@@ -8,9 +8,9 @@ description: Build the extension and launch a VS Code Extension Development Host
 Build the extension if needed, then launch a VS Code Extension Development Host pointed at
 a real MO2 instance directory. Do all steps proactively without waiting to be asked.
 
-The extension spawns the backend itself on "Launch mEdit"
-([ADR-0022](../../../docs/adr/0022-extension-owns-backend-lifecycle.md)) — there is no manual
-`dotnet run` step. Setup and prerequisites: [README.md](../../../README.md) § Getting started.
+The extension spawns the backend itself at activation
+([ADR-0022](../../../docs/adr/0022-extension-owns-backend-lifecycle.md); there is no Launch/Close
+mEdit command — maintainer ruling 2026-09-01) — no manual `dotnet run` step. Setup and prerequisites: [README.md](../../../README.md) § Getting started.
 
 ## 0 — Confirm the checkout is current
 
@@ -53,7 +53,7 @@ use if none was named.
 are contributed unconditionally, but activation is still required to populate them.
 
 Force activation once per sitting by running any Modbench command from the Command Palette,
-e.g. **Modbench: Refresh**. The activity bar icon then appears (Loadout view). From
-there, use **Modbench: Launch mEdit** to spawn/attach the backend — the Plugins tree's rows
+e.g. **Modbench: Refresh**. The activity bar icon then appears (Loadout view) and the
+backend launches automatically — the Plugins tree's rows
 gain chevrons once the load order is ready. Nothing switches views; every loadout view stays
 exactly where it was.

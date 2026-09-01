@@ -262,19 +262,7 @@
         "icon": "$(account)",
         "category": "Modbench"
       },
-      {
-        "command": "modbench.modList.launchMedit",
-        "title": "Launch mEdit",
-        "icon": "$(rocket)",
-        "category": "Modbench"
-      },
-      {
-        "command": "modbench.closeMedit",
-        "title": "Close mEdit",
-        "icon": "$(close)",
-        "category": "Modbench"
-      },
-      {
+                  {
         "command": "modbench.modList.view.winningAtTop",
         "title": "Show Winning Mods at Top",
         "icon": "$(triangle-down)",
@@ -696,17 +684,7 @@
           "when": "view == modbench.pluginListTree",
           "group": "navigation@3"
         },
-        {
-          "command": "modbench.modList.launchMedit",
-          "when": "view == modbench.pluginListTree && modbench.workspaceIsMo2Instance && !modbench.backendRunning",
-          "group": "1_medit"
-        },
-        {
-          "command": "modbench.closeMedit",
-          "when": "view == modbench.pluginListTree && modbench.workspaceIsMo2Instance && modbench.backendRunning",
-          "group": "1_medit"
-        },
-        {
+                        {
           "command": "modbench.modList.filter",
           "when": "view == modbench.modList && !modbench.modList.filterActive",
           "group": "navigation@1"

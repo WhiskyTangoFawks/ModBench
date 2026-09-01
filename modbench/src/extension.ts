@@ -405,6 +405,36 @@ function makeNotifyConflictsComputed(
   };
 }
 
+/** The backend launches with the extension — maintainer ruling 2026-09-01: the DB-file-backed
+ *  session made startup cheap enough that lifecycle stopped being a user decision, so the
+ *  Launch mEdit / Close mEdit commands are gone. The extension still owns spawn/teardown
+ *  (ADR-0022): spawn is here at activation (only in an MO2 instance — enterEditing exists
+ *  only when the loadout views registered), teardown is deactivate()/crash handling.
+ *  exitToLoadout survives as the failure path, same as the old command's own catch. A launch
+ *  that bailed for want of a game directory (enterEditing's 'no-game-directory' teardown)
+ *  gets its retry when the user supplies one — with no Launch command left, a config change
+ *  is the only gesture that can mean "try again". */
+function wireAutoLaunch(
+  context: vscode.ExtensionContext, outputChannel: vscode.LogOutputChannel,
+  enterEditing: (() => Promise<void>) | undefined,
+): void {
+  const launch = async () => {
+    try {
+      await enterEditing?.();
+    } catch (err) {
+      outputChannel.error(`[extension] backend launch failed: ${err instanceof Error ? err.message : String(err)}`);
+      exitToLoadout(); // reset the view and tear down any half-started backend
+      void vscode.window.showErrorMessage('Modbench: Failed to launch mEdit.');
+    }
+  };
+  void launch();
+  context.subscriptions.push(
+    vscode.workspace.onDidChangeConfiguration((e) => {
+      if (e.affectsConfiguration('modbench.mods.gameDirectory') && !backendManager?.isHealthy) void launch();
+    }),
+  );
+}
+
 export function activate(context: vscode.ExtensionContext) {
   const port: number = meditConfig().get('backendPort') ?? 5172;
 
@@ -420,7 +450,6 @@ export function activate(context: vscode.ExtensionContext) {
   const compileDiagnostics = vscode.languages.createDiagnosticCollection('modbench-compile');
   context.subscriptions.push(compileDiagnostics);
   backendManager = createBackendManager(port, outputChannel, statusBarItem);
-  wireBackendRunningContext(backendManager);
 
   const client = createApiClient(port, createUnlimitedFetch());
   const repository = new ApiPluginRepository(client, log);
@@ -448,7 +477,7 @@ export function activate(context: vscode.ExtensionContext) {
   });
   const { referencedByTreeView, activeRecordSubscription } = createReferencedByTree(client, log, activeRecordTracker);
   const showCrashRepairOffers = makeCrashRepairOffersPresenter(controller, compileDiagnostics);
-  const { modListProvider, downloadsProvider, pluginListProvider, modlistSource, instanceRoot } = registerLoadoutSurfaces({ context, log, outputChannel, controller, recordBrowser: treeProvider, heldPluginFiles: heldPluginFilesFrom(repository), showCrashRepairOffers });
+  const { modListProvider, downloadsProvider, pluginListProvider, modlistSource, instanceRoot, enterEditing } = registerLoadoutSurfaces({ context, log, outputChannel, controller, recordBrowser: treeProvider, heldPluginFiles: heldPluginFilesFrom(repository), showCrashRepairOffers });
 
   wireExternalChangePolling(repository, controller, outputChannel, log);
 
@@ -463,15 +492,14 @@ export function activate(context: vscode.ExtensionContext) {
     }),
   );
 
-  // The backend is spawned lazily on entering editing (Launch mEdit) and
-  // torn down on Close mEdit — the extension owns its lifecycle (ADR-0022). There
-  // is no auto-connect / auto-wizard at activation; show a neutral idle state.
   statusBarItem.text = '$(plug) mEdit';
+
+  wireAutoLaunch(context, outputChannel, enterEditing);
 
   // Exposed for integration tests — unused in production.
   return {
     modListProvider, downloadsProvider, pluginListProvider, pluginsTree, pluginListView: pluginsTreeView, treeProvider,
-    outputChannel,
+    outputChannel, enterEditing, exitToLoadout,
   };
 }
 
@@ -696,7 +724,6 @@ function registerRecordViewCommands(deps: EditorCommandDeps): vscode.Disposable[
   };
   return [
     vscode.window.registerFileDecorationProvider(recordDecorationProvider),
-    vscode.commands.registerCommand('modbench.closeMedit', () => exitToLoadout()),
     vscode.commands.registerCommand('modbench.openEditor', (args?: { formKey?: string; label?: string }) => {
       openRecordPanel(context, openPanels, args?.label ?? args?.formKey ?? 'mEdit', args?.formKey, port,
         vscode.ViewColumn.One, { routerDeps, recordPanels, activeRecordTracker, singleton: true });
@@ -811,13 +838,10 @@ interface ModListCoreDeps {
   modListProvider: ModListProvider;
   modlistSource: Mo2ModlistSource;
   updateProfileDescription: () => Promise<void>;
-  // Takes no progress reporter — it owns its own, in the Plugins view's header.
-  enterEditing: () => Promise<void>;
-  outputChannel: vscode.LogOutputChannel;
 }
-/** Loadout core commands: refresh, switch profile, filter, launch mEdit. */
+/** Loadout core commands: refresh, switch profile, filter. */
 function registerModListCoreCommands(deps: ModListCoreDeps): vscode.Disposable[] {
-  const { modListProvider, modlistSource, updateProfileDescription, enterEditing, outputChannel } = deps;
+  const { modListProvider, modlistSource, updateProfileDescription } = deps;
   return [
       vscode.commands.registerCommand('modbench.modList.view.winningAtTop', () => {
         modListProvider.toggleViewDirection();
@@ -845,18 +869,6 @@ function registerModListCoreCommands(deps: ModListCoreDeps): vscode.Disposable[]
         // the reconcile cheap. The profile files themselves are not watched for this (switching
         // writes ModOrganizer.ini, not modlist/plugins.txt), so this asks explicitly.
         loadOrderSync?.request();
-      }),
-      vscode.commands.registerCommand('modbench.modList.launchMedit', async () => {
-        // enterEditing puts chevrons on the merged tree's rows *as each plugin
-        // lands* rather than all at once at the end, and owns its own progress indicator — in
-        // the Plugins view's header, not a notification. Nothing to wrap here.
-        try {
-          await enterEditing();
-        } catch (err) {
-          outputChannel.error(`[extension] launchMedit failed: ${err instanceof Error ? err.message : String(err)}`);
-          exitToLoadout(); // reset the view and tear down any half-started backend
-          void vscode.window.showErrorMessage('Modbench: Failed to launch mEdit.');
-        }
       }),
   ];
 }
@@ -1845,20 +1857,6 @@ function makeLoadOrderSync(deps: ReconcileDeps): LoadOrderSync {
   });
 }
 
-/** modbench.backendRunning drives the Launch mEdit / Close mEdit toggle on the Plugins
- *  view's title bar — the same two-command/context-key toggle shape as sort direction and
- *  show-hidden, just contributed to overflow instead of a navigation icon slot. Explicit
- *  initial value, not left implicitly falsy, matching modbench.workspaceIsMo2Instance's own
- *  "every exit path sets it" convention. Every backend lifecycle transition — attach,
- *  disconnect, crash, and a deliberate stop — moves it, the same set of transitions
- *  clearTreeWhenBackendDies below reacts to. */
-function wireBackendRunningContext(manager: BackendManager): void {
-  void vscode.commands.executeCommand('setContext', 'modbench.backendRunning', false);
-  manager.on('status', () => {
-    void vscode.commands.executeCommand('setContext', 'modbench.backendRunning', manager.isHealthy);
-  });
-}
-
 /** A backend that dies takes the load order with it, and `exitToLoadout` is not on that path — a
  *  crash or a lost connection reaches us only as a status change. Without this the rows keep their
  *  chevrons and expanding one fetches against a backend that is gone, and the record rows
@@ -2028,7 +2026,7 @@ function registerLoadoutSurfaces(deps: Omit<LoadoutViewDeps, 'revealLog'>): {
   // Forwarded so the composition root can wire modbench.newPlugin's destination QuickPick —
   // both are undefined together with the providers above, on the same no-workspace/not-an-MO2-
   // instance paths registerLoadoutView already bails on.
-  modlistSource?: Mo2ModlistSource; instanceRoot?: string;
+  modlistSource?: Mo2ModlistSource; instanceRoot?: string; enterEditing?: () => Promise<void>;
 } {
   const { context, outputChannel } = deps;
   registerDeploymentModeContext(context);
@@ -2040,6 +2038,7 @@ function registerLoadoutSurfaces(deps: Omit<LoadoutViewDeps, 'revealLog'>): {
     pluginListProvider: loadout?.pluginListProvider,
     modlistSource: loadout?.modlistSource,
     instanceRoot: loadout?.instanceRoot,
+    enterEditing: loadout?.enterEditing,
   };
 }
 
@@ -2101,7 +2100,7 @@ interface LoadoutViewDeps {
  *  ModListProvider and DownloadsProvider (exposed via activate() for integration
  *  tests), or undefined with a neutral log when no workspace is open, or when the
  *  workspace isn't an MO2 instance (the Mods view shows welcome content instead). */
-function registerLoadoutView(deps: LoadoutViewDeps): { modListProvider: ModListProvider; downloadsProvider: DownloadsProvider; pluginListProvider: PluginListProvider; modlistSource: Mo2ModlistSource; instanceRoot: string; refreshAll: () => void } | undefined {
+function registerLoadoutView(deps: LoadoutViewDeps): { modListProvider: ModListProvider; downloadsProvider: DownloadsProvider; pluginListProvider: PluginListProvider; modlistSource: Mo2ModlistSource; instanceRoot: string; refreshAll: () => void; enterEditing: () => Promise<void> } | undefined {
   const { context, log, outputChannel, revealLog, controller, recordBrowser, heldPluginFiles, showCrashRepairOffers } = deps;
   const instanceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   if (!instanceRoot) {
@@ -2164,7 +2163,7 @@ function registerLoadoutView(deps: LoadoutViewDeps): { modListProvider: ModListP
       modListView,
       modListFilter,
       modListView.onDidChangeCheckboxState((e) => onModCheckboxChanged(e, modListProvider, outputChannel)),
-      ...registerModListCoreCommands({ modListProvider, modlistSource, updateProfileDescription, enterEditing, outputChannel }),
+      ...registerModListCoreCommands({ modListProvider, modlistSource, updateProfileDescription }),
       ...registerDeployCommands(instanceRoot, modlistSource, outputChannel, gameDirResolver),
       registerLaunchCommand(outputChannel),
       gameDirResolver,
@@ -2179,7 +2178,7 @@ function registerLoadoutView(deps: LoadoutViewDeps): { modListProvider: ModListP
     const { downloadsProvider, disposables: downloadsDisposables } = registerDownloadsView(instanceRoot, log);
     context.subscriptions.push(...downloadsDisposables);
     const refreshAll = makeRefreshAll(modListProvider, pluginListProvider, downloadsProvider, updateProfileDescription);
-    return { modListProvider, downloadsProvider, pluginListProvider, modlistSource, instanceRoot, refreshAll };
+    return { modListProvider, downloadsProvider, pluginListProvider, modlistSource, instanceRoot, refreshAll, enterEditing };
 }
 
 /** Refresh is one need, not three. Every Mod-Management source re-reads from disk

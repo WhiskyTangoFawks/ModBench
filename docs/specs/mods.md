@@ -130,10 +130,9 @@ requires a deploy.**
 31. As a user, I want every write Modbench makes to `modlist.txt` and `ModOrganizer.ini` to
     change only the bytes that need changing, so that my comments, CRLF line endings,
     unmanaged (`*`) lines, and separators survive verbatim and MO2 still reads the files.
-32. As a user, I want a "Launch mEdit" action reachable from the Plugins view's title bar
-    (see [plugins.md](plugins.md)) that spins up the record editor
-    against my active loadout, so that I
-    can move from managing mods to editing records without a manual setup step.
+32. As a user, I want the record editor running against my active loadout the moment Modbench
+    opens, so that I can move from managing mods to editing records without any launch step
+    (maintainer ruling 2026-09-01 — the former "Launch mEdit" action is gone).
 33. As a user, I want an "update available" indicator on mods (planned) once Nexus
     integration lands, so that I can tell when an installed mod is behind its Nexus
     version.
@@ -279,14 +278,13 @@ the configured game directory's `Data/`.
 The extension owns the editing backend process
 ([ADR-0022](../adr/0022-extension-owns-backend-lifecycle.md)):
 
-- **Spawn** — lazily, on **Launch mEdit** (the first editing backend for the active
-  modlist).
+- **Spawn** — at activation (maintainer ruling 2026-09-01; a launch that found no game
+  directory retries when `modbench.mods.gameDirectory` changes).
 - **Load order** — sent whole as the `PUT /load-order` snapshot (ADR-0044): every physical
   plugin copy in the instance as `(name, path, origin, slot, enabled, winning)` — disabled
   entries included (ADR-0035) — with vanilla masters prepended by the backend. One backend,
   one load order — a second load on the same instance is refused (ADR-0001 point 6).
-- **Teardown** — explicit **Close mEdit**, or closing the workspace. Restarted on crash;
-  re-entering editing re-spawns and re-indexes. **Switching profile or modlist is not a
+- **Teardown** — closing the workspace; there is no Close command. Restarted on crash. **Switching profile or modlist is not a
   teardown** — it sends the new profile's snapshot to the running backend as the next
   reconcile (ADR-0044); the backend keeps running (see *Profiles* above and *Profile
   selector* below, and `extension.ts`'s own comment: "a profile switch is the next
@@ -297,8 +295,7 @@ The extension owns the editing backend process
 - **Header**: title "MODS"; description = current profile name; a first non-interactive
   count node ("N active / M installed"); title-bar icon buttons for Filter, Sort Direction
   and Collapse All — three, and nothing else. Switch Profile, Refresh, Deploy
-  and Purge live on the [Loadout header](loadout-header.md), Launch mEdit on the
-  [Plugins view](plugins.md): none of them are
+  and Purge live on the [Loadout header](loadout-header.md): none of them are
   about *this tree*, and nine icons is past the point where VS Code
   keeps them visible in a narrow sidebar. Launch Game does not exist (see
   *Deploy / purge* below).

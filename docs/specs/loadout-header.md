@@ -1,8 +1,8 @@
 # Loadout header — Surface Specification
 
 **Status: Implemented.** Launch… is a placed affordance whose wiring is deferred —
-see *Launch…* below. Launch mEdit / Close mEdit live on the [Plugins view](plugins.md), not
-here — see *mEdit lives on the Plugins view* below.
+see *Launch…* below. There is no Launch/Close mEdit anywhere: the backend launches with the
+extension (maintainer ruling 2026-09-01) — see *mEdit has no lifecycle affordance* below.
 
 A cross-context surface. It reads Mod-Management state (profile, deployment), so it belongs to
 neither bounded context and lives at the composition root
@@ -67,19 +67,15 @@ stays quiet rather than repeating it.
   there is state out there needing a purge, which is what the row should say. When deployed,
   the row is an inert readout — Purge is destructive and stays in overflow behind a modal.
 
-### mEdit lives on the Plugins view
+### mEdit has no lifecycle affordance
 
-Maintainer ruling: "launch mEdit should be an option on the plugins view —
-mEdit isn't a universal option, it's an option on the plugins view."
-This header carries no mEdit row of any kind, running or not, and reads no
-backend/load order state — `LoadoutHeaderProvider` only ever reads Mod-Management state.
-Launch mEdit / Close mEdit
-(`modbench.modList.launchMedit` / `modbench.closeMedit`) are reachable from the
-[Plugins view](plugins.md)'s own title-bar overflow, gated by
-`modbench.workspaceIsMo2Instance` and toggled between the two commands by the
-`modbench.backendRunning` context key (only one of the pair is ever contributed for a given
-state). See [plugins.md](plugins.md#toolbar--title-bar) for the placement and its context-key
-toggle.
+The backend launches with the extension (maintainer ruling 2026-09-01: the DB-file-backed
+session made startup cheap enough that lifecycle stopped being a user decision); the former
+Launch mEdit / Close mEdit toggle on the [Plugins view](plugins.md) is gone. This header
+carries no mEdit row of any kind, running or not, and reads no backend/load order state —
+`LoadoutHeaderProvider` only ever reads Mod-Management state. (The earlier ruling that placed
+the pair — "launch mEdit should be an option on the plugins view" — is superseded by there
+being no pair to place.)
 
 ### Title bar
 
@@ -124,10 +120,10 @@ Editing's "mEdit Plugins tree" into the one shared Plugins tree that exists toda
 
 | View | Lost | Result |
 | --- | --- | --- |
-| Mods | Switch Profile, Launch mEdit, Refresh, Deploy, Purge, Launch Game | Filter, sort-direction toggle, Collapse All — **nine icons to three** |
+| Mods | Switch Profile, Launch mEdit (since removed entirely), Refresh, Deploy, Purge, Launch Game | Filter, sort-direction toggle, Collapse All — **nine icons to three** |
 | Plugins (load order) | Refresh | Filter only |
 | Downloads | — | Filter gained at slot 1, show-hidden toggle moved to slot 2, Sort by… stays in overflow |
-| Plugins (Editing) | Refresh, Close mEdit | Name filter, record filter, New Plugin, **Collapse All gained** |
+| Plugins (Editing) | Refresh, Close mEdit (since removed entirely) | Name filter, record filter, New Plugin, **Collapse All gained** |
 
 ## Implementation Decisions
 

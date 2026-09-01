@@ -275,9 +275,9 @@ describe('package.json title-bar rubric (#247)', () => {
   // Rule 1, scope first: an action that isn't about this tree's own domain doesn't go on this
   // tree. These three are workspace-scope — they swap the modlist or act on the whole
   // deployment. (There is no Reload Load Order: ADR-0044 reconciles the load order on every
-  // change, so there is nothing to reload.) Launch mEdit / Close mEdit is deliberately absent:
-  // mEdit is *not* workspace-scope, it is an option on the Plugins view's
-  // own domain — see the Launch/Close mEdit block below for its placement assertions.
+  // change, so there is nothing to reload.) There is no Launch/Close mEdit anywhere: the
+  // backend launches with the extension (maintainer ruling 2026-09-01 — the DB-file-backed
+  // session made startup cheap enough that lifecycle stopped being a user decision).
   const WORKSPACE_ACTIONS = [
     'modbench.modList.switchProfile',
     'modbench.modList.deploy',
@@ -338,39 +338,6 @@ describe('package.json title-bar rubric (#247)', () => {
 // added — a two-command toggle still "counts as one icon" per rule 2, but that accounting
 // only matters once there is a free slot to spend it on, and rule 5's own slot sequence ends
 // "then overflow" for whatever arrives once domain-action slots are exhausted.
-describe('package.json Launch/Close mEdit on the Plugins view (#352)', () => {
-  const titleMenus = () => pkg.contributes.menus['view/title'] as { command: string; when: string; group: string }[];
-  const entriesFor = (command: string) => titleMenus().filter((e) => e.command === command);
-
-  it.each(['modbench.modList.launchMedit', 'modbench.closeMedit'])(
-    '%s is contributed only to the Plugins view, nowhere else', (command) => {
-      const entries = entriesFor(command);
-      expect(entries).toHaveLength(1);
-      expect(entries[0].when).toContain('view == modbench.pluginListTree');
-    });
-
-  it('is exactly one context-key toggle pair — only ever one of the two visible', () => {
-    const launch = entriesFor('modbench.modList.launchMedit')[0];
-    const close = entriesFor('modbench.closeMedit')[0];
-    expect(launch.when).toBe('view == modbench.pluginListTree && modbench.workspaceIsMo2Instance && !modbench.backendRunning');
-    expect(close.when).toBe('view == modbench.pluginListTree && modbench.workspaceIsMo2Instance && modbench.backendRunning');
-  });
-
-  it('carries the same MO2-instance gating the header withheld it behind', () => {
-    for (const command of ['modbench.modList.launchMedit', 'modbench.closeMedit']) {
-      expect(entriesFor(command)[0].when).toContain('modbench.workspaceIsMo2Instance');
-    }
-  });
-
-  // Overflow, not navigation: modbench.pluginListTree is already at rule 2's 4-icon ceiling
-  // (see the rubric test above), so this pair lands in the `…` menu, per rule 5's own "then
-  // overflow" landing spot for whatever arrives once a view's icon budget is spent.
-  it.each(['modbench.modList.launchMedit', 'modbench.closeMedit'])(
-    '%s stays in overflow, never a navigation icon', (command) => {
-      expect(entriesFor(command)[0].group.startsWith('navigation')).toBe(false);
-    });
-});
-
 describe('package.json standalone Deploy/Purge/Launch withdrawal (#186)', () => {
   it('defaults deploymentMode to external so the alpha never exposes standalone deploy without explicit opt-in', () => {
     const prop = pkg.contributes.configuration.properties['modbench.mods.deploymentMode'];

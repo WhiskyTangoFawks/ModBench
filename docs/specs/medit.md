@@ -49,10 +49,13 @@ load order over the active loadout:
 | **Version control (Track, branch, compile)** | Track gesture, native Source Control panel review & commit per tracked mod, Save & Compile, external-change handling | [medit-version-control.md](medit-version-control.md) |
 | **Status bar item** | Backend/load order state | This document |
 
-**Launch mEdit** (from the [Plugins view](plugins.md)'s title-bar overflow) spawns the
+The backend **launches with the extension** (maintainer ruling 2026-09-01: the DB-file-backed
+session made startup cheap enough that lifecycle stopped being a user decision — there is no
+Launch mEdit / Close mEdit command). At activation it spawns the
 backend and builds the load order from every line of the active profile's `plugins.txt` — disabled
 entries included, carrying their participation (ADR-0035) — plus vanilla masters
-(the `PUT /load-order` snapshot, ADR-0044); **Close mEdit** tears the load order down. The Plugins tree's rows gain chevrons
+(the `PUT /load-order` snapshot, ADR-0044); teardown is workspace close (or crash handling). A
+launch that found no game directory retries when `modbench.mods.gameDirectory` changes. The Plugins tree's rows gain chevrons
 once the load order is ready — no other surface swap happens: the Loadout views (Mods, Plugins,
 Downloads) are always visible regardless of load order state, and Referenced By is
 always-present-and-following rather than gated on a mode.
@@ -69,12 +72,9 @@ Surface-specific stories live in the surface specs above. These are the cross-cu
 2. As a user, I want a status bar item that tells me whether the backend is connecting,
    attached, disconnected, stopped, or holds a ready load order (with a plugin count), so
    that I always know the editor's state.
-3. As a user, I want clicking the status bar item when the backend isn't running to tell me how
-   to start it, so that I'm not stuck guessing — **not built today**: the item carries no
-   command, and Launch mEdit on the [Plugins view](plugins.md)'s title-bar overflow is the only
-   way to start the backend.
-4. As a user, I want closing the editor to tear the load order down, so that a backend I'm not
-   using isn't left running against my loadout.
+3. As a user, I want the backend running whenever Modbench is, so that editing is simply
+   available — no launch gesture. (The status bar item still reports its state; it carries no
+   command.)
 5. As a user, I want to run a script against the whole load order or a specific record/plugin
    (planned), so that I can automate repetitive edits.
 6. As a user, I want all of these actions reachable from the command palette as well as the
@@ -93,11 +93,9 @@ Surface-specific stories live in the surface specs above. These are the cross-cu
   Loadout and mEdit view is contributed unconditionally, and each surface that needs to hide
   does so on its own signal rather than a shared mode — the Plugins tree's rows gain chevrons
   once a load order exists (ADR-0035), and Referenced By is always present, following the active
-  record editor ([medit-referenced-by.md](medit-referenced-by.md)). **Launch mEdit** spawns the
-  backend and loads the active modlist as the load order; **Close mEdit** tears it down. Both are
-  reached from the **[Plugins view](plugins.md)'s title-bar overflow**
-  — a two-command/context-key toggle (`modbench.backendRunning`) showing whichever direction
-  applies, gated on `modbench.workspaceIsMo2Instance`. Per the maintainer's ruling, mEdit is
+  record editor ([medit-referenced-by.md](medit-referenced-by.md)). The backend launches at
+  activation and loads the active modlist as the load order; there is no Launch/Close command
+  and no `modbench.backendRunning` context key. Per the maintainer's ruling, mEdit is
   "an option on the plugins view", not a workspace action
   ([loadout-header.md](loadout-header.md)).
 - The mEdit view is composed of the five surfaces listed above. There is no toolbar or
@@ -113,17 +111,15 @@ Surface-specific stories live in the surface specs above. These are the cross-cu
   **Disconnected** (`$(error) mEdit: Disconnected — start MEditService and reload`),
   **Stopped** (`$(circle-slash) mEdit: Stopped`), and, once the load order is ready, **Ready**
   (`$(check) mEdit: Ready ({N} plugin copies)`). No game name is shown in any state.
-- The item carries **no command** — clicking it does nothing. The backend is started
-  exclusively via **Launch mEdit** from the [Plugins view](plugins.md)'s title-bar overflow,
-  never from the status bar.
+- The item carries **no command** — clicking it does nothing. The backend starts with the
+  extension; there is no start gesture anywhere, the status bar included.
 
 ### Command palette
 
 - All `modbench.*` commands are available in the palette; `package.json`'s
-  `contributes.commands` is the canonical registry. Navigation/workflow commands include Launch
-  mEdit (enter editing; spawn backend; send it the load order snapshot), Close mEdit (return to
-  Loadout; tear down) — there is no Reload: the load order is reconciled on every loadout change
-  (ADR-0044) —, Open Editor
+  `contributes.commands` is the canonical registry. There is no Launch/Close mEdit (the backend
+  launches with the extension) and no Reload: the load order is reconciled on every loadout change
+  (ADR-0044). Navigation/workflow commands include Open Editor
   (internal; also bound to
   tree click), New Plugin…, Track…, Save & Compile, and Run Script… (planned; context = the
   active record if a panel is open, else global).
@@ -174,7 +170,7 @@ Per-surface testing decisions live in the surface specs. Shared:
 - Record browsing is the **only** capability that requires the C# backend; the Mod-Management
   surfaces ([mods.md](mods.md), [downloads.md](downloads.md)) and the Plugin load order half of
   the merged Plugins tree ([plugins.md](plugins.md)) all run without it — a row is a leaf until a
-  load order exists, per ADR-0035. The backend lifecycle (spawn on Launch mEdit, teardown on Close
-  mEdit / profile switch / workspace close, restart on crash) is owned by the extension per
+  load order exists, per ADR-0035. The backend lifecycle (spawn at activation, teardown on
+  workspace close, restart on crash) is owned by the extension per
   [ADR-0022](../adr/0022-extension-owns-backend-lifecycle.md) and specified from the Loadout
   side in [mods.md](mods.md).

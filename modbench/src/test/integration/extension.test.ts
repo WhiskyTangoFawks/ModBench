@@ -11,6 +11,23 @@ const TEST_PORT = 15172;
 let mockBackend: http.Server;
 let ext: vscode.Extension<unknown> | undefined;
 
+// The Launch/Close mEdit commands are gone — the backend launches with the extension
+// (maintainer ruling 2026-09-01) — so tests drive the same lifecycle through activate()'s
+// test-API exports. enterEditing mirrors the old command's semantics exactly: a launch
+// failure is logged-and-swallowed after resetting to loadout, never thrown at the caller.
+const editingApi = () =>
+  ext?.exports as { enterEditing?: () => Promise<void>; exitToLoadout?: () => void } | undefined;
+async function enterEditing(): Promise<void> {
+  try {
+    await editingApi()?.enterEditing?.();
+  } catch {
+    editingApi()?.exitToLoadout?.();
+  }
+}
+function exitEditing(): void {
+  editingApi()?.exitToLoadout?.();
+}
+
 // Mock backend state, controlled by the launch suite. Models the real backend:
 // GET /plugins fails with 503 "No load order held" until PUT /load-order
 // is received, then serves the loaded plugins.
@@ -627,7 +644,7 @@ describe('Overwrite row (#82)', () => {
 // activates the extension exactly once (the file's own top-level before()), so "no poll before
 // Launch mEdit" is only provable at the one point in the run where that is still true.
 
-describe('External-change poller starts/stops with the backend, never before Launch mEdit (#432)', () => {
+describe('External-change poller runs only while the backend is up (#432)', () => {
   const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   let gameDir = '';
   const pollRequests = (log: string[]) => log.filter((r) => r.includes('external-changes/status'));
@@ -644,34 +661,32 @@ describe('External-change poller starts/stops with the backend, never before Lau
 
   after(async () => {
     if (!root) return;
-    await vscode.commands.executeCommand('modbench.closeMedit');
+    exitEditing();
     await vscode.workspace.getConfiguration('modbench').update(
       'mods.gameDirectory', undefined, vscode.ConfigurationTarget.Workspace);
     fs.writeFileSync(path.join(root, 'profiles', 'Default', 'plugins.txt'), '');
     fs.rmSync(gameDir, { recursive: true, force: true });
   });
 
-  it('polls only between a successful Launch mEdit and Close mEdit', async function () {
+  // The original #432 test also asserted no poll could fire before Launch mEdit had ever
+  // run — that assertion died with the command: the backend now launches with the extension
+  // (maintainer ruling 2026-09-01), so "before launch" is not a state the design has. What
+  // remains load-bearing is the second half: the poller runs only while a backend is up.
+  it('polls while the backend is up and stops when editing ends', async function () {
     if (!root) this.skip();
     this.timeout(20000);
 
-    // Wait past one full poll interval (EXTERNAL_CHANGE_POLL_INTERVAL_MS = 3000ms) with no Launch
-    // mEdit run — an unconditional start-at-activation wiring would already have
-    // ticked at least once by now.
-    await new Promise((r) => setTimeout(r, 3500));
-    assert.strictEqual(pollRequests(requestLog).length, 0,
-      'no external-change poll should fire before Launch mEdit has ever run');
-
-    await vscode.commands.executeCommand('modbench.modList.launchMedit');
+    await enterEditing();
+    // One full poll interval (EXTERNAL_CHANGE_POLL_INTERVAL_MS = 3000ms) plus slack.
     await new Promise((r) => setTimeout(r, 3500));
     assert.ok(pollRequests(requestLog).length > 0,
-      'expected the poller to start once Launch mEdit confirms the backend is up');
+      'expected the poller to run once the launch confirms the backend is up');
 
-    await vscode.commands.executeCommand('modbench.closeMedit');
+    exitEditing();
     const countAtClose = pollRequests(requestLog).length;
     await new Promise((r) => setTimeout(r, 3500));
     assert.strictEqual(pollRequests(requestLog).length, countAtClose,
-      'expected no further external-change polls after Close mEdit');
+      'expected no further external-change polls once editing ends');
   });
 });
 
@@ -715,7 +730,7 @@ describe('Launch mEdit populates the editing plugin tree (#75)', () => {
   });
 
   it('loads the load order and shows plugins (not an empty tree) after launch', async () => {
-    await vscode.commands.executeCommand('modbench.modList.launchMedit');
+    await enterEditing();
     // Snapshot the launch's own requests before we query the tree ourselves below —
     // any GET /plugins the editing view fired during launch would appear here.
     const duringLaunch = [...requestLog];
@@ -799,8 +814,8 @@ describe('Loadout stays visible through an editing backend (#268)', () => {
       'the filter should narrow to the one matching row before entering editing',
     );
 
-    await vscode.commands.executeCommand('modbench.modList.launchMedit');
-    await vscode.commands.executeCommand('modbench.closeMedit');
+    await enterEditing();
+    exitEditing();
 
     const after = await provider.getChildren();
     assert.deepStrictEqual(
@@ -812,7 +827,7 @@ describe('Loadout stays visible through an editing backend (#268)', () => {
   it('still writes plugins.txt through the Plugin load order while the backend is running (AC4)', async () => {
     const provider = pluginListProvider()!;
     provider.setFilter(''); // undo the previous test's filter so both rows are addressable
-    await vscode.commands.executeCommand('modbench.modList.launchMedit');
+    await enterEditing();
 
     await provider.setPluginEnabled('Other.esp', false);
 
@@ -820,7 +835,7 @@ describe('Loadout stays visible through an editing backend (#268)', () => {
     assert.ok(written.includes('Other.esp'), 'plugins.txt should still list Other.esp, just disabled');
     assert.ok(!written.includes('*Other.esp'), 'disabling a plugin while the backend runs should still write plugins.txt');
 
-    await vscode.commands.executeCommand('modbench.closeMedit');
+    exitEditing();
   });
 
   it('still writes plugins.txt through the Plugin load order drag-reorder while the backend is running (AC4)', async () => {
@@ -830,7 +845,7 @@ describe('Loadout stays visible through an editing backend (#268)', () => {
     provider.invalidate();
     await provider.getChildren(); // populate the cached order handleDrop's index math reads against
 
-    await vscode.commands.executeCommand('modbench.modList.launchMedit');
+    await enterEditing();
 
     // Same mime type PluginListProvider.ts's private DND_MIME constant uses — pinned here since
     // it isn't exported; handleDrag/handleDrop only round-trip through it, never inspect it.
@@ -846,7 +861,7 @@ describe('Loadout stays visible through an editing backend (#268)', () => {
       'dragging TestMod.esp to the end while the backend runs should still write the reordered plugins.txt',
     );
 
-    await vscode.commands.executeCommand('modbench.closeMedit');
+    exitEditing();
   });
 });
 
@@ -890,11 +905,16 @@ describe('Plugin load-order rows expand into records (#270)', () => {
       'mods.gameDirectory', gameDir, vscode.ConfigurationTarget.Workspace);
     fs.writeFileSync(pluginsTxtPath, '*TestMod.esp\nOther.esp\n');
     pluginListProviderOf()?.invalidate();
+      // Setting the game directory just now fired the production config-change relaunch
+    // (backend down + a directory appeared). Settle it and return to loadout so the
+    // tests below still start from the pre-editing state they assert.
+    await enterEditing();
+    exitEditing();
   });
 
   after(async () => {
     if (!root) return;
-    await vscode.commands.executeCommand('modbench.closeMedit');
+    exitEditing();
     await vscode.workspace.getConfiguration('modbench').update(
       'mods.gameDirectory', undefined, vscode.ConfigurationTarget.Workspace);
     fs.writeFileSync(pluginsTxtPath, '');
@@ -925,7 +945,7 @@ describe('Plugin load-order rows expand into records (#270)', () => {
     const tree = pluginsTree()!;
     const before = await tree.getChildren();
 
-    await vscode.commands.executeCommand('modbench.modList.launchMedit');
+    await enterEditing();
 
     const after = await tree.getChildren();
     assert.deepStrictEqual(
@@ -964,7 +984,7 @@ describe('Plugin load-order rows expand into records (#270)', () => {
   it('returns every row to a leaf when the mEdit closes, keeping the load order', async () => {
     const tree = pluginsTree()!;
 
-    await vscode.commands.executeCommand('modbench.closeMedit');
+    exitEditing();
 
     const rows = await tree.getChildren();
     assert.deepStrictEqual(
@@ -999,11 +1019,16 @@ describe('A read-only plugin\'s tooltip says so once the backend is running (#27
       'mods.gameDirectory', gameDir, vscode.ConfigurationTarget.Workspace);
     fs.writeFileSync(pluginsTxtPath, '*Immutable.esm\n');
     pluginListProviderOf()?.invalidate();
+      // Setting the game directory just now fired the production config-change relaunch
+    // (backend down + a directory appeared). Settle it and return to loadout so the
+    // tests below still start from the pre-editing state they assert.
+    await enterEditing();
+    exitEditing();
   });
 
   after(async () => {
     if (!root) return;
-    await vscode.commands.executeCommand('modbench.closeMedit');
+    exitEditing();
     await vscode.workspace.getConfiguration('modbench').update(
       'mods.gameDirectory', undefined, vscode.ConfigurationTarget.Workspace);
     fs.writeFileSync(pluginsTxtPath, '');
@@ -1017,7 +1042,7 @@ describe('A read-only plugin\'s tooltip says so once the backend is running (#27
   });
 
   it('gains a read-only tooltip once the load order reports it immutable', async () => {
-    await vscode.commands.executeCommand('modbench.modList.launchMedit');
+    await enterEditing();
     const tree = pluginsTree()!;
     const row = findRow(await tree.getChildren(), 'Immutable.esm');
 
@@ -1027,7 +1052,7 @@ describe('A read-only plugin\'s tooltip says so once the backend is running (#27
   });
 
   it('loses the tooltip again once the mEdit closes', async () => {
-    await vscode.commands.executeCommand('modbench.closeMedit');
+    exitEditing();
     const tree = pluginsTree()!;
     const row = findRow(await tree.getChildren(), 'Immutable.esm');
 
@@ -1067,12 +1092,12 @@ describe('A plugin with a missing master is flagged, never deactivated (#277)', 
       'mods.gameDirectory', gameDir, vscode.ConfigurationTarget.Workspace);
     fs.writeFileSync(pluginsTxtPath, '*TestMod.esp\n*MissingMaster.esp\n');
     pluginListProviderOf()?.invalidate();
-    await vscode.commands.executeCommand('modbench.modList.launchMedit');
+    await enterEditing();
   });
 
   after(async () => {
     if (!root) return;
-    await vscode.commands.executeCommand('modbench.closeMedit');
+    exitEditing();
     await vscode.workspace.getConfiguration('modbench').update(
       'mods.gameDirectory', undefined, vscode.ConfigurationTarget.Workspace);
     fs.writeFileSync(pluginsTxtPath, '');
@@ -1152,12 +1177,12 @@ describe('A loadout change sends a fresh load order snapshot (ADR-0044)', () => 
       'mods.gameDirectory', gameDir, vscode.ConfigurationTarget.Workspace);
     fs.writeFileSync(pluginsTxtPath, '*TestMod.esp\n*MissingMaster.esp\n');
     pluginListProviderOf()?.invalidate();
-    await vscode.commands.executeCommand('modbench.modList.launchMedit');
+    await enterEditing();
   });
 
   after(async () => {
     if (!root) return;
-    await vscode.commands.executeCommand('modbench.closeMedit');
+    exitEditing();
     await vscode.workspace.getConfiguration('modbench').update(
       'mods.gameDirectory', undefined, vscode.ConfigurationTarget.Workspace);
     fs.writeFileSync(pluginsTxtPath, '');
@@ -1275,7 +1300,7 @@ describe('The record-filter readout does not outlive its load order (#255)', () 
   });
 
   it('an explicit Close mEdit takes the record filter out of the description', async () => {
-    await vscode.commands.executeCommand('modbench.modList.launchMedit');
+    await enterEditing();
     // Applied from an open document — the one record-filter entry point a test can drive; the
     // other opens a quick pick over the scripts folder.
     const doc = await vscode.workspace.openTextDocument({ language: 'sql', content: 'SELECT form_key FROM "npc_"' });
@@ -1284,7 +1309,7 @@ describe('The record-filter readout does not outlive its load order (#255)', () 
     assert.ok(description()?.includes('records:'),
       `sanity: the description must name the record filter before Close mEdit, or clearing it proves nothing (was: ${description() ?? 'unset'})`);
 
-    await vscode.commands.executeCommand('modbench.closeMedit');
+    exitEditing();
 
     assert.ok(!(description() ?? '').includes('records:'),
       'a load order that no longer exists must not leave the view still claiming a record filter');
@@ -1355,7 +1380,7 @@ describe('Close mEdit clears the record filter\'s code lens too, not just the re
   });
 
   it('an explicit Close mEdit clears the code lens the same way it clears the readout', async () => {
-    await vscode.commands.executeCommand('modbench.modList.launchMedit');
+    await enterEditing();
     const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(scriptsFile));
     await vscode.window.showTextDocument(doc);
     await vscode.commands.executeCommand('modbench.setFilterFromDocument');
@@ -1363,7 +1388,7 @@ describe('Close mEdit clears the record filter\'s code lens too, not just the re
     assert.strictEqual(await codeLensCommandFor(doc.uri), 'modbench.clearFilter',
       'sanity: the code lens must report the filter active before Close mEdit, or clearing it proves nothing');
 
-    await vscode.commands.executeCommand('modbench.closeMedit');
+    exitEditing();
 
     assert.strictEqual(await codeLensCommandFor(doc.uri), 'modbench.setFilterFromDocument',
       'a load order that no longer exists must not leave the code lens still claiming its SQL is active');
@@ -1428,11 +1453,16 @@ describe('Progressive load (#307)', () => {
     await vscode.workspace.getConfiguration('modbench').update(
       'mods.gameDirectory', gameDir, vscode.ConfigurationTarget.Workspace);
     fs.writeFileSync(pluginsTxtPath, '*TestMod.esp\n*Other.esp\n*MissingMaster.esp\n*Immutable.esm\n');
+      // Setting the game directory just now fired the production config-change relaunch
+    // (backend down + a directory appeared). Settle it and return to loadout so the
+    // tests below still start from the pre-editing state they assert.
+    await enterEditing();
+    exitEditing();
   });
 
   after(async () => {
     if (!root) return;
-    await vscode.commands.executeCommand('modbench.closeMedit');
+    exitEditing();
     await vscode.workspace.getConfiguration('modbench').update(
       'mods.gameDirectory', undefined, vscode.ConfigurationTarget.Workspace);
     fs.writeFileSync(pluginsTxtPath, '');
@@ -1446,15 +1476,15 @@ describe('Progressive load (#307)', () => {
     pluginListProviderOf()?.invalidate();
   });
 
-  afterEach(async () => {
+  afterEach(() => {
     releasePutLoadOrder?.();
-    await vscode.commands.executeCommand('modbench.closeMedit');
+    exitEditing();
   });
 
   // Rows gain chevrons as each plugin lands, not all at once at the end.
   it('makes a plugin expandable as soon as it is indexed, while a later one is still a leaf', async () => {
     setIndexed(['TestMod.esp']);
-    const launch = vscode.commands.executeCommand('modbench.modList.launchMedit');
+    const launch = enterEditing();
 
     await waitFor('TestMod.esp to gain a chevron mid-load', async () =>
       (await itemFor('TestMod.esp')).collapsibleState === vscode.TreeItemCollapsibleState.Collapsed);
@@ -1478,7 +1508,7 @@ describe('Progressive load (#307)', () => {
   // A per-plugin failure surfaces when it occurs, not only at the end of the load.
   it('decorates a plugin that failed to load the moment it is reported, not at the end', async () => {
     setIndexed(['TestMod.esp'], { failures: [{ name: 'Other.esp', reason: 'RACE parse' }] });
-    const launch = vscode.commands.executeCommand('modbench.modList.launchMedit');
+    const launch = enterEditing();
 
     const item = await waitFor('Other.esp to be decorated with its load failure mid-load', async () => {
       const candidate = await itemFor('Other.esp');
@@ -1498,11 +1528,11 @@ describe('Progressive load (#307)', () => {
   // the reporter is injectable; here we assert the observable consequences in a live window.)
   it('stops polling and clears the view when mEdit is closed mid-load', async () => {
     setIndexed(['TestMod.esp']);
-    const launch = vscode.commands.executeCommand('modbench.modList.launchMedit');
+    const launch = enterEditing();
     await waitFor('the load to be under way, polling and rendering', async () =>
       (await itemFor('TestMod.esp')).collapsibleState === vscode.TreeItemCollapsibleState.Collapsed);
 
-    await vscode.commands.executeCommand('modbench.closeMedit');
+    exitEditing();
     // The abandoned load resolves on its own — the abort reaches the in-flight POST rather than
     // leaving it to wait for a socket that will never answer.
     await launch;
@@ -1542,11 +1572,11 @@ describe('Progressive load (#307)', () => {
     (vscode.window as { showErrorMessage: unknown }).showErrorMessage =
       (message: string) => { errors.push(message); return Promise.resolve(undefined); };
     try {
-      const launch = vscode.commands.executeCommand('modbench.modList.launchMedit');
+      const launch = enterEditing();
       await waitFor('the launch to reach the backend health probe', () =>
         requestLog.some((l) => l === 'GET /health'));
 
-      await vscode.commands.executeCommand('modbench.closeMedit');
+      exitEditing();
       releaseHealth?.();
       await launch;
 
@@ -1567,7 +1597,7 @@ describe('Progressive load (#307)', () => {
   // importantly, that it lifts by itself once the load completes.
   it('leaves master issues off the rows until the load completes, then decorates them with no user action', async () => {
     setIndexed(['TestMod.esp', 'MissingMaster.esp']);
-    const launch = vscode.commands.executeCommand('modbench.modList.launchMedit');
+    const launch = enterEditing();
 
     await waitFor('MissingMaster.esp to gain a chevron mid-load', async () =>
       (await itemFor('MissingMaster.esp')).collapsibleState === vscode.TreeItemCollapsibleState.Collapsed);

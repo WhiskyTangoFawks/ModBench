@@ -533,7 +533,7 @@ exactly one more PUT after it, never a race. The sync drops a request when no ba
 a loadout-only workspace is the ordinary case, not a failure. One PUT is one reconcile
 (`createReconcileSequencer`, folded into `loadOrderSync` itself — `src/loadOrderReconcile.ts`):
 snapshot → `EditingController.putLoadOrder` → filter sync → the tree hand-off, the same sequence
-Launch mEdit runs (via `loadOrderSync.flush()`) after the backend comes up.
+the activation-time launch runs (via `loadOrderSync.flush()`) after the backend comes up.
 
 **A failed PUT tears nothing down.** The backend keeps whatever it held; the error is surfaced
 (ADR-0026's explicit-action tier) and the next snapshot retries. A copy that cannot be opened or
@@ -609,19 +609,10 @@ overflow, then native **Collapse All** last.
   frontend never saw it applied), never by its SQL text: a `WHERE` clause is not a readout.
   Clearing either axis leaves the other applied and still named.
 - **Slot 3 — New Plugin…**.
-- **Overflow — Launch mEdit / Close mEdit**:
-  `modbench.modList.launchMedit` /
-  `modbench.closeMedit`, gated on `modbench.workspaceIsMo2Instance` — the same MO2-instance
-  gating the [Loadout header](loadout-header.md) applies to its own actions — and toggled by the
-  `modbench.backendRunning` context key, the standard two-command/context-key toggle shape
-  (only one of the pair is ever contributed for a given state, so it "counts as one icon" per
-  `modbench/CLAUDE.md` rule 2). It lands in overflow rather than a `navigation@N` slot because
-  this tree's navigation bar is already at rule 2's four-icon ceiling (name filter, record
-  filter, New Plugin) before this pair is added; rule 5's own slot sequence ends "then
-  overflow" for whatever arrives once a view's icon budget is spent, so overflow is this
-  toggle's rules-compliant landing spot, not a downgrade. The maintainer's
-  ruling: mEdit is "an option on the plugins view", not a workspace action, so it lives here
-  and not on the [Loadout header](loadout-header.md).
+- **No Launch/Close mEdit anywhere** — the backend launches with the extension (maintainer
+  ruling 2026-09-01: the DB-file-backed session made startup cheap enough that lifecycle
+  stopped being a user decision), so the former overflow toggle pair and its
+  `modbench.backendRunning` context key are gone.
 - **Native Collapse All** — the merge made this the deepest tree in the product
   (plugin → record type → record), so it earns the affordance.
 - **No Refresh of its own.** Re-reading `plugins.txt` is part of the single
