@@ -10,26 +10,19 @@ import * as path from 'node:path';
 // home would be warranted if a third consumer appears; not worth the churn yet.
 import { dropIndexForMove } from './mo2/pluginsText';
 import type { Reporter } from './deployer';
+import { ErrorNode } from './ErrorNode';
 
 const DND_MIME = 'application/vnd.medit.modlist-node';
-
-/** Tags a failed drop mutation with which of `applyDrop`'s three branches threw,
- *  so `handleDrop`'s catch can log a specific `<operation> failed: ...` line
- *  instead of a generic one — without re-deriving the branch from the drop
- *  payload. `message` mirrors the original error so
- *  the reporter's user-facing detail is unaffected. */
-class DropMutationError extends Error {
-  constructor(
-    readonly operation: 'reorder' | 'moveModToSeparator' | 'reorderSeparatorBlock',
-    cause: unknown,
-  ) {
-    super(cause instanceof Error ? cause.message : String(cause));
-  }
-}
 
 /** Shared resolved-undefined default for an omitted `dataFolder` — hoisted out of
  *  the constructor so it isn't a fresh closure per instance. */
 const NO_DATA_FOLDER: () => Promise<string | undefined> = () => Promise.resolve(undefined);
+
+/** The only IModlistSource members this provider calls — see loadOrderSnapshot.ts's
+ *  own `Source` alias for the same narrowing pattern. */
+export type ModListSource = Pick<
+  IModlistSource, 'setEnabled' | 'reorder' | 'moveModToSeparator' | 'reorderSeparatorBlock' | 'setActiveProfile' | 'readModlist'
+>;
 
 /** Constructor options for {@link ModListProvider}. Field order matches
  *  PluginListProvider's identically-shaped options so the two siblings read the
@@ -39,7 +32,7 @@ const NO_DATA_FOLDER: () => Promise<string | undefined> = () => Promise.resolve(
  *  while Modbench runs, so a value captured once at construction could go stale for the life of
  *  the provider. Each call re-reads through the single game-directory resolver. */
 export interface ModListProviderOptions {
-  source: IModlistSource;
+  source: ModListSource;
   log?: (msg: string) => void;
   reporter?: Reporter;
   instanceRoot?: string;
@@ -85,18 +78,6 @@ export class SeparatorNode extends vscode.TreeItem {
   constructor(public readonly separator: Separator, public readonly mods: Mod[]) {
     super(separator.name, vscode.TreeItemCollapsibleState.Collapsed);
     this.contextValue = 'separator';
-  }
-}
-
-/** Inline error surface: shown instead of an empty list when a fetch/read fails,
- *  so a failure is never indistinguishable from "nothing here" (ADR-0026). */
-export class ErrorNode extends vscode.TreeItem {
-  readonly kind = 'error' as const;
-  constructor(message: string) {
-    super(`⚠ Failed to load: ${message}`, vscode.TreeItemCollapsibleState.None);
-    this.contextValue = 'error';
-    this.tooltip = message;
-    this.iconPath = new vscode.ThemeIcon('error');
   }
 }
 
@@ -174,7 +155,7 @@ export class ModListProvider
   // base/vanilla-adjacent mods on top, winning overrides at the bottom, matching
   // MO2's default. See modmanager/CONTEXT.md ("View order").
   private winningAtTop = false;
-  private readonly source: IModlistSource;
+  private readonly source: ModListSource;
   private readonly log: (msg: string) => void;
   private readonly reporter?: Reporter;
   private readonly instanceRoot?: string;
@@ -248,24 +229,18 @@ export class ModListProvider
     // position — dropping onto them must not fall through to "move to end".
     if (target?.kind === 'count' || target?.kind === 'overwrite') return;
     const { kind, name } = payload.value as { kind: 'mod' | 'separator'; name: string };
-    try {
-      await this.applyDrop(kind, name, target);
-    } catch (e) {
-      // ADR-0026: an explicit user action failed — notify + log, then resync the
-      // moved rows against disk so the tree never shows a phantom reorder.
-      const message = e instanceof Error ? e.message : String(e);
-      const operation = e instanceof DropMutationError ? e.operation : 'handleDrop';
-      this.log(`[ModListProvider] ${operation} failed: ${message}`);
-      this.reporter?.report('error', 'Failed to reorder mods.', message);
-    }
+    // ADR-0026: an explicit user action failed — notify + log (see runMutation, which already
+    // knows which of the three mutations threw), then resync the moved rows against disk so the
+    // tree never shows a phantom reorder.
+    await this.applyDrop(kind, name, target);
     this.invalidate();
   }
 
   /** Dispatches a drop's mutation call: mod-onto-separator, mod-reorder, or
    *  separator-block-reorder. Split out of `handleDrop` only to keep that
    *  method's cyclomatic complexity under lint's threshold.
-   *  Each branch runs through `runMutation` so a throw carries which branch it
-   *  came from (specific log lines over a generic one). */
+   *  Each branch runs through `runMutation`, which logs and reports a failure itself
+   *  (specific log lines over a generic one) rather than throwing. */
   private async applyDrop(kind: 'mod' | 'separator', name: string, target: ModlistNode | undefined): Promise<void> {
     // A drop hands us the *pre-removal* target ("insert before this row"), but
     // moveModInText/moveSeparatorBlockInText count toIndex among the entries with
@@ -287,8 +262,10 @@ export class ModListProvider
     }
   }
 
-  /** Runs a single drop mutation, tagging any throw with `operation` so
-   *  `handleDrop`'s catch can log which of the three mutations failed. */
+  /** Runs a single drop mutation, logging and reporting a failure itself — it already knows
+   *  which of the three mutations this is, so `handleDrop` doesn't need to unpack a tagged
+   *  exception to find out. Swallows the failure (rather than rethrowing) so `handleDrop` always
+   *  reaches its resync `invalidate()` call, exactly as it did before this method existed. */
   private async runMutation(
     operation: 'reorder' | 'moveModToSeparator' | 'reorderSeparatorBlock',
     mutate: () => Promise<void>,
@@ -296,7 +273,9 @@ export class ModListProvider
     try {
       await mutate();
     } catch (e) {
-      throw new DropMutationError(operation, e);
+      const message = this.err(e);
+      this.log(`[ModListProvider] ${operation} failed: ${message}`);
+      this.reporter?.report('error', 'Failed to reorder mods.', message);
     }
   }
 

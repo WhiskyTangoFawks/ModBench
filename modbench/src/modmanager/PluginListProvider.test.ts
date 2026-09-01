@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { mkdtemp, mkdir, rm, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { IModlistSource, InstallMeta, ModlistEntry } from './model';
+import type { ModlistEntry } from './model';
 import { Mo2ModlistSource } from './mo2/Mo2ModlistSource';
 import { buildTes4Buffer } from './test/buildTes4Buffer';
 import {
@@ -16,12 +16,16 @@ vi.mock('vscode', () => ({
 }));
 
 import {
-  PluginListProvider, PluginNode, ImplicitMasterNode, ErrorNode, EmptyNode, pluginFileOf, orderIssueMastersOf,
+  PluginListProvider, PluginNode, ImplicitMasterNode, EmptyNode, pluginFileOf, orderIssueMastersOf,
+  type PluginListSource,
 } from './PluginListProvider';
+import { ErrorNode } from './ErrorNode';
 
-/** Minimal IModlistSource stub: only the two plugin read methods matter here;
- *  everything else throws to prove PluginListProvider never touches them. */
-class FakeSource implements IModlistSource {
+/** Implements exactly PluginListProvider's own Pick<> of IModlistSource — a method the provider
+ *  doesn't touch can't even be added here by mistake. readModlist is part of that set but never
+ *  exercised by these tests (the instanceRoot fixtures further down use the real
+ *  Mo2ModlistSource instead), so it stays an 'unused' stub rather than a real implementation. */
+class FakeSource implements PluginListSource {
   setPluginEnabledCalls: { pluginName: string; enabled: boolean }[] = [];
   reorderPluginsCalls: { names: string[]; toIndex: number }[] = [];
   reorderPluginsError?: Error;
@@ -40,20 +44,6 @@ class FakeSource implements IModlistSource {
     return this.order instanceof Error ? Promise.reject(this.order) : Promise.resolve(this.enabled);
   }
   readModlist(): Promise<ModlistEntry[]> { throw new Error('unused'); }
-  setEnabled(): Promise<void> { throw new Error('unused'); }
-  reorder(): Promise<void> { throw new Error('unused'); }
-  insertSeparator(): Promise<void> { throw new Error('unused'); }
-  renameSeparator(): Promise<void> { throw new Error('unused'); }
-  deleteSeparator(): Promise<void> { throw new Error('unused'); }
-  moveModToSeparator(): Promise<void> { throw new Error('unused'); }
-  removeMod(): Promise<void> { throw new Error('unused'); }
-  installMod(_n: string, _d: string, _m: InstallMeta): Promise<void> { throw new Error('unused'); }
-  reorderSeparatorBlock(): Promise<void> { throw new Error('unused'); }
-  getNexusSlug(): Promise<string> { throw new Error('unused'); }
-  listProfiles(): Promise<string[]> { throw new Error('unused'); }
-  listSeparators(): Promise<string[]> { throw new Error('unused'); }
-  getActiveProfile(): Promise<string> { throw new Error('unused'); }
-  setActiveProfile(): Promise<void> { throw new Error('unused'); }
   setPluginEnabled(pluginName: string, enabled: boolean): Promise<void> {
     this.setPluginEnabledCalls.push({ pluginName, enabled });
     return Promise.resolve();
@@ -63,7 +53,6 @@ class FakeSource implements IModlistSource {
     this.reorderPluginsCalls.push({ names, toIndex });
     return Promise.resolve();
   }
-  appendPlugin(): Promise<void> { throw new Error('unused'); }
 }
 
 // The leading slot answers exactly one question — "can you change whether this loads?"
