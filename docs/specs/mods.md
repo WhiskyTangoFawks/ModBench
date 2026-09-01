@@ -14,11 +14,11 @@ Architecture is fixed by four ADRs:
 - [ADR-0027](../adr/0027-mo2-surfaces-map-to-native-vscode-views.md) — MO2's
   Mods/Plugins/Downloads panels map to native VS Code views and editor tabs, not a
   custom panel switcher.
-- [MM ADR-0001](../adr/0021-mod-manager-in-extension.md)
+- [ADR-0021](../adr/0021-mod-manager-in-extension.md)
   — the modlist format **is** MO2's format, behind a source adapter.
 
 Sibling surfaces: Editing ([medit.md](medit.md)); the Downloads tree
-([downloads.md](downloads.md)); the planned Plugins load-order tree
+([downloads.md](downloads.md)); the Plugins load-order tree
 ([plugins.md](plugins.md)).
 
 ## Problem Statement
@@ -255,7 +255,7 @@ the configured game directory's `Data/`.
 ### Modlist format & source adapters
 
 - Modbench does not invent a modlist format — its format **is** MO2's
-  ([MM ADR-0001](../adr/0021-mod-manager-in-extension.md)).
+  ([ADR-0021](../adr/0021-mod-manager-in-extension.md)).
   Persistence goes through an `IModlistSource` over an in-memory modlist model.
 - **MO2 adapter** (first-class): reads/writes an instance in place — `mods/<name>/`, the
   active profile's `modlist.txt` (`+`/`-` prefixes, top of file = winning end, bottom = losing end) and

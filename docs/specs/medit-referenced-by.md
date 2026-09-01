@@ -112,7 +112,7 @@ Code surface. Zero referrers renders the tree's own empty state instead.
   view is created with `canSelectMany: true`, same as the Plugins tree.
   `modbench.referencedByTree.copy` is reachable by a `Ctrl+C` keybinding (`focusedView ==
   modbench.referencedByTree`) *and* a `view/item/context` entry — both invoking the one command,
-  the same shape `modbench.deleteRecord` already uses elsewhere in this tree family.
+  the same shape `modbench.record.delete` already uses elsewhere in this tree family.
   [ADR-0034](../adr/0034-xedit-is-the-ux-reference-for-the-record-editor.md)'s "no action reachable
   two ways" is about redundant *affordances* for one action (an inline button duplicating a menu
   item), not a command carrying both a keybinding and a menu entry — those are the same route, not
@@ -148,12 +148,11 @@ deferred**, and that narrowing is a recorded decision, not an omission:
   (`canSelectMany`), Copy (a selected group's own label), Open, and Open to the Side. None of
   these mutate a record, so they don't trip the "tree navigates, it does not mutate" line below.
 - **The mutating family (the copy-as-override/copy-as-new-record group, Remove, Mark Modified,
-  Visible When Distant) is deferred to the planned unified record context menu**, not rejected.
-  That work unifies one record context menu
-  across the record row, the placed-record row, and the record editor's column header — Referenced
-  By rows are records too, so they become a fourth surface for that same shared menu. Building the
-  mutating family here first would mean building it a fourth time immediately before the
-  unification removes the duplication.
+  Visible When Distant) is deferred, not rejected.** #281 already unified one record context menu
+  (Copy as Override Into…, Copy as New Record Into…, Remove, in xEdit's `pmuViewHeader` order)
+  across three surfaces — the record row, the placed-record row, and the record editor's column
+  header — but Referenced By rows are records too and were not made a fourth surface for that
+  shared menu when it shipped. Tracked as its own polish pass (#580) rather than folded in here.
 - **Compare Selected is deferred until multi-record compare exists**, which this surface would
   need and does not yet have.
 

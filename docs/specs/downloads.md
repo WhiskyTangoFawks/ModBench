@@ -1,5 +1,9 @@
 # Downloads — Surface Specification
 
+**Status: Implemented.** The tree, queue watcher, install/hide/delete/filter/sort commands
+(12 `modbench.downloads.*` commands) all ship; a `nxm://` protocol handler and authenticated
+Nexus API integration remain out of scope (see Nexus login below).
+
  Feature landscape:
 [mod-manager feature inventory](../research/mod-manager-feature-inventory.md).
 
@@ -152,7 +156,7 @@ bookkeeping.
 
 - The tree views the MO2 instance's shared `downloads/` folder
   (`<instanceRoot>/downloads/`), per
-  [modmanager ADR-0001](../adr/0021-mod-manager-in-extension.md).
+  [ADR-0021](../adr/0021-mod-manager-in-extension.md).
   Not a Modbench-private location — a user must be able to alternate between MO2 and
   Modbench on the same instance with no divergence.
 - Retention (keep vs. purge downloads after install) is **not a Downloads-tree decision**:
@@ -262,8 +266,9 @@ of the two in one menu is the UX wart being fixed).
 word-boundary regex (`viewItem =~ /\bflag\b/`), so flag order never matters — the
 same `contextValue`-flag-string idiom Mods/Plugins use.
 
-**Seven commands** — no Reveal in Explorer (see user story 16): the tree lives beside the
-workspace's own Explorer, so an in-tree reveal action is redundant.
+**Twelve commands** (install, visitNexus, openFile, openMeta, delete, hide, unhide, filter,
+clearFilter, sortBy, showHidden, hideHidden) — no Reveal in Explorer (see user story 16): the
+tree lives beside the workspace's own Explorer, so an in-tree reveal action is redundant.
 
 - **Install, Visit on Nexus, Open File, Open Meta File** act on the **clicked row only**,
   ignoring any multi-selection. VS Code invokes a `view/item/context` command as
@@ -392,8 +397,8 @@ workspace's own Explorer, so an in-tree reveal action is redundant.
 - **Reused integration seam** (`npm run test:integration`, real VS Code process,
   `extension.test.ts`'s `modbench.downloads` tree block): the tree renders from a
   real instance; a dropped-in file is reflected via the watcher with no manual refresh;
-  the folder-exists welcome states; and all ten `modbench.downloads.*` commands (seven
-  row + `sortBy`/`showHidden`/`hideHidden`) register, asserted via `EXPECTED_COMMANDS`.
+  the folder-exists welcome states; and all twelve `modbench.downloads.*` commands
+  register, asserted via `EXPECTED_COMMANDS`.
 - The `when`-clause gating in `package.json` itself isn't exercised by any test
   (declarative, verified manually), same caveat as every other native context menu in
   this codebase.
@@ -425,8 +430,9 @@ workspace's own Explorer, so an in-tree reveal action is redundant.
 
 - **What the alpha's Downloads surface actually is**: the `modbench.downloads` sidebar
   `TreeView`, collapsed by default, reachable via the command palette or by expanding it
-  in the loadout stack — no separate command to open it, no columns, no filter box, no
-  manual Refresh. Live entirely off `downloadsWatcher.ts` and the pure `downloads` model
+  in the loadout stack — no separate command to open it, no columns, no
+  manual Refresh (a name filter exists — Slot 1 above — this is about the absence of a
+  data-refresh control). Live entirely off `downloadsWatcher.ts` and the pure `downloads` model
   in `mo2/downloads.ts`.
 - Consequence of ADR-0027: this surface's shape — sidebar tree, collapsed by
   default, status-bar item deferred to Nexus integration — is resolved; downloads
