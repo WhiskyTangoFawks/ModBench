@@ -165,11 +165,11 @@ public sealed class CompareGoldenTests : IDisposable
             // derived from the reconciled load order the way GetRecordTypes() (via RequireSchemas)
             // did; that's a basis change, accepted because it's the same constant this fixture
             // already reconciles with two lines above and root CLAUDE.md's game-generalization
-            // rule permits an FO4-concrete *test fixture*. "header" duplicates
-            // RecordQueryService.HeaderTableName's *value* — that const is `private`, so this
-            // literal can't reference it directly; if the const's value ever changes, update this
-            // literal to match, or this count silently includes one extra type.
-            RecordTypes = _reflector.GetSchemas(GameRelease.Fallout4).Keys.Count(t => t != "header"),
+            // rule permits an FO4-concrete *test fixture*. The header exclusion names
+            // HeaderIndexer.RecordType directly — #631 folded away the private
+            // RecordQueryService.HeaderTableName this used to have to duplicate as a literal, so a
+            // change to the value can no longer leave this count silently including one extra type.
+            RecordTypes = _reflector.GetSchemas(GameRelease.Fallout4).Keys.Count(t => t != HeaderIndexer.RecordType),
             PerPluginTypes = new[] { "Base.esm", "Mid.esp", "Top.esp" }
                 .ToDictionary(p => p, p => _service.GetPluginRecordTypes(p)),
             WinningRecords = new[] { ConflictedNpc, UnchangedWeapon, SoleNpc, InjectedNpc }

@@ -179,7 +179,7 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         IReadOnlyDictionary<Type, string> getterTypeToTable, ILogger logger)
     {
         if (BuildHeaderSchema(category, assembly, getterTypeToTable, logger) is { } headerSchema)
-            schemas["header"] = headerSchema;
+            schemas[HeaderIndexer.RecordType] = headerSchema;
     }
 
     // ── Header schema ──────────────────────────────────────────────────────────
@@ -191,8 +191,15 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
     // reflection needed, since MasterReferences is already exposed generically.
     //
     // ColumnSpec.Extract is unused here (it's Func<IMajorRecordGetter, object?>; a header is never
-    // one, and the header table bypasses the major-record indexing loop entirely) — the real
-    // per-plugin extraction is HeaderColumnExtract, positionally aligned with RecordColumns.
+    // one, and the header bypasses the major-record indexing loop entirely) — the real extraction is
+    // HeaderColumnExtract, positionally aligned with RecordColumns.
+    //
+    // #631: PropertyName is the column's path *inside the header's own document*, so it carries the
+    // "ModHeader." prefix (see HeaderDocumentPath). Every other schema's PropertyName is a bare CLR
+    // property name because a record's document is that record; the header's document is the whole
+    // mod's root RecordData.json, which nests the header one level in. Only the generated view's
+    // json_extract path reads PropertyName for the header — the typed read goes through
+    // HeaderColumnExtract, which reflects over the live CLR property and never sees this string.
     private static RecordTableSchema? BuildHeaderSchema(
         GameCategory category, Assembly assembly,
         IReadOnlyDictionary<Type, string> getterTypeToTable, ILogger logger)
@@ -212,8 +219,13 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         var authorProp = headerGetterType.GetProperty("Author", BindingFlags.Public | BindingFlags.Instance);
         if (authorProp != null && ClassifyLeaf(authorProp, authorProp.PropertyType, getterTypeToTable) is { } authorLeaf)
         {
-            columns.Add(new ColumnSpec("author", authorProp.Name, authorLeaf.DuckDbType, _ => null,
-                authorLeaf.ApiType, authorLeaf.ValidFormKeyTypes, authorLeaf.EnumValues, Apply: null));
+            // ViewDefaultLiteral threaded through like ProjectColumn does for every other column
+            // (#631, now that the header has a generated view). Author is a string, so
+            // ClassifyLeaf already answers null here — absent means "no author", and NULL is the
+            // honest rendering, exactly what the retired wide column stored.
+            columns.Add(new ColumnSpec("author", HeaderDocumentPath(modHeaderProp, authorProp), authorLeaf.DuckDbType, _ => null,
+                authorLeaf.ApiType, authorLeaf.ValidFormKeyTypes, authorLeaf.EnumValues, Apply: null,
+                ViewDefaultLiteral: authorLeaf.ViewDefaultLiteral));
             extracts.Add(HeaderPropertyExtract(modHeaderProp, authorLeaf.Get));
         }
         else
@@ -229,10 +241,18 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
             // Only the header's flags column gets xEdit's display names — every other
             // bitmask enum in the schema (npc_, race, ...) keeps its raw Mutagen member names, so
             // this maps flagsLeaf.EnumValues here rather than inside ClassifyEnumLeaf.
+            // IsFlagsEnum/ViewDefaultLiteral threaded through like ProjectColumn does for every other
+            // column (#631, now that the header has a generated view). Both are load-bearing rather
+            // than tidy: the serializer writes a [Flags] enum as an array of member names, so without
+            // IsFlagsEnum the view emits `CAST(json_extract(...) AS BIGINT)` over `["Small"]` and the
+            // whole view fails to bind ("Conversion Error: Failed to cast value to numerical" —
+            // observed, not hypothetical). The typed read is unaffected either way: it goes through
+            // HeaderColumnExtract and IsBitmask, never this flag.
             var displayNames = flagsLeaf.EnumValues.Select(MapToXEditFlagName).ToArray();
-            columns.Add(new ColumnSpec("flags", flagsProp.Name, flagsLeaf.DuckDbType, _ => null,
+            columns.Add(new ColumnSpec("flags", HeaderDocumentPath(modHeaderProp, flagsProp), flagsLeaf.DuckDbType, _ => null,
                 flagsLeaf.ApiType, flagsLeaf.ValidFormKeyTypes, displayNames, Apply: null,
-                IsBitmask: flagsLeaf.IsBitmask, EnumBitValues: flagsLeaf.EnumBitValues));
+                IsBitmask: flagsLeaf.IsBitmask, EnumBitValues: flagsLeaf.EnumBitValues,
+                IsFlagsEnum: flagsLeaf.IsFlagsEnum, ViewDefaultLiteral: flagsLeaf.ViewDefaultLiteral));
             extracts.Add(HeaderPropertyExtract(modHeaderProp, flagsLeaf.Get));
         }
         else
@@ -240,15 +260,20 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
             logger.LogWarning("No Flags enum property found on {HeaderType}; header flags column omitted", headerGetterType);
         }
 
+        // Masters comes straight off the game-agnostic IModGetter rather than through a reflected
+        // ModHeader property, so its document path is spelled directly. Apply stays null: masters are
+        // wholly content-derived at compile time (#335/ADR-0038) and this column is the leaf refusal
+        // for a write that ever reaches it — see HeaderIndexer.MastersFieldName for why nothing does
+        // today.
         var mastersElement = new FieldMetadata("", "string", false, Empty, Empty);
-        columns.Add(new ColumnSpec(HeaderIndexer.MastersFieldName, "MasterReferences", "VARCHAR", _ => null, "array",
+        columns.Add(new ColumnSpec(HeaderIndexer.MastersFieldName, $"{modHeaderProp.Name}.MasterReferences", "VARCHAR", _ => null, "array",
             Empty, Empty, Apply: null, IsArray: true, ElementType: mastersElement));
         extracts.Add(mod => JsonSerializer.Serialize(mod.MasterReferences.Select(r => r.Master.FileName.ToString()).ToList()));
 
         return new RecordTableSchema
         {
-            TableName = "header",
-            DisplayName = RecordDisplayNames.For("header"),
+            TableName = HeaderIndexer.RecordType,
+            DisplayName = RecordDisplayNames.For(HeaderIndexer.RecordType),
             RecordType = headerGetterType,
             RecordColumns = columns,
             HeaderColumnExtract = extracts,
@@ -258,6 +283,13 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
 
     private static Func<IModGetter, object?> HeaderPropertyExtract(PropertyInfo modHeaderProp, Func<object, object?> leafGet) =>
         mod => modHeaderProp.GetValue(mod) is { } header ? leafGet(header) : null;
+
+    /// <summary>Where this header property sits in the mod's own root <c>RecordData.json</c> —
+    /// <c>"ModHeader.Author"</c>, not <c>"Author"</c>. Built from the reflected property names rather
+    /// than a literal so it follows a rename of either, the same reason every other
+    /// <c>PropertyName</c> is <c>prop.Name</c> and not a string.</summary>
+    private static string HeaderDocumentPath(PropertyInfo modHeaderProp, PropertyInfo leafProp) =>
+        $"{modHeaderProp.Name}.{leafProp.Name}";
 
     // Member names Mutagen uses for the light-master ("ESL") flag across games.
     private static readonly HashSet<string> LightMasterFlagNames =
@@ -789,7 +821,7 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
     }
 
     // Every prior VARCHAR column already held a real string; a widened scalar column is the first
-    // one to hand AppendTyped a raw boxed *numeric* value, and AppendTyped's own VARCHAR branch is
+    // one to hand CoerceToColumnType a raw boxed *numeric* value, and its own VARCHAR branch is
     // a bare value.ToString() with no culture — so on any non-en-US host a widened float/int would
     // round-trip through the current culture's separators (e.g. "3,5" under de-DE) instead of the
     // actual value. Format explicitly with InvariantCulture here, for every IFormattable scalar

@@ -1,4 +1,5 @@
 using System.Globalization;
+using MEditService.Core.Records;
 using MEditService.Core.Serialization;
 using MEditService.Core.Source;
 using MEditService.Tests.RealData;
@@ -52,9 +53,14 @@ public sealed class RecordsDocumentTableTests(CutDownPluginFixture fixture) : IC
     public void Index_WritesOneDocumentPerRecordOfEveryIndexedType()
     {
         using var overlay = OpenPlugin();
+        // The header is excluded from the enumeration (a ModHeader is not an IMajorRecordGetter, so
+        // EnumerateMajorRecords cannot reach it) and added back as the one row it contributes — since
+        // #631 it is an ordinary `records` row, so leaving it out would under-count by exactly one
+        // per plugin.
         var expected = SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4)
-            .Where(kv => kv.Key != "header")
-            .Sum(kv => overlay.EnumerateMajorRecords(kv.Value.RecordType, throwIfUnknown: false).Count());
+            .Where(kv => kv.Key != HeaderIndexer.RecordType)
+            .Sum(kv => overlay.EnumerateMajorRecords(kv.Value.RecordType, throwIfUnknown: false).Count())
+            + 1;
 
         var actual = Convert.ToInt64(Scalar("SELECT COUNT(*) FROM records"), CultureInfo.InvariantCulture);
 

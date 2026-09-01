@@ -52,8 +52,13 @@ public sealed class InstanceScopedIndexTests : IDisposable
     private static IReadOnlyList<LoadOrderEntry> OrderIn(string instanceRoot) =>
         [new(Plugin, Path.Combine(instanceRoot, "mods", Origin, Plugin), Origin, Slot: 0, Enabled: true, Winning: true)];
 
+    // Records only: the plugin header is a document too since #631, and its EditorID is null by
+    // definition — including it would put a meaningless null in front of every expectation here
+    // without saying anything more about instance isolation, which is what this file is about.
     private static IReadOnlyList<string?> EditorIdsIn(LoadOrderMirror manager) =>
-        [.. manager.Index!.GetDocuments(Key).Select(d => d.EditorId)];
+        [.. manager.Index!.GetDocuments(Key)
+            .Where(d => d.RecordType != HeaderIndexer.RecordType)
+            .Select(d => d.EditorId)];
 
     // Two instances, one game, the same mod folder name, different plugin bytes: neither ever
     // reads the other's records. Warm on both sides — the second load of each instance is the one

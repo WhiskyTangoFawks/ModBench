@@ -97,9 +97,10 @@ public sealed class WinnersDerivedTableTests : IDisposable
         // FormKey and exactly one row per ref names a winner for it.
         Assert.Equal(2, Scalar(index, $"SELECT COUNT(*) FROM winners WHERE form_key = '{_npc}'"));
 
-        // Every plugin header is swept in the same pass — the header table is the one surviving
-        // per-type table and would otherwise never have a winner at all, which reads as "no header
-        // exists" through Open Header's winner-only lookup.
+        // Every plugin header wins its own FormKey. It is swept by construction rather than by a
+        // branch of its own since #631 — it is an ordinary `records` row, and the sweep reads that
+        // one relation. Still asserted, because "no winner" reads as "no header exists" through Open
+        // Header's winner-only lookup, and that is a real failure mode however the row gets there.
         foreach (var plugin in new[] { BaseKey, OverKey })
         {
             var headerFk = HeaderIndexer.FormKeyFor(ModKey.FromFileName(plugin.Name));

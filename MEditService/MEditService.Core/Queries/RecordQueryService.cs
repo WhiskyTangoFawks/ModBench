@@ -61,8 +61,13 @@ public sealed class RecordQueryService(
     // The header isn't a browsable record type (the "expand a plugin -> record types"
     // listing, or an unscoped "all types" search) — it's reached only via "Open Header" on the
     // plugin node. It stays a real schemas.Keys entry so GetRecord/GetCompare (a direct FormKey
-    // lookup) can still resolve it; only this one browse-all-types path excludes it.
-    private const string HeaderTableName = "header";
+    // lookup) can still resolve it; only the two browse paths below exclude it, and since #631 both
+    // exclusions are real rather than side effects of the header living outside `records`.
+    //
+    // Named through HeaderIndexer.RecordType, not a local copy of the literal: this file used to
+    // carry its own private const, which is exactly the kind of second spelling #631 exists to
+    // delete — and being private, it had already forced CompareGoldenTests into a third copy as a
+    // bare literal. That one now names the canonical constant too.
 
     public PagedResult<RecordSummary> GetRecords(string? type, string? plugin, string? search, int limit, int offset, string? origin = null)
     {
@@ -76,7 +81,7 @@ public sealed class RecordQueryService(
         if (type != null && !schemas.ContainsKey(type))
             return new PagedResult<RecordSummary>([], 0);
 
-        IReadOnlyList<string> recordTypes = type != null ? [type] : [.. schemas.Keys.Where(t => t != HeaderTableName)];
+        IReadOnlyList<string> recordTypes = type != null ? [type] : [.. schemas.Keys.Where(t => t != HeaderIndexer.RecordType)];
         // Written as an if rather than `plugin == null ? null : new PluginKey(plugin, origin)`
         // — PluginKey's implicit string conversion makes that ternary's common-type inference reach
         // for the null literal via `string`, tripping CS8625 on PluginKey.Name.
@@ -186,10 +191,13 @@ public sealed class RecordQueryService(
         origin ??= PluginOriginResolver.Resolve(_mirror.LoadOrder, plugin);
         var schemas = RequireSchemas();
 
-        // The header is never in `records`, so it is already absent from the result without an
-        // explicit exclusion.
+        // #631: the header IS in `records` now — one row per plugin, grouped by record_type like
+        // every other — so this exclusion has to be real rather than a side effect of the header
+        // living somewhere else. Without it "Main File Header" appears as a browsable record-type
+        // node (count 1) under every plugin, which is not how the header is reached
+        // (GetPluginRecordTypes_ExcludesHeader is the standing guard).
         return [.. reads.GetRecordTypeCounts(new PluginKey(plugin, origin))
-            .Where(c => schemas.ContainsKey(c.Type))
+            .Where(c => c.Type != HeaderIndexer.RecordType && schemas.ContainsKey(c.Type))
             .Select(c => new PluginRecordTypeCount(c.Type, c.Count, schemas.DisplayNameFor(c.Type)))
             .OrderBy(r => r.Type)];
     }

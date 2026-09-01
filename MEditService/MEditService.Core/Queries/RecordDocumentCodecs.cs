@@ -21,9 +21,9 @@ internal static class RecordDocumentCodecs
 {
     private static readonly RecordTextCodec Codec = new(NullLogger<RecordTextCodec>.Instance);
 
-    // Missing data reads as null/empty, never a throw: a null Body — the header, which is never an
-    // IMajorRecordGetter and so has no document — reads as "no VMAD", the same as a record that
-    // simply carries none.
+    // Missing data reads as null/empty, never a throw: a document this codec cannot reconstitute
+    // reads as "no VMAD", the same as a record that simply carries none. See Deserialize for the two
+    // cases that reach that.
     public static VmadData? GetVmad(RecordDocument document, GameRelease release, ILogger logger)
     {
         if (Deserialize(document, release) is not IHaveVirtualMachineAdapterGetter { VirtualMachineAdapter: { } vmad })
@@ -55,7 +55,8 @@ internal static class RecordDocumentCodecs
     // Owners are re-sorted by FieldPath (ordinal): Extract's own discovery order (reflection order
     // for flat fields, then nested owners appended after) is not a stable presentation order.
     //
-    // A null Body reads as "no conditions", same as GetVmad's null-VMAD case.
+    // A document this codec cannot reconstitute reads as "no conditions", same as GetVmad's
+    // null-VMAD case.
     public static IReadOnlyList<ConditionOwner> GetConditions(RecordDocument document, GameRelease release, IConditionCodec? conditionCodec)
     {
         if (conditionCodec == null) return [];
@@ -75,8 +76,25 @@ internal static class RecordDocumentCodecs
             })];
     }
 
+    /// <summary>
+    /// The document as a live record, or null when this codec structurally cannot produce one.
+    ///
+    /// <para><b>The plugin header is refused by name, and it has to be.</b> Its body is a real
+    /// document like every other row's since #631 — the whole-mod door's root
+    /// <c>RecordData.json</c> — but a ModHeader is not an <see cref="IMajorRecordGetter"/>, so the
+    /// per-record codec cannot read it: handed the header's <c>record_type</c> it takes the
+    /// self-describing path, finds no <c>MutagenObjectType</c>, and throws
+    /// <c>RecordTypeSerializationUnsupportedException</c>. Both capabilities here are structurally
+    /// impossible for a header anyway (<c>RecordTableSchema.HasVmad</c> is false for it, and a
+    /// ModHeader owns no condition list), so "no VMAD, no conditions" is the honest answer rather
+    /// than a swallowed failure.</para>
+    ///
+    /// <para>This used to be a null-<c>Body</c> check, which answered the same question only because
+    /// the header was the one document-less row. That is no longer true, and a null body would now
+    /// mean something quite different — so the guard names what it actually excludes.</para>
+    /// </summary>
     private static IMajorRecord? Deserialize(RecordDocument document, GameRelease release) =>
-        document.Body is not { } body
+        document.RecordType == HeaderIndexer.RecordType || document.Body is not { } body
             ? null
             : Codec.DeserializeFromBytesAsync(Encoding.UTF8.GetBytes(body), release, document.RecordType)
                 .GetAwaiter().GetResult();

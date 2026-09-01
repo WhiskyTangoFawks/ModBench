@@ -422,19 +422,39 @@ already empty: matching xEdit's own guard (`Element.EditValue` must be non-empty
   as DOM keydown accelerators on the focused cell, no extension-host round trip needed for the
   keys since `onArrayEdit`/`onArrayAdd` are pure in-webview state.) Add is available regardless of
   the array's expand state, matching xEdit. Sorted (`wbArrayS`) arrays offer none of these — order is derived from the
-  sort key, so the entries are absent, not merely disabled. All three ops write the **whole
-  array** as a single field edit — the atomic complex-field write CONTEXT.md describes — and only
-  on non-immutable columns. An element-**value** edit is offered on the same cell and shares this
+  sort key, so the entries are absent, not merely disabled. **The ops post a server-side op
+  envelope** (`{op, path}`, #630) through the ordinary edit path; the backend reads the record's
+  own current value, computes the result, and applies it as the same atomic whole-array
+  complex-field write CONTEXT.md describes — so the write itself is unchanged, only who computes
+  it. Boundary cases (move the first element up, the last down, remove an out-of-range index)
+  are answered server-side as no-ops that commit nothing: no rewrite, no working-tree change, no
+  history entry. Only non-immutable columns offer the ops. An element-**value** edit is offered on the same cell and shares this
   same reconstruction: the whole array (or struct-array element) is rebuilt before the write, so
   it lands atomically rather than being silently lost. The context-menu ops' wire payload
   carries the element's full `path` + `rootField` (the addressing contract), so ops on an
   array nested inside a struct or another array land at the element's real depth, and Add
   resolves its default element from the nested array's own element type via `metaAtPath` — a
   bare element index would truncate both. There is no free
-  drag-reorder and no auto-sort. A VMAD array-of-scalars
-  property reuses this exact same machinery with no VMAD-specific code; VMAD's struct/
-  structList element ops and Conditions' own add/remove/reorder are described under *VMAD and
-  Conditions are ordinary rows in the one tree* below.
+  drag-reorder and no auto-sort.
+  **Two surfaces are carved out of the envelope path and still compute client-side** (#630):
+  a **VMAD** array-of-scalars property, and a **Condition** list. Both are reached by the same
+  generic `{ type: 'array' }` metadata and the same gestures, but neither goes through the
+  reflected-schema column the envelope path applies to — VMAD has `VmadCodec`'s own vocabulary,
+  and a condition-owning field is dispatched to `Fallout4ConditionCodec.ApplyListValue`, which
+  requires a JSON array and refuses an envelope object. The two carve-outs are deliberately
+  **separate branches, not one merged gate**: a Condition group's own `FieldDiff` is always a
+  top-level entry, whereas a VMAD property's is a child of its script row, so a single
+  top-level-keyed gate would start posting envelopes for VMAD properties. Moving each to its own
+  codec's structural-op vocabulary is the intended end state (#658). **VMAD arity ops work as of
+  #660**, which fixed the lookup: a property's `FieldDiff` sits two levels down
+  (`wrapper → script → property`), so the old flat top-level search matched *nothing* under a
+  VMAD path — every VMAD op through this handler was an unconditional silent no-op, before and
+  after #630. The lookup now descends the VMAD subtree only; the Condition and ordinary-field
+  lookups stay flat and untouched, because widening those would let a `rootField` resolve to a
+  deeper node than intended and turn a silent no-op into a silent wrong write.
+  VMAD's struct/structList element ops and
+  Conditions' own add/remove/reorder are described under *VMAD and Conditions are ordinary rows
+  in the one tree* below.
 - **Editing writes working-tree source text directly** (ADR-0041) — there is no staged
   intermediate state. A single field's value can be **dragged between plugin columns** to copy
   just that field into the target (which must be editable; the source need not be) — or **copied
@@ -681,8 +701,14 @@ carrying its own `wirePath`. A property's own kind decides its row: scalar/objec
 leaves; **array** (`ArrayOf` Bool/Int/Float/String/Object) reconstructs a real per-plugin array
 (not the raw compare payload's `null`-for-containers convention) so it fits the exact shape an
 ordinary unsorted array already does — meaning the **existing** array-op machinery (right-click
-Add/Remove/Move Up/Move Down, `Insert`/`Delete`/`Ctrl+↑`/`Ctrl+↓`) applies to a VMAD array with
-*zero* VMAD-specific code anywhere in `DiffRow`/`RecordPanel`; **struct**/**structList**
+Add/Remove/Move Up/Move Down, `Insert`/`Delete`/`Ctrl+↑`/`Ctrl+↓`) offers the same gestures on a
+VMAD array. **This is no longer VMAD-free at the handler** (#630): ordinary arrays post a
+server-side op envelope, while VMAD is carved out to the preserved client-side computation,
+because VMAD does not go through the reflected-schema column the envelope path applies to. These
+arity ops **were an unconditional silent no-op until #660** — a pre-existing lookup defect that
+searched only the flat top level, where a VMAD property's `FieldDiff` never sits (it is two levels
+down, `wrapper → script → property`). The same defect silently discarded a VMAD **string**
+property's extended-editor save. Both now resolve. **struct**/**structList**
 (ArrayOfStruct) use `commitOverride` as described above, with structList's own instances exposed
 as array elements the same way (Remove/Move reuse the generic array machinery unmodified; instance
 **Add** is the one case still awaiting a follow-up, noted below). A **variable**-kind property is
@@ -691,8 +717,13 @@ as array elements the same way (Remove/Move reuse the generic array machinery un
 **Conditions' shape**: one **`type: 'array'`** row per condition-owning field (not a struct
 container the way VMAD's script list is) — a condition list's add/remove/move already wrote
 the whole list at one field path before this work, the identical shape an ordinary unsorted array
-writes in, so it reuses the **same** array-op machinery Conditions' AC asks for
-("consistent with array operations") with **zero new commands**. Conditions align across plugins
+writes in, so it reuses the **same** array-op gestures Conditions' AC asks for
+("consistent with array operations") with **zero new commands**. As of #630 it is a **carve-out
+at the handler**, not shared machinery: a condition-owning field is dispatched server-side to
+`Fallout4ConditionCodec.ApplyListValue`, which requires a JSON array and refuses an op envelope,
+so condition lists keep computing the whole array client-side. Review caught this as a live
+regression when the envelope path first shipped without the carve-out — Remove on any Condition
+row refused as "field not found". Conditions align across plugins
 positionally by canonical index (the glossary's Unsorted array rule, ADR-0019, the same alignment
 `VmadConflictClassifier` already gives VMAD arrays) — a plugin missing one condition leaves a hole
 at that position rather than compacting the row list, so a condition's row stays aligned with its

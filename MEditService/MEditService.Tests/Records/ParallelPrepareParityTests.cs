@@ -36,7 +36,14 @@ public class ParallelPrepareParityTests
         repo.Index(mod, Registration.Participating(0), key);
 
         var codec = new RecordTextCodec(NullLogger<RecordTextCodec>.Instance);
-        var stored = repo.GetDocuments(key).ToDictionary(d => d.FormKey, d => d.Body!);
+        var all = repo.GetDocuments(key);
+        // The plugin header is a document too since #631, but not one this codec can produce: a
+        // ModHeader is not an IMajorRecordGetter, so it is neither in EnumerateMajorRecords below nor
+        // reachable through SerializeToBytesAsync. Split out and counted rather than filtered
+        // silently, so "one document per record, plus the header" stays an assertion.
+        var header = Assert.Single(all, d => d.RecordType == HeaderIndexer.RecordType);
+        Assert.NotNull(header.Body);
+        var stored = all.Where(d => d != header).ToDictionary(d => d.FormKey, d => d.Body!);
         var records = mod.EnumerateMajorRecords().ToList();
 
         Assert.Equal(records.Count, stored.Count);

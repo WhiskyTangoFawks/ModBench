@@ -123,8 +123,9 @@ public static class ModelIdentity
     /// corruption on any of them is a real defect, never an encoding artifact. A corruption on any of
     /// these would otherwise round-trip silently, because <see cref="FindFirst"/> only ever walks
     /// <c>original.EnumerateMajorRecords()</c>, and a <c>ModHeader</c> is not an
-    /// <c>IMajorRecordGetter</c> (see <c>MEditService/CLAUDE.md</c>'s own "the header is the one
-    /// surviving per-type table" note) — no per-record mask check ever reaches it.
+    /// <c>IMajorRecordGetter</c> — no per-record mask check ever reaches it. (That is also why the
+    /// header needs its own indexing and read path, <c>Records.HeaderDocument</c>, even now that it
+    /// is an ordinary <c>records</c> row: Mutagen's own enumeration cannot reach it either.)
     ///
     /// <para><b>Every one of these 7 has a test that corrupts that field alone and asserts the
     /// resulting refusal names it</b> (<c>ModelIdentityTests</c>' own

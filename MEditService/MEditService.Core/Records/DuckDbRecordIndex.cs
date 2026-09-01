@@ -274,23 +274,18 @@ public sealed class DuckDbRecordIndex : IRecordIndex
     {
         Execute($"DELETE FROM {TableDdlBuilder.WinnersRelation}");
 
-        // Effective. The header table is swept in the same statement rather than in one of its own:
-        // it is the only surviving per-type table and would otherwise never have a winner
-        // at all — which reads as "no header exists" through every winnerOnly lookup, Open Header
-        // included — and its FormKeys cannot collide with a record's, since HeaderIndexer.FormKeyFor
-        // mints them at FormID 000000, the null form, which no major record can occupy.
+        // Effective. One relation, no union: since #631 the plugin header is an ordinary `records`
+        // row, so it is swept here by construction rather than by a second SELECT of its own — and
+        // its FormKeys still cannot collide with a record's, since HeaderIndexer.FormKeyFor mints
+        // them at FormID 000000, the null form, which no major record can occupy.
         //
-        // form_lookup gets no branch here at all: ADR-0031 keeps exactly one lookup row per Effective
-        // record row (ingest appends them together, RederiveIndexRowsForRecord and
-        // DeleteDerivationsForRecord keep them in step), so `records`' own winners *are*
-        // form_lookup's, and its registered view joins the same rows. That is what makes
+        // form_lookup gets no branch here either: ADR-0031 keeps exactly one lookup row per Effective
+        // record row (ingest appends them together — the header's included — and
+        // RederiveIndexRowsForRecord/DeleteDerivationsForRecord keep them in step), so `records`' own
+        // winners *are* form_lookup's, and its registered view joins the same rows. That is what makes
         // ResolveFormKey's EditorID reflect the winning override by construction rather than by a
         // second sweep that could drift from this one.
-        InsertWinners(RecordRef.Effective, $"""
-            SELECT form_key, plugin, origin FROM mirror.records
-            UNION ALL
-            SELECT form_key, plugin, origin FROM mirror."{HeaderIndexer.TableName}"
-            """);
+        InsertWinners(RecordRef.Effective, "SELECT form_key, plugin, origin FROM mirror.records");
 
         // Head, over the same membership relation records_head itself is built on. A record the
         // working tree deleted is gone from Effective but still held at Head, so the two stacks can
@@ -520,25 +515,15 @@ public sealed class DuckDbRecordIndex : IRecordIndex
             var tableName = owner.FindRecordType(records, formKey);
             if (tableName == null) return null;
             var schema = owner.RequireSchemas()[tableName];
-            var isHeader = IsHeaderTable(tableName);
-            var sql = isHeader
-                ? $"""
-                    SELECT form_key, plugin, origin, load_order_idx, is_winner, editor_id{ColumnList(schema)}
-                    FROM "{HeaderIndexer.TableName}"
-                    WHERE form_key = $1
-                    ORDER BY load_order_idx
-                    """
-                : $"""
-                    SELECT form_key, plugin, origin, load_order_idx, is_winner, editor_id, body, "ref"
-                    FROM {records}
-                    WHERE form_key = $1 AND record_type = $2
-                    ORDER BY load_order_idx
-                    """;
             using var cmd = owner.Connection.CreateCommand();
-            cmd.CommandText = sql;
+            cmd.CommandText = $"""
+                SELECT form_key, plugin, origin, load_order_idx, is_winner, editor_id, body, "ref"
+                FROM {records}
+                WHERE form_key = $1 AND record_type = $2
+                ORDER BY load_order_idx
+                """;
             cmd.Parameters.Add(new DuckDBParameter { Value = formKey });
-            if (!isHeader)
-                cmd.Parameters.Add(new DuckDBParameter { Value = NormalizeRecordType(tableName) });
+            cmd.Parameters.Add(new DuckDBParameter { Value = NormalizeRecordType(tableName) });
             using var reader = cmd.ExecuteReader();
 
             var resolve = FormKeyResolutionCache.Memoize(owner.ResolveFormKey);
@@ -549,13 +534,10 @@ public sealed class DuckDbRecordIndex : IRecordIndex
             var rows = new List<(RecordDocument Document, bool IsDirty)>();
             while (reader.Read())
             {
-                var doc = isHeader
-                    ? ReadDocumentFromColumns(reader, schema, resolve, owner._release)
-                    : owner.ReadDocumentFromBody(reader, schema, resolve);
-                // The header carries no `ref` column at all (D8: it has no document), so it is never
-                // dirty here. On a Head-scoped read every row is committed by construction, so this
-                // reads false for all of them without needing to know which relation it is on.
-                var isDirty = !isHeader && reader.GetString(7) == SourceRef.WorkingTree;
+                var doc = owner.ReadDocumentFromBody(reader, schema, resolve);
+                // On a Head-scoped read every row is committed by construction, so this reads false
+                // for all of them without needing to know which relation it is on.
+                var isDirty = reader.GetString(7) == SourceRef.WorkingTree;
                 rows.Add((doc, isDirty));
             }
             reader.Close();
@@ -740,10 +722,15 @@ public sealed class DuckDbRecordIndex : IRecordIndex
 
         public IReadOnlyList<string> GetNativeFormKeys(PluginKey plugin)
         {
-            // The header is excluded implicitly — a ModHeader is not a major record, so it has no
-            // document at all.
+            // The header is excluded explicitly. It used to be excluded implicitly — it had no
+            // document, so it was absent from `records` — but since #631 it is an ordinary row here,
+            // and its synthetic 000000:<plugin> FormKey is not a record's: it names no record, and
+            // the caller that computes the next free local FormID (RecordEditService) would be
+            // handed a FormKey no record occupies. Harmless arithmetically (FormID 0 raises no
+            // maximum) and wrong in kind, which is the reason it is filtered rather than tolerated.
             using var cmd = owner.Connection.CreateCommand();
-            cmd.CommandText = $"SELECT DISTINCT form_key FROM {records} WHERE plugin = $1 AND origin = $2";
+            cmd.CommandText =
+                $"SELECT DISTINCT form_key FROM {records} WHERE plugin = $1 AND origin = $2 AND record_type <> '{HeaderIndexer.RecordType}'";
             cmd.Parameters.Add(new DuckDBParameter { Value = plugin.Name });
             cmd.Parameters.Add(new DuckDBParameter { Value = plugin.Origin });
             using var reader = cmd.ExecuteReader();
@@ -1037,37 +1024,24 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         if (plugin != null) { conditions.Add($"plugin = ${values.Count + 1}"); values.Add(plugin); }
         if (origin != null) { conditions.Add($"origin = ${values.Count + 1}"); values.Add(origin); }
 
-        var isHeader = IsHeaderTable(tableName);
-        if (!isHeader) { conditions.Add($"record_type = ${values.Count + 1}"); values.Add(NormalizeRecordType(tableName)); }
-
-        var where = " WHERE " + string.Join(" AND ", conditions);
-        var sql = isHeader
-            ? $"""
-                SELECT form_key, plugin, origin, load_order_idx, is_winner, editor_id{ColumnList(schema)}
-                FROM "{HeaderIndexer.TableName}"{where}
-                LIMIT 1
-                """
-            : $"""
-                SELECT form_key, plugin, origin, load_order_idx, is_winner, editor_id, body
-                FROM {records}{where}
-                LIMIT 1
-                """;
+        conditions.Add($"record_type = ${values.Count + 1}");
+        values.Add(NormalizeRecordType(tableName));
 
         using var cmd = Connection.CreateCommand();
-        cmd.CommandText = sql;
+        cmd.CommandText = $"""
+            SELECT form_key, plugin, origin, load_order_idx, is_winner, editor_id, body
+            FROM {records} WHERE {string.Join(" AND ", conditions)}
+            LIMIT 1
+            """;
         AddParams(cmd, values);
         using var reader = cmd.ExecuteReader();
         if (!reader.Read()) return null;
 
-        var resolve = FormKeyResolutionCache.Memoize(ResolveFormKey);
-
-        return isHeader
-            ? ReadDocumentFromColumns(reader, schema, resolve, _release)
-            : ReadDocumentFromBody(reader, schema, resolve);
+        return ReadDocumentFromBody(reader, schema, FormKeyResolutionCache.Memoize(ResolveFormKey));
     }
 
     /// <summary>Reads a record's document row into a <see cref="RecordDocument"/>, reconstituted
-    /// through <see cref="RecordTextCodec"/> and extracted via <see cref="ExtractFields"/> — see
+    /// through <see cref="RecordTextCodec"/> and extracted via <see cref="BuildFields"/> — see
     /// that method's own doc comment for why the values match the SQL door's by
     /// construction.</summary>
     private RecordDocument ReadDocumentFromBody(
@@ -1084,53 +1058,40 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         string? editorId, string body, RecordTableSchema schema,
         Func<string, RecordLookupEntry?> resolveFormKey)
     {
-        var record = _codec
-            .DeserializeFromBytesAsync(Encoding.UTF8.GetBytes(body), _release, schema.TableName)
-            .GetAwaiter().GetResult();
+        var bytes = Encoding.UTF8.GetBytes(body);
+
+        // The plugin header (#631). Its body is a real document like every other row's — the source
+        // tree's root RecordData.json — but a ModHeader is not an IMajorRecordGetter, so neither the
+        // per-record codec nor ColumnSpec.Extract can touch it. Read back through the whole-mod door
+        // that produced it and extracted by this schema's own HeaderColumnExtract delegates, which are
+        // the *same delegates* that used to fill the retired wide table's columns — so what the record
+        // editor renders for a header is unchanged by construction, not by a second implementation
+        // agreeing with the first.
+        if (schema.HeaderColumnExtract is { } headerExtracts)
+        {
+            var mod = HeaderDocument.Read(bytes);
+            return new RecordDocument(
+                formKey, new PluginKey(plugin, origin), loadOrderIndex, isWinner, editorId, schema.TableName,
+                body, BuildFields(schema, i => headerExtracts[i](mod), resolveFormKey, _release),
+                // A ModHeader can neither carry the Partial Form flag nor ever be a type that could,
+                // so both are false outright rather than probed — same answer the retired column
+                // reader gave by defaulting them.
+                IsPartialForm: false, IsPartialFormable: false);
+        }
+
+        var record = _codec.DeserializeFromBytesAsync(bytes, _release, schema.TableName).GetAwaiter().GetResult();
 
         return new RecordDocument(
             formKey, new PluginKey(plugin, origin), loadOrderIndex, isWinner, editorId, schema.TableName,
-            body, ExtractFields(schema, record, resolveFormKey, _release), PartialFormFlag.IsSet(record),
-            PartialFormFlag.IsPartialFormable(record.GetType()));
-    }
-
-    /// <summary>The header's own reader (a ModHeader has no document) — reads straight off the
-    /// header table's real per-field columns. <see cref="RecordDocument.Body"/> is null.</summary>
-    private static RecordDocument ReadDocumentFromColumns(
-        DuckDBDataReader reader, RecordTableSchema schema, Func<string, RecordLookupEntry?> resolveFormKey, GameRelease release)
-    {
-        var formKey = reader.GetString(0);
-        var plugin = reader.GetString(1);
-        var origin = reader.GetString(2);
-        var loadOrderIndex = LoadOrderSortKey(reader, 3);
-        var isWinner = reader.GetBoolean(4);
-        var editorId = reader.IsDBNull(5) ? null : reader.GetString(5);
-
-        var fields = new List<FieldValue>();
-        for (int i = 0; i < schema.RecordColumns.Count; i++)
-        {
-            var col = schema.RecordColumns[i];
-            var isDbNull = reader.IsDBNull(6 + i);
-            object? value = (isDbNull, col.IsArray || col.SubFields != null) switch
-            {
-                (true, _) => null,
-                (false, true) => JsonSerializer.Deserialize<JsonElement>(reader.GetString(6 + i)),
-                _ => reader.GetValue(6 + i),
-            };
-            if (value != null && col.IsBitmask)
-                value = Convert.ToInt64(value, CultureInfo.InvariantCulture).ToString(CultureInfo.InvariantCulture);
-            var meta = col.ToFieldMetadata();
-            fields.Add(new FieldValue(meta, value, CheckErrorBuilder.Build(meta, value, resolveFormKey, release)));
-        }
-
-        return new RecordDocument(formKey, new PluginKey(plugin, origin), loadOrderIndex, isWinner, editorId, schema.TableName, null, fields);
+            body, BuildFields(schema, i => schema.RecordColumns[i].Extract(record), resolveFormKey, _release),
+            PartialFormFlag.IsSet(record), PartialFormFlag.IsPartialFormable(record.GetType()));
     }
 
     /// <summary>
-    /// The ColumnSpec.Extract walk every reconstitution path shares — extracts a record's
-    /// typed fields from its live Mutagen object, the shape both <see cref="ReadDocumentFromBody"/>
-    /// and (via <c>RecordQueryService.ToRecordDetail</c>-adjacent callers) the rest of the read
-    /// model build on.
+    /// The field-extraction walk every reconstitution path shares — turns one raw per-column value
+    /// into the <see cref="FieldValue"/> the read model serves, the shape both
+    /// <see cref="ReadDocumentFromBody"/> and (via <c>RecordQueryService.ToRecordDetail</c>-adjacent
+    /// callers) the rest of the read model build on.
     ///
     /// <para>The record is reconstituted through <see cref="RecordTextCodec"/> and then read by the
     /// <b>same <see cref="ColumnSpec.Extract"/> delegates</b> that fill the generated views. That is
@@ -1141,17 +1102,31 @@ public sealed class DuckDbRecordIndex : IRecordIndex
     /// (defaults omitted, translated strings as objects, flags as name arrays, and the widened and
     /// split columns with no JSON path whatsoever).</para>
     ///
+    /// <para><paramref name="rawAt"/> rather than the record itself, because the plugin header's
+    /// values come from a different delegate family over a different object
+    /// (<c>RecordTableSchema.HeaderColumnExtract</c> over an <c>IModGetter</c>, since a ModHeader is
+    /// not an <see cref="IMajorRecord"/>). Everything past that one call is deliberately shared: the
+    /// normalizations below are what a field's rendered shape actually depends on, so letting the
+    /// header have its own copy of them is exactly how the two would drift.</para>
+    ///
     /// <para>Each extracted value then passes through two normalizations, so a field's JSON keeps a
-    /// stable shape: coerced to the column's declared DuckDB type (<see cref="CoerceToColumnType"/>,
-    /// mirroring <see cref="AppendTyped"/>), and bitmasks rendered as decimal strings.</para>
+    /// stable shape: coerced to the column's declared DuckDB type (<see cref="CoerceToColumnType"/>),
+    /// and bitmasks rendered as decimal strings.</para>
     /// </summary>
-    private static List<FieldValue> ExtractFields(
-        RecordTableSchema schema, IMajorRecord record, Func<string, RecordLookupEntry?> resolveFormKey, GameRelease release)
+    /// <param name="schema">The record type's schema; <paramref name="rawAt"/> is indexed against its
+    /// <see cref="RecordTableSchema.RecordColumns"/>.</param>
+    /// <param name="rawAt">This column's raw value, by column position.</param>
+    /// <param name="resolveFormKey">FormKey resolution, for the check-error pass.</param>
+    /// <param name="release">The game release, for the check-error pass.</param>
+    private static List<FieldValue> BuildFields(
+        RecordTableSchema schema, Func<int, object?> rawAt,
+        Func<string, RecordLookupEntry?> resolveFormKey, GameRelease release)
     {
         var fields = new List<FieldValue>();
-        foreach (var col in schema.RecordColumns)
+        for (int i = 0; i < schema.RecordColumns.Count; i++)
         {
-            var raw = CoerceToColumnType(col.Extract(record), col.DuckDbType);
+            var col = schema.RecordColumns[i];
+            var raw = CoerceToColumnType(rawAt(i), col.DuckDbType);
 
             var isJsonText = col.IsArray || col.SubFields != null;
             object? value = raw switch
@@ -1170,9 +1145,9 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         return fields;
     }
 
-    // The header needs its own second lookup for the same reason it keeps its own read path:
-    // it has no document, so it is absent from `records` entirely. Covering it here is deliberate
-    // behaviour — Open Header resolves a plugin's synthetic 000000:<plugin> FormKey through this.
+    // One lookup, over one relation: since #631 the plugin header is an ordinary `records` row, so
+    // Open Header's synthetic 000000:<plugin> FormKey resolves here the same way every other FormKey
+    // does — where it used to need a second query against a table of its own.
     //
     // Private — table-name dispatch is explicitly rejected from the seam; GetDocument and
     // GetOverrideStack resolve a FormKey's type themselves rather than being told it.
@@ -1181,12 +1156,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         using var cmd = Connection.CreateCommand();
         cmd.CommandText = $"SELECT record_type FROM {records} WHERE form_key = $1 LIMIT 1";
         cmd.Parameters.Add(new DuckDBParameter { Value = formKey });
-        if (cmd.ExecuteScalar() is string recordType) return recordType;
-
-        using var headerCmd = Connection.CreateCommand();
-        headerCmd.CommandText = $"SELECT 1 FROM \"{HeaderIndexer.TableName}\" WHERE form_key = $1 LIMIT 1";
-        headerCmd.Parameters.Add(new DuckDBParameter { Value = formKey });
-        return headerCmd.ExecuteScalar() != null ? HeaderIndexer.TableName : null;
+        return cmd.ExecuteScalar() as string;
     }
 
     // Private — Resolve(formKey) is the public seam member and delegates here.
@@ -1209,10 +1179,10 @@ public sealed class DuckDbRecordIndex : IRecordIndex
     private static int LoadOrderSortKey(DuckDBDataReader reader, int ordinal) =>
         reader.IsDBNull(ordinal) ? int.MaxValue : reader.GetInt32(ordinal);
 
-    // The read-side mirror of AppendTyped: a column declared INTEGER must read back an int no
-    // matter whether its extractor produced a byte, ushort or uint. Reconstitution has no column
-    // type to do the narrowing, so the same conversion is applied here — without it a field's JSON
-    // would silently change numeric shape for every sub-int type.
+    // A column declared INTEGER must read back an int no matter whether its extractor produced a
+    // byte, ushort or uint. Reconstitution has no column type to do the narrowing, so the conversion
+    // is applied here — without it a field's JSON would silently change numeric shape for every
+    // sub-int type.
     private static object? CoerceToColumnType(object? value, string duckDbType)
     {
         if (value == null) return null;
@@ -1228,11 +1198,6 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         };
     }
 
-    internal static string ColumnList(RecordTableSchema schema) =>
-        schema.RecordColumns.Count == 0
-            ? ""
-            : ", " + string.Join(", ", schema.RecordColumns.Select(c => $"\"{c.Name}\""));
-
     // Record types used to be table names, and DuckDB resolves those case-insensitively — so callers
     // have always been free to say "NPC_" or "npc_" and several do. As a column value the comparison
     // is case-*sensitive*, which would silently return nothing for the same call that used to work.
@@ -1240,10 +1205,6 @@ public sealed class DuckDbRecordIndex : IRecordIndex
     // value is an exact normalization, not a guess. Applied at every point a caller-supplied type is
     // bound as a parameter.
     private static string NormalizeRecordType(string recordType) => recordType.ToLowerInvariant();
-
-    private static bool IsHeaderTable(string tableName) =>
-        string.Equals(tableName, HeaderIndexer.TableName, StringComparison.OrdinalIgnoreCase);
-
 
     private static void AddParams(DuckDBCommand cmd, IEnumerable<string> values)
     {
@@ -1257,20 +1218,6 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         using var cmd = Connection.CreateCommand();
         cmd.CommandText = sql;
         cmd.ExecuteNonQuery();
-    }
-
-    internal static void AppendTyped(IDuckDBAppenderRow row, object? value, string duckDbType)
-    {
-        if (value == null) { row.AppendNullValue(); return; }
-        switch (duckDbType)
-        {
-            case "BOOLEAN": row.AppendValue((bool?)Convert.ToBoolean(value, CultureInfo.InvariantCulture)); break;
-            case "INTEGER": row.AppendValue((int?)Convert.ToInt32(value, CultureInfo.InvariantCulture)); break;
-            case "BIGINT": row.AppendValue((long?)Convert.ToInt64(value, CultureInfo.InvariantCulture)); break;
-            case "FLOAT": row.AppendValue((float?)Convert.ToSingle(value, CultureInfo.InvariantCulture)); break;
-            case "DOUBLE": row.AppendValue((double?)Convert.ToDouble(value, CultureInfo.InvariantCulture)); break;
-            case "VARCHAR": row.AppendValue(value.ToString()); break;
-        }
     }
 
     private IReadOnlyDictionary<string, RecordTableSchema> RequireSchemas() =>

@@ -67,10 +67,10 @@ public sealed class LoadOrderDatabaseTablesTests(LoadedApiFixture<TestPluginFixt
         Assert.Contains("records", baseTables);
         Assert.Contains("form_lookup", baseTables);
         Assert.Contains("placement", baseTables);
-        // The header is the one surviving per-type table — a ModHeader has no document.
-        Assert.Contains("header", baseTables);
-
-        foreach (var type in (string[])["npc_", "weap", "armo", "cell", "glob"])
+        // #631 retired the last per-type wide table, the plugin header's — so "header" belongs in
+        // the loop below with every other type rather than being called out as the exception it used
+        // to be. Listed first in the loop for emphasis: this is the assertion the ticket exists for.
+        foreach (var type in (string[])["header", "npc_", "weap", "armo", "cell", "glob"])
         {
             Assert.DoesNotContain(type, baseTables);   // the wide table is gone
             Assert.Contains(type, views);              // ... and the name is a view now
