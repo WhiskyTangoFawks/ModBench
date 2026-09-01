@@ -39,8 +39,10 @@ import { ImplicitMasterDecorationProvider } from './modmanager/ImplicitMasterDec
 import { makeReporter } from './reporter';
 import { LoadoutHeaderProvider } from './LoadoutHeaderProvider';
 import { registerNameFilter, type NameFilter } from './nameFilter';
+import { onPluginCheckboxChanged } from './pluginCheckboxHandler';
 import { createReferencedByTree, makeNotifyConflictsComputed, registerEditorCommands, registerRecordLifecycleCommands, registerRecordCopyCommands, startExternalChangeDialogPolling, makeCrashRepairOffersPresenter, makeMergeEditorOpener, compileAndReport, reportCompileTargetError } from './medit/editorCommands';
-import { makeModActionHelpers, registerModInstallCommands, registerModContextCommands, registerSeparatorCommands, registerOverwriteView, registerModsAutoRegisterWatcher, registerNotMo2InstanceWelcome, onModCheckboxChanged, createModListView, registerDownloadsView, isStandaloneDeployment, registerDeploymentModeContext, registerDeployCommands, registerLaunchCommand, registerModListCoreCommands } from './modmanager/modManagementCommands';
+import { makeModActionHelpers, registerModInstallCommands, registerModContextCommands, registerSeparatorCommands, registerOverwriteView, registerModsAutoRegisterWatcher, registerNotMo2InstanceWelcome, createModListView, registerDownloadsView, isStandaloneDeployment, registerDeploymentModeContext, registerDeployCommands, registerLaunchCommand, registerModListCoreCommands } from './modmanager/modManagementCommands';
+import { onModCheckboxChanged } from './modmanager/modCheckboxHandler';
 
 
 /** Everything one `activate()` call constructs that a choke point registered elsewhere (a
@@ -535,20 +537,7 @@ function registerPluginListView(deps: PluginListDeps): { pluginListProvider: Plu
       new ImplicitMasterDecorationProvider(dataFolder, () => pluginListProvider.implicitMasterNames()),
     ),
     ...wireLoadOrderWatchers(session.loadOrderSync!, instanceRoot, pluginListProvider),
-    pluginListView.onDidChangeCheckboxState(async (e) => {
-      for (const [node, state] of e.items) {
-        if (node.kind !== 'plugin') continue;
-        try {
-          await pluginListProvider.setPluginEnabled(node.plugin.name, state === vscode.TreeItemCheckboxState.Checked);
-        } catch (err) {
-          // ADR-0026: a failed user action must surface, not silently leave the checkbox
-          // out of sync with disk. Log detail, notify, and refresh to resync the checkbox.
-          makeReporter(outputChannel, 'pluginListTree.checkbox').report(
-            'error', `Failed to update "${node.plugin.name}".`, err instanceof Error ? err.message : String(err));
-          pluginListProvider.invalidate();
-        }
-      }
-    }),
+    pluginListView.onDidChangeCheckboxState((e) => onPluginCheckboxChanged(e, pluginListProvider, outputChannel)),
     registerRevealInExplorerCommand(pluginListProvider, outputChannel),
     registerParticipationSync(session, pluginListProvider),
     session.pluginsNameFilter,

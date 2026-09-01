@@ -307,25 +307,6 @@ export function registerNotMo2InstanceWelcome(
     vscode.window.createTreeView('modbench.modList', { treeDataProvider: NOT_MO2_INSTANCE_PROVIDER }),
   );
 }
-/** Enable/disable a mod from its row checkbox. ADR-0026: a failed toggle must surface, not
- *  silently leave the checkbox out of sync with disk — log detail, notify, and invalidate so
- *  the checkbox resyncs to what `modlist.txt` actually says. */
-export async function onModCheckboxChanged(
-  e: vscode.TreeCheckboxChangeEvent<ModlistNode>,
-  modListProvider: ModListProvider,
-  outputChannel: vscode.LogOutputChannel,
-): Promise<void> {
-  for (const [node, state] of e.items) {
-    if (node.kind !== 'mod') continue;
-    try {
-      await modListProvider.setModEnabled(node.mod.name, state === vscode.TreeItemCheckboxState.Checked);
-    } catch (err) {
-      makeReporter(outputChannel, 'modList.checkbox').report(
-        'error', `Failed to update "${node.mod.name}".`, err instanceof Error ? err.message : String(err));
-      modListProvider.invalidate();
-    }
-  }
-}
 /** The Mods tree, its name filter, and the profile readout — together, because they are
  *  one thing: the view's description is written by exactly one owner (the filter), and the
  *  active profile is what it composes the term around. Split apart, the profile update and a
