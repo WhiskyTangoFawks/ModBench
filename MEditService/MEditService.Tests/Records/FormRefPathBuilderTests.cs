@@ -2,16 +2,17 @@ using System.Text.Json;
 using MEditService.Core.Queries;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
+using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Tests.Records;
 
 public class FormRefPathBuilderTests
 {
     private static ColumnSpec ScalarFormKeyCol(string name) =>
-        new(name, name, "VARCHAR", _ => null, "formKey", [], [], null);
+        new(name, name, "VARCHAR", _ => null, "formKey", [], [], LeafWrite.ReadOnly<IMajorRecord>("test fixture: write capability is not under test"));
 
     private static ColumnSpec ArrayFormKeyCol(string name) =>
-        new(name, name, "JSON", _ => null, "array", [], [], null,
+        new(name, name, "JSON", _ => null, "array", [], [], LeafWrite.ReadOnly<IMajorRecord>("test fixture: write capability is not under test"),
             IsArray: true,
             ElementType: new FieldMetadata(name, "formKey", false, [], []));
 
@@ -20,7 +21,7 @@ public class FormRefPathBuilderTests
         var fields = fkSubFields
             .Select(f => new FieldMetadata(f, "formKey", false, [], []))
             .ToList<FieldMetadata>();
-        return new(name, name, "JSON", _ => null, "array", [], [], null,
+        return new(name, name, "JSON", _ => null, "array", [], [], LeafWrite.ReadOnly<IMajorRecord>("test fixture: write capability is not under test"),
             IsArray: true,
             ElementType: new FieldMetadata(name, "struct", false, [], [], Fields: fields));
     }
@@ -158,7 +159,7 @@ public class FormRefPathBuilderTests
     [Fact]
     public void Walk_UnknownApiType_DoesNotCallVisitor()
     {
-        var col = new ColumnSpec("name", "Name", "VARCHAR", _ => null, "string", [], [], null);
+        var col = new ColumnSpec("name", "Name", "VARCHAR", _ => null, "string", [], [], LeafWrite.ReadOnly<IMajorRecord>("test fixture: write capability is not under test"));
         Assert.Empty(Collect(col, "some value"));
     }
 
@@ -209,7 +210,7 @@ public class FormRefPathBuilderTests
     [Fact]
     public void Walk_ArrayWithNullElementType_DoesNotCallVisitor()
     {
-        var col = new ColumnSpec("items", "items", "JSON", _ => null, "array", [], [], null,
+        var col = new ColumnSpec("items", "items", "JSON", _ => null, "array", [], [], LeafWrite.ReadOnly<IMajorRecord>("test fixture: write capability is not under test"),
             IsArray: true, ElementType: null);
         var hits = Collect(col, "[\"000001:Fallout4.esm\"]");
         Assert.Empty(hits);
@@ -223,7 +224,7 @@ public class FormRefPathBuilderTests
         var innerFk = new FieldMetadata("target", "formKey", false, [], []);
         var innerStruct = new FieldMetadata("inner", "struct", false, [], [], Fields: [innerFk]);
         var elemMeta = new FieldMetadata("", "struct", false, [], [], Fields: [innerStruct]);
-        var col = new ColumnSpec("links", "links", "JSON", _ => null, "array", [], [], null,
+        var col = new ColumnSpec("links", "links", "JSON", _ => null, "array", [], [], LeafWrite.ReadOnly<IMajorRecord>("test fixture: write capability is not under test"),
             IsArray: true, ElementType: elemMeta);
 
         var json = "[{\"inner\":{\"target\":\"000001:Plugin.esp\"}}]";

@@ -224,7 +224,8 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
             // ClassifyLeaf already answers null here — absent means "no author", and NULL is the
             // honest rendering, exactly what the retired wide column stored.
             columns.Add(new ColumnSpec("author", HeaderDocumentPath(modHeaderProp, authorProp), authorLeaf.DuckDbType, _ => null,
-                authorLeaf.ApiType, authorLeaf.ValidFormKeyTypes, authorLeaf.EnumValues, Apply: null,
+                authorLeaf.ApiType, authorLeaf.ValidFormKeyTypes, authorLeaf.EnumValues,
+                Apply: LeafWrite.ReadOnly<IMajorRecord>(HeaderNoWritePathReason),
                 ViewDefaultLiteral: authorLeaf.ViewDefaultLiteral));
             extracts.Add(HeaderPropertyExtract(modHeaderProp, authorLeaf.Get));
         }
@@ -250,7 +251,8 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
             // HeaderColumnExtract and IsBitmask, never this flag.
             var displayNames = flagsLeaf.EnumValues.Select(MapToXEditFlagName).ToArray();
             columns.Add(new ColumnSpec("flags", HeaderDocumentPath(modHeaderProp, flagsProp), flagsLeaf.DuckDbType, _ => null,
-                flagsLeaf.ApiType, flagsLeaf.ValidFormKeyTypes, displayNames, Apply: null,
+                flagsLeaf.ApiType, flagsLeaf.ValidFormKeyTypes, displayNames,
+                Apply: LeafWrite.ReadOnly<IMajorRecord>(HeaderNoWritePathReason),
                 IsBitmask: flagsLeaf.IsBitmask, EnumBitValues: flagsLeaf.EnumBitValues,
                 IsFlagsEnum: flagsLeaf.IsFlagsEnum, ViewDefaultLiteral: flagsLeaf.ViewDefaultLiteral));
             extracts.Add(HeaderPropertyExtract(modHeaderProp, flagsLeaf.Get));
@@ -268,7 +270,10 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         // delegate gives, not a masters-specific mechanism (see HeaderIndexer.MastersFieldName).
         var mastersElement = new FieldMetadata("", "string", false, Empty, Empty);
         columns.Add(new ColumnSpec(HeaderIndexer.MastersFieldName, $"{modHeaderProp.Name}.MasterReferences", "VARCHAR", _ => null, "array",
-            Empty, Empty, Apply: null, IsArray: true, ElementType: mastersElement));
+            Empty, Empty,
+            Apply: LeafWrite.ReadOnly<IMajorRecord>(
+                "masters are wholly content-derived at compile time (#335/ADR-0038)"),
+            IsArray: true, ElementType: mastersElement));
         extracts.Add(mod => JsonSerializer.Serialize(mod.MasterReferences.Select(r => r.Master.FileName.ToString()).ToList()));
 
         return new RecordTableSchema
@@ -399,6 +404,7 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
     {
         var grouped = GetAllInterfaceProperties(getterType)
             .Where(p => !BaseSkip.Contains(p.Name))
+            .Where(p => !IsInfrastructureProperty(p))
             .Where(p => conditionCodec == null || !conditionCodec.IsConditionListField(getterType, p.Name))
             .Where(p => vmadInterfaceType == null
                         || !vmadInterfaceType.IsAssignableFrom(getterType)
@@ -608,8 +614,10 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
             IsWidened = true,
             ViewDefaultLiteral = null,
             IsFlagsEnum = false,
-            Apply = null, // editing a widened value is out of scope — read-only falls out of
-                          // PluginWriter.IsFieldPathReadOnly already treating a null Apply as such
+            Apply = LeafWrite.ReadOnly<IMajorRecord>(
+                "widened scalar column: sibling subclasses disagree on this field's CLR type, so " +
+                "there is no single value shape to write"), // editing a widened value is out of scope — read-only falls out of
+                                                            // PluginWriter.IsFieldPathReadOnly already treating a null Apply as such
             IsArray = false,
             ElementType = null,
             SubFields = null,
@@ -848,7 +856,7 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         string ApiType,
         string[] ValidFormKeyTypes,
         string[] EnumValues,
-        Func<IMajorRecord, JsonElement, ApplyOutcome>? Apply,
+        LeafWrite<IMajorRecord> Apply,
         FieldMetadata? ElementMeta = null,
         IReadOnlyList<FieldMetadata>? SubFieldMetas = null,
         bool AllowsNull = false,
@@ -865,7 +873,7 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         string[] ValidFormKeyTypes,
         string[] EnumValues,
         Func<object, object?> Extract,
-        Func<object, JsonElement, ApplyOutcome>? Apply,
+        LeafWrite<object> Apply,
         IReadOnlyList<SubFieldSpec>? SubFields = null,
         SubFieldSpec? ElementSpec = null,
         bool AllowsNull = false,
@@ -972,6 +980,350 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
 
     private static bool IsVectorStructType(Type type) => VectorStructTypes.Contains(type);
 
+    // ── The atomic-value class ────────────────────────────────────────────────────────────────
+    // #649: a CLR value type that Loqui does not model, so it has no sub-schema of its own and
+    // falls through every structural test above (not a primitive, not an enum, not a form link, not
+    // a Loqui interface, not a list, not a Noggog vector). Rather than a new handler branch per
+    // type, each one is a row in this table saying which named scalar components it decomposes
+    // into — the "not Loqui-modelled ⇒ value" rule, applied by lookup.
+    //
+    // Exactly one entry today: System.Drawing.Color. Every other unmodelled value type reachable in
+    // the walk is a named exclusion instead (AtomicValueExclusions) — a table entry is a rendered
+    // presentation, and only Color's has been decided.
+    //
+    // Components are named the way xEdit names them (Red/Green/Blue/Alpha -> red/green/blue/alpha),
+    // not the way the CLR type does (R/G/B/A), because the wire name is what reaches the grid and
+    // ADR-0034 makes xEdit the vocabulary for anything a user reads. The CLR name is kept alongside
+    // it: it is what both the Extract (reads off the real Color) and the Apply (writes onto the
+    // mutable staging box below) resolve by reflection, so neither has to know about the rename.
+    private sealed record AtomicValueComponent(string WireName, string ClrName);
+
+    private static readonly AtomicValueComponent[] ColorRgbComponents =
+    [
+        new("red", "R"), new("green", "G"), new("blue", "B"),
+    ];
+
+    private static readonly AtomicValueComponent[] ColorRgbaComponents =
+    [
+        new("red", "R"), new("green", "G"), new("blue", "B"), new("alpha", "A"),
+    ];
+
+    /// <summary>
+    /// The Color-typed fields xEdit renders <i>with</i> an Alpha leaf — its <c>wbByteRGBA</c>
+    /// definition (wbDefinitionsCommon.pas:6372-6386: Red/Green/Blue/Alpha, all U8). Every other
+    /// Color field in the schema takes <c>wbByteColors</c>'s 3-leaf shape instead
+    /// (wbDefinitionsCommon.pas:6291-6305), whose fourth byte is declared <c>wbUnused(1)</c> and is
+    /// never rendered as a field there.
+    ///
+    /// <para><b>Why a hand-transcribed table.</b> Which of the two shapes a colour takes is a
+    /// property of the <i>field</i>, not of its type: all 60 Color-typed getter properties in
+    /// Fallout 4 are the same <c>System.Drawing.Color</c>. Mutagen answers the same question with
+    /// <c>ColorBinaryType</c>, but selects it inside generated binary-translation call sites
+    /// (<c>frame.ReadColor(ColorBinaryType.Alpha)</c>) — not on the type, not an attribute, not
+    /// reachable from a property walk. Four transcribed rows are smaller than any mechanism that
+    /// could infer it, so this is a workaround rather than ADR-0034's "genuine platform limitation
+    /// that cannot be worked around", and the xEdit shape is matched exactly rather than diverged
+    /// from. Same transcribed-from-xEdit idiom this file already uses for
+    /// <see cref="VectorStructTypes"/> and <c>ObjectModPropertyLeafSkip</c>.</para>
+    ///
+    /// <para><b>Safe by agreement, not by luck.</b> All four are <c>ColorBinaryType.Alpha</c> on the
+    /// Mutagen side (Keyword_Generated.cs:1875, LocationReferenceType_Generated.cs:1510,
+    /// ActionRecord_Generated.cs:1766, Location_Generated.cs:5435), so every field that renders an
+    /// alpha leaf is also a field whose alpha byte Mutagen actually writes
+    /// (ColorBinaryTranslation.cs:21-26). There is no field where the two disagree, which is what
+    /// makes an alpha edit here unable to be silently discarded at compile.</para>
+    ///
+    /// <para>Keyed on the declaring getter interface rather than the table name so it generalizes:
+    /// the same four fields are <c>wbByteRGBA</c> in Skyrim too (wbDefinitionsTES5.pas:5321 KYWD,
+    /// :5326 LCRT, :5331 AACT, :6511 LCTN). <c>internal</c> for the completeness guard in
+    /// <c>SchemaReflectorAtomicValueTests</c>, which fails loudly if a row stops resolving.</para>
+    /// </summary>
+    internal static readonly (string OwnerGetterTypeName, string PropertyName)[] AlphaBearingColorFields =
+    [
+        ("IKeywordGetter", "Color"),                // KYWD — wbDefinitionsFO4.pas:7028
+        ("ILocationReferenceTypeGetter", "Color"),  // LCRT — wbDefinitionsFO4.pas:7040
+        ("IActionRecordGetter", "Color"),           // AACT — wbDefinitionsFO4.pas:7051
+        ("ILocationGetter", "Color"),               // LCTN — wbDefinitionsFO4.pas:8256
+    ];
+
+    private static bool HasAlphaLeaf(PropertyInfo prop) =>
+        AlphaBearingColorFields.Any(e =>
+            e.PropertyName == prop.Name && e.OwnerGetterTypeName == prop.DeclaringType?.Name);
+
+    private static bool IsAtomicValueType(Type core) => core == typeof(System.Drawing.Color);
+
+    // ── Total classification: the default branch is a reported anomaly, never silence ──────────
+    // #649 commitment 2. Every property the walk reaches lands in exactly one structural class, or
+    // says so here. The channel is the ILogger already threaded through every dispatch site rather
+    // than a new collector parameter on ten signatures — the audit
+    // (SchemaReflectorTotalClassificationTests) builds a schema with a collecting logger and asserts
+    // this line never fires.
+    //
+    // Warning, not Debug: an unclassified property is a field the editor can neither see nor write,
+    // which is exactly what #641 and #642 were. It should be loud in a real run too, not only under
+    // test.
+    internal const string UnclassifiedAnomalyPrefix = "SchemaReflector: unclassified";
+
+    // ── The declared read-only reasons (#649 commitment 3) ────────────────────────────────────
+    // Every leaf that cannot be written says why, in one of these terms. Shared constants rather
+    // than repeated literals so the symmetry audit can enumerate the legitimate reasons and reject
+    // anything else — a mass re-declaration (reverting #643, say) would have to invent a new one.
+
+    /// <summary>A discriminator: consumed off the raw JSON to decide which concrete type to build,
+    /// before the object it would be applied to exists. Not a gap — this one can never be writable,
+    /// and ApplySubFields deliberately keeps naming it a silent skip (TargetingRefuses stays false).</summary>
+    internal const string DiscriminatorReason =
+        "discriminator: read off the payload to choose a concrete type, before that object exists";
+
+    /// <summary>An element-shape template carried by a list's metadata. A list is written as one whole
+    /// value through its owning field, so the template itself is never a write target.</summary>
+    internal const string ElementTemplateReason =
+        "list element template: a list is written as one whole value through its owning field";
+
+    /// <summary>A list whose elements are bare primitives — BuildListElement has FormLink/Loqui/vector
+    /// branches only, so there is no element write path at any level. Refused honestly rather than
+    /// silently discarded (#642/#643).</summary>
+    internal const string PrimitiveElementListReason =
+        "primitive-element list: no element write path exists at any nesting level";
+
+    /// <summary>A leaf whose LeafSpec produced no converter and is not a form link. Not reachable for
+    /// any shape ClassifyLeaf currently returns — every one of them has a converter or is a FormLink —
+    /// so this is the honest name for a branch that exists to keep the choice total.</summary>
+    internal const string NoConverterReason =
+        "leaf with no JSON converter and no form-link write path";
+
+    /// <summary>The plugin header's author/flags. #633 deleted the header write path deliberately;
+    /// since #661 a write genuinely reaches these columns and is refused here rather than at a gate.</summary>
+    internal const string HeaderNoWritePathReason =
+        "the header's write path was built and deliberately deleted (#633); no write exists for this column";
+
+    private static string TypeLabel(Type type) =>
+        type.IsGenericType
+            ? $"{type.Name[..type.Name.IndexOf('`', StringComparison.Ordinal)]}" +
+              $"<{string.Join(", ", type.GetGenericArguments().Select(TypeLabel))}>"
+            : type.Name;
+
+    private static T? ReportUnclassified<T>(ILogger logger, PropertyInfo prop, Type shape, string site)
+        where T : class
+    {
+        var owner = prop.DeclaringType?.Name ?? "?";
+        if (ExcludedShapeReason(shape) is { } reason)
+        {
+            // Named, so not an anomaly — but still said out loud, at Debug, so a real run can answer
+            // "why is this field missing?" without anyone reading this file. Guarded because
+            // TypeLabel builds a string for a generic shape (CA1873).
+            if (logger.IsEnabled(LogLevel.Debug))
+            {
+                logger.LogDebug("SchemaReflector: excluded {Owner}.{Property} :: {Shape} — {Reason}",
+                    owner, prop.Name, TypeLabel(shape), reason);
+            }
+            return null;
+        }
+
+        logger.LogWarning(
+            UnclassifiedAnomalyPrefix + " {Owner}.{Property} :: {Shape} [{Site}]",
+            owner, prop.Name, TypeLabel(shape), site);
+        return null;
+    }
+
+    // ── Mutagen/Loqui plumbing the walk reaches, which is not editor surface and never will be ──
+    // Skipped, deliberately NOT excluded-with-a-reason: an exclusion says "real data we chose not to
+    // present", and saying that about infrastructure would be a lie in the code. All six already
+    // produced no column and no sub-field (they reached the old silent default), so skipping them
+    // earlier changes no emitted schema — asserted by both goldens staying put.
+    //
+    // Keyed on (declaring interface, property) rather than by name alone, because one of these names
+    // is commonplace real data elsewhere: `Type` is a genuine enum field on Keyword, SoundOutputModel,
+    // NpcFaceTintingLayer and others, and skipping it globally would be catastrophic. The pair form
+    // cannot swallow a future real property that merely shares a name.
+    //
+    // This also closes an asymmetry #649 surfaced: BaseSkip filters columns only and LoquiSkipProps
+    // filters sub-fields only, so `Registration` was skipped as a sub-field but not as a column, and
+    // `FormKey` the exact opposite. These pairs close both directions precisely. A blanket merge of
+    // the two lists was considered and declined: it would also skip names like `EditorID` and
+    // `PersistentTimestamp` at nesting depth, where nothing shows they are unwanted, for no observed
+    // gain over these six.
+    //
+    // Six rows, eight anomaly messages: `ILinkIdentifier.Type` and `IBinaryItem.BinaryWriteTranslator`
+    // are each reachable from both the column and the sub-field dispatch, so disabling this filter
+    // reproduces 8 distinct reports for these 6 properties. Two valid countings of one set — noted
+    // because the mismatch reads as an error until you know why.
+    private static readonly (string OwnerTypeName, string PropertyName)[] InfrastructurePropertySkips =
+    [
+        ("ILoquiObject", "Registration"),                    // Loqui's own registration handle
+        ("IBinaryItem", "BinaryWriteTranslator"),            // Mutagen's binary write-strategy object
+        ("ILinkIdentifier", "Type"),                         // a System.Type, not a record field
+        ("IFormKeyGetter", "FormKey"),                       // record identity; BaseSkip's sub-field-side twin
+        ("IGlobalGetter", "TypeChar"),                       // GLOB's derived subclass discriminant char
+        ("IAMagicEffectArchetypeGetter", "AssociationKey"),  // IFormLinkIdentifier alias of Association
+    ];
+
+    private static bool IsInfrastructureProperty(PropertyInfo prop) =>
+        InfrastructurePropertySkips.Any(s =>
+            s.PropertyName == prop.Name && s.OwnerTypeName == prop.DeclaringType?.Name);
+
+    // ── Explicitly excluded shapes: real data, deliberately not presented ───────────────────────
+    // #649 commitment 2's third outcome, and a first-class one: a shape the walk genuinely reaches
+    // and could present, that no one has yet decided a presentation for, is named here rather than
+    // silently dropped. Counts are LIVE, from the audit's own enumeration over Fallout 4 — never from
+    // a grep over Mutagen's sources, which found ~76% of this population and none of the shapes that
+    // actually needed a decision (see SchemaReflectorTotalClassificationTests).
+    //
+    // Promotion out of this list is always available: Color sat here in spirit until #649 gave it a
+    // presentation-table entry, and the atomic-value mechanism it now uses is ready for more. Each
+    // reason therefore says what a future ticket would have to decide, not merely that it is absent.
+    /// <summary>One leaf's write capability, flattened for the read/write symmetry audit (#649
+    /// commitment 3 / AC #2). Facts only — where the leaf is, the Loqui getter type it decomposes,
+    /// and the reason it declared if it is read-only. Deliberately silent on whether the leaf
+    /// <i>ought</i> to be writable: the audit re-derives that independently from Mutagen, so this
+    /// cannot hand the audit the answer it is checking.</summary>
+    internal sealed record LeafWriteFact(string Path, Type? StructGetterType, string? ReadOnlyReason);
+
+    /// <summary>
+    /// Every top-level column, plus every nested Loqui-struct member one level in, with the write
+    /// capability each actually declared. Re-invokes the real production builders
+    /// (<see cref="GetSubFieldInfo"/>) rather than re-deriving anything, so reverting a write path
+    /// changes what this reports — which is what makes the audit that reads it non-vacuous.
+    ///
+    /// <para>Lives here, rather than exposing <see cref="SubFieldSpec"/>, because that type is
+    /// private and should stay so: the audit needs two facts about a leaf, not the leaf.</para>
+    /// </summary>
+    internal IReadOnlyList<LeafWriteFact> EnumerateWriteCapability(GameRelease release)
+    {
+        var category = release.ToCategory();
+        var assembly = ResolveAssembly(release, category)
+            ?? throw new UnsupportedGameReleaseException(release, AssemblyNameFor(category));
+        var cache = GetCache(category, assembly);
+
+        var facts = new List<LeafWriteFact>();
+        foreach (var (table, schema) in cache.Schemas)
+        {
+            foreach (var column in schema.RecordColumns)
+            {
+                facts.Add(new($"{table}.{column.Name}", null, column.Apply.ReadOnlyReason));
+
+                // Only this schema's own properties: a sibling-merged column belongs to another
+                // getter type and is walked on that type's own table instead.
+                var prop = GetAllInterfaceProperties(schema.RecordType)
+                    .FirstOrDefault(p => p.Name == column.PropertyName);
+                if (prop == null) continue;
+
+                var core = Nullable.GetUnderlyingType(prop.PropertyType) ?? prop.PropertyType;
+                if (IsListType(core, out var element)) core = element;
+                if (!IsLoquiInterface(core) || IsFormLink(core)) continue;
+
+                foreach (var member in GetAllInterfaceProperties(core)
+                             .Where(p => !LoquiSkipProps.Contains(p.Name))
+                             .Where(p => !IsInfrastructureProperty(p)))
+                {
+                    if (GetSubFieldInfo(member, cache.GetterTypeToTable, 1, _logger) is not { } spec) continue;
+
+                    // The LEAF's own shape, not its enclosing struct's: a primitive-element list or an
+                    // excluded VMAD struct sitting inside a perfectly writable struct is not itself
+                    // writable-shaped, and reporting the parent here would accuse it of lying.
+                    var leaf = Nullable.GetUnderlyingType(member.PropertyType) ?? member.PropertyType;
+                    var leafStruct = IsLoquiInterface(leaf) && !IsFormLink(leaf) ? leaf : null;
+                    facts.Add(new($"{table}.{column.Name}.{spec.Name}", leafStruct, spec.Apply.ReadOnlyReason));
+                }
+            }
+        }
+        return facts;
+    }
+
+    internal static string? ExcludedShapeReason(Type shape)
+    {
+        var open = shape.IsGenericType ? shape.GetGenericTypeDefinition() : null;
+
+        // FOUND AND SIZED, NOT OVERLOOKED — 20 fields, enumerated in
+        // SchemaReflectorTotalClassificationTests.GenderedItemFields. Mutagen's Male/Female pair
+        // wrapper (Mutagen.Bethesda.Core/Plugins/Records/GenderedItem.cs:17 — a plain generic
+        // interface with no StaticRegistration, which is exactly why IsLoquiInterface declines it and
+        // it fell through the old silent default). It carries ordinary modding content: Race height,
+        // head data, skeletal model and voices per sex; ArmorAddon world/first-person models, skin
+        // texture and priority per sex; faction rank titles per sex. It is invisible and unwritable
+        // for the same reason Color was before #649, at a third of Color's scale.
+        //
+        // Deferred, not dropped: presenting a gendered pair is a NEW RENDERED SHAPE and needs its own
+        // xEdit-shape decision (two sub-rows? a two-column split? something else?) the way Color got a
+        // live triage session and a maintainer-confirmed representation before it was built. That is a
+        // maintainer call, not a mid-slice one.
+        if (open == typeof(IGenderedItemGetter<>))
+            return "gendered Male/Female pair — 20 fields; real data, deferred pending a presentation decision";
+
+        // 83 fields: raw binary blobs (Model.Data and friends). xEdit renders these as opaque hex
+        // "Unknown" fields; mEdit has no hex editor, and inventing one is a UI decision.
+        if (open == typeof(ReadOnlyMemorySlice<>))
+            return "raw byte/element blob — 83 fields; no hex presentation exists";
+
+        // 4 fields: LandscapeVertexHeightMap-style grids. Real data, tiny population, no grid shape.
+        if (open == typeof(IReadOnlyArray2d<>))
+            return "2D array grid — 4 fields; no grid presentation exists";
+
+        // 2 fields: Race.BipedObjects (keyed by BipedObject) and Package.Data (keyed by SByte). Real
+        // data; a keyed map is a shape neither the schema's array nor its struct model covers.
+        if (open == typeof(IReadOnlyDictionary<,>))
+            return "keyed map — 2 fields; neither the array nor the struct model covers a dictionary";
+
+        // Candidate atomic-value table entries — the mechanism Color now uses is ready for each, but
+        // each is a new rendered leaf needing its own xEdit-shape decision first. Percent is a ratio
+        // xEdit shows as a raw float; TimeOnly is Climate's sunrise/sunset, which xEdit shows as a
+        // byte in 10-minute increments; RecordType is a 4-character signature.
+        if (shape == typeof(Percent))
+            return "Noggog Percent — 25 fields; candidate atomic value, presentation undecided";
+        if (shape == typeof(TimeOnly))
+            return "TimeOnly — 4 fields; candidate atomic value, presentation undecided";
+        if (shape == typeof(RecordType))
+            return "Mutagen RecordType signature — 7 fields; candidate atomic value, presentation undecided";
+
+        // 11 fields: a Loqui struct whose own sub-schema comes out empty, so there is nothing to
+        // present. Deliberately NOT restated here — every one already carries a reasoned entry in
+        // SchemaReflectorLeafCoverageCompletenessTests.KnownGaps (ASceneActionType's two independent
+        // blockers, ScenePhaseUnusedData's byte-blob-only membership, and the rest). Two independent
+        // sets of reasons for one set of facts would drift, and silently.
+        return EmptySubSchemaTypeNames.Contains(shape.Name)
+            ? "empty sub-schema — see SchemaReflectorLeafCoverageCompletenessTests.KnownGaps"
+            : null;
+    }
+
+    private static readonly HashSet<string> EmptySubSchemaTypeNames = new(StringComparer.Ordinal)
+    {
+        "IScenePhaseUnusedDataGetter",      // byte-blob-only members
+        "IPlacedGetter",                     // abstract placed-record base, no members of its own
+        "IScriptFragmentGetter",             // VMAD-adjacent, outside the reflected pipeline by design
+        "IScriptEntryGetter",                // ditto
+        "IFindMatchingRefFromEventGetter",  // package-data leaf whose own members are all excluded shapes
+        "IASceneActionTypeGetter",          // deliberately not abstract upstream; see KnownGaps
+    };
+
+    /// <summary>Every excluded shape's reason, for the audit's own non-vacuity guard.</summary>
+    internal static IReadOnlyList<string> ExcludedShapeLabels =>
+    [
+        .. new[]
+        {
+            typeof(IGenderedItemGetter<>), typeof(ReadOnlyMemorySlice<>), typeof(IReadOnlyArray2d<>),
+            typeof(IReadOnlyDictionary<,>), typeof(Percent), typeof(TimeOnly), typeof(RecordType),
+        }.Select(t => ExcludedShapeReason(t)!),
+    ];
+
+    // The components this property decomposes into. Per-property rather than per-type precisely
+    // because of the alpha allowlist: two fields of the identical CLR type get different shapes.
+    private static AtomicValueComponent[] AtomicValueComponentsFor(PropertyInfo prop) =>
+        HasAlphaLeaf(prop) ? ColorRgbaComponents : ColorRgbComponents;
+
+    // The mutable staging target an atomic value's Apply writes onto before the immutable value is
+    // rebuilt from it. System.Drawing.Color's own R/G/B/A are get-only, so the vector-struct trick
+    // of mutating a boxed value in place is structurally unavailable here — but with a box whose
+    // property *names* match the CLR type's, every component still gets an ordinary MakeApplier and
+    // the whole write folds through the same ApplySubFields every other struct uses. No bespoke
+    // per-component write path, and no null Apply anywhere in the shape.
+    private sealed class ColorComponentBox
+    {
+        public byte R { get; set; }
+        public byte G { get; set; }
+        public byte B { get; set; }
+        public byte A { get; set; }
+    }
+
     private static string[] GetFormLinkValidTypes(
         Type core, IReadOnlyDictionary<Type, string> getterTypeToTable)
     {
@@ -1012,6 +1364,7 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
 
         var grouped = GetAllInterfaceProperties(getterInterface)
             .Where(p => !LoquiSkipProps.Contains(p.Name))
+            .Where(p => !IsInfrastructureProperty(p))
             .GroupBy(p => ToSnakeCase(p.Name), StringComparer.OrdinalIgnoreCase);
 
         var result = new List<SubFieldSpec>();
@@ -1169,7 +1522,8 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         }
 
         return new(ObjectModValueTypeDiscriminator, "string", Empty,
-            [.. leaves.Select(l => l.ValueTypeName)], Extract, Apply: null, AllowsNull: true);
+            [.. leaves.Select(l => l.ValueTypeName)], Extract,
+            Apply: LeafWrite.ReadOnly<object>(DiscriminatorReason), AllowsNull: true);
     }
 
     private static SubFieldSpec BuildTypedLeafUnionField(
@@ -1197,11 +1551,12 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         // sub-field — it resolves the property off the target's own runtime type and answers
         // ApplyOutcome.PropertyNotFound when that type doesn't declare it, which ApplySubFields
         // treats as a silent no-op, exactly what a leaf that lacks this member needs.
-        Func<object, JsonElement, ApplyOutcome>? apply = rep.Convert switch
+        var apply = rep.Convert switch
         {
-            { } c => MakeApplier(pName, nullable: true, c, logger),
-            null when IsFormLink(core) => (obj, val) => ApplyFormLinkJson(obj, val, pName, logger),
-            _ => null,
+            { } c => LeafWrite.Writable(MakeApplier(pName, nullable: true, c, logger)),
+            null when IsFormLink(core) => LeafWrite.Writable<object>(
+                (obj, val) => ApplyFormLinkJson(obj, val, pName, logger)),
+            _ => LeafWrite.ReadOnly<object>(NoConverterReason),
         };
 
         return new(colName, rep.ApiType, rep.ValidFormKeyTypes, rep.EnumValues, Extract,
@@ -1227,7 +1582,7 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         // therefore cannot share one converter the way MakeApplier's callers normally do; instead
         // it resolves the target property's own declared type at write time, off whichever
         // concrete leaf ApplyListJson already constructed, and converts into *that*.
-        return new(colName, "string", Empty, Empty, Extract, Apply: MakeWidenedApplier(pName, logger), AllowsNull: true);
+        return new(colName, "string", Empty, Empty, Extract, Apply: LeafWrite.Writable(MakeWidenedApplier(pName, logger)), AllowsNull: true);
     }
 
     /// <summary>
@@ -1517,9 +1872,9 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
             .Select(d => Nullable.GetUnderlyingType(d.Prop.PropertyType) ?? d.Prop.PropertyType)
             .Distinct()
             .Count();
-        var apply = distinctClrTypes > 1 && rep.Apply != null
+        var apply = distinctClrTypes > 1 && rep.Apply.Writer != null
             && rep.ApiType is not ("struct" or "array" or "formKey")
-            ? MakeWidenedApplier(declaring[0].Prop.Name, logger)
+            ? LeafWrite.Writable(MakeWidenedApplier(declaring[0].Prop.Name, logger))
             : rep.Apply;
 
         return rep with { Name = colName, Extract = Extract, Apply = apply, AllowsNull = true };
@@ -1544,7 +1899,8 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         }
 
         return new(AbstractUnionTypeDiscriminator, "string", Empty,
-            [.. leaves.Select(l => l.ClassName)], Extract, Apply: null, AllowsNull: true);
+            [.. leaves.Select(l => l.ClassName)], Extract,
+            Apply: LeafWrite.ReadOnly<object>(DiscriminatorReason), AllowsNull: true);
     }
 
     // Write side: resolves the concrete Setter class named by an incoming JSON object's own
@@ -1882,11 +2238,12 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         return ClassifyLeaf(prop, core, getterTypeToTable) switch
         {
             { } leaf => ProjectSubField(prop, colName, core, nullable, leaf, logger),
+            null when IsAtomicValueType(core) => BuildAtomicValueSubField(prop, core, colName, logger),
             null when IsVectorStructType(core) => BuildVectorSubField(prop, core, colName, getterTypeToTable, depth, logger),
             null when IsListType(core, out var elementType) =>
                 BuildListSubField(prop, colName, elementType, getterTypeToTable, logger),
             null when IsLoquiInterface(core) => BuildStructSubField(prop, core, colName, getterTypeToTable, depth, logger),
-            _ => null,
+            _ => ReportUnclassified<SubFieldSpec>(logger, prop, core, "sub-field"),
         };
     }
 
@@ -1897,11 +2254,12 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         PropertyInfo prop, string colName, Type core, bool nullable, LeafSpec leaf, ILogger logger)
     {
         var pName = prop.Name;
-        Func<object, JsonElement, ApplyOutcome>? apply = leaf.Convert switch
+        var apply = leaf.Convert switch
         {
-            { } c => MakeApplier(pName, nullable, c, logger),
-            null when IsFormLink(core) => (obj, val) => ApplyFormLinkJson(obj, val, pName, logger),
-            _ => null,
+            { } c => LeafWrite.Writable(MakeApplier(pName, nullable, c, logger)),
+            null when IsFormLink(core) => LeafWrite.Writable<object>(
+                (obj, val) => ApplyFormLinkJson(obj, val, pName, logger)),
+            _ => LeafWrite.ReadOnly<object>(NoConverterReason),
         };
         return new(colName, leaf.ApiType, leaf.ValidFormKeyTypes, leaf.EnumValues,
             leaf.Get, apply,
@@ -1962,7 +2320,7 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         IReadOnlyDictionary<Type, string> getterTypeToTable, int depth, ILogger logger)
     {
         var sub = BuildSubSchema(core, getterTypeToTable, logger, depth);
-        if (sub.Count == 0) return null;
+        if (sub.Count == 0) return ReportUnclassified<SubFieldSpec>(logger, prop, core, "empty nested struct");
         var g = SubGetter(prop);
         var pName = prop.Name;
         var setterType = GetSetterType(core);
@@ -1970,7 +2328,11 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
             && (!setterType.IsAbstract || sub.Any(f => f.Name == AbstractUnionTypeDiscriminator));
         return new(colName, "struct", Empty, Empty,
             obj => { var v = g(obj); return v == null ? null : ExtractSubObject(v, sub); },
-            Apply: writable ? (obj, val) => ApplyStructJson(obj, val, pName, setterType!, sub) : null,
+            Apply: writable
+                ? LeafWrite.Writable<object>((obj, val) => ApplyStructJson(obj, val, pName, setterType!, sub))
+                : LeafWrite.ReadOnly<object>(
+                    "nested struct with no usable write door: no resolvable Loqui setter class, or an " +
+                    "excluded abstract union whose discriminator can never appear in a payload"),
             SubFields: sub,
             // #642: a payload that names an unwritable sub-field must refuse the whole write rather
             // than silently drop it while the caller reports success (SubFieldSpec's own doc comment
@@ -2008,6 +2370,87 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         return result;
     }
 
+    // ── The atomic-value class: build (see AlphaBearingColorFields for the shape decision) ──────
+
+    // One component's own sub-field. Read and write deliberately target different runtime types:
+    // Extract reads off the real immutable value (a System.Drawing.Color), while Apply resolves the
+    // same CLR name on the mutable ColorComponentBox the enclosing Apply stages into. Both are
+    // ordinary name-keyed reflection — SubGetter and MakeApplier, unchanged — so a component behaves
+    // exactly like any other byte leaf, ApplyOutcome folding included.
+    private static List<SubFieldSpec> BuildAtomicValueComponentSubFields(
+        Type core, AtomicValueComponent[] components, ILogger logger)
+    {
+        var (_, apiType, converter) = PrimitiveMap[typeof(byte)];
+        var result = new List<SubFieldSpec>();
+        foreach (var component in components)
+        {
+            var componentProp = core.GetProperty(component.ClrName, BindingFlags.Public | BindingFlags.Instance)
+                ?? throw new InvalidOperationException(
+                    $"Atomic value type {core.Name} declares no '{component.ClrName}' component. " +
+                    "The presentation table and the CLR type have diverged.");
+
+            result.Add(new(component.WireName, apiType, Empty, Empty,
+                SubGetter(componentProp),
+                LeafWrite.Writable(MakeApplier(component.ClrName, nullable: false, converter, logger))));
+        }
+        return result;
+    }
+
+    // Rebuilds the immutable value from the staged box. Alpha rides through whether or not this
+    // field renders an alpha leaf: a field on the 3-leaf shape simply never has "alpha" in its
+    // payload, so ApplySubFields leaves box.A at whatever the current value already carried — which
+    // is what makes a colour edit on one of the 40 wbByteColors fields preserve its existing fourth
+    // byte instead of silently zeroing it.
+    private static System.Drawing.Color RebuildAtomicValue(ColorComponentBox box) =>
+        System.Drawing.Color.FromArgb(box.A, box.R, box.G, box.B);
+
+    private static ColorComponentBox StageAtomicValue(object? current) =>
+        current is System.Drawing.Color c
+            ? new ColorComponentBox { R = c.R, G = c.G, B = c.B, A = c.A }
+            // No prior value (a nullable Color being written for the first time). All-zero matches
+            // xEdit's own wbByteColors defaults (aDefaultR/G/B = 0, the fourth byte wbUnused).
+            : new ColorComponentBox();
+
+    // The shared write body for an atomic value, operating on `object` so the top-level column and
+    // the nested sub-field share one implementation — the same posture ApplyStructJson takes for
+    // Loqui structs since #643.
+    private static ApplyOutcome ApplyAtomicValueJson(
+        object obj, JsonElement val, string pName, IReadOnlyList<SubFieldSpec> components)
+    {
+        if (val.ValueKind != JsonValueKind.Object) return ApplyOutcome.ValueRejected;
+        var rp = obj.GetType().GetProperty(pName, BindingFlags.Public | BindingFlags.Instance);
+        if (rp == null) return ApplyOutcome.PropertyNotFound;
+
+        var box = StageAtomicValue(rp.GetValue(obj));
+        var subOutcome = ApplySubFields(box, val, components);
+        if (subOutcome != ApplyOutcome.Applied) return subOutcome;
+        if (rp.CanWrite) rp.SetValue(obj, RebuildAtomicValue(box));
+        return ApplyOutcome.Applied;
+    }
+
+    private static SubFieldSpec BuildAtomicValueSubField(
+        PropertyInfo prop, Type core, string colName, ILogger logger)
+    {
+        var components = BuildAtomicValueComponentSubFields(core, AtomicValueComponentsFor(prop), logger);
+        var g = SubGetter(prop);
+        var pName = prop.Name;
+        return new(colName, "struct", Empty, Empty,
+            obj => { var v = g(obj); return v == null ? null : ExtractSubObject(v, components); },
+            Apply: LeafWrite.Writable<object>((obj, val) => ApplyAtomicValueJson(obj, val, pName, components)),
+            SubFields: components);
+    }
+
+    private static ColumnInfoResult BuildAtomicValueColumn(PropertyInfo prop, Type core, ILogger logger)
+    {
+        var components = BuildAtomicValueComponentSubFields(core, AtomicValueComponentsFor(prop), logger);
+        var pName = prop.Name;
+        return new("VARCHAR",
+            r => TryGet(r, prop) is { } v ? JsonSerializer.Serialize(ExtractSubObject(v, components)) : null,
+            "struct", Empty, Empty,
+            Apply: LeafWrite.Writable<IMajorRecord>((record, val) => ApplyAtomicValueJson(record, val, pName, components)),
+            SubFieldMetas: components.ConvertAll(c => c.ToFieldMetadata()));
+    }
+
     // A vector-struct field nested inside another struct (e.g. ObjectBounds.First/Second, a
     // P3Int16; Cell.Grid.Point, a P2Int) — xEdit shows OBND's six components individually
     // (wbDefinitionsCommon.pas: wbOBND — X1/Y1/Z1/X2/Y2/Z2, not one opaque value), so this mirrors
@@ -2026,7 +2469,7 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         var pName = prop.Name;
         return new(colName, "struct", Empty, Empty,
             obj => { var v = g(obj); return v == null ? null : ExtractSubObject(v, components); },
-            Apply: (obj, val) =>
+            Apply: LeafWrite.Writable<object>((obj, val) =>
             {
                 if (val.ValueKind != JsonValueKind.Object) return ApplyOutcome.ValueRejected;
                 var rp = obj.GetType().GetProperty(pName, BindingFlags.Public | BindingFlags.Instance);
@@ -2036,7 +2479,7 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
                 if (subOutcome != ApplyOutcome.Applied) return subOutcome;
                 if (rp.CanWrite) rp.SetValue(obj, current);
                 return ApplyOutcome.Applied;
-            },
+            }),
             SubFields: components);
     }
 
@@ -2061,14 +2504,15 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         IReadOnlyDictionary<Type, string> getterTypeToTable)
     {
         if (elemSubFields != null)
-            return new("", "struct", Empty, Empty, _ => null, Apply: null, SubFields: elemSubFields);
+            return new("", "struct", Empty, Empty, _ => null,
+                Apply: LeafWrite.ReadOnly<object>(ElementTemplateReason), SubFields: elemSubFields);
         if (isFl)
         {
             return new("", "formKey", GetFormLinkValidTypes(elementType, getterTypeToTable), Empty,
-                _ => null, Apply: null, AllowsNull: true);
+                _ => null, Apply: LeafWrite.ReadOnly<object>(ElementTemplateReason), AllowsNull: true);
         }
         return TryMapPrimitive(elementType, out _, out var elemApiType, out _)
-            ? new("", elemApiType, Empty, Empty, _ => null, Apply: null)
+            ? new("", elemApiType, Empty, Empty, _ => null, Apply: LeafWrite.ReadOnly<object>(ElementTemplateReason))
             : null;
     }
 
@@ -2088,13 +2532,15 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         // above has already done the Loqui/vector element work, so there is nothing to gain from routing
         // through BuildElementMeta's own FieldMetadata output and converting it back.
         var elementSpec = BuildListElementSpec(elementType, isFl, elemSubFields, getterTypeToTable);
-        if (elementSpec == null) return null;
+        if (elementSpec == null)
+            return ReportUnclassified<SubFieldSpec>(logger, prop, elementType, "nested list element");
 
         var g = SubGetter(prop);
         var pName = prop.Name;
-        Func<object, JsonElement, ApplyOutcome>? apply = isFl || isLoqui || isVector
-            ? (obj, json) => ApplyListSubFieldJson(obj, json, pName, isFl, elementType, elemSubFields)
-            : null;
+        var apply = isFl || isLoqui || isVector
+            ? LeafWrite.Writable<object>(
+                (obj, json) => ApplyListSubFieldJson(obj, json, pName, isFl, elementType, elemSubFields))
+            : LeafWrite.ReadOnly<object>(PrimitiveElementListReason);
 
         return new(colName, "array", Empty, Empty,
             obj => g(obj) is IEnumerable list ? BuildListItems(list, elementType, elemSubFields) : null,
@@ -2107,7 +2553,11 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
             // than the silent discard the survey caught. Making the shape writable at both levels
             // is a separate capability, deliberately not built here (maintainer decision at #643's
             // gate).
-            TargetingRefuses: apply == null);
+            // #649: `apply` is a LeafWrite and therefore never null — the old `apply == null` test
+            // silently became `false` here when the type narrowed, which reopened #642's silent
+            // discard for this exact shape (caught by NestedScalarListSubFieldRefusalTests). Ask the
+            // question the type actually answers.
+            TargetingRefuses: apply.Writer == null);
     }
 
     // ApplyListJson's own sub-field twin: writes a struct/array-nested list's whole value, same
@@ -2202,10 +2652,11 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         return ClassifyLeaf(prop, core, getterTypeToTable) switch
         {
             { } leaf => ProjectColumn(prop, core, nullable, leaf, logger),
+            null when IsAtomicValueType(core) => BuildAtomicValueColumn(prop, core, logger),
             null when IsVectorStructType(core) => BuildVectorColumn(prop, core, getterTypeToTable, logger),
             null when IsListType(core, out var elementType) => BuildListColumn(prop, elementType, getterTypeToTable, logger),
             null when IsLoquiInterface(core) => BuildStructColumn(prop, core, getterTypeToTable, logger),
-            _ => null,
+            _ => ReportUnclassified<ColumnInfoResult>(logger, prop, core, "column"),
         };
     }
 
@@ -2215,11 +2666,11 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
     private static ColumnInfoResult ProjectColumn(PropertyInfo prop, Type core, bool nullable, LeafSpec leaf, ILogger logger)
     {
         var pName = prop.Name;
-        Func<IMajorRecord, JsonElement, ApplyOutcome>? apply = leaf.Convert switch
+        var apply = leaf.Convert switch
         {
-            { } c => MakeColumnApplier(pName, nullable, c, logger),
-            null when IsFormLink(core) => FormLinkColumnApplier(pName, logger),
-            _ => null,
+            { } c => LeafWrite.Writable(MakeColumnApplier(pName, nullable, c, logger)),
+            null when IsFormLink(core) => LeafWrite.Writable(FormLinkColumnApplier(pName, logger)),
+            _ => LeafWrite.ReadOnly<IMajorRecord>(NoConverterReason),
         };
         return new(leaf.DuckDbType, r => leaf.Get(r), leaf.ApiType, leaf.ValidFormKeyTypes, leaf.EnumValues,
             apply,
@@ -2245,7 +2696,7 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         var elemSubFields = BuildListElementSubFields(elementType, isLoqui, isVector, getterTypeToTable, logger);
 
         var elemMeta = BuildElementMeta(elementType, getterTypeToTable, logger);
-        if (elemMeta == null) return null;
+        if (elemMeta == null) return ReportUnclassified<ColumnInfoResult>(logger, prop, elementType, "list element");
 
         object? Extractor(IMajorRecordGetter r)
         {
@@ -2259,9 +2710,10 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         }
 
         var pName = prop.Name;
-        Func<IMajorRecord, JsonElement, ApplyOutcome>? apply = isFl || isLoqui || isVector
-            ? (record, json) => ApplyListJson(record, json, pName, isFl, elementType, elemSubFields)
-            : null;
+        var apply = isFl || isLoqui || isVector
+            ? LeafWrite.Writable<IMajorRecord>(
+                (record, json) => ApplyListJson(record, json, pName, isFl, elementType, elemSubFields))
+            : LeafWrite.ReadOnly<IMajorRecord>(PrimitiveElementListReason);
 
         return new("VARCHAR", Extractor, "array", Empty, Empty, apply,
             ElementMeta: elemMeta);
@@ -2451,7 +2903,7 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         foreach (var sf in subFields)
         {
             if (!json.TryGetProperty(sf.Name, out var sfVal)) continue;
-            if (sf.Apply is not { } apply)
+            if (sf.Apply.Writer is not { } apply)
             {
                 if (sf.TargetingRefuses) notWritable = true;
                 continue;
@@ -2542,7 +2994,7 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         PropertyInfo prop, Type core, IReadOnlyDictionary<Type, string> getterTypeToTable, ILogger logger)
     {
         var subFields = BuildSubSchema(core, getterTypeToTable, logger);
-        if (subFields.Count == 0) return null;
+        if (subFields.Count == 0) return ReportUnclassified<ColumnInfoResult>(logger, prop, core, "empty struct");
 
         var subFieldMetas = subFields.ConvertAll(s => s.ToFieldMetadata());
 
@@ -2555,13 +3007,15 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
 
         var setterType = GetSetterType(core);
         var pName = prop.Name;
-        Func<IMajorRecord, JsonElement, ApplyOutcome>? apply = null;
+        var apply = LeafWrite.ReadOnly<IMajorRecord>(
+            "struct column with no resolvable Loqui setter class, so nothing can be constructed to write onto");
         if (setterType != null)
         {
             // ApplyStructJson carries the whole contract (shape guard, discriminator resolution,
             // refuse-before-attach) — shared with every nested struct sub-field since #643, so the
             // column and sub-field write paths cannot drift apart.
-            apply = (record, json) => ApplyStructJson(record, json, pName, setterType, subFields);
+            apply = LeafWrite.Writable<IMajorRecord>(
+                (record, json) => ApplyStructJson(record, json, pName, setterType, subFields));
         }
 
         return new("VARCHAR", Extractor, "struct", Empty, Empty, apply,
@@ -2596,7 +3050,7 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
 
         var pName = prop.Name;
         return new("VARCHAR", Extractor, "struct", Empty, Empty,
-            (record, json) =>
+            LeafWrite.Writable<IMajorRecord>((record, json) =>
             {
                 if (json.ValueKind != JsonValueKind.Object) return ApplyOutcome.ValueRejected;
                 var rp = record.GetType().GetProperty(pName, BindingFlags.Public | BindingFlags.Instance)!;
@@ -2605,7 +3059,7 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
                 if (subOutcome != ApplyOutcome.Applied) return subOutcome;
                 if (rp.CanWrite) rp.SetValue(record, obj);
                 return ApplyOutcome.Applied;
-            },
+            }),
             SubFieldMetas: subFieldMetas);
     }
 

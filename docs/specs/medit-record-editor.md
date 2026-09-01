@@ -366,6 +366,22 @@ already empty: matching xEdit's own guard (`Element.EditValue` must be non-empty
   existing value object is reused only when it is already the same concrete type; and a write with
   one bad member anywhere in the nested tree refuses the whole write before anything is written,
   leaving the working tree byte-identical.
+  **Read/write symmetry is structural, not conventional** (#649). A leaf carries either a writer or
+  a named read-only reason — `ColumnSpec.Apply`/`SubFieldSpec.Apply` are a two-case union, so a leaf
+  that reads but silently cannot be written is no longer representable, and an audit asserts every
+  writable-shaped leaf has one or the other. Classification is likewise total: every property the
+  reflection walk reaches lands in exactly one structural class or is a **reported anomaly**, never
+  silence. Shapes with no class yet are excluded by name with their live count, so a gap is a
+  written-down decision rather than an absence — `IGenderedItemGetter<T>` (20 fields across Race,
+  ArmorAddon, Armor, AssociationType and Rank), raw byte slices, `Percent`, `TimeOnly`, `RecordType`,
+  `IReadOnlyArray2d`, `IReadOnlyDictionary`.
+  **Atomic values are a table, not a handler branch.** `System.Drawing.Color` is its first entry,
+  presented as xEdit presents it (`wbByteColors`): `red`/`green`/`blue` byte sub-fields, editable
+  through the one write path like any struct member. Four fields — `ActionRecord.Color`,
+  `Keyword.Color`, `LocationReferenceType.Color`, `Location.Color` — additionally carry `alpha`,
+  matching the exact four xEdit renders with `wbByteRGBA`; the distinction is per *field*, not per
+  type, and is not reflectable from Mutagen, so it is a transcribed allowlist in the same idiom as
+  the vector-struct list. Editing a Color leaf preserves any existing alpha byte it does not name.
   **Naming a sub-field that genuinely has no write path is itself a refusal**
   (`RecordEditRefusal.NestedFieldReadOnly`, #642). Since #643 that is the unwritable residue only:
   nested condition data (its discriminator can never appear in a payload) and primitive-element

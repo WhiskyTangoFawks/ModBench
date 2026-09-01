@@ -162,7 +162,8 @@ there is no separate load-order step.
     at edit time when the plugin isn't ESL-eligible) — so that maintaining a plugin's header is
     an ordinary working-tree edit, reviewable in the Source Control panel like any other.
     Viewing is built; **editing is not yet built**: no header column carries a write delegate
-    (`author`, `flags` and `masters` are all `Apply: null`), so every header field edit refuses.
+    (`author`, `flags` and `masters` are each declared read-only with a named reason, since #649
+    made a null write delegate unrepresentable), so every header field edit refuses.
     #661 makes the header a source unit, which changes only *which* refusal fires; genuine
     writability — setting the author, toggling ESL/ESM with eligibility rejection — is #290.
 25. As a user, I want to create and manage placed references (REFR/ACHR) inside a cell's

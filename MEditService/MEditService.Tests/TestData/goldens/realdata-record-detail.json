@@ -266,6 +266,11 @@
         ],
         "looping_sound": null,
         "major_flags": "134217728",
+        "marker_color": {
+          "blue": 51,
+          "green": 76,
+          "red": 204
+        },
         "model": {
           "color_remapping_index": null,
           "file": "CreationClub\\_Shared\\VRWorkshop\\SetDressing\\VRWorkshop_EnemySpawner01.nif",
@@ -322,6 +327,11 @@
         ],
         "looping_sound": null,
         "major_flags": "134217728",
+        "marker_color": {
+          "blue": 51,
+          "green": 76,
+          "red": 204
+        },
         "model": {
           "color_remapping_index": null,
           "file": "CreationClub\\_Shared\\VRWorkshop\\SetDressing\\VRWorkshop_EnemySpawner01.nif",
@@ -378,6 +388,11 @@
         ],
         "looping_sound": null,
         "major_flags": "134217728",
+        "marker_color": {
+          "blue": 51,
+          "green": 76,
+          "red": 204
+        },
         "model": {
           "color_remapping_index": null,
           "file": "CreationClub\\_Shared\\VRWorkshop\\SetDressing\\VRWorkshop_EnemySpawner01.nif",
@@ -41387,6 +41402,12 @@
       "EditorId": "dn_HasPiggyBank",
       "Fields": {
         "attraction_rule": null,
+        "color": {
+          "alpha": 0,
+          "blue": 255,
+          "green": 255,
+          "red": 255
+        },
         "display_name": null,
         "fallout4_major_record_flags": "0",
         "is_deleted": false,
@@ -41408,6 +41429,12 @@
       "EditorId": "WorkshopRecipeFilterCreationClub02Holiday03ccFSVFO4007",
       "Fields": {
         "attraction_rule": null,
+        "color": {
+          "alpha": 0,
+          "blue": 255,
+          "green": 255,
+          "red": 255
+        },
         "display_name": null,
         "fallout4_major_record_flags": "0",
         "is_deleted": false,
@@ -41429,6 +41456,12 @@
       "EditorId": "WorkshopRecipeFilterCreationClub02HolidayHalloween",
       "Fields": {
         "attraction_rule": null,
+        "color": {
+          "alpha": 0,
+          "blue": 255,
+          "green": 255,
+          "red": 255
+        },
         "display_name": null,
         "fallout4_major_record_flags": "0",
         "is_deleted": false,
@@ -41861,6 +41894,11 @@
         "sounds": null,
         "spectator_override_package_list": null,
         "template_actors": null,
+        "texture_lighting": {
+          "blue": 128,
+          "green": 128,
+          "red": 128
+        },
         "unknown": -29952,
         "unused": 0,
         "use_template_actors": "0",
@@ -42081,6 +42119,11 @@
           "spell_list_template": "Null",
           "stats_template": "2499C7:Fallout4.esm",
           "trait_template": "2499C7:Fallout4.esm"
+        },
+        "texture_lighting": {
+          "blue": 128,
+          "green": 128,
+          "red": 128
         },
         "unknown": 16256,
         "unused": 0,
@@ -42345,6 +42388,11 @@
           "spell_list_template": "Null",
           "stats_template": "1628EF:Fallout4.esm",
           "trait_template": "1628EF:Fallout4.esm"
+        },
+        "texture_lighting": {
+          "blue": 0,
+          "green": 0,
+          "red": 0
         },
         "unknown": -13169,
         "unused": 0,
