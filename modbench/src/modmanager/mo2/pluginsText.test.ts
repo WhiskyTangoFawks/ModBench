@@ -37,6 +37,28 @@ describe('parsePlugins', () => {
   it('#635: a whitespace-only line is blank, not a phantom entry named for its spaces — this is what lets Mo2ModlistSource route readPluginOrder/readEnabledPlugins through this function', () => {
     expect(names('﻿# header\r\n*Foo.esp\r\n\r\n   \r\nBar.esp\r\n')).toEqual(['Foo.esp', 'Bar.esp']);
   });
+
+  // #635 regression: the deleted readPluginLines fully .trim()ed each line before reading
+  // `*`/the name off it. isEntryLine alone being trim-aware (the fix above) isn't enough —
+  // pluginNameOf and the enabled check must be too, or a line with incidental leading/trailing
+  // whitespace parses to a name containing the padding (or a literal `*`) and the wrong
+  // enabled state. PluginEntry.name is a matching key downstream, so this made a real,
+  // enabled plugin unreachable by name and reported as disabled.
+  it('#635: leading whitespace before the marker does not hide it, and does not leak into the name', () => {
+    expect(parsePlugins(' *Foo.esp\r\n')).toEqual([{ name: 'Foo.esp', enabled: true }] satisfies PluginEntry[]);
+  });
+
+  it('#635: leading whitespace with no marker parses as disabled, not a name containing the padding', () => {
+    expect(parsePlugins(' Foo.esp\r\n')).toEqual([{ name: 'Foo.esp', enabled: false }] satisfies PluginEntry[]);
+  });
+
+  it('#635: trailing whitespace does not leak into the name', () => {
+    expect(parsePlugins('Foo.esp \r\n')).toEqual([{ name: 'Foo.esp', enabled: false }] satisfies PluginEntry[]);
+  });
+
+  it('#635: a comment line with incidental leading whitespace is still recognized as a comment, not an entry', () => {
+    expect(parsePlugins('  # header\r\n*Foo.esp\r\n')).toEqual([{ name: 'Foo.esp', enabled: true }] satisfies PluginEntry[]);
+  });
 });
 
 describe('setPluginEnabledInText — byte-faithful surgical edit', () => {
@@ -68,6 +90,40 @@ describe('setPluginEnabledInText — byte-faithful surgical edit', () => {
   it('preserves a leading BOM when toggling the first line', () => {
     const out = setPluginEnabledInText('\uFEFF*First.esp\r\n*Second.esp\r\n', 'First.esp', false);
     expect(out).toBe('\uFEFFFirst.esp\r\n*Second.esp\r\n');
+  });
+
+  it('#635: locates a hand-padded line by its trimmed name and flips only the marker byte, leaving the padding and every other line untouched', () => {
+    // The marker sits after the padding (index start+1), not at `start` \u2014 a naive
+    // "insert/remove at the line's own start index" would corrupt the padding
+    // instead of the marker (or silently no-op, reading the padding as the marker).
+    const input = '*A.esp\r\n *Foo.esp\r\nB.esp\r\n';
+    const out = setPluginEnabledInText(input, 'Foo.esp', false);
+    expect(out).toBe('*A.esp\r\n Foo.esp\r\nB.esp\r\n');
+  });
+
+  it('#635: enabling a hand-padded disabled line inserts the marker after the padding, not before it', () => {
+    const input = '*A.esp\r\n Foo.esp\r\nB.esp\r\n';
+    const out = setPluginEnabledInText(input, 'Foo.esp', true);
+    expect(out).toBe('*A.esp\r\n *Foo.esp\r\nB.esp\r\n');
+  });
+
+  it('#635 end-to-end round trip: parse a hand-padded enabled line, toggle it off then back on, and land on byte-identical text \u2014 the exact ` *Foo.esp` case, traced through the full read/write path', () => {
+    const input = '*A.esp\r\n *Foo.esp\r\nB.esp\r\n';
+
+    // Read side: parsePlugins (and so Mo2ModlistSource.readPluginOrder/readEnabledPlugins,
+    // which route through it) reports the real name and the real enabled state.
+    expect(parsePlugins(input)).toContainEqual({ name: 'Foo.esp', enabled: true });
+
+    // Write side: setPluginEnabledInText finds that same name \u2014 the matching key
+    // parsePlugins handed back \u2014 and flips only its marker.
+    const disabled = setPluginEnabledInText(input, 'Foo.esp', false);
+    expect(disabled).toBe('*A.esp\r\n Foo.esp\r\nB.esp\r\n');
+    expect(parsePlugins(disabled)).toContainEqual({ name: 'Foo.esp', enabled: false });
+
+    // Toggling back reaches the exact original bytes \u2014 nothing about the padding
+    // or the surrounding lines was ever touched.
+    const reEnabled = setPluginEnabledInText(disabled, 'Foo.esp', true);
+    expect(reEnabled).toBe(input);
   });
 
   it('round-trips: disable then re-enable yields the original bytes', () => {

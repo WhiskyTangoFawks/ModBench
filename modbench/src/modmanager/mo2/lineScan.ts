@@ -1,6 +1,10 @@
-// Shared, EOL-aware line scanning for the byte-faithful MO2 text transforms.
-// Centralises the one error-prone bit — handling \r\n vs \r vs \n — so the
-// surgical edit/parse helpers don't each re-implement the CRLF lookahead.
+// Shared helpers for the byte-faithful MO2 text transforms (modlistText.ts,
+// pluginsText.ts): EOL-aware line scanning, BOM handling, and splice-index
+// arithmetic. Centralises the error-prone bits those two modules would
+// otherwise each re-implement — the CRLF lookahead, the file's leading-BOM
+// convention, and (via `insertIndexAmongEntries`, generic over any
+// predicate-filtered `string[]`, not itself EOL/BOM-aware) the "insert at
+// this entry-index" splice math their move/reorder functions share.
 
 export interface LineRange {
   /** Index of the first character of the line. */
