@@ -26,14 +26,14 @@ import { trackProgressMessage } from './medit/trackProgress';
 import { FilterCodeLensProvider } from './medit/FilterCodeLensProvider';
 import { buildWebviewHtml } from './medit/webviewHtml';
 import {
-  EXTENSION_TO_WEBVIEW, type ExtensionToWebview, type ArrayElementContext, type ArrayParentContext,
+  EXTENSION_TO_WEBVIEW, type ExtensionToWebview,
   type VmadScriptsContext, type VmadScriptContext, type VmadPropertyContext, type ColumnHeaderContext,
-  type StringValueContext,
 } from './medit/messages';
 import { copyTargetPlugins, type CopyGesture } from './medit/copyTargetPlugins';
 import { routeRecordPanelMessage, pickScriptNameViaInputBox, type RouteRecordPanelMessageDeps } from './medit/recordPanelMessageRouter';
 import { RecordDecorationProvider } from './medit/RecordDecorationProvider';
 import { broadcastToRecordPanels, makeOnRecordEdited } from './medit/onRecordEdited';
+import { registerForwarderCommands } from './medit/recordPanelForwarderCommands';
 import { Mo2ModlistSource } from './modmanager/mo2/Mo2ModlistSource';
 import { isMo2Instance, mo2InstanceContext } from './modmanager/detectMo2Instance';
 import { ModListProvider, ModNode, OverwriteNode, SeparatorNode, type ModlistNode } from './modmanager/ModListProvider';
@@ -529,66 +529,8 @@ interface EditorCommandDeps {
 function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposable[] {
   return [
     ...registerRecordViewCommands(deps),
-    ...registerArrayOpCommands(deps.recordPanels),
-    ...registerVmadOpCommands(deps.recordPanels),
-    ...registerFieldOpCommands(deps.recordPanels),
-  ];
-}
-
-// ADR-0039: the string cell's right-click menu — same broadcast-and-self-filter shape as
-// registerArrayOpCommands/registerVmadOpCommands above and for the identical reason (the
-// extension host has no live reference into any open panel's own React state, which alone holds
-// the record's current display label). Unlike those two, there's nothing to compute here beyond
-// forwarding `ctx` — `stringValueContext` (recordUtils.ts) already carries the cell's own current
-// value and readOnly flag, computed webview-side at right-click time, so the matching panel's own
-// listener can call `handleOpenExtended` directly with no further webview-side computation
-// (RecordPanel.tsx's FIELD_OPEN_EXTENDED_EDITOR branch).
-function registerFieldOpCommands(recordPanels: Set<vscode.WebviewPanel>): vscode.Disposable[] {
-  return [
-    vscode.commands.registerCommand('modbench.field.openExtended', (ctx?: StringValueContext) => {
-      if (!ctx) return;
-      broadcastToRecordPanels(recordPanels, {
-        type: EXTENSION_TO_WEBVIEW.FIELD_OPEN_EXTENDED_EDITOR,
-        formKey: ctx.formKey, plugin: ctx.plugin, origin: ctx.origin, fieldName: ctx.fieldName,
-        value: ctx.value, readOnly: ctx.readOnly, path: ctx.path, rootField: ctx.rootField,
-      });
-    }),
-  ];
-}
-
-// #630: the array-op right-click commands — the extension host has no live reference into any
-// open panel's own React state (which alone holds the record's current values), so each command
-// only resolves *which* row/column was clicked (from the `data-vscode-context` VS Code parses and
-// hands it as `ctx`) and broadcasts one ARRAY_STRUCTURAL_OP naming the op; every open panel
-// self-filters on `formKey` and, if it matches, posts the op envelope straight through
-// handleEditCell/EDIT_FIELD — no webview-side computation for an ordinary reflected field's array
-// (RecordFieldWriter/ArrayOpWriter compute the result server-side). A VMAD scalar-array property's
-// own arity ops, and a Condition-owning field's, are the two exceptions, deliberately out of scope
-// here (RecordPanel's own handleArrayOp still computes those client-side) — this command layer doesn't need to know the
-// difference, it only ever forwards ctx verbatim.
-function registerArrayOpCommands(recordPanels: Set<vscode.WebviewPanel>): vscode.Disposable[] {
-  // Forwards ctx.rootField/ctx.path verbatim — see
-  // ArrayParentContext/ArrayElementContext's own doc comments (medit/messages.ts).
-  function broadcastArrayOp(ctx: ArrayParentContext | ArrayElementContext, op: 'add' | 'remove' | 'moveUp' | 'moveDown') {
-    broadcastToRecordPanels(recordPanels, {
-      type: EXTENSION_TO_WEBVIEW.ARRAY_STRUCTURAL_OP,
-      formKey: ctx.formKey, plugin: ctx.plugin, origin: ctx.origin, rootField: ctx.rootField, path: ctx.path, op,
-    });
-  }
-
-  return [
-    vscode.commands.registerCommand('modbench.array.add', (ctx?: ArrayParentContext) => {
-      if (ctx) broadcastArrayOp(ctx, 'add');
-    }),
-    vscode.commands.registerCommand('modbench.array.remove', (ctx?: ArrayElementContext) => {
-      if (ctx) broadcastArrayOp(ctx, 'remove');
-    }),
-    vscode.commands.registerCommand('modbench.array.moveUp', (ctx?: ArrayElementContext) => {
-      if (ctx) broadcastArrayOp(ctx, 'moveUp');
-    }),
-    vscode.commands.registerCommand('modbench.array.moveDown', (ctx?: ArrayElementContext) => {
-      if (ctx) broadcastArrayOp(ctx, 'moveDown');
-    }),
+    ...registerForwarderCommands(deps.recordPanels),
+    ...registerVmadPromptCommands(deps.recordPanels),
   ];
 }
 
@@ -599,22 +541,16 @@ function registerArrayOpCommands(recordPanels: Set<vscode.WebviewPanel>): vscode
 const VMAD_SCRIPT_FLAGS = ['Local', 'Inherited', 'Removed', 'InheritedAndRemoved'] as const;
 const VMAD_PROP_FLAGS = ['Edited', 'Removed'] as const;
 
-// VMAD's own structural-op commands — same
-// broadcast-and-self-filter shape as registerArrayOpCommands above, reached from the "Scripts
-// (VMAD)" wrapper row (Add Script), a script row (Remove Script, Add Property, Set Script Flags),
-// or a property row (Remove Property, Set Property Flags). Every op below (other than Add
-// Script's own name prompt and Add Property's
-// dialog-open signal) collapses to one VMAD_STRUCTURAL_OP broadcast carrying a VmadPath fieldPath
-// and an op-envelope value — RecordFieldWriter.ApplyVmadField's own contract, the same
-// door EDIT_FIELD already opens. Add Script still needs its own native input box
-// (pickScriptNameViaInputBox — no round trip through the webview) since
-// there is no existing row to right-click for a script that doesn't exist yet. Add Property
-// collects three fields at once (a deliberate webview-modal exception), so its command
-// only tells the matching panel which script/plugin to open the dialog for — the dialog's own
-// confirm builds the fieldPath/op-envelope itself (RecordPanel.tsx). Set Script/Property Flags run
-// their own native QuickPick here, seeded (script only — no per-property read model carries a
+// The VMAD commands that resolve something host-side (a native input box or QuickPick) before
+// there is a message to build, so they can't live in recordPanelForwarderCommands.ts's own
+// table alongside their sibling VMAD commands (Remove Script, Add Property, Remove Property —
+// all pure forwards, moved there). Reached from the "Scripts (VMAD)" wrapper row (Add Script), a
+// script row (Set Script Flags), or a property row (Set Property Flags). Add Script needs its own
+// native input box (pickScriptNameViaInputBox — no round trip through the webview) since there is
+// no existing row to right-click for a script that doesn't exist yet. Set Script/Property Flags
+// run their own native QuickPick here, seeded (script only — no per-property read model carries a
 // current flag) the same way the condition-function picker sorts its own seed to the front.
-function registerVmadOpCommands(recordPanels: Set<vscode.WebviewPanel>): vscode.Disposable[] {
+function registerVmadPromptCommands(recordPanels: Set<vscode.WebviewPanel>): vscode.Disposable[] {
   return [
     vscode.commands.registerCommand('modbench.vmad.addScript', async (ctx?: VmadScriptsContext) => {
       if (!ctx) return;
@@ -623,26 +559,6 @@ function registerVmadOpCommands(recordPanels: Set<vscode.WebviewPanel>): vscode.
       broadcastToRecordPanels(recordPanels, {
         type: EXTENSION_TO_WEBVIEW.VMAD_STRUCTURAL_OP, formKey: ctx.formKey, plugin: ctx.plugin, origin: ctx.origin,
         fieldPath: `VMAD\\${name}`, value: { op: 'add_script' },
-      });
-    }),
-    vscode.commands.registerCommand('modbench.vmad.removeScript', (ctx?: VmadScriptContext) => {
-      if (!ctx) return;
-      broadcastToRecordPanels(recordPanels, {
-        type: EXTENSION_TO_WEBVIEW.VMAD_STRUCTURAL_OP, formKey: ctx.formKey, plugin: ctx.plugin, origin: ctx.origin,
-        fieldPath: `VMAD\\${ctx.scriptName}`, value: { op: 'remove_script' },
-      });
-    }),
-    vscode.commands.registerCommand('modbench.vmad.addProperty', (ctx?: VmadScriptContext) => {
-      if (!ctx) return;
-      broadcastToRecordPanels(recordPanels, {
-        type: EXTENSION_TO_WEBVIEW.VMAD_OPEN_ADD_PROPERTY, formKey: ctx.formKey, plugin: ctx.plugin, origin: ctx.origin, scriptName: ctx.scriptName,
-      });
-    }),
-    vscode.commands.registerCommand('modbench.vmad.removeProperty', (ctx?: VmadPropertyContext) => {
-      if (!ctx) return;
-      broadcastToRecordPanels(recordPanels, {
-        type: EXTENSION_TO_WEBVIEW.VMAD_STRUCTURAL_OP, formKey: ctx.formKey, plugin: ctx.plugin, origin: ctx.origin,
-        fieldPath: `VMAD\\${ctx.scriptName}\\${ctx.propName}`, value: { op: 'remove_property' },
       });
     }),
     // "Seeded with the current value" means the script's own current flag is
@@ -1157,7 +1073,7 @@ function registerPluginListView(deps: PluginListDeps): { pluginListProvider: Plu
 
 /** `modbench.pluginListTree.revealInExplorer`: pulled out of `registerPluginListView`
  *  purely to stay under the lint budget — no other reason to
- *  split it out, same as `registerRereadCommand` alongside it. */
+ *  split it out, same as `registerParticipationSync` alongside it. */
 function registerRevealInExplorerCommand(
   pluginListProvider: PluginListProvider, outputChannel: vscode.LogOutputChannel,
 ): vscode.Disposable {
