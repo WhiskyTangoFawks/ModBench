@@ -399,6 +399,7 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
     {
         var grouped = GetAllInterfaceProperties(getterType)
             .Where(p => !BaseSkip.Contains(p.Name))
+            .Where(p => !IsInfrastructureProperty(p))
             .Where(p => conditionCodec == null || !conditionCodec.IsConditionListField(getterType, p.Name))
             .Where(p => vmadInterfaceType == null
                         || !vmadInterfaceType.IsAssignableFrom(getterType)
@@ -1044,6 +1045,163 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
 
     private static bool IsAtomicValueType(Type core) => core == typeof(System.Drawing.Color);
 
+    // ── Total classification: the default branch is a reported anomaly, never silence ──────────
+    // #649 commitment 2. Every property the walk reaches lands in exactly one structural class, or
+    // says so here. The channel is the ILogger already threaded through every dispatch site rather
+    // than a new collector parameter on ten signatures — the audit
+    // (SchemaReflectorTotalClassificationTests) builds a schema with a collecting logger and asserts
+    // this line never fires.
+    //
+    // Warning, not Debug: an unclassified property is a field the editor can neither see nor write,
+    // which is exactly what #641 and #642 were. It should be loud in a real run too, not only under
+    // test.
+    internal const string UnclassifiedAnomalyPrefix = "SchemaReflector: unclassified";
+
+    private static string TypeLabel(Type type) =>
+        type.IsGenericType
+            ? $"{type.Name[..type.Name.IndexOf('`', StringComparison.Ordinal)]}" +
+              $"<{string.Join(", ", type.GetGenericArguments().Select(TypeLabel))}>"
+            : type.Name;
+
+    private static T? ReportUnclassified<T>(ILogger logger, PropertyInfo prop, Type shape, string site)
+        where T : class
+    {
+        var owner = prop.DeclaringType?.Name ?? "?";
+        if (ExcludedShapeReason(shape) is { } reason)
+        {
+            // Named, so not an anomaly — but still said out loud, at Debug, so a real run can answer
+            // "why is this field missing?" without anyone reading this file. Guarded because
+            // TypeLabel builds a string for a generic shape (CA1873).
+            if (logger.IsEnabled(LogLevel.Debug))
+            {
+                logger.LogDebug("SchemaReflector: excluded {Owner}.{Property} :: {Shape} — {Reason}",
+                    owner, prop.Name, TypeLabel(shape), reason);
+            }
+            return null;
+        }
+
+        logger.LogWarning(
+            UnclassifiedAnomalyPrefix + " {Owner}.{Property} :: {Shape} [{Site}]",
+            owner, prop.Name, TypeLabel(shape), site);
+        return null;
+    }
+
+    // ── Mutagen/Loqui plumbing the walk reaches, which is not editor surface and never will be ──
+    // Skipped, deliberately NOT excluded-with-a-reason: an exclusion says "real data we chose not to
+    // present", and saying that about infrastructure would be a lie in the code. All six already
+    // produced no column and no sub-field (they reached the old silent default), so skipping them
+    // earlier changes no emitted schema — asserted by both goldens staying put.
+    //
+    // Keyed on (declaring interface, property) rather than by name alone, because one of these names
+    // is commonplace real data elsewhere: `Type` is a genuine enum field on Keyword, SoundOutputModel,
+    // NpcFaceTintingLayer and others, and skipping it globally would be catastrophic. The pair form
+    // cannot swallow a future real property that merely shares a name.
+    //
+    // This also closes an asymmetry #649 surfaced: BaseSkip filters columns only and LoquiSkipProps
+    // filters sub-fields only, so `Registration` was skipped as a sub-field but not as a column, and
+    // `FormKey` the exact opposite. These pairs close both directions precisely. A blanket merge of
+    // the two lists was considered and declined: it would also skip names like `EditorID` and
+    // `PersistentTimestamp` at nesting depth, where nothing shows they are unwanted, for no observed
+    // gain over these six.
+    private static readonly (string OwnerTypeName, string PropertyName)[] InfrastructurePropertySkips =
+    [
+        ("ILoquiObject", "Registration"),                    // Loqui's own registration handle
+        ("IBinaryItem", "BinaryWriteTranslator"),            // Mutagen's binary write-strategy object
+        ("ILinkIdentifier", "Type"),                         // a System.Type, not a record field
+        ("IFormKeyGetter", "FormKey"),                       // record identity; BaseSkip's sub-field-side twin
+        ("IGlobalGetter", "TypeChar"),                       // GLOB's derived subclass discriminant char
+        ("IAMagicEffectArchetypeGetter", "AssociationKey"),  // IFormLinkIdentifier alias of Association
+    ];
+
+    private static bool IsInfrastructureProperty(PropertyInfo prop) =>
+        InfrastructurePropertySkips.Any(s =>
+            s.PropertyName == prop.Name && s.OwnerTypeName == prop.DeclaringType?.Name);
+
+    // ── Explicitly excluded shapes: real data, deliberately not presented ───────────────────────
+    // #649 commitment 2's third outcome, and a first-class one: a shape the walk genuinely reaches
+    // and could present, that no one has yet decided a presentation for, is named here rather than
+    // silently dropped. Counts are LIVE, from the audit's own enumeration over Fallout 4 — never from
+    // a grep over Mutagen's sources, which found ~76% of this population and none of the shapes that
+    // actually needed a decision (see SchemaReflectorTotalClassificationTests).
+    //
+    // Promotion out of this list is always available: Color sat here in spirit until #649 gave it a
+    // presentation-table entry, and the atomic-value mechanism it now uses is ready for more. Each
+    // reason therefore says what a future ticket would have to decide, not merely that it is absent.
+    internal static string? ExcludedShapeReason(Type shape)
+    {
+        var open = shape.IsGenericType ? shape.GetGenericTypeDefinition() : null;
+
+        // FOUND AND SIZED, NOT OVERLOOKED — 20 fields, enumerated in
+        // SchemaReflectorTotalClassificationTests.GenderedItemFields. Mutagen's Male/Female pair
+        // wrapper (Mutagen.Bethesda.Core/Plugins/Records/GenderedItem.cs:17 — a plain generic
+        // interface with no StaticRegistration, which is exactly why IsLoquiInterface declines it and
+        // it fell through the old silent default). It carries ordinary modding content: Race height,
+        // head data, skeletal model and voices per sex; ArmorAddon world/first-person models, skin
+        // texture and priority per sex; faction rank titles per sex. It is invisible and unwritable
+        // for the same reason Color was before #649, at a third of Color's scale.
+        //
+        // Deferred, not dropped: presenting a gendered pair is a NEW RENDERED SHAPE and needs its own
+        // xEdit-shape decision (two sub-rows? a two-column split? something else?) the way Color got a
+        // live triage session and a maintainer-confirmed representation before it was built. That is a
+        // maintainer call, not a mid-slice one.
+        if (open == typeof(IGenderedItemGetter<>))
+            return "gendered Male/Female pair — 20 fields; real data, deferred pending a presentation decision";
+
+        // 83 fields: raw binary blobs (Model.Data and friends). xEdit renders these as opaque hex
+        // "Unknown" fields; mEdit has no hex editor, and inventing one is a UI decision.
+        if (open == typeof(ReadOnlyMemorySlice<>))
+            return "raw byte/element blob — 83 fields; no hex presentation exists";
+
+        // 4 fields: LandscapeVertexHeightMap-style grids. Real data, tiny population, no grid shape.
+        if (open == typeof(IReadOnlyArray2d<>))
+            return "2D array grid — 4 fields; no grid presentation exists";
+
+        // 2 fields: Race.BipedObjects (keyed by BipedObject) and Package.Data (keyed by SByte). Real
+        // data; a keyed map is a shape neither the schema's array nor its struct model covers.
+        if (open == typeof(IReadOnlyDictionary<,>))
+            return "keyed map — 2 fields; neither the array nor the struct model covers a dictionary";
+
+        // Candidate atomic-value table entries — the mechanism Color now uses is ready for each, but
+        // each is a new rendered leaf needing its own xEdit-shape decision first. Percent is a ratio
+        // xEdit shows as a raw float; TimeOnly is Climate's sunrise/sunset, which xEdit shows as a
+        // byte in 10-minute increments; RecordType is a 4-character signature.
+        if (shape == typeof(Percent))
+            return "Noggog Percent — 25 fields; candidate atomic value, presentation undecided";
+        if (shape == typeof(TimeOnly))
+            return "TimeOnly — 4 fields; candidate atomic value, presentation undecided";
+        if (shape == typeof(RecordType))
+            return "Mutagen RecordType signature — 7 fields; candidate atomic value, presentation undecided";
+
+        // 11 fields: a Loqui struct whose own sub-schema comes out empty, so there is nothing to
+        // present. Deliberately NOT restated here — every one already carries a reasoned entry in
+        // SchemaReflectorLeafCoverageCompletenessTests.KnownGaps (ASceneActionType's two independent
+        // blockers, ScenePhaseUnusedData's byte-blob-only membership, and the rest). Two independent
+        // sets of reasons for one set of facts would drift, and silently.
+        return EmptySubSchemaTypeNames.Contains(shape.Name)
+            ? "empty sub-schema — see SchemaReflectorLeafCoverageCompletenessTests.KnownGaps"
+            : null;
+    }
+
+    private static readonly HashSet<string> EmptySubSchemaTypeNames = new(StringComparer.Ordinal)
+    {
+        "IScenePhaseUnusedDataGetter",      // byte-blob-only members
+        "IPlacedGetter",                     // abstract placed-record base, no members of its own
+        "IScriptFragmentGetter",             // VMAD-adjacent, outside the reflected pipeline by design
+        "IScriptEntryGetter",                // ditto
+        "IFindMatchingRefFromEventGetter",  // package-data leaf whose own members are all excluded shapes
+        "IASceneActionTypeGetter",          // deliberately not abstract upstream; see KnownGaps
+    };
+
+    /// <summary>Every excluded shape's reason, for the audit's own non-vacuity guard.</summary>
+    internal static IReadOnlyList<string> ExcludedShapeLabels =>
+    [
+        .. new[]
+        {
+            typeof(IGenderedItemGetter<>), typeof(ReadOnlyMemorySlice<>), typeof(IReadOnlyArray2d<>),
+            typeof(IReadOnlyDictionary<,>), typeof(Percent), typeof(TimeOnly), typeof(RecordType),
+        }.Select(t => ExcludedShapeReason(t)!),
+    ];
+
     // The components this property decomposes into. Per-property rather than per-type precisely
     // because of the alpha allowlist: two fields of the identical CLR type get different shapes.
     private static AtomicValueComponent[] AtomicValueComponentsFor(PropertyInfo prop) =>
@@ -1103,6 +1261,7 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
 
         var grouped = GetAllInterfaceProperties(getterInterface)
             .Where(p => !LoquiSkipProps.Contains(p.Name))
+            .Where(p => !IsInfrastructureProperty(p))
             .GroupBy(p => ToSnakeCase(p.Name), StringComparer.OrdinalIgnoreCase);
 
         var result = new List<SubFieldSpec>();
@@ -1978,7 +2137,7 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
             null when IsListType(core, out var elementType) =>
                 BuildListSubField(prop, colName, elementType, getterTypeToTable, logger),
             null when IsLoquiInterface(core) => BuildStructSubField(prop, core, colName, getterTypeToTable, depth, logger),
-            _ => null,
+            _ => ReportUnclassified<SubFieldSpec>(logger, prop, core, "sub-field"),
         };
     }
 
@@ -2054,7 +2213,7 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         IReadOnlyDictionary<Type, string> getterTypeToTable, int depth, ILogger logger)
     {
         var sub = BuildSubSchema(core, getterTypeToTable, logger, depth);
-        if (sub.Count == 0) return null;
+        if (sub.Count == 0) return ReportUnclassified<SubFieldSpec>(logger, prop, core, "empty nested struct");
         var g = SubGetter(prop);
         var pName = prop.Name;
         var setterType = GetSetterType(core);
@@ -2261,7 +2420,8 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         // above has already done the Loqui/vector element work, so there is nothing to gain from routing
         // through BuildElementMeta's own FieldMetadata output and converting it back.
         var elementSpec = BuildListElementSpec(elementType, isFl, elemSubFields, getterTypeToTable);
-        if (elementSpec == null) return null;
+        if (elementSpec == null)
+            return ReportUnclassified<SubFieldSpec>(logger, prop, elementType, "nested list element");
 
         var g = SubGetter(prop);
         var pName = prop.Name;
@@ -2379,7 +2539,7 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
             null when IsVectorStructType(core) => BuildVectorColumn(prop, core, getterTypeToTable, logger),
             null when IsListType(core, out var elementType) => BuildListColumn(prop, elementType, getterTypeToTable, logger),
             null when IsLoquiInterface(core) => BuildStructColumn(prop, core, getterTypeToTable, logger),
-            _ => null,
+            _ => ReportUnclassified<ColumnInfoResult>(logger, prop, core, "column"),
         };
     }
 
@@ -2419,7 +2579,7 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         var elemSubFields = BuildListElementSubFields(elementType, isLoqui, isVector, getterTypeToTable, logger);
 
         var elemMeta = BuildElementMeta(elementType, getterTypeToTable, logger);
-        if (elemMeta == null) return null;
+        if (elemMeta == null) return ReportUnclassified<ColumnInfoResult>(logger, prop, elementType, "list element");
 
         object? Extractor(IMajorRecordGetter r)
         {
@@ -2716,7 +2876,7 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         PropertyInfo prop, Type core, IReadOnlyDictionary<Type, string> getterTypeToTable, ILogger logger)
     {
         var subFields = BuildSubSchema(core, getterTypeToTable, logger);
-        if (subFields.Count == 0) return null;
+        if (subFields.Count == 0) return ReportUnclassified<ColumnInfoResult>(logger, prop, core, "empty struct");
 
         var subFieldMetas = subFields.ConvertAll(s => s.ToFieldMetadata());
 
