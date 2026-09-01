@@ -283,12 +283,12 @@ public sealed class ArrayOpEditTests : IDisposable
         Assert.Equal(10, stages[1].GetProperty("HealthPercent").GetByte());
     }
 
-    // ── #642 interaction: an array op reuses ColumnSpec.Apply unchanged, so it inherits
-    // NestedFieldReadOnly exactly as any other whole-value write does ──────────────────────────
+    // ── #642/#643 interaction: an array op reuses ColumnSpec.Apply unchanged, so it inherits
+    // the nested write path exactly as any other whole-value write does ────────────────────────
 
     /// <summary>
-    /// An array op that never touches the element carrying an unwritable nested Loqui struct
-    /// (<c>QuestReferenceAlias.Location</c>, #642) still succeeds when that member is unset —
+    /// An array op that never touches the element carrying a nested Loqui struct
+    /// (<c>QuestReferenceAlias.Location</c>) still succeeds when that member is unset —
     /// <see cref="ArrayOpWriter"/>'s own null-stripping restores "absence is not targeting" for the
     /// common case, the same guarantee <see cref="ComplexFieldElementEditTests"/>'s ordinary edits
     /// already rely on.
@@ -310,27 +310,32 @@ public sealed class ArrayOpEditTests : IDisposable
     }
 
     /// <summary>
-    /// The other half of the same guarantee: when that nested member genuinely carries a value, the
-    /// array op still refuses exactly as an ordinary whole-array edit would
-    /// (<see cref="AbstractUnionEditTests.Aliases_WholeArrayWrite_QuestReferenceAliasElement_LocationNamedInPayload_IsRefused"/>)
-    /// — the op is a thin wrapper around the same <c>ColumnSpec.Apply</c>, so it inherits the refusal
-    /// rather than bypassing it. Not this ticket's own defect to route around: a real, non-null
-    /// value that would otherwise be silently dropped is exactly what #642 exists to catch.
+    /// The other half of the same guarantee, flipped by #643: when that nested member genuinely
+    /// carries a value, the op's whole-value round trip now *preserves* it — the op is a thin
+    /// wrapper around the same <c>ColumnSpec.Apply</c>, so it inherited #642's refusal while the
+    /// member had no write door and inherits the write path now that
+    /// <c>SchemaReflector.BuildStructSubField</c> wires one
+    /// (<see cref="AbstractUnionEditTests.Aliases_WholeArrayWrite_QuestReferenceAliasElement_LocationNamedInPayload_RoundTrips"/>
+    /// is the ordinary-edit half). Asserting the nested value itself survives the move — not just
+    /// <c>Applied == true</c> — is what makes this strictly stronger than the refusal it replaces:
+    /// an op that reported success while discarding <c>Location</c> (the pre-#642 behaviour) fails
+    /// here on the missing <c>AliasID</c>.
     /// </summary>
     [Fact]
-    public void ArrayMoveDown_ArrayContainsElementWithSetReadOnlyNestedField_StillRefuses()
+    public void ArrayMoveDown_ArrayContainsElementWithSetNestedStructField_AppliesAndPreservesIt()
     {
         using var fixture = new QuestFixture(withLocation: true); // Location: { AliasID: 9 }
-        var before = fixture.Body();
 
         var result = fixture.Service().EditField(fixture.Plugin, fixture.Quest.ToString(), "aliases",
             Json("""{"op": "array_move_down", "path": [{"kind": "index", "index": 0}]}"""));
 
-        Assert.False(result.Applied);
-        Assert.Equal(RecordEditRefusal.NestedFieldReadOnly, result.Refusal);
-        Assert.Contains("aliases", result.Message, StringComparison.Ordinal);
-        Assert.Contains("not yet editable", result.Message, StringComparison.Ordinal);
-        Assert.Equal(before, fixture.Body());
+        Assert.True(result.Applied, result.Message);
+        var body = fixture.Body();
+        var refIdx = body.IndexOf("QuestReferenceAlias", StringComparison.Ordinal);
+        var locIdx = body.IndexOf("QuestLocationAlias", StringComparison.Ordinal);
+        Assert.True(refIdx >= 0 && locIdx >= 0, body);
+        Assert.True(refIdx < locIdx, $"QuestReferenceAlias should now precede QuestLocationAlias in:\n{body}");
+        Assert.Contains("\"AliasID\": 9", body, StringComparison.Ordinal);
     }
 
     /// <summary>A real mod folder holding one <c>Quest</c> with two aliases — same
