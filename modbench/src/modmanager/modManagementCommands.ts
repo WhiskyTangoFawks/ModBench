@@ -80,32 +80,6 @@ export interface ModInstallDeps {
   promptModName: (defaultName: string) => Thenable<string | undefined>;
   warnIfFomod: (name: string, isFomod: boolean) => void;
 }
-// The three closures registerModInstallCommands needs — pulled out of registerLoadoutView
-// purely to stay under the lint budget, no other reason to split it out (same reasoning as
-// registerRevealInExplorerCommand). Named for what's already true at the call site, where they're
-// handed to registerModInstallCommands as one bundle.
-export function makeModActionHelpers(
-  modListProvider: ModListProvider, outputChannel: vscode.LogOutputChannel,
-): Pick<ModInstallDeps, 'runModAction' | 'promptModName' | 'warnIfFomod'> {
-  return {
-    runModAction: async (logLabel, failMessage, action) => {
-      try {
-        await action();
-        modListProvider.invalidate();
-      } catch (err) {
-        makeReporter(outputChannel, logLabel).report('error', failMessage, err instanceof Error ? err.message : String(err));
-      }
-    },
-    promptModName: (defaultName) => vscode.window.showInputBox({ prompt: 'Mod name', value: defaultName }),
-    warnIfFomod: (name, isFomod) => {
-      if (isFomod)
-        void vscode.window.showWarningMessage(
-          `Modbench: "${name}" is a FOMOD installer — its files were copied as-is and need manual ` +
-            `arrangement (the scripted installer is coming later).`,
-        );
-    },
-  };
-}
 /** Loadout install commands: from archive, from folder. */
 export function registerModInstallCommands(deps: ModInstallDeps): vscode.Disposable[] {
   const { modlistSource, runModAction, promptModName, warnIfFomod } = deps;

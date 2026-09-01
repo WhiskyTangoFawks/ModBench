@@ -23,7 +23,7 @@ dotnet build -v minimal
 dotnet test -v minimal
 
 # from modbench/
-npm run lint              # binary: --max-warnings 0, so any warning fails it. No baseline-diffing.
+npm run lint              # errors fail the build; warnings don't — see eslint.config.mjs
 npm run build             # type-check + bundle extension + webview
 npm run test:unit         # Vitest, no backend
 npm run test:integration  # real VS Code process (~10s), no backend; bundles extension.js first (pretest hook)
@@ -33,6 +33,23 @@ npm run package           # build alpha .vsix — pinned local @vscode/vsce, no 
 
 ## Rules that matter
 
+- `modbench/eslint.config.mjs`'s five complexity rules (`sonarjs/cognitive-complexity`,
+  `complexity`, `max-lines-per-function`, `max-depth`, `max-params`) sit at `warn` on purpose,
+  and `npm run lint` no longer fails on a warning — that flag (`--max-warnings 0`) predated the
+  code-quality Stop hook and was removed once the hook made it redundant; it must not come back.
+  **A warning from one of these five is a prompt to think, not an instruction to comply.** Fix a
+  genuinely tangled function. Leave an honestly long or branchy one alone and say why in a
+  comment. **Never create a function whose only reason to exist is silencing one of these
+  warnings** — the pattern produced functions across `modbench/src/`, each carrying a comment
+  admitting as much. Thirteen were deleted (inlined back into their callers) in the three
+  registration files this rule exists for (`extension.ts`, `medit/editorCommands.ts`,
+  `modmanager/modManagementCommands.ts`). Four remain elsewhere, known and not yet addressed —
+  `loadOrderReconcile.ts`'s `createAbortScope`, `medit/PluginTreeProvider.ts`'s
+  `getSpatialChildren`, `medit/recordPanelMessageRouter.ts`'s `routeWritePathMessage`, and
+  `medit/EditingController.ts`'s `reportReconciled`. Do not fold those back in casually — two of
+  them sit on the surface of a queued ticket. The Stop hook surfaces these on changed files
+  between turns; that is the feedback channel, not `npm run lint`. If warnings ever pile up
+  unread, the fix is a separate advisory script, not restoring the flag.
 - Generalize across Bethesda games, don't lock to FO4 — FO4-concrete repo
   path/tests are a fixture choice, not a platform lock; each bounded context enforces this independently.
 - Vocabulary boundary is enforced, not stylistic: "mod" forbidden in Editing;

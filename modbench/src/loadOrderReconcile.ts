@@ -70,8 +70,9 @@ export interface LoadOrderSync {
 }
 
 /** The cancellation half of `createLoadOrderSync`'s own state, pulled out purely to stay under
- *  the lint line budget (same reasoning as `registerRevealInExplorerCommand`'s own split in
- *  `extension.ts`) — no dependency on the rest of the closure, so it stands alone cleanly. */
+ *  the lint line budget — no dependency on the rest of the closure, so it stands alone cleanly.
+ *  (CLAUDE.md's "Rules that matter": this is one of the four such functions outside the three
+ *  registration files still known and not yet addressed — left alone here on purpose.) */
 function createAbortScope(): { arm: () => { signal: AbortSignal; abandoned: () => boolean }; abandon: () => void } {
   let armed: AbortController | undefined;
   return {
