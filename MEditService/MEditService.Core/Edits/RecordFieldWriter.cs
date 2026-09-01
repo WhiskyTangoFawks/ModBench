@@ -257,15 +257,16 @@ internal static class RecordFieldWriter
 
         if (TryGetOpName(value, out var opName))
         {
-            // #630: an array arity/order op envelope under a VMAD path — a Papyrus scalar-array
-            // property's own arity ops are deliberately out of this ticket's scope (they belong in
-            // VmadCodec's own structural-op vocabulary, not this generic array machinery) and
-            // nothing sends this shape today, so this branch is unreached in practice. Guarded
-            // anyway: without it, "array_remove"/etc. would fall through to VmadCodec.ApplyPropertyOp/
-            // ApplyScriptOp as an unrecognised structural-op name and fail on whatever those answer
-            // for that, rather than a refusal that names the real reason.
-            if (ArrayOpWriter.IsArrayOp(opName)) return FieldApplyOutcome.NotFound;
-
+            // #630 guarded this branch against "array_remove"/etc — ArrayOpWriter's own op names —
+            // arriving under a VMAD path and misrouting into VmadCodec.ApplyPropertyOp/ApplyScriptOp
+            // as an unrecognised op name. #658 removes that guard: a Papyrus scalar-array property's
+            // own arity ops now live here deliberately, under VmadCodec's own vocabulary
+            // (add_element/remove_element/move_element_up/move_element_down, chosen precisely to
+            // never collide with ArrayOpWriter's array_* names), so the guard's premise — that no
+            // legitimate op envelope should ever reach this dispatch for an arity op — is gone. An
+            // actual "array_remove" envelope arriving here (a genuine misroute from the ordinary
+            // reflected-field path) still falls through to NotFound below on its own, the same as any
+            // other opName neither ApplyPropertyOp nor ApplyScriptOp recognises.
             if (VmadPath.TryParse(fieldPath, out var opPropScript, out var opPropName))
                 return ToOutcome(VmadCodec.ApplyPropertyOp(vmadRecord, opPropScript, opPropName, opName, value));
             if (VmadPath.TryParseScript(fieldPath, out var opScriptName))
@@ -295,6 +296,11 @@ internal static class RecordFieldWriter
     {
         VmadApplyResult.Applied => FieldApplyOutcome.Applied,
         VmadApplyResult.ReadOnly => FieldApplyOutcome.ReadOnly,
+        // #658: a scalar-array element op's own boundary no-op (VmadCodec.RemoveAt/Move) — mirrors
+        // ArrayOpWriter's own NoOp mapping one-for-one, so RecordEditService's existing "commit
+        // nothing for a boundary op" handling (no rename, no re-serialize, no working-tree write)
+        // applies here unchanged, regardless of which codec answered it.
+        VmadApplyResult.NoOp => FieldApplyOutcome.NoOp,
         _ => FieldApplyOutcome.NotFound,
     };
 

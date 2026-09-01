@@ -14,8 +14,13 @@ namespace MEditService.Core.Edits;
 /// codec and wire vocabulary this class does not reach into:
 /// <list type="bullet">
 /// <item>A VMAD property's own array is <c>VmadCodec</c>'s surface, with its own structural-op
-/// vocabulary — <see cref="RecordFieldWriter"/>'s VMAD-path guard refuses an envelope arriving
-/// under a VMAD path before this class is ever reached.</item>
+/// vocabulary (#658: <c>add_element</c>/<c>remove_element</c>/<c>move_element_up</c>/
+/// <c>move_element_down</c>, dispatched through <c>VmadCodec.ApplyPropertyOp</c>) — this class is
+/// structurally unreachable for a VMAD path, not merely guarded against one:
+/// <see cref="RecordFieldWriter.TryApply"/> dispatches on <c>VmadPath.IsVmadPath(fieldPath)</c>
+/// before it ever reaches the schema/column lookup that leads here, so a VMAD fieldPath never
+/// makes it as far as this class's own op-envelope detection to be excluded from in the first
+/// place.</item>
 /// <item>A Condition-owning field (<c>Conditions</c>, and nested condition lists) carries the same
 /// generic <c>{type: "array"}</c> wire shape an ordinary array does, which is exactly why this
 /// exclusion needs saying explicitly rather than left to be inferred from "not VMAD": Condition

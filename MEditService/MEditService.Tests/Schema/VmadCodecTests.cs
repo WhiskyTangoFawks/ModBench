@@ -427,6 +427,173 @@ public class VmadCodecTests
         Assert.Single(npc.VirtualMachineAdapter!.Scripts[0].Properties);
     }
 
+    // ---- Property element ops (#658) — a Papyrus scalar-array property's own arity ops, relocated
+    // from RecordPanel.tsx's client-side computation into VmadCodec's own structural-op vocabulary
+    // alongside add_property/remove_property. `index` alone (no path) is sufficient because a
+    // Papyrus scalar array cannot nest — VmadCodec's own taxonomy has no "array inside an array"
+    // shape for Bool/Int/Float/String lists (ArrayOfObject/Struct are the two exceptions, and both
+    // are out of this ticket's scope: ArrayOfObject stays on the pre-existing client-side carve-out,
+    // ArrayOfStruct's elements live in struct_json, never list-item rows at all). ----
+
+    [Fact]
+    public void ApplyPropertyOp_AddElement_AppendsTheTypesOwnDefaultToAnIntList()
+    {
+        var prop = new ScriptIntListProperty { Name = "Levels" };
+        prop.Data.Add(9);
+        var npc = NpcWithScript("DefaultScript", prop);
+
+        Assert.Equal(
+            VmadApplyResult.Applied,
+            VmadCodec.ApplyPropertyOp(npc, "DefaultScript", "Levels", "add_element", J("{\"op\":\"add_element\"}")));
+
+        Assert.Equal([9, 0], ((ScriptIntListProperty)npc.VirtualMachineAdapter!.Scripts[0].Properties[0]).Data);
+    }
+
+    [Theory]
+    [InlineData("Bool")]
+    [InlineData("Float")]
+    [InlineData("String")]
+    public void ApplyPropertyOp_AddElement_AppendsTheTypesOwnDefaultForEveryScalarListType(string type)
+    {
+        var prop = VmadCodec.CreateDefault($"ArrayOf{type}")!;
+        prop.Name = "Prop";
+        var npc = NpcWithScript("DefaultScript", prop);
+
+        Assert.Equal(
+            VmadApplyResult.Applied,
+            VmadCodec.ApplyPropertyOp(npc, "DefaultScript", "Prop", "add_element", J("{\"op\":\"add_element\"}")));
+
+        var added = npc.VirtualMachineAdapter!.Scripts[0].Properties[0];
+        object? value = added switch
+        {
+            ScriptBoolListProperty p => Assert.Single(p.Data),
+            ScriptFloatListProperty p => Assert.Single(p.Data),
+            ScriptStringListProperty p => Assert.Single(p.Data),
+            _ => throw new Xunit.Sdk.XunitException("unexpected property type"),
+        };
+        Assert.Equal(type switch { "Bool" => false, "Float" => 0f, _ => "" }, value);
+    }
+
+    [Fact]
+    public void ApplyPropertyOp_AddElement_UnrecognisedPropertyReturnsNotFound()
+    {
+        var npc = NpcWithScript("DefaultScript", new ScriptIntProperty { Name = "Counter" });
+        Assert.Equal(
+            VmadApplyResult.NotFound,
+            VmadCodec.ApplyPropertyOp(npc, "DefaultScript", "Missing", "add_element", J("{\"op\":\"add_element\"}")));
+    }
+
+    // ArrayOfObject is a separate synthetic shape (deliberately out of #658's scope) — add_element
+    // must not touch it, leaving RecordPanel.tsx's own client-side carve-out as the only route.
+    [Fact]
+    public void ApplyPropertyOp_AddElement_ArrayOfObjectReturnsNotFound()
+    {
+        var prop = new ScriptObjectListProperty { Name = "Refs" };
+        var npc = NpcWithScript("DefaultScript", prop);
+
+        Assert.Equal(
+            VmadApplyResult.NotFound,
+            VmadCodec.ApplyPropertyOp(npc, "DefaultScript", "Refs", "add_element", J("{\"op\":\"add_element\"}")));
+        Assert.Empty(prop.Objects);
+    }
+
+    // A scalar (non-array) property is not a list at all — add_element must not silently no-op it.
+    [Fact]
+    public void ApplyPropertyOp_AddElement_ScalarPropertyReturnsNotFound()
+    {
+        var npc = NpcWithScript("DefaultScript", new ScriptIntProperty { Name = "Counter", Data = 1 });
+        Assert.Equal(
+            VmadApplyResult.NotFound,
+            VmadCodec.ApplyPropertyOp(npc, "DefaultScript", "Counter", "add_element", J("{\"op\":\"add_element\"}")));
+    }
+
+    [Fact]
+    public void ApplyPropertyOp_RemoveElement_RemovesTheNamedIndexAndKeepsTheRest()
+    {
+        var prop = new ScriptIntListProperty { Name = "Levels" };
+        prop.Data.AddRange([1, 2, 3]);
+        var npc = NpcWithScript("DefaultScript", prop);
+
+        Assert.Equal(
+            VmadApplyResult.Applied,
+            VmadCodec.ApplyPropertyOp(npc, "DefaultScript", "Levels", "remove_element", J("{\"op\":\"remove_element\",\"index\":1}")));
+
+        Assert.Equal([1, 3], ((ScriptIntListProperty)npc.VirtualMachineAdapter!.Scripts[0].Properties[0]).Data);
+    }
+
+    // #630 established the codec's own reserialization is not byte-stable, so a boundary op that
+    // fell through to an ordinary write would leave a real, spurious working-tree change — this is
+    // why NoOp exists as its own outcome (RecordFieldWriter.ToOutcome), never folded into Applied.
+    [Fact]
+    public void ApplyPropertyOp_RemoveElement_OutOfRangeIndexIsABoundaryNoOp()
+    {
+        var prop = new ScriptIntListProperty { Name = "Levels" };
+        prop.Data.AddRange([1, 2, 3]);
+        var npc = NpcWithScript("DefaultScript", prop);
+
+        Assert.Equal(
+            VmadApplyResult.NoOp,
+            VmadCodec.ApplyPropertyOp(npc, "DefaultScript", "Levels", "remove_element", J("{\"op\":\"remove_element\",\"index\":5}")));
+
+        Assert.Equal([1, 2, 3], ((ScriptIntListProperty)npc.VirtualMachineAdapter!.Scripts[0].Properties[0]).Data);
+    }
+
+    [Fact]
+    public void ApplyPropertyOp_MoveElementUp_SwapsWithThePreviousNeighbour()
+    {
+        var prop = new ScriptIntListProperty { Name = "Levels" };
+        prop.Data.AddRange([1, 2, 3]);
+        var npc = NpcWithScript("DefaultScript", prop);
+
+        Assert.Equal(
+            VmadApplyResult.Applied,
+            VmadCodec.ApplyPropertyOp(npc, "DefaultScript", "Levels", "move_element_up", J("{\"op\":\"move_element_up\",\"index\":1}")));
+
+        Assert.Equal([2, 1, 3], ((ScriptIntListProperty)npc.VirtualMachineAdapter!.Scripts[0].Properties[0]).Data);
+    }
+
+    [Fact]
+    public void ApplyPropertyOp_MoveElementUp_TheFirstElementIsABoundaryNoOp()
+    {
+        var prop = new ScriptIntListProperty { Name = "Levels" };
+        prop.Data.AddRange([1, 2, 3]);
+        var npc = NpcWithScript("DefaultScript", prop);
+
+        Assert.Equal(
+            VmadApplyResult.NoOp,
+            VmadCodec.ApplyPropertyOp(npc, "DefaultScript", "Levels", "move_element_up", J("{\"op\":\"move_element_up\",\"index\":0}")));
+
+        Assert.Equal([1, 2, 3], ((ScriptIntListProperty)npc.VirtualMachineAdapter!.Scripts[0].Properties[0]).Data);
+    }
+
+    [Fact]
+    public void ApplyPropertyOp_MoveElementDown_SwapsWithTheNextNeighbour()
+    {
+        var prop = new ScriptIntListProperty { Name = "Levels" };
+        prop.Data.AddRange([1, 2, 3]);
+        var npc = NpcWithScript("DefaultScript", prop);
+
+        Assert.Equal(
+            VmadApplyResult.Applied,
+            VmadCodec.ApplyPropertyOp(npc, "DefaultScript", "Levels", "move_element_down", J("{\"op\":\"move_element_down\",\"index\":1}")));
+
+        Assert.Equal([1, 3, 2], ((ScriptIntListProperty)npc.VirtualMachineAdapter!.Scripts[0].Properties[0]).Data);
+    }
+
+    [Fact]
+    public void ApplyPropertyOp_MoveElementDown_TheLastElementIsABoundaryNoOp()
+    {
+        var prop = new ScriptIntListProperty { Name = "Levels" };
+        prop.Data.AddRange([1, 2, 3]);
+        var npc = NpcWithScript("DefaultScript", prop);
+
+        Assert.Equal(
+            VmadApplyResult.NoOp,
+            VmadCodec.ApplyPropertyOp(npc, "DefaultScript", "Levels", "move_element_down", J("{\"op\":\"move_element_down\",\"index\":2}")));
+
+        Assert.Equal([1, 2, 3], ((ScriptIntListProperty)npc.VirtualMachineAdapter!.Scripts[0].Properties[0]).Data);
+    }
+
     // ---- Parse: leaves ----
 
     [Fact]

@@ -43,11 +43,51 @@ function subtreeFor(
   return { path: [...path, seg], rootField, rootDiff };
 }
 
+// The four array arity/order gestures — shared by every op-name table and computation below
+// (ARRAY_OP_NAMES/VMAD_ELEMENT_OP_NAMES/computeArrayOpClientSide/vmadElementOpValue/handleArrayOp)
+// rather than each repeating the same literal union.
+type ArrayOpKind = 'add' | 'remove' | 'moveUp' | 'moveDown';
+
 // #630: the op-envelope name each arity op sends under an ordinary reflected field's own
 // fieldPath — RecordFieldWriter/ArrayOpWriter's own vocabulary (ArrayOpWriter.IsArrayOp).
 const ARRAY_OP_NAMES = {
   add: 'array_add', remove: 'array_remove', moveUp: 'array_move_up', moveDown: 'array_move_down',
 } as const;
+
+// #658: the op-envelope name each arity op sends under a VMAD scalar-array property's own wirePath
+// — VmadCodec's own structural-op vocabulary (VmadCodec.ApplyPropertyOp's opName switch), the same
+// door add_property/remove_property/set_type/set_flags already use, deliberately distinct from
+// ARRAY_OP_NAMES above so an envelope carrying one can never be mistaken for the other regardless
+// of which fieldPath it lands under.
+const VMAD_ELEMENT_OP_NAMES = {
+  add: 'add_element', remove: 'remove_element', moveUp: 'move_element_up', moveDown: 'move_element_down',
+} as const;
+
+// #658 review: an ALLOWLIST, not a denylist — route to the server envelope only when the element
+// type is positively one of the four scalar list types VmadCodec.cs's AddElement/RemoveAt/Move
+// switches actually implement (ScriptBoolListProperty/ScriptIntListProperty/
+// ScriptFloatListProperty/ScriptStringListProperty; see those methods' own switch arms — this set
+// must stay identical to the case list there, by hand, since nothing crosses the TS/C# boundary at
+// runtime to keep them in sync automatically). A denylist ("route unless it looks like an object")
+// fails *open*: any VMAD array element shape nobody enumerated — struct (ArrayOfStruct/structList)
+// was the one this review caught, object (ArrayOfObject) was the one the original survey caught —
+// falls through to the server path anyway and hits VmadCodec's own `default: NotFound`, refusing a
+// gesture that used to work. This allowlist fails *closed* instead: an unrecognised/future element
+// type (`undefined` included, e.g. a malformed diff tree) simply stays on the pre-#658 client-side
+// carve-out below, exactly like ArrayOfObject and ArrayOfStruct do today.
+const VMAD_SCALAR_ELEMENT_TYPES: ReadonlySet<string> = new Set(['bool', 'int', 'float', 'string']);
+
+// The envelope handleArrayOp's own VMAD scalar-array branch posts — 'add' addresses the property
+// itself (no index; VmadCodec.AddElement always appends), every other op addresses one of its
+// elements by the row's own last path hop (index alone, never a path — a Papyrus scalar array
+// cannot nest). Module-scope (like subtreeFor/computeArrayOpClientSide/findFieldDiffDeep below):
+// closes over nothing, everything it needs arrives as an argument.
+function vmadElementOpValue(op: ArrayOpKind, path: PathSegment[]): unknown {
+  const opName = VMAD_ELEMENT_OP_NAMES[op];
+  if (op === 'add') return { op: opName };
+  const lastSeg = path.at(-1);
+  return { op: opName, index: lastSeg?.kind === 'index' ? lastSeg.index : undefined };
+}
 
 // The shared computation behind both of handleArrayOp's carve-outs below — a VMAD scalar-array
 // property's own arity op, and a Condition-owning field's — each deliberately out of #630's scope
@@ -65,7 +105,7 @@ const ARRAY_OP_NAMES = {
 // (conditionTreeAdapter.ts's own buildConditionRows builds one flat array per condition-owning
 // field, nested game-data condition lists included), pinned end-to-end in ConditionArrayOps.test.tsx.
 export function computeArrayOpClientSide(
-  rootValue: unknown, path: PathSegment[], op: 'add' | 'remove' | 'moveUp' | 'moveDown', elementMeta?: FieldMetadata,
+  rootValue: unknown, path: PathSegment[], op: ArrayOpKind, elementMeta?: FieldMetadata,
 ): unknown {
   // 'add' addresses the array itself; every other op addresses one of its elements, so the
   // array is one hop shorter than the row's own path (the last hop is the element's own index).
@@ -277,27 +317,42 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
   // no webview-side computation at all, the same shape VMAD's own structural ops
   // (VMAD_STRUCTURAL_OP) already use.
   //
-  // Two carve-outs, kept as separate branches rather than one merged lookup, each preserving the
-  // pre-#630 computation bit-for-bit (computeArrayOpClientSide above): a VMAD scalar-array property's
-  // own arity ops (VmadCodec's own vocabulary, not ArrayOpWriter's) and a Condition-owning field's
-  // (Fallout4ConditionCodec.ApplyListValue requires a JSON array and refuses an op-envelope object
-  // outright — RecordFieldWriter routes a Condition-list fieldPath there before ArrayOpWriter's own
-  // detection ever runs, so posting an envelope under one is a guaranteed refusal, not merely an
-  // unsupported shape). Kept as two branches rather than merged into one lookup for that same
-  // refusal-shape reason, not a lookup-capability one (#660): gating VMAD on the same flat top-level
-  // lookup Conditions safely uses (a Condition group's own FieldDiff *is* always a top-level entry
-  // in conditionTree.diffs — conditionTreeAdapter.ts's own buildConditionRows builds one flat array,
-  // nested game-data condition lists included) would start posting an op envelope for a VMAD
-  // property, which RecordFieldWriter's own VMAD-path dispatch refuses outright — a new network
-  // round trip and a new refusal shape neither existed before. The VMAD branch resolves its own
-  // root through the tree instead (findFieldDiffDeep above, #660) precisely because
-  // vmadTree.diffs's own top level can never hold a property's FieldDiff (see that function's own
-  // doc comment) — it stays a distinct branch, but is no longer a no-op branch.
+  // Three carve-outs, kept as separate branches rather than one merged lookup, each preserving the
+  // pre-#630 computation bit-for-bit (computeArrayOpClientSide above): a VMAD ArrayOfObject
+  // property's own arity ops and a VMAD ArrayOfStruct (structList) property's own — both separate
+  // synthetic shapes, out of #658's scope, neither matched by VMAD_SCALAR_ELEMENT_TYPES above — and
+  // a Condition-owning field's (Fallout4ConditionCodec.ApplyListValue requires a JSON array and
+  // refuses an op-envelope object outright — RecordFieldWriter routes a Condition-list fieldPath
+  // there before ArrayOpWriter's own detection ever runs, so posting an envelope under one is a
+  // guaranteed refusal, not merely an unsupported shape). Kept as separate branches rather than
+  // merged into one lookup for that same refusal-shape reason, not a lookup-capability one (#660):
+  // gating on the same flat top-level lookup Conditions safely uses (a Condition group's own
+  // FieldDiff *is* always a top-level entry in conditionTree.diffs — conditionTreeAdapter.ts's own
+  // buildConditionRows builds one flat array, nested game-data condition lists included) would start
+  // posting an op envelope for VMAD ArrayOfObject/ArrayOfStruct too, which VmadCodec's own element
+  // ops refuse outright (NotFound — VMAD_SCALAR_ELEMENT_TYPES is that refusal boundary, mirrored
+  // client-side) — a new network round trip and a new refusal shape neither existed before. The VMAD
+  // branch resolves its own root through the tree instead (findFieldDiffDeep above, #660) precisely
+  // because vmadTree.diffs's own top level can never hold a property's FieldDiff (see that
+  // function's own doc comment).
+  //
+  // #658: a VMAD *scalar-array* property's own arity ops are no longer part of that carve-out — they
+  // post a VMAD structural-op envelope (VMAD_ELEMENT_OP_NAMES) under the property's own wirePath,
+  // computed server-side by VmadCodec, the same shape VMAD_STRUCTURAL_OP's six other ops already
+  // use. VMAD_SCALAR_ELEMENT_TYPES.has(elementMeta?.type) is the allowlist that tells VMAD's three
+  // element shapes apart (#658 review: a denylist checking only for 'vmadObject' missed
+  // ArrayOfStruct's 'struct' — the fourth shape nobody enumerates next stays safe on the client-side
+  // carve-out by construction, not by remembering to add it to an exclusion list). `index` alone (no
+  // path) is enough because a Papyrus scalar array cannot nest.
   const handleArrayOp = useCallback((
     plugin: ColumnKey, path: PathSegment[], rootField: string,
-    op: 'add' | 'remove' | 'moveUp' | 'moveDown', elementMeta?: FieldMetadata,
+    op: ArrayOpKind, elementMeta?: FieldMetadata,
   ) => {
     if (rootField.startsWith('VMAD\\')) {
+      if (VMAD_SCALAR_ELEMENT_TYPES.has(elementMeta?.type ?? '')) {
+        handleEditCell(plugin, rootField, vmadElementOpValue(op, path));
+        return;
+      }
       const rootDiff = findFieldDiffDeep(vmadTree.diffs, rootField);
       if (!rootDiff) return;
       const nextValue = computeArrayOpClientSide(rootDiff.values[plugin], path, op, elementMeta);
@@ -569,6 +624,15 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
   // reads the current array from). `isUnsortedArrayElement` is supplied by the *parent* call
   // (buildArrayElementRows) when this row is itself an unsorted array's element — never computed
   // by a row for itself, since only the parent knows which array it just descended into.
+  //
+  // #658: onArrayRemove/onArrayMoveUp/onArrayMoveDown now pass `meta` (this *element* row's own
+  // type) alongside onArrayAdd's existing `meta?.elementType` (the *parent* array row's element
+  // schema) — before #658 those three never needed it (computeArrayOpClientSide's arithmetic is
+  // type-agnostic for them), but handleArrayOp's own VMAD branch now needs it for every gesture, to
+  // tell a scalar-array property (routes to a server-computed VmadCodec element op) apart from an
+  // ArrayOfObject one (a separate synthetic shape, stays on the pre-#658 client-side carve-out) —
+  // `elementMeta` is the only signal available for that, and it has to be right for all four
+  // gestures, not just Add.
   function buildRows(
     diff: FieldDiff, meta: FieldMetadata | undefined, path: PathSegment[],
     rootField: string, rootDiff: FieldDiff, rowKey: string, isUnsortedArrayElement = false,
@@ -589,9 +653,9 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
         editableColumns={editableColumns}
         onEditCell={(plugin: ColumnKey, value: unknown) => handleCellCommit(plugin, path, rootField, rootDiff, value)}
         onArrayAdd={isUnsortedArrayParent ? (plugin: ColumnKey) => handleArrayOp(plugin, path, rootField, 'add', meta?.elementType ?? undefined) : undefined}
-        onArrayRemove={isUnsortedArrayElement ? (plugin: ColumnKey) => handleArrayOp(plugin, path, rootField, 'remove') : undefined}
-        onArrayMoveUp={isUnsortedArrayElement ? (plugin: ColumnKey) => handleArrayOp(plugin, path, rootField, 'moveUp') : undefined}
-        onArrayMoveDown={isUnsortedArrayElement ? (plugin: ColumnKey) => handleArrayOp(plugin, path, rootField, 'moveDown') : undefined}
+        onArrayRemove={isUnsortedArrayElement ? (plugin: ColumnKey) => handleArrayOp(plugin, path, rootField, 'remove', meta) : undefined}
+        onArrayMoveUp={isUnsortedArrayElement ? (plugin: ColumnKey) => handleArrayOp(plugin, path, rootField, 'moveUp', meta) : undefined}
+        onArrayMoveDown={isUnsortedArrayElement ? (plugin: ColumnKey) => handleArrayOp(plugin, path, rootField, 'moveDown', meta) : undefined}
         collapsedColumns={collapsedColumns}
         onOpen={handleOpen}
         context={{ path, overrideMeta: meta, rootField }}

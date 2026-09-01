@@ -5,12 +5,12 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 vi.mock('./vscode', () => ({ vscode: { postMessage: vi.fn() } }));
 
-import { RecordPanel } from './RecordPanel';
+import { RecordPanel, computeArrayOpClientSide } from './RecordPanel';
 import { columnKey } from './types';
 import type { RecordPanelClient } from './RecordPanelClient';
 import { vscode } from './vscode';
 import { WEBVIEW_TO_EXTENSION } from './messages';
-import type { ParsedCondition, ConditionDiff } from './types';
+import type { FieldMetadata, ParsedCondition, ConditionDiff } from './types';
 
 // #630 review: a Condition-owning field carries the same generic `{type: 'array'}` wire shape an
 // ordinary array does, so it reaches the identical right-click/keyboard array-op UI — but its
@@ -110,5 +110,55 @@ describe('RecordPanel — a Condition-owning field\'s own arity ops still comput
     const value = lastEditField()?.value;
     expect(Array.isArray(value)).toBe(true);
     expect((value as unknown[]).length).toBe(1);
+  });
+});
+
+// #658 review: this suite used to be titled "the VMAD scalar-array carve-out (#630)" and live in
+// VmadStructuralOps.test.tsx — #658 moved VMAD's own scalar-array arity ops server-side (VmadCodec's
+// own add_element/remove_element/move_element_up/move_element_down), so that title stopped
+// describing reality. The function itself did not delete: it still backs *two* surviving
+// client-side carve-outs neither of which #658 touches — this file's own Condition carve-out above
+// (Fallout4ConditionCodec.ApplyListValue requires a JSON array and refuses an op-envelope object)
+// and VMAD's own ArrayOfObject carve-out (a separate synthetic shape, deliberately out of #658's
+// scope — see RecordPanel.tsx's handleArrayOp). Relocated here, renamed to name both, rather than
+// deleted: the arithmetic (boundary no-ops included) is still exactly what both carve-outs depend
+// on, pinned independent of whichever tree-walk resolves a given caller's own root.
+describe('computeArrayOpClientSide — backs the surviving Condition and VMAD ArrayOfObject carve-outs (#630/#658)', () => {
+  // rootValue is one column's own current value (rootDiff.values[plugin] — a plain array), not a
+  // per-plugin map. Every caller (Condition group, VMAD ArrayOfObject property) hands this function
+  // the same shape regardless of element type, which is exactly why one generic suite covers both.
+  const rootValue = [1, 2, 3];
+
+  it('remove: removes the named index and keeps the rest', () => {
+    const next = computeArrayOpClientSide(rootValue, [{ kind: 'index', index: 1 }], 'remove');
+    expect(next).toEqual([1, 3]);
+  });
+
+  it('remove: an out-of-range index is a boundary no-op (undefined — nothing to commit)', () => {
+    const next = computeArrayOpClientSide(rootValue, [{ kind: 'index', index: 5 }], 'remove');
+    expect(next).toBeUndefined();
+  });
+
+  it('moveDown: swaps the named index with its next neighbour', () => {
+    const next = computeArrayOpClientSide(rootValue, [{ kind: 'index', index: 0 }], 'moveDown');
+    expect(next).toEqual([2, 1, 3]);
+  });
+
+  it('moveUp: the first element is a boundary no-op', () => {
+    const next = computeArrayOpClientSide(rootValue, [{ kind: 'index', index: 0 }], 'moveUp');
+    expect(next).toBeUndefined();
+  });
+
+  it('add: appends a default element built from the given element meta', () => {
+    const intMeta: FieldMetadata = { name: '', type: 'int', isArray: false, validFormKeyTypes: [], enumValues: [] };
+    const next = computeArrayOpClientSide(rootValue, [], 'add', intMeta);
+    expect(next).toEqual([1, 2, 3, 0]);
+  });
+
+  // The VMAD ArrayOfObject-specific case: `defaultElementValue`'s own 'vmadObject' arm.
+  it("add: builds a VMAD ArrayOfObject property's own default element ({formKey: '', alias: -1})", () => {
+    const vmadObjectMeta: FieldMetadata = { name: '', type: 'vmadObject', isArray: false, validFormKeyTypes: [], enumValues: [] };
+    const next = computeArrayOpClientSide([], [], 'add', vmadObjectMeta);
+    expect(next).toEqual([{ formKey: '', alias: -1 }]);
   });
 });

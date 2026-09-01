@@ -38,6 +38,18 @@ public enum VmadApplyResult
     Applied,
     ReadOnly,
     NotFound,
+
+    /// <summary>
+    /// #658: a scalar-array element op (<c>remove_element</c>/<c>move_element_up</c>/
+    /// <c>move_element_down</c>) whose own boundary check answered "nothing to do" — removing past
+    /// the array's end, or moving the first element up / the last element down. Mirrors
+    /// <c>FieldApplyOutcome.NoOp</c> (<c>ArrayOpWriter</c>'s own reason for existing) one-for-one: the
+    /// codec's own reserialization is not byte-stable (#630), so a boundary op that fell through to
+    /// an ordinary write would leave a real, spurious working-tree change for an operation that
+    /// changed nothing. <see cref="Edits.RecordFieldWriter"/>'s <c>ToOutcome</c> maps this straight
+    /// onto <c>FieldApplyOutcome.NoOp</c>, which <c>RecordEditService</c> already commits nothing for.
+    /// </summary>
+    NoOp,
 }
 
 // VMAD's Mutagen edge: the property-type taxonomy, the editability policy, and
@@ -331,8 +343,96 @@ public static class VmadCodec
                 "remove_property" => RemoveProperty(script, propName),
                 "set_type" => SetType(script, propName, op),
                 "set_flags" => SetPropertyFlags(script, propName, op),
+                "add_element" => AddElement(script, propName),
+                "remove_element" => RemoveElement(script, propName, op),
+                "move_element_up" => MoveElement(script, propName, op, -1),
+                "move_element_down" => MoveElement(script, propName, op, 1),
                 _ => VmadApplyResult.NotFound,
             };
+    }
+
+    // A Papyrus scalar-array property's own arity ops (#658) — relocated from RecordPanel.tsx's
+    // client-side computation into this codec's own structural-op vocabulary, alongside
+    // add_property/remove_property above. Scope is the four scalar-element list types
+    // (Bool/Int/Float/String); ArrayOfObject and ArrayOfStruct are deliberately unmatched here (both
+    // out of this ticket's scope — ArrayOfObject keeps computing client-side, RecordPanel.tsx's own
+    // carve-out; ArrayOfStruct's elements live in struct_json, never list-item rows), so a property
+    // of either type falls through to NotFound the same as an unrecognised property name would.
+    //
+    // #658 review: the four cases handled below (mirrored identically in RemoveElement and
+    // MoveElement further down) are the authoritative definition of what counts as a VMAD
+    // scalar-array element op. RecordPanel.tsx keeps its own client-side allowlist naming the same
+    // four scalar kinds, purely so the webview knows which gesture to route to this door in the
+    // first place, and that allowlist has to stay the positive mirror of exactly these four cases.
+    // Nothing crosses the TypeScript/C# boundary at runtime to enforce that agreement, so widening
+    // the switch below to a fifth list type needs the matching webview-side entry added in the same
+    // change, not left to drift — a denylist on the webview side would silently keep working and
+    // misroute the next type nobody thought to add, which is exactly the defect review caught for
+    // the struct-list array shape this ticket deliberately leaves alone.
+    private static VmadApplyResult AddElement(ScriptEntry script, string propName)
+    {
+        var prop = FindProperty(script, propName);
+        switch (prop)
+        {
+            case ScriptBoolListProperty p: p.Data.Add(false); return VmadApplyResult.Applied;
+            case ScriptIntListProperty p: p.Data.Add(0); return VmadApplyResult.Applied;
+            case ScriptFloatListProperty p: p.Data.Add(0f); return VmadApplyResult.Applied;
+            case ScriptStringListProperty p: p.Data.Add(""); return VmadApplyResult.Applied;
+            default: return VmadApplyResult.NotFound;
+        }
+    }
+
+    // `index` alone (no path) is sufficient because a Papyrus scalar array cannot nest — none of
+    // the four list types AddElement matches above can hold another array or struct as an element
+    // (that shape belongs to ArrayOfObject/ArrayOfStruct, both out of scope). If a nested case ever
+    // appears here, the envelope needs a path; it doesn't today.
+    private static VmadApplyResult RemoveElement(ScriptEntry script, string propName, JsonElement op)
+    {
+        if (!op.TryGetProperty("index", out var idxEl) || idxEl.ValueKind != JsonValueKind.Number)
+            return VmadApplyResult.NotFound;
+        var index = idxEl.GetInt32();
+
+        return FindProperty(script, propName) switch
+        {
+            ScriptBoolListProperty p => RemoveAt(p.Data, index),
+            ScriptIntListProperty p => RemoveAt(p.Data, index),
+            ScriptFloatListProperty p => RemoveAt(p.Data, index),
+            ScriptStringListProperty p => RemoveAt(p.Data, index),
+            _ => VmadApplyResult.NotFound,
+        };
+    }
+
+    private static VmadApplyResult RemoveAt<T>(IList<T> list, int index)
+    {
+        if (index < 0 || index >= list.Count) return VmadApplyResult.NoOp; // boundary no-op
+        list.RemoveAt(index);
+        return VmadApplyResult.Applied;
+    }
+
+    private static VmadApplyResult MoveElement(ScriptEntry script, string propName, JsonElement op, int direction)
+    {
+        if (!op.TryGetProperty("index", out var idxEl) || idxEl.ValueKind != JsonValueKind.Number)
+            return VmadApplyResult.NotFound;
+        var index = idxEl.GetInt32();
+
+        return FindProperty(script, propName) switch
+        {
+            ScriptBoolListProperty p => Move(p.Data, index, direction),
+            ScriptIntListProperty p => Move(p.Data, index, direction),
+            ScriptFloatListProperty p => Move(p.Data, index, direction),
+            ScriptStringListProperty p => Move(p.Data, index, direction),
+            _ => VmadApplyResult.NotFound,
+        };
+    }
+
+    private static VmadApplyResult Move<T>(IList<T> list, int index, int direction)
+    {
+        var j = index + direction;
+        if (index < 0 || index >= list.Count || j < 0 || j >= list.Count) return VmadApplyResult.NoOp; // boundary no-op
+        var item = list[index];
+        list.RemoveAt(index);
+        list.Insert(j, item);
+        return VmadApplyResult.Applied;
     }
 
     private static ScriptEntry? FindScript(IHaveVirtualMachineAdapter record, string scriptName) =>

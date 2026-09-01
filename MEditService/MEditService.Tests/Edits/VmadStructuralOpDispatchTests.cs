@@ -122,6 +122,109 @@ public sealed class VmadStructuralOpDispatchTests : IDisposable
         Assert.Equal(RecordEditRefusal.FieldNotFound, result.Refusal);
     }
 
+    // ── Scalar-array element ops (#658) ───────────────────────────────────────────────────────────
+    // Relocated from RecordPanel.tsx's client-side computation into VmadCodec's own
+    // add_element/remove_element/move_element_up/move_element_down — same dispatch-only posture as
+    // the rest of this class (VmadCodecTests pins the codec's own arithmetic).
+
+    private RecordEditService SeedIntListProperty(string values)
+    {
+        var service = Service();
+        service.EditField(_mod.Plugin, _mod.Npc.ToString(), @"VMAD\Scr", Json("""{"op":"add_script"}"""));
+        var seed = service.EditField(
+            _mod.Plugin, _mod.Npc.ToString(), @"VMAD\Scr\Levels",
+            Json($$"""{"op":"add_property","name":"Levels","type":"ArrayOfInt","value":{{values}}}"""));
+        Assert.True(seed.Applied, seed.Message);
+        return service;
+    }
+
+    [Fact]
+    public void EditField_AddElementOp_AppendsAndWritesWorkingTreeDirt()
+    {
+        var service = SeedIntListProperty("[1,2,3]");
+
+        var result = service.EditField(
+            _mod.Plugin, _mod.Npc.ToString(), @"VMAD\Scr\Levels", Json("""{"op":"add_element"}"""));
+
+        Assert.True(result.Applied, result.Message);
+        var relative = _mod.RelativeSourcePath(_mod.Npc, "npc_", TrackedModFixture.NpcEditorId).Replace('\\', '/');
+        Assert.Equal([$"M {relative}"], _mod.GitStatus());
+    }
+
+    [Fact]
+    public void EditField_RemoveElementOp_RemovesAndWritesWorkingTreeDirt()
+    {
+        var service = SeedIntListProperty("[1,2,3]");
+
+        var result = service.EditField(
+            _mod.Plugin, _mod.Npc.ToString(), @"VMAD\Scr\Levels",
+            Json("""{"op":"remove_element","index":1}"""));
+
+        Assert.True(result.Applied, result.Message);
+        var relative = _mod.RelativeSourcePath(_mod.Npc, "npc_", TrackedModFixture.NpcEditorId).Replace('\\', '/');
+        Assert.Equal([$"M {relative}"], _mod.GitStatus());
+    }
+
+    /// <summary>
+    /// The boundary case that matters most: #630 established the codec's own reserialization is not
+    /// byte-stable, so a no-op that fell through to an ordinary write would leave real,
+    /// <c>git status --porcelain</c>-visible dirt for an operation that changed nothing — the same
+    /// reasoning <see cref="ArrayOpEditTests.ArrayRemove_IndexPastTheEnd_IsANoOpThatCommitsNothing"/>
+    /// pins for the generic path. Unlike that test, this one cannot start from a pristine
+    /// <c>git status --porcelain</c> baseline: a VMAD property has to be added before it can be
+    /// addressed at all (add_script + add_property), and that seed is itself a real edit that
+    /// already dirties the one source file this fixture's NPC lives in — a second, further change to
+    /// that <i>same</i> file would still porcelain-report as a single unchanged "M path" line, so
+    /// comparing <c>git status --porcelain</c> before/after the op under test cannot tell "nothing
+    /// further changed" apart from "something further changed" (both look identical at file
+    /// granularity). Comparing the record's own serialized body before/after is the content-level
+    /// equivalent of the same check <see cref="TrackedModFixture.GitStatus"/> makes at file
+    /// granularity elsewhere in this class — precise where file-level status cannot be: asserting
+    /// <c>Applied</c> alone would pass even for a rival that clamps the index and removes some other
+    /// element, or one that re-serializes the array back byte-for-byte anyway.
+    /// </summary>
+    [Fact]
+    public void EditField_RemoveElementOp_OutOfRangeIndexIsANoOpThatCommitsNothing()
+    {
+        var service = SeedIntListProperty("[1,2,3]");
+        var bodyBeforeOp = _mod.Mirror.Index!.GetDocument(_mod.Npc.ToString(), _mod.Plugin)!.Body!;
+
+        var result = service.EditField(
+            _mod.Plugin, _mod.Npc.ToString(), @"VMAD\Scr\Levels",
+            Json("""{"op":"remove_element","index":5}"""));
+
+        Assert.True(result.Applied, result.Message);
+        Assert.Equal(bodyBeforeOp, _mod.Mirror.Index!.GetDocument(_mod.Npc.ToString(), _mod.Plugin)!.Body!);
+    }
+
+    [Fact]
+    public void EditField_MoveElementUpOp_TheFirstElementIsANoOpThatCommitsNothing()
+    {
+        var service = SeedIntListProperty("[1,2,3]");
+        var bodyBeforeOp = _mod.Mirror.Index!.GetDocument(_mod.Npc.ToString(), _mod.Plugin)!.Body!;
+
+        var result = service.EditField(
+            _mod.Plugin, _mod.Npc.ToString(), @"VMAD\Scr\Levels",
+            Json("""{"op":"move_element_up","index":0}"""));
+
+        Assert.True(result.Applied, result.Message);
+        Assert.Equal(bodyBeforeOp, _mod.Mirror.Index!.GetDocument(_mod.Npc.ToString(), _mod.Plugin)!.Body!);
+    }
+
+    [Fact]
+    public void EditField_MoveElementDownOp_TheLastElementIsANoOpThatCommitsNothing()
+    {
+        var service = SeedIntListProperty("[1,2,3]");
+        var bodyBeforeOp = _mod.Mirror.Index!.GetDocument(_mod.Npc.ToString(), _mod.Plugin)!.Body!;
+
+        var result = service.EditField(
+            _mod.Plugin, _mod.Npc.ToString(), @"VMAD\Scr\Levels",
+            Json("""{"op":"move_element_down","index":2}"""));
+
+        Assert.True(result.Applied, result.Message);
+        Assert.Equal(bodyBeforeOp, _mod.Mirror.Index!.GetDocument(_mod.Npc.ToString(), _mod.Plugin)!.Body!);
+    }
+
     // ── Guard inheritance ──────────────────────────────────────────────────────────────────────
     // The op-envelope dispatch above still enters through the one guarded door
     // (RecordEditService.EditField), never IRecordIndex.ApplyWorkingTreeChanges directly. Proving

@@ -5,7 +5,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 vi.mock('./vscode', () => ({ vscode: { postMessage: vi.fn() } }));
 
-import { RecordPanel, computeArrayOpClientSide } from './RecordPanel';
+import { RecordPanel } from './RecordPanel';
 import type { FieldMetadata } from './types';
 import { columnKey } from './types';
 import type { RecordPanelClient } from './RecordPanelClient';
@@ -56,6 +56,52 @@ const vmadEditableCompareResult = {
             { name: '', kind: 'scalar', values: { 'MyMod.esp': 1 }, types: { 'MyMod.esp': 'Int' }, winnerColumn: 'MyMod.esp', cellStates: {} },
             { name: '', kind: 'scalar', values: { 'MyMod.esp': 2 }, types: { 'MyMod.esp': 'Int' }, winnerColumn: 'MyMod.esp', cellStates: {} },
             { name: '', kind: 'scalar', values: { 'MyMod.esp': 3 }, types: { 'MyMod.esp': 'Int' }, winnerColumn: 'MyMod.esp', cellStates: {} },
+          ],
+        },
+        // #658: ArrayOfObject — a separate synthetic shape (VmadCodec.ElementType's own "Object"
+        // entry), deliberately out of scope. Element kind 'object' resolves to OBJECT_META
+        // (type: 'vmadObject'), not one of VMAD_SCALAR_ELEMENT_TYPES's four members, so
+        // handleArrayOp's VMAD branch keeps this property on the pre-#658 client-side carve-out.
+        {
+          name: 'Refs', kind: 'array', values: {}, types: { 'MyMod.esp': 'ArrayOfObject' },
+          winnerColumn: 'MyMod.esp', cellStates: {},
+          children: [
+            { name: '', kind: 'object', values: { 'MyMod.esp': '000010:Fallout4.esm [-1]' }, types: { 'MyMod.esp': 'Object' }, winnerColumn: 'MyMod.esp', cellStates: {} },
+            { name: '', kind: 'object', values: { 'MyMod.esp': '000011:Fallout4.esm [-1]' }, types: { 'MyMod.esp': 'Object' }, winnerColumn: 'MyMod.esp', cellStates: {} },
+          ],
+        },
+        // #658 review: ArrayOfStruct (structList) — VMAD's *third* array shape, missed by the
+        // original survey's "two carve-outs" enumeration. Its element meta is type: 'struct'
+        // (buildStructList/buildStruct, vmadTreeAdapter.ts) — a third value neither the old
+        // `=== 'vmadObject'` denylist nor a naive `!== 'vmadObject'` check would have excluded
+        // correctly, which is exactly why the fix is an allowlist (VMAD_SCALAR_ELEMENT_TYPES) rather
+        // than one more denylist entry. Fixture mirrors vmadTreeAdapter.test.ts's own structList
+        // shape: `raw` carries each plugin's own array of flat member-node arrays (one per instance),
+        // which is exactly what computeArrayOpClientSide restages under `rootDiff.values[plugin]`.
+        {
+          name: 'Points', kind: 'structList', values: {}, types: { 'MyMod.esp': 'ArrayOfStruct' },
+          winnerColumn: 'MyMod.esp', cellStates: {},
+          raw: {
+            'MyMod.esp': [
+              [{ name: 'X', type: 'Int', intValue: 1 }, { name: 'Y', type: 'Int', intValue: 2 }],
+              [{ name: 'X', type: 'Int', intValue: 3 }, { name: 'Y', type: 'Int', intValue: 4 }],
+            ],
+          },
+          children: [
+            {
+              name: '', kind: 'struct', values: {}, types: {}, winnerColumn: 'MyMod.esp', cellStates: {},
+              children: [
+                { name: 'X', kind: 'scalar', values: { 'MyMod.esp': 1 }, types: { 'MyMod.esp': 'Int' }, winnerColumn: 'MyMod.esp', cellStates: {} },
+                { name: 'Y', kind: 'scalar', values: { 'MyMod.esp': 2 }, types: { 'MyMod.esp': 'Int' }, winnerColumn: 'MyMod.esp', cellStates: {} },
+              ],
+            },
+            {
+              name: '', kind: 'struct', values: {}, types: {}, winnerColumn: 'MyMod.esp', cellStates: {},
+              children: [
+                { name: 'X', kind: 'scalar', values: { 'MyMod.esp': 3 }, types: { 'MyMod.esp': 'Int' }, winnerColumn: 'MyMod.esp', cellStates: {} },
+                { name: 'Y', kind: 'scalar', values: { 'MyMod.esp': 4 }, types: { 'MyMod.esp': 'Int' }, winnerColumn: 'MyMod.esp', cellStates: {} },
+              ],
+            },
           ],
         },
       ],
@@ -242,7 +288,14 @@ describe('RecordPanel — a VMAD property resolves its own root through the scri
     }));
   });
 
-  it('ARRAY_STRUCTURAL_OP (remove) on a VMAD scalar-array property commits the computed array under its own wirePath', async () => {
+  // #658: a Papyrus scalar-array property's own arity ops relocate here — VmadCodec's own
+  // structural-op vocabulary (add_element/remove_element/move_element_up/move_element_down,
+  // VmadCodecTests/VmadStructuralOpDispatchTests pin the codec's own arithmetic and dispatch), the
+  // same door VMAD_STRUCTURAL_OP's six ops already use, computed server-side. `index` alone (no
+  // path) is enough because a Papyrus scalar array cannot nest. ArrayOfObject is a different,
+  // synthetic shape (deliberately out of #658's scope) and keeps computing client-side — see
+  // "RecordPanel — VMAD ArrayOfObject still computes client-side" below.
+  it('ARRAY_STRUCTURAL_OP (remove) on a VMAD scalar-array property posts a remove_element envelope under its own wirePath', async () => {
     renderVmadPanel();
     await waitFor(() => screen.getByText('Scripts (VMAD)'));
 
@@ -254,50 +307,106 @@ describe('RecordPanel — a VMAD property resolves its own root through the scri
 
     await waitFor(() => expect(lastEditFieldMessage()).toEqual({
       type: WEBVIEW_TO_EXTENSION.EDIT_FIELD, formKey: '000001:Fallout4.esm',
-      plugin: 'MyMod.esp', origin: 'Data', fieldPath: 'VMAD\\MyScript\\Levels', value: [2, 3],
+      plugin: 'MyMod.esp', origin: 'Data', fieldPath: 'VMAD\\MyScript\\Levels',
+      value: { op: 'remove_element', index: 0 },
     }));
   });
-});
 
-// #630: a Papyrus scalar-array property's own arity ops (Add/Remove/Move Up/Move Down) are
-// deliberately out of #630's scope — they belong in VmadCodec's own structural-op vocabulary, a
-// different codec surface than an ordinary reflected column (RecordFieldWriter's own VMAD-path
-// dispatch refuses an array-op envelope arriving under a VMAD fieldPath) — so RecordPanel's own
-// handleArrayOp still routes these to computeArrayOpClientSide, which computes the next array
-// client-side exactly as every arity op did before #630, rather than posting an op envelope.
-//
-// Unit-tested directly here (rather than relying solely on the DOM round trip above) so the
-// carve-out's own arithmetic — boundary no-ops included — is pinned independent of the tree-walk
-// that resolves its root (#660's own "RecordPanel — a VMAD property resolves its own root..." suite
-// above), rather than folding both into one test that could pass or fail for either reason.
-describe('computeArrayOpClientSide — the VMAD scalar-array carve-out (#630)', () => {
-  // rootValue is one column's own current value (rootDiff.values[plugin] — a plain array for a
-  // top-level VMAD scalar-array property), not a per-plugin map.
-  const rootValue = [1, 2, 3];
+  it('ARRAY_STRUCTURAL_OP (add) on a VMAD scalar-array property posts a bare add_element envelope (no index)', async () => {
+    renderVmadPanel();
+    await waitFor(() => screen.getByText('Scripts (VMAD)'));
 
-  it('remove: removes the named index and keeps the rest', () => {
-    const next = computeArrayOpClientSide(rootValue, [{ kind: 'index', index: 1 }], 'remove');
-    expect(next).toEqual([1, 3]);
+    window.postMessage({
+      type: EXTENSION_TO_WEBVIEW.ARRAY_STRUCTURAL_OP, formKey: '000001:Fallout4.esm',
+      plugin: 'MyMod.esp', origin: 'Data', rootField: 'VMAD\\MyScript\\Levels',
+      path: [], op: 'add',
+    }, '*');
+
+    await waitFor(() => expect(lastEditFieldMessage()).toEqual({
+      type: WEBVIEW_TO_EXTENSION.EDIT_FIELD, formKey: '000001:Fallout4.esm',
+      plugin: 'MyMod.esp', origin: 'Data', fieldPath: 'VMAD\\MyScript\\Levels',
+      value: { op: 'add_element' },
+    }));
   });
 
-  it('remove: an out-of-range index is a boundary no-op (undefined — nothing to commit)', () => {
-    const next = computeArrayOpClientSide(rootValue, [{ kind: 'index', index: 5 }], 'remove');
-    expect(next).toBeUndefined();
+  it('ARRAY_STRUCTURAL_OP (moveUp) on a VMAD scalar-array property posts a move_element_up envelope', async () => {
+    renderVmadPanel();
+    await waitFor(() => screen.getByText('Scripts (VMAD)'));
+
+    window.postMessage({
+      type: EXTENSION_TO_WEBVIEW.ARRAY_STRUCTURAL_OP, formKey: '000001:Fallout4.esm',
+      plugin: 'MyMod.esp', origin: 'Data', rootField: 'VMAD\\MyScript\\Levels',
+      path: [{ kind: 'index', index: 1 }], op: 'moveUp',
+    }, '*');
+
+    await waitFor(() => expect(lastEditFieldMessage()).toEqual({
+      type: WEBVIEW_TO_EXTENSION.EDIT_FIELD, formKey: '000001:Fallout4.esm',
+      plugin: 'MyMod.esp', origin: 'Data', fieldPath: 'VMAD\\MyScript\\Levels',
+      value: { op: 'move_element_up', index: 1 },
+    }));
   });
 
-  it('moveDown: swaps the named index with its next neighbour', () => {
-    const next = computeArrayOpClientSide(rootValue, [{ kind: 'index', index: 0 }], 'moveDown');
-    expect(next).toEqual([2, 1, 3]);
+  it('ARRAY_STRUCTURAL_OP (moveDown) on a VMAD scalar-array property posts a move_element_down envelope', async () => {
+    renderVmadPanel();
+    await waitFor(() => screen.getByText('Scripts (VMAD)'));
+
+    window.postMessage({
+      type: EXTENSION_TO_WEBVIEW.ARRAY_STRUCTURAL_OP, formKey: '000001:Fallout4.esm',
+      plugin: 'MyMod.esp', origin: 'Data', rootField: 'VMAD\\MyScript\\Levels',
+      path: [{ kind: 'index', index: 1 }], op: 'moveDown',
+    }, '*');
+
+    await waitFor(() => expect(lastEditFieldMessage()).toEqual({
+      type: WEBVIEW_TO_EXTENSION.EDIT_FIELD, formKey: '000001:Fallout4.esm',
+      plugin: 'MyMod.esp', origin: 'Data', fieldPath: 'VMAD\\MyScript\\Levels',
+      value: { op: 'move_element_down', index: 1 },
+    }));
   });
 
-  it('moveUp: the first element is a boundary no-op', () => {
-    const next = computeArrayOpClientSide(rootValue, [{ kind: 'index', index: 0 }], 'moveUp');
-    expect(next).toBeUndefined();
+  // #658's own trap, named explicitly: ArrayOfObject is a separate synthetic shape, deliberately
+  // out of scope, and must keep computing client-side exactly as it did before this ticket —
+  // VmadCodec's new add_element/remove_element/move_element_up/move_element_down only match the
+  // four scalar-list types (VmadCodecTests), so an envelope posted for an ArrayOfObject property
+  // would refuse as NotFound. This is the regression review caught in #630 for Conditions,
+  // recurring here for VMAD's own second carve-out.
+  it('ARRAY_STRUCTURAL_OP (remove) on a VMAD ArrayOfObject property still commits a computed array, not an envelope', async () => {
+    renderVmadPanel();
+    await waitFor(() => screen.getByText('Scripts (VMAD)'));
+
+    window.postMessage({
+      type: EXTENSION_TO_WEBVIEW.ARRAY_STRUCTURAL_OP, formKey: '000001:Fallout4.esm',
+      plugin: 'MyMod.esp', origin: 'Data', rootField: 'VMAD\\MyScript\\Refs',
+      path: [{ kind: 'index', index: 0 }], op: 'remove',
+    }, '*');
+
+    await waitFor(() => expect(lastEditFieldMessage()).toEqual({
+      type: WEBVIEW_TO_EXTENSION.EDIT_FIELD, formKey: '000001:Fallout4.esm',
+      plugin: 'MyMod.esp', origin: 'Data', fieldPath: 'VMAD\\MyScript\\Refs',
+      value: ['000011:Fallout4.esm [-1]'],
+    }));
   });
 
-  it('add: appends a default element built from the given element meta', () => {
-    const intMeta: FieldMetadata = { name: '', type: 'int', isArray: false, validFormKeyTypes: [], enumValues: [] };
-    const next = computeArrayOpClientSide(rootValue, [], 'add', intMeta);
-    expect(next).toEqual([1, 2, 3, 0]);
+  // #658 review: VMAD's *third* array shape, ArrayOfStruct (structList) — missed by the original
+  // survey, which enumerated only Conditions and ArrayOfObject as surviving carve-outs. Its element
+  // meta is type: 'struct', a third value the old `elementMeta?.type === 'vmadObject'` denylist did
+  // not exclude, so it fell into the new server-envelope branch and refused (VmadCodec's element ops
+  // only match Bool/Int/Float/String lists — NotFound for a ScriptStructListProperty). The fix is an
+  // allowlist (VMAD_SCALAR_ELEMENT_TYPES), so this — and any future VMAD array shape nobody has
+  // enumerated yet — stays on the client-side carve-out by construction.
+  it('ARRAY_STRUCTURAL_OP (remove) on a VMAD ArrayOfStruct (structList) property still commits a computed array, not an envelope', async () => {
+    renderVmadPanel();
+    await waitFor(() => screen.getByText('Scripts (VMAD)'));
+
+    window.postMessage({
+      type: EXTENSION_TO_WEBVIEW.ARRAY_STRUCTURAL_OP, formKey: '000001:Fallout4.esm',
+      plugin: 'MyMod.esp', origin: 'Data', rootField: 'VMAD\\MyScript\\Points',
+      path: [{ kind: 'index', index: 0 }], op: 'remove',
+    }, '*');
+
+    await waitFor(() => expect(lastEditFieldMessage()).toEqual({
+      type: WEBVIEW_TO_EXTENSION.EDIT_FIELD, formKey: '000001:Fallout4.esm',
+      plugin: 'MyMod.esp', origin: 'Data', fieldPath: 'VMAD\\MyScript\\Points',
+      value: [[{ name: 'X', type: 'Int', intValue: 3 }, { name: 'Y', type: 'Int', intValue: 4 }]],
+    }));
   });
 });
