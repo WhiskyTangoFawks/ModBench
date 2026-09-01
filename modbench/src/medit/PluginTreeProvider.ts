@@ -66,9 +66,18 @@ export class RecordNode extends vscode.TreeItem {
     // CellNode do (a container's own row stays an ordinary, fully-affordanced record row).
     // undefined for every other record type, which stays a leaf.
     public readonly containerChildType?: 'qust' | 'dial',
+    // #560: whether this row actually has at least one container child, from the same bulk
+    // listing response `record` was built from (RecordSummary/ContainerChildSummary.
+    // hasContainerChildren — populated by the backend's container_child EXISTS check, never a
+    // per-row follow-up call here). A qust/dial row shows an expand chevron only when this is
+    // true — a Quest with zero DialogTopics/DialogBranches/Scenes is a leaf like any other record,
+    // matching every other empty-collection row in this tree (e.g. PlacedGroupNode), even though
+    // this one keeps the row visible and simply withholds the chevron rather than omitting the row.
+    public readonly hasContainerChildren = false,
   ) {
     const label = record.editorId ? `${record.editorId} [${record.formKey}]` : record.formKey;
-    super(label, containerChildType ? vscode.TreeItemCollapsibleState.Collapsed : vscode.TreeItemCollapsibleState.None);
+    const collapsible = containerChildType && hasContainerChildren;
+    super(label, collapsible ? vscode.TreeItemCollapsibleState.Collapsed : vscode.TreeItemCollapsibleState.None);
     this.contextValue = immutable ? 'recordImmutable' : 'record';
     this.command = {
       command: 'modbench.openEditor',
@@ -518,7 +527,7 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
       }
     }
     return children.map(c => new RecordNode(
-      c, node.origin, this.isImmutable(c.plugin, node.origin), containerChildTypeOf(c.recordType)));
+      c, node.origin, this.isImmutable(c.plugin, node.origin), containerChildTypeOf(c.recordType), c.hasContainerChildren));
   }
 
   private async fetchInteriorCells(node: InteriorCellsNode): Promise<PluginTreeNode[]> {
@@ -567,6 +576,6 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
     // own flat record-type listing (not just as someone else's child) still expands into its own
     // container children, the same single mechanism fetchContainerChildren's own recursion uses.
     return cached.items.map(r => new RecordNode(
-      r, node.origin, this.isImmutable(r.plugin, node.origin), containerChildTypeOf(node.recordType)));
+      r, node.origin, this.isImmutable(r.plugin, node.origin), containerChildTypeOf(node.recordType), r.hasContainerChildren));
   }
 }

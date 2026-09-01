@@ -123,6 +123,36 @@ public class ContainerChildQueryServiceTests
         Assert.Equal(["dial", "dial", "dlbr", "scen"], result.Select(r => r.RecordType).ToArray());
     }
 
+    // #560: a returned "dial" child (a Quest's own Dialog Topic) is itself a container the
+    // Plugins tree can expand further — its HasContainerChildren flag must survive the
+    // RecordSummary -> ContainerChildSummary flattening this service does, the same way every other
+    // hydrated field (EditorId, IsWinner, WorkingTreeState...) already does. Rival: a
+    // ContainerChildSummary constructor call that drops the flag on the floor would still pass every
+    // other assertion in this file, since none of them look at it.
+    [Fact]
+    public void GetChildren_HydratesHasContainerChildren_FromRecordSummary()
+    {
+        var reader = new StubReader(
+            [
+                new ContainerChildRow("dial1:M.esp", "qust1:M.esp", "Quest", "DialogTopics", 0),
+                new ContainerChildRow("dial2:M.esp", "qust1:M.esp", "Quest", "DialogTopics", 1),
+            ],
+            new Dictionary<string, IReadOnlyList<RecordSummary>>
+            {
+                ["dial"] =
+                [
+                    new RecordSummary("dial1:M.esp", "M.esp", 0, true, "TopicA", "Data", HasContainerChildren: true),
+                    new RecordSummary("dial2:M.esp", "M.esp", 0, true, "TopicB", "Data", HasContainerChildren: false),
+                ],
+            });
+        var svc = new ContainerChildQueryService(new StubMirror(reader));
+
+        var result = svc.GetChildren("M.esp", "qust1:M.esp");
+
+        Assert.True(result.Single(r => r.FormKey == "dial1:M.esp").HasContainerChildren);
+        Assert.False(result.Single(r => r.FormKey == "dial2:M.esp").HasContainerChildren);
+    }
+
     // A Dialog Topic's Responses come back in SlotIndex order, tagged "info".
     [Fact]
     public void GetChildren_DialogTopic_ReturnsResponsesInSlotOrder_TaggedInfo()

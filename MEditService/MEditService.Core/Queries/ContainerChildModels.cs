@@ -15,4 +15,8 @@ namespace MEditService.Core.Queries;
 /// </summary>
 public record ContainerChildSummary(
     string FormKey, string? EditorId, string Plugin, string Origin,
-    int LoadOrderIndex, bool IsWinner, WorkingTreeState WorkingTreeState, string RecordType);
+    int LoadOrderIndex, bool IsWinner, WorkingTreeState WorkingTreeState, string RecordType,
+    // #560: carried straight through from the RecordSummary this row was hydrated from — a
+    // returned "dial" child (a Quest's own Dialog Topic) is itself a container the Plugins tree
+    // recurses into, and needs this same presence fact to decide its own expand chevron.
+    bool HasContainerChildren = false);

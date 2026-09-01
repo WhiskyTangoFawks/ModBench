@@ -427,6 +427,14 @@ end.
   (whether reached directly or as a Quest's child) expands to its `Responses`.
 - Child rows are ordinary record rows — same `modbench.openEditor` command, same context menu,
   same origin-keyed identity as every other record row (no new command was needed for this).
+- A Quest/Dialog Topic row shows its expand chevron only when it actually has at least one
+  container child — the presence fact travels with the row's own listing entry
+  (`RecordSummary`/`ContainerChildSummary.hasContainerChildren`, read from the same containment
+  index the children themselves come from), never guessed from the record's type signature alone
+  (#560). This is a different rule from a group node like a placed-reference group, which omits
+  itself entirely when its collection is empty — a Quest/Dialog Topic row stays visible either way
+  and only withholds the chevron, since the row is itself an ordinary, fully-affordanced record
+  row regardless of whether it has children.
 
 ### Missing-master badge (order-aware) and load-order-derived master/load-failure decoration
 

@@ -93,7 +93,14 @@ public record RecordSummary(
     string Origin,
     // Defaults to None (test fixtures, GetOverrideStack's own unrelated read paths) — Search() is
     // the only real producer of a non-None value; see DuckDbRecordIndex.Search.
-    WorkingTreeState WorkingTreeState = WorkingTreeState.None);
+    WorkingTreeState WorkingTreeState = WorkingTreeState.None,
+    // #560: whether this FormKey has at least one container_child row naming it as parent — the
+    // Plugins tree's RecordNode reads this to decide a qust/dial row's expand chevron, rather than
+    // showing one for every row of those two types regardless of whether expanding it would yield
+    // anything. Defaults to false for the same reason WorkingTreeState defaults to None: Search()
+    // is the only real producer of a true value; every other construction site (test fixtures,
+    // GetOverrideStack's own unrelated read paths) has nothing to report.
+    bool HasContainerChildren = false);
 
 public record PagedResult<T>(IReadOnlyList<T> Items, int Total);
 
