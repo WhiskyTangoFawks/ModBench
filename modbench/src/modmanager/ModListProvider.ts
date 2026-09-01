@@ -239,8 +239,8 @@ export class ModListProvider
   /** Dispatches a drop's mutation call: mod-onto-separator, mod-reorder, or
    *  separator-block-reorder. Split out of `handleDrop` only to keep that
    *  method's cyclomatic complexity under lint's threshold.
-   *  Each branch runs through `runMutation` so a throw carries which branch it
-   *  came from (specific log lines over a generic one). */
+   *  Each branch runs through `runMutation`, which logs and reports a failure itself
+   *  (specific log lines over a generic one) rather than throwing. */
   private async applyDrop(kind: 'mod' | 'separator', name: string, target: ModlistNode | undefined): Promise<void> {
     // A drop hands us the *pre-removal* target ("insert before this row"), but
     // moveModInText/moveSeparatorBlockInText count toIndex among the entries with
