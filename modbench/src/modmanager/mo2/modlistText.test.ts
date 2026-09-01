@@ -14,6 +14,7 @@ import {
   renameSeparatorInText,
   setEnabledInText,
   unlistedModNames,
+  deadModEntryNames,
 } from './modlistText';
 import type { Mod, ModlistEntry, Separator } from '../model';
 
@@ -591,6 +592,40 @@ describe('unlistedModNames — which mods/ folders need a modlist.txt entry', ()
 
   it('returns multiple new folders sorted', () => {
     expect(unlistedModNames(['Zeta Mod', 'Alpha Mod'], [])).toEqual(['Alpha Mod', 'Zeta Mod']);
+  });
+});
+
+describe('deadModEntryNames — which modlist entries lost their mods/ folder (#93)', () => {
+  it('includes a mod entry whose folder is gone', () => {
+    const entries = parseModlist(defaultModlist());
+    // The fixture registers this mod; a dir listing without it means the folder was deleted.
+    expect(deadModEntryNames([], entries)).toContain('SKK Fast Start new game (Fallout 4)');
+  });
+
+  it('excludes a mod entry whose folder is present', () => {
+    const entries = parseModlist(defaultModlist());
+    const allFolders = entries.filter((e) => e.kind === 'mod').map((e) => e.name);
+    expect(deadModEntryNames(allFolders, entries)).toEqual([]);
+  });
+
+  it('never returns a separator entry — its on-disk form is the marker folder, not a mod folder', () => {
+    // "Unassigned (Modlist Development)" exists only as a separator; even with an empty
+    // dir listing it is not a dead *mod* entry.
+    const entries = parseModlist(defaultModlist());
+    expect(deadModEntryNames([], entries)).not.toContain('Unassigned (Modlist Development)');
+  });
+
+  it('includes a disabled entry whose folder is gone — disabled is still registered', () => {
+    const entries: ModlistEntry[] = [{ kind: 'mod', name: 'Gone Mod', enabled: false }];
+    expect(deadModEntryNames([], entries)).toEqual(['Gone Mod']);
+  });
+
+  it('returns dead names in modlist order', () => {
+    const entries: ModlistEntry[] = [
+      { kind: 'mod', name: 'Zeta Mod', enabled: true },
+      { kind: 'mod', name: 'Alpha Mod', enabled: true },
+    ];
+    expect(deadModEntryNames([], entries)).toEqual(['Zeta Mod', 'Alpha Mod']);
   });
 });
 
