@@ -29,8 +29,13 @@ import { makeReporter } from '../reporter';
 // never calls getChildren (and so never invokes the callback) until createTreeView returns and
 // this whole function has finished, by which point the const is long since initialized.
 export function createReferencedByTree(
-  client: ApiClient, log: (msg: string) => void, activeRecordTracker: ActiveRecordTracker<vscode.WebviewPanel>,
+  client: ApiClient, outputChannel: vscode.LogOutputChannel, activeRecordTracker: ActiveRecordTracker<vscode.WebviewPanel>,
 ) {
+  // `log` is a compat shim (defaults to .info) for modules taking a flat `(msg) => void` —
+  // constructed here, at the boundary, rather than threaded in as its own parameter alongside
+  // outputChannel (#628: finishing the reporter migration means the flat shape stops at the
+  // collaborator that still needs it, not one level higher).
+  const log = (msg: string) => outputChannel.info(msg);
   const referencedByTreeProvider = new ReferencedByTreeProvider(client, log, (count) => {
     // The declared name is "Plugins - Referenced By" — the sub-functionality
     // naming convention (ADR-0035) — and the runtime count badge carries the same prefix so the
@@ -96,7 +101,6 @@ export interface EditorCommandDeps {
   // mergedTreeSelection is, just above.
   refreshMatchingPlugins: () => void;
   refreshSourceControlFor: (plugin: string) => void;
-  log: (msg: string) => void;
   outputChannel: vscode.LogOutputChannel;
 }
 /** Editor-side commands, grouped so no single registrar exceeds the size budget. */
@@ -506,8 +510,13 @@ export async function runCopyRecordCommand(
  *  its load-time hash check) and runs the one dialog, sequentially, for whatever it finds — pulled
  *  out of `activate()` purely for that function's own line budget. Returns the stop function. */
 export function startExternalChangeDialogPolling(
-  repository: PluginRepository, controller: EditingController, outputChannel: vscode.LogOutputChannel, log: (msg: string) => void,
+  repository: PluginRepository, controller: EditingController, outputChannel: vscode.LogOutputChannel,
 ): () => void {
+  // `log` is a compat shim (defaults to .info) for modules taking a flat `(msg) => void` —
+  // constructed here, at the boundary, rather than threaded in as its own parameter alongside
+  // outputChannel (#628: finishing the reporter migration means the flat shape stops at the
+  // collaborator that still needs it, not one level higher).
+  const log = (msg: string) => outputChannel.info(msg);
   return startExternalChangePolling({
     repository,
     controller,

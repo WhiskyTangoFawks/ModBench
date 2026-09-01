@@ -371,8 +371,13 @@ export function createModListView(
  *  via activate() for integration tests) alongside its disposables. */
 export function registerDownloadsView(
   instanceRoot: string,
-  log: (msg: string) => void,
+  outputChannel: vscode.LogOutputChannel,
 ): { downloadsProvider: DownloadsProvider; disposables: vscode.Disposable[] } {
+  // `log` is a compat shim (defaults to .info) for modules taking a flat `(msg) => void` —
+  // constructed here, at the boundary, rather than threaded in as its own parameter alongside
+  // outputChannel (#628: finishing the reporter migration means the flat shape stops at the
+  // collaborator that still needs it, not one level higher).
+  const log = (msg: string) => outputChannel.info(msg);
   const downloadsProvider = new DownloadsProvider(instanceRoot, log);
   const downloadsView = vscode.window.createTreeView('modbench.downloads', {
     treeDataProvider: downloadsProvider,

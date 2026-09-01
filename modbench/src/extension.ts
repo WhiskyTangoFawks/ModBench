@@ -398,11 +398,11 @@ export function activate(context: vscode.ExtensionContext) {
       recordPanels, () => { void registerHeldTrackedRepositories(session, repository, outputChannel); },
     ),
   });
-  const { referencedByTreeView, activeRecordSubscription } = createReferencedByTree(client, log, activeRecordTracker);
+  const { referencedByTreeView, activeRecordSubscription } = createReferencedByTree(client, outputChannel, activeRecordTracker);
   const showCrashRepairOffers = makeCrashRepairOffersPresenter(controller, compileDiagnostics);
-  const { modListProvider, downloadsProvider, pluginListProvider, modlistSource, instanceRoot, enterEditing } = registerLoadoutSurfaces(session, { context, log, outputChannel, controller, recordBrowser: treeProvider, heldPluginFiles: heldPluginFilesFrom(repository), showCrashRepairOffers });
+  const { modListProvider, downloadsProvider, pluginListProvider, modlistSource, instanceRoot, enterEditing } = registerLoadoutSurfaces(session, { context, outputChannel, controller, recordBrowser: treeProvider, heldPluginFiles: heldPluginFilesFrom(repository), showCrashRepairOffers });
 
-  wireExternalChangePolling(session, repository, controller, outputChannel, log);
+  wireExternalChangePolling(session, repository, controller, outputChannel);
 
   context.subscriptions.push(
     referencedByTreeView,
@@ -411,7 +411,7 @@ export function activate(context: vscode.ExtensionContext) {
     ...registerPluginRowCommands(session, controller, repository, activeRecordTracker, outputChannel, compileDiagnostics),
     registerCreatePluginCommand(controller, modlistSource, instanceRoot, pluginListProvider, outputChannel),
     ...registerEditorCommands({
-      context, openPanels, recordPanels, activeRecordTracker, port, treeProvider, controller, repository, scriptsPath, referencedByTreeView, log, outputChannel,
+      context, openPanels, recordPanels, activeRecordTracker, port, treeProvider, controller, repository, scriptsPath, referencedByTreeView, outputChannel,
       mergedTreeSelection: () => session.pluginsTreeView?.selection ?? [],
       refreshMatchingPlugins: () => { void refreshMatchingPlugins(session, repository, outputChannel); },
       refreshSourceControlFor: (plugin) => refreshSourceControlFor(session, plugin, outputChannel),
@@ -450,7 +450,6 @@ export function activate(context: vscode.ExtensionContext) {
 interface PluginListDeps {
   session: ExtensionSession;
   modlistSource: Mo2ModlistSource;
-  log: (msg: string) => void;
   outputChannel: vscode.LogOutputChannel;
   reporter: Reporter;
   instanceRoot: string;
@@ -503,7 +502,12 @@ function buildPluginsTreeComposite(
 }
 
 function registerPluginListView(deps: PluginListDeps): { pluginListProvider: PluginListProvider; disposables: vscode.Disposable[] } {
-  const { session, modlistSource, log, outputChannel, reporter, instanceRoot, dataFolder, recordBrowser } = deps;
+  const { session, modlistSource, outputChannel, reporter, instanceRoot, dataFolder, recordBrowser } = deps;
+  // `log` is a compat shim (defaults to .info) for modules taking a flat `(msg) => void` —
+  // constructed here, at the boundary, rather than threaded in as its own PluginListDeps field
+  // alongside outputChannel (#628: finishing the reporter migration means the flat shape stops
+  // at the collaborator that still needs it, not one level higher).
+  const log = (msg: string) => outputChannel.info(msg);
   const pluginListProvider = new PluginListProvider({ source: modlistSource, log, reporter, instanceRoot, dataFolder });
   const composite = buildPluginsTreeComposite(session, pluginListProvider, recordBrowser);
   session.pluginsTree = composite;
@@ -803,12 +807,12 @@ function registerCreatePluginCommand(
  *  this reacts to like any other transition. */
 function wireExternalChangePolling(
   session: ExtensionSession, repository: PluginRepository, controller: EditingController,
-  outputChannel: vscode.LogOutputChannel, log: (msg: string) => void,
+  outputChannel: vscode.LogOutputChannel,
 ): void {
   gateExternalChangePolling({
     onBackendStatusChange: (cb) => session.backendManager!.on('status', cb),
     isBackendHealthy: () => session.backendManager!.isHealthy,
-    startPolling: () => startExternalChangeDialogPolling(repository, controller, outputChannel, log),
+    startPolling: () => startExternalChangeDialogPolling(repository, controller, outputChannel),
   });
 }
 
@@ -1072,7 +1076,6 @@ function registerLoadoutSurfaces(session: ExtensionSession, deps: Omit<LoadoutVi
 
 interface LoadoutViewDeps {
   context: vscode.ExtensionContext;
-  log: (msg: string) => void;
   outputChannel: vscode.LogOutputChannel;
   revealLog: () => void;
   controller: EditingController;
@@ -1106,7 +1109,9 @@ function wireEnterEditingOnRestart(
 }
 
 function registerLoadoutView(session: ExtensionSession, deps: LoadoutViewDeps): { modListProvider: ModListProvider; downloadsProvider: DownloadsProvider; pluginListProvider: PluginListProvider; modlistSource: Mo2ModlistSource; instanceRoot: string; refreshAll: () => void; enterEditing: () => Promise<void> } | undefined {
-  const { context, log, outputChannel, revealLog, controller, recordBrowser, heldPluginFiles, showCrashRepairOffers } = deps;
+  const { context, outputChannel, revealLog, controller, recordBrowser, heldPluginFiles, showCrashRepairOffers } = deps;
+  // #628: the flat log shim, built locally rather than threaded in as its own Deps field.
+  const log = (msg: string) => outputChannel.info(msg);
   const instanceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   if (!instanceRoot) {
     outputChannel.info('[extension] No workspace folder open — Mod List view not registered.');
@@ -1152,13 +1157,12 @@ function registerLoadoutView(session: ExtensionSession, deps: LoadoutViewDeps): 
       session, instanceRoot, modlistSource, controller, outputChannel, heldPluginFiles, showCrashRepairOffers, gameDirResolver,
     });
     const { pluginListProvider, disposables: pluginListDisposables } =
-      registerPluginListView({ session, modlistSource, log, outputChannel, reporter: makeReporter(outputChannel, 'pluginList'), instanceRoot, dataFolder, recordBrowser });
+      registerPluginListView({ session, modlistSource, outputChannel, reporter: makeReporter(outputChannel, 'pluginList'), instanceRoot, dataFolder, recordBrowser });
     const { modListView, modListFilter, updateProfileDescription } =
       createModListView(modListProvider, modlistSource, outputChannel);
     const { runModAction, promptModName, warnIfFomod } = makeModActionHelpers(modListProvider, outputChannel);
     const enterEditing = makeEnterEditing(session, outputChannel, revealLog);
     wireEnterEditingOnRestart(session, enterEditing, outputChannel);
-
     context.subscriptions.push(
       modListView,
       modListFilter,
@@ -1179,7 +1183,7 @@ function registerLoadoutView(session: ExtensionSession, deps: LoadoutViewDeps): 
       registerModsAutoRegisterWatcher(instanceRoot, modlistSource, modListProvider, outputChannel),
       ...pluginListDisposables,
     );
-    const { downloadsProvider, disposables: downloadsDisposables } = registerDownloadsView(instanceRoot, log);
+    const { downloadsProvider, disposables: downloadsDisposables } = registerDownloadsView(instanceRoot, outputChannel);
     context.subscriptions.push(...downloadsDisposables);
     const refreshAll = makeRefreshAll(modListProvider, pluginListProvider, downloadsProvider, updateProfileDescription);
     return { modListProvider, downloadsProvider, pluginListProvider, modlistSource, instanceRoot, refreshAll, enterEditing };
