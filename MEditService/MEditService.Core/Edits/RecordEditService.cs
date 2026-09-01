@@ -69,11 +69,20 @@ public sealed class RecordEditService(
         // modFolder isn't needed past resolution here — EditField's own remaining work is entirely
         // in terms of the record's own source unit, not the mod folder that produced it.
         var (index, _, release, document, unit) = editTarget;
-        var reads = index.At(RecordRef.Effective);
+        var schemas = schemaReflector.GetSchemas(release);
 
+        // #661: the header is a source unit now, so ResolveEditTarget above no longer refuses it at
+        // SourceUnitNotFound before this line — but a ModHeader is not an IMajorRecord, so it can
+        // never flow through ReadRecordFromSource/RecordFieldWriter's generic per-record pipeline
+        // below (that pipeline is what every other record type uses, and structurally cannot carry
+        // this one — see HeaderDocument's own doc comment). Answered here instead, off the schema
+        // alone, before any record is read or materialized.
+        if (document.RecordType == HeaderIndexer.RecordType)
+            return RefuseHeaderFieldEdit(fieldPath, schemas);
+
+        var reads = index.At(RecordRef.Effective);
         var owner = reads.GetDocument(unit.OwnerFormKey, plugin)!;
         var record = ReadRecordFromSource(_codec, logger, unit.FullPath, owner, release);
-        var schemas = schemaReflector.GetSchemas(release);
 
         // The record the field lands on is the one the caller named — which is *inside* `record` when
         // the source unit belongs to a container. Locating it in the parent's own object graph rather
@@ -1503,6 +1512,45 @@ public sealed class RecordEditService(
                 // command that does not exist is its own dead end, so the
                 // tests assert this string exactly rather than merely containing "Track".
                 $"Run \"{TrackCommandTitle}\" on it once to start editing.");
+
+    /// <summary>
+    /// The header's own field-edit gate (#661), reached from <see cref="EditField"/> once source-unit
+    /// resolution stops refusing a header FormKey at <see cref="RecordEditRefusal.SourceUnitNotFound"/>.
+    /// Answers exactly the question <see cref="RecordFieldWriter.TryApply"/> would — does the named
+    /// column exist, does it carry a write delegate — without ever needing a <see cref="ModHeader"/>
+    /// instance, which the generic <see cref="IMajorRecord"/> pipeline that question normally runs
+    /// through cannot accept in the first place. Reuses <see cref="RefuseFieldOutcome"/> so a header
+    /// field's refusal reads identically to every other read-only column's, rather than inventing a
+    /// second wording for the same outcome.
+    ///
+    /// <para>No header column carries a write delegate today — <c>masters</c> by design (#335/
+    /// ADR-0038), <c>author</c>/<c>flags</c> simply because giving them one is #290's work, not this
+    /// ticket's (Minimal by default: a write mechanism nothing calls is scaffolding). The
+    /// <see cref="ColumnSpec.Apply"/> non-null branch below is therefore unreached today — kept as a
+    /// loud failure rather than a silent one, so a future column gaining a delegate is a build-time
+    /// nudge to give this method (or replace it with) a real write path, not a refusal that quietly
+    /// keeps lying about the field being read-only.</para>
+    /// </summary>
+    private static RecordEditResult RefuseHeaderFieldEdit(
+        string fieldPath, IReadOnlyDictionary<string, RecordTableSchema> schemas)
+    {
+        if (!schemas.TryGetValue(HeaderIndexer.RecordType, out var schema))
+            return RefuseFieldOutcome(FieldApplyOutcome.NotFound, fieldPath, HeaderIndexer.RecordType, schemas);
+
+        var column = schema.RecordColumns.FirstOrDefault(c => c.Name == fieldPath);
+        if (column == null)
+            return RefuseFieldOutcome(FieldApplyOutcome.NotFound, fieldPath, HeaderIndexer.RecordType, schemas);
+
+        if (column.Apply != null)
+        {
+            throw new NotSupportedException(
+                $"Header column '{fieldPath}' now carries a write delegate, but RecordEditService has " +
+                "no header write path — EditField's header branch only knows how to refuse. Build one " +
+                "(#290) before giving any header column an Apply delegate.");
+        }
+
+        return RefuseFieldOutcome(FieldApplyOutcome.ReadOnly, fieldPath, HeaderIndexer.RecordType, schemas);
+    }
 
     private static RecordEditResult RefuseFieldOutcome(
         FieldApplyOutcome outcome, string fieldPath, string recordType,

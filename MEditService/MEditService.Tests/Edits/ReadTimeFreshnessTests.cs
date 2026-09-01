@@ -100,21 +100,24 @@ public sealed class ReadTimeFreshnessTests : IDisposable
 
     /// <summary>
     /// <b>Where the header's read-only-ness actually comes from</b> — recorded because it is easy to
-    /// believe otherwise. #335/ADR-0038 keeps <c>masters</c> unwritable, and the header schema's
-    /// <c>masters</c> column duly carries <c>Apply: null</c>
-    /// (<c>HeaderIndexingTests.HeaderSchema_MastersColumn_CarriesNoWriteDelegate</c>) — but that
-    /// column is not what refuses an edit today, and a reader who assumes it is would draw the wrong
-    /// conclusion from removing it.
+    /// believe otherwise, and this is the assertion 631a's own version of this test (then named
+    /// <c>EditingAHeaderField_IsRefusedAtTheGate_NotByTheColumnsMissingWriteDelegate</c>) predicted
+    /// would flip once the header became a source unit (#661). It has: the gate that used to refuse
+    /// both fields identically at <c>SourceUnitNotFound</c>, before any column was consulted, is gone.
     ///
-    /// <para>The refusal is <c>SourceUnitNotFound</c>, not <c>FieldNotWritable</c>: an edit is turned
-    /// away at the gate, before any column is consulted, because no source unit resolves for a header
-    /// FormKey. The column-level guard is therefore currently unreachable — kept as the leaf answer
-    /// for when the header becomes a source unit, not because it is doing work now. This test is what
-    /// makes that distinction checkable rather than a claim in a comment; when the header does become
-    /// a source unit, this is the assertion that should flip to <c>FieldNotWritable</c>.</para>
+    /// <para>What replaces it is <b>not</b> a masters-specific guard. #335/ADR-0038 keeps
+    /// <c>masters</c> unwritable, and the header schema's <c>masters</c> column duly carries
+    /// <c>Apply: null</c> (<c>HeaderIndexingTests.HeaderSchema_MastersColumn_CarriesNoWriteDelegate</c>)
+    /// — but so does every other header column today (<c>author</c>, <c>flags</c>): no header field
+    /// has a write delegate yet (that is #290's work, not this ticket's), so <c>masters</c> refuses
+    /// for the exact same reason its writable-*looking* sibling <c>author</c> does. There is no
+    /// separate mechanism that specifically protects <c>masters</c> — the schema's <c>Apply: null</c>,
+    /// identical across all three columns, is the whole of the enforcement. Both refuse
+    /// <c>FieldReadOnly</c> now, the ordinary "this column has no write delegate" refusal every other
+    /// read-only column in the schema gives — the header is no longer special-cased at all.</para>
     /// </summary>
     [Fact]
-    public void EditingAHeaderField_IsRefusedAtTheGate_NotByTheColumnsMissingWriteDelegate()
+    public void EditingAHeaderField_IsRefusedByTheColumnsMissingWriteDelegate_NowThatTheGateDoesNotBlockIt()
     {
         var headerFormKey = HeaderIndexer.FormKeyFor(ModKey.FromFileName(_mod.ActualPluginName));
 
@@ -123,10 +126,10 @@ public sealed class ReadTimeFreshnessTests : IDisposable
         var author = EditService().EditField(
             _mod.Plugin, headerFormKey, "author", Json("\"Someone Else\""));
 
-        Assert.Equal(RecordEditRefusal.SourceUnitNotFound, masters.Refusal);
-        // The writable-looking sibling refuses identically, which is the evidence that the refusal is
-        // about the record, not about this one field's missing delegate.
-        Assert.Equal(RecordEditRefusal.SourceUnitNotFound, author.Refusal);
+        Assert.Equal(RecordEditRefusal.FieldReadOnly, masters.Refusal);
+        // The writable-looking sibling refuses identically, which is the evidence that no
+        // masters-specific mechanism exists — every header column is equally unwritten today.
+        Assert.Equal(RecordEditRefusal.FieldReadOnly, author.Refusal);
         Assert.Empty(_mod.GitStatus());
     }
 

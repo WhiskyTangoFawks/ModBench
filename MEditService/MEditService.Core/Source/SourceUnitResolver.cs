@@ -41,7 +41,9 @@ internal readonly record struct SourceUnit(
 /// The record→source-unit question, answered for <b>every</b> record shape the source layout has
 /// (ADR-0041 amendment: one source unit is one file). <see cref="SourceRecordPath"/>
 /// answers it for flat records by computing a path; this answers it for the rest — containers, whose
-/// directory nesting is not derivable from the index, and embedded children, which have no file at all.
+/// directory nesting is not derivable from the index, embedded children, which have no file at all,
+/// and the header (#661), whose one fixed path (the root <c>RecordData.json</c>) needs no derivation
+/// at all.
 ///
 /// <para><b>Why the disk and not a path map.</b> A path map built at
 /// ingest would presume ingest's extraction already walks this structure. It does not:
@@ -100,6 +102,21 @@ internal static class SourceUnitResolver
         string formKey, string recordType, string? editorId, GameRelease release,
         SourceUnitResolutionCache? cache = null)
     {
+        // The header's own source unit: the root RecordData.json, one level above every group
+        // folder (#661). It needs none of the machinery below — no order index or EditorID to
+        // compute a flat path from (the file name never varies), never a placement or an embedded
+        // child, and no group folder to scan if the computed path is stale, because there is
+        // nothing to compute: the path is fixed. This is also why every branch below always
+        // answered null for it before this ticket, traced at plan time: FlatSourcePath throws
+        // (SourceRecordPath.For has no folder for a synthetic type), GetPlacement is null, and
+        // FindOwnUnit's own FormKey-suffix scan can never match a file with no FormKey in its name.
+        if (recordType == HeaderIndexer.RecordType)
+        {
+            var headerPath = Path.Combine(modFolder, SourceRecordPath.RootFor(plugin.Name), RecordDataFileName);
+            return new SourceUnit(
+                headerPath, Path.GetRelativePath(modFolder, headerPath), formKey, recordType, IsEmbedded: false);
+        }
+
         // A flat record: the path is computed, then corrected if the file has been renamed out from
         // under it. The overwhelmingly common edit pays one File.Exists and searches nothing.
         try
