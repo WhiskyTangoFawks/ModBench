@@ -413,7 +413,7 @@ internal static class SourceUnitResolver
     /// <summary>Strips a leading <c>"[N] "</c> ordering prefix when <paramref name="leaf"/>
     /// genuinely has one — never on a false positive, so an EditorID that happens to start with a
     /// bracketed number of its own (legal, if unusual) is left alone.</summary>
-    private static string WithoutOrderPrefix(string leaf) =>
+    internal static string WithoutOrderPrefix(string leaf) =>
         TryGetOrderIndex(leaf) is null ? leaf : leaf[(leaf.IndexOf("] ", StringComparison.Ordinal) + 2)..];
 
     /// <summary>

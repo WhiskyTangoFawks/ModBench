@@ -1,5 +1,6 @@
 using MEditService.Core.Edits;
 using MEditService.Core.Schema;
+using MEditService.Core.Source;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -84,9 +85,16 @@ public sealed class ExteriorCellCopyCompileTests : IDisposable
 
         Assert.True(result.Applied, result.Message);
 
-        // One worldspace directory total — the defect this ticket exists for is a bare-named sibling.
+        // One worldspace directory total — the defect this ticket exists for is a bare-named sibling
+        // — and the new block/sub-block folders exist on disk inside it.
         var worldspacesDir = Path.Combine(_fixture.DestinationSourceRoot, "Worldspaces");
-        Assert.Single(Directory.EnumerateDirectories(worldspacesDir));
+        var worldspaceDir = Assert.Single(Directory.EnumerateDirectories(worldspacesDir));
+        var newBlockDir = Assert.Single(Directory.EnumerateDirectories(worldspaceDir), d =>
+            SourceUnitResolver.WithoutOrderPrefix(Path.GetFileName(d))
+                .Equals($"{ContainerCopyFixture.OtherBlockX}, {ContainerCopyFixture.OtherBlockY}", StringComparison.Ordinal));
+        Assert.Single(Directory.EnumerateDirectories(newBlockDir), d =>
+            SourceUnitResolver.WithoutOrderPrefix(Path.GetFileName(d))
+                .Equals($"{ContainerCopyFixture.OtherSubX}, {ContainerCopyFixture.OtherSubY}", StringComparison.Ordinal));
 
         var compiled = ImportCompiled();
         var worldspace = compiled.Worldspaces.Records.Single(w => w.FormKey == _fixture.Worldspace);
@@ -118,6 +126,14 @@ public sealed class ExteriorCellCopyCompileTests : IDisposable
             _fixture.SourcePlugin, _fixture.SameBlockCell.ToString(), _fixture.DestinationPlugin);
 
         Assert.True(result.Applied, result.Message);
+
+        // On disk: still one directory for the shared block, now holding both sub-block folders.
+        var worldspaceDir = Assert.Single(
+            Directory.EnumerateDirectories(Path.Combine(_fixture.DestinationSourceRoot, "Worldspaces")));
+        var blockDir = Assert.Single(Directory.EnumerateDirectories(worldspaceDir), d =>
+            SourceUnitResolver.WithoutOrderPrefix(Path.GetFileName(d))
+                .Equals($"{ContainerCopyFixture.ExteriorBlockX}, {ContainerCopyFixture.ExteriorBlockY}", StringComparison.Ordinal));
+        Assert.Equal(2, Directory.EnumerateDirectories(blockDir).Count());
 
         var compiled = ImportCompiled();
         var block = compiled.Worldspaces.Records.Single(w => w.FormKey == _fixture.Worldspace)

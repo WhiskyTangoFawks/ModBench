@@ -169,9 +169,10 @@ internal static class SpatialContainerMint
         while (true)
         {
             var scratchChild = Directory.EnumerateDirectories(scratchLevel).Single();
-            var identity = WithoutOrderPrefix(Path.GetFileName(scratchChild));
+            var identity = SourceUnitResolver.WithoutOrderPrefix(Path.GetFileName(scratchChild));
             var existing = Directory.EnumerateDirectories(destinationLevel)
-                .SingleOrDefault(d => WithoutOrderPrefix(Path.GetFileName(d)).Equals(identity, StringComparison.Ordinal));
+                .SingleOrDefault(d =>
+                    SourceUnitResolver.WithoutOrderPrefix(Path.GetFileName(d)).Equals(identity, StringComparison.Ordinal));
 
             if (existing == null)
             {
@@ -184,11 +185,4 @@ internal static class SpatialContainerMint
             destinationLevel = existing;
         }
     }
-
-    /// <summary>The name's identity half — <see cref="SourceUnitResolver.TryGetOrderIndex"/>'s own
-    /// recognition of a genuine <c>"[N] "</c> prefix, minus that prefix.</summary>
-    private static string WithoutOrderPrefix(string leaf) =>
-        SourceUnitResolver.TryGetOrderIndex(leaf) is null
-            ? leaf
-            : leaf[(leaf.IndexOf("] ", StringComparison.Ordinal) + 2)..];
 }
