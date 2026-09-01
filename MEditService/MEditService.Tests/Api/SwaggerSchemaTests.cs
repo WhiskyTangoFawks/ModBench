@@ -91,6 +91,76 @@ public sealed class SwaggerSchemaTests
         Assert.False(prop.TryGetProperty("allOf", out _));
     }
 
+    // #644: a dictionary whose VALUE is a nullable $ref (C# `Dictionary<string, ParsedCondition?>`)
+    // arrives through `additionalProperties`, not the per-property pass the two tests above cover.
+    // Same OpenAPI 3.0 restriction, same fix shape: additionalProperties can't be a bare $ref next
+    // to `nullable: true`, so a genuinely-nullable value needs the same allOf wrap.
+    [Fact]
+    public async Task NullableRefDictionaryValue_IsNullableViaAllOfWrapper()
+    {
+        var root = await GetSchemaAsync();
+        var additionalProperties = root.GetProperty("components").GetProperty("schemas")
+            .GetProperty("ConditionDiff").GetProperty("properties").GetProperty("perPlugin")
+            .GetProperty("additionalProperties");
+
+        // Not a bare $ref — OpenAPI 3.0 can't attach `nullable` to one.
+        Assert.False(additionalProperties.TryGetProperty("$ref", out _));
+
+        Assert.True(additionalProperties.TryGetProperty("nullable", out var nullable));
+        Assert.True(nullable.GetBoolean());
+
+        Assert.True(additionalProperties.TryGetProperty("allOf", out var allOf));
+        Assert.Equal(1, allOf.GetArrayLength());
+        Assert.Equal("#/components/schemas/ParsedCondition", allOf[0].GetProperty("$ref").GetString());
+    }
+
+    // Complement of the above, on a dictionary whose value is a non-nullable $ref (C#
+    // `IReadOnlyDictionary<string, ConflictThis>`, an enum) — the filter must not wrap
+    // indiscriminately, only genuinely-nullable dictionary values.
+    [Fact]
+    public async Task NonNullableRefDictionaryValue_StaysBareRef()
+    {
+        var root = await GetSchemaAsync();
+        var additionalProperties = root.GetProperty("components").GetProperty("schemas")
+            .GetProperty("FieldDiff").GetProperty("properties").GetProperty("cellStates")
+            .GetProperty("additionalProperties");
+
+        Assert.True(additionalProperties.TryGetProperty("$ref", out var reference));
+        Assert.Equal("#/components/schemas/ConflictThis", reference.GetString());
+        Assert.False(additionalProperties.TryGetProperty("nullable", out _));
+        Assert.False(additionalProperties.TryGetProperty("allOf", out _));
+    }
+
+    // The discriminating control: `FieldDiff.Resolutions` is
+    // `IReadOnlyDictionary<string, FormKeyResolution>? Resolutions` — the *property* is nullable,
+    // but a dictionary's own schema is inline (not a bare $ref), so OpenAPI 3.0's sibling
+    // restriction never applied to it in the first place: Swashbuckle's own
+    // SupportNonNullableReferenceTypes already puts `nullable: true` directly on it, no allOf
+    // wrap needed or present. The dictionary's *value* type (FormKeyResolution) is not nullable.
+    // An implementation that reads nullability off the property instead of the dictionary's own
+    // second generic type argument would wrap `additionalProperties` here too — and neither test
+    // above would catch it, since one is nullable at both levels and the other at neither. This is
+    // the one case nullable at exactly one of the two levels, and it must land exactly there.
+    [Fact]
+    public async Task NullablePropertyWithNonNullableDictionaryValue_WrapsOnlyTheProperty()
+    {
+        var root = await GetSchemaAsync();
+        var prop = root.GetProperty("components").GetProperty("schemas")
+            .GetProperty("FieldDiff").GetProperty("properties").GetProperty("resolutions");
+
+        // Outer: nullable sits directly on the dictionary's own inline schema — no allOf wrap.
+        Assert.True(prop.TryGetProperty("nullable", out var nullable));
+        Assert.True(nullable.GetBoolean());
+        Assert.False(prop.TryGetProperty("allOf", out _));
+
+        // Inner: the dictionary's value is a non-nullable $ref and must stay bare.
+        var additionalProperties = prop.GetProperty("additionalProperties");
+        Assert.True(additionalProperties.TryGetProperty("$ref", out var reference));
+        Assert.Equal("#/components/schemas/FormKeyResolution", reference.GetString());
+        Assert.False(additionalProperties.TryGetProperty("nullable", out _));
+        Assert.False(additionalProperties.TryGetProperty("allOf", out _));
+    }
+
     // Swashbuckle never reads C#'s nullable-reference-type annotations on its own, so without a
     // filter no property lands in `required` at all and openapi-typescript types the whole wire
     // optional-and-nullable — which is what the frontend used to hand-compensate for, field by

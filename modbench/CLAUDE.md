@@ -68,7 +68,10 @@ This holds because the OpenAPI schema reports C# nullability and enums honestly 
 `NullabilitySchemaFilter` + `SupportNonNullableReferenceTypes()` (`Program.cs`) put non-nullable
 properties in `required` and keep them off `nullable`, and every wire-reaching enum carries
 `[JsonConverter(typeof(JsonStringEnumConverter))]`. So a non-nullable C# `string Name` arrives as
-`name: string` — **not** `name?: string | null`. A `??` default or a trust-cast on a wire field is
+`name: string` — **not** `name?: string | null`. Dictionary **values** carry their nullability too
+(#644): `Dictionary<string, T?>` arrives as `{ [key: string]: T | null }` whether `T` is a `$ref`
+or an inline schema — the filter wraps a nullable `$ref` value in `allOf`, since OpenAPI 3.0
+forbids a sibling `nullable` next to a `$ref`. A `??` default or a trust-cast on a wire field is
 now a bug, not defensive coding. `SwaggerSchemaTests`/`WireEnumSerializationTests` (backend) and the
 three `Assert<Exact<…>>` checks in `webview/src/types.test.ts` (checked by `npm run build`, not
 vitest) pin all of that.

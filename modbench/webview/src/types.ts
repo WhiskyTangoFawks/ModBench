@@ -172,15 +172,7 @@ export type VmadScriptDiff = Omit<Schemas['VmadScriptDiff'], 'properties'> & {
 
 export type VmadCompare = { scripts: VmadScriptDiff[] };
 
-/** `perPlugin`'s values are nullable (null = that plugin lacks this condition row) and the
- *  generated type cannot say so: the C# is `Dictionary<string, ParsedCondition?>`, but OpenAPI 3.0
- *  forbids a sibling `nullable` next to the `$ref` an object-typed dictionary *value* becomes.
- *  NullabilitySchemaFilter fixes exactly that shape for *properties*; dictionary values reach the
- *  schema through `additionalProperties` and are a separate, still-open gap. Narrowed here rather
- *  than left wrong, and named rather than left as an unexplained divergence. */
-export type ConditionDiff = Omit<Schemas['ConditionDiff'], 'perPlugin'> & {
-  perPlugin: Record<string, ParsedCondition | null>;
-};
+export type ConditionDiff = Schemas['ConditionDiff'];
 
 export type ConditionGroupDiff = Omit<Schemas['ConditionGroupDiff'], 'conditions'> & {
   conditions: ConditionDiff[];
