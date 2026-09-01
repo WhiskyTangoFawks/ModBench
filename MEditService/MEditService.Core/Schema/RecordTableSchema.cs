@@ -180,11 +180,24 @@ public sealed class RecordTableSchema
     public required bool HasVmad { get; init; }
 
     /// <summary>
-    /// Per-plugin column extractors for the synthetic "header" table only (null for every
+    /// Per-mod column extractors for the synthetic "header" record type only (null for every
     /// other schema). A mod header is never an <see cref="IMajorRecordGetter"/>, so
     /// <see cref="ColumnSpec.Extract"/> is structurally unusable for it — this is the real
-    /// extraction path, positionally aligned with <see cref="RecordColumns"/>, invoked once per
-    /// plugin against the mod itself rather than per-record.
+    /// extraction path, positionally aligned with <see cref="RecordColumns"/>, invoked against a mod
+    /// rather than a record.
+    ///
+    /// <para>Non-null <b>is</b> how the read path recognises the header schema
+    /// (<c>DuckDbRecordIndex.DocumentFromBody</c>) and how the two schema-completeness sweeps skip it
+    /// (<c>SchemaReflectorLeafCoverageCompletenessTests</c>): it is the one structural fact
+    /// distinguishing a schema whose columns hang off an <see cref="IModGetter"/> from every schema
+    /// whose columns hang off an <see cref="IMajorRecordGetter"/>. Prefer it to comparing a table
+    /// name — that is a value, this is the actual difference.</para>
+    ///
+    /// <para>#631: the mod these run against is no longer the live plugin at index time. The header's
+    /// document (the whole-mod door's root <c>RecordData.json</c>) is stored in <c>records.body</c>
+    /// like every other row's, and these delegates run against the mod that document reads back into
+    /// — so a header field is produced by the same delegate whether it came from a plugin binary or
+    /// from its own source text, exactly as <see cref="ColumnSpec.Extract"/> is for a record.</para>
     /// </summary>
     public IReadOnlyList<Func<IModGetter, object?>>? HeaderColumnExtract { get; init; }
 }

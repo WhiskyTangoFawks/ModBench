@@ -186,10 +186,13 @@ public sealed class RecordQueryService(
         origin ??= PluginOriginResolver.Resolve(_mirror.LoadOrder, plugin);
         var schemas = RequireSchemas();
 
-        // The header is never in `records`, so it is already absent from the result without an
-        // explicit exclusion.
+        // #631: the header IS in `records` now — one row per plugin, grouped by record_type like
+        // every other — so this exclusion has to be real rather than a side effect of the header
+        // living somewhere else. Without it "Main File Header" appears as a browsable record-type
+        // node (count 1) under every plugin, which is not how the header is reached
+        // (GetPluginRecordTypes_ExcludesHeader is the standing guard).
         return [.. reads.GetRecordTypeCounts(new PluginKey(plugin, origin))
-            .Where(c => schemas.ContainsKey(c.Type))
+            .Where(c => c.Type != HeaderTableName && schemas.ContainsKey(c.Type))
             .Select(c => new PluginRecordTypeCount(c.Type, c.Count, schemas.DisplayNameFor(c.Type)))
             .OrderBy(r => r.Type)];
     }

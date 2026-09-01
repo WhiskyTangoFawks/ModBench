@@ -84,6 +84,32 @@ structure from the tree. The generated whole-mod serializer is the designated do
 ingest and compile (always with a sequential dropoff); the per-record codec serves untracked
 ingest, typed reads and point writes, byte-identical to the whole-mod door by test.
 
+**The mod header is an ordinary record row, and the whole-mod door is its codec** (#631
+amendment). The header's body is the root `RecordData.json` this decision already names as part of
+the source, so it is a `records` row like any other — `record_type`, `ref`, `body`, and a
+`content_hash` that is a real git object name. A `ModHeader` is not an `IMajorRecordGetter`, so the
+per-record codec structurally cannot carry it; the only alternative to the whole-mod door would be a
+hand-rolled copy of that door's own `{ModKey, GameRelease, ModHeader}` wrapper, which is exactly the
+second dialect the door exists to prevent. So the designated-door list gains a fourth entry,
+`HeaderDocument` (both directions), and the whitelist test grows one line.
+
+That list is a cost control, not a taboo — whole-mod export was measured at 21 s / 132,787 files for
+a 20 MB plugin, and the doors on it are the ones that pay that cost deliberately and once. This
+entry satisfies the control rather than being excused from it: it serializes a *header-only clone*,
+which produces the byte-identical root document in **~1 ms**, against **239 ms warm / 1,510 ms cold**
+for a full walk (measured per plugin on the 3,940-record cut-down fixture). `HeaderDocumentTests`
+pins that byte equality against a real full walk, so the shortcut cannot quietly stop being faithful.
+Both directions are in-memory: neither reads nor writes a file.
+
+One consequence is deliberate, one deferred. **Deliberate**: the header participates in
+Head/Effective, winner selection and `form_lookup` like every other record, instead of being the one
+recordless special case; and the two ingest paths are one producer over two readers, so "the read
+model never sees a dialect" holds for the header by construction rather than by coincidence.
+**Deferred**: it is still not a *source unit* — `SourceUnitResolver` cannot locate the root
+`RecordData.json`, so `SourceFreshness` skips it and an external edit to that file is not yet
+detected. That is a follow-up ticket, and skipping is the safe answer meanwhile: an unguarded
+freshness pass reads "no file resolves" as "the user deleted this record".
+
 **Container source units are found by scanning the tree, never by computing a path.** A
 path-computation grammar would be a second copy of the serializer's own directory-naming policy
 and could only drift from it; `SourceUnitResolver` reads the disk (one group subtree per

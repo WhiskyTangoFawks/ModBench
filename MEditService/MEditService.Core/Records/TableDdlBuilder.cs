@@ -32,25 +32,24 @@ public sealed class TableDdlBuilder(SchemaReflector reflector)
     // The list CreateRegisteredViews scopes.
     //
     // ADR-0001: `load_order_idx` lives only on `registrations` — none of these mirror
-    // tables store it. The four whose readers ask for it (records, records_committed,
-    // form_lookup, the header table) carry it as a derived column in their registered view, joined
+    // tables store it. The three whose readers ask for it (records, records_committed,
+    // form_lookup) carry it as a derived column in their registered view, joined
     // from `registrations` rather than read off the row. ADR-0044: it is
     // nullable there — a copy no plugins.txt line names has no slot — and so nullable in the views.
     //
     // ADR-0001: `is_winner` is the same story one step further out. It is never a fact about
     // a row's bytes — it is a fact about the whole registered stack a FormKey sits in — so no
-    // mirror table stores it, and the three relations whose readers ask for it
-    // (`records`, `form_lookup`, the header table) derive it in their view by joining `winners`.
+    // mirror table stores it, and the two relations whose readers ask for it
+    // (`records`, `form_lookup`) derive it in their view by joining `winners`.
     // `records_committed` is not among them: nothing reads a winner flag on it
     // (records_head answers Head).
     //
-    // All three join at Effective, the header included, even though `winners` can now express
-    // a ref. That is deliberate and unchanged from the stored flag: the header table carries no ref
-    // dimension at all — there is no committed/working-tree header text — so a Head-ref header read
-    // wants Effective's answer, exactly as Resolve/GetReferencedBy/GetPlacement do (see
-    // MEditService/CLAUDE.md, "Reads that answer from the extracted tables ... answer identically at
-    // both refs, deliberately"). `records_head` is the one relation with a stack of its own, and it
+    // Both join at Effective. `records_head` is the one relation with a stack of its own, and it
     // joins at RecordRef.Head accordingly.
+    //
+    // #631 removed a fourth entry, the header's own wide table. The plugin header is now an ordinary
+    // `records` row, so it inherits that relation's registered view, its winner join and its ref
+    // dimension rather than needing three of its own.
     private static readonly RegisteredRelation[] RegisteredRelations =
     [
         new("records", "plugin", "origin", DerivesLoadOrder: true, DerivesWinner: true),
@@ -60,7 +59,6 @@ public sealed class TableDdlBuilder(SchemaReflector reflector)
         new("placement", "plugin", "origin", DerivesLoadOrder: false, DerivesWinner: false),
         new("cell_location", "plugin", "origin", DerivesLoadOrder: false, DerivesWinner: false),
         new("container_child", "plugin", "origin", DerivesLoadOrder: false, DerivesWinner: false),
-        new(HeaderIndexer.TableName, "plugin", "origin", DerivesLoadOrder: true, DerivesWinner: true),
     ];
 
     /// <summary>The winners relation (<see cref="CreateWinnersTable"/>), named once so the sweep in
@@ -110,14 +108,12 @@ public sealed class TableDdlBuilder(SchemaReflector reflector)
         CreatePlacementTables(connection);
         CreateContainerChildTable(connection);
 
-        // ADR-0041: the reflector emits no per-type DDL. Every record type is a
-        // json_extract VIEW over `records`, bearing the type's name — which is
-        // what keeps user filter SQL working unchanged. The header is the one
-        // exception and the only surviving per-type table: a ModHeader is not a major record, so it
-        // has no document to project a view over.
+        // ADR-0041: the reflector emits no per-type DDL at all. Every record type is a json_extract
+        // VIEW over `records`, bearing the type's name — which is what keeps user filter SQL working
+        // unchanged. Since #631 that includes the plugin header, which used to be the one exception
+        // (a wide table, because it had no document to project a view over) and now has a document
+        // like everything else.
         var schemas = _reflector.GetSchemas(release);
-        if (schemas.TryGetValue(HeaderIndexer.TableName, out var headerSchema))
-            CreateRecordTable(connection, headerSchema);
 
         // Views last, in dependency order: the registered views over every mirror table, then the
         // Head views over the registered `records`/`records_committed`, then the per-type views over
@@ -502,23 +498,6 @@ public sealed class TableDdlBuilder(SchemaReflector reflector)
             CREATE INDEX IF NOT EXISTS idx_container_child_parent
                 ON {MirrorSchema}.container_child(parent_form_key, plugin)
             """);
-    }
-
-    // ADR-0036: `origin` is part of every record table's identity alongside `plugin` — the
-    // composite key is (form_key, origin, plugin). Placed right after `plugin` (not load-bearing for
-    // the explicit-column-list reads in DuckDbRecordIndex, which never SELECT *).
-    private static void CreateRecordTable(DuckDBConnection connection, RecordTableSchema schema)
-    {
-        var sb = new StringBuilder();
-        sb.Append("form_key VARCHAR NOT NULL, ");
-        sb.Append("plugin VARCHAR NOT NULL, ");
-        sb.Append(CultureInfo.InvariantCulture, $"origin VARCHAR NOT NULL DEFAULT '{PluginOrigin.DataDirectory}', ");
-        sb.Append("editor_id VARCHAR");
-
-        foreach (var col in schema.RecordColumns)
-            sb.Append(CultureInfo.InvariantCulture, $", \"{col.Name}\" {col.DuckDbType}");
-
-        Execute(connection, $"CREATE TABLE IF NOT EXISTS {MirrorSchema}.\"{schema.TableName}\" ({sb})");
     }
 
     private static void Execute(DuckDBConnection connection, string sql)

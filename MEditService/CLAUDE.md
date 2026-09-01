@@ -157,8 +157,12 @@ C# ASP.NET Core backend. Root [CLAUDE.md](../CLAUDE.md) for project-wide invaria
     delete and renumber all renormalize their touched group folder to contiguous `[0..k]` as their
     own last file-system act (survivors keep their relative order; no persistent gaps survive a
     write), and an EditorID rename carries its own old index forward unchanged.
-  - The header is the one surviving per-type table: a `ModHeader` is not an `IMajorRecordGetter`, so
-    it has no document to project a view over.
+  - **No per-type table survives.** The plugin header used to be the exception; since #631 its body
+    is the source tree's root `RecordData.json`, produced and read back through the whole-mod door
+    (`Records/HeaderDocument`) because a `ModHeader` is not an `IMajorRecordGetter` and the
+    per-record codec therefore cannot carry it. It is an ordinary `records` row with a view like
+    every other type — its columns just sit one level deeper in the document
+    (`$.ModHeader.Author`), which lives in the column's own `PropertyName`.
 - **Editing is a working-tree change to text, and there is exactly one write path**
   (ADR-0041). `Edits/RecordEditService.EditField` reads the record's source file, applies the field,
   writes the file back atomically, and tells the index what landed. It reads the **file**, not the
@@ -212,8 +216,11 @@ C# ASP.NET Core backend. Root [CLAUDE.md](../CLAUDE.md) for project-wide invaria
     express the other. Both re-derive the record's extracted rows (`form_lookup`,
     `form_references`) through the same collectors ingest uses.
   - Reads that answer from the **extracted** tables (`Resolve`, `GetReferencedBy`, `GetPlacement`)
-    and the header table answer identically at both refs, deliberately: those carry no ref
-    dimension and track Effective, which is the answer their consumers want.
+    answer identically at both refs, deliberately: those carry no ref dimension and track Effective,
+    which is the answer their consumers want. The plugin header is no longer among them — it has a
+    ref dimension like every other `records` row since #631, though nothing in that change can
+    actually diverge it (`SourceFreshness` skips it, `EditField` refuses it, and the structural Head
+    reconcile diffs through `EnumerateMajorRecords`, which a `ModHeader` is not in).
 - **`SourceRepository.CommittedSourceHashes`/`ReadCommittedSourceText` ask what `HEAD` holds** — not
   what the working tree holds against the index, which is `WorkingTreeStatus` (as are
   `CommitPristineToMain` and the rebase verbs). The two diverge after exactly the events these

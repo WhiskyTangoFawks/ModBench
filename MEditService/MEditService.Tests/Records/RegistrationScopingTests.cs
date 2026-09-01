@@ -31,7 +31,7 @@ public class RegistrationScopingTests
     private sealed record Fixture(
         DuckDbRecordIndex Repo, string SharedNpcFk, string BetaNpcFk, string BetaRaceFk,
         string BetaWorldspaceFk, string BetaCellFk, string BetaPlacedFk, string BetaQuestFk, string BetaTopicFk,
-        int BetaRecordCount) : IDisposable
+        int BetaRowCount) : IDisposable
     {
         public void Dispose() => Repo.Dispose();
     }
@@ -84,8 +84,11 @@ public class RegistrationScopingTests
         repo.Index((IModGetter)beta, Registration.Participating(1), BetaKey);
         repo.UpdateWinners();
 
+        // +1 for the plugin header's own row (#631): it is an ordinary `records` row but is not an
+        // IMajorRecordGetter, so EnumerateMajorRecords cannot count it. This is a row count, not a
+        // record count — hence the name.
         return new Fixture(repo, sharedNpcFk, betaNpc, betaRace, betaWrld, betaCell, betaPlaced, betaQuest, betaTopic,
-            beta.EnumerateMajorRecords().Count());
+            beta.EnumerateMajorRecords().Count() + 1);
     }
 
     private static long Scalar(DuckDbRecordIndex repo, string sql, params object[] args)
@@ -99,9 +102,10 @@ public class RegistrationScopingTests
     private static long RowsFor(DuckDbRecordIndex repo, string relation, PluginKey key) =>
         Scalar(repo, $"SELECT COUNT(*) FROM {relation} WHERE plugin = $1 AND origin = $2", key.Name, key.Origin!);
 
+    // Every schema key, with no exclusion: #631 gave the plugin header a generated view like every
+    // other record type, so it is swept here rather than named as a relation of its own below.
     private static IEnumerable<string> GeneratedViews() =>
-        Reflector.GetSchemas(GameRelease.Fallout4).Keys
-            .Where(t => !string.Equals(t, HeaderIndexer.TableName, StringComparison.OrdinalIgnoreCase));
+        Reflector.GetSchemas(GameRelease.Fallout4).Keys;
 
     [Fact]
     public void Unregister_LeavesRowsInPlace_AndNoReadAnswersForThePlugin()
@@ -110,7 +114,7 @@ public class RegistrationScopingTests
         var repo = fx.Repo;
 
         // Premise: registered, everything answers — otherwise the emptiness below proves nothing.
-        Assert.Equal(fx.BetaRecordCount, repo.GetDocuments(BetaKey).Count);
+        Assert.Equal(fx.BetaRowCount, repo.GetDocuments(BetaKey).Count);
         Assert.Equal(2, repo.GetOverrideStack(fx.SharedNpcFk)!.Entries.Count);
         Assert.NotEmpty(repo.GetReferencedBy(fx.BetaRaceFk));
         Assert.NotNull(repo.GetPlacement(fx.BetaPlacedFk, BetaKey));
@@ -120,8 +124,8 @@ public class RegistrationScopingTests
         repo.UpdateWinners();
 
         // The rows demonstrably remain — the mirror schema is the one door that sees them.
-        Assert.Equal(fx.BetaRecordCount, RowsFor(repo, "mirror.records", BetaKey));
-        foreach (var table in new[] { "mirror.form_lookup", "mirror.placement", "mirror.cell_location", "mirror.container_child", "mirror.header" })
+        Assert.Equal(fx.BetaRowCount, RowsFor(repo, "mirror.records", BetaKey));
+        foreach (var table in new[] { "mirror.form_lookup", "mirror.placement", "mirror.cell_location", "mirror.container_child" })
             Assert.True(RowsFor(repo, table, BetaKey) > 0, $"{table} should keep Beta's rows");
         Assert.True(Scalar(repo, "SELECT COUNT(*) FROM mirror.form_references WHERE source_plugin = $1 AND source_origin = $2",
             BetaKey.Name, BetaKey.Origin!) > 0);
@@ -180,7 +184,10 @@ public class RegistrationScopingTests
         var repo = fx.Repo;
         repo.Unregister(BetaKey);
 
-        Assert.All(new[] { "records", "records_head", "form_lookup", "placement", "cell_location", "container_child", "header" },
+        // "header" is deliberately absent from this list since #631 — it is no longer a relation of
+        // its own, and its rows are covered twice over: by `records` here and by the generated
+        // "header" view in the sweep below.
+        Assert.All(new[] { "records", "records_head", "form_lookup", "placement", "cell_location", "container_child" },
             relation => Assert.Equal(0, RowsFor(repo, relation, BetaKey)));
         Assert.Equal(0, Scalar(repo, "SELECT COUNT(*) FROM form_references WHERE source_plugin = $1 AND source_origin = $2",
             BetaKey.Name, BetaKey.Origin!));
@@ -205,7 +212,7 @@ public class RegistrationScopingTests
         repo.Register(BetaKey, Registration.Participating(1));
         repo.UpdateWinners();
 
-        Assert.Equal(fx.BetaRecordCount, repo.GetDocuments(BetaKey).Count);
+        Assert.Equal(fx.BetaRowCount, repo.GetDocuments(BetaKey).Count);
         var stack = repo.GetOverrideStack(fx.SharedNpcFk)!.Entries;
         Assert.Equal(2, stack.Count);
         Assert.True(stack.Single(e => e.Plugin.Name == BetaKey.Name).IsWinner);

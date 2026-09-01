@@ -52,7 +52,14 @@ public class GetDocumentsTests
 
         var documents = repo.GetDocuments(key);
 
-        Assert.Equal(mod.EnumerateMajorRecords().Count(), documents.Count);
+        // Every major record, plus the plugin header's own document (#631) — which
+        // EnumerateMajorRecords structurally cannot count, a ModHeader not being one. Asserted as its
+        // own presence rather than folded into a "+1", so this still fails if the extra row is
+        // something else entirely.
+        Assert.Equal(mod.EnumerateMajorRecords().Count() + 1, documents.Count);
+        Assert.Single(documents, d => d.RecordType == HeaderIndexer.RecordType);
+        // ...and the point-read parity below covers the header on the same terms as every record,
+        // which is the whole claim of the change: one read path, no special case.
         Assert.All(documents, doc =>
         {
             var pointRead = repo.GetDocument(doc.FormKey, key);
@@ -88,13 +95,23 @@ public class GetDocumentsTests
         repo.Index(modA, Registration.Participating(0), new PluginKey("Shared.esp", "ModA"));
         repo.Index(modB, Registration.Participating(1), new PluginKey("Shared.esp", "ModB"));
 
+        // Records only: each copy also carries its own header document since #631, which is scoped
+        // by origin exactly like the records are (asserted separately below) but says nothing about
+        // the per-origin *record* scoping this test is about.
         var fromA = repo.GetDocuments(new PluginKey("Shared.esp", "ModA"));
         var fromB = repo.GetDocuments(new PluginKey("Shared.esp", "ModB"));
+        var recordsFromA = fromA.Where(d => d.RecordType != HeaderIndexer.RecordType).ToList();
+        var recordsFromB = fromB.Where(d => d.RecordType != HeaderIndexer.RecordType).ToList();
 
-        var single = Assert.Single(fromA);
+        var single = Assert.Single(recordsFromA);
         Assert.Equal("FromModA", single.EditorId);
         Assert.Equal("ModA", single.Plugin.Origin);
-        Assert.Equal(2, fromB.Count);
-        Assert.All(fromB, d => Assert.Equal("ModB", d.Plugin.Origin));
+        Assert.Equal(2, recordsFromB.Count);
+        Assert.All(recordsFromB, d => Assert.Equal("ModB", d.Plugin.Origin));
+
+        // ADR-0036: the header is per-copy too — one each, each carrying its own origin, never one
+        // shared row keyed on the filename the two copies have in common.
+        Assert.Equal("ModA", Assert.Single(fromA, d => d.RecordType == HeaderIndexer.RecordType).Plugin.Origin);
+        Assert.Equal("ModB", Assert.Single(fromB, d => d.RecordType == HeaderIndexer.RecordType).Plugin.Origin);
     }
 }

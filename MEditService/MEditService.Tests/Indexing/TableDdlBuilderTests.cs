@@ -82,33 +82,6 @@ public class TableDdlBuilderTests
         Assert.Contains("editor_id", cols);
     }
 
-    [Fact]
-    public void CreateTables_CreatesHeaderTable_WithAuthorFlagsMastersColumns()
-    {
-        // The header table is entirely schema-driven — no DDL changes
-        // needed once SchemaReflector's schemas dictionary carries a "header" entry.
-        using var conn = OpenMemory();
-        _builder.CreateTables(conn, GameRelease.Fallout4);
-
-        var cols = GetColumns(conn, "header");
-        Assert.Contains("form_key", cols);
-        Assert.Contains("plugin", cols);
-        Assert.Contains("load_order_idx", cols);
-        Assert.Contains("is_winner", cols);
-        Assert.Contains("editor_id", cols);
-        Assert.Contains("author", cols);
-        Assert.Contains("flags", cols);
-        Assert.Contains("masters", cols);
-    }
-
-    [Fact]
-    public void CreateTables_IsIdempotent()
-    {
-        using var conn = OpenMemory();
-        _builder.CreateTables(conn, GameRelease.Fallout4);
-        _builder.CreateTables(conn, GameRelease.Fallout4); // should not throw
-    }
-
     // ADR-0001: load order lives only on `registrations`. The mirror record-shaped
     // tables carry file-derived facts only; `load_order_idx` reaches a reader exclusively through
     // the registered view's join to `registrations` (TableDdlBuilder.CreateRegisteredViews), never
@@ -117,7 +90,6 @@ public class TableDdlBuilderTests
     [InlineData("records")]
     [InlineData("records_committed")]
     [InlineData("form_lookup")]
-    [InlineData("header")]
     public void MirrorRecordShapedTables_CarryNoLoadOrderColumn(string tableName)
     {
         using var conn = OpenMemory();
@@ -135,7 +107,6 @@ public class TableDdlBuilderTests
     [InlineData("records")]
     [InlineData("records_committed")]
     [InlineData("form_lookup")]
-    [InlineData("header")]
     public void RegisteredViews_StillExposeLoadOrderIndex_DerivedFromRegistrations(string tableName)
     {
         using var conn = OpenMemory();
@@ -153,7 +124,6 @@ public class TableDdlBuilderTests
     [InlineData("records")]
     [InlineData("records_committed")]
     [InlineData("form_lookup")]
-    [InlineData("header")]
     public void MirrorRecordShapedTables_CarryNoWinnerColumn(string tableName)
     {
         using var conn = OpenMemory();
@@ -170,7 +140,6 @@ public class TableDdlBuilderTests
     [Theory]
     [InlineData("records", true)]
     [InlineData("form_lookup", true)]
-    [InlineData("header", true)]
     [InlineData("records_head", true)]
     [InlineData("records_committed", false)]
     public void RegisteredViews_ExposeWinner_OnlyWhereAReaderAsksForIt(string relation, bool exposesWinner)

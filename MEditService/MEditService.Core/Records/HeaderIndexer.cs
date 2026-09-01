@@ -1,50 +1,84 @@
+using System.Text;
 using DuckDB.NET.Data;
-using MEditService.Core.Schema;
+using MEditService.Core.Source;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Core.Records;
 
 /// <summary>
-/// Indexes a plugin's ModHeader as a single row in the "header" table, at the synthetic
-/// FormKey <c>000000:&lt;plugin&gt;</c>. A mod header is never an <see cref="IMajorRecordGetter"/>,
-/// so it bypasses the major-record indexing loop entirely — mirroring the VmadIndexer/
-/// PlacementWalker precedent for structurally-foreign data pulled out of that loop.
+/// Indexes a plugin's ModHeader as an <b>ordinary <c>records</c> row</b> (#631) at the synthetic
+/// FormKey <c>000000:&lt;plugin&gt;</c>, whose body is the whole-mod door's root
+/// <c>RecordData.json</c> (<see cref="HeaderDocument"/>).
+///
+/// <para>A ModHeader is never an <see cref="IMajorRecordGetter"/>, so it still bypasses the
+/// major-record indexing loop — but that is now the <i>only</i> thing special about it. It carries the
+/// same columns as every other row (<c>record_type</c>, <c>ref</c>, <c>body</c>,
+/// <c>content_hash</c>), wins its FormKey through the same sweep, is read back through the same
+/// document path, and hashes to a real git object name comparable against the source tree in one ref
+/// read (<see cref="GitBlobHash"/>) — where before it was a per-type wide table sitting outside the
+/// dual-ref model entirely.</para>
+///
+/// <para>Its FormKeys cannot collide with a record's: <see cref="FormKeyFor"/> mints them at FormID
+/// <c>000000</c>, the null form, which no major record can occupy.</para>
 /// </summary>
 internal static class HeaderIndexer
 {
-    /// <summary>The synthetic DuckDB table / record type the plugin header is indexed under.</summary>
-    internal const string TableName = "header";
+    /// <summary>The synthetic <c>record_type</c> the plugin header is indexed under. No table bears
+    /// this name any more (#631 retired the wide table) — it is a value in <c>records.record_type</c>
+    /// and a key in the reflected schema map, nothing else.</summary>
+    internal const string RecordType = "header";
 
     /// <summary>
-    /// The header's masters column name — single source of truth shared by
-    /// <c>SchemaReflector</c> (column definition) and the write path (validation-time
-    /// rejection guard, ADR-0038). Not read by <c>PluginWriter</c>: masters are
-    /// wholly content-derived at write time, unconditionally, so there is nothing to key
-    /// a write-time override off of.
+    /// The header's masters field name — the reflected schema's own column
+    /// (<c>SchemaReflector.BuildHeaderSchema</c>), which carries <c>Apply: null</c> so a write against
+    /// it is refused as not-writable rather than silently accepted (#335/ADR-0038: masters are wholly
+    /// content-derived at compile time, unconditionally, so there is nothing to key a write-time
+    /// override off of).
+    ///
+    /// <para><b>Not currently reachable, and that is worth knowing before relying on it.</b> An
+    /// <c>EditField</c> against a header FormKey refuses earlier, at
+    /// <c>RecordEditRefusal.SourceUnitNotFound</c>: <c>SourceUnitResolver.Resolve</c> cannot locate a
+    /// source unit for <c>record_type == "header"</c> (no group folder, not a placement, and the root
+    /// <c>RecordData.json</c> carries no FormKey in its name for the fallback scan to match), so
+    /// <c>RecordFieldWriter</c> never consults this column at all. The guard is kept as the leaf
+    /// answer for when that changes — making the header a first-class source unit is its own ticket —
+    /// not because it is doing work today.</para>
     /// </summary>
     internal const string MastersFieldName = "masters";
 
     public static string FormKeyFor(ModKey plugin) => FormKey.Factory($"000000:{plugin}").ToString();
 
-    public static void Index(
-        IModGetter pluginMod, string plugin, string origin,
-        RecordTableSchema headerSchema, DuckDBAppender appender)
+    /// <summary>
+    /// Appends this plugin's header row onto the shared <c>records</c> appender, and returns the
+    /// <c>form_lookup</c> row that goes with it.
+    ///
+    /// <para>No delete step of its own: the row lives in <c>records</c>, which
+    /// <c>PluginIngest.DeletePriorDocuments</c> already clears wholesale for this (plugin, origin)
+    /// before the appender exists. Returning the lookup row rather than writing it keeps ADR-0031's
+    /// one-lookup-row-per-record-row invariant a property of a single flush instead of two writers
+    /// that could drift.</para>
+    /// </summary>
+    public static (string FormKey, string RecordType, string? EditorId) Index(
+        IModGetter pluginMod, string plugin, string origin, DuckDBAppender documentAppender)
     {
-        var extracts = headerSchema.HeaderColumnExtract;
-        if (extracts == null) return;
+        var formKey = FormKeyFor(pluginMod.ModKey);
+        var body = HeaderDocument.Write(pluginMod);
 
-        var row = appender.CreateRow();
-        row.AppendValue(FormKeyFor(pluginMod.ModKey));
+        var row = documentAppender.CreateRow();
+        row.AppendValue(formKey);
         row.AppendValue(plugin);
         row.AppendValue(origin);
+        row.AppendValue(RecordType);
         row.AppendNullValue();    // editor_id: headers have no EditorID concept
-
-        // RecordColumns and HeaderColumnExtract are always built in lockstep, one extractor per
-        // column, by SchemaReflector.BuildHeaderSchema — no bounds check needed here.
-        for (int i = 0; i < headerSchema.RecordColumns.Count; i++)
-            DuckDbRecordIndex.AppendTyped(row, extracts[i](pluginMod), headerSchema.RecordColumns[i].DuckDbType);
-
+        row.AppendValue(SourceRef.Committed);
+        row.AppendValue(Encoding.UTF8.GetString(body));
+        // Hashed from the document's own bytes, never from a string round trip — identical for the
+        // valid UTF-8 the door emits, but it keeps the hash defined by what the source file holds.
+        // Same rule, same call, as PluginIngest.PrepareRecord.
+        row.AppendValue(GitBlobHash.Of(body));
         row.EndRow();
+
+        return (formKey, RecordType, null);
     }
 }

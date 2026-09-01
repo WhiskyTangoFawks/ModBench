@@ -525,7 +525,7 @@ public sealed class RecordEditService(
 
         var release = mirror.LoadOrder!.GameRelease;
         var schemas = schemaReflector.GetSchemas(release);
-        if (recordType == HeaderIndexer.TableName || !schemas.TryGetValue(recordType, out var schema))
+        if (recordType == HeaderIndexer.RecordType || !schemas.TryGetValue(recordType, out var schema))
         {
             return RecordEditResult.Refused(
                 RecordEditRefusal.RecordTypeNotFound, $"'{recordType}' is not a creatable record type.");

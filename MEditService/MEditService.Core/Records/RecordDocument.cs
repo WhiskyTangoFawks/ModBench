@@ -5,10 +5,14 @@ namespace MEditService.Core.Records;
 /// <summary>
 /// One plugin's copy of one record, reconstituted from its stored document (ADR-0041).
 /// <see cref="Body"/> is exactly the bytes the record's source file would hold — the same document
-/// <c>records.body</c> stores — null for the header (a ModHeader is not an
-/// <see cref="Mutagen.Bethesda.Plugins.Records.IMajorRecordGetter"/>, so it has no document at
-/// all). <see cref="Fields"/> is the typed, schema-driven extraction
-/// (<see cref="Schema.ColumnSpec.Extract"/> delegates), owned by Records/.
+/// <c>records.body</c> stores. That holds for the plugin header too since #631: its body is the
+/// source tree's root <c>RecordData.json</c>, produced and read back through the whole-mod door
+/// (<see cref="HeaderDocument"/>) because a ModHeader is not an
+/// <see cref="Mutagen.Bethesda.Plugins.Records.IMajorRecordGetter"/> and the per-record codec
+/// therefore cannot carry it. <see cref="Fields"/> is the typed, schema-driven extraction
+/// (<see cref="Schema.ColumnSpec.Extract"/> delegates; <c>RecordTableSchema.HeaderColumnExtract</c>
+/// for the header, whose columns are not reachable through an <c>IMajorRecordGetter</c>), owned by
+/// Records/.
 ///
 /// <para><see cref="IsPartialForm"/>: <see cref="Schema.PartialFormFlag.IsSet"/> read off the
 /// live deserialized record at the same point <see cref="Fields"/> is extracted — always false for
