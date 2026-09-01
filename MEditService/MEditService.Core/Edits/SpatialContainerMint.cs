@@ -90,9 +90,21 @@ internal static class SpatialContainerMint
     /// directory, then folds only its <c>Worldspaces</c> subtree into the destination's existing
     /// source tree (<see cref="SourceTreeMerge.MergeAdditively"/>) — never the synthetic mod's own
     /// root-level header file, which is a bare default the destination's real, already-tracked header
-    /// must not be merged against.</summary>
+    /// must not be merged against.
+    ///
+    /// <para>When the destination already overrides the worldspace (#597),
+    /// <paramref name="existingWorldspaceDirectory"/> is that override's own directory — found by
+    /// scanning the destination tree (<see cref="SourceUnitResolver"/>), never computed, because its
+    /// name carries the destination's own EditorID where the synthetic bare ancestor's carries none.
+    /// The merge then starts one level down: the scratch worldspace directory's <i>contents</i>
+    /// (block → sub-block → cell) fold into the existing directory, minus the scratch worldspace's
+    /// own <see cref="SourceUnitResolver.RecordDataFileName"/> — a bare default that must never
+    /// overwrite, or merge-collide with, the destination's real worldspace document. Block and
+    /// sub-block directories that already exist are reused by name (their names are pure
+    /// coordinates, identical from both serializer runs); missing ones are created.</para></summary>
     internal static async Task<SpatialMintResult> MintAsync(
-        Fallout4Mod syntheticMod, string destinationModFolder, string destinationPluginName)
+        Fallout4Mod syntheticMod, string destinationModFolder, string destinationPluginName,
+        string? existingWorldspaceDirectory = null)
     {
         var scratchDir = Directory.CreateTempSubdirectory("medit-spatial-mint-").FullName;
         try
@@ -116,9 +128,17 @@ internal static class SpatialContainerMint
             var result = new SpatialMintResult(
                 await File.ReadAllBytesAsync(worldspaceHeaderFile), await File.ReadAllBytesAsync(cellFile));
 
-            var destinationWorldspaces = Path.Combine(
-                destinationModFolder, SourceRecordPath.RootFor(destinationPluginName), worldspacesFolder);
-            SourceTreeMerge.MergeAdditively(scratchWorldspaces, destinationWorldspaces);
+            if (existingWorldspaceDirectory != null)
+            {
+                File.Delete(worldspaceHeaderFile);
+                MergeIntoExistingWorldspace(worldspaceOwnDir, existingWorldspaceDirectory);
+            }
+            else
+            {
+                var destinationWorldspaces = Path.Combine(
+                    destinationModFolder, SourceRecordPath.RootFor(destinationPluginName), worldspacesFolder);
+                SourceTreeMerge.MergeAdditively(scratchWorldspaces, destinationWorldspaces);
+            }
 
             return result;
         }
@@ -127,4 +147,48 @@ internal static class SpatialContainerMint
             Directory.Delete(scratchDir, recursive: true);
         }
     }
+
+    /// <summary>
+    /// Folds the synthetic worldspace's single block → sub-block → cell path into an existing
+    /// worldspace directory. At each level, a destination directory whose identity (name minus the
+    /// <c>"[N] "</c> ordering prefix) matches the scratch child is descended into rather than
+    /// duplicated; the first level with no match is the genuinely-new subtree, renamed to the
+    /// destination's own next order index (<see cref="SourceUnitResolver.NextOrderIndex"/> — the
+    /// scratch serializer numbered it within a one-child synthetic mod, so its prefix is meaningless
+    /// here) and merged whole. Group-level files at a descended level (a <c>GroupRecordData.json</c>
+    /// the destination necessarily already has, since it has children there) are deliberately left
+    /// the destination's own.
+    ///
+    /// <para>Terminates: the cell itself is always new — <see cref="RecordCopy.MintExteriorCell"/>
+    /// refuses a FormKey the destination already holds before minting anything.</para>
+    /// </summary>
+    private static void MergeIntoExistingWorldspace(string scratchWorldspaceDir, string existingWorldspaceDir)
+    {
+        var scratchLevel = scratchWorldspaceDir;
+        var destinationLevel = existingWorldspaceDir;
+        while (true)
+        {
+            var scratchChild = Directory.EnumerateDirectories(scratchLevel).Single();
+            var identity = WithoutOrderPrefix(Path.GetFileName(scratchChild));
+            var existing = Directory.EnumerateDirectories(destinationLevel)
+                .SingleOrDefault(d => WithoutOrderPrefix(Path.GetFileName(d)).Equals(identity, StringComparison.Ordinal));
+
+            if (existing == null)
+            {
+                var newName = $"[{SourceUnitResolver.NextOrderIndex(destinationLevel)}] {identity}";
+                SourceTreeMerge.MergeAdditively(scratchChild, Path.Combine(destinationLevel, newName));
+                return;
+            }
+
+            scratchLevel = scratchChild;
+            destinationLevel = existing;
+        }
+    }
+
+    /// <summary>The name's identity half — <see cref="SourceUnitResolver.TryGetOrderIndex"/>'s own
+    /// recognition of a genuine <c>"[N] "</c> prefix, minus that prefix.</summary>
+    private static string WithoutOrderPrefix(string leaf) =>
+        SourceUnitResolver.TryGetOrderIndex(leaf) is null
+            ? leaf
+            : leaf[(leaf.IndexOf("] ", StringComparison.Ordinal) + 2)..];
 }

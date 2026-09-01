@@ -141,11 +141,10 @@ internal sealed class RecordCopy(ILoadOrderMirror mirror, SchemaReflector schema
     /// serializing). Shared by <see cref="RecordEditService.CopyRecordAsOverride"/>'s own exterior-Cell
     /// branch and <see cref="CopyPlacedReferenceAsOverride"/>'s own exterior branch.
     ///
-    /// <para>Never mints into a worldspace the destination already overrides: a second mint into an
-    /// already-existing WRLD directory risks a colliding sibling folder for the same FormKey rather
-    /// than landing inside the one that already exists there — the supported case is a destination
-    /// with no CELL/WRLD override to start with, refused rather than silently routed
-    /// around or half-implemented.</para>
+    /// <para>A destination that already overrides the worldspace (#597) keeps that override
+    /// untouched — document, index row and Partial Form flag all exactly as they were — and the new
+    /// block/sub-block/cell merge into its existing directory, resolved by scan
+    /// (<see cref="SpatialContainerMint.MintAsync"/>'s own doc comment has the naming argument).</para>
     ///
     /// <para>Writes the worldspace's and cell's own index rows from the exact bytes
     /// <see cref="SpatialContainerMint.MintAsync"/> wrote to the working tree
@@ -171,14 +170,22 @@ internal sealed class RecordCopy(ILoadOrderMirror mirror, SchemaReflector schema
                 $"{cellFormKey} has no recorded parent worldspace — cannot place it.");
         }
 
+        // The destination may already override the worldspace (#597 — the common real-world case:
+        // any plugin already touching this WRLD). Then the mint merges *into* that override's own
+        // directory — resolved by scanning the tree (its name carries the destination's EditorID,
+        // which the bare synthetic ancestor's never would) — and the WRLD's own document and index
+        // row are left exactly as they are.
         var reads = index.At(RecordRef.Effective);
-        if (reads.GetDocument(worldspaceFormKey, destinationPlugin) != null)
+        var existingWorldspace = reads.GetDocument(worldspaceFormKey, destinationPlugin);
+        string? existingWorldspaceDirectory = null;
+        if (existingWorldspace != null)
         {
-            return RecordEditResult.Refused(
-                RecordEditRefusal.ContainerParentMissingInDestination,
-                $"{destinationPlugin.Name} already overrides worldspace {worldspaceFormKey}, but not cell {cellFormKey} — " +
-                "placing a new cell inside an existing worldspace override is not supported yet; " +
-                "only a destination with neither the worldspace nor the cell can be copied into.");
+            var worldspaceUnit = SourceUnitResolver.Resolve(
+                reads, destinationPlugin, destinationModFolder, worldspaceFormKey,
+                existingWorldspace.RecordType, existingWorldspace.EditorId, release)
+                ?? throw new InvalidOperationException(
+                    $"{worldspaceFormKey} is indexed in {destinationPlugin.Name} but SourceUnitResolver cannot find its source unit.");
+            existingWorldspaceDirectory = Path.GetDirectoryName(worldspaceUnit.FullPath)!;
         }
 
         var sourceWorldspaceDocument = reads.GetDocument(worldspaceFormKey, sourcePlugin)
@@ -189,12 +196,16 @@ internal sealed class RecordCopy(ILoadOrderMirror mirror, SchemaReflector schema
 
         var syntheticMod = SpatialContainerMint.BuildSyntheticWorldspaceMod(
             destinationPlugin, worldspaceAncestor, cellLocation, cellRecord, release);
-        var minted = SpatialContainerMint.MintAsync(syntheticMod, destinationModFolder, destinationPlugin.Name)
+        var minted = SpatialContainerMint.MintAsync(
+                syntheticMod, destinationModFolder, destinationPlugin.Name, existingWorldspaceDirectory)
             .GetAwaiter().GetResult();
 
-        index.CreateWorkingTreeRecord(
-            destinationPlugin, worldspaceFormKey, sourceWorldspaceDocument.RecordType,
-            Encoding.UTF8.GetString(minted.WorldspaceBody));
+        if (existingWorldspace == null)
+        {
+            index.CreateWorkingTreeRecord(
+                destinationPlugin, worldspaceFormKey, sourceWorldspaceDocument.RecordType,
+                Encoding.UTF8.GetString(minted.WorldspaceBody));
+        }
         index.CreateCellLocation(destinationPlugin, cellLocation);
         index.CreateWorkingTreeRecord(destinationPlugin, cellFormKey, "cell", Encoding.UTF8.GetString(minted.CellBody));
 

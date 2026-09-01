@@ -92,6 +92,24 @@ public sealed class ContainerCopyFixture : IDisposable
     public const string ExteriorCellEditorId = "SourceExteriorCell";
     public FormKey ExteriorCell { get; }
 
+    // Three more SubCells cells, one per #597 shape — each shares progressively more of
+    // ExteriorCell's spatial ancestry, so copying it *after* ExteriorCell exercises "the
+    // destination already overrides the WRLD (and maybe the block, and maybe the sub-block)".
+    public const int OtherBlockX = 5;
+    public const int OtherBlockY = 1;
+    public const int OtherSubX = 2;
+    public const int OtherSubY = 3;
+    public const string OtherBlockCellEditorId = "SourceOtherBlockCell";
+    public FormKey OtherBlockCell { get; }
+
+    public const int SameBlockOtherSubX = -4;
+    public const int SameBlockOtherSubY = 6;
+    public const string SameBlockCellEditorId = "SourceSameBlockCell";
+    public FormKey SameBlockCell { get; }
+
+    public const string SameSubBlockCellEditorId = "SourceSameSubBlockCell";
+    public FormKey SameSubBlockCell { get; }
+
     public const string ExteriorPersistentRefEditorId = "SourceExteriorPersistentRef";
     public FormKey ExteriorPersistentRef { get; }
 
@@ -169,6 +187,33 @@ public sealed class ContainerCopyFixture : IDisposable
         exteriorBlock.Items.Add(exteriorSubBlock);
         worldspace.SubCells.Add(exteriorBlock);
 
+        var sameSubBlockCell = new Cell(sourceMod)
+        {
+            EditorID = SameSubBlockCellEditorId,
+            Grid = new CellGrid { Point = new P2Int(ExteriorGridX + 1, ExteriorGridY + 1) },
+        };
+        exteriorSubBlock.Items.Add(sameSubBlockCell);
+
+        var sameBlockCell = new Cell(sourceMod)
+        {
+            EditorID = SameBlockCellEditorId,
+            Grid = new CellGrid { Point = new P2Int(ExteriorGridX + 2, ExteriorGridY + 2) },
+        };
+        var sameBlockOtherSub = new WorldspaceSubBlock { BlockNumberX = (short)SameBlockOtherSubX, BlockNumberY = (short)SameBlockOtherSubY };
+        sameBlockOtherSub.Items.Add(sameBlockCell);
+        exteriorBlock.Items.Add(sameBlockOtherSub);
+
+        var otherBlockCell = new Cell(sourceMod)
+        {
+            EditorID = OtherBlockCellEditorId,
+            Grid = new CellGrid { Point = new P2Int(ExteriorGridX + 3, ExteriorGridY + 3) },
+        };
+        var otherSub = new WorldspaceSubBlock { BlockNumberX = (short)OtherSubX, BlockNumberY = (short)OtherSubY };
+        otherSub.Items.Add(otherBlockCell);
+        var otherBlock = new WorldspaceBlock { BlockNumberX = (short)OtherBlockX, BlockNumberY = (short)OtherBlockY };
+        otherBlock.Items.Add(otherSub);
+        worldspace.SubCells.Add(otherBlock);
+
         sourceMod.Worldspaces.Add(worldspace);
 
         sourceMod.WriteToBinary(sourcePath);
@@ -179,6 +224,8 @@ public sealed class ContainerCopyFixture : IDisposable
         (Worldspace, TopCell, TopCellRef) = (worldspace.FormKey, topCell.FormKey, topCellRef.FormKey);
         ExteriorCell = exteriorCell.FormKey;
         (ExteriorPersistentRef, ExteriorTemporaryRef) = (exteriorPersistentRef.FormKey, exteriorTemporaryRef.FormKey);
+        (OtherBlockCell, SameBlockCell, SameSubBlockCell) =
+            (otherBlockCell.FormKey, sameBlockCell.FormKey, sameSubBlockCell.FormKey);
 
         var destinationPath = Path.Combine(DestinationModFolder, DestinationPluginName);
         var destinationMod = new Fallout4Mod(ModKey.FromFileName(DestinationPluginName), Fallout4Release.Fallout4);
