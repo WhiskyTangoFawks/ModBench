@@ -378,6 +378,20 @@ internal sealed class WorkingTreeOverlay
                 WHERE l.form_key = r.form_key AND l.plugin = r.plugin AND l.origin = r.origin)
             """, formKey, key.Name, key.Origin!);
 
+        // The header (#661) is never an IMajorRecordGetter and carries no reference graph of its own
+        // — HeaderIndexer.Index never populates form_references for it at ingest either, because
+        // masters are a distinct plugin-dependency list, not a records-row FormKey reference this
+        // graph tracks. Deserializing it through the generic per-record codec below is structurally
+        // impossible (a ModHeader is not an IMajorRecord — see HeaderDocument's own doc comment), so
+        // this stops here, after the identity-only update above, clearing any stale form_references
+        // the same way a record with zero refs would (RederiveContainmentForRecord's own "harmless to
+        // call for a non-container record" reasoning applies just as much: the header is never one).
+        if (recordType == HeaderIndexer.RecordType)
+        {
+            DeleteFormReferencesForRecord(key, formKey);
+            return;
+        }
+
         var record = _codec
             .DeserializeFromBytesAsync(Encoding.UTF8.GetBytes(body), _release, recordType)
             .GetAwaiter().GetResult();

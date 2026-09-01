@@ -37,6 +37,10 @@ public sealed class ReadTimeFreshnessTests : IDisposable
 
     private string NpcRelativePath => _mod.RelativeSourcePath(_mod.Npc, "npc_", TrackedModFixture.NpcEditorId);
 
+    private string HeaderFormKey => HeaderIndexer.FormKeyFor(ModKey.FromFileName(_mod.ActualPluginName));
+
+    private string HeaderSourceFile => Path.Combine(_mod.ModFolder, "source", _mod.ActualPluginName, "RecordData.json");
+
     private void Git(params string[] args) =>
         GitCli.Run(Path.Combine(_mod.ModFolder, ".git"), _mod.ModFolder, args);
 
@@ -60,14 +64,22 @@ public sealed class ReadTimeFreshnessTests : IDisposable
     /// observes it. A single read would pass even against the broken behaviour, because
     /// <c>GetRecord</c> returns the document it fetched before the pass rewrote anything.</para>
     ///
-    /// <para>Making the header a first-class source unit — so this pass can genuinely validate it
-    /// against its own file — is separate work. Until then the honest behaviour is the one the header
-    /// had before it carried a body: the pass leaves it alone.</para>
+    /// <para><b>Reads with the header genuinely dirty</b> (#661): a hand edit outside Modbench, made
+    /// before either read below, so the guard is proven under the same condition that found the
+    /// original defect — giving the header a body put it in this pass's reach for the first time, and
+    /// an unguarded pass read "no file resolves" as "the user deleted this record" on exactly this
+    /// kind of read. The resolver now genuinely finds the file (#661 made the header a source unit),
+    /// so this is no longer a skip hiding that it cannot — it is the same read-time self-heal every
+    /// other record already gets.</para>
     /// </summary>
     [Fact]
     public void ReadingATrackedPluginsHeader_DoesNotFoldADeletionIntoTheIndex()
     {
-        var headerFormKey = HeaderIndexer.FormKeyFor(ModKey.FromFileName(_mod.ActualPluginName));
+        var headerFormKey = HeaderFormKey;
+
+        var text = File.ReadAllText(HeaderSourceFile);
+        File.WriteAllText(HeaderSourceFile, text.Replace(
+            "\"ModHeader\": {", "\"ModHeader\": {\n    \"Author\": \"RenamedByHand\",", StringComparison.Ordinal));
 
         var first = Reads().GetRecord(headerFormKey);
         Assert.NotNull(first);
@@ -79,23 +91,39 @@ public sealed class ReadTimeFreshnessTests : IDisposable
             first.Fields.Select(f => (f.Metadata.Name, f.Value?.ToString())),
             second.Fields.Select(f => (f.Metadata.Name, f.Value?.ToString())));
 
-        // The row is still there at both refs, and the working tree is still clean — a folded-in
-        // deletion would show as a missing document, a dirtied tree, or both.
+        // The row is still there at both refs — a folded-in deletion would show as a missing
+        // document, at one ref or both.
         Assert.NotNull(_mod.Mirror.Index!.At(RecordRef.Effective).GetDocument(headerFormKey, _mod.Plugin));
         Assert.NotNull(_mod.Mirror.Index!.At(RecordRef.Head).GetDocument(headerFormKey, _mod.Plugin));
-        Assert.Empty(_mod.GitStatus());
+        Assert.NotEmpty(_mod.GitStatus());
 
-        // ...and it reads as clean, not merely as present. This is the pinned statement of a
-        // deliberate limit: giving the header a `ref` dimension made a dirty/diverged indicator
-        // *representable* for the first time, and no path in this change can actually produce one —
-        // SourceFreshness skips it, EditField refuses it at SourceUnitNotFound, and
-        // SourceIngest.ReconcileHeadStructurally diffs through EnumerateMajorRecords, which a
-        // ModHeader is not in. So the record editor renders exactly what it rendered before. When
-        // the header does become a source unit, this assertion is the one that should be revisited
-        // deliberately rather than discovered.
+        // ...and it reads as genuinely dirty, not merely as present. Inverted deliberately from 631a's
+        // own version of this assertion (HasWorkingTreeChange == false, Effective.Body == Head.Body),
+        // which was the pinned statement of a deliberate limit: giving the header a ref dimension made
+        // a dirty/diverged indicator *representable*, but nothing in that change could actually
+        // produce one — SourceFreshness skipped it, EditField refused it at the gate, and the
+        // structural Head reconcile diffed through EnumerateMajorRecords, which a ModHeader is not in.
+        // #661 removed all three. This is the assertion that had to flip, not vanish.
         var entry = Assert.Single(_mod.Mirror.Index!.At(RecordRef.Effective).GetOverrideStack(headerFormKey)!.Entries);
-        Assert.False(entry.HasWorkingTreeChange);
-        Assert.Equal(entry.Effective.Body, entry.Head.Body);
+        Assert.True(entry.HasWorkingTreeChange);
+        Assert.NotEqual(entry.Effective.Body, entry.Head.Body);
+    }
+
+    /// <summary>The header's own version of the hand-edit pattern every other record already has
+    /// (<see cref="AHandEditToASourceFileOutsideModbench_IsPickedUpAtTheNextRead"/>) — an external edit
+    /// to the root <c>RecordData.json</c>, made through no path Modbench knows about, must be visible
+    /// at the very next read. Complementary to the dirty-flag proof above: this one proves the actual
+    /// content lands, not just that the row is marked dirty.</summary>
+    [Fact]
+    public void AHandEditToTheHeaderFileOutsideModbench_IsPickedUpAtTheNextRead()
+    {
+        var text = File.ReadAllText(HeaderSourceFile);
+        File.WriteAllText(HeaderSourceFile, text.Replace(
+            "\"ModHeader\": {", "\"ModHeader\": {\n    \"Author\": \"RenamedByHand\",", StringComparison.Ordinal));
+
+        var author = Reads().GetRecord(HeaderFormKey)!.Fields.Single(f => f.Metadata.Name == "author").Value;
+
+        Assert.Equal("RenamedByHand", author);
     }
 
     /// <summary>
@@ -119,12 +147,10 @@ public sealed class ReadTimeFreshnessTests : IDisposable
     [Fact]
     public void EditingAHeaderField_IsRefusedByTheColumnsMissingWriteDelegate_NowThatTheGateDoesNotBlockIt()
     {
-        var headerFormKey = HeaderIndexer.FormKeyFor(ModKey.FromFileName(_mod.ActualPluginName));
-
         var masters = EditService().EditField(
-            _mod.Plugin, headerFormKey, HeaderIndexer.MastersFieldName, Json("[\"Other.esm\"]"));
+            _mod.Plugin, HeaderFormKey, HeaderIndexer.MastersFieldName, Json("[\"Other.esm\"]"));
         var author = EditService().EditField(
-            _mod.Plugin, headerFormKey, "author", Json("\"Someone Else\""));
+            _mod.Plugin, HeaderFormKey, "author", Json("\"Someone Else\""));
 
         Assert.Equal(RecordEditRefusal.FieldReadOnly, masters.Refusal);
         // The writable-looking sibling refuses identically, which is the evidence that no
