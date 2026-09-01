@@ -217,6 +217,14 @@ public enum RecordEditRefusal
     UnderrideDestination,
 
     /// <summary>
+    /// A batch copy's commit phase hit a write fault (I/O, permissions) on one item after earlier
+    /// items already landed — the batch stops there and this marks the failed item, so the partial
+    /// landing reaches the client as ADR-0026's structured collection instead of a thrown exception
+    /// that would discard it. Never produced by validation, which refuses the batch whole.
+    /// </summary>
+    BatchWriteFailed,
+
+    /// <summary>
     /// A placed reference's own file was written, but one of the two index
     /// calls that follow it (<c>CreateWorkingTreeRecord</c> for the reference's own row,
     /// <c>ApplyWorkingTreeChanges</c> for its Cell's changed body) threw — a should-never-happen guard

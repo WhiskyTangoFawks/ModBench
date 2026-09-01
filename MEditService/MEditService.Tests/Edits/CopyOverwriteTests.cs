@@ -122,6 +122,49 @@ public sealed class CopyOverwriteTests : IDisposable
             .GetDocument(_fixture.FlatNpc.ToString(), _fixture.DestinationPlugin));
     }
 
+    // Foreseeable key problems refuse up front, not partially: a caller-typed FormKey requested
+    // twice in one batch is caught before anything writes.
+    [Fact]
+    public void CopyBatch_WithTheSameRequestedFormKeyTwice_RefusesTheWholeBatch()
+    {
+        var requested = "ABC123:" + ContainerCopyFixture.DestinationPluginName;
+        var outcome = EditService().CopyRecordsBatch(
+        [
+            new RecordCopyRequest(_fixture.SourcePlugin, _fixture.FlatNpc.ToString(), _fixture.DestinationPlugin, AsNewRecord: true, requested),
+            new RecordCopyRequest(_fixture.SourcePlugin, _fixture.Quest.ToString(), _fixture.DestinationPlugin, AsNewRecord: true, requested),
+        ]);
+
+        Assert.False(outcome.Applied);
+        Assert.Equal(RecordEditRefusal.FormKeyCollision, outcome.Refusal!.Refusal);
+        Assert.Empty(outcome.Results);
+        Assert.Null(_fixture.Mirror.Index!.At(RecordRef.Effective)
+            .GetDocument(requested, _fixture.DestinationPlugin));
+    }
+
+    // The commit-time stop: the pre-validated gate set is exactly the ticket's enumerated three
+    // (type, tracked destination, load-order direction) — parent-chain feasibility stays a
+    // commit-time answer, so a TopCell ref mid-batch stops the batch there and the response
+    // carries the partial landing (ADR-0026): item 1 landed, item 2 refused, nothing after.
+    [Fact]
+    public void CopyBatch_WithACommitTimeRefusalMidBatch_ReportsThePartialLanding()
+    {
+        var outcome = EditService().CopyRecordsBatch(
+        [
+            new RecordCopyRequest(_fixture.SourcePlugin, _fixture.FlatNpc.ToString(), _fixture.DestinationPlugin, AsNewRecord: false),
+            new RecordCopyRequest(_fixture.SourcePlugin, _fixture.TopCellRef.ToString(), _fixture.DestinationPlugin, AsNewRecord: false),
+        ]);
+
+        Assert.False(outcome.Applied);
+        Assert.Equal(2, outcome.Results.Count);
+        Assert.True(outcome.Results[0].Result.Applied);
+        Assert.False(outcome.Results[1].Result.Applied);
+        Assert.Equal(RecordEditRefusal.ContainerParentMissingInDestination, outcome.Results[1].Result.Refusal);
+
+        var reads = _fixture.Mirror.Index!.At(RecordRef.Effective);
+        Assert.NotNull(reads.GetDocument(_fixture.FlatNpc.ToString(), _fixture.DestinationPlugin));
+        Assert.Null(reads.GetDocument(_fixture.TopCellRef.ToString(), _fixture.DestinationPlugin));
+    }
+
     [Fact]
     public void CopyBatch_AllValid_LandsEveryRequest()
     {

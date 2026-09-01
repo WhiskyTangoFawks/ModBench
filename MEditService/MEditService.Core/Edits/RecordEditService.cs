@@ -747,7 +747,7 @@ public sealed class RecordEditService(
         // record keeps its existing path below; everything else still refuses (embedded children,
         // folder-split types with no copy story: Scene, Landscape, NavigationMesh).
         var isFlat = RecordTypeDispatch.For(release).FolderNameFor(document.RecordType) is not null;
-        var concreteName = RecordTypeDispatch.For(release).ConcreteFor(document.RecordType)?.Name;
+        var concreteName = CopyAsNewContainerFamilyName(document.RecordType, release);
         if (!isFlat && concreteName is "DialogTopic")
         {
             return CopyDialogTopicAsNewRecord(
@@ -920,7 +920,17 @@ public sealed class RecordEditService(
                 ?? throw new InvalidOperationException(
                     $"{sourcePlugin.Name}'s index names {child.ChildFormKey} as a child of {formKey} but holds no document for it.");
             if (ResolveTargetFormKey(index, destinationPlugin, requestedFormKey: null, out var childFormKey) is { } childRefused)
-                return childRefused;
+            {
+                // The topic (and any earlier responses) are already written — a Refused here would
+                // silently leave that partial state behind a "nothing happened" shape. Refusals
+                // precede writes; a fault after them is an exception carrying the disclosure, the
+                // same posture RenumberRecord's own mid-cascade catch documents.
+                throw new IOException(
+                    $"Allocating a FormKey for copied response {child.ChildFormKey} failed after the new topic " +
+                    $"{targetFormKey} (and {copiedChildren.Count} earlier response(s)) already landed in " +
+                    $"{destinationPlugin.Name}'s working tree — review them in the Source Control panel. " +
+                    $"Underlying refusal: {childRefused.Message}");
+            }
 
             var childRecord = ReadCopySourceRecord(sourcePlugin, child.ChildFormKey, childDocument, release)
                 .Duplicate(FormKey.Factory(childFormKey));
@@ -1107,9 +1117,12 @@ public sealed class RecordEditService(
         var plugins = mirror.LoadOrder?.Plugins;
         if (plugins == null) return null;
 
+        // A FormKey carries only a ModKey (a filename), so the origin lookup is name-based by
+        // nature; when the load order holds two same-named copies (ADR-0036's duplicate-filename
+        // case) the winning one is the one whose records the FormKey resolves against.
         var originName = FormKey.Factory(formKey).ModKey.FileName.String;
-        var originIndex = plugins.FirstOrDefault(
-            p => p.Name.Equals(originName, StringComparison.OrdinalIgnoreCase))?.LoadOrderIndex;
+        var sameNamed = plugins.Where(p => p.Name.Equals(originName, StringComparison.OrdinalIgnoreCase)).ToList();
+        var originIndex = (sameNamed.FirstOrDefault(p => p.Winning) ?? sameNamed.FirstOrDefault())?.LoadOrderIndex;
         var destinationIndex = plugins.FirstOrDefault(
             p => p.Name.Equals(destinationPlugin.Name, StringComparison.OrdinalIgnoreCase)
                 && p.Origin.Equals(destinationPlugin.Origin, StringComparison.Ordinal))?.LoadOrderIndex;
@@ -1135,8 +1148,25 @@ public sealed class RecordEditService(
     /// </summary>
     public BatchCopyOutcome CopyRecordsBatch(IReadOnlyList<RecordCopyRequest> requests)
     {
+        var seenOverrideTargets = new HashSet<(string, PluginKey)>();
+        var seenRequestedFormKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var request in requests)
         {
+            // The two foreseeable intra-batch collisions, refused up front rather than left to
+            // land partially at commit: the same record copied as an override twice into one
+            // destination, and two copy-as-new requests claiming one caller-typed FormKey.
+            if (!request.AsNewRecord && !seenOverrideTargets.Add((request.FormKey, request.DestinationPlugin)))
+            {
+                return new BatchCopyOutcome(false, request.FormKey, RecordEditResult.Refused(
+                    RecordEditRefusal.FormKeyCollision,
+                    $"{request.FormKey} is copied as an override into {request.DestinationPlugin.Name} more than once in this batch."), []);
+            }
+            if (request is { AsNewRecord: true, RequestedFormKey: { } requested } && !seenRequestedFormKeys.Add(requested))
+            {
+                return new BatchCopyOutcome(false, request.FormKey, RecordEditResult.Refused(
+                    RecordEditRefusal.FormKeyCollision,
+                    $"{requested} is requested as the new FormKey by more than one request in this batch."), []);
+            }
             if (ValidateCopyRequest(request) is { } refusal)
                 return new BatchCopyOutcome(false, request.FormKey, refusal, []);
         }
@@ -1144,15 +1174,41 @@ public sealed class RecordEditService(
         var results = new List<BatchCopyItemOutcome>();
         foreach (var request in requests)
         {
-            var result = request.AsNewRecord
-                ? CopyRecordAsNewRecord(request.SourcePlugin, request.FormKey, request.DestinationPlugin, request.RequestedFormKey)
-                : CopyRecordAsOverride(request.SourcePlugin, request.FormKey, request.DestinationPlugin);
+            RecordEditResult result;
+            try
+            {
+                result = request.AsNewRecord
+                    ? CopyRecordAsNewRecord(request.SourcePlugin, request.FormKey, request.DestinationPlugin, request.RequestedFormKey)
+                    : CopyRecordAsOverride(request.SourcePlugin, request.FormKey, request.DestinationPlugin);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                // A mid-commit write fault must not escape as an exception that discards the
+                // partial landing already in `results` (ADR-0026: partial success is a structured
+                // collection, never swallowed) — the items that landed are real, reviewable
+                // working-tree changes the response has to disclose.
+                logger.LogError(ex, "Batch copy failed mid-commit at {FormKey}", request.FormKey);
+                result = RecordEditResult.Refused(
+                    RecordEditRefusal.BatchWriteFailed,
+                    $"Copying {request.FormKey} failed mid-batch: {ex.Message}. Everything before it in " +
+                    "this batch already landed as working-tree changes — review them in the Source Control panel.");
+            }
             results.Add(new BatchCopyItemOutcome(request.FormKey, result));
             // Pre-validated, so a refusal here is a race (something changed mid-batch) — stop
             // rather than pile further writes onto a state the validation no longer describes.
             if (!result.Applied) return new BatchCopyOutcome(false, request.FormKey, result, results);
         }
         return new BatchCopyOutcome(true, null, null, results);
+    }
+
+    /// <summary>The one statement of which container types Copy as New Record supports (#550 AC5 —
+    /// xEdit's DIAL/INFO/QUST allowance): the concrete type name when the record type is in the
+    /// family, null otherwise. Shared by <see cref="CopyRecordAsNewRecord"/>'s dispatch and
+    /// <see cref="ValidateCopyRequest"/>'s pre-check so the two cannot drift.</summary>
+    private static string? CopyAsNewContainerFamilyName(string recordType, GameRelease release)
+    {
+        var name = RecordTypeDispatch.For(release).ConcreteFor(recordType)?.Name;
+        return name is "Quest" or "DialogTopic" or "DialogResponses" ? name : null;
     }
 
     /// <summary>
@@ -1174,10 +1230,18 @@ public sealed class RecordEditService(
         if (request.AsNewRecord)
         {
             if (RefuseIfDisallowedForCopyAsNewRecord(document.RecordType) is { } disallowed) return disallowed;
-            if (!isFlat && dispatch.ConcreteFor(document.RecordType)?.Name is not ("Quest" or "DialogTopic" or "DialogResponses")
+            if (!isFlat && CopyAsNewContainerFamilyName(document.RecordType, release) is null
                 && RefuseIfContainerType(document.RecordType, release) is { } container)
             {
                 return container;
+            }
+            // A caller-typed target is fully checkable without writing (native to the destination,
+            // free at both refs, well-formed) — the same resolution the commit itself will run, so
+            // a foreseeable key collision refuses the batch up front rather than landing partially.
+            if (request.RequestedFormKey is not null
+                && ResolveTargetFormKey(index, request.DestinationPlugin, request.RequestedFormKey, out _) is { } badTarget)
+            {
+                return badTarget;
             }
             return null;
         }

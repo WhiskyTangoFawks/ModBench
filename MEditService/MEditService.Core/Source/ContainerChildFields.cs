@@ -266,9 +266,11 @@ internal static class ContainerChildFields
             var property = to.GetType().GetProperty(slotName)
                 ?? throw new InvalidOperationException(
                     $"{to.GetType().Name} has no property '{slotName}' to transplant a child into — ContainerChildFields' table is stale.");
+            // Branch on the slot's shape, not the current value — a cleared list slot could in
+            // principle be null, and SetValue'ing a single child into a list property would crash.
             var value = property.GetValue(to);
-            if (value is null or IMajorRecordGetter) property.SetValue(to, child);
-            else ((dynamic)value).Add((dynamic)child);
+            if (value is System.Collections.IEnumerable and not string) ((dynamic)value).Add((dynamic)child);
+            else property.SetValue(to, child);
         }
     }
 
