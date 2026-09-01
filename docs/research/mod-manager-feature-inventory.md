@@ -17,18 +17,18 @@ A survey of Mod Organizer 2 and Vortex feature surfaces, mapped to Modbench's cu
 | Profiles | ✓ per-instance, per-profile saves/INIs | ✓ | ✅ switcher (quick pick, persists `selected_profile`); per-profile saves/INIs ❓ deferred |
 | Instances | ✓ instance manager | per-game | ➖ workspace root **is** the MO2 instance — VS Code "Open Folder" is the instance manager |
 | Deployment | USVFS (API hooking, Windows-only) | Hardlinks from staging | ✅ hardlinks (Vortex approach) + purge manifest; symlink fallback for cross-volume |
-| Overwrite folder | ✓ dedicated handling, "move to mod" | n/a (writes land in staging) | ❓ purge collects strays to `mods/overwrite/`; no UI to reassign/discard yet |
+| Overwrite folder | ✓ dedicated handling, "move to mod" | n/a (writes land in staging) | ✅ purge collects strays to `mods/overwrite/`; `modbench.modList.overwrite.reveal` reassigns/discards via the Explorer |
 | Tool launcher / dashboard | ✓ executables list | ✓ dashboard dashlets | ➖ mostly covered by VS Code tasks/launch; Launch Game command ✅ |
 | Mod merging (assets) | ✓ | ✗ | ❓ plugin-level merge is an Editing concern; asset-folder merge unplanned |
 | Problem detection | missing masters, overwrite files, form-43, SE plugins | similar + BSA/BA2 compat | ✅ missing master/missing mod badges; broader checks ❓ |
 
-## Downloads (planned surface — [docs/specs/downloads.md](../specs/downloads.md))
+## Downloads (implemented surface — [docs/specs/downloads.md](../specs/downloads.md))
 
 | Feature | MO2 | Vortex | Modbench |
 |---|---|---|---|
-| `nxm://` handler ("Download with manager") | ✓ | ✓ | 🔜 modbench-7 |
-| Download queue UI with progress | ✓ Downloads tab | ✓ | 🔜 modbench-7 (sidebar tree + status-bar item — [ADR-0027](../adr/0027-mo2-surfaces-map-to-native-vscode-views.md)) |
-| Install from download | ✓ double-click | ✓ | 🔜 modbench-7 ("Install now?" → modbench-6 flow) |
+| `nxm://` handler ("Download with manager") | ✓ | ✓ | 🔜 (still pending) |
+| Download queue UI with progress | ✓ Downloads tab | ✓ | ✅ sidebar tree + status-bar item — [ADR-0027](../adr/0027-mo2-surfaces-map-to-native-vscode-views.md) |
+| Install from download | ✓ double-click | ✓ | ✅ `modbench.downloads.install` |
 | Nexus account login / API key | ✓ | ✓ (first-party) | 🔜 modbench-7 (`vscode.SecretStorage`) |
 | Update-available check | ✓ | ✓ | 🔜 modbench-8 (`meta.ini` version vs Nexus) |
 | Endorsements / mod tracking | ✓ | ✓ | ❓ |

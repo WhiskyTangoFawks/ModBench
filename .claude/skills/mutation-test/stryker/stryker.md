@@ -70,7 +70,7 @@ Measured on this repo, 2026-08-13. Budget from these, not from folklore:
 An `--all` run is expensive because of mutant *count* — the whole corpus, at the per-mutant
 rate above. Prefer `--since`.
 
-**Timeouts are a real but secondary tax.** Mutating the async session-lifecycle code deadlocks
+**Timeouts are a real but secondary tax.** Mutating the async load-order-lifecycle code deadlocks
 rather than fails: a broken cancellation check or loop-exit produces no answer at all, and from
 outside the process "hung" and "slow" are indistinguishable, so a timeout is the only sound
 detector Stryker has. One full run put 200 mutants in `Timeout` — `LoadOrderMirror.cs` (99),

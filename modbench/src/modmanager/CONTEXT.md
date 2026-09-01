@@ -73,7 +73,7 @@ A named label that **wraps** a contiguous run of mods in the Mod override order 
 _Avoid_: group/category (say separator), "the mods under a separator" without saying in which order, treating a separator as a priority position.
 
 **Plugin load order**:
-The **Plugin override order** as written in `plugins.txt` — the order the game engine loads plugins (`.esm`/`.esp`/`.esl`); the last-loaded wins at the record level and base masters (`Fallout4.esm`) are losing-most (Editing context concern). Owned and written by the Plugins tab ([plugins.md](../../../docs/specs/plugins.md)); Mod Management sends it to Editing whole — every plugin copy in the instance, with its slot, `*` state and whether it wins the Mod override order — whenever it changes (ADR-0044). Distinct from the Mod override order (file-level winner).
+The **Plugin override order** as written in `plugins.txt` — the order the game engine loads plugins (`.esm`/`.esp`/`.esl`); the last-loaded wins at the record level and base masters (`Fallout4.esm`) are losing-most (Editing context concern). Owned and written by the Plugins view ([plugins.md](../../../docs/specs/plugins.md)); Mod Management sends it to Editing whole — every plugin copy in the instance, with its slot, `*` state and whether it wins the Mod override order — whenever it changes (ADR-0044). Distinct from the Mod override order (file-level winner).
 _Avoid_: load order (ambiguous), plugin list, higher/lower priority (say "winning"/"losing")
 
 **Deploy** (a.k.a. Build):

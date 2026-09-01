@@ -9,7 +9,7 @@ How the engineering skills should consume this repo's domain documentation when 
   - **Mod Management** context → `modbench/src/modmanager/CONTEXT.md`
 - **`docs/specs/`** — living surface specs, one per Modbench UI surface (present-tense behavior). `docs/specs/README.md` indexes them with status. Before building on a surface, read its spec; when an initiative changes behavior, update the spec first.
 - **`docs/adr/`** — system-wide architectural decisions, each stating current truth. Numbering has gaps: a decision that was reversed is deleted, and its story lives in the *Alternatives rejected* section of the ADR that replaced it. ADRs are rewritten in place (pre-alpha — root `CLAUDE.md` § Status). Read the ADRs that touch the area you're about to work in.
-- **`docs/research/`** — reference material that stays live: `xedit-ux-audit.md` (required reading before any record-editing interaction) and `mod-manager-feature-inventory.md` (MO2/Vortex feature map). A spike is deleted once its decision lands in an ADR.
+- **`docs/research/`** — a mix of reference material that stays live and spikes awaiting disposal; check what's actually there rather than trusting this list. Live reference: `xedit-ux-audit.md` (required reading before any record-editing interaction), `mod-manager-feature-inventory.md` (MO2/Vortex feature map), and `fo4-binding-inventory.md` (compile-time Mutagen.Bethesda.Fallout4 binding survey, spike for #162). A spike is deleted once its decision lands in an ADR.
 - **`docs/out-of-scope/`** — the won't-do register. Check it before proposing a feature; if it's there, the answer and the reason are recorded.
 
 ## Layout
