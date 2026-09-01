@@ -445,9 +445,14 @@ already empty: matching xEdit's own guard (`Element.EditValue` must be non-empty
   **separate branches, not one merged gate**: a Condition group's own `FieldDiff` is always a
   top-level entry, whereas a VMAD property's is a child of its script row, so a single
   top-level-keyed gate would start posting envelopes for VMAD properties. Moving each to its own
-  codec's structural-op vocabulary is the intended end state (#658). **VMAD arity ops silently
-  no-op today** and did before #630, for a pre-existing lookup defect tracked as #660 — nothing
-  regressed there, but nothing works there either. VMAD's struct/structList element ops and
+  codec's structural-op vocabulary is the intended end state (#658). **VMAD arity ops work as of
+  #660**, which fixed the lookup: a property's `FieldDiff` sits two levels down
+  (`wrapper → script → property`), so the old flat top-level search matched *nothing* under a
+  VMAD path — every VMAD op through this handler was an unconditional silent no-op, before and
+  after #630. The lookup now descends the VMAD subtree only; the Condition and ordinary-field
+  lookups stay flat and untouched, because widening those would let a `rootField` resolve to a
+  deeper node than intended and turn a silent no-op into a silent wrong write.
+  VMAD's struct/structList element ops and
   Conditions' own add/remove/reorder are described under *VMAD and Conditions are ordinary rows
   in the one tree* below.
 - **Editing writes working-tree source text directly** (ADR-0041) — there is no staged
@@ -699,10 +704,11 @@ ordinary unsorted array already does — meaning the **existing** array-op machi
 Add/Remove/Move Up/Move Down, `Insert`/`Delete`/`Ctrl+↑`/`Ctrl+↓`) offers the same gestures on a
 VMAD array. **This is no longer VMAD-free at the handler** (#630): ordinary arrays post a
 server-side op envelope, while VMAD is carved out to the preserved client-side computation,
-because VMAD does not go through the reflected-schema column the envelope path applies to. Note
-also that these VMAD arity ops **silently no-op today**, and did before #630 — a pre-existing
-lookup defect (a property's `FieldDiff` is a child of its script row, never top-level) tracked as
-#660. **struct**/**structList**
+because VMAD does not go through the reflected-schema column the envelope path applies to. These
+arity ops **were an unconditional silent no-op until #660** — a pre-existing lookup defect that
+searched only the flat top level, where a VMAD property's `FieldDiff` never sits (it is two levels
+down, `wrapper → script → property`). The same defect silently discarded a VMAD **string**
+property's extended-editor save. Both now resolve. **struct**/**structList**
 (ArrayOfStruct) use `commitOverride` as described above, with structList's own instances exposed
 as array elements the same way (Remove/Move reuse the generic array machinery unmodified; instance
 **Add** is the one case still awaiting a follow-up, noted below). A **variable**-kind property is
