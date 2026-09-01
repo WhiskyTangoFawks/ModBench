@@ -83,6 +83,67 @@ public enum ApplyOutcome
     SubFieldReadOnly,
 }
 
+/// <summary>
+/// #649 commitment 3: a leaf's write capability, as a closed two-case choice — it either carries a
+/// writer, or it carries a named reason for being read-only. There is no third state, and no way to
+/// spell one.
+///
+/// <para><b>Why a type and not a nullable delegate plus a comment.</b> The previous shape was
+/// <c>Func&lt;…&gt;? Apply</c>, where <c>null</c> meant four different things depending on where you
+/// stood: a discriminator consumed before its object exists, a genuinely unwritable residue, a
+/// widened column nobody decided to make editable, and — the one that shipped as #642 — an accidental
+/// omission. Nothing distinguished the fourth from the first three, so the accident was invisible at
+/// every call site and in every review. With this type the accident is not <i>detected</i>, it is
+/// <i>unrepresentable</i>: a leaf cannot be constructed without choosing, and choosing read-only costs
+/// a sentence saying why. A detected-only guard is one deleted assertion away from silence, which is
+/// the failure mode this ticket exists to close.</para>
+///
+/// <para>Constructed only through <see cref="Writable"/> and <see cref="ReadOnly"/>. Both properties
+/// are get-only, so a <c>with</c> expression cannot reopen the choice from outside either.</para>
+/// </summary>
+/// <typeparam name="TTarget">What the writer writes onto — <c>IMajorRecord</c> for a top-level
+/// column, <c>object</c> for a struct member or array element one or more levels down.</typeparam>
+public sealed record LeafWrite<TTarget>
+{
+    /// <summary>Internal rather than private so the non-generic <see cref="LeafWrite"/> factories can
+    /// reach it (CA1000 forbids static factories on the generic type itself). It validates the choice
+    /// anyway, so even in-assembly callers cannot spell the invalid states.</summary>
+    internal LeafWrite(Func<TTarget, JsonElement, ApplyOutcome>? writer, string? readOnlyReason)
+    {
+        if (writer is null == (readOnlyReason is null))
+        {
+            throw new ArgumentException(
+                "A leaf is either writable or read-only with a named reason — never both, never neither.");
+        }
+
+        Writer = writer;
+        ReadOnlyReason = readOnlyReason;
+    }
+
+    /// <summary>The write, or null exactly when <see cref="ReadOnlyReason"/> is set.</summary>
+    public Func<TTarget, JsonElement, ApplyOutcome>? Writer { get; }
+
+    /// <summary>Why this leaf cannot be written, or null exactly when <see cref="Writer"/> is set.
+    /// Never empty — a read-only leaf that cannot say why is what this type forbids.</summary>
+    public string? ReadOnlyReason { get; }
+
+}
+
+/// <summary>The two ways to make a <see cref="LeafWrite{TTarget}"/>. Non-generic so the factories are
+/// ordinary static methods rather than static members on a generic type (CA1000).</summary>
+public static class LeafWrite
+{
+    public static LeafWrite<TTarget> Writable<TTarget>(Func<TTarget, JsonElement, ApplyOutcome> writer) =>
+        new(writer, null);
+
+    /// <summary><paramref name="reason"/> is required and must say something: a read-only leaf that
+    /// cannot explain itself is exactly what this type exists to forbid.</summary>
+    public static LeafWrite<TTarget> ReadOnly<TTarget>(string reason) =>
+        string.IsNullOrWhiteSpace(reason)
+            ? throw new ArgumentException("A read-only leaf must name its reason.", nameof(reason))
+            : new(null, reason);
+}
+
 public sealed record ColumnSpec(
     string Name,
     string PropertyName,
@@ -102,7 +163,7 @@ public sealed record ColumnSpec(
     /// way into "applied". See <see cref="ApplyOutcome"/> for why the failure outcomes are
     /// distinct.</para>
     /// </summary>
-    Func<IMajorRecord, JsonElement, ApplyOutcome>? Apply,
+    LeafWrite<IMajorRecord> Apply,
     bool IsArray = false,
     FieldMetadata? ElementType = null,
     IReadOnlyList<FieldMetadata>? SubFields = null,

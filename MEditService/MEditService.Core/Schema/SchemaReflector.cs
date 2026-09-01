@@ -224,7 +224,8 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
             // ClassifyLeaf already answers null here — absent means "no author", and NULL is the
             // honest rendering, exactly what the retired wide column stored.
             columns.Add(new ColumnSpec("author", HeaderDocumentPath(modHeaderProp, authorProp), authorLeaf.DuckDbType, _ => null,
-                authorLeaf.ApiType, authorLeaf.ValidFormKeyTypes, authorLeaf.EnumValues, Apply: null,
+                authorLeaf.ApiType, authorLeaf.ValidFormKeyTypes, authorLeaf.EnumValues,
+                Apply: LeafWrite.ReadOnly<IMajorRecord>(HeaderNoWritePathReason),
                 ViewDefaultLiteral: authorLeaf.ViewDefaultLiteral));
             extracts.Add(HeaderPropertyExtract(modHeaderProp, authorLeaf.Get));
         }
@@ -250,7 +251,8 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
             // HeaderColumnExtract and IsBitmask, never this flag.
             var displayNames = flagsLeaf.EnumValues.Select(MapToXEditFlagName).ToArray();
             columns.Add(new ColumnSpec("flags", HeaderDocumentPath(modHeaderProp, flagsProp), flagsLeaf.DuckDbType, _ => null,
-                flagsLeaf.ApiType, flagsLeaf.ValidFormKeyTypes, displayNames, Apply: null,
+                flagsLeaf.ApiType, flagsLeaf.ValidFormKeyTypes, displayNames,
+                Apply: LeafWrite.ReadOnly<IMajorRecord>(HeaderNoWritePathReason),
                 IsBitmask: flagsLeaf.IsBitmask, EnumBitValues: flagsLeaf.EnumBitValues,
                 IsFlagsEnum: flagsLeaf.IsFlagsEnum, ViewDefaultLiteral: flagsLeaf.ViewDefaultLiteral));
             extracts.Add(HeaderPropertyExtract(modHeaderProp, flagsLeaf.Get));
@@ -268,7 +270,10 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         // delegate gives, not a masters-specific mechanism (see HeaderIndexer.MastersFieldName).
         var mastersElement = new FieldMetadata("", "string", false, Empty, Empty);
         columns.Add(new ColumnSpec(HeaderIndexer.MastersFieldName, $"{modHeaderProp.Name}.MasterReferences", "VARCHAR", _ => null, "array",
-            Empty, Empty, Apply: null, IsArray: true, ElementType: mastersElement));
+            Empty, Empty,
+            Apply: LeafWrite.ReadOnly<IMajorRecord>(
+                "masters are wholly content-derived at compile time (#335/ADR-0038)"),
+            IsArray: true, ElementType: mastersElement));
         extracts.Add(mod => JsonSerializer.Serialize(mod.MasterReferences.Select(r => r.Master.FileName.ToString()).ToList()));
 
         return new RecordTableSchema
@@ -609,8 +614,10 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
             IsWidened = true,
             ViewDefaultLiteral = null,
             IsFlagsEnum = false,
-            Apply = null, // editing a widened value is out of scope — read-only falls out of
-                          // PluginWriter.IsFieldPathReadOnly already treating a null Apply as such
+            Apply = LeafWrite.ReadOnly<IMajorRecord>(
+                "widened scalar column: sibling subclasses disagree on this field's CLR type, so " +
+                "there is no single value shape to write"), // editing a widened value is out of scope — read-only falls out of
+                                                            // PluginWriter.IsFieldPathReadOnly already treating a null Apply as such
             IsArray = false,
             ElementType = null,
             SubFields = null,
@@ -849,7 +856,7 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         string ApiType,
         string[] ValidFormKeyTypes,
         string[] EnumValues,
-        Func<IMajorRecord, JsonElement, ApplyOutcome>? Apply,
+        LeafWrite<IMajorRecord> Apply,
         FieldMetadata? ElementMeta = null,
         IReadOnlyList<FieldMetadata>? SubFieldMetas = null,
         bool AllowsNull = false,
@@ -866,7 +873,7 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         string[] ValidFormKeyTypes,
         string[] EnumValues,
         Func<object, object?> Extract,
-        Func<object, JsonElement, ApplyOutcome>? Apply,
+        LeafWrite<object> Apply,
         IReadOnlyList<SubFieldSpec>? SubFields = null,
         SubFieldSpec? ElementSpec = null,
         bool AllowsNull = false,
@@ -1057,6 +1064,39 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
     // test.
     internal const string UnclassifiedAnomalyPrefix = "SchemaReflector: unclassified";
 
+    // ── The declared read-only reasons (#649 commitment 3) ────────────────────────────────────
+    // Every leaf that cannot be written says why, in one of these terms. Shared constants rather
+    // than repeated literals so the symmetry audit can enumerate the legitimate reasons and reject
+    // anything else — a mass re-declaration (reverting #643, say) would have to invent a new one.
+
+    /// <summary>A discriminator: consumed off the raw JSON to decide which concrete type to build,
+    /// before the object it would be applied to exists. Not a gap — this one can never be writable,
+    /// and ApplySubFields deliberately keeps naming it a silent skip (TargetingRefuses stays false).</summary>
+    internal const string DiscriminatorReason =
+        "discriminator: read off the payload to choose a concrete type, before that object exists";
+
+    /// <summary>An element-shape template carried by a list's metadata. A list is written as one whole
+    /// value through its owning field, so the template itself is never a write target.</summary>
+    internal const string ElementTemplateReason =
+        "list element template: a list is written as one whole value through its owning field";
+
+    /// <summary>A list whose elements are bare primitives — BuildListElement has FormLink/Loqui/vector
+    /// branches only, so there is no element write path at any level. Refused honestly rather than
+    /// silently discarded (#642/#643).</summary>
+    internal const string PrimitiveElementListReason =
+        "primitive-element list: no element write path exists at any nesting level";
+
+    /// <summary>A leaf whose LeafSpec produced no converter and is not a form link. Not reachable for
+    /// any shape ClassifyLeaf currently returns — every one of them has a converter or is a FormLink —
+    /// so this is the honest name for a branch that exists to keep the choice total.</summary>
+    internal const string NoConverterReason =
+        "leaf with no JSON converter and no form-link write path";
+
+    /// <summary>The plugin header's author/flags. #633 deleted the header write path deliberately;
+    /// since #661 a write genuinely reaches these columns and is refused here rather than at a gate.</summary>
+    internal const string HeaderNoWritePathReason =
+        "the header's write path was built and deliberately deleted (#633); no write exists for this column";
+
     private static string TypeLabel(Type type) =>
         type.IsGenericType
             ? $"{type.Name[..type.Name.IndexOf('`', StringComparison.Ordinal)]}" +
@@ -1127,6 +1167,64 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
     // Promotion out of this list is always available: Color sat here in spirit until #649 gave it a
     // presentation-table entry, and the atomic-value mechanism it now uses is ready for more. Each
     // reason therefore says what a future ticket would have to decide, not merely that it is absent.
+    /// <summary>One leaf's write capability, flattened for the read/write symmetry audit (#649
+    /// commitment 3 / AC #2). Facts only — where the leaf is, the Loqui getter type it decomposes,
+    /// and the reason it declared if it is read-only. Deliberately silent on whether the leaf
+    /// <i>ought</i> to be writable: the audit re-derives that independently from Mutagen, so this
+    /// cannot hand the audit the answer it is checking.</summary>
+    internal sealed record LeafWriteFact(string Path, Type? StructGetterType, string? ReadOnlyReason);
+
+    /// <summary>
+    /// Every top-level column, plus every nested Loqui-struct member one level in, with the write
+    /// capability each actually declared. Re-invokes the real production builders
+    /// (<see cref="GetSubFieldInfo"/>) rather than re-deriving anything, so reverting a write path
+    /// changes what this reports — which is what makes the audit that reads it non-vacuous.
+    ///
+    /// <para>Lives here, rather than exposing <see cref="SubFieldSpec"/>, because that type is
+    /// private and should stay so: the audit needs two facts about a leaf, not the leaf.</para>
+    /// </summary>
+    internal IReadOnlyList<LeafWriteFact> EnumerateWriteCapability(GameRelease release)
+    {
+        var category = release.ToCategory();
+        var assembly = ResolveAssembly(release, category)
+            ?? throw new UnsupportedGameReleaseException(release, AssemblyNameFor(category));
+        var cache = GetCache(category, assembly);
+
+        var facts = new List<LeafWriteFact>();
+        foreach (var (table, schema) in cache.Schemas)
+        {
+            foreach (var column in schema.RecordColumns)
+            {
+                facts.Add(new($"{table}.{column.Name}", null, column.Apply.ReadOnlyReason));
+
+                // Only this schema's own properties: a sibling-merged column belongs to another
+                // getter type and is walked on that type's own table instead.
+                var prop = GetAllInterfaceProperties(schema.RecordType)
+                    .FirstOrDefault(p => p.Name == column.PropertyName);
+                if (prop == null) continue;
+
+                var core = Nullable.GetUnderlyingType(prop.PropertyType) ?? prop.PropertyType;
+                if (IsListType(core, out var element)) core = element;
+                if (!IsLoquiInterface(core) || IsFormLink(core)) continue;
+
+                foreach (var member in GetAllInterfaceProperties(core)
+                             .Where(p => !LoquiSkipProps.Contains(p.Name))
+                             .Where(p => !IsInfrastructureProperty(p)))
+                {
+                    if (GetSubFieldInfo(member, cache.GetterTypeToTable, 1, _logger) is not { } spec) continue;
+
+                    // The LEAF's own shape, not its enclosing struct's: a primitive-element list or an
+                    // excluded VMAD struct sitting inside a perfectly writable struct is not itself
+                    // writable-shaped, and reporting the parent here would accuse it of lying.
+                    var leaf = Nullable.GetUnderlyingType(member.PropertyType) ?? member.PropertyType;
+                    var leafStruct = IsLoquiInterface(leaf) && !IsFormLink(leaf) ? leaf : null;
+                    facts.Add(new($"{table}.{column.Name}.{spec.Name}", leafStruct, spec.Apply.ReadOnlyReason));
+                }
+            }
+        }
+        return facts;
+    }
+
     internal static string? ExcludedShapeReason(Type shape)
     {
         var open = shape.IsGenericType ? shape.GetGenericTypeDefinition() : null;
@@ -1419,7 +1517,8 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         }
 
         return new(ObjectModValueTypeDiscriminator, "string", Empty,
-            [.. leaves.Select(l => l.ValueTypeName)], Extract, Apply: null, AllowsNull: true);
+            [.. leaves.Select(l => l.ValueTypeName)], Extract,
+            Apply: LeafWrite.ReadOnly<object>(DiscriminatorReason), AllowsNull: true);
     }
 
     private static SubFieldSpec BuildTypedLeafUnionField(
@@ -1447,11 +1546,12 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         // sub-field — it resolves the property off the target's own runtime type and answers
         // ApplyOutcome.PropertyNotFound when that type doesn't declare it, which ApplySubFields
         // treats as a silent no-op, exactly what a leaf that lacks this member needs.
-        Func<object, JsonElement, ApplyOutcome>? apply = rep.Convert switch
+        var apply = rep.Convert switch
         {
-            { } c => MakeApplier(pName, nullable: true, c, logger),
-            null when IsFormLink(core) => (obj, val) => ApplyFormLinkJson(obj, val, pName, logger),
-            _ => null,
+            { } c => LeafWrite.Writable(MakeApplier(pName, nullable: true, c, logger)),
+            null when IsFormLink(core) => LeafWrite.Writable<object>(
+                (obj, val) => ApplyFormLinkJson(obj, val, pName, logger)),
+            _ => LeafWrite.ReadOnly<object>(NoConverterReason),
         };
 
         return new(colName, rep.ApiType, rep.ValidFormKeyTypes, rep.EnumValues, Extract,
@@ -1477,7 +1577,7 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         // therefore cannot share one converter the way MakeApplier's callers normally do; instead
         // it resolves the target property's own declared type at write time, off whichever
         // concrete leaf ApplyListJson already constructed, and converts into *that*.
-        return new(colName, "string", Empty, Empty, Extract, Apply: MakeWidenedApplier(pName, logger), AllowsNull: true);
+        return new(colName, "string", Empty, Empty, Extract, Apply: LeafWrite.Writable(MakeWidenedApplier(pName, logger)), AllowsNull: true);
     }
 
     /// <summary>
@@ -1767,9 +1867,9 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
             .Select(d => Nullable.GetUnderlyingType(d.Prop.PropertyType) ?? d.Prop.PropertyType)
             .Distinct()
             .Count();
-        var apply = distinctClrTypes > 1 && rep.Apply != null
+        var apply = distinctClrTypes > 1 && rep.Apply.Writer != null
             && rep.ApiType is not ("struct" or "array" or "formKey")
-            ? MakeWidenedApplier(declaring[0].Prop.Name, logger)
+            ? LeafWrite.Writable(MakeWidenedApplier(declaring[0].Prop.Name, logger))
             : rep.Apply;
 
         return rep with { Name = colName, Extract = Extract, Apply = apply, AllowsNull = true };
@@ -1794,7 +1894,8 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         }
 
         return new(AbstractUnionTypeDiscriminator, "string", Empty,
-            [.. leaves.Select(l => l.ClassName)], Extract, Apply: null, AllowsNull: true);
+            [.. leaves.Select(l => l.ClassName)], Extract,
+            Apply: LeafWrite.ReadOnly<object>(DiscriminatorReason), AllowsNull: true);
     }
 
     // Write side: resolves the concrete Setter class named by an incoming JSON object's own
@@ -2148,11 +2249,12 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         PropertyInfo prop, string colName, Type core, bool nullable, LeafSpec leaf, ILogger logger)
     {
         var pName = prop.Name;
-        Func<object, JsonElement, ApplyOutcome>? apply = leaf.Convert switch
+        var apply = leaf.Convert switch
         {
-            { } c => MakeApplier(pName, nullable, c, logger),
-            null when IsFormLink(core) => (obj, val) => ApplyFormLinkJson(obj, val, pName, logger),
-            _ => null,
+            { } c => LeafWrite.Writable(MakeApplier(pName, nullable, c, logger)),
+            null when IsFormLink(core) => LeafWrite.Writable<object>(
+                (obj, val) => ApplyFormLinkJson(obj, val, pName, logger)),
+            _ => LeafWrite.ReadOnly<object>(NoConverterReason),
         };
         return new(colName, leaf.ApiType, leaf.ValidFormKeyTypes, leaf.EnumValues,
             leaf.Get, apply,
@@ -2221,7 +2323,11 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
             && (!setterType.IsAbstract || sub.Any(f => f.Name == AbstractUnionTypeDiscriminator));
         return new(colName, "struct", Empty, Empty,
             obj => { var v = g(obj); return v == null ? null : ExtractSubObject(v, sub); },
-            Apply: writable ? (obj, val) => ApplyStructJson(obj, val, pName, setterType!, sub) : null,
+            Apply: writable
+                ? LeafWrite.Writable<object>((obj, val) => ApplyStructJson(obj, val, pName, setterType!, sub))
+                : LeafWrite.ReadOnly<object>(
+                    "nested struct with no usable write door: no resolvable Loqui setter class, or an " +
+                    "excluded abstract union whose discriminator can never appear in a payload"),
             SubFields: sub,
             // #642: a payload that names an unwritable sub-field must refuse the whole write rather
             // than silently drop it while the caller reports success (SubFieldSpec's own doc comment
@@ -2280,7 +2386,7 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
 
             result.Add(new(component.WireName, apiType, Empty, Empty,
                 SubGetter(componentProp),
-                MakeApplier(component.ClrName, nullable: false, converter, logger)));
+                LeafWrite.Writable(MakeApplier(component.ClrName, nullable: false, converter, logger))));
         }
         return result;
     }
@@ -2325,7 +2431,7 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         var pName = prop.Name;
         return new(colName, "struct", Empty, Empty,
             obj => { var v = g(obj); return v == null ? null : ExtractSubObject(v, components); },
-            Apply: (obj, val) => ApplyAtomicValueJson(obj, val, pName, components),
+            Apply: LeafWrite.Writable<object>((obj, val) => ApplyAtomicValueJson(obj, val, pName, components)),
             SubFields: components);
     }
 
@@ -2336,7 +2442,7 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         return new("VARCHAR",
             r => TryGet(r, prop) is { } v ? JsonSerializer.Serialize(ExtractSubObject(v, components)) : null,
             "struct", Empty, Empty,
-            Apply: (record, val) => ApplyAtomicValueJson(record, val, pName, components),
+            Apply: LeafWrite.Writable<IMajorRecord>((record, val) => ApplyAtomicValueJson(record, val, pName, components)),
             SubFieldMetas: components.ConvertAll(c => c.ToFieldMetadata()));
     }
 
@@ -2358,7 +2464,7 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         var pName = prop.Name;
         return new(colName, "struct", Empty, Empty,
             obj => { var v = g(obj); return v == null ? null : ExtractSubObject(v, components); },
-            Apply: (obj, val) =>
+            Apply: LeafWrite.Writable<object>((obj, val) =>
             {
                 if (val.ValueKind != JsonValueKind.Object) return ApplyOutcome.ValueRejected;
                 var rp = obj.GetType().GetProperty(pName, BindingFlags.Public | BindingFlags.Instance);
@@ -2368,7 +2474,7 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
                 if (subOutcome != ApplyOutcome.Applied) return subOutcome;
                 if (rp.CanWrite) rp.SetValue(obj, current);
                 return ApplyOutcome.Applied;
-            },
+            }),
             SubFields: components);
     }
 
@@ -2393,14 +2499,15 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         IReadOnlyDictionary<Type, string> getterTypeToTable)
     {
         if (elemSubFields != null)
-            return new("", "struct", Empty, Empty, _ => null, Apply: null, SubFields: elemSubFields);
+            return new("", "struct", Empty, Empty, _ => null,
+                Apply: LeafWrite.ReadOnly<object>(ElementTemplateReason), SubFields: elemSubFields);
         if (isFl)
         {
             return new("", "formKey", GetFormLinkValidTypes(elementType, getterTypeToTable), Empty,
-                _ => null, Apply: null, AllowsNull: true);
+                _ => null, Apply: LeafWrite.ReadOnly<object>(ElementTemplateReason), AllowsNull: true);
         }
         return TryMapPrimitive(elementType, out _, out var elemApiType, out _)
-            ? new("", elemApiType, Empty, Empty, _ => null, Apply: null)
+            ? new("", elemApiType, Empty, Empty, _ => null, Apply: LeafWrite.ReadOnly<object>(ElementTemplateReason))
             : null;
     }
 
@@ -2425,9 +2532,10 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
 
         var g = SubGetter(prop);
         var pName = prop.Name;
-        Func<object, JsonElement, ApplyOutcome>? apply = isFl || isLoqui || isVector
-            ? (obj, json) => ApplyListSubFieldJson(obj, json, pName, isFl, elementType, elemSubFields)
-            : null;
+        var apply = isFl || isLoqui || isVector
+            ? LeafWrite.Writable<object>(
+                (obj, json) => ApplyListSubFieldJson(obj, json, pName, isFl, elementType, elemSubFields))
+            : LeafWrite.ReadOnly<object>(PrimitiveElementListReason);
 
         return new(colName, "array", Empty, Empty,
             obj => g(obj) is IEnumerable list ? BuildListItems(list, elementType, elemSubFields) : null,
@@ -2440,7 +2548,11 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
             // than the silent discard the survey caught. Making the shape writable at both levels
             // is a separate capability, deliberately not built here (maintainer decision at #643's
             // gate).
-            TargetingRefuses: apply == null);
+            // #649: `apply` is a LeafWrite and therefore never null — the old `apply == null` test
+            // silently became `false` here when the type narrowed, which reopened #642's silent
+            // discard for this exact shape (caught by NestedScalarListSubFieldRefusalTests). Ask the
+            // question the type actually answers.
+            TargetingRefuses: apply.Writer == null);
     }
 
     // ApplyListJson's own sub-field twin: writes a struct/array-nested list's whole value, same
@@ -2549,11 +2661,11 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
     private static ColumnInfoResult ProjectColumn(PropertyInfo prop, Type core, bool nullable, LeafSpec leaf, ILogger logger)
     {
         var pName = prop.Name;
-        Func<IMajorRecord, JsonElement, ApplyOutcome>? apply = leaf.Convert switch
+        var apply = leaf.Convert switch
         {
-            { } c => MakeColumnApplier(pName, nullable, c, logger),
-            null when IsFormLink(core) => FormLinkColumnApplier(pName, logger),
-            _ => null,
+            { } c => LeafWrite.Writable(MakeColumnApplier(pName, nullable, c, logger)),
+            null when IsFormLink(core) => LeafWrite.Writable(FormLinkColumnApplier(pName, logger)),
+            _ => LeafWrite.ReadOnly<IMajorRecord>(NoConverterReason),
         };
         return new(leaf.DuckDbType, r => leaf.Get(r), leaf.ApiType, leaf.ValidFormKeyTypes, leaf.EnumValues,
             apply,
@@ -2593,9 +2705,10 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         }
 
         var pName = prop.Name;
-        Func<IMajorRecord, JsonElement, ApplyOutcome>? apply = isFl || isLoqui || isVector
-            ? (record, json) => ApplyListJson(record, json, pName, isFl, elementType, elemSubFields)
-            : null;
+        var apply = isFl || isLoqui || isVector
+            ? LeafWrite.Writable<IMajorRecord>(
+                (record, json) => ApplyListJson(record, json, pName, isFl, elementType, elemSubFields))
+            : LeafWrite.ReadOnly<IMajorRecord>(PrimitiveElementListReason);
 
         return new("VARCHAR", Extractor, "array", Empty, Empty, apply,
             ElementMeta: elemMeta);
@@ -2785,7 +2898,7 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         foreach (var sf in subFields)
         {
             if (!json.TryGetProperty(sf.Name, out var sfVal)) continue;
-            if (sf.Apply is not { } apply)
+            if (sf.Apply.Writer is not { } apply)
             {
                 if (sf.TargetingRefuses) notWritable = true;
                 continue;
@@ -2889,13 +3002,15 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
 
         var setterType = GetSetterType(core);
         var pName = prop.Name;
-        Func<IMajorRecord, JsonElement, ApplyOutcome>? apply = null;
+        var apply = LeafWrite.ReadOnly<IMajorRecord>(
+            "struct column with no resolvable Loqui setter class, so nothing can be constructed to write onto");
         if (setterType != null)
         {
             // ApplyStructJson carries the whole contract (shape guard, discriminator resolution,
             // refuse-before-attach) — shared with every nested struct sub-field since #643, so the
             // column and sub-field write paths cannot drift apart.
-            apply = (record, json) => ApplyStructJson(record, json, pName, setterType, subFields);
+            apply = LeafWrite.Writable<IMajorRecord>(
+                (record, json) => ApplyStructJson(record, json, pName, setterType, subFields));
         }
 
         return new("VARCHAR", Extractor, "struct", Empty, Empty, apply,
@@ -2930,7 +3045,7 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
 
         var pName = prop.Name;
         return new("VARCHAR", Extractor, "struct", Empty, Empty,
-            (record, json) =>
+            LeafWrite.Writable<IMajorRecord>((record, json) =>
             {
                 if (json.ValueKind != JsonValueKind.Object) return ApplyOutcome.ValueRejected;
                 var rp = record.GetType().GetProperty(pName, BindingFlags.Public | BindingFlags.Instance)!;
@@ -2939,7 +3054,7 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
                 if (subOutcome != ApplyOutcome.Applied) return subOutcome;
                 if (rp.CanWrite) rp.SetValue(record, obj);
                 return ApplyOutcome.Applied;
-            },
+            }),
             SubFieldMetas: subFieldMetas);
     }
 
