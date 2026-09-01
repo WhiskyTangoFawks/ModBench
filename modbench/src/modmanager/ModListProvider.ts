@@ -32,6 +32,12 @@ class DropMutationError extends Error {
  *  the constructor so it isn't a fresh closure per instance. */
 const NO_DATA_FOLDER: () => Promise<string | undefined> = () => Promise.resolve(undefined);
 
+/** The only IModlistSource members this provider calls — see loadOrderSnapshot.ts's
+ *  own `Source` alias for the same narrowing pattern. */
+export type ModListSource = Pick<
+  IModlistSource, 'setEnabled' | 'reorder' | 'moveModToSeparator' | 'reorderSeparatorBlock' | 'setActiveProfile' | 'readModlist'
+>;
+
 /** Constructor options for {@link ModListProvider}. Field order matches
  *  PluginListProvider's identically-shaped options so the two siblings read the
  *  same.
@@ -40,7 +46,7 @@ const NO_DATA_FOLDER: () => Promise<string | undefined> = () => Promise.resolve(
  *  while Modbench runs, so a value captured once at construction could go stale for the life of
  *  the provider. Each call re-reads through the single game-directory resolver. */
 export interface ModListProviderOptions {
-  source: IModlistSource;
+  source: ModListSource;
   log?: (msg: string) => void;
   reporter?: Reporter;
   instanceRoot?: string;
@@ -163,7 +169,7 @@ export class ModListProvider
   // base/vanilla-adjacent mods on top, winning overrides at the bottom, matching
   // MO2's default. See modmanager/CONTEXT.md ("View order").
   private winningAtTop = false;
-  private readonly source: IModlistSource;
+  private readonly source: ModListSource;
   private readonly log: (msg: string) => void;
   private readonly reporter?: Reporter;
   private readonly instanceRoot?: string;

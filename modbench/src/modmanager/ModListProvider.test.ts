@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { IModlistSource, Mod, ModlistEntry, Separator } from './model';
+import type { Mod, ModlistEntry, Separator } from './model';
 import { parseModlist, moveModInText, moveSeparatorBlockInText } from './mo2/modlistText';
 import { buildTes4Buffer } from './test/buildTes4Buffer';
 import {
@@ -17,7 +17,7 @@ vi.mock('vscode', () => ({
   Uri: { file: uriFile }, DataTransferItem, DataTransfer,
 }));
 
-import { ModListProvider, CountNode, SeparatorNode, ModNode, OverwriteNode } from './ModListProvider';
+import { ModListProvider, CountNode, SeparatorNode, ModNode, OverwriteNode, type ModListSource } from './ModListProvider';
 import { ErrorNode } from './ErrorNode';
 
 const mod = (name: string, enabled = true, extra: Partial<Mod> = {}): Mod => ({
@@ -25,10 +25,11 @@ const mod = (name: string, enabled = true, extra: Partial<Mod> = {}): Mod => ({
 });
 const sep = (name: string, enabled = false): Separator => ({ kind: 'separator', name, enabled });
 
-class FakeSource implements IModlistSource {
+/** Implements exactly ModListProvider's own Pick<> of IModlistSource — a method the provider
+ *  doesn't touch can't even be added here by mistake. */
+class FakeSource implements ModListSource {
   setEnabledCalls: { modName: string; enabled: boolean }[] = [];
   activeProfile = 'Default';
-  profiles = ['Default', 'Secondary'];
   readModlistCalls = 0;
   constructor(public entries: ModlistEntry[], private readonly throwOnRead = false) {}
   readModlist(): Promise<ModlistEntry[]> {
@@ -41,25 +42,9 @@ class FakeSource implements IModlistSource {
     return Promise.resolve();
   }
   reorder(_name: string, _idx: number): Promise<void> { return Promise.resolve(); }
-  insertSeparator(_name: string, _after: string): Promise<void> { return Promise.resolve(); }
-  renameSeparator(_old: string, _new: string): Promise<void> { return Promise.resolve(); }
-  deleteSeparator(_name: string): Promise<void> { return Promise.resolve(); }
   moveModToSeparator(_mod: string, _sep: string | null): Promise<void> { return Promise.resolve(); }
-  removeMod(_name: string): Promise<void> { return Promise.resolve(); }
-  installMod(_name: string, _dir: string, _meta: unknown): Promise<void> { return Promise.resolve(); }
   reorderSeparatorBlock(_sep: string, _idx: number): Promise<void> { return Promise.resolve(); }
-  getNexusSlug(): Promise<string> { return Promise.resolve('fallout4'); }
-  listProfiles(): Promise<string[]> { return Promise.resolve(this.profiles); }
-  listSeparators(): Promise<string[]> {
-    return Promise.resolve(this.entries.filter((e) => e.kind === 'separator').map((e) => e.name));
-  }
-  getActiveProfile(): Promise<string> { return Promise.resolve(this.activeProfile); }
   setActiveProfile(name: string): Promise<void> { this.activeProfile = name; return Promise.resolve(); }
-  readPluginOrder(): Promise<string[]> { return Promise.resolve([]); }
-  readEnabledPlugins(): Promise<string[]> { return Promise.resolve([]); }
-  setPluginEnabled(): Promise<void> { return Promise.resolve(); }
-  reorderPlugins(): Promise<void> { return Promise.resolve(); }
-  appendPlugin(): Promise<void> { return Promise.resolve(); }
 }
 
 describe('ModListProvider', () => {

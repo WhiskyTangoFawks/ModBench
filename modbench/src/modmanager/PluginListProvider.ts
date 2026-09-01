@@ -20,6 +20,12 @@ const DND_MIME = 'application/vnd.medit.pluginlist-node';
  *  the constructor so it isn't a fresh closure per instance. */
 const NO_DATA_FOLDER: () => Promise<string | undefined> = () => Promise.resolve(undefined);
 
+/** The only IModlistSource members this provider calls — see loadOrderSnapshot.ts's
+ *  own `Source` alias for the same narrowing pattern. */
+export type PluginListSource = Pick<
+  IModlistSource, 'setPluginEnabled' | 'readModlist' | 'readPluginOrder' | 'readEnabledPlugins' | 'reorderPlugins'
+>;
+
 /** Constructor options for {@link PluginListProvider}. Field order matches
  *  ModListProvider's identically-shaped options so the two siblings read the
  *  same.
@@ -28,7 +34,7 @@ const NO_DATA_FOLDER: () => Promise<string | undefined> = () => Promise.resolve(
  *  while Modbench runs, so a value captured once at construction could go stale for the life of
  *  the provider. Each call re-reads through the single game-directory resolver. */
 export interface PluginListProviderOptions {
-  source: IModlistSource;
+  source: PluginListSource;
   log?: (msg: string) => void;
   reporter?: Reporter;
   instanceRoot?: string;
@@ -204,7 +210,7 @@ export class PluginListProvider
   private readonly _onDidChangeParticipation = new vscode.EventEmitter<PluginParticipationChange>();
   readonly onDidChangeParticipation = this._onDidChangeParticipation.event;
 
-  private readonly source: IModlistSource;
+  private readonly source: PluginListSource;
   private readonly log: (msg: string) => void;
   private readonly reporter?: Reporter;
   private readonly instanceRoot?: string;
