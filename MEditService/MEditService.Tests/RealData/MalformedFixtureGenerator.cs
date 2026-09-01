@@ -23,8 +23,10 @@ public sealed class MalformedFixtureGenerator
 {
     private static readonly (string SourceMod, string SourcePlugin, string FixtureName, (string Type, uint FormId)[] Records)[] Cuts =
     [
-        ("The Charger Pistol - a Gauss based weapon platform", "GaussRevolver.esp",
-            "GaussRevolver - CutDown.esp", [("WEAP", 0x01000860u)]),
+        // Lunar Arsenal's copy, not "The Charger Pistol"'s — two mods ship a GaussRevolver.esp
+        // (ADR-0044's every-physical-copy story in the wild) and only this one is malformed.
+        ("Lunar Arsenal Unique Replacers - Weapons", "GaussRevolver.esp",
+            "GaussRevolver - CutDown.esp", [("WEAP", 0x03000860u)]),
         ("Lunar - UNPCs", "Lunar-UniqueCreatures.esp",
             "Lunar-UniqueCreatures - CutDown.esp", [("RACE", 0x03014174u), ("RACE", 0x0603637Au)]),
         ("South of the Sea - Atom's Storm", "SouthOfTheSea.esm",

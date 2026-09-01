@@ -157,12 +157,14 @@ public static class MalformedPluginScan
         }
     }
 
-    /// <summary>GaussRevolver.esp's proven rotation: within the WEAP object template
-    /// (<c>OBTE … STOP</c>), the CK writes each combination as <c>OBTF, FULL, OBTS</c> — every
-    /// <c>OBTS</c> in the defective plugin instead sits one combination early, so the very first
-    /// template subrecord after <c>OBTE</c> is an <c>OBTS</c> while <c>OBTF</c>/<c>FULL</c>
-    /// follow later. A bare trailing combination (an <c>OBTS</c> with no <c>OBTF</c>/<c>FULL</c>
-    /// of its own, after dressed ones) is not the rotation and stays clean.</summary>
+    /// <summary>R1: within the WEAP object template (<c>OBTE … STOP</c>), the CK's grammar —
+    /// proven by every vanilla template (1,031/1,031, <c>docs/specs/medit-repair.md</c>) — is an
+    /// optional leading bare <c>OBTS</c> (the default combination, GaussRifle's own shape) followed
+    /// by combinations each written <c>OBTF, FULL, OBTS</c>: every <c>OBTF</c>/<c>FULL</c> is
+    /// eventually closed by an <c>OBTS</c>. The defective plugin (Lunar Arsenal's
+    /// <c>GaussRevolver.esp</c>: <c>OBTS OBTF FULL STOP</c>) instead trails <c>OBTF</c>/<c>FULL</c>
+    /// with no closing <c>OBTS</c> — that combination's <c>OBTS</c> came before it. The named
+    /// combination index is the count of properly closed <c>OBTF</c>-led groups.</summary>
     private static void DetectTemplateOrder(
         PluginBinaryWalk.RecordSpan record, List<PluginBinaryWalk.SubrecordSpan> subrecords,
         string anchor, List<PluginDiagnosis> diagnoses)
@@ -172,14 +174,30 @@ public static class MalformedPluginScan
         if (start < 0) return;
         var end = subrecords.FindIndex(start, s => s.Sig == "STOP");
         if (end < 0) end = subrecords.Count;
-
         var template = subrecords.Skip(start + 1).Take(end - start - 1).Select(s => s.Sig).ToList();
-        if (template.Count > 0 && template[0] == "OBTS"
-            && template.Skip(1).Any(sig => sig is "OBTF" or "FULL"))
+
+        var lastObts = template.LastIndexOf("OBTS");
+        var lastDress = Math.Max(template.LastIndexOf("OBTF"), template.LastIndexOf("FULL"));
+        if (lastDress >= 0 && lastDress > lastObts)
         {
+            var closedGroups = CountClosedGroups(template);
             diagnoses.Add(new PluginDiagnosis(anchor, "subrecord-out-of-ck-order", Lossless,
-                "template combination 0's OBTS precedes its OBTF/FULL; the Creation Kit writes OBTF, FULL, OBTS"));
+                $"template combination {closedGroups}'s OBTS precedes its OBTF/FULL; the Creation Kit writes OBTF, FULL, OBTS"));
         }
+    }
+
+    /// <summary>How many OBTF-led combinations were properly closed by a following OBTS — the
+    /// index the dangling one would have taken.</summary>
+    private static int CountClosedGroups(List<string> template)
+    {
+        var closed = 0;
+        var open = false;
+        foreach (var sig in template)
+        {
+            if (sig is "OBTF" or "FULL") open = true;
+            else if (sig == "OBTS" && open) { closed++; open = false; }
+        }
+        return closed;
     }
 
     /// <summary>R5-R7: each PERK entry-point effect (a <c>PRKE</c> whose type byte is 2) carries

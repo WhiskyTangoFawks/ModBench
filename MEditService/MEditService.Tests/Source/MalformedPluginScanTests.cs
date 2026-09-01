@@ -33,11 +33,14 @@ public sealed class MalformedPluginScanTests
     [Fact]
     public void GaussRevolver_TemplateRotation_IsDiagnosedByExactClassAndText()
     {
+        // Lunar Arsenal's GaussRevolver.esp (OBTE=1: OBTS OBTF FULL STOP) — the combination's
+        // OBTS precedes its OBTF/FULL, leaving them unclosed. "The Charger Pistol" ships a clean
+        // plugin under the same filename; the generator cuts from the malformed copy.
         var diagnoses = ScanFixture("GaussRevolver - CutDown.esp");
 
         var d = Assert.Single(diagnoses);
         Assert.Equal("subrecord-out-of-ck-order", d.DefectClass);
-        Assert.Equal("WEAP 01000860 (GaussRevolver)", d.Anchor);
+        Assert.Equal("WEAP 03000860 (GaussRevolver)", d.Anchor);
         Assert.Equal("repairable (lossless)", d.Tail);
         Assert.Equal("template combination 0's OBTS precedes its OBTF/FULL; the Creation Kit writes OBTF, FULL, OBTS", d.Message);
     }
@@ -199,15 +202,15 @@ public sealed class MalformedPluginScanTests
     }
 
     [Fact]
-    public void CkOrder_AnObtsPrecedingItsObtfAndFull_IsDiagnosed()
+    public void CkOrder_TrailingObtfFullWithNoClosingObts_IsDiagnosed()
     {
-        // GaussRevolver.esp's real shape: every OBTS sits one combination early —
-        // OBTE, OBTS, [OBTF FULL OBTS] … — where the CK writes OBTF, FULL, OBTS per combination.
+        // Lunar Arsenal's shape: the one combination's OBTS came first, leaving its OBTF/FULL
+        // unclosed at STOP — the CK closes every OBTF-led combination with an OBTS.
         var record = Record("WEAP", 0x00000006,
             Sub("EDID", "BadWeap\0"u8.ToArray()),
-            Sub("OBTE", Le(2)),
+            Sub("OBTE", Le(1)),
             Sub("OBTS", new byte[8]),
-            Sub("OBTF", []), Sub("FULL", "N\0"u8.ToArray()), Sub("OBTS", new byte[8]),
+            Sub("OBTF", []), Sub("FULL", "N\0"u8.ToArray()),
             Sub("STOP", []));
 
         var d = Assert.Single(MalformedPluginScan.Scan(record));
@@ -218,12 +221,15 @@ public sealed class MalformedPluginScanTests
     }
 
     [Fact]
-    public void CkOrder_ATemplateInCkOrder_ReportsNothing()
+    public void CkOrder_ALeadingBareObtsFollowedByClosedCombinations_ReportsNothing()
     {
+        // Vanilla GaussRifle's own shape (OBTE=5: OBTS, then OBTF FULL OBTS ×4) — the leading
+        // bare OBTS is the default combination and canonical CK output, proven by the
+        // MEDIT_SMOKE vanilla scan; an earlier draft flagged it and tripped 14 vanilla WEAPs.
         var record = Record("WEAP", 0x00000007,
             Sub("OBTE", Le(2)),
+            Sub("OBTS", new byte[8]),
             Sub("OBTF", []), Sub("FULL", "A\0"u8.ToArray()), Sub("OBTS", new byte[8]),
-            Sub("OBTS", new byte[8]), // a bare combination *after* dressed ones is not the rotation
             Sub("STOP", []));
 
         Assert.Empty(MalformedPluginScan.Scan(record));
