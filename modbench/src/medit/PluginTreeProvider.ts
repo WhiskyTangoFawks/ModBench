@@ -438,13 +438,37 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
     return e instanceof Error ? e.message : String(e);
   }
 
+  /** The one failure frame every child fetcher shares: a failed fetch renders as an error tree
+   *  node in place of the children, never an empty list (ADR-0026 background tier — inline UI,
+   *  logged, no toast). Wrapping the whole build keeps that enforced by construction. */
+  private async orErrorNode(op: string, build: () => Promise<PluginTreeNode[]>): Promise<PluginTreeNode[]> {
+    try {
+      return await build();
+    } catch (e) {
+      const message = this.err(e);
+      this.log(`[PluginTreeProvider] ${op} failed: ${message}`);
+      return [new ErrorNode(message)];
+    }
+  }
+
+  /** Get-or-fetch-and-set against one of the per-surface caches. A failed fetch caches
+   *  nothing, so the next expand retries — same as every hand-written block this replaced. */
+  private async cached<T>(map: Map<string, T>, key: string, fetch: () => Promise<T>): Promise<T> {
+    let value = map.get(key);
+    if (value === undefined) {
+      value = await fetch();
+      map.set(key, value);
+    }
+    return value;
+  }
+
   /** A plugin's children — its spatial group nodes and flat record-type nodes — keyed by filename
    *  rather than by a node this provider built. Public because the merged Plugins tree
    *  (ADR-0035) is the only caller: `PluginsTreeComposite` expands rows built by
    *  `PluginListProvider`, and its whole knowledge of this side is a plugin filename. There is
    *  no standalone root listing — this is the one way into a plugin's children. */
   async getPluginChildren(pluginName: string, origin?: string): Promise<PluginTreeNode[]> {
-    try {
+    return this.orErrorNode(`getPluginChildren(${pluginName})`, async () => {
       const types = await this.repository.getRecordTypes(pluginName, origin);
       const typesPresent = new Set(types.map(t => t.type));
       const nodes: PluginTreeNode[] = [];
@@ -458,54 +482,35 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
         if (!SPATIAL_TYPES.has(t.type)) nodes.push(new RecordTypeNode(pluginName, t.type, t.count, t.displayName, origin));
       }
       return nodes;
-    } catch (e) {
-      const message = this.err(e);
-      this.log(`[PluginTreeProvider] getPluginChildren(${pluginName}) failed: ${message}`);
-      return [new ErrorNode(message)];
-    }
+    });
   }
 
-  private async fetchWorldspaces(node: WorldspacesNode): Promise<PluginTreeNode[]> {
-    try {
+  private fetchWorldspaces(node: WorldspacesNode): Promise<PluginTreeNode[]> {
+    return this.orErrorNode(`fetchWorldspaces(${node.plugin})`, async () => {
       const worldspaces = await this.repository.getWorldspaces(node.plugin, node.origin);
       return worldspaces.map(w => new WorldspaceNode(node.plugin, w, node.origin));
-    } catch (e) {
-      const message = this.err(e);
-      this.log(`[PluginTreeProvider] fetchWorldspaces(${node.plugin}) failed: ${message}`);
-      return [new ErrorNode(message)];
-    }
+    });
   }
 
-  private async fetchWorldspaceChildren(node: WorldspaceNode): Promise<PluginTreeNode[]> {
-    try {
+  private fetchWorldspaceChildren(node: WorldspaceNode): Promise<PluginTreeNode[]> {
+    return this.orErrorNode(`fetchWorldspaceChildren(${node.worldspace.formKey})`, async () => {
       const data = await this.repository.getWorldspaceBlocks(node.plugin, node.worldspace.formKey, node.origin);
       const nodes: PluginTreeNode[] = data.topCells.map(c => new CellNode(node.plugin, c, node.origin));
       nodes.push(...data.blocks.map(b => new BlockNode(node.plugin, b, node.origin)));
       return nodes;
-    } catch (e) {
-      const message = this.err(e);
-      this.log(`[PluginTreeProvider] fetchWorldspaceChildren(${node.worldspace.formKey}) failed: ${message}`);
-      return [new ErrorNode(message)];
-    }
+    });
   }
 
-  private async fetchCellGroups(node: CellNode): Promise<PluginTreeNode[]> {
-    const cacheKey = `${this.originKey(node.plugin, node.origin)}::${node.cell.formKey}`;
-    let refs = this.refCache.get(cacheKey);
-    if (!refs) {
-      try {
-        refs = await this.repository.getCellReferences(node.plugin, node.cell.formKey, node.origin);
-        this.refCache.set(cacheKey, refs);
-      } catch (e) {
-        const message = this.err(e);
-        this.log(`[PluginTreeProvider] fetchCellGroups(${node.cell.formKey}) failed: ${message}`);
-        return [new ErrorNode(message)];
-      }
-    }
-    const groups: PlacedGroupNode[] = [];
-    if (refs.persistent.length) groups.push(new PlacedGroupNode(node.plugin, node.cell.formKey, 'persistent', refs.persistent, node.origin));
-    if (refs.temporary.length) groups.push(new PlacedGroupNode(node.plugin, node.cell.formKey, 'temporary', refs.temporary, node.origin));
-    return groups;
+  private fetchCellGroups(node: CellNode): Promise<PluginTreeNode[]> {
+    return this.orErrorNode(`fetchCellGroups(${node.cell.formKey})`, async () => {
+      const cacheKey = `${this.originKey(node.plugin, node.origin)}::${node.cell.formKey}`;
+      const refs = await this.cached(this.refCache, cacheKey,
+        () => this.repository.getCellReferences(node.plugin, node.cell.formKey, node.origin));
+      const groups: PlacedGroupNode[] = [];
+      if (refs.persistent.length) groups.push(new PlacedGroupNode(node.plugin, node.cell.formKey, 'persistent', refs.persistent, node.origin));
+      if (refs.temporary.length) groups.push(new PlacedGroupNode(node.plugin, node.cell.formKey, 'temporary', refs.temporary, node.origin));
+      return groups;
+    });
   }
 
   /** A Quest/DialogTopic row's own children, in the backend's already-xEdit-ordered
@@ -513,69 +518,46 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
    *  ContainerChildQueryService's own doc comment). A returned "dial" child (a Quest's own Dialog
    *  Topic) recurses into the same containerChildType flag its parent has, so it is itself
    *  expandable to its own Responses; every other returned type (dlbr/scen/info) stays a leaf. */
-  private async fetchContainerChildren(node: RecordNode): Promise<PluginTreeNode[]> {
-    const cacheKey = `${this.originKey(node.record.plugin, node.origin)}::${node.record.formKey}`;
-    let children = this.containerChildCache.get(cacheKey);
-    if (!children) {
-      try {
-        children = await this.repository.getContainerChildren(node.record.plugin, node.record.formKey, node.origin);
-        this.containerChildCache.set(cacheKey, children);
-      } catch (e) {
-        const message = this.err(e);
-        this.log(`[PluginTreeProvider] fetchContainerChildren(${node.record.formKey}) failed: ${message}`);
-        return [new ErrorNode(message)];
-      }
-    }
-    return children.map(c => new RecordNode(
-      c, node.origin, this.isImmutable(c.plugin, node.origin), containerChildTypeOf(c.recordType), c.hasContainerChildren));
+  private fetchContainerChildren(node: RecordNode): Promise<PluginTreeNode[]> {
+    return this.orErrorNode(`fetchContainerChildren(${node.record.formKey})`, async () => {
+      const cacheKey = `${this.originKey(node.record.plugin, node.origin)}::${node.record.formKey}`;
+      const children = await this.cached(this.containerChildCache, cacheKey,
+        () => this.repository.getContainerChildren(node.record.plugin, node.record.formKey, node.origin));
+      return children.map(c => new RecordNode(
+        c, node.origin, this.isImmutable(c.plugin, node.origin), containerChildTypeOf(c.recordType), c.hasContainerChildren));
+    });
   }
 
-  private async fetchInteriorCells(node: InteriorCellsNode): Promise<PluginTreeNode[]> {
-    const cacheKey = this.originKey(node.plugin, node.origin);
-    let cached = this.interiorCache.get(cacheKey);
-    if (!cached) {
-      try {
-        cached = await this.repository.getInteriorCells(node.plugin, 0, PAGE_SIZE, node.origin);
-        this.interiorCache.set(cacheKey, cached);
-      } catch (e) {
-        const message = this.err(e);
-        this.log(`[PluginTreeProvider] fetchInteriorCells(${node.plugin}) failed: ${message}`);
-        return [new ErrorNode(message)];
+  private fetchInteriorCells(node: InteriorCellsNode): Promise<PluginTreeNode[]> {
+    return this.orErrorNode(`fetchInteriorCells(${node.plugin})`, async () => {
+      const cacheKey = this.originKey(node.plugin, node.origin);
+      const cached = await this.cached(this.interiorCache, cacheKey,
+        () => this.repository.getInteriorCells(node.plugin, 0, PAGE_SIZE, node.origin));
+      const nodes: PluginTreeNode[] = cached.items.map(c => new CellNode(node.plugin, c, node.origin));
+      if (cached.total > cached.items.length) {
+        nodes.push(new InteriorLoadMoreNode(node, cached.total - cached.items.length));
       }
-    }
-    const nodes: PluginTreeNode[] = cached.items.map(c => new CellNode(node.plugin, c, node.origin));
-    if (cached.total > cached.items.length) {
-      nodes.push(new InteriorLoadMoreNode(node, cached.total - cached.items.length));
-    }
-    const failure = this.interiorLoadMoreFailures.get(cacheKey);
-    if (failure) nodes.push(new ErrorNode(failure));
-    return nodes;
+      const failure = this.interiorLoadMoreFailures.get(cacheKey);
+      if (failure) nodes.push(new ErrorNode(failure));
+      return nodes;
+    });
   }
 
-  private async fetchRecords(node: RecordTypeNode): Promise<PluginTreeNode[]> {
-    const cacheKey = this.cacheKey(node);
-    let cached = this.pageCache.get(cacheKey);
-    if (!cached) {
-      try {
-        // Every record of this type, one call, no "Load more…" step — measured no
-        // meaningful cost even at the realistic worst case (Fallout4.esm's own INFO records in a
-        // full FO4 load order, ~78k rows, ~500ms backend query + extension-host materialization
-        // combined; docs/specs/plugins.md). Matches xEdit's own record-type group nodes, which
-        // load unconditionally in full (xeMainForm.pas `vstNavInitChildren`:
-        // `ChildCount := Container.ElementCount`, no LIMIT).
-        cached = await this.repository.getRecords(node.plugin, node.recordType, 0, UNLIMITED_RECORDS, node.origin);
-        this.pageCache.set(cacheKey, cached);
-      } catch (e) {
-        const message = this.err(e);
-        this.log(`[PluginTreeProvider] fetchRecords(${node.plugin}, ${node.recordType}) failed: ${message}`);
-        return [new ErrorNode(message)];
-      }
-    }
-
-    // qust/dial rows are collapsible here too — a Quest or Dialog Topic reached from its
-    // own flat record-type listing (not just as someone else's child) still expands into its own
-    // container children, the same single mechanism fetchContainerChildren's own recursion uses.
-    return cached.items.map(r => new RecordNode(
-      r, node.origin, this.isImmutable(r.plugin, node.origin), containerChildTypeOf(node.recordType), r.hasContainerChildren));
+  private fetchRecords(node: RecordTypeNode): Promise<PluginTreeNode[]> {
+    return this.orErrorNode(`fetchRecords(${node.plugin}, ${node.recordType})`, async () => {
+      // Every record of this type, one call, no "Load more…" step — measured no
+      // meaningful cost even at the realistic worst case (Fallout4.esm's own INFO records in a
+      // full FO4 load order, ~78k rows, ~500ms backend query + extension-host materialization
+      // combined; docs/specs/plugins.md). Matches xEdit's own record-type group nodes, which
+      // load unconditionally in full (xeMainForm.pas `vstNavInitChildren`:
+      // `ChildCount := Container.ElementCount`, no LIMIT).
+      const cached = await this.cached(this.pageCache, this.cacheKey(node),
+        () => this.repository.getRecords(node.plugin, node.recordType, 0, UNLIMITED_RECORDS, node.origin));
+      // qust/dial rows are collapsible here too — a Quest or Dialog Topic reached from its
+      // own flat record-type listing (not just as someone else's child) still expands into its own
+      // container children, the same single mechanism fetchContainerChildren's own recursion uses.
+      return cached.items.map(r => new RecordNode(
+        r, node.origin, this.isImmutable(r.plugin, node.origin), containerChildTypeOf(node.recordType), r.hasContainerChildren));
+    });
   }
 }
