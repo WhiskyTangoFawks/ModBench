@@ -34,4 +34,28 @@ public sealed class SourceUnitResolverHeaderTests
             Path.Combine(mod.ModFolder, "source", mod.ActualPluginName, "RecordData.json"), unit.Value.FullPath);
         Assert.True(File.Exists(unit.Value.FullPath), "Track already writes this file — resolution must find the real one.");
     }
+
+    /// <summary>
+    /// Regression, at the root rather than at a caller: <see cref="SourceUnit.IsDirectoryPerRecord"/>'s
+    /// filename-only test (<c>RecordData.json</c>) cannot by itself tell the header's own document,
+    /// sitting <i>at</i> the plugin's source root, from a container's field file, sitting one level
+    /// <i>under</i> it — answering true here is what let an unguarded <c>DeleteRecord</c> against the
+    /// header delete the plugin's entire tracked source tree (found in review). This is the direct
+    /// test of the property itself, alongside the higher-level <c>DeleteRecord</c>/<c>RenumberRecord</c>
+    /// refusal tests in <c>MEditService.Tests.Edits</c>.
+    /// </summary>
+    [Fact]
+    public void Resolve_ForAHeaderFormKey_IsNotDirectoryPerRecord()
+    {
+        using var mod = TrackedModFixture.Tracked();
+        var headerFormKey = HeaderIndexer.FormKeyFor(ModKey.FromFileName(mod.ActualPluginName));
+        var reads = mod.Mirror.Index!.At(RecordRef.Effective);
+
+        var unit = SourceUnitResolver.Resolve(
+            reads, mod.Plugin, mod.ModFolder, headerFormKey, HeaderIndexer.RecordType, editorId: null,
+            GameRelease.Fallout4);
+
+        Assert.NotNull(unit);
+        Assert.False(unit!.Value.IsDirectoryPerRecord);
+    }
 }

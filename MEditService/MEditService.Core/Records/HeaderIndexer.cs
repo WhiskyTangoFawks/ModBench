@@ -36,14 +36,15 @@ internal static class HeaderIndexer
     /// content-derived at compile time, unconditionally, so there is nothing to key a write-time
     /// override off of).
     ///
-    /// <para><b>Not currently reachable, and that is worth knowing before relying on it.</b> An
-    /// <c>EditField</c> against a header FormKey refuses earlier, at
-    /// <c>RecordEditRefusal.SourceUnitNotFound</c>: <c>SourceUnitResolver.Resolve</c> cannot locate a
-    /// source unit for <c>record_type == "header"</c> (no group folder, not a placement, and the root
-    /// <c>RecordData.json</c> carries no FormKey in its name for the fallback scan to match), so
-    /// <c>RecordFieldWriter</c> never consults this column at all. The guard is kept as the leaf
-    /// answer for when that changes — making the header a first-class source unit is its own ticket —
-    /// not because it is doing work today.</para>
+    /// <para><b>Reachable since #661, and not specially enforced when it is.</b> The header became a
+    /// first-class source unit, so <c>EditField</c> no longer refuses it at the gate
+    /// (<c>RecordEditRefusal.SourceUnitNotFound</c>) — it answers off the schema instead
+    /// (<c>RecordEditService.RefuseHeaderFieldEdit</c>) and reaches this column's <c>Apply: null</c>
+    /// for real. That refusal (<c>FieldReadOnly</c>) is not masters-specific: every header column
+    /// carries <c>Apply: null</c> today — <c>author</c>/<c>flags</c> simply because giving them a
+    /// write delegate is #290's work, not this ticket's — so masters refuses for the identical reason
+    /// its writable-looking siblings do. This constant is never consulted as a runtime branch anywhere;
+    /// the missing delegate is the entire enforcement.</para>
     /// </summary>
     internal const string MastersFieldName = "masters";
 

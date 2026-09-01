@@ -4,6 +4,7 @@ using MEditService.Core.Records;
 using MEditService.Core.Schema;
 using MEditService.Core.Source;
 using Microsoft.Extensions.Logging.Abstractions;
+using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Tests.Edits;
 
@@ -18,6 +19,33 @@ public sealed class RecordEditServiceDeleteRecordTests
 {
     private static RecordEditService ServiceFor(ILoadOrderMirror mirror) =>
         new(mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
+
+    /// <summary>
+    /// #661 regression: <c>SourceUnitResolver</c> now resolves the header's own root
+    /// <c>RecordData.json</c> — but <c>SourceUnit.IsDirectoryPerRecord</c> tells "container's own file"
+    /// from "flat record" by filename alone (<c>RecordData.json</c>), and cannot tell the header's copy
+    /// of that name, which sits <i>at</i> the plugin's own source root, from a container's, which sits
+    /// one level <i>under</i> it. Left unguarded, <see cref="RecordEditService.DeleteRecord"/> answered
+    /// true for the header and deleted the plugin's <i>entire</i> tracked source tree as "one record's"
+    /// delete — found in review, reproduced, and this is the regression test: a sibling record's file
+    /// surviving is exactly the assertion that would have caught it.
+    /// </summary>
+    [Fact]
+    public void DeleteRecord_OnTheHeader_RefusesWithoutTouchingTheSourceTree()
+    {
+        using var mod = TrackedModFixture.Tracked();
+        var headerFormKey = HeaderIndexer.FormKeyFor(ModKey.FromFileName(mod.ActualPluginName));
+
+        var result = ServiceFor(mod.Mirror).DeleteRecord(mod.Plugin, headerFormKey);
+
+        Assert.False(result.Applied);
+        Assert.Equal(RecordEditRefusal.HeaderDeleteOrRenumberNotSupported, result.Refusal);
+        Assert.True(File.Exists(mod.NpcSourceFile), "an unrelated sibling record's file must survive");
+        Assert.True(
+            Directory.Exists(Path.Combine(mod.ModFolder, "source", mod.ActualPluginName)),
+            "the plugin's own tracked source tree must survive");
+        Assert.NotNull(mod.Mirror.Index!.At(RecordRef.Effective).GetDocument(headerFormKey, mod.Plugin));
+    }
 
     [Fact]
     public void DeleteRecord_RemovesTheSourceFile_GoneAtEffective_StillAtHead()

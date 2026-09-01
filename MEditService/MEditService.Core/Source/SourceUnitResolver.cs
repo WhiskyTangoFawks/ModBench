@@ -32,9 +32,23 @@ internal readonly record struct SourceUnit(
     /// (<c>RecordEditService.RenameSourceUnit</c>, <c>DeleteRecord</c>,
     /// <c>RenumberTheRecordItself</c>) retyping the test — alongside <see cref="IsEmbedded"/>,
     /// which <see cref="SourceUnit"/> already carries the same way.
+    ///
+    /// <para><b>The header's own root <c>RecordData.json</c> (#661) is excluded explicitly, not by
+    /// the filename test alone.</b> The whole-mod door's group-level file name
+    /// (<see cref="SourceUnitResolver.RecordDataFileName"/>) is shared between two shapes: a
+    /// container's field file, sitting one level <i>under</i> the plugin's own source root, and the
+    /// header's document, sitting <i>at</i> it — the filename test alone cannot tell them apart, and
+    /// answering true for the header is not a theoretical risk: it was a real, reviewer-caught defect
+    /// (a header <c>DeleteRecord</c> deleting the plugin's own source root as "one record's" delete).
+    /// <see cref="OwnerRecordType"/> is what actually distinguishes them — a container's is its own
+    /// concrete type, the header's is always <c>HeaderIndexer.RecordType</c> — so this checks that
+    /// rather than trusting the filename in isolation. Every one of the three call sites this
+    /// property's own doc names is expected to answer correctly for the header now, not just the ones
+    /// a caller happened to guard separately.</para>
     /// </summary>
     internal bool IsDirectoryPerRecord =>
-        Path.GetFileName(FullPath).Equals(SourceUnitResolver.RecordDataFileName, StringComparison.Ordinal);
+        OwnerRecordType != HeaderIndexer.RecordType
+        && Path.GetFileName(FullPath).Equals(SourceUnitResolver.RecordDataFileName, StringComparison.Ordinal);
 }
 
 /// <summary>

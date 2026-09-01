@@ -172,9 +172,12 @@ public class HeaderIndexingTests
 
     /// <summary>
     /// #335/ADR-0038: masters are wholly content-derived at compile time, so the column carries no
-    /// write delegate. Not currently reachable through EditField (a header FormKey refuses earlier at
-    /// SourceUnitNotFound — see HeaderIndexer.MastersFieldName), so this pins the leaf guard where it
-    /// actually lives rather than through a write that never gets there.
+    /// write delegate. Reachable through EditField since #661 (the header is a source unit now, so
+    /// EditField no longer refuses it at SourceUnitNotFound) — a write against masters is refused
+    /// FieldReadOnly, and this pins the leaf guard itself: not because masters gets any special
+    /// treatment (author/flags carry the identical Apply: null, per ReadTimeFreshnessTests'
+    /// EditingAHeaderField_... test), but because this is where the enforcement actually lives —
+    /// see HeaderIndexer.MastersFieldName.
     /// </summary>
     [Fact]
     public void HeaderSchema_MastersColumn_CarriesNoWriteDelegate()

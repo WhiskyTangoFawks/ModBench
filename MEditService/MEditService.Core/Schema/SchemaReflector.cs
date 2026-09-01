@@ -262,9 +262,10 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
 
         // Masters comes straight off the game-agnostic IModGetter rather than through a reflected
         // ModHeader property, so its document path is spelled directly. Apply stays null: masters are
-        // wholly content-derived at compile time (#335/ADR-0038) and this column is the leaf refusal
-        // for a write that ever reaches it — see HeaderIndexer.MastersFieldName for why nothing does
-        // today.
+        // wholly content-derived at compile time (#335/ADR-0038), and since #661 a write genuinely
+        // reaches this column (EditField no longer refuses the header at the source-unit gate) and is
+        // refused FieldReadOnly here — the same refusal every other header column with no Apply
+        // delegate gives, not a masters-specific mechanism (see HeaderIndexer.MastersFieldName).
         var mastersElement = new FieldMetadata("", "string", false, Empty, Empty);
         columns.Add(new ColumnSpec(HeaderIndexer.MastersFieldName, $"{modHeaderProp.Name}.MasterReferences", "VARCHAR", _ => null, "array",
             Empty, Empty, Apply: null, IsArray: true, ElementType: mastersElement));

@@ -21,6 +21,29 @@ public sealed class RecordEditServiceRenumberRecordTests
     private static RecordEditService ServiceFor(ILoadOrderMirror mirror) =>
         new(mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
 
+    /// <summary>
+    /// #661 regression: <see cref="RecordEditService.ResolveEditTarget"/> is the shared gate every
+    /// verb touching an existing record passes through, and only <c>EditField</c> was guarded against
+    /// the header when the source-unit gate that used to block it (<c>SourceUnitNotFound</c>) came
+    /// down. Traced, not run against production before the fix: <c>RenumberTheRecordItself</c> would
+    /// have deserialized the header's own file through the per-record codec —
+    /// <c>codec.DeserializeAsync(path, release, "header")</c> — the exact generic path a
+    /// <c>ModHeader</c> cannot flow through, an untyped throw rather than a typed refusal.
+    /// </summary>
+    [Fact]
+    public void RenumberRecord_OnTheHeader_RefusesWithoutTouchingTheSourceTree()
+    {
+        using var mod = TrackedModFixture.Tracked();
+        var headerFormKey = HeaderIndexer.FormKeyFor(ModKey.FromFileName(mod.ActualPluginName));
+
+        var result = ServiceFor(mod.Mirror).RenumberRecord(mod.Plugin, headerFormKey);
+
+        Assert.False(result.Applied);
+        Assert.Equal(RecordEditRefusal.HeaderDeleteOrRenumberNotSupported, result.Refusal);
+        Assert.True(File.Exists(mod.NpcSourceFile), "an unrelated sibling record's file must survive");
+        Assert.NotNull(mod.Mirror.Index!.At(RecordRef.Effective).GetDocument(headerFormKey, mod.Plugin));
+    }
+
     [Fact]
     public void RenumberRecord_MovesToNewFormKey_OldGoneAtEffective_StillAtHead_NewAbsentAtHead()
     {
