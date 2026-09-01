@@ -40,7 +40,8 @@ function makeRecord(
   i: number, workingTreeState: RecordSummary['workingTreeState'] = 'None', hasContainerChildren = false,
 ): RecordSummary {
   return {
-    formKey: `Fallout4.esm:${String(i).padStart(6, '0')}`,
+    // The backend's real shape — Mutagen's FormKey.ToString(): "<hex6>:<ModKey>".
+    formKey: `${String(i).padStart(6, '0')}:Fallout4.esm`,
     plugin: 'Fallout4.esm',
     loadOrderIndex: 0,
     isWinner: true,
@@ -66,6 +67,7 @@ function makeRepository(overrides: Partial<{
     getRecords: vi.fn().mockResolvedValue(overrides.records ?? { items: [makeRecord(0)], total: 1 }),
     searchRecords: vi.fn().mockResolvedValue({ items: [], total: 0 }),
     getConditionFunctions: vi.fn().mockResolvedValue([]),
+    getReferences: vi.fn().mockResolvedValue([]),
     setFilter: vi.fn().mockResolvedValue(null),
     clearFilter: vi.fn().mockResolvedValue(undefined),
     getActiveFilter: vi.fn().mockResolvedValue(null),
@@ -357,6 +359,21 @@ describe('RecordNode', () => {
   it('contextValue is record', () => {
     const node = new RecordNode(makeRecord(0));
     expect(node.contextValue).toBe('record');
+  });
+
+  // #572 ruling 1: an override doesn't own its FormID — the row says so, and package.json's
+  // renumber when-clause reads it: Change FormID is absent (not offered-then-refused) on a row
+  // whose plugin is not the FormKey's own origin.
+  it('contextValue is recordOverride when the row\'s plugin is not the FormKey\'s origin', () => {
+    const record: RecordSummary = { ...makeRecord(0), plugin: 'PatchMod.esp' };
+    const node = new RecordNode(record);
+    expect(node.contextValue).toBe('recordOverride');
+  });
+
+  it('contextValue stays recordImmutable for an override of an immutable plugin', () => {
+    const record: RecordSummary = { ...makeRecord(0), plugin: 'PatchMod.esp' };
+    const node = new RecordNode(record, undefined, true);
+    expect(node.contextValue).toBe('recordImmutable');
   });
 
   // resourceUri is what RecordDecorationProvider keys its badge lookup on — carries the same

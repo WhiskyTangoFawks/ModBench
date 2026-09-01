@@ -14,6 +14,7 @@ import { startExternalChangePolling, gateExternalChangePolling, type OpenMergeEd
 import { buildWebviewHtml } from './webviewHtml';
 import { EXTENSION_TO_WEBVIEW, type ExtensionToWebview, type VmadScriptsContext, type VmadScriptContext, type VmadPropertyContext, type ColumnHeaderContext } from './messages';
 import { copyTargetPlugins, type CopyGesture } from './copyTargetPlugins';
+import { renumberConfirmMessage } from './renumberConfirm';
 import { routeRecordPanelMessage, pickScriptNameViaInputBox, type RouteRecordPanelMessageDeps } from './recordPanelMessageRouter';
 import { RecordDecorationProvider } from './RecordDecorationProvider';
 import { broadcastToRecordPanels, makeOnRecordEdited } from './onRecordEdited';
@@ -308,6 +309,24 @@ export function registerRecordLifecycleCommands(
         valueSelection: undefined,
       });
       if (input === undefined) return; // cancelled
+
+      // #572 ruling 3: a renumber with referencers cascades automatically behind one up-front
+      // confirm stating the blast radius. A fetch failure degrades to a confirm with no counts
+      // rather than blocking — the backend re-checks referencers (untracked ones refuse there)
+      // regardless of what this preview said.
+      let confirmMessage: string | null;
+      try {
+        confirmMessage = renumberConfirmMessage(
+          node.record.formKey, input || suggested || '(next free)', await repository.getReferences(node.record.formKey));
+      } catch (e) {
+        outputChannel.warn(`[extension] record.renumber could not fetch referencers for the confirm: ${e instanceof Error ? e.message : String(e)}`);
+        confirmMessage = `Change FormID of ${node.record.formKey}? Its references could not be counted — ` +
+          'every referencing record in a tracked plugin will be updated with it.';
+      }
+      if (confirmMessage !== null) {
+        const choice = await vscode.window.showWarningMessage(confirmMessage, { modal: true }, 'Change FormID');
+        if (choice !== 'Change FormID') return;
+      }
 
       const newFormKey = await controller.renumberRecord(node.record.formKey, node.record.plugin, origin, input || undefined);
       if (newFormKey) void vscode.window.showInformationMessage(`Modbench: Renumbered to ${newFormKey}.`);
