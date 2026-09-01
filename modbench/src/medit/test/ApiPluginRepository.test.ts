@@ -45,6 +45,7 @@ function makeRecord(i: number): RecordSummary {
     editorId: `Record${i}`,
     origin: 'Data',
     workingTreeState: 'None',
+    hasContainerChildren: false,
   };
 }
 

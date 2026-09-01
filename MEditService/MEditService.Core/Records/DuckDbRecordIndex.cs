@@ -594,12 +594,21 @@ public sealed class DuckDbRecordIndex : IRecordIndex
             // own doc comment: a create writes nothing into records_committed). The `r` alias is needed
             // only for the correlated EXISTS below; `where`'s own unqualified column references still
             // resolve against it unambiguously, since it is the sole table this query's FROM names.
+            // #560: has_container_children is the same correlated-EXISTS shape as
+            // has_committed_snapshot just above, against container_child instead of
+            // records_committed — container_child is never duplicated per ref (see
+            // DuckDbRecordIndex.GetContainerChildren's own doc comment), so it's queried unqualified
+            // here too, the same way that private method already does.
             const string cols = """
                 form_key, plugin, load_order_idx, is_winner, editor_id, origin, r."ref",
                 EXISTS (
                     SELECT 1 FROM records_committed rc
                     WHERE rc.form_key = r.form_key AND rc.plugin = r.plugin AND rc.origin = r.origin
-                ) AS has_committed_snapshot
+                ) AS has_committed_snapshot,
+                EXISTS (
+                    SELECT 1 FROM container_child cc
+                    WHERE cc.parent_form_key = r.form_key AND cc.plugin = r.plugin AND cc.origin = r.origin
+                ) AS has_container_children
                 """;
 
             using var countCmd = owner.Connection.CreateCommand();
@@ -901,10 +910,13 @@ public sealed class DuckDbRecordIndex : IRecordIndex
             return colon > 0 ? formKey[(colon + 1)..] : null;
         }
 
+        // Column 8 is the correlated container_child EXISTS Search's SELECT list adds (#560) —
+        // read positionally, same as columns 6/7 above, rather than by name, matching this reader's
+        // existing convention throughout.
         private static RecordSummary ReadSummary(DuckDBDataReader reader) =>
             new(reader.GetString(0), reader.GetString(1), LoadOrderSortKey(reader, 2),
                 reader.GetBoolean(3), reader.IsDBNull(4) ? null : reader.GetString(4), reader.GetString(5),
-                ReadWorkingTreeState(reader));
+                ReadWorkingTreeState(reader), reader.GetBoolean(8));
 
         // origin (ADR-0036): nullable and independent of plugin — a *filter*, not an identity
         // field. Defaults to "no constraint" so a plugin-only or filter-less call returns every

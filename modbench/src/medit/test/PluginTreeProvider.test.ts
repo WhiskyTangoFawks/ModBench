@@ -57,7 +57,9 @@ function makePlugin(i: number): PluginMetadata {
   };
 }
 
-function makeRecord(i: number, workingTreeState: RecordSummary['workingTreeState'] = 'None'): RecordSummary {
+function makeRecord(
+  i: number, workingTreeState: RecordSummary['workingTreeState'] = 'None', hasContainerChildren = false,
+): RecordSummary {
   return {
     formKey: `Fallout4.esm:${String(i).padStart(6, '0')}`,
     plugin: 'Fallout4.esm',
@@ -66,6 +68,7 @@ function makeRecord(i: number, workingTreeState: RecordSummary['workingTreeState
     editorId: `Record${i}`,
     origin: 'Data',
     workingTreeState,
+    hasContainerChildren,
   };
 }
 
@@ -188,6 +191,58 @@ describe('PluginTreeProvider.getChildren(RecordTypeNode)', () => {
     await provider.getChildren(typeNode);
 
     expect(repo.getRecords).toHaveBeenCalledTimes(1);
+  });
+
+  // #560: fetchRecords maps each row's own hasContainerChildren straight from the single
+  // getRecords response — a "qust" row with none is a leaf, one with some is Collapsed, read from
+  // the listing rather than guessed from the record type alone.
+  it('a "qust" row\'s collapsible state follows its own RecordSummary.hasContainerChildren, not its record type alone', async () => {
+    const repo = makeRepository({
+      recordTypes: [{ type: 'qust', count: 2 }],
+      records: {
+        items: [
+          { ...makeRecord(0, 'None', true), formKey: 'qustWithChildren:Fallout4.esm' },
+          { ...makeRecord(1, 'None', false), formKey: 'qustWithoutChildren:Fallout4.esm' },
+        ],
+        total: 2,
+      },
+    });
+    const provider = new PluginTreeProvider(repo);
+    const [typeNode] = await provider.getPluginChildren('Plugin0.esp') as RecordTypeNode[];
+
+    const children = await provider.getChildren(typeNode) as RecordNode[];
+
+    const withChildren = children.find(c => c.record.formKey === 'qustWithChildren:Fallout4.esm')!;
+    const withoutChildren = children.find(c => c.record.formKey === 'qustWithoutChildren:Fallout4.esm')!;
+    expect(withChildren.collapsibleState).toBe(1); // Collapsed
+    expect(withoutChildren.collapsibleState).toBe(0); // None (#560)
+  });
+});
+
+// ── AC3 guard: listing a record type issues no per-row fan-out (#560) ─────────
+
+// Option 1 (per-row `getContainerChildren` fan-out to learn whether each qust/dial row has
+// children) was rejected at triage on cost grounds — up to ~1,300 concurrent round trips for one
+// "expand all Quests" action on Fallout4.esm. This guard pins the chosen option 2 instead: presence
+// travels inside the single getRecords response, so building N RecordNodes from one page issues
+// zero additional repository calls. Rival: fetchRecords/RecordNode awaiting
+// `repository.getContainerChildren(...)` per qust/dial row instead of trusting
+// `record.hasContainerChildren` — applied and observed failing (see report) before this guard was
+// trusted green.
+describe('PluginTreeProvider.getChildren(RecordTypeNode) — no per-row fan-out for container presence (#560)', () => {
+  it('listing ~1,300 Quests issues exactly one getRecords call and zero getContainerChildren calls', async () => {
+    const count = 1_300; // Fallout4.esm's own approximate QUST count
+    const records = Array.from(
+      { length: count }, (_, i) => makeRecord(i, 'None', i % 2 === 0));
+    const repo = makeRepository({ recordTypes: [{ type: 'qust', count }], records: { items: records, total: count } });
+    const provider = new PluginTreeProvider(repo);
+    const [typeNode] = await provider.getPluginChildren('Plugin0.esp') as RecordTypeNode[];
+
+    const children = await provider.getChildren(typeNode);
+
+    expect(children).toHaveLength(count);
+    expect(repo.getRecords).toHaveBeenCalledTimes(1);
+    expect(repo.getContainerChildren).not.toHaveBeenCalled();
   });
 });
 
@@ -938,25 +993,38 @@ describe('PluginTreeProvider.getPluginChildren (spatial nodes on a specific copy
 // ── Quest/DialogTopic child records ────────────────────────────────────────────
 
 function makeContainerChild(
-  formKey: string, recordType: string, editorId: string | null = null,
+  formKey: string, recordType: string, editorId: string | null = null, hasContainerChildren = false,
 ): ContainerChildSummary {
   return {
     formKey, editorId, plugin: 'Fallout4.esm', origin: 'Data',
-    loadOrderIndex: 0, isWinner: true, workingTreeState: 'None', recordType,
+    loadOrderIndex: 0, isWinner: true, workingTreeState: 'None', recordType, hasContainerChildren,
   };
 }
 
-describe('RecordNode collapsibility for container types (#424)', () => {
+describe('RecordNode collapsibility for container types (#424, #560)', () => {
   // Rival named: a RecordNode that always constructs CollapsibleState.None regardless of
   // record type — this pins the behaviour against exactly that rival.
-  it('is Collapsed when built as a "qust" row', () => {
-    const node = new RecordNode(makeRecord(0), undefined, false, 'qust');
+  it('is Collapsed when built as a "qust" row that actually has container children', () => {
+    const node = new RecordNode(makeRecord(0), undefined, false, 'qust', true);
     expect(node.collapsibleState).toBe(1); // TreeItemCollapsibleState.Collapsed (mocked to 1 above)
   });
 
-  it('is Collapsed when built as a "dial" row', () => {
-    const node = new RecordNode(makeRecord(0), undefined, false, 'dial');
+  it('is Collapsed when built as a "dial" row that actually has container children', () => {
+    const node = new RecordNode(makeRecord(0), undefined, false, 'dial', true);
     expect(node.collapsibleState).toBe(1);
+  });
+
+  // #560: the reported bug — a Quest/Dialog Topic with zero actual container children showed an
+  // expand chevron that expanded to nothing. Collapsibility now reads the listing's own
+  // hasContainerChildren fact instead of the record's type signature alone.
+  it('stays None (a leaf) when built as a "qust" row with no container children', () => {
+    const node = new RecordNode(makeRecord(0), undefined, false, 'qust', false);
+    expect(node.collapsibleState).toBe(0);
+  });
+
+  it('stays None (a leaf) when built as a "dial" row with no container children', () => {
+    const node = new RecordNode(makeRecord(0), undefined, false, 'dial', false);
+    expect(node.collapsibleState).toBe(0);
   });
 
   it('stays None (a leaf) when no containerChildType is given, as every other record type does', () => {
@@ -987,21 +1055,30 @@ describe('PluginTreeProvider.getChildren(RecordNode) — container children (#42
     expect((children[0] as RecordNode).command).toMatchObject({ command: 'modbench.openEditor' });
   });
 
-  it('a returned "dial" child is itself Collapsed — expandable to its own Responses', async () => {
+  // #560 correction: before this fix, the assertion below read `expect(dialChild...).toBe(1)`
+  // against a dial1 fixture that never claimed to have any children of its own — the test was
+  // unknowingly certifying the reported bug (a "dial" child always shows a chevron, even one that
+  // expands to nothing), not the intended "a container child is itself expandable" behaviour. Fixed
+  // by giving dial1 a genuine child (hasContainerChildren: true) and adding dial2, the previously
+  // untested case of a "dial" child with none, which must stay a leaf exactly like a top-level one.
+  it('a returned "dial" child with its own children is itself Collapsed — expandable to its own Responses; one with none stays a leaf', async () => {
     const repo = makeRepository();
     repo.getContainerChildren = vi.fn().mockResolvedValue([
-      makeContainerChild('dial1:Fallout4.esm', 'dial', 'TopicA'),
+      makeContainerChild('dial1:Fallout4.esm', 'dial', 'TopicA', true),
+      makeContainerChild('dial2:Fallout4.esm', 'dial', 'TopicB', false),
       makeContainerChild('scen1:Fallout4.esm', 'scen', 'SceneA'),
     ]);
     const provider = new PluginTreeProvider(repo);
     const questNode = new RecordNode(
-      { ...makeRecord(0), formKey: 'qust1:Fallout4.esm' }, undefined, false, 'qust');
+      { ...makeRecord(0), formKey: 'qust1:Fallout4.esm' }, undefined, false, 'qust', true);
 
     const children = await provider.getChildren(questNode) as RecordNode[];
 
-    const dialChild = children.find(c => c.record.formKey === 'dial1:Fallout4.esm')!;
+    const dialWithChildren = children.find(c => c.record.formKey === 'dial1:Fallout4.esm')!;
+    const dialWithoutChildren = children.find(c => c.record.formKey === 'dial2:Fallout4.esm')!;
     const scenChild = children.find(c => c.record.formKey === 'scen1:Fallout4.esm')!;
-    expect(dialChild.collapsibleState).toBe(1); // Collapsed — a nested "dial" is a container too
+    expect(dialWithChildren.collapsibleState).toBe(1); // Collapsed — a nested "dial" with its own children
+    expect(dialWithoutChildren.collapsibleState).toBe(0); // None (#560) — a "dial" with none stays a leaf
     expect(scenChild.collapsibleState).toBe(0); // None — a Scene is always a leaf
   });
 
