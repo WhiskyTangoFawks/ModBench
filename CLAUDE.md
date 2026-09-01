@@ -1,18 +1,14 @@
 # Modbench and mEdit
 
-## What this is
-
-Modbench: VS Code extension + local C# service (mEdit) — modding IDE for Bethesda
-plugins. Setup/architecture: [README.md](README.md). Per-module invariants:
+Modding IDE for Bethesda plugins: VS Code extension (`modbench/`) + local C# service
+(`MEditService/`). Architecture and surface map: [README.md](README.md). Per-module invariants:
 [modbench/CLAUDE.md](modbench/CLAUDE.md), [MEditService/CLAUDE.md](MEditService/CLAUDE.md).
 
 ## Status: pre-alpha, unreleased, zero users
 
-Nothing has shipped and nobody has an installed copy. Therefore: **no backwards compatibility,
-ever** — no migrations for internal renames or layout changes (re-Track is the migration), no
-compatibility shims, no "existing users" reasoning, no deprecation periods. Rename and delete
-freely; when an old form has no live consumer, remove it and its tests. ADRs are rewritten in
-place, not superseded-and-kept.
+**No backwards compatibility** — no migrations (re-Track is the migration), no shims, no
+"existing users" reasoning, no deprecation periods. Rename and delete freely; when an old form has
+no live consumer, remove it and its tests. ADRs are rewritten in place, never superseded-and-kept.
 
 ## Tools
 
@@ -26,73 +22,29 @@ dotnet test -v minimal
 npm run lint              # errors fail the build; warnings don't — see eslint.config.mjs
 npm run build             # type-check + bundle extension + webview
 npm run test:unit         # Vitest, no backend
-npm run test:integration  # real VS Code process (~10s), no backend; bundles extension.js first (pretest hook)
+npm run test:integration  # real VS Code process (~10s), no backend
 npm run generate-api      # regen typed API client — needs fresh backend; see /regenerate-api
-npm run package           # build alpha .vsix — pinned local @vscode/vsce, no npx/global install
+npm run package           # build alpha .vsix — pinned local @vscode/vsce, no npx
 ```
 
 ## Rules that matter
 
-- `modbench/eslint.config.mjs`'s five complexity rules (`sonarjs/cognitive-complexity`,
-  `complexity`, `max-lines-per-function`, `max-depth`, `max-params`) sit at `warn` on purpose,
-  and `npm run lint` no longer fails on a warning — that flag (`--max-warnings 0`) predated the
-  code-quality Stop hook and was removed once the hook made it redundant; it must not come back.
-  **A warning from one of these five is a prompt to think, not an instruction to comply.** Fix a
-  genuinely tangled function. Leave an honestly long or branchy one alone and say why in a
-  comment. **Never create a function whose only reason to exist is silencing one of these
-  warnings** — the pattern produced functions across `modbench/src/`, each carrying a comment
-  admitting as much. Thirteen were deleted (inlined back into their callers) in the three
-  registration files this rule exists for (`extension.ts`, `medit/editorCommands.ts`,
-  `modmanager/modManagementCommands.ts`). Four remain elsewhere, known and not yet addressed —
-  `loadOrderReconcile.ts`'s `createAbortScope`, `medit/PluginTreeProvider.ts`'s
-  `getSpatialChildren`, `medit/recordPanelMessageRouter.ts`'s `routeWritePathMessage`, and
-  `medit/EditingController.ts`'s `reportReconciled`. Do not fold those back in casually — two of
-  them sit on the surface of a queued ticket. The Stop hook surfaces these on changed files
-  between turns; that is the feedback channel, not `npm run lint`. If warnings ever pile up
-  unread, the fix is a separate advisory script, not restoring the flag.
-- Generalize across Bethesda games, don't lock to FO4 — FO4-concrete repo
-  path/tests are a fixture choice, not a platform lock; each bounded context enforces this independently.
-- Vocabulary boundary is enforced, not stylistic: "mod" forbidden in Editing;
-  "record"/"FormKey" absent from Mod Management. Check `CONTEXT-MAP.md` / relevant
-  `CONTEXT.md` before naming anything.
-- Mod Management (`modbench/src/modmanager/`) never calls the C# backend — pure
-  TS/Node. mEdit is the inverse: thin extension-side view; logic lives in
-  `MEditService/`, not webview/extension host.
-- **Never assume exclusive ownership of a file on disk.** MO2, xEdit, other mod
-  managers, and the user directly can create, edit, move, or delete any mod file
-  or plugin outside Modbench at any time. Every mechanism that tracks state
-  derived from disk (indexes, hashes, hidden repos, caches) must be able to
-  detect and recover from that file having changed without Modbench's
-  knowledge — never assume the last write Modbench made is still the current
-  state.
-- `references/` (not `.references/`) — grep-only local clones, never modify. Clone what
-  you need; Mutagen and TES5Edit are the load-bearing two:
-  Mutagen (`docs/Big-Cheat-Sheet.md`), TES5Edit (`wbDefinitionsFO4.pas`: `wbArrayS` =
-  sorted, `wbArray` = unsorted), `modorganizer/` (MO2 C++, e.g.
-  `src/downloadmanager.cpp` for `.meta` semantics), `SFRecordCompareEngine/`
-  (UX-parity reference), `vscode-docs` for the VS Code API.
-  **Gitignored, so it exists only in the main checkout and never in a `git worktree`.**
-  From a worktree, read it at the main checkout's absolute path — a relative grep
-  there matches nothing and returns success, which reads as "no such convention
-  upstream" rather than "you looked in the wrong place".
-- New end-to-end command = 3 touch points, else half-wired: backend endpoint +
-  `/regenerate-api` → frontend (`PluginRepository`/`EditingController`) →
-  `package.json` commands/menus + `extension.ts` registration. (`EXPECTED_COMMANDS` in
-  the integration test is derived from `package.json`, so it needs no separate edit.)
-- **xEdit decides plugin-editing UX; VS Code decides the vehicle.** Before designing
-  any record-editing interaction, read how xEdit does it — `docs/research/xedit-ux-audit.md`
-  first, then `references/TES5Edit/xEdit/xeMainForm.pas` (`vstView*` handlers),
-  `xeMainForm.dfm` (tree options) and `xEdit/EditTips.txt` (its own user-facing UX
-  doc). Adopt its answer. Diverge **only** for a genuine platform limitation, never
-  because an alternative seems nicer — 25 years of refinement against this exact domain,
-  and every user arrives already fluent in it, so familiarity outranks local improvement.
-  Baseline, not ceiling: opt-in power-user additions xEdit never had are fine — default
-  stays xEdit's, no xEdit gesture redefined
-  ([ADR-0034](docs/adr/0034-xedit-is-the-ux-reference-for-the-record-editor.md),
-  [ADR-0019](docs/adr/0019-xedit-unified-tree-model-for-compare-grid.md)). Specify from
-  xEdit, never from memory of it — memory has repeatedly gotten the gestures wrong (click
-  focuses a cell there, it does not edit). Does not apply to Mod Management, which follows MO2. Also does
-  not apply to tracking/compile/branch UX (review, revert, history, dirty indicators) —
-  xEdit has no such model; the references there are the product's own git-native
-  working-tree model (ADR-0041) and VS Code/git native idioms (Source Control panel,
-  decorations, dirty markers).
+- Generalize across Bethesda games — FO4-concrete paths/tests are a fixture choice, not a
+  platform lock; each bounded context enforces this independently.
+- Vocabulary boundary is enforced, not stylistic: "mod" forbidden in Editing; "record"/"FormKey"
+  absent from Mod Management. Check `CONTEXT-MAP.md` / the relevant `CONTEXT.md` before naming
+  anything.
+- Mod Management (`modbench/src/modmanager/`) never calls the C# backend — pure TS/Node. mEdit is
+  the inverse: thin extension-side view; logic lives in `MEditService/`.
+- **Never assume exclusive ownership of a file on disk.** MO2, xEdit, other tools and the user can
+  create, edit, move or delete any mod file or plugin outside Modbench at any time. Anything that
+  tracks disk-derived state (indexes, hashes, hidden repos, caches) must detect and recover from
+  the file having changed without Modbench's knowledge.
+- `references/` = grep-only local clones, never modified. Load-bearing two: Mutagen
+  (`docs/Big-Cheat-Sheet.md`) and TES5Edit (`wbDefinitionsFO4.pas`: `wbArrayS` = sorted,
+  `wbArray` = unsorted); also `modorganizer/` (MO2 C++), `SFRecordCompareEngine/`, `vscode-docs`.
+  Gitignored, so **absent from every `git worktree`** — read it at the main checkout's absolute
+  path; a relative grep from a worktree silently matches nothing.
+
+CLAUDE.MD Files are owned by the developer. Any edit to a claude.md developer needs explicit permission,
+given for the exact edit to be made.

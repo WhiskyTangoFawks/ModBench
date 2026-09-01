@@ -4,128 +4,48 @@ TypeScript VS Code extension. Root [CLAUDE.md](../CLAUDE.md) for project-wide in
 
 ## Invariants
 
-- VS Code workspace root = MO2 instance dir. `src/modmanager/` reads `mods/`, `profiles/`, `ModOrganizer.ini` relative to it — no separate instance-path config. `ModOrganizer.ini` supplies `selected_profile`/`gamePath`. `GamePathDetector` resolves only the vanilla/editing game path (later phases), not the instance.
-- Mod-manager writes are byte-faithful surgical edits, never model→re-serialization — splice only changed bytes of `modlist.txt`/`ModOrganizer.ini` (CRLF, comments, `*` lines, separators, order survive verbatim). Pure transforms: `src/modmanager/mo2/*.ts`. In-memory `ModlistEntry[]` = read-view, not the serialization source.
-- All backend HTTP calls go through the generated `openapi-fetch` client (`ApiClient`) — never raw `fetch()`.
-- Don't rebuild what VS Code already does — check native capability first, **and the rule does not stop at the webview boundary**. Extension-side: file mgmt → Explorer (`revealInExplorer`), not a bespoke browser; row coloring → `FileDecorationProvider`, not a custom widget. Webview-side: right-click menu → `contributes.menus["webview/context"]` + `data-vscode-context`, not a rendered `<ul role="menu">`; pick-one-of-N → `showQuickPick`/`createQuickPick`, not a rendered dropdown; confirm-destructive → `showWarningMessage(…, { modal: true })`, not a rendered overlay; free text in → `showInputBox`; get text *out* of a **tree or list** → a **Copy command**, never a bespoke selection mechanism (what Explorer/Problems/SCM/Debug-Variables all do — those surfaces have no text selection at all, so a command is the only answer); a hierarchy → `TreeView`, not rendered chevrons. **Get text out of a webview → `Ctrl+C` on the focused cell**, which reads the cell's model value directly rather than going through DOM/native text selection — the record editor's answer per [ADR-0034](../docs/adr/0034-xedit-is-the-ux-reference-for-the-record-editor.md): click focuses a cell, it does not select text, so copy cannot depend on a text selection existing. Corollary: because copy reads the model value and not the rendered label, a lossy label (`{…}`, `[3]`) does not block copying — but still fix the label, since it's what the user reads. Work within the native widget's limits (e.g. no per-row bg color in a TreeView) rather than reinvent them. A webview is justified by what it *renders* — the compare grid, which nothing native provides — never by the chrome around it. Ask "which VS Code surface already does this?" before designing any interaction; if the answer is a surface, copy its answer. Not `@vscode/webview-ui-toolkit` — archived; the native path is contributions + commands. [ADR-0027](../docs/adr/0027-mo2-surfaces-map-to-native-vscode-views.md)
-- **Recorded divergence from Native-first: tree name filtering is bespoke, not VS Code's tree Find.** Every Modbench list view narrows by name through `registerNameFilter` (`src/nameFilter.ts`), not `list.find`. Rejected on facts, not taste: (1) `list.find`'s keybinding moved to `ctrl+alt+F`/`F3` in VS Code 1.89 specifically to reduce accidental activation, leaving it effectively undiscoverable; (2) whether it *highlights* or *filters* is `workbench.list.defaultFindMode`, a global user setting an extension cannot override per view — adopting it would make behavior inconsistent by construction; (3) it only sees rendered rows, which is structurally wrong for the lazily-paginated Plugins tree. The corollary is that `ctrl+F` (`focusedView == <view>`, per view, never the container) is **ours** on these trees: it means find-within-the-focused-surface everywhere else in VS Code, trees left it unbound in 1.89, so the binding conflicts with nothing and closes the one surface where the platform's own idiom silently does nothing. Behavior is specified once in [docs/specs/mods.md](../docs/specs/mods.md); do not re-answer "how should this list filter?" per view.
-- Prefer reactive updates over manual refresh — watch the source (`createFileSystemWatcher`) and re-render; don't require a Refresh click. Manual Refresh, if present, is only a safety net for flaky watch events, never the primary path.
-- **Where a command lands in a title bar is decided by rule, not per ticket.** The Native-first rule above answers *which surface* an interaction uses; this answers *where on it*.
-  1. **Scope first.** If an action isn't about this tree's own domain, it doesn't go on this tree — it goes to the **Loadout header view** (`modbench.loadoutHeader`, [docs/specs/loadout-header.md](../docs/specs/loadout-header.md)), the status bar, or the palette. Workspace-scope actions (profile, load order, deployment, refresh) live there. VS Code's container-level `…` is *its own* auto-generated Views menu and is not a contribution point, so a real view is the only shared home.
-  2. **Four navigation icons maximum.** Not taste: VS Code collapses navigation icons into `…` when a view is narrow, so a fifth is already unreliable. A two-command context-key toggle counts as one — only ever one of the pair is visible.
-  3. **An icon is earned** by in-workflow frequency (used more than once per sitting) or by being a state readout (sort direction, show-hidden, filter-active). Configure-once and occasional actions go to `…`.
-  4. **Destructive actions never get an icon** — overflow plus a modal confirm (`showWarningMessage(…, { modal: true })`).
-  5. **Fixed slot order**, so an icon means the same thing in every view: name filter, then the view's state affordance (presentation toggle, or a second narrowing axis like the record filter), then domain actions, then overflow, then Collapse All (native, always last). Assign `navigation@1`… in that order **skipping what a view doesn't have** — the header is not a list, so Refresh is its `@1` and Launch… its `@2`. What the rule fixes is the *order*, not the number.
-  6. **Icon vocabulary:** `$(search)` = narrow by name, `$(filter)` = narrow by condition, `$(refresh)` = re-read from disk and is **one command id** (`modbench.refresh`) covering every Mod-Management source at once.
-  7. **`showCollapseAll` on every hierarchical tree, never on a flat list.** Currently: Mods and the one Plugins tree (its rows expand into records) — yes; Downloads, the header — no.
-  8. There is no session reload to place — the editing backend's load order is reconciled on every loadout change (ADR-0044), so Refresh is the only re-read gesture.
+- VS Code workspace root = MO2 instance dir; `ModOrganizer.ini` supplies
+  `selected_profile`/`gamePath` ([docs/specs/mods.md](../docs/specs/mods.md)). No separate
+  instance-path config.
+- Mod-manager writes are byte-faithful surgical edits, never model→re-serialization
+  (ADR-0021); in-memory `ModlistEntry[]` is a read-view, not the serialization source.
+- All backend HTTP goes through the generated `openapi-fetch` client (`ApiClient`) — never raw
+  `fetch()`.
+- Prefer reactive updates (`createFileSystemWatcher` → re-render) over manual Refresh; Refresh is
+  a safety net, never the primary path.
+- Bounded-context import and vocabulary boundaries are pinned in
+  `src/test/contextBoundary.test.ts`; title-bar placement rules and rationale in
+  `src/test/packageJson.test.ts` — read the test before placing a command. The one untestable
+  rule: `showCollapseAll` on every hierarchical tree, never a flat list — a `createTreeView`
+  option with no test seam; check the call sites.
+- `EditingController` keeps VS Code types out of its interface — chat tool handlers call it
+  directly (ADR-0012).
 
-  Filtering is **one widget** (`registerNameFilter`, `src/nameFilter.ts`) used by every list view — Mods, the merged Plugins tree, Downloads. Adding a fourth list view means reusing it, not writing a second one: pass the view and its id, and its two command ids and filter-active context key follow by construction. The rules govern the *surface*, not command ids: several ids carry a legacy `modList.` prefix, and renaming them would be churn with no user-visible effect.
+## Placement
 
-  Rules 1–6 and 8 are enforced in `src/test/packageJson.test.ts`, not by review — a new contribution that breaks one fails there. **Rule 7 is not**: `showCollapseAll` is a `createTreeView` option with no declarative contribution and no readable property on the returned `TreeView`, so it has no test seam and is checked by reading the `createTreeView` call sites — since #628 those are in `extension.ts` (Plugins) and `modmanager/modManagementCommands.ts` (Mods), not one file.
+- New commands: register in the surface file for the command's own context; `extension.ts` only
+  when it genuinely joins both. A forward-context-to-panel command is a
+  `recordPanelForwarderCommands.ts` row.
+- Context-menu availability = tree node `contextValue` — plugin rows carry Mod Management's
+  values, expanded rows carry the record browser's (from backend metadata). Read-only-for-editing
+  is a tooltip, never a contextValue (ADR-0035).
+- New data queries: `PluginRepository` interface → `ApiPluginRepository`, tested without VS Code.
+- New UI surface: read its spec in `docs/specs/` first (one spec per surface); update the spec if
+  not covered.
 
-## Module Map
+## Wire types
 
-| Module | Owns | Key rule |
-| ------ | ---- | ---- |
-| `extension.ts` | The composition root: the `ExtensionSession` object, the lifecycle (`activate`/`deactivate`), and everything that genuinely joins both bounded contexts (the merged Plugins tree, plugin-row commands, load-order reconcile wiring, the Loadout header) | No business logic; prompts then delegates to `EditingController`. Single-context wiring does **not** live here — it lives in the surface files below (#628) |
-| `medit/editorCommands.ts` | Editing-context command registration, narrowed to callbacks rather than the session object | Single-context: no Mod Management imports (`contextBoundary.test.ts`, import-only tier — it carries user-facing strings naming MO2's vocabulary for the user's benefit) |
-| `modmanager/modManagementCommands.ts` | Mod Management command registration | Single-context: no Editing imports **and no Editing vocabulary in its own text** — held to the strict `contextBoundary.test.ts` tier |
-| `medit/recordPanelForwarderCommands.ts` | The `[commandId → messageType]` table + one generic registrar for commands that only forward context to the record panel | Data, not repetition — a new forwarder is a table row. The mapping is pinned by its own unit test; the integration suite only asserts commands are *registered*, so it cannot catch a wrong row |
-| `workspaceConfig.ts` | `meditConfig`, `makeDetectPaths`, `setMo2InstanceContext` | Context-neutral helpers both surface files need; exists so neither has an import edge back to the composition root |
-| `EditingController` | HTTP orchestration (create plugin, copy record, `putLoadOrder`) | No VS Code types in interface — VS Code chat tool handlers call it directly (ADR-0012) |
-| `loadOrderReconcile` (`createLoadOrderSync`) | ADR-0044: the whole reconcile pipeline — "recompute the snapshot, PUT it, apply the answer", coalesced — every loadout trigger calls `request()`, Launch mEdit calls `flush()` for the outcome; also owns the in-flight abort scope (`arm()`/`abandon()`) and the per-plugin record-filter match map (`matches()`/`setMatches()`) | Composition-root joiner, imports nothing from either context (`contextBoundary.test.ts`); every reconcile step (snapshot, PUT, tree hand-off) is injected, never known to the module; drops requests when no backend is receiving |
-| `modmanager/loadOrderSnapshot` | `buildLoadOrderSnapshot`: every physical plugin copy with slot/enabled/winning | Pure over `FileConflictIndex` + `plugins.txt`; the only thing that crosses to Editing is `(name, path, origin, slot, enabled, winning)` |
-| `BackendManager` | Backend lifecycle: `start()` (attach if healthy, else spawn bundled binary), `stop()`, crash-restart; polls `GET /health` | Spawns/tears down backend ([ADR-0022](../docs/adr/0022-extension-owns-backend-lifecycle.md)); path/exe injected by `extension.ts` |
-| `PluginRepository` | HTTP adapter (`GET /plugins`, `/plugins/{plugin}/record-types`, `/records`) | Interface `PluginRepository`; impl `ApiPluginRepository` |
-| `PluginTreeProvider` | Sidebar tree: repo data → tree nodes; page cache | Takes `PluginRepository`, not `ApiClient` — cache keyed `"plugin::recordType"`. `getPluginChildren(name)` is the public way in for rows built elsewhere, shared by whatever else needs a plugin's children (e.g. `RecordDecorationProvider`) alongside the one Plugins tree it backs |
-| `PluginsTreeComposite` | The one Plugins tree ([ADR-0035](../docs/adr/0035-one-plugins-tree-editing-is-a-capability.md)): Mod Management's rows + the record browser's children, joined | Composition root, imports from neither bounded context — rows and children are type parameters and its whole knowledge of both domains is the injected `pluginFileOf`. Chevrons come from `setLoadOrder(files)`; a row the load order doesn't hold stays a leaf rather than expanding to nothing. Enforced by `src/test/contextBoundary.test.ts`, not by review |
-| `ApiClient` | Typed `openapi-fetch` client factory | Type alias for generated client; wire DTOs *named* here as `components['schemas']` aliases, never re-declared — see § Wire types |
-| `GamePathDetector` | Game path discovery (Steam VDF / Windows registry) | Pure utility; returns `GamePaths \| null` |
-| `webviewHtml` | HTML shell for record editor webview | No VS Code types except `Uri` string |
-| `recordPanelMessageRouter` | Webview→extension message dispatch for the record panel | Pure function, no VS Code types in signature except injected deps — testable without a harness |
-| `LoadoutHeaderProvider` | The Loadout header's rows: profile, deployment ([docs/specs/loadout-header.md](../docs/specs/loadout-header.md)) | Composition root, imports from neither bounded context — all state injected as getters, so it is unit-testable without a VS Code harness. Renders nothing when there is no loadout: its rows' commands only exist alongside the Loadout views |
-| `reporter` | ADR-0026 surfacing reporter (`makeReporter`): logs at the level matching severity, toasts on warning/error | Takes the leveled channel directly (`.warn`/`.error`), not the flat `log` shim — testable without a harness (`vi.mock('vscode')`) |
-| `backendLog` | `makeBackendLogForwarder`: one line of backend console output → the matching leveled channel call. `backendLogLevelArgs`: the channel's level → the backend's Serilog spawn-arg override | Sole owner of Serilog-console-format knowledge, both directions — read (console template parsing) and write (`--Serilog:MinimumLevel:Default` argv). Parse is tolerant — an untagged line is still forwarded, never dropped. Carried level is per stream (untagged stdout = continuation, untagged stderr = runtime crash → `error`) |
+**The generated schema is the frontend type — never mirror a wire DTO by hand.** `ApiClient.ts`
+and `webview/src/types.ts` name `components['schemas'][…]` aliases; adding a wire field is C#
+model → `/regenerate-api`, nothing else. The schema reports C# nullability and enums honestly
+(pinned by backend `SwaggerSchemaTests` and `webview/src/types.test.ts`), so a `??` default or
+trust-cast on a wire field is a bug, not defensive coding. Never edit `src/medit/generated/api.ts`
+or read it to learn the wire shape — consult the C# DTOs (`MEditService.Core/Queries/Models.cs`).
+Hand-written types earn their place only as a genuine transform or refinement of the wire type;
+optionality that exists so stale fixtures compile is neither.
 
-Placement:
+## Surfacing
 
-- Context menu availability = tree node `contextValue`. Plugin rows carry Mod Management's own
-  values (`"plugin"`, `"pluginImplicit"` — `PluginListProvider.ts`); everything a row expands into
-  (once the backend is running) carries the record browser's, from backend metadata (`"recordType"`,
-  `"record"`, …). Read-only-for-editing on a plugin row is a tooltip `PluginsTreeComposite`
-  appends, never a contextValue (ADR-0035, `docs/specs/plugins.md`).
-- New commands: register in the surface file for the command's own context — `medit/editorCommands.ts`
-  for Editing, `modmanager/modManagementCommands.ts` for Mod Management — and only in `extension.ts`
-  when the command genuinely joins both (its argument is a merged-tree node type, say). Prompt there,
-  delegate to `EditingController` (explicit args, no VS Code types). A command that only forwards
-  context to the record panel is a row in `medit/recordPanelForwarderCommands.ts`, not a new function.
-- New data queries: add to `PluginRepository` interface, implement in `ApiPluginRepository`, test without VS Code.
-- New UI surface: read the surface spec in `docs/specs/` first — one spec per surface (`medit-record-editor.md`, `medit-referenced-by.md`, `medit-version-control.md` for Editing, with `medit.md` the cross-cutting overview; `mods.md`, `plugins.md` (the one Plugins tree — ADR-0035; joint Mod Management/Editing), `downloads.md` for Loadout; `loadout-header.md` for the cross-context header). Update the spec if not covered.
-
-## Wire types: the generated schema is the frontend type
-
-**The generated type *is* the frontend type. Never mirror a wire DTO by hand.** `ApiClient.ts` and
-`webview/src/types.ts` name `components['schemas'][…]` aliases; there is no mapper layer and no
-second copy to keep in sync.
-
-Adding a field to a wire DTO is **two steps**: C# model → `/regenerate-api`. Consumers see it
-immediately; nothing else needs touching.
-
-This holds because the OpenAPI schema reports C# nullability and enums honestly (#627):
-`NullabilitySchemaFilter` + `SupportNonNullableReferenceTypes()` (`Program.cs`) put non-nullable
-properties in `required` and keep them off `nullable`, and every wire-reaching enum carries
-`[JsonConverter(typeof(JsonStringEnumConverter))]`. So a non-nullable C# `string Name` arrives as
-`name: string` — **not** `name?: string | null`. Dictionary **values** carry their nullability too
-(#644): `Dictionary<string, T?>` arrives as `{ [key: string]: T | null }` whether `T` is a `$ref`
-or an inline schema — the filter wraps a nullable `$ref` value in `allOf`, since OpenAPI 3.0
-forbids a sibling `nullable` next to a `$ref`. A `??` default or a trust-cast on a wire field is
-now a bug, not defensive coding. `SwaggerSchemaTests`/`WireEnumSerializationTests` (backend) and the
-three `Assert<Exact<…>>` checks in `webview/src/types.test.ts` (checked by `npm run build`, not
-vitest) pin all of that.
-
-**`src/medit/generated/api.ts` is generated — don't read it to learn the wire shape and never edit
-it.** Consult the OpenAPI spec (`http://localhost:5172/swagger/v1/swagger.json` off a running
-backend) or the C# DTO in `MEditService.Core/Queries/Models.cs`; to change it, change the C# and
-regenerate. `run-gates.sh --api-drift` fails if it has drifted.
-
-Two kinds of hand-written type still earn their place, and the test is: **would this still need to
-exist if the generator were perfect?**
-
-- A genuine **transform** — `LoadOrderStatus` (`ApiClient.ts`) flattens `indexedPlugins` to
-  filenames and drops the duplicated `state`.
-- A genuine **refinement** — `webview/src/types.ts`'s `FieldType`/`VmadKind` narrow the wire's
-  `string`, and `FieldMetadata.isSortable`/`allowsNull`/`isBitmask` stay optional, because the
-  VMAD/Condition tree adapters synthesize metadata for rows **the backend never sends**. A perfect
-  generator describes the wire; it would still say nothing about an object that never touches it.
-  Wire → webview is therefore a documented downcast (`RecordPanelClient.load`'s one remaining
-  `as`), not distrust.
-
-Optionality that exists *so stale fixtures compile* is neither, and does not belong.
-
-## Integration tests (`src/test/integration/extension.test.ts`)
-
-Real VS Code process via `@vscode/test-cli` against a mock HTTP server (port 15172) — no real backend needed.
-
-Update when: new `extension.ts` behavior (`EXPECTED_COMMANDS` derives from `package.json`, so a new command needs no edit here). Skip for `EditingController`/`PluginRepository`/`BackendManager`/`PluginTreeProvider` — unit-tested without VS Code.
-
-## Logging
-
-- One `vscode.LogOutputChannel` (`'Modbench'`, created with `{ log: true }`), created in `extension.ts`. Its native `.debug/.info/.warn/.error` methods drive the Output panel's level filter and stamp timestamps automatically.
-- Call sites that log **and** toast go through `makeReporter` (ADR-0026). Call sites that log only call the channel's leveled methods directly (DEBUG/INFO for routine actions, WARN when the system correctly refuses something, ERROR for an actual failure) — deliberately, because routing them through the reporter would add a toast that does not exist today. One site logs at ERROR but toasts at WARNING (`applyLoadOrderToTree`); the reporter ties both to one severity, so it stays direct. Other modules doing HTTP/async-error handling (`BackendManager`, `PluginRepository`, `EditingController`, etc.) still take a flat `log: (msg: string) => void` compat shim — their own releveling is not yet done.
-- The spawned backend's Serilog console output is piped (`stdio: ['ignore','pipe','pipe']`) and forwarded line-by-line into the same channel, prefixed `[backend]`, at its parsed level — so the level filter governs backend and frontend lines alike. Only for a backend *we spawn*: an attached dev-launched one keeps logging to its own terminal. Streams are drained unconditionally — an unread pipe blocks the backend's writes.
-- Every `catch` logs to the channel before showing UI or swallowing. No silent `catch {}`.
-- `PluginTreeProvider`/`ModListProvider`: error tree node instead of empty list on fetch/read failure. `ModListProvider`'s status-badge calc (secondary, non-blocking) degrades badges + warns instead — silently-absent badges would look like "no conflicts."
-- Webview: every async op checks `resp.ok`, sets error state on failure. No fire-and-forget fetches.
-
-## Error surfacing ([ADR-0026](../docs/adr/0026-error-surfacing-policy.md))
-
-User's mental model must never be silently wrong — missing/incomplete data the UI implies present needs a mandatory notification, even on HTTP-200 "success" (e.g. skipped plugin). Surface by severity, never a blanket popup:
-
-| Severity | Response |
-| --- | --- |
-| Integrity / silent-wrong-state (skipped plugin, partial save, failed reindex) | notification (warn/error) + log, always |
-| Explicit action failed (a command the user ran) | error notification + log |
-| Background / recoverable / frequent (tree fetch blip, poll) | inline UI (error tree node, status bar) + log — not a toast |
-
-Surface via an injected reporter (logs to channel, shows severity-appropriate surface) — no raw `vscode.window.*` in `EditingController`/repositories; keeps it testable (`EditingController` skipped-plugin tests). Backend returns structured failures (e.g. `LoadOrderResponse.Failures`); frontend decides surfacing — backend never swallows a partial outcome.
+Sites that log **and** toast go through the injected reporter (`makeReporter`); the severity table
+and the no-raw-`vscode.window.*`-in-controllers rule are ADR-0026. Log-only sites call the shared
+`LogOutputChannel`'s leveled methods directly.

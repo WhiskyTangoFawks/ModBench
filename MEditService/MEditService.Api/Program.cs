@@ -31,6 +31,8 @@ try
     var builder = WebApplication.CreateBuilder(new WebApplicationOptions
     {
         Args = args,
+        // The extension spawns us without a working directory; the default content root would then
+        // silently skip appsettings.json, so config must load from the binary's own directory.
         ContentRootPath = AppContext.BaseDirectory,
     });
 
