@@ -535,8 +535,8 @@ function registerFieldOpCommands(recordPanels: Set<vscode.WebviewPanel>): vscode
 // self-filters on `formKey` and, if it matches, posts the op envelope straight through
 // handleEditCell/EDIT_FIELD — no webview-side computation for an ordinary reflected field's array
 // (RecordFieldWriter/ArrayOpWriter compute the result server-side). A VMAD scalar-array property's
-// own arity ops are the one exception, deliberately out of scope here (RecordPanel's own
-// handleArrayOp still computes those client-side) — this command layer doesn't need to know the
+// own arity ops, and a Condition-owning field's, are the two exceptions, deliberately out of scope
+// here (RecordPanel's own handleArrayOp still computes those client-side) — this command layer doesn't need to know the
 // difference, it only ever forwards ctx verbatim.
 function registerArrayOpCommands(recordPanels: Set<vscode.WebviewPanel>): vscode.Disposable[] {
   // Forwards ctx.rootField/ctx.path verbatim — see

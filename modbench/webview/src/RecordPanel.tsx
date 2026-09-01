@@ -49,21 +49,27 @@ const ARRAY_OP_NAMES = {
   add: 'array_add', remove: 'array_remove', moveUp: 'array_move_up', moveDown: 'array_move_down',
 } as const;
 
-// A VMAD scalar-array property's own arity op — deliberately out of #630's scope (belongs in
-// VmadCodec's own structural-op vocabulary, a script/property's Papyrus array being a different
-// codec surface than an ordinary reflected column; RecordFieldWriter's own VMAD-path dispatch
-// refuses an array-op envelope arriving under one) — so this still computes the next array
-// client-side and commits it whole, exactly as every arity op did before #630. Module-scope (like
-// subtreeFor above): closes over nothing, everything it needs arrives as an argument. Exported
-// (unlike subtreeFor) purely so RecordPanel.test.tsx can pin its own boundary/happy-path behaviour
-// directly — handleArrayOp's own VMAD branch reaches it through a rootDiff lookup
-// (`[...vmadTree.diffs, ...conditionTree.diffs].find(...)`) that only ever finds a *script's* own
-// diff, never a property's (the property's FieldDiff is a child of its script's, not a top-level
-// entry) — the same pre-existing, already-documented gap handleOpenExtended's own comment names
-// ("a VMAD property's own FieldDiff is a child of its script row, never a top-level entry"), so a
-// full DOM-level test of a VMAD array gesture cannot pass regardless of this function's own
-// correctness. Not this ticket's defect to fix.
-export function computeVmadArrayOp(
+// The shared computation behind both of handleArrayOp's carve-outs below — a VMAD scalar-array
+// property's own arity op, and a Condition-owning field's — each deliberately out of #630's scope
+// (VmadCodec and Fallout4ConditionCodec each own their own vocabulary/wire shape, neither is
+// ArrayOpWriter's ColumnSpec-backed one; RecordFieldWriter's own VMAD-path dispatch refuses an
+// array-op envelope arriving under a VMAD path, and Fallout4ConditionCodec.ApplyListValue requires
+// a JSON array and refuses an envelope object the same way), so both still compute the next array
+// client-side and commit it whole, exactly as every arity op did before #630 — this function is
+// that computation, identical for either caller (it never knows or cares which). Module-scope
+// (like subtreeFor above): closes over nothing, everything it needs arrives as an argument.
+// Exported (unlike subtreeFor) purely so RecordPanel.test.tsx can pin its own boundary/happy-path
+// behaviour directly for the VMAD case — handleArrayOp's own VMAD branch reaches it through a
+// rootDiff lookup (`vmadTree.diffs.find(...)`) that only ever finds a *script's* own diff, never a
+// property's (the property's FieldDiff is a child of its script's, not a top-level entry) — a
+// pre-existing, already-documented gap handleOpenExtended's own comment names ("a VMAD property's
+// own FieldDiff is a child of its script row, never a top-level entry"), so a full DOM-level test
+// of a VMAD array gesture cannot pass regardless of this function's own correctness (not this
+// ticket's defect to fix). The Condition case has no such gap — a Condition group's own FieldDiff
+// *is* always a top-level entry in conditionTree.diffs (conditionTreeAdapter.ts's own
+// buildConditionRows builds one flat array per condition-owning field, nested game-data condition
+// lists included) — so it is pinned end-to-end instead, in ConditionArrayOps.test.tsx.
+export function computeArrayOpClientSide(
   rootValue: unknown, path: PathSegment[], op: 'add' | 'remove' | 'moveUp' | 'moveDown', elementMeta?: FieldMetadata,
 ): unknown {
   // 'add' addresses the array itself; every other op addresses one of its elements, so the
@@ -252,20 +258,38 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
   // (`{op, path}`) straight through handleEditCell/EDIT_FIELD under `rootField`; RecordFieldWriter/
   // ArrayOpWriter compute the result server-side from the record's own current value and schema —
   // no webview-side computation at all, the same shape VMAD's own structural ops
-  // (VMAD_STRUCTURAL_OP) already use. `elementMeta` and the boundary no-op check (a client-computed
-  // "would this change anything?") both move server-side with it; ArrayOpWriter answers a boundary
-  // op as a no-op that commits nothing. The VMAD exception (computeVmadArrayOp above) is told apart
-  // by `rootField`'s own shape (`VMAD\<Script>\<Property>`, vmadTreeAdapter.ts's own wirePath
-  // convention).
+  // (VMAD_STRUCTURAL_OP) already use.
+  //
+  // Two carve-outs, kept as separate branches rather than one merged lookup, each preserving the
+  // pre-#630 computation bit-for-bit (computeArrayOpClientSide above): a VMAD scalar-array property's
+  // own arity ops (VmadCodec's own vocabulary, not ArrayOpWriter's) and a Condition-owning field's
+  // (Fallout4ConditionCodec.ApplyListValue requires a JSON array and refuses an op-envelope object
+  // outright — RecordFieldWriter routes a Condition-list fieldPath there before ArrayOpWriter's own
+  // detection ever runs, so posting an envelope under one is a guaranteed refusal, not merely an
+  // unsupported shape). Not merged into one lookup: a VMAD *property*'s own wirePath
+  // (`VMAD\<Script>\<Property>`) never resolves in this same top-level-diffs lookup (a property's
+  // FieldDiff is a child of its script's, never a top-level entry — the same pre-existing gap
+  // computeArrayOpClientSide's own doc comment names), so gating VMAD on the lookup succeeding, the way
+  // Conditions safely can (a Condition group's own FieldDiff *is* always a top-level entry in
+  // conditionTree.diffs — conditionTreeAdapter.ts's own buildConditionRows builds one flat array,
+  // nested game-data condition lists included), would silently start posting an envelope for a
+  // VMAD property instead of the current true no-op — a new network round trip and a new refusal
+  // shape neither existed before.
   const handleArrayOp = useCallback((
     plugin: ColumnKey, path: PathSegment[], rootField: string,
     op: 'add' | 'remove' | 'moveUp' | 'moveDown', elementMeta?: FieldMetadata,
   ) => {
     if (rootField.startsWith('VMAD\\')) {
-      const rootDiff = [...vmadTree.diffs, ...conditionTree.diffs]
-        .find(d => (d.wirePath ?? d.fieldName) === rootField);
+      const rootDiff = vmadTree.diffs.find(d => (d.wirePath ?? d.fieldName) === rootField);
       if (!rootDiff) return;
-      const nextValue = computeVmadArrayOp(rootDiff.values[plugin], path, op, elementMeta);
+      const nextValue = computeArrayOpClientSide(rootDiff.values[plugin], path, op, elementMeta);
+      if (nextValue !== undefined) handleEditCell(plugin, rootField, nextValue);
+      return;
+    }
+
+    const conditionRootDiff = conditionTree.diffs.find(d => (d.wirePath ?? d.fieldName) === rootField);
+    if (conditionRootDiff) {
+      const nextValue = computeArrayOpClientSide(conditionRootDiff.values[plugin], path, op, elementMeta);
       if (nextValue !== undefined) handleEditCell(plugin, rootField, nextValue);
       return;
     }
@@ -414,8 +438,8 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
         // stale/background panel showing a different record ignores it.
         if (msg.formKey !== prevFormKeyRef.current) return;
         const plugin = columnKey(msg.plugin, msg.origin);
-        // `elementMeta` only matters for handleArrayOp's own VMAD fallback ('add' there needs a
-        // default element built client-side); for an ordinary reflected field it's posted straight
+        // `elementMeta` only matters for handleArrayOp's own VMAD/Condition carve-outs ('add' on
+        // either needs a default element built client-side); for an ordinary reflected field it's posted straight
         // through as an op envelope and ignored here — RecordFieldWriter/ArrayOpWriter resolve the
         // array's own element type server-side instead of relying on this one, the same reason
         // `metaAtPath` (not `fieldMetaMapRef.current[msg.rootField]?.elementType` directly) is still

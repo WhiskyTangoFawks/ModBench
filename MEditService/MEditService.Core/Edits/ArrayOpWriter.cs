@@ -10,9 +10,23 @@ namespace MEditService.Core.Edits;
 /// #630: the four array arity/order op envelopes — <c>array_remove</c>/<c>array_move_up</c>/
 /// <c>array_move_down</c>/<c>array_add</c> — computed here instead of round-tripped as a
 /// client-computed whole array through the webview. Scope is ordinary reflected fields only
-/// (<see cref="ColumnSpec"/>-backed columns) — a VMAD property's own array is a separate codec
-/// surface (<c>VmadCodec</c>) with its own structural-op vocabulary and is deliberately not reached
-/// from here; see <see cref="RecordFieldWriter"/>'s VMAD-path guard.
+/// (<see cref="ColumnSpec"/>-backed columns). Two exclusions, both deliberate, each with its own
+/// codec and wire vocabulary this class does not reach into:
+/// <list type="bullet">
+/// <item>A VMAD property's own array is <c>VmadCodec</c>'s surface, with its own structural-op
+/// vocabulary — <see cref="RecordFieldWriter"/>'s VMAD-path guard refuses an envelope arriving
+/// under a VMAD path before this class is ever reached.</item>
+/// <item>A Condition-owning field (<c>Conditions</c>, and nested condition lists) carries the same
+/// generic <c>{type: "array"}</c> wire shape an ordinary array does, which is exactly why this
+/// exclusion needs saying explicitly rather than left to be inferred from "not VMAD": Condition
+/// list fields are dispatched to <c>Fallout4ConditionCodec.ApplyListValue</c> earlier in
+/// <see cref="RecordFieldWriter.TryApply"/>, before this class's own op-envelope detection ever
+/// runs — <c>ApplyListValue</c> requires its whole-value argument to be a JSON array and refuses
+/// (<c>NotFound</c>) anything else, an op-envelope object included — found in review, where an op
+/// envelope reaching a Condition path refused exactly this way. The client's own carve-out,
+/// <c>RecordPanel.tsx</c>'s <c>computeArrayOpClientSide</c>, still computes the next array
+/// client-side for Conditions the same way it does for VMAD.</item>
+/// </list>
 ///
 /// <para>Each op reads the column's own <i>current</i> value (<see cref="ColumnSpec.Extract"/>),
 /// walks the envelope's own <c>path</c> to the target array — an ordinary reflected field's wire
@@ -252,6 +266,16 @@ internal static class ArrayOpWriter
     // name a key it never meant to write. Stripping every null-valued member before resubmission
     // restores "absence is not targeting" for the common (unset) case; a genuinely *non-null* nested
     // value still correctly refuses (ArrayOpEditTests pins both).
+    //
+    // This is a blunt tool in general — JSON null is meaningful elsewhere in this same write path
+    // (MakeApplier/ApplySubFields: a null clears a nullable FormLink, and a non-nullable column
+    // refuses one outright rather than treating it as absence) — but it is safe *here* specifically
+    // because of where this JSON tree came from: `root` above is always the freshly-`Extract`ed
+    // current value of the whole field, never a caller-supplied payload. Every null this strips is
+    // therefore already exactly what the record's own persisted state holds for that member — there
+    // is no edit to lose, because nothing here ever *wrote* a null; it only declined to re-name one
+    // that was already there. A hand-authored payload naming a field explicitly as null (the general
+    // case MakeApplier/ApplySubFields still have to honor) never reaches this function at all.
     private static void StripNulls(JsonNode? node)
     {
         switch (node)

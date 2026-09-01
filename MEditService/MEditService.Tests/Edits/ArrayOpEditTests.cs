@@ -257,6 +257,32 @@ public sealed class ArrayOpEditTests : IDisposable
         Assert.Equal(20, stages[0].GetProperty("HealthPercent").GetByte());
     }
 
+    /// <summary>
+    /// The same nested path, for <c>array_move_down</c> — closes a real coverage gap review
+    /// found: the deleted client-side tests (<c>ArrayDiffRows.test.tsx</c>'s own #535 block)
+    /// included a nested move case, and nothing server-side replaced it — every <c>ArrayMove*</c>
+    /// fact above targets a top-level array only. The shared path walk is already exercised by the
+    /// nested remove/add facts above; this one proves the *move* mutation itself lands at the same
+    /// real (non-top-level) path rather than assuming it does by extension.
+    /// </summary>
+    [Fact]
+    public void ArrayMoveDown_NestedArrayElement_MovesAtTheRealPath()
+    {
+        using var fixture = new ContainerFixture();
+        var seed = fixture.Service().EditField(fixture.Plugin, fixture.Container.ToString(), "destructible",
+            Json("""{"stages": [{"health_percent": 10}, {"health_percent": 20}]}"""));
+        Assert.True(seed.Applied, seed.Message);
+
+        var result = fixture.Service().EditField(fixture.Plugin, fixture.Container.ToString(), "destructible",
+            Json("""{"op": "array_move_down", "path": [{"kind": "member", "name": "stages"}, {"kind": "index", "index": 0}]}"""));
+
+        Assert.True(result.Applied, result.Message);
+        var stages = fixture.ExtractStages();
+        Assert.Equal(2, stages.GetArrayLength());
+        Assert.Equal(20, stages[0].GetProperty("HealthPercent").GetByte());
+        Assert.Equal(10, stages[1].GetProperty("HealthPercent").GetByte());
+    }
+
     // ── #642 interaction: an array op reuses ColumnSpec.Apply unchanged, so it inherits
     // NestedFieldReadOnly exactly as any other whole-value write does ──────────────────────────
 

@@ -39,10 +39,11 @@ export const EXTENSION_TO_WEBVIEW = {
   // field's array: `op`/`rootField`/`path` travel straight through to `handleEditCell`/EDIT_FIELD as
   // an op envelope (`{op, path}` under `rootField`), and `RecordFieldWriter`/`ArrayOpWriter` compute
   // the result server-side from the record's own current value and schema — the same shape
-  // VMAD_STRUCTURAL_OP below already established for VMAD's own ops. One deliberate exception: a
-  // VMAD scalar-array property's own arity ops are out of #630's scope (they belong in VmadCodec's
-  // own structural-op vocabulary, a different ticket) and still compute client-side — RecordPanel's
-  // own handleArrayOp branches on `rootField` to tell the two apart. `path` addresses the array
+  // VMAD_STRUCTURAL_OP below already established for VMAD's own ops. Two deliberate exceptions: a
+  // VMAD scalar-array property's own arity ops (VmadCodec's own structural-op vocabulary) and a
+  // Condition-owning field's (Fallout4ConditionCodec.ApplyListValue requires a JSON array and
+  // refuses an op-envelope object) are both out of #630's scope and still compute client-side —
+  // RecordPanel's own handleArrayOp tells all three apart. `path` addresses the array
   // itself for 'add', the element for the other three; a top-level array's is a one-hop (or empty)
   // path, a nested array's carries every hop from `rootField`.
   ARRAY_STRUCTURAL_OP: 'arrayStructuralOp',
