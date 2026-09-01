@@ -63,6 +63,20 @@ const VMAD_ELEMENT_OP_NAMES = {
   add: 'add_element', remove: 'remove_element', moveUp: 'move_element_up', moveDown: 'move_element_down',
 } as const;
 
+// #658 review: an ALLOWLIST, not a denylist — route to the server envelope only when the element
+// type is positively one of the four scalar list types VmadCodec.cs's AddElement/RemoveAt/Move
+// switches actually implement (ScriptBoolListProperty/ScriptIntListProperty/
+// ScriptFloatListProperty/ScriptStringListProperty; see those methods' own switch arms — this set
+// must stay identical to the case list there, by hand, since nothing crosses the TS/C# boundary at
+// runtime to keep them in sync automatically). A denylist ("route unless it looks like an object")
+// fails *open*: any VMAD array element shape nobody enumerated — struct (ArrayOfStruct/structList)
+// was the one this review caught, object (ArrayOfObject) was the one the original survey caught —
+// falls through to the server path anyway and hits VmadCodec's own `default: NotFound`, refusing a
+// gesture that used to work. This allowlist fails *closed* instead: an unrecognised/future element
+// type (`undefined` included, e.g. a malformed diff tree) simply stays on the pre-#658 client-side
+// carve-out below, exactly like ArrayOfObject and ArrayOfStruct do today.
+const VMAD_SCALAR_ELEMENT_TYPES: ReadonlySet<string> = new Set(['bool', 'int', 'float', 'string']);
+
 // The envelope handleArrayOp's own VMAD scalar-array branch posts — 'add' addresses the property
 // itself (no index; VmadCodec.AddElement always appends), every other op addresses one of its
 // elements by the row's own last path hop (index alone, never a path — a Papyrus scalar array
@@ -303,44 +317,46 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
   // no webview-side computation at all, the same shape VMAD's own structural ops
   // (VMAD_STRUCTURAL_OP) already use.
   //
-  // Two carve-outs, kept as separate branches rather than one merged lookup, each preserving the
+  // Three carve-outs, kept as separate branches rather than one merged lookup, each preserving the
   // pre-#630 computation bit-for-bit (computeArrayOpClientSide above): a VMAD ArrayOfObject
-  // property's own arity ops (a separate synthetic shape, out of #658's scope — VmadCodec's new
-  // element ops below only match the four scalar-list types) and a Condition-owning field's
-  // (Fallout4ConditionCodec.ApplyListValue requires a JSON array and refuses an op-envelope object
-  // outright — RecordFieldWriter routes a Condition-list fieldPath there before ArrayOpWriter's own
-  // detection ever runs, so posting an envelope under one is a guaranteed refusal, not merely an
-  // unsupported shape). Kept as two branches rather than merged into one lookup for that same
-  // refusal-shape reason, not a lookup-capability one (#660): gating on the same flat top-level
-  // lookup Conditions safely uses (a Condition group's own FieldDiff *is* always a top-level entry
-  // in conditionTree.diffs — conditionTreeAdapter.ts's own buildConditionRows builds one flat array,
-  // nested game-data condition lists included) would start posting an op envelope for VMAD
-  // ArrayOfObject too, which VmadCodec's own element ops refuse outright (NotFound — they only match
-  // Bool/Int/Float/String lists) — a new network round trip and a new refusal shape neither existed
-  // before. The VMAD branch resolves its own root through the tree instead (findFieldDiffDeep above,
-  // #660) precisely because vmadTree.diffs's own top level can never hold a property's FieldDiff
-  // (see that function's own doc comment).
+  // property's own arity ops and a VMAD ArrayOfStruct (structList) property's own — both separate
+  // synthetic shapes, out of #658's scope, neither matched by VMAD_SCALAR_ELEMENT_TYPES above — and
+  // a Condition-owning field's (Fallout4ConditionCodec.ApplyListValue requires a JSON array and
+  // refuses an op-envelope object outright — RecordFieldWriter routes a Condition-list fieldPath
+  // there before ArrayOpWriter's own detection ever runs, so posting an envelope under one is a
+  // guaranteed refusal, not merely an unsupported shape). Kept as separate branches rather than
+  // merged into one lookup for that same refusal-shape reason, not a lookup-capability one (#660):
+  // gating on the same flat top-level lookup Conditions safely uses (a Condition group's own
+  // FieldDiff *is* always a top-level entry in conditionTree.diffs — conditionTreeAdapter.ts's own
+  // buildConditionRows builds one flat array, nested game-data condition lists included) would start
+  // posting an op envelope for VMAD ArrayOfObject/ArrayOfStruct too, which VmadCodec's own element
+  // ops refuse outright (NotFound — VMAD_SCALAR_ELEMENT_TYPES is that refusal boundary, mirrored
+  // client-side) — a new network round trip and a new refusal shape neither existed before. The VMAD
+  // branch resolves its own root through the tree instead (findFieldDiffDeep above, #660) precisely
+  // because vmadTree.diffs's own top level can never hold a property's FieldDiff (see that
+  // function's own doc comment).
   //
   // #658: a VMAD *scalar-array* property's own arity ops are no longer part of that carve-out — they
   // post a VMAD structural-op envelope (VMAD_ELEMENT_OP_NAMES) under the property's own wirePath,
   // computed server-side by VmadCodec, the same shape VMAD_STRUCTURAL_OP's six other ops already
-  // use. `elementMeta.type === 'vmadObject'` is the one signal that tells the two VMAD shapes apart
-  // (vmadOps.ts's OBJECT_META/vmadTreeAdapter.ts's buildScalarOrObject) — everything else reaching
-  // this branch (int/float/bool/string) is a scalar array. `index` alone (no path) is enough because
-  // a Papyrus scalar array cannot nest.
+  // use. VMAD_SCALAR_ELEMENT_TYPES.has(elementMeta?.type) is the allowlist that tells VMAD's three
+  // element shapes apart (#658 review: a denylist checking only for 'vmadObject' missed
+  // ArrayOfStruct's 'struct' — the fourth shape nobody enumerates next stays safe on the client-side
+  // carve-out by construction, not by remembering to add it to an exclusion list). `index` alone (no
+  // path) is enough because a Papyrus scalar array cannot nest.
   const handleArrayOp = useCallback((
     plugin: ColumnKey, path: PathSegment[], rootField: string,
     op: ArrayOpKind, elementMeta?: FieldMetadata,
   ) => {
     if (rootField.startsWith('VMAD\\')) {
-      if (elementMeta?.type === 'vmadObject') {
-        const rootDiff = findFieldDiffDeep(vmadTree.diffs, rootField);
-        if (!rootDiff) return;
-        const nextValue = computeArrayOpClientSide(rootDiff.values[plugin], path, op, elementMeta);
-        if (nextValue !== undefined) handleEditCell(plugin, rootField, nextValue);
+      if (VMAD_SCALAR_ELEMENT_TYPES.has(elementMeta?.type ?? '')) {
+        handleEditCell(plugin, rootField, vmadElementOpValue(op, path));
         return;
       }
-      handleEditCell(plugin, rootField, vmadElementOpValue(op, path));
+      const rootDiff = findFieldDiffDeep(vmadTree.diffs, rootField);
+      if (!rootDiff) return;
+      const nextValue = computeArrayOpClientSide(rootDiff.values[plugin], path, op, elementMeta);
+      if (nextValue !== undefined) handleEditCell(plugin, rootField, nextValue);
       return;
     }
 

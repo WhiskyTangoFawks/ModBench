@@ -358,6 +358,17 @@ public static class VmadCodec
     // out of this ticket's scope — ArrayOfObject keeps computing client-side, RecordPanel.tsx's own
     // carve-out; ArrayOfStruct's elements live in struct_json, never list-item rows), so a property
     // of either type falls through to NotFound the same as an unrecognised property name would.
+    //
+    // #658 review: the four cases handled below (mirrored identically in RemoveElement and
+    // MoveElement further down) are the authoritative definition of what counts as a VMAD
+    // scalar-array element op. RecordPanel.tsx keeps its own client-side allowlist naming the same
+    // four scalar kinds, purely so the webview knows which gesture to route to this door in the
+    // first place, and that allowlist has to stay the positive mirror of exactly these four cases.
+    // Nothing crosses the TypeScript/C# boundary at runtime to enforce that agreement, so widening
+    // the switch below to a fifth list type needs the matching webview-side entry added in the same
+    // change, not left to drift — a denylist on the webview side would silently keep working and
+    // misroute the next type nobody thought to add, which is exactly the defect review caught for
+    // the struct-list array shape this ticket deliberately leaves alone.
     private static VmadApplyResult AddElement(ScriptEntry script, string propName)
     {
         var prop = FindProperty(script, propName);
