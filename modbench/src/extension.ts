@@ -44,6 +44,7 @@ import { registerNameFilter, type NameFilter } from './nameFilter';
 import { onPluginCheckboxChanged } from './pluginCheckboxHandler';
 import { registerEditorCommands, registerRecordLifecycleCommands, makeResolveOriginOrReport, runCopyRecordCommand, makeMergeEditorOpener, compileAndReport, reportCompileTargetError, registerHeldTrackedRepositories, refreshSourceControlFor, wireExternalChangePolling, type MinimalRepository } from './medit/editorCommands';
 import { reconcileModlistWithModsDir } from './modmanager/startupModlistReconcile';
+import { say, exitToLoadout, clearTreeWhenBackendDies, refreshMatchingPlugins } from './loadoutTeardown';
 import { registerModInstallCommands, registerModContextCommands, registerSeparatorCommands, registerOverwriteView, registerModsAutoRegisterWatcher, registerNotMo2InstanceWelcome, createModListView, registerDownloadsView, isStandaloneDeployment, registerDeploymentModeContext, registerDeployCommands, registerLaunchCommand, registerModListCoreCommands } from './modmanager/modManagementCommands';
 import { onModCheckboxChanged } from './modmanager/modCheckboxHandler';
 import { meditConfig, makeDetectPaths, setMo2InstanceContext } from './workspaceConfig';
@@ -85,18 +86,6 @@ interface ExtensionSession {
   setFilterActive?: ReturnType<typeof makeSetFilterActive>;
 }
 
-/** The Plugins view's own statement about what it is doing, or what it does not yet know
- *  (`TreeView.message` — the native surface for a view-scoped statement about its own contents,
- *  so there is no banner row and no bespoke widget). `undefined` clears it, which is the value
- *  the property itself takes. */
-function say(session: ExtensionSession, message: string | undefined): void {
-  if (!session.pluginsTreeView) return;
-  session.pluginsTreeView.message = message;
-  // One message surface, two things that can want it. The load's statement wins while it
-  // has something to say; when it stops, whatever the name filter had to say comes back — a
-  // no-matches statement must not be silently swallowed by a load that has since finished.
-  if (message === undefined) session.pluginsNameFilter?.refresh();
-}
 
 /** ADR-0035: run `work` with a progress indicator in the **Plugins view's own header**,
  *  addressed by view id. One indicator, in the view whose contents are being loaded, running for
@@ -160,62 +149,8 @@ function heldPluginFilesFrom(repository: ApiPluginRepository): () => Promise<Hel
   };
 }
 
-/** ADR-0035 amending ADR-0018: `EditingController.setFilter`/`clearFilter`'s
- *  `refreshMatchingPlugins` — re-derives `loadOrderSync`'s match map off a fresh `GET /plugins` and
- *  re-renders, so `PluginsTreeComposite`'s chevron reads the filter that is active now, not the
- *  one that produced the last set. The *other* path that can change which filter is active —
- *  a reconcile, which can start already-filtered or unfiltered — does not come through
- *  here; it is covered by `applyLoadOrderToTree` reusing this same `GET /plugins` answer via
- *  `HeldPluginFiles.matches` below, not by a second call site into this function. A read
- *  failure here degrades to "no data" (matches everywhere) rather than throwing — a chevron guess
- *  is wrong in the same direction `hasMatchingRecords` already treats as safe, and a record
- *  filter's whole *point* is to be applied and inspected, so silently freezing every chevron would
- *  be a far worse failure than briefly over-showing them. */
-async function refreshMatchingPlugins(
-  session: ExtensionSession, repository: PluginRepository, outputChannel: vscode.LogOutputChannel,
-): Promise<void> {
-  try {
-    // ADR-0044: keyed by filename, so read the copy plugins.txt names — two held copies can share one.
-    const plugins = (await repository.getPlugins()).filter((p) => p.inLoadOrder);
-    session.loadOrderSync?.setMatches(new Map(plugins.map((p) => [p.name.toLowerCase(), p.hasMatchingRecords] as const)));
-  } catch (err) {
-    outputChannel.error(`[extension] refreshing the record filter's plugin matches failed: ${err instanceof Error ? err.message : String(err)}`);
-    session.loadOrderSync?.setMatches(undefined);
-  }
-  session.pluginsTree?.refreshDecorations();
-}
 
 
-/** Leave editing: tear down the editing backend. There is no separate loadout view mode
- *  to switch back to — the loadout views are never hidden, and Referenced By
- *  governs its own visibility. */
-function exitToLoadout(session: ExtensionSession): void {
-  // Abandon any reconcile still in flight *first* — it aborts the PUT outright, so the
-  // reconcile stops polling and returns 'abandoned' rather than discovering a killed backend as a
-  // network error and reporting that to the user as a failure.
-  session.loadOrderSync?.abandon();
-  // The chevrons go with the backend. Cleared before it stops, so no row can be expanded
-  // into a backend that is on its way down. The immutable set goes with it.
-  session.pluginsTree?.setLoadOrder(undefined);
-  // So does anything the reconcile was saying about itself. A statement about a load order
-  // that is no longer held is the same class of silent-wrong-state as a stale chevron.
-  say(session, undefined);
-  // And so does the record filter's whole UI state — the Clear action's context key,
-  // the code lens's active SQL, and the Plugins tree readout's record-filter half — all through
-  // the same single writer every other record-filter change goes through, so `modbench.filterActive`
-  // stays written from exactly one place. (The name filter's half of the readout is untouched: it
-  // filters load-order rows, which are still there.)
-  session.setFilterActive?.(false);
-  // And so does the match set it drove (ADR-0035 amending ADR-0018) — a statement about
-  // which held plugins' records matched, same reasoning as the chevrons just above.
-  session.loadOrderSync?.setMatches(undefined);
-  session.recordBrowserProvider?.setImmutablePlugins([]);
-  // stop() is async (waits for confirmed exit before reporting "stopped") but its body
-  // runs to completion regardless of whether the returned promise is awaited — fire-and-forget
-  // here still defers emitStatus('stopped') correctly; exitToLoadout() itself doesn't need to
-  // become async just to observe that.
-  void session.backendManager?.stop();
-}
 
 /** Everything that follows the record filter turning on or off: the context key its Clear
  *  action is gated on, the code lens's notion of which SQL is live, and the Plugins
@@ -890,25 +825,6 @@ function makeLoadOrderSync(deps: ReconcileDeps): LoadOrderSync {
   });
 }
 
-/** A backend that dies takes the load order with it, and `exitToLoadout` is not on that path — a
- *  crash or a lost connection reaches us only as a status change. Without this the rows keep their
- *  chevrons and expanding one fetches against a backend that is gone, and the record rows
- *  keep a read-only set nothing backs. Both are statements about a live backend, so both
- *  go together. */
-function clearTreeWhenBackendDies(
-  session: ExtensionSession,
-  composite: PluginsTreeComposite<PluginListNode, PluginTreeNode>,
-  recordBrowser: PluginTreeProvider,
-): void {
-  session.backendManager?.on('status', () => {
-    if (session.backendManager?.isHealthy) return;
-    composite.setLoadOrder(undefined);
-    recordBrowser.setImmutablePlugins([]);
-    // ADR-0035 amending ADR-0018: same reasoning as the two above — a statement about
-    // which plugins the dead backend's records matched must not seed the next one.
-    session.loadOrderSync?.setMatches(undefined);
-  });
-}
 
 /** ADR-0044: what keeps Editing's load order true — Mod Management's own reactive watchers, never
  *  a timer (modbench/CLAUDE.md: reactive over manual). Every event is "recompute the snapshot, PUT
