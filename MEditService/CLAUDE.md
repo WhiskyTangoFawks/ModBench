@@ -221,9 +221,12 @@ C# ASP.NET Core backend. Root [CLAUDE.md](../CLAUDE.md) for project-wide invaria
   - Reads that answer from the **extracted** tables (`Resolve`, `GetReferencedBy`, `GetPlacement`)
     answer identically at both refs, deliberately: those carry no ref dimension and track Effective,
     which is the answer their consumers want. The plugin header is no longer among them — it has a
-    ref dimension like every other `records` row since #631, though nothing in that change can
-    actually diverge it (`SourceFreshness` skips it, `EditField` refuses it, and the structural Head
-    reconcile diffs through `EnumerateMajorRecords`, which a `ModHeader` is not in).
+    ref dimension like every other `records` row since #631, and since #661 it is a genuine source
+    unit that can actually diverge on it: `SourceFreshness` validates it like any other record,
+    `EditField` reaches it (refusing `FieldReadOnly`, since no header column has a write delegate
+    yet), and `SourceIngest.ReconcileHead` carries its own header branch — needed because the
+    structural Head reconcile still can't reach it (`EnumerateMajorRecords`, which a `ModHeader` is
+    not in).
 - **`SourceRepository.CommittedSourceHashes`/`ReadCommittedSourceText` ask what `HEAD` holds** — not
   what the working tree holds against the index, which is `WorkingTreeStatus` (as are
   `CommitPristineToMain` and the rebase verbs). The two diverge after exactly the events these

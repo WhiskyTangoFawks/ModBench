@@ -14,8 +14,9 @@ documents at ingest. The plugin header was the one exception — a per-type wide
 (`author`/`flags`/`masters`), outside the dual-ref model with no `ref`/`body`/`content_hash`.
 **Since #631 it is an ordinary `records` row like everything else**, its body the whole-mod
 serializer's root `RecordData.json`, at the synthetic FormKey `000000:<plugin>`; the wide table
-and its read path are gone. It is not yet a *source unit* (#661), so an external edit to that file
-is not detected and `SourceFreshness` skips it deliberately.
+and its read path are gone. **Since #661 it is also a genuine *source unit***: `SourceRecordPath`/
+`SourceUnitResolver` locate the root `RecordData.json` directly, so an external edit to that file is
+detected the same way `SourceFreshness` catches one for any other record.
 `load_order_idx` and `is_winner` read as columns of `records` but are not
 stored on it — they are load-order-derived, joined into the registered view from `plugins` and
 the `winners` table respectively (ADR-0001). The index is a persistent per-instance cache
