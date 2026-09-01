@@ -675,6 +675,7 @@ export interface components {
             refusalReason?: string | null;
             diagnostics: components["schemas"]["CompileDiagnostic"][];
             masters: string[];
+            eslContradiction: boolean;
         };
         ConditionCompare: {
             groups: components["schemas"]["ConditionGroupDiff"][];

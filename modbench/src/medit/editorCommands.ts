@@ -4,7 +4,7 @@ import * as os from 'os';
 import * as fs from 'fs';
 import { type CompileResult } from './ApiClient';
 import { EditingController } from './EditingController';
-import { InteriorLoadMoreNode, PluginTreeProvider, RecordTypeNode, RecordNode, PlacedNode } from './PluginTreeProvider';
+import { InteriorLoadMoreNode, PluginTreeProvider, RecordTypeNode, RecordNode, PlacedNode, headerFormKeyFor } from './PluginTreeProvider';
 import { ReferencedByGroupNode, referencedByCopyText, type ReferencedByTreeNode } from './ReferencedByTreeProvider';
 import { ActiveRecordTracker } from './ActiveRecordTracker';
 import { type CompileTarget } from './compileTarget';
@@ -579,6 +579,7 @@ export function reportCompileTargetError(outputChannel: vscode.LogOutputChannel,
 export async function compileAndReport(
   controller: EditingController, diagnostics: vscode.DiagnosticCollection,
   target: CompileTarget, atRef: string | undefined,
+  repository?: PluginRepository,
 ): Promise<void> {
   const result = await controller.compile(target.name, target.origin, atRef);
   if (!result) return;
@@ -587,6 +588,11 @@ export async function compileAndReport(
 
   const refSuffix = atRef ? ` at "${atRef}"` : '';
   if (!result.succeeded) {
+    if (result.eslContradiction && repository
+        && await offerEslFlagRemoval(target, result.refusalReason ?? '', repository)) {
+      await compileAndReport(controller, diagnostics, target, atRef, repository);
+      return;
+    }
     void vscode.window.showErrorMessage(`Modbench: Could not compile "${target.name}"${refSuffix} — ${result.refusalReason}`);
     return;
   }
@@ -595,6 +601,28 @@ export async function compileAndReport(
       ? `Modbench: Compiled "${target.name}"${refSuffix} — ${result.diagnostics.length} diagnostic(s), see Problems panel.`
       : `Modbench: Compiled "${target.name}"${refSuffix}.`,
   );
+}
+
+/** #290's coherence prompt (the maintainer's always-prompt rule for consequential state): the
+ *  plugin no longer fits ESL and the compile's typed marker says the flag is removable. Accept =
+ *  an ordinary `is_light` header edit (the flag's one sanctioned door), after which the caller
+ *  compiles again; decline (or a refused edit) = false, and the caller's loud typed refusal
+ *  stands, with the contradiction as the record of what to fix. */
+async function offerEslFlagRemoval(
+  target: CompileTarget, refusalReason: string, repository: PluginRepository,
+): Promise<boolean> {
+  const accept = 'Remove ESL Flag and Compile';
+  const choice = await vscode.window.showWarningMessage(
+    `"${target.name}" no longer fits ESL. Remove the ESL flag and compile?\n\n${refusalReason}`,
+    { modal: true }, accept);
+  if (choice !== accept) return false;
+
+  const outcome = await repository.editRecordField(
+    headerFormKeyFor(target.name), target.name, target.origin, 'is_light', false);
+  if (outcome.applied) return true;
+  void vscode.window.showErrorMessage(
+    `Modbench: Could not remove the ESL flag on "${target.name}" — ${outcome.message}`);
+  return false;
 }
 
 /** Publishes one compile's diagnostics to the Problems panel, replacing whatever this plugin's

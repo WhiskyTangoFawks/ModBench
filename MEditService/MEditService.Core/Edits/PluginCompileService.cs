@@ -67,6 +67,34 @@ public sealed class PluginCompileService(
             return CompileResult.Refused(deserializeRefusal);
         var mod = parsedMod!;
 
+        // #290's flag-vs-content coherence gate: an ESL-addressable plugin whose own native records
+        // no longer fit the light FormID range would compile to a binary the game mis-addresses —
+        // refused up front, never written. When the ESL-ness comes from the removable header flag
+        // the refusal carries the typed marker the frontend turns into its remove-the-flag prompt
+        // (accepting it is an ordinary is_light edit + recompile); a plugin light by .esl extension
+        // has no flag to remove, so the message names renaming instead. Strictly flag/content
+        // coherence — broader validation is #24's initiative, not this gate's.
+        if (PluginFlagPredicates.IsLight(mod, plugin.Name))
+        {
+            var outOfRange = mod.EnumerateMajorRecords()
+                .Where(r => r.FormKey.ModKey == mod.ModKey && r.FormKey.ID > 0xFFF)
+                .Select(r => r.FormKey.ToString())
+                .ToList();
+            if (outOfRange.Count > 0)
+            {
+                var flagRemovable = mod.IsSmallMaster;
+                var remedy = flagRemovable
+                    ? "Remove the ESL flag (the header's is_light field), or renumber the record(s) into the light range."
+                    : "Rename the plugin off the .esl extension, or renumber the record(s) into the light range.";
+                return CompileResult.Refused(
+                    $"{plugin.Name} is ESL-addressable but holds native FormID(s) outside the light range " +
+                    $"(up to 0xFFF): {string.Join(", ", outOfRange.Take(4))}" +
+                    (outOfRange.Count > 4 ? $" and {outOfRange.Count - 4} more" : "") +
+                    $". {remedy}",
+                    eslContradiction: flagRemovable);
+            }
+        }
+
         // Structurally impossible to emit: two source units both claiming one FormKey (a hand-edit, an
         // interrupted rename, a third-party tool's copy) can only become one binary record, silently
         // discarding the other — refuse rather than pick a winner, naming the collision. Asked of the

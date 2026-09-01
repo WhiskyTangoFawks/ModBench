@@ -113,6 +113,23 @@ internal static class HeaderDocument
             .GetAwaiter().GetResult();
     }
 
+    /// <summary>The document's own bytes with the ESL (<c>Small</c>) header flag set or cleared —
+    /// #290's one write to the header, expressed as a document→document transform through the same
+    /// two doors (<see cref="Read"/>, <see cref="Write"/>) so the result is byte-canonical and no
+    /// third dialect of the header exists. FO4-typed for <see cref="Write"/>'s own reason.</summary>
+    internal static byte[] WithLightFlag(byte[] body, bool isLight)
+    {
+        var source = (IFallout4ModGetter)Read(body);
+        var clone = new Fallout4Mod(source.ModKey, source.GameRelease.ToFallout4Release());
+        clone.ModHeader.DeepCopyIn(source.ModHeader);
+        clone.IsSmallMaster = isLight;
+        return Write(clone);
+    }
+
+    /// <summary>Whether the document's header carries the ESL flag — read through <see cref="Read"/>,
+    /// never string-matched out of the JSON, so the answer is the door's own.</summary>
+    internal static bool IsLight(byte[] body) => Read(body) is IModFlagsGetter flags && flags.IsSmallMaster;
+
     /// <summary>
     /// An absolute path that certainly does not exist, per call.
     ///

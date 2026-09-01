@@ -756,7 +756,7 @@ function registerSaveAndCompileCommand(
     );
     if (!target) return;
 
-    await compileAndReport(controller, diagnostics, target, undefined);
+    await compileAndReport(controller, diagnostics, target, undefined, repository);
   });
 }
 
@@ -792,7 +792,7 @@ function registerCompileAtRefCommand(
     );
     if (confirmed !== 'Compile at main') return;
 
-    await compileAndReport(controller, diagnostics, target, 'main');
+    await compileAndReport(controller, diagnostics, target, 'main', repository);
   });
 }
 

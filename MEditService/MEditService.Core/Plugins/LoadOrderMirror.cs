@@ -549,6 +549,14 @@ public sealed class LoadOrderMirror(
 
             var modKey = ModKey.FromFileName(name);
             var mod = ModFactory.Activator(modKey, _gameRelease);
+            // #290 (maintainer ruling 2026-08-31): a new plugin defaults to an ESL-flagged ESP,
+            // silently — the flag is an ordinary editable header field afterward. Only for a
+            // caller-named .esp: an explicit .esl is light by extension already, and an explicit
+            // .esm asked for a full master.
+            if (Path.GetExtension(name).Equals(".esp", StringComparison.OrdinalIgnoreCase))
+            {
+                mod.IsSmallMaster = true;
+            }
             mod.WriteToBinary(filePath);
 
             var metadata = loadOrder.AddCreatedPlugin(filePath, origin);

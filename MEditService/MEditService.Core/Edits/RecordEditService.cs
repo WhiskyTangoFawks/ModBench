@@ -78,7 +78,15 @@ public sealed class RecordEditService(
         // this one — see HeaderDocument's own doc comment). Answered here instead, off the schema
         // alone, before any record is read or materialized.
         if (document.RecordType == HeaderIndexer.RecordType)
+        {
+            // #290: the ESL flag's one sanctioned door — a synthetic boolean field, the same
+            // pattern is_partial_form uses for record-flag bit 14. Every real header column still
+            // refuses below (author/masters/flags stay read-only; full flags-array editing is a
+            // follow-up, not smuggled in here).
+            if (fieldPath.Equals(IsLightFieldPath, StringComparison.Ordinal))
+                return EditHeaderIsLight(index, plugin, unit, formKey, value);
             return RefuseHeaderFieldEdit(fieldPath, schemas);
+        }
 
         var reads = index.At(RecordRef.Effective);
         var owner = reads.GetDocument(unit.OwnerFormKey, plugin)!;
@@ -1658,10 +1666,11 @@ public sealed class RecordEditService(
         IRecordIndex index, PluginKey plugin, string? requestedFormKey, out string targetFormKey)
     {
         var mod = mirror.LoadOrder!.GetMod(plugin.Name, plugin.Origin!);
+        var isLight = IsLightAtEffective(index, plugin, mod);
 
         if (requestedFormKey != null)
         {
-            if (RefuseIfNotNativeTarget(requestedFormKey, plugin, mod) is { } notNative)
+            if (RefuseIfNotNativeTarget(requestedFormKey, plugin, isLight) is { } notNative)
             {
                 targetFormKey = "";
                 return notNative;
@@ -1677,7 +1686,7 @@ public sealed class RecordEditService(
             return null;
         }
 
-        var allocated = NextFreeNativeFormId(index, plugin, mod);
+        var allocated = NextFreeNativeFormId(index, plugin, mod, isLight);
         if (allocated != null)
         {
             targetFormKey = allocated;
@@ -1686,7 +1695,25 @@ public sealed class RecordEditService(
 
         targetFormKey = "";
         return RecordEditResult.Refused(
-            RecordEditRefusal.FormKeySpaceExhausted, FormKeySpaceExhaustedMessage(plugin, IsLightPlugin(mod, plugin)));
+            RecordEditRefusal.FormKeySpaceExhausted, FormKeySpaceExhaustedMessage(plugin, isLight));
+    }
+
+    /// <summary>
+    /// Whether <paramref name="plugin"/> is ESL-flagged, answered from its header <b>document</b> at
+    /// Effective when one is indexed — the source tree is the truth (ADR-0041), and the one write
+    /// door onto this flag (<see cref="EditHeaderIsLight"/>) lands there, so a flag flipped this
+    /// session caps FormID minting immediately with no reconcile in between. The loaded mod object
+    /// (<see cref="PluginFlagPredicates.IsLight"/>) only answers when no header document exists.
+    /// </summary>
+    private static bool IsLightAtEffective(IRecordIndex index, PluginKey plugin, IModGetter? mod)
+    {
+        var headerFormKey = HeaderIndexer.FormKeyFor(ModKey.FromFileName(plugin.Name));
+        if (index.At(RecordRef.Effective).GetDocument(headerFormKey, plugin)?.Body is { } body)
+        {
+            return HeaderDocument.IsLight(Encoding.UTF8.GetBytes(body))
+                || plugin.Name.EndsWith(".esl", StringComparison.OrdinalIgnoreCase);
+        }
+        return IsLightPlugin(mod, plugin);
     }
 
     /// <summary>
@@ -1706,7 +1733,7 @@ public sealed class RecordEditService(
     /// (<see cref="PluginFlagPredicates.IsLight"/>). Checked after ownership, not before: a FormKey
     /// belonging to a different plugin is refused for that reason regardless of its magnitude.</para>
     /// </summary>
-    private static RecordEditResult? RefuseIfNotNativeTarget(string requestedFormKey, PluginKey plugin, IModGetter? mod)
+    private static RecordEditResult? RefuseIfNotNativeTarget(string requestedFormKey, PluginKey plugin, bool isLight)
     {
         var parsed = FormKey.Factory(requestedFormKey);
         var requestedOwner = parsed.ModKey.FileName.String;
@@ -1718,7 +1745,7 @@ public sealed class RecordEditService(
                 "must be native to the plugin it is being created or renumbered into.");
         }
 
-        if (IsLightPlugin(mod, plugin) && parsed.ID > 0xFFF)
+        if (isLight && parsed.ID > 0xFFF)
         {
             return RecordEditResult.Refused(
                 RecordEditRefusal.LightPluginFormIdOutOfRange,
@@ -1763,7 +1790,7 @@ public sealed class RecordEditService(
     /// as every other refusal on this write path, not a fault for the caller's generic exception
     /// handling to (mis)classify as "no usable load order."</para>
     /// </summary>
-    private static string? NextFreeNativeFormId(IRecordIndex index, PluginKey plugin, IModGetter? mod)
+    private static string? NextFreeNativeFormId(IRecordIndex index, PluginKey plugin, IModGetter? mod, bool isLight)
     {
         var floor = mod?.GetDefaultInitialNextFormID() ?? 0x800u;
         var highest = index.At(RecordRef.Effective).GetNativeFormKeys(plugin)
@@ -1772,7 +1799,7 @@ public sealed class RecordEditService(
             .DefaultIfEmpty(0u)
             .Max();
         var next = Math.Max(floor, highest + 1);
-        var cap = IsLightPlugin(mod, plugin) ? 0xFFFu : 0xFFFFFFu;
+        var cap = isLight ? 0xFFFu : 0xFFFFFFu;
         return next > cap ? null : $"{next:X6}:{plugin.Name}";
     }
 
@@ -1807,11 +1834,12 @@ public sealed class RecordEditService(
             return RecordEditResult.Refused(RecordEditRefusal.RecordNotFound, "No load order has been received.");
 
         var mod = mirror.LoadOrder!.GetMod(plugin.Name, plugin.Origin!);
-        var formKey = NextFreeNativeFormId(index, plugin, mod);
+        var isLight = IsLightAtEffective(index, plugin, mod);
+        var formKey = NextFreeNativeFormId(index, plugin, mod, isLight);
         return formKey != null
             ? RecordEditResult.Success(formKey)
             : RecordEditResult.Refused(
-                RecordEditRefusal.FormKeySpaceExhausted, FormKeySpaceExhaustedMessage(plugin, IsLightPlugin(mod, plugin)));
+                RecordEditRefusal.FormKeySpaceExhausted, FormKeySpaceExhaustedMessage(plugin, isLight));
     }
 
     /// <summary>
@@ -2062,6 +2090,44 @@ public sealed class RecordEditService(
     /// nudge to give this method (or replace it with) a real write path, not a refusal that quietly
     /// keeps lying about the field being read-only.</para>
     /// </summary>
+    /// <summary>The synthetic header field name the ESL flag is written through — see
+    /// <see cref="EditHeaderIsLight"/>.</summary>
+    internal const string IsLightFieldPath = "is_light";
+
+    /// <summary>
+    /// #290's header write: sets or clears the ESL (<c>Small</c>) flag by transforming the header's
+    /// own current document (<see cref="HeaderDocument.WithLightFlag"/> — document in, canonical
+    /// document out, no in-memory mod consulted, so a stale loaded-plugin object can never leak
+    /// other header values into the write). The root <c>RecordData.json</c> and the index row move
+    /// together, the same two-step every other edit here lands as.
+    /// </summary>
+    private RecordEditResult EditHeaderIsLight(
+        IRecordIndex index, PluginKey plugin, SourceUnit unit, string formKey, JsonElement value)
+    {
+        if (value.ValueKind is not (JsonValueKind.True or JsonValueKind.False))
+        {
+            return RecordEditResult.Refused(
+                RecordEditRefusal.FieldValueShapeMismatch, $"'{IsLightFieldPath}' takes a JSON boolean.");
+        }
+
+        var currentBody = File.Exists(unit.FullPath)
+            ? File.ReadAllBytes(unit.FullPath)
+            : Encoding.UTF8.GetBytes(index.At(RecordRef.Effective).GetDocument(formKey, plugin)!.Body!);
+        var newBody = HeaderDocument.WithLightFlag(currentBody, value.GetBoolean());
+        var newText = Encoding.UTF8.GetString(newBody);
+
+        WriteBodyAtomic(unit.FullPath, newText);
+        index.ApplyWorkingTreeChanges(plugin, [(formKey, newText)]);
+        mirror.ReapplyFilter();
+
+        // Warn, not info, per the #290 ruling: flipping this flag shifts load-order behavior
+        // downstream, so the log keeps a visible record of every change to it.
+        logger.LogWarning(
+            "ESL flag on {Plugin} ({Origin}) set to {IsLight} via {Field}",
+            plugin.Name, plugin.Origin, value.GetBoolean(), IsLightFieldPath);
+        return RecordEditResult.Success();
+    }
+
     private static RecordEditResult RefuseHeaderFieldEdit(
         string fieldPath, IReadOnlyDictionary<string, RecordTableSchema> schemas)
     {
