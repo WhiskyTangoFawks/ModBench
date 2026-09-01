@@ -59,16 +59,11 @@ const ARRAY_OP_NAMES = {
 // that computation, identical for either caller (it never knows or cares which). Module-scope
 // (like subtreeFor above): closes over nothing, everything it needs arrives as an argument.
 // Exported (unlike subtreeFor) purely so RecordPanel.test.tsx can pin its own boundary/happy-path
-// behaviour directly for the VMAD case — handleArrayOp's own VMAD branch reaches it through a
-// rootDiff lookup (`vmadTree.diffs.find(...)`) that only ever finds a *script's* own diff, never a
-// property's (the property's FieldDiff is a child of its script's, not a top-level entry) — a
-// pre-existing, already-documented gap handleOpenExtended's own comment names ("a VMAD property's
-// own FieldDiff is a child of its script row, never a top-level entry"), so a full DOM-level test
-// of a VMAD array gesture cannot pass regardless of this function's own correctness (not this
-// ticket's defect to fix). The Condition case has no such gap — a Condition group's own FieldDiff
-// *is* always a top-level entry in conditionTree.diffs (conditionTreeAdapter.ts's own
-// buildConditionRows builds one flat array per condition-owning field, nested game-data condition
-// lists included) — so it is pinned end-to-end instead, in ConditionArrayOps.test.tsx.
+// behaviour directly for the VMAD case, alongside the tree-walk that resolves a VMAD property's
+// own root (#660, findFieldDiffDeep below) — the two are pinned separately so either can fail on
+// its own terms. The Condition case's own root is always a top-level entry in conditionTree.diffs
+// (conditionTreeAdapter.ts's own buildConditionRows builds one flat array per condition-owning
+// field, nested game-data condition lists included), pinned end-to-end in ConditionArrayOps.test.tsx.
 export function computeArrayOpClientSide(
   rootValue: unknown, path: PathSegment[], op: 'add' | 'remove' | 'moveUp' | 'moveDown', elementMeta?: FieldMetadata,
 ): unknown {
@@ -89,6 +84,28 @@ export function computeArrayOpClientSide(
   }
   if (nextArray === currentArray) return undefined; // boundary no-op — nothing to write
   return setAtPath(rootValue, arrayPath, nextArray);
+}
+
+// #660: resolves a root FieldDiff by wirePath/fieldName *through* a tree, not just across its own
+// top level — what handleArrayOp's VMAD branch and handleOpenExtended's VMAD fallback below both
+// need and neither the plain `.find` they replace could give them. Needed specifically (only) for
+// VMAD: `vmadTree.diffs` is a single-element wrapper array (buildVmadRows), so a property's own
+// FieldDiff sits two hops below it (wrapper → script → property) — a flat `.find` over
+// `vmadTree.diffs` therefore never matches anything at all, not even a script's own diff, let alone
+// a property's. Condition's own tree has no such gap (a Condition group's own FieldDiff *is*
+// already a top-level entry in conditionTree.diffs, see computeArrayOpClientSide's own doc comment
+// above) so its call sites keep the plain flat `.find` unchanged — this only widens where the
+// defect actually is. Module-scope (like subtreeFor/computeArrayOpClientSide above): closes over
+// nothing, everything it needs arrives as an argument.
+function findFieldDiffDeep(diffs: FieldDiff[], target: string): FieldDiff | undefined {
+  for (const d of diffs) {
+    if ((d.wirePath ?? d.fieldName) === target) return d;
+    if (d.children) {
+      const found = findFieldDiffDeep(d.children, target);
+      if (found) return found;
+    }
+  }
+  return undefined;
 }
 
 // ── RecordPanel ───────────────────────────────────────────────────────────────
@@ -266,21 +283,22 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
   // (Fallout4ConditionCodec.ApplyListValue requires a JSON array and refuses an op-envelope object
   // outright — RecordFieldWriter routes a Condition-list fieldPath there before ArrayOpWriter's own
   // detection ever runs, so posting an envelope under one is a guaranteed refusal, not merely an
-  // unsupported shape). Not merged into one lookup: a VMAD *property*'s own wirePath
-  // (`VMAD\<Script>\<Property>`) never resolves in this same top-level-diffs lookup (a property's
-  // FieldDiff is a child of its script's, never a top-level entry — the same pre-existing gap
-  // computeArrayOpClientSide's own doc comment names), so gating VMAD on the lookup succeeding, the way
-  // Conditions safely can (a Condition group's own FieldDiff *is* always a top-level entry in
-  // conditionTree.diffs — conditionTreeAdapter.ts's own buildConditionRows builds one flat array,
-  // nested game-data condition lists included), would silently start posting an envelope for a
-  // VMAD property instead of the current true no-op — a new network round trip and a new refusal
-  // shape neither existed before.
+  // unsupported shape). Kept as two branches rather than merged into one lookup for that same
+  // refusal-shape reason, not a lookup-capability one (#660): gating VMAD on the same flat top-level
+  // lookup Conditions safely uses (a Condition group's own FieldDiff *is* always a top-level entry
+  // in conditionTree.diffs — conditionTreeAdapter.ts's own buildConditionRows builds one flat array,
+  // nested game-data condition lists included) would start posting an op envelope for a VMAD
+  // property, which RecordFieldWriter's own VMAD-path dispatch refuses outright — a new network
+  // round trip and a new refusal shape neither existed before. The VMAD branch resolves its own
+  // root through the tree instead (findFieldDiffDeep above, #660) precisely because
+  // vmadTree.diffs's own top level can never hold a property's FieldDiff (see that function's own
+  // doc comment) — it stays a distinct branch, but is no longer a no-op branch.
   const handleArrayOp = useCallback((
     plugin: ColumnKey, path: PathSegment[], rootField: string,
     op: 'add' | 'remove' | 'moveUp' | 'moveDown', elementMeta?: FieldMetadata,
   ) => {
     if (rootField.startsWith('VMAD\\')) {
-      const rootDiff = vmadTree.diffs.find(d => (d.wirePath ?? d.fieldName) === rootField);
+      const rootDiff = findFieldDiffDeep(vmadTree.diffs, rootField);
       if (!rootDiff) return;
       const nextValue = computeArrayOpClientSide(rootDiff.values[plugin], path, op, elementMeta);
       if (nextValue !== undefined) handleEditCell(plugin, rootField, nextValue);
@@ -328,10 +346,11 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
   // (stringValueContext, recordUtils.ts) through FIELD_OPEN_EXTENDED_EDITOR, so a string leaf
   // nested inside a struct/array reconstructs the whole subtree exactly the way an inline edit on
   // the same cell does, instead of sending the saved text alone under the subtree's root
-  // path. `rootDiff` is resolved by name across the flattened top-level
-  // diffs — the same lookup handleArrayOp above already uses, and the same known gap: a VMAD
-  // property's own FieldDiff is a child of its script row, never a top-level entry, so a VMAD
-  // string property's extended-editor save can't find its root here and silently no-ops.
+  // path. `rootDiff` is resolved by name: a plain top-level `.find` for an ordinary field or a
+  // Condition (both always have their own root at the top of `result.diffs`/`conditionTree.diffs`
+  // respectively — see computeArrayOpClientSide's own doc comment for why Condition's is safe to
+  // search flat), falling back to findFieldDiffDeep (#660) for a VMAD property, whose own root
+  // never sits at vmadTree.diffs's own top level (see that function's own doc comment).
   const handleOpenExtended = useCallback((
     plugin: ColumnKey, fieldPath: string, path: PathSegment[], rootField: string, value: string, readOnly: boolean,
   ) => {
@@ -342,8 +361,9 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
     // every other identity-bearing surface here already does.
     const displayId = (result?.overrides.find(o => o.isWinner) ?? result?.overrides[0])?.editorId;
     const recordLabel = displayId ? `${displayId} [${formKey}]` : formKey;
-    const rootDiff = [...(result?.diffs ?? []), ...vmadTree.diffs, ...conditionTree.diffs]
-      .find(d => (d.wirePath ?? d.fieldName) === rootField);
+    const rootDiff = [...(result?.diffs ?? []), ...conditionTree.diffs]
+      .find(d => (d.wirePath ?? d.fieldName) === rootField)
+      ?? findFieldDiffDeep(vmadTree.diffs, rootField);
     openExtendedFieldEditor(
       { value, recordLabel, fieldName: fieldPath, plugin: override.plugin, origin: override.origin, readOnly },
       (v: string) => { if (rootDiff) handleCellCommit(plugin, path, rootField, rootDiff, v); },

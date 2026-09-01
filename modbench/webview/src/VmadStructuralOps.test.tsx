@@ -37,10 +37,28 @@ const vmadEditableCompareResult = {
   vmad: {
     scripts: [{
       name: 'MyScript', flags: { 'MyMod.esp': 'Local' }, winnerColumn: 'MyMod.esp', cellStates: {},
-      properties: [{
-        name: 'Enabled', kind: 'scalar', values: { 'MyMod.esp': false }, types: { 'MyMod.esp': 'Bool' },
-        winnerColumn: 'MyMod.esp', cellStates: {}, children: null,
-      }],
+      properties: [
+        {
+          name: 'Enabled', kind: 'scalar', values: { 'MyMod.esp': false }, types: { 'MyMod.esp': 'Bool' },
+          winnerColumn: 'MyMod.esp', cellStates: {}, children: null,
+        },
+        // #660: a string and a scalar-array property — each carries its own wirePath
+        // (`VMAD\MyScript\<name>`, buildScript) two levels below vmadTree.diffs's own top level
+        // (wrapper → script → property), the exact shape the flat top-level lookup could never reach.
+        {
+          name: 'Greeting', kind: 'scalar', values: { 'MyMod.esp': 'hello' }, types: { 'MyMod.esp': 'String' },
+          winnerColumn: 'MyMod.esp', cellStates: {}, children: null,
+        },
+        {
+          name: 'Levels', kind: 'array', values: {}, types: { 'MyMod.esp': 'ArrayOfInt' },
+          winnerColumn: 'MyMod.esp', cellStates: {},
+          children: [
+            { name: '', kind: 'scalar', values: { 'MyMod.esp': 1 }, types: { 'MyMod.esp': 'Int' }, winnerColumn: 'MyMod.esp', cellStates: {} },
+            { name: '', kind: 'scalar', values: { 'MyMod.esp': 2 }, types: { 'MyMod.esp': 'Int' }, winnerColumn: 'MyMod.esp', cellStates: {} },
+            { name: '', kind: 'scalar', values: { 'MyMod.esp': 3 }, types: { 'MyMod.esp': 'Int' }, winnerColumn: 'MyMod.esp', cellStates: {} },
+          ],
+        },
+      ],
     }],
   },
 };
@@ -173,6 +191,74 @@ describe('RecordPanel — VMAD structural-op right-click menu (issue #231)', () 
   });
 });
 
+// #660: a VMAD property's own FieldDiff sits two levels below vmadTree.diffs's own top level
+// (wrapper → script → property, buildVmadRows/buildScript) — a name-based lookup across only the
+// *flattened top level* of vmadTree.diffs can therefore never find it (nor even a script's own
+// diff, since vmadTree.diffs is itself a single-element wrapper array). Both handlers that resolve
+// a VMAD op's root FieldDiff by name (handleArrayOp's VMAD branch, handleOpenExtended) now walk the
+// tree instead, so both a VMAD string property's extended-editor save and a VMAD scalar-array
+// property's arity op find their own root and commit — this is what makes the DOM-level round trip
+// below possible at all (previously nothing could be observed to land: see the superseded rationale
+// this replaced, computeArrayOpClientSide's own unit tests below).
+describe('RecordPanel — a VMAD property resolves its own root through the script tree, not the flattened top level (#660)', () => {
+  beforeEach(() => {
+    vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
+    (vscode.postMessage as ReturnType<typeof vi.fn>).mockClear();
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  function lastOpenExtendedEditorRequestId(): string {
+    const calls = (vscode.postMessage as ReturnType<typeof vi.fn>).mock.calls;
+    const call = [...calls].reverse().find(([m]) => (m as { type?: string }).type === WEBVIEW_TO_EXTENSION.OPEN_EXTENDED_EDITOR);
+    return (call?.[0] as { requestId: string }).requestId;
+  }
+
+  // The worse half (#660's own framing): the user opens the tab, types, saves, and every signal
+  // says it worked — the extended-editor's own save round trip, mirroring RecordPanel.test.tsx's
+  // "opens the extended editor bridge call" test for the open half and ArrayDiffRows.test.tsx's
+  // "#533" suite for the commit half, but rooted at a VMAD property's own wirePath instead of an
+  // ordinary top-level field.
+  it("a VMAD string property's extended-editor save commits under the property's own wirePath", async () => {
+    renderVmadPanel();
+    await waitFor(() => screen.getByText('Scripts (VMAD)'));
+
+    window.postMessage({
+      type: EXTENSION_TO_WEBVIEW.FIELD_OPEN_EXTENDED_EDITOR, formKey: '000001:Fallout4.esm',
+      plugin: 'MyMod.esp', origin: 'Data', fieldName: 'Greeting',
+      value: 'hello', readOnly: false, path: [], rootField: 'VMAD\\MyScript\\Greeting',
+    }, '*');
+    await waitFor(() => expect(vscode.postMessage).toHaveBeenCalledWith(expect.objectContaining({
+      type: WEBVIEW_TO_EXTENSION.OPEN_EXTENDED_EDITOR,
+    })));
+    const requestId = lastOpenExtendedEditorRequestId();
+
+    window.postMessage({
+      type: EXTENSION_TO_WEBVIEW.EXTENDED_EDITOR_COMMITTED, requestId, value: 'goodbye',
+    }, '*');
+
+    await waitFor(() => expect(lastEditFieldMessage()).toEqual({
+      type: WEBVIEW_TO_EXTENSION.EDIT_FIELD, formKey: '000001:Fallout4.esm',
+      plugin: 'MyMod.esp', origin: 'Data', fieldPath: 'VMAD\\MyScript\\Greeting', value: 'goodbye',
+    }));
+  });
+
+  it('ARRAY_STRUCTURAL_OP (remove) on a VMAD scalar-array property commits the computed array under its own wirePath', async () => {
+    renderVmadPanel();
+    await waitFor(() => screen.getByText('Scripts (VMAD)'));
+
+    window.postMessage({
+      type: EXTENSION_TO_WEBVIEW.ARRAY_STRUCTURAL_OP, formKey: '000001:Fallout4.esm',
+      plugin: 'MyMod.esp', origin: 'Data', rootField: 'VMAD\\MyScript\\Levels',
+      path: [{ kind: 'index', index: 0 }], op: 'remove',
+    }, '*');
+
+    await waitFor(() => expect(lastEditFieldMessage()).toEqual({
+      type: WEBVIEW_TO_EXTENSION.EDIT_FIELD, formKey: '000001:Fallout4.esm',
+      plugin: 'MyMod.esp', origin: 'Data', fieldPath: 'VMAD\\MyScript\\Levels', value: [2, 3],
+    }));
+  });
+});
+
 // #630: a Papyrus scalar-array property's own arity ops (Add/Remove/Move Up/Move Down) are
 // deliberately out of #630's scope — they belong in VmadCodec's own structural-op vocabulary, a
 // different codec surface than an ordinary reflected column (RecordFieldWriter's own VMAD-path
@@ -180,18 +266,10 @@ describe('RecordPanel — VMAD structural-op right-click menu (issue #231)', () 
 // handleArrayOp still routes these to computeArrayOpClientSide, which computes the next array
 // client-side exactly as every arity op did before #630, rather than posting an op envelope.
 //
-// Pinned at computeArrayOpClientSide directly, not through a full right-click/keyboard DOM round trip:
-// handleArrayOp's own VMAD-branch rootDiff lookup (`[...vmadTree.diffs,
-// ...conditionTree.diffs].find(...)`) only ever finds a *script's* own top-level diff, never a
-// property's (a property's FieldDiff is a child of its script's, not a top-level entry) — a
-// pre-existing, already-documented gap (RecordPanel.tsx's own handleOpenExtended comment names it:
-// "a VMAD property's own FieldDiff is a child of its script row, never a top-level entry, so a VMAD
-// string property's extended-editor save can't find its root here and silently no-ops" — the exact
-// same lookup shape, the exact same silent no-op, for the exact same reason). That gap predates
-// #630, is not this ticket's to fix, and would make a DOM-level test fail for a reason that has
-// nothing to do with whether the carve-out itself is correct. Testing the extracted function
-// directly is what proves the carve-out's own logic without also re-proving (or silently masking)
-// an unrelated defect.
+// Unit-tested directly here (rather than relying solely on the DOM round trip above) so the
+// carve-out's own arithmetic — boundary no-ops included — is pinned independent of the tree-walk
+// that resolves its root (#660's own "RecordPanel — a VMAD property resolves its own root..." suite
+// above), rather than folding both into one test that could pass or fail for either reason.
 describe('computeArrayOpClientSide — the VMAD scalar-array carve-out (#630)', () => {
   // rootValue is one column's own current value (rootDiff.values[plugin] — a plain array for a
   // top-level VMAD scalar-array property), not a per-plugin map.
