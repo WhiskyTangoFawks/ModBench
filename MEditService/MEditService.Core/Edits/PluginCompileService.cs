@@ -4,6 +4,7 @@ using MEditService.Core.Serialization;
 using MEditService.Core.Source;
 using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
+using Mutagen.Bethesda.Plugins.Analysis;
 using Mutagen.Bethesda.Plugins.Records;
 using Noggog.WorkEngine;
 
@@ -74,10 +75,12 @@ public sealed class PluginCompileService(
         // (accepting it is an ordinary is_light edit + recompile); a plugin light by .esl extension
         // has no flag to remove, so the message names renaming instead. Strictly flag/content
         // coherence — broader validation is #24's initiative, not this gate's.
-        if (PluginFlagPredicates.IsLight(mod, plugin.Name))
+        if (PluginFlagPredicates.IsLight(mod, plugin.Name)
+            && RecordCompactionCompatibilityDetection.GetSmallMasterRange(mod) is { } lightRange)
         {
             var outOfRange = mod.EnumerateMajorRecords()
-                .Where(r => r.FormKey.ModKey == mod.ModKey && r.FormKey.ID > 0xFFF)
+                .Where(r => r.FormKey.ModKey == mod.ModKey
+                    && (r.FormKey.ID < lightRange.Min || r.FormKey.ID > lightRange.Max))
                 .Select(r => r.FormKey.ToString())
                 .ToList();
             if (outOfRange.Count > 0)
@@ -88,7 +91,7 @@ public sealed class PluginCompileService(
                     : "Rename the plugin off the .esl extension, or renumber the record(s) into the light range.";
                 return CompileResult.Refused(
                     $"{plugin.Name} is ESL-addressable but holds native FormID(s) outside the light range " +
-                    $"(up to 0xFFF): {string.Join(", ", outOfRange.Take(4))}" +
+                    $"(0x{lightRange.Min:X}-0x{lightRange.Max:X}): {string.Join(", ", outOfRange.Take(4))}" +
                     (outOfRange.Count > 4 ? $" and {outOfRange.Count - 4} more" : "") +
                     $". {remedy}",
                     eslContradiction: flagRemovable);

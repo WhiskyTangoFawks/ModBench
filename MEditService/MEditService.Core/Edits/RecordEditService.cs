@@ -1745,13 +1745,13 @@ public sealed class RecordEditService(
                 "must be native to the plugin it is being created or renumbered into.");
         }
 
-        if (isLight && parsed.ID > 0xFFF)
+        if (isLight && parsed.ID > PluginFlagPredicates.LightLocalFormIdCap)
         {
             return RecordEditResult.Refused(
                 RecordEditRefusal.LightPluginFormIdOutOfRange,
                 $"{requestedFormKey} exceeds {plugin.Name}'s ESL local FormID range — a light-flagged " +
-                "plugin can only address local FormIDs up to 0xFFF. Choose a FormID within that range, " +
-                "or un-flag the plugin as ESL.");
+                $"plugin can only address local FormIDs up to 0x{PluginFlagPredicates.LightLocalFormIdCap:X}. " +
+                "Choose a FormID within that range, or un-flag the plugin as ESL.");
         }
 
         return null;
@@ -1799,7 +1799,7 @@ public sealed class RecordEditService(
             .DefaultIfEmpty(0u)
             .Max();
         var next = Math.Max(floor, highest + 1);
-        var cap = isLight ? 0xFFFu : 0xFFFFFFu;
+        var cap = isLight ? PluginFlagPredicates.LightLocalFormIdCap : FormID.FullIdMask;
         return next > cap ? null : $"{next:X6}:{plugin.Name}";
     }
 

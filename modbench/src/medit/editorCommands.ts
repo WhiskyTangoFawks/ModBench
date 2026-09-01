@@ -579,7 +579,7 @@ export function reportCompileTargetError(outputChannel: vscode.LogOutputChannel,
 export async function compileAndReport(
   controller: EditingController, diagnostics: vscode.DiagnosticCollection,
   target: CompileTarget, atRef: string | undefined,
-  repository?: PluginRepository,
+  repository: PluginRepository,
 ): Promise<void> {
   const result = await controller.compile(target.name, target.origin, atRef);
   if (!result) return;
@@ -588,7 +588,7 @@ export async function compileAndReport(
 
   const refSuffix = atRef ? ` at "${atRef}"` : '';
   if (!result.succeeded) {
-    if (result.eslContradiction && repository
+    if (result.eslContradiction
         && await offerEslFlagRemoval(target, result.refusalReason ?? '', repository)) {
       await compileAndReport(controller, diagnostics, target, atRef, repository);
       return;
