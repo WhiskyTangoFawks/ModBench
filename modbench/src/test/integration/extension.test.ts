@@ -76,6 +76,11 @@ let mockPluginsOverride: MockPlugin[] | null = null;
 // disposes the previous scope first, on a scope change) means the mock must *not* set
 // loadOrderHeld on this path, matching the real backend leaving no load order behind either.
 let putLoadOrderShouldFail = false;
+// Makes the next GET /plugins fail, the way a transient backend hiccup would mid-session
+// (#650) — distinct from putLoadOrderShouldFail, which is about the reconcile's own PUT, and
+// from the 503 "no load order held" answer below, which is a normal, expected state rather than
+// a failure.
+let getPluginsShouldFail = false;
 // GET /load-order/status' answer — what the load can honestly say about itself *right now*.
 // Mutable per-test so a suite can script a load landing one plugin at a time and observe the tree
 // react to each, which is the whole subject of progressive load. `conflictsComputed` is part of
@@ -111,6 +116,7 @@ function resetMockBackend(): void {
   requestLog.length = 0;
   mockPluginsOverride = null;
   putLoadOrderShouldFail = false;
+  getPluginsShouldFail = false;
   loadOrderStatus = { ...NO_LOAD_ORDER_STATUS };
   holdPutLoadOrder = false;
   releasePutLoadOrder?.();
@@ -189,6 +195,11 @@ function createMockBackend(): http.Server {
       if (!loadOrderHeld) {
         res.writeHead(503);
         res.end('No load order has been received.');
+        return;
+      }
+      if (getPluginsShouldFail) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'simulated plugin-list failure' }));
         return;
       }
       res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -1264,6 +1275,104 @@ describe('A loadout change sends a fresh load order snapshot (ADR-0044)', () => 
     const after = findRow(await tree.getChildren(), 'TestMod.esp');
     assert.strictEqual(tree.getTreeItem(after).collapsibleState, vscode.TreeItemCollapsibleState.Collapsed,
       'a failed reconcile leaves the load order the backend already holds in place, so the rows stay expandable');
+  });
+});
+
+// ADR-0035 amending ADR-0018: `loadOrderSync`'s match map is a statement about which held
+// plugins' records the *currently active* record filter matches, and it has exactly three
+// writers that reset it to "no data" (undefined, read as "matches everywhere") rather than let it
+// answer for a filter or a load order that no longer holds: refreshMatchingPlugins's own failure
+// path, exitToLoadout, and clearTreeWhenBackendDies. None of the three had ever been exercised by
+// this suite (#650) — dropping any one of them left the suite green, because the *tree's* own
+// chevrons are also cleared independently by other writes (pluginsTree.setLoadOrder(undefined)),
+// which masks whether the match map underneath was ever actually reset. These tests read
+// loadOrderSync.matches() directly instead, so each is a proof of its own named writer and
+// nothing else.
+describe('matchingPlugins clears when it can no longer be trusted (#650)', () => {
+  const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+  const pluginsTxtPath = root ? path.join(root, 'profiles', 'Default', 'plugins.txt') : '';
+  const loadOrderSyncOf = () =>
+    (ext?.exports as { loadOrderSync?: { matches: (file: string) => boolean | undefined } } | undefined)?.loadOrderSync;
+  interface BackendManagerLike {
+    stop(): Promise<void>;
+    listeners(event: string): ((...args: unknown[]) => void)[];
+    removeAllListeners(event: string): void;
+    on(event: string, listener: (...args: unknown[]) => void): void;
+  }
+  const backendManagerOf = () =>
+    (ext?.exports as { backendManager?: BackendManagerLike } | undefined)?.backendManager;
+  let gameDir = '';
+
+  before(() => {
+    if (!root) return;
+    gameDir = fs.mkdtempSync(path.join(os.tmpdir(), 'medit-matching-plugins-'));
+    fs.mkdirSync(path.join(gameDir, 'Data'), { recursive: true });
+    fs.writeFileSync(path.join(gameDir, 'Data', 'TestMod.esp'), '');
+  });
+
+  after(() => {
+    if (!root) return;
+    fs.rmSync(gameDir, { recursive: true, force: true });
+  });
+
+  // Each test starts from the same "a record filter has already ruled TestMod.esp out"
+  // state — set directly on the plugin the activation reconcile loads, rather than through an
+  // explicit setFilter round trip, since which filter produced the map is irrelevant to what
+  // clears it.
+  beforeEach(async () => {
+    if (!root) return;
+    resetMockBackend();
+    mockPluginsOverride = MOCK_PLUGINS.map((p) => (p.name === 'TestMod.esp' ? { ...p, hasMatchingRecords: false } : p));
+    await vscode.workspace.getConfiguration('modbench').update(
+      'mods.gameDirectory', gameDir, vscode.ConfigurationTarget.Workspace);
+    fs.writeFileSync(pluginsTxtPath, '*TestMod.esp\n');
+    await enterEditing();
+    await waitFor('the activation reconcile to record TestMod.esp as filtered out',
+      () => (loadOrderSyncOf()?.matches('testmod.esp') === false ? true : undefined));
+  });
+
+  afterEach(async () => {
+    if (!root) return;
+    exitEditing();
+    await vscode.workspace.getConfiguration('modbench').update(
+      'mods.gameDirectory', undefined, vscode.ConfigurationTarget.Workspace);
+    fs.writeFileSync(pluginsTxtPath, '');
+    resetMockBackend();
+  });
+
+  it('exitToLoadout clears the match map, not just the tree', () => {
+    // exitToLoadout's own stop() call also fires clearTreeWhenBackendDies's 'status' listener,
+    // a second, independent writer of the same map (below) — detach it here so this test proves
+    // exitToLoadout's own write and nothing else, restoring it afterward so later tests (and
+    // clearTreeWhenBackendDies's own real job) are unaffected.
+    const bm = backendManagerOf();
+    const statusListeners = bm?.listeners('status') ?? [];
+    bm?.removeAllListeners('status');
+    try {
+      exitEditing();
+      assert.strictEqual(loadOrderSyncOf()?.matches('testmod.esp'), undefined,
+        'closing mEdit must forget which plugins an old record filter matched, not leave a stale answer for the next session');
+    } finally {
+      for (const listener of statusListeners) bm?.on('status', listener);
+    }
+  });
+
+  it('a failed refresh after clearing the filter drops the stale match rather than keeping it', async () => {
+    getPluginsShouldFail = true;
+    try {
+      await vscode.commands.executeCommand('modbench.clearFilter');
+      const cleared = await waitFor('refreshMatchingPlugins\'s failed GET /plugins to clear the stale match',
+        () => (loadOrderSyncOf()?.matches('testmod.esp') === undefined ? true : undefined));
+      assert.strictEqual(cleared, true);
+    } finally {
+      getPluginsShouldFail = false;
+    }
+  });
+
+  it('a backend that goes unhealthy outside exitToLoadout still clears the match map', async () => {
+    await backendManagerOf()?.stop();
+    assert.strictEqual(loadOrderSyncOf()?.matches('testmod.esp'), undefined,
+      'a dead backend must forget which plugins an old record filter matched, the same as an explicit Close mEdit');
   });
 });
 

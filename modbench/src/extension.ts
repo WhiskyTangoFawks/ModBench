@@ -496,10 +496,13 @@ export function activate(context: vscode.ExtensionContext) {
 
   wireAutoLaunch(context, outputChannel, enterEditing);
 
-  // Exposed for integration tests — unused in production.
+  // Exposed for integration tests — unused in production. loadOrderSync/backendManager: #650's
+  // matchingPlugins tests need to observe/drive the real singletons directly (the match map has
+  // no other externally observable surface, and a live "backend went unhealthy outside
+  // exitToLoadout" needs the real BackendManager.stop()), same reasoning as every other field here.
   return {
     modListProvider, downloadsProvider, pluginListProvider, pluginsTree, pluginListView: pluginsTreeView, treeProvider,
-    outputChannel, enterEditing, exitToLoadout,
+    outputChannel, enterEditing, exitToLoadout, loadOrderSync, backendManager,
   };
 }
 
