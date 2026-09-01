@@ -11,31 +11,39 @@
 // (comment/blank) survive untouched.
 
 import type { PluginEntry } from '../model';
-import { lineContent, lineRanges } from './lineScan';
+import { detectEol, insertIndexAmongEntries, lineContent, lineRanges, splitLinesKeepEol, stripBom, withBomPreserved } from './lineScan';
 
-const BOM = '﻿';
+/** The part of a line #635's fixes key off: EOL-stripped, then leading/trailing
+ *  whitespace stripped too — MO2 itself never writes padded lines, but a
+ *  hand-edited plugins.txt (never assume exclusive ownership of the file) can,
+ *  and the deleted `readPluginLines` this module's `isEntryLine`/`pluginNameOf`
+ *  replaced always `.trim()`ed the whole line before reading `*`/the name off
+ *  it. Only used for *reading* — `setPluginEnabledInText`'s write still has to
+ *  locate the marker's real byte offset, which this collapses away, so it
+ *  computes that separately (see its own comment). */
+const trimmedEntryContent = (line: string): string => lineContent(line).trim();
 
-const stripBom = (text: string): string => (text.startsWith(BOM) ? text.slice(BOM.length) : text);
-
-/** The BOM is a whole-file property (always at absolute position 0), never a
- *  line's. Every surgical edit strips it up front, edits the bomless text, then
- *  re-prepends it — so it stays pinned to position 0 even when the line that
- *  carried it is edited or moved. */
-function withBomPreserved(text: string, edit: (bomless: string) => string): string {
-  if (!text.startsWith(BOM)) return edit(text);
-  return BOM + edit(stripBom(text));
-}
-
-/** An entry line is any non-blank, non-comment line; its `*` prefix (if any)
- *  marks it enabled. Comment (#) and blank lines carry no model meaning. */
+/** An entry line is any non-blank, non-comment line (after trimming — a
+ *  whitespace-only line, or a `#` comment with incidental leading whitespace,
+ *  both count as blank/comment, not an entry). Comment and blank lines carry
+ *  no model meaning. */
 const isEntryLine = (line: string): boolean => {
-  const c = lineContent(line);
+  const c = trimmedEntryContent(line);
   return c.length > 0 && !c.startsWith('#');
 };
 
-/** Plugin name for an entry line, with the leading `*` (enabled) marker removed. */
+/** Whether an entry line's `*` (enabled) marker is present — after trimming, so
+ *  incidental leading whitespace before the marker doesn't hide it. */
+const isEnabledEntry = (line: string): boolean => trimmedEntryContent(line).startsWith('*');
+
+/** Plugin name for an entry line, with the leading `*` (enabled) marker and any
+ *  incidental leading/trailing whitespace removed — `PluginEntry.name` is a
+ *  matching key (`setPluginEnabledInText`, `appendPluginInText`'s duplicate
+ *  check, `movePluginsInText`), so it must report the same name a hand-padded
+ *  line's *real* plugin resolves to, not a name containing the padding or a
+ *  literal `*`. */
 const pluginNameOf = (line: string): string => {
-  const c = lineContent(line);
+  const c = trimmedEntryContent(line);
   return c.startsWith('*') ? c.slice(1) : c;
 };
 
@@ -45,14 +53,10 @@ export function parsePlugins(text: string): PluginEntry[] {
   const entries: PluginEntry[] = [];
   for (const raw of stripBom(text).split(/\r\n|\r|\n/)) {
     if (!isEntryLine(raw)) continue;
-    entries.push({ name: pluginNameOf(raw), enabled: raw.startsWith('*') });
+    entries.push({ name: pluginNameOf(raw), enabled: isEnabledEntry(raw) });
   }
   return entries;
 }
-
-/** Lines each INCLUDING their trailing EOL (last may lack one); join('') is exact. */
-const splitLinesKeepEol = (text: string): string[] =>
-  [...lineRanges(text)].map((r) => text.slice(r.start, r.end));
 
 /** Set a plugin's enabled state by adding/removing its leading `*` marker.
  *  Throws if the plugin is absent. */
@@ -61,23 +65,19 @@ export function setPluginEnabledInText(text: string, pluginName: string, enabled
     for (const { start, contentEnd } of lineRanges(bomless)) {
       const content = bomless.slice(start, contentEnd);
       if (!isEntryLine(content) || pluginNameOf(content) !== pluginName) continue;
-      const isEnabled = content.startsWith('*');
+      const isEnabled = isEnabledEntry(content);
       if (isEnabled === enabled) return bomless; // already in the requested state
-      if (enabled) return bomless.slice(0, start) + '*' + bomless.slice(start);
-      return bomless.slice(0, start) + bomless.slice(start + 1); // drop the leading *
+      // The marker sits at the first non-whitespace character of the line, which is
+      // `start` for a real MO2-written line but not necessarily for a hand-edited one
+      // with incidental leading whitespace — matching pluginNameOf/isEnabledEntry's own
+      // trim-then-read means this write must locate the marker the same trim-aware way,
+      // or it would splice into the padding instead of flipping the real marker.
+      const markerAt = start + (content.length - content.trimStart().length);
+      if (enabled) return bomless.slice(0, markerAt) + '*' + bomless.slice(markerAt);
+      return bomless.slice(0, markerAt) + bomless.slice(markerAt + 1); // drop the leading *
     }
     throw new Error(`Plugin not found in plugins.txt: ${pluginName}`);
   });
-}
-
-/** The EOL terminator the file already uses, sniffed off its first terminated line — never
- *  guessed from platform defaults. Falls back to `\n` when the text has no terminated line at all
- *  (empty file, or a single line with none). */
-function detectEol(text: string): string {
-  for (const { contentEnd, end } of lineRanges(text)) {
-    if (end > contentEnd) return text.slice(contentEnd, end);
-  }
-  return '\n';
 }
 
 /** The New Plugin gesture's own write — appends a new, always-enabled entry line at the
@@ -131,16 +131,7 @@ export function movePluginsInText(text: string, pluginNames: string[], toIndex: 
     const block = moveIdx.map((i) => lines[i]);
     for (const i of [...moveIdx].reverse()) lines.splice(i, 1); // remove high→low to keep indices valid
 
-    const entryLineIdx = [...lines.keys()].filter((i) => isEntryLine(lines[i]));
-    const clamped = Math.max(0, Math.min(toIndex, entryLineIdx.length));
-    let insertAt: number;
-    if (clamped < entryLineIdx.length) {
-      insertAt = entryLineIdx[clamped]; // before the entry currently at that slot
-    } else if (entryLineIdx.length === 0) {
-      insertAt = lines.length;
-    } else {
-      insertAt = entryLineIdx.at(-1)! + 1; // after the last remaining entry
-    }
+    const insertAt = insertIndexAmongEntries(lines, isEntryLine, toIndex);
     lines.splice(insertAt, 0, ...block);
     return lines.join('');
   });

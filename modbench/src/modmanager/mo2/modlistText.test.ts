@@ -221,6 +221,11 @@ describe('insertSeparatorAtIndexInText', () => {
     const out = insertSeparatorAtIndexInText('# header\n', 'FirstSep', 0);
     expect(out).toBe('# header\n+FirstSep_separator\n');
   });
+
+  it('#635: a file with both LF- and CRLF-terminated lines uses CRLF for the new line, not the first line\'s own LF (the shared detectEol\'s ruled whole-file-scan behavior, end to end through this caller)', () => {
+    const out = insertSeparatorAtIndexInText('+A\n+B\r\n', 'Sep', 1);
+    expect(out).toBe('+A\n+B\r\n+Sep_separator\r\n');
+  });
 });
 
 describe('renameSeparatorInText', () => {
@@ -545,6 +550,11 @@ describe('insertModAtWinningEnd — add a disabled mod at the winning end (first
     // being inserted after, so nothing about it may be touched.
     const out = insertModAtWinningEnd('# header\r\n+A\r\n*DLC: Foo', 'New');
     expect(out).toBe('# header\r\n-New\r\n+A\r\n*DLC: Foo');
+  });
+
+  it('#635: a file with both LF- and CRLF-terminated lines uses CRLF for the new line, not the first line\'s own LF (the shared detectEol\'s ruled whole-file-scan behavior, end to end through this caller)', () => {
+    const out = insertModAtWinningEnd('+A\n+B\r\n', 'New');
+    expect(out).toBe('-New\r\n+A\n+B\r\n');
   });
 });
 
