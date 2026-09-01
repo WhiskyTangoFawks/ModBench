@@ -6,6 +6,7 @@ using MEditService.Core.Serialization;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
+using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
 using Noggog.WorkEngine;
 
@@ -197,6 +198,32 @@ internal static class SourceIngest
             // not merely the bytes one of them holds. Each gets its own verb.
             var fullPath = Path.Combine(modFolder, relativePath);
             var headText = SourceRepository.ReadCommittedSourceText(modFolder, relativePath);
+
+            // The header (#661): its own FormKey is computed directly, never recovered by
+            // deserializing through the per-record codec below — a ModHeader cannot flow through it
+            // structurally (see HeaderDocument's own doc comment), the same reason
+            // RecordEditService.ReadRecordFromSource and WorkingTreeOverlay.RederiveIndexRowsForRecord
+            // both special-case it. Its own path rather than a parameter tweak to the flat-record
+            // logic below, which is what the ticket's own scope note asks for — ReconcileHeadStructurally
+            // cannot reach it either (it diffs through EnumerateMajorRecords, which a ModHeader is not
+            // in), so this loop is the only place left that can.
+            if (identity.RecordType == HeaderIndexer.RecordType)
+            {
+                var headerFormKey = HeaderIndexer.FormKeyFor(ModKey.FromFileName(identity.PluginFileName));
+
+                if (!File.Exists(fullPath))
+                {
+                    if (headText != null)
+                        deletedInWorkingTree.Add((headerFormKey, HeaderIndexer.RecordType, headText));
+                    continue;
+                }
+
+                if (headText == null)
+                    workingTreeOnly.Add(headerFormKey);
+                else
+                    baselines.Add((headerFormKey, headText));
+                continue;
+            }
 
             if (!File.Exists(fullPath))
             {
