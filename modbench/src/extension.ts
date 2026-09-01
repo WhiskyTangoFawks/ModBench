@@ -70,47 +70,53 @@ import { makeReporter } from './reporter';
 import { LoadoutHeaderProvider } from './LoadoutHeaderProvider';
 import { registerNameFilter, type NameFilter } from './nameFilter';
 
-let backendManager: BackendManager | undefined;
-// The Loadout header re-reads its rows whenever workspace-scope state moves. Module
-// level for the same reason pluginsTree below is — the choke points that move that state
-// (exitToLoadout, switchProfile) are module-level functions too.
-let loadoutHeaderProvider: LoadoutHeaderProvider | undefined;
-// The merged Plugins tree. Module level for the same reason as the above — mEdit
-// starting and stopping is what puts chevrons on its rows, and both choke points for that
-// (enterEditing, exitToLoadout) are module-level.
-let pluginsTree: PluginsTreeComposite<PluginListNode, PluginTreeNode> | undefined;
-// ADR-0044: the one path by which the Plugin load order reaches Editing — "recompute the
-// snapshot, PUT it", coalesced. Module level for the same reason pluginsTree is: the profile
-// switch and the checkbox toggle are module-level or registered before the view's wiring exists,
-// and both have to be able to ask for a fresh snapshot.
-let loadOrderSync: LoadOrderSync | undefined;
-// The same view, as a TreeView — what carries the load's own progress (a native header
-// progress indicator, addressed by this view id) and its incompleteness statement
-// (`TreeView.message`). Module level for the same reason as pluginsTree above: enterEditing and
-// exitToLoadout are module-level, and both have to be able to set and clear it.
-let pluginsTreeView: vscode.TreeView<PluginListNode | PluginTreeNode> | undefined;
-// The same view's name filter. Module level for the same reason as the two above — the
-// record filter (a second, independent narrowing axis) has to be able to add itself to this
-// view's readout from `activate`'s own setFilterActive, which runs before the view exists.
-let pluginsNameFilter: NameFilter | undefined;
-// Plugin filename → the `vscode.git` `Repository` handle opened for that plugin's own mod
-// folder — rebuilt wholesale by registerHeldTrackedRepositories below, same "no stale
-// carryover" posture as loadOrderSync's own match map. Kept so a successful field
-// edit can prompt the right repository's own status() and make the native Source Control panel
-// pick up the resulting working-tree change without a manual Refresh click.
-let pluginRepositories: Map<string, MinimalRepository> | undefined;
+/** Everything one `activate()` call constructs that a choke point registered elsewhere (a
+ *  command, a watcher callback, a checkbox handler) also has to reach — `enterEditing`/
+ *  `exitToLoadout`/`switchProfile` and friends. One object built empty in `activate()` and
+ *  threaded to whatever registrar needs a field, rather than nine separate module-level
+ *  singletons each carrying its own "why module level" paragraph — the reason was always the
+ *  same one (a choke point outside `activate()`'s own closure needs it), so it is said once,
+ *  here, instead of nine times. `undefined` until `activate()`'s own wiring reaches the field —
+ *  every reader already treats "not yet built" and "no live workspace" the same way (`?.`). */
+interface ExtensionSession {
+  backendManager?: BackendManager;
+  loadoutHeaderProvider?: LoadoutHeaderProvider;
+  /** The merged Plugins tree. */
+  pluginsTree?: PluginsTreeComposite<PluginListNode, PluginTreeNode>;
+  /** ADR-0044: the one path by which the Plugin load order reaches Editing. */
+  loadOrderSync?: LoadOrderSync;
+  /** The same view, as a `TreeView` — carries the load's own progress and incompleteness
+   *  statement (`TreeView.message`, via `say` below). */
+  pluginsTreeView?: vscode.TreeView<PluginListNode | PluginTreeNode>;
+  /** The same view's name filter — a second, independent narrowing axis from the record filter,
+   *  which has to be able to add itself to this view's readout (`say` below). */
+  pluginsNameFilter?: NameFilter;
+  /** Plugin filename → the `vscode.git` `Repository` handle opened for that plugin's own mod
+   *  folder — rebuilt wholesale by `registerHeldTrackedRepositories`, same "no stale carryover"
+   *  posture as `loadOrderSync`'s own match map. Kept so a successful field edit can prompt the
+   *  right repository's own `status()` and make the native Source Control panel pick up the
+   *  resulting working-tree change without a manual Refresh click. */
+  pluginRepositories?: Map<string, MinimalRepository>;
+  /** The record browser behind the merged tree's children — mEdit starting/stopping is what
+   *  tells its record rows which plugins are immutable (Remove hidden via `contextValue`). */
+  recordBrowserProvider?: PluginTreeProvider;
+  /** The record filter's single writer (the context key its Clear action is gated on, the code
+   *  lens's active SQL, and the readout) — built by `makeSetFilterActive` alongside where this
+   *  is assigned, exactly once. */
+  setFilterActive?: ReturnType<typeof makeSetFilterActive>;
+}
 
 /** The Plugins view's own statement about what it is doing, or what it does not yet know
  *  (`TreeView.message` — the native surface for a view-scoped statement about its own contents,
  *  so there is no banner row and no bespoke widget). `undefined` clears it, which is the value
  *  the property itself takes. */
-function say(message: string | undefined): void {
-  if (!pluginsTreeView) return;
-  pluginsTreeView.message = message;
+function say(session: ExtensionSession, message: string | undefined): void {
+  if (!session.pluginsTreeView) return;
+  session.pluginsTreeView.message = message;
   // One message surface, two things that can want it. The load's statement wins while it
   // has something to say; when it stops, whatever the name filter had to say comes back — a
   // no-matches statement must not be silently swallowed by a load that has since finished.
-  if (message === undefined) pluginsNameFilter?.refresh();
+  if (message === undefined) session.pluginsNameFilter?.refresh();
 }
 
 /** ADR-0035: run `work` with a progress indicator in the **Plugins view's own header**,
@@ -125,22 +131,12 @@ function say(message: string | undefined): void {
  *
  *  Deliberately not `cancellable`: the header location has no cancel affordance (that is a
  *  Notification-only option), and abandoning a load is Close mEdit's job, not a second control. */
-function withPluginsViewProgress(work: () => Promise<void>): Promise<void> {
+function withPluginsViewProgress(session: ExtensionSession, work: () => Promise<void>): Promise<void> {
   return Promise.resolve(vscode.window.withProgress(
     { location: { viewId: 'modbench.pluginListTree' } },
-    async () => { try { await work(); } finally { say(undefined); } },
+    async () => { try { await work(); } finally { say(session, undefined); } },
   ));
 }
-// The record browser behind the merged tree's children. Module level for the same reason as
-// pluginsTree directly above — mEdit starting/stopping is what tells its record rows which
-// plugins are immutable (Remove hidden via contextValue), through the same choke points.
-let recordBrowserProvider: PluginTreeProvider | undefined;
-// Module level for the same reason as the above — exitToLoadout has to reach the record
-// filter's single writer (the context key its Clear action is gated on, the code lens's active
-// SQL, and the readout) to end the filter's UI state when mEdit closes, and a local `const` inside
-// activate() is structurally unreachable from there. Assigned exactly once, alongside where
-// makeSetFilterActive builds it.
-let setFilterActive: ReturnType<typeof makeSetFilterActive> | undefined;
 
 const meditConfig = () => vscode.workspace.getConfiguration('modbench');
 
@@ -218,16 +214,18 @@ function heldPluginFilesFrom(repository: ApiPluginRepository): () => Promise<Hel
  *  is wrong in the same direction `hasMatchingRecords` already treats as safe, and a record
  *  filter's whole *point* is to be applied and inspected, so silently freezing every chevron would
  *  be a far worse failure than briefly over-showing them. */
-async function refreshMatchingPlugins(repository: PluginRepository, outputChannel: vscode.LogOutputChannel): Promise<void> {
+async function refreshMatchingPlugins(
+  session: ExtensionSession, repository: PluginRepository, outputChannel: vscode.LogOutputChannel,
+): Promise<void> {
   try {
     // ADR-0044: keyed by filename, so read the copy plugins.txt names — two held copies can share one.
     const plugins = (await repository.getPlugins()).filter((p) => p.inLoadOrder);
-    loadOrderSync?.setMatches(new Map(plugins.map((p) => [p.name.toLowerCase(), p.hasMatchingRecords] as const)));
+    session.loadOrderSync?.setMatches(new Map(plugins.map((p) => [p.name.toLowerCase(), p.hasMatchingRecords] as const)));
   } catch (err) {
     outputChannel.error(`[extension] refreshing the record filter's plugin matches failed: ${err instanceof Error ? err.message : String(err)}`);
-    loadOrderSync?.setMatches(undefined);
+    session.loadOrderSync?.setMatches(undefined);
   }
-  pluginsTree?.refreshDecorations();
+  session.pluginsTree?.refreshDecorations();
 }
 
 /** The one shape this extension needs from a `vscode.git` `Repository` — just `status()`,
@@ -255,7 +253,9 @@ interface GitExtensionExports {
  *  freshly tracked repo appears without waiting for the next activation. Silent no-op (logged, not
  *  surfaced) when `vscode.git` isn't installed/enabled: this only ever narrows the native UI,
  *  never blocks reading or editing. */
-async function registerHeldTrackedRepositories(repository: ApiPluginRepository, outputChannel: vscode.LogOutputChannel): Promise<void> {
+async function registerHeldTrackedRepositories(
+  session: ExtensionSession, repository: ApiPluginRepository, outputChannel: vscode.LogOutputChannel,
+): Promise<void> {
   try {
     const gitExtension = vscode.extensions.getExtension<GitExtensionExports>('vscode.git');
     if (!gitExtension) {
@@ -269,7 +269,7 @@ async function registerHeldTrackedRepositories(repository: ApiPluginRepository, 
     const folders = trackedModFoldersOf(plugins);
     const folderRepositories = await registerTrackedRepositories(
       (folder) => Promise.resolve(gitApi.openRepository(vscode.Uri.file(folder))), folders);
-    pluginRepositories = pluginRepositoriesOf(plugins, folderRepositories);
+    session.pluginRepositories = pluginRepositoriesOf(plugins, folderRepositories);
   } catch (err) {
     outputChannel.error(`[extension] registering tracked repositories with vscode.git failed: ${err instanceof Error ? err.message : String(err)}`);
   }
@@ -284,8 +284,8 @@ async function registerHeldTrackedRepositories(repository: ApiPluginRepository, 
  *  gates: this only ever narrows the native UI, never blocks the edit that already succeeded. A
  *  rejected `status()` is logged, not surfaced — a refresh failing must never read as the edit
  *  itself having failed. */
-function refreshSourceControlFor(plugin: string, outputChannel: vscode.LogOutputChannel): void {
-  const repo = pluginRepositories?.get(plugin);
+function refreshSourceControlFor(session: ExtensionSession, plugin: string, outputChannel: vscode.LogOutputChannel): void {
+  const repo = session.pluginRepositories?.get(plugin);
   if (!repo) return;
   void repo.status().then(undefined, (err: unknown) => {
     outputChannel.error(`[extension] refreshing Source Control status for ${plugin} failed: ${err instanceof Error ? err.message : String(err)}`);
@@ -295,32 +295,32 @@ function refreshSourceControlFor(plugin: string, outputChannel: vscode.LogOutput
 /** Leave editing: tear down the editing backend. There is no separate loadout view mode
  *  to switch back to — the loadout views are never hidden, and Referenced By
  *  governs its own visibility. */
-function exitToLoadout(): void {
+function exitToLoadout(session: ExtensionSession): void {
   // Abandon any reconcile still in flight *first* — it aborts the PUT outright, so the
   // reconcile stops polling and returns 'abandoned' rather than discovering a killed backend as a
   // network error and reporting that to the user as a failure.
-  loadOrderSync?.abandon();
+  session.loadOrderSync?.abandon();
   // The chevrons go with the backend. Cleared before it stops, so no row can be expanded
   // into a backend that is on its way down. The immutable set goes with it.
-  pluginsTree?.setLoadOrder(undefined);
+  session.pluginsTree?.setLoadOrder(undefined);
   // So does anything the reconcile was saying about itself. A statement about a load order
   // that is no longer held is the same class of silent-wrong-state as a stale chevron.
-  say(undefined);
+  say(session, undefined);
   // And so does the record filter's whole UI state — the Clear action's context key,
   // the code lens's active SQL, and the Plugins tree readout's record-filter half — all through
   // the same single writer every other record-filter change goes through, so `modbench.filterActive`
   // stays written from exactly one place. (The name filter's half of the readout is untouched: it
   // filters load-order rows, which are still there.)
-  setFilterActive?.(false);
+  session.setFilterActive?.(false);
   // And so does the match set it drove (ADR-0035 amending ADR-0018) — a statement about
   // which held plugins' records matched, same reasoning as the chevrons just above.
-  loadOrderSync?.setMatches(undefined);
-  recordBrowserProvider?.setImmutablePlugins([]);
+  session.loadOrderSync?.setMatches(undefined);
+  session.recordBrowserProvider?.setImmutablePlugins([]);
   // stop() is async (waits for confirmed exit before reporting "stopped") but its body
   // runs to completion regardless of whether the returned promise is awaited — fire-and-forget
   // here still defers emitStatus('stopped') correctly; exitToLoadout() itself doesn't need to
   // become async just to observe that.
-  void backendManager?.stop();
+  void session.backendManager?.stop();
 }
 
 /** Everything that follows the record filter turning on or off: the context key its Clear
@@ -334,11 +334,11 @@ function exitToLoadout(): void {
  *  to end the record filter's UI state when mEdit closes, the same way EditingController's own
  *  setFilter/clearFilter/syncFilterState call it while it runs. `modbench.filterActive` is written
  *  from exactly this one place. */
-function makeSetFilterActive(filterProvider: FilterCodeLensProvider) {
+function makeSetFilterActive(session: ExtensionSession, filterProvider: FilterCodeLensProvider) {
   return (active: boolean, sql?: string, label?: string) => {
     void vscode.commands.executeCommand('setContext', 'modbench.filterActive', active);
     filterProvider.setActiveSql(active ? (sql ?? null) : null);
-    pluginsNameFilter?.setBaseDescription(active ? `records: ${label ?? 'SQL'}` : undefined);
+    session.pluginsNameFilter?.setBaseDescription(active ? `records: ${label ?? 'SQL'}` : undefined);
   };
 }
 
@@ -393,7 +393,7 @@ function createReferencedByTree(
  *  tells every open record panel to refetch its comparison, and (re-)registers every tracked mod's
  *  repo with `vscode.git`. */
 function makeNotifyConflictsComputed(
-  recordPanels: Set<vscode.WebviewPanel>,
+  session: ExtensionSession, recordPanels: Set<vscode.WebviewPanel>,
   repository: ApiPluginRepository, outputChannel: vscode.LogOutputChannel,
 ): () => void {
   return () => {
@@ -401,7 +401,7 @@ function makeNotifyConflictsComputed(
     // ADR-0041: the load order just settled — the one reliable point (see this dep's own
     // doc comment) to (re-)register every tracked mod's repo with vscode.git, which is also what
     // makes a plugin whose winning copy moved to a newly tracked folder pick that repo up.
-    void registerHeldTrackedRepositories(repository, outputChannel);
+    void registerHeldTrackedRepositories(session, repository, outputChannel);
   };
 }
 
@@ -415,7 +415,7 @@ function makeNotifyConflictsComputed(
  *  gets its retry when the user supplies one — with no Launch command left, a config change
  *  is the only gesture that can mean "try again". */
 function wireAutoLaunch(
-  context: vscode.ExtensionContext, outputChannel: vscode.LogOutputChannel,
+  session: ExtensionSession, context: vscode.ExtensionContext, outputChannel: vscode.LogOutputChannel,
   enterEditing: (() => Promise<void>) | undefined,
 ): void {
   const launch = async () => {
@@ -423,19 +423,25 @@ function wireAutoLaunch(
       await enterEditing?.();
     } catch (err) {
       outputChannel.error(`[extension] backend launch failed: ${err instanceof Error ? err.message : String(err)}`);
-      exitToLoadout(); // reset the view and tear down any half-started backend
+      exitToLoadout(session); // reset the view and tear down any half-started backend
       void vscode.window.showErrorMessage('Modbench: Failed to launch mEdit.');
     }
   };
   void launch();
   context.subscriptions.push(
     vscode.workspace.onDidChangeConfiguration((e) => {
-      if (e.affectsConfiguration('modbench.mods.gameDirectory') && !backendManager?.isHealthy) void launch();
+      if (e.affectsConfiguration('modbench.mods.gameDirectory') && !session.backendManager?.isHealthy) void launch();
     }),
   );
 }
 
 export function activate(context: vscode.ExtensionContext) {
+  // Everything a choke point registered elsewhere (a command, a watcher, a checkbox handler)
+  // has to reach back into — see ExtensionSession's own doc comment. Built empty and filled in
+  // as this function's own wiring reaches each field.
+  const session: ExtensionSession = {};
+  activeSession = session; // deactivate()'s only way to reach it — see activeSession's own comment.
+
   const port: number = meditConfig().get('backendPort') ?? 5172;
 
   const outputChannel = vscode.window.createOutputChannel('Modbench', { log: true });
@@ -449,19 +455,19 @@ export function activate(context: vscode.ExtensionContext) {
   // current per compile (publishCompileDiagnostics replaces a mod's own entries wholesale each run).
   const compileDiagnostics = vscode.languages.createDiagnosticCollection('modbench-compile');
   context.subscriptions.push(compileDiagnostics);
-  backendManager = createBackendManager(port, outputChannel, statusBarItem);
+  session.backendManager = createBackendManager(port, outputChannel, statusBarItem);
 
   const client = createApiClient(port, createUnlimitedFetch());
   const repository = new ApiPluginRepository(client, log);
   const treeProvider = new PluginTreeProvider(repository, log);
-  recordBrowserProvider = treeProvider;
+  session.recordBrowserProvider = treeProvider;
   const openPanels = new Map<string, vscode.WebviewPanel>();
   const recordPanels = new Set<vscode.WebviewPanel>();
   // The Referenced By view's input — which record panel is active and what FormKey it shows.
   const activeRecordTracker = new ActiveRecordTracker<vscode.WebviewPanel>();
   const { scriptsPath, filterProvider } = setupScripts(meditConfig());
 
-  setFilterActive = makeSetFilterActive(filterProvider);
+  session.setFilterActive = makeSetFilterActive(session, filterProvider);
 
   const controller = new EditingController({
     client,
@@ -471,43 +477,45 @@ export function activate(context: vscode.ExtensionContext) {
     setStatusText: (t) => { statusBarItem.text = t; },
     showWarning: (msg) => { void vscode.window.showWarningMessage(msg); },
     showError: (msg) => { void vscode.window.showErrorMessage(msg); },
-    setFilterActive,
-    refreshMatchingPlugins: () => { void refreshMatchingPlugins(repository, outputChannel); },
-    notifyConflictsComputed: makeNotifyConflictsComputed(recordPanels, repository, outputChannel),
+    setFilterActive: session.setFilterActive,
+    refreshMatchingPlugins: () => { void refreshMatchingPlugins(session, repository, outputChannel); },
+    notifyConflictsComputed: makeNotifyConflictsComputed(session, recordPanels, repository, outputChannel),
   });
   const { referencedByTreeView, activeRecordSubscription } = createReferencedByTree(client, log, activeRecordTracker);
   const showCrashRepairOffers = makeCrashRepairOffersPresenter(controller, compileDiagnostics);
-  const { modListProvider, downloadsProvider, pluginListProvider, modlistSource, instanceRoot, enterEditing } = registerLoadoutSurfaces({ context, log, outputChannel, controller, recordBrowser: treeProvider, heldPluginFiles: heldPluginFilesFrom(repository), showCrashRepairOffers });
+  const { modListProvider, downloadsProvider, pluginListProvider, modlistSource, instanceRoot, enterEditing } = registerLoadoutSurfaces(session, { context, log, outputChannel, controller, recordBrowser: treeProvider, heldPluginFiles: heldPluginFilesFrom(repository), showCrashRepairOffers });
 
-  wireExternalChangePolling(repository, controller, outputChannel, log);
+
+  wireExternalChangePolling(session, repository, controller, outputChannel, log);
 
   context.subscriptions.push(
     referencedByTreeView,
     activeRecordSubscription,
     vscode.languages.registerCodeLensProvider({ language: 'sql' }, filterProvider),
-    ...registerPluginRowCommands(controller, repository, activeRecordTracker, outputChannel, compileDiagnostics),
+    ...registerPluginRowCommands(session, controller, repository, activeRecordTracker, outputChannel, compileDiagnostics),
     registerCreatePluginCommand(controller, modlistSource, instanceRoot, pluginListProvider, outputChannel),
     ...registerEditorCommands({
-      context, openPanels, recordPanels, activeRecordTracker, port, treeProvider, controller, repository, scriptsPath, referencedByTreeView, log, outputChannel,
+      session, context, openPanels, recordPanels, activeRecordTracker, port, treeProvider, controller, repository, scriptsPath, referencedByTreeView, log, outputChannel,
     }),
   );
 
   statusBarItem.text = '$(plug) mEdit';
 
-  wireAutoLaunch(context, outputChannel, enterEditing);
+  wireAutoLaunch(session, context, outputChannel, enterEditing);
 
   // Exposed for integration tests — unused in production. loadOrderSync/backendManager: #650's
   // matchingPlugins tests need to observe/drive the real singletons directly (the match map has
   // no other externally observable surface, and a live "backend went unhealthy outside
   // exitToLoadout" needs the real BackendManager.stop()), same reasoning as every other field here.
   return {
-    modListProvider, downloadsProvider, pluginListProvider, pluginsTree, pluginListView: pluginsTreeView, treeProvider,
-    outputChannel, enterEditing, exitToLoadout, loadOrderSync, backendManager,
+    modListProvider, downloadsProvider, pluginListProvider, pluginsTree: session.pluginsTree, pluginListView: session.pluginsTreeView, treeProvider,
+    outputChannel, enterEditing, exitToLoadout: () => exitToLoadout(session), loadOrderSync: session.loadOrderSync, backendManager: session.backendManager,
   };
 }
 
 
 interface EditorCommandDeps {
+  session: ExtensionSession;
   context: vscode.ExtensionContext;
   openPanels: Map<string, vscode.WebviewPanel>;
   // Every open 'modbench'-viewType record panel — see openRecordPanel's recordPanels param.
@@ -609,18 +617,18 @@ function makeOnRecordEditedCallback(
   deps: EditorCommandDeps,
   recordDecorationProvider: RecordDecorationProvider,
 ): (formKey: string, plugin: string, origin: string) => void {
-  const { treeProvider, recordPanels, repository, outputChannel } = deps;
+  const { session, treeProvider, recordPanels, repository, outputChannel } = deps;
   return makeOnRecordEdited(
     treeProvider, recordDecorationProvider, recordPanels,
-    () => { void refreshMatchingPlugins(repository, outputChannel); },
-    (plugin) => refreshSourceControlFor(plugin, outputChannel),
+    () => { void refreshMatchingPlugins(session, repository, outputChannel); },
+    (plugin) => refreshSourceControlFor(session, plugin, outputChannel),
   );
 }
 
 /** Record view/navigation + filter commands. */
 function registerRecordViewCommands(deps: EditorCommandDeps): vscode.Disposable[] {
   const {
-    context, openPanels, recordPanels, activeRecordTracker, port, treeProvider, controller, scriptsPath,
+    session, context, openPanels, recordPanels, activeRecordTracker, port, treeProvider, controller, scriptsPath,
     referencedByTreeView, outputChannel,
   } = deps;
   // The *shared* part of the router deps; `formKeyPicker` itself
@@ -657,7 +665,7 @@ function registerRecordViewCommands(deps: EditorCommandDeps): vscode.Disposable[
       (item?: RecordNode | PlacedNode | ReferencedByGroupNode | { formKey?: string; label?: string },
         allSelected?: unknown[]) => {
         const nodes: readonly unknown[] = allSelected?.length ? allSelected
-          : pluginsTreeView?.selection.length ? pluginsTreeView.selection
+          : session.pluginsTreeView?.selection.length ? session.pluginsTreeView.selection
           : item ? [item] : [];
         const identities = nodes.map(recordOpenIdentity)
           .filter((i): i is { formKey: string; label: string } => i !== undefined);
@@ -754,13 +762,14 @@ function registerReferencedByCopyCommand(
 }
 
 interface ModListCoreDeps {
+  session: ExtensionSession;
   modListProvider: ModListProvider;
   modlistSource: Mo2ModlistSource;
   updateProfileDescription: () => Promise<void>;
 }
 /** Loadout core commands: refresh, switch profile, filter. */
 function registerModListCoreCommands(deps: ModListCoreDeps): vscode.Disposable[] {
-  const { modListProvider, modlistSource, updateProfileDescription } = deps;
+  const { session, modListProvider, modlistSource, updateProfileDescription } = deps;
   return [
       vscode.commands.registerCommand('modbench.modList.view.winningAtTop', () => {
         modListProvider.toggleViewDirection();
@@ -782,12 +791,12 @@ function registerModListCoreCommands(deps: ModListCoreDeps): vscode.Disposable[]
         if (!picked || picked.label === active) return;
         await modListProvider.switchProfile(picked.label);
         void updateProfileDescription();
-        loadoutHeaderProvider?.refresh();
+        session.loadoutHeaderProvider?.refresh();
         // ADR-0044: a profile switch is the next snapshot, not a teardown — the backend keeps
         // running, and the index (keyed on the instance, shared by every profile) makes
         // the reconcile cheap. The profile files themselves are not watched for this (switching
         // writes ModOrganizer.ini, not modlist/plugins.txt), so this asks explicitly.
-        loadOrderSync?.request();
+        session.loadOrderSync?.request();
       }),
   ];
 }
@@ -972,6 +981,7 @@ function registerSeparatorCommands(deps: SeparatorCmdDeps): vscode.Disposable[] 
 
 
 interface PluginListDeps {
+  session: ExtensionSession;
   modlistSource: Mo2ModlistSource;
   log: (msg: string) => void;
   outputChannel: vscode.LogOutputChannel;
@@ -998,7 +1008,7 @@ interface PluginListDeps {
  *  `registerPluginListView` purely to stay under the lint budget — no other reason to split it
  *  out, same as `registerRevealInExplorerCommand` alongside it. */
 function buildPluginsTreeComposite(
-  pluginListProvider: PluginListProvider, recordBrowser: PluginTreeProvider,
+  session: ExtensionSession, pluginListProvider: PluginListProvider, recordBrowser: PluginTreeProvider,
 ): PluginsTreeComposite<PluginListNode, PluginTreeNode> {
   return new PluginsTreeComposite<PluginListNode, PluginTreeNode>({
     rows: pluginListProvider,
@@ -1021,16 +1031,16 @@ function buildPluginsTreeComposite(
     // refreshMatchingPlugins function above, whenever EditingController's setFilter/clearFilter
     // run. Undefined (never fetched, or the accessor finds nothing for this file) reads as
     // "matches" — the composite's own fallback for an accessor that has nothing to say.
-    hasMatchingRecords: (file) => loadOrderSync?.matches(file.toLowerCase()),
+    hasMatchingRecords: (file) => session.loadOrderSync?.matches(file.toLowerCase()),
   });
 }
 
 function registerPluginListView(deps: PluginListDeps): { pluginListProvider: PluginListProvider; disposables: vscode.Disposable[] } {
-  const { modlistSource, log, outputChannel, reporter, instanceRoot, dataFolder, recordBrowser } = deps;
+  const { session, modlistSource, log, outputChannel, reporter, instanceRoot, dataFolder, recordBrowser } = deps;
   const pluginListProvider = new PluginListProvider({ source: modlistSource, log, reporter, instanceRoot, dataFolder });
-  const composite = buildPluginsTreeComposite(pluginListProvider, recordBrowser);
-  pluginsTree = composite;
-  clearTreeWhenBackendDies(composite, recordBrowser);
+  const composite = buildPluginsTreeComposite(session, pluginListProvider, recordBrowser);
+  session.pluginsTree = composite;
+  clearTreeWhenBackendDies(session, composite, recordBrowser);
   const pluginListView = vscode.window.createTreeView('modbench.pluginListTree', {
     treeDataProvider: composite,
     canSelectMany: true,
@@ -1041,8 +1051,8 @@ function registerPluginListView(deps: PluginListDeps): { pluginListProvider: Plu
     // is hierarchical — plugin → record type → record.
     showCollapseAll: true,
   });
-  pluginsTreeView = pluginListView; // see its declaration — progress and message live here
-  pluginsNameFilter = registerPluginsNameFilter(pluginListView, pluginListProvider);
+  session.pluginsTreeView = pluginListView; // see its declaration — progress and message live here
+  session.pluginsNameFilter = registerPluginsNameFilter(pluginListView, pluginListProvider);
   return { pluginListProvider, disposables: [
     pluginListView,
     composite,
@@ -1053,7 +1063,7 @@ function registerPluginListView(deps: PluginListDeps): { pluginListProvider: Plu
     vscode.window.registerFileDecorationProvider(
       new ImplicitMasterDecorationProvider(dataFolder, () => pluginListProvider.implicitMasterNames()),
     ),
-    ...wireLoadOrderWatchers(loadOrderSync!, instanceRoot, pluginListProvider),
+    ...wireLoadOrderWatchers(session.loadOrderSync!, instanceRoot, pluginListProvider),
     pluginListView.onDidChangeCheckboxState(async (e) => {
       for (const [node, state] of e.items) {
         if (node.kind !== 'plugin') continue;
@@ -1069,8 +1079,8 @@ function registerPluginListView(deps: PluginListDeps): { pluginListProvider: Plu
       }
     }),
     registerRevealInExplorerCommand(pluginListProvider, outputChannel),
-    registerParticipationSync(pluginListProvider),
-    pluginsNameFilter,
+    registerParticipationSync(session, pluginListProvider),
+    session.pluginsNameFilter,
   ] };
 }
 
@@ -1109,8 +1119,8 @@ function registerRevealInExplorerCommand(
  *
  *  Pulled out of `registerPluginListView` purely to keep that function under the lint line
  *  budget, same as `registerRevealInExplorerCommand` alongside it. */
-function registerParticipationSync(pluginListProvider: PluginListProvider): vscode.Disposable {
-  return pluginListProvider.onDidChangeParticipation(() => loadOrderSync?.request());
+function registerParticipationSync(session: ExtensionSession, pluginListProvider: PluginListProvider): vscode.Disposable {
+  return pluginListProvider.onDidChangeParticipation(() => session.loadOrderSync?.request());
 }
 
 /** Every plugin-row command (Track, Save & Compile, compile-at-ref, Rebase, the record
@@ -1118,6 +1128,7 @@ function registerParticipationSync(pluginListProvider: PluginListProvider): vsco
  *  `registerEditorCommands`'s own grouping, one level up (plugin-tree rows rather than the record
  *  editor's own commands). */
 function registerPluginRowCommands(
+  session: ExtensionSession,
   controller: EditingController,
   repository: ApiPluginRepository,
   activeRecordTracker: ActiveRecordTracker<vscode.WebviewPanel>,
@@ -1125,7 +1136,7 @@ function registerPluginRowCommands(
   compileDiagnostics: vscode.DiagnosticCollection,
 ): vscode.Disposable[] {
   return [
-    registerTrackCommand(controller, outputChannel, () => registerHeldTrackedRepositories(repository, outputChannel)),
+    registerTrackCommand(session, controller, outputChannel, () => registerHeldTrackedRepositories(session, repository, outputChannel)),
     registerSaveAndCompileCommand(controller, repository, activeRecordTracker, outputChannel, compileDiagnostics),
     registerCompileAtRefCommand(controller, repository, outputChannel, compileDiagnostics),
     registerRebaseCommand(controller, repository, outputChannel),
@@ -1145,7 +1156,7 @@ function registerPluginRowCommands(
  *  progress indicator already built for the other long, blocking-POST operation this view
  *  has (the reconcile) — same surface, same `say` narration, no second bespoke indicator. */
 function registerTrackCommand(
-  controller: EditingController, outputChannel: vscode.LogOutputChannel, onTracked: () => Promise<void>,
+  session: ExtensionSession, controller: EditingController, outputChannel: vscode.LogOutputChannel, onTracked: () => Promise<void>,
 ): vscode.Disposable {
   return vscode.commands.registerCommand('modbench.pluginListTree.track', async (node: PluginListNode) => {
     if (node?.kind !== 'plugin') return;
@@ -1167,12 +1178,12 @@ function registerTrackCommand(
     );
     if (!choice) return;
 
-    await withPluginsViewProgress(async () => {
-      say(trackProgressMessage(origin, { phase: 'Idle', pluginsDone: 0, pluginsTotal: 0 }));
+    await withPluginsViewProgress(session, async () => {
+      say(session, trackProgressMessage(origin, { phase: 'Idle', pluginsDone: 0, pluginsTotal: 0 }));
       const ok = await controller.track(origin, choice.label as 'Edits' | 'Everything', {
         // Narrates the same Plugins-view message this
         // command already showed a static version of, updated on each poll tick.
-        onProgress: (status) => say(trackProgressMessage(origin, status)),
+        onProgress: (status) => say(session, trackProgressMessage(origin, status)),
       });
       if (!ok) return;
       void vscode.window.showInformationMessage(`Modbench: Tracked "${origin}".`);
@@ -1503,11 +1514,12 @@ async function runCopyRecordCommand(
  *  and this file's own deactivate() (backendManager.dispose()) both already emit 'stopped', which
  *  this reacts to like any other transition. */
 function wireExternalChangePolling(
-  repository: PluginRepository, controller: EditingController, outputChannel: vscode.LogOutputChannel, log: (msg: string) => void,
+  session: ExtensionSession, repository: PluginRepository, controller: EditingController,
+  outputChannel: vscode.LogOutputChannel, log: (msg: string) => void,
 ): void {
   gateExternalChangePolling({
-    onBackendStatusChange: (cb) => backendManager!.on('status', cb),
-    isBackendHealthy: () => backendManager!.isHealthy,
+    onBackendStatusChange: (cb) => session.backendManager!.on('status', cb),
+    isBackendHealthy: () => session.backendManager!.isHealthy,
     startPolling: () => startExternalChangeDialogPolling(repository, controller, outputChannel, log),
   });
 }
@@ -1750,13 +1762,13 @@ function publishCompileDiagnostics(collection: vscode.DiagnosticCollection, orig
  *  drag reorder's own write plus its watcher event, a checkbox toggle's explicit request plus the
  *  plugins.txt event it causes. */
 function makeLoadOrderSync(deps: ReconcileDeps): LoadOrderSync {
-  const { instanceRoot, modlistSource, controller, outputChannel, heldPluginFiles, showCrashRepairOffers, gameDirResolver } = deps;
+  const { session, instanceRoot, modlistSource, controller, outputChannel, heldPluginFiles, showCrashRepairOffers, gameDirResolver } = deps;
   return createLoadOrderSync<LoadOrderPlugin, LoadOrderProgress, CrashRepairOffer>({
-    isReceiving: () => backendManager?.isHealthy === true,
+    isReceiving: () => session.backendManager?.isHealthy === true,
     debounceMs: 250,
     log: (msg) => outputChannel.debug(msg),
-    withProgress: (work) => withPluginsViewProgress(work),
-    say,
+    withProgress: (work) => withPluginsViewProgress(session, work),
+    say: (message) => say(session, message),
     logInfo: (msg) => outputChannel.info(msg),
     notifyNoGameDirectory: () => void vscode.window.showErrorMessage(
       'Modbench: No game directory found. Set modbench.mods.gameDirectory to your Stock Game Folder or Steam install.',
@@ -1767,11 +1779,11 @@ function makeLoadOrderSync(deps: ReconcileDeps): LoadOrderSync {
     resolveGameDirectory: () => gameDirResolver.resolve().then((gd) => gd ?? undefined),
     buildSnapshot: (dataFolder) => buildLoadOrderSnapshot(modlistSource, instanceRoot, dataFolder, (entries, root) =>
       buildFileConflictIndex(entries, root, (msg) => outputChannel.debug(msg))),
-    makeProgressHandler: makeTreeProgressHandler,
+    makeProgressHandler: () => makeTreeProgressHandler(session),
     putLoadOrder: (plugins, dataFolder, signal, onProgress) =>
       controller.putLoadOrder(plugins, dataFolder, instanceRoot, undefined, { onProgress, signal }),
     syncFilterState: () => controller.syncFilterState(),
-    applyReconciled: (failures, totalPlugins) => applyLoadOrderToTree(heldPluginFiles, failures, outputChannel, totalPlugins),
+    applyReconciled: (failures, totalPlugins) => applyLoadOrderToTree(session, heldPluginFiles, failures, outputChannel, totalPlugins),
     presentCrashRepairOffers: (offers) => showCrashRepairOffers(offers),
   });
 }
@@ -1782,16 +1794,17 @@ function makeLoadOrderSync(deps: ReconcileDeps): LoadOrderSync {
  *  keep a read-only set nothing backs. Both are statements about a live backend, so both
  *  go together. */
 function clearTreeWhenBackendDies(
+  session: ExtensionSession,
   composite: PluginsTreeComposite<PluginListNode, PluginTreeNode>,
   recordBrowser: PluginTreeProvider,
 ): void {
-  backendManager?.on('status', () => {
-    if (backendManager?.isHealthy) return;
+  session.backendManager?.on('status', () => {
+    if (session.backendManager?.isHealthy) return;
     composite.setLoadOrder(undefined);
     recordBrowser.setImmutablePlugins([]);
     // ADR-0035 amending ADR-0018: same reasoning as the two above — a statement about
     // which plugins the dead backend's records matched must not seed the next one.
-    loadOrderSync?.setMatches(undefined);
+    session.loadOrderSync?.setMatches(undefined);
   });
 }
 
@@ -1940,7 +1953,7 @@ async function onModCheckboxChanged(
  *  the paths where `registerLoadoutView` bails (no workspace, or not an MO2 instance): it is
  *  the container's first view and must never be a hole. Returns what the integration tests
  *  read off `activate`'s exports. */
-function registerLoadoutSurfaces(deps: Omit<LoadoutViewDeps, 'revealLog'>): {
+function registerLoadoutSurfaces(session: ExtensionSession, deps: Omit<LoadoutViewDeps, 'revealLog'>): {
   modListProvider?: ModListProvider; downloadsProvider?: DownloadsProvider; pluginListProvider?: PluginListProvider;
   // Forwarded so the composition root can wire modbench.newPlugin's destination QuickPick —
   // both are undefined together with the providers above, on the same no-workspace/not-an-MO2-
@@ -1948,9 +1961,9 @@ function registerLoadoutSurfaces(deps: Omit<LoadoutViewDeps, 'revealLog'>): {
   modlistSource?: Mo2ModlistSource; instanceRoot?: string; enterEditing?: () => Promise<void>;
 } {
   const { context, outputChannel } = deps;
-  registerDeploymentModeContext(context);
-  const loadout = registerLoadoutView({ ...deps, revealLog: () => outputChannel.show(true) });
-  registerLoadoutHeaderView({ context, outputChannel, ...loadout });
+  registerDeploymentModeContext(session, context);
+  const loadout = registerLoadoutView(session, { ...deps, revealLog: () => outputChannel.show(true) });
+  registerLoadoutHeaderView(session, { context, outputChannel, ...loadout });
   return {
     modListProvider: loadout?.modListProvider,
     downloadsProvider: loadout?.downloadsProvider,
@@ -2019,7 +2032,7 @@ interface LoadoutViewDeps {
  *  ModListProvider and DownloadsProvider (exposed via activate() for integration
  *  tests), or undefined with a neutral log when no workspace is open, or when the
  *  workspace isn't an MO2 instance (the Mods view shows welcome content instead). */
-function registerLoadoutView(deps: LoadoutViewDeps): { modListProvider: ModListProvider; downloadsProvider: DownloadsProvider; pluginListProvider: PluginListProvider; modlistSource: Mo2ModlistSource; instanceRoot: string; refreshAll: () => void; enterEditing: () => Promise<void> } | undefined {
+function registerLoadoutView(session: ExtensionSession, deps: LoadoutViewDeps): { modListProvider: ModListProvider; downloadsProvider: DownloadsProvider; pluginListProvider: PluginListProvider; modlistSource: Mo2ModlistSource; instanceRoot: string; refreshAll: () => void; enterEditing: () => Promise<void> } | undefined {
   const { context, log, outputChannel, revealLog, controller, recordBrowser, heldPluginFiles, showCrashRepairOffers } = deps;
   const instanceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   if (!instanceRoot) {
@@ -2061,18 +2074,18 @@ function registerLoadoutView(deps: LoadoutViewDeps): { modListProvider: ModListP
     const modListProvider = new ModListProvider({ source: modlistSource, log, instanceRoot, reporter: modListReporter, dataFolder });
     // ADR-0044: the one path by which the Plugin load order reaches Editing. Built here, before
     // the Plugins tree, because both the tree (its own hasMatchingRecords accessor) and
-    // enterEditing below need the module-level slot filled first.
-    loadOrderSync = makeLoadOrderSync({
-      instanceRoot, modlistSource, controller, outputChannel, heldPluginFiles, showCrashRepairOffers, gameDirResolver,
+    // enterEditing below need the session slot filled first.
+    session.loadOrderSync = makeLoadOrderSync({
+      session, instanceRoot, modlistSource, controller, outputChannel, heldPluginFiles, showCrashRepairOffers, gameDirResolver,
     });
     const { pluginListProvider, disposables: pluginListDisposables } =
-      registerPluginListView({ modlistSource, log, outputChannel, reporter: makeReporter(outputChannel, 'pluginList'), instanceRoot, dataFolder, recordBrowser });
+      registerPluginListView({ session, modlistSource, log, outputChannel, reporter: makeReporter(outputChannel, 'pluginList'), instanceRoot, dataFolder, recordBrowser });
     const { modListView, modListFilter, updateProfileDescription } =
       createModListView(modListProvider, modlistSource, outputChannel);
     const { runModAction, promptModName, warnIfFomod } = makeModActionHelpers(modListProvider, outputChannel);
-    const enterEditing = makeEnterEditing(outputChannel, revealLog);
+    const enterEditing = makeEnterEditing(session, outputChannel, revealLog);
 
-    backendManager!.on('restarted', () => {
+    session.backendManager!.on('restarted', () => {
       void enterEditing().catch((err: unknown) =>
         outputChannel.error(`[extension] reload after backend restart failed: ${err instanceof Error ? err.message : String(err)}`),
       );
@@ -2082,8 +2095,8 @@ function registerLoadoutView(deps: LoadoutViewDeps): { modListProvider: ModListP
       modListView,
       modListFilter,
       modListView.onDidChangeCheckboxState((e) => onModCheckboxChanged(e, modListProvider, outputChannel)),
-      ...registerModListCoreCommands({ modListProvider, modlistSource, updateProfileDescription }),
-      ...registerDeployCommands(instanceRoot, modlistSource, outputChannel, gameDirResolver),
+      ...registerModListCoreCommands({ session, modListProvider, modlistSource, updateProfileDescription }),
+      ...registerDeployCommands(session, instanceRoot, modlistSource, outputChannel, gameDirResolver),
       registerLaunchCommand(outputChannel),
       gameDirResolver,
       ...registerModInstallCommands({ modlistSource, runModAction, promptModName, warnIfFomod }),
@@ -2133,7 +2146,7 @@ interface LoadoutHeaderDepsWiring {
 /** The Loadout header view — workspace-scope readout and action home. Wired here, at
  *  the composition root, because it spans both bounded contexts; the provider itself takes
  *  only getters and knows about neither. */
-function registerLoadoutHeaderView(deps: LoadoutHeaderDepsWiring): void {
+function registerLoadoutHeaderView(session: ExtensionSession, deps: LoadoutHeaderDepsWiring): void {
   const { context, outputChannel, modlistSource, instanceRoot, refreshAll } = deps;
   const provider = new LoadoutHeaderProvider({
     hasLoadout: () => modlistSource !== undefined,
@@ -2153,7 +2166,7 @@ function registerLoadoutHeaderView(deps: LoadoutHeaderDepsWiring): void {
       return (await isDeployed(instanceRoot)) ? 'deployed' : 'notDeployed';
     },
   });
-  loadoutHeaderProvider = provider;
+  session.loadoutHeaderProvider = provider;
   context.subscriptions.push(
     vscode.window.createTreeView('modbench.loadoutHeader', { treeDataProvider: provider }),
     // The one Refresh, replacing the three each tree had grown. Its scope is the workspace,
@@ -2216,6 +2229,7 @@ function registerDownloadsView(
  *  decorations would silently vanish from a fully reconciled tree.
  */
 async function applyLoadOrderToTree(
+  session: ExtensionSession,
   heldPluginFiles: () => Promise<HeldPluginFiles>,
   failures: { name?: string | null; reason?: string | null }[],
   outputChannel: vscode.LogOutputChannel,
@@ -2246,11 +2260,11 @@ async function applyLoadOrderToTree(
     // ADR-0035 amending ADR-0018: set before setLoadOrder fires its re-render, so no row
     // renders off a match set stale from whatever reconcile preceded this one — every reconcile
     // re-runs this exact hand-off.
-    loadOrderSync?.setMatches(held.matches);
-    pluginsTree?.setLoadOrder(held.files, held.readOnly, held.masterIssues, loadFailures);
+    session.loadOrderSync?.setMatches(held.matches);
+    session.pluginsTree?.setLoadOrder(held.files, held.readOnly, held.masterIssues, loadFailures);
     // The same read-only set, to the record rows — theirs is contextValue (Remove
     // hidden), the plugin rows' is the tooltip note.
-    recordBrowserProvider?.setImmutablePlugins(held.readOnly);
+    session.recordBrowserProvider?.setImmutablePlugins(held.readOnly);
   } catch (err) {
     // Leaving every row a leaf is a safe *render*, but it is not an honest one: the reconcile
     // did land, so the tree would be telling the user editing is unavailable when it is
@@ -2284,10 +2298,12 @@ function reportAbandoned(outputChannel: vscode.LogOutputChannel): void {
  *  which never includes them. `applyLoadOrderToTree`'s completion log needs something to compare
  *  its own count against; a tick already carries the right number, and it does not change over
  *  the reconcile, so the last one seen is as good as asking again. */
-function makeTreeProgressHandler(): { onProgress: (status: LoadOrderProgress) => void; lastTotalPlugins: () => number } {
+function makeTreeProgressHandler(
+  session: ExtensionSession,
+): { onProgress: (status: LoadOrderProgress) => void; lastTotalPlugins: () => number } {
   let totalPlugins = 0;
   const applyTick = makeReconcileProgressHandler({
-    applyLoadOrder: (indexedPlugins, failures) => pluginsTree?.setLoadOrder(
+    applyLoadOrder: (indexedPlugins, failures) => session.pluginsTree?.setLoadOrder(
       new Set(indexedPlugins),
       new Set(),
       new Map(),
@@ -2301,6 +2317,7 @@ function makeTreeProgressHandler(): { onProgress: (status: LoadOrderProgress) =>
 }
 
 interface ReconcileDeps {
+  session: ExtensionSession;
   instanceRoot: string;
   modlistSource: Mo2ModlistSource;
   controller: EditingController;
@@ -2321,18 +2338,20 @@ interface ReconcileDeps {
  *
  *  ADR-0035: owns its own progress indicator (`withPluginsViewProgress` — see there)
  *  rather than leaving each of its callers to wrap it, and reports its steps through `say`. */
-function makeEnterEditing(outputChannel: vscode.LogOutputChannel, revealLog: () => void): () => Promise<void> {
+function makeEnterEditing(
+  session: ExtensionSession, outputChannel: vscode.LogOutputChannel, revealLog: () => void,
+): () => Promise<void> {
   const enter = async (): Promise<void> => {
-    const { abandoned } = loadOrderSync!.arm();
+    const { abandoned } = session.loadOrderSync!.arm();
     revealLog(); // the launch can take a while; let the user watch the step log
-    say('Starting backend…');
+    say(session, 'Starting backend…');
     outputChannel.info('[extension] entering editing: starting backend');
-    await backendManager!.start();
+    await session.backendManager!.start();
     // Before the health gate, deliberately: a close stops the backend, so an abandoned launch
     // would otherwise fail this check and report the stop it asked for as a startup failure.
     if (abandoned()) { reportAbandoned(outputChannel); return; }
-    if (!backendManager!.isHealthy) {
-      exitToLoadout(); // tear down the half-started backend and reset the view
+    if (!session.backendManager!.isHealthy) {
+      exitToLoadout(session); // tear down the half-started backend and reset the view
       void vscode.window.showErrorMessage('Modbench: Backend failed to start — see the Modbench output for details.');
       return;
     }
@@ -2340,9 +2359,9 @@ function makeEnterEditing(outputChannel: vscode.LogOutputChannel, revealLog: () 
     // hold — don't strand the UI in an empty editing view. `flush()` — not a separately threaded
     // reconcile function — is the activation path's own documented reason to exist: it wants the
     // outcome, not just a promise that a send will happen eventually.
-    if ((await loadOrderSync!.flush()) === 'no-game-directory') exitToLoadout();
+    if ((await session.loadOrderSync!.flush()) === 'no-game-directory') exitToLoadout(session);
   };
-  return () => withPluginsViewProgress(enter);
+  return () => withPluginsViewProgress(session, enter);
 }
 
 
@@ -2429,7 +2448,7 @@ function isStandaloneDeployment(): boolean {
 }
 
 /** Seed and watch the deployment-mode context key (standalone vs external manager). */
-function registerDeploymentModeContext(context: vscode.ExtensionContext): void {
+function registerDeploymentModeContext(session: ExtensionSession, context: vscode.ExtensionContext): void {
   // Deploy/Purge/Launch are standalone-only; hidden when an external manager owns
   // deployment. Default external for the alpha — MO2 stays the deployer/launcher
   // until standalone deploy ships post-alpha.
@@ -2441,23 +2460,29 @@ function registerDeploymentModeContext(context: vscode.ExtensionContext): void {
     vscode.workspace.onDidChangeConfiguration((e) => {
       if (e.affectsConfiguration('modbench.mods.deploymentMode')) {
         applyDeploymentMode();
-        loadoutHeaderProvider?.refresh(); // the deployment row appears/disappears with the mode
+        session.loadoutHeaderProvider?.refresh(); // the deployment row appears/disappears with the mode
       }
     }),
   );
 }
 
+// VS Code's own `deactivate()` contract takes no arguments, so it has no way to receive
+// `activate()`'s session object directly — this is the one module-level reference left, existing
+// solely to bridge that gap, not a singleton with a "why module level" justification of its own.
+let activeSession: ExtensionSession | undefined;
+
 // Async so VS Code awaits confirmed-dead-child teardown (BackendManager.dispose() → stop())
 // before the extension host finishes tearing down — otherwise a reload's replacement
 // BackendManager instance is structurally unable to ever clean up this instance's spawned child.
 export async function deactivate(): Promise<void> {
-  await backendManager?.dispose();
+  await activeSession?.backendManager?.dispose();
 }
 
 /** Deploy / Purge / Launch Game commands (standalone mode). Orchestrates the
  *  existing resolver + deployer over the active MO2 instance; surfacing goes
  *  through an injected reporter per ADR-0026. */
 function registerDeployCommands(
+  session: ExtensionSession,
   instanceRoot: string,
   modlistSource: Mo2ModlistSource,
   outputChannel: vscode.LogOutputChannel,
@@ -2496,7 +2521,7 @@ function registerDeployCommands(
         const gd = await resolveGd();
         if (!gd) return;
         await runDeploy(gd);
-        loadoutHeaderProvider?.refresh();
+        session.loadoutHeaderProvider?.refresh();
         void vscode.window.showInformationMessage('Modbench: Mods deployed.');
       } catch (err) {
         reporter.report('error', 'Deploy failed.', err instanceof Error ? err.message : String(err));
@@ -2507,7 +2532,7 @@ function registerDeployCommands(
         const gd = await resolveGd();
         if (!gd) return;
         await purge(instanceRoot, gd, reporter);
-        loadoutHeaderProvider?.refresh();
+        session.loadoutHeaderProvider?.refresh();
         void vscode.window.showInformationMessage('Modbench: Deployed mods purged.');
       } catch (err) {
         reporter.report('error', 'Purge failed.', err instanceof Error ? err.message : String(err));
