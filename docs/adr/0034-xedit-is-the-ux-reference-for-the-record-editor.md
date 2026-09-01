@@ -100,6 +100,13 @@ is the default arrow; drag is not advertised, exactly as in xEdit.
    correctness divergence, not preference — with the flag set, the engine sources those fields
    from the template, so xEdit's permissiveness lets the user edit data the game demonstrably
    ignores. Where xEdit's answer is demonstrably wrong about the domain, it is not a reference.
+7. **A flags row expands into an in-cell checkbox list**, one flag per line, collapsed by
+   default to xEdit's own compact name summary. xEdit's edit gesture opens a transient
+   `etCheckComboBox` instead; here the expanded state is a persistent render toggled by the
+   grid's chevron/double-click gesture, and toggling a checkbox commits directly. Maintainer
+   ruling (2026-09-01 live session): a deliberate divergence — the collapsed default keeps
+   xEdit's at-rest look, but expansion replaces its editor rather than reproducing it.
+   Recorded here rather than silently overridden.
 
 Anything not on this list aligns.
 

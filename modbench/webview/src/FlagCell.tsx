@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { modelValue, toBigInt } from './modelValue';
 import type { FieldMetadata } from './types';
 
@@ -8,82 +8,56 @@ interface FlagCellProps {
   // Whether this cell's column can be written — presence of somewhere to write is the
   // editability signal (see ScalarCell's identical contract).
   editable?: boolean;
-  // ADR-0034: gates the plain click, so a *second* click on an already-focused cell
-  // opens while a first click only focuses.
-  isFocused?: boolean;
   // Where a toggled bitmask goes — mirrors ScalarCell's onCommit contract exactly (a decimal
   // string, per modelValue's own flags convention, so precision above 2^53 survives the wire).
   // Optional for the same reason ScalarCell's is: a caller with nowhere to write (outside the
   // field grid's focus model) renders read-only rather than crashing.
   onCommit?: (v: unknown) => void;
+  // The row's collapse state (the grid's chevron/double-click gesture, owned by the row —
+  // all columns collapse together): collapsed shows the compact active-flag-name summary,
+  // xEdit's own at-rest render.
+  collapsed?: boolean;
 }
 
 /**
- * xEdit's inline check-combo (`etCheckComboBox`) for a bitmask `enum` column — the
- * one editor type that was never a native surface (ADR-0034 permits only the FormKey picker and
- * the extended editor as vehicle substitutions; flags stay exactly what xEdit already renders
- * inline).
+ * A bitmask `enum` column renders as an always-visible checkbox list, one flag per line —
+ * maintainer ruling 2026-09-01, a deliberate ADR-0034 divergence recorded there (xEdit's own
+ * default is a text row whose `etCheckComboBox` appears only on the edit gesture). There is no
+ * text state and nothing to open: no `data-open-trigger`, so F2 is inert here by construction
+ * (DiskCell's rule), and Ctrl+C still copies modelValue's flag-name string via DiskCell.
  */
-export function FlagCell({ value, meta, editable, isFocused = true, onCommit }: FlagCellProps) {
-  // Only the clicked cell becomes a multi-select; the rest of the grid stays text.
-  const [active, setActive] = useState(false);
-
+export function FlagCell({ value, meta, editable, onCommit, collapsed }: FlagCellProps) {
   if (meta.enumValues.length === 0) return null;
   if (!meta.enumBitValues) return null;
+
+  if (collapsed) {
+    // modelValue collapses null and no-bits-set alike to '' — both render the placeholder.
+    const names = modelValue(value, meta);
+    return names === ''
+      ? <span style={{ opacity: 0.35 }}>—</span>
+      : <span>{names}</span>;
+  }
+
+  // Null is a column that doesn't hold the field — a placeholder, not an all-unchecked value
+  // (ADR-0034's placeholder rule)… except on a writable column, where the old text render let a
+  // click set flags starting from null; the all-unchecked list preserves that capability.
+  const writable = editable && onCommit != null;
+  if (value == null && !writable) return <span style={{ opacity: 0.35 }}>—</span>;
 
   // BigInt arithmetic avoids ToInt32 truncation for flags at bit 32+ and keeps full precision
   // for high bits. onCommit emits a decimal string so the toggled value round-trips losslessly.
   const num = toBigInt(value);
   const bits = meta.enumBitValues.map(BigInt);
 
-  // The active flag *names* are what this cell displays, so they are what it
-  // has to be able to hand over — the bitmask integer behind them is not something the user ever
-  // saw. Sourced from modelValue (the same string Ctrl+C copies) rather than computed again
-  // here. Null and "no bits set" both render `—`, a placeholder rather than a value, and collapse
-  // to the same null here so neither offers a surface (ADR-0034's placeholder rule) —
-  // modelValue already collapses both to '', so only the empty-string check is needed here.
-  const namesStr = modelValue(value, meta);
-  const names = namesStr === '' ? null : namesStr;
-
-  const text = names === null
-    ? <span style={{ opacity: 0.35 }}>—</span>
-    : <span>{names}</span>;
-
-  // ADR-0034: an immutable column simply refuses — no multi-select, no distinct
-  // affordance beforehand. Checked ahead of `active` since there is no state to gate: click,
-  // second click, F2 and double click all land here and do nothing. Copy is Ctrl+C on the
-  // focused, unopened cell, sourced from the same modelValue string as `names` above.
-  if (!editable || !onCommit) return text;
-
-  if (!active) {
-    // ADR-0034 (no leaf asserts a resting cursor): no cursor override — the parent DiskCell's
-    // `grab` is this cell's resting affordance, since it is a drag source the whole time; a
-    // `pointer` here would advertise the click and paint over the drag.
-    // ADR-0034: mutable columns gate opening behind xEdit's three triggers — see
-    // ScalarCell's identical branch for the full rationale.
-    return (
-      <span
-        data-open-trigger
-        onClick={() => { if (isFocused) setActive(true); }}
-        onDoubleClick={() => setActive(true)}
-      >{text}</span>
-    );
-  }
-
   return (
-    // The multi-select is a group, so it closes when focus leaves the group as a whole — not
-    // when it moves between the flags inside it.
-    <span
-      tabIndex={-1}
-      onBlur={e => { if (!e.currentTarget.contains(e.relatedTarget)) setActive(false); }}
-      style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 8px', outline: 'none' }}
-    >
+    <span style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
       {meta.enumValues.map((name, i) => (
         <label key={name} style={{ display: 'inline-flex', alignItems: 'center', gap: 2 }}>
           <input
             type="checkbox"
             checked={(num & bits[i]) !== 0n}
-            onChange={() => onCommit(String(num ^ bits[i]))}
+            disabled={!writable}
+            onChange={writable ? () => onCommit(String(num ^ bits[i])) : undefined}
           />
           {name}
         </label>

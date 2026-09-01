@@ -367,21 +367,40 @@ describe('DiffRow — flags cell wiring (#426)', () => {
     });
   }
 
-  it('a flags cell in a non-editable column renders text, not checkboxes, even when clicked', () => {
-    flagsRow({ focusedCell: { rowKey: 'Name', plugin: columnKey('MyMod.esp', null) } });
-    fireEvent.click(screen.getAllByText('A')[1]);
-    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+  // Maintainer rulings 2026-09-01: when expanded, the checkbox list renders in every column —
+  // a non-editable column's boxes are disabled, not absent — but a flags row *starts
+  // collapsed* ("we start with the clean view"), so the expanded-state tests pass
+  // isExpanded explicitly.
+  it('an expanded flags cell in a non-editable column renders its checkboxes disabled', () => {
+    flagsRow({ isExpanded: true, focusedCell: { rowKey: 'Name', plugin: columnKey('MyMod.esp', null) } });
+    const boxes = screen.getAllByRole('checkbox');
+    expect(boxes).toHaveLength(4); // both columns, 2 flags each
+    for (const box of boxes) expect(box).toBeDisabled();
   });
 
-  it('a flags cell in an editable, focused column opens its checkbox multi-select on click', () => {
-    const onEditCell = vi.fn();
+  it('an expanded flags cell in an editable column renders enabled checkboxes', () => {
     flagsRow({
+      isExpanded: true,
       editableColumns: new Set([columnKey('MyMod.esp', null)]),
-      onEditCell,
-      focusedCell: { rowKey: 'Name', plugin: columnKey('MyMod.esp', null) },
+      onEditCell: vi.fn(),
     });
-    fireEvent.click(screen.getAllByText('A')[1]);
-    expect(screen.getAllByRole('checkbox')).toHaveLength(2);
+    const boxes = screen.getAllByRole('checkbox');
+    expect(boxes).toHaveLength(4);
+    expect(boxes[2]).toBeEnabled();  // MyMod.esp's A
+    expect(boxes[0]).toBeDisabled(); // Fallout4.esm's A — immutable column stays inert
+  });
+
+  // The row collapses as a row (chevron + double-click label, the grid's one collapse
+  // gesture): flags rows get the toggle despite having no child rows — the "children" are
+  // the checkbox lines inside the cell.
+  it('a flags row starts collapsed: chevron closed, compact summary, no checkboxes', () => {
+    const onToggle = vi.fn();
+    flagsRow({ onToggle });
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+    expect(screen.getAllByText('A')).toHaveLength(2); // value 1 → summary "A" in both columns
+    const btn = screen.getByRole('button', { name: '▶' });
+    fireEvent.click(btn);
+    expect(onToggle).toHaveBeenCalled();
   });
 
   // The column and the value, and no field path — where the value goes is the row builder's
@@ -389,12 +408,11 @@ describe('DiffRow — flags cell wiring (#426)', () => {
   it('toggling a checkbox calls onEditCell with the column and the new bitmask', () => {
     const onEditCell = vi.fn();
     flagsRow({
+      isExpanded: true,
       editableColumns: new Set([columnKey('MyMod.esp', null)]),
       onEditCell,
-      focusedCell: { rowKey: 'Name', plugin: columnKey('MyMod.esp', null) },
     });
-    fireEvent.click(screen.getAllByText('A')[1]);
-    fireEvent.click(screen.getAllByRole('checkbox')[1]); // check B (bit 2): 1 ^ 2 = 3
+    fireEvent.click(screen.getAllByRole('checkbox')[3]); // MyMod.esp's B (bit 2): 1 ^ 2 = 3
     expect(onEditCell).toHaveBeenCalledWith(columnKey('MyMod.esp', null), '3');
   });
 });

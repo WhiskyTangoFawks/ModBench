@@ -753,32 +753,31 @@ describe('RecordPanel — flags cell editing through real message plumbing (#622
     expect(screen.getByRole('textbox')).toBeInTheDocument();
   });
 
-  it('a flags cell in a tracked, editable column opens its checkbox multi-select on double click', async () => {
+  // Maintainer rulings 2026-09-01: a flags row starts collapsed to its compact summary —
+  // "we start with the clean view" — and the chevron (expandedStructs' existing toggle,
+  // chevron or double-click on the label) reveals the checkbox list, enabled only in the
+  // tracked/editable column.
+  it('a flags row starts collapsed; expanding reveals enabled checkboxes and it re-collapses', async () => {
     renderPanel(flagsCompareResult, { plugins: flagsTrackedPluginsResponse });
-    await waitFor(() => expect(screen.getByText('A, B')).toBeInTheDocument());
-
-    fireEvent.doubleClick(screen.getByText('A, B'));
-    expect(screen.getAllByRole('checkbox')).toHaveLength(2);
-  });
-
-  it('F2 on a focused, editable flags cell opens the same multi-select', async () => {
-    renderPanel(flagsCompareResult, { plugins: flagsTrackedPluginsResponse });
-    await waitFor(() => expect(screen.getByText('A, B')).toBeInTheDocument());
-
-    const cell = screen.getByText('A, B');
-    fireEvent.click(cell); // focuses only — a plain first click must not open (ADR-0034)
+    await waitFor(() => expect(screen.getByText('A, B')).toBeInTheDocument()); // compact summary, value 3
     expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
 
-    fireEvent.keyDown(cell.closest('td')!, { key: 'F2' });
-    expect(screen.getAllByRole('checkbox')).toHaveLength(2);
+    fireEvent.click(screen.getByRole('button', { name: '▶' }));
+    const boxes = screen.getAllByRole('checkbox');
+    expect(boxes).toHaveLength(2); // one rendered column, 2 flags
+    for (const box of boxes) expect(box).toBeEnabled();
+
+    fireEvent.click(screen.getByRole('button', { name: '▼' }));
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+    expect(screen.getByText('A, B')).toBeInTheDocument();
   });
 
   it('toggling a flag posts EDIT_FIELD with the toggled bitmask — working-tree dirt', async () => {
     renderPanel(flagsCompareResult, { plugins: flagsTrackedPluginsResponse });
     await waitFor(() => expect(screen.getByText('A, B')).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: '▶' }));
     vi.mocked(vscode.postMessage).mockClear();
 
-    fireEvent.doubleClick(screen.getByText('A, B'));
     fireEvent.click(screen.getAllByRole('checkbox')[0]); // uncheck A (bit 1): 3 ^ 1 = 2
 
     expect(vscode.postMessage).toHaveBeenCalledWith(expect.objectContaining({

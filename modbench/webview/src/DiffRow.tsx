@@ -39,6 +39,9 @@ interface RenderCellExtras {
   // Where an edited value goes. Absent means this cell has nowhere to write — an immutable
   // or untracked column, or a caller outside the field grid — and the leaf renders read-only.
   onCommit?: (v: unknown) => void;
+  // The row's own collapse state, threaded to the one leaf that renders differently for it
+  // (FlagCell's compact summary) — a row collapses as a row, all columns together.
+  rowCollapsed?: boolean;
 }
 
 // ADR-0041: leaves render read-only unless the caller supplies `onCommit` — the presence of
@@ -49,7 +52,7 @@ function renderCell(
   meta: FieldMetadata,
   isFocused: boolean,
   onOpen: (fk: string) => void,
-  { checkError, resolution, summaryLabel, onCommit }: RenderCellExtras = {},
+  { checkError, resolution, summaryLabel, onCommit, rowCollapsed }: RenderCellExtras = {},
 ): React.ReactNode {
   if (meta.type === 'formKey') {
     return (
@@ -83,11 +86,11 @@ function renderCell(
       <FlagCell
         value={value}
         meta={meta}
-        isFocused={isFocused}
         // Same rule as ScalarCell's editable computation just below: presence of somewhere to
         // write is the editability signal, ORed with the per-row readOnly veto.
         editable={onCommit != null && !meta.readOnly}
         onCommit={onCommit}
+        collapsed={rowCollapsed}
       />
     );
   }
@@ -283,6 +286,14 @@ export function DiffRow({
   // hides that something inside differs.
   const rowConflictAll = hasChildren && isExpanded ? undefined : diff.conflictAll;
 
+  // Maintainer rulings 2026-09-01: a flags row is collapsible like a struct row — chevron +
+  // double-click-the-label, the grid's one collapse gesture — though its "children" are the
+  // checkbox lines inside the cell, not sub-rows. It starts collapsed ("we start with the
+  // clean view"), so it shares struct rows' default exactly: expanded only when the toggle
+  // put the row in expandedStructs.
+  const isFlagsRow = meta.type === 'enum' && !!meta.isBitmask;
+  const rowExpanded = !!isExpanded;
+
   return (
     <tr style={{ backgroundColor: getRowBg(rowConflictAll), ...(isRowFocused ? focusedRowStyle : undefined) }}>
       {/* ADR-0034: double-clicking the label column expands/collapses the node,
@@ -296,8 +307,8 @@ export function DiffRow({
         style={{ ...baseCell, opacity: 0.75, userSelect: 'text', paddingLeft: context.path.length > 0 ? 24 : undefined }}
         onDoubleClick={onToggle}
       >
-        {hasChildren && (
-          <button style={toggleBtnStyle} onClick={onToggle}>{isExpanded ? '▼' : '▶'}</button>
+        {(hasChildren || isFlagsRow) && (
+          <button style={toggleBtnStyle} onClick={onToggle}>{rowExpanded ? '▼' : '▶'}</button>
         )}
         {diff.fieldName}
       </td>
@@ -443,6 +454,7 @@ export function DiffRow({
                 checkError, resolution: diff.resolutions?.[key],
                 summaryLabel: diff.collapsedSummary?.[key],
                 onCommit: cellEditable ? (v: unknown) => onEditCell(key, v) : undefined,
+                rowCollapsed: isFlagsRow && !rowExpanded,
               })}
             </DiskCell>
           );
