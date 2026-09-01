@@ -53,6 +53,13 @@ public sealed class AbstractUnionCompileFixture : IDisposable
     public FormKey MagicEffect { get; }
     public FormKey AudioEffectChain { get; }
 
+    // ── #643's two nested abstract unions (ALocationTarget / ANavmeshParent) — reached one level
+    // inside an ordinary struct column rather than as a column of their own, which is why the
+    // original nine above didn't include them (this file's own test-class doc comment used to name
+    // them as the not-yet-writable gap; #643 closes it) ─
+    public FormKey Faction { get; }
+    public FormKey Static { get; }
+
     public AbstractUnionCompileFixture()
     {
         var pluginPath = Path.Combine(_modFolder, PluginName);
@@ -122,6 +129,21 @@ public sealed class AbstractUnionCompileFixture : IDisposable
             LowerThreshold = 4f,
         });
         AudioEffectChain = audioEffectChain.FormKey;
+
+        var faction = mod.Factions.AddNew("Faction611");
+        faction.VendorLocation = new LocationTargetRadius
+        {
+            Radius = 1,
+            Target = new LocationFallback { Type = LocationTargetRadius.LocationType.NearReference, Data = 0 },
+        };
+        Faction = faction.FormKey;
+
+        // Minimal geometry: every list member stays its empty default, and both parent leaves'
+        // FormLinks stay null — no linked Worldspace/Cell record needed, and nothing for
+        // ValidateFormLinks to refuse when a test's payload names none either.
+        var stat = mod.Statics.AddNew("Static611");
+        stat.NavmeshGeometry = new NavmeshGeometry { Parent = new WorldspaceNavmeshParent() };
+        Static = stat.FormKey;
 
         mod.WriteToBinary(pluginPath);
 
