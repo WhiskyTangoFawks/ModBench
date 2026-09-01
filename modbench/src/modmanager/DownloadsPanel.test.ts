@@ -27,7 +27,6 @@ import { mkdtemp, mkdir, writeFile, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
-  buildRowActionHandlers,
   deleteArchives,
   registerDownloadsHiddenToggleCommands,
   registerDownloadsMultiRowCommands,
@@ -84,203 +83,21 @@ function calledFsPath(mockFn: { mock: { calls: unknown[][] } }): string {
   return (mockFn.mock.calls[0][0] as { fsPath: string }).fsPath;
 }
 
-// ── buildRowActionHandlers ──────────────────────────────────────────────────
-// The handler bodies behind the modbench.downloads TreeView's native commands
-// (registerDownloadsSingleRowCommands / registerDownloadsMultiRowCommands, tested
-// further down) — exercised directly here, real fixture-in/behavior-out.
-
-describe('buildRowActionHandlers — install', () => {
-  beforeEach(() => vi.clearAllMocks());
-
-  it('on success, writes installed=true back to the .meta sidecar', async () => {
-    const root = await makeInstanceRoot();
-    const archive = await writeArchive(root, 'foo.7z');
-    const meta = await writeMeta(root, 'foo.7z');
-    executeCommand.mockResolvedValueOnce(true);
-
-    const handlers = buildRowActionHandlers(root, vi.fn());
-    handlers.install('foo.7z');
-
-    await vi.waitFor(async () => {
-      expect(await readFile(meta, 'utf8')).toContain('installed=true');
-    });
-    expect(executeCommand).toHaveBeenCalledWith('modbench.modList.installFromArchive', archive);
-  });
-
-  it('when the install command reports cancellation, leaves the .meta untouched', async () => {
-    const root = await makeInstanceRoot();
-    await writeArchive(root, 'foo.7z');
-    const meta = await writeMeta(root, 'foo.7z');
-    executeCommand.mockResolvedValueOnce(false);
-
-    const handlers = buildRowActionHandlers(root, vi.fn());
-    handlers.install('foo.7z');
-
-    await vi.waitFor(() => expect(executeCommand).toHaveBeenCalled());
-    // give any (incorrect) writeback a chance to land before asserting its absence
-    await new Promise((r) => setTimeout(r, 50));
-    expect(await readFile(meta, 'utf8')).not.toContain('installed=true');
-  });
-
-  it('when the install command throws, surfaces an error and leaves the .meta untouched', async () => {
-    const root = await makeInstanceRoot();
-    await writeArchive(root, 'foo.7z');
-    const meta = await writeMeta(root, 'foo.7z');
-    executeCommand.mockRejectedValueOnce(new Error('boom'));
-    const log = vi.fn();
-
-    const handlers = buildRowActionHandlers(root, log);
-    handlers.install('foo.7z');
-
-    await vi.waitFor(() => expect(showErrorMessage).toHaveBeenCalled());
-    expect(showErrorMessage).toHaveBeenCalledWith('Modbench: Failed to install "foo.7z".');
-    expect(log).toHaveBeenCalledWith(expect.stringContaining('installing "foo.7z" failed'));
-    expect(await readFile(meta, 'utf8')).not.toContain('installed=true');
-  });
-});
-
-describe('buildRowActionHandlers — delete', () => {
-  beforeEach(() => vi.clearAllMocks());
-
-  it('on confirm-cancel, does not trash anything', async () => {
-    const root = await makeInstanceRoot();
-    await writeArchive(root, 'foo.7z');
-    showWarningMessage.mockResolvedValueOnce(undefined); // user dismissed, not "Delete"
-
-    const handlers = buildRowActionHandlers(root, vi.fn());
-    handlers.delete('foo.7z');
-
-    await vi.waitFor(() => expect(showWarningMessage).toHaveBeenCalled());
-    await new Promise((r) => setTimeout(r, 50));
-    expect(fsDelete).not.toHaveBeenCalled();
-  });
-
-  it('on confirm-accept, trashes the archive (and its .meta, if present)', async () => {
-    const root = await makeInstanceRoot();
-    const archive = await writeArchive(root, 'foo.7z');
-    const meta = await writeMeta(root, 'foo.7z');
-    showWarningMessage.mockResolvedValueOnce('Delete');
-
-    const handlers = buildRowActionHandlers(root, vi.fn());
-    handlers.delete('foo.7z');
-
-    await vi.waitFor(() => expect(fsDelete).toHaveBeenCalledTimes(2));
-    const trashedPaths = fsDelete.mock.calls.map((c) => (c[0] as { fsPath: string }).fsPath);
-    expect(trashedPaths).toEqual(expect.arrayContaining([archive, meta]));
-  });
-});
-
-describe('buildRowActionHandlers — hide / unhide', () => {
-  beforeEach(() => vi.clearAllMocks());
-
-  it('hide sets removed=true on the .meta sidecar', async () => {
-    const root = await makeInstanceRoot();
-    const meta = await writeMeta(root, 'foo.7z');
-
-    const handlers = buildRowActionHandlers(root, vi.fn());
-    handlers.hide('foo.7z');
-
-    await vi.waitFor(async () => {
-      expect(await readFile(meta, 'utf8')).toContain('removed=true');
-    });
-  });
-
-  it('unhide clears removed to false on the .meta sidecar', async () => {
-    const root = await makeInstanceRoot();
-    const meta = await writeMeta(root, 'foo.7z', '[General]\r\nremoved=true\r\n');
-
-    const handlers = buildRowActionHandlers(root, vi.fn());
-    handlers.unhide('foo.7z');
-
-    await vi.waitFor(async () => {
-      expect(await readFile(meta, 'utf8')).toContain('removed=false');
-    });
-  });
-});
-
-describe('buildRowActionHandlers — visitNexus', () => {
-  beforeEach(() => vi.clearAllMocks());
-
-  it('opens the Nexus mod page when the .meta has a modID', async () => {
-    const root = await makeInstanceRoot();
-    await writeMeta(root, 'foo.7z', '[General]\r\nmodID=123\r\n');
-    await writeFile(join(root, 'ModOrganizer.ini'), '[General]\r\ngameName=Fallout4\r\n');
-
-    const handlers = buildRowActionHandlers(root, vi.fn());
-    handlers.visitNexus('foo.7z');
-
-    await vi.waitFor(() => expect(openExternal).toHaveBeenCalled());
-    const url = (openExternal.mock.calls[0][0] as { toString(): string }).toString();
-    expect(url).toBe('https://www.nexusmods.com/fallout4/mods/123');
-  });
-
-  it('is a no-op when the .meta has no modID', async () => {
-    const root = await makeInstanceRoot();
-    await writeMeta(root, 'foo.7z');
-
-    const handlers = buildRowActionHandlers(root, vi.fn());
-    handlers.visitNexus('foo.7z');
-
-    await new Promise((r) => setTimeout(r, 50));
-    expect(openExternal).not.toHaveBeenCalled();
-  });
-});
-
-describe('buildRowActionHandlers — nav actions (openFile / openMeta)', () => {
-  beforeEach(() => vi.clearAllMocks());
-
-  it('openFile OS-opens the archive', async () => {
-    const root = await makeInstanceRoot();
-    const archive = await writeArchive(root, 'foo.7z');
-
-    const handlers = buildRowActionHandlers(root, vi.fn());
-    handlers.openFile('foo.7z');
-
-    await vi.waitFor(() => expect(openExternal).toHaveBeenCalled());
-    expect(calledFsPath(openExternal)).toBe(archive);
-  });
-
-  it('openMeta opens the .meta sidecar in the editor', async () => {
-    const root = await makeInstanceRoot();
-    const meta = await writeMeta(root, 'foo.7z');
-
-    const handlers = buildRowActionHandlers(root, vi.fn());
-    handlers.openMeta('foo.7z');
-
-    await vi.waitFor(() => expect(showTextDocument).toHaveBeenCalled());
-    expect(calledFsPath(showTextDocument)).toBe(meta);
-  });
-
-  // runRowAction's catch -> log + error-notification path is shared by both
-  // nav actions (visitNexus/openFile/openMeta) — proving it once here
-  // covers all of them; no need to duplicate per action.
-  it('on failure, logs and surfaces an error notification naming the action and row', async () => {
-    const root = await makeInstanceRoot();
-    await writeArchive(root, 'foo.7z');
-    openExternal.mockRejectedValueOnce(new Error('no handler for this file type'));
-    const log = vi.fn();
-
-    const handlers = buildRowActionHandlers(root, log);
-    handlers.openFile('foo.7z');
-
-    await vi.waitFor(() => expect(showErrorMessage).toHaveBeenCalled());
-    expect(showErrorMessage).toHaveBeenCalledWith('Modbench: Open File for "foo.7z" failed.');
-    expect(log).toHaveBeenCalledWith(expect.stringContaining('Open File for "foo.7z" failed'));
-  });
-});
-
-// ── registerDownloadsSingleRowCommands / registerDownloadsMultiRowCommands ──────────────────
-// The adapter from a native modbench.downloads TreeView `view/item/context` command invocation
-// — VS Code's own `(clickedItem, selectedItems[])` shape — to the buildRowActionHandlers
-// handler(s) for that action. Registration itself (that all 7 ids get wired to
-// vscode.commands.registerCommand) is covered by the EXPECTED_COMMANDS integration test; this
-// is the dispatch/gating/selection behavior.
-
+/** Invoke a command registered via the mocked `vscode.commands.registerCommand` by id — the
+ *  real captured callback, not a handler reached by any other path. Every behavior test in this
+ *  file goes through this, so each one exercises the actual production wiring (the node?
+ *  null-guard, `selectionNames`' selection-collapsing) along with the action itself. */
 function invoke(commandId: string, ...args: unknown[]): void {
   const call = registerCommand.mock.calls.find((c) => c[0] === commandId);
   if (!call) throw new Error(`command not registered: ${commandId}`);
   call[1](...args);
 }
+
+// ── registerDownloadsSingleRowCommands ──────────────────────────────────────
+// Install / Visit on Nexus / Open File / Open Meta File: clicked-row-only commands, each
+// registered as a direct vscode.commands.registerCommand call (no id->handler lookup table).
+// Registration itself (that all 7 ids get wired to vscode.commands.registerCommand) is also
+// covered by the EXPECTED_COMMANDS integration test; these are the dispatch/gating/behavior.
 
 describe('registerDownloadsSingleRowCommands', () => {
   beforeEach(() => vi.clearAllMocks());
@@ -331,6 +148,115 @@ describe('registerDownloadsSingleRowCommands', () => {
       expect(executeCommand).toHaveBeenCalledWith('modbench.modList.installFromArchive', archive);
     });
     expect(executeCommand).toHaveBeenCalledTimes(1);
+  });
+
+  it('install: on success, writes installed=true back to the .meta sidecar', async () => {
+    const root = await makeInstanceRoot();
+    const archive = await writeArchive(root, 'foo.7z');
+    const meta = await writeMeta(root, 'foo.7z');
+    executeCommand.mockResolvedValueOnce(true);
+
+    registerDownloadsSingleRowCommands(root, vi.fn());
+    invoke('modbench.downloads.install', node('foo.7z'));
+
+    await vi.waitFor(async () => {
+      expect(await readFile(meta, 'utf8')).toContain('installed=true');
+    });
+    expect(executeCommand).toHaveBeenCalledWith('modbench.modList.installFromArchive', archive);
+  });
+
+  it('install: when the install command reports cancellation, leaves the .meta untouched', async () => {
+    const root = await makeInstanceRoot();
+    await writeArchive(root, 'foo.7z');
+    const meta = await writeMeta(root, 'foo.7z');
+    executeCommand.mockResolvedValueOnce(false);
+
+    registerDownloadsSingleRowCommands(root, vi.fn());
+    invoke('modbench.downloads.install', node('foo.7z'));
+
+    await vi.waitFor(() => expect(executeCommand).toHaveBeenCalled());
+    // give any (incorrect) writeback a chance to land before asserting its absence
+    await new Promise((r) => setTimeout(r, 50));
+    expect(await readFile(meta, 'utf8')).not.toContain('installed=true');
+  });
+
+  it('install: when the install command throws, surfaces an error and leaves the .meta untouched', async () => {
+    const root = await makeInstanceRoot();
+    await writeArchive(root, 'foo.7z');
+    const meta = await writeMeta(root, 'foo.7z');
+    executeCommand.mockRejectedValueOnce(new Error('boom'));
+    const log = vi.fn();
+
+    registerDownloadsSingleRowCommands(root, log);
+    invoke('modbench.downloads.install', node('foo.7z'));
+
+    await vi.waitFor(() => expect(showErrorMessage).toHaveBeenCalled());
+    expect(showErrorMessage).toHaveBeenCalledWith('Modbench: Failed to install "foo.7z".');
+    expect(log).toHaveBeenCalledWith(expect.stringContaining('installing "foo.7z" failed'));
+    expect(await readFile(meta, 'utf8')).not.toContain('installed=true');
+  });
+
+  it('visitNexus: opens the Nexus mod page when the .meta has a modID', async () => {
+    const root = await makeInstanceRoot();
+    await writeMeta(root, 'foo.7z', '[General]\r\nmodID=123\r\n');
+    await writeFile(join(root, 'ModOrganizer.ini'), '[General]\r\ngameName=Fallout4\r\n');
+
+    registerDownloadsSingleRowCommands(root, vi.fn());
+    invoke('modbench.downloads.visitNexus', node('foo.7z'));
+
+    await vi.waitFor(() => expect(openExternal).toHaveBeenCalled());
+    const url = (openExternal.mock.calls[0][0] as { toString(): string }).toString();
+    expect(url).toBe('https://www.nexusmods.com/fallout4/mods/123');
+  });
+
+  it('visitNexus: is a no-op when the .meta has no modID', async () => {
+    const root = await makeInstanceRoot();
+    await writeMeta(root, 'foo.7z');
+
+    registerDownloadsSingleRowCommands(root, vi.fn());
+    invoke('modbench.downloads.visitNexus', node('foo.7z'));
+
+    await new Promise((r) => setTimeout(r, 50));
+    expect(openExternal).not.toHaveBeenCalled();
+  });
+
+  it('openFile: OS-opens the archive', async () => {
+    const root = await makeInstanceRoot();
+    const archive = await writeArchive(root, 'foo.7z');
+
+    registerDownloadsSingleRowCommands(root, vi.fn());
+    invoke('modbench.downloads.openFile', node('foo.7z'));
+
+    await vi.waitFor(() => expect(openExternal).toHaveBeenCalled());
+    expect(calledFsPath(openExternal)).toBe(archive);
+  });
+
+  it('openMeta: opens the .meta sidecar in the editor', async () => {
+    const root = await makeInstanceRoot();
+    const meta = await writeMeta(root, 'foo.7z');
+
+    registerDownloadsSingleRowCommands(root, vi.fn());
+    invoke('modbench.downloads.openMeta', node('foo.7z'));
+
+    await vi.waitFor(() => expect(showTextDocument).toHaveBeenCalled());
+    expect(calledFsPath(showTextDocument)).toBe(meta);
+  });
+
+  // runRowAction's catch -> log + error-notification path is shared by both nav actions
+  // (visitNexus/openFile/openMeta) — proving it once here (via openFile) covers all of them;
+  // no need to duplicate per action.
+  it('nav actions: on failure, logs and surfaces an error notification naming the action and row', async () => {
+    const root = await makeInstanceRoot();
+    await writeArchive(root, 'foo.7z');
+    openExternal.mockRejectedValueOnce(new Error('no handler for this file type'));
+    const log = vi.fn();
+
+    registerDownloadsSingleRowCommands(root, log);
+    invoke('modbench.downloads.openFile', node('foo.7z'));
+
+    await vi.waitFor(() => expect(showErrorMessage).toHaveBeenCalled());
+    expect(showErrorMessage).toHaveBeenCalledWith('Modbench: Open File for "foo.7z" failed.');
+    expect(log).toHaveBeenCalledWith(expect.stringContaining('Open File for "foo.7z" failed'));
   });
 });
 
@@ -391,6 +317,30 @@ describe('registerDownloadsMultiRowCommands', () => {
     expect(showErrorMessage).not.toHaveBeenCalled();
   });
 
+  it('hide: sets removed=true on the .meta sidecar (clicked row alone, no selection array)', async () => {
+    const root = await makeInstanceRoot();
+    const meta = await writeMeta(root, 'foo.7z');
+
+    registerDownloadsMultiRowCommands(root, vi.fn());
+    invoke('modbench.downloads.hide', node('foo.7z'));
+
+    await vi.waitFor(async () => {
+      expect(await readFile(meta, 'utf8')).toContain('removed=true');
+    });
+  });
+
+  it('unhide: clears removed to false on the .meta sidecar (clicked row alone, no selection array)', async () => {
+    const root = await makeInstanceRoot();
+    const meta = await writeMeta(root, 'foo.7z', '[General]\r\nremoved=true\r\n');
+
+    registerDownloadsMultiRowCommands(root, vi.fn());
+    invoke('modbench.downloads.unhide', node('foo.7z'));
+
+    await vi.waitFor(async () => {
+      expect(await readFile(meta, 'utf8')).toContain('removed=false');
+    });
+  });
+
   it('delete falls back to the clicked row alone when no selection array is passed', async () => {
     const root = await makeInstanceRoot();
     await writeArchive(root, 'foo.7z');
@@ -405,6 +355,35 @@ describe('registerDownloadsMultiRowCommands', () => {
       { modal: true },
       'Delete',
     );
+  });
+
+  // The negative case on a destructive operation — the single most valuable assertion in this
+  // group: declining the confirmation must trash nothing.
+  it('delete: on confirm-cancel, does not trash anything', async () => {
+    const root = await makeInstanceRoot();
+    await writeArchive(root, 'foo.7z');
+    showWarningMessage.mockResolvedValueOnce(undefined); // user dismissed, not "Delete"
+
+    registerDownloadsMultiRowCommands(root, vi.fn());
+    invoke('modbench.downloads.delete', node('foo.7z'));
+
+    await vi.waitFor(() => expect(showWarningMessage).toHaveBeenCalled());
+    await new Promise((r) => setTimeout(r, 50));
+    expect(fsDelete).not.toHaveBeenCalled();
+  });
+
+  it('delete: on confirm-accept, trashes the archive (and its .meta, if present)', async () => {
+    const root = await makeInstanceRoot();
+    const archive = await writeArchive(root, 'foo.7z');
+    const meta = await writeMeta(root, 'foo.7z');
+    showWarningMessage.mockResolvedValueOnce('Delete');
+
+    registerDownloadsMultiRowCommands(root, vi.fn());
+    invoke('modbench.downloads.delete', node('foo.7z'));
+
+    await vi.waitFor(() => expect(fsDelete).toHaveBeenCalledTimes(2));
+    const trashedPaths = fsDelete.mock.calls.map((c) => (c[0] as { fsPath: string }).fsPath);
+    expect(trashedPaths).toEqual(expect.arrayContaining([archive, meta]));
   });
 });
 

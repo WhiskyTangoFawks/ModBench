@@ -175,55 +175,38 @@ async function setArchiveHidden(instanceRoot: string, name: string, hidden: bool
   await writeFile(metaPath, setHiddenInText(metaText, hidden), 'utf8');
 }
 
-// The row's right-click actions (Install/Visit on Nexus/Open File/Open Meta File/
-// Reveal in Explorer/Delete/Hide/Unhide) as directly-callable handlers — all the real
-// work lives in the extension host, so the native commands below call these directly.
-// Exported for fixture-in/behavior-out testing (DownloadsPanel.test.ts).
-export function buildRowActionHandlers(instanceRoot: string, log: (msg: string) => void): Record<string, (name: string) => void> {
-  return {
-    install: (name) => void installArchive(instanceRoot, name, log),
-    visitNexus: (name) =>
-      void runRowAction('Visit on Nexus', name, log, () => visitOnNexus(instanceRoot, name)),
-    // OS-open the archive in the system's associated application.
-    openFile: (name) =>
-      void runRowAction('Open File', name, log, async () => {
-        await vscode.env.openExternal(vscode.Uri.file(join(instanceRoot, 'downloads', name)));
-      }),
-    // Open the `.meta` sidecar in the editor (gated off in the native menu when absent).
-    openMeta: (name) =>
-      void runRowAction('Open Meta File', name, log, async () => {
-        await vscode.window.showTextDocument(vscode.Uri.file(join(instanceRoot, 'downloads', `${name}.meta`)));
-      }),
-    delete: (name) => void deleteArchive(instanceRoot, name, log),
-    hide: (name) => void runRowAction('Hide', name, log, () => setArchiveHidden(instanceRoot, name, true)),
-    unhide: (name) => void runRowAction('Unhide', name, log, () => setArchiveHidden(instanceRoot, name, false)),
-  };
-}
-
-// One command id per native `view/item/context` menu entry on the modbench.downloads
-// TreeView (package.json's contributes.commands/menus), mapped to its buildRowActionHandlers
-// key. `keyof ReturnType<typeof buildRowActionHandlers>` (not a bare `string`) so a typo'd or
-// renamed key on either side of this table is a compile error, not a silent no-op at that one
-// command.
-const SINGLE_ROW_COMMANDS: Record<string, keyof ReturnType<typeof buildRowActionHandlers>> = {
-  'modbench.downloads.install': 'install',
-  'modbench.downloads.visitNexus': 'visitNexus',
-  'modbench.downloads.openFile': 'openFile',
-  'modbench.downloads.openMeta': 'openMeta',
-};
-
 /** Register Install / Visit on Nexus / Open File / Open Meta File — clicked row only, ignoring
  *  the rest of any multi-selection: MO2 doesn't batch Install either, and batching the
  *  navigational actions is "open five browser tabs / five archives / five editors". VS Code
  *  invokes a contributed `view/item/context` command as `(clickedItem, selectedItems[])`; the
- *  selection argument is simply unused here. */
+ *  selection argument is simply unused here. Each command calls its action function directly —
+ *  no id -> handler lookup table, matching the multi-row commands below. */
 export function registerDownloadsSingleRowCommands(instanceRoot: string, log: (msg: string) => void): vscode.Disposable[] {
-  const handlers = buildRowActionHandlers(instanceRoot, log);
-  return Object.entries(SINGLE_ROW_COMMANDS).map(([commandId, key]) =>
-    vscode.commands.registerCommand(commandId, (node?: DownloadNode) => {
-      if (node?.row.name) handlers[key](node.row.name);
+  return [
+    vscode.commands.registerCommand('modbench.downloads.install', (node?: DownloadNode) => {
+      if (node?.row.name) void installArchive(instanceRoot, node.row.name, log);
     }),
-  );
+    vscode.commands.registerCommand('modbench.downloads.visitNexus', (node?: DownloadNode) => {
+      const name = node?.row.name;
+      if (name) void runRowAction('Visit on Nexus', name, log, () => visitOnNexus(instanceRoot, name));
+    }),
+    // OS-open the archive in the system's associated application.
+    vscode.commands.registerCommand('modbench.downloads.openFile', (node?: DownloadNode) => {
+      const name = node?.row.name;
+      if (!name) return;
+      void runRowAction('Open File', name, log, async () => {
+        await vscode.env.openExternal(vscode.Uri.file(join(instanceRoot, 'downloads', name)));
+      });
+    }),
+    // Open the `.meta` sidecar in the editor (gated off in the native menu when absent).
+    vscode.commands.registerCommand('modbench.downloads.openMeta', (node?: DownloadNode) => {
+      const name = node?.row.name;
+      if (!name) return;
+      void runRowAction('Open Meta File', name, log, async () => {
+        await vscode.window.showTextDocument(vscode.Uri.file(join(instanceRoot, 'downloads', `${name}.meta`)));
+      });
+    }),
+  ];
 }
 
 /** The clicked row plus its multi-selection, collapsed to the row-name set a batch command
@@ -235,24 +218,27 @@ function selectionNames(clicked: DownloadNode | undefined, selected: DownloadNod
 }
 
 /** Register Delete / Hide / Unhide — act on the WHOLE selection, not just the clicked
- *  row. Hide/Unhide are idempotent per row (buildRowActionHandlers' hide/unhide always
- *  write `removed=true/false` regardless of prior state), so a mixed hidden/visible selection
- *  never errors — the `when` clause gating Hide vs Unhide can only inspect the clicked row, so
- *  a mixed selection applies whichever action that row's state offers to every selected row,
- *  matching MO2's own "Hide All". Delete gets its own batch-confirm entry point
- *  (`deleteArchives`) since one modal must cover the whole batch, never one per file. */
+ *  row. Hide/Unhide are idempotent per row (setArchiveHidden always writes `removed=true/false`
+ *  regardless of prior state), so a mixed hidden/visible selection never errors — the `when`
+ *  clause gating Hide vs Unhide can only inspect the clicked row, so a mixed selection applies
+ *  whichever action that row's state offers to every selected row, matching MO2's own "Hide
+ *  All". Delete gets its own batch-confirm entry point (`deleteArchives`) since one modal must
+ *  cover the whole batch, never one per file. */
 export function registerDownloadsMultiRowCommands(instanceRoot: string, log: (msg: string) => void): vscode.Disposable[] {
-  const handlers = buildRowActionHandlers(instanceRoot, log);
   return [
     vscode.commands.registerCommand('modbench.downloads.delete', (clicked?: DownloadNode, selected?: DownloadNode[]) => {
       const names = selectionNames(clicked, selected);
       if (names.length > 0) void deleteArchives(instanceRoot, names, log);
     }),
     vscode.commands.registerCommand('modbench.downloads.hide', (clicked?: DownloadNode, selected?: DownloadNode[]) => {
-      for (const name of selectionNames(clicked, selected)) handlers.hide(name);
+      for (const name of selectionNames(clicked, selected)) {
+        void runRowAction('Hide', name, log, () => setArchiveHidden(instanceRoot, name, true));
+      }
     }),
     vscode.commands.registerCommand('modbench.downloads.unhide', (clicked?: DownloadNode, selected?: DownloadNode[]) => {
-      for (const name of selectionNames(clicked, selected)) handlers.unhide(name);
+      for (const name of selectionNames(clicked, selected)) {
+        void runRowAction('Unhide', name, log, () => setArchiveHidden(instanceRoot, name, false));
+      }
     }),
   ];
 }

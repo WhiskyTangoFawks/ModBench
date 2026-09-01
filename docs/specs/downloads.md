@@ -330,13 +330,15 @@ workspace's own Explorer, so an in-tree reveal action is redundant.
   space-separated flag string a native `view/item/context` `when` clause can regex-match
   directly.
 - **`DownloadsPanel.ts`** is action functions plus command registration only — no
-  webview, no `postMessage`, no panel lifecycle. `buildRowActionHandlers` returns the
-  seven action functions keyed by name; `registerDownloadsSingleRowCommands` wires the
-  clicked-row-only four, `registerDownloadsMultiRowCommands` wires the
-  selection-wide three (Delete additionally routing through the batch-confirming
-  `deleteArchives`); `registerDownloadsSortCommand` and
-  `registerDownloadsHiddenToggleCommands` wire the toolbar. Every command calls its
-  handler directly — no round trip.
+  webview, no `postMessage`, no panel lifecycle. The seven per-archive action functions
+  (`installArchive`, `visitOnNexus`, the two nav actions, `deleteArchive`,
+  `setArchiveHidden` for hide/unhide) are module-private; `registerDownloadsSingleRowCommands`
+  wires the clicked-row-only four straight to `vscode.commands.registerCommand`, and
+  `registerDownloadsMultiRowCommands` wires the selection-wide three the same way (Delete
+  additionally routing through the batch-confirming `deleteArchives`) — every command id has
+  its own direct `registerCommand` call, no id -> handler lookup table in between.
+  `registerDownloadsSortCommand` and `registerDownloadsHiddenToggleCommands` wire the
+  toolbar. Every command calls its action function directly — no round trip.
 - **`downloadsWatcher.ts`** is the sole re-render trigger; there is no
   manual Refresh — see *Toolbar*.
 - **`HiddenDownloadDecorationProvider`** dims hidden rows: a stateless
@@ -369,16 +371,15 @@ workspace's own Explorer, so an in-tree reveal action is redundant.
   context key (including that a scan failure leaves it untouched — existence is unknown,
   not false), and `ErrorNode` surfacing on a non-ENOENT scan failure (ADR-0026).
 - **`DownloadsPanel.test.ts`** (Vitest, `vscode` stubbed the way `ModListProvider.test.ts`
-  does): `buildRowActionHandlers` exercised directly (fixture-in / real-fs-out) for
-  install (success/cancel/throw), delete (confirm/cancel), hide/unhide, visitNexus
-  (with/without modID), and the nav actions; `registerDownloadsSingleRowCommands` /
-  `registerDownloadsMultiRowCommands` exercised by capturing the mocked
-  `vscode.commands.registerCommand` calls and invoking the captured handler with
-  `DownloadNode`-shaped arguments — including the mixed-selection idempotency case for
-  Hide/Unhide and the selection-fallback case for Delete; `deleteArchives`'
-  once-for-the-whole-batch confirmation, including the single-item-reuses-singular-text
-  case; `registerDownloadsSortCommand` and `registerDownloadsHiddenToggleCommands`
-  against the mocked provider.
+  does): `registerDownloadsSingleRowCommands` / `registerDownloadsMultiRowCommands` exercised
+  by capturing the mocked `vscode.commands.registerCommand` calls and invoking the captured
+  callback with `DownloadNode`-shaped arguments (real fixture-in / real-fs-out) — install
+  (success/cancel/throw), delete (confirm-cancel/confirm-accept/selection-fallback), hide/unhide
+  (including the mixed-selection idempotency case), visitNexus (with/without modID), and the nav
+  actions, all through the actual registered callback rather than a handler reached by any other
+  path; `deleteArchives`' once-for-the-whole-batch confirmation, including the
+  single-item-reuses-singular-text case; `registerDownloadsSortCommand` and
+  `registerDownloadsHiddenToggleCommands` against the mocked provider.
 - **`downloadsWatcher.test.ts`**: debounces multiple rapid fs events into one `onChange`
   call.
 - **`HiddenDownloadDecorationProvider.test.ts`**: decorates only rows both under the
