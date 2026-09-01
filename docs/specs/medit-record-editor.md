@@ -436,16 +436,26 @@ already empty: matching xEdit's own guard (`Element.EditValue` must be non-empty
   resolves its default element from the nested array's own element type via `metaAtPath` — a
   bare element index would truncate both. There is no free
   drag-reorder and no auto-sort.
-  **Two surfaces are carved out of the envelope path and still compute client-side** (#630):
-  a **VMAD** array-of-scalars property, and a **Condition** list. Both are reached by the same
-  generic `{ type: 'array' }` metadata and the same gestures, but neither goes through the
-  reflected-schema column the envelope path applies to — VMAD has `VmadCodec`'s own vocabulary,
-  and a condition-owning field is dispatched to `Fallout4ConditionCodec.ApplyListValue`, which
-  requires a JSON array and refuses an envelope object. The two carve-outs are deliberately
-  **separate branches, not one merged gate**: a Condition group's own `FieldDiff` is always a
-  top-level entry, whereas a VMAD property's is a child of its script row, so a single
-  top-level-keyed gate would start posting envelopes for VMAD properties. Moving each to its own
-  codec's structural-op vocabulary is the intended end state (#658). **VMAD arity ops work as of
+  **Three surfaces are carved out of the generic envelope path and still compute client-side**:
+  a **Condition** list, and VMAD's two non-scalar array shapes — **`ArrayOfObject`** and
+  **`ArrayOfStruct`**. All are reached by the same generic `{ type: 'array' }` metadata and the
+  same gestures, but none goes through the reflected-schema column the envelope path applies to —
+  a condition-owning field is dispatched to `Fallout4ConditionCodec.ApplyListValue`, which
+  requires a JSON array and refuses an envelope object.
+  **A VMAD array-of-*scalars* property is no longer carved out** (#658): its arity ops became
+  VMAD structural ops in `VmadCodec`'s own vocabulary — `add_element`, `remove_element`,
+  `move_element_up`, `move_element_down` — computed server-side alongside `add_script` and
+  `set_type`, which was the intended end state.
+  **The client routes to the server on an allowlist, not a denylist**, and that is load-bearing:
+  it posts an envelope only for the four scalar element kinds `VmadCodec` actually implements, so
+  any other shape — including one added later — stays on the working client-side path and fails
+  *closed*. The reverse (excluding known shapes) shipped briefly and broke `ArrayOfStruct`, which
+  fell through to a `NotFound` refusal on a gesture that had worked. The client's allowlist and
+  `VmadCodec`'s matched set have no runtime tie and must be changed together.
+  The Condition and VMAD branches stay deliberately **separate, not one merged gate**: a
+  Condition group's own `FieldDiff` is always a top-level entry, whereas a VMAD property's is
+  nested under its script row, so a single top-level-keyed gate would misroute VMAD.
+  **VMAD arity ops work as of
   #660**, which fixed the lookup: a property's `FieldDiff` sits two levels down
   (`wrapper → script → property`), so the old flat top-level search matched *nothing* under a
   VMAD path — every VMAD op through this handler was an unconditional silent no-op, before and
@@ -703,8 +713,13 @@ leaves; **array** (`ArrayOf` Bool/Int/Float/String/Object) reconstructs a real p
 ordinary unsorted array already does — meaning the **existing** array-op machinery (right-click
 Add/Remove/Move Up/Move Down, `Insert`/`Delete`/`Ctrl+↑`/`Ctrl+↓`) offers the same gestures on a
 VMAD array. **This is no longer VMAD-free at the handler** (#630): ordinary arrays post a
-server-side op envelope, while VMAD is carved out to the preserved client-side computation,
-because VMAD does not go through the reflected-schema column the envelope path applies to. These
+generic server-side op envelope, and VMAD is handled on its own branch, because VMAD does not go
+through the reflected-schema column that path applies to. **As of #658 a VMAD array of *scalars*
+also computes server-side** — but in `VmadCodec`'s own vocabulary (`add_element`,
+`remove_element`, `move_element_up`, `move_element_down`), not the generic array envelope. VMAD's
+`ArrayOfObject` and `ArrayOfStruct` shapes remain client-side; the client selects by an allowlist
+of the scalar kinds `VmadCodec` implements, so an unrecognised shape stays on the working path.
+These
 arity ops **were an unconditional silent no-op until #660** — a pre-existing lookup defect that
 searched only the flat top level, where a VMAD property's `FieldDiff` never sits (it is two levels
 down, `wrapper → script → property`). The same defect silently discarded a VMAD **string**
