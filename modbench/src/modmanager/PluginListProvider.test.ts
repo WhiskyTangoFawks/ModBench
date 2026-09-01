@@ -16,8 +16,9 @@ vi.mock('vscode', () => ({
 }));
 
 import {
-  PluginListProvider, PluginNode, ImplicitMasterNode, ErrorNode, EmptyNode, pluginFileOf, orderIssueMastersOf,
+  PluginListProvider, PluginNode, ImplicitMasterNode, EmptyNode, pluginFileOf, orderIssueMastersOf,
 } from './PluginListProvider';
+import { ErrorNode } from './ErrorNode';
 
 /** Minimal IModlistSource stub: only the two plugin read methods matter here;
  *  everything else throws to prove PluginListProvider never touches them. */

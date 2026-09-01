@@ -12,6 +12,7 @@ import { computePluginOrderStatuses, type PluginOrderStatus } from './statusChec
 import { resolvePluginPaths } from './loadOrderSnapshot';
 import { discoverImplicitMasters } from './vanillaMasters';
 import { PLUGIN_EXTENSIONS } from './masterReader';
+import { ErrorNode } from './ErrorNode';
 
 const DND_MIME = 'application/vnd.medit.pluginlist-node';
 
@@ -120,19 +121,6 @@ export class ImplicitMasterNode extends vscode.TreeItem {
     // bridge command rather than building the header panel's target directly here.
     this.command = { command: 'modbench.openHeader', title: 'Open Header', arguments: [this] };
     if (path !== undefined) this.resourceUri = vscode.Uri.file(path);
-  }
-}
-
-/** Inline error surface: shown instead of an empty list when the plugins.txt
- *  read fails, so a failure is never indistinguishable from "no plugins"
- *  (ADR-0026, modmanager/CLAUDE.md convention). */
-export class ErrorNode extends vscode.TreeItem {
-  readonly kind = 'error' as const;
-  constructor(message: string) {
-    super(`⚠ Failed to load: ${message}`, vscode.TreeItemCollapsibleState.None);
-    this.contextValue = 'error';
-    this.tooltip = message;
-    this.iconPath = new vscode.ThemeIcon('error');
   }
 }
 

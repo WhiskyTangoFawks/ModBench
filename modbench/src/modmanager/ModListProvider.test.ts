@@ -17,7 +17,8 @@ vi.mock('vscode', () => ({
   Uri: { file: uriFile }, DataTransferItem, DataTransfer,
 }));
 
-import { ModListProvider, CountNode, SeparatorNode, ModNode, ErrorNode, OverwriteNode } from './ModListProvider';
+import { ModListProvider, CountNode, SeparatorNode, ModNode, OverwriteNode } from './ModListProvider';
+import { ErrorNode } from './ErrorNode';
 
 const mod = (name: string, enabled = true, extra: Partial<Mod> = {}): Mod => ({
   kind: 'mod', name, enabled, ...extra,

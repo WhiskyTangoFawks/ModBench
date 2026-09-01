@@ -14,6 +14,7 @@ import {
   type DownloadStatus,
 } from './mo2/downloads';
 import { scanDownloads } from './DownloadsPanel';
+import { ErrorNode } from './ErrorNode';
 
 /** Status -> ThemeIcon id + colour, mirroring MO2's Status-cell colours
  *  (downloadlist.cpp:202): green for ready-to-install, yellow for uninstalled, no explicit
@@ -72,20 +73,6 @@ export class DownloadNode extends vscode.TreeItem {
     this.contextValue = downloadContextValue(row);
     // Decoration hook — the dimming FileDecorationProvider keys off this URI.
     this.resourceUri = vscode.Uri.file(join(instanceRoot, 'downloads', row.name));
-  }
-}
-
-/** Inline error surface: shown instead of an empty list when scanning downloads/ fails for a
- *  reason other than "no downloads/ folder" (that's the structural-absence empty state, not an
- *  error — see load()). Mirrors ModListProvider's ErrorNode (ADR-0026: a failure must never be
- *  indistinguishable from "nothing here"). */
-export class ErrorNode extends vscode.TreeItem {
-  readonly kind = 'error' as const;
-  constructor(message: string) {
-    super(`⚠ Failed to load: ${message}`, vscode.TreeItemCollapsibleState.None);
-    this.contextValue = 'error';
-    this.tooltip = message;
-    this.iconPath = new vscode.ThemeIcon('error');
   }
 }
 

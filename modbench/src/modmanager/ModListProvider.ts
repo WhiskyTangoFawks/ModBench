@@ -10,6 +10,7 @@ import * as path from 'node:path';
 // home would be warranted if a third consumer appears; not worth the churn yet.
 import { dropIndexForMove } from './mo2/pluginsText';
 import type { Reporter } from './deployer';
+import { ErrorNode } from './ErrorNode';
 
 const DND_MIME = 'application/vnd.medit.modlist-node';
 
@@ -85,18 +86,6 @@ export class SeparatorNode extends vscode.TreeItem {
   constructor(public readonly separator: Separator, public readonly mods: Mod[]) {
     super(separator.name, vscode.TreeItemCollapsibleState.Collapsed);
     this.contextValue = 'separator';
-  }
-}
-
-/** Inline error surface: shown instead of an empty list when a fetch/read fails,
- *  so a failure is never indistinguishable from "nothing here" (ADR-0026). */
-export class ErrorNode extends vscode.TreeItem {
-  readonly kind = 'error' as const;
-  constructor(message: string) {
-    super(`⚠ Failed to load: ${message}`, vscode.TreeItemCollapsibleState.None);
-    this.contextValue = 'error';
-    this.tooltip = message;
-    this.iconPath = new vscode.ThemeIcon('error');
   }
 }
 
