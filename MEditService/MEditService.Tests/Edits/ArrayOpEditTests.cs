@@ -35,7 +35,7 @@ public sealed class ArrayOpEditTests : IDisposable
 
     private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
 
-    private string NpcBody() => _mod.Mirror.Index!.GetDocument(_mod.Npc.ToString(), _mod.Plugin)!.Body!;
+    private string NpcBody() => _mod.Mirror.Index!.At(RecordRef.Effective).GetDocument(_mod.Npc.ToString(), _mod.Plugin)!.Body!;
 
     /// <summary>A second, distinct Keyword FormKey — <see cref="TrackedModFixture.Keyword"/> alone
     /// isn't enough to prove "removed the named element, kept the others" against a one-element
@@ -381,7 +381,7 @@ public sealed class ArrayOpEditTests : IDisposable
         public RecordEditService Service() =>
             new(_mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
 
-        public string Body() => _mirror.Index!.GetDocument(Quest.ToString(), Plugin)!.Body!;
+        public string Body() => _mirror.Index!.At(RecordRef.Effective).GetDocument(Quest.ToString(), Plugin)!.Body!;
 
         public void Dispose()
         {
@@ -437,7 +437,7 @@ public sealed class ArrayOpEditTests : IDisposable
         public RecordEditService Service() =>
             new(_mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
 
-        public string Body() => _mirror.Index!.GetDocument(Container.ToString(), Plugin)!.Body!;
+        public string Body() => _mirror.Index!.At(RecordRef.Effective).GetDocument(Container.ToString(), Plugin)!.Body!;
 
         public JsonElement ExtractStages()
         {

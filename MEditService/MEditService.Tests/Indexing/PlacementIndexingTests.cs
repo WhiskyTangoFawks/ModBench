@@ -264,7 +264,7 @@ public class PlacementIndexingTests
     {
         using var b = IndexFixture();
         // refr is now a normal record table; the placed objects appear there too.
-        var result = b.Repo.Search(new RecordQuery(RecordTypes: ["refr"], Plugin: new PluginKey("TestWorld.esp"), Limit: 100, Offset: 0));
+        var result = b.Repo.At(RecordRef.Effective).Search(new RecordQuery(RecordTypes: ["refr"], Plugin: new PluginKey("TestWorld.esp"), Limit: 100, Offset: 0));
         Assert.Equal(3, result.Total);
     }
 
@@ -274,7 +274,7 @@ public class PlacementIndexingTests
     public void GetCellReferences_SplitsPersistentAndTemporary()
     {
         using var b = IndexFixture();
-        var refs = b.Repo.GetCellReferences(new PluginKey("TestWorld.esp", "Data"), b.ExtCellFk);
+        var refs = b.Repo.At(RecordRef.Effective).GetCellReferences(new PluginKey("TestWorld.esp", "Data"), b.ExtCellFk);
 
         Assert.Equal(2, refs.Persistent.Count);
         Assert.Single(refs.Temporary);
@@ -294,7 +294,7 @@ public class PlacementIndexingTests
     public void GetWorldspaceCells_ReturnsCellsWithBlockGridAndNullVariants()
     {
         using var b = IndexFixture();
-        var cells = b.Repo.GetWorldspaceCells(new PluginKey("TestWorld.esp", "Data"), b.WorldspaceFk);
+        var cells = b.Repo.At(RecordRef.Effective).GetWorldspaceCells(new PluginKey("TestWorld.esp", "Data"), b.WorldspaceFk);
         Assert.Equal(3, cells.Count);  // TopCell + ExtCell + BareCell
 
         var ext = cells.Single(c => c.FormKey == b.ExtCellFk);
@@ -324,7 +324,7 @@ public class PlacementIndexingTests
     public void GetPlacement_PlacedRef_ReturnsParentCellGroupAndPosition()
     {
         using var b = IndexFixture();
-        var placement = b.Repo.GetPlacement(b.BarrelFk, new PluginKey("TestWorld.esp", "Data"));
+        var placement = b.Repo.At(RecordRef.Effective).GetPlacement(b.BarrelFk, new PluginKey("TestWorld.esp", "Data"));
 
         Assert.NotNull(placement);
         Assert.Equal(b.ExtCellFk, placement.Value.ParentCell);
@@ -338,14 +338,14 @@ public class PlacementIndexingTests
     public void GetPlacement_NonPlacedRecord_ReturnsNull()
     {
         using var b = IndexFixture();
-        Assert.Null(b.Repo.GetPlacement(b.ExtCellFk, new PluginKey("TestWorld.esp", "Data")));
+        Assert.Null(b.Repo.At(RecordRef.Effective).GetPlacement(b.ExtCellFk, new PluginKey("TestWorld.esp", "Data")));
     }
 
     [Fact]
     public void GetPlacement_AbsentFormKey_ReturnsNull()
     {
         using var b = IndexFixture();
-        Assert.Null(b.Repo.GetPlacement("FFFFFF:TestWorld.esp", new PluginKey("TestWorld.esp", "Data")));
+        Assert.Null(b.Repo.At(RecordRef.Effective).GetPlacement("FFFFFF:TestWorld.esp", new PluginKey("TestWorld.esp", "Data")));
     }
 
     // ADR-0036: two origins loading the same physical file — the `placement` table
@@ -367,9 +367,9 @@ public class PlacementIndexingTests
         repo.Index((IModGetter)mod, Registration.Participating(1), new PluginKey(mod.ModKey.FileName.ToString(), "ModB"));
 
         var formKey = barrel.FormKey.ToString();
-        Assert.NotNull(repo.GetPlacement(formKey, new PluginKey("Placed.esp", "ModA")));
-        Assert.NotNull(repo.GetPlacement(formKey, new PluginKey("Placed.esp", "ModB")));
-        Assert.Null(repo.GetPlacement(formKey, new PluginKey("Placed.esp", "ModC")));
+        Assert.NotNull(repo.At(RecordRef.Effective).GetPlacement(formKey, new PluginKey("Placed.esp", "ModA")));
+        Assert.NotNull(repo.At(RecordRef.Effective).GetPlacement(formKey, new PluginKey("Placed.esp", "ModB")));
+        Assert.Null(repo.At(RecordRef.Effective).GetPlacement(formKey, new PluginKey("Placed.esp", "ModC")));
     }
 
     // ADR-0036: same shape as GetPlacement_SameFilenameDifferentOrigin_ScopesToOrigin above —
@@ -418,9 +418,9 @@ public class PlacementIndexingTests
     {
         using var f = BuildTwoOriginWorldspaceFixture();
 
-        var modACells = f.Repo.GetWorldspaceCells(new PluginKey("SharedWorld.esp", "ModA"), f.WorldspaceFk);
-        var modBCells = f.Repo.GetWorldspaceCells(new PluginKey("SharedWorld.esp", "ModB"), f.WorldspaceFk);
-        var modCCells = f.Repo.GetWorldspaceCells(new PluginKey("SharedWorld.esp", "ModC"), f.WorldspaceFk);
+        var modACells = f.Repo.At(RecordRef.Effective).GetWorldspaceCells(new PluginKey("SharedWorld.esp", "ModA"), f.WorldspaceFk);
+        var modBCells = f.Repo.At(RecordRef.Effective).GetWorldspaceCells(new PluginKey("SharedWorld.esp", "ModB"), f.WorldspaceFk);
+        var modCCells = f.Repo.At(RecordRef.Effective).GetWorldspaceCells(new PluginKey("SharedWorld.esp", "ModC"), f.WorldspaceFk);
 
         Assert.Single(modACells);
         Assert.Single(modBCells);
@@ -432,9 +432,9 @@ public class PlacementIndexingTests
     {
         using var f = BuildTwoOriginWorldspaceFixture();
 
-        var modAPage = f.Repo.GetInteriorCells(new PluginKey("SharedWorld.esp", "ModA"), 50, 0);
-        var modBPage = f.Repo.GetInteriorCells(new PluginKey("SharedWorld.esp", "ModB"), 50, 0);
-        var modCPage = f.Repo.GetInteriorCells(new PluginKey("SharedWorld.esp", "ModC"), 50, 0);
+        var modAPage = f.Repo.At(RecordRef.Effective).GetInteriorCells(new PluginKey("SharedWorld.esp", "ModA"), 50, 0);
+        var modBPage = f.Repo.At(RecordRef.Effective).GetInteriorCells(new PluginKey("SharedWorld.esp", "ModB"), 50, 0);
+        var modCPage = f.Repo.At(RecordRef.Effective).GetInteriorCells(new PluginKey("SharedWorld.esp", "ModC"), 50, 0);
 
         Assert.Equal(1, modAPage.Total);
         Assert.Equal(1, modBPage.Total);
@@ -446,9 +446,9 @@ public class PlacementIndexingTests
     {
         using var f = BuildTwoOriginWorldspaceFixture();
 
-        var modARefs = f.Repo.GetCellReferences(new PluginKey("SharedWorld.esp", "ModA"), f.ExtCellFk);
-        var modBRefs = f.Repo.GetCellReferences(new PluginKey("SharedWorld.esp", "ModB"), f.ExtCellFk);
-        var modCRefs = f.Repo.GetCellReferences(new PluginKey("SharedWorld.esp", "ModC"), f.ExtCellFk);
+        var modARefs = f.Repo.At(RecordRef.Effective).GetCellReferences(new PluginKey("SharedWorld.esp", "ModA"), f.ExtCellFk);
+        var modBRefs = f.Repo.At(RecordRef.Effective).GetCellReferences(new PluginKey("SharedWorld.esp", "ModB"), f.ExtCellFk);
+        var modCRefs = f.Repo.At(RecordRef.Effective).GetCellReferences(new PluginKey("SharedWorld.esp", "ModC"), f.ExtCellFk);
 
         Assert.Single(modARefs.Persistent);
         Assert.Single(modBRefs.Persistent);
@@ -459,7 +459,7 @@ public class PlacementIndexingTests
     public void GetInteriorCells_ReturnsInteriorCellsWithNullVariants()
     {
         using var b = IndexFixture();
-        var page = b.Repo.GetInteriorCells(new PluginKey("TestWorld.esp", "Data"), 50, 0);
+        var page = b.Repo.At(RecordRef.Effective).GetInteriorCells(new PluginKey("TestWorld.esp", "Data"), 50, 0);
         Assert.Equal(2, page.Total);
 
         var named = page.Items.Single(c => c.FormKey == b.IntCellFk);
@@ -507,7 +507,7 @@ public class PlacementIndexingTests
         using var repo = BuildDuplicateEditorIdInteriorCellsFixture(out var total);
         var plugin = new PluginKey("DupCells.esp", "Data");
 
-        var full = repo.GetInteriorCells(plugin, 100, 0);
+        var full = repo.At(RecordRef.Effective).GetInteriorCells(plugin, 100, 0);
         Assert.Equal(total, full.Total);
         var expected = full.Items.Select(i => i.FormKey).ToList();
 
@@ -516,7 +516,7 @@ public class PlacementIndexingTests
             var seen = new List<string>();
             for (var offset = 0; offset < full.Total; offset += 2)
             {
-                var page = repo.GetInteriorCells(plugin, 2, offset);
+                var page = repo.At(RecordRef.Effective).GetInteriorCells(plugin, 2, offset);
                 seen.AddRange(page.Items.Select(i => i.FormKey));
             }
             return seen;

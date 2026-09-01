@@ -56,7 +56,7 @@ public sealed class InstanceScopedIndexTests : IDisposable
     // definition — including it would put a meaningless null in front of every expectation here
     // without saying anything more about instance isolation, which is what this file is about.
     private static IReadOnlyList<string?> EditorIdsIn(LoadOrderMirror manager) =>
-        [.. manager.Index!.GetDocuments(Key)
+        [.. manager.Index!.At(RecordRef.Effective).GetDocuments(Key)
             .Where(d => d.RecordType != HeaderIndexer.RecordType)
             .Select(d => d.EditorId)];
 

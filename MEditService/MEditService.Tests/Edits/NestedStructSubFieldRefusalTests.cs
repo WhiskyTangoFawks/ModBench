@@ -139,7 +139,7 @@ public sealed class NestedStructSubFieldRefusalTests : IDisposable
         public RecordEditService Service() =>
             new(_mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
 
-        public string Body() => _mirror.Index!.GetDocument(Faction.ToString(), Plugin)!.Body!;
+        public string Body() => _mirror.Index!.At(RecordRef.Effective).GetDocument(Faction.ToString(), Plugin)!.Body!;
 
         public void Dispose()
         {

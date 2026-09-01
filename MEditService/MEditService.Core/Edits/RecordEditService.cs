@@ -69,8 +69,9 @@ public sealed class RecordEditService(
         // modFolder isn't needed past resolution here — EditField's own remaining work is entirely
         // in terms of the record's own source unit, not the mod folder that produced it.
         var (index, _, release, document, unit) = editTarget;
+        var reads = index.At(RecordRef.Effective);
 
-        var owner = index.GetDocument(unit.OwnerFormKey, plugin)!;
+        var owner = reads.GetDocument(unit.OwnerFormKey, plugin)!;
         var record = ReadRecordFromSource(_codec, logger, unit.FullPath, owner, release);
         var schemas = schemaReflector.GetSchemas(release);
 
@@ -120,7 +121,7 @@ public sealed class RecordEditService(
                 "Form flag on its header first.");
         }
 
-        if (ValidateFormLinks(index, schemas, document.RecordType, fieldPath, value, release) is { } linkError)
+        if (ValidateFormLinks(reads, schemas, document.RecordType, fieldPath, value, release) is { } linkError)
             return RecordEditResult.Refused(RecordEditRefusal.InvalidFormLink, linkError);
 
         // Two reflected columns (major_flags, fallout4_major_record_flags — and,
@@ -370,12 +371,13 @@ public sealed class RecordEditService(
         // document isn't needed past resolution here — every remaining branch below reads through
         // the resolved source unit instead.
         var (index, _, release, _, unit) = target;
+        var reads = index.At(RecordRef.Effective);
 
         var deltas = new List<(string FormKey, string? Body)>();
 
         if (unit.IsEmbedded)
         {
-            var owner = index.GetDocument(unit.OwnerFormKey, plugin)!;
+            var owner = reads.GetDocument(unit.OwnerFormKey, plugin)!;
             var record = ReadRecordFromSource(_codec, logger, unit.FullPath, owner, release);
 
             if (!ContainerChildFields.RemoveEmbeddedChild(record, formKey))
@@ -398,7 +400,7 @@ public sealed class RecordEditService(
             // computed the same way RenormalizeGroupOrder computes them on disk below (sort by old
             // rank ascending, assign 0..k-1). Null for a top-level container/flat record, which is
             // nobody's folder-split child.
-            var parentLink = index.GetContainerParent(plugin, formKey);
+            var parentLink = reads.GetContainerParent(plugin, formKey);
 
             // A container's own directory (Cell/Worldspace/Quest, or a nested folder-split child —
             // DialogTopic etc.), or a flat record's single file. Never-assume-exclusive-ownership: the
@@ -430,7 +432,7 @@ public sealed class RecordEditService(
             // tree would put it.
             if (parentLink is { } parent)
             {
-                var survivors = index.GetContainerChildren(plugin, parent.ParentFormKey)
+                var survivors = reads.GetContainerChildren(plugin, parent.ParentFormKey)
                     .Where(c => c.SlotName == parent.SlotName && c.ChildFormKey != formKey)
                     .OrderBy(c => c.SlotIndex)
                     .Select((c, i) => (c.ChildFormKey, SlotIndex: i))
@@ -446,7 +448,7 @@ public sealed class RecordEditService(
         // levels deep (a Worldspace's TopCell carrying its own placed refs). Every descendant's index
         // row is nulled alongside the target's own, in the one batch below.
         deltas.Add((formKey, null));
-        foreach (var descendant in EnumerateDescendantFormKeys(index, plugin, formKey))
+        foreach (var descendant in EnumerateDescendantFormKeys(reads, plugin, formKey))
             deltas.Add((descendant, null));
 
         index.ApplyWorkingTreeChanges(plugin, deltas);
@@ -595,6 +597,7 @@ public sealed class RecordEditService(
     {
         if (ResolveCopySource(destinationPlugin, sourcePlugin, formKey, out var source) is { } blocked) return blocked;
         var (index, destinationModFolder, release, document) = source;
+        var reads = index.At(RecordRef.Effective);
 
         // A placed reference (a Cell's Persistent/Temporary child) has its own,
         // parent-chain-aware handling — it never reaches RefuseIfCopySourceHasNoContainerOfItsOwn's
@@ -602,7 +605,7 @@ public sealed class RecordEditService(
         // reference" from every other embedded/folder-split type that predicate still refuses
         // (Landscape, NavigationMesh, DialogTopic, Scene).
         if (RecordTypeDispatch.For(release).GroupFolderNameFor(document.RecordType) is null
-            && index.GetPlacement(formKey, sourcePlugin) is { } placement)
+            && reads.GetPlacement(formKey, sourcePlugin) is { } placement)
         {
             return _recordCopy.CopyPlacedReferenceAsOverride(
                 sourcePlugin, formKey, document, placement, destinationPlugin, destinationModFolder, index, release);
@@ -627,7 +630,7 @@ public sealed class RecordEditService(
         // refusal below — TopCell's own spatial placement is a WRLD-scale follow-up, tracked
         // separately.
         var isCell = RecordTypeDispatch.For(release).ConcreteFor(document.RecordType)?.Name == "Cell";
-        var cellLocation = isCell ? index.GetCellLocation(sourcePlugin, formKey) : null;
+        var cellLocation = isCell ? reads.GetCellLocation(sourcePlugin, formKey) : null;
         if (isCell && cellLocation?.IsInterior == false && cellLocation.Value.BlockX != null)
         {
             var cellRecord = ReadCopySourceRecord(sourcePlugin, formKey, document, release);
@@ -865,7 +868,7 @@ public sealed class RecordEditService(
         // is one row per (source record, field), and a record referencing the target through two
         // fields still only needs its source file rewritten once — the body-level replace below fixes
         // every occurrence in one write.
-        var referencers = index.GetReferencedBy(formKey)
+        var referencers = index.At(RecordRef.Effective).GetReferencedBy(formKey)
             .Select(r => (FormKey: r.FormKey, Plugin: new PluginKey(r.Plugin, r.Origin)))
             .Distinct()
             .ToList();
@@ -959,12 +962,13 @@ public sealed class RecordEditService(
         IRecordIndex index, PluginKey referencerPlugin, string referencerModFolder,
         string referencerFormKey, string oldFormKey, string newFormKey, GameRelease release)
     {
-        var referencerDoc = index.GetDocument(referencerFormKey, referencerPlugin)
+        var reads = index.At(RecordRef.Effective);
+        var referencerDoc = reads.GetDocument(referencerFormKey, referencerPlugin)
             ?? throw new InvalidOperationException(
                 $"{referencerPlugin.Name} no longer holds {referencerFormKey} mid-renumber.");
 
         if (SourceUnitResolver.Resolve(
-                index, referencerPlugin, referencerModFolder, referencerFormKey, referencerDoc.RecordType,
+                reads, referencerPlugin, referencerModFolder, referencerFormKey, referencerDoc.RecordType,
                 referencerDoc.EditorId, release)
             is not { } unit)
         {
@@ -984,7 +988,7 @@ public sealed class RecordEditService(
         }
 
         var owner = ReadRecordFromSource(
-            _codec, logger, unit.FullPath, index.GetDocument(unit.OwnerFormKey, referencerPlugin)!, release);
+            _codec, logger, unit.FullPath, reads.GetDocument(unit.OwnerFormKey, referencerPlugin)!, release);
         var child = ContainerChildFields.FindEmbeddedChild(owner, referencerFormKey)?.Child
             ?? throw new InvalidOperationException(
                 $"{unit.RelativePath} no longer carries {referencerFormKey} after its own reference rewrite.");
@@ -1002,9 +1006,10 @@ public sealed class RecordEditService(
     private void RenumberTheRecordItself(
         IRecordIndex index, PluginKey plugin, string modFolder, string oldFormKey, string newFormKey, GameRelease release)
     {
-        var document = index.GetDocument(oldFormKey, plugin)
+        var reads = index.At(RecordRef.Effective);
+        var document = reads.GetDocument(oldFormKey, plugin)
             ?? throw new InvalidOperationException($"{plugin.Name} no longer holds {oldFormKey} mid-renumber.");
-        if (SourceUnitResolver.Resolve(index, plugin, modFolder, oldFormKey, document.RecordType, document.EditorId, release)
+        if (SourceUnitResolver.Resolve(reads, plugin, modFolder, oldFormKey, document.RecordType, document.EditorId, release)
             is not { } unit)
         {
             throw new InvalidOperationException($"No source unit in {plugin.Name}'s tree holds {oldFormKey} mid-renumber.");
@@ -1096,7 +1101,8 @@ public sealed class RecordEditService(
         IRecordIndex index, PluginKey plugin, SourceUnit unit, string oldFormKey, string newFormKey,
         string childRecordType, GameRelease release)
     {
-        var owner = ReadRecordFromSource(_codec, logger, unit.FullPath, index.GetDocument(unit.OwnerFormKey, plugin)!, release);
+        var owner = ReadRecordFromSource(
+            _codec, logger, unit.FullPath, index.At(RecordRef.Effective).GetDocument(unit.OwnerFormKey, plugin)!, release);
 
         if (ContainerChildFields.FindEmbeddedChild(owner, oldFormKey) is not { } found)
         {
@@ -1123,7 +1129,8 @@ public sealed class RecordEditService(
     /// unhandled exception reaching the endpoint.
     /// </summary>
     internal static bool IsFreeAtBothRefs(IRecordIndex index, PluginKey plugin, string formKey) =>
-        index.GetDocument(formKey, plugin) == null && index.At(RecordRef.Head).GetDocument(formKey, plugin) == null;
+        index.At(RecordRef.Effective).GetDocument(formKey, plugin) == null
+        && index.At(RecordRef.Head).GetDocument(formKey, plugin) == null;
 
     /// <summary>
     /// The target-FormKey resolution <see cref="CreateRecord"/> and <see cref="RenumberRecord"/>
@@ -1250,7 +1257,7 @@ public sealed class RecordEditService(
     private static string? NextFreeNativeFormId(IRecordIndex index, PluginKey plugin, IModGetter? mod)
     {
         var floor = mod?.GetDefaultInitialNextFormID() ?? 0x800u;
-        var highest = index.GetNativeFormKeys(plugin)
+        var highest = index.At(RecordRef.Effective).GetNativeFormKeys(plugin)
             .Concat(index.At(RecordRef.Head).GetNativeFormKeys(plugin))
             .Select(LocalId)
             .DefaultIfEmpty(0u)
@@ -1324,7 +1331,7 @@ public sealed class RecordEditService(
     /// here; widening that is its own change with its own evidence.</para>
     /// </summary>
     private static string? ValidateFormLinks(
-        IRecordIndex index,
+        IRecordReads reads,
         IReadOnlyDictionary<string, RecordTableSchema> schemas,
         string recordType,
         string fieldPath,
@@ -1338,7 +1345,7 @@ public sealed class RecordEditService(
         // The same builder the read model renders check errors from, so "what the editor flags in a
         // loaded plugin" and "what the editor refuses to create" are one definition of a broken link,
         // not two that can drift.
-        return CheckErrorBuilder.Build(col.ToFieldMetadata(), value, index.Resolve, release);
+        return CheckErrorBuilder.Build(col.ToFieldMetadata(), value, reads.Resolve, release);
     }
 
     /// <summary>The Track command as the palette actually shows it — <c>package.json</c>'s title
@@ -1382,8 +1389,9 @@ public sealed class RecordEditService(
         var index = mirror.Index;
         if (index == null)
             return RecordEditResult.Refused(RecordEditRefusal.RecordNotFound, "No load order has been received.");
+        var reads = index.At(RecordRef.Effective);
 
-        var document = index.GetDocument(formKey, plugin);
+        var document = reads.GetDocument(formKey, plugin);
         if (document == null)
         {
             return RecordEditResult.Refused(
@@ -1396,7 +1404,7 @@ public sealed class RecordEditService(
         // Which file holds this record. A flat record's own, a container's
         // RecordData.json, or \u2014 for an embedded child (a placed ref, a landscape, a navmesh, a
         // worldspace's top cell) \u2014 its parent container's, since the child has no file of its own.
-        if (SourceUnitResolver.Resolve(index, plugin, modFolder, formKey, document.RecordType, document.EditorId, release)
+        if (SourceUnitResolver.Resolve(reads, plugin, modFolder, formKey, document.RecordType, document.EditorId, release)
             is not { } unit)
         {
             return RecordEditResult.Refused(
@@ -1435,7 +1443,7 @@ public sealed class RecordEditService(
         if (index == null)
             return RecordEditResult.Refused(RecordEditRefusal.RecordNotFound, "No load order has been received.");
 
-        var document = index.GetDocument(formKey, sourcePlugin);
+        var document = index.At(RecordRef.Effective).GetDocument(formKey, sourcePlugin);
         if (document == null)
         {
             return RecordEditResult.Refused(

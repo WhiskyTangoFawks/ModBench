@@ -53,7 +53,7 @@ public sealed class CutDownPluginIndexTests(CutDownPluginFixture fixture) : ICla
     [Fact]
     public void Index_RealScripts_ReconstitutesVmadFromDocument()
     {
-        var document = _fixture.Repo.GetDocument("2499C4:Fallout4.esm", new PluginKey(CutDownPluginFixture.PluginFileName, "Data"));
+        var document = _fixture.Repo.At(RecordRef.Effective).GetDocument("2499C4:Fallout4.esm", new PluginKey(CutDownPluginFixture.PluginFileName, "Data"));
         var vmad = document == null ? null : RecordDocumentCodecs.GetVmad(document, GameRelease.Fallout4, NullLogger.Instance);
 
         Assert.NotNull(vmad);

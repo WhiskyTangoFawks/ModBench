@@ -56,7 +56,7 @@ public class RecordIndexFactoryTests : IDisposable
     {
         using var repo = MakeFactory().Create(GameRelease.Fallout4);
 
-        var result = repo.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 1, Offset: 0));
+        var result = repo.At(RecordRef.Effective).Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 1, Offset: 0));
         Assert.Equal(0, result.Total);
     }
 
@@ -76,7 +76,7 @@ public class RecordIndexFactoryTests : IDisposable
         using (var other = factory.Create(GameRelease.Fallout4, b))
         {
             Assert.Null(other.IndexedContentHash(key));
-            Assert.Empty(other.GetDocuments(key));
+            Assert.Empty(other.At(RecordRef.Effective).GetDocuments(key));
         }
 
         using var again = factory.Create(GameRelease.Fallout4, a);

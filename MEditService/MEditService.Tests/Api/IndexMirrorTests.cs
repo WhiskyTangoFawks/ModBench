@@ -50,7 +50,7 @@ public sealed class IndexMirrorTests
     }
 
     private static IReadOnlyList<string?> EditorIds(TrackedModFixture fixture, PluginKey key) =>
-        [.. fixture.Mirror.Index!.GetDocuments(key).Select(d => d.EditorId)];
+        [.. fixture.Mirror.Index!.At(RecordRef.Effective).GetDocuments(key).Select(d => d.EditorId)];
 
     // An untracked plugin's bytes move while the backend runs and the index follows, with no reload — the
     // whole point of extending the watcher past the tracked binaries.

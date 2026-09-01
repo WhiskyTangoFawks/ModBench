@@ -54,9 +54,9 @@ public class MultiSubclassIndexingTests
     private static Dictionary<string, object?> FieldByEditorId(DuckDbRecordIndex repo, string table, string field)
     {
         var result = new Dictionary<string, object?>(StringComparer.Ordinal);
-        foreach (var summary in repo.Search(new RecordQuery(RecordTypes: [table], Limit: 100, Offset: 0)).Items)
+        foreach (var summary in repo.At(RecordRef.Effective).Search(new RecordQuery(RecordTypes: [table], Limit: 100, Offset: 0)).Items)
         {
-            var detail = repo.GetDocument(summary.FormKey, new PluginKey(summary.Plugin, summary.Origin));
+            var detail = repo.At(RecordRef.Effective).GetDocument(summary.FormKey, new PluginKey(summary.Plugin, summary.Origin));
             Assert.NotNull(detail);
             var value = detail.Fields.FirstOrDefault(f => f.Metadata.Name == field);
             Assert.NotNull(value);

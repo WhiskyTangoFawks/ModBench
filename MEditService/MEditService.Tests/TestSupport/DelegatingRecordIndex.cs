@@ -49,30 +49,4 @@ internal abstract class DelegatingRecordIndex(IRecordIndex inner) : IRecordIndex
     public virtual void Dispose() => Inner.Dispose();
 
     public virtual IRecordReads At(RecordRef recordRef) => Inner.At(recordRef);
-    public RecordDocument? GetDocument(string formKey) => Inner.GetDocument(formKey);
-    public RecordDocument? GetDocument(string formKey, PluginKey plugin) => Inner.GetDocument(formKey, plugin);
-    public IReadOnlyList<RecordDocument> GetDocuments(PluginKey plugin) => Inner.GetDocuments(plugin);
-    public RecordOverrides? GetOverrideStack(string formKey) => Inner.GetOverrideStack(formKey);
-    public PagedResult<RecordSummary> Search(RecordQuery query) => Inner.Search(query);
-    public IReadOnlyList<RecordTypeCount> GetRecordTypeCounts(PluginKey plugin) => Inner.GetRecordTypeCounts(plugin);
-    public RecordLookupEntry? Resolve(string formKey) => Inner.Resolve(formKey);
-    public IReadOnlyList<ReferenceResult> GetReferencedBy(string targetFormKey) => Inner.GetReferencedBy(targetFormKey);
-    public IReadOnlySet<string> GetPluginsWithMatchingRecords(IEnumerable<string> tableNames) =>
-        Inner.GetPluginsWithMatchingRecords(tableNames);
-    public IReadOnlyList<string> GetNativeFormKeys(PluginKey plugin) => Inner.GetNativeFormKeys(plugin);
-    public IReadOnlyList<string> GetEffectiveMasters(PluginKey plugin) => Inner.GetEffectiveMasters(plugin);
-    // Virtual so a test can inject an anomalous second block-less cell-location row
-    // without reimplementing the rest of the wide IRecordIndex surface.
-    public virtual IReadOnlyList<CellLocationSummary> GetWorldspaceCells(PluginKey plugin, string worldspaceFormKey) =>
-        Inner.GetWorldspaceCells(plugin, worldspaceFormKey);
-    public PagedResult<CellSummary> GetInteriorCells(PluginKey plugin, int limit, int offset) =>
-        Inner.GetInteriorCells(plugin, limit, offset);
-    public CellReferences GetCellReferences(PluginKey plugin, string cellFormKey) =>
-        Inner.GetCellReferences(plugin, cellFormKey);
-    public PlacementRow? GetPlacement(string formKey, PluginKey plugin) => Inner.GetPlacement(formKey, plugin);
-    public CellLocationRow? GetCellLocation(PluginKey plugin, string cellFormKey) => Inner.GetCellLocation(plugin, cellFormKey);
-    public IReadOnlyList<ContainerChildRow> GetContainerChildren(PluginKey plugin, string parentFormKey) =>
-        Inner.GetContainerChildren(plugin, parentFormKey);
-    public ContainerChildRow? GetContainerParent(PluginKey plugin, string childFormKey) =>
-        Inner.GetContainerParent(plugin, childFormKey);
 }

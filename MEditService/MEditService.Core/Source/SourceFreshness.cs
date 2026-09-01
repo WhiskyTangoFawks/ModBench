@@ -62,7 +62,7 @@ public sealed class SourceFreshness(ILoadOrderMirror mirror, ILogger<SourceFresh
         var loadOrder = mirror.LoadOrder;
         if (index == null || loadOrder == null) return;
 
-        var stack = index.GetOverrideStack(formKey);
+        var stack = index.At(RecordRef.Effective).GetOverrideStack(formKey);
         if (stack == null) return;
 
         // The plugin header is skipped, and skipping it is the *safe* answer rather than a gap.
@@ -119,7 +119,7 @@ public sealed class SourceFreshness(ILoadOrderMirror mirror, ILogger<SourceFresh
         // freshness check at all for either shape. Resolve also carries FlatSourcePath's own
         // EditorID-drift tolerance for the flat case.
         var unit = SourceUnitResolver.Resolve(
-            index, entry.Plugin, modFolder, formKey, recordType, entry.Effective.EditorId, release);
+            index.At(RecordRef.Effective), entry.Plugin, modFolder, formKey, recordType, entry.Effective.EditorId, release);
 
         // Nothing on disk claims this record and the index names no container that would either — the
         // same "genuinely absent" conclusion the flat path already reached when File.Exists came back

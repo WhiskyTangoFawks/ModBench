@@ -51,7 +51,7 @@ public sealed class IndexVisibilityTests
             {
                 while (!indexing.IsCancellationRequested)
                 {
-                    observed.Add(repository.GetRecordTypeCounts(new PluginKey("Big.esp", PluginOrigin.DataDirectory))
+                    observed.Add(repository.At(RecordRef.Effective).GetRecordTypeCounts(new PluginKey("Big.esp", PluginOrigin.DataDirectory))
                         .FirstOrDefault(c => string.Equals(c.Type, "npc_", StringComparison.OrdinalIgnoreCase))?.Count ?? 0);
                 }
             })).ToArray();
@@ -73,7 +73,7 @@ public sealed class IndexVisibilityTests
             Assert.All(observed, count => Assert.True(
                 count is 0 or NpcCount,
                 $"a read observed {count} of {NpcCount} records — a partially-indexed plugin was visible"));
-            Assert.Equal(NpcCount, repository.GetRecordTypeCounts(new PluginKey("Big.esp", PluginOrigin.DataDirectory))
+            Assert.Equal(NpcCount, repository.At(RecordRef.Effective).GetRecordTypeCounts(new PluginKey("Big.esp", PluginOrigin.DataDirectory))
                 .FirstOrDefault(c => string.Equals(c.Type, "npc_", StringComparison.OrdinalIgnoreCase))?.Count ?? 0);
         }
         finally

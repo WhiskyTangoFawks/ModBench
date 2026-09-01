@@ -37,7 +37,7 @@ public class HardcodedFormKeyResolutionTests
         repo.Index(mod, Registration.Participating(0), key);
         repo.UpdateWinners();
 
-        var doc = repo.GetDocument(npc.FormKey.ToString(), key);
+        var doc = repo.At(RecordRef.Effective).GetDocument(npc.FormKey.ToString(), key);
 
         Assert.NotNull(doc);
         var raceField = doc!.Fields.Single(f => f.Metadata.Name.Equals("race", StringComparison.OrdinalIgnoreCase));

@@ -139,7 +139,7 @@ public sealed class PluginCompileService(
         if (writeRefusal != null)
             return CompileResult.Refused(writeRefusal);
 
-        var masters = index.GetEffectiveMasters(plugin);
+        var masters = index.At(RecordRef.Effective).GetEffectiveMasters(plugin);
         if (logger.IsEnabled(LogLevel.Information))
         {
             logger.LogInformation("Compiled {Plugin} ({Origin}) from {RecordCount} source records",
@@ -191,7 +191,8 @@ public sealed class PluginCompileService(
         // Compile's wall clock on a real 3,940-record fixture. The loop still
         // walks the mod (not the fetched set) so diagnostic order stays the mod's own enumeration
         // order, and a record the index doesn't hold still skips.
-        var documents = index.GetDocuments(plugin).ToDictionary(d => d.FormKey);
+        var reads = index.At(RecordRef.Effective);
+        var documents = reads.GetDocuments(plugin).ToDictionary(d => d.FormKey);
         // And one resolution cache for the pass: the dominant cost was never the document fetch but
         // SourceUnitResolver re-scanning the tree once per reporting record (see the cache's own doc).
         var resolutionCache = new SourceUnitResolutionCache();
@@ -211,7 +212,7 @@ public sealed class PluginCompileService(
             // the parent document that actually holds it. Only records that have something to report
             // pay for it, which is what keeps a container's subtree scan off the common path.
             var relativePath = SourceUnitResolver
-                .Resolve(index, plugin, resolverRoot, formKey, document.RecordType, document.EditorId, gameRelease, resolutionCache)
+                .Resolve(reads, plugin, resolverRoot, formKey, document.RecordType, document.EditorId, gameRelease, resolutionCache)
                 ?.RelativePath ?? string.Empty;
             diagnostics.AddRange(errors.Select(message => new CompileDiagnostic(formKey, relativePath, message)));
         }

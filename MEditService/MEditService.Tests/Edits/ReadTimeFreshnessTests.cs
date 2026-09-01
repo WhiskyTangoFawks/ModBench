@@ -81,7 +81,7 @@ public sealed class ReadTimeFreshnessTests : IDisposable
 
         // The row is still there at both refs, and the working tree is still clean — a folded-in
         // deletion would show as a missing document, a dirtied tree, or both.
-        Assert.NotNull(_mod.Mirror.Index!.GetDocument(headerFormKey, _mod.Plugin));
+        Assert.NotNull(_mod.Mirror.Index!.At(RecordRef.Effective).GetDocument(headerFormKey, _mod.Plugin));
         Assert.NotNull(_mod.Mirror.Index!.At(RecordRef.Head).GetDocument(headerFormKey, _mod.Plugin));
         Assert.Empty(_mod.GitStatus());
 
@@ -93,7 +93,7 @@ public sealed class ReadTimeFreshnessTests : IDisposable
         // ModHeader is not in. So the record editor renders exactly what it rendered before. When
         // the header does become a source unit, this assertion is the one that should be revisited
         // deliberately rather than discovered.
-        var entry = Assert.Single(_mod.Mirror.Index!.GetOverrideStack(headerFormKey)!.Entries);
+        var entry = Assert.Single(_mod.Mirror.Index!.At(RecordRef.Effective).GetOverrideStack(headerFormKey)!.Entries);
         Assert.False(entry.HasWorkingTreeChange);
         Assert.Equal(entry.Effective.Body, entry.Head.Body);
     }
@@ -162,7 +162,7 @@ public sealed class ReadTimeFreshnessTests : IDisposable
 
         Reads().GetCompare(_mod.Npc.ToString());
 
-        var entry = _mod.Mirror.Index!.GetOverrideStack(_mod.Npc.ToString())!.Entries.Single();
+        var entry = _mod.Mirror.Index!.At(RecordRef.Effective).GetOverrideStack(_mod.Npc.ToString())!.Entries.Single();
         Assert.False(entry.HasWorkingTreeChange);
         Assert.Equal(entry.Effective.Body, entry.Head.Body);
     }
@@ -196,7 +196,7 @@ public sealed class ReadTimeFreshnessTests : IDisposable
 
         Reads().GetRecord(_mod.Npc.ToString());
 
-        var entry = _mod.Mirror.Index!.GetOverrideStack(_mod.Npc.ToString())!.Entries.Single();
+        var entry = _mod.Mirror.Index!.At(RecordRef.Effective).GetOverrideStack(_mod.Npc.ToString())!.Entries.Single();
         Assert.False(entry.HasWorkingTreeChange);
         Assert.Equal(entry.Head.Body, entry.Effective.Body);
     }
@@ -230,8 +230,8 @@ public sealed class ReadTimeFreshnessTests : IDisposable
         Assert.NotNull(again);
         Assert.Equal("RenamedByHand", again!.EditorId);
         // Still live at Effective, and still resolvable — a record marked deleted loses both.
-        Assert.NotNull(_mod.Mirror.Index!.GetDocument(_mod.Npc.ToString(), _mod.Plugin));
-        Assert.NotNull(_mod.Mirror.Index!.Resolve(_mod.Npc.ToString()));
+        Assert.NotNull(_mod.Mirror.Index!.At(RecordRef.Effective).GetDocument(_mod.Npc.ToString(), _mod.Plugin));
+        Assert.NotNull(_mod.Mirror.Index!.At(RecordRef.Effective).Resolve(_mod.Npc.ToString()));
     }
 
     /// <summary>
@@ -261,7 +261,7 @@ public sealed class ReadTimeFreshnessTests : IDisposable
         // for.
         Assert.False(File.Exists(originalPath));
         Assert.Contains("0.6", File.ReadAllText(renamed), StringComparison.Ordinal);
-        Assert.NotNull(_mod.Mirror.Index!.GetDocument(_mod.Npc.ToString(), _mod.Plugin));
+        Assert.NotNull(_mod.Mirror.Index!.At(RecordRef.Effective).GetDocument(_mod.Npc.ToString(), _mod.Plugin));
     }
 
     // The self-heal above folds an externally-changed source file into the read model as a
@@ -299,7 +299,7 @@ public sealed class ReadTimeFreshnessTests : IDisposable
         // "Committed" has moved, so the record is clean and *both* refs serve the new bytes. A pass
         // that refreshed only the working-tree side would still report this as dirt against a
         // baseline no ref holds any more.
-        var entry = _mod.Mirror.Index!.GetOverrideStack(_mod.Npc.ToString())!.Entries.Single();
+        var entry = _mod.Mirror.Index!.At(RecordRef.Effective).GetOverrideStack(_mod.Npc.ToString())!.Entries.Single();
         Assert.False(entry.HasWorkingTreeChange);
         Assert.Contains("0.75", entry.Head.Body!, StringComparison.Ordinal);
         Assert.Equal(_mod.GitShowHead(NpcRelativePath), entry.Head.Body);
@@ -319,7 +319,7 @@ public sealed class ReadTimeFreshnessTests : IDisposable
 
         Reads().GetCompare(_mod.Npc.ToString());
 
-        var entry = _mod.Mirror.Index!.GetOverrideStack(_mod.Npc.ToString())!.Entries.Single();
+        var entry = _mod.Mirror.Index!.At(RecordRef.Effective).GetOverrideStack(_mod.Npc.ToString())!.Entries.Single();
         Assert.True(entry.HasWorkingTreeChange);
         Assert.Contains("0.25", entry.Effective.Body!, StringComparison.Ordinal);
         Assert.Equal(_mod.GitShowHead(NpcRelativePath), entry.Head.Body);

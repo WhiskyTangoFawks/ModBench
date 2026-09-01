@@ -162,7 +162,7 @@ public class WorldspaceQueryServiceTests
     public void GetWorldspaces_RealRepository_ReturnsCommonwealthWorldspace()
     {
         using var fixture = new CutDownPluginFixture();
-        var svc = new WorldspaceQueryService(new StubMirror(fixture.Repo));
+        var svc = new WorldspaceQueryService(new StubMirror(fixture.Repo.At(RecordRef.Effective)));
 
         var result = svc.GetWorldspaces(CutDownPluginFixture.PluginFileName);
 

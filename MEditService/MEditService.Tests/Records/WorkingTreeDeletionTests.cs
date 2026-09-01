@@ -80,8 +80,8 @@ public sealed class WorkingTreeDeletionTests : IDisposable
 
         index.ApplyWorkingTreeChanges(BaseKey, [(_raceA, null)]);
 
-        Assert.Null(index.GetDocument(_raceA, BaseKey));
-        Assert.Null(index.GetDocument(_raceA));
+        Assert.Null(index.At(RecordRef.Effective).GetDocument(_raceA, BaseKey));
+        Assert.Null(index.At(RecordRef.Effective).GetDocument(_raceA));
 
         var head = index.At(RecordRef.Head).GetDocument(_raceA, BaseKey);
         Assert.NotNull(head);
@@ -92,14 +92,14 @@ public sealed class WorkingTreeDeletionTests : IDisposable
     public void DeletingTheWinningOverride_PromotesTheNextPluginDown_AtEffectiveOnly()
     {
         using var index = LoadedIndex();
-        Assert.Equal("Winner.esp", index.GetDocument(_npc)!.Plugin.Name);
+        Assert.Equal("Winner.esp", index.At(RecordRef.Effective).GetDocument(_npc)!.Plugin.Name);
 
         // Winner.esp's copy of the NPC is deleted in *its* working tree; Base.esm's copy is untouched
         // and must become the winner — a record's winner is a fact about the stack that survives at
         // this ref, not a stored flag that goes stale when the stack changes underneath it.
         index.ApplyWorkingTreeChanges(WinnerKey, [(_npc, null)]);
 
-        var effectiveWinner = index.GetDocument(_npc);
+        var effectiveWinner = index.At(RecordRef.Effective).GetDocument(_npc);
         Assert.Equal("Base.esm", effectiveWinner!.Plugin.Name);
         Assert.True(effectiveWinner.IsWinner);
 
@@ -116,11 +116,11 @@ public sealed class WorkingTreeDeletionTests : IDisposable
     public void RestoringADeletedOverride_MakesItTheEffectiveWinnerAgain_WithoutMovingHead()
     {
         using var index = LoadedIndex();
-        var winnersCopy = index.GetDocument(_npc, WinnerKey)!.Body!;
+        var winnersCopy = index.At(RecordRef.Effective).GetDocument(_npc, WinnerKey)!.Body!;
 
         // Winner.esp's copy is deleted in its working tree, so Base.esm holds the field...
         index.ApplyWorkingTreeChanges(WinnerKey, [(_npc, null)]);
-        Assert.Equal("Base.esm", index.GetDocument(_npc)!.Plugin.Name);
+        Assert.Equal("Base.esm", index.At(RecordRef.Effective).GetDocument(_npc)!.Plugin.Name);
 
         // ...and then the file comes back, carrying a *different* value than the commit had. This is
         // the direction a create takes too: a row that does not exist at Effective appears, and its
@@ -132,7 +132,7 @@ public sealed class WorkingTreeDeletionTests : IDisposable
         Assert.NotEqual(winnersCopy, edited);
         index.ApplyWorkingTreeChanges(WinnerKey, [(_npc, edited)]);
 
-        var effectiveWinner = index.GetDocument(_npc)!;
+        var effectiveWinner = index.At(RecordRef.Effective).GetDocument(_npc)!;
         Assert.Equal("Winner.esp", effectiveWinner.Plugin.Name);
         Assert.True(effectiveWinner.IsWinner);
         Assert.Equal("RestoredByWorkingTree", effectiveWinner.EditorId);
@@ -149,39 +149,39 @@ public sealed class WorkingTreeDeletionTests : IDisposable
     public void DeletingARecord_StopsItResolving_SoAFormLinkToItReadsAsDangling()
     {
         using var index = LoadedIndex();
-        Assert.NotNull(index.Resolve(_raceA));
+        Assert.NotNull(index.At(RecordRef.Effective).Resolve(_raceA));
 
         index.ApplyWorkingTreeChanges(BaseKey, [(_raceA, null)]);
 
         // FormKey resolution is what every FormLink check reads (CheckErrorBuilder), so this is the
         // mechanism by which a link to a record the working tree deleted becomes a dangling link.
-        Assert.Null(index.Resolve(_raceA));
-        Assert.NotNull(index.Resolve(_raceB));
+        Assert.Null(index.At(RecordRef.Effective).Resolve(_raceA));
+        Assert.NotNull(index.At(RecordRef.Effective).Resolve(_raceB));
     }
 
     [Fact]
     public void EditingAFormLink_MovesTheRecordInTheReferenceGraph()
     {
         using var index = LoadedIndex();
-        Assert.Contains(index.GetReferencedBy(_raceA), r => r.FormKey == _npc);
-        Assert.DoesNotContain(index.GetReferencedBy(_raceB), r => r.FormKey == _npc);
+        Assert.Contains(index.At(RecordRef.Effective).GetReferencedBy(_raceA), r => r.FormKey == _npc);
+        Assert.DoesNotContain(index.At(RecordRef.Effective).GetReferencedBy(_raceB), r => r.FormKey == _npc);
 
-        var body = index.GetDocument(_npc, BaseKey)!.Body!;
+        var body = index.At(RecordRef.Effective).GetDocument(_npc, BaseKey)!.Body!;
         Assert.Contains(_raceA, body, StringComparison.Ordinal); // the fixture really does carry the link being repointed
         index.ApplyWorkingTreeChanges(BaseKey, [(_npc, body.Replace(_raceA, _raceB, StringComparison.Ordinal))]);
 
-        Assert.DoesNotContain(index.GetReferencedBy(_raceA), r => r.FormKey == _npc && r.Plugin == "Base.esm");
-        Assert.Contains(index.GetReferencedBy(_raceB), r => r.FormKey == _npc && r.Plugin == "Base.esm");
+        Assert.DoesNotContain(index.At(RecordRef.Effective).GetReferencedBy(_raceA), r => r.FormKey == _npc && r.Plugin == "Base.esm");
+        Assert.Contains(index.At(RecordRef.Effective).GetReferencedBy(_raceB), r => r.FormKey == _npc && r.Plugin == "Base.esm");
     }
 
     [Fact]
     public void DeletingARecord_TakesItsOutgoingReferencesWithIt()
     {
         using var index = LoadedIndex();
-        Assert.Contains(index.GetReferencedBy(_raceA), r => r.FormKey == _npc && r.Plugin == "Base.esm");
+        Assert.Contains(index.At(RecordRef.Effective).GetReferencedBy(_raceA), r => r.FormKey == _npc && r.Plugin == "Base.esm");
 
         index.ApplyWorkingTreeChanges(BaseKey, [(_npc, null)]);
 
-        Assert.DoesNotContain(index.GetReferencedBy(_raceA), r => r.FormKey == _npc && r.Plugin == "Base.esm");
+        Assert.DoesNotContain(index.At(RecordRef.Effective).GetReferencedBy(_raceA), r => r.FormKey == _npc && r.Plugin == "Base.esm");
     }
 }

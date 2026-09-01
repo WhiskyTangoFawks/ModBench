@@ -149,10 +149,10 @@ public sealed class SourceIngestParityTests : IDisposable
     /// rows. Caught here by two runs of this same test disagreeing about the binary side's own count.</para>
     /// </summary>
     private List<string> AllFormKeys(LoadOrderMirror mirror) =>
-        [.. mirror.Index!.Search(new RecordQuery(Plugin: _plugin, Limit: int.MaxValue)).Items.Select(i => i.FormKey)];
+        [.. mirror.Index!.At(RecordRef.Effective).Search(new RecordQuery(Plugin: _plugin, Limit: int.MaxValue)).Items.Select(i => i.FormKey)];
 
     private int CountOf(LoadOrderMirror mirror, string recordType) =>
-        mirror.Index!.GetRecordTypeCounts(_plugin).FirstOrDefault(c => c.Type == recordType)?.Count ?? 0;
+        mirror.Index!.At(RecordRef.Effective).GetRecordTypeCounts(_plugin).FirstOrDefault(c => c.Type == recordType)?.Count ?? 0;
 
     /// <summary>
     /// The document itself, byte for byte, for every record — the strongest assertion here, and also the
@@ -185,8 +185,8 @@ public sealed class SourceIngestParityTests : IDisposable
         var byType = new Dictionary<string, int>(StringComparer.Ordinal);
         foreach (var formKey in AllFormKeys(_fromBinary))
         {
-            var binary = _fromBinary.Index!.GetDocument(formKey, _plugin);
-            var source = _fromSource.Index!.GetDocument(formKey, _plugin);
+            var binary = _fromBinary.Index!.At(RecordRef.Effective).GetDocument(formKey, _plugin);
+            var source = _fromSource.Index!.At(RecordRef.Effective).GetDocument(formKey, _plugin);
             if (binary?.Body == source?.Body) continue;
             mismatched.Add(formKey);
             var type = binary?.RecordType ?? source?.RecordType ?? "?";
@@ -201,8 +201,8 @@ public sealed class SourceIngestParityTests : IDisposable
 
         // ...and pinned to the *field*, so another Cell field starting to diverge cannot hide behind
         // the same count.
-        var binaryBody = _fromBinary.Index!.GetDocument(mismatched[0], _plugin)!.Body!;
-        var sourceBody = _fromSource.Index!.GetDocument(mismatched[0], _plugin)!.Body!;
+        var binaryBody = _fromBinary.Index!.At(RecordRef.Effective).GetDocument(mismatched[0], _plugin)!.Body!;
+        var sourceBody = _fromSource.Index!.At(RecordRef.Effective).GetDocument(mismatched[0], _plugin)!.Body!;
         Assert.Contains("\"Break2\"", binaryBody, StringComparison.Ordinal);
         Assert.DoesNotContain("\"Break2\"", sourceBody, StringComparison.Ordinal);
         Assert.Equal(
@@ -237,8 +237,8 @@ public sealed class SourceIngestParityTests : IDisposable
     {
         var headerFormKey = HeaderIndexer.FormKeyFor(ModKey.FromFileName(CutDownPluginFixture.PluginFileName));
 
-        var binary = _fromBinary.Index!.GetDocument(headerFormKey, _plugin);
-        var source = _fromSource.Index!.GetDocument(headerFormKey, _plugin);
+        var binary = _fromBinary.Index!.At(RecordRef.Effective).GetDocument(headerFormKey, _plugin);
+        var source = _fromSource.Index!.At(RecordRef.Effective).GetDocument(headerFormKey, _plugin);
 
         Assert.NotNull(binary);
         Assert.NotNull(source);
@@ -288,13 +288,13 @@ public sealed class SourceIngestParityTests : IDisposable
 
         foreach (var formKey in AllFormKeys(_fromBinary))
         {
-            var binaryPlacement = _fromBinary.Index!.GetPlacement(formKey, _plugin);
-            var sourcePlacement = _fromSource.Index!.GetPlacement(formKey, _plugin);
+            var binaryPlacement = _fromBinary.Index!.At(RecordRef.Effective).GetPlacement(formKey, _plugin);
+            var sourcePlacement = _fromSource.Index!.At(RecordRef.Effective).GetPlacement(formKey, _plugin);
             Assert.Equal(binaryPlacement, sourcePlacement);
             if (binaryPlacement != null) placed++;
 
-            var binaryLocation = _fromBinary.Index!.GetCellLocation(_plugin, formKey);
-            var sourceLocation = _fromSource.Index!.GetCellLocation(_plugin, formKey);
+            var binaryLocation = _fromBinary.Index!.At(RecordRef.Effective).GetCellLocation(_plugin, formKey);
+            var sourceLocation = _fromSource.Index!.At(RecordRef.Effective).GetCellLocation(_plugin, formKey);
             Assert.Equal(binaryLocation, sourceLocation);
             if (binaryLocation != null) located++;
         }
@@ -323,10 +323,10 @@ public sealed class SourceIngestParityTests : IDisposable
 
         foreach (var formKey in AllFormKeys(_fromBinary))
         {
-            Assert.Equal(_fromBinary.Index!.Resolve(formKey), _fromSource.Index!.Resolve(formKey));
+            Assert.Equal(_fromBinary.Index!.At(RecordRef.Effective).Resolve(formKey), _fromSource.Index!.At(RecordRef.Effective).Resolve(formKey));
 
-            var binaryRefs = _fromBinary.Index!.GetReferencedBy(formKey).OrderBy(r => r.ToString(), StringComparer.Ordinal).ToList();
-            var sourceRefs = _fromSource.Index!.GetReferencedBy(formKey).OrderBy(r => r.ToString(), StringComparer.Ordinal).ToList();
+            var binaryRefs = _fromBinary.Index!.At(RecordRef.Effective).GetReferencedBy(formKey).OrderBy(r => r.ToString(), StringComparer.Ordinal).ToList();
+            var sourceRefs = _fromSource.Index!.At(RecordRef.Effective).GetReferencedBy(formKey).OrderBy(r => r.ToString(), StringComparer.Ordinal).ToList();
             referenced += binaryRefs.Count;
 
             // Hard, and exact: no reference may appear, disappear, or move within its own FieldPath's
@@ -355,8 +355,8 @@ public sealed class SourceIngestParityTests : IDisposable
 
         foreach (var formKey in AllFormKeys(_fromBinary))
         {
-            var binary = _fromBinary.Index!.GetContainerChildren(_plugin, formKey);
-            var source = _fromSource.Index!.GetContainerChildren(_plugin, formKey);
+            var binary = _fromBinary.Index!.At(RecordRef.Effective).GetContainerChildren(_plugin, formKey);
+            var source = _fromSource.Index!.At(RecordRef.Effective).GetContainerChildren(_plugin, formKey);
             children += binary.Count;
 
             // Hard, and exact: the containment graph may not move, and neither may a child's slot

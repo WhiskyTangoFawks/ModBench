@@ -56,11 +56,11 @@ public sealed class RecordEditServiceContainerDeleteRenumberTests : IDisposable
         Assert.False(Directory.Exists(directory));
 
         // The container's own row, and every embedded child's — all four of EmbedCell's slots.
-        Assert.Null(Index.GetDocument(_fixture.EmbedCell.ToString(), _fixture.Plugin));
-        Assert.Null(Index.GetDocument(_fixture.TemporaryRef.ToString(), _fixture.Plugin));
-        Assert.Null(Index.GetDocument(_fixture.PersistentRef.ToString(), _fixture.Plugin));
-        Assert.Null(Index.GetDocument(_fixture.Navmesh.ToString(), _fixture.Plugin));
-        Assert.Null(Index.GetDocument(_fixture.Landscape.ToString(), _fixture.Plugin));
+        Assert.Null(Index.At(RecordRef.Effective).GetDocument(_fixture.EmbedCell.ToString(), _fixture.Plugin));
+        Assert.Null(Index.At(RecordRef.Effective).GetDocument(_fixture.TemporaryRef.ToString(), _fixture.Plugin));
+        Assert.Null(Index.At(RecordRef.Effective).GetDocument(_fixture.PersistentRef.ToString(), _fixture.Plugin));
+        Assert.Null(Index.At(RecordRef.Effective).GetDocument(_fixture.Navmesh.ToString(), _fixture.Plugin));
+        Assert.Null(Index.At(RecordRef.Effective).GetDocument(_fixture.Landscape.ToString(), _fixture.Plugin));
 
         // Still at Head — this is a working-tree delete, not a hard erase.
         Assert.NotNull(Index.At(RecordRef.Head).GetDocument(_fixture.EmbedCell.ToString(), _fixture.Plugin));
@@ -73,9 +73,9 @@ public sealed class RecordEditServiceContainerDeleteRenumberTests : IDisposable
         var result = EditService().DeleteRecord(_fixture.Plugin, _fixture.Worldspace.ToString());
 
         Assert.True(result.Applied, result.Message);
-        Assert.Null(Index.GetDocument(_fixture.Worldspace.ToString(), _fixture.Plugin));
-        Assert.Null(Index.GetDocument(_fixture.TopCell.ToString(), _fixture.Plugin));
-        Assert.Null(Index.GetDocument(_fixture.TopCellRef.ToString(), _fixture.Plugin));
+        Assert.Null(Index.At(RecordRef.Effective).GetDocument(_fixture.Worldspace.ToString(), _fixture.Plugin));
+        Assert.Null(Index.At(RecordRef.Effective).GetDocument(_fixture.TopCell.ToString(), _fixture.Plugin));
+        Assert.Null(Index.At(RecordRef.Effective).GetDocument(_fixture.TopCellRef.ToString(), _fixture.Plugin));
     }
 
     /// <summary>
@@ -99,7 +99,7 @@ public sealed class RecordEditServiceContainerDeleteRenumberTests : IDisposable
     [Fact]
     public void DeletingAWorldspace_WithTwoBlocklessCellRows_CascadesIntoBothCellsDescendants()
     {
-        var realRows = Index.GetWorldspaceCells(_fixture.Plugin, _fixture.Worldspace.ToString());
+        var realRows = Index.At(RecordRef.Effective).GetWorldspaceCells(_fixture.Plugin, _fixture.Worldspace.ToString());
         var extraRow = new CellLocationSummary(
             _fixture.EmbedCell.ToString(), ContainerModFixture.EmbedCellEditorId,
             BlockX: null, BlockY: null, SubX: null, SubY: null, CellX: null, CellY: null);
@@ -114,24 +114,36 @@ public sealed class RecordEditServiceContainerDeleteRenumberTests : IDisposable
         Assert.True(result.Applied, result.Message);
         // The real TopCell's own descendants — unaffected by the second row's presence, proving the
         // existing single-block-less-row behavior is unchanged.
-        Assert.Null(Index.GetDocument(_fixture.TopCell.ToString(), _fixture.Plugin));
-        Assert.Null(Index.GetDocument(_fixture.TopCellRef.ToString(), _fixture.Plugin));
+        Assert.Null(Index.At(RecordRef.Effective).GetDocument(_fixture.TopCell.ToString(), _fixture.Plugin));
+        Assert.Null(Index.At(RecordRef.Effective).GetDocument(_fixture.TopCellRef.ToString(), _fixture.Plugin));
         // The injected second block-less row's own descendants — exactly what a FirstOrDefault
         // implementation drops, since it stops at the first (real) row above.
-        Assert.Null(Index.GetDocument(_fixture.EmbedCell.ToString(), _fixture.Plugin));
-        Assert.Null(Index.GetDocument(_fixture.TemporaryRef.ToString(), _fixture.Plugin));
-        Assert.Null(Index.GetDocument(_fixture.PersistentRef.ToString(), _fixture.Plugin));
+        Assert.Null(Index.At(RecordRef.Effective).GetDocument(_fixture.EmbedCell.ToString(), _fixture.Plugin));
+        Assert.Null(Index.At(RecordRef.Effective).GetDocument(_fixture.TemporaryRef.ToString(), _fixture.Plugin));
+        Assert.Null(Index.At(RecordRef.Effective).GetDocument(_fixture.PersistentRef.ToString(), _fixture.Plugin));
     }
 
-    /// <summary>Intercepts only <see cref="IRecordIndex.GetWorldspaceCells"/> — everything else
+    /// <summary>Intercepts only <see cref="IRecordReads.GetWorldspaceCells"/> — everything else
     /// stays the real DuckDB-backed behavior, per <see cref="DelegatingRecordIndex"/>'s own posture of
-    /// "one seam intercepted, not a fake database".</summary>
+    /// "one seam intercepted, not a fake database". #639 moved every read off <see cref="IRecordIndex"/>
+    /// itself onto whatever <see cref="IRecordIndex.At"/> hands out, so the interception moves with
+    /// it — <see cref="WorldspaceCellInjectingIndex"/> overrides <c>At</c> to return a
+    /// <see cref="DelegatingReads"/> that intercepts just this one member, rather than overriding the
+    /// member directly (no longer possible: <see cref="IRecordIndex"/> no longer declares it).</summary>
     private sealed class WorldspaceCellInjectingIndex(
         IRecordIndex inner, string worldspaceFormKey, IReadOnlyList<CellLocationSummary> rows)
         : DelegatingRecordIndex(inner)
     {
-        public override IReadOnlyList<CellLocationSummary> GetWorldspaceCells(PluginKey plugin, string worldspaceFormKeyArg) =>
-            worldspaceFormKeyArg == worldspaceFormKey ? rows : base.GetWorldspaceCells(plugin, worldspaceFormKeyArg);
+        public override IRecordReads At(RecordRef recordRef) =>
+            new WorldspaceCellInjectingReads(base.At(recordRef), worldspaceFormKey, rows);
+
+        private sealed class WorldspaceCellInjectingReads(
+            IRecordReads inner, string worldspaceFormKey, IReadOnlyList<CellLocationSummary> rows)
+            : DelegatingReads(inner)
+        {
+            public override IReadOnlyList<CellLocationSummary> GetWorldspaceCells(PluginKey plugin, string worldspaceFormKeyArg) =>
+                worldspaceFormKeyArg == worldspaceFormKey ? rows : base.GetWorldspaceCells(plugin, worldspaceFormKeyArg);
+        }
     }
 
     /// <summary>Forwards every <see cref="ILoadOrderMirror"/> member to a real load order except
@@ -177,12 +189,12 @@ public sealed class RecordEditServiceContainerDeleteRenumberTests : IDisposable
         Assert.Contains(ContainerModFixture.NavmeshEditorId, after, StringComparison.Ordinal);
         Assert.Contains(ContainerModFixture.LandscapeEditorId, after, StringComparison.Ordinal);
 
-        Assert.Null(Index.GetDocument(_fixture.TemporaryRef.ToString(), _fixture.Plugin));
+        Assert.Null(Index.At(RecordRef.Effective).GetDocument(_fixture.TemporaryRef.ToString(), _fixture.Plugin));
         Assert.NotNull(Index.At(RecordRef.Head).GetDocument(_fixture.TemporaryRef.ToString(), _fixture.Plugin));
         // The owner's own row picked up the rewritten body.
         Assert.DoesNotContain(
             ContainerModFixture.TemporaryRefEditorId,
-            Index.GetDocument(_fixture.EmbedCell.ToString(), _fixture.Plugin)!.Body!,
+            Index.At(RecordRef.Effective).GetDocument(_fixture.EmbedCell.ToString(), _fixture.Plugin)!.Body!,
             StringComparison.Ordinal);
     }
 
@@ -212,12 +224,12 @@ public sealed class RecordEditServiceContainerDeleteRenumberTests : IDisposable
         Assert.DoesNotContain(ContainerModFixture.TopCellEditorId, after, StringComparison.Ordinal);
         Assert.DoesNotContain(ContainerModFixture.TopCellRefEditorId, after, StringComparison.Ordinal);
 
-        Assert.Null(Index.GetDocument(_fixture.TopCell.ToString(), _fixture.Plugin));
+        Assert.Null(Index.At(RecordRef.Effective).GetDocument(_fixture.TopCell.ToString(), _fixture.Plugin));
         // TopCellRef was itself embedded inside TopCell — cascaded, not orphaned.
-        Assert.Null(Index.GetDocument(_fixture.TopCellRef.ToString(), _fixture.Plugin));
+        Assert.Null(Index.At(RecordRef.Effective).GetDocument(_fixture.TopCellRef.ToString(), _fixture.Plugin));
         Assert.NotNull(Index.At(RecordRef.Head).GetDocument(_fixture.TopCell.ToString(), _fixture.Plugin));
         // The Worldspace itself is untouched — only its TopCell slot emptied.
-        Assert.NotNull(Index.GetDocument(_fixture.Worldspace.ToString(), _fixture.Plugin));
+        Assert.NotNull(Index.At(RecordRef.Effective).GetDocument(_fixture.Worldspace.ToString(), _fixture.Plugin));
     }
 
     // ---- renumber a container's own record ----
@@ -232,9 +244,9 @@ public sealed class RecordEditServiceContainerDeleteRenumberTests : IDisposable
 
         Assert.True(result.Applied, result.Message);
         Assert.False(Directory.Exists(oldDirectory));
-        Assert.Null(Index.GetDocument(_fixture.Cell.ToString(), _fixture.Plugin));
+        Assert.Null(Index.At(RecordRef.Effective).GetDocument(_fixture.Cell.ToString(), _fixture.Plugin));
 
-        var newDoc = Index.GetDocument(result.NewFormKey!, _fixture.Plugin);
+        var newDoc = Index.At(RecordRef.Effective).GetDocument(result.NewFormKey!, _fixture.Plugin);
         Assert.NotNull(newDoc);
         Assert.Contains(result.NewFormKey!, newDoc!.Body!, StringComparison.Ordinal);
 
@@ -258,9 +270,9 @@ public sealed class RecordEditServiceContainerDeleteRenumberTests : IDisposable
         Assert.Contains(result.NewFormKey!, text, StringComparison.Ordinal);
         Assert.DoesNotContain(_fixture.TemporaryRef.ToString(), text, StringComparison.Ordinal);
 
-        Assert.Null(Index.GetDocument(_fixture.TemporaryRef.ToString(), _fixture.Plugin));
+        Assert.Null(Index.At(RecordRef.Effective).GetDocument(_fixture.TemporaryRef.ToString(), _fixture.Plugin));
         Assert.NotNull(Index.At(RecordRef.Head).GetDocument(_fixture.TemporaryRef.ToString(), _fixture.Plugin));
-        Assert.NotNull(Index.GetDocument(result.NewFormKey!, _fixture.Plugin));
+        Assert.NotNull(Index.At(RecordRef.Effective).GetDocument(result.NewFormKey!, _fixture.Plugin));
     }
 
     // ---- renumbering a record a container references ----

@@ -126,13 +126,13 @@ public sealed class WinnersDerivedTableTests : IDisposable
         Assert.Equal(Expected(BaseKey), WinnerOf(index, RecordRef.Effective, _npc));
         Assert.Equal(Expected(BaseKey), WinnerOf(index, RecordRef.Head, _npc));
         Assert.Equal(0, Scalar(index, $"SELECT COUNT(*) FROM winners WHERE plugin = '{OverKey.Name}'"));
-        Assert.Equal(BaseKey.Name, index.GetDocument(_npc)!.Plugin.Name);
+        Assert.Equal(BaseKey.Name, index.At(RecordRef.Effective).GetDocument(_npc)!.Plugin.Name);
 
         index.Register(OverKey, Registration.Participating(1));
         index.UpdateWinners();
 
         Assert.Equal(Expected(OverKey), WinnerOf(index, RecordRef.Effective, _npc));
-        Assert.Equal(OverKey.Name, index.GetDocument(_npc)!.Plugin.Name);
+        Assert.Equal(OverKey.Name, index.At(RecordRef.Effective).GetDocument(_npc)!.Plugin.Name);
     }
 
     [Fact]
@@ -160,7 +160,7 @@ public sealed class WinnersDerivedTableTests : IDisposable
     public void SeedCommittedOnly_GivesTheRecordItAddsAtHead_AWinnerThere()
     {
         using var index = LoadedIndex();
-        var baseBody = index.GetDocument(_npc, BaseKey)!.Body!;
+        var baseBody = index.At(RecordRef.Effective).GetDocument(_npc, BaseKey)!.Body!;
 
         // Both plugins' copies vanish from the working tree and turn out to be held by no commit
         // either, so nothing holds the NPC at either ref...
@@ -200,6 +200,6 @@ public sealed class WinnersDerivedTableTests : IDisposable
 
         // Effective never changed: Over.esp still holds the field the editor shows.
         Assert.Equal(Expected(OverKey), WinnerOf(index, RecordRef.Effective, _npc));
-        Assert.Equal(OverKey.Name, index.GetDocument(_npc)!.Plugin.Name);
+        Assert.Equal(OverKey.Name, index.At(RecordRef.Effective).GetDocument(_npc)!.Plugin.Name);
     }
 }

@@ -92,18 +92,18 @@ public sealed class WorldspaceRenumberContainmentTests : IDisposable
     public void RenumberingAWorldspace_RepointsItsExteriorCellsCellLocationRow_ToTheNewFormKey_SameLoadOrder()
     {
         var index = _mirror.Index!;
-        Assert.Equal(_worldspaceFormKey, index.GetCellLocation(_plugin, _extCellFormKey)!.Value.ParentWorldspace);
+        Assert.Equal(_worldspaceFormKey, index.At(RecordRef.Effective).GetCellLocation(_plugin, _extCellFormKey)!.Value.ParentWorldspace);
 
         var result = EditService().RenumberRecord(_plugin, _worldspaceFormKey);
         Assert.True(result.Applied, result.Message);
         var newFormKey = result.NewFormKey!;
 
-        Assert.Equal(newFormKey, index.GetCellLocation(_plugin, _extCellFormKey)!.Value.ParentWorldspace);
+        Assert.Equal(newFormKey, index.At(RecordRef.Effective).GetCellLocation(_plugin, _extCellFormKey)!.Value.ParentWorldspace);
         Assert.Contains(
-            index.GetWorldspaceCells(_plugin, newFormKey),
+            index.At(RecordRef.Effective).GetWorldspaceCells(_plugin, newFormKey),
             c => c.FormKey == _extCellFormKey);
         Assert.DoesNotContain(
-            index.GetWorldspaceCells(_plugin, _worldspaceFormKey),
+            index.At(RecordRef.Effective).GetWorldspaceCells(_plugin, _worldspaceFormKey),
             c => c.FormKey == _extCellFormKey);
     }
 
@@ -126,9 +126,9 @@ public sealed class WorldspaceRenumberContainmentTests : IDisposable
         Assert.True(result.Applied, result.Message);
         var newFormKey = result.NewFormKey!;
 
-        var cells = index.GetWorldspaceCells(_plugin, newFormKey);
+        var cells = index.At(RecordRef.Effective).GetWorldspaceCells(_plugin, newFormKey);
         Assert.Single(cells, c => c.FormKey == _topCellFormKey);
-        Assert.Equal(newFormKey, index.GetCellLocation(_plugin, _topCellFormKey)!.Value.ParentWorldspace);
+        Assert.Equal(newFormKey, index.At(RecordRef.Effective).GetCellLocation(_plugin, _topCellFormKey)!.Value.ParentWorldspace);
     }
 
     // ---- parity against a fresh reconcile ingest ----
@@ -140,7 +140,7 @@ public sealed class WorldspaceRenumberContainmentTests : IDisposable
         Assert.True(result.Applied, result.Message);
         var newFormKey = result.NewFormKey!;
 
-        var live = _mirror.Index!.GetWorldspaceCells(_plugin, newFormKey)
+        var live = _mirror.Index!.At(RecordRef.Effective).GetWorldspaceCells(_plugin, newFormKey)
             .OrderBy(c => c.FormKey).ToList();
 
         using var reloaded = new LoadOrderMirror(
@@ -151,7 +151,7 @@ public sealed class WorldspaceRenumberContainmentTests : IDisposable
             GameRelease.Fallout4);
         Assert.Empty(((ILoadOrderMirror)reloaded).LoadOrder!.LoadFailures);
 
-        var freshlyIngested = reloaded.Index!.GetWorldspaceCells(_plugin, newFormKey)
+        var freshlyIngested = reloaded.Index!.At(RecordRef.Effective).GetWorldspaceCells(_plugin, newFormKey)
             .OrderBy(c => c.FormKey).ToList();
 
         Assert.Equal(freshlyIngested, live);

@@ -38,12 +38,12 @@ public sealed class RecordEditServiceCopyRecordAsOverrideTests
         var sourceFile = mod.SourceFileFor(mod.DestinationPlugin, mod.SourceNpc, "npc_", CopyFixture.SourceNpcEditorId);
         Assert.True(File.Exists(sourceFile));
 
-        var doc = mod.Mirror.Index!.GetDocument(mod.SourceNpc.ToString(), mod.DestinationPlugin);
+        var doc = mod.Mirror.Index!.At(RecordRef.Effective).GetDocument(mod.SourceNpc.ToString(), mod.DestinationPlugin);
         Assert.NotNull(doc);
         Assert.Equal(CopyFixture.SourceNpcEditorId, doc!.EditorId);
 
         // The source plugin's own copy is untouched — this is a copy, not a move.
-        Assert.NotNull(mod.Mirror.Index!.GetDocument(mod.SourceNpc.ToString(), mod.SourcePlugin));
+        Assert.NotNull(mod.Mirror.Index!.At(RecordRef.Effective).GetDocument(mod.SourceNpc.ToString(), mod.SourcePlugin));
     }
 
     [Fact]
@@ -98,7 +98,7 @@ public sealed class RecordEditServiceCopyRecordAsOverrideTests
         // Seeded directly at the index layer (bypassing the service), the same way
         // RecordEditServiceCreateRecordTests seeds a both-refs collision fixture — this is what "the
         // destination already carries this FormKey at some ref" looks like in the index.
-        var seedBody = mod.Mirror.Index!.GetDocument(mod.SourceNpc.ToString(), mod.SourcePlugin)!.Body!;
+        var seedBody = mod.Mirror.Index!.At(RecordRef.Effective).GetDocument(mod.SourceNpc.ToString(), mod.SourcePlugin)!.Body!;
         mod.Mirror.Index!.CreateWorkingTreeRecord(mod.DestinationPlugin, mod.SourceNpc.ToString(), "npc_", seedBody);
 
         var result = ServiceFor(mod.Mirror).CopyRecordAsOverride(mod.SourcePlugin, mod.SourceNpc.ToString(), mod.DestinationPlugin);

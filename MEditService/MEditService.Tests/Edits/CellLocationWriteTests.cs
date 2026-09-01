@@ -30,7 +30,7 @@ public sealed class CellLocationWriteTests : IDisposable
 
         index.CreateCellLocation(_fixture.Plugin, row);
 
-        Assert.Equal(row, index.GetCellLocation(_fixture.Plugin, SyntheticCellFormKey));
+        Assert.Equal(row, index.At(RecordRef.Effective).GetCellLocation(_fixture.Plugin, SyntheticCellFormKey));
     }
 
     // The rival this guards against: an implementation that appends without first deleting any prior
@@ -50,8 +50,8 @@ public sealed class CellLocationWriteTests : IDisposable
             BlockX: 5, BlockY: 7, SubX: 1, SubY: 0, GridX: 20, GridY: 30, IsInterior: false);
         index.CreateCellLocation(_fixture.Plugin, updated);
 
-        Assert.Equal(updated, index.GetCellLocation(_fixture.Plugin, SyntheticCellFormKey));
-        var cells = index.GetWorldspaceCells(_fixture.Plugin, SyntheticWorldspaceFormKey);
+        Assert.Equal(updated, index.At(RecordRef.Effective).GetCellLocation(_fixture.Plugin, SyntheticCellFormKey));
+        var cells = index.At(RecordRef.Effective).GetWorldspaceCells(_fixture.Plugin, SyntheticWorldspaceFormKey);
         Assert.Single(cells);
     }
 }

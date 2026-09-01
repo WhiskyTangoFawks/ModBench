@@ -55,7 +55,7 @@ public sealed class TopLevelFormLinkColumnEditTests : IDisposable
         Assert.NotEmpty(_mod.GitStatus());
 
         // Answers at Effective: the read model's own document for OtherNpc now carries the new race.
-        var body = _mod.Mirror.Index!.GetDocument(_mod.OtherNpc.ToString(), _mod.Plugin)!.Body!;
+        var body = _mod.Mirror.Index!.At(RecordRef.Effective).GetDocument(_mod.OtherNpc.ToString(), _mod.Plugin)!.Body!;
         Assert.Contains(_mod.Race.ToString(), body, StringComparison.Ordinal);
     }
 

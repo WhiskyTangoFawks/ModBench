@@ -51,7 +51,7 @@ public sealed class SourceIngestTests
 
         using var reloaded = Reload(mod);
 
-        var record = reloaded.Index!.GetDocument(mod.Npc.ToString(), mod.Plugin);
+        var record = reloaded.Index!.At(RecordRef.Effective).GetDocument(mod.Npc.ToString(), mod.Plugin);
         Assert.NotNull(record);
         Assert.Equal("ExternallyRenamed", record!.EditorId);
     }
@@ -67,10 +67,10 @@ public sealed class SourceIngestTests
 
         using var reloaded = Reload(mod);
 
-        Assert.Null(reloaded.Index!.GetDocument(mod.Npc.ToString(), mod.Plugin));
+        Assert.Null(reloaded.Index!.At(RecordRef.Effective).GetDocument(mod.Npc.ToString(), mod.Plugin));
         // Positive control: the load really happened and really indexed this plugin, or "absent"
         // would be true of a load that did nothing at all.
-        Assert.NotNull(reloaded.Index!.GetDocument(mod.OtherNpc.ToString(), mod.Plugin));
+        Assert.NotNull(reloaded.Index!.At(RecordRef.Effective).GetDocument(mod.OtherNpc.ToString(), mod.Plugin));
     }
 
     /// <summary>
@@ -109,7 +109,7 @@ public sealed class SourceIngestTests
 
         using var reloaded = Reload(mod);
 
-        Assert.Equal("ExternallyRenamed", reloaded.Index!.GetDocument(mod.Npc.ToString(), mod.Plugin)!.EditorId);
+        Assert.Equal("ExternallyRenamed", reloaded.Index!.At(RecordRef.Effective).GetDocument(mod.Npc.ToString(), mod.Plugin)!.EditorId);
         Assert.Equal(
             TrackedModFixture.NpcEditorId,
             reloaded.Index!.At(RecordRef.Head).GetDocument(mod.Npc.ToString(), mod.Plugin)!.EditorId);
@@ -131,7 +131,7 @@ public sealed class SourceIngestTests
 
         // HEAD moved with the working tree, so the record is clean against its *new* baseline —
         // not dirty against a baseline no ref holds any more.
-        Assert.Equal("CommittedRename", reloaded.Index!.GetDocument(mod.Npc.ToString(), mod.Plugin)!.EditorId);
+        Assert.Equal("CommittedRename", reloaded.Index!.At(RecordRef.Effective).GetDocument(mod.Npc.ToString(), mod.Plugin)!.EditorId);
         Assert.Equal(
             "CommittedRename",
             reloaded.Index!.At(RecordRef.Head).GetDocument(mod.Npc.ToString(), mod.Plugin)!.EditorId);
@@ -157,7 +157,7 @@ public sealed class SourceIngestTests
         using var reloaded = Reload(mod);
 
         var byFormKey = reloaded.Index!
-            .Search(new RecordQuery { Plugin = TrackedModFixture.PluginName, Limit = 100 })
+            .At(RecordRef.Effective).Search(new RecordQuery { Plugin = TrackedModFixture.PluginName, Limit = 100 })
             .Items.ToDictionary(r => r.FormKey, StringComparer.Ordinal);
 
         Assert.Equal(WorkingTreeState.Modified, byFormKey[mod.Npc.ToString()].WorkingTreeState);
@@ -181,7 +181,7 @@ public sealed class SourceIngestTests
         using var reloaded = Reload(mod);
 
         // Degraded, not dropped — the plugin's records are still queryable from the binary.
-        Assert.NotNull(reloaded.Index!.GetDocument(mod.Npc.ToString(), mod.Plugin));
+        Assert.NotNull(reloaded.Index!.At(RecordRef.Effective).GetDocument(mod.Npc.ToString(), mod.Plugin));
 
         // ...and the degradation is *visible*, which is the whole mitigation: a user reading
         // pre-Track binary content while believing they are reading their tracked source is the hazard.
@@ -273,7 +273,7 @@ public sealed class SourceIngestTests
         using var reloaded = Reload(mod);
 
         // Effective is the working tree: the new name.
-        var effective = reloaded.Index!.GetDocument(mod.Npc.ToString(), mod.Plugin);
+        var effective = reloaded.Index!.At(RecordRef.Effective).GetDocument(mod.Npc.ToString(), mod.Plugin);
         Assert.NotNull(effective);
         Assert.Equal("RenamedAcrossReload", effective!.EditorId);
 

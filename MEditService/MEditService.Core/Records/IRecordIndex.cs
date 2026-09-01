@@ -10,7 +10,7 @@ namespace MEditService.Core.Records;
 /// No <c>Connection</c> property and no SQL crosses this seam except <see cref="SetFilter"/>
 /// (invariant 8).
 /// </summary>
-public interface IRecordIndex : IRecordReads, IDisposable
+public interface IRecordIndex : IDisposable
 {
     /// <summary>Repositions every <see cref="IRecordReads"/> read at <paramref name="recordRef"/>.
     /// (Named <c>recordRef</c> rather than a literal <c>ref</c>/<c>@ref</c>: CA1716 rejects a

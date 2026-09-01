@@ -45,7 +45,7 @@ public class PluginParticipationTests
     }
 
     private static Dictionary<string, bool> WinnersByPlugin(DuckDbRecordIndex repo, string npcKey) =>
-        repo.GetOverrideStack(npcKey)?.Entries.ToDictionary(o => o.Plugin.Name, o => o.IsWinner) ?? [];
+        repo.At(RecordRef.Effective).GetOverrideStack(npcKey)?.Entries.ToDictionary(o => o.Plugin.Name, o => o.IsWinner) ?? [];
 
     [Fact]
     public void DisabledPlugin_LaterInLoadOrder_DoesNotDisplaceEnabledWinner()
@@ -60,7 +60,7 @@ public class PluginParticipationTests
         repo.Index(modB, Registration.Disabled(1), new PluginKey(modB.ModKey.FileName.ToString(), "Data"));
         repo.UpdateWinners();
 
-        var overrides = repo.GetOverrideStack(npcKey.ToString())!.Entries;
+        var overrides = repo.At(RecordRef.Effective).GetOverrideStack(npcKey.ToString())!.Entries;
 
         Assert.Equal(2, overrides.Count);
         var pluginA = overrides.Single(o => o.Plugin.Name == "PluginA.esm");
@@ -135,7 +135,7 @@ public class PluginParticipationTests
         repo.Index(mod, Registration.Disabled(0), new PluginKey(mod.ModKey.FileName.ToString(), "Data"));
         repo.UpdateWinners();
 
-        var record = repo.GetDocument(npcKey.ToString(), new PluginKey("Disabled.esp", "Data"));
+        var record = repo.At(RecordRef.Effective).GetDocument(npcKey.ToString(), new PluginKey("Disabled.esp", "Data"));
 
         Assert.NotNull(record);
         Assert.False(record.IsWinner);
@@ -157,6 +157,6 @@ public class PluginParticipationTests
         repo.Index(mod, Registration.Disabled(0), new PluginKey(mod.ModKey.FileName.ToString(), "Data"));
         repo.UpdateWinners();
 
-        Assert.Null(repo.Resolve(npcKey.ToString()));
+        Assert.Null(repo.At(RecordRef.Effective).Resolve(npcKey.ToString()));
     }
 }

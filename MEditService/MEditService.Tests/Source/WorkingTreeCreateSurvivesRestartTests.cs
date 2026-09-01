@@ -44,7 +44,7 @@ public sealed class WorkingTreeCreateSurvivesRestartTests
         // path instead of failing, so a fresh, never-committed record's own Head lookup silently came
         // back "" instead of null (SourceRepository.ReadCommittedSourceText's own doc comment).
         Assert.Empty(((ILoadOrderMirror)reloaded).LoadOrder!.LoadFailures);
-        var reread = reloaded.Index!.GetDocument(created.NewFormKey!, mod.Plugin);
+        var reread = reloaded.Index!.At(RecordRef.Effective).GetDocument(created.NewFormKey!, mod.Plugin);
         Assert.NotNull(reread);
         Assert.Equal("SurvivesRestart", reread!.EditorId);
         Assert.Null(reloaded.Index!.At(RecordRef.Head).GetDocument(created.NewFormKey!, mod.Plugin));
@@ -68,6 +68,6 @@ public sealed class WorkingTreeCreateSurvivesRestartTests
         Assert.Empty(((ILoadOrderMirror)reloaded).LoadOrder!.LoadFailures);
         // The rival: a sweep that inserts the row but forgets winner resweep (or runs before the
         // whole-load-order UpdateWinners() at the end of the load loop) leaves it_winner false.
-        Assert.True(reloaded.Index!.GetDocument(created.NewFormKey!)!.IsWinner);
+        Assert.True(reloaded.Index!.At(RecordRef.Effective).GetDocument(created.NewFormKey!)!.IsWinner);
     }
 }

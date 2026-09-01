@@ -117,7 +117,7 @@ public sealed class VmadIndexerTests : IDisposable
     public void GetVmad_MapsPropertyFlags_EditedAndZero()
     {
         using var repo = LoadedRepository();
-        var props = GetVmad(repo, _npc1FormKey.ToString(), "VmadTest.esp", origin: "Data")!
+        var props = GetVmad(repo.At(RecordRef.Effective), _npc1FormKey.ToString(), "VmadTest.esp", origin: "Data")!
             .Scripts.First(s => s.Name == "DefaultScript").Properties;
 
         Assert.Equal("Edited", props.First(p => p.Name == "IsActive").Value.Flags);
@@ -128,7 +128,7 @@ public sealed class VmadIndexerTests : IDisposable
     public void GetVmad_MapsScriptFlags_InheritedAndRemoved()
     {
         using var repo = LoadedRepository();
-        var scripts = GetVmad(repo, _npc1FormKey.ToString(), "VmadTest.esp", origin: "Data")!.Scripts;
+        var scripts = GetVmad(repo.At(RecordRef.Effective), _npc1FormKey.ToString(), "VmadTest.esp", origin: "Data")!.Scripts;
 
         Assert.Equal("Inherited and Removed",
             scripts.First(s => s.Name == "InheritedScript").Flags);
