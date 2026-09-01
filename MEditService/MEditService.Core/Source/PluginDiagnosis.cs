@@ -178,8 +178,17 @@ public sealed record PluginDiagnosis(string? Anchor, string DefectClass, string?
         return $"{re.RecordType?.Name ?? "record"}{(re.FormKey != null ? " " + re.FormKey : "")}{(re.EditorID != null ? $" ({re.EditorID})" : "")}";
     }
 
-    /// <summary>The refusal-text fragment every caller shares: <c>&lt;anchor&gt; — &lt;class&gt;:
+    /// <summary>The refusal-text fragment every caller shares: <c>&lt;anchor&gt; — &lt;label&gt;:
     /// &lt;message&gt;</c>, naming just "the plugin" when nothing more specific survived the failure —
-    /// never a guessed identity.</summary>
-    public string Describe() => $"{Anchor ?? "the plugin"} — {Tail ?? DefectClass}: {Message}";
+    /// never a guessed identity. A classed (Kind B, #569) diagnosis carries both its class and its
+    /// repair tail in the label; an <see cref="UnknownClass"/> one shows its tail alone (Kind A's
+    /// "blocked upstream"), or the class when there is no tail either.</summary>
+    public string Describe()
+    {
+        string label;
+        if (DefectClass == UnknownClass) label = Tail ?? DefectClass;
+        else if (Tail == null) label = DefectClass;
+        else label = $"{DefectClass}, {Tail}";
+        return $"{Anchor ?? "the plugin"} — {label}: {Message}";
+    }
 }

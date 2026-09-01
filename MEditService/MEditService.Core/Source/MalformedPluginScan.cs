@@ -56,14 +56,28 @@ public static class MalformedPluginScan
     /// NOT required — three vanilla entries omit it).</summary>
     private static readonly Dictionary<byte, byte> EpftByPerkFunction = new()
     {
-        [1] = 1, [2] = 1, [3] = 1, [5] = 8, [9] = 4, [10] = 5, [12] = 8, [13] = 8, [14] = 8,
+        [1] = 1,
+        [2] = 1,
+        [3] = 1,
+        [5] = 8,
+        [9] = 4,
+        [10] = 5,
+        [12] = 8,
+        [13] = 8,
+        [14] = 8,
     };
 
     private static readonly Dictionary<byte, string> PerkFunctionNames = new()
     {
-        [1] = "Set Value", [2] = "Add Value", [3] = "Multiply Value", [5] = "Add Actor Value Mult",
-        [6] = "Absolute Value", [9] = "Add Activate Choice", [10] = "Select Spell",
-        [12] = "Set to Actor Value Mult", [13] = "Multiply Actor Value Mult",
+        [1] = "Set Value",
+        [2] = "Add Value",
+        [3] = "Multiply Value",
+        [5] = "Add Actor Value Mult",
+        [6] = "Absolute Value",
+        [9] = "Add Activate Choice",
+        [10] = "Select Spell",
+        [12] = "Set to Actor Value Mult",
+        [13] = "Multiply Actor Value Mult",
         [14] = "Multiply 1 + Actor Value Mult",
     };
 

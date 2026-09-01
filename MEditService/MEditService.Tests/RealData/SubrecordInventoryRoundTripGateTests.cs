@@ -49,6 +49,11 @@ public sealed class SubrecordInventoryRoundTripGateTests
         Assert.Contains("ANAM", ex.Message);
         Assert.Contains("RDMO", ex.Message);
         Assert.Contains("RDSA", ex.Message);
+        // #569: the refusal carries the Kind B diagnosis for the same record — the *cause* of the
+        // drop, class-labelled with its repair tail — not only the generic inventory loss.
+        Assert.Contains("fixed-size-subrecord-short", ex.Message);
+        Assert.Contains("repairable (lossless)", ex.Message);
+        Assert.Contains("RDAT is 6 bytes; a REGN RDAT is always 8", ex.Message);
         Assert.DoesNotContain("header or a container's own structure", ex.Message);
         Assert.False(SourceRepository.IsTracked(scratch.ModFolder));
     }

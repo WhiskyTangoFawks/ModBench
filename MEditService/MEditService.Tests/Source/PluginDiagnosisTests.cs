@@ -138,6 +138,21 @@ public sealed class PluginDiagnosisTests
         Assert.Equal("the plugin — unknown: boom", diagnosis.Describe());
     }
 
+    [Fact]
+    public void Describe_AClassedDiagnosisWithATail_CarriesBoth()
+    {
+        // A Kind B diagnosis (#569) knows its class *and* its repair tail; neither may shadow
+        // the other in the refusal text. Kind A stays as before: its class is `unknown`, so
+        // only the tail shows.
+        var diagnosis = new PluginDiagnosis(
+            Anchor: "REGN 001D2AF4 (DowntownRegion)", DefectClass: "fixed-size-subrecord-short",
+            Tail: "repairable (lossless)", Message: "RDAT is 6 bytes; a REGN RDAT is always 8");
+
+        Assert.Equal(
+            "REGN 001D2AF4 (DowntownRegion) — fixed-size-subrecord-short, repairable (lossless): RDAT is 6 bytes; a REGN RDAT is always 8",
+            diagnosis.Describe());
+    }
+
     /// <summary>The write seam: the exact nested shape observed live against
     /// <c>SpaDia_AMR.esp</c> (<c>AggregateException(AggregateException(RecordException(UnmappableFormIDException)))</c>,
     /// from Mutagen's own <c>WriteGroupParallel</c>/<c>WriteQuestsParallel</c>) — the anchor comes from
