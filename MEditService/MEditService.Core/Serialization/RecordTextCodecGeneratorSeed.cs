@@ -1,5 +1,7 @@
+using System.IO.Abstractions;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Serialization.Newtonsoft;
+using Noggog.IO;
 
 namespace MEditService.Core.Serialization;
 
@@ -121,9 +123,36 @@ internal static class RecordTextCodecGeneratorSeed
     /// currently moot rather than worked around — recorded here in case a future caller reaches for
     /// <c>extraMeta</c> and hits it fresh. Revisit if the Serialization pin ever bumps past 1.37.1 and
     /// this is confirmed fixed upstream.</para>
+    ///
+    /// <para><b><c>extraMeta: null</c> is passed explicitly, and removing it breaks the build in a way
+    /// that names an unrelated type.</b> A second, nastier face of the same defect: the generator's
+    /// <c>BootstrapInvocationDetector</c> resolves <c>extraMeta</c> as "the argument named
+    /// <c>extraMeta</c>, or failing that <b>whatever sits at positional index 5</b>" — see
+    /// <c>ArgumentRetriever.Get</c>, which falls back to the index without checking whether that
+    /// argument is a <c>NameColon</c> for some other parameter entirely. This call has six arguments,
+    /// so index 5 is <c>cancel:</c>, and without the explicit name the generator concluded the meta
+    /// type was <see cref="CancellationToken"/> and emitted a <c>CancellationToken_Serializations</c>
+    /// class — which then failed the build with two <c>CS0162: Unreachable code detected</c> errors
+    /// inside generated code, naming a file no source in this repo mentions. Reproduced, then fixed by
+    /// naming the argument; reordering does not help (whatever lands on index 5 gets picked instead,
+    /// e.g. <c>ICreateStream</c>). Keep the name.</para>
     /// </summary>
-    internal static Task SerializeWholeMod(IFallout4ModGetter mod, string folder, Noggog.WorkEngine.IWorkDropoff workDropoff, CancellationToken cancel)
-        => MutagenJsonConverter.Instance.Serialize(mod, folder, workDropoff: workDropoff, cancel: cancel);
+    /// <param name="fileSystem">The filesystem the door writes through, or <see langword="null"/> for
+    /// the real one. Named here rather than left to the mixin's own default so a caller that must not
+    /// touch the disk can say so — <c>HeaderDocument.Write</c> pairs a non-creating filesystem with a
+    /// <paramref name="streamCreator"/> that captures the root document in memory.</param>
+    /// <param name="streamCreator">Where each file's bytes actually go, or <see langword="null"/> for
+    /// real files. Under <c>.FilePerRecord()</c> the mixin takes the <i>root</i>
+    /// <c>RecordData.json</c>'s own stream from here too (traced in <c>MixinGenerator</c>'s
+    /// <c>SerializeInternal</c>: <c>exceptionPath = Path.Combine(path, RecordDataFileName)</c>, then
+    /// <c>streamCreator.GetStreamFor(fileSystem, exceptionPath, write: true)</c>) — which is what lets
+    /// a caller capture the mod header's own document without writing a tree.</param>
+    internal static Task SerializeWholeMod(
+        IFallout4ModGetter mod, string folder, Noggog.WorkEngine.IWorkDropoff workDropoff, CancellationToken cancel,
+        IFileSystem? fileSystem = null, ICreateStream? streamCreator = null)
+        => MutagenJsonConverter.Instance.Serialize(
+            mod, folder, extraMeta: null, workDropoff: workDropoff,
+            fileSystem: fileSystem, streamCreator: streamCreator, cancel: cancel);
 
     /// <summary>
     /// The read side of the same door (ingest-from-source): a whole <c>source/&lt;plugin&gt;/</c>
@@ -147,7 +176,21 @@ internal static class RecordTextCodecGeneratorSeed
     /// in the parallel helpers), stated explicitly so a swap is a visible diff
     /// that <see cref="RecordTextCodecGeneratorSeedTests"/>' own guard can catch.</para>
     /// </summary>
+    /// <param name="folder">The tree root to read.</param>
+    /// <param name="workDropoff">Sequential, for the reason above.</param>
+    /// <param name="cancel">Cancellation token.</param>
+    /// <param name="fileSystem">The filesystem the door reads through, or <see langword="null"/> for
+    /// the real one — the symmetric inverse of <see cref="SerializeWholeMod"/>'s own parameter.
+    /// <b>Supplying <paramref name="streamCreator"/> alone is not enough to read from memory</b>:
+    /// <c>SerializationHelper.ExtractMetaInternal</c> guards on
+    /// <c>fileSystem.File.Exists(path)</c> before it ever consults the stream creator, and throws
+    /// <c>FileNotFoundException("Could not find file to parse")</c> if that answers false (verified by
+    /// trying exactly that). So an in-memory read needs both.</param>
+    /// <param name="streamCreator">Where each file's bytes come from, or <see langword="null"/> for
+    /// real files.</param>
     internal static Task<IFallout4Mod> DeserializeWholeMod(
-        string folder, Noggog.WorkEngine.IWorkDropoff workDropoff, CancellationToken cancel)
-        => MutagenJsonConverter.Instance.Deserialize(folder, workDropoff: workDropoff, cancel: cancel);
+        string folder, Noggog.WorkEngine.IWorkDropoff workDropoff, CancellationToken cancel,
+        IFileSystem? fileSystem = null, ICreateStream? streamCreator = null)
+        => MutagenJsonConverter.Instance.Deserialize(
+            folder, workDropoff: workDropoff, fileSystem: fileSystem, streamCreator: streamCreator, cancel: cancel);
 }

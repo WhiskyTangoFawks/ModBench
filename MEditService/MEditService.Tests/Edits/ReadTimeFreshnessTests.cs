@@ -4,6 +4,7 @@ using MEditService.Core.Queries;
 using MEditService.Core.Records;
 using MEditService.Core.Source;
 using Microsoft.Extensions.Logging.Abstractions;
+using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Tests.Edits;
 
@@ -45,6 +46,89 @@ public sealed class ReadTimeFreshnessTests : IDisposable
     private object? HeightMaxFromCompareGrid() =>
         Reads().GetCompare(_mod.Npc.ToString())!.Overrides.Single()
             .Fields.Single(f => f.Metadata.Name == "height_max").Value;
+
+    /// <summary>
+    /// <b>Reading a tracked plugin's header must not destroy it.</b> #631 gave the header a real
+    /// <c>body</c>, which put it inside this pass's reach for the first time — and the pass resolves
+    /// a record's file through <c>SourceUnitResolver</c>, which cannot locate the root
+    /// <c>RecordData.json</c> (no group folder, not a placement, and no FormKey in its filename for
+    /// the fallback scan). An unguarded pass therefore reads "no file on disk holds this record",
+    /// concludes the user deleted it, and folds a working-tree <i>deletion</i> of the header into the
+    /// index — on an ordinary read, with nothing edited.
+    ///
+    /// <para>Read twice deliberately: the first read is what would do the damage, the second is what
+    /// observes it. A single read would pass even against the broken behaviour, because
+    /// <c>GetRecord</c> returns the document it fetched before the pass rewrote anything.</para>
+    ///
+    /// <para>Making the header a first-class source unit — so this pass can genuinely validate it
+    /// against its own file — is separate work. Until then the honest behaviour is the one the header
+    /// had before it carried a body: the pass leaves it alone.</para>
+    /// </summary>
+    [Fact]
+    public void ReadingATrackedPluginsHeader_DoesNotFoldADeletionIntoTheIndex()
+    {
+        var headerFormKey = HeaderIndexer.FormKeyFor(ModKey.FromFileName(_mod.ActualPluginName));
+
+        var first = Reads().GetRecord(headerFormKey);
+        Assert.NotNull(first);
+        Assert.NotEmpty(first.Fields);
+
+        var second = Reads().GetRecord(headerFormKey);
+        Assert.NotNull(second);
+        Assert.Equal(
+            first.Fields.Select(f => (f.Metadata.Name, f.Value?.ToString())),
+            second.Fields.Select(f => (f.Metadata.Name, f.Value?.ToString())));
+
+        // The row is still there at both refs, and the working tree is still clean — a folded-in
+        // deletion would show as a missing document, a dirtied tree, or both.
+        Assert.NotNull(_mod.Mirror.Index!.GetDocument(headerFormKey, _mod.Plugin));
+        Assert.NotNull(_mod.Mirror.Index!.At(RecordRef.Head).GetDocument(headerFormKey, _mod.Plugin));
+        Assert.Empty(_mod.GitStatus());
+
+        // ...and it reads as clean, not merely as present. This is the pinned statement of a
+        // deliberate limit: giving the header a `ref` dimension made a dirty/diverged indicator
+        // *representable* for the first time, and no path in this change can actually produce one —
+        // SourceFreshness skips it, EditField refuses it at SourceUnitNotFound, and
+        // SourceIngest.ReconcileHeadStructurally diffs through EnumerateMajorRecords, which a
+        // ModHeader is not in. So the record editor renders exactly what it rendered before. When
+        // the header does become a source unit, this assertion is the one that should be revisited
+        // deliberately rather than discovered.
+        var entry = Assert.Single(_mod.Mirror.Index!.GetOverrideStack(headerFormKey)!.Entries);
+        Assert.False(entry.HasWorkingTreeChange);
+        Assert.Equal(entry.Effective.Body, entry.Head.Body);
+    }
+
+    /// <summary>
+    /// <b>Where the header's read-only-ness actually comes from</b> — recorded because it is easy to
+    /// believe otherwise. #335/ADR-0038 keeps <c>masters</c> unwritable, and the header schema's
+    /// <c>masters</c> column duly carries <c>Apply: null</c>
+    /// (<c>HeaderIndexingTests.HeaderSchema_MastersColumn_CarriesNoWriteDelegate</c>) — but that
+    /// column is not what refuses an edit today, and a reader who assumes it is would draw the wrong
+    /// conclusion from removing it.
+    ///
+    /// <para>The refusal is <c>SourceUnitNotFound</c>, not <c>FieldNotWritable</c>: an edit is turned
+    /// away at the gate, before any column is consulted, because no source unit resolves for a header
+    /// FormKey. The column-level guard is therefore currently unreachable — kept as the leaf answer
+    /// for when the header becomes a source unit, not because it is doing work now. This test is what
+    /// makes that distinction checkable rather than a claim in a comment; when the header does become
+    /// a source unit, this is the assertion that should flip to <c>FieldNotWritable</c>.</para>
+    /// </summary>
+    [Fact]
+    public void EditingAHeaderField_IsRefusedAtTheGate_NotByTheColumnsMissingWriteDelegate()
+    {
+        var headerFormKey = HeaderIndexer.FormKeyFor(ModKey.FromFileName(_mod.ActualPluginName));
+
+        var masters = EditService().EditField(
+            _mod.Plugin, headerFormKey, HeaderIndexer.MastersFieldName, Json("[\"Other.esm\"]"));
+        var author = EditService().EditField(
+            _mod.Plugin, headerFormKey, "author", Json("\"Someone Else\""));
+
+        Assert.Equal(RecordEditRefusal.SourceUnitNotFound, masters.Refusal);
+        // The writable-looking sibling refuses identically, which is the evidence that the refusal is
+        // about the record, not about this one field's missing delegate.
+        Assert.Equal(RecordEditRefusal.SourceUnitNotFound, author.Refusal);
+        Assert.Empty(_mod.GitStatus());
+    }
 
     [Fact]
     public void RestoringASourceFileThroughGit_PutsTheCommittedValueBackInTheRecordEditor()

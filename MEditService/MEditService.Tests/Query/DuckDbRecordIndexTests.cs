@@ -538,65 +538,6 @@ public class DuckDbRecordIndexTests(TestPluginFixture fixture)
         Assert.Null(ex);
     }
 
-    // --- AppendTyped: DOUBLE branch ---
-
-    [Fact]
-    public void AppendTyped_Double_AppendsCorrectValue()
-    {
-        using var conn = new DuckDBConnection("DataSource=:memory:");
-        conn.Open();
-        using (var cmd = conn.CreateCommand())
-        {
-            cmd.CommandText = "CREATE TABLE t (v DOUBLE)";
-            cmd.ExecuteNonQuery();
-        }
-
-        using (var appender = conn.CreateAppender("t"))
-        {
-            var row = appender.CreateRow();
-            DuckDbRecordIndex.AppendTyped(row, 3.14, "DOUBLE");
-            row.EndRow();
-        }
-
-        using var q = conn.CreateCommand();
-        q.CommandText = "SELECT v FROM t";
-        var result = q.ExecuteScalar();
-        Assert.NotNull(result);
-        Assert.Equal(3.14, (double)result, precision: 5);
-    }
-
-    [Fact]
-    public void AppendTyped_Null_AppendsNullValue()
-    {
-        using var conn = new DuckDBConnection("DataSource=:memory:");
-        conn.Open();
-        using (var cmd = conn.CreateCommand())
-        {
-            cmd.CommandText = "CREATE TABLE t (v DOUBLE)";
-            cmd.ExecuteNonQuery();
-        }
-
-        using (var appender = conn.CreateAppender("t"))
-        {
-            var row = appender.CreateRow();
-            DuckDbRecordIndex.AppendTyped(row, null, "DOUBLE");
-            row.EndRow();
-        }
-
-        using var q = conn.CreateCommand();
-        q.CommandText = "SELECT v IS NULL FROM t";
-        Assert.Equal(true, q.ExecuteScalar());
-    }
-
-    // --- ColumnList: zero-column branch ---
-
-    [Fact]
-    public void ColumnList_ZeroColumns_ReturnsEmptyString()
-    {
-        var schema = new RecordTableSchema { TableName = "t", DisplayName = "t", RecordType = typeof(object), RecordColumns = [], HasVmad = false };
-        Assert.Equal("", DuckDbRecordIndex.ColumnList(schema));
-    }
-
     // --- ReadDetail: null scalar field returns C# null, not DBNull ---
 
     [Fact]

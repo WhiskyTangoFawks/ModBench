@@ -107,6 +107,16 @@ public class RecordTextCodecGeneratorSeedTests
         {
             "TrackService.cs",          // Track
             "SpatialContainerMint.cs",  // exterior WRLD/CELL spatial mint
+            // #631: the plugin header's own body. The header is an ordinary `records` row whose body
+            // is the whole-mod door's root RecordData.json (ADR-0041 already names that file as part
+            // of the source), and a ModHeader is not an IMajorRecordGetter — so the per-record codec
+            // structurally cannot produce it and the only alternative to this door would be a
+            // hand-rolled copy of its {ModKey, GameRelease, ModHeader} wrapper, i.e. exactly the
+            // second dialect this whitelist exists to prevent. It pays the door's cost the way the
+            // whitelist asks a door to: deliberately, once, and cheaply — ~1 ms, because it serializes
+            // a header-only clone rather than walking the mod (HeaderDocument.Write's own comment
+            // carries the measurement, and HeaderDocumentTests pins the equality that licenses it).
+            "HeaderDocument.cs",        // the plugin header's document, both directions
         };
 
         var sourceFiles = Directory.GetFiles(CoreSourceRoot(), "*.cs", SearchOption.AllDirectories);
@@ -138,6 +148,11 @@ public class RecordTextCodecGeneratorSeedTests
             "SourceIngest.cs",         // ingest-from-source
             "PluginCompileService.cs", // compile from the tree
             "TrackService.cs",         // Track's own round-trip gate reads its own tree back
+            // #631: the read half of the same header door — see the write-side list above for why
+            // the header cannot go through the per-record codec. Symmetric by construction: the
+            // document this reads is the one HeaderDocument.Write produced, so using any other
+            // reader would reintroduce the dialect split from the other end.
+            "HeaderDocument.cs",       // the plugin header's document, both directions
         };
 
         var sourceFiles = Directory.GetFiles(CoreSourceRoot(), "*.cs", SearchOption.AllDirectories);
@@ -199,13 +214,19 @@ public class RecordTextCodecGeneratorSeedTests
     // sequential dropoff and is held to the same rule rather than being trusted to the library default.
     //
     // PluginCompileService.cs likewise, for the same reason as SourceIngest — it reads the
-    // same trees through the same gateway. That completes the whitelist: all three doors ADR-0041
-    // names are open, and this list is not expected to grow again.
+    // same trees through the same gateway.
+    //
+    // HeaderDocument.cs (#631) is held to the rule too, even though it cannot actually reach the
+    // race: it serializes a header-only clone, so there is no nested container for the parallel
+    // helpers to trip over. Listed anyway because the rule is about which files may name a parallel
+    // dropoff at all, not about which ones would currently be harmed by one — a later edit that
+    // handed this door a populated mod would otherwise inherit the hazard silently. Adding a file
+    // here only tightens the check.
     [Fact]
     public void DoorFiles_NeverNameAParallelWorkDropoff()
     {
         const string parallelDropoffName = "ParallelWorkDropoff";
-        var doorFiles = new[] { "TrackService.cs", "SourceIngest.cs", "PluginCompileService.cs" };
+        var doorFiles = new[] { "TrackService.cs", "SourceIngest.cs", "PluginCompileService.cs", "HeaderDocument.cs" };
 
         var sourceFiles = Directory.GetFiles(CoreSourceRoot(), "*.cs", SearchOption.AllDirectories)
             .Where(f => doorFiles.Contains(Path.GetFileName(f)))

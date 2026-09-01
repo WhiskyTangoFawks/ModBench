@@ -31,12 +31,14 @@ internal static class RecordViewBuilder
 {
     internal static void CreateViews(DuckDBConnection connection, IReadOnlyDictionary<string, RecordTableSchema> schemas)
     {
+        // No exceptions since #631. The plugin header used to be skipped here because it had no
+        // document to project a view over; now it has one like every other type, so it keeps a
+        // `header` relation at the SQL door rather than losing one when its wide table went. Its
+        // columns sit a level deeper in the document than a record's ($.ModHeader.Author, not
+        // $.Author) — which needs nothing special here: that nesting is in the column's own
+        // PropertyName and Projection just reads it.
         foreach (var (tableName, schema) in schemas)
         {
-            // The header has no document — it stays a real extracted index table, so there is
-            // nothing to project a view over.
-            if (string.Equals(tableName, HeaderIndexer.TableName, StringComparison.OrdinalIgnoreCase)) continue;
-
             using var cmd = connection.CreateCommand();
             cmd.CommandText = BuildViewSql(tableName, schema);
             cmd.ExecuteNonQuery();

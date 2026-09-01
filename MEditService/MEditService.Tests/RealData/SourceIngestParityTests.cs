@@ -1,3 +1,5 @@
+using System.Text;
+using DuckDB.NET.Data;
 using MEditService.Core.Plugins;
 using MEditService.Core.Queries;
 using MEditService.Core.Records;
@@ -5,6 +7,7 @@ using MEditService.Core.Schema;
 using MEditService.Core.Source;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
+using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Tests.RealData;
 
@@ -205,6 +208,67 @@ public sealed class SourceIngestParityTests : IDisposable
         Assert.Equal(
             StripVersioningBlock(binaryBody),
             StripVersioningBlock(sourceBody));
+    }
+
+    /// <summary>
+    /// <b>The plugin header's own row, byte for byte</b> (#631) — the proof that the two ingest paths
+    /// produce one dialect for the header exactly as the sweep above proves it for every record.
+    ///
+    /// <para><b>What is actually being compared, and why it is not circular.</b> Both paths reach the
+    /// same producer (<c>HeaderDocument.Write</c>) — that is deliberate, and it is the design: the
+    /// header is not two producers to be reconciled, it is one producer over two <i>readers</i>. So
+    /// the question this answers is the one that remains open: does the mod behind a tracked ingest
+    /// (deserialized from the source tree, itself written from a deep parse) present the same header
+    /// as the mod behind an untracked one (a binary overlay)? That is genuinely open —
+    /// <c>GitBlobHash</c>'s own doc comment records overlay-vs-deep-parse divergence on real record
+    /// data, and the sweep above allowlists exactly one instance of it.</para>
+    ///
+    /// <para><b>Three arms, deliberately.</b> The document bodies (what the read model serves), the
+    /// stored <c>content_hash</c> (what the freshness machinery compares — not implied by body
+    /// equality, since a producer could hash something else), and the raw bytes of the tracked
+    /// plugin's own <c>source/&lt;plugin&gt;/RecordData.json</c> on disk. Only the third can see a
+    /// BOM, a trailing newline or a CRLF difference: <c>records.body</c> is a DuckDB VARCHAR, so by
+    /// the time the first two compare, both sides have already been decoded to a .NET string. It is
+    /// also the arm that makes <c>content_hash</c> provably the git object name of the file, which is
+    /// the entire reason the header now carries one.</para>
+    /// </summary>
+    [Fact]
+    public void TheHeaderRow_IsByteIdentical_TrackedAndUntracked()
+    {
+        var headerFormKey = HeaderIndexer.FormKeyFor(ModKey.FromFileName(CutDownPluginFixture.PluginFileName));
+
+        var binary = _fromBinary.Index!.GetDocument(headerFormKey, _plugin);
+        var source = _fromSource.Index!.GetDocument(headerFormKey, _plugin);
+
+        Assert.NotNull(binary);
+        Assert.NotNull(source);
+        Assert.Equal(HeaderIndexer.RecordType, binary.RecordType);
+        Assert.Equal(HeaderIndexer.RecordType, source.RecordType);
+
+        // Positive controls: an empty or absent body would satisfy plain equality below and prove
+        // nothing at all. These pin that the body really is the root document.
+        Assert.NotNull(binary.Body);
+        Assert.Contains("\"ModHeader\"", binary.Body, StringComparison.Ordinal);
+        Assert.Contains("\"MasterReferences\"", binary.Body, StringComparison.Ordinal);
+
+        Assert.Equal(binary.Body, source.Body);
+        Assert.Equal(ContentHashOf(_fromBinary, headerFormKey), ContentHashOf(_fromSource, headerFormKey));
+
+        // The third arm: against the tracked plugin's own file on disk, as raw bytes. `records.body`
+        // is VARCHAR, so this is the only comparison here that is genuinely about bytes.
+        var headerFile = Path.Combine(_modFolder, "source", CutDownPluginFixture.PluginFileName, "RecordData.json");
+        Assert.True(File.Exists(headerFile), $"expected the tracked tree to hold {headerFile}");
+        Assert.Equal(File.ReadAllBytes(headerFile), Encoding.UTF8.GetBytes(source.Body!));
+    }
+
+    /// <summary>The <c>content_hash</c> the index actually stored for this row — read straight out of
+    /// <c>records</c>, because no read-model type surfaces it.</summary>
+    private static string ContentHashOf(LoadOrderMirror mirror, string formKey)
+    {
+        using var cmd = ((DuckDbRecordIndex)mirror.Index!).Connection.CreateCommand();
+        cmd.CommandText = "SELECT content_hash FROM records WHERE form_key = $1";
+        cmd.Parameters.Add(new DuckDBParameter { Value = formKey });
+        return Assert.IsType<string>(cmd.ExecuteScalar());
     }
 
     /// <summary>Everything except the <c>Versioning</c> array, so the rest of the one allowlisted Cell's

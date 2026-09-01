@@ -16,7 +16,7 @@ namespace MEditService.Core.Records;
 /// The prepare/append/collectors collaborator of
 /// <see cref="DuckDbRecordIndex"/> — everything <see cref="IRecordIndex.Index"/>/
 /// <see cref="IRecordIndex.Unindex"/> do to a plugin's own rows across every ingest-owned table
-/// (<c>records</c>/<c>records_committed</c>/<c>header</c>/<c>form_lookup</c>/<c>form_references</c>/
+/// (<c>records</c>/<c>records_committed</c>/<c>form_lookup</c>/<c>form_references</c>/
 /// <c>placement</c>/<c>cell_location</c>/<c>container_child</c>), plus the record-level collectors
 /// (<see cref="CollectFormRefs"/>/<see cref="CollectVmadRefsForRecord"/>/
 /// <see cref="CollectConditionRefsForRecord"/>) and append primitives <see cref="WorkingTreeOverlay"/>
@@ -84,8 +84,8 @@ internal sealed class PluginIngest
 
     // ADR-0041: this plugin's documents go first, for the same reason every other table's
     // delete does — a re-index replaces its own rows rather than accumulating a second copy.
-    // The header is deliberately absent from `records`: a ModHeader is not an IMajorRecordGetter,
-    // so it has no codec document at all, and stays a purely extracted index table.
+    // This covers the plugin header's row too (#631): it is an ordinary `records` row, so the one
+    // delete here is also its delete, and HeaderIndexer needs no step of its own.
     //
     // Its own method, called by DuckDbRecordIndex.Index *before* it creates the `records` appender
     // and calls IndexPlugin below — the deletes must precede the appender's creation rather than
@@ -133,10 +133,11 @@ internal sealed class PluginIngest
         var counters = new RefCounters();
         foreach (var (tableName, schema) in schemas)
         {
-            // The header table is never a major-record type (ModHeader has no FormKey/EditorID) —
-            // IndexRecordTable's EnumerateMajorRecords call assumes one, so it's indexed separately,
-            // and header rows never enter form_lookup for the same reason.
-            if (tableName == "header") continue;
+            // The header is never a major-record type (ModHeader has no FormKey/EditorID) —
+            // IndexRecordTable's EnumerateMajorRecords call assumes one, so it is appended separately
+            // by IndexHeader below. Its row lands in `records` like every other one (#631); only the
+            // way it is *reached* differs, because Mutagen's own enumeration cannot reach it.
+            if (tableName == HeaderIndexer.RecordType) continue;
             IndexRecordTable(
                 tableName, schema, pluginMod, plugin, origin, refs, lookupRows,
                 containerChildRows, documentAppender, pluginMod.GameRelease, counters);
@@ -157,12 +158,16 @@ internal sealed class PluginIngest
         // flush below, while GetVmad and GetConditions read the document on demand. What that pass
         // does not see is exactly what has no schema (SchemaReflector.ExcludedTables — the placed
         // projectile types): those records have no document and no row, and contribute no
-        // VMAD/condition refs either. Header's own delete step is in IndexHeader below.
+        // VMAD/condition refs either.
 
         phaseTimer.Restart();
         IndexPlacement(pluginMod, plugin, origin);
 
-        IndexHeader(pluginMod, plugin, origin, schemas);
+        // Before the form_lookup flush below, deliberately: the header's row and its lookup row are
+        // written by the same two flushes as every other record's, which is what keeps ADR-0031's
+        // one-lookup-row-per-record-row invariant true by construction rather than by a second sweep.
+        if (schemas.ContainsKey(HeaderIndexer.RecordType))
+            lookupRows.Add(HeaderIndexer.Index(pluginMod, plugin, origin, documentAppender));
 
         // Clear this plugin's stale refs, then rebuild from the refs gathered across both passes.
         DeleteFormReferencesForPlugin(plugin, origin);
@@ -215,15 +220,14 @@ internal sealed class PluginIngest
     // (IndexStore) and the registration row itself — see this class's own doc comment.
     public void DeleteAllRowsFor(string plugin, string origin)
     {
-        // The record rows are all in `records`; the only surviving per-type table is the header,
-        // deleted just below. Deleting this plugin's `records` rows also removes the one thing
+        // Every record row is in `records`, the plugin header's included (#631 — no per-type table
+        // survives). Deleting this plugin's `records` rows also removes the one thing
         // GetVmad/GetConditions read.
         DeleteExistingForOrigin("records", plugin, origin);
         // "Removes every trace of key" has to include the Head side. A leftover snapshot would
         // keep answering at Head for a plugin the load order no longer holds — the exact opposite of
         // ADR-0035's "hidden means absent".
         DeleteExistingForOrigin("records_committed", plugin, origin);
-        DeleteExistingForOrigin("header", plugin, origin);
         DeleteExistingForOrigin("form_lookup", plugin, origin);
         DeleteFormReferencesForPlugin(plugin, origin);
         DeleteExistingForOrigin("placement", plugin, origin);
@@ -446,22 +450,6 @@ internal sealed class PluginIngest
         _placementWalker.Walk(pluginMod,
             cell => AppendCellLocationRow(cellAppender, cell, plugin, origin),
             placed => AppendPlacementRow(placeAppender, placed, plugin, origin));
-    }
-
-    // Header rows never flow through IndexRecordTable (see IndexPlugin's skip
-    // above), so they need their own delete-then-append step, matching every other side table.
-    // ADR-0036: the header table's DDL comes from the same generic CreateRecordTable as
-    // every reflected schema, so it carries the `origin` column too, and the delete below is
-    // scoped to (plugin, origin) like every other.
-    private void IndexHeader(
-        IModGetter pluginMod, string plugin, string origin,
-        IReadOnlyDictionary<string, RecordTableSchema> schemas)
-    {
-        if (!schemas.TryGetValue("header", out var headerSchema)) return;
-
-        DeleteExistingForOrigin("header", plugin, origin);
-        using var appender = _connection.CreateAppender("mirror", "header");
-        HeaderIndexer.Index(pluginMod, plugin, origin, headerSchema, appender);
     }
 
     // One record's condition refs — the body of the loop above, extracted so per-record

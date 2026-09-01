@@ -48,7 +48,20 @@ public class FormLookupTests
         cmd.CommandText = "SELECT COUNT(*) FROM form_lookup WHERE plugin = 'Lookup.esp'";
         var count = (long)cmd.ExecuteScalar()!;
 
-        Assert.Equal(2, count);
+        // Two records and the plugin header (#631) — ADR-0031 keeps exactly one lookup row per
+        // `records` row, and the header is one of those rows now. Written as the sum rather than as
+        // "3" so the reason for each row stays visible.
+        Assert.Equal(2 + 1, count);
+
+        // ...and the header's is a real, resolvable row rather than filler that makes the count add
+        // up: this is what lets Open Header's synthetic FormKey resolve like every other one.
+        using var headerCmd = repo.Connection.CreateCommand();
+        headerCmd.CommandText =
+            "SELECT record_type, editor_id FROM form_lookup WHERE plugin = 'Lookup.esp' AND form_key = '000000:Lookup.esp'";
+        using var reader = headerCmd.ExecuteReader();
+        Assert.True(reader.Read(), "the plugin header must have its own form_lookup row");
+        Assert.Equal(HeaderIndexer.RecordType, reader.GetString(0));
+        Assert.True(reader.IsDBNull(1), "a header has no EditorID");
     }
 
     [Fact]

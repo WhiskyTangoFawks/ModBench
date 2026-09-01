@@ -133,9 +133,10 @@ public record FieldValue(FieldMetadata Metadata, object? Value, string? CheckErr
 // Declared before the two still-defaulted trailing fields only because C# requires a required
 // parameter to precede any optional one — callers may still pass it by name in any position.
 // IsPartialForm: this override's own record-header Partial Form flag
-// (Schema.PartialFormFlag), independent of any field's own value — always false for a synthesized
-// row (e.g. the header table, which has no such flag). Drives ConflictClassifier's field-exclusion
-// rule and the compare grid's column dimming (CompareOverride below).
+// (Schema.PartialFormFlag), independent of any field's own value — always false for a row whose
+// record cannot carry one (the plugin header: a ModHeader has no such flag). Drives
+// ConflictClassifier's field-exclusion rule and the compare grid's column dimming (CompareOverride
+// below).
 // IsPartialFormable: whether this record's own type could ever carry the flag at all —
 // independent of IsPartialForm's current state. Lets the webview decide whether to render its own
 // Partial Form toggle (PluginHeader.tsx) without hand-duplicating Source.ContainerChildFields'

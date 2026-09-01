@@ -82,31 +82,30 @@ public class TableDdlBuilderTests
         Assert.Contains("editor_id", cols);
     }
 
-    [Fact]
-    public void CreateTables_CreatesHeaderTable_WithAuthorFlagsMastersColumns()
-    {
-        // The header table is entirely schema-driven — no DDL changes
-        // needed once SchemaReflector's schemas dictionary carries a "header" entry.
-        using var conn = OpenMemory();
-        _builder.CreateTables(conn, GameRelease.Fallout4);
-
-        var cols = GetColumns(conn, "header");
-        Assert.Contains("form_key", cols);
-        Assert.Contains("plugin", cols);
-        Assert.Contains("load_order_idx", cols);
-        Assert.Contains("is_winner", cols);
-        Assert.Contains("editor_id", cols);
-        Assert.Contains("author", cols);
-        Assert.Contains("flags", cols);
-        Assert.Contains("masters", cols);
-    }
-
+    /// <summary>
+    /// Building the schema twice is a no-op, not an error — a general guard on every statement
+    /// <see cref="TableDdlBuilder.CreateTables"/> issues, nothing header-specific. It holds because
+    /// each table is <c>CREATE TABLE IF NOT EXISTS</c>, each index <c>CREATE INDEX IF NOT EXISTS</c>,
+    /// and each view <c>CREATE OR REPLACE VIEW</c>; a future statement missing one of those forms
+    /// fails here rather than on a second reconcile against a warm index.
+    ///
+    /// <para>Re-asserted deliberately after #631: this test previously sat between the two
+    /// header-table tests that ticket retired, and is easy to remove as collateral with them. It is
+    /// not about the header at all.</para>
+    /// </summary>
     [Fact]
     public void CreateTables_IsIdempotent()
     {
         using var conn = OpenMemory();
         _builder.CreateTables(conn, GameRelease.Fallout4);
-        _builder.CreateTables(conn, GameRelease.Fallout4); // should not throw
+
+        var ex = Record.Exception(() => _builder.CreateTables(conn, GameRelease.Fallout4));
+
+        Assert.Null(ex);
+        // Positive control: the second call left a working schema behind rather than an empty one —
+        // a no-op that also dropped every relation would satisfy "did not throw" on its own.
+        Assert.NotEmpty(GetColumns(conn, "records"));
+        Assert.NotEmpty(GetColumns(conn, "npc_"));
     }
 
     // ADR-0001: load order lives only on `registrations`. The mirror record-shaped
@@ -117,7 +116,6 @@ public class TableDdlBuilderTests
     [InlineData("records")]
     [InlineData("records_committed")]
     [InlineData("form_lookup")]
-    [InlineData("header")]
     public void MirrorRecordShapedTables_CarryNoLoadOrderColumn(string tableName)
     {
         using var conn = OpenMemory();
@@ -135,7 +133,6 @@ public class TableDdlBuilderTests
     [InlineData("records")]
     [InlineData("records_committed")]
     [InlineData("form_lookup")]
-    [InlineData("header")]
     public void RegisteredViews_StillExposeLoadOrderIndex_DerivedFromRegistrations(string tableName)
     {
         using var conn = OpenMemory();
@@ -153,7 +150,6 @@ public class TableDdlBuilderTests
     [InlineData("records")]
     [InlineData("records_committed")]
     [InlineData("form_lookup")]
-    [InlineData("header")]
     public void MirrorRecordShapedTables_CarryNoWinnerColumn(string tableName)
     {
         using var conn = OpenMemory();
@@ -170,7 +166,6 @@ public class TableDdlBuilderTests
     [Theory]
     [InlineData("records", true)]
     [InlineData("form_lookup", true)]
-    [InlineData("header", true)]
     [InlineData("records_head", true)]
     [InlineData("records_committed", false)]
     public void RegisteredViews_ExposeWinner_OnlyWhereAReaderAsksForIt(string relation, bool exposesWinner)

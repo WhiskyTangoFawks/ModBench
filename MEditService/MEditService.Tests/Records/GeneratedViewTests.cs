@@ -42,8 +42,11 @@ public sealed class GeneratedViewTests(CutDownPluginFixture fixture) : IClassFix
     [Fact]
     public void EveryRecordType_HasAView_NamedAsItsTableWas()
     {
+        // No exclusion since #631: the plugin header has a document, so it has a view like every
+        // other type — which is what keeps a `header` relation at the SQL door now that its wide
+        // table is gone.
         var expected = SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4).Keys
-            .Where(k => k != "header").ToHashSet(StringComparer.OrdinalIgnoreCase);
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         using var cmd = _fixture.Repo.Connection.CreateCommand();
         cmd.CommandText = "SELECT view_name FROM duckdb_views() WHERE NOT internal";
@@ -145,7 +148,6 @@ public sealed class GeneratedViewTests(CutDownPluginFixture fixture) : IClassFix
         var scalarsPresent = 0;
         foreach (var (table, schema) in schemas)
         {
-            if (table == "header") continue;
             var viewColumns = ColumnsOf(table).ToHashSet(StringComparer.OrdinalIgnoreCase);
             foreach (var col in schema.RecordColumns)
             {
