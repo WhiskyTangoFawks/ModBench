@@ -19,6 +19,13 @@ public static class PluginEndpoints
             .WithTags(Tag)
             .Produces<IReadOnlyList<PluginResponse>>();
 
+        // #570: every held, mutable plugin's Kind B diagnoses off its original bytes — the
+        // session-load complement of Track's refusal, one call for the whole load order.
+        app.MapGet("/plugins/diagnoses", (MalformedPluginQueryService svc) => Results.Ok(svc.GetLoadOrderDiagnoses()))
+            .WithName("GetPluginDiagnoses")
+            .WithTags(Tag)
+            .Produces<IReadOnlyList<PluginDiagnosisReport>>();
+
         // The condition function picker's catalog — filtered to what the loaded load order's
         // game actually resolves (ConditionCodecRegistry), not a hardcoded list.
         MapCatalog(app, "/condition-functions", "GetConditionFunctions", svc => svc.GetConditionFunctions());

@@ -2,7 +2,7 @@ import type { components } from './generated/api';
 import type {
   ApiClient, PluginMetadata, LoadOrderStatus, TrackStatus,
   WorldspaceSummary, CellReferences, WorldspaceBlocks,
-  UnansweredExternalChange, ContainerChildSummary,
+  UnansweredExternalChange, ContainerChildSummary, PluginDiagnosisReport,
 } from './ApiClient';
 import { errorText } from './ApiClient';
 
@@ -27,6 +27,10 @@ export type CellPage = components['schemas']['CellSummaryPagedResult'];
 
 export interface PluginRepository {
   getPlugins(): Promise<PluginMetadata[]>;
+  /** #570: every held, mutable plugin's Kind B diagnoses off its original bytes — worded
+   *  exactly as the Track refusal would word them (one vocabulary; #569). One call for the
+   *  whole load order, made after a reconcile lands. */
+  getDiagnoses(): Promise<PluginDiagnosisReport[]>;
   // ADR-0035: the reconcile's own progress, polled alongside the in-flight PUT. Separate
   // from getPlugins() rather than folded into it: this one answers while the load order is still
   // incomplete, and it is the only read that can distinguish "not looked yet" from "no conflict".
@@ -156,6 +160,12 @@ export class ApiPluginRepository implements PluginRepository {
   async getPlugins(): Promise<PluginMetadata[]> {
     const { data, error, response } = await this.client.GET('/plugins', {});
     this.ensureOk('GET /plugins', response, error);
+    return data ?? [];
+  }
+
+  async getDiagnoses(): Promise<PluginDiagnosisReport[]> {
+    const { data, error, response } = await this.client.GET('/plugins/diagnoses', {});
+    this.ensureOk('GET /plugins/diagnoses', response, error);
     return data ?? [];
   }
 

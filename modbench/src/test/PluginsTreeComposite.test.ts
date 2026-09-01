@@ -647,6 +647,59 @@ describe('PluginsTreeComposite — load-failure decoration (#277 / ADR-0037 AC7)
   });
 });
 
+// #570: the session-load Kind B diagnoses (Malformed plugin, CONTEXT.md) join the same
+// backend-decoration chain — warning tier, below a load failure or master issue, since a
+// malformed plugin still loads and plays.
+describe('malformed-plugin diagnosis decoration', () => {
+  it('decorates a diagnosed plugin row with the warning badge and the diagnosis text', async () => {
+    const { composite, render } = make([PLUGIN_ROW]);
+    await render();
+    composite.setLoadOrder(new Set(['A.esp']));
+
+    composite.setDiagnoses(new Map([['A.ESP', ['REGN 001D2AF4 (DowntownRegion) — fixed-size-subrecord-short, repairable (lossless): RDAT is 6 bytes; a REGN RDAT is always 8']]]));
+
+    const item = composite.getTreeItem(PLUGIN_ROW);
+    expect(item.description).toBe('⚠ Malformed plugin');
+    expect(item.tooltip).toContain('RDAT is 6 bytes');
+  });
+
+  it('a load failure keeps decoration authority over a diagnosis on the same row', async () => {
+    const { composite, render } = make([PLUGIN_ROW]);
+    await render();
+    composite.setLoadOrder(new Set(), new Set(), new Map(), new Map([['a.esp', 'Malformed record']]));
+
+    composite.setDiagnoses(new Map([['a.esp', ['some diagnosis']]]));
+
+    expect(composite.getTreeItem(PLUGIN_ROW).description).toBe('✗ Failed to load');
+  });
+
+  it('a reconcile clears the previous scan\'s diagnoses until the new one lands', async () => {
+    const { composite, render } = make([PLUGIN_ROW]);
+    await render();
+    composite.setLoadOrder(new Set(['A.esp']));
+    composite.setDiagnoses(new Map([['a.esp', ['some diagnosis']]]));
+
+    composite.setLoadOrder(new Set(['A.esp']));
+
+    const item = composite.getTreeItem(PLUGIN_ROW);
+    expect(item.description).toBeUndefined();
+    expect(item.tooltip).toBeUndefined();
+  });
+
+  it('two diagnoses on one plugin read as a count and both tooltip lines', async () => {
+    const { composite, render } = make([PLUGIN_ROW]);
+    await render();
+    composite.setLoadOrder(new Set(['A.esp']));
+
+    composite.setDiagnoses(new Map([['a.esp', ['first diagnosis', 'second diagnosis']]]));
+
+    const item = composite.getTreeItem(PLUGIN_ROW);
+    expect(item.description).toBe('⚠ 2 malformed-plugin diagnoses');
+    expect(item.tooltip).toContain('first diagnosis');
+    expect(item.tooltip).toContain('second diagnosis');
+  });
+});
+
 // ADR-0037: the order-aware missing-master badge (Mod Management, no
 // load order needed) and this load-order-derived state are one concept in the merged tree, never two
 // decorations that can disagree.

@@ -38,13 +38,13 @@ F5 doesn't reliably work in this environment — use the CLI directly:
 
 ```bash
 code --extensionDevelopmentPath="$(git rev-parse --show-toplevel)/modbench" \
-     "<path-to-an-MO2-instance-directory>" &
+     "$(git rev-parse --show-toplevel)/DevList" &
 ```
 
 **The workspace root must be a real MO2 instance directory** (`modbench/CLAUDE.md` § Invariants:
-workspace root = MO2 instance, no separate setting). Do not open the Modbench source repo itself
-as the workspace — the Loadout view will have nothing to show. Ask the user which instance to
-use if none was named.
+workspace root = MO2 instance, no separate setting). Default to `DevList/` (the local test
+instance checked into this repo) unless the user names another instance. Do not open the
+Modbench source repo itself as the workspace — the Loadout view will have nothing to show.
 
 ## 3 — Activate the extension
 

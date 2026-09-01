@@ -23,6 +23,7 @@ type Schemas = components['schemas'];
  *  least one matching record — PluginsTreeComposite omits a `false` row entirely rather than only
  *  suppressing its chevron. ADR-0041: `isTracked` is whether the mod folder holds a `.git`. */
 export type PluginMetadata = Schemas['PluginResponse'];
+export type PluginDiagnosisReport = Schemas['PluginDiagnosisReport'];
 
 export type MasterIssue = Schemas['MasterIssue'];
 
