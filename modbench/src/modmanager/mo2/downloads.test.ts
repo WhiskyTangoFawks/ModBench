@@ -38,12 +38,11 @@ describe('parseDownloadMeta', () => {
     expect(parseDownloadMeta('[General]\r\nversion=1.2.3\r\n').version).toBe('1.2.3');
   });
 
-  it('reads the tooltip fields: modName, fileID, gameName, author', () => {
+  it('reads the tooltip fields: modName, gameName, author', () => {
     const meta = parseDownloadMeta(
-      '[General]\r\nmodName=Sleep or Save\r\nfileID=456\r\ngameName=Fallout4\r\nauthor=SomeAuthor\r\n',
+      '[General]\r\nmodName=Sleep or Save\r\ngameName=Fallout4\r\nauthor=SomeAuthor\r\n',
     );
     expect(meta.modName).toBe('Sleep or Save');
-    expect(meta.fileID).toBe('456');
     expect(meta.gameName).toBe('Fallout4');
     expect(meta.author).toBe('SomeAuthor');
   });

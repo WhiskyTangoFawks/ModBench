@@ -39,8 +39,6 @@ export interface DownloadRow {
   /** Tooltip field from the `.meta`: the mod's name (distinct from the file's
    *  own `displayName`), absent when not recorded. */
   modName?: string;
-  /** Tooltip field from the `.meta`: the Nexus file id, absent when not recorded. */
-  fileID?: string;
   /** Tooltip field from the `.meta`: the game this download is for, absent when not recorded. */
   gameName?: string;
   /** Tooltip field from the `.meta`: the mod's author, absent when not recorded. */
@@ -77,7 +75,6 @@ export function parseDownloadMeta(
   name?: string;
   version?: string;
   modName?: string;
-  fileID?: string;
   gameName?: string;
   author?: string;
 } {
@@ -100,7 +97,6 @@ export function parseDownloadMeta(
     name: values.get('name'),
     version: values.get('version'),
     modName: values.get('modName'),
-    fileID: values.get('fileID'),
     gameName: values.get('gameName'),
     author: values.get('author'),
   };
@@ -182,7 +178,7 @@ export function buildDownloadRows(entries: DownloadEntry[]): DownloadRow[] {
   const rows = entries
     .filter((e) => !e.name.endsWith('.meta'))
     .map((e) => {
-      const { status, hidden, modID, name, version, modName, fileID, gameName, author } = parseDownloadMeta(
+      const { status, hidden, modID, name, version, modName, gameName, author } = parseDownloadMeta(
         e.metaText ?? '',
       );
       // Mirrors MO2's displayNameByInfo (downloadmanager.cpp:1410): `.meta` name
@@ -200,7 +196,6 @@ export function buildDownloadRows(entries: DownloadEntry[]): DownloadRow[] {
         modID,
         version,
         modName,
-        fileID,
         gameName,
         author,
       };
