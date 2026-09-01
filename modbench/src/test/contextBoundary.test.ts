@@ -123,4 +123,29 @@ describe('bounded-context boundary in the merged Plugins tree', () => {
     const offending = [...read('medit/PluginTreeProvider.ts').matchAll(/\b(mods?|modlists?|loadouts?)\b/gi)];
     expect(offending.map((m) => m[0])).toEqual([]);
   });
+
+  // #628: extension.ts's own decomposition — editorCommands.ts and modManagementCommands.ts
+  // are genuinely single-context now (unlike extension.ts itself, still exempt as the
+  // composition root that joins them). editorCommands.ts is held to the same import-only tier
+  // pluginDestination.ts/Mo2ModlistSource.ts/model.ts get above, not PluginListProvider.ts's
+  // stricter "no vocabulary in its own text" bar: it carries user-facing strings that
+  // legitimately name the other context's term for the user's own benefit (e.g.
+  // makeResolveOriginOrReport's toast, "could not resolve which mod ... belongs to" — a user
+  // thinks in MO2's vocabulary even from an Editing-triggered command).
+  it('editorCommands.ts imports nothing from Mod Management', () => {
+    expect(importsOf(read('medit/editorCommands.ts')).filter((s) => s.includes('modmanager'))).toEqual([]);
+  });
+
+  // modManagementCommands.ts has no such user-facing exception (verified: zero occurrences of
+  // Editing's own vocabulary anywhere in its text, not just its imports), so it gets
+  // PluginListProvider.ts's own stricter bar instead of editorCommands.ts's weaker one — the
+  // stronger guard where it's free, not the same tier as a matter of course.
+  it('modManagementCommands.ts imports nothing from Editing', () => {
+    expect(importsOf(read('modmanager/modManagementCommands.ts')).filter((s) => s.includes('medit'))).toEqual([]);
+  });
+
+  it('modManagementCommands.ts contains no record vocabulary', () => {
+    const offending = [...read('modmanager/modManagementCommands.ts').matchAll(/\b(records?|formkeys?|recordtypes?|editorids?)\b/gi)];
+    expect(offending.map((m) => m[0])).toEqual([]);
+  });
 });
