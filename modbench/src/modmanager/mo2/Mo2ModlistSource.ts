@@ -197,16 +197,9 @@ export class Mo2ModlistSource implements IModlistSource {
    *  it registered, so callers can skip a no-op refresh. Idempotent: a name
    *  already registered by an earlier call is excluded on the next one. */
   async registerUnlistedMods(): Promise<string[]> {
-    let dirents;
-    try {
-      dirents = await readdir(join(this.instanceRoot, 'mods'), { withFileTypes: true });
-    } catch (err) {
-      if ((err as NodeJS.ErrnoException).code === 'ENOENT') return []; // no mods/ folder yet
-      throw err;
-    }
-    const dirNames = dirents.filter((d) => d.isDirectory()).map((d) => d.name);
-    const entries = parseModlist(await readFile(await this.modlistPath(), 'utf8'));
-    const names = unlistedModNames(dirNames, entries);
+    const listing = await this.readModsDirAndModlist();
+    if (listing === null) return [];
+    const names = unlistedModNames(listing.dirNames, listing.entries);
     // insertModAtWinningEnd always lands its new line above whatever's
     // currently first, so inserting in reverse-sorted order leaves the batch
     // in ascending sorted order top-to-bottom on disk.
@@ -223,20 +216,30 @@ export class Mo2ModlistSource implements IModlistSource {
    *  directory prunes nothing (same ENOENT posture as registerUnlistedMods — a malformed
    *  workspace must not read as a mass delete); any other readdir failure propagates. */
   async pruneDeadEntries(): Promise<string[]> {
-    let dirents;
-    try {
-      dirents = await readdir(join(this.instanceRoot, 'mods'), { withFileTypes: true });
-    } catch (err) {
-      if ((err as NodeJS.ErrnoException).code === 'ENOENT') return [];
-      throw err;
-    }
-    const dirNames = dirents.filter((d) => d.isDirectory()).map((d) => d.name);
-    const entries = parseModlist(await readFile(await this.modlistPath(), 'utf8'));
-    const names = deadModEntryNames(dirNames, entries);
+    const listing = await this.readModsDirAndModlist();
+    if (listing === null) return [];
+    const names = deadModEntryNames(listing.dirNames, listing.entries);
     for (const name of names) {
       await this.modifyModlist((t) => removeModFromText(t, name));
     }
     return names;
+  }
+
+  /** The shared preamble of registerUnlistedMods/pruneDeadEntries: the mods/ folder listing
+   *  (directories only) beside the parsed modlist. `null` when mods/ does not exist — only ENOENT
+   *  means "no mods folder yet"; any other readdir failure (ENOTDIR etc.) propagates. */
+  private async readModsDirAndModlist(): Promise<{ dirNames: string[]; entries: ModlistEntry[] } | null> {
+    let dirents;
+    try {
+      dirents = await readdir(join(this.instanceRoot, 'mods'), { withFileTypes: true });
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code === 'ENOENT') return null;
+      throw err;
+    }
+    return {
+      dirNames: dirents.filter((d) => d.isDirectory()).map((d) => d.name),
+      entries: parseModlist(await readFile(await this.modlistPath(), 'utf8')),
+    };
   }
 
   async reorderSeparatorBlock(separatorName: string, toIndex: number): Promise<void> {

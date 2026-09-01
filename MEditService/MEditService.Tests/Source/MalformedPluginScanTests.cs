@@ -82,7 +82,9 @@ public sealed class MalformedPluginScanTests
 
         var d = Assert.Single(diagnoses, d => d.DefectClass == "entry-point-parameter-shape");
         Assert.Equal("PERK 040000EF (T6M_QuickReload_ReloadVATs)", d.Anchor);
-        Assert.Equal("repairable (lossless)", d.Tail);
+        // Diagnose only — no repair tail (medit-repair.md R7: retyping the parameter is a
+        // semantic mapping, not a byte operation).
+        Assert.Null(d.Tail);
         Assert.Equal("entry point 1 (function 14, Multiply 1 + Actor Value Mult) has EPFT 2; vanilla writes EPFT 8", d.Message);
     }
 
@@ -106,9 +108,9 @@ public sealed class MalformedPluginScanTests
         var d = Assert.Single(diagnoses);
         Assert.Equal("entry-point-parameter-shape", d.DefectClass);
         Assert.Equal("PERK 0004C92C (Sniper03)", d.Anchor);
-        // Repair here removes the parameter block the function never takes — EPFT and EPFD,
-        // headers included — so the tail carries the byte cost.
-        Assert.Equal("repairable (drops 17 bytes)", d.Tail);
+        // Repair here removes the whole parameter block the function never takes — EPFT, EPFB
+        // and EPFD, headers included (medit-repair.md R6) — so the tail carries the byte cost.
+        Assert.Equal("repairable (drops 25 bytes)", d.Tail);
         Assert.Equal("entry point 0 (function 6, Absolute Value) has EPFT 1; vanilla writes no parameters", d.Message);
     }
 

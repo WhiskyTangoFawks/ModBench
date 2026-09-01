@@ -453,7 +453,7 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
 
   /** Get-or-fetch-and-set against one of the per-surface caches. A failed fetch caches
    *  nothing, so the next expand retries — same as every hand-written block this replaced. */
-  private async cached<T>(map: Map<string, T>, key: string, fetch: () => Promise<T>): Promise<T> {
+  private async getOrFetch<T>(map: Map<string, T>, key: string, fetch: () => Promise<T>): Promise<T> {
     let value = map.get(key);
     if (value === undefined) {
       value = await fetch();
@@ -504,7 +504,7 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
   private fetchCellGroups(node: CellNode): Promise<PluginTreeNode[]> {
     return this.orErrorNode(`fetchCellGroups(${node.cell.formKey})`, async () => {
       const cacheKey = `${this.originKey(node.plugin, node.origin)}::${node.cell.formKey}`;
-      const refs = await this.cached(this.refCache, cacheKey,
+      const refs = await this.getOrFetch(this.refCache, cacheKey,
         () => this.repository.getCellReferences(node.plugin, node.cell.formKey, node.origin));
       const groups: PlacedGroupNode[] = [];
       if (refs.persistent.length) groups.push(new PlacedGroupNode(node.plugin, node.cell.formKey, 'persistent', refs.persistent, node.origin));
@@ -521,7 +521,7 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
   private fetchContainerChildren(node: RecordNode): Promise<PluginTreeNode[]> {
     return this.orErrorNode(`fetchContainerChildren(${node.record.formKey})`, async () => {
       const cacheKey = `${this.originKey(node.record.plugin, node.origin)}::${node.record.formKey}`;
-      const children = await this.cached(this.containerChildCache, cacheKey,
+      const children = await this.getOrFetch(this.containerChildCache, cacheKey,
         () => this.repository.getContainerChildren(node.record.plugin, node.record.formKey, node.origin));
       return children.map(c => new RecordNode(
         c, node.origin, this.isImmutable(c.plugin, node.origin), containerChildTypeOf(c.recordType), c.hasContainerChildren));
@@ -531,7 +531,7 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
   private fetchInteriorCells(node: InteriorCellsNode): Promise<PluginTreeNode[]> {
     return this.orErrorNode(`fetchInteriorCells(${node.plugin})`, async () => {
       const cacheKey = this.originKey(node.plugin, node.origin);
-      const cached = await this.cached(this.interiorCache, cacheKey,
+      const cached = await this.getOrFetch(this.interiorCache, cacheKey,
         () => this.repository.getInteriorCells(node.plugin, 0, PAGE_SIZE, node.origin));
       const nodes: PluginTreeNode[] = cached.items.map(c => new CellNode(node.plugin, c, node.origin));
       if (cached.total > cached.items.length) {
@@ -551,7 +551,7 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
       // combined; docs/specs/plugins.md). Matches xEdit's own record-type group nodes, which
       // load unconditionally in full (xeMainForm.pas `vstNavInitChildren`:
       // `ChildCount := Container.ElementCount`, no LIMIT).
-      const cached = await this.cached(this.pageCache, this.cacheKey(node),
+      const cached = await this.getOrFetch(this.pageCache, this.cacheKey(node),
         () => this.repository.getRecords(node.plugin, node.recordType, 0, UNLIMITED_RECORDS, node.origin));
       // qust/dial rows are collapsible here too — a Quest or Dialog Topic reached from its
       // own flat record-type listing (not just as someone else's child) still expands into its own

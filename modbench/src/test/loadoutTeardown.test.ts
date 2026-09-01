@@ -15,6 +15,7 @@ function makeSession() {
     recordBrowserProvider: { setImmutablePlugins: vi.fn() },
     backendManager: { isHealthy: false, on: vi.fn(), stop: vi.fn().mockResolvedValue(undefined) },
     setFilterActive: vi.fn(),
+    loadDiagnostics: { clear: vi.fn() },
   };
 }
 
@@ -31,6 +32,7 @@ describe('exitToLoadout', () => {
     expect(session.loadOrderSync.setMatches).toHaveBeenCalledWith(undefined);
     expect(session.recordBrowserProvider.setImmutablePlugins).toHaveBeenCalledWith([]);
     expect(session.backendManager.stop).toHaveBeenCalled();
+    expect(session.loadDiagnostics.clear).toHaveBeenCalled();
   });
 
   it('tolerates a session whose fields were never built', () => {
@@ -57,6 +59,7 @@ describe('clearTreeWhenBackendDies', () => {
     expect(composite.setLoadOrder).toHaveBeenCalledWith(undefined);
     expect(recordBrowser.setImmutablePlugins).toHaveBeenCalledWith([]);
     expect(session.loadOrderSync.setMatches).toHaveBeenCalledWith(undefined);
+    expect(session.loadDiagnostics.clear).toHaveBeenCalled();
   });
 
   it('a healthy status clears nothing', () => {

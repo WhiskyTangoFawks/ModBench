@@ -12,6 +12,10 @@ export interface TeardownSession {
   recordBrowserProvider?: { setImmutablePlugins(names: string[]): void };
   backendManager?: { isHealthy: boolean; on(event: 'status', cb: () => void): void; stop(): Promise<void> };
   setFilterActive?: (active: boolean) => void;
+  /** #570: the session-load diagnosis collection (Problems panel). Cleared by both teardown
+   *  writers below so the two diagnosis surfaces — Problems entries and the tree badge, which
+   *  `setLoadOrder(undefined)` clears — can never disagree about a dead session. */
+  loadDiagnostics?: { clear(): void };
 }
 
 /** The Plugins view's own statement about what it is doing, or what it does not yet know
@@ -51,6 +55,9 @@ export function exitToLoadout(session: TeardownSession): void {
   // which held plugins' records matched, same reasoning as the chevrons just above.
   session.loadOrderSync?.setMatches(undefined);
   session.recordBrowserProvider?.setImmutablePlugins([]);
+  // #570: the Problems entries are statements about a live backend's scan, same as the tree
+  // badge setLoadOrder just cleared.
+  session.loadDiagnostics?.clear();
   // stop() is async (waits for confirmed exit before reporting "stopped") but its body
   // runs to completion regardless of whether the returned promise is awaited — fire-and-forget
   // here still defers emitStatus('stopped') correctly; exitToLoadout() itself doesn't need to
@@ -75,6 +82,8 @@ export function clearTreeWhenBackendDies(
     // ADR-0035 amending ADR-0018: same reasoning as the two above — a statement about
     // which plugins the dead backend's records matched must not seed the next one.
     session.loadOrderSync?.setMatches(undefined);
+    // #570: and neither must its diagnoses (see exitToLoadout).
+    session.loadDiagnostics?.clear();
   });
 }
 

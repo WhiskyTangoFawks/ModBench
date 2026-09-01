@@ -5,7 +5,7 @@ import type { PluginDiagnosisReport } from './ApiClient';
 /** #570: publishes the session-load Kind B scan's diagnoses to the Problems panel — a sibling of
  *  `editorCommands.ts`'s publishCompileDiagnostics, but targeting the plugin binary itself
  *  (`mods/<origin>/<plugin>`): these plugins are pre-Track, so there is no source-tree file to
- *  point at. Replaced wholesale each scan (never per mod): one scan answers for the whole load
+ *  point at. Replaced wholesale each scan (never one plugin at a time): one scan answers for the whole load
  *  order. Each entry's message is `PluginDiagnosisReport.text` — the Track refusal's own wording
  *  (#569), one vocabulary. Warning severity: a Malformed plugin still loads and plays. */
 export function publishLoadDiagnoses(

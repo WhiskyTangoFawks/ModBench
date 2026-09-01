@@ -21,9 +21,9 @@ namespace MEditService.Tests.RealData;
 /// </summary>
 public sealed class MalformedFixtureGenerator
 {
-    private static readonly (string SourceMod, string SourcePlugin, string FixtureName, (string Type, uint FormId)[] Records)[] Cuts =
+    private static readonly (string SourceFolder, string SourcePlugin, string FixtureName, (string Type, uint FormId)[] Records)[] Cuts =
     [
-        // Lunar Arsenal's copy, not "The Charger Pistol"'s — two mods ship a GaussRevolver.esp
+        // Lunar Arsenal's copy, not "The Charger Pistol"'s — two folders ship a GaussRevolver.esp
         // (ADR-0044's every-physical-copy story in the wild) and only this one is malformed.
         ("Lunar Arsenal Unique Replacers - Weapons", "GaussRevolver.esp",
             "GaussRevolver - CutDown.esp", [("WEAP", 0x03000860u)]),
@@ -50,9 +50,9 @@ public sealed class MalformedFixtureGenerator
         // Written to the source tree, not the test bin dir — these are committed fixtures.
         var testDataDir = Path.Combine(FindRepoRoot(), "MEditService", "MEditService.Tests", "TestData");
 
-        foreach (var (sourceMod, sourcePlugin, fixtureName, records) in Cuts)
+        foreach (var (sourceFolder, sourcePlugin, fixtureName, records) in Cuts)
         {
-            var bytes = File.ReadAllBytes(Path.Combine(instance, "mods", sourceMod, sourcePlugin));
+            var bytes = File.ReadAllBytes(Path.Combine(instance, "mods", sourceFolder, sourcePlugin));
             var spans = PluginBinaryWalk.WalkRecords(bytes);
 
             var tes4 = spans.First(r => r.Type == "TES4");

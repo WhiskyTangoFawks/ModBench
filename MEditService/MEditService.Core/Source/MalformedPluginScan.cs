@@ -245,7 +245,9 @@ public static class MalformedPluginScan
                 var s = subrecords[j];
                 if (s.Sig == "DATA" && function == null && s.Len >= 8) function = data[s.Start + 7];
                 if (s.Sig == "EPFT" && s.Len >= 7) { epft = data[s.Start + 6]; parameterBytes += s.Len; }
-                if (s.Sig == "EPFD") parameterBytes += s.Len;
+                // The drop operation removes the whole parameter block — EPFT, EPFB and EPFD
+                // (medit-repair.md R6), so all three count toward the tail's byte cost.
+                if (s.Sig is "EPFD" or "EPFB") parameterBytes += s.Len;
                 if (s.Sig == "EPF3") hasEpf3 = true;
             }
             i = j;
@@ -266,7 +268,10 @@ public static class MalformedPluginScan
             }
             else if (EpftByPerkFunction.TryGetValue(fn, out var expected) && epft != null && epft != expected)
             {
-                diagnoses.Add(new PluginDiagnosis(anchor, "entry-point-parameter-shape", Lossless,
+                // Diagnose only — no repair tail (medit-repair.md R7): converting the parameter's
+                // value between EPFT encodings (an AV index to an AVIF FormKey) is a semantic
+                // mapping, not one of the engine's byte operations.
+                diagnoses.Add(new PluginDiagnosis(anchor, "entry-point-parameter-shape", Tail: null,
                     $"entry point {entryIndex} (function {fn}, {name}) has EPFT {epft}; vanilla writes EPFT {expected}"));
             }
         }

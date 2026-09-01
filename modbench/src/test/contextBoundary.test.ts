@@ -58,6 +58,16 @@ describe('bounded-context boundary in the merged Plugins tree', () => {
     expect(imports).toEqual([]);
   });
 
+  // #628/#650: the teardown/refresh writers left extension.ts for a unit seam, and their
+  // docstring claims the same structural-deps property the composite and name filter hold —
+  // so it is guarded the same way: nothing imported but `vscode` (type-only, for
+  // TreeView.message's MarkdownString half).
+  it('the loadout teardown module imports from neither context', () => {
+    const imports = importsOf(read('loadoutTeardown.ts'));
+    expect(imports.filter((s) => s.includes('medit') || s.includes('modmanager'))).toEqual([]);
+    expect(imports).toEqual(['vscode']);
+  });
+
   // The sync joins the two contexts, so it may speak of a snapshot and a receiver, but never of
   // what a snapshot is made of on Mod Management's side, and never of what a plugin contains on
   // Editing's. "Send the mod list" is the sentence this file's code must not be able to write.

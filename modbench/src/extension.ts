@@ -89,6 +89,9 @@ interface ExtensionSession {
    *  decoration). Assigned in activate() where the repository, the diagnostic collection and the
    *  instance root all exist; called by applyLoadOrderToTree after every reconcile's hand-off. */
   refreshDiagnoses?: () => void;
+  /** #570: the same scan's Problems collection, held on the session so the teardown writers
+   *  (loadoutTeardown.ts) can clear it alongside the tree badge. */
+  loadDiagnostics?: vscode.DiagnosticCollection;
 }
 
 
@@ -155,8 +158,6 @@ function heldPluginFilesFrom(repository: ApiPluginRepository): () => Promise<Hel
 }
 
 
-
-
 /** Everything that follows the record filter turning on or off: the context key its Clear
  *  action is gated on, the code lens's notion of which SQL is live, and the Plugins
  *  tree's readout — where the record filter is one of two independent narrowing axes and is
@@ -175,7 +176,6 @@ function makeSetFilterActive(session: ExtensionSession, filterProvider: FilterCo
     session.pluginsNameFilter?.setBaseDescription(active ? `records: ${label ?? 'SQL'}` : undefined);
   };
 }
-
 
 
 /** The backend launches with the extension — maintainer ruling 2026-09-01: the DB-file-backed
@@ -231,6 +231,7 @@ export function activate(context: vscode.ExtensionContext) {
   // targeting plugin binaries (pre-Track), replaced wholesale per scan (publishLoadDiagnoses).
   const loadDiagnostics = vscode.languages.createDiagnosticCollection('modbench-diagnosis');
   context.subscriptions.push(loadDiagnostics);
+  session.loadDiagnostics = loadDiagnostics;
   session.backendManager = createBackendManager(port, outputChannel, statusBarItem);
 
   const client = createApiClient(port, createUnlimitedFetch());
@@ -303,10 +304,15 @@ export function activate(context: vscode.ExtensionContext) {
   // #570: ADR-0026 background tier — the scan is advisory, so a blip logs and retries next
   // reconcile, never toasts. Fire-and-forget: the tree hand-off must not wait on a
   // whole-load-order file scan.
+  let diagnosisScanGeneration = 0;
   session.refreshDiagnoses = () => {
     // No instance root means no MO2 workspace — nothing a diagnosis could point at.
     if (instanceRoot === undefined) return;
+    // Generation guard: a slow scan answering after a newer reconcile's own refresh (or after
+    // teardown cleared everything) must not resurrect a stale answer.
+    const generation = ++diagnosisScanGeneration;
     void repository.getDiagnoses().then((reports) => {
+      if (generation !== diagnosisScanGeneration) return;
       publishLoadDiagnoses(loadDiagnostics, instanceRoot, reports);
       session.pluginsTree?.setDiagnoses(groupDiagnosesByPlugin(reports));
     }).catch((err: unknown) => {
@@ -342,20 +348,6 @@ export function activate(context: vscode.ExtensionContext) {
     outputChannel, enterEditing, exitToLoadout: () => exitToLoadout(session), loadOrderSync: session.loadOrderSync, backendManager: session.backendManager,
   };
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 interface PluginListDeps {
@@ -693,11 +685,6 @@ function registerCreatePluginCommand(
 }
 
 
-
-
-
-
-
 /** `Modbench: Rebase onto Updated Baseline` — origin-scoped (the repo, not any one plugin,
  *  is the unit of baselines and rebase), resolved from a tracked plugin row the same way Track
  *  resolves origin. Also the *re-runnable* form: {@link SourceRepository.RebaseEditBranch}'s own
@@ -901,9 +888,6 @@ function registerPluginsNameFilter(
     hasRows: async () => (await provider.getChildren()).length > 0,
   });
 }
-
-
-
 
 
 /** The Loadout half of activation, as one step: deployment-mode context key, the
@@ -1364,7 +1348,6 @@ function setupScripts(cfg: vscode.WorkspaceConfiguration): { scriptsPath: string
 }
 
 
-
 // VS Code's own `deactivate()` contract takes no arguments, so it has no way to receive
 // `activate()`'s session object directly — this is the one module-level reference left, existing
 // solely to bridge that gap, not a singleton with a "why module level" justification of its own.
@@ -1378,8 +1361,6 @@ export async function deactivate(): Promise<void> {
 }
 
 
-
-
 function promptPluginName(): Thenable<string | undefined> {
   return vscode.window.showInputBox({
     prompt: 'Enter new plugin name (e.g. MyPatch.esp)',
@@ -1390,10 +1371,5 @@ function promptPluginName(): Thenable<string | undefined> {
     },
   });
 }
-
-
-
-
-
 
 

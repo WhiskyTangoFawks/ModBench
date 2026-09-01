@@ -20,11 +20,26 @@ public static class PluginEndpoints
             .Produces<IReadOnlyList<PluginResponse>>();
 
         // #570: every held, mutable plugin's Kind B diagnoses off its original bytes — the
-        // session-load complement of Track's refusal, one call for the whole load order.
-        app.MapGet("/plugins/diagnoses", (MalformedPluginQueryService svc) => Results.Ok(svc.GetLoadOrderDiagnoses()))
+        // session-load complement of Track's refusal, one call for the whole load order. Same
+        // no-load-order handling as MapCatalog below: RequireScope's throw becomes a 503, never
+        // an unmapped 500.
+        app.MapGet("/plugins/diagnoses", (MalformedPluginQueryService svc, ILoggerFactory loggerFactory) =>
+        {
+            var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
+            try
+            {
+                return Results.Ok(svc.GetLoadOrderDiagnoses());
+            }
+            catch (InvalidOperationException ex)
+            {
+                logger.LogError(ex, "No loadOrder for GetPluginDiagnoses");
+                return Results.Problem(ex.Message, statusCode: 503);
+            }
+        })
             .WithName("GetPluginDiagnoses")
             .WithTags(Tag)
-            .Produces<IReadOnlyList<PluginDiagnosisReport>>();
+            .Produces<IReadOnlyList<PluginDiagnosisReport>>()
+            .ProducesProblem(503);
 
         // The condition function picker's catalog — filtered to what the loaded load order's
         // game actually resolves (ConditionCodecRegistry), not a hardcoded list.
