@@ -17,9 +17,9 @@ serializer's root `RecordData.json`, at the synthetic FormKey `000000:<plugin>`;
 and its read path are gone. It is not yet a *source unit* (#661), so an external edit to that file
 is not detected and `SourceFreshness` skips it deliberately.
 `load_order_idx` and `is_winner` read as columns of `records` but are not
-stored on it — they are session-derived, joined into the registered view from `plugins` and the
-`winners` table respectively (ADR-0001). The index is a cache rebuilt on session
-load — deleting it loses nothing.
+stored on it — they are load-order-derived, joined into the registered view from `plugins` and
+the `winners` table respectively (ADR-0001). The index is a persistent per-instance cache
+(ADR-0001) — deleting it costs one cold index and loses nothing.
 
 **Reflection over Mutagen's record types generates, at startup, three things — never DDL:**
 

@@ -11,10 +11,10 @@ status: accepted
 game-path resolution. Mod management is file/HTTP/JSON work that never parses plugin binaries —
 the one exception, reading a plugin's master list for missing-master and load-order sorting, is
 a small `TES4`-header read, not a Mutagen-sized concern. Node provides hardlinks natively
-(`fs.link`), and the entire mod-manager UI surface (tree views, `SecretStorage`, status bar,
-`nxm://` handler) already lives in the extension, so a C# home would mean a chatty HTTP API
-wrapped around inherently UI-adjacent bookkeeping. The editing backend stays a pure Mutagen +
-DuckDB record service.
+(`fs.link`), and the mod-manager UI surface (tree views, status bar) already lives in the
+extension — `SecretStorage` and a `nxm://` handler are designed to live there too once built
+(neither is built yet) — so a C# home would mean a chatty HTTP API wrapped around inherently
+UI-adjacent bookkeeping. The editing backend stays a pure Mutagen + DuckDB record service.
 
 **Its on-disk format is MO2's.** Modbench does not invent a modlist format: a mod is a
 `mods/<name>/` folder, enable state and mod override order live in a profile's `modlist.txt`

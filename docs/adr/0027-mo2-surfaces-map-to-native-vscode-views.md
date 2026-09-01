@@ -14,7 +14,7 @@ rather than reinventing MO2's layout widgets. Three placement decisions follow:
   mid-workflow, so both get a permanent slot rather than living behind a switcher, and both get
   native checkbox/drag-reorder/keyboard-nav for free (`TreeDragAndDropController`). Plugins is
   **the one Plugins tree** ([ADR-0035](0035-one-plugins-tree-editing-is-a-capability.md)): Mod
-  Management owns its rows (`plugins.txt`, no backend required) and a running editing session adds
+  Management owns its rows (`plugins.txt`, no backend required) and a running editing backend adds
   record browsing beneath them.
 - **Downloads** is a native `TreeView`, third in the loadout stack below Mods and Plugins (flat
   list, status columns, right-click actions — the same native-context-menu pattern Mods/Plugins

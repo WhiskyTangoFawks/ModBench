@@ -286,7 +286,7 @@ end.
 - **A second window on the same instance is refused, by name.** The backend answers the load
   `423 Locked` ("this instance's index is open in another Modbench window") and holds nothing; the
   frontend surfaces that message as the load failure. No read-only mode, no waiting, never a second
-  index file ([ADR-0001](../adr/0001-persistent-per-instance-index-session-is-a-registration.md)
+  index file ([ADR-0001](../adr/0001-persistent-per-instance-index-load-order-is-a-registration.md)
   point 6).
 - **Mechanism: poll, don't stream.** Every call goes through the generated `openapi-fetch`
   client, which has no streaming path, and the load POST stays blocking. So `GET /load-order/status`

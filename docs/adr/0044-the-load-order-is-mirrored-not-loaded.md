@@ -5,7 +5,7 @@ status: accepted
 # The load order is mirrored, not loaded: one reconcile verb, every copy registered, no session
 
 Governs [ADR-0035](0035-one-plugins-tree-editing-is-a-capability.md) § The
-loading model and § Live mutation, [ADR-0001](0001-persistent-per-instance-index-session-is-a-registration.md)
+loading model and § Live mutation, [ADR-0001](0001-persistent-per-instance-index-load-order-is-a-registration.md)
 points 2 and 4, and the Mod Management → Editing relationship in [CONTEXT-MAP.md](../../CONTEXT-MAP.md).
 
 ## Context

@@ -41,8 +41,9 @@ per-plugin view.
 
 ## Consequences
 
-- One-time cost: the indexing walk + storage for placed refs on each session load (the index is
-  `:memory:`, rebuilt per session). Consistent with how every other record type is indexed.
+- One-time cost: the indexing walk + storage for placed refs when a plugin is first indexed (the
+  index is a persistent per-instance file — ADR-0001 — not rebuilt per launch). Consistent with
+  how every other record type is indexed.
 - `pos_x/y/z` is captured during the same walk so spatial search (point/radius/bbox) is not
   foreclosed; region/grid queries are already served by `cell_location` grid columns. A DuckDB
   `spatial` extension can layer on additively later.
