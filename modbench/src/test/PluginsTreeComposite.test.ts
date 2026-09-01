@@ -1,37 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
+import { TreeItem, ThemeIcon, ThemeColor, TreeItemCollapsibleState, EventEmitter } from './vscodeMock';
 
-vi.mock('vscode', () => ({
-  TreeItem: class {
-    label: string;
-    collapsibleState: number;
-    tooltip?: string;
-    description?: string;
-    iconPath?: unknown;
-    contextValue?: string;
-    constructor(label: string, collapsibleState = 0) {
-      this.label = label;
-      this.collapsibleState = collapsibleState;
-    }
-  },
-  ThemeIcon: class {
-    constructor(public id: string, public color?: unknown) {}
-  },
-  ThemeColor: class {
-    constructor(public id: string) {}
-  },
-  TreeItemCollapsibleState: { None: 0, Collapsed: 1, Expanded: 2 },
-  EventEmitter: class {
-    private readonly handlers: ((e: unknown) => void)[] = [];
-    get event() {
-      return (h: (e: unknown) => void) => {
-        this.handlers.push(h);
-        return { dispose: () => { /* no-op */ } };
-      };
-    }
-    fire(e?: unknown) { this.handlers.forEach(h => h(e)); }
-    dispose() { /* no-op */ }
-  },
-}));
+vi.mock('vscode', () => ({ TreeItem, ThemeIcon, ThemeColor, TreeItemCollapsibleState, EventEmitter }));
 
 import * as vscode from 'vscode';
 import { PluginsTreeComposite } from '../PluginsTreeComposite';

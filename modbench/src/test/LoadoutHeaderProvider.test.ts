@@ -1,32 +1,12 @@
 import { describe, it, expect, vi } from 'vitest';
+import { TreeItem, TreeItemCollapsibleState, ThemeIcon, EventEmitter } from './vscodeMock';
 
 // The Loadout header is the home for workspace-scope actions — profile, deployment —
 // none of which belong to any one tree's domain. It spans both bounded contexts, so it may
 // not import either context's internals: every piece of state arrives as an injected getter.
 // That constraint is what makes it unit-testable here without a VS Code harness
 // (`vi.mock('vscode')`, the reporter.test.ts precedent).
-vi.mock('vscode', () => ({
-  TreeItem: class {
-    label: string;
-    description?: string;
-    tooltip?: string;
-    contextValue?: string;
-    iconPath?: unknown;
-    command?: unknown;
-    collapsibleState: number;
-    constructor(label: string, collapsibleState = 0) {
-      this.label = label;
-      this.collapsibleState = collapsibleState;
-    }
-  },
-  TreeItemCollapsibleState: { None: 0, Collapsed: 1, Expanded: 2 },
-  ThemeIcon: class { constructor(public id: string) {} },
-  EventEmitter: class {
-    private readonly handlers: ((e: unknown) => void)[] = [];
-    get event() { return (h: (e: unknown) => void) => { this.handlers.push(h); }; }
-    fire(e?: unknown) { this.handlers.forEach(h => h(e)); }
-  },
-}));
+vi.mock('vscode', () => ({ TreeItem, TreeItemCollapsibleState, ThemeIcon, EventEmitter }));
 
 import { LoadoutHeaderProvider, type LoadoutHeaderDeps } from '../LoadoutHeaderProvider';
 

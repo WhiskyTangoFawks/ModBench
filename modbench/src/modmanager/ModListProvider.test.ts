@@ -5,39 +5,16 @@ import { join } from 'node:path';
 import type { IModlistSource, Mod, ModlistEntry, Separator } from './model';
 import { parseModlist, moveModInText, moveSeparatorBlockInText } from './mo2/modlistText';
 import { buildTes4Buffer } from './test/buildTes4Buffer';
+import {
+  TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon,
+  uriFile, DataTransferItem, DataTransfer,
+} from '../test/vscodeMock';
 
 const conflictFixture = join(__dirname, 'test', 'fixtures', 'conflict-instance');
 
 vi.mock('vscode', () => ({
-  TreeItem: class {
-    label: string;
-    description?: string;
-    tooltip?: string;
-    contextValue?: string;
-    iconPath?: unknown;
-    collapsibleState: number;
-    command?: unknown;
-    checkboxState?: number;
-    constructor(label: string, collapsibleState = 0) {
-      this.label = label;
-      this.collapsibleState = collapsibleState;
-    }
-  },
-  TreeItemCollapsibleState: { None: 0, Collapsed: 1, Expanded: 2 },
-  TreeItemCheckboxState: { Unchecked: 0, Checked: 1 },
-  EventEmitter: class {
-    private readonly handlers: ((e: unknown) => void)[] = [];
-    get event() { return (h: (e: unknown) => void) => { this.handlers.push(h); }; }
-    fire(e?: unknown) { this.handlers.forEach(h => h(e)); }
-  },
-  ThemeIcon: class { constructor(public id: string) {} },
-  Uri: { file: (p: string) => ({ fsPath: p, toString: () => `file://${p}` }) },
-  DataTransferItem: class { constructor(public value: unknown) {} },
-  DataTransfer: class {
-    private readonly _items = new Map<string, { value: unknown }>();
-    get(mime: string) { return this._items.get(mime); }
-    set(mime: string, item: { value: unknown }) { this._items.set(mime, item); }
-  },
+  TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon,
+  Uri: { file: uriFile }, DataTransferItem, DataTransfer,
 }));
 
 import { ModListProvider, CountNode, SeparatorNode, ModNode, ErrorNode, OverwriteNode } from './ModListProvider';
