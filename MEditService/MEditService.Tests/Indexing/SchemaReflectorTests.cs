@@ -716,7 +716,10 @@ public class SchemaReflectorTests
         var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
         var col = schemas["npc_"].RecordColumns.FirstOrDefault(c => c.Name == "race");
         Assert.NotNull(col);
-        Assert.NotNull(col!.Apply);
+        // #649: the delegate, not the LeafWrite wrapper. Asserting the wrapper is unconditionally
+        // true now that Apply is non-nullable, which would leave this fact — whose entire body is
+        // these two lines — proving nothing at all.
+        Assert.NotNull(col!.Apply.Writer);
     }
 
     [Fact]
@@ -935,7 +938,7 @@ public class SchemaReflectorTests
         // (Nullable.GetUnderlyingType(type) != null || !type.IsValueType) requires — a genuinely
         // nullable scalar column, live on a real record type, to exercise the clear branch on.
         var nullableCol = schemas["npc_"].RecordColumns.First(c => c.Name == "facial_morph_intensity");
-        Assert.NotNull(nullableCol.Apply);
+        Assert.NotNull(nullableCol.Apply.Writer); // the delegate, not the always-present wrapper (#649)
         npc.FacialMorphIntensity = 1.0f;
 
         nullableCol.Apply.Writer!(npc, System.Text.Json.JsonDocument.Parse("null").RootElement);

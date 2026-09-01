@@ -1143,6 +1143,11 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
     // the two lists was considered and declined: it would also skip names like `EditorID` and
     // `PersistentTimestamp` at nesting depth, where nothing shows they are unwanted, for no observed
     // gain over these six.
+    //
+    // Six rows, eight anomaly messages: `ILinkIdentifier.Type` and `IBinaryItem.BinaryWriteTranslator`
+    // are each reachable from both the column and the sub-field dispatch, so disabling this filter
+    // reproduces 8 distinct reports for these 6 properties. Two valid countings of one set — noted
+    // because the mismatch reads as an error until you know why.
     private static readonly (string OwnerTypeName, string PropertyName)[] InfrastructurePropertySkips =
     [
         ("ILoquiObject", "Registration"),                    // Loqui's own registration handle
