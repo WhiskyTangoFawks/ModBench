@@ -51,6 +51,6 @@ public sealed class SecondWindowRefusedTests
         otherWindow.Dispose();
         mirror.Reconcile(data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
         Assert.Equal(LoadOrderState.Ready, mirror.Status.State);
-        Assert.NotEmpty(mirror.Index!.GetDocuments(new PluginKey("A.esp", PluginOrigin.DataDirectory)));
+        Assert.NotEmpty(mirror.Index!.At(RecordRef.Effective).GetDocuments(new PluginKey("A.esp", PluginOrigin.DataDirectory)));
     }
 }

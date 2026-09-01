@@ -220,8 +220,8 @@ public sealed class AbstractUnionEditTests : IDisposable
         public RecordEditService Service() =>
             new(_mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
 
-        public string NpcBody() => _mirror.Index!.GetDocument(Npc.ToString(), Plugin)!.Body!;
-        public string QuestBody() => _mirror.Index!.GetDocument(Quest.ToString(), Plugin)!.Body!;
+        public string NpcBody() => _mirror.Index!.At(RecordRef.Effective).GetDocument(Npc.ToString(), Plugin)!.Body!;
+        public string QuestBody() => _mirror.Index!.At(RecordRef.Effective).GetDocument(Quest.ToString(), Plugin)!.Body!;
 
         public void Dispose()
         {

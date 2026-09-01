@@ -30,9 +30,9 @@ public sealed class RecordEditServiceRenumberRecordTests
 
         Assert.True(result.Applied, result.Message);
         var index = mod.Mirror.Index!;
-        Assert.Null(index.GetDocument(mod.Npc.ToString(), mod.Plugin));
+        Assert.Null(index.At(RecordRef.Effective).GetDocument(mod.Npc.ToString(), mod.Plugin));
         Assert.NotNull(index.At(RecordRef.Head).GetDocument(mod.Npc.ToString(), mod.Plugin));
-        Assert.NotNull(index.GetDocument(result.NewFormKey!, mod.Plugin));
+        Assert.NotNull(index.At(RecordRef.Effective).GetDocument(result.NewFormKey!, mod.Plugin));
         Assert.Null(index.At(RecordRef.Head).GetDocument(result.NewFormKey!, mod.Plugin));
     }
 
@@ -160,10 +160,10 @@ public sealed class RecordEditServiceRenumberRecordTests
 
         Assert.True(result.Applied, result.Message);
         var index = two.Mirror.Index!;
-        var referencer = index.GetDocument(two.ReferencerNpc.ToString(), two.ReferencerPlugin)!;
+        var referencer = index.At(RecordRef.Effective).GetDocument(two.ReferencerNpc.ToString(), two.ReferencerPlugin)!;
         Assert.Contains(result.NewFormKey!, referencer.Body, StringComparison.Ordinal);
         Assert.DoesNotContain(two.TargetRace.ToString(), referencer.Body, StringComparison.Ordinal);
-        Assert.Contains(index.GetReferencedBy(result.NewFormKey!), r => r.FormKey == two.ReferencerNpc.ToString());
+        Assert.Contains(index.At(RecordRef.Effective).GetReferencedBy(result.NewFormKey!), r => r.FormKey == two.ReferencerNpc.ToString());
     }
 
     // A reapply that only runs on the try block's success path leaves _filter
@@ -234,8 +234,8 @@ public sealed class RecordEditServiceRenumberRecordTests
 
         // "No half-applied state": refused before any write, on either side of the cascade.
         Assert.True(File.Exists(oldRaceSourceFile));
-        Assert.NotNull(two.Mirror.Index!.GetDocument(two.TargetRace.ToString(), two.TargetPlugin));
-        var referencerBody = two.Mirror.Index!.GetDocument(two.ReferencerNpc.ToString(), two.ReferencerPlugin)!.Body!;
+        Assert.NotNull(two.Mirror.Index!.At(RecordRef.Effective).GetDocument(two.TargetRace.ToString(), two.TargetPlugin));
+        var referencerBody = two.Mirror.Index!.At(RecordRef.Effective).GetDocument(two.ReferencerNpc.ToString(), two.ReferencerPlugin)!.Body!;
         Assert.Contains(two.TargetRace.ToString(), referencerBody, StringComparison.Ordinal);
     }
 

@@ -77,7 +77,7 @@ public sealed class WorkingTreeCreationTests : IDisposable
 
         index.CreateWorkingTreeRecord(BaseKey, formKey, "npc_", NewNpcBody(formKey, "NewNpc"));
 
-        var effective = index.GetDocument(formKey, BaseKey);
+        var effective = index.At(RecordRef.Effective).GetDocument(formKey, BaseKey);
         Assert.NotNull(effective);
         Assert.Equal("NewNpc", effective!.EditorId);
         Assert.Null(index.At(RecordRef.Head).GetDocument(formKey, BaseKey));
@@ -94,7 +94,7 @@ public sealed class WorkingTreeCreationTests : IDisposable
         // An implementation that inserts the row but skips the structural
         // UpdateWinners() resweep never gives the new FormKey a winners row at all, so it reads as
         // losing forever — this is the test that catches that omission.
-        Assert.True(index.GetDocument(formKey)!.IsWinner);
+        Assert.True(index.At(RecordRef.Effective).GetDocument(formKey)!.IsWinner);
     }
 
     [Fact]
@@ -103,11 +103,11 @@ public sealed class WorkingTreeCreationTests : IDisposable
         using var index = LoadedIndex();
         var formKey = "800000:Winner.esp";
 
-        Assert.Null(index.Resolve(formKey));
+        Assert.Null(index.At(RecordRef.Effective).Resolve(formKey));
 
         index.CreateWorkingTreeRecord(WinnerKey, formKey, "npc_", NewNpcBody(formKey, "BrandNew"));
 
-        var resolved = index.Resolve(formKey);
+        var resolved = index.At(RecordRef.Effective).Resolve(formKey);
         Assert.NotNull(resolved);
         Assert.Equal("BrandNew", resolved!.Value.EditorId);
     }
@@ -116,7 +116,7 @@ public sealed class WorkingTreeCreationTests : IDisposable
     public void CreatingARecord_ThatAlreadyExistsAtEffective_Throws()
     {
         using var index = LoadedIndex();
-        var existing = index.GetDocument(index.GetNativeFormKeys(BaseKey)[0], BaseKey)!;
+        var existing = index.At(RecordRef.Effective).GetDocument(index.At(RecordRef.Effective).GetNativeFormKeys(BaseKey)[0], BaseKey)!;
 
         Assert.Throws<ArgumentException>(() =>
             index.CreateWorkingTreeRecord(BaseKey, existing.FormKey, existing.RecordType, existing.Body!));
@@ -126,10 +126,10 @@ public sealed class WorkingTreeCreationTests : IDisposable
     public void CreatingARecord_ThatExistsOnlyAtHead_BecauseTheWorkingTreeDeletedIt_Throws()
     {
         using var index = LoadedIndex();
-        var deleted = index.GetNativeFormKeys(BaseKey)[0];
-        var recordType = index.GetDocument(deleted, BaseKey)!.RecordType;
+        var deleted = index.At(RecordRef.Effective).GetNativeFormKeys(BaseKey)[0];
+        var recordType = index.At(RecordRef.Effective).GetDocument(deleted, BaseKey)!.RecordType;
         index.ApplyWorkingTreeChanges(BaseKey, [(deleted, null)]);
-        Assert.Null(index.GetDocument(deleted, BaseKey)); // gone at Effective...
+        Assert.Null(index.At(RecordRef.Effective).GetDocument(deleted, BaseKey)); // gone at Effective...
         Assert.NotNull(index.At(RecordRef.Head).GetDocument(deleted, BaseKey)); // ...still at Head
 
         Assert.Throws<ArgumentException>(() =>

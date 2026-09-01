@@ -63,7 +63,7 @@ public sealed class WarmReconcileTests
 
         Assert.Equal(LoadOrderState.Ready, warm.Status.State);
         Assert.True(warm.Status.ConflictsComputed);
-        Assert.NotEmpty(warm.Index!.GetDocuments(new PluginKey("A.esp", PluginOrigin.DataDirectory)));
+        Assert.NotEmpty(warm.Index!.At(RecordRef.Effective).GetDocuments(new PluginKey("A.esp", PluginOrigin.DataDirectory)));
     }
 
     // The "during" half of progress: observed from inside the load loop itself, once per
@@ -155,7 +155,7 @@ public sealed class WarmReconcileTests
         Assert.Equal(0, Registered(entries, "B.esp"));
 
         // And the re-index is what the load order serves: the edited record, not the stale one.
-        var documents = warm.Index!.GetDocuments(new PluginKey("B.esp", PluginOrigin.DataDirectory));
+        var documents = warm.Index!.At(RecordRef.Effective).GetDocuments(new PluginKey("B.esp", PluginOrigin.DataDirectory));
         Assert.Contains(documents, d => d.EditorId == "NpcBEdited");
         Assert.DoesNotContain(documents, d => d.EditorId == "NpcB");
     }

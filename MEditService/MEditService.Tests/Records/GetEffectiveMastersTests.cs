@@ -91,7 +91,7 @@ public sealed class GetEffectiveMastersTests : IDisposable
     {
         using var repo = LoadedRepository(out _);
 
-        var masters = repo.GetEffectiveMasters(new PluginKey("Patch.esp", "Data"));
+        var masters = repo.At(RecordRef.Effective).GetEffectiveMasters(new PluginKey("Patch.esp", "Data"));
 
         Assert.Equal(["Base.esm", "Ref.esm"], masters);
     }
@@ -101,7 +101,7 @@ public sealed class GetEffectiveMastersTests : IDisposable
     {
         using var repo = LoadedRepository(out var declaredMasters);
 
-        var derived = repo.GetEffectiveMasters(new PluginKey("Patch.esp", "Data"));
+        var derived = repo.At(RecordRef.Effective).GetEffectiveMasters(new PluginKey("Patch.esp", "Data"));
 
         Assert.Equal(["Base.esm", "Ref.esm", "Unused.esm"], declaredMasters);
         Assert.NotEqual(declaredMasters, derived);
@@ -113,6 +113,6 @@ public sealed class GetEffectiveMastersTests : IDisposable
     {
         using var repo = LoadedRepository(out _);
 
-        Assert.Empty(repo.GetEffectiveMasters(new PluginKey("Base.esm", "Data")));
+        Assert.Empty(repo.At(RecordRef.Effective).GetEffectiveMasters(new PluginKey("Base.esm", "Data")));
     }
 }

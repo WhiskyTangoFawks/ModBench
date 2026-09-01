@@ -50,7 +50,7 @@ public class GetDocumentsTests
         // FormLink in the fixture reads as dangling — the sweep is part of the real load pipeline.
         repo.UpdateWinners();
 
-        var documents = repo.GetDocuments(key);
+        var documents = repo.At(RecordRef.Effective).GetDocuments(key);
 
         // Every major record, plus the plugin header's own document (#631) — which
         // EnumerateMajorRecords structurally cannot count, a ModHeader not being one. Asserted as its
@@ -62,7 +62,7 @@ public class GetDocumentsTests
         // which is the whole claim of the change: one read path, no special case.
         Assert.All(documents, doc =>
         {
-            var pointRead = repo.GetDocument(doc.FormKey, key);
+            var pointRead = repo.At(RecordRef.Effective).GetDocument(doc.FormKey, key);
             Assert.NotNull(pointRead);
             Assert.Equal(pointRead.EditorId, doc.EditorId);
             Assert.Equal(pointRead.RecordType, doc.RecordType);
@@ -98,8 +98,8 @@ public class GetDocumentsTests
         // Records only: each copy also carries its own header document since #631, which is scoped
         // by origin exactly like the records are (asserted separately below) but says nothing about
         // the per-origin *record* scoping this test is about.
-        var fromA = repo.GetDocuments(new PluginKey("Shared.esp", "ModA"));
-        var fromB = repo.GetDocuments(new PluginKey("Shared.esp", "ModB"));
+        var fromA = repo.At(RecordRef.Effective).GetDocuments(new PluginKey("Shared.esp", "ModA"));
+        var fromB = repo.At(RecordRef.Effective).GetDocuments(new PluginKey("Shared.esp", "ModB"));
         var recordsFromA = fromA.Where(d => d.RecordType != HeaderIndexer.RecordType).ToList();
         var recordsFromB = fromB.Where(d => d.RecordType != HeaderIndexer.RecordType).ToList();
 

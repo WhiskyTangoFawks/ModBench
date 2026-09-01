@@ -1,5 +1,6 @@
 using System.Text.Json;
 using MEditService.Core.Edits;
+using MEditService.Core.Records;
 using MEditService.Core.Source;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -42,7 +43,7 @@ public sealed class VmadStructuralOpDispatchTests : IDisposable
         var relative = _mod.RelativeSourcePath(_mod.Npc, "npc_", TrackedModFixture.NpcEditorId).Replace('\\', '/');
         Assert.Equal([$"M {relative}"], _mod.GitStatus());
 
-        var body = _mod.Mirror.Index!.GetDocument(_mod.Npc.ToString(), _mod.Plugin)!.Body!;
+        var body = _mod.Mirror.Index!.At(RecordRef.Effective).GetDocument(_mod.Npc.ToString(), _mod.Plugin)!.Body!;
         Assert.Contains("NewScript", body, StringComparison.Ordinal);
     }
 
@@ -59,7 +60,7 @@ public sealed class VmadStructuralOpDispatchTests : IDisposable
             _mod.Plugin, _mod.Npc.ToString(), @"VMAD\Scr\Counter", Json("""{"op":"remove_property"}"""));
 
         Assert.True(result.Applied, result.Message);
-        var body = _mod.Mirror.Index!.GetDocument(_mod.Npc.ToString(), _mod.Plugin)!.Body!;
+        var body = _mod.Mirror.Index!.At(RecordRef.Effective).GetDocument(_mod.Npc.ToString(), _mod.Plugin)!.Body!;
         Assert.DoesNotContain("Counter", body, StringComparison.Ordinal);
     }
 
@@ -87,7 +88,7 @@ public sealed class VmadStructuralOpDispatchTests : IDisposable
         var result = service.EditField(_mod.Plugin, _mod.Npc.ToString(), @"VMAD\Scr\Counter", Json("42"));
 
         Assert.True(result.Applied, result.Message);
-        var body = _mod.Mirror.Index!.GetDocument(_mod.Npc.ToString(), _mod.Plugin)!.Body!;
+        var body = _mod.Mirror.Index!.At(RecordRef.Effective).GetDocument(_mod.Npc.ToString(), _mod.Plugin)!.Body!;
         Assert.Contains("42", body, StringComparison.Ordinal);
     }
 
@@ -187,42 +188,42 @@ public sealed class VmadStructuralOpDispatchTests : IDisposable
     public void EditField_RemoveElementOp_OutOfRangeIndexIsANoOpThatCommitsNothing()
     {
         var service = SeedIntListProperty("[1,2,3]");
-        var bodyBeforeOp = _mod.Mirror.Index!.GetDocument(_mod.Npc.ToString(), _mod.Plugin)!.Body!;
+        var bodyBeforeOp = _mod.Mirror.Index!.At(RecordRef.Effective).GetDocument(_mod.Npc.ToString(), _mod.Plugin)!.Body!;
 
         var result = service.EditField(
             _mod.Plugin, _mod.Npc.ToString(), @"VMAD\Scr\Levels",
             Json("""{"op":"remove_element","index":5}"""));
 
         Assert.True(result.Applied, result.Message);
-        Assert.Equal(bodyBeforeOp, _mod.Mirror.Index!.GetDocument(_mod.Npc.ToString(), _mod.Plugin)!.Body!);
+        Assert.Equal(bodyBeforeOp, _mod.Mirror.Index!.At(RecordRef.Effective).GetDocument(_mod.Npc.ToString(), _mod.Plugin)!.Body!);
     }
 
     [Fact]
     public void EditField_MoveElementUpOp_TheFirstElementIsANoOpThatCommitsNothing()
     {
         var service = SeedIntListProperty("[1,2,3]");
-        var bodyBeforeOp = _mod.Mirror.Index!.GetDocument(_mod.Npc.ToString(), _mod.Plugin)!.Body!;
+        var bodyBeforeOp = _mod.Mirror.Index!.At(RecordRef.Effective).GetDocument(_mod.Npc.ToString(), _mod.Plugin)!.Body!;
 
         var result = service.EditField(
             _mod.Plugin, _mod.Npc.ToString(), @"VMAD\Scr\Levels",
             Json("""{"op":"move_element_up","index":0}"""));
 
         Assert.True(result.Applied, result.Message);
-        Assert.Equal(bodyBeforeOp, _mod.Mirror.Index!.GetDocument(_mod.Npc.ToString(), _mod.Plugin)!.Body!);
+        Assert.Equal(bodyBeforeOp, _mod.Mirror.Index!.At(RecordRef.Effective).GetDocument(_mod.Npc.ToString(), _mod.Plugin)!.Body!);
     }
 
     [Fact]
     public void EditField_MoveElementDownOp_TheLastElementIsANoOpThatCommitsNothing()
     {
         var service = SeedIntListProperty("[1,2,3]");
-        var bodyBeforeOp = _mod.Mirror.Index!.GetDocument(_mod.Npc.ToString(), _mod.Plugin)!.Body!;
+        var bodyBeforeOp = _mod.Mirror.Index!.At(RecordRef.Effective).GetDocument(_mod.Npc.ToString(), _mod.Plugin)!.Body!;
 
         var result = service.EditField(
             _mod.Plugin, _mod.Npc.ToString(), @"VMAD\Scr\Levels",
             Json("""{"op":"move_element_down","index":2}"""));
 
         Assert.True(result.Applied, result.Message);
-        Assert.Equal(bodyBeforeOp, _mod.Mirror.Index!.GetDocument(_mod.Npc.ToString(), _mod.Plugin)!.Body!);
+        Assert.Equal(bodyBeforeOp, _mod.Mirror.Index!.At(RecordRef.Effective).GetDocument(_mod.Npc.ToString(), _mod.Plugin)!.Body!);
     }
 
     // ── Guard inheritance ──────────────────────────────────────────────────────────────────────

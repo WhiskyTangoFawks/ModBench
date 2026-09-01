@@ -61,7 +61,7 @@ public class LoadOrderViaRegistrationTests
 
         var beforeA = MirrorRecordCount(repo, aKey);
         var beforeB = MirrorRecordCount(repo, bKey);
-        Assert.True(repo.GetOverrideStack(npcKey.ToString())!.Entries
+        Assert.True(repo.At(RecordRef.Effective).GetOverrideStack(npcKey.ToString())!.Entries
             .Single(e => e.Plugin.Name == bKey.Name).IsWinner, "B, later in load order, should win before reorder.");
 
         // Reorder via `registrations` only — B now sorts before A — no Index() call.
@@ -69,7 +69,7 @@ public class LoadOrderViaRegistrationTests
         repo.Register(bKey, Registration.Participating(0));
         repo.UpdateWinners();
 
-        var stack = repo.GetOverrideStack(npcKey.ToString())!.Entries;
+        var stack = repo.At(RecordRef.Effective).GetOverrideStack(npcKey.ToString())!.Entries;
         Assert.True(stack.Single(e => e.Plugin.Name == aKey.Name).IsWinner, "A, now later, should win after reorder.");
         Assert.False(stack.Single(e => e.Plugin.Name == bKey.Name).IsWinner);
 

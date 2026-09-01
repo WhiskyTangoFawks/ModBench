@@ -28,7 +28,7 @@ public sealed class RecordEditServiceDeleteRecordTests
 
         Assert.True(result.Applied, result.Message);
         Assert.False(File.Exists(mod.NpcSourceFile));
-        Assert.Null(mod.Mirror.Index!.GetDocument(mod.Npc.ToString(), mod.Plugin));
+        Assert.Null(mod.Mirror.Index!.At(RecordRef.Effective).GetDocument(mod.Npc.ToString(), mod.Plugin));
         Assert.NotNull(mod.Mirror.Index!.At(RecordRef.Head).GetDocument(mod.Npc.ToString(), mod.Plugin));
     }
 
@@ -51,7 +51,7 @@ public sealed class RecordEditServiceDeleteRecordTests
         var result = service.DeleteRecord(mod.Plugin, created.NewFormKey!);
 
         Assert.True(result.Applied, result.Message);
-        Assert.Null(mod.Mirror.Index!.GetDocument(created.NewFormKey!, mod.Plugin));
+        Assert.Null(mod.Mirror.Index!.At(RecordRef.Effective).GetDocument(created.NewFormKey!, mod.Plugin));
         Assert.Null(mod.Mirror.Index!.At(RecordRef.Head).GetDocument(created.NewFormKey!, mod.Plugin));
     }
 
@@ -62,7 +62,7 @@ public sealed class RecordEditServiceDeleteRecordTests
 
         ServiceFor(mod.Mirror).DeleteRecord(mod.Plugin, mod.Npc.ToString());
 
-        Assert.NotNull(mod.Mirror.Index!.GetDocument(mod.OtherNpc.ToString(), mod.Plugin));
+        Assert.NotNull(mod.Mirror.Index!.At(RecordRef.Effective).GetDocument(mod.OtherNpc.ToString(), mod.Plugin));
     }
 
     [Fact]

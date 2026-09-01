@@ -180,9 +180,9 @@ public sealed class ConditionIndexerTests : IDisposable
         repo.Index(mod, Registration.Participating(1), new PluginKey(mod.ModKey.FileName.ToString(), "ModB"));
         repo.UpdateWinners();
 
-        Assert.NotEmpty(GetConditions(repo, _cobjFormKey.ToString(), "CtdaTest.esp", "ModA"));
-        Assert.NotEmpty(GetConditions(repo, _cobjFormKey.ToString(), "CtdaTest.esp", "ModB"));
-        Assert.Empty(GetConditions(repo, _cobjFormKey.ToString(), "CtdaTest.esp", "ModC"));
+        Assert.NotEmpty(GetConditions(repo.At(RecordRef.Effective), _cobjFormKey.ToString(), "CtdaTest.esp", "ModA"));
+        Assert.NotEmpty(GetConditions(repo.At(RecordRef.Effective), _cobjFormKey.ToString(), "CtdaTest.esp", "ModB"));
+        Assert.Empty(GetConditions(repo.At(RecordRef.Effective), _cobjFormKey.ToString(), "CtdaTest.esp", "ModC"));
     }
 
     [Fact]
@@ -190,7 +190,7 @@ public sealed class ConditionIndexerTests : IDisposable
     {
         using var repo = LoadedRepository();
 
-        var owners = GetConditions(repo, _cobjFormKey.ToString(), "CtdaTest.esp", origin: "Data");
+        var owners = GetConditions(repo.At(RecordRef.Effective), _cobjFormKey.ToString(), "CtdaTest.esp", origin: "Data");
 
         var owner = Assert.Single(owners);
         Assert.Equal("Conditions", owner.FieldPath);
@@ -214,7 +214,7 @@ public sealed class ConditionIndexerTests : IDisposable
     public void GetConditions_RecordWithoutConditions_ReturnsEmpty()
     {
         using var repo = LoadedRepository();
-        Assert.Empty(GetConditions(repo, _questFormKey.ToString(), "CtdaTest.esp", origin: "Data"));
+        Assert.Empty(GetConditions(repo.At(RecordRef.Effective), _questFormKey.ToString(), "CtdaTest.esp", origin: "Data"));
     }
 
     // Missing data reads as empty, never a throw: distinct from the case above, where
@@ -227,7 +227,7 @@ public sealed class ConditionIndexerTests : IDisposable
         using var repo = LoadedRepository();
 
         var headerFormKey = HeaderIndexer.FormKeyFor(ModKey.FromFileName("CtdaTest.esp"));
-        Assert.Empty(GetConditions(repo, headerFormKey, "CtdaTest.esp", origin: "Data"));
+        Assert.Empty(GetConditions(repo.At(RecordRef.Effective), headerFormKey, "CtdaTest.esp", origin: "Data"));
     }
 
     // A record with more than one condition-carrying field (Quest.DialogConditions and
@@ -238,7 +238,7 @@ public sealed class ConditionIndexerTests : IDisposable
     {
         using var repo = LoadedRepository();
 
-        var owners = GetConditions(repo, _multiListQuestFormKey.ToString(), "CtdaTest.esp", origin: "Data");
+        var owners = GetConditions(repo.At(RecordRef.Effective), _multiListQuestFormKey.ToString(), "CtdaTest.esp", origin: "Data");
 
         Assert.Equal(2, owners.Count);
         var dialog = owners.Single(o => o.FieldPath == "DialogConditions");
@@ -261,7 +261,7 @@ public sealed class ConditionIndexerTests : IDisposable
     {
         using var repo = LoadedRepository();
 
-        var owner = Assert.Single(GetConditions(repo, _sexCobjFormKey.ToString(), "CtdaTest.esp", origin: "Data"));
+        var owner = Assert.Single(GetConditions(repo.At(RecordRef.Effective), _sexCobjFormKey.ToString(), "CtdaTest.esp", origin: "Data"));
         var condition = Assert.Single(owner.Conditions);
         var param = Assert.Single(condition.Parameters);
 
@@ -340,7 +340,7 @@ public sealed class ConditionIndexerTests : IDisposable
     public void GetReferences_RecordReferencedOnlyByCondition_ReturnsReferencingRecord()
     {
         using var repo = LoadedRepository();
-        var references = repo.GetReferencedBy(_referenceTargetFormKey.ToString());
+        var references = repo.At(RecordRef.Effective).GetReferencedBy(_referenceTargetFormKey.ToString());
 
         var reference = Assert.Single(references);
         Assert.Equal(_runOnRefCobjFormKey.ToString(), reference.FormKey);

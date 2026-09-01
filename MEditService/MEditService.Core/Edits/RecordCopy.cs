@@ -51,14 +51,15 @@ internal sealed class RecordCopy(ILoadOrderMirror mirror, SchemaReflector schema
                 $"{formKey} is already held by a record in {destinationPlugin.Name} at some ref.");
         }
 
+        var reads = index.At(RecordRef.Effective);
         var cellFormKey = placement.ParentCell;
-        var cellDocument = index.GetDocument(cellFormKey, destinationPlugin);
+        var cellDocument = reads.GetDocument(cellFormKey, destinationPlugin);
         if (cellDocument == null)
         {
             // IsInterior's own double-duty note lives on CopyRecordAsOverride's identical check —
             // only the genuine-SubCells case mints (a real BlockX to mint from); a
             // TopCell ref's own cell_location row carries none, so it falls to the refusal below.
-            var sourceCellLocation = index.GetCellLocation(sourcePlugin, cellFormKey);
+            var sourceCellLocation = reads.GetCellLocation(sourcePlugin, cellFormKey);
             if (sourceCellLocation?.IsInterior == false && sourceCellLocation.Value.BlockX != null)
             {
                 return MintExteriorCellAroundPlacedReference(
@@ -79,7 +80,7 @@ internal sealed class RecordCopy(ILoadOrderMirror mirror, SchemaReflector schema
         }
 
         var cellUnit = SourceUnitResolver.Resolve(
-            index, destinationPlugin, destinationModFolder, cellFormKey, cellDocument.RecordType, cellDocument.EditorId, release)
+            reads, destinationPlugin, destinationModFolder, cellFormKey, cellDocument.RecordType, cellDocument.EditorId, release)
             ?? throw new InvalidOperationException(
                 $"{cellFormKey} is indexed in {destinationPlugin.Name} but SourceUnitResolver cannot find its source unit.");
 
@@ -170,7 +171,8 @@ internal sealed class RecordCopy(ILoadOrderMirror mirror, SchemaReflector schema
                 $"{cellFormKey} has no recorded parent worldspace — cannot place it.");
         }
 
-        if (index.GetDocument(worldspaceFormKey, destinationPlugin) != null)
+        var reads = index.At(RecordRef.Effective);
+        if (reads.GetDocument(worldspaceFormKey, destinationPlugin) != null)
         {
             return RecordEditResult.Refused(
                 RecordEditRefusal.ContainerParentMissingInDestination,
@@ -179,7 +181,7 @@ internal sealed class RecordCopy(ILoadOrderMirror mirror, SchemaReflector schema
                 "only a destination with neither the worldspace nor the cell can be copied into.");
         }
 
-        var sourceWorldspaceDocument = index.GetDocument(worldspaceFormKey, sourcePlugin)
+        var sourceWorldspaceDocument = reads.GetDocument(worldspaceFormKey, sourcePlugin)
             ?? throw new InvalidOperationException(
                 $"{sourcePlugin.Name} does not hold {worldspaceFormKey} — cell_location resolved this FormKey from its own row.");
 
@@ -291,7 +293,8 @@ internal sealed class RecordCopy(ILoadOrderMirror mirror, SchemaReflector schema
         PluginKey sourcePlugin, string cellFormKey, PluginKey destinationPlugin, string destinationModFolder,
         IRecordIndex index, GameRelease release)
     {
-        var sourceCellDocument = index.GetDocument(cellFormKey, sourcePlugin)
+        var reads = index.At(RecordRef.Effective);
+        var sourceCellDocument = reads.GetDocument(cellFormKey, sourcePlugin)
             ?? throw new InvalidOperationException(
                 $"{sourcePlugin.Name} does not hold {cellFormKey} — CopyPlacedReferenceAsOverride resolved this FormKey from its own placement row.");
 
@@ -317,6 +320,6 @@ internal sealed class RecordCopy(ILoadOrderMirror mirror, SchemaReflector schema
                 cellFormKey, destinationPlugin.Name, destinationPlugin.Origin);
         }
 
-        return index.GetDocument(cellFormKey, destinationPlugin)!;
+        return reads.GetDocument(cellFormKey, destinationPlugin)!;
     }
 }

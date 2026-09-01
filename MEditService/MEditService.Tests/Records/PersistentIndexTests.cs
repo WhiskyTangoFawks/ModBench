@@ -97,7 +97,7 @@ public class PersistentIndexTests : IDisposable
 
         second.Register(key, Registration.Participating(0));
         second.UpdateWinners();
-        Assert.NotEmpty(second.GetDocuments(key));
+        Assert.NotEmpty(second.At(RecordRef.Effective).GetDocuments(key));
     }
 
     // A freshly opened index is in no load order yet, so whatever the last one registered must not be
@@ -113,10 +113,10 @@ public class PersistentIndexTests : IDisposable
 
         using var second = OpenIndex();
         Assert.Contains(KeyOf("Alpha.esp"), second.RegisteredPlugins());
-        Assert.NotEmpty(second.GetDocuments(KeyOf("Alpha.esp")));
+        Assert.NotEmpty(second.At(RecordRef.Effective).GetDocuments(KeyOf("Alpha.esp")));
 
         second.Unregister(KeyOf("Alpha.esp"));
-        Assert.Empty(second.GetDocuments(KeyOf("Alpha.esp")));
+        Assert.Empty(second.At(RecordRef.Effective).GetDocuments(KeyOf("Alpha.esp")));
     }
 
     // Content, never clock: the changed plugin's rows are dropped so the next load re-indexes
@@ -177,7 +177,7 @@ public class PersistentIndexTests : IDisposable
         // And registering it anyway cannot conjure the rows back — "removed" is removed, not hidden.
         second.Register(key, Registration.Participating(0));
         second.UpdateWinners();
-        Assert.Empty(second.GetDocuments(key));
+        Assert.Empty(second.At(RecordRef.Effective).GetDocuments(key));
     }
 
     // A codec or schema change invalidates the whole file, not the rows of one plugin: the
@@ -273,7 +273,7 @@ public class PersistentIndexTests : IDisposable
         mod.Npcs.AddNew("NpcAlpha");
         index.Index((IModGetter)mod, Registration.Participating(0), KeyOf("Alpha.esp"));
 
-        Assert.NotEmpty(index.GetDocuments(KeyOf("Alpha.esp")));
+        Assert.NotEmpty(index.At(RecordRef.Effective).GetDocuments(KeyOf("Alpha.esp")));
         Assert.Null(index.IndexedContentHash(KeyOf("Alpha.esp")));
     }
 }

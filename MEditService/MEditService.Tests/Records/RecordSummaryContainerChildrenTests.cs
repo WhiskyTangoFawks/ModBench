@@ -43,7 +43,7 @@ public sealed class RecordSummaryContainerChildrenTests
         index.Index((IModGetter)mod, Registration.Participating(0), Key);
         index.UpdateWinners();
 
-        var page = index.Search(new RecordQuery(Plugin: Key, RecordTypes: ["qust"], Limit: 50));
+        var page = index.At(RecordRef.Effective).Search(new RecordQuery(Plugin: Key, RecordTypes: ["qust"], Limit: 50));
 
         Assert.True(SummaryFor(page, withChildren.FormKey.ToString()).HasContainerChildren);
         Assert.False(SummaryFor(page, withoutChildren.FormKey.ToString()).HasContainerChildren);

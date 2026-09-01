@@ -30,12 +30,12 @@ public sealed class RecordEditServiceCopyRecordAsNewRecordTests
         Assert.NotEqual(mod.SourceNpc.ToString(), result.NewFormKey);
         Assert.EndsWith(":" + CopyFixture.DestinationPluginName, result.NewFormKey, StringComparison.Ordinal);
 
-        var doc = mod.Mirror.Index!.GetDocument(result.NewFormKey!, mod.DestinationPlugin);
+        var doc = mod.Mirror.Index!.At(RecordRef.Effective).GetDocument(result.NewFormKey!, mod.DestinationPlugin);
         Assert.NotNull(doc);
         Assert.Equal(CopyFixture.SourceNpcEditorId, doc!.EditorId);
 
         // The source's own copy is untouched — this is a copy, not a move.
-        Assert.NotNull(mod.Mirror.Index!.GetDocument(mod.SourceNpc.ToString(), mod.SourcePlugin));
+        Assert.NotNull(mod.Mirror.Index!.At(RecordRef.Effective).GetDocument(mod.SourceNpc.ToString(), mod.SourcePlugin));
     }
 
     [Fact]
@@ -73,7 +73,7 @@ public sealed class RecordEditServiceCopyRecordAsNewRecordTests
             mod.SourcePlugin, mod.SelfLinkingFaction.ToString(), mod.DestinationPlugin);
 
         Assert.True(result.Applied, result.Message);
-        var doc = mod.Mirror.Index!.GetDocument(result.NewFormKey!, mod.DestinationPlugin);
+        var doc = mod.Mirror.Index!.At(RecordRef.Effective).GetDocument(result.NewFormKey!, mod.DestinationPlugin);
         Assert.NotNull(doc);
         Assert.Contains(result.NewFormKey!, doc!.Body, StringComparison.Ordinal);
         Assert.DoesNotContain(mod.SelfLinkingFaction.ToString(), doc.Body, StringComparison.Ordinal);

@@ -965,55 +965,6 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         }
     }
 
-    public RecordDocument? GetDocument(string formKey) => At(RecordRef.Effective).GetDocument(formKey);
-
-    public RecordDocument? GetDocument(string formKey, PluginKey plugin) =>
-        At(RecordRef.Effective).GetDocument(formKey, plugin);
-
-    public IReadOnlyList<RecordDocument> GetDocuments(PluginKey plugin) =>
-        At(RecordRef.Effective).GetDocuments(plugin);
-
-    public RecordOverrides? GetOverrideStack(string formKey) => At(RecordRef.Effective).GetOverrideStack(formKey);
-
-    public PagedResult<RecordSummary> Search(RecordQuery query) => At(RecordRef.Effective).Search(query);
-
-    public IReadOnlyList<RecordTypeCount> GetRecordTypeCounts(PluginKey plugin) =>
-        At(RecordRef.Effective).GetRecordTypeCounts(plugin);
-
-    public RecordLookupEntry? Resolve(string formKey) => At(RecordRef.Effective).Resolve(formKey);
-
-    public IReadOnlyList<ReferenceResult> GetReferencedBy(string targetFormKey) =>
-        At(RecordRef.Effective).GetReferencedBy(targetFormKey);
-
-    public IReadOnlyList<string> GetEffectiveMasters(PluginKey plugin) =>
-        At(RecordRef.Effective).GetEffectiveMasters(plugin);
-
-    public IReadOnlySet<string> GetPluginsWithMatchingRecords(IEnumerable<string> tableNames) =>
-        At(RecordRef.Effective).GetPluginsWithMatchingRecords(tableNames);
-
-    public IReadOnlyList<string> GetNativeFormKeys(PluginKey plugin) =>
-        At(RecordRef.Effective).GetNativeFormKeys(plugin);
-
-    public IReadOnlyList<CellLocationSummary> GetWorldspaceCells(PluginKey plugin, string worldspaceFormKey) =>
-        At(RecordRef.Effective).GetWorldspaceCells(plugin, worldspaceFormKey);
-
-    public PagedResult<CellSummary> GetInteriorCells(PluginKey plugin, int limit, int offset) =>
-        At(RecordRef.Effective).GetInteriorCells(plugin, limit, offset);
-
-    public CellReferences GetCellReferences(PluginKey plugin, string cellFormKey) =>
-        At(RecordRef.Effective).GetCellReferences(plugin, cellFormKey);
-
-    public PlacementRow? GetPlacement(string formKey, PluginKey plugin) =>
-        At(RecordRef.Effective).GetPlacement(formKey, plugin);
-
-    public CellLocationRow? GetCellLocation(PluginKey plugin, string cellFormKey) =>
-        At(RecordRef.Effective).GetCellLocation(plugin, cellFormKey);
-
-    public IReadOnlyList<ContainerChildRow> GetContainerChildren(PluginKey plugin, string parentFormKey) =>
-        At(RecordRef.Effective).GetContainerChildren(plugin, parentFormKey);
-
-    public ContainerChildRow? GetContainerParent(PluginKey plugin, string childFormKey) =>
-        At(RecordRef.Effective).GetContainerParent(plugin, childFormKey);
     private RecordDocument? ReadDocument(string records, string tableName, string formKey, string? plugin, string? origin, bool winnerOnly)
     {
         var schema = RequireSchemas()[tableName];

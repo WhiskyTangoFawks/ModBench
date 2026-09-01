@@ -114,11 +114,11 @@ public class RegistrationScopingTests
         var repo = fx.Repo;
 
         // Premise: registered, everything answers — otherwise the emptiness below proves nothing.
-        Assert.Equal(fx.BetaRowCount, repo.GetDocuments(BetaKey).Count);
-        Assert.Equal(2, repo.GetOverrideStack(fx.SharedNpcFk)!.Entries.Count);
-        Assert.NotEmpty(repo.GetReferencedBy(fx.BetaRaceFk));
-        Assert.NotNull(repo.GetPlacement(fx.BetaPlacedFk, BetaKey));
-        Assert.NotEmpty(repo.GetContainerChildren(BetaKey, fx.BetaQuestFk));
+        Assert.Equal(fx.BetaRowCount, repo.At(RecordRef.Effective).GetDocuments(BetaKey).Count);
+        Assert.Equal(2, repo.At(RecordRef.Effective).GetOverrideStack(fx.SharedNpcFk)!.Entries.Count);
+        Assert.NotEmpty(repo.At(RecordRef.Effective).GetReferencedBy(fx.BetaRaceFk));
+        Assert.NotNull(repo.At(RecordRef.Effective).GetPlacement(fx.BetaPlacedFk, BetaKey));
+        Assert.NotEmpty(repo.At(RecordRef.Effective).GetContainerChildren(BetaKey, fx.BetaQuestFk));
 
         repo.Unregister(BetaKey);
         repo.UpdateWinners();
@@ -131,15 +131,15 @@ public class RegistrationScopingTests
             BetaKey.Name, BetaKey.Origin!) > 0);
 
         // Documents.
-        Assert.Null(repo.GetDocument(fx.BetaNpcFk));
-        Assert.Null(repo.GetDocument(fx.BetaNpcFk, BetaKey));
-        Assert.Empty(repo.GetDocuments(BetaKey));
-        Assert.Null(repo.GetOverrideStack(fx.BetaNpcFk));
-        var shared = repo.GetOverrideStack(fx.SharedNpcFk)!;
+        Assert.Null(repo.At(RecordRef.Effective).GetDocument(fx.BetaNpcFk));
+        Assert.Null(repo.At(RecordRef.Effective).GetDocument(fx.BetaNpcFk, BetaKey));
+        Assert.Empty(repo.At(RecordRef.Effective).GetDocuments(BetaKey));
+        Assert.Null(repo.At(RecordRef.Effective).GetOverrideStack(fx.BetaNpcFk));
+        var shared = repo.At(RecordRef.Effective).GetOverrideStack(fx.SharedNpcFk)!;
         var only = Assert.Single(shared.Entries);
         Assert.Equal(AlphaKey.Name, only.Plugin.Name);
         Assert.True(only.IsWinner);
-        Assert.Equal(AlphaKey.Name, repo.GetDocument(fx.SharedNpcFk)!.Plugin.Name);
+        Assert.Equal(AlphaKey.Name, repo.At(RecordRef.Effective).GetDocument(fx.SharedNpcFk)!.Plugin.Name);
         // Head answers through the same scoping, not a second implementation.
         var head = repo.At(RecordRef.Head);
         Assert.Null(head.GetDocument(fx.BetaNpcFk));
@@ -147,34 +147,34 @@ public class RegistrationScopingTests
         Assert.Single(head.GetOverrideStack(fx.SharedNpcFk)!.Entries);
 
         // Listings and counts.
-        Assert.Empty(repo.Search(new RecordQuery(Plugin: BetaKey, Limit: 1000)).Items);
-        Assert.DoesNotContain(repo.Search(new RecordQuery(Limit: 1000)).Items, r => r.Plugin == BetaKey.Name);
-        Assert.Empty(repo.GetRecordTypeCounts(BetaKey));
-        Assert.Empty(repo.GetNativeFormKeys(BetaKey));
-        Assert.Empty(repo.GetEffectiveMasters(BetaKey));
+        Assert.Empty(repo.At(RecordRef.Effective).Search(new RecordQuery(Plugin: BetaKey, Limit: 1000)).Items);
+        Assert.DoesNotContain(repo.At(RecordRef.Effective).Search(new RecordQuery(Limit: 1000)).Items, r => r.Plugin == BetaKey.Name);
+        Assert.Empty(repo.At(RecordRef.Effective).GetRecordTypeCounts(BetaKey));
+        Assert.Empty(repo.At(RecordRef.Effective).GetNativeFormKeys(BetaKey));
+        Assert.Empty(repo.At(RecordRef.Effective).GetEffectiveMasters(BetaKey));
 
         // Extracted tables.
-        Assert.Null(repo.Resolve(fx.BetaNpcFk));
-        Assert.Empty(repo.GetReferencedBy(fx.BetaRaceFk));
-        Assert.Empty(repo.GetWorldspaceCells(BetaKey, fx.BetaWorldspaceFk));
-        Assert.Empty(repo.GetInteriorCells(BetaKey, 50, 0).Items);
-        var cellRefs = repo.GetCellReferences(BetaKey, fx.BetaCellFk);
+        Assert.Null(repo.At(RecordRef.Effective).Resolve(fx.BetaNpcFk));
+        Assert.Empty(repo.At(RecordRef.Effective).GetReferencedBy(fx.BetaRaceFk));
+        Assert.Empty(repo.At(RecordRef.Effective).GetWorldspaceCells(BetaKey, fx.BetaWorldspaceFk));
+        Assert.Empty(repo.At(RecordRef.Effective).GetInteriorCells(BetaKey, 50, 0).Items);
+        var cellRefs = repo.At(RecordRef.Effective).GetCellReferences(BetaKey, fx.BetaCellFk);
         Assert.Empty(cellRefs.Persistent);
         Assert.Empty(cellRefs.Temporary);
-        Assert.Null(repo.GetPlacement(fx.BetaPlacedFk, BetaKey));
-        Assert.Null(repo.GetCellLocation(BetaKey, fx.BetaCellFk));
-        Assert.Empty(repo.GetContainerChildren(BetaKey, fx.BetaQuestFk));
-        Assert.Null(repo.GetContainerParent(BetaKey, fx.BetaTopicFk));
+        Assert.Null(repo.At(RecordRef.Effective).GetPlacement(fx.BetaPlacedFk, BetaKey));
+        Assert.Null(repo.At(RecordRef.Effective).GetCellLocation(BetaKey, fx.BetaCellFk));
+        Assert.Empty(repo.At(RecordRef.Effective).GetContainerChildren(BetaKey, fx.BetaQuestFk));
+        Assert.Null(repo.At(RecordRef.Effective).GetContainerParent(BetaKey, fx.BetaTopicFk));
 
         // The SQL door: user filter SQL and the filtered-chevron read see nothing of Beta either.
         repo.SetFilter("SELECT form_key FROM npc_");
-        Assert.DoesNotContain(BetaKey.Name, repo.GetPluginsWithMatchingRecords(["npc_"]));
-        Assert.Contains(AlphaKey.Name, repo.GetPluginsWithMatchingRecords(["npc_"]));
+        Assert.DoesNotContain(BetaKey.Name, repo.At(RecordRef.Effective).GetPluginsWithMatchingRecords(["npc_"]));
+        Assert.Contains(AlphaKey.Name, repo.At(RecordRef.Effective).GetPluginsWithMatchingRecords(["npc_"]));
         repo.SetFilter(null);
 
         // Alpha, still registered, is untouched by its neighbour's unregistration.
-        Assert.NotEmpty(repo.GetDocuments(AlphaKey));
-        Assert.NotEmpty(repo.GetRecordTypeCounts(AlphaKey));
+        Assert.NotEmpty(repo.At(RecordRef.Effective).GetDocuments(AlphaKey));
+        Assert.NotEmpty(repo.At(RecordRef.Effective).GetRecordTypeCounts(AlphaKey));
     }
 
     [Fact]
@@ -207,19 +207,19 @@ public class RegistrationScopingTests
         var repo = fx.Repo;
         repo.Unregister(BetaKey);
         repo.UpdateWinners();
-        Assert.Empty(repo.GetDocuments(BetaKey));
+        Assert.Empty(repo.At(RecordRef.Effective).GetDocuments(BetaKey));
 
         repo.Register(BetaKey, Registration.Participating(1));
         repo.UpdateWinners();
 
-        Assert.Equal(fx.BetaRowCount, repo.GetDocuments(BetaKey).Count);
-        var stack = repo.GetOverrideStack(fx.SharedNpcFk)!.Entries;
+        Assert.Equal(fx.BetaRowCount, repo.At(RecordRef.Effective).GetDocuments(BetaKey).Count);
+        var stack = repo.At(RecordRef.Effective).GetOverrideStack(fx.SharedNpcFk)!.Entries;
         Assert.Equal(2, stack.Count);
         Assert.True(stack.Single(e => e.Plugin.Name == BetaKey.Name).IsWinner);
-        Assert.Equal(BetaKey.Name, repo.GetDocument(fx.SharedNpcFk)!.Plugin.Name);
-        Assert.NotNull(repo.Resolve(fx.BetaNpcFk));
-        Assert.NotNull(repo.GetPlacement(fx.BetaPlacedFk, BetaKey));
-        Assert.NotEmpty(repo.GetContainerChildren(BetaKey, fx.BetaQuestFk));
+        Assert.Equal(BetaKey.Name, repo.At(RecordRef.Effective).GetDocument(fx.SharedNpcFk)!.Plugin.Name);
+        Assert.NotNull(repo.At(RecordRef.Effective).Resolve(fx.BetaNpcFk));
+        Assert.NotNull(repo.At(RecordRef.Effective).GetPlacement(fx.BetaPlacedFk, BetaKey));
+        Assert.NotEmpty(repo.At(RecordRef.Effective).GetContainerChildren(BetaKey, fx.BetaQuestFk));
         Assert.True(RowsFor(repo, "\"npc_\"", BetaKey) > 0);
     }
 

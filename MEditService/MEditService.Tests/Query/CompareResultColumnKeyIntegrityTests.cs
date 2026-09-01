@@ -243,7 +243,7 @@ public sealed class CompareResultColumnKeyIntegrityTests
         repo.UpdateWinners();
 
         var plugins = new[] { new PluginMetadata("Shared.esp", "", 0, false, false, [], 1, false, Origin: "Data", Enabled: true, Winning: true) };
-        var loadOrder = new FakeMirror(new FakeLoadOrder(plugins), repo);
+        var loadOrder = new FakeMirror(new FakeLoadOrder(plugins), repo.At(RecordRef.Effective));
         var svc = new RecordQueryService(loadOrder, reflector, new ConflictClassifier());
 
         var compare = svc.GetCompare(perk.FormKey.ToString());

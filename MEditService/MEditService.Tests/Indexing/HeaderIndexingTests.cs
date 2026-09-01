@@ -129,7 +129,7 @@ public class HeaderIndexingTests
 
         using var repo = Indexed(mod);
 
-        var doc = repo.GetDocument(HeaderIndexer.FormKeyFor(mod.ModKey), new PluginKey("AuthorTest.esp", "Data"));
+        var doc = repo.At(RecordRef.Effective).GetDocument(HeaderIndexer.FormKeyFor(mod.ModKey), new PluginKey("AuthorTest.esp", "Data"));
         Assert.NotNull(doc);
         Assert.Equal("Vault Dweller", FieldValueOf(doc, "author"));
     }
@@ -142,7 +142,7 @@ public class HeaderIndexingTests
 
         using var repo = Indexed(mod);
 
-        var doc = repo.GetDocument(HeaderIndexer.FormKeyFor(mod.ModKey), new PluginKey("EslTest.esp", "Data"));
+        var doc = repo.At(RecordRef.Effective).GetDocument(HeaderIndexer.FormKeyFor(mod.ModKey), new PluginKey("EslTest.esp", "Data"));
         Assert.NotNull(doc);
         // A bitmask column renders as a decimal string, exactly as it did when read off the wide
         // table's INTEGER column — the shared normalization in DuckDbRecordIndex.BuildFields.
@@ -160,7 +160,7 @@ public class HeaderIndexingTests
 
         using var repo = Indexed(mod);
 
-        var doc = repo.GetDocument(HeaderIndexer.FormKeyFor(mod.ModKey), new PluginKey("MastersTest.esp", "Data"));
+        var doc = repo.At(RecordRef.Effective).GetDocument(HeaderIndexer.FormKeyFor(mod.ModKey), new PluginKey("MastersTest.esp", "Data"));
         Assert.NotNull(doc);
         // An array column surfaces as a JsonElement of bare filename strings — deliberately NOT the
         // document's own [{ "Master": ... }] shape, which is what the masters extractor flattens.
@@ -223,7 +223,7 @@ public class HeaderIndexingTests
         Assert.True(records > 1, $"expected the header and at least one record; got {records}");
         Assert.Equal(records, lookups);
 
-        var resolved = repo.Resolve(HeaderIndexer.FormKeyFor(mod.ModKey));
+        var resolved = repo.At(RecordRef.Effective).Resolve(HeaderIndexer.FormKeyFor(mod.ModKey));
         Assert.NotNull(resolved);
         Assert.Equal("header", resolved.Value.RecordType);
         Assert.Null(resolved.Value.EditorId);
@@ -240,8 +240,8 @@ public class HeaderIndexingTests
         repo.Index((IModGetter)modB, Registration.Participating(1), new PluginKey(modB.ModKey.FileName.ToString(), "Data"));
         repo.UpdateWinners();
 
-        var overridesA = repo.GetOverrideStack("000000:PluginA.esp")!.Entries;
-        var overridesB = repo.GetOverrideStack("000000:PluginB.esp")!.Entries;
+        var overridesA = repo.At(RecordRef.Effective).GetOverrideStack("000000:PluginA.esp")!.Entries;
+        var overridesB = repo.At(RecordRef.Effective).GetOverrideStack("000000:PluginB.esp")!.Entries;
 
         Assert.Single(overridesA);
         Assert.Single(overridesB);
@@ -265,7 +265,7 @@ public class HeaderIndexingTests
         repo.Index((IModGetter)modA, Registration.Participating(0), new PluginKey(modA.ModKey.FileName.ToString(), "ModA"));
         repo.Index((IModGetter)modB, Registration.Participating(1), new PluginKey(modB.ModKey.FileName.ToString(), "ModB"));
 
-        var overrides = repo.GetOverrideStack("000000:Shared.esp")!.Entries;
+        var overrides = repo.At(RecordRef.Effective).GetOverrideStack("000000:Shared.esp")!.Entries;
 
         Assert.Equal(2, overrides.Count);
         Assert.Contains(overrides, o => o.Plugin.Origin == "ModA");

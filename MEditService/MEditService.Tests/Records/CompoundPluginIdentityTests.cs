@@ -48,7 +48,7 @@ public class CompoundPluginIdentityTests
         repo.Index(modA, Registration.Participating(0), new PluginKey(modA.ModKey.FileName.ToString(), "ModA"));
         repo.Index(modB, Registration.Participating(1), new PluginKey(modB.ModKey.FileName.ToString(), "ModB"));
 
-        var overrides = repo.GetOverrideStack(npcKey.ToString())!.Entries;
+        var overrides = repo.At(RecordRef.Effective).GetOverrideStack(npcKey.ToString())!.Entries;
 
         Assert.Equal(2, overrides.Count);
         Assert.Contains(overrides, o => o.Effective.EditorId == "FromModA");
@@ -69,7 +69,7 @@ public class CompoundPluginIdentityTests
         repo.Index(modA, Registration.Participating(0), new PluginKey(modA.ModKey.FileName.ToString(), "ModA"));
         repo.Index(modB, Registration.Participating(1), new PluginKey(modB.ModKey.FileName.ToString(), "ModB"));
 
-        var record = repo.GetDocument(npcKey.ToString(), new PluginKey("Shared.esp", "ModA"));
+        var record = repo.At(RecordRef.Effective).GetDocument(npcKey.ToString(), new PluginKey("Shared.esp", "ModA"));
 
         Assert.NotNull(record);
         Assert.Equal("FromModA", record.EditorId);
@@ -89,9 +89,9 @@ public class CompoundPluginIdentityTests
         repo.Index(modA, Registration.Participating(0), new PluginKey(modA.ModKey.FileName.ToString(), "ModA"));
         repo.Index(modB, Registration.Participating(1), new PluginKey(modB.ModKey.FileName.ToString(), "ModB"));
 
-        Assert.Equal(1, repo.GetRecordTypeCounts(new PluginKey("Shared.esp", "ModA"))
+        Assert.Equal(1, repo.At(RecordRef.Effective).GetRecordTypeCounts(new PluginKey("Shared.esp", "ModA"))
             .FirstOrDefault(c => string.Equals(c.Type, "npc_", StringComparison.OrdinalIgnoreCase))?.Count ?? 0);
-        Assert.Equal(1, repo.GetRecordTypeCounts(new PluginKey("Shared.esp", "ModB"))
+        Assert.Equal(1, repo.At(RecordRef.Effective).GetRecordTypeCounts(new PluginKey("Shared.esp", "ModB"))
             .FirstOrDefault(c => string.Equals(c.Type, "npc_", StringComparison.OrdinalIgnoreCase))?.Count ?? 0);
     }
 
@@ -114,8 +114,8 @@ public class CompoundPluginIdentityTests
         repo.Index(modA, Registration.Participating(0), new PluginKey(modA.ModKey.FileName.ToString(), "ModA"));
         repo.Index(modB, Registration.Participating(1), new PluginKey(modB.ModKey.FileName.ToString(), "ModB"));
 
-        var modAKeys = repo.GetNativeFormKeys(new PluginKey("Shared.esp", "ModA"));
-        var modBKeys = repo.GetNativeFormKeys(new PluginKey("Shared.esp", "ModB"));
+        var modAKeys = repo.At(RecordRef.Effective).GetNativeFormKeys(new PluginKey("Shared.esp", "ModA"));
+        var modBKeys = repo.At(RecordRef.Effective).GetNativeFormKeys(new PluginKey("Shared.esp", "ModB"));
 
         Assert.Single(modAKeys);
         Assert.Equal(sharedFirstKey.ToString(), modAKeys[0]);
@@ -137,7 +137,7 @@ public class CompoundPluginIdentityTests
         repo.Index(modA, Registration.Participating(0), new PluginKey(modA.ModKey.FileName.ToString(), "ModA"));
         repo.Index(modB, Registration.Participating(1), new PluginKey(modB.ModKey.FileName.ToString(), "ModB"));
 
-        var modAResult = repo.Search(new RecordQuery(RecordTypes: ["npc_"], Plugin: new PluginKey("Shared.esp", "ModA"), Limit: 100, Offset: 0));
+        var modAResult = repo.At(RecordRef.Effective).Search(new RecordQuery(RecordTypes: ["npc_"], Plugin: new PluginKey("Shared.esp", "ModA"), Limit: 100, Offset: 0));
 
         var item = Assert.Single(modAResult.Items);
         Assert.Equal(npcKey.ToString(), item.FormKey);
@@ -158,7 +158,7 @@ public class CompoundPluginIdentityTests
         repo.Index(modB, Registration.Disabled(5), new PluginKey(modB.ModKey.FileName.ToString(), "ModB"));
         repo.UpdateWinners();
 
-        var overrides = repo.GetOverrideStack(npcKey.ToString())!.Entries;
+        var overrides = repo.At(RecordRef.Effective).GetOverrideStack(npcKey.ToString())!.Entries;
         var fromA = overrides.Single(o => o.Effective.EditorId == "FromModA");
         var fromB = overrides.Single(o => o.Effective.EditorId == "FromModB");
 
@@ -233,7 +233,7 @@ public class CompoundPluginIdentityTests
         repo.Index(modA, Registration.Participating(0), new PluginKey(modA.ModKey.FileName.ToString(), "ModA"));
         repo.Index(modB, Registration.Participating(1), new PluginKey(modB.ModKey.FileName.ToString(), "ModB"));
 
-        var refs = repo.GetReferencedBy(raceFormKey);
+        var refs = repo.At(RecordRef.Effective).GetReferencedBy(raceFormKey);
 
         Assert.Equal(2, refs.Count);
         Assert.Contains(refs, r => r.Origin == "ModA");

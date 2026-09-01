@@ -67,7 +67,7 @@ public sealed class GenericFieldWriteDispatchTests : IDisposable
 
         Assert.True(result.Applied, result.Message);
         Assert.NotEmpty(_cond.GitStatus());
-        var body = _cond.Mirror.Index!.GetDocument(_cond.Cobj.ToString(), _cond.Plugin)!.Body!;
+        var body = _cond.Mirror.Index!.At(RecordRef.Effective).GetDocument(_cond.Cobj.ToString(), _cond.Plugin)!.Body!;
         Assert.Contains("GetIsID", body, StringComparison.Ordinal);
     }
 

@@ -40,7 +40,7 @@ public sealed class HeadRelationDisjointnessTests
         // Precondition: the record really is dirty, so a snapshot row exists to be duplicated.
         Assert.Equal(
             WorkingTreeState.Modified,
-            mod.Mirror.Index!.Search(new RecordQuery(Plugin: mod.Plugin, Limit: 100))
+            mod.Mirror.Index!.At(RecordRef.Effective).Search(new RecordQuery(Plugin: mod.Plugin, Limit: 100))
                 .Items.Single(r => r.FormKey == mod.Npc.ToString()).WorkingTreeState);
 
         await ((ILoadOrderMirror)mod.Mirror).ReindexPlugin(mod.Plugin);

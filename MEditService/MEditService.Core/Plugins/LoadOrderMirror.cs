@@ -68,11 +68,15 @@ public sealed class LoadOrderMirror(
     private GameRelease _gameRelease;
 
     public ILoadOrder? LoadOrder { get { lock (_lock) return _loadOrder; } }
-    public IRecordReads? Reads { get { lock (_lock) return _index; } }
+    public IRecordReads? Reads { get { lock (_lock) return _index?.At(RecordRef.Effective); } }
     public IRecordIndex? Index { get { lock (_lock) return _index; } }
 
     /// <summary>See <see cref="ILoadOrderMirror.RequireScope"/>.</summary>
-    public (ILoadOrder LoadOrder, IRecordReads Reads) RequireScope() => RequireScopeCore();
+    public (ILoadOrder LoadOrder, IRecordReads Reads) RequireScope()
+    {
+        var (loadOrder, index) = RequireScopeCore();
+        return (loadOrder, index.At(RecordRef.Effective));
+    }
 
     /// <summary>
     /// The actual gate behind <see cref="RequireScope"/> — every write-side method below

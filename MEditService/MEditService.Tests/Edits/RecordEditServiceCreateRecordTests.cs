@@ -46,7 +46,7 @@ public sealed class RecordEditServiceCreateRecordTests
         var result = service.EditField(mod.Plugin, created.NewFormKey!, "editor_id", Json("\"RenamedNpc\""));
 
         Assert.True(result.Applied, result.Message);
-        var doc = mod.Mirror.Index!.GetDocument(created.NewFormKey!, mod.Plugin)!;
+        var doc = mod.Mirror.Index!.At(RecordRef.Effective).GetDocument(created.NewFormKey!, mod.Plugin)!;
         Assert.Equal("RenamedNpc", doc.EditorId);
         Assert.Contains("RenamedNpc", doc.Body, StringComparison.Ordinal);
     }
@@ -66,7 +66,7 @@ public sealed class RecordEditServiceCreateRecordTests
             Mutagen.Bethesda.Plugins.FormKey.Factory(result.NewFormKey!), "npc_", "BrandNewNpc"));
         Assert.True(File.Exists(sourceFile));
 
-        var doc = mod.Mirror.Index!.GetDocument(result.NewFormKey!, mod.Plugin);
+        var doc = mod.Mirror.Index!.At(RecordRef.Effective).GetDocument(result.NewFormKey!, mod.Plugin);
         Assert.NotNull(doc);
         Assert.Equal("BrandNewNpc", doc!.EditorId);
     }
@@ -126,7 +126,7 @@ public sealed class RecordEditServiceCreateRecordTests
         index.CreateWorkingTreeRecord(mod.Plugin, headOnlyFormKey, "npc_", seedBody);
         index.SetCommittedBaseline(mod.Plugin, [(headOnlyFormKey, seedBody)]);
         index.ApplyWorkingTreeChanges(mod.Plugin, [(headOnlyFormKey, null)]);
-        Assert.Null(index.GetDocument(headOnlyFormKey, mod.Plugin));
+        Assert.Null(index.At(RecordRef.Effective).GetDocument(headOnlyFormKey, mod.Plugin));
         Assert.NotNull(index.At(RecordRef.Head).GetDocument(headOnlyFormKey, mod.Plugin));
 
         var result = ServiceFor(mod.Mirror).CreateRecord(mod.Plugin, "npc_", "AllocatedAfter");

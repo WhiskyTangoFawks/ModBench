@@ -47,7 +47,7 @@ public sealed class ScalarFieldApplierRefusalTests : IDisposable
 
     private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
 
-    private string NpcBody() => _mod.Mirror.Index!.GetDocument(_mod.Npc.ToString(), _mod.Plugin)!.Body!;
+    private string NpcBody() => _mod.Mirror.Index!.At(RecordRef.Effective).GetDocument(_mod.Npc.ToString(), _mod.Plugin)!.Body!;
 
     // ── converter-declined scalar values ───────────────────────────────────────
 
@@ -271,7 +271,7 @@ public sealed class ScalarFieldApplierRefusalTests : IDisposable
         public RecordEditService Service() =>
             new(_mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
 
-        public string Body() => _mirror.Index!.GetDocument(GlobalShort.ToString(), Plugin)!.Body!;
+        public string Body() => _mirror.Index!.At(RecordRef.Effective).GetDocument(GlobalShort.ToString(), Plugin)!.Body!;
 
         public void Dispose()
         {
@@ -329,7 +329,7 @@ public sealed class ScalarFieldApplierRefusalTests : IDisposable
         public RecordEditService Service() =>
             new(_mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
 
-        public string Body() => _mirror.Index!.GetDocument(ArmorMod.ToString(), Plugin)!.Body!;
+        public string Body() => _mirror.Index!.At(RecordRef.Effective).GetDocument(ArmorMod.ToString(), Plugin)!.Body!;
 
         public void Dispose()
         {

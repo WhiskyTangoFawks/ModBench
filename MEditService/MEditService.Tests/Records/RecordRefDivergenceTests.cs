@@ -108,7 +108,7 @@ public sealed class RecordRefDivergenceTests : IDisposable
         repo.SetFilter($"SELECT '{_keptNpcFormKey}' AS form_key");
 
         var query = new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0);
-        var effective = repo.Search(query);
+        var effective = repo.At(RecordRef.Effective).Search(query);
         var head = repo.At(RecordRef.Head).Search(query);
 
         Assert.Equal(2, effective.Total);
@@ -127,7 +127,7 @@ public sealed class RecordRefDivergenceTests : IDisposable
         // KeepMe has two overrides (Base.esm loses, Winner.esp wins) — a broken At(Head) that
         // recomputed winner status differently (e.g. always true, or by load-order alone ignoring
         // participation) would diverge on IsWinner here without changing the entry count.
-        var effectiveStack = repo.GetOverrideStack(_keptNpcFormKey.ToString());
+        var effectiveStack = repo.At(RecordRef.Effective).GetOverrideStack(_keptNpcFormKey.ToString());
         var headStack = repo.At(RecordRef.Head).GetOverrideStack(_keptNpcFormKey.ToString());
 
         Assert.Equal(2, effectiveStack!.Entries.Count);
@@ -137,7 +137,7 @@ public sealed class RecordRefDivergenceTests : IDisposable
 
         // DropMe's sole override is its own winner — the distinct case from KeepMe's losing base
         // entry above, exercised at both refs too.
-        var effectiveDropped = repo.GetDocument(_droppedNpcFormKey.ToString());
+        var effectiveDropped = repo.At(RecordRef.Effective).GetDocument(_droppedNpcFormKey.ToString());
         var headDropped = repo.At(RecordRef.Head).GetDocument(_droppedNpcFormKey.ToString());
         Assert.True(effectiveDropped!.IsWinner);
         Assert.Equal(effectiveDropped.IsWinner, headDropped!.IsWinner);
@@ -152,12 +152,12 @@ public sealed class RecordRefDivergenceTests : IDisposable
         var untouched = _droppedNpcFormKey.ToString();
         var basePlugin = new PluginKey("Base.esm", "Data");
 
-        var before = repo.GetDocument(edited, basePlugin)!;
+        var before = repo.At(RecordRef.Effective).GetDocument(edited, basePlugin)!;
         repo.ApplyWorkingTreeChanges(
             basePlugin, [(edited, before.Body!.Replace("KeepMe", "RenamedInWorkingTree", StringComparison.Ordinal))]);
 
         // The edited record's own Base.esm entry diverges...
-        var stack = repo.GetOverrideStack(edited)!;
+        var stack = repo.At(RecordRef.Effective).GetOverrideStack(edited)!;
         var baseEntry = stack.Entries.Single(e => e.Plugin.Name == "Base.esm");
         Assert.True(baseEntry.HasWorkingTreeChange);
         Assert.NotEqual(baseEntry.Effective.Body, baseEntry.Head.Body);
@@ -169,7 +169,7 @@ public sealed class RecordRefDivergenceTests : IDisposable
 
         // ...and neither does an entirely different record in the same plugin.
         Assert.Equal(
-            repo.GetDocument(untouched, basePlugin)!.Body,
+            repo.At(RecordRef.Effective).GetDocument(untouched, basePlugin)!.Body,
             repo.At(RecordRef.Head).GetDocument(untouched, basePlugin)!.Body);
     }
 
@@ -186,7 +186,7 @@ public sealed class RecordRefDivergenceTests : IDisposable
         using var repo = RepositoryWithWinnerOverrideDeleted();
         repo.SetFilter($"SELECT '{_keptNpcFormKey}' AS form_key");
 
-        var effective = repo.GetPluginsWithMatchingRecords(["npc_"]);
+        var effective = repo.At(RecordRef.Effective).GetPluginsWithMatchingRecords(["npc_"]);
         var head = repo.At(RecordRef.Head).GetPluginsWithMatchingRecords(["npc_"]);
 
         Assert.DoesNotContain("Winner.esp", effective);
@@ -204,7 +204,7 @@ public sealed class RecordRefDivergenceTests : IDisposable
 
         // Winner.esp's only record was its now-deleted override of KeepMe, so nothing in its
         // Effective rows still forces Base.esm as a master. Head's committed row still does.
-        Assert.DoesNotContain("Base.esm", repo.GetEffectiveMasters(WinnerKey));
+        Assert.DoesNotContain("Base.esm", repo.At(RecordRef.Effective).GetEffectiveMasters(WinnerKey));
         Assert.Contains("Base.esm", repo.At(RecordRef.Head).GetEffectiveMasters(WinnerKey));
     }
 
@@ -215,7 +215,7 @@ public sealed class RecordRefDivergenceTests : IDisposable
         var newFormKey = "800000:Base.esm";
         repo.CreateWorkingTreeRecord(BaseKey, newFormKey, "npc_", NewNpcBody(newFormKey, "WorkingTreeOnlyNpc"));
 
-        var effectiveCount = repo.GetRecordTypeCounts(BaseKey).Single(c => c.Type == "npc_").Count;
+        var effectiveCount = repo.At(RecordRef.Effective).GetRecordTypeCounts(BaseKey).Single(c => c.Type == "npc_").Count;
         var headCount = repo.At(RecordRef.Head).GetRecordTypeCounts(BaseKey).Single(c => c.Type == "npc_").Count;
 
         Assert.Equal(headCount + 1, effectiveCount);
@@ -228,7 +228,7 @@ public sealed class RecordRefDivergenceTests : IDisposable
         var newFormKey = "800000:Base.esm";
         repo.CreateWorkingTreeRecord(BaseKey, newFormKey, "npc_", NewNpcBody(newFormKey, "WorkingTreeOnlyNpc"));
 
-        Assert.Contains(newFormKey, repo.GetNativeFormKeys(BaseKey));
+        Assert.Contains(newFormKey, repo.At(RecordRef.Effective).GetNativeFormKeys(BaseKey));
         Assert.DoesNotContain(newFormKey, repo.At(RecordRef.Head).GetNativeFormKeys(BaseKey));
     }
 }

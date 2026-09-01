@@ -279,7 +279,7 @@ public sealed class CompileRoundTripGateTests(CompileRoundTripGateFixture fixtur
         using var scope = new MutationScope(fixture);
 
         var npc = scope.Mirror.Index!
-            .Search(new RecordQuery(RecordTypes: ["npc_"], Plugin: scope.Plugin, Limit: 1))
+            .At(RecordRef.Effective).Search(new RecordQuery(RecordTypes: ["npc_"], Plugin: scope.Plugin, Limit: 1))
             .Items[0];
         // SourceUnitResolver rather than SourceRecordPath.For directly — For needs an order
         // index this test would otherwise have to reverse-engineer from Track's own output.

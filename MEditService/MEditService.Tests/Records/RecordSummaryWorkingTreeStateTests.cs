@@ -73,11 +73,11 @@ public sealed class RecordSummaryWorkingTreeStateTests : IDisposable
     {
         using var index = LoadedIndex();
         var edited = _editedFormKey.ToString();
-        var committed = index.GetDocument(edited, BaseKey)!;
+        var committed = index.At(RecordRef.Effective).GetDocument(edited, BaseKey)!;
         index.ApplyWorkingTreeChanges(
             BaseKey, [(edited, committed.Body!.Replace("EditedOriginal", "EditedNew", StringComparison.Ordinal))]);
 
-        var page = index.Search(new RecordQuery(Plugin: BaseKey, RecordTypes: ["npc_"], Limit: 50));
+        var page = index.At(RecordRef.Effective).Search(new RecordQuery(Plugin: BaseKey, RecordTypes: ["npc_"], Limit: 50));
 
         Assert.Equal(WorkingTreeState.Modified, SummaryFor(page, edited).WorkingTreeState);
         Assert.Equal(WorkingTreeState.None, SummaryFor(page, _untouchedFormKey.ToString()).WorkingTreeState);
@@ -90,7 +90,7 @@ public sealed class RecordSummaryWorkingTreeStateTests : IDisposable
         var created = "800000:Base.esm";
         index.CreateWorkingTreeRecord(BaseKey, created, "npc_", NewNpcBody(created, "BrandNew"));
 
-        var page = index.Search(new RecordQuery(Plugin: BaseKey, RecordTypes: ["npc_"], Limit: 50));
+        var page = index.At(RecordRef.Effective).Search(new RecordQuery(Plugin: BaseKey, RecordTypes: ["npc_"], Limit: 50));
 
         Assert.Equal(WorkingTreeState.Added, SummaryFor(page, created).WorkingTreeState);
     }
@@ -104,7 +104,7 @@ public sealed class RecordSummaryWorkingTreeStateTests : IDisposable
     {
         using var index = LoadedIndex();
         var edited = _editedFormKey.ToString();
-        var committed = index.GetDocument(edited, BaseKey)!;
+        var committed = index.At(RecordRef.Effective).GetDocument(edited, BaseKey)!;
         index.ApplyWorkingTreeChanges(
             BaseKey, [(edited, committed.Body!.Replace("EditedOriginal", "EditedNew", StringComparison.Ordinal))]);
 
