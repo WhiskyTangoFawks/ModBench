@@ -108,7 +108,7 @@ Surface-specific stories live in the surface specs above. These are the cross-cu
 
 ### Status bar
 
-- A bottom-right item reflects backend/load order state, one of five: **Connecting…**
+- A bottom-left item reflects backend/load order state, one of five: **Connecting…**
   (`$(loading~spin) mEdit: Connecting…`), **Attached** (`$(plug) mEdit: Attached`),
   **Disconnected** (`$(error) mEdit: Disconnected — start MEditService and reload`),
   **Stopped** (`$(circle-slash) mEdit: Stopped`), and, once the load order is ready, **Ready**
