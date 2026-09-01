@@ -165,23 +165,37 @@ public sealed class AbstractUnionCompileRoundTripTests : IDisposable
     }
 
     /// <summary>
-    /// #641: <c>ColorData</c>'s own <c>Color</c> member is a <c>System.Drawing.Color</c> —
-    /// <c>SchemaReflector</c> has never reflected that shape anywhere in the schema, so this leaf
-    /// contributes zero real sub-fields today. This fact can only prove the discriminator itself
-    /// switches correctly on compile; it is deliberately not asserting on any color value, because
-    /// there is no field this write door can set one through. Not a regression this ticket
-    /// introduces — every other <c>Color</c>-typed field in the schema has the identical gap.
+    /// #649 (absorbing #641), upgrading what was a discriminator-only fact. <c>ColorData</c>'s own
+    /// <c>Color</c> member is a <c>System.Drawing.Color</c>, a shape <c>SchemaReflector</c> could not
+    /// reflect anywhere until the atomic-value class landed — so this test used to assert nothing
+    /// beyond <c>Assert.IsType&lt;ColorData&gt;</c>, because there was no field the write door could
+    /// set a value through. It now switches the concrete type <i>and</i> carries a real colour across
+    /// the same write, which is what #360's precedent asks for: a union leaf that resolves its
+    /// discriminator correctly but discards the rest of its payload would still have passed the old
+    /// shape of this test.
+    ///
+    /// <para><c>ColorData.Color</c> is <c>ColorBinaryType.Alpha</c> (ColorData_Generated.cs:1057) but
+    /// is deliberately not on <c>SchemaReflector.AlphaBearingColorFields</c>: xEdit's CLFM colour is
+    /// <c>wbByteColors</c>-shaped (wbDefinitionsFO4.pas:9660, inside the union it comments out in
+    /// favour of a formatted integer because its own decider can't run during copying — Mutagen models
+    /// that union properly, so mEdit follows the shape xEdit intended rather than its workaround).
+    /// Hence red/green/blue only, and no alpha in this payload.</para>
+    ///
+    /// <para>Rival: null the atomic-value <c>Apply</c>. Observed — the enclosing struct write is
+    /// refused (<c>NestedFieldReadOnly</c>) and this fails at <c>Assert.True(result.Applied)</c>,
+    /// where the old discriminator-only assertion would have passed unchanged.</para>
     /// </summary>
     [Fact]
-    public void Data_SwitchingConcreteType_IndexToColorData_CompilesAndReparsesAsColorDataWithNoColorField()
+    public void Data_SwitchingConcreteType_IndexToColorData_CompilesAndReparsesTheNewColorValue()
     {
         var result = EditService().EditField(
             _fixture.Plugin, _fixture.ColorRecord.ToString(), "data",
-            Json("""{"concrete_type": "ColorData"}"""));
+            Json("""{"concrete_type": "ColorData", "color": {"red": 17, "green": 34, "blue": 51}}"""));
         Assert.True(result.Applied, result.Message);
 
         var color = CompileAndReparse().Colors.Single(c => c.FormKey == _fixture.ColorRecord);
-        Assert.IsType<ColorData>(color.Data);
+        var colorData = Assert.IsType<ColorData>(color.Data);
+        Assert.Equal((17, 34, 51), (colorData.Color.R, colorData.Color.G, colorData.Color.B));
     }
 
     // ── Holotape.Data (AHolotapeData) ───────────────────────────────────────────
