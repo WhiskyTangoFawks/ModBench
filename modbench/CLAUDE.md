@@ -22,13 +22,17 @@ TypeScript VS Code extension. Root [CLAUDE.md](../CLAUDE.md) for project-wide in
 
   Filtering is **one widget** (`registerNameFilter`, `src/nameFilter.ts`) used by every list view — Mods, the merged Plugins tree, Downloads. Adding a fourth list view means reusing it, not writing a second one: pass the view and its id, and its two command ids and filter-active context key follow by construction. The rules govern the *surface*, not command ids: several ids carry a legacy `modList.` prefix, and renaming them would be churn with no user-visible effect.
 
-  Rules 1–6 and 8 are enforced in `src/test/packageJson.test.ts`, not by review — a new contribution that breaks one fails there. **Rule 7 is not**: `showCollapseAll` is a `createTreeView` option with no declarative contribution and no readable property on the returned `TreeView`, so it has no test seam and is checked by reading the call sites in `extension.ts`.
+  Rules 1–6 and 8 are enforced in `src/test/packageJson.test.ts`, not by review — a new contribution that breaks one fails there. **Rule 7 is not**: `showCollapseAll` is a `createTreeView` option with no declarative contribution and no readable property on the returned `TreeView`, so it has no test seam and is checked by reading the `createTreeView` call sites — since #628 those are in `extension.ts` (Plugins) and `modmanager/modManagementCommands.ts` (Mods), not one file.
 
 ## Module Map
 
 | Module | Owns | Key rule |
 | ------ | ---- | ---- |
-| `extension.ts` | Wiring: instances, commands, prompts | No business logic; prompts then delegates to `EditingController` |
+| `extension.ts` | The composition root: the `ExtensionSession` object, the lifecycle (`activate`/`deactivate`), and everything that genuinely joins both bounded contexts (the merged Plugins tree, plugin-row commands, load-order reconcile wiring, the Loadout header) | No business logic; prompts then delegates to `EditingController`. Single-context wiring does **not** live here — it lives in the surface files below (#628) |
+| `medit/editorCommands.ts` | Editing-context command registration, narrowed to callbacks rather than the session object | Single-context: no Mod Management imports (`contextBoundary.test.ts`, import-only tier — it carries user-facing strings naming MO2's vocabulary for the user's benefit) |
+| `modmanager/modManagementCommands.ts` | Mod Management command registration | Single-context: no Editing imports **and no Editing vocabulary in its own text** — held to the strict `contextBoundary.test.ts` tier |
+| `medit/recordPanelForwarderCommands.ts` | The `[commandId → messageType]` table + one generic registrar for commands that only forward context to the record panel | Data, not repetition — a new forwarder is a table row. The mapping is pinned by its own unit test; the integration suite only asserts commands are *registered*, so it cannot catch a wrong row |
+| `workspaceConfig.ts` | `meditConfig`, `makeDetectPaths`, `setMo2InstanceContext` | Context-neutral helpers both surface files need; exists so neither has an import edge back to the composition root |
 | `EditingController` | HTTP orchestration (create plugin, copy record, `putLoadOrder`) | No VS Code types in interface — VS Code chat tool handlers call it directly (ADR-0012) |
 | `loadOrderReconcile` (`createLoadOrderSync`) | ADR-0044: the whole reconcile pipeline — "recompute the snapshot, PUT it, apply the answer", coalesced — every loadout trigger calls `request()`, Launch mEdit calls `flush()` for the outcome; also owns the in-flight abort scope (`arm()`/`abandon()`) and the per-plugin record-filter match map (`matches()`/`setMatches()`) | Composition-root joiner, imports nothing from either context (`contextBoundary.test.ts`); every reconcile step (snapshot, PUT, tree hand-off) is injected, never known to the module; drops requests when no backend is receiving |
 | `modmanager/loadOrderSnapshot` | `buildLoadOrderSnapshot`: every physical plugin copy with slot/enabled/winning | Pure over `FileConflictIndex` + `plugins.txt`; the only thing that crosses to Editing is `(name, path, origin, slot, enabled, winning)` |
@@ -51,7 +55,11 @@ Placement:
   (once the backend is running) carries the record browser's, from backend metadata (`"recordType"`,
   `"record"`, …). Read-only-for-editing on a plugin row is a tooltip `PluginsTreeComposite`
   appends, never a contextValue (ADR-0035, `docs/specs/plugins.md`).
-- New commands: prompt in `extension.ts`, delegate to `EditingController` (explicit args, no VS Code types).
+- New commands: register in the surface file for the command's own context — `medit/editorCommands.ts`
+  for Editing, `modmanager/modManagementCommands.ts` for Mod Management — and only in `extension.ts`
+  when the command genuinely joins both (its argument is a merged-tree node type, say). Prompt there,
+  delegate to `EditingController` (explicit args, no VS Code types). A command that only forwards
+  context to the record panel is a row in `medit/recordPanelForwarderCommands.ts`, not a new function.
 - New data queries: add to `PluginRepository` interface, implement in `ApiPluginRepository`, test without VS Code.
 - New UI surface: read the surface spec in `docs/specs/` first — one spec per surface (`medit-record-editor.md`, `medit-referenced-by.md`, `medit-version-control.md` for Editing, with `medit.md` the cross-cutting overview; `mods.md`, `plugins.md` (the one Plugins tree — ADR-0035; joint Mod Management/Editing), `downloads.md` for Loadout; `loadout-header.md` for the cross-context header). Update the spec if not covered.
 
@@ -104,7 +112,7 @@ Update when: new `extension.ts` behavior (`EXPECTED_COMMANDS` derives from `pack
 ## Logging
 
 - One `vscode.LogOutputChannel` (`'Modbench'`, created with `{ log: true }`), created in `extension.ts`. Its native `.debug/.info/.warn/.error` methods drive the Output panel's level filter and stamp timestamps automatically.
-- Call sites local to `extension.ts` call the channel's leveled methods directly (DEBUG/INFO for routine actions, WARN when the system correctly refuses something, ERROR for an actual failure). Other modules doing HTTP/async-error handling (`BackendManager`, `PluginRepository`, `EditingController`, etc.) still take a flat `log: (msg: string) => void` compat shim — their own releveling is not yet done.
+- Call sites that log **and** toast go through `makeReporter` (ADR-0026). Call sites that log only call the channel's leveled methods directly (DEBUG/INFO for routine actions, WARN when the system correctly refuses something, ERROR for an actual failure) — deliberately, because routing them through the reporter would add a toast that does not exist today. One site logs at ERROR but toasts at WARNING (`applyLoadOrderToTree`); the reporter ties both to one severity, so it stays direct. Other modules doing HTTP/async-error handling (`BackendManager`, `PluginRepository`, `EditingController`, etc.) still take a flat `log: (msg: string) => void` compat shim — their own releveling is not yet done.
 - The spawned backend's Serilog console output is piped (`stdio: ['ignore','pipe','pipe']`) and forwarded line-by-line into the same channel, prefixed `[backend]`, at its parsed level — so the level filter governs backend and frontend lines alike. Only for a backend *we spawn*: an attached dev-launched one keeps logging to its own terminal. Streams are drained unconditionally — an unread pipe blocks the backend's writes.
 - Every `catch` logs to the channel before showing UI or swallowing. No silent `catch {}`.
 - `PluginTreeProvider`/`ModListProvider`: error tree node instead of empty list on fetch/read failure. `ModListProvider`'s status-badge calc (secondary, non-blocking) degrades badges + warns instead — silently-absent badges would look like "no conflicts."
