@@ -361,9 +361,17 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
     // every other identity-bearing surface here already does.
     const displayId = (result?.overrides.find(o => o.isWinner) ?? result?.overrides[0])?.editorId;
     const recordLabel = displayId ? `${displayId} [${formKey}]` : formKey;
+    // The VMAD fallback is gated on the same `VMAD\` prefix handleArrayOp's own VMAD branch
+    // requires above, not left as a bare `??`: without it, a script's synthesized `Flags` child
+    // (bare fieldName, no wirePath) would collide with a real top-level `Flags` field on any record
+    // type that genuinely has both (Fallout4's Activator/MagicEffect/Package, e.g.) the moment
+    // `result.diffs` ever stopped containing every real field — today it always does, so the shallow
+    // `.find` above always wins first, but that safety is an unwritten invariant on a field named
+    // `diffs`, not a structural guarantee. Gating makes the collision impossible outright rather than
+    // incidentally avoided.
     const rootDiff = [...(result?.diffs ?? []), ...conditionTree.diffs]
       .find(d => (d.wirePath ?? d.fieldName) === rootField)
-      ?? findFieldDiffDeep(vmadTree.diffs, rootField);
+      ?? (rootField.startsWith('VMAD\\') ? findFieldDiffDeep(vmadTree.diffs, rootField) : undefined);
     openExtendedFieldEditor(
       { value, recordLabel, fieldName: fieldPath, plugin: override.plugin, origin: override.origin, readOnly },
       (v: string) => { if (rootDiff) handleCellCommit(plugin, path, rootField, rootDiff, v); },
