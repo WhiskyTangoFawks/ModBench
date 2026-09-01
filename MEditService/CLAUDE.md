@@ -14,7 +14,7 @@ C# ASP.NET Core backend. Root [CLAUDE.md](../CLAUDE.md) for project-wide invaria
   `LoadOrderMirror.IndexOnePlugin`. An unreadable source tree degrades to the binary **and records
   a visible `PluginLoadFailure`**; a silent fallback would let a user read pre-Track content
   believing it was their source. DuckDB = indexed read model. Reads only via
-  `IRecordReads`/`IRecordIndex`, never Mutagen directly.
+  `IRecordReads`, obtained from `IRecordIndex.At(RecordRef)`, never Mutagen directly.
 - **Plugin identity is compound, everywhere** (ADR-0036 amends ADR-0006). The records table key is
   `(form_key, origin, plugin)`: `origin` is the mod folder that provided the file or a reserved
   `PluginOrigin` value; a bare filename is never an identity. `PluginKey(Name, Origin)` is the
@@ -232,7 +232,10 @@ C# ASP.NET Core backend. Root [CLAUDE.md](../CLAUDE.md) for project-wide invaria
   names, which is why that column stores git's own hash.
 - **The record-index seam is `IRecordReads`/`IRecordIndex`.** `PluginKey(Name, Origin)`
   is the compound identity on every seam member, ingest included — never a bare
-  `(string plugin, string origin)` pair. `IRecordIndex.At(RecordRef)` repositions every read.
+  `(string plugin, string origin)` pair. **`IRecordIndex` does not itself carry read members**
+  (#639): `At(RecordRef)` is the only way to a reads surface, so every read site names the ref it
+  reads at — a consumer that reads captures one `var reads = index.At(RecordRef.Effective)` local,
+  or takes an `IRecordReads` where that is all it needs.
   VMAD/condition reconstitution lives at the query-service level (`Queries/RecordDocumentCodecs`,
   operating on `RecordDocument.Body`) — rejected from the seam itself, same as raw SQL. No
   `Connection` property and no SQL crosses this seam except `SetFilter` — the concrete
