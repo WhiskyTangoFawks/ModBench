@@ -33,20 +33,20 @@ export const EXTENSION_TO_WEBVIEW = {
   // opened. Carries no value: closing commits nothing beyond whatever EXTENDED_EDITOR_COMMITTED
   // messages already arrived before it.
   EXTENDED_EDITOR_CLOSED: 'extendedEditorClosed',
-  // The array-op right-click commands broadcast to every
-  // open record panel and let each self-filter on `formKey` — the extension host has no live
-  // reference into the webview's own React state (which alone holds the record's current values),
-  // so the actual mutation (moveArrayElement/removeArrayElement/appendArrayElement, then writing
-  // through the ordinary EDIT_FIELD write path) happens webview-side, the same computation the
-  // keyboard accelerators (Insert/Delete/Ctrl+↑/Ctrl+↓, pure in-webview) already use. `rootField`/
-  // `path` are the row's own wire identity and restage coordinates, matching
-  // arrayParentContext/arrayElementContext's own convention — `path` addresses the array itself
-  // for ARRAY_ADD, the element for the other three; a top-level array's is a one-hop (or empty)
+  // #630: the array-op right-click commands broadcast to every open record panel and let each
+  // self-filter on `formKey` — the extension host has no live reference into the webview's own
+  // React state — but unlike before, no webview-side computation happens for an ordinary reflected
+  // field's array: `op`/`rootField`/`path` travel straight through to `handleEditCell`/EDIT_FIELD as
+  // an op envelope (`{op, path}` under `rootField`), and `RecordFieldWriter`/`ArrayOpWriter` compute
+  // the result server-side from the record's own current value and schema — the same shape
+  // VMAD_STRUCTURAL_OP below already established for VMAD's own ops. Two deliberate exceptions: a
+  // VMAD scalar-array property's own arity ops (VmadCodec's own structural-op vocabulary) and a
+  // Condition-owning field's (Fallout4ConditionCodec.ApplyListValue requires a JSON array and
+  // refuses an op-envelope object) are both out of #630's scope and still compute client-side —
+  // RecordPanel's own handleArrayOp tells all three apart. `path` addresses the array
+  // itself for 'add', the element for the other three; a top-level array's is a one-hop (or empty)
   // path, a nested array's carries every hop from `rootField`.
-  ARRAY_ADD: 'arrayAdd',
-  ARRAY_REMOVE: 'arrayRemove',
-  ARRAY_MOVE_UP: 'arrayMoveUp',
-  ARRAY_MOVE_DOWN: 'arrayMoveDown',
+  ARRAY_STRUCTURAL_OP: 'arrayStructuralOp',
   // VMAD's six structural-op right-click commands
   // (Add/Remove Script, Add/Remove Property, Set Script/Property Flags) all reduce, on Track 0's
   // backend, to the exact same shape EDIT_FIELD already carries — a VmadPath fieldPath
@@ -270,11 +270,12 @@ export type ExtensionToWebview =
   | { type: typeof EXTENSION_TO_WEBVIEW.EXTENDED_EDITOR_COMMITTED; requestId: string; value: string }
   | { type: typeof EXTENSION_TO_WEBVIEW.EXTENDED_EDITOR_CLOSED; requestId: string }
   // `rootField`/`path` are forwarded verbatim from
-  // ArrayElementContext/ArrayParentContext (see their own doc comments above).
-  | { type: typeof EXTENSION_TO_WEBVIEW.ARRAY_ADD; formKey: string; plugin: string; origin: string; rootField: string; path: PathSegment[] }
-  | { type: typeof EXTENSION_TO_WEBVIEW.ARRAY_REMOVE; formKey: string; plugin: string; origin: string; rootField: string; path: PathSegment[] }
-  | { type: typeof EXTENSION_TO_WEBVIEW.ARRAY_MOVE_UP; formKey: string; plugin: string; origin: string; rootField: string; path: PathSegment[] }
-  | { type: typeof EXTENSION_TO_WEBVIEW.ARRAY_MOVE_DOWN; formKey: string; plugin: string; origin: string; rootField: string; path: PathSegment[] }
+  // ArrayElementContext/ArrayParentContext (see their own doc comments above); `op` names which of
+  // the four gestures fired.
+  | {
+      type: typeof EXTENSION_TO_WEBVIEW.ARRAY_STRUCTURAL_OP; formKey: string; plugin: string; origin: string;
+      rootField: string; path: PathSegment[]; op: 'add' | 'remove' | 'moveUp' | 'moveDown';
+    }
   | { type: typeof EXTENSION_TO_WEBVIEW.VMAD_STRUCTURAL_OP; formKey: string; plugin: string; origin: string; fieldPath: string; value: unknown }
   | { type: typeof EXTENSION_TO_WEBVIEW.VMAD_OPEN_ADD_PROPERTY; formKey: string; plugin: string; origin: string; scriptName: string }
   | {

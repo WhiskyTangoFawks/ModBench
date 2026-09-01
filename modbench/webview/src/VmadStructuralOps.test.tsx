@@ -5,7 +5,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 vi.mock('./vscode', () => ({ vscode: { postMessage: vi.fn() } }));
 
-import { RecordPanel } from './RecordPanel';
+import { RecordPanel, computeArrayOpClientSide } from './RecordPanel';
 import type { FieldMetadata } from './types';
 import { columnKey } from './types';
 import type { RecordPanelClient } from './RecordPanelClient';
@@ -170,5 +170,56 @@ describe('RecordPanel — VMAD structural-op right-click menu (issue #231)', () 
     }, '*');
     await new Promise(r => setTimeout(r, 0));
     expect(screen.queryByText('Add property')).not.toBeInTheDocument();
+  });
+});
+
+// #630: a Papyrus scalar-array property's own arity ops (Add/Remove/Move Up/Move Down) are
+// deliberately out of #630's scope — they belong in VmadCodec's own structural-op vocabulary, a
+// different codec surface than an ordinary reflected column (RecordFieldWriter's own VMAD-path
+// dispatch refuses an array-op envelope arriving under a VMAD fieldPath) — so RecordPanel's own
+// handleArrayOp still routes these to computeArrayOpClientSide, which computes the next array
+// client-side exactly as every arity op did before #630, rather than posting an op envelope.
+//
+// Pinned at computeArrayOpClientSide directly, not through a full right-click/keyboard DOM round trip:
+// handleArrayOp's own VMAD-branch rootDiff lookup (`[...vmadTree.diffs,
+// ...conditionTree.diffs].find(...)`) only ever finds a *script's* own top-level diff, never a
+// property's (a property's FieldDiff is a child of its script's, not a top-level entry) — a
+// pre-existing, already-documented gap (RecordPanel.tsx's own handleOpenExtended comment names it:
+// "a VMAD property's own FieldDiff is a child of its script row, never a top-level entry, so a VMAD
+// string property's extended-editor save can't find its root here and silently no-ops" — the exact
+// same lookup shape, the exact same silent no-op, for the exact same reason). That gap predates
+// #630, is not this ticket's to fix, and would make a DOM-level test fail for a reason that has
+// nothing to do with whether the carve-out itself is correct. Testing the extracted function
+// directly is what proves the carve-out's own logic without also re-proving (or silently masking)
+// an unrelated defect.
+describe('computeArrayOpClientSide — the VMAD scalar-array carve-out (#630)', () => {
+  // rootValue is one column's own current value (rootDiff.values[plugin] — a plain array for a
+  // top-level VMAD scalar-array property), not a per-plugin map.
+  const rootValue = [1, 2, 3];
+
+  it('remove: removes the named index and keeps the rest', () => {
+    const next = computeArrayOpClientSide(rootValue, [{ kind: 'index', index: 1 }], 'remove');
+    expect(next).toEqual([1, 3]);
+  });
+
+  it('remove: an out-of-range index is a boundary no-op (undefined — nothing to commit)', () => {
+    const next = computeArrayOpClientSide(rootValue, [{ kind: 'index', index: 5 }], 'remove');
+    expect(next).toBeUndefined();
+  });
+
+  it('moveDown: swaps the named index with its next neighbour', () => {
+    const next = computeArrayOpClientSide(rootValue, [{ kind: 'index', index: 0 }], 'moveDown');
+    expect(next).toEqual([2, 1, 3]);
+  });
+
+  it('moveUp: the first element is a boundary no-op', () => {
+    const next = computeArrayOpClientSide(rootValue, [{ kind: 'index', index: 0 }], 'moveUp');
+    expect(next).toBeUndefined();
+  });
+
+  it('add: appends a default element built from the given element meta', () => {
+    const intMeta: FieldMetadata = { name: '', type: 'int', isArray: false, validFormKeyTypes: [], enumValues: [] };
+    const next = computeArrayOpClientSide(rootValue, [], 'add', intMeta);
+    expect(next).toEqual([1, 2, 3, 0]);
   });
 });

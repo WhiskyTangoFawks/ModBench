@@ -60,6 +60,17 @@ internal enum FieldApplyOutcome
     /// accepts" is actively false here, since the value's shape was never the problem.
     /// </summary>
     NestedFieldReadOnly,
+
+    /// <summary>
+    /// #630: an array op envelope (<c>array_remove</c>/<c>array_move_up</c>/<c>array_move_down</c>)
+    /// whose own boundary check answered "nothing to do" — removing past the array's end, or moving
+    /// the first element up / the last element down. Its own outcome rather than folded into
+    /// <see cref="Applied"/>: <see cref="RecordEditService"/> must commit nothing for it (no rename,
+    /// no re-serialize, no working-tree write, no <c>ReapplyFilter</c>), which only a distinct
+    /// outcome lets it tell apart from a change that genuinely landed. Never a refusal — a boundary
+    /// op is not a mistake the caller needs to fix, it is a request that was already satisfied.
+    /// </summary>
+    NoOp,
 }
 
 /// <summary>
@@ -118,6 +129,14 @@ internal static class RecordFieldWriter
         var col = schema.RecordColumns.FirstOrDefault(c => c.Name == fieldPath);
         if (col == null)
             return FieldApplyOutcome.NotFound;
+
+        // #630: an array arity/order op envelope — same shape-based detection as VmadField's own
+        // op envelopes just above (a JSON object carrying an "op" string member), checked here
+        // rather than earlier since it only ever targets an ordinary reflected column, never a
+        // VMAD/condition path (both already dispatched above this line).
+        if (TryGetOpName(value, out var arrayOpName) && ArrayOpWriter.IsArrayOp(arrayOpName))
+            return ArrayOpWriter.Apply(record, col, arrayOpName, value);
+
         if (col.Apply == null)
             return FieldApplyOutcome.ReadOnly;
 
@@ -238,6 +257,15 @@ internal static class RecordFieldWriter
 
         if (TryGetOpName(value, out var opName))
         {
+            // #630: an array arity/order op envelope under a VMAD path — a Papyrus scalar-array
+            // property's own arity ops are deliberately out of this ticket's scope (they belong in
+            // VmadCodec's own structural-op vocabulary, not this generic array machinery) and
+            // nothing sends this shape today, so this branch is unreached in practice. Guarded
+            // anyway: without it, "array_remove"/etc. would fall through to VmadCodec.ApplyPropertyOp/
+            // ApplyScriptOp as an unrecognised structural-op name and fail on whatever those answer
+            // for that, rather than a refusal that names the real reason.
+            if (ArrayOpWriter.IsArrayOp(opName)) return FieldApplyOutcome.NotFound;
+
             if (VmadPath.TryParse(fieldPath, out var opPropScript, out var opPropName))
                 return ToOutcome(VmadCodec.ApplyPropertyOp(vmadRecord, opPropScript, opPropName, opName, value));
             if (VmadPath.TryParseScript(fieldPath, out var opScriptName))

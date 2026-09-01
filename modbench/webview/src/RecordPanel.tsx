@@ -43,6 +43,54 @@ function subtreeFor(
   return { path: [...path, seg], rootField, rootDiff };
 }
 
+// #630: the op-envelope name each arity op sends under an ordinary reflected field's own
+// fieldPath — RecordFieldWriter/ArrayOpWriter's own vocabulary (ArrayOpWriter.IsArrayOp).
+const ARRAY_OP_NAMES = {
+  add: 'array_add', remove: 'array_remove', moveUp: 'array_move_up', moveDown: 'array_move_down',
+} as const;
+
+// The shared computation behind both of handleArrayOp's carve-outs below — a VMAD scalar-array
+// property's own arity op, and a Condition-owning field's — each deliberately out of #630's scope
+// (VmadCodec and Fallout4ConditionCodec each own their own vocabulary/wire shape, neither is
+// ArrayOpWriter's ColumnSpec-backed one; RecordFieldWriter's own VMAD-path dispatch refuses an
+// array-op envelope arriving under a VMAD path, and Fallout4ConditionCodec.ApplyListValue requires
+// a JSON array and refuses an envelope object the same way), so both still compute the next array
+// client-side and commit it whole, exactly as every arity op did before #630 — this function is
+// that computation, identical for either caller (it never knows or cares which). Module-scope
+// (like subtreeFor above): closes over nothing, everything it needs arrives as an argument.
+// Exported (unlike subtreeFor) purely so RecordPanel.test.tsx can pin its own boundary/happy-path
+// behaviour directly for the VMAD case — handleArrayOp's own VMAD branch reaches it through a
+// rootDiff lookup (`vmadTree.diffs.find(...)`) that only ever finds a *script's* own diff, never a
+// property's (the property's FieldDiff is a child of its script's, not a top-level entry) — a
+// pre-existing, already-documented gap handleOpenExtended's own comment names ("a VMAD property's
+// own FieldDiff is a child of its script row, never a top-level entry"), so a full DOM-level test
+// of a VMAD array gesture cannot pass regardless of this function's own correctness (not this
+// ticket's defect to fix). The Condition case has no such gap — a Condition group's own FieldDiff
+// *is* always a top-level entry in conditionTree.diffs (conditionTreeAdapter.ts's own
+// buildConditionRows builds one flat array per condition-owning field, nested game-data condition
+// lists included) — so it is pinned end-to-end instead, in ConditionArrayOps.test.tsx.
+export function computeArrayOpClientSide(
+  rootValue: unknown, path: PathSegment[], op: 'add' | 'remove' | 'moveUp' | 'moveDown', elementMeta?: FieldMetadata,
+): unknown {
+  // 'add' addresses the array itself; every other op addresses one of its elements, so the
+  // array is one hop shorter than the row's own path (the last hop is the element's own index).
+  const arrayPath = op === 'add' ? path : path.slice(0, -1);
+  const current = getAtPath(rootValue, arrayPath);
+  const currentArray = Array.isArray(current) ? current : [];
+  const lastSeg = path.at(-1);
+  const index = lastSeg?.kind === 'index' ? lastSeg.index : -1;
+  let nextArray: unknown[];
+  if (op === 'add') {
+    nextArray = appendArrayElement(currentArray, defaultElementValue(elementMeta ?? { name: '', type: 'string', isArray: false, validFormKeyTypes: [], enumValues: [] }));
+  } else if (op === 'remove') {
+    nextArray = removeArrayElement(currentArray, index);
+  } else {
+    nextArray = moveArrayElement(currentArray, index, op === 'moveUp' ? -1 : 1);
+  }
+  if (nextArray === currentArray) return undefined; // boundary no-op — nothing to write
+  return setAtPath(rootValue, arrayPath, nextArray);
+}
+
 // ── RecordPanel ───────────────────────────────────────────────────────────────
 
 export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>) {
@@ -205,34 +253,49 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
     [result, isHeaderRecord, runOnTargets],
   );
 
-  // The four array-arity/order ops (Add/Remove/Move Up/Move
-  // Down) — one generic handler for every unsorted array in the tree (an ordinary reflected
-  // field, or a VMAD array-of-scalars property reusing this exact same machinery), rather
-  // than a per-field special case. `rootField` locates the subtree's own root FieldDiff (whichever
-  // of diffs/vmadTree.diffs/conditionTree.diffs it came from); `path` addresses the array within
-  // that root's own per-column value (getAtPath/setAtPath, the same generic accessors every field
-  // commit already writes through). `elementMeta` is only needed for 'add' (defaultElementValue).
+  // #630: the four array-arity/order ops (Add/Remove/Move Up/Move Down) — one generic handler for
+  // every unsorted array in the tree. For an ordinary reflected field, this posts an op envelope
+  // (`{op, path}`) straight through handleEditCell/EDIT_FIELD under `rootField`; RecordFieldWriter/
+  // ArrayOpWriter compute the result server-side from the record's own current value and schema —
+  // no webview-side computation at all, the same shape VMAD's own structural ops
+  // (VMAD_STRUCTURAL_OP) already use.
+  //
+  // Two carve-outs, kept as separate branches rather than one merged lookup, each preserving the
+  // pre-#630 computation bit-for-bit (computeArrayOpClientSide above): a VMAD scalar-array property's
+  // own arity ops (VmadCodec's own vocabulary, not ArrayOpWriter's) and a Condition-owning field's
+  // (Fallout4ConditionCodec.ApplyListValue requires a JSON array and refuses an op-envelope object
+  // outright — RecordFieldWriter routes a Condition-list fieldPath there before ArrayOpWriter's own
+  // detection ever runs, so posting an envelope under one is a guaranteed refusal, not merely an
+  // unsupported shape). Not merged into one lookup: a VMAD *property*'s own wirePath
+  // (`VMAD\<Script>\<Property>`) never resolves in this same top-level-diffs lookup (a property's
+  // FieldDiff is a child of its script's, never a top-level entry — the same pre-existing gap
+  // computeArrayOpClientSide's own doc comment names), so gating VMAD on the lookup succeeding, the way
+  // Conditions safely can (a Condition group's own FieldDiff *is* always a top-level entry in
+  // conditionTree.diffs — conditionTreeAdapter.ts's own buildConditionRows builds one flat array,
+  // nested game-data condition lists included), would silently start posting an envelope for a
+  // VMAD property instead of the current true no-op — a new network round trip and a new refusal
+  // shape neither existed before.
   const handleArrayOp = useCallback((
     plugin: ColumnKey, path: PathSegment[], rootField: string,
     op: 'add' | 'remove' | 'moveUp' | 'moveDown', elementMeta?: FieldMetadata,
   ) => {
-    const rootDiff = [...(result?.diffs ?? []), ...vmadTree.diffs, ...conditionTree.diffs]
-      .find(d => (d.wirePath ?? d.fieldName) === rootField);
-    if (!rootDiff) return;
-    const rootValue = rootDiff.values[plugin];
-    // 'add' addresses the array itself; every other op addresses one of its elements, so the
-    // array is one hop shorter than the row's own path (the last hop is the element's own index).
-    const arrayPath = op === 'add' ? path : path.slice(0, -1);
-    const current = getAtPath(rootValue, arrayPath);
-    const currentArray = Array.isArray(current) ? current : [];
-    const lastSeg = path[path.length - 1];
-    const index = lastSeg?.kind === 'index' ? lastSeg.index : -1;
-    const nextArray = op === 'add' ? appendArrayElement(currentArray, defaultElementValue(elementMeta ?? { name: '', type: 'string', isArray: false, validFormKeyTypes: [], enumValues: [] }))
-      : op === 'remove' ? removeArrayElement(currentArray, index)
-      : moveArrayElement(currentArray, index, op === 'moveUp' ? -1 : 1);
-    if (nextArray === currentArray) return; // boundary no-op — nothing to write
-    handleEditCell(plugin, rootField, setAtPath(rootValue, arrayPath, nextArray));
-  }, [result, vmadTree, conditionTree, handleEditCell]);
+    if (rootField.startsWith('VMAD\\')) {
+      const rootDiff = vmadTree.diffs.find(d => (d.wirePath ?? d.fieldName) === rootField);
+      if (!rootDiff) return;
+      const nextValue = computeArrayOpClientSide(rootDiff.values[plugin], path, op, elementMeta);
+      if (nextValue !== undefined) handleEditCell(plugin, rootField, nextValue);
+      return;
+    }
+
+    const conditionRootDiff = conditionTree.diffs.find(d => (d.wirePath ?? d.fieldName) === rootField);
+    if (conditionRootDiff) {
+      const nextValue = computeArrayOpClientSide(conditionRootDiff.values[plugin], path, op, elementMeta);
+      if (nextValue !== undefined) handleEditCell(plugin, rootField, nextValue);
+      return;
+    }
+
+    handleEditCell(plugin, rootField, { op: ARRAY_OP_NAMES[op], path });
+  }, [vmadTree, conditionTree, handleEditCell]);
 
   // One *value* edit, committed the way the arity ops above already commit an arity change —
   // the whole complex field, reconstructed. CONTEXT.md: a complex field is "always edited as one
@@ -369,29 +432,22 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
         // in full, so the grid and the banner update together in one state change. Load-order-wide,
         // not record-specific, so no self-filter — every open panel reacts.
         void refreshRef.current(prevFormKeyRef.current);
-      } else if (
-        msg.type === EXTENSION_TO_WEBVIEW.ARRAY_ADD || msg.type === EXTENSION_TO_WEBVIEW.ARRAY_REMOVE
-        || msg.type === EXTENSION_TO_WEBVIEW.ARRAY_MOVE_UP || msg.type === EXTENSION_TO_WEBVIEW.ARRAY_MOVE_DOWN
-      ) {
+      } else if (msg.type === EXTENSION_TO_WEBVIEW.ARRAY_STRUCTURAL_OP) {
         // Self-filter on formKey — a changeId-less broadcast (there is no per-change id here).
         // Only reachable while this exact record is open, so a
         // stale/background panel showing a different record ignores it.
         if (msg.formKey !== prevFormKeyRef.current) return;
         const plugin = columnKey(msg.plugin, msg.origin);
-        const op = msg.type === EXTENSION_TO_WEBVIEW.ARRAY_ADD ? 'add'
-          : msg.type === EXTENSION_TO_WEBVIEW.ARRAY_REMOVE ? 'remove'
-          : msg.type === EXTENSION_TO_WEBVIEW.ARRAY_MOVE_UP ? 'moveUp' : 'moveDown';
-        // `msg.path` is the carried path (the array itself for 'add', the element for every
-        // other op) — never re-synthesized from a bare scalar index, which would only
-        // address a top-level array correctly. `metaAtPath` resolves the *array's own*
-        // element type from the subtree root's meta, walking the same hops the value itself sits
-        // behind — reading `fieldMetaMapRef.current[msg.rootField]?.elementType` directly
-        // would only find the right element type when the array is itself the subtree
-        // root; for a nested array it would name the wrong node's (or no) elementType, and Add
-        // would append a malformed element.
-        const arrayPath = op === 'add' ? msg.path : msg.path.slice(0, -1);
+        // `elementMeta` only matters for handleArrayOp's own VMAD/Condition carve-outs ('add' on
+        // either needs a default element built client-side); for an ordinary reflected field it's posted straight
+        // through as an op envelope and ignored here — RecordFieldWriter/ArrayOpWriter resolve the
+        // array's own element type server-side instead of relying on this one, the same reason
+        // `metaAtPath` (not `fieldMetaMapRef.current[msg.rootField]?.elementType` directly) is still
+        // needed here: for a nested array, only walking the hops down from the subtree root names
+        // the right node's elementType.
+        const arrayPath = msg.op === 'add' ? msg.path : msg.path.slice(0, -1);
         const arrayMeta = metaAtPath(fieldMetaMapRef.current[msg.rootField], arrayPath);
-        handleArrayOpRef.current(plugin, msg.path, msg.rootField, op, arrayMeta?.elementType ?? undefined);
+        handleArrayOpRef.current(plugin, msg.path, msg.rootField, msg.op, arrayMeta?.elementType ?? undefined);
       } else if (msg.type === EXTENSION_TO_WEBVIEW.VMAD_STRUCTURAL_OP) {
         // Same self-filter-and-commit shape as the array-op branch above, except the
         // op-envelope value is already the exact shape handleEditCell/EDIT_FIELD always carries —
