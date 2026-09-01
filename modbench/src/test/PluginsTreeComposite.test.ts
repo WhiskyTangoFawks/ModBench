@@ -95,8 +95,10 @@ describe('PluginsTreeComposite with no backend running', () => {
   it('leaves every row a leaf', async () => {
     const { composite, render } = make([PLUGIN_ROW, ERROR_ROW]);
 
-    for (const row of await render()) {
-      expect(composite.getTreeItem(row).collapsibleState).toBe(vscode.TreeItemCollapsibleState.None);
+    for (const row of await render() as FakeRow[]) {
+      const item = composite.getTreeItem(row);
+      expect(item.label).toBe(row.file ?? row.kind);
+      expect(item.collapsibleState).toBe(vscode.TreeItemCollapsibleState.None);
     }
   });
 

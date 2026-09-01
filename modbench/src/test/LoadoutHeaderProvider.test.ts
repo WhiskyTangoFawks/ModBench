@@ -37,7 +37,18 @@ describe('LoadoutHeaderProvider', () => {
   it('never renders an mEdit row', async () => {
     const rows = await makeProvider().getChildren();
 
+    expect(rows.map((r) => r.label)).toEqual(['Profile']);
     expect(rows.some((r) => r.label === 'mEdit')).toBe(false);
+  });
+
+  it('refresh() fires the change event VS Code re-renders the tree on', () => {
+    const provider = makeProvider();
+    const fired: unknown[] = [];
+    provider.onDidChangeTreeData((e) => fired.push(e));
+
+    provider.refresh();
+
+    expect(fired).toEqual([undefined]);
   });
 
   it('reads the active profile as a row that activates Switch Profile', async () => {

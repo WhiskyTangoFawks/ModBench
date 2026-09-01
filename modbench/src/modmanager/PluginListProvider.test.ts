@@ -113,6 +113,7 @@ describe('PluginNode / ImplicitMasterNode — row click opens the plugin header 
 describe('leading slot — rows outside the load order render neither checkbox nor lock (#276 AC3)', () => {
   it('ErrorNode has no checkbox and no lock', () => {
     const node = new ErrorNode('boom');
+    expect(node.label).toBe('⚠ Failed to load: boom');
     expect(node.checkboxState).toBeUndefined();
     expect(node.iconPath).not.toEqual({ id: 'lock' });
   });
