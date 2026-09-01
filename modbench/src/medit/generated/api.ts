@@ -621,7 +621,7 @@ export interface components {
             /** Format: int32 */
             index: number;
             perPlugin: {
-                [key: string]: components["schemas"]["ParsedCondition"];
+                [key: string]: components["schemas"]["ParsedCondition"] | null;
             };
             winnerColumn: string;
             cellStates: {

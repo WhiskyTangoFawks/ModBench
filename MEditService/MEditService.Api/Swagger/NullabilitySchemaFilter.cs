@@ -7,8 +7,8 @@ namespace MEditService.Api.Swagger;
 
 // Swashbuckle does not read C#'s nullable-reference-type annotations, so left alone it describes
 // every property of every DTO as both optional and nullable. This filter is the one place that
-// mismatch is corrected, and it makes two edits per schema, both driven by the same
-// NullabilityInfoContext reading of the CLR property:
+// mismatch is corrected, and it makes three edits per schema, all driven by NullabilityInfoContext
+// readings of the CLR property:
 //
 //   1. Non-nullable property -> `required`. Without it openapi-typescript emits `name?: string`
 //      for a C# `string Name`, and the frontend has to re-assert non-nullability by hand at every
@@ -16,11 +16,19 @@ namespace MEditService.Api.Swagger;
 //   2. Nullable *object-typed* property -> allOf-wrapped $ref. OpenAPI 3.0 forbids sibling
 //      keywords next to a $ref, so Swashbuckle never emits `nullable: true` alongside a bare one
 //      and a genuinely-nullable ref silently loses its nullability. Wrapping in `allOf` gives
-//      `nullable` somewhere to attach. Only a bare $ref needs this — an array/dictionary of refs
-//      carries its own inline schema, which can already take a `nullable` sibling.
+//      `nullable` somewhere to attach. Only a bare $ref needs this — a dictionary's own schema is
+//      inline (not itself a $ref), so SupportNonNullableReferenceTypes can already put `nullable`
+//      directly on it with no conflict.
+//   3. A dictionary property whose *value* type is a nullable $ref (`Dictionary<string, T?>`) ->
+//      the value schema, reached through `additionalProperties` rather than a property of its own,
+//      gets the same allOf wrap as (2) and for the same reason. additionalProperties is a
+//      different code path from the per-property walk (1)/(2) run, so it needs its own check
+//      (#644). Independent of the dictionary property's own nullability — a `Dictionary<string,
+//      T>` (non-null dict, nullable T) and a `Dictionary<string, T>? ` (nullable dict, non-null T)
+//      are unrelated axes; SwaggerSchemaTests pins both directions plus the case nullable at
+//      exactly one of the two levels.
 //
-// The two halves are complementary, never both applied to one property: (1) fires on the
-// non-nullable ones, (2) on the nullable ones.
+// (1) and (2) are complementary, never both applied to one property. (3) is independent of both.
 public sealed class NullabilitySchemaFilter : ISchemaFilter
 {
     private static readonly NullabilityInfoContext NullabilityContext = new();
@@ -38,10 +46,8 @@ public sealed class NullabilitySchemaFilter : ISchemaFilter
             {
                 concrete.Required ??= new HashSet<string>();
                 concrete.Required.Add(name);
-                continue;
             }
-
-            if (concrete.Properties[name] is OpenApiSchemaReference propSchema)
+            else if (concrete.Properties[name] is OpenApiSchemaReference propSchema)
             {
                 concrete.Properties[name] = new OpenApiSchema
                 {
@@ -49,7 +55,27 @@ public sealed class NullabilitySchemaFilter : ISchemaFilter
                     Type = JsonSchemaType.Null,
                 };
             }
+
+            WrapNullableDictionaryValue(concrete.Properties[name], property);
         }
+    }
+
+    // Case 3: a dictionary property's own `additionalProperties` is a bare $ref whose CLR value
+    // type is nullable. Keyed off the dictionary's *value* generic argument specifically — not the
+    // property's own nullability, which is an unrelated axis (see the class comment).
+    private static void WrapNullableDictionaryValue(IOpenApiSchema propertySchema, PropertyInfo property)
+    {
+        if (propertySchema is not OpenApiSchema { AdditionalProperties: OpenApiSchemaReference valueSchema } dictSchema)
+            return;
+
+        var typeArguments = NullabilityContext.Create(property).GenericTypeArguments;
+        if (typeArguments.Length != 2 || typeArguments[1].WriteState != NullabilityState.Nullable) return;
+
+        dictSchema.AdditionalProperties = new OpenApiSchema
+        {
+            AllOf = [valueSchema],
+            Type = JsonSchemaType.Null,
+        };
     }
 
     // Reverses the default ASP.NET Core camelCase JSON naming policy Swashbuckle applies to find
