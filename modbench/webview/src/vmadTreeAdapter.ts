@@ -202,13 +202,21 @@ const FLAGS_META: FieldMetadata = {
 // Property/Remove Script/Set Flags…, are right-click-menu commands, reached the
 // same way every other structural op is, not rendered here). Every property child carries its
 // own `wirePath`, independent of the container and of every sibling.
-function buildScript(s: VmadScriptDiff): { diff: FieldDiff; meta: FieldMetadata } {
+function buildScript(s: VmadScriptDiff): { diff: FieldDiff; meta: FieldMetadata; propertyMeta: Record<string, FieldMetadata> } {
   const propertyBuilds = s.properties.map(p => ({ name: p.name, ...buildProperty(p) }));
   const children: FieldDiff[] = [
     buildFlagsChild(s),
     ...propertyBuilds.map(({ name, diff }) => ({ ...diff, wirePath: `VMAD\\${s.name}\\${name}` })),
   ];
   const fields: FieldMetadata[] = [FLAGS_META, ...propertyBuilds.map(({ name, meta }) => ({ ...meta, name }))];
+  // #658: a flat wirePath-keyed entry per property, alongside the nested `fields` array above
+  // (unchanged, still what a script's own struct-shaped meta needs) — mirrors how an ordinary
+  // reflected field's own FieldMetadata is already flat-keyed by name in RecordPanel's
+  // `fieldMetaMap`. Without this, nothing outside a full tree walk could resolve a VMAD property's
+  // own elementType from its wirePath alone; `WRAPPER_NAME`'s single metaMap entry only ever named
+  // the wrapper, never a script or property nested inside its `fields`.
+  const propertyMeta: Record<string, FieldMetadata> =
+    Object.fromEntries(propertyBuilds.map(({ name, meta }) => [`VMAD\\${s.name}\\${name}`, meta]));
   return {
     diff: {
       fieldName: s.name,
@@ -218,7 +226,8 @@ function buildScript(s: VmadScriptDiff): { diff: FieldDiff; meta: FieldMetadata 
       cellStates: s.cellStates,
       conflictAll: aggregateConflictAll(s.cellStates, children),
       children },
-    meta: { name: s.name, type: 'struct', isArray: false, validFormKeyTypes: [], enumValues: [], fields } };
+    meta: { name: s.name, type: 'struct', isArray: false, validFormKeyTypes: [], enumValues: [], fields },
+    propertyMeta };
 }
 
 export interface VmadTreeRows {
@@ -256,5 +265,7 @@ export function buildVmadRows(vmad: VmadCompare | null | undefined): VmadTreeRow
   const wrapperMeta: FieldMetadata = {
     name: WRAPPER_NAME, type: 'struct', isArray: false, validFormKeyTypes: [], enumValues: [],
     fields: scriptBuilds.map(b => b.meta) };
-  return { diffs: [wrapper], metaMap: { [WRAPPER_NAME]: wrapperMeta } };
+  const metaMap: Record<string, FieldMetadata> = { [WRAPPER_NAME]: wrapperMeta };
+  for (const b of scriptBuilds) Object.assign(metaMap, b.propertyMeta);
+  return { diffs: [wrapper], metaMap };
 }

@@ -270,6 +270,38 @@ describe('buildVmadRows — structList property (ArrayOfStruct)', () => {
   });
 });
 
+// A pre-existing, untested defect found while relocating VMAD's scalar-array arity ops
+// server-side (#658) — distinct from #660's own fix (that resolved a property's own FieldDiff
+// through the tree; this is the *metadata* side of the same gap). `metaMap` only ever exposed one
+// key, `WRAPPER` ("Scripts (VMAD)") — RecordPanel.tsx's ARRAY_STRUCTURAL_OP broadcast listener
+// looks a VMAD property's own elementType up by a flat `fieldMetaMap[rootField]` read (the exact
+// convention every ordinary reflected field's metadata already supports), which for any VMAD
+// wirePath always read `undefined`. In practice this meant a right-click Add on any VMAD array
+// silently built a wrong-typed default element (a plain string ''), and — going forward — makes it
+// impossible for RecordPanel to tell a scalar-array property apart from an ArrayOfObject one via
+// that same broadcast path, since both would agree on `undefined`. Fixed the same way ordinary
+// fields already work: every VMAD property gets its own flat `metaMap` entry, keyed by wirePath,
+// alongside the existing wrapper-keyed entry (additive — nothing removes the wrapper's own key).
+describe('buildVmadRows — metaMap carries a flat per-property entry, not just the wrapper (#658)', () => {
+  it("a scalar property's own metadata is reachable by its wirePath, not just by walking the wrapper's fields", () => {
+    const { metaMap } = buildVmadRows({ scripts: [script({ properties: [scalarProp({ name: 'Health' })] })] });
+    expect(metaMap['VMAD\\ScriptA\\Health']?.type).toBe('int');
+  });
+
+  it("a scalar-array property's own metadata is reachable the same way, elementType included", () => {
+    const arrProp: VmadPropertyDiff = {
+      name: 'Levels', kind: 'array',
+      values: {}, types: { 'Fallout4.esm': 'ArrayOfInt' }, winnerColumn: 'Fallout4.esm', cellStates: {},
+      children: [
+        { name: '', kind: 'scalar', values: { 'Fallout4.esm': 1 }, types: { 'Fallout4.esm': 'Int' }, winnerColumn: 'Fallout4.esm', cellStates: {} },
+      ],
+    };
+    const { metaMap } = buildVmadRows({ scripts: [script({ properties: [arrProp] })] });
+    expect(metaMap['VMAD\\ScriptA\\Levels']?.type).toBe('array');
+    expect(metaMap['VMAD\\ScriptA\\Levels']?.elementType?.type).toBe('int');
+  });
+});
+
 // Every synthesized FieldDiff node this adapter builds must populate its own
 // bottom-up conflictAll — the compare grid's per-row renderer reads it directly, with no fallback
 // computation of its own, so a node the adapter forgot would silently paint no background.
