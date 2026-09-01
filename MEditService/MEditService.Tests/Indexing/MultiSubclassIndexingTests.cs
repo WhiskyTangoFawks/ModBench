@@ -17,7 +17,8 @@ namespace MEditService.Tests.Indexing;
 //
 // These round-trip the real Index -> query pipeline (SchemaReflectorTests' Extract-only test
 // covers the same defect at the schema seam without a database); this one also exercises DDL
-// (TableDdlBuilder building the widened column) and the appender (AppendTyped's VARCHAR branch).
+// (TableDdlBuilder building the widened column) and the read-side coercion (CoerceToColumnType's
+// VARCHAR branch).
 public class MultiSubclassIndexingTests
 {
     private static readonly SchemaReflector Reflector = SharedSchemaReflector.Instance;
@@ -119,7 +120,7 @@ public class MultiSubclassIndexingTests
     {
         // SchemaReflectorTests' schema/Extract-seam tests cover the same defect without a
         // database; this one also exercises DDL (TableDdlBuilder building the merged array column)
-        // and the appender (AppendTyped's VARCHAR branch) for every one of OMOD's five concrete
+        // and the read-side coercion (CoerceToColumnType's VARCHAR branch) for every one of OMOD's five concrete
         // subclasses in one real Index -> query round trip, same rationale as GMST/GLOB above:
         // the defect is invisible if only the discovery-winning subclass is checked.
         var mod = new Fallout4Mod(ModKey.FromFileName("Omod339.esp"), Fallout4Release.Fallout4);

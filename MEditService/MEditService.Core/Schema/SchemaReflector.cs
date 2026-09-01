@@ -179,7 +179,7 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         IReadOnlyDictionary<Type, string> getterTypeToTable, ILogger logger)
     {
         if (BuildHeaderSchema(category, assembly, getterTypeToTable, logger) is { } headerSchema)
-            schemas["header"] = headerSchema;
+            schemas[HeaderIndexer.RecordType] = headerSchema;
     }
 
     // ── Header schema ──────────────────────────────────────────────────────────
@@ -272,8 +272,8 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
 
         return new RecordTableSchema
         {
-            TableName = "header",
-            DisplayName = RecordDisplayNames.For("header"),
+            TableName = HeaderIndexer.RecordType,
+            DisplayName = RecordDisplayNames.For(HeaderIndexer.RecordType),
             RecordType = headerGetterType,
             RecordColumns = columns,
             HeaderColumnExtract = extracts,
@@ -821,7 +821,7 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
     }
 
     // Every prior VARCHAR column already held a real string; a widened scalar column is the first
-    // one to hand AppendTyped a raw boxed *numeric* value, and AppendTyped's own VARCHAR branch is
+    // one to hand CoerceToColumnType a raw boxed *numeric* value, and its own VARCHAR branch is
     // a bare value.ToString() with no culture — so on any non-en-US host a widened float/int would
     // round-trip through the current culture's separators (e.g. "3,5" under de-DE) instead of the
     // actual value. Format explicitly with InvariantCulture here, for every IFormattable scalar

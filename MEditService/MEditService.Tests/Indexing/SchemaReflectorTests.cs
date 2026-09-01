@@ -125,8 +125,8 @@ public class SchemaReflectorTests
         var data = schemas["gmst"].RecordColumns.Single(c => c.Name == "data");
 
         // Widened scalars format as text (FormatWidenedValue) — int/float via InvariantCulture,
-        // not the raw boxed value, so the column round-trips through AppendTyped's VARCHAR branch
-        // (a bare ToString(), see AppendTyped) the same way on every host.
+        // not the raw boxed value, so the column round-trips through CoerceToColumnType's VARCHAR
+        // branch (a bare ToString(), see CoerceToColumnType) the same way on every host.
         Assert.Equal("42", data.Extract(i));
         Assert.Equal("3.5", data.Extract(f));
         Assert.Equal("hello", data.Extract(s));
@@ -137,7 +137,7 @@ public class SchemaReflectorTests
     public void GetSchemas_Gmst_DataColumn_WidenedFloatFormattingIsCultureInvariant()
     {
         // Regression: FormatWidenedValue handing a raw boxed float straight through to
-        // AppendTyped's VARCHAR branch, whose value.ToString() carries no culture — the first
+        // CoerceToColumnType's VARCHAR branch, whose value.ToString() carries no culture — the first
         // VARCHAR column to ever hold a raw numeric rather than an already-formatted string —
         // round-trips 3.5 as "3,5" under a comma-decimal culture, on any non-en-US host.
         // Setting CurrentCulture for the assertion is what

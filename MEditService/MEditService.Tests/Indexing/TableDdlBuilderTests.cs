@@ -82,6 +82,32 @@ public class TableDdlBuilderTests
         Assert.Contains("editor_id", cols);
     }
 
+    /// <summary>
+    /// Building the schema twice is a no-op, not an error — a general guard on every statement
+    /// <see cref="TableDdlBuilder.CreateTables"/> issues, nothing header-specific. It holds because
+    /// each table is <c>CREATE TABLE IF NOT EXISTS</c>, each index <c>CREATE INDEX IF NOT EXISTS</c>,
+    /// and each view <c>CREATE OR REPLACE VIEW</c>; a future statement missing one of those forms
+    /// fails here rather than on a second reconcile against a warm index.
+    ///
+    /// <para>Re-asserted deliberately after #631: this test previously sat between the two
+    /// header-table tests that ticket retired, and is easy to remove as collateral with them. It is
+    /// not about the header at all.</para>
+    /// </summary>
+    [Fact]
+    public void CreateTables_IsIdempotent()
+    {
+        using var conn = OpenMemory();
+        _builder.CreateTables(conn, GameRelease.Fallout4);
+
+        var ex = Record.Exception(() => _builder.CreateTables(conn, GameRelease.Fallout4));
+
+        Assert.Null(ex);
+        // Positive control: the second call left a working schema behind rather than an empty one —
+        // a no-op that also dropped every relation would satisfy "did not throw" on its own.
+        Assert.NotEmpty(GetColumns(conn, "records"));
+        Assert.NotEmpty(GetColumns(conn, "npc_"));
+    }
+
     // ADR-0001: load order lives only on `registrations`. The mirror record-shaped
     // tables carry file-derived facts only; `load_order_idx` reaches a reader exclusively through
     // the registered view's join to `registrations` (TableDdlBuilder.CreateRegisteredViews), never

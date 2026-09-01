@@ -1041,7 +1041,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
     }
 
     /// <summary>Reads a record's document row into a <see cref="RecordDocument"/>, reconstituted
-    /// through <see cref="RecordTextCodec"/> and extracted via <see cref="ExtractFields"/> — see
+    /// through <see cref="RecordTextCodec"/> and extracted via <see cref="BuildFields"/> — see
     /// that method's own doc comment for why the values match the SQL door's by
     /// construction.</summary>
     private RecordDocument ReadDocumentFromBody(
