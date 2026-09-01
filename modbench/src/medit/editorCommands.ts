@@ -392,11 +392,11 @@ export function registerRecordLifecycleCommands(
 export function makeResolveOriginOrReport(
   controller: EditingController, outputChannel: vscode.LogOutputChannel,
 ): (node: { origin?: string; pluginName: string }) => Promise<string | undefined> {
+  const reporter = makeReporter(outputChannel, 'recordLifecycle');
   return async (node) => {
     const origin = node.origin ?? await controller.resolveOrigin(node.pluginName);
     if (!origin) {
-      outputChannel.error(`[extension] record lifecycle command could not resolve an origin for "${node.pluginName}"`);
-      void vscode.window.showErrorMessage(`Modbench: Could not resolve which mod "${node.pluginName}" belongs to.`);
+      reporter.report('error', `Could not resolve which mod "${node.pluginName}" belongs to.`);
     }
     return origin;
   };
@@ -471,8 +471,9 @@ export async function pickCopyDestination(
     return picked && { name: picked.plugin.name, origin: picked.plugin.origin };
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error);
-    outputChannel.error(`[extension] pickCopyDestination (${gesture}): ${detail}`);
-    void vscode.window.showErrorMessage(`Modbench: Could not look up destination plugins: ${detail}`);
+    // gesture goes in `detail`, not `message` — it's context for the Output channel, not
+    // something the toast (already carrying `detail`) needs to repeat.
+    makeReporter(outputChannel, 'pickCopyDestination').report('error', `Could not look up destination plugins: ${detail}`, gesture);
     return undefined;
   }
 }
@@ -565,8 +566,7 @@ export function makeMergeEditorOpener(repository: PluginRepository, outputChanne
 }
 
 export function reportCompileTargetError(outputChannel: vscode.LogOutputChannel, command: string, message: string): void {
-  outputChannel.error(`[extension] ${command}: ${message}`);
-  void vscode.window.showErrorMessage(`Modbench: ${message}`);
+  makeReporter(outputChannel, command).report('error', message);
 }
 
 /** The shared tail both compile commands share once they have a target: call through

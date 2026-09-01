@@ -334,13 +334,13 @@ function wireAutoLaunch(
   session: ExtensionSession, context: vscode.ExtensionContext, outputChannel: vscode.LogOutputChannel,
   enterEditing: (() => Promise<void>) | undefined,
 ): void {
+  const reporter = makeReporter(outputChannel, 'launch');
   const launch = async () => {
     try {
       await enterEditing?.();
     } catch (err) {
-      outputChannel.error(`[extension] backend launch failed: ${err instanceof Error ? err.message : String(err)}`);
       exitToLoadout(session); // reset the view and tear down any half-started backend
-      void vscode.window.showErrorMessage('Modbench: Failed to launch mEdit.');
+      reporter.report('error', 'Failed to launch mEdit.', err instanceof Error ? err.message : String(err));
     }
   };
   void launch();
@@ -543,8 +543,8 @@ function registerPluginListView(deps: PluginListDeps): { pluginListProvider: Plu
         } catch (err) {
           // ADR-0026: a failed user action must surface, not silently leave the checkbox
           // out of sync with disk. Log detail, notify, and refresh to resync the checkbox.
-          outputChannel.error(`[extension] toggling "${node.plugin.name}" failed: ${err instanceof Error ? err.message : String(err)}`);
-          void vscode.window.showErrorMessage(`Modbench: Failed to update "${node.plugin.name}".`);
+          makeReporter(outputChannel, 'pluginListTree.checkbox').report(
+            'error', `Failed to update "${node.plugin.name}".`, err instanceof Error ? err.message : String(err));
           pluginListProvider.invalidate();
         }
       }
@@ -561,21 +561,20 @@ function registerPluginListView(deps: PluginListDeps): { pluginListProvider: Plu
 function registerRevealInExplorerCommand(
   pluginListProvider: PluginListProvider, outputChannel: vscode.LogOutputChannel,
 ): vscode.Disposable {
+  const reporter = makeReporter(outputChannel, 'pluginListTree.revealInExplorer');
   return vscode.commands.registerCommand('modbench.pluginListTree.revealInExplorer', async (node: PluginListNode) => {
     if (node?.kind !== 'plugin') return;
     const name = node.plugin.name;
     const filePath = await pluginListProvider.resolvePluginPath(name);
     if (!filePath) {
       // ADR-0026: an explicit user action failed — notify + log, never a silent no-op.
-      outputChannel.error(`[extension] revealInExplorer could not resolve a path for "${name}"`);
-      void vscode.window.showErrorMessage(`Modbench: Could not resolve a file location for "${name}".`);
+      reporter.report('error', `Could not resolve a file location for "${name}".`);
       return;
     }
     try {
       await vscode.commands.executeCommand('revealFileInOS', vscode.Uri.file(filePath));
     } catch (err) {
-      outputChannel.error(`[extension] revealInExplorer for "${name}" failed: ${err instanceof Error ? err.message : String(err)}`);
-      void vscode.window.showErrorMessage(`Modbench: Failed to reveal "${name}" in Explorer.`);
+      reporter.report('error', `Failed to reveal "${name}" in Explorer.`, err instanceof Error ? err.message : String(err));
     }
   });
 }
@@ -651,8 +650,7 @@ function registerTrackCommand(
     const origin = await controller.resolveOrigin(name);
     if (!origin) {
       // ADR-0026: an explicit user action failed — notify + log, never a silent no-op.
-      outputChannel.error(`[extension] track could not resolve an origin for "${name}"`);
-      void vscode.window.showErrorMessage(`Modbench: Could not resolve which mod "${name}" belongs to.`);
+      makeReporter(outputChannel, 'pluginListTree.track').report('error', `Could not resolve which mod "${name}" belongs to.`);
       return;
     }
 
@@ -744,10 +742,10 @@ async function appendCreatedPluginToLoadOrder(
   try {
     await modlistSource.appendPlugin(pluginName);
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    outputChannel.error(`[extension] newPlugin: created "${pluginName}" but could not add it to plugins.txt: ${message}`);
-    void vscode.window.showErrorMessage(
-      `Modbench: Created "${pluginName}", but could not add it to the load order — add it manually in the Plugins tree.`,
+    makeReporter(outputChannel, 'newPlugin').report(
+      'error',
+      `Created "${pluginName}", but could not add it to the load order — add it manually in the Plugins tree.`,
+      err instanceof Error ? err.message : String(err),
     );
     pluginListProvider.invalidate();
     return;
@@ -763,10 +761,10 @@ function registerCreatePluginCommand(
   pluginListProvider: PluginListProvider | undefined,
   outputChannel: vscode.LogOutputChannel,
 ): vscode.Disposable {
+  const reporter = makeReporter(outputChannel, 'newPlugin');
   return vscode.commands.registerCommand('modbench.newPlugin', async () => {
     if (!modlistSource || !instanceRoot || !pluginListProvider) {
-      outputChannel.error('[extension] newPlugin: no Loadout available — need an open MO2 instance workspace.');
-      void vscode.window.showErrorMessage('Modbench: New Plugin needs an open MO2 instance workspace.');
+      reporter.report('error', 'New Plugin needs an open MO2 instance workspace.');
       return;
     }
 
@@ -778,8 +776,7 @@ function registerCreatePluginCommand(
       destination = await pickPluginDestination(modlistSource, instanceRoot);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      outputChannel.error(`[extension] newPlugin: could not prepare the destination: ${message}`);
-      void vscode.window.showErrorMessage(`Modbench: Could not prepare the destination — ${message}`);
+      reporter.report('error', `Could not prepare the destination — ${message}`);
       return;
     }
     if (!destination) return; // user cancelled a prompt
@@ -831,8 +828,7 @@ function registerRebaseCommand(
     const name = node.plugin.name;
     const origin = await controller.resolveOrigin(name);
     if (!origin) {
-      outputChannel.error(`[extension] rebase could not resolve an origin for "${name}"`);
-      void vscode.window.showErrorMessage(`Modbench: Could not resolve which mod "${name}" belongs to.`);
+      makeReporter(outputChannel, 'pluginListTree.rebase').report('error', `Could not resolve which mod "${name}" belongs to.`);
       return;
     }
 

@@ -93,8 +93,7 @@ export function makeModActionHelpers(
         await action();
         modListProvider.invalidate();
       } catch (err) {
-        outputChannel.error(`[extension] ${logLabel} failed: ${err instanceof Error ? err.message : String(err)}`);
-        void vscode.window.showErrorMessage(`Modbench: ${failMessage}`);
+        makeReporter(outputChannel, logLabel).report('error', failMessage, err instanceof Error ? err.message : String(err));
       }
     },
     promptModName: (defaultName) => vscode.window.showInputBox({ prompt: 'Mod name', value: defaultName }),
@@ -184,8 +183,7 @@ export function registerModContextCommands(
         try {
           separators = await modlistSource.listSeparators();
         } catch (err) {
-          outputChannel.error(`[extension] moveToSeparator listSeparators failed: ${err instanceof Error ? err.message : String(err)}`);
-          void vscode.window.showErrorMessage(`Modbench: Failed to read mod list.`);
+          makeReporter(outputChannel, 'moveToSeparator').report('error', 'Failed to read mod list.', err instanceof Error ? err.message : String(err));
           return;
         }
         const items: Array<vscode.QuickPickItem & { sepName: string | null }> = [
@@ -265,8 +263,8 @@ export function registerOverwriteView(
       try {
         await vscode.commands.executeCommand('revealInExplorer', node.resourceUri);
       } catch (err) {
-        outputChannel.error(`[extension] revealInExplorer for overwrite/ failed: ${err instanceof Error ? err.message : String(err)}`);
-        void vscode.window.showErrorMessage('Modbench: Failed to reveal the overwrite folder in the Explorer.');
+        makeReporter(outputChannel, 'overwrite.reveal').report(
+          'error', 'Failed to reveal the overwrite folder in the Explorer.', err instanceof Error ? err.message : String(err));
       }
     }),
   ];
@@ -322,8 +320,8 @@ export async function onModCheckboxChanged(
     try {
       await modListProvider.setModEnabled(node.mod.name, state === vscode.TreeItemCheckboxState.Checked);
     } catch (err) {
-      outputChannel.error(`[extension] toggling "${node.mod.name}" failed: ${err instanceof Error ? err.message : String(err)}`);
-      void vscode.window.showErrorMessage(`Modbench: Failed to update "${node.mod.name}".`);
+      makeReporter(outputChannel, 'modList.checkbox').report(
+        'error', `Failed to update "${node.mod.name}".`, err instanceof Error ? err.message : String(err));
       modListProvider.invalidate();
     }
   }
