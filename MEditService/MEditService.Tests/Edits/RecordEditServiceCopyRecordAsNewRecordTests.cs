@@ -154,20 +154,19 @@ public sealed class RecordEditServiceCopyRecordAsNewRecordTests
         Assert.Equal(RecordEditRefusal.CopyAsNewRecordDisallowedForType, result.Refusal);
     }
 
-    // A Quest is not on xEdit's permanent blacklist — DIAL/INFO/QUST allow a fresh
-    // FormKey per xEdit itself — but that allowance is not built yet, so it still refuses.
-    // The distinct "not yet" flavor is the point of this test: a caller sees a
-    // different refusal here than for the permanently-disallowed types above.
+    // A Quest is not on xEdit's permanent blacklist — DIAL/INFO/QUST copy as new (#550 AC5;
+    // CopyAsNewContainerTests own the family's behavior). This one pins the tracked-source read:
+    // the source quest's own directory document resolves through SourceUnitResolver, never the
+    // flat computed path (which has no answer for a container and used to throw).
     [Fact]
-    public void CopyRecordAsNewRecord_Refuses_WhenTheSourceIsAQuest_NotYetSupported()
+    public void CopyRecordAsNewRecord_OnAQuestFromATrackedSource_Succeeds()
     {
         using var fixture = new ContainerModFixture();
 
         var result = ServiceFor(fixture.Mirror).CopyRecordAsNewRecord(fixture.Plugin, fixture.Quest.ToString(), fixture.Plugin);
 
-        Assert.False(result.Applied);
-        Assert.Equal(RecordEditRefusal.ContainerRecordNotYetSupported, result.Refusal);
-        Assert.Contains("not yet", result.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.True(result.Applied, result.Message);
+        Assert.NotNull(fixture.Mirror.Index!.At(RecordRef.Effective).GetDocument(result.NewFormKey!, fixture.Plugin));
     }
 
     [Fact]

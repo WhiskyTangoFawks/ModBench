@@ -43,8 +43,22 @@ public sealed class ContainerCopyFixture : IDisposable
     public const string QuestEditorId = "SourceQuest";
     public FormKey Quest { get; }
 
+    // A flat record in the source — the negative control for #550 AC7's container-only overwrite
+    // scope (a flat re-copy keeps #436's FormKeyCollision refusal).
+    public const string FlatNpcEditorId = "SourceFlatNpc";
+    public FormKey FlatNpc { get; }
+
     public const string DialogTopicEditorId = "SourceTopic";
     public FormKey DialogTopic { get; }
+
+    // Two responses under the topic — #550 AC5's "DIAL with INFOs": each copied child draws a fresh
+    // FormKey, and Response2's sibling link at Response1 stays pointed at the *original* (never
+    // remapped onto the copies — xEdit doesn't either).
+    public const string Response1EditorId = "SourceResponse1";
+    public FormKey Response1 { get; }
+
+    public const string Response2EditorId = "SourceResponse2";
+    public FormKey Response2 { get; }
 
     // Interior — the non-spatial case: a real block/sub-block pair, but one whose
     // number carries no gameplay meaning (PlacementWalker.Walk's own interior branch, verified: block/
@@ -116,7 +130,7 @@ public sealed class ContainerCopyFixture : IDisposable
     public const string ExteriorTemporaryRefEditorId = "SourceExteriorTemporaryRef";
     public FormKey ExteriorTemporaryRef { get; }
 
-    private ContainerCopyFixture()
+    private ContainerCopyFixture(bool destinationLoadsFirst)
     {
         SourceModFolder = Directory.CreateTempSubdirectory("medit-container-copy-source-").FullName;
         DestinationModFolder = Directory.CreateTempSubdirectory("medit-container-copy-dest-").FullName;
@@ -125,8 +139,15 @@ public sealed class ContainerCopyFixture : IDisposable
         var sourcePath = Path.Combine(SourceModFolder, SourcePluginName);
         var sourceMod = new Fallout4Mod(ModKey.FromFileName(SourcePluginName), Fallout4Release.Fallout4);
 
+        var flatNpc = sourceMod.Npcs.AddNew(FlatNpcEditorId);
+
         var quest = new Quest(sourceMod) { EditorID = QuestEditorId };
         var dialogTopic = new DialogTopic(sourceMod) { EditorID = DialogTopicEditorId };
+        var response1 = new DialogResponses(sourceMod) { EditorID = Response1EditorId };
+        var response2 = new DialogResponses(sourceMod) { EditorID = Response2EditorId };
+        response2.PreviousDialog.SetTo(response1);
+        dialogTopic.Responses.Add(response1);
+        dialogTopic.Responses.Add(response2);
         quest.DialogTopics.Add(dialogTopic);
         sourceMod.Quests.Add(quest);
 
@@ -218,6 +239,8 @@ public sealed class ContainerCopyFixture : IDisposable
 
         sourceMod.WriteToBinary(sourcePath);
         (Quest, DialogTopic) = (quest.FormKey, dialogTopic.FormKey);
+        (Response1, Response2) = (response1.FormKey, response2.FormKey);
+        FlatNpc = flatNpc.FormKey;
         InteriorCell = interiorCell.FormKey;
         (PersistentRef, TemporaryRef) = (persistentRef.FormKey, temporaryRef.FormKey);
         (Navmesh, Landscape) = (navmesh.FormKey, landscape.FormKey);
@@ -238,8 +261,8 @@ public sealed class ContainerCopyFixture : IDisposable
         ((ILoadOrderMirror)Mirror).Reconcile(
             GameDirectory,
             [
-                new LoadOrderEntry(SourcePluginName, sourcePath, SourceOrigin, Slot: 0, Enabled: true, Winning: true),
-                new LoadOrderEntry(DestinationPluginName, destinationPath, DestinationOrigin, Slot: 1, Enabled: true, Winning: true),
+                new LoadOrderEntry(SourcePluginName, sourcePath, SourceOrigin, Slot: destinationLoadsFirst ? 1 : 0, Enabled: true, Winning: true),
+                new LoadOrderEntry(DestinationPluginName, destinationPath, DestinationOrigin, Slot: destinationLoadsFirst ? 0 : 1, Enabled: true, Winning: true),
             ],
             GameRelease.Fallout4);
 
@@ -247,7 +270,11 @@ public sealed class ContainerCopyFixture : IDisposable
             .TrackAsync(Mirror.LoadOrder!, DestinationOrigin, SourcePreset.Edits).GetAwaiter().GetResult();
     }
 
-    public static ContainerCopyFixture Create() => new();
+    public static ContainerCopyFixture Create() => new(destinationLoadsFirst: false);
+
+    /// <summary>The #550 AC6 underride shape: the destination plugin loads <i>before</i> the source
+    /// records' origin, so any Copy as Override into it would be an underride (#439) — refused.</summary>
+    public static ContainerCopyFixture CreateWithDestinationLoadingFirst() => new(destinationLoadsFirst: true);
 
     private static void AddInteriorCell(Fallout4Mod mod, Cell cell, int blockNumber)
     {

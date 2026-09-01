@@ -185,12 +185,11 @@ public sealed class ExteriorCellCopyCompileTests : IDisposable
         Assert.Contains(subBlock.Items, c => c.FormKey == _fixture.ExteriorCell);
     }
 
-    // #597's remaining refusal on this path, named: with the worldspace override no longer refused,
-    // what still can't be copied is a cell the destination already holds — FormKeyCollision, before
-    // anything is written. (The other standing refusal, a TopCell with no block/sub-block to place,
-    // keeps its own two tests in RecordEditServiceContainerCopyTests.)
+    // Re-copying a cell the destination already holds replaces it in place (#550 AC7's
+    // container-family overwrite — this superseded #597-era FormKeyCollision here): no second cell
+    // directory, no refusal, and the compiled worldspace still carries exactly one copy.
     [Fact]
-    public void CopyExteriorCell_WhenDestinationAlreadyHoldsTheCellItself_RefusesWithFormKeyCollision()
+    public void CopyExteriorCell_WhenDestinationAlreadyHoldsTheCellItself_ReplacesItInPlace()
     {
         var service = EditService();
         Assert.True(service.CopyRecordAsOverride(
@@ -199,8 +198,11 @@ public sealed class ExteriorCellCopyCompileTests : IDisposable
         var result = service.CopyRecordAsOverride(
             _fixture.SourcePlugin, _fixture.ExteriorCell.ToString(), _fixture.DestinationPlugin);
 
-        Assert.False(result.Applied);
-        Assert.Equal(RecordEditRefusal.FormKeyCollision, result.Refusal);
+        Assert.True(result.Applied, result.Message);
+        var compiledCells = ImportCompiled().Worldspaces.Records.Single(w => w.FormKey == _fixture.Worldspace)
+            .SubCells.SelectMany(b => b.Items).SelectMany(sb => sb.Items)
+            .Where(c => c.FormKey == _fixture.ExteriorCell);
+        Assert.Single(compiledCells);
     }
 
     /// <summary>Compile the destination and import the resulting binary — every #597 assertion ends
