@@ -89,12 +89,14 @@ export function hasElementAt(length: number, index: number): boolean {
   return index >= 0 && index < length;
 }
 
-// The three pure array-arity/order mutations behind Move Up/Move
-// Down/Remove/Add — shared by the keyboard accelerator (DiskCell's onKeyDown, a pure in-webview
-// call) and the right-click menu's broadcast handler (RecordPanel, arriving asynchronously from
-// the extension host), so both write the array identically without needing to share one runtime
-// call path. Each returns a new array; callers commit the whole thing via onEditCell, the same
-// as any other field commit.
+// #630: the three pure array-arity/order mutations behind Move Up/Move Down/Remove/Add — for an
+// ordinary reflected field these moved server-side (RecordFieldWriter/ArrayOpWriter compute the
+// result from the record's own current value and schema); the one surviving caller is
+// RecordPanel's own VMAD fallback (computeVmadArrayOp), a Papyrus scalar-array property's own
+// arity ops, deliberately out of #630's scope (belongs in VmadCodec's own structural-op
+// vocabulary, a different codec surface than an ordinary reflected column). Each returns a new
+// array; the VMAD fallback commits the whole thing via onEditCell, the same as any other field
+// commit.
 //
 // `index` itself must be bounds-checked here, not just the swap target `j` (index ===
 // array.length, direction -1 → j = index - 1, which passes a j-only guard) — without it, the
@@ -366,9 +368,10 @@ export function setAtPath(root: unknown, path: readonly PathSegment[], value: un
   return arr.map(e => (e === seg.key ? value : e));
 }
 
-// getAtPath/setAtPath's metadata-side counterpart, over FieldMetadata instead of a value —
-// needed by the array-op broadcast handler (RecordPanel.tsx), which has only the wire's
-// rootField/path to work with, never a render-time `context.overrideMeta` the way DiffRow's own
+// getAtPath/setAtPath's metadata-side counterpart, over FieldMetadata instead of a value — #630:
+// still needed by the array-op broadcast handler (RecordPanel.tsx) for its own VMAD fallback
+// ('add' on a VMAD scalar-array property needs an element schema to default from), which has only
+// the wire's rootField/path to work with, never a render-time `context.overrideMeta` the way DiffRow's own
 // buildRows resolves a row's meta by hand (member → `.fields`, index/sortKey → `.elementType`,
 // the same two hops this mirrors). Reading `fieldMetaMap[rootField].elementType` directly
 // would only find the right element type when the array itself is the subtree root —

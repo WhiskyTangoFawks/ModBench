@@ -396,10 +396,10 @@ describe('RecordPanel — array editing (unsorted, #426)', () => {
     return { client, ...render(<RecordPanel client={client} />) };
   }
 
-  function lastEditFieldValue(): unknown {
+  function lastEditField(): { fieldPath?: string; value?: unknown } | undefined {
     const calls = (vscode.postMessage as ReturnType<typeof vi.fn>).mock.calls;
     const call = [...calls].reverse().find(([m]) => (m as { type?: string }).type === WEBVIEW_TO_EXTENSION.EDIT_FIELD);
-    return (call?.[0] as { value?: unknown } | undefined)?.value;
+    return call?.[0] as { fieldPath?: string; value?: unknown } | undefined;
   }
 
   beforeEach(() => {
@@ -409,17 +409,23 @@ describe('RecordPanel — array editing (unsorted, #426)', () => {
   });
   afterEach(() => vi.unstubAllGlobals());
 
-  it('Insert on the focused array-parent cell appends a default element (0)', async () => {
+  // #630: the computation (what the next array looks like, including every boundary case) moved
+  // server-side — RecordFieldWriter/ArrayOpWriter compute it from the record's own current value
+  // and schema. What the keyboard accelerators still own is *which* op envelope to post under the
+  // field's own fieldPath; these three facts assert exactly that shape, not a computed array.
+
+  it('Insert on the focused array-parent cell posts an array_add envelope', async () => {
     renderEditablePanel();
     await waitFor(() => screen.getByText('Values'));
     const cell = screen.getAllByText('[3]')[0].closest('td')!;
     fireEvent.click(cell); // focus
     fireEvent.keyDown(cell, { key: 'Insert' });
 
-    expect(lastEditFieldValue()).toEqual([1, 2, 3, 0]);
+    expect(lastEditField()?.fieldPath).toBe('Values');
+    expect(lastEditField()?.value).toEqual({ op: 'array_add', path: [] });
   });
 
-  it('Delete on a focused array-element cell removes it', async () => {
+  it('Delete on a focused array-element cell posts an array_remove envelope at its own index', async () => {
     renderEditablePanel();
     await waitFor(() => screen.getByText('Values'));
     fireEvent.click(screen.getAllByText('▶')[0]); // expand
@@ -428,10 +434,11 @@ describe('RecordPanel — array editing (unsorted, #426)', () => {
     fireEvent.click(cell);
     fireEvent.keyDown(cell, { key: 'Delete' });
 
-    expect(lastEditFieldValue()).toEqual([1, 3]);
+    expect(lastEditField()?.fieldPath).toBe('Values');
+    expect(lastEditField()?.value).toEqual({ op: 'array_remove', path: [{ kind: 'index', index: 1 }] });
   });
 
-  it('Ctrl+ArrowDown on a focused array-element cell swaps it with its next neighbour', async () => {
+  it('Ctrl+ArrowDown on a focused array-element cell posts an array_move_down envelope at its own index', async () => {
     renderEditablePanel();
     await waitFor(() => screen.getByText('Values'));
     fireEvent.click(screen.getAllByText('▶')[0]);
@@ -440,50 +447,36 @@ describe('RecordPanel — array editing (unsorted, #426)', () => {
     fireEvent.click(cell);
     fireEvent.keyDown(cell, { key: 'ArrowDown', ctrlKey: true });
 
-    expect(lastEditFieldValue()).toEqual([2, 1, 3]);
-  });
-
-  it('Delete on the first element does not corrupt the array when Ctrl+ArrowUp would be a boundary no-op', async () => {
-    renderEditablePanel();
-    await waitFor(() => screen.getByText('Values'));
-    fireEvent.click(screen.getAllByText('▶')[0]);
-    await waitFor(() => screen.getByText('[0]'));
-    const cell = screen.getByText('1').closest('td')!;
-    fireEvent.click(cell);
-    fireEvent.keyDown(cell, { key: 'ArrowUp', ctrlKey: true }); // boundary — must no-op
-
-    expect((vscode.postMessage as ReturnType<typeof vi.fn>).mock.calls
-      .some(([m]) => (m as { type?: string }).type === WEBVIEW_TO_EXTENSION.EDIT_FIELD)).toBe(false);
+    expect(lastEditField()?.fieldPath).toBe('Values');
+    expect(lastEditField()?.value).toEqual({ op: 'array_move_down', path: [{ kind: 'index', index: 0 }] });
   });
 
   // The right-click menu's own trigger — a broadcast from the extension host (no
-  // live reference into this panel's React state), self-filtered on formKey, reaching the exact
-  // same handleArrayOp computation the keyboard accelerators already use.
-  //
-  // `rootField`/`path` are the wire shape — a top-level array's element
-  // path is one hop (`[{kind:'index',index:1}]`).
-  it('an ARRAY_REMOVE broadcast for this open record writes the array via EDIT_FIELD', async () => {
+  // live reference into this panel's React state), self-filtered on formKey, posting the exact
+  // same op envelope the keyboard accelerators above post.
+  it('an ARRAY_STRUCTURAL_OP broadcast for this open record posts the op envelope via EDIT_FIELD', async () => {
     renderEditablePanel();
     await waitFor(() => screen.getByText('Values'));
 
     window.postMessage(
       {
-        type: EXTENSION_TO_WEBVIEW.ARRAY_REMOVE, formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'Data',
-        rootField: 'Values', path: [{ kind: 'index', index: 1 }],
+        type: EXTENSION_TO_WEBVIEW.ARRAY_STRUCTURAL_OP, formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'Data',
+        rootField: 'Values', path: [{ kind: 'index', index: 1 }], op: 'remove',
       },
       '*',
     );
-    await waitFor(() => expect(lastEditFieldValue()).toEqual([1, 3]));
+    await waitFor(() => expect(lastEditField()?.fieldPath).toBe('Values'));
+    expect(lastEditField()?.value).toEqual({ op: 'array_remove', path: [{ kind: 'index', index: 1 }] });
   });
 
-  it('an ARRAY_REMOVE broadcast for a different open record is ignored', async () => {
+  it('an ARRAY_STRUCTURAL_OP broadcast for a different open record is ignored', async () => {
     renderEditablePanel();
     await waitFor(() => screen.getByText('Values'));
 
     window.postMessage(
       {
-        type: EXTENSION_TO_WEBVIEW.ARRAY_REMOVE, formKey: '999999:Other.esp', plugin: 'MyMod.esp', origin: 'Data',
-        rootField: 'Values', path: [{ kind: 'index', index: 1 }],
+        type: EXTENSION_TO_WEBVIEW.ARRAY_STRUCTURAL_OP, formKey: '999999:Other.esp', plugin: 'MyMod.esp', origin: 'Data',
+        rootField: 'Values', path: [{ kind: 'index', index: 1 }], op: 'remove',
       },
       '*',
     );
@@ -491,138 +484,6 @@ describe('RecordPanel — array editing (unsorted, #426)', () => {
     await new Promise(r => setTimeout(r, 0));
     expect((vscode.postMessage as ReturnType<typeof vi.fn>).mock.calls
       .some(([m]) => (m as { type?: string }).type === WEBVIEW_TO_EXTENSION.EDIT_FIELD)).toBe(false);
-  });
-});
-
-// The array-op broadcast handler must land at the element's real path for an array nested
-// at least one level inside a struct — a handler synthesizing a one-hop path from a bare
-// scalar index would only
-// address a top-level array correctly. Mirrors the extended-editor block below: same
-// nested-struct-array fixture shape, different trigger (ARRAY_ADD/REMOVE/MOVE_UP/MOVE_DOWN instead
-// of FIELD_OPEN_EXTENDED_EDITOR).
-describe('RecordPanel — array ops land at the element\'s real path, at any depth (#535)', () => {
-  const entryMeta: FieldMetadata = {
-    name: '', type: 'struct', isArray: false, validFormKeyTypes: [], enumValues: [],
-    fields: [
-      { name: 'Id', type: 'string', isArray: false, validFormKeyTypes: [], enumValues: [] },
-      { name: 'Weight', type: 'int', isArray: false, validFormKeyTypes: [], enumValues: [] },
-    ],
-  };
-  const nestedEditableArrayMeta: FieldMetadata = {
-    name: 'Container', type: 'struct', isArray: false, validFormKeyTypes: [], enumValues: [],
-    fields: [{
-      name: 'Entries', type: 'array', isArray: true, validFormKeyTypes: [], enumValues: [], elementType: entryMeta,
-    }],
-  };
-
-  const nestedEditableArrayResult = {
-    conflictAll: 'NoConflict',
-    overrides: [
-      {
-        formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'Data',
-        loadOrderIndex: 1, isWinner: true, editorId: 'TestNPC',
-        fields: [{ metadata: nestedEditableArrayMeta, value: { Entries: [{ Id: 'A', Weight: 1 }, { Id: 'B', Weight: 2 }] } }],
-        conflictThis: 'Master',
-      },
-    ],
-    diffs: [{
-      fieldName: 'Container',
-      values: { 'MyMod.esp': { Entries: [{ Id: 'A', Weight: 1 }, { Id: 'B', Weight: 2 }] } },
-      winnerColumn: 'MyMod.esp', winnerValue: { Entries: [{ Id: 'A', Weight: 1 }, { Id: 'B', Weight: 2 }] },
-      cellStates: {},
-      children: [{
-        fieldName: 'Entries',
-        values: { 'MyMod.esp': [{ Id: 'A', Weight: 1 }, { Id: 'B', Weight: 2 }] },
-        winnerColumn: 'MyMod.esp', winnerValue: [{ Id: 'A', Weight: 1 }, { Id: 'B', Weight: 2 }],
-        cellStates: {},
-      }],
-    }],
-  };
-
-  function renderEditablePanel() {
-    const client: RecordPanelClient = {
-      load: vi.fn().mockImplementation(() => Promise.resolve({
-        ok: true,
-        result: nestedEditableArrayResult,
-        immutableSet: new Set(),
-        notInLoadOrderSet: new Set(),
-        trackedSet: new Set([columnKey('MyMod.esp', null)]),
-        conflictsComputed: true,
-      } as unknown as LoadResult)),
-      conditionRunOnTargets: vi.fn().mockResolvedValue([]),
-    };
-    return { client, ...render(<RecordPanel client={client} />) };
-  }
-
-  function lastEditField(): { fieldPath?: string; value?: unknown } | undefined {
-    const calls = (vscode.postMessage as ReturnType<typeof vi.fn>).mock.calls;
-    const call = [...calls].reverse().find(([m]) => (m as { type?: string }).type === WEBVIEW_TO_EXTENSION.EDIT_FIELD);
-    return call?.[0] as { fieldPath?: string; value?: unknown } | undefined;
-  }
-
-  beforeEach(() => {
-    vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
-    (vscode.postMessage as ReturnType<typeof vi.fn>).mockClear();
-  });
-  afterEach(() => vi.unstubAllGlobals());
-
-  it('ARRAY_REMOVE on a nested array element commits the whole root value', async () => {
-    renderEditablePanel();
-    await waitFor(() => screen.getByText('Container'));
-
-    window.postMessage({
-      type: EXTENSION_TO_WEBVIEW.ARRAY_REMOVE, formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'Data',
-      rootField: 'Container', path: [{ kind: 'member', name: 'Entries' }, { kind: 'index', index: 0 }],
-    }, '*');
-
-    await waitFor(() => expect(lastEditField()?.fieldPath).toBe('Container'));
-    expect(lastEditField()?.value).toEqual({ Entries: [{ Id: 'B', Weight: 2 }] });
-  });
-
-  it('ARRAY_MOVE_DOWN on a nested array element commits the whole root value', async () => {
-    renderEditablePanel();
-    await waitFor(() => screen.getByText('Container'));
-
-    window.postMessage({
-      type: EXTENSION_TO_WEBVIEW.ARRAY_MOVE_DOWN, formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'Data',
-      rootField: 'Container', path: [{ kind: 'member', name: 'Entries' }, { kind: 'index', index: 0 }],
-    }, '*');
-
-    await waitFor(() => expect(lastEditField()?.fieldPath).toBe('Container'));
-    expect(lastEditField()?.value).toEqual({ Entries: [{ Id: 'B', Weight: 2 }, { Id: 'A', Weight: 1 }] });
-  });
-
-  it('ARRAY_MOVE_UP on a nested array element commits the whole root value', async () => {
-    renderEditablePanel();
-    await waitFor(() => screen.getByText('Container'));
-
-    window.postMessage({
-      type: EXTENSION_TO_WEBVIEW.ARRAY_MOVE_UP, formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'Data',
-      rootField: 'Container', path: [{ kind: 'member', name: 'Entries' }, { kind: 'index', index: 1 }],
-    }, '*');
-
-    await waitFor(() => expect(lastEditField()?.fieldPath).toBe('Container'));
-    expect(lastEditField()?.value).toEqual({ Entries: [{ Id: 'B', Weight: 2 }, { Id: 'A', Weight: 1 }] });
-  });
-
-  // Add on a nested array must build its
-  // default element from the *nested* array's own elementType (a struct here), not the subtree
-  // root's — reading fieldMetaMap['Container'].elementType (undefined, Container
-  // is a struct, not an array) would make defaultElementValue fall back to its generic scalar
-  // default and append a malformed (empty-string) element instead of `{ Id: '', Weight: 0 }`.
-  it('ARRAY_ADD on a nested array appends a default element built from the nested array\'s own element type', async () => {
-    renderEditablePanel();
-    await waitFor(() => screen.getByText('Container'));
-
-    window.postMessage({
-      type: EXTENSION_TO_WEBVIEW.ARRAY_ADD, formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'Data',
-      rootField: 'Container', path: [{ kind: 'member', name: 'Entries' }],
-    }, '*');
-
-    await waitFor(() => expect(lastEditField()?.fieldPath).toBe('Container'));
-    expect(lastEditField()?.value).toEqual({
-      Entries: [{ Id: 'A', Weight: 1 }, { Id: 'B', Weight: 2 }, { Id: '', Weight: 0 }],
-    });
   });
 });
 

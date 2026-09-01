@@ -528,40 +528,38 @@ function registerFieldOpCommands(recordPanels: Set<vscode.WebviewPanel>): vscode
   ];
 }
 
-// The array-op right-click commands — the extension
-// host has no live reference into any open panel's own React state (which alone holds the
-// record's current values), so each command only resolves *which* row/column was clicked (from
-// the `data-vscode-context` VS Code parses and hands it as `ctx`) and broadcasts; every open
-// panel self-filters on `formKey` and, if it matches, writes the array through the exact same
-// computation (recordUtils.ts's moveArrayElement/removeArrayElement/appendArrayElement, then
-// EDIT_FIELD) the keyboard accelerators (Insert/Delete/Ctrl+↑/Ctrl+↓, pure in-webview) already use.
+// #630: the array-op right-click commands — the extension host has no live reference into any
+// open panel's own React state (which alone holds the record's current values), so each command
+// only resolves *which* row/column was clicked (from the `data-vscode-context` VS Code parses and
+// hands it as `ctx`) and broadcasts one ARRAY_STRUCTURAL_OP naming the op; every open panel
+// self-filters on `formKey` and, if it matches, posts the op envelope straight through
+// handleEditCell/EDIT_FIELD — no webview-side computation for an ordinary reflected field's array
+// (RecordFieldWriter/ArrayOpWriter compute the result server-side). A VMAD scalar-array property's
+// own arity ops are the one exception, deliberately out of scope here (RecordPanel's own
+// handleArrayOp still computes those client-side) — this command layer doesn't need to know the
+// difference, it only ever forwards ctx verbatim.
 function registerArrayOpCommands(recordPanels: Set<vscode.WebviewPanel>): vscode.Disposable[] {
+  // Forwards ctx.rootField/ctx.path verbatim — see
+  // ArrayParentContext/ArrayElementContext's own doc comments (medit/messages.ts).
+  function broadcastArrayOp(ctx: ArrayParentContext | ArrayElementContext, op: 'add' | 'remove' | 'moveUp' | 'moveDown') {
+    broadcastToRecordPanels(recordPanels, {
+      type: EXTENSION_TO_WEBVIEW.ARRAY_STRUCTURAL_OP,
+      formKey: ctx.formKey, plugin: ctx.plugin, origin: ctx.origin, rootField: ctx.rootField, path: ctx.path, op,
+    });
+  }
+
   return [
-    // Forwards ctx.rootField/ctx.path verbatim — see
-    // ArrayParentContext/ArrayElementContext's own doc comments (medit/messages.ts).
     vscode.commands.registerCommand('modbench.array.add', (ctx?: ArrayParentContext) => {
-      if (!ctx) return;
-      broadcastToRecordPanels(recordPanels, {
-        type: EXTENSION_TO_WEBVIEW.ARRAY_ADD, formKey: ctx.formKey, plugin: ctx.plugin, origin: ctx.origin, rootField: ctx.rootField, path: ctx.path,
-      });
+      if (ctx) broadcastArrayOp(ctx, 'add');
     }),
     vscode.commands.registerCommand('modbench.array.remove', (ctx?: ArrayElementContext) => {
-      if (!ctx) return;
-      broadcastToRecordPanels(recordPanels, {
-        type: EXTENSION_TO_WEBVIEW.ARRAY_REMOVE, formKey: ctx.formKey, plugin: ctx.plugin, origin: ctx.origin, rootField: ctx.rootField, path: ctx.path,
-      });
+      if (ctx) broadcastArrayOp(ctx, 'remove');
     }),
     vscode.commands.registerCommand('modbench.array.moveUp', (ctx?: ArrayElementContext) => {
-      if (!ctx) return;
-      broadcastToRecordPanels(recordPanels, {
-        type: EXTENSION_TO_WEBVIEW.ARRAY_MOVE_UP, formKey: ctx.formKey, plugin: ctx.plugin, origin: ctx.origin, rootField: ctx.rootField, path: ctx.path,
-      });
+      if (ctx) broadcastArrayOp(ctx, 'moveUp');
     }),
     vscode.commands.registerCommand('modbench.array.moveDown', (ctx?: ArrayElementContext) => {
-      if (!ctx) return;
-      broadcastToRecordPanels(recordPanels, {
-        type: EXTENSION_TO_WEBVIEW.ARRAY_MOVE_DOWN, formKey: ctx.formKey, plugin: ctx.plugin, origin: ctx.origin, rootField: ctx.rootField, path: ctx.path,
-      });
+      if (ctx) broadcastArrayOp(ctx, 'moveDown');
     }),
   ];
 }

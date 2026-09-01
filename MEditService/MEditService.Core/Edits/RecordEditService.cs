@@ -139,6 +139,14 @@ public sealed class RecordEditService(
         var bit14Before = checkBit14Leak ? target.MajorRecordFlagsRaw & PartialFormFlag.Bit : 0;
 
         var outcome = RecordFieldWriter.TryApply(target, document.RecordType, fieldPath, value, schemas, release);
+        // #630: a boundary array op (remove past the end, move the first element up / the last
+        // down) — already fully "satisfied" with nothing to commit. Returned before the bit-14 leak
+        // check and every write below (rename, re-serialize, ApplyWorkingTreeChanges, ReapplyFilter)
+        // so a boundary no-op leaves the working tree exactly as it was: no dirty file, no spurious
+        // history entry, matching this class's own "nothing written before/unless applied" contract
+        // for every genuine refusal.
+        if (outcome == FieldApplyOutcome.NoOp)
+            return RecordEditResult.Success();
         if (outcome != FieldApplyOutcome.Applied)
             return RefuseFieldOutcome(outcome, fieldPath, document.RecordType, schemas);
 
