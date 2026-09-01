@@ -1,26 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { TreeItem, TreeItemCollapsibleState, EventEmitter, ThemeIcon } from '../../test/vscodeMock';
 
-vi.mock('vscode', () => ({
-  TreeItem: class {
-    label: string;
-    description?: string;
-    contextValue?: string;
-    iconPath?: unknown;
-    collapsibleState: number;
-    command?: unknown;
-    constructor(label: string, collapsibleState = 0) {
-      this.label = label;
-      this.collapsibleState = collapsibleState;
-    }
-  },
-  TreeItemCollapsibleState: { None: 0, Collapsed: 1, Expanded: 2 },
-  EventEmitter: class {
-    private handlers: ((e: unknown) => void)[] = [];
-    get event() { return (h: (e: unknown) => void) => { this.handlers.push(h); }; }
-    fire(e?: unknown) { this.handlers.forEach(h => h(e)); }
-  },
-  ThemeIcon: class { constructor(public id: string) {} },
-}));
+vi.mock('vscode', () => ({ TreeItem, TreeItemCollapsibleState, EventEmitter, ThemeIcon }));
 
 import {
   ReferencedByTreeProvider,

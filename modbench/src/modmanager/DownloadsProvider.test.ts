@@ -5,32 +5,13 @@ import { join } from 'node:path';
 
 const { executeCommand } = vi.hoisted(() => ({ executeCommand: vi.fn() }));
 
+import {
+  TreeItem, TreeItemCollapsibleState, EventEmitter, ThemeIcon, ThemeColor, MarkdownString, uriFile,
+} from '../test/vscodeMock';
+
 vi.mock('vscode', () => ({
-  TreeItem: class {
-    label: string;
-    id?: string;
-    description?: string;
-    tooltip?: unknown;
-    contextValue?: string;
-    iconPath?: unknown;
-    resourceUri?: unknown;
-    collapsibleState: number;
-    constructor(label: string, collapsibleState = 0) {
-      this.label = label;
-      this.collapsibleState = collapsibleState;
-    }
-  },
-  TreeItemCollapsibleState: { None: 0, Collapsed: 1, Expanded: 2 },
-  EventEmitter: class {
-    private readonly handlers: ((e: unknown) => void)[] = [];
-    get event() { return (h: (e: unknown) => void) => { this.handlers.push(h); }; }
-    fire(e?: unknown) { this.handlers.forEach(h => h(e)); }
-  },
-  ThemeIcon: class { constructor(public id: string, public color?: unknown) {} },
-  ThemeColor: class { constructor(public id: string) {} },
-  MarkdownString: class { value: string; constructor(v = '') { this.value = v; } },
-  Uri: { file: (p: string) => ({ fsPath: p, toString: () => `file://${p}` }) },
-  commands: { executeCommand },
+  TreeItem, TreeItemCollapsibleState, EventEmitter, ThemeIcon, ThemeColor, MarkdownString,
+  Uri: { file: uriFile }, commands: { executeCommand },
 }));
 
 import { DownloadsProvider, DownloadNode, type DownloadsNode } from './DownloadsProvider';

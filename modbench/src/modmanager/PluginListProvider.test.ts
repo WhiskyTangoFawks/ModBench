@@ -5,37 +5,14 @@ import { join } from 'node:path';
 import type { IModlistSource, InstallMeta, ModlistEntry } from './model';
 import { Mo2ModlistSource } from './mo2/Mo2ModlistSource';
 import { buildTes4Buffer } from './test/buildTes4Buffer';
+import {
+  TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon,
+  uriFilePlain, DataTransferItem, DataTransfer,
+} from '../test/vscodeMock';
 
 vi.mock('vscode', () => ({
-  TreeItem: class {
-    label: string;
-    description?: string;
-    tooltip?: string;
-    contextValue?: string;
-    iconPath?: unknown;
-    resourceUri?: unknown;
-    collapsibleState: number;
-    checkboxState?: number;
-    constructor(label: string, collapsibleState = 0) {
-      this.label = label;
-      this.collapsibleState = collapsibleState;
-    }
-  },
-  TreeItemCollapsibleState: { None: 0, Collapsed: 1, Expanded: 2 },
-  TreeItemCheckboxState: { Unchecked: 0, Checked: 1 },
-  EventEmitter: class {
-    private readonly handlers: ((e: unknown) => void)[] = [];
-    get event() { return (h: (e: unknown) => void) => { this.handlers.push(h); }; }
-    fire(e?: unknown) { this.handlers.forEach(h => h(e)); }
-  },
-  ThemeIcon: class { constructor(public id: string) {} },
-  Uri: { file: (fsPath: string) => ({ fsPath }) },
-  DataTransferItem: class { constructor(public value: unknown) {} },
-  DataTransfer: class {
-    private readonly map = new Map<string, unknown>();
-    set(mime: string, item: unknown) { this.map.set(mime, item); }
-    get(mime: string) { return this.map.get(mime); }
-  },
+  TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon,
+  Uri: { file: uriFilePlain }, DataTransferItem, DataTransfer,
 }));
 
 import {
