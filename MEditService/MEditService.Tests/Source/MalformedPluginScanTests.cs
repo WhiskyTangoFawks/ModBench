@@ -68,6 +68,76 @@ public sealed class MalformedPluginScanTests
         Assert.Equal("XWPG counts 1; 2 XWPN entries follow", d.Message);
     }
 
+    // ── R5/R6/R7: PERK entry-point parameter shape (real fixtures) ───────────────────────────
+
+    [Fact]
+    public void PlasmaAutocannon_WrongEpftForFunction14_IsDiagnosedByExactClassAndText()
+    {
+        // Already committed whole (SKI_PlasmaAutocannon.esp) — entry 0 of the same PERK is clean,
+        // which is what pins the per-entry indexing.
+        var diagnoses = ScanFixture("SKI_PlasmaAutocannon.esp");
+
+        var d = Assert.Single(diagnoses, d => d.DefectClass == "entry-point-parameter-shape");
+        Assert.Equal("PERK 040000EF (T6M_QuickReload_ReloadVATs)", d.Anchor);
+        Assert.Equal("repairable (lossless)", d.Tail);
+        Assert.Equal("entry point 1 (function 14, Multiply 1 + Actor Value Mult) has EPFT 2; vanilla writes EPFT 8", d.Message);
+    }
+
+    [Fact]
+    public void FastTravelSigns_Function9MissingEpf3_IsDiagnosedByExactClassAndText()
+    {
+        var diagnoses = ScanFixture("FTS_FastTravelSettlement - CutDown.esp");
+
+        var d = Assert.Single(diagnoses);
+        Assert.Equal("entry-point-parameter-shape", d.DefectClass);
+        Assert.Equal("PERK 050008AB (FTS_CallMarkerPerk)", d.Anchor);
+        Assert.Equal("repairable (lossless)", d.Tail);
+        Assert.Equal("entry point 0 (function 9, Add Activate Choice) is missing EPF3; vanilla always writes it", d.Message);
+    }
+
+    [Fact]
+    public void Radfall_Function6WithParameters_IsDiagnosedLossyByExactClassAndText()
+    {
+        var diagnoses = ScanFixture("Radfall - CutDown.esp");
+
+        var d = Assert.Single(diagnoses);
+        Assert.Equal("entry-point-parameter-shape", d.DefectClass);
+        Assert.Equal("PERK 0004C92C (Sniper03)", d.Anchor);
+        // Repair here removes the parameter block the function never takes — EPFT and EPFD,
+        // headers included — so the tail carries the byte cost.
+        Assert.Equal("repairable (drops 17 bytes)", d.Tail);
+        Assert.Equal("entry point 0 (function 6, Absolute Value) has EPFT 1; vanilla writes no parameters", d.Message);
+    }
+
+    [Fact]
+    public void EntryPointShape_AVanillaShapedFunction14_ReportsNothing()
+    {
+        var record = Record("PERK", 0x00000009,
+            Sub("EDID", "CleanPerk\0"u8.ToArray()),
+            Sub("PRKE", [2, 0, 0]),
+            Sub("DATA", [0, 14, 0]),
+            Sub("EPFT", [8]),
+            Sub("EPFD", new byte[8]),
+            Sub("PRKF", []));
+
+        Assert.Empty(MalformedPluginScan.Scan(record));
+    }
+
+    [Fact]
+    public void EntryPointShape_AFunctionVanillaNeverExercises_MakesNoClaim()
+    {
+        // fn 4 never occurs in the shipped game, so no canonical shape is provable for it —
+        // the table stays silent rather than trusting a reference's comments.
+        var record = Record("PERK", 0x0000000A,
+            Sub("PRKE", [2, 0, 0]),
+            Sub("DATA", [0, 4, 0]),
+            Sub("EPFT", [1]),
+            Sub("EPFD", new byte[4]),
+            Sub("PRKF", []));
+
+        Assert.Empty(MalformedPluginScan.Scan(record));
+    }
+
     private static List<PluginDiagnosis> ScanFixture(string fileName) =>
         MalformedPluginScan.Scan(File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "TestData", fileName)));
 

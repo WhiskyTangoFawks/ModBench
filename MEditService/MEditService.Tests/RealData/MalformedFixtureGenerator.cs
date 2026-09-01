@@ -29,6 +29,10 @@ public sealed class MalformedFixtureGenerator
             "Lunar-UniqueCreatures - CutDown.esp", [("RACE", 0x03014174u), ("RACE", 0x0603637Au)]),
         ("South of the Sea - Atom's Storm", "SouthOfTheSea.esm",
             "SouthOfTheSea - CutDown.esm", [("REFR", 0x07431EDCu)]),
+        ("Settlement Fast Travel Signs", "FTS_FastTravelSettlement.esp",
+            "FTS_FastTravelSettlement - CutDown.esp", [("PERK", 0x050008ABu)]),
+        ("[NODELETE] Radfall", "Radfall.esp",
+            "Radfall - CutDown.esp", [("PERK", 0x0004C92Cu)]),
     ];
 
     [Fact]

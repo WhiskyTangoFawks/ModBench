@@ -47,6 +47,26 @@ public static class MalformedPluginScan
 
     private const string Lossless = "repairable (lossless)";
 
+    /// <summary>PERK entry-point function → the EPFT the CK writes for it, proven empirically
+    /// over every entry-point effect in the shipped game and DLC (823 of them) — not taken from
+    /// a reference's annotations (xEdit's comment table says fn 14 → EPFT 2; vanilla carries 8).
+    /// Functions vanilla never exercises (4, 7, 8, 11, 15) have no provable canonical shape and
+    /// are deliberately absent — the scan makes no claim about them. fn 6 is the inverse row:
+    /// vanilla writes no parameter block at all. fn 9 additionally always carries EPF3 (EPF2 is
+    /// NOT required — three vanilla entries omit it).</summary>
+    private static readonly Dictionary<byte, byte> EpftByPerkFunction = new()
+    {
+        [1] = 1, [2] = 1, [3] = 1, [5] = 8, [9] = 4, [10] = 5, [12] = 8, [13] = 8, [14] = 8,
+    };
+
+    private static readonly Dictionary<byte, string> PerkFunctionNames = new()
+    {
+        [1] = "Set Value", [2] = "Add Value", [3] = "Multiply Value", [5] = "Add Actor Value Mult",
+        [6] = "Absolute Value", [9] = "Add Activate Choice", [10] = "Select Spell",
+        [12] = "Set to Actor Value Mult", [13] = "Multiply Actor Value Mult",
+        [14] = "Multiply 1 + Actor Value Mult",
+    };
+
     /// <summary>Every Kind B diagnosis the plugin's own bytes prove, in record order. A record
     /// whose compressed payload cannot be inflated is skipped — an unreadable stream is a
     /// different failure than the classes this scan names.</summary>
@@ -74,6 +94,7 @@ public static class MalformedPluginScan
             DetectFixedCount(record, subrecords, anchor, diagnoses);
             DetectCounterEntries(record, data, subrecords, anchor, diagnoses);
             DetectTemplateOrder(record, subrecords, anchor, diagnoses);
+            DetectEntryPointShape(record, data, subrecords, anchor, diagnoses);
         }
         return diagnoses;
     }
@@ -82,7 +103,7 @@ public static class MalformedPluginScan
         FixedSizeTable.Keys.Any(k => k.RecordType == recordType)
         || FixedCountTable.Keys.Any(k => k.RecordType == recordType)
         || CounterTable.Keys.Any(k => k.RecordType == recordType)
-        || recordType == "WEAP";
+        || recordType is "WEAP" or "PERK";
 
     private static void DetectFixedSize(
         PluginBinaryWalk.RecordSpan record, List<PluginBinaryWalk.SubrecordSpan> subrecords,
@@ -158,6 +179,64 @@ public static class MalformedPluginScan
         {
             diagnoses.Add(new PluginDiagnosis(anchor, "subrecord-out-of-ck-order", Lossless,
                 "template combination 0's OBTS precedes its OBTF/FULL; the Creation Kit writes OBTF, FULL, OBTS"));
+        }
+    }
+
+    /// <summary>R5-R7: each PERK entry-point effect (a <c>PRKE</c> whose type byte is 2) carries
+    /// its function in the following <c>DATA</c>'s second byte; the parameter block until
+    /// <c>PRKF</c> must match <see cref="EpftByPerkFunction"/>'s vanilla-proven shape. Repairing a
+    /// parameter block a function never takes removes bytes, so that one row's tail carries the
+    /// byte cost; the other two shapes repair without removing anything.</summary>
+    private static void DetectEntryPointShape(
+        PluginBinaryWalk.RecordSpan record, byte[] data, List<PluginBinaryWalk.SubrecordSpan> subrecords,
+        string anchor, List<PluginDiagnosis> diagnoses)
+    {
+        if (record.Type != "PERK") return;
+        var entryIndex = -1;
+        var i = 0;
+        while (i < subrecords.Count)
+        {
+            if (subrecords[i].Sig != "PRKE" || subrecords[i].Len < 7 || data[subrecords[i].Start + 6] != 2)
+            {
+                i++;
+                continue;
+            }
+            entryIndex++;
+
+            byte? function = null;
+            byte? epft = null;
+            var hasEpf3 = false;
+            var parameterBytes = 0;
+            var j = i + 1;
+            for (; j < subrecords.Count && subrecords[j].Sig is not ("PRKF" or "PRKE"); j++)
+            {
+                var s = subrecords[j];
+                if (s.Sig == "DATA" && function == null && s.Len >= 8) function = data[s.Start + 7];
+                if (s.Sig == "EPFT" && s.Len >= 7) { epft = data[s.Start + 6]; parameterBytes += s.Len; }
+                if (s.Sig == "EPFD") parameterBytes += s.Len;
+                if (s.Sig == "EPF3") hasEpf3 = true;
+            }
+            i = j;
+            if (function == null) continue;
+            var fn = function.Value;
+            var name = PerkFunctionNames.GetValueOrDefault(fn, "Unknown");
+
+            if (fn == 6 && epft != null)
+            {
+                diagnoses.Add(new PluginDiagnosis(anchor, "entry-point-parameter-shape",
+                    $"repairable (drops {parameterBytes} bytes)",
+                    $"entry point {entryIndex} (function {fn}, {name}) has EPFT {epft}; vanilla writes no parameters"));
+            }
+            else if (fn == 9 && epft == 4 && !hasEpf3)
+            {
+                diagnoses.Add(new PluginDiagnosis(anchor, "entry-point-parameter-shape", Lossless,
+                    $"entry point {entryIndex} (function {fn}, {name}) is missing EPF3; vanilla always writes it"));
+            }
+            else if (EpftByPerkFunction.TryGetValue(fn, out var expected) && epft != null && epft != expected)
+            {
+                diagnoses.Add(new PluginDiagnosis(anchor, "entry-point-parameter-shape", Lossless,
+                    $"entry point {entryIndex} (function {fn}, {name}) has EPFT {epft}; vanilla writes EPFT {expected}"));
+            }
         }
     }
 
