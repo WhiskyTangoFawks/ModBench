@@ -32,19 +32,18 @@ export const NOT_MO2_INSTANCE_PROVIDER: vscode.TreeDataProvider<never> = {
   getChildren: () => [],
 };
 
-export interface ModListCoreDeps {
-  modListProvider: ModListProvider;
-  modlistSource: Mo2ModlistSource;
-  updateProfileDescription: () => Promise<void>;
-  // ADR-0044 / the Loadout header: a profile switch is the next snapshot, and the header's own
-  // profile readout has to move with it — both narrow callbacks against the composition root's
-  // session object, since this is otherwise a pure Mod-Management registrar.
-  notifyLoadoutHeaderChanged: () => void;
-  requestLoadOrderSync: () => void;
-}
-/** Loadout core commands: refresh, switch profile, filter. */
-export function registerModListCoreCommands(deps: ModListCoreDeps): vscode.Disposable[] {
-  const { modListProvider, modlistSource, updateProfileDescription, notifyLoadoutHeaderChanged, requestLoadOrderSync } = deps;
+/** Loadout core commands: refresh, switch profile, filter. One call site (registerLoadoutView),
+ *  so its params are positional, not a Deps bundle — #628: a bundle earns its keep by being
+ *  shared across more than one consumer or call site (see EditorCommandDeps, ModInstallDeps,
+ *  LoadoutViewDeps for real examples), not merely by having several fields.
+ *  notifyLoadoutHeaderChanged/requestLoadOrderSync: ADR-0044 / the Loadout header — a profile
+ *  switch is the next snapshot, and the header's own profile readout has to move with it — both
+ *  narrow callbacks against the composition root's session object, since this is otherwise a
+ *  pure Mod-Management registrar. */
+export function registerModListCoreCommands(
+  modListProvider: ModListProvider, modlistSource: Mo2ModlistSource, updateProfileDescription: () => Promise<void>,
+  notifyLoadoutHeaderChanged: () => void, requestLoadOrderSync: () => void,
+): vscode.Disposable[] {
   return [
       vscode.commands.registerCommand('modbench.modList.view.winningAtTop', () => {
         modListProvider.toggleViewDirection();
@@ -160,15 +159,13 @@ export function registerModInstallCommands(deps: ModInstallDeps): vscode.Disposa
       }),
   ];
 }
-export interface ModContextDeps {
-  instanceRoot: string;
-  modlistSource: Mo2ModlistSource;
-  outputChannel: vscode.LogOutputChannel;
-  runModAction: (label: string, failMessage: string, action: () => Promise<void>) => Promise<void>;
-}
-/** Loadout per-mod context commands: reveal, separator ops, uninstall, Nexus. */
-export function registerModContextCommands(deps: ModContextDeps): vscode.Disposable[] {
-  const { instanceRoot, modlistSource, outputChannel, runModAction } = deps;
+/** Loadout per-mod context commands: reveal, separator ops, uninstall, Nexus. One call site
+ *  (registerLoadoutView) — positional params, not a Deps bundle; see registerModListCoreCommands's
+ *  own comment on why (#628). */
+export function registerModContextCommands(
+  instanceRoot: string, modlistSource: Mo2ModlistSource, outputChannel: vscode.LogOutputChannel,
+  runModAction: (label: string, failMessage: string, action: () => Promise<void>) => Promise<void>,
+): vscode.Disposable[] {
   return [
       vscode.commands.registerCommand('modbench.modList.mod.openInExplorer', async (node: ModNode) => {
         if (node?.kind !== 'mod') return;
@@ -221,13 +218,13 @@ export function registerModContextCommands(deps: ModContextDeps): vscode.Disposa
       }),
   ];
 }
-export interface SeparatorCmdDeps {
-  modlistSource: Mo2ModlistSource;
-  runModAction: (label: string, failMessage: string, action: () => Promise<void>) => Promise<void>;
-}
-/** Loadout separator context commands: rename, add-below, delete. */
-export function registerSeparatorCommands(deps: SeparatorCmdDeps): vscode.Disposable[] {
-  const { modlistSource, runModAction } = deps;
+/** Loadout separator context commands: rename, add-below, delete. One call site
+ *  (registerLoadoutView) — positional params, not a Deps bundle; see registerModListCoreCommands's
+ *  own comment on why (#628). */
+export function registerSeparatorCommands(
+  modlistSource: Mo2ModlistSource,
+  runModAction: (label: string, failMessage: string, action: () => Promise<void>) => Promise<void>,
+): vscode.Disposable[] {
   return [
       vscode.commands.registerCommand('modbench.modList.separator.rename', async (node: SeparatorNode) => {
         if (node?.kind !== 'separator') return;
@@ -413,7 +410,8 @@ export function isStandaloneDeployment(): boolean {
 export function registerDeploymentModeContext(
   context: vscode.ExtensionContext,
   // The deployment row appears/disappears with the mode — a narrow callback against the
-  // composition root's session object, same reasoning as ModListCoreDeps's own pair above.
+  // composition root's session object, same reasoning as registerModListCoreCommands's own
+  // pair of callbacks above.
   notifyLoadoutHeaderChanged: () => void,
 ): void {
   // Deploy/Purge/Launch are standalone-only; hidden when an external manager owns
