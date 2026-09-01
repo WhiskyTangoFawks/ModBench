@@ -76,8 +76,10 @@ backend/load order state — `LoadoutHeaderProvider` only ever reads Mod-Managem
 Launch mEdit / Close mEdit
 (`modbench.modList.launchMedit` / `modbench.closeMedit`) are reachable from the
 [Plugins view](plugins.md)'s own title-bar overflow, gated by
-`modbench.workspaceIsMo2Instance`. See [plugins.md](plugins.md#toolbar--title-bar) for the
-placement and its context-key toggle.
+`modbench.workspaceIsMo2Instance` and toggled between the two commands by the
+`modbench.backendRunning` context key (only one of the pair is ever contributed for a given
+state). See [plugins.md](plugins.md#toolbar--title-bar) for the placement and its context-key
+toggle.
 
 ### Title bar
 
@@ -115,6 +117,10 @@ teardown-on-exit is deferred to its own design, since a
 script-extender loader exits immediately and its exit code says nothing about the game.
 
 ## Deltas this surface absorbed
+
+Historical record from before ADR-0035 merged Mod Management's "Plugins (load order)" and
+Editing's "mEdit Plugins tree" into the one shared Plugins tree that exists today — the two
+"Plugins" rows below describe the two pre-merge views, not two views that exist now.
 
 | View | Lost | Result |
 | --- | --- | --- |

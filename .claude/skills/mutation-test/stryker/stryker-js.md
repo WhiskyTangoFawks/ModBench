@@ -72,11 +72,14 @@ this is cheap enough to run per-ticket:
 | Scope | Mutants | Wall clock |
 | ----- | ------- | ---------- |
 | One file (`fileConflictIndex.ts`) | 71 | ~1m30s |
-| All of `src/modmanager/` (30 files) | 1799 | **3m40s** |
+| All of `src/modmanager/` (30 files at measurement time) | 1799 | **3m40s** |
 
-⚠️ **Measured before `src/medit/` entered scope.** `--all` now mutates roughly
-twice the corpus and has not been re-timed; the per-file and per-diff figures are
-unaffected. Re-measure on the next `--all` run and replace this note with the number.
+⚠️ **Stale on two counts, not just timing.** Measured before `src/medit/` entered scope —
+`--all` now mutates roughly twice the corpus and has not been re-timed. The `src/modmanager/`
+file count has also drifted since: `stryker.config.json`'s `mutate` array currently resolves to
+35 eligible files there (39 non-test `.ts` files minus 4 excluded providers/panels), not 30, so
+even the per-file and per-diff figures are unverified against today's tree. Re-measure on the
+next `--all` run and replace this note with fresh numbers.
 
 The cap is nearly free: the old 11-worker default finished the same corpus only ~30s
 faster, by thrashing all 15 GiB — it was never CPU-bound. The initial test run is 563

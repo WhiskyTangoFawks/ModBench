@@ -31,7 +31,7 @@ enabled in `plugins.txt` and would therefore genuinely crash the game.
 **The divergence is justified by architectural asymmetry, not preference.** Mutagen builds FormKeys
 from a plugin's own `MasterReferences`, read from its TES4 header, so `ModFactory.ImportGetter` is a
 per-file read that never requires a master file to exist. A FormID pointing at an absent master still
-yields a well-formed FormKey; it simply names a ModKey nothing in the session provides, which already
+yields a well-formed FormKey; it simply names a ModKey nothing in the load order provides, which already
 resolves to nothing and already falls back to displaying the raw FormKey. xEdit's rule exists because
 a Delphi object graph cannot resolve at all with a master missing. That is the inverse of the
 carve-out ADR-0034 permits: not a platform limitation of ours, but a platform capability xEdit never
@@ -54,7 +54,7 @@ versus "Master `Foo.esp` cannot be loaded"), so a cascade does not read as many 
 - **This is close to the existing behaviour.** Nothing currently checks masters at all —
   `BuildPluginMetadata` records `mod.MasterReferences` but never requires them — so the work is
   detection and display, a set difference against the loaded set, not a change to loading.
-- **`PluginLoadFailure` gets surfaced.** `GameSession` already isolates per-plugin load failures with
+- **`PluginLoadFailure` gets surfaced.** `LoadOrder` already isolates per-plugin load failures with
   a reason so one unparseable file cannot abort the load order; that state has never reached the
   tree. It becomes the error decoration, alongside the missing-master flag.
 - **The Plugin List's order-aware missing-master badge and this state become one concept** in one
@@ -63,5 +63,8 @@ versus "Master `Foo.esp` cannot be loaded"), so a cascade does not read as many 
   be opened and diffed against the patched copy, with the removed master's references showing as
   unresolved — which is exactly the check that workflow needs.
 - **What it costs:** a plugin the game cannot load is browsable, so the tree must be unambiguous
-  about which rows those are. That obligation is discharged by ADR-0035's dimming and error
-  decoration, and this ADR is invalid without them.
+  about which rows those are. The error decoration (a `✗ Failed to load` / `✗ Master issue` row
+  description and tooltip, `PluginsTreeComposite`) ships and discharges part of that obligation.
+  **Dimming does not** — ADR-0035 lists it only as one of several still-open UX options for how a
+  non-participating copy surfaces, never a decision — so this obligation is only partially
+  discharged today, and this ADR is invalid without the rest of it being designed.

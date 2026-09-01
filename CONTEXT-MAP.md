@@ -1,13 +1,22 @@
 # Context Map
 
-The product is **Modbench** — "the modding IDE for VS Code." It surfaces two views, backed by two bounded contexts:
+The product is **Modbench** — "the modding IDE for VS Code." It surfaces several views — Mods,
+Plugins, Downloads, and the record editor's compare grid and satellite panels — backed by two
+bounded contexts:
 
-- **Loadout** view → Mod Management context
-- **mEdit** view → Editing context
+- **Loadout** views (Mods, Plugins, Downloads) → Mod Management context
+- **Record editor** views (compare grid, Referenced By, Repair, Version control) → Editing context
 
-(The repo and editing backend are still named `mEdit`/`MEditService` for historical reasons; "mEdit" now refers specifically to the editor view.)
+There is no separate "mEdit view": **mEdit** names the C# backend plus the record-editor surfaces
+it serves, not a view of its own — the Plugins tree they render into is Mod Management's
+([ADR-0035](./docs/adr/0035-one-plugins-tree-editing-is-a-capability.md)). (The repo and editing
+backend are still named `mEdit`/`MEditService` for historical reasons.)
 
-Each UI surface has a living spec in [docs/specs/](./docs/specs/) — a surface belongs to exactly one context and uses its vocabulary.
+Each UI surface has a living spec in [docs/specs/](./docs/specs/) — a surface belongs to exactly
+one context and uses its vocabulary, with one composition-root exception: the Plugins tree is Mod
+Management's, but once a load order is running it also renders Editing's record rows, supplied
+only as data through the `PluginsTreeComposite` seam — never a Mod Management→backend call (see
+Relationship below).
 
 ## Contexts
 
@@ -31,4 +40,4 @@ Each UI surface has a living spec in [docs/specs/](./docs/specs/) — a surface 
   or the user can install, update, or delete any mod outside Modbench. Source-derived
   state reaches Loadout surfaces only as data through composition roots (the
   `PluginsTreeComposite` pattern), never via a Mod Management→backend call.
-- **Shared vocabulary — override order, winning vs losing.** Every conflict is decided by an **override order**, whose ends are the **winning** and **losing** ends — never by position in a file or a view (that is *view order*, a separate configurable presentation choice). There are two distinct override orders: Mod Management's **Mod override order** (Modlist priority, `modlist.txt`, file-level winner) and Editing's **Plugin override order** / Plugin load order (`plugins.txt`, record-level winner). Say which one you mean, and never say "higher/lower priority" — say winning/losing. Anchor invariant: **vanilla content is losing-most on both axes** (`Fallout4.esm` records, vanilla `Data/` files lose to everything). `plugins.txt` itself is owned and written by Mod Management's Plugins tab even though the ordering concept it encodes is consumed by Editing — see each context's `CONTEXT.md`.
+- **Shared vocabulary — override order, winning vs losing.** Every conflict is decided by an **override order**, whose ends are the **winning** and **losing** ends — never by position in a file or a view (that is *view order*, a separate configurable presentation choice). There are two distinct override orders: Mod Management's **Mod override order** (Modlist priority, `modlist.txt`, file-level winner) and Editing's **Plugin override order** / Plugin load order (`plugins.txt`, record-level winner). Say which one you mean, and never say "higher/lower priority" — say winning/losing. Anchor invariant: **vanilla content is losing-most on both axes** (`Fallout4.esm` records, vanilla `Data/` files lose to everything). `plugins.txt` itself is owned and written by Mod Management's Plugins view even though the ordering concept it encodes is consumed by Editing — see each context's `CONTEXT.md`.

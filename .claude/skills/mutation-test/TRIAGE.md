@@ -23,13 +23,13 @@ reported. A table of documented accepts passes exactly as a table of deletions d
 
 Scope the run to the review's fixed point, or take results the caller supplied. Runner
 mechanics live next to the runners — `stryker/stryker.md` for C# (`MEditService.Core`),
-`stryker/stryker-js.md` for TypeScript (`modbench/src/modmanager`). Both wrappers print
+`stryker/stryker-js.md` for TypeScript (`modbench/src/{modmanager,medit}`). Both wrappers print
 only the parsed findings; exit 1 (survivors await disposition) and exit 3 (nothing in
 scope) are normal outcomes, not failures.
 
-- **Background the run and poll.** The C# run costs ~17 minutes and outlasts the
-  foreground command cap; a foreground call killed partway looks exactly like a silent
-  failure. **Every check-in while waiting reports a progress figure** (mutants tested
+- **Background the run and poll.** The C# run (current cost figure in `stryker/stryker.md`)
+  outlasts the foreground command cap; a foreground call killed partway looks exactly like a
+  silent failure. **Every check-in while waiting reports a progress figure** (mutants tested
   so far / total, once the tool has printed one) — a bare "still running" is
   indistinguishable from hung, and forces whoever's waiting on you to go verify the
   process directly instead of trusting the report.

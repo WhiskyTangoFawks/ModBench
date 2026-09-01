@@ -28,9 +28,7 @@ buttons. There is no read-only value
 surface: an immutable cell opens nothing on plain click, second click, `F2`, or double click —
 **a `string` cell included** (ADR-0039) — with Ctrl+C on the focused cell as every
 immutable cell's copy path regardless, and the right-click menu's **Open in Editor…** entry (see
-*Editing* below) as a long immutable value's own read path, read-only. Everything in
-*Interaction model* below
-describes the target, not the build. VMAD and Conditions render as ordinary rows in this same
+*Editing* below) as a long immutable value's own read path, read-only. VMAD and Conditions render as ordinary rows in this same
 tree and inherit its focus model in full (see *VMAD and Conditions are ordinary rows in the
 one tree* below for the handful of still-open, explicitly scoped gaps).
 
@@ -160,7 +158,8 @@ better idea.
   model's attempt to make one cursor state two gestures at once; with click meaning focus there is nothing
   for the cursor to disambiguate.
 - **Right-click** — the only place a named, discrete action lives. On a **value cell** that is the
-  list structure ops (**Add** / **Remove** / **Clear** / **Move Up** / **Move Down**), which are
+  list structure ops (**Add** / **Remove** / **Move Up** / **Move Down** — there is no **Clear**),
+  which are
   also the `Insert`/`Delete`/`Ctrl+↑`/`Ctrl+↓` accelerators above — the menu is the canonical
   definition and the keys are shortcuts onto it, exactly as in xEdit, and there are **no inline
   ▲▼✕ controls**, per the no-second-route rule below. On a **`string` value cell**, right-click also
@@ -262,14 +261,20 @@ already empty: matching xEdit's own guard (`Element.EditValue` must be non-empty
 
 ### The panel
 
-- A webview panel opened by `modbench.openEditor`; **one panel at a time**, reused when
-  navigating between records (an extension invariant). It is a React app.
+- A webview panel opened by `modbench.openEditor`; **one singleton panel**, reused/retargeted
+  when navigating between records (an extension invariant). `modbench.openEditorBeside` opens
+  additional, independent panels beside it — as many as selected records — landing as tabs in
+  one new editor group; only the singleton panel is reused. It is a React app.
+- `modbench.openCompare` (command-palette only, no menu/keybinding) reveals the singleton panel
+  if one is already open, or opens a fresh blank one if not — a way to bring the compare grid to
+  front without going through a tree row. It never touches which record the panel shows.
 - **Header**: record identity (`{RecordType} / {EditorID}`, or FormKey) and the FormKey
-  (`{FormID}:{OriginPlugin}`). On a mutable record the FormID is a 6-hex-char input with a
-  **Renumber** button (enabled only when the value changed); on an immutable one it is plain
-  text. Renumber writes a delete+create pair as an ordinary working-tree change. An
-  in-use FormID surfaces an inline error; an immutable-reference block surfaces a notification
-  naming the blocking plugins.
+  (`{FormID}:{OriginPlugin}`), plain text — there is no in-panel Renumber control. Renumber
+  ("Change FormID…") is a **tree-row** gesture: right-click a record node (or its context-menu
+  entry), a native `showInputBox` prefilled with the next-free suggestion, accepting or typing
+  over it; it writes a delete+create pair as an ordinary working-tree change. An
+  in-use FormID surfaces an inline error in the input box; an immutable-reference block surfaces
+  a notification naming the blocking plugins.
 - **Compare grid** (the primary view): one **row per field** (fields with no value in any
   plugin hidden by default); one **column per plugin** that contains the record's FormKey, in
   load order (left = master, right = winning override) — every column renders Effective state,
@@ -288,7 +293,8 @@ already empty: matching xEdit's own guard (`Element.EditValue` must be non-empty
   tooltip states the fact and names both surfaces that decide it (the Mods view, the Plugins view)
   rather than one gesture that would only fix one cause. Never "move it earlier in the load
   order" — that names the wrong axis for a shadowed copy (CONTEXT-MAP.md, CONTEXT.md). Left-click
-  collapses/expands a column (state persisted in load order). The grid's scroll region is bound to the
+  collapses/expands a column (state persisted for the panel's lifetime, not across restarts).
+  The grid's scroll region is bound to the
   panel's viewport, not to its own content height, so a horizontal scrollbar (for wide grids with
   many plugin columns) stays reachable at the bottom of the visible viewport regardless of
   vertical scroll position, instead of only appearing at the bottom of a possibly very tall table.
@@ -993,8 +999,6 @@ new value, so a large array or struct edit can't flood the panel.
 
 ## Out of Scope
 
-- **Multiple simultaneous record editor panels** — one panel is open at a time and reused when
-  navigating (an extension invariant).
 - **Editing Papyrus source** — VMAD's own rows edit script *data* (properties, their values
   and types, script and property flags). Compiling or editing `.psc` source is a different job
   and is not this surface's.

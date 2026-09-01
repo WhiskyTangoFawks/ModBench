@@ -53,7 +53,7 @@ use if none was named.
 are contributed unconditionally, but activation is still required to populate them.
 
 Force activation once per sitting by running any Modbench command from the Command Palette,
-e.g. **Modbench: Refresh Mod List**. The activity bar icon then appears (Loadout view). From
+e.g. **Modbench: Refresh**. The activity bar icon then appears (Loadout view). From
 there, use **Modbench: Launch mEdit** to spawn/attach the backend — the Plugins tree's rows
 gain chevrons once the load order is ready. Nothing switches views; every loadout view stays
 exactly where it was.

@@ -66,11 +66,13 @@ Surface-specific stories live in the surface specs above. These are the cross-cu
 1. As a mod author, I want to start an editing backend from my loadout with a single action, so that
    the editor opens against exactly the plugins my active profile loads, with no separate
    load order-setup step.
-2. As a user, I want a status bar item that tells me whether the backend is running,
-   connecting, attached, or holds a load order (and for which game, with a plugin count), so
+2. As a user, I want a status bar item that tells me whether the backend is connecting,
+   attached, disconnected, stopped, or holds a ready load order (with a plugin count), so
    that I always know the editor's state.
 3. As a user, I want clicking the status bar item when the backend isn't running to tell me how
-   to start it, so that I'm not stuck guessing.
+   to start it, so that I'm not stuck guessing — **not built today**: the item carries no
+   command, and Launch mEdit on the [Plugins view](plugins.md)'s title-bar overflow is the only
+   way to start the backend.
 4. As a user, I want closing the editor to tear the load order down, so that a backend I'm not
    using isn't left running against my loadout.
 5. As a user, I want to run a script against the whole load order or a specific record/plugin
@@ -106,11 +108,14 @@ Surface-specific stories live in the surface specs above. These are the cross-cu
 
 ### Status bar
 
-- A bottom-right item reflects backend/load order state: **not running** ("backend not running",
-  warning color), **connecting**, **attached with no backend running**, and **attached with a load order**
-  ("{GameRelease} — {N} plugins", success color).
-- Clicking it while the backend is not running shows start-up instructions. The backend is
-  started via **Launch mEdit** from the Loadout surface, never from the status bar.
+- A bottom-left item reflects backend/load order state, one of five: **Connecting…**
+  (`$(loading~spin) mEdit: Connecting…`), **Attached** (`$(plug) mEdit: Attached`),
+  **Disconnected** (`$(error) mEdit: Disconnected — start MEditService and reload`),
+  **Stopped** (`$(circle-slash) mEdit: Stopped`), and, once the load order is ready, **Ready**
+  (`$(check) mEdit: Ready ({N} plugin copies)`). No game name is shown in any state.
+- The item carries **no command** — clicking it does nothing. The backend is started
+  exclusively via **Launch mEdit** from the [Plugins view](plugins.md)'s title-bar overflow,
+  never from the status bar.
 
 ### Command palette
 

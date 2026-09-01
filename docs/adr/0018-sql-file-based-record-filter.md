@@ -21,8 +21,8 @@ same file type means one UX surface instead of two, and a filter naturally upgra
 script by adding a Python body.
 
 Keeping filters as plain files gives users and agents identical interfaces: a human writes a
-`.sql` file and applies it via Code Lens; an agent calls `POST /session/filter` with the same SQL
-string directly. No separate agent data path.
+`.sql` file and applies it via Code Lens; an agent calls `POST /load-order/filter` with the same
+SQL string directly. No separate agent data path.
 
 VS Code provides syntax highlighting, undo history, save, and version control for `.sql` files at
 zero cost. Building a custom filter webview would be worse UX than the editor the user is already

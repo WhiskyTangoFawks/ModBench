@@ -42,7 +42,7 @@ and [ADR-0042](docs/adr/0042-plugin-is-the-source-of-truth-lossless-source.md).
 | **Loadout header** — profile, load order, deployment readout | [loadout-header.md](docs/specs/loadout-header.md) | Implemented |
 | **Record filter** — plain `.sql` files against the record index, applied with a Code Lens | [plugins.md](docs/specs/plugins.md) | Implemented |
 | **Repair** — byte-level repair of malformed plugins the Creation Kit wouldn't have written | [medit-repair.md](docs/specs/medit-repair.md) | Specced |
-| **Downloads** — Nexus `nxm://` handler and queue | [downloads.md](docs/specs/downloads.md) | Specced |
+| **Downloads** — Nexus download queue and tree (`nxm://` handler still pending) | [downloads.md](docs/specs/downloads.md) | Implemented |
 
 What's next is the [GitHub Milestones](https://github.com/WhiskyTangoFawks/ModBench/milestones)
 board: each numbered milestone is an epic in priority order, its issues are the slices.
@@ -53,7 +53,8 @@ board: each numbered milestone is an epic in priority order, its issues are the 
 modbench/          VS Code extension (TypeScript) + React webview for the compare grid
   src/modmanager/    Mod Management — pure TS/Node, reads and writes the MO2 instance in place,
                      never calls the backend
-  src/medit/         Editing view — thin client of the backend over a generated typed API
+  src/medit/         Record editor — thin client of the backend, rendered inside the shared
+                     Plugins tree (ADR-0035) over a generated typed API
 MEditService/      Local C# service (ASP.NET Core minimal API on localhost:5172)
   MEditService.Core/   Mutagen for plugin I/O; DuckDB as an index over per-record JSON documents;
                        the source codec, Track, compile and git layer
@@ -130,8 +131,9 @@ The repo is set up to be worked on by people and coding agents alike:
 
 The editing backend is agent-friendly by construction: a discoverable OpenAPI surface, typed
 request/response for every operation, an index you can query with SQL, and edits that land as git
-working-tree changes a human can review before anything touches the binary. Scripts are plain
-Python HTTP clients of the same API ([ADR-0024](docs/adr/0024-python-scripts-are-http-clients.md)).
+working-tree changes a human can review before anything touches the binary. Scripts — plain
+Python HTTP clients of the same API — are decided but not yet built
+([ADR-0024](docs/adr/0024-python-scripts-are-http-clients.md)).
 
 ## References
 

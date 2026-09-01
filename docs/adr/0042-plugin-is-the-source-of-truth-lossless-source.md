@@ -162,7 +162,7 @@ listing tells the truth; the cost is rename churn on mid-list inserts. The Cell/
 per cell is the tree a human wants.
 
 **5. Format identity is not stamped; compile failure is the uniform signal.** Nothing is written
-at Track and nothing is compared at session load. Compatibility is observed, not predicted: a
+at Track and nothing is compared at load. Compatibility is observed, not predicted: a
 version-driven format break, a hand edit and external corruption all produce the same event —
 compile fails with the round-trip gate's named-failure diagnostic — and the same remedy,
 re-Track. Codec changes stay backward-compatible wherever feasible (default a new field; sniff

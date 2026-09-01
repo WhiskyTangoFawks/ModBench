@@ -4,9 +4,10 @@ status: accepted
 
 # Extension owns the backend lifecycle; MO2 compatibility is by file import, not VFS
 
-The extension spawns and tears down the editing backend itself, passing it an ordered set of
-physical plugin paths (`load-explicit`): the active modlist's enabled plugins plus the vanilla
-masters from the game directory. Edits are written to the mod files in place.
+The extension spawns and tears down the editing backend itself, then keeps its load order true
+by sending the whole snapshot as a `PUT /load-order` reconcile (ADR-0044) whenever anything that
+feeds it changes: the active modlist's enabled plugins plus the vanilla masters from the game
+directory. Edits are written to the mod files in place.
 
 Modbench reconstructs MO2's effective view from the physical mod folders plus load order itself
 (the same priority merge usVFS performs), so it never depends on MO2's runtime. MO2 compatibility
@@ -18,9 +19,9 @@ level.
 
 - `BackendManager` owns spawn/teardown: attach if a healthy backend is already listening, else
   spawn the bundled binary; crash-restart; poll `GET /health`.
-- The backend's load order source is `load-explicit` (ordered `{name, physicalPath}` list), with
-  each plugin's winning physical path resolved by Mod Management's `FileConflictIndex`. This is
-  also the foundation for loading an arbitrary overriding-plugin set.
+- The backend's load order source is the `PUT /load-order` snapshot (ADR-0044): every physical
+  plugin copy in the instance, each plugin's winning physical path resolved by Mod Management's
+  `FileConflictIndex`. This is also the foundation for loading an arbitrary overriding-plugin set.
 - Deploy (hardlinks into the game directory) is decoupled from editing — it is needed only to run
   the game, never to edit.
 

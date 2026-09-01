@@ -98,15 +98,18 @@ C# ASP.NET Core backend. Root [CLAUDE.md](../CLAUDE.md) for project-wide invaria
 - **The DB is an index over documents** (ADR-0041). One `records` table holds each record's
   codec JSON as its body beside identity columns (`plugin`, `form_key`, `record_type`, `editor_id`,
   `ref`, `content_hash`); the extracted index tables (`form_lookup`,
-  `form_references`, `placement`, `cell_location`, `container_child`, `registrations`, `header`)
-  are populated from it at ingest. Each record type's name is a generated `json_extract` **view**
+  `form_references`, `placement`, `cell_location`, `container_child`)
+  are populated from it at ingest. Since #631 the plugin header is an ordinary `records` row too —
+  there is no separate header table. `registrations` is not an extracted index table: it is the
+  load-order-mirror table itself (ADR-0001), populated by `Reconcile`/`Register`, never derived
+  from `records`. Each record type's name is a generated `json_extract` **view**
   over `records`, which is what keeps user filter SQL working unchanged.
   **Nothing load-order-derived is stored on a data row** (ADR-0001): a record row carries
   file-derived facts only. `load_order_idx` is a fact about a plugin's registration and lives solely
   on `registrations`; `is_winner` is a fact about the registered stack a FormKey sits in and lives
   solely in `winners` (`(record_ref, form_key) → (plugin, origin)`, rebuilt wholesale by
   `DuckDbRecordIndex.UpdateWinners`). The registered view over each mirror table (`records`,
-  `records_committed`, `form_lookup`, `header` — see "Registration is visibility" above) joins both
+  `records_committed`, `form_lookup` — see "Registration is visibility" above) joins both
   back in, so they still read as ordinary columns everywhere outside `Records/` itself. Every writer
   that moves a row into or out of a ref's stack must resweep — that is why `MarkWorkingTreeOnly` and
   `SeedCommittedOnly` call `UpdateWinners` even though Effective is untouched.

@@ -78,7 +78,7 @@ record-browsing side ends at the [Record editor panel](medit-record-editor.md).
 
 The load order is constructed on entry from every line of the active profile's `plugins.txt` —
 disabled entries included, carrying their participation (ADR-0035) — plus vanilla masters;
-there is no separate load-load order step.
+there is no separate load-order step.
 
 ## User Stories
 
@@ -130,27 +130,27 @@ there is no separate load-load order step.
 
 ### Record navigation (Editing, once the backend is running)
 
-15. As a user, I want to expand a plugin row and see its record types, then every record under a
+16. As a user, I want to expand a plugin row and see its record types, then every record under a
     type in one step, so that browsing works the way it does in xEdit — no manual "Load more…" click
     (measured: no meaningful cost even at the realistic worst case; see Record navigation
     below).
-16. As a user, I want each record labeled with its EditorID and FormKey (or just the FormKey
+17. As a user, I want each record labeled with its EditorID and FormKey (or just the FormKey
     when it has no EditorID), so that I can recognize records the way I do in xEdit.
-17. As a user, I want to select multiple tree nodes with Ctrl/Shift-click and run a batch
+18. As a user, I want to select multiple tree nodes with Ctrl/Shift-click and run a batch
     action (e.g. Remove Record) across the whole selection, so that I can act on many records
     at once, even across different plugins.
-18. As a user, I want to browse a plugin's worldspaces and interior cells spatially — down
+19. As a user, I want to browse a plugin's worldspaces and interior cells spatially — down
     through blocks, sub-blocks, cells, and their persistent/temporary placed references — so
     that I can navigate the world the way it's actually laid out, seeing only what *that*
     plugin declares rather than a cross-plugin winner.
-19. As a user, I want to open a record by single-clicking its node, so that inspecting a record
+20. As a user, I want to open a record by single-clicking its node, so that inspecting a record
     is immediate.
-20. As a user, I want to filter the record tree by a SQL query against the backend's per-type
+21. As a user, I want to filter the record tree by a SQL query against the backend's per-type
     tables (returning `form_key`), pruning record types and records with no matches — but
     never a plugin row itself, since that would make the load order unviewable and
     unreorderable mid-patch (ADR-0035 amends ADR-0018 on this point) — so that I can slice the
     loadout by any condition I can express without a fixed toggle UI.
-21. As a user, I want to save filters as `.sql` files, apply one from a picker or from an
+22. As a user, I want to save filters as `.sql` files, apply one from a picker or from an
     inline Code Lens on the file, and see which filter is active, so that my useful queries are
     reusable and obvious.
 23. As a user, I want to create a new plugin, add a record to a plugin, and remove records (with
@@ -162,7 +162,10 @@ there is no separate load-load order step.
     at edit time when the plugin isn't ESL-eligible) — so that maintaining a plugin's header is
     an ordinary working-tree edit, reviewable in the Source Control panel like any other.
 25. As a user, I want to create and manage placed references (REFR/ACHR) inside a cell's
-    persistent or temporary group, so that I can edit world placement spatially.
+    persistent or temporary group, so that I can edit world placement spatially — **not yet
+    built**: today a placed-reference row opens only (Open to the Side); no context-menu
+    gesture creates, removes or renumbers one (see Context menus under Worldspace / interior-cell
+    tree below).
 26. As a user, I want a plugin whose master can't be resolved flagged and still fully browsable —
     never deactivated, excluded or hidden — with the tooltip telling me whether the master is
     missing entirely or is present but itself failed to load, so that I can inspect and fix the
@@ -221,12 +224,13 @@ there is no separate load-load order step.
 - **Read-only-for-editing** (Editing's "Immutable plugin", `PluginMetadata.isImmutable`) is decided
   and rendered by `PluginsTreeComposite` — the one place already allowed to know both bounded
   contexts — once a load order reports it, as a tooltip appended to whatever tooltip the row already
-  carries (e.g. the missing-master badge below). It is never a `contextValue`: no per-row editing
-  command exists yet to gate off one, and adding that plumbing before a command needs it would be
-  exactly the speculative scaffolding this project's conventions rule out. **Selecting an immutable
-  plugin's row still opens its header, ungated** — viewing a plugin's header is not an editing
-  action, only the fields inside it are (see Record navigation below); an immutable plugin's row
-  otherwise has no editing action to hide today, since none is contributed on a plugin row yet.
+  carries (e.g. the missing-master badge below). It is never a `contextValue` of its own: the five
+  plugin-row commands (Reveal in Explorer, Track…, Save & Compile, Save & Compile from main…,
+  Rebase onto Updated Baseline — see Record navigation below) gate on the existing `plugin`
+  `contextValue` and package.json's own editability checks, not on a second, immutable-specific
+  one. **Selecting an immutable plugin's row still opens its header, ungated** — viewing a
+  plugin's header is not an editing action, only the fields inside it are (see Record navigation
+  below).
 
 ### Row children ([ADR-0035](../adr/0035-one-plugins-tree-editing-is-a-capability.md))
 
@@ -286,7 +290,7 @@ end.
 - **A second window on the same instance is refused, by name.** The backend answers the load
   `423 Locked` ("this instance's index is open in another Modbench window") and holds nothing; the
   frontend surfaces that message as the load failure. No read-only mode, no waiting, never a second
-  index file ([ADR-0001](../adr/0001-persistent-per-instance-index-session-is-a-registration.md)
+  index file ([ADR-0001](../adr/0001-persistent-per-instance-index-load-order-is-a-registration.md)
   point 6).
 - **Mechanism: poll, don't stream.** Every call goes through the generated `openapi-fetch`
   client, which has no streaming path, and the load POST stays blocking. So `GET /load-order/status`
@@ -316,10 +320,11 @@ end.
   "Open Header" button here either — `PluginNode` and
   `ImplicitMasterNode` (`modmanager/PluginListProvider.ts`) each wire their own `.command` to the
   `modbench.openHeader` bridge command that used to back the retired button, so the gesture is
-  reachable identically from both plugin-bearing row kinds. A plugin's context menu also exposes
-  New Plugin…, Track… (untracked plugins), and — on editable plugins only — Save & Compile, Add
-  New Record…, Convert to ESL/ESM, and Run Script…. Each is a confirmation or picker as
-  appropriate; destructive ones confirm.
+  reachable identically from both plugin-bearing row kinds. A plugin's context menu exposes
+  Reveal in Explorer, Track… (untracked plugins), and — on editable plugins only — Save &
+  Compile, Save & Compile from main…, and Rebase onto Updated Baseline. Each is a confirmation
+  or picker as appropriate; destructive ones confirm. New Plugin… is title-bar only (Slot 3
+  below), not on this menu; Add lives on the record-type row, not the plugin row.
 - **Record-type nodes** (`contextValue: "recordType"`): labeled by the type's **human-readable
   name** (e.g. "Activator" for `ACTI`, "Game Setting" for `GMST`), matching xEdit's naming from
   `wbDefinitionsFO4.pas`; the raw 4-char signature remains the internal identifier (cache
@@ -344,7 +349,7 @@ end.
   FormID… though not Copy, see below): labeled `{EditorID}  [{RecordType}:{FormID}]`
   (FormKey only when no EditorID). Single-click (or Open Record) opens the editor; the context
   menu adds Remove (a confirmation listing every selected record, deleting the whole selection as
-  one batch; the Delete key also triggers it) and Change FormID… (renumber), with xEdit's own
+  one batch; no keybinding) and Change FormID… (renumber), with xEdit's own
   captions, per [medit-version-control.md](medit-version-control.md) — Add lives on the
   record-type row above a plugin's records. Removing a record deletes its source file as an
   ordinary working-tree change; an uncommitted create has no special-cased handling — its
@@ -410,17 +415,19 @@ end.
 - The spatial hierarchy descends Worldspace → Block → Sub-block → Cell (by XCLC coordinates) →
   Persistent/Temporary placed-reference groups → placed references. Block and Sub-block nodes
   are grouping-only (no record, no click); clicking a CELL or REFR node opens the editor.
-- Context menus: a **placed group** offers Create Placed… (quick pick REFR/ACHR + optional
-  template FormKey); a **placed reference** (`contextValue: "refr"` / `"refrImmutable"`) offers
-  the same lifecycle actions as a record row — Remove, Change FormID… — with the same handlers
-  and immutable gating. CELL nodes have no menu.
+- Context menus: a **placed group** has no menu — nothing is contributed against its
+  `placedGroup-*` contextValue, so creating a new placed reference isn't a tree-row gesture
+  today. A **placed reference** (`contextValue: "refr"` / `"refrImmutable"`) offers only Open to
+  the Side, the one command gated on those two context values; it does not carry Remove or
+  Change FormID… (those gate on `record`/`recordImmutable` only). CELL nodes have no menu.
 
 ### Quest / dialog topic children
 
-- Shallow containers (ADR-0040) strip a Quest's dialog topics/branches/scenes and a Dialog
-  Topic's responses out of the parent's own record/document — the Plugins tree restores
-  navigation to them as expandable tree children, reading the same containment index the
-  worldspace tree above reads, never a parallel source.
+- A Quest's dialog topics/branches/scenes and a Dialog Topic's responses are folder-split in
+  Source layout but **not stripped from the document** — a container's document carries its
+  embedded children (ADR-0041 amendment; `ContainerChildFields`), and each child is also its own
+  extracted index row. The Plugins tree restores navigation to them as expandable tree children,
+  reading the same containment index the worldspace tree above reads, never a parallel source.
 - A Quest row expands to its `DialogTopics`, `DialogBranches`, then `Scenes`, in that flat order
   with no intermediate grouping node — xEdit's own GroupType-10 order
   ([ADR-0034](../adr/0034-xedit-is-the-ux-reference-for-the-record-editor.md)). A Dialog Topic row
@@ -598,7 +605,7 @@ overflow, then native **Collapse All** last.
   clear.
 - **Both axes read out in the view description** when both are active — `"arm" · records:
   cells.sql`. The record filter is named by its **source** (the `.sql` filename, or `document`
-  when applied from an open editor; `SQL` when a load order-start sync reports a filter this
+  when applied from an open editor; `SQL` when a load-order sync reports a filter this
   frontend never saw it applied), never by its SQL text: a `WHERE` clause is not a readout.
   Clearing either axis leaves the other applied and still named.
 - **Slot 3 — New Plugin…**.

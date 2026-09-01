@@ -6,7 +6,8 @@ status: accepted
 
 DuckDB is the in-process analytical query engine for the record index. It holds a queryable read
 model of all loaded records, derived from plugins (or, for a tracked mod, its source) via Mutagen.
-It is a cache — deleting it loses nothing and it rebuilds on session load.
+It is a cache — a persistent per-instance file (ADR-0001), not rebuilt per launch; deleting it
+loses nothing and costs one cold index.
 
 Key reasons over SQLite: columnar storage makes GROUP BY and aggregation across hundreds of
 thousands of records sub-100ms (conflict detection across a 200-mod load order is a GROUP BY);

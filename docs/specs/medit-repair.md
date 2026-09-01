@@ -108,7 +108,8 @@ counter pairs with which entries), each row backed by a vanilla-scan proof and a
   *plus* the repair's own declared additions/removals — the repair is verified against its
   own preview, not just "parses now". Anything else rolls back from the `.bak` and reports.
   The endpoint then **reloads that plugin in the load order itself** (it already holds the
-  parsed result; the external-change watcher covers tracked plugins only) and republishes
+  parsed result; the external-change watcher covers every indexed binary, tracked or not — #587)
+  and republishes
   the plugin's Problems entries from the re-run, so they clear or shrink at once. A plugin
   that is untracked stays untracked; a tracked plugin is additionally *externally changed*
   from the parked ref's point of view and gets the standing external-change dialog
@@ -120,8 +121,9 @@ counter pairs with which entries), each row backed by a vanilla-scan proof and a
   *are* the proof set the table is built from; a hit there is a test failure, not a
   diagnosis.
 - **Row decoration**: a plugin carrying a Kind B diagnosis gets a plugin-row decoration
-  through the existing load-order-derived `FileDecorationProvider` (ADR-0037's master /
-  load-failure decorations, badge-priority rule in [plugins.md](plugins.md)) — no new
+  through the existing load-order-derived decoration mechanism (`PluginsTreeComposite`'s own
+  `TreeItem` description/tooltip, the same one ADR-0037's master/load-failure decorations use;
+  badge-priority rule in [plugins.md](plugins.md)) — no new
   mechanism. Later, in the Diagnostics & code actions milestone, the diagnosis is a
   lightbulb whose fix action is this gesture.
 - **Not offered**: a repair whose table row lacks a vanilla proof or a fixture; any change to
