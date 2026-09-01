@@ -33,6 +33,10 @@ describe('parsePlugins', () => {
       { name: 'ccSBJFO4003-Grenade.esl', enabled: true },
     ] satisfies PluginEntry[]);
   });
+
+  it('#635: a whitespace-only line is blank, not a phantom entry named for its spaces — this is what lets Mo2ModlistSource route readPluginOrder/readEnabledPlugins through this function', () => {
+    expect(names('﻿# header\r\n*Foo.esp\r\n\r\n   \r\nBar.esp\r\n')).toEqual(['Foo.esp', 'Bar.esp']);
+  });
 });
 
 describe('setPluginEnabledInText — byte-faithful surgical edit', () => {
@@ -107,6 +111,11 @@ describe('appendPluginInText — byte-faithful append at the winning end', () =>
   it('throws when the name already exists (never a silent duplicate line)', () => {
     const input = defaultPlugins();
     expect(() => appendPluginInText(input, 'Unofficial Fallout 4 Patch.esp')).toThrow(/Unofficial Fallout 4 Patch\.esp/);
+  });
+
+  it('#635: a file with both LF- and CRLF-terminated lines uses CRLF for the new line, not the first line\'s own LF — the ruled behaviour change (this module\'s own detectEol used to sniff the first line, LF here; consolidated onto the shared whole-file-scan, which sees the CRLF line further down)', () => {
+    const out = appendPluginInText('*A.esp\nB.esp\r\n', 'New.esp');
+    expect(out).toBe('*A.esp\nB.esp\r\n*New.esp\r\n');
   });
 });
 

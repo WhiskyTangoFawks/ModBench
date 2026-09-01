@@ -1,6 +1,6 @@
 import { readFile, writeFile, readdir, rm, cp, access } from 'node:fs/promises'; // access used by exists()
 import { join } from 'node:path';
-import type { IModlistSource, InstallMeta, ModlistEntry } from '../model';
+import type { IModlistSource, InstallMeta, ModlistEntry, PluginEntry } from '../model';
 import type { Reporter } from '../deployer';
 import {
   insertModAtWinningEnd,
@@ -15,7 +15,7 @@ import {
   setEnabledInText,
   unlistedModNames,
 } from './modlistText';
-import { appendPluginInText, movePluginsInText, setPluginEnabledInText } from './pluginsText';
+import { appendPluginInText, movePluginsInText, parsePlugins, setPluginEnabledInText } from './pluginsText';
 import { parseMetaIni, writeMetaIni } from './metaIni';
 import { setUninstalledInText } from './downloads';
 import { readGameName, readSelectedProfile, setSelectedProfileInText } from './modOrganizerIni';
@@ -258,13 +258,11 @@ export class Mo2ModlistSource implements IModlistSource {
   }
 
   async readPluginOrder(): Promise<string[]> {
-    return (await this.readPluginLines()).map((l) => (l.startsWith('*') ? l.slice(1) : l));
+    return (await this.readPluginEntries()).map((e) => e.name);
   }
 
   async readEnabledPlugins(): Promise<string[]> {
-    return (await this.readPluginLines())
-      .filter((l) => l.startsWith('*'))
-      .map((l) => l.slice(1));
+    return (await this.readPluginEntries()).filter((e) => e.enabled).map((e) => e.name);
   }
 
   async setPluginEnabled(pluginName: string, enabled: boolean): Promise<void> {
@@ -279,12 +277,7 @@ export class Mo2ModlistSource implements IModlistSource {
     await this.modifyPlugins((t) => appendPluginInText(t, pluginName));
   }
 
-  /** Non-comment, non-blank plugins.txt lines in order (leading `*` retained). */
-  private async readPluginLines(): Promise<string[]> {
-    const text = await readFile(await this.pluginsPath(), 'utf8');
-    return text
-      .split(/\r\n|\r|\n/)
-      .map((l) => l.trim()) // also strips a leading UTF-8 BOM (U+FEFF) so the comment header still matches
-      .filter((l) => l.length > 0 && !l.startsWith('#'));
+  private async readPluginEntries(): Promise<PluginEntry[]> {
+    return parsePlugins(await readFile(await this.pluginsPath(), 'utf8'));
   }
 }

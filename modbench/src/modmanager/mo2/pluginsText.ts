@@ -11,26 +11,17 @@
 // (comment/blank) survive untouched.
 
 import type { PluginEntry } from '../model';
-import { lineContent, lineRanges } from './lineScan';
-
-const BOM = '﻿';
-
-const stripBom = (text: string): string => (text.startsWith(BOM) ? text.slice(BOM.length) : text);
-
-/** The BOM is a whole-file property (always at absolute position 0), never a
- *  line's. Every surgical edit strips it up front, edits the bomless text, then
- *  re-prepends it — so it stays pinned to position 0 even when the line that
- *  carried it is edited or moved. */
-function withBomPreserved(text: string, edit: (bomless: string) => string): string {
-  if (!text.startsWith(BOM)) return edit(text);
-  return BOM + edit(stripBom(text));
-}
+import { detectEol, insertIndexAmongEntries, lineContent, lineRanges, splitLinesKeepEol, stripBom, withBomPreserved } from './lineScan';
 
 /** An entry line is any non-blank, non-comment line; its `*` prefix (if any)
- *  marks it enabled. Comment (#) and blank lines carry no model meaning. */
+ *  marks it enabled. Comment (#) and blank lines carry no model meaning. A
+ *  whitespace-only line (spaces/tabs, no visible content) counts as blank too —
+ *  #635: this is what lets `readPluginOrder`/`readEnabledPlugins` route through
+ *  `parsePlugins` instead of their own separate parse; that separate parse used
+ *  to fold this case into a per-line `.trim()`. */
 const isEntryLine = (line: string): boolean => {
   const c = lineContent(line);
-  return c.length > 0 && !c.startsWith('#');
+  return c.trim().length > 0 && !c.startsWith('#');
 };
 
 /** Plugin name for an entry line, with the leading `*` (enabled) marker removed. */
@@ -50,10 +41,6 @@ export function parsePlugins(text: string): PluginEntry[] {
   return entries;
 }
 
-/** Lines each INCLUDING their trailing EOL (last may lack one); join('') is exact. */
-const splitLinesKeepEol = (text: string): string[] =>
-  [...lineRanges(text)].map((r) => text.slice(r.start, r.end));
-
 /** Set a plugin's enabled state by adding/removing its leading `*` marker.
  *  Throws if the plugin is absent. */
 export function setPluginEnabledInText(text: string, pluginName: string, enabled: boolean): string {
@@ -68,16 +55,6 @@ export function setPluginEnabledInText(text: string, pluginName: string, enabled
     }
     throw new Error(`Plugin not found in plugins.txt: ${pluginName}`);
   });
-}
-
-/** The EOL terminator the file already uses, sniffed off its first terminated line — never
- *  guessed from platform defaults. Falls back to `\n` when the text has no terminated line at all
- *  (empty file, or a single line with none). */
-function detectEol(text: string): string {
-  for (const { contentEnd, end } of lineRanges(text)) {
-    if (end > contentEnd) return text.slice(contentEnd, end);
-  }
-  return '\n';
 }
 
 /** The New Plugin gesture's own write — appends a new, always-enabled entry line at the
@@ -131,16 +108,7 @@ export function movePluginsInText(text: string, pluginNames: string[], toIndex: 
     const block = moveIdx.map((i) => lines[i]);
     for (const i of [...moveIdx].reverse()) lines.splice(i, 1); // remove high→low to keep indices valid
 
-    const entryLineIdx = [...lines.keys()].filter((i) => isEntryLine(lines[i]));
-    const clamped = Math.max(0, Math.min(toIndex, entryLineIdx.length));
-    let insertAt: number;
-    if (clamped < entryLineIdx.length) {
-      insertAt = entryLineIdx[clamped]; // before the entry currently at that slot
-    } else if (entryLineIdx.length === 0) {
-      insertAt = lines.length;
-    } else {
-      insertAt = entryLineIdx.at(-1)! + 1; // after the last remaining entry
-    }
+    const insertAt = insertIndexAmongEntries(lines, isEntryLine, toIndex);
     lines.splice(insertAt, 0, ...block);
     return lines.join('');
   });

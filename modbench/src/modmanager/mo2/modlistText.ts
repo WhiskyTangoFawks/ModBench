@@ -11,12 +11,9 @@
 // BOM, and every unmodelled line survive untouched.
 
 import type { ModlistEntry } from '../model';
-import { lineContent, lineRanges } from './lineScan';
+import { detectEol, insertIndexAmongEntries, lineContent, lineRanges, splitLinesKeepEol, stripBom, withBomPreserved } from './lineScan';
 
 const SEPARATOR_SUFFIX = '_separator';
-const BOM = '\uFEFF';
-
-const stripBom = (text: string): string => (text.startsWith(BOM) ? text.slice(BOM.length) : text);
 
 /** Does `line` carry the entry `name`, enabled or disabled? `line` may be a raw
  *  line (with or without trailing EOL) or an already-EOL-stripped slice —
@@ -26,16 +23,6 @@ const stripBom = (text: string): string => (text.startsWith(BOM) ? text.slice(BO
  *  know *which* state matched (e.g. `setEnabledInText`) read that separately. */
 const matchesModLine = (line: string, name: string): boolean =>
   lineContent(line) === '+' + name || lineContent(line) === '-' + name;
-
-/** The BOM is a whole-file property (always at absolute position 0), never a
- *  line's. Every surgical edit strips it up front, edits the bomless text
- *  with the (BOM-unaware) helpers below, then re-prepends it — so the BOM
- *  stays pinned to position 0 even when the line that carried it is edited,
- *  moved, or removed. */
-function withBomPreserved(text: string, edit: (bomless: string) => string): string {
-  if (!text.startsWith(BOM)) return edit(text);
-  return BOM + edit(stripBom(text));
-}
 
 /** Parse modlist.txt into the ordered model view (file order; top = winning end).
  *  Only +/- mod and separator lines are surfaced; comment/*-prefixed/blank
@@ -76,10 +63,6 @@ export function setEnabledInText(text: string, modName: string, enabled: boolean
   });
 }
 
-/** Lines each INCLUDING their trailing EOL (last may lack one); join('') is exact. */
-const splitLinesKeepEol = (text: string): string[] =>
-  [...lineRanges(text)].map((r) => text.slice(r.start, r.end));
-
 const isEntryLine = (line: string): boolean => {
   const c = lineContent(line)[0];
   return c === '+' || c === '-';
@@ -89,9 +72,6 @@ const isSeparatorLine = (line: string): boolean => {
   const c = lineContent(line);
   return (c.startsWith('+') || c.startsWith('-')) && c.endsWith(SEPARATOR_SUFFIX);
 };
-
-/** Detect file EOL (CRLF if present, else LF). */
-const detectEol = (text: string): string => (text.includes('\r\n') ? '\r\n' : '\n');
 
 /** Insert a new enabled separator line after the `afterIndex`-th entry (0-based).
  *  Out-of-range afterIndex clamps to the last entry position. */
@@ -270,16 +250,7 @@ export function moveSeparatorBlockInText(
     const block = lines.splice(blockStart, sepIdx - blockStart + 1);
 
     // Insert at toIndex among remaining entry lines
-    const entryLineIdx = [...lines.keys()].filter((i) => isEntryLine(lines[i]));
-    const clamped = Math.max(0, Math.min(toIndex, entryLineIdx.length));
-    let insertAt: number;
-    if (clamped < entryLineIdx.length) {
-      insertAt = entryLineIdx[clamped];
-    } else if (entryLineIdx.length === 0) {
-      insertAt = lines.length;
-    } else {
-      insertAt = entryLineIdx.at(-1)! + 1;
-    }
+    const insertAt = insertIndexAmongEntries(lines, isEntryLine, toIndex);
     lines.splice(insertAt, 0, ...block);
     return lines.join('');
   });
@@ -296,18 +267,7 @@ export function moveModInText(text: string, modName: string, toIndex: number): s
     if (srcLine === -1) throw new Error(`Mod not found in modlist: ${modName}`);
 
     const [moved] = lines.splice(srcLine, 1);
-    const entryLineIdx = [...lines.keys()].filter((i) => isEntryLine(lines[i]));
-
-    const clamped = Math.max(0, Math.min(toIndex, entryLineIdx.length));
-    const lastEntry = entryLineIdx.at(-1);
-    let insertAt: number;
-    if (clamped < entryLineIdx.length) {
-      insertAt = entryLineIdx[clamped]; // before the entry currently at that slot
-    } else if (lastEntry === undefined) {
-      insertAt = lines.length; // no entries at all
-    } else {
-      insertAt = lastEntry + 1; // after the last entry, before any trailing * block
-    }
+    const insertAt = insertIndexAmongEntries(lines, isEntryLine, toIndex);
     lines.splice(insertAt, 0, moved);
     return lines.join('');
   });
