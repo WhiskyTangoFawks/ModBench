@@ -13,6 +13,19 @@ namespace MEditService.Core.Queries;
 // MasterIssues (ADR-0037): this plugin's own declared masters that aren't resolvable in the
 // load order — never a transitive/cascaded fact about a master's own masters. Empty, never null, for
 // a plugin whose masters all resolved. See MasterResolution.Classify.
+// #570: one Kind B diagnosis on a held plugin's binary, as the session-load scan found it.
+// Text is PluginDiagnosis.Describe()'s exact refusal fragment (#569) — the Problems panel and the
+// Track refusal share one vocabulary by construction. Anchor/DefectClass/Tail ride separately so
+// the frontend can decorate rows and (later) route a repair gesture without re-parsing prose.
+public record PluginDiagnosisReport(
+    string Plugin,
+    string Origin,
+    string? Anchor,
+    string DefectClass,
+    string? Tail,
+    string Message,
+    string Text);
+
 public record PluginResponse(
     string Name,
     string Path,

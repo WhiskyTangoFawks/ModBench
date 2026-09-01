@@ -604,6 +604,7 @@ export function publishCompileDiagnostics(collection: vscode.DiagnosticCollectio
   for (const [fsPath, list] of byUri) collection.set(vscode.Uri.file(fsPath), list);
 }
 
+
 export const RECORD_PANEL_KEY = '__record_view__';
 // The temp directory every extended-editor tab writes under —
 // load order-static (the same value every panel gets), so it lives at module scope rather than in

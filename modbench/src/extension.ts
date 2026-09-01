@@ -45,6 +45,7 @@ import { onPluginCheckboxChanged } from './pluginCheckboxHandler';
 import { registerEditorCommands, registerRecordLifecycleCommands, makeResolveOriginOrReport, runCopyRecordCommand, makeMergeEditorOpener, compileAndReport, reportCompileTargetError, registerHeldTrackedRepositories, refreshSourceControlFor, wireExternalChangePolling, type MinimalRepository } from './medit/editorCommands';
 import { reconcileModlistWithModsDir } from './modmanager/startupModlistReconcile';
 import { say, exitToLoadout, clearTreeWhenBackendDies, refreshMatchingPlugins } from './loadoutTeardown';
+import { publishLoadDiagnoses, groupDiagnosesByPlugin } from './medit/loadDiagnostics';
 import { registerModInstallCommands, registerModContextCommands, registerSeparatorCommands, registerOverwriteView, registerModsAutoRegisterWatcher, registerNotMo2InstanceWelcome, createModListView, registerDownloadsView, isStandaloneDeployment, registerDeploymentModeContext, registerDeployCommands, registerLaunchCommand, registerModListCoreCommands } from './modmanager/modManagementCommands';
 import { onModCheckboxChanged } from './modmanager/modCheckboxHandler';
 import { meditConfig, makeDetectPaths, setMo2InstanceContext } from './workspaceConfig';
@@ -84,6 +85,10 @@ interface ExtensionSession {
    *  lens's active SQL, and the readout) — built by `makeSetFilterActive` alongside where this
    *  is assigned, exactly once. */
   setFilterActive?: ReturnType<typeof makeSetFilterActive>;
+  /** #570: fetch the session-load Kind B scan and publish it (Problems panel + tree
+   *  decoration). Assigned in activate() where the repository, the diagnostic collection and the
+   *  instance root all exist; called by applyLoadOrderToTree after every reconcile's hand-off. */
+  refreshDiagnoses?: () => void;
 }
 
 
@@ -222,6 +227,10 @@ export function activate(context: vscode.ExtensionContext) {
   // current per compile (publishCompileDiagnostics replaces a mod's own entries wholesale each run).
   const compileDiagnostics = vscode.languages.createDiagnosticCollection('modbench-compile');
   context.subscriptions.push(compileDiagnostics);
+  // #570: the session-load Kind B scan's own collection — a sibling of the compile one,
+  // targeting plugin binaries (pre-Track), replaced wholesale per scan (publishLoadDiagnoses).
+  const loadDiagnostics = vscode.languages.createDiagnosticCollection('modbench-diagnosis');
+  context.subscriptions.push(loadDiagnostics);
   session.backendManager = createBackendManager(port, outputChannel, statusBarItem);
 
   const client = createApiClient(port, createUnlimitedFetch());
@@ -291,6 +300,19 @@ export function activate(context: vscode.ExtensionContext) {
     ),
   );
   const { modListProvider, downloadsProvider, pluginListProvider, modlistSource, instanceRoot, enterEditing } = registerLoadoutSurfaces(session, { context, outputChannel, controller, recordBrowser: treeProvider, heldPluginFiles: heldPluginFilesFrom(repository), showCrashRepairOffers });
+  // #570: ADR-0026 background tier — the scan is advisory, so a blip logs and retries next
+  // reconcile, never toasts. Fire-and-forget: the tree hand-off must not wait on a
+  // whole-load-order file scan.
+  session.refreshDiagnoses = () => {
+    // No instance root means no MO2 workspace — nothing a diagnosis could point at.
+    if (instanceRoot === undefined) return;
+    void repository.getDiagnoses().then((reports) => {
+      publishLoadDiagnoses(loadDiagnostics, instanceRoot, reports);
+      session.pluginsTree?.setDiagnoses(groupDiagnosesByPlugin(reports));
+    }).catch((err: unknown) => {
+      outputChannel.warn(`[extension] the malformed-plugin scan could not be read: ${err instanceof Error ? err.message : String(err)}`);
+    });
+  };
   wireExternalChangePolling(repository, controller, outputChannel,
     (cb) => session.backendManager!.on('status', cb), () => session.backendManager!.isHealthy);
   context.subscriptions.push(
@@ -1163,6 +1185,9 @@ async function applyLoadOrderToTree(
     // The same read-only set, to the record rows — theirs is contextValue (Remove
     // hidden), the plugin rows' is the tooltip note.
     session.recordBrowserProvider?.setImmutablePlugins(held.readOnly);
+    // #570: every reconcile re-runs the malformed-plugin scan — setLoadOrder above just cleared
+    // the previous scan's decorations, and this brings the new answer when it lands.
+    session.refreshDiagnoses?.();
   } catch (err) {
     // Leaving every row a leaf is a safe *render*, but it is not an honest one: the reconcile
     // did land, so the tree would be telling the user editing is unavailable when it is

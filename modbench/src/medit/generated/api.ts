@@ -85,6 +85,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/plugins/diagnoses": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["GetPluginDiagnoses"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/plugins/{plugin}/record-types": {
         parameters: {
             query?: never;
@@ -798,6 +814,15 @@ export interface components {
             baseFormKey?: string | null;
             recordType: string;
         };
+        PluginDiagnosisReport: {
+            plugin: string;
+            origin: string;
+            anchor?: string | null;
+            defectClass: string;
+            tail?: string | null;
+            message: string;
+            text: string;
+        };
         PluginLoadFailure: {
             name: string;
             reason: string;
@@ -1269,6 +1294,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PluginResponse"][];
+                };
+            };
+        };
+    };
+    GetPluginDiagnoses: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PluginDiagnosisReport"][];
                 };
             };
         };

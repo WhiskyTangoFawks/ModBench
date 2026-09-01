@@ -75,6 +75,7 @@ try
     builder.Services.AddSingleton<IModImporter, DefaultModImporter>();
     builder.Services.AddSingleton<ILoadOrderMirror, LoadOrderMirror>();
     builder.Services.AddSingleton<IRecordQueryService, RecordQueryService>();
+    builder.Services.AddSingleton<MalformedPluginQueryService>();
     builder.Services.AddSingleton<IWorldspaceQueryService, WorldspaceQueryService>();
     builder.Services.AddSingleton<ContainerChildQueryService>();
     builder.Services.AddSingleton<RecordTextCodec>();

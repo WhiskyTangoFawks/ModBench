@@ -185,8 +185,24 @@ export class PluginsTreeComposite<TRow, TChild> implements vscode.TreeDataProvid
       item.tooltip = typeof item.tooltip === 'string' ? `${item.tooltip}\n${note}` : note;
     } else {
       const issues = file !== undefined ? (this.masterIssues?.get(file) ?? []) : [];
-      if (issues.length > 0) this.applyMasterIssueDecoration(item, row, issues);
+      if (issues.length > 0) {
+        this.applyMasterIssueDecoration(item, row, issues);
+        return;
+      }
+      // #570: warning tier, below the two error decorations above — a Malformed plugin still
+      // loads and plays; the badge says "look", not "broken".
+      const texts = file !== undefined ? (this.diagnoses?.get(file) ?? []) : [];
+      if (texts.length > 0) this.applyDiagnosisDecoration(item, texts);
     }
+  }
+
+  /** #570: the Kind B diagnosis badge. Text lines are `PluginDiagnosisReport.text` verbatim —
+   *  the same wording the Track refusal and the Problems panel carry, one vocabulary. */
+  private applyDiagnosisDecoration(item: vscode.TreeItem, texts: string[]): void {
+    item.iconPath = new vscode.ThemeIcon('warning', new vscode.ThemeColor('problemsWarningIcon.foreground'));
+    item.description = texts.length === 1 ? '⚠ Malformed plugin' : `⚠ ${texts.length} malformed-plugin diagnoses`;
+    const note = texts.join('\n');
+    item.tooltip = typeof item.tooltip === 'string' ? `${item.tooltip}\n${note}` : note;
   }
 
   /** One decoration, not two that can disagree. A master name the backend also
@@ -263,6 +279,7 @@ export class PluginsTreeComposite<TRow, TChild> implements vscode.TreeDataProvid
   private readOnlyFiles?: Set<string>;
   private masterIssues?: Map<string, MasterIssue[]>;
   private loadFailures?: Map<string, string>;
+  private diagnoses?: Map<string, string[]>;
 
   /** The plugin files Editing's load order holds, or undefined when it holds none, plus
    *  (ADR-0035) the subset that's read-only for editing — Editing's "Immutable plugin"
@@ -292,6 +309,19 @@ export class PluginsTreeComposite<TRow, TChild> implements vscode.TreeDataProvid
     this.readOnlyFiles = pluginFiles && new Set([...readOnlyFiles].map((f) => f.toLowerCase()));
     this.masterIssues = pluginFiles && new Map([...masterIssues].map(([name, issues]) => [name.toLowerCase(), issues]));
     this.loadFailures = pluginFiles && new Map([...loadFailures].map(([name, reason]) => [name.toLowerCase(), reason]));
+    // #570: a reconcile invalidates the previous scan's diagnoses — they describe binaries the
+    // load order may no longer hold — so they clear here and return via setDiagnoses when the
+    // new scan lands. Clearing the load order (mEdit closed, backend gone) clears them with it.
+    this.diagnoses = undefined;
+    this.emitter.fire(undefined);
+  }
+
+  /** #570: the session-load Kind B scan's answer — plugin filename → each diagnosis's full
+   *  refusal-worded text (`PluginDiagnosisReport.text`). A separate setter from setLoadOrder
+   *  because it arrives from a separate, later fetch; it cannot drift past the load order it
+   *  describes because every setLoadOrder clears it (see there). */
+  setDiagnoses(diagnoses: Map<string, string[]>): void {
+    this.diagnoses = new Map([...diagnoses].map(([name, texts]) => [name.toLowerCase(), texts]));
     this.emitter.fire(undefined);
   }
 

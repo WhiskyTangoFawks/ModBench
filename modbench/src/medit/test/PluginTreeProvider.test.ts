@@ -84,6 +84,7 @@ function makeRepository(overrides: Partial<{
     peekNextFreeFormKey: vi.fn(),
     // The tree provider never copies either — same "whole surface, unused here" note.
     getRecordOverridePlugins: vi.fn(),
+    getDiagnoses: vi.fn().mockResolvedValue([]),
   };
 }
 
