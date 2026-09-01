@@ -16,6 +16,7 @@ vi.mock('vscode', () => ({
 
 import { DownloadsProvider, DownloadNode, type DownloadsNode } from './DownloadsProvider';
 import type { DownloadRow } from './mo2/downloads';
+import { ErrorNode } from './ErrorNode';
 
 /** Archive filenames among a getChildren() result, ignoring any ErrorNode — the happy-path
  *  tests below only ever expect DownloadNodes; the error-path tests further down assert on
@@ -367,7 +368,10 @@ describe('DownloadsProvider', () => {
       const children = await provider.getChildren();
 
       expect(children).toHaveLength(1);
-      expect((children[0] as unknown as { kind: string }).kind).toBe('error');
+      expect(children[0]).toBeInstanceOf(ErrorNode);
+      // The exact Node fs error prose isn't ours to pin (varies by Node version/platform); the
+      // error code is the portable part (see this describe block's own comment above).
+      expect((children[0] as ErrorNode).tooltip).toContain('ENOTDIR');
       expect(log).toHaveBeenCalledWith(expect.stringContaining('scanning downloads/ failed'));
     });
 
