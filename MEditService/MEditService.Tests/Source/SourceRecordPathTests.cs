@@ -1,3 +1,4 @@
+using MEditService.Core.Records;
 using MEditService.Core.Serialization;
 using MEditService.Core.Source;
 using Mutagen.Bethesda;
@@ -113,6 +114,8 @@ public sealed class SourceRecordPathTests
     [InlineData("source/Vendor.esp/Cells/GroupRecordData.json")]
     // A folder this game's schema has no group for at all.
     [InlineData("source/Vendor.esp/NotARealFolder/000800.json")]
+    // Three segments but not literally RecordData.json — must not be mistaken for the header (#661).
+    [InlineData("source/Vendor.esp/NotRecordData.json")]
     public void TryParse_MalformedOrUnmappedPaths_FailsCleanly(string relativePath)
     {
         // Malformed input must fail outright, not return a *wrong* parse — a
@@ -144,5 +147,20 @@ public sealed class SourceRecordPathTests
 
         Assert.False(ok, "...but that folder is shared with GlobalBool/GlobalInt/GlobalShort, so it must not resolve.");
         Assert.Null(identity);
+    }
+
+    /// <summary>#661: the header is a source unit too — the tree's root <c>RecordData.json</c>
+    /// (three segments: <c>source/&lt;plugin&gt;/RecordData.json</c>, one shallower than a flat
+    /// record's own four) now identifies as <see cref="HeaderIndexer.RecordType"/> rather than
+    /// failing closed.</summary>
+    [Fact]
+    public void TryParse_ForTheRootRecordDataJson_ResolvesTheHeaderIdentity()
+    {
+        var ok = SourceRecordPath.TryParse(
+            Path.Combine("source", "Vendor.esp", "RecordData.json"), Release, out var identity);
+
+        Assert.True(ok);
+        Assert.Equal("Vendor.esp", identity.PluginFileName);
+        Assert.Equal(HeaderIndexer.RecordType, identity.RecordType);
     }
 }

@@ -1,3 +1,4 @@
+using MEditService.Core.Records;
 using MEditService.Core.Serialization;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
@@ -38,8 +39,10 @@ internal sealed record SourceRecordIdentity(string PluginFileName, string Record
 /// XY nesting ahead of it for Cell/Worldspace) instead of a flat file — reading and writing that
 /// structure is <see cref="SourceUnitResolver"/>'s job, not this helper's.
 /// <see cref="For"/> refuses (a named exception, never a silently wrong flat path) for any record type
-/// that resolves to one of those three or to no top-level group at all; <see cref="TryParse"/> simply
-/// answers false for any path deeper or shallower than the flat shape.</para>
+/// that resolves to one of those three or to no top-level group at all; <see cref="TryParse"/> answers
+/// false for any container path (deeper than the flat shape) — the one path shallower than it, the
+/// root <c>RecordData.json</c>, is the header's own source unit (#661) and <see cref="TryParse"/>
+/// recognises it on purpose rather than folding it into this refusal.</para>
 ///
 /// <para><b>The folder segment is the whole-mod door's own group-property name</b> (<c>"Npcs"</c>,
 /// <c>"Weapons"</c>) — traced to <c>FolderPerRecordGroupFieldGenerator</c>/<c>GroupParallelHelper</c>
@@ -127,14 +130,31 @@ internal static class SourceRecordPath
     /// <summary>Recovers a flat record's plugin/type identity straight from its own path text — no
     /// JSON parse, no git read, matching <see cref="For"/>'s own flat shape exactly (four segments:
     /// <c>source/&lt;plugin&gt;/&lt;GroupFolder&gt;/&lt;file&gt;.json</c>). Fails closed (returns
-    /// <see langword="false"/>) on anything not shaped like a path a flat record could produce —
-    /// including every container path (<c>Cells/&lt;b&gt;/&lt;sb&gt;/&lt;name&gt;/RecordData.json</c>,
-    /// <c>Quests/&lt;name&gt;/RecordData.json</c>) and the root <c>RecordData.json</c> header file —
-    /// so a caller walking the whole tree never silently misreads one of those as a flat record.</summary>
+    /// <see langword="false"/>) on anything not shaped like a path a flat record or the header could
+    /// produce — every container path (<c>Cells/&lt;b&gt;/&lt;sb&gt;/&lt;name&gt;/RecordData.json</c>,
+    /// <c>Quests/&lt;name&gt;/RecordData.json</c>) included — so a caller walking the whole tree never
+    /// silently misreads one of those as a flat record.
+    ///
+    /// <para><b>The root <c>RecordData.json</c> is the header's own source unit</b> (#661) — one
+    /// segment shallower than a flat record's own shape (<c>source/&lt;plugin&gt;/RecordData.json</c>,
+    /// no group folder, because the header sits above every group), so it is recognised before the
+    /// four-segment check below ever runs rather than being folded into it.
+    /// <see cref="HeaderIndexer.RecordType"/> is the identity's <c>record_type</c>, matching what
+    /// <see cref="HeaderIndexer.Index"/> already stamps on the header's <c>records</c> row.</para></summary>
     internal static bool TryParse(string relativePath, GameRelease gameRelease, out SourceRecordIdentity identity)
     {
         identity = null!;
         var segments = relativePath.Split(Path.DirectorySeparatorChar, StringSplitOptions.RemoveEmptyEntries);
+
+        if (segments.Length == 3
+            && segments[0].Equals(RootFolderName, StringComparison.Ordinal)
+            && segments[1].Length > 0
+            && segments[2].Equals(RecordDataFileName, StringComparison.Ordinal))
+        {
+            identity = new SourceRecordIdentity(segments[1], HeaderIndexer.RecordType);
+            return true;
+        }
+
         if (segments.Length != 4) return false;
 
         var (rootSegment, pluginFileName, folder, fileSegment) = (segments[0], segments[1], segments[2], segments[3]);
