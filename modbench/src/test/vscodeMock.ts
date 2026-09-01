@@ -11,10 +11,11 @@
 // which is the dedup this file deliberately does not do.
 //
 // Same pattern already established by modmanager/test/fakeVscodeWatcher.ts for the watcher
-// family; this one lives at the composition root (src/test/, home to PluginsTreeComposite.ts,
-// nameFilter.ts and LoadoutHeaderProvider.ts and their tests) because it is imported by both
-// modmanager/ and medit/ test files and carries no domain vocabulary of either context — nothing
-// here says "mod" or "record".
+// family; this one lives at src/test/, alongside the tests for the composition-root modules
+// that live in modbench/src/ itself (PluginsTreeComposite.ts, nameFilter.ts,
+// LoadoutHeaderProvider.ts) — src/test/ is where their shared test scaffolding belongs, because
+// it is imported by both modmanager/ and medit/ test files and carries no domain vocabulary of
+// either context — nothing here says "mod" or "record".
 
 // Deliberately declares only the two constructor-assigned fields. The optional VS Code
 // TreeItem properties (description, tooltip, contextValue, iconPath, resourceUri, command,
