@@ -112,7 +112,7 @@ public sealed class DuplicateFilenameLoadOrderApiTests(LoadedApiFixture<TestPlug
     }
 
     [Fact]
-    public async Task LosingCopy_IsItsOwnCompareColumn()
+    public async Task LosingCopy_IsNotACompareColumn()
     {
         using var fx = BuildTwoCopies();
         await PutBothCopies(fx);
@@ -122,30 +122,16 @@ public sealed class DuplicateFilenameLoadOrderApiTests(LoadedApiFixture<TestPlug
         var columns = compare.GetProperty("overrides").EnumerateArray()
             .ToDictionary(o => o.GetProperty("origin").GetString()!, o => o);
 
-        // The two copies are one column each, carrying their own record — the delta comparison
-        // under test. GetCompare builds its masters and participation
-        // lookups keyed by bare filename, so a second copy of one filename makes them ambiguous
-        // (in fact a duplicate-key throw) rather than merely mis-keyed.
-        Assert.Equal("FromModA", columns["ModA"].GetProperty("editorId").GetString());
-        Assert.Equal("FromModB", columns["ModB"].GetProperty("editorId").GetString());
-    }
-
-    [Fact]
-    public async Task LosingCopy_NeverWinsAndDoesNotConflictWithTheCopyThatShadowsIt()
-    {
-        using var fx = BuildTwoCopies();
-        await PutBothCopies(fx);
-
-        var compare = await _client.GetFromJsonAsync<JsonElement>(
-            $"/records/{Uri.EscapeDataString("000800:Shared.esp")}/compare");
-        var columns = compare.GetProperty("overrides").EnumerateArray()
-            .ToDictionary(o => o.GetProperty("origin").GetString()!, o => o);
-
-        // ADR-0044's derived participation is what makes registering every copy safe: a copy the
-        // game does not load can never take the winner, and two copies differing in EditorID must
-        // not read as a conflict between them.
-        Assert.True(columns["ModA"].GetProperty("isWinner").GetBoolean());
-        Assert.False(columns["ModB"].GetProperty("isWinner").GetBoolean());
+        // ADR-0036 (amended, #618 follow-up): the grid is xEdit parity — the in-game resolution
+        // stack. The game loads exactly one file named Shared.esp, so the winning copy is the
+        // one column; the discarded file stays indexed and browsable (the sibling tests above)
+        // but never columns. Its Winning flag still travels the wire keyed by compound identity —
+        // this is also the guard that a same-filename pair keeps GetCompare's ColumnKey-keyed
+        // lookups unambiguous rather than a duplicate-key throw.
+        var column = Assert.Single(columns);
+        Assert.Equal("ModA", column.Key);
+        Assert.Equal("FromModA", column.Value.GetProperty("editorId").GetString());
+        Assert.True(column.Value.GetProperty("isWinner").GetBoolean());
         // OnlyOne, not NoConflict: classification sees a single participating copy, so this record
         // is exactly as unconflicted as a single-copy record — which is the whole claim, that a
         // losing copy changes no classification.
@@ -217,7 +203,8 @@ public sealed class DuplicateFilenameLoadOrderApiTests(LoadedApiFixture<TestPlug
         Assert.True(shadowed.GetProperty("isImmutable").GetBoolean());
         Assert.False(shadowed.GetProperty("participates").GetBoolean());
         Assert.False(shadowed.GetProperty("inLoadOrder").GetBoolean());
-        // It shares the shadowing copy's slot so the two render adjacent in the compare grid.
+        // It shares the winning copy's slot — the registration fact a future show-losing-copies
+        // toggle would render the pair adjacent from (the grid itself excludes it today).
         Assert.Equal(
             plugins.EnumerateArray().Single(p => p.GetProperty("origin").GetString() == "ModA").GetProperty("loadOrderIndex").GetInt32(),
             shadowed.GetProperty("loadOrderIndex").GetInt32());

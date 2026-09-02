@@ -14,21 +14,17 @@ export function toStr(v: unknown): string {
 // overrideMap. `plugin`/`origin` stay present on the overlay variant (mirroring
 // CompareOverride's own plugin+origin fields) only for display/decomposition, never parsed back
 // out of `key` itself.
-// ADR-0041: one column per override, though as of #618 the grid renders only the winning one
-// (below) — the override-stack view ADR-0019/ADR-0034 anticipate is deferred pending its own UX
-// design, not rejected. Kept as a discriminated shape (`kind: 'disk'`) even though there is
-// currently only one kind — DiffRow's own render loop branches on it.
+// ADR-0041/ADR-0019: one column per override — the record's full in-game resolution stack,
+// restored by the #618 follow-up (the collapse-to-winner over-reached the ruling; ADR-0036
+// amended: file-level losers are excluded by the backend before they reach this list).
+// Kept as a discriminated shape (`kind: 'disk'`) even though there is currently only one kind —
+// DiffRow's own render loop branches on it.
 export type Column = { kind: 'disk'; key: ColumnKey; override: CompareOverride };
 
-// #618: exactly one column — the winning override — never the full stack. Mirrors
-// RecordPanel.tsx's own title/extended-editor-label fallback (`overrides.find(o => o.isWinner) ??
-// overrides[0]`) rather than inventing a second one: a response can genuinely carry no
-// isWinner:true entry, and the grid still needs one column to render, not zero. `overrides` itself
-// stays full-stack on the wire and in every other consumer here (editableColumns,
-// collidingFilenames, the extended-editor override lookup) — only column rendering narrows.
+// xEdit's own layout: load order ascending, master leftmost, winner rightmost — the wire order
+// itself (GetOverrideStack's ORDER BY load_order_idx), trusted rather than re-sorted here.
 export function buildColumns(overrides: CompareOverride[]): Column[] {
-  const winner = overrides.find(o => o.isWinner) ?? overrides[0];
-  return winner ? [{ kind: 'disk' as const, key: columnKey(winner.plugin, winner.origin), override: winner }] : [];
+  return overrides.map(o => ({ kind: 'disk' as const, key: columnKey(o.plugin, o.origin), override: o }));
 }
 
 // The *reason* a column is read-only — `immutableSet` alone (RecordPanelClient.ts) says

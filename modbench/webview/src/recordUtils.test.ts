@@ -43,34 +43,29 @@ function makeOverride(plugin: string, extra: Partial<CompareOverride> = {}): Com
   };
 }
 
-// #618: the grid shows exactly one column — the winning override — never the full stack.
-// The override-stack view is deferred pending its own UX design; the wire response and every
-// other consumer of CompareResult.overrides (editableColumns, collidingFilenames, the
-// extended-editor override lookup) keep the full stack, only column rendering narrows here.
+// #618 follow-up: the grid is the record's full override stack again — one column per
+// CompareOverride, in the wire's own load order (master leftmost, winner rightmost — xEdit's
+// layout, guaranteed by GetOverrideStack's ORDER BY and trusted here, not re-sorted). The
+// backend already excludes file-level losers (ADR-0036 amended).
 describe('buildColumns', () => {
-  it('selects only the override flagged isWinner', () => {
-    const cols = buildColumns([makeOverride('Fallout4.esm'), makeOverride('MyMod.esp', { isWinner: true })]);
-    expect(cols).toHaveLength(1);
-    expect(cols[0].override.plugin).toBe('MyMod.esp');
+  it('returns one column per override, in response order', () => {
+    const cols = buildColumns([
+      makeOverride('Fallout4.esm', { loadOrderIndex: 0 }),
+      makeOverride('Patch.esp', { loadOrderIndex: 3 }),
+      makeOverride('MyMod.esp', { loadOrderIndex: 7, isWinner: true }),
+    ]);
+    expect(cols.map(c => c.override.plugin)).toEqual(['Fallout4.esm', 'Patch.esp', 'MyMod.esp']);
   });
 
-  // Mirrors RecordPanel.tsx's own title fallback (`overrides.find(o => o.isWinner) ??
-  // overrides[0]`) exactly — not a fallback invented here. A response can genuinely carry no
-  // isWinner:true entry (every fixture's makeOverride defaults isWinner: false), and the grid
-  // still needs one column to render rather than none.
-  it('falls back to the first override when none is flagged isWinner', () => {
-    const cols = buildColumns([makeOverride('Fallout4.esm'), makeOverride('MyMod.esp')]);
-    expect(cols).toHaveLength(1);
-    expect(cols[0].override.plugin).toBe('Fallout4.esm');
-  });
-
-  // The single-override case is mathematically identical to the old per-override mapping
-  // (find(isWinner) ?? overrides[0] over a length-1 array always returns that one element) — an
-  // unconflicted record's grid is unchanged in content, regardless of how isWinner is set.
-  it('returns that one column unchanged for a single-override response', () => {
-    const cols = buildColumns([makeOverride('Fallout4.esm')]);
-    expect(cols).toHaveLength(1);
-    expect(cols[0].override.plugin).toBe('Fallout4.esm');
+  // ADR-0036: two loaded copies sharing a filename are two columns with distinct keys — the
+  // compound (plugin, origin) identity is minted here, once, for every consumer.
+  it('keys same-filename columns by compound identity', () => {
+    const cols = buildColumns([
+      makeOverride('Shared.esp', { origin: 'ModA', loadOrderIndex: 1 }),
+      makeOverride('Shared.esp', { origin: 'ModB', loadOrderIndex: 1 }),
+    ]);
+    expect(cols).toHaveLength(2);
+    expect(new Set(cols.map(c => c.key)).size).toBe(2);
   });
 
   it('returns no columns for an empty override list', () => {

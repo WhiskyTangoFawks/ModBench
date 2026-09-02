@@ -536,10 +536,12 @@ describe('RecordPanel', () => {
 
   // #618: exactly one column — the winning override. The losing override's own value
   // (Fallout4.esm's "Original Name") never reaches the DOM at all; only the winner's does.
-  it('shows the field value from the winning override column only', async () => {
+  // #618 follow-up: the full stack renders — each override's own value in its own column,
+  // master leftmost, winner rightmost (xEdit parity).
+  it('shows each override\'s own field value in its own column', async () => {
     renderPanel(compareResult);
     await waitFor(() => expect(screen.getByText('Override Name')).toBeInTheDocument());
-    expect(screen.queryByText('Original Name')).not.toBeInTheDocument();
+    expect(screen.getByText('Original Name')).toBeInTheDocument();
   });
 
   // There is no edit mode. Editing affordances follow the column's plugin
@@ -588,18 +590,17 @@ describe('RecordPanel', () => {
 describe('RecordPanel — same-filename, different-origin columns (#272 AC5)', () => {
   afterEach(() => vi.unstubAllGlobals());
 
-  // #618: collidingFilenames is computed over the full override stack (never scoped down to
-  // the rendered column), so it still fires for the surviving winner even though the losing
-  // same-filename copy (ModA) is itself never rendered — origin-inline is what disambiguates the
-  // winner from an invisible collision, not from a second visible column (the old form of this
-  // test, deleted: two columns' independent collapse/expand no longer has a second column to
-  // exercise at all).
-  it('renders origin inline in the surviving column\'s header when a losing copy shares its filename', async () => {
+  // #618 follow-up: both copies are their own column again, disambiguated by inline origin
+  // (ADR-0036: filename in the header, origin inline only on collision). The display rule is
+  // response-driven — the backend today excludes a file-level loser from the response entirely
+  // (ADR-0036 amended), but whatever same-filename pair does arrive renders unambiguously.
+  it('renders origin inline in both columns\' headers when two copies share a filename', async () => {
     vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
     renderPanel(sameFilenameCompareResult, { plugins: sameFilenamePluginsResponse });
     await waitFor(() => expect(screen.getByText('Shared.esp (ModB)')).toBeInTheDocument());
-    expect(screen.queryByText('Shared.esp (ModA)')).not.toBeInTheDocument();
-    expect(screen.queryByText('FromA')).not.toBeInTheDocument();
+    expect(screen.getByText('Shared.esp (ModA)')).toBeInTheDocument();
+    expect(screen.getByText('FromA')).toBeInTheDocument();
+    expect(screen.getByText('FromB')).toBeInTheDocument();
     expect(screen.queryByText('Shared.esp')).not.toBeInTheDocument();
   });
 
@@ -759,26 +760,30 @@ describe('RecordPanel — flags cell editing through real message plumbing (#622
   // tracked/editable column.
   it('a flags row starts collapsed; expanding reveals enabled checkboxes and it re-collapses', async () => {
     renderPanel(flagsCompareResult, { plugins: flagsTrackedPluginsResponse });
-    await waitFor(() => expect(screen.getByText('A, B')).toBeInTheDocument()); // compact summary, value 3
+    // compact summary, value 3, once per column
+    await waitFor(() => expect(screen.getAllByText('A, B')).toHaveLength(2));
     expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: '▶' }));
-    const boxes = screen.getAllByRole('checkbox');
-    expect(boxes).toHaveLength(2); // one rendered column, 2 flags
-    for (const box of boxes) expect(box).toBeEnabled();
+    // #618 follow-up: both columns render, so the immutable master column's flags expand too —
+    // its checkboxes disabled, only the tracked/editable column's two enabled.
+    const enabled = screen.getAllByRole('checkbox').filter(b => !(b as HTMLInputElement).disabled);
+    expect(enabled).toHaveLength(2);
 
     fireEvent.click(screen.getByRole('button', { name: '▼' }));
     expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
-    expect(screen.getByText('A, B')).toBeInTheDocument();
+    expect(screen.getAllByText('A, B')).toHaveLength(2);
   });
 
   it('toggling a flag posts EDIT_FIELD with the toggled bitmask — working-tree dirt', async () => {
     renderPanel(flagsCompareResult, { plugins: flagsTrackedPluginsResponse });
-    await waitFor(() => expect(screen.getByText('A, B')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getAllByText('A, B')).toHaveLength(2));
     fireEvent.click(screen.getByRole('button', { name: '▶' }));
     vi.mocked(vscode.postMessage).mockClear();
 
-    fireEvent.click(screen.getAllByRole('checkbox')[0]); // uncheck A (bit 1): 3 ^ 1 = 2
+    // uncheck A (bit 1) in the tracked column: 3 ^ 1 = 2 — the first *enabled* box, since the
+    // master column's disabled checkboxes render first in column order.
+    fireEvent.click(screen.getAllByRole('checkbox').filter(b => !(b as HTMLInputElement).disabled)[0]);
 
     expect(vscode.postMessage).toHaveBeenCalledWith(expect.objectContaining({
       type: WEBVIEW_TO_EXTENSION.EDIT_FIELD,
@@ -979,15 +984,15 @@ describe('RecordPanel — struct sub-rows', () => {
     expect(screen.getByText('Y')).toBeInTheDocument();
   });
 
-  // #618: only the winning override's own sub-field value (X: 15) reaches the DOM — the
-  // losing override's (X: 10) never does, since its whole column is never rendered.
-  it('child row for X shows the winning override\'s own sub-field value', async () => {
+  // #618 follow-up: each column's own sub-field value renders — the master's X: 10 beside
+  // the override's X: 15, the xEdit delta the struct expansion exists to show.
+  it('child row for X shows each override\'s own sub-field value', async () => {
     renderPanel(structCompareResult);
     await waitFor(() => screen.getByText('▶'));
     fireEvent.click(screen.getByText('▶'));
     await waitFor(() => screen.getByText('X'));
     expect(screen.getByText('15')).toBeInTheDocument();
-    expect(screen.queryByText('10')).not.toBeInTheDocument();
+    expect(screen.getByText('10')).toBeInTheDocument();
   });
 
   it('toggle collapses child rows when clicked again', async () => {

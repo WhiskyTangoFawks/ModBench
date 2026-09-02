@@ -58,17 +58,16 @@ in, produces broken plugins.
 
 ## Solution
 
-> **Current behaviour (#618): the grid renders exactly one column — the winning override.**
-> The multi-column description throughout this document is the **designed** shape, not the shipped
-> one. On a maintainer ruling, the override-stack columns were removed pending a proper UX design
-> pass; [ADR-0019](../adr/0019-xedit-unified-tree-model-for-compare-grid.md) and
-> [ADR-0034](../adr/0034-xedit-is-the-ux-reference-for-the-record-editor.md) stand and remain the
-> reference for that work. Nothing structural was removed to achieve this: `CompareResult.overrides`
-> is still full-stack on the wire, `DiffRow` is still an N-column renderer, and the reduction is a
-> single filter at the column-building seam (`buildColumns`), so restoring the full grid is
-> re-widening that filter rather than rebuilding the view. Read every "one column per plugin"
-> statement below as describing that deferred design. Where a statement is about *how a column
-> behaves*, it still holds — of the one column that renders.
+> **Current behaviour (#618 follow-up, 2026-09-02): the grid renders the full override stack.**
+> #618's collapse-to-winner over-reached its ruling and was reverted — the multi-column
+> description throughout this document is the shipped shape again, per
+> [ADR-0019](../adr/0019-xedit-unified-tree-model-for-compare-grid.md) and
+> [ADR-0034](../adr/0034-xedit-is-the-ux-reference-for-the-record-editor.md). The one narrowing
+> that remains is [ADR-0036](../adr/0036-plugin-identity-is-origin-plus-filename.md)'s amended
+> file-level-loser exclusion: a losing physical copy of a duplicate-named plugin file
+> (`Registration.Winning` false — never the broader `Participates`) is excluded backend-side at
+> `RecordQueryService.GetCompare`, the single site a future show-losing-copies toggle would
+> parameterize.
 
 An editor-tab webview presenting a **compare grid**: one row per field, one column per plugin
 containing the record, in load order — master on the left, winning override on the right — with
@@ -625,12 +624,8 @@ gesture — Sim Settlements 2 is a real-world example on Fallout 4.
   `OnlyOne`, since it exists in only the one plugin that added it).
 - **Column dimming, not hiding (AC3).** Unlike xEdit's own default of hiding a Partial Form
   record from conflict display entirely, the compare grid shows the column — mEdit's own
-  never-hide-data posture — but visually marks it. **#618 narrows the reach of that posture
-  without reversing it:** while the grid renders only the winning override, a Partial Form column
-  is visible precisely when it is the winner, and is otherwise not rendered at all — along with
-  every other non-winning column. The never-hide-data commitment is about not suppressing a column
-  *within the stack the grid shows*; which columns the grid shows is the deferred question ADR-0019
-  and ADR-0034 govern. The dimming below applies whenever such a column does render: the same
+  never-hide-data posture — but visually marks it. The dimming below applies to every rendered
+  Partial Form column: the same
   `DIMMED_OPACITY` treatment a
   not-in-load-order column already gets, both at the column header and on every one of that
   column's own cells (read straight off `CompareOverride.IsPartialForm`, not a separately-computed

@@ -2,11 +2,11 @@ import { describe, expect, it } from 'vitest';
 import { buildColumns } from '../../../webview/src/recordUtils';
 import type { RecordDetail } from '../../../webview/src/types';
 
-function makeOverride(plugin: string): RecordDetail {
+function makeOverride(plugin: string, loadOrderIndex = 0): RecordDetail {
   return {
     formKey: 'Fallout4.esm:000001',
     plugin,
-    loadOrderIndex: 0,
+    loadOrderIndex,
     isWinner: false,
     editorId: null,
     fields: [],
@@ -14,14 +14,14 @@ function makeOverride(plugin: string): RecordDetail {
 }
 
 describe('buildColumns', () => {
-  // #618: exactly one column — the winning override — never one per override. Mirrors
+  // #618 follow-up: one column per override, in the wire's own load order. Mirrors
   // recordUtils.test.ts's own thorough coverage of this seam; this file only pins the extension
   // host's own import path into it stays wired.
-  it('builds a single disk column for the winning override', () => {
-    const cols = buildColumns([makeOverride('A'), { ...makeOverride('B'), isWinner: true }]);
-    expect(cols).toHaveLength(1);
-    expect(cols[0].kind).toBe('disk');
-    expect(cols[0].override.plugin).toBe('B');
+  it('builds one disk column per override', () => {
+    const cols = buildColumns([makeOverride('A', 0), { ...makeOverride('B', 5), isWinner: true }]);
+    expect(cols).toHaveLength(2);
+    expect(cols.map(c => c.kind)).toEqual(['disk', 'disk']);
+    expect(cols.map(c => c.override.plugin)).toEqual(['A', 'B']);
   });
 
 });

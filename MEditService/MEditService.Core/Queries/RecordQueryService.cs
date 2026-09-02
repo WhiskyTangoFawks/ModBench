@@ -109,9 +109,20 @@ public sealed class RecordQueryService(
         var stack = reads.GetOverrideStack(formKey);
         if (stack == null) return null;
 
-        var committedOverrides = stack.Entries.Select(e => ToRecordDetail(e.Effective)).ToList();
-
         var heldPlugins = RequireLoadOrder().Plugins;
+        // ADR-0036 (amended, #618 follow-up): the compare grid is xEdit parity — the record's
+        // in-game resolution stack. A file-level loser (Registration.Winning false: another
+        // origin's same-named file is the one the game loads) is not a column; it stays indexed
+        // and browsable from the plugins tree. Winning alone, never Participates — a disabled or
+        // unlisted copy is a different axis and still columns. This is the one filter site a
+        // future show-losing-copies toggle would parameterize. Fail-open on a copy the load
+        // order doesn't hold, matching pluginParticipates' own absent-key default.
+        var pluginWinning = heldPlugins.ToDictionary(p => ColumnKey.Of(p.Name, p.Origin), p => p.Winning);
+        var committedOverrides = stack.Entries
+            .Where(e => pluginWinning.GetValueOrDefault(ColumnKey.Of(e.Plugin.Name, e.Plugin.Origin!), true))
+            .Select(e => ToRecordDetail(e.Effective))
+            .ToList();
+
         // ADR-0036: keyed by the compound column identity — with a second copy of one filename
         // loaded, a filename key is ambiguous, and ToDictionary throws outright.
         var pluginMasters = heldPlugins.ToDictionary(p => ColumnKey.Of(p.Name, p.Origin), p => p.Masters);
