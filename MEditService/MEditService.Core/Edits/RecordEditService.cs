@@ -1263,7 +1263,16 @@ public sealed class RecordEditService(
         var (index, modFolder, release, document, _) = target;
         if (RefuseIfHeader(document.RecordType) is { } headerRefusal) return headerRefusal;
 
-        var originatingPlugin = FormKey.Factory(formKey).ModKey.FileName.String;
+        // Canonicalised once, here, and used for every string comparison below. The caller's
+        // spelling reaches this method raw, and two of those comparisons are ordinal against text
+        // that is always canonical — the exclusion predicate below (against the index's own
+        // form_key) and ComputeReferencerRewrites' post-remap check (against serialized bytes). A
+        // differently-cased spelling would silently turn both into no-ops: the target back in the
+        // referencer list, and the remap-completeness guard never matching.
+        var parsedFormKey = FormKey.Factory(formKey);
+        formKey = parsedFormKey.ToString();
+
+        var originatingPlugin = parsedFormKey.ModKey.FileName.String;
         if (!originatingPlugin.Equals(plugin.Name, StringComparison.OrdinalIgnoreCase))
         {
             return RecordEditResult.Refused(
@@ -1407,10 +1416,7 @@ public sealed class RecordEditService(
     {
         rewrites = [];
         var reads = index.At(RecordRef.Effective);
-        var mapping = new Dictionary<FormKey, FormKey>
-        {
-            [FormKey.Factory(oldFormKey)] = FormKey.Factory(newFormKey),
-        };
+        var mapping = RenumberMapping(oldFormKey, newFormKey);
 
         var resolved = new List<(string FormKey, PluginKey Plugin, SourceUnit Unit)>();
         foreach (var (referencerFormKey, referencerPlugin) in referencers)
@@ -1453,18 +1459,9 @@ public sealed class RecordEditService(
 
             var owner = ReadRecordFromSource(_codec, logger, filePath, ownerDoc, release);
             ((IFormLinkContainer)owner).RemapLinks(mapping);
-            var ownerBody = Encoding.UTF8.GetString(
-                _codec.SerializeToBytesAsync(owner, release).GetAwaiter().GetResult());
-
-            if (ownerBody.Contains(oldFormKey, StringComparison.Ordinal))
-            {
-                return RecordEditResult.Refused(
-                    RecordEditRefusal.ReferenceRemapIncomplete,
-                    $"{unit.OwnerFormKey} in {referencerPlugin.Name} still carries {oldFormKey} after the typed " +
-                    "link remap, so renumbering it would leave that reference dangling. The known cause is a " +
-                    "script property holding an array of structs, which Mutagen's generated remap does not walk " +
-                    "(see upstream-mutagen-issue.md). Nothing was written.");
-            }
+            var ownerBody = SerializeToText(owner, release);
+            if (RefuseIfRemapIncomplete(owner, ownerDoc.RecordType, oldFormKey, referencerPlugin) is { } incomplete)
+                return incomplete;
 
             var changes = new List<(string FormKey, string? Body)> { (unit.OwnerFormKey, ownerBody) };
             foreach (var (embeddedFormKey, _, _) in group.Where(r => r.Unit.IsEmbedded))
@@ -1481,11 +1478,67 @@ public sealed class RecordEditService(
                         "not hold it. Nothing was written.");
                 }
 
-                changes.Add((embeddedFormKey, Encoding.UTF8.GetString(
-                    _codec.SerializeToBytesAsync(child, release).GetAwaiter().GetResult())));
+                // The owner's own walk never reaches a child's VMAD — an embedded referencer's
+                // struct-list link is its own record's, and has to be asked of the child directly.
+                var childDoc = reads.GetDocument(embeddedFormKey, referencerPlugin);
+                if (RefuseIfRemapIncomplete(
+                        child, childDoc?.RecordType ?? unit.OwnerRecordType, oldFormKey, referencerPlugin)
+                    is { } childIncomplete) return childIncomplete;
+
+                changes.Add((embeddedFormKey, SerializeToText(child, release)));
             }
 
             rewrites.Add(new ComputedRewrite(referencerPlugin, filePath, owner, changes));
+        }
+
+        return null;
+    }
+
+    /// <summary>The one-entry FormKey mapping both compute phases apply, built from the same pair
+    /// so the referencer pass and the target pass can never disagree about what is moving.</summary>
+    private static Dictionary<FormKey, FormKey> RenumberMapping(string oldFormKey, string newFormKey) =>
+        new() { [FormKey.Factory(oldFormKey)] = FormKey.Factory(newFormKey) };
+
+    /// <summary>A record's own source text, as the index will be told it.</summary>
+    private string SerializeToText(IMajorRecordGetter record, GameRelease release) =>
+        Encoding.UTF8.GetString(_codec.SerializeToBytesAsync(record, release).GetAwaiter().GetResult());
+
+    /// <summary>
+    /// The remap-completeness guard, applied to every record the cascade is about to write — the
+    /// referencers and the renumbered record itself alike. After the typed remap, no <i>link</i>
+    /// in <paramref name="record"/> should still point at the old FormKey; one that does is a link
+    /// Mutagen's generated <c>RemapLinks</c> did not move.
+    ///
+    /// <para>The known cause is the upstream gap in <c>upstream-mutagen-issue.md</c>:
+    /// <c>ScriptStructListProperty.RemapLinks</c> is generated base-only and never descends into its
+    /// own <c>Structs</c>, so a VMAD <c>ArrayOfStruct</c> property's Object members are left
+    /// pointing at the old FormKey. It applies to a self-link in the renumbered record just as much
+    /// as to a referencer's, which is why this is not the referencer pass's private business.
+    /// Delete this guard when the upstream fix ships.</para>
+    ///
+    /// <para><b>Asked of the reference index's own walker, not of the serialized text.</b>
+    /// <see cref="PluginIngest.CollectVmadRefsForRecord"/> is the same collector a fresh ingest
+    /// derives <c>form_references</c> with, and it walks struct-lists (<c>VmadCodec</c>) where the
+    /// generated remap does not — that asymmetry is the whole reason this can catch anything. A
+    /// textual "no occurrence of the old FormKey survives" check would be broader, but it cannot
+    /// tell a link from an EditorID, a string field, or a sibling record inside a container
+    /// document, and would refuse a perfectly good renumber for any of them. Precision here is not
+    /// a nicety: the record being renumbered may legitimately spell its own old FormKey in a string
+    /// field, and refusing that is refusing the gesture outright.</para>
+    /// </summary>
+    private static RecordEditResult? RefuseIfRemapIncomplete(
+        IMajorRecordGetter record, string recordType, string oldFormKey, PluginKey plugin)
+    {
+        var refs = new List<FormRef>();
+        PluginIngest.CollectVmadRefsForRecord(record, recordType, refs);
+        if (refs.FirstOrDefault(r => r.TargetFormKey == oldFormKey) is { TargetFormKey: not null } stale)
+        {
+            return RecordEditResult.Refused(
+                RecordEditRefusal.ReferenceRemapIncomplete,
+                $"{record.FormKey} in {plugin.Name} still links {oldFormKey} at {stale.FieldPath} after the " +
+                "typed link remap, so renumbering would leave that reference dangling. The cause is a script " +
+                "property holding an array of structs, which Mutagen's generated remap does not walk " +
+                "(see upstream-mutagen-issue.md). Nothing was written.");
         }
 
         return null;
@@ -1540,10 +1593,7 @@ public sealed class RecordEditService(
                 $"No source unit in {plugin.Name}'s tree holds {oldFormKey}. Nothing was written.");
         }
 
-        var mapping = new Dictionary<FormKey, FormKey>
-        {
-            [FormKey.Factory(oldFormKey)] = FormKey.Factory(newFormKey),
-        };
+        var mapping = RenumberMapping(oldFormKey, newFormKey);
 
         if (unit.IsEmbedded)
         {
@@ -1567,23 +1617,32 @@ public sealed class RecordEditService(
             // Remapped on the owner, not the child: a sibling embedded in the same document may hold
             // the self-link, and its own file is this same one.
             ((IFormLinkContainer)owner).RemapLinks(mapping);
+
+            // Guarded before the new FormKey is stamped on, so a refusal names the record the user
+            // asked about. The renumbered record's own self-link is remapped on this path and
+            // nowhere else — the referencer list excludes the target — so without this the one gap
+            // the guard exists for would pass silently here.
+            if (RefuseIfRemapIncomplete(owner, ownerDocument.RecordType, oldFormKey, plugin) is { } ownerIncomplete)
+                return ownerIncomplete;
+            if (RefuseIfRemapIncomplete(found.Child, document.RecordType, oldFormKey, plugin) is { } childIncomplete)
+                return childIncomplete;
+
             ((IMajorRecordInternal)found.Child).FormKey = FormKey.Factory(newFormKey);
 
             target = new ComputedTarget(
-                unit, document, owner,
-                Encoding.UTF8.GetString(_codec.SerializeToBytesAsync(owner, release).GetAwaiter().GetResult()),
-                Encoding.UTF8.GetString(_codec.SerializeToBytesAsync(found.Child, release).GetAwaiter().GetResult()));
+                unit, document, owner, SerializeToText(owner, release), SerializeToText(found.Child, release));
             return null;
         }
 
         var record = ReadRecordFromSource(_codec, logger, unit.FullPath, document, release);
         ((IFormLinkContainer)record).RemapLinks(mapping);
+
+        if (RefuseIfRemapIncomplete(record, document.RecordType, oldFormKey, plugin) is { } recordIncomplete)
+            return recordIncomplete;
+
         ((IMajorRecordInternal)record).FormKey = FormKey.Factory(newFormKey);
 
-        target = new ComputedTarget(
-            unit, document, record,
-            Encoding.UTF8.GetString(_codec.SerializeToBytesAsync(record, release).GetAwaiter().GetResult()),
-            ChildBody: null);
+        target = new ComputedTarget(unit, document, record, SerializeToText(record, release), ChildBody: null);
         return null;
     }
 
@@ -1600,7 +1659,9 @@ public sealed class RecordEditService(
             // The owner is reserialized over its existing file and the child's own extracted row is
             // replaced (old FormKey's row nulled, new FormKey's row created from the child alone) —
             // the same two-row shape EditField's own embedded edit uses.
-            _codec.SerializeAsync(root, unit.FullPath, release).GetAwaiter().GetResult();
+            SourceUnitResolver.InMintedDirectory(
+                Path.GetDirectoryName(unit.FullPath)!,
+                () => _codec.SerializeAsync(root, unit.FullPath, release).GetAwaiter().GetResult());
             index.ApplyWorkingTreeChanges(plugin, [(unit.OwnerFormKey, rootBody)]);
             index.CreateWorkingTreeRecord(plugin, newFormKey, document.RecordType, childBody!);
             index.ApplyWorkingTreeChanges(plugin, [(oldFormKey, null)]);
@@ -2498,10 +2559,16 @@ public sealed class RecordEditService(
 
     /// <summary>
     /// The reserialize-and-write-back idiom nearly every write path here repeats: get
-    /// <paramref name="record"/>'s own bytes — what the index will be told next — and write those
-    /// exact same bytes to <paramref name="path"/> in one atomic move, never a second,
-    /// independently-serialized copy of either. Returns the body as text, ready for whichever
+    /// <paramref name="record"/>'s own bytes — what the index will be told next — and write to
+    /// <paramref name="path"/> in one atomic move. Returns the body as text, ready for whichever
     /// index-notify call the caller makes next.
+    ///
+    /// <para>The two serializations are separate calls, and it is
+    /// <see cref="RecordTextCodec.SerializeToBytesAsync"/>/<see cref="RecordTextCodec.SerializeAsync"/>
+    /// producing identical bytes for the same record — pinned by <c>RecordTextCodecInMemoryTests</c>
+    /// — that makes what the index is told and what lands on disk the same text. Splitting the pair
+    /// across a compute phase and a write phase, as the renumber cascade does, rests on that same
+    /// guarantee and is no weaker than calling this.</para>
     /// </summary>
     internal static string SerializeAndWrite(RecordTextCodec codec, IMajorRecord record, string path, GameRelease release)
     {

@@ -52,6 +52,27 @@ public sealed class RecordEditServiceRenumberCascadeTests
     }
 
     /// <summary>
+    /// The same struct-list gap, on the renumbered record's own self-link. The referencer pass
+    /// deliberately excludes the target — its content is computed by the target pass instead — so
+    /// the guard has to live on both paths or this one writes a dangling self-link and reports
+    /// success. Review finding on the first cut of #676, which guarded only the referencer pass.
+    /// </summary>
+    [Fact]
+    public void RenumberRecord_Refuses_WhenTheTargetsOwnSelfLinkIsAStructListScriptProperty()
+    {
+        using var fixture = CascadeFixture.WithStructListSelfReferencingTarget();
+        var targetFile = fixture.SourceFileOf(fixture.Target, "npc_", "SelfStructListNpc");
+        var before = File.ReadAllText(targetFile);
+
+        var result = ServiceFor(fixture.Mirror).RenumberRecord(fixture.Plugin, fixture.Target.ToString());
+
+        Assert.False(result.Applied, result.Message);
+        Assert.Equal(RecordEditRefusal.ReferenceRemapIncomplete, result.Refusal);
+        Assert.Contains(fixture.Target.ToString(), result.Message, StringComparison.Ordinal);
+        Assert.Equal(before, File.ReadAllText(targetFile));
+    }
+
+    /// <summary>
     /// The old cascade rewrote every textual occurrence of the FormKey in the referencer's file.
     /// The renumbered record's own file went through that same substitution whenever it referenced
     /// itself, so a FormKey spelled incidentally in one of its string fields was rewritten along
@@ -164,6 +185,28 @@ public sealed class RecordEditServiceRenumberCascadeTests
 
             var member = new ScriptObjectProperty { Name = "Target", Alias = -1 };
             member.Object.SetTo(race.FormKey);
+            var instance = new ScriptEntryStructs();
+            instance.Members.Add(member);
+            var structList = new ScriptStructListProperty { Name = "Slots" };
+            structList.Structs.Add(instance);
+
+            var script = new ScriptEntry { Name = "CascadeScript", Flags = ScriptEntry.Flag.Local };
+            script.Properties.Add(structList);
+            var vmad = new VirtualMachineAdapter();
+            vmad.Scripts.Add(script);
+            npc.VirtualMachineAdapter = vmad;
+        });
+
+        /// <summary>An Npc whose only link is to <i>itself</i>, through a VMAD
+        /// <c>ArrayOfStruct</c> member — the struct-list gap on the target's own path.</summary>
+        public static CascadeFixture WithStructListSelfReferencingTarget() => new((mod, self) =>
+        {
+            var npc = mod.Npcs.AddNew("SelfStructListNpc");
+            self.Target = npc.FormKey;
+            self.Referencer = npc.FormKey;
+
+            var member = new ScriptObjectProperty { Name = "Self", Alias = -1 };
+            member.Object.SetTo(npc.FormKey);
             var instance = new ScriptEntryStructs();
             instance.Members.Add(member);
             var structList = new ScriptStructListProperty { Name = "Slots" };
