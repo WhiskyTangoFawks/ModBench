@@ -146,6 +146,30 @@ internal sealed class RecordTypeDispatch
             && DirectoryPerRecordFolders.TryGetValue(concrete.Name, out var folder) ? folder : null);
 
     /// <summary>
+    /// The member a cell sub-block's own cells are carried under, for the ordered child list that
+    /// names them (<c>SourceChildOrder</c>). The one placement key that is not simply the folder it
+    /// sits in: a block level's directory is named after its coordinates, so the collection's name
+    /// appears nowhere in the path.
+    ///
+    /// <para><b>Here rather than at the call site because this is the layer that owns game-specific
+    /// naming</b> (ADR-0032, and root CLAUDE.md's "generalize across Bethesda games"). The write path
+    /// in <c>Source</c>/<c>Edits</c> asks this class instead of naming a Fallout 4 type directly and
+    /// quietly binding itself to one game.</para>
+    ///
+    /// <para><b>Static, and not dispatched per game, because the name genuinely does not vary</b> —
+    /// Fallout 4, Skyrim and Starfield all spell it the same. Hanging it off the per-release instance
+    /// would imply a variation that does not exist. What a literal gives up against <c>nameof</c> is
+    /// the compile-time check, so <c>BlockChildMemberNamesTests</c> buys that back by asserting it
+    /// against the real type — the same posture <see cref="DirectoryPerRecordFolders"/>'s own literals
+    /// take.</para>
+    /// </summary>
+    internal static string SubBlockChildMember => "Cells";
+
+    /// <summary>The member a cell <i>block</i>'s own sub-blocks are carried under — the level above
+    /// <see cref="SubBlockChildMember"/>, and static for the same reason.</summary>
+    internal static string BlockChildMember => "SubBlocks";
+
+    /// <summary>
     /// The inverse of <see cref="FolderNameFor"/>: which <c>record_type</c> a flat folder's own name
     /// names, for <c>SourceRecordPath.TryParse</c>'s reverse direction. Null when the folder maps to
     /// more than one concrete type (an ambiguous group — e.g. <c>Globals</c> holds

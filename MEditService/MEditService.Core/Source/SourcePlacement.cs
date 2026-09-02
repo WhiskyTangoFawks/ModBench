@@ -78,13 +78,7 @@ internal readonly record struct SourcePlacement(string RelativePath, string Carr
         return new SourcePlacement(
             Path.Combine(carrierDirectory, leaf, SourceUnitResolver.RecordDataFileName),
             Path.Combine(carrierDirectory, SourceUnitResolver.GroupRecordDataFileName),
-            blockPath is { Count: > 0 } ? SubBlockChildMember : groupFolder);
+            blockPath is { Count: > 0 } ? RecordTypeDispatch.SubBlockChildMember : groupFolder);
     }
 
-    /// <summary>The member a sub-block's own cells are carried under — the one key that is not simply
-    /// the folder it sits in, because a block level's directory is named after its coordinates rather
-    /// than after the collection it holds. Spelled through the model so it cannot drift from what
-    /// <see cref="SourceChildOrder"/>'s own walk reads off the same property.</summary>
-    private static readonly string SubBlockChildMember =
-        nameof(Mutagen.Bethesda.Fallout4.CellSubBlock.Cells);
 }

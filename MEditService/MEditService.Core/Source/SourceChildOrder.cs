@@ -58,10 +58,11 @@ namespace MEditService.Core.Source;
 ///
 /// <para><b>That makes a hand-deleted record readable, not compilable.</b> The round-trip gate
 /// compares the tree against what the codec would reserialize from it, so a list still naming the
-/// deleted record refuses the plugin's own next Save &amp; Compile until <see cref="PruneMissing"/>
-/// repairs it or the mod is re-Tracked. The superseded numbering scheme had exactly this limit for
-/// exactly this case (a hand-deleted file left a numbering gap the compile gate refused); it is
-/// ported deliberately, not overlooked.</para>
+/// deleted record refuses the plugin's own next Save &amp; Compile. <see cref="PruneMissing"/> repairs
+/// it, but only where it runs: <c>CreateRecord</c>, over the one flat group folder it is writing into.
+/// A hand-deleted folder-split child therefore has no repair short of a re-Track. The superseded
+/// numbering scheme had the same limit in the same place (a hand-deleted file left a numbering gap the
+/// compile gate refused), so this is ported deliberately rather than overlooked.</para>
 /// </summary>
 internal static class SourceChildOrder
 {
@@ -285,9 +286,9 @@ internal static class SourceChildOrder
     /// disagree with <see cref="Walk"/> about them. Asking the document which list holds this child
     /// cannot disagree with the document.</para>
     /// </summary>
-    internal static void RemoveByIdentity(string childDirectory, string identity, IFileSystem? fileSystem = null)
+    internal static void RemoveByIdentity(string childrenDirectory, string identity, IFileSystem? fileSystem = null)
     {
-        if (SlotHolding(childDirectory, identity, fileSystem) is { } slot)
+        if (SlotHolding(childrenDirectory, identity, fileSystem) is { } slot)
             Remove(slot.Carrier, slot.Key, identity, fileSystem);
     }
 
@@ -297,9 +298,9 @@ internal static class SourceChildOrder
     /// list is keyed by and must keep the record's position while doing so.
     /// </summary>
     internal static void RenameByIdentity(
-        string childDirectory, string oldIdentity, string newIdentity, IFileSystem? fileSystem = null)
+        string childrenDirectory, string oldIdentity, string newIdentity, IFileSystem? fileSystem = null)
     {
-        if (SlotHolding(childDirectory, oldIdentity, fileSystem) is { } slot)
+        if (SlotHolding(childrenDirectory, oldIdentity, fileSystem) is { } slot)
             Rename(slot.Carrier, slot.Key, oldIdentity, newIdentity, fileSystem);
     }
 
@@ -348,14 +349,14 @@ internal static class SourceChildOrder
     /// null when no list does — also what a caller needing to record the carrier it is about to
     /// change (a transactional renumber, #678) asks for the path.</summary>
     internal static (string Carrier, string Key)? SlotHolding(
-        string childDirectory, string identity, IFileSystem? fileSystem = null)
+        string childrenDirectory, string identity, IFileSystem? fileSystem = null)
     {
         var files = (fileSystem ?? new FileSystem()).File;
-        var parent = Path.GetDirectoryName(childDirectory);
+        var parent = Path.GetDirectoryName(childrenDirectory);
 
         string[] candidates = parent is null
-            ? [CarrierFor(childDirectory, parentIsRecord: false)]
-            : [CarrierFor(childDirectory, parentIsRecord: false), CarrierFor(parent, parentIsRecord: true)];
+            ? [CarrierFor(childrenDirectory, parentIsRecord: false)]
+            : [CarrierFor(childrenDirectory, parentIsRecord: false), CarrierFor(parent, parentIsRecord: true)];
 
         foreach (var carrier in candidates)
         {
@@ -377,7 +378,7 @@ internal static class SourceChildOrder
 
     /// <summary>
     /// Drops from <paramref name="carrierPath"/>'s list under <paramref name="key"/> every identity
-    /// that no longer has a file or directory in <paramref name="childDirectory"/> — the repair a
+    /// that no longer has a file or directory in <paramref name="childrenDirectory"/> — the repair a
     /// structural write performs defensively, because the tree can have been changed without Modbench
     /// (root CLAUDE.md's never-assume-exclusive-ownership rule).
     ///
@@ -395,12 +396,12 @@ internal static class SourceChildOrder
     /// EditorID and FormKey.</para>
     /// </summary>
     internal static void PruneMissing(
-        string childDirectory, string carrierPath, string key, IFileSystem? fileSystem = null)
+        string childrenDirectory, string carrierPath, string key, IFileSystem? fileSystem = null)
     {
         var system = fileSystem ?? new FileSystem();
-        if (!system.Directory.Exists(childDirectory)) return;
+        if (!system.Directory.Exists(childrenDirectory)) return;
 
-        var present = system.Directory.EnumerateFileSystemEntries(childDirectory)
+        var present = system.Directory.EnumerateFileSystemEntries(childrenDirectory)
             .Select(Path.GetFileName)
             .Select(name => name!)
             .ToList();
@@ -444,7 +445,7 @@ internal static class SourceChildOrder
         orders[key] = working;
 
         system.Directory.CreateDirectory(Path.GetDirectoryName(carrierPath)!);
-        files.WriteAllText(carrierPath, document.ToJsonString(CarrierOptions));
+        WriteCarrier(system, carrierPath, document);
     }
 
     /// <summary>
@@ -488,13 +489,13 @@ internal static class SourceChildOrder
 
             document[MemberName] = orders;
             system.Directory.CreateDirectory(Path.GetDirectoryName(group.Key)!);
-            files.WriteAllText(group.Key, document.ToJsonString(CarrierOptions));
+            WriteCarrier(system, group.Key, document);
         }
 
         foreach (var carrier in stale)
         {
             var document = ReadCarrier(files, carrier);
-            if (document.Remove(MemberName)) files.WriteAllText(carrier, document.ToJsonString(CarrierOptions));
+            if (document.Remove(MemberName)) WriteCarrier(system, carrier, document);
         }
     }
 
@@ -702,6 +703,34 @@ internal static class SourceChildOrder
 
         var arguments = type.GetGenericArguments();
         return arguments.Length == 1 ? arguments[0] : null;
+    }
+
+    /// <summary>
+    /// Writes a carrier document the way every other writer in <c>Source</c> writes one: to a
+    /// neighbouring temp file, then an atomic rename.
+    ///
+    /// <para>A bare <c>WriteAllText</c> truncates its target before the first new byte lands, so an
+    /// interruption leaves a half-written document. That is worse here than for an ordinary file,
+    /// because a carrier is usually a <i>record's</i> own <c>RecordData.json</c> — losing the window
+    /// loses the record's fields, not just its children's order. <see cref="RecordTextCodec"/>'s own
+    /// write goes to the same trouble for the same reason, and <see cref="CarryOrderInto"/> exists so
+    /// that a record write stays one atomic act; it would be incoherent for the order writes not to.
+    /// Root CLAUDE.md's never-assume-exclusive-ownership rule, with Modbench as the corrupting
+    /// writer.</para>
+    /// </summary>
+    private static void WriteCarrier(IFileSystem system, string path, JsonObject document)
+    {
+        var temporary = path + ".tmp";
+        try
+        {
+            system.File.WriteAllText(temporary, document.ToJsonString(CarrierOptions));
+            system.File.Move(temporary, path, overwrite: true);
+        }
+        catch
+        {
+            if (system.File.Exists(temporary)) system.File.Delete(temporary);
+            throw;
+        }
     }
 
     private static JsonObject ReadCarrier(IFile files, string path) =>

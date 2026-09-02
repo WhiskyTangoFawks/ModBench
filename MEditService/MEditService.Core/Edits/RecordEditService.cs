@@ -2565,7 +2565,7 @@ public sealed class RecordEditService(
         var blockDirectory = FindOrMintGroupDirectory(
             cellsDirectory, "InteriorCellBlock", cellsFolder);
         var subBlockDirectory = FindOrMintGroupDirectory(
-            blockDirectory, "InteriorCellSubBlock", nameof(Mutagen.Bethesda.Fallout4.CellBlock.SubBlocks));
+            blockDirectory, "InteriorCellSubBlock", RecordTypeDispatch.BlockChildMember);
 
         return [Path.GetFileName(blockDirectory), Path.GetFileName(subBlockDirectory)];
     }
@@ -2573,7 +2573,7 @@ public sealed class RecordEditService(
     /// <summary>The first existing child directory of <paramref name="parentDirectory"/>, or a
     /// freshly-minted <c>"0"</c> one carrying <paramref name="groupType"/>'s own minimal
     /// <c>GroupRecordData.json</c> when none exists yet — interior placement's own "reuse whatever
-    /// bucket already exists" rule (<see cref="InteriorCellDestinationPath"/>'s own doc
+    /// bucket already exists" rule (<see cref="EnsureInteriorCellBlockPath"/>'s own doc
     /// comment).</summary>
     /// <param name="orderKey">The member name this level is carried under in
     /// <paramref name="parentDirectory"/>'s own ordered child list — a freshly minted block has to

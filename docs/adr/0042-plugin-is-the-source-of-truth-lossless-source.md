@@ -216,8 +216,12 @@ structural write repairs the list (`SourceChildOrder.PruneMissing`, which `Creat
 defensively) or the mod is re-Tracked. That is exactly the behaviour the superseded numbering scheme
 had for the same situation — a hand-deleted file left a numbering gap, which the compile gate refused
 until a structural write renormalized the folder — so this is a faithful port of the old limit, not a
-new one. Closing it properly means repairing on the compile path, which is a change to what a compile
-is allowed to write and is deliberately not made here.
+new one. **What actually repairs it is narrower than "a structural write".** `SourceChildOrder.PruneMissing`
+has one caller — `CreateRecord` — and it prunes only the one flat group folder that create is writing
+into. So a hand-deleted *flat* record is repaired by creating another record of the same type; a
+hand-deleted **folder-split child** (`DialogTopic.Responses`, the case whose order is gameplay) is
+repaired by nothing short of a re-Track. Closing that properly means repairing on the compile path,
+which is a change to what a compile is allowed to write, and is deliberately not made here.
 
 The Cell/Worldspace *embeds* (children inline in the parent document) are kept on our own grounds —
 one document per cell is the tree a human wants — and are excluded from the above precisely because
