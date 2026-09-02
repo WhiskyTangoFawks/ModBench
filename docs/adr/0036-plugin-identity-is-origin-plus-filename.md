@@ -40,6 +40,9 @@ putting "mod" in the Editing index's key, is the strongest possible violation of
 It appears inline only when two loaded copies share a filename, and in the compare grid the same
 rule applies to column headers — filename in the header, origin in its tooltip, inline only on
 collision. Column headers are the scarcest space in the grid and xEdit's carry filenames alone.
+(Since the grid excludes file-level losers — see Consequences — a collision can no longer arise
+from a same-filename pair in one response; the display rule stays as the fail-safe for whatever
+shape does arrive.)
 
 **A path is not the identity.** `(origin, filename)` is stable, readable, survives the instance
 being relocated, and is exactly what the tooltip already needs to show. An absolute path is none of
@@ -61,5 +64,14 @@ those things and would leak the user's filesystem into every wire message.
   hatch is better than the feature: raise that mod's priority and it becomes the winning copy and
   editable in one gesture. Editability can be added later by unhiding the actions if the need
   proves real.
+- A file-level loser (this ADR's original "shadowed copy" — CONTEXT.md retires that term) is
+  **not a compare-grid column** (maintainer ruling, 2026-09-02 manual-test session, amending
+  this ADR's original visible-column stance). The grid is xEdit parity — the record's in-game
+  resolution stack — and a file the game never loads is not part of it. The exclusion is
+  `Registration.Winning` alone, filtered at `RecordQueryService.GetCompare`, the one site a
+  future show-losing-copies toggle would parameterize; a disabled or unlisted copy is a
+  different axis and still columns. A losing copy stays indexed and browsable from the plugins
+  tree; opening one of its records shows the stack without its own column until that toggle
+  exists — a known, accepted edge.
 - Vanilla, DLC and Creation Club plugins take the reserved `Data/` origin rather than a null
   component in a primary key.

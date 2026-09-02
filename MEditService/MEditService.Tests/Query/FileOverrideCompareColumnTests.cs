@@ -11,26 +11,23 @@ namespace MEditService.Tests.Query;
 // Fixture-verifies the *file-level* resolution-stack case (CONTEXT.md "Resolution stack") —
 // two mod folders providing the same plugin filename, exactly ADR-0036's "shadowed copies": "MO2
 // priority picks one and the other is discarded before the load order is built" — through the
-// GetCompare/read-model seam, distinct from the record-level (within-load-order)
-// shadowing, which has no backend footprint at all (it is entirely
-// PluginHeader/RecordPanel/DiffRow/extendedFieldEditor rendering).
+// GetCompare/read-model seam.
 //
-// This is deliberately *not* a duplicate of DuplicateFilenameLoadOrderApiTests
-// (ShadowedCopyLoadedOnDemand_IsItsOwnCompareColumn), which already builds the identical two-mod
-// fixture and proves the same claim — but does so as a full HTTP round trip through the API host.
-// This test calls RecordQueryService.GetCompare directly, in-process — the narrower seam, the one
-// that would fail first if a regression landed inside GetCompare's own annotation step rather
-// than in JSON translation.
+// ADR-0036 (amended, #618 follow-up): the compare grid is xEdit parity — the record's in-game
+// resolution stack. A file-level loser is a file the game never loads, so it is *not* a column;
+// it stays indexed and browsable from the plugins tree, and a future toggle may re-expose it.
+// The exclusion is Registration.Winning alone — a disabled or unlisted copy is a different,
+// deliberately untouched axis (it still columns; see the plugins-tree display ticket).
 public sealed class FileOverrideCompareColumnTests
 {
     [Fact]
-    public void GetCompare_TwoModsProvideSameFilename_ProducesOneColumnPerOrigin()
+    public void GetCompare_TwoOriginsProvideSameFilename_ExcludesTheFileLevelLosersColumn()
     {
         // ModA is the load-order winner (what MO2's file-conflict merge picked); ModB is the file
         // it discarded — the losing copy, registered beside the winner (ADR-0044). Both copies run
         // their own NextFormID sequence from the same ModKey, so both NPCs land on the identical
         // nominal FormKey ("000800:Shared.esp") — the same coincidence DuplicateFilenameLoadOrderApiTests
-        // relies on, and what makes this a same-identity delta comparison rather than two unrelated files.
+        // relies on, and what makes this a same-identity comparison rather than two unrelated files.
         var fx = new PluginFixtureBuilder("file-override-446")
             .WithPlugin("Shared.esp", mod => mod.Npcs.AddNew("FromModA").Name = "NameFromModA", origin: "ModA")
             .WithPlugin("Shared.esp", mod => mod.Npcs.AddNew("FromModB").Name = "NameFromModB", origin: "ModB")
@@ -52,14 +49,38 @@ public sealed class FileOverrideCompareColumnTests
         var compare = svc.GetCompare("000800:Shared.esp");
 
         Assert.NotNull(compare);
-        var byOrigin = compare.Overrides.ToDictionary(o => o.Origin, o => o);
-        Assert.Equal(2, compare.Overrides.Count);
-        Assert.Equal("FromModA", byOrigin["ModA"].EditorId);
-        Assert.Equal("FromModB", byOrigin["ModB"].EditorId);
-        Assert.True(byOrigin["ModA"].IsWinner);
-        Assert.False(byOrigin["ModB"].IsWinner);
-        // ADR-0035: the shadowed copy never participates, so this stays exactly as
-        // unconflicted as a single-origin record — not a new conflict between the two copies.
+        // xEdit parity: the game loads exactly one file named Shared.esp, so the grid shows
+        // exactly one column — the winning copy's own record, not the discarded file's.
+        var column = Assert.Single(compare.Overrides);
+        Assert.Equal("ModA", column.Origin);
+        Assert.Equal("FromModA", column.EditorId);
+        Assert.True(column.IsWinner);
         Assert.Equal(ConflictAll.OnlyOne, compare.ConflictAll);
+    }
+
+    [Fact]
+    public void GetCompare_DisabledButWinningCopy_StillColumns()
+    {
+        // The deliberately-untouched axis: a disabled line (Enabled false, Winning true) is not a
+        // file-level loser — its file is the one the name resolves to; the user merely switched it
+        // off. It stays a column exactly as before the #618 follow-up; only Winning filters.
+        // This is the guard that the exclusion never widens to Participates.
+        var fx = new PluginFixtureBuilder("file-override-446-disabled")
+            .WithPlugin("Solo.esp", mod => mod.Npcs.AddNew("FromSolo").Name = "NameFromSolo", origin: "ModA")
+            .BuildScattered();
+        using var _ = fx;
+
+        using var manager = new LoadOrderMirror(
+            new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
+        var snapshot = fx.Plugins.Select(p => p with { Enabled = false }).ToList();
+        manager.Reconcile(fx.GameDirectory, snapshot, GameRelease.Fallout4);
+
+        var svc = new RecordQueryService(manager, SharedSchemaReflector.Instance, new ConflictClassifier());
+
+        var compare = svc.GetCompare("000800:Solo.esp");
+
+        Assert.NotNull(compare);
+        var column = Assert.Single(compare.Overrides);
+        Assert.Equal("FromSolo", column.EditorId);
     }
 }
