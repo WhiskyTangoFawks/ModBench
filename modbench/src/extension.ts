@@ -297,7 +297,7 @@ export function activate(context: vscode.ExtensionContext) {
     offers,
     (message, options, ...buttons) => Promise.resolve(vscode.window.showWarningMessage(message, options, ...buttons)),
     (offer, atRef) => compileAndReport(
-      controller, compileDiagnostics, { name: offer.plugin, origin: offer.origin }, atRef,
+      controller, compileDiagnostics, { name: offer.plugin, origin: offer.origin }, atRef, repository,
     ),
   );
   const { modListProvider, downloadsProvider, pluginListProvider, modlistSource, instanceRoot, enterEditing } = registerLoadoutSurfaces(session, { context, outputChannel, controller, recordBrowser: treeProvider, heldPluginFiles: heldPluginFilesFrom(repository), showCrashRepairOffers });
@@ -756,7 +756,7 @@ function registerSaveAndCompileCommand(
     );
     if (!target) return;
 
-    await compileAndReport(controller, diagnostics, target, undefined);
+    await compileAndReport(controller, diagnostics, target, undefined, repository);
   });
 }
 
@@ -792,7 +792,7 @@ function registerCompileAtRefCommand(
     );
     if (confirmed !== 'Compile at main') return;
 
-    await compileAndReport(controller, diagnostics, target, 'main');
+    await compileAndReport(controller, diagnostics, target, 'main', repository);
   });
 }
 

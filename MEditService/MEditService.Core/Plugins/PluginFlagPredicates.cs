@@ -19,6 +19,13 @@ namespace MEditService.Core.Plugins;
 /// </summary>
 public static class PluginFlagPredicates
 {
+    /// <summary>The highest local FormID a light (ESL-addressable) plugin can carry — Mutagen's own
+    /// <see cref="Mutagen.Bethesda.Plugins.FormID.SmallIdMask"/>, restated once here so every call
+    /// site reads one name (#290's no-hand-written-literals rule). The range's game-dependent
+    /// <i>lower</i> bound is <c>RecordCompactionCompatibilityDetection.GetSmallMasterRange</c>'s to
+    /// answer, where a whole mod is in hand.</summary>
+    public const uint LightLocalFormIdCap = Mutagen.Bethesda.Plugins.FormID.SmallIdMask;
+
     public static bool IsLight(IModFlagsGetter mod, string fileName) =>
         mod.IsSmallMaster || fileName.EndsWith(".esl", StringComparison.OrdinalIgnoreCase);
 

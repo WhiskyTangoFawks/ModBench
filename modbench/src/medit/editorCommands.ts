@@ -4,7 +4,7 @@ import * as os from 'os';
 import * as fs from 'fs';
 import { type CompileResult } from './ApiClient';
 import { EditingController } from './EditingController';
-import { InteriorLoadMoreNode, PluginTreeProvider, RecordTypeNode, RecordNode, PlacedNode } from './PluginTreeProvider';
+import { InteriorLoadMoreNode, PluginTreeProvider, RecordTypeNode, RecordNode, PlacedNode, headerFormKeyFor } from './PluginTreeProvider';
 import { ReferencedByGroupNode, referencedByCopyText, type ReferencedByTreeNode } from './ReferencedByTreeProvider';
 import { ActiveRecordTracker } from './ActiveRecordTracker';
 import { type CompileTarget } from './compileTarget';
@@ -14,6 +14,7 @@ import { startExternalChangePolling, gateExternalChangePolling, type OpenMergeEd
 import { buildWebviewHtml } from './webviewHtml';
 import { EXTENSION_TO_WEBVIEW, type ExtensionToWebview, type VmadScriptsContext, type VmadScriptContext, type VmadPropertyContext, type ColumnHeaderContext } from './messages';
 import { copyTargetPlugins, type CopyGesture } from './copyTargetPlugins';
+import { renumberConfirmMessage } from './renumberConfirm';
 import { routeRecordPanelMessage, pickScriptNameViaInputBox, type RouteRecordPanelMessageDeps } from './recordPanelMessageRouter';
 import { RecordDecorationProvider } from './RecordDecorationProvider';
 import { broadcastToRecordPanels, makeOnRecordEdited } from './onRecordEdited';
@@ -309,6 +310,24 @@ export function registerRecordLifecycleCommands(
       });
       if (input === undefined) return; // cancelled
 
+      // #572 ruling 3: a renumber with referencers cascades automatically behind one up-front
+      // confirm stating the blast radius. A fetch failure degrades to a confirm with no counts
+      // rather than blocking — the backend re-checks referencers (untracked ones refuse there)
+      // regardless of what this preview said.
+      let confirmMessage: string | null;
+      try {
+        confirmMessage = renumberConfirmMessage(
+          node.record.formKey, input || suggested || '(next free)', await repository.getReferences(node.record.formKey));
+      } catch (e) {
+        outputChannel.warn(`[extension] record.renumber could not fetch referencers for the confirm: ${e instanceof Error ? e.message : String(e)}`);
+        confirmMessage = `Change FormID of ${node.record.formKey}? Its references could not be counted — ` +
+          'every referencing record in a tracked plugin will be updated with it.';
+      }
+      if (confirmMessage !== null) {
+        const choice = await vscode.window.showWarningMessage(confirmMessage, { modal: true }, 'Change FormID');
+        if (choice !== 'Change FormID') return;
+      }
+
       const newFormKey = await controller.renumberRecord(node.record.formKey, node.record.plugin, origin, input || undefined);
       if (newFormKey) void vscode.window.showInformationMessage(`Modbench: Renumbered to ${newFormKey}.`);
     }),
@@ -560,6 +579,7 @@ export function reportCompileTargetError(outputChannel: vscode.LogOutputChannel,
 export async function compileAndReport(
   controller: EditingController, diagnostics: vscode.DiagnosticCollection,
   target: CompileTarget, atRef: string | undefined,
+  repository: PluginRepository,
 ): Promise<void> {
   const result = await controller.compile(target.name, target.origin, atRef);
   if (!result) return;
@@ -568,6 +588,11 @@ export async function compileAndReport(
 
   const refSuffix = atRef ? ` at "${atRef}"` : '';
   if (!result.succeeded) {
+    if (result.eslContradiction
+        && await offerEslFlagRemoval(target, result.refusalReason ?? '', repository)) {
+      await compileAndReport(controller, diagnostics, target, atRef, repository);
+      return;
+    }
     void vscode.window.showErrorMessage(`Modbench: Could not compile "${target.name}"${refSuffix} — ${result.refusalReason}`);
     return;
   }
@@ -576,6 +601,28 @@ export async function compileAndReport(
       ? `Modbench: Compiled "${target.name}"${refSuffix} — ${result.diagnostics.length} diagnostic(s), see Problems panel.`
       : `Modbench: Compiled "${target.name}"${refSuffix}.`,
   );
+}
+
+/** #290's coherence prompt (the maintainer's always-prompt rule for consequential state): the
+ *  plugin no longer fits ESL and the compile's typed marker says the flag is removable. Accept =
+ *  an ordinary `is_light` header edit (the flag's one sanctioned door), after which the caller
+ *  compiles again; decline (or a refused edit) = false, and the caller's loud typed refusal
+ *  stands, with the contradiction as the record of what to fix. */
+async function offerEslFlagRemoval(
+  target: CompileTarget, refusalReason: string, repository: PluginRepository,
+): Promise<boolean> {
+  const accept = 'Remove ESL Flag and Compile';
+  const choice = await vscode.window.showWarningMessage(
+    `"${target.name}" no longer fits ESL. Remove the ESL flag and compile?\n\n${refusalReason}`,
+    { modal: true }, accept);
+  if (choice !== accept) return false;
+
+  const outcome = await repository.editRecordField(
+    headerFormKeyFor(target.name), target.name, target.origin, 'is_light', false);
+  if (outcome.applied) return true;
+  void vscode.window.showErrorMessage(
+    `Modbench: Could not remove the ESL flag on "${target.name}" — ${outcome.message}`);
+  return false;
 }
 
 /** Publishes one compile's diagnostics to the Problems panel, replacing whatever this plugin's

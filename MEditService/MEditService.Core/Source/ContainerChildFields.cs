@@ -251,6 +251,43 @@ internal static class ContainerChildFields
         ((dynamic)property.GetValue(parent)!).Add((dynamic)child);
     }
 
+    /// <summary>
+    /// Moves every child-major slot's contents from <paramref name="from"/> onto
+    /// <paramref name="to"/> — the own-fields-replace half of #550 AC7's overwrite: the replacing
+    /// record arrives child-stripped (<see cref="ClearAllChildSlots"/>) and the destination's own
+    /// embedded children (a Cell's placed refs, navmeshes, landscape) are re-attached so an
+    /// own-fields copy can never silently delete them. Same reflection-over-the-table posture as
+    /// every other mutator here.
+    /// </summary>
+    internal static void TransplantChildSlots(IMajorRecordGetter from, IMajorRecordGetter to)
+    {
+        foreach (var (slotName, _, child) in EnumerateChildren(from).ToList())
+        {
+            var property = to.GetType().GetProperty(slotName)
+                ?? throw new InvalidOperationException(
+                    $"{to.GetType().Name} has no property '{slotName}' to transplant a child into — ContainerChildFields' table is stale.");
+            // Branch on the slot's shape, not the current value — a cleared list slot could in
+            // principle be null, and SetValue'ing a single child into a list property would crash.
+            var value = property.GetValue(to);
+            if (value is System.Collections.IEnumerable and not string) ((dynamic)value).Add((dynamic)child);
+            else property.SetValue(to, child);
+        }
+    }
+
+    /// <summary>In-place swap of one slot occupant — #550 AC7's placed-reference replace, which must
+    /// keep the child's exact position among its siblings (an append-after-remove would move it to
+    /// the end, silently reordering the cell's GRUP).</summary>
+    internal static void ReplaceInSlot(IMajorRecordGetter parent, string slotName, int slotIndex, IMajorRecord child)
+    {
+        var property = parent.GetType().GetProperty(slotName)
+            ?? throw new InvalidOperationException(
+                $"{parent.GetType().Name} has no property '{slotName}' to replace a child in — ContainerChildFields' table is stale.");
+
+        var value = property.GetValue(parent);
+        if (value is IMajorRecordGetter) property.SetValue(parent, child);
+        else ((dynamic)value!)[slotIndex] = (dynamic)child;
+    }
+
     /// <summary>The mutation half of <see cref="RemoveEmbeddedChild"/> — reflection rather than a
     /// hand-written switch over each of the four/two concrete slot shapes, for the same reason
     /// <see cref="EnumerateChildren"/> reads them that way: one path that cannot drift from the table

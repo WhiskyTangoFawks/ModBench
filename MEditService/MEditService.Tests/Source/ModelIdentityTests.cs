@@ -3,6 +3,7 @@ using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Binary.Parameters;
+using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Tests.Source;
 
@@ -222,19 +223,95 @@ public sealed class ModelIdentityTests
         Assert.Null(field);
     }
 
+    // ── #669: the one comparison door must not inherit the generated comparers' lies ──
+    // Mutagen's Equals and GetEqualsMask each miss real divergence (upstream reports #685/#686
+    // and PRs #689/#690 closed by our own withdrawal;
+    // #528/#614 investigations) and the pin stays 0.53.1 — so the verdict may never depend on them
+    // alone. Each of the three known blind spots gets its own named test: a pair differing ONLY in
+    // that field must come back unequal from the door.
+
+    [Fact]
+    public void FindFirst_WhenOnlyAGenderedItemSubFieldDiffers_ReportsTheDivergence()
+    {
+        var mod = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
+        var armor = mod.Armors.AddNew("GenderedArmor");
+        armor.WorldModel = new GenderedItem<ArmorModel?>(
+            new ArmorModel { Model = new Model { File = "male.nif" } }, null);
+
+        var recompiled = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
+        var recompiledArmor = new Armor(armor.FormKey, Fallout4Release.Fallout4)
+        {
+            EditorID = "GenderedArmor",
+            WorldModel = new GenderedItem<ArmorModel?>(
+                new ArmorModel { Model = new Model { File = "DIFFERENT.nif" } }, null),
+        };
+        recompiled.Armors.Add(recompiledArmor);
+
+        // Which stage catches it, pinned: generated Equals lies about GenderedItem (upstream #685),
+        // but the MASK turns out to see this sub-field — so this is a pin of stage one, not a
+        // decider gap-closure. If this assertion ever starts failing, the mask regressed and the
+        // decider below is what keeps the verdict honest.
+        Assert.NotEmpty(ModelIdentity.FailingFields(armor, recompiledArmor));
+
+        var divergence = ModelIdentity.FindFirst(mod, recompiled);
+
+        Assert.NotNull(divergence);
+        Assert.Equal(armor.FormKey, divergence!.FormKey);
+    }
+
+    [Fact]
+    public void FindFirst_WhenOnlyAPackageDataIntValueDiffers_ReportsTheDivergence()
+    {
+        var mod = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
+        var package = mod.Packages.AddNew("IntPackage");
+        package.Data.Add(0, new PackageDataInt { Name = "Count", Data = 1 });
+
+        var recompiled = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
+        var recompiledPackage = new Package(package.FormKey, Fallout4Release.Fallout4) { EditorID = "IntPackage" };
+        recompiledPackage.Data.Add(0, new PackageDataInt { Name = "Count", Data = 99 });
+        recompiled.Packages.Add(recompiledPackage);
+
+        // Which stage catches it, pinned: the mask genuinely misses this one — the polymorphic
+        // base-overload binding (#528) never compares PackageDataInt's derived-only Data — so the
+        // codec decider is what refuses it. A future mask fix flips this first assertion, not the
+        // verdict.
+        Assert.Empty(ModelIdentity.FailingFields(package, recompiledPackage));
+
+        var divergence = ModelIdentity.FindFirst(mod, recompiled);
+
+        Assert.NotNull(divergence);
+        Assert.Equal(package.FormKey, divergence!.FormKey);
+    }
+
+    // The dictionary tolerance's boundary, pinned from the review that found it: NpcMorph's
+    // elements are exactly {Key, Value} but Npc.Morphs is an ORDERED list, not a dictionary — a
+    // reorder is a real content change and must be refused, never forgiven as dict enumeration
+    // order (the keyed comparison is gated on reflected IReadOnlyDictionary membership).
+    [Fact]
+    public void FindFirst_WhenAnOrderedKeyValueShapedListIsReordered_ReportsTheDivergence()
+    {
+        var mod = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
+        var npc = mod.Npcs.AddNew("MorphNpc");
+        npc.Morphs.Add(new NpcMorph { Key = 1, Value = 0.25f });
+        npc.Morphs.Add(new NpcMorph { Key = 2, Value = 0.75f });
+
+        var recompiled = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
+        var recompiledNpc = new Npc(npc.FormKey, Fallout4Release.Fallout4) { EditorID = "MorphNpc" };
+        recompiledNpc.Morphs.Add(new NpcMorph { Key = 2, Value = 0.75f });
+        recompiledNpc.Morphs.Add(new NpcMorph { Key = 1, Value = 0.25f });
+        recompiled.Npcs.Add(recompiledNpc);
+
+        Assert.NotNull(ModelIdentity.FindFirst(mod, recompiled));
+    }
+
     /// <summary>
-    /// Pinned so it stays honestly documented rather than quietly forgotten:
-    /// <c>TransientTypes</c> is deliberately not on <see cref="ModelIdentity.OpaqueHeaderFields"/> (see
-    /// that field's own doc comment) because a per-item corruption is reported by
-    /// <see cref="ModelIdentity.FailingFields"/> against the nested leaf's own declaring type
-    /// (<c>"TransientType"</c>/<c>"FormType"</c>), never against the outer <c>"TransientTypes"</c> name
-    /// the allow-list would need to match. This test proves that stays true: a real per-item
-    /// corruption is not named by this gate. If this ever starts returning "TransientTypes", the
-    /// nested-name mapping described in <c>OpaqueHeaderFields</c>' doc comment has changed and that
-    /// doc comment (and the corresponding ADR-0042 amendment) need updating alongside whatever fixed it.
+    /// #669 inverted this from the #614-era known-gap pin: the gate now carries its own
+    /// <c>TransientTypes</c> comparer (plain value comparisons — never the generated mask, which
+    /// reports a per-item corruption against the nested leaf's type and so could never match the
+    /// allow-list's outer name), and a per-item corruption is named.
     /// </summary>
     [Fact]
-    public void FindFirstHeaderFieldDivergence_WithATransientTypesItemCorruption_KnownGap_ReturnsNull()
+    public void FindFirstHeaderFieldDivergence_WithATransientTypesItemCorruption_NamesTransientTypes()
     {
         var original = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
         original.ModHeader.TransientTypes.Add(new TransientType { FormType = 7 });
@@ -244,26 +321,30 @@ public sealed class ModelIdentityTests
 
         var field = ModelIdentity.FindFirstHeaderFieldDivergence(original.ModHeader, recompiled.ModHeader);
 
-        Assert.Null(field);
+        Assert.Equal("TransientTypes", field);
     }
 
     /// <summary>
-    /// The known gap's second half, independently pinned: Mutagen's own generated equality
-    /// mask does not flag a <c>TransientTypes</c> list-count divergence as unequal at all (a
-    /// pre-existing Mutagen quirk, not introduced here) — <see cref="ModelIdentity.FailingFields"/>
-    /// itself returns nothing for a 1-item-vs-0-item list, before this gate's allow-list even runs.
+    /// The gap's second half, inverted with the first (#669): a list-<i>count</i> divergence —
+    /// which Mutagen's own generated mask does not flag as unequal at all (that stays pinned inside
+    /// this test by asserting <see cref="ModelIdentity.FailingFields"/> is still empty) — is caught
+    /// by the gate's own comparer.
     /// </summary>
     [Fact]
-    public void FailingFields_WithATransientTypesCountDivergence_MutagenMaskDoesNotFlagIt()
+    public void FindFirstHeaderFieldDivergence_WithATransientTypesCountDivergence_NamesTransientTypes()
     {
         var original = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
         original.ModHeader.TransientTypes.Add(new TransientType { FormType = 7 });
 
         var recompiled = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
 
-        var failing = ModelIdentity.FailingFields(original.ModHeader, recompiled.ModHeader);
+        // The underlying Mutagen quirk is unchanged — the mask still sees nothing — which is
+        // exactly why the gate's own comparer exists.
+        Assert.Empty(ModelIdentity.FailingFields(original.ModHeader, recompiled.ModHeader));
 
-        Assert.Empty(failing);
+        var field = ModelIdentity.FindFirstHeaderFieldDivergence(original.ModHeader, recompiled.ModHeader);
+
+        Assert.Equal("TransientTypes", field);
     }
 
     private static void SetOpaqueHeaderFields(Fallout4Mod mod)
@@ -289,7 +370,35 @@ public sealed class ModelIdentityTests
 
     /// <summary>Mirrors <c>RoundTripSurvey</c>'s own write options — the shape
     /// <see cref="TrackService.VerifyRoundTrip"/> uses to reproduce a plugin's own bytes.</summary>
-    private static async Task<(Fallout4Mod Original, Fallout4Mod Recompiled, byte[] OriginalBytes, byte[] RewrittenBytes)>
+    /// <summary>
+    /// #669's cost accounting for the codec decider, at the scale this environment has (the
+    /// committed real fixture; the LitR mega-plugin measurement needs a real instance and is the
+    /// ticket's to record from one). Asserts only a generous ceiling — the number itself goes to the
+    /// test log, per-record, for the budget math (#366's ~21s mega-plugin figure).
+    /// </summary>
+    [Fact]
+    public async Task FindFirst_CodecDeciderCost_IsLoggedAndBounded()
+    {
+        var (original, recompiled, _, _) = await ParseWriteAndReparse("RecruitSierra.esl");
+        // Warm the codec/serializer once so the measurement is the steady-state cost.
+        Assert.Null(ModelIdentity.FindFirst(original, recompiled));
+
+        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+        Assert.Null(ModelIdentity.FindFirst(original, recompiled));
+        stopwatch.Stop();
+
+        var recordCount = original.EnumerateMajorRecords().Count();
+        _output.WriteLine(
+            $"FindFirst over {recordCount} records: {stopwatch.ElapsedMilliseconds} ms " +
+            $"({(double)stopwatch.ElapsedMilliseconds / recordCount:F2} ms/record, warm)");
+        Assert.True(stopwatch.ElapsedMilliseconds < 30_000, $"took {stopwatch.ElapsedMilliseconds} ms");
+    }
+
+    private readonly Xunit.Abstractions.ITestOutputHelper _output;
+
+    public ModelIdentityTests(Xunit.Abstractions.ITestOutputHelper output) => _output = output;
+
+    internal static async Task<(Fallout4Mod Original, Fallout4Mod Recompiled, byte[] OriginalBytes, byte[] RewrittenBytes)>
         ParseWriteAndReparse(string fileName)
     {
         var scratch = Directory.CreateTempSubdirectory("medit-modelidentity-").FullName;

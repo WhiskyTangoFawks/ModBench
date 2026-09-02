@@ -66,6 +66,9 @@ export interface PluginRepository {
   // generated" flow). Never throws on the ordinary case; a genuine fault propagates like every
   // other read here.
   peekNextFreeFormKey(plugin: string, origin: string): Promise<string>;
+  /** Every (record, field) referencing formKey session-wide — the renumber confirm's blast
+   *  radius (#572); the same rows the Referenced By panel shows. */
+  getReferences(formKey: string): Promise<components['schemas']['ReferenceResult'][]>;
   // The condition-function picker's catalog — every function name Mutagen resolves
   // for the held load order's game, backing the extension-host QuickPick. Degrades to [] on a
   // failed fetch (mirrors setFilter/clearFilter's catch-and-log-no-throw below, not the
@@ -261,6 +264,14 @@ export class ApiPluginRepository implements PluginRepository {
     });
     this.ensureOk(`peekNextFreeFormKey(${plugin})`, response, error);
     return data?.formKey ?? '';
+  }
+
+  async getReferences(formKey: string): Promise<components['schemas']['ReferenceResult'][]> {
+    const { data, error, response } = await this.client.GET('/records/{formKey}/references', {
+      params: { path: { formKey } },
+    });
+    this.ensureOk(`getReferences(${formKey})`, response, error);
+    return data ?? [];
   }
 
   async getConditionFunctions(): Promise<string[]> {

@@ -78,7 +78,16 @@ export class RecordNode extends vscode.TreeItem {
     const label = record.editorId ? `${record.editorId} [${record.formKey}]` : record.formKey;
     const collapsible = containerChildType && hasContainerChildren;
     super(label, collapsible ? vscode.TreeItemCollapsibleState.Collapsed : vscode.TreeItemCollapsibleState.None);
-    this.contextValue = immutable ? 'recordImmutable' : 'record';
+    // #572 ruling 1: an override doesn't own its FormID, so Change FormID is only ever offered on
+    // a row whose plugin IS the FormKey's origin ('record'); an override row ('recordOverride')
+    // keeps every other record action via its own when-clauses. FormKey shape is Mutagen's own
+    // "<hex6>:<ModKey>", so the origin is everything after the first colon.
+    const originModKey = record.formKey.slice(record.formKey.indexOf(':') + 1);
+    // toLowerCase, not localeCompare: matches the backend's OrdinalIgnoreCase filename semantics
+    // without host-locale hazards, and is the comparison renumberConfirm.ts already uses.
+    const isNative = originModKey.toLowerCase() === record.plugin.toLowerCase();
+    if (immutable) this.contextValue = 'recordImmutable';
+    else this.contextValue = isNative ? 'record' : 'recordOverride';
     this.command = {
       command: 'modbench.openEditor',
       title: 'Open Record',

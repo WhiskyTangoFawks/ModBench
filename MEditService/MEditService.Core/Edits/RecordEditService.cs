@@ -78,7 +78,15 @@ public sealed class RecordEditService(
         // this one — see HeaderDocument's own doc comment). Answered here instead, off the schema
         // alone, before any record is read or materialized.
         if (document.RecordType == HeaderIndexer.RecordType)
+        {
+            // #290: the ESL flag's one sanctioned door — a synthetic boolean field, the same
+            // pattern is_partial_form uses for record-flag bit 14. Every real header column still
+            // refuses below (author/masters/flags stay read-only; full flags-array editing is a
+            // follow-up, not smuggled in here).
+            if (fieldPath.Equals(IsLightFieldPath, StringComparison.Ordinal))
+                return EditHeaderIsLight(index, plugin, unit, formKey, value);
             return RefuseHeaderFieldEdit(fieldPath, schemas);
+        }
 
         var reads = index.At(RecordRef.Effective);
         var owner = reads.GetDocument(unit.OwnerFormKey, plugin)!;
@@ -607,6 +615,7 @@ public sealed class RecordEditService(
     {
         if (ResolveCopySource(destinationPlugin, sourcePlugin, formKey, out var source) is { } blocked) return blocked;
         var (index, destinationModFolder, release, document) = source;
+        if (RefuseIfUnderride(formKey, destinationPlugin) is { } underrideRefusal) return underrideRefusal;
         var reads = index.At(RecordRef.Effective);
 
         // A placed reference (a Cell's Persistent/Temporary child) has its own,
@@ -623,8 +632,18 @@ public sealed class RecordEditService(
 
         if (RefuseIfCopySourceHasNoContainerOfItsOwn(document.RecordType, release) is { } containerRefusal) return containerRefusal;
 
+        var isFlat = RecordTypeDispatch.For(release).FolderNameFor(document.RecordType) is not null;
         if (!IsFreeAtBothRefs(index, destinationPlugin, formKey))
         {
+            // #550 AC7: for the container-copy family, a destination that already overrides the
+            // explicitly-selected record gets it replaced, own-fields-only, never refused — xEdit's
+            // copy-into behavior. Flat records keep #436's refusal, deliberately; so does a record
+            // held only at Head (deleted in the working tree — nothing at Effective to replace).
+            if (!isFlat && reads.GetDocument(formKey, destinationPlugin) is { } existingTarget)
+            {
+                return ReplaceExplicitContainerCopyTarget(
+                    index, sourcePlugin, formKey, document, existingTarget, destinationPlugin, destinationModFolder, release);
+            }
             return RecordEditResult.Refused(
                 RecordEditRefusal.FormKeyCollision,
                 $"{formKey} is already held by a record in {destinationPlugin.Name} at some ref.");
@@ -672,7 +691,6 @@ public sealed class RecordEditService(
         // levels deeper than Worldspace/Quest do (InteriorCellDestinationPath's own doc comment), which
         // is why it is not just another call to ContainerOwnDirectoryPath.
         string relativePath;
-        var isFlat = RecordTypeDispatch.For(release).FolderNameFor(document.RecordType) is not null;
         if (isFlat)
         {
             var orderIndex = SourceUnitResolver.NextOrderIndexFor(destinationModFolder, destinationPlugin.Name, document.RecordType, release);
@@ -732,7 +750,27 @@ public sealed class RecordEditService(
         if (ResolveCopySource(destinationPlugin, sourcePlugin, formKey, out var source) is { } blocked) return blocked;
         var (index, destinationModFolder, release, document) = source;
         if (RefuseIfDisallowedForCopyAsNewRecord(document.RecordType) is { } disallowedRefusal) return disallowedRefusal;
-        if (RefuseIfContainerType(document.RecordType, release) is { } containerRefusal) return containerRefusal;
+
+        // The QUST/DIAL/INFO family copies as new (#550 AC5 — xEdit allows exactly these); a flat
+        // record keeps its existing path below; everything else still refuses (embedded children,
+        // folder-split types with no copy story: Scene, Landscape, NavigationMesh).
+        var isFlat = RecordTypeDispatch.For(release).FolderNameFor(document.RecordType) is not null;
+        var concreteName = CopyAsNewContainerFamilyName(document.RecordType, release);
+        if (!isFlat && concreteName is "DialogTopic")
+        {
+            return CopyDialogTopicAsNewRecord(
+                index, sourcePlugin, formKey, document, destinationPlugin, destinationModFolder, release, requestedFormKey);
+        }
+        if (!isFlat && concreteName is "DialogResponses")
+        {
+            return CopyDialogResponseAsNewRecord(
+                index, sourcePlugin, formKey, document, destinationPlugin, destinationModFolder, release, requestedFormKey);
+        }
+        if (!isFlat && concreteName is not "Quest"
+            && RefuseIfContainerType(document.RecordType, release) is { } containerRefusal)
+        {
+            return containerRefusal;
+        }
 
         if (ResolveTargetFormKey(index, destinationPlugin, requestedFormKey, out var targetFormKey) is { } refusedTarget)
             return refusedTarget;
@@ -744,14 +782,31 @@ public sealed class RecordEditService(
             selfLinking.RemapLinks(new Dictionary<FormKey, FormKey> { [FormKey.Factory(formKey)] = FormKey.Factory(targetFormKey) });
         }
 
-        var orderIndex = SourceUnitResolver.NextOrderIndexFor(destinationModFolder, destinationPlugin.Name, document.RecordType, release);
-        var relativePath = SourceRecordPath.For(destinationPlugin.Name, document.RecordType, targetFormKey, newRecord.EditorID, release, orderIndex);
+        // A flat record is a new file at the group folder's next index; a directory-per-record
+        // container (Quest) is a new RecordData.json directory there instead — same split Copy as
+        // Override already makes, and like it, own-record-only: folder-split children never ride
+        // along (deep copy is #551's gesture).
+        string relativePath;
+        if (isFlat)
+        {
+            var orderIndex = SourceUnitResolver.NextOrderIndexFor(destinationModFolder, destinationPlugin.Name, document.RecordType, release);
+            relativePath = SourceRecordPath.For(destinationPlugin.Name, document.RecordType, targetFormKey, newRecord.EditorID, release, orderIndex);
+        }
+        else
+        {
+            relativePath = ContainerOwnDirectoryPath(
+                destinationModFolder, destinationPlugin.Name, document.RecordType, targetFormKey, newRecord.EditorID, release);
+        }
         var sourcePath = Path.Combine(destinationModFolder, relativePath);
         Directory.CreateDirectory(Path.GetDirectoryName(sourcePath)!);
 
         var newBody = SerializeAndWrite(_codec, newRecord, sourcePath, release);
 
-        SourceUnitResolver.RenormalizeGroupOrder(Path.GetDirectoryName(sourcePath)!);
+        // The group directory whose [N] prefixes the new leaf joined — the file's own directory for
+        // a flat record, the record directory's parent for a directory-per-record one.
+        SourceUnitResolver.RenormalizeGroupOrder(isFlat
+            ? Path.GetDirectoryName(sourcePath)!
+            : Path.GetDirectoryName(Path.GetDirectoryName(sourcePath)!)!);
 
         index.CreateWorkingTreeRecord(destinationPlugin, targetFormKey, document.RecordType, newBody);
         // A brand-new row can newly match an active filter.
@@ -768,6 +823,448 @@ public sealed class RecordEditService(
         return RecordEditResult.Success(targetFormKey);
     }
 
+    /// <summary>
+    /// #550 AC7's replace itself: the destination's existing override of the explicitly-selected
+    /// container record takes the source's own fields, and nothing else moves. The destination's
+    /// embedded children (a Cell's placed refs, navmeshes, landscape) are re-attached onto the
+    /// replacing record (<see cref="ContainerChildFields.TransplantChildSlots"/>) so an own-fields
+    /// copy can never silently delete them; folder-split children have their own files and are
+    /// untouched by construction. An EditorID difference renames the source unit the same way an
+    /// EditorID edit does (<see cref="RenameSourceUnit"/> — the round-trip gate regenerates
+    /// canonical names, so a stale leaf would refuse the next compile).
+    /// </summary>
+    private RecordEditResult ReplaceExplicitContainerCopyTarget(
+        IRecordIndex index, PluginKey sourcePlugin, string formKey, RecordDocument sourceDocument,
+        RecordDocument existingTarget, PluginKey destinationPlugin, string destinationModFolder, GameRelease release)
+    {
+        var reads = index.At(RecordRef.Effective);
+        var unit = SourceUnitResolver.Resolve(
+                reads, destinationPlugin, destinationModFolder, formKey,
+                existingTarget.RecordType, existingTarget.EditorId, release)
+            ?? throw new InvalidOperationException(
+                $"{formKey} is indexed in {destinationPlugin.Name} but SourceUnitResolver cannot find its source unit.");
+
+        var replacement = ReadCopySourceRecord(sourcePlugin, formKey, sourceDocument, release);
+        ContainerChildFields.ClearAllChildSlots(replacement);
+        var destinationRecord = ReadRecordFromSource(_codec, logger, unit.FullPath, existingTarget, release);
+        ContainerChildFields.TransplantChildSlots(destinationRecord, replacement);
+
+        var writePath = RenameSourceUnit(unit, replacement, existingTarget);
+        var newBody = SerializeAndWrite(_codec, replacement, writePath, release);
+        index.ApplyWorkingTreeChanges(destinationPlugin, [(formKey, newBody)]);
+        mirror.ReapplyFilter();
+
+        if (logger.IsEnabled(LogLevel.Information))
+        {
+            logger.LogInformation(
+                "Copied {FormKey} from {SourcePlugin} ({SourceOrigin}) as an override into {DestinationPlugin} " +
+                "({DestinationOrigin}) — replaced the existing override's own fields in place",
+                formKey, sourcePlugin.Name, sourcePlugin.Origin, destinationPlugin.Name, destinationPlugin.Origin);
+        }
+        return RecordEditResult.Success();
+    }
+
+    /// <summary>
+    /// The DIAL half of Copy as New Record (#550 AC5) — the topic and each of its folder-split
+    /// Responses draw fresh native FormKeys (the same <see cref="ResolveTargetFormKey"/> resolution,
+    /// once per record), landing under a destination override of the topic's own parent quest:
+    /// reused untouched when it exists, auto-created bare and Partial Form when it doesn't (the
+    /// parent-chain recipe <see cref="RecordCopy.CreateInteriorCellParent"/> documents — its own doc
+    /// comment carries the full xEdit-parity argument, not repeated here). Each copied record's
+    /// self-link is remapped onto its own new FormKey; links <i>between</i> copied siblings are
+    /// deliberately not (a copied response naming its sibling keeps naming the original — xEdit's
+    /// own behavior, per the #440 ruling).
+    /// </summary>
+    private RecordEditResult CopyDialogTopicAsNewRecord(
+        IRecordIndex index, PluginKey sourcePlugin, string formKey, RecordDocument document,
+        PluginKey destinationPlugin, string destinationModFolder, GameRelease release, string? requestedFormKey)
+    {
+        var reads = index.At(RecordRef.Effective);
+        var parentQuest = reads.GetContainerParent(sourcePlugin, formKey)
+            ?? throw new InvalidOperationException(
+                $"{sourcePlugin.Name}'s index names no parent quest for dialog topic {formKey} — " +
+                "container_child resolved every other read of this record.");
+
+        if (ResolveTargetFormKey(index, destinationPlugin, requestedFormKey, out var targetFormKey) is { } refusedTarget)
+            return refusedTarget;
+
+        // The parent quest override, found or minted — resolved to its own directory either way.
+        var questDirectory = EnsureContainerAncestorDirectory(
+            index, reads, sourcePlugin, parentQuest.ParentFormKey, parentQuest.ParentRecordType,
+            destinationPlugin, destinationModFolder, release);
+        var topicsDirectory = Path.Combine(questDirectory, parentQuest.SlotName);
+        Directory.CreateDirectory(topicsDirectory);
+
+        // The topic itself: duplicate under the fresh key, self-link remapped, its own directory at
+        // the slot's next order index.
+        var topicRecord = ReadCopySourceRecord(sourcePlugin, formKey, document, release)
+            .Duplicate(FormKey.Factory(targetFormKey));
+        if (topicRecord is IFormLinkContainer selfLinking)
+        {
+            selfLinking.RemapLinks(new Dictionary<FormKey, FormKey> { [FormKey.Factory(formKey)] = FormKey.Factory(targetFormKey) });
+        }
+        var topicDirectory = Path.Combine(
+            topicsDirectory,
+            $"[{SourceUnitResolver.NextOrderIndex(topicsDirectory)}] " +
+                SourceUnitResolver.LeafNameFor(FormKey.Factory(targetFormKey), topicRecord.EditorID, isDirectory: true));
+        Directory.CreateDirectory(topicDirectory);
+        var topicBody = SerializeAndWrite(
+            _codec, topicRecord, Path.Combine(topicDirectory, RecordDataFileName), release);
+        index.CreateWorkingTreeRecord(destinationPlugin, targetFormKey, document.RecordType, topicBody);
+
+        // The topic's own membership in the quest's slot: whatever children the destination quest
+        // already has, plus this one at the end.
+        AppendChildToSlot(
+            index, reads, destinationPlugin, parentQuest.ParentFormKey, parentQuest.ParentRecordType,
+            parentQuest.SlotName, targetFormKey);
+
+        // Each response: fresh key, self-link remapped, sibling links untouched, source order kept.
+        // Allocation and row-creation interleave so ResolveTargetFormKey's next-free scan always
+        // sees the key the previous child just took.
+        var copiedChildren = new List<(string ChildFormKey, int SlotIndex)>();
+        foreach (var child in reads.GetContainerChildren(sourcePlugin, formKey).OrderBy(c => c.SlotIndex))
+        {
+            var childDocument = reads.GetDocument(child.ChildFormKey, sourcePlugin)
+                ?? throw new InvalidOperationException(
+                    $"{sourcePlugin.Name}'s index names {child.ChildFormKey} as a child of {formKey} but holds no document for it.");
+            if (ResolveTargetFormKey(index, destinationPlugin, requestedFormKey: null, out var childFormKey) is { } childRefused)
+            {
+                // The topic (and any earlier responses) are already written — a Refused here would
+                // silently leave that partial state behind a "nothing happened" shape. Refusals
+                // precede writes; a fault after them is an exception carrying the disclosure, the
+                // same posture RenumberRecord's own mid-cascade catch documents.
+                throw new IOException(
+                    $"Allocating a FormKey for copied response {child.ChildFormKey} failed after the new topic " +
+                    $"{targetFormKey} (and {copiedChildren.Count} earlier response(s)) already landed in " +
+                    $"{destinationPlugin.Name}'s working tree — review them in the Source Control panel. " +
+                    $"Underlying refusal: {childRefused.Message}");
+            }
+
+            var childRecord = ReadCopySourceRecord(sourcePlugin, child.ChildFormKey, childDocument, release)
+                .Duplicate(FormKey.Factory(childFormKey));
+            if (childRecord is IFormLinkContainer childSelfLinking)
+            {
+                childSelfLinking.RemapLinks(
+                    new Dictionary<FormKey, FormKey> { [FormKey.Factory(child.ChildFormKey)] = FormKey.Factory(childFormKey) });
+            }
+
+            var childSlotDirectory = Path.Combine(topicDirectory, child.SlotName);
+            Directory.CreateDirectory(childSlotDirectory);
+            var childPath = Path.Combine(
+                childSlotDirectory,
+                $"[{copiedChildren.Count}] " +
+                    SourceUnitResolver.LeafNameFor(FormKey.Factory(childFormKey), childRecord.EditorID, isDirectory: false));
+            var childBody = SerializeAndWrite(_codec, childRecord, childPath, release);
+            index.CreateWorkingTreeRecord(destinationPlugin, childFormKey, childDocument.RecordType, childBody);
+            copiedChildren.Add((childFormKey, copiedChildren.Count));
+        }
+        if (copiedChildren.Count > 0)
+        {
+            index.ReplaceContainerChildSlot(
+                destinationPlugin, targetFormKey, document.RecordType, "Responses", copiedChildren);
+        }
+
+        mirror.ReapplyFilter();
+
+        if (logger.IsEnabled(LogLevel.Information))
+        {
+            logger.LogInformation(
+                "Copied {FormKey} from {SourcePlugin} ({SourceOrigin}) as new dialog topic {NewFormKey} into " +
+                "{DestinationPlugin} ({DestinationOrigin}) with {ChildCount} response(s), each under a fresh FormKey",
+                formKey, sourcePlugin.Name, sourcePlugin.Origin, targetFormKey, destinationPlugin.Name,
+                destinationPlugin.Origin, copiedChildren.Count);
+        }
+        return RecordEditResult.Success(targetFormKey);
+    }
+
+    /// <summary>
+    /// The INFO half of Copy as New Record (#550 AC5) — the response draws a fresh native FormKey
+    /// and lands in the destination's override of its own parent topic, with the whole missing
+    /// ancestor chain (topic, and the topic's own quest) auto-created bare and Partial Form when
+    /// absent — <see cref="EnsureContainerAncestorDirectory"/>'s recursion, the same silent
+    /// parent-chain rule every copy gesture here follows.
+    /// </summary>
+    private RecordEditResult CopyDialogResponseAsNewRecord(
+        IRecordIndex index, PluginKey sourcePlugin, string formKey, RecordDocument document,
+        PluginKey destinationPlugin, string destinationModFolder, GameRelease release, string? requestedFormKey)
+    {
+        var reads = index.At(RecordRef.Effective);
+        var parentTopic = reads.GetContainerParent(sourcePlugin, formKey)
+            ?? throw new InvalidOperationException(
+                $"{sourcePlugin.Name}'s index names no parent topic for dialog response {formKey} — " +
+                "container_child resolved every other read of this record.");
+
+        if (ResolveTargetFormKey(index, destinationPlugin, requestedFormKey, out var targetFormKey) is { } refusedTarget)
+            return refusedTarget;
+
+        var topicDirectory = EnsureContainerAncestorDirectory(
+            index, reads, sourcePlugin, parentTopic.ParentFormKey, parentTopic.ParentRecordType,
+            destinationPlugin, destinationModFolder, release);
+        var slotDirectory = Path.Combine(topicDirectory, parentTopic.SlotName);
+        Directory.CreateDirectory(slotDirectory);
+
+        var newRecord = ReadCopySourceRecord(sourcePlugin, formKey, document, release)
+            .Duplicate(FormKey.Factory(targetFormKey));
+        if (newRecord is IFormLinkContainer selfLinking)
+        {
+            selfLinking.RemapLinks(new Dictionary<FormKey, FormKey> { [FormKey.Factory(formKey)] = FormKey.Factory(targetFormKey) });
+        }
+
+        var newPath = Path.Combine(
+            slotDirectory,
+            $"[{SourceUnitResolver.NextOrderIndex(slotDirectory)}] " +
+                SourceUnitResolver.LeafNameFor(FormKey.Factory(targetFormKey), newRecord.EditorID, isDirectory: false));
+        var newBody = SerializeAndWrite(_codec, newRecord, newPath, release);
+        index.CreateWorkingTreeRecord(destinationPlugin, targetFormKey, document.RecordType, newBody);
+        AppendChildToSlot(
+            index, reads, destinationPlugin, parentTopic.ParentFormKey, parentTopic.ParentRecordType,
+            parentTopic.SlotName, targetFormKey);
+
+        mirror.ReapplyFilter();
+
+        if (logger.IsEnabled(LogLevel.Information))
+        {
+            logger.LogInformation(
+                "Copied {FormKey} from {SourcePlugin} ({SourceOrigin}) as new dialog response {NewFormKey} into " +
+                "{DestinationPlugin} ({DestinationOrigin})",
+                formKey, sourcePlugin.Name, sourcePlugin.Origin, targetFormKey, destinationPlugin.Name,
+                destinationPlugin.Origin);
+        }
+        return RecordEditResult.Success(targetFormKey);
+    }
+
+    /// <summary>
+    /// The destination's override of a copied record's ancestor, found or minted, resolved to its
+    /// own directory either way. A missing ancestor auto-creates bare and Partial Form (the recipe
+    /// <see cref="RecordCopy.CreateInteriorCellParent"/> documents), recursing when the ancestor is
+    /// itself folder-split — a missing DialogTopic first ensures its own quest, so an INFO copied
+    /// into an empty destination builds the whole chain. Overrides keep their original FormKeys
+    /// throughout; only the record the user copies draws a fresh one.
+    /// </summary>
+    private string EnsureContainerAncestorDirectory(
+        IRecordIndex index, IRecordReads reads, PluginKey sourcePlugin, string ancestorFormKey,
+        string ancestorRecordType, PluginKey destinationPlugin, string destinationModFolder, GameRelease release)
+    {
+        if (reads.GetDocument(ancestorFormKey, destinationPlugin) is { } existing)
+        {
+            var unit = SourceUnitResolver.Resolve(
+                    reads, destinationPlugin, destinationModFolder, ancestorFormKey,
+                    existing.RecordType, existing.EditorId, release)
+                ?? throw new InvalidOperationException(
+                    $"{ancestorFormKey} is indexed in {destinationPlugin.Name} but SourceUnitResolver cannot find its source unit.");
+            return Path.GetDirectoryName(unit.FullPath)!;
+        }
+
+        var bare = MajorRecordInstantiator.Activator(
+            FormKey.Factory(ancestorFormKey), release, schemaReflector.GetSchemas(release)[ancestorRecordType].RecordType);
+        PartialFormFlag.Set(bare, true);
+
+        string recordDataPath;
+        ContainerChildRow? ownParent = null;
+        if (RecordTypeDispatch.For(release).GroupFolderNameFor(ancestorRecordType) is not null)
+        {
+            // A top-level container (Quest): its own directory at the group folder's next index.
+            recordDataPath = Path.Combine(destinationModFolder, ContainerOwnDirectoryPath(
+                destinationModFolder, destinationPlugin.Name, ancestorRecordType, ancestorFormKey, editorId: null, release));
+        }
+        else
+        {
+            // A folder-split container (DialogTopic): under its own parent's slot, ensured first.
+            ownParent = reads.GetContainerParent(sourcePlugin, ancestorFormKey)
+                ?? throw new InvalidOperationException(
+                    $"{sourcePlugin.Name}'s index names no parent for folder-split container {ancestorFormKey}.");
+            var parentDirectory = EnsureContainerAncestorDirectory(
+                index, reads, sourcePlugin, ownParent.Value.ParentFormKey, ownParent.Value.ParentRecordType,
+                destinationPlugin, destinationModFolder, release);
+            var slotDirectory = Path.Combine(parentDirectory, ownParent.Value.SlotName);
+            Directory.CreateDirectory(slotDirectory);
+            recordDataPath = Path.Combine(
+                slotDirectory,
+                $"[{SourceUnitResolver.NextOrderIndex(slotDirectory)}] " +
+                    SourceUnitResolver.LeafNameFor(FormKey.Factory(ancestorFormKey), editorId: null, isDirectory: true),
+                RecordDataFileName);
+        }
+
+        Directory.CreateDirectory(Path.GetDirectoryName(recordDataPath)!);
+        var body = SerializeAndWrite(_codec, bare, recordDataPath, release);
+        index.CreateWorkingTreeRecord(destinationPlugin, ancestorFormKey, ancestorRecordType, body);
+        if (ownParent is { } parentSlot)
+        {
+            AppendChildToSlot(
+                index, reads, destinationPlugin, parentSlot.ParentFormKey, parentSlot.ParentRecordType,
+                parentSlot.SlotName, ancestorFormKey);
+        }
+        return Path.GetDirectoryName(recordDataPath)!;
+    }
+
+    /// <summary>One new child appended at the end of a folder-split slot's <c>container_child</c>
+    /// rows — existing children keep their order, re-based contiguous, the same shape
+    /// <see cref="SourceUnitResolver.RenormalizeGroupOrder"/> keeps the matching file names in.</summary>
+    private static void AppendChildToSlot(
+        IRecordIndex index, IRecordReads reads, PluginKey destinationPlugin,
+        string parentFormKey, string parentRecordType, string slotName, string childFormKey)
+    {
+        var children = reads.GetContainerChildren(destinationPlugin, parentFormKey)
+            .Where(c => c.SlotName.Equals(slotName, StringComparison.Ordinal))
+            .OrderBy(c => c.SlotIndex)
+            .Select((c, i) => (c.ChildFormKey, i))
+            .ToList();
+        children.Add((childFormKey, children.Count));
+        index.ReplaceContainerChildSlot(destinationPlugin, parentFormKey, parentRecordType, slotName, children);
+    }
+
+    /// <summary>
+    /// #550 AC6's narrow load-order gate for Copy as Override: a destination loading before the
+    /// record's origin plugin cannot hold an <i>over</i>ride of it — the result would be an
+    /// underride (#439's own operation, with semantics this gesture does not implement), silently
+    /// beaten by the origin at runtime. Only the direction is checked; a plugin the load order does
+    /// not place (no slot) passes, leaving the existing gates to answer for it.
+    /// </summary>
+    private RecordEditResult? RefuseIfUnderride(string formKey, PluginKey destinationPlugin)
+    {
+        var plugins = mirror.LoadOrder?.Plugins;
+        if (plugins == null) return null;
+
+        // A FormKey carries only a ModKey (a filename), so the origin lookup is name-based by
+        // nature; when the load order holds two same-named copies (ADR-0036's duplicate-filename
+        // case) the winning one is the one whose records the FormKey resolves against.
+        var originName = FormKey.Factory(formKey).ModKey.FileName.String;
+        var sameNamed = plugins.Where(p => p.Name.Equals(originName, StringComparison.OrdinalIgnoreCase)).ToList();
+        var originIndex = (sameNamed.FirstOrDefault(p => p.Winning) ?? sameNamed.FirstOrDefault())?.LoadOrderIndex;
+        var destinationIndex = plugins.FirstOrDefault(
+            p => p.Name.Equals(destinationPlugin.Name, StringComparison.OrdinalIgnoreCase)
+                && p.Origin.Equals(destinationPlugin.Origin, StringComparison.Ordinal))?.LoadOrderIndex;
+        if (originIndex is not { } origin || destinationIndex is not { } destination || destination >= origin)
+            return null;
+
+        return RecordEditResult.Refused(
+            RecordEditRefusal.UnderrideDestination,
+            $"{destinationPlugin.Name} loads before {originName}, which originates {formKey} — copying it " +
+            "there would be an underride, not an override: the origin's copy would still win at runtime. " +
+            "Pick a destination that loads after the origin.");
+    }
+
+    /// <summary>
+    /// The batch copy door (#550 AC6/Q4): every request validated up front through the same
+    /// server-side gates the single gestures use — record resolvable and destination writable
+    /// (<see cref="ResolveCopySource"/>), type allowed for the gesture, load-order direction
+    /// (<see cref="RefuseIfUnderride"/>) — then committed sequentially. One bad request refuses the
+    /// whole batch before anything writes; a genuinely unexpected mid-commit failure stops the
+    /// batch, leaving the partial landing visible in <see cref="BatchCopyOutcome.Results"/>
+    /// (ADR-0026). One endpoint, one validation site — Q4's ruling against client-side
+    /// pre-validation drifting from server truth.
+    /// </summary>
+    public BatchCopyOutcome CopyRecordsBatch(IReadOnlyList<RecordCopyRequest> requests)
+    {
+        var seenOverrideTargets = new HashSet<(string, PluginKey)>();
+        var seenRequestedFormKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var request in requests)
+        {
+            // The two foreseeable intra-batch collisions, refused up front rather than left to
+            // land partially at commit: the same record copied as an override twice into one
+            // destination, and two copy-as-new requests claiming one caller-typed FormKey.
+            if (!request.AsNewRecord && !seenOverrideTargets.Add((request.FormKey, request.DestinationPlugin)))
+            {
+                return new BatchCopyOutcome(false, request.FormKey, RecordEditResult.Refused(
+                    RecordEditRefusal.FormKeyCollision,
+                    $"{request.FormKey} is copied as an override into {request.DestinationPlugin.Name} more than once in this batch."), []);
+            }
+            if (request is { AsNewRecord: true, RequestedFormKey: { } requested } && !seenRequestedFormKeys.Add(requested))
+            {
+                return new BatchCopyOutcome(false, request.FormKey, RecordEditResult.Refused(
+                    RecordEditRefusal.FormKeyCollision,
+                    $"{requested} is requested as the new FormKey by more than one request in this batch."), []);
+            }
+            if (ValidateCopyRequest(request) is { } refusal)
+                return new BatchCopyOutcome(false, request.FormKey, refusal, []);
+        }
+
+        var results = new List<BatchCopyItemOutcome>();
+        foreach (var request in requests)
+        {
+            RecordEditResult result;
+            try
+            {
+                result = request.AsNewRecord
+                    ? CopyRecordAsNewRecord(request.SourcePlugin, request.FormKey, request.DestinationPlugin, request.RequestedFormKey)
+                    : CopyRecordAsOverride(request.SourcePlugin, request.FormKey, request.DestinationPlugin);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                // A mid-commit write fault must not escape as an exception that discards the
+                // partial landing already in `results` (ADR-0026: partial success is a structured
+                // collection, never swallowed) — the items that landed are real, reviewable
+                // working-tree changes the response has to disclose.
+                logger.LogError(ex, "Batch copy failed mid-commit at {FormKey}", request.FormKey);
+                result = RecordEditResult.Refused(
+                    RecordEditRefusal.BatchWriteFailed,
+                    $"Copying {request.FormKey} failed mid-batch: {ex.Message}. Everything before it in " +
+                    "this batch already landed as working-tree changes — review them in the Source Control panel.");
+            }
+            results.Add(new BatchCopyItemOutcome(request.FormKey, result));
+            // Pre-validated, so a refusal here is a race (something changed mid-batch) — stop
+            // rather than pile further writes onto a state the validation no longer describes.
+            if (!result.Applied) return new BatchCopyOutcome(false, request.FormKey, result, results);
+        }
+        return new BatchCopyOutcome(true, null, null, results);
+    }
+
+    /// <summary>The one statement of which container types Copy as New Record supports (#550 AC5 —
+    /// xEdit's DIAL/INFO/QUST allowance): the concrete type name when the record type is in the
+    /// family, null otherwise. Shared by <see cref="CopyRecordAsNewRecord"/>'s dispatch and
+    /// <see cref="ValidateCopyRequest"/>'s pre-check so the two cannot drift.</summary>
+    private static string? CopyAsNewContainerFamilyName(string recordType, GameRelease release)
+    {
+        var name = RecordTypeDispatch.For(release).ConcreteFor(recordType)?.Name;
+        return name is "Quest" or "DialogTopic" or "DialogResponses" ? name : null;
+    }
+
+    /// <summary>
+    /// The write-free half of one copy request's gates, composed from the same predicates the
+    /// single gestures run — kept in one place so the batch's pre-validation cannot drift from what
+    /// <see cref="CopyRecordAsOverride"/>/<see cref="CopyRecordAsNewRecord"/> would actually refuse.
+    /// Collision is deliberately not validated here: for the container family a collision is AC7's
+    /// replace (not a refusal), and for copy-as-new the allocator only answers accurately at commit
+    /// time, one mint after another.
+    /// </summary>
+    private RecordEditResult? ValidateCopyRequest(RecordCopyRequest request)
+    {
+        if (ResolveCopySource(request.DestinationPlugin, request.SourcePlugin, request.FormKey, out var source) is { } blocked)
+            return blocked;
+        var (index, _, release, document) = source;
+        var dispatch = RecordTypeDispatch.For(release);
+        var isFlat = dispatch.FolderNameFor(document.RecordType) is not null;
+
+        if (request.AsNewRecord)
+        {
+            if (RefuseIfDisallowedForCopyAsNewRecord(document.RecordType) is { } disallowed) return disallowed;
+            if (!isFlat && CopyAsNewContainerFamilyName(document.RecordType, release) is null
+                && RefuseIfContainerType(document.RecordType, release) is { } container)
+            {
+                return container;
+            }
+            // A caller-typed target is fully checkable without writing (native to the destination,
+            // free at both refs, well-formed) — the same resolution the commit itself will run, so
+            // a foreseeable key collision refuses the batch up front rather than landing partially.
+            if (request.RequestedFormKey is not null
+                && ResolveTargetFormKey(index, request.DestinationPlugin, request.RequestedFormKey, out _) is { } badTarget)
+            {
+                return badTarget;
+            }
+            return null;
+        }
+
+        if (RefuseIfUnderride(request.FormKey, request.DestinationPlugin) is { } underride) return underride;
+        var isPlacedReference = dispatch.GroupFolderNameFor(document.RecordType) is null
+            && index.At(RecordRef.Effective).GetPlacement(request.FormKey, request.SourcePlugin) != null;
+        if (!isPlacedReference
+            && RefuseIfCopySourceHasNoContainerOfItsOwn(document.RecordType, release) is { } noContainer)
+        {
+            return noContainer;
+        }
+        return null;
+    }
+
     /// <summary>Copy as Override's own seed read: the record's source text, verbatim — no
     /// Mutagen deserialization, since <see cref="RecordDocument.Body"/> is already byte-identical to
     /// the source file. Mirrors <see cref="EditField"/>'s read posture for a tracked plugin (the
@@ -775,20 +1272,35 @@ public sealed class RecordEditService(
     /// untracked one — the only representation that exists for it.</summary>
     private string ReadCopySourceBody(PluginKey sourcePlugin, string formKey, RecordDocument document, GameRelease release)
     {
-        if (ModFolders.TrackedOf(mirror.LoadOrder, sourcePlugin) is { } sourceModFolder)
-        {
-            var fullPath = SourceUnitResolver.FlatSourcePath(
-                sourceModFolder, sourcePlugin.Name, document.RecordType, formKey, document.EditorId, release);
-            if (File.Exists(fullPath)) return File.ReadAllText(fullPath);
-
-            // The same never-assume-exclusive-ownership diagnostic ReadRecordFromSource gives, for
-            // the same case here: a tracked source whose file went missing outside Modbench between
-            // the last reconcile and this copy running — worth knowing about, unlike the untracked
-            // fallback below, which is the expected, silent case.
-            logger.LogWarning(
-                "Source file {SourcePath} is missing; copying from the indexed document instead", fullPath);
-        }
+        if (TrackedCopySourcePath(sourcePlugin, formKey, document, release) is { } fullPath)
+            return File.ReadAllText(fullPath);
         return document.Body!;
+    }
+
+    /// <summary>
+    /// Where a tracked copy source's own file is, or null when the indexed body is the right (or
+    /// only) representation: the source plugin untracked, the record embedded in a parent's document
+    /// (its own indexed body is byte-accurate; the parent's file is the wrong type to read it as),
+    /// or the file missing on disk — the never-assume-exclusive-ownership case, logged the same way
+    /// <see cref="ReadRecordFromSource"/> logs it. Resolution is full
+    /// <see cref="SourceUnitResolver.Resolve"/>, never <see cref="SourceUnitResolver.FlatSourcePath"/>
+    /// alone — a container copy source (a Quest, a folder-split Response) has no flat path and threw
+    /// <see cref="NotSupportedException"/> under the old computed-path read.
+    /// </summary>
+    private string? TrackedCopySourcePath(PluginKey sourcePlugin, string formKey, RecordDocument document, GameRelease release)
+    {
+        if (ModFolders.TrackedOf(mirror.LoadOrder, sourcePlugin) is not { } sourceModFolder) return null;
+        if (mirror.Reads is not { } reads) return null;
+
+        var unit = SourceUnitResolver.Resolve(
+            reads, sourcePlugin, sourceModFolder, formKey, document.RecordType, document.EditorId, release);
+        if (unit is { IsEmbedded: false } own && File.Exists(own.FullPath)) return own.FullPath;
+        if (unit is { IsEmbedded: true }) return null;
+
+        logger.LogWarning(
+            "Source file for {FormKey} in {SourcePlugin} is missing; copying from the indexed document instead",
+            formKey, sourcePlugin.Name);
+        return null;
     }
 
     /// <summary>Copy as New Record's own seed read: the same posture as
@@ -796,17 +1308,8 @@ public sealed class RecordEditService(
     /// an object to copy, unlike the override path.</summary>
     private IMajorRecord ReadCopySourceRecord(PluginKey sourcePlugin, string formKey, RecordDocument document, GameRelease release)
     {
-        if (ModFolders.TrackedOf(mirror.LoadOrder, sourcePlugin) is { } sourceModFolder)
-        {
-            var fullPath = SourceUnitResolver.FlatSourcePath(
-                sourceModFolder, sourcePlugin.Name, document.RecordType, formKey, document.EditorId, release);
-            if (File.Exists(fullPath))
-                return _codec.DeserializeAsync(fullPath, release, document.RecordType).GetAwaiter().GetResult();
-
-            // Same diagnostic as ReadCopySourceBody's own missing-file branch above.
-            logger.LogWarning(
-                "Source file {SourcePath} is missing; copying from the indexed document instead", fullPath);
-        }
+        if (TrackedCopySourcePath(sourcePlugin, formKey, document, release) is { } fullPath)
+            return _codec.DeserializeAsync(fullPath, release, document.RecordType).GetAwaiter().GetResult();
 
         return _codec
             .DeserializeFromBytesAsync(Encoding.UTF8.GetBytes(document.Body!), release, document.RecordType)
@@ -1163,10 +1666,11 @@ public sealed class RecordEditService(
         IRecordIndex index, PluginKey plugin, string? requestedFormKey, out string targetFormKey)
     {
         var mod = mirror.LoadOrder!.GetMod(plugin.Name, plugin.Origin!);
+        var isLight = IsLightAtEffective(index, plugin, mod);
 
         if (requestedFormKey != null)
         {
-            if (RefuseIfNotNativeTarget(requestedFormKey, plugin, mod) is { } notNative)
+            if (RefuseIfNotNativeTarget(requestedFormKey, plugin, isLight) is { } notNative)
             {
                 targetFormKey = "";
                 return notNative;
@@ -1182,7 +1686,7 @@ public sealed class RecordEditService(
             return null;
         }
 
-        var allocated = NextFreeNativeFormId(index, plugin, mod);
+        var allocated = NextFreeNativeFormId(index, plugin, mod, isLight);
         if (allocated != null)
         {
             targetFormKey = allocated;
@@ -1191,7 +1695,25 @@ public sealed class RecordEditService(
 
         targetFormKey = "";
         return RecordEditResult.Refused(
-            RecordEditRefusal.FormKeySpaceExhausted, FormKeySpaceExhaustedMessage(plugin, IsLightPlugin(mod, plugin)));
+            RecordEditRefusal.FormKeySpaceExhausted, FormKeySpaceExhaustedMessage(plugin, isLight));
+    }
+
+    /// <summary>
+    /// Whether <paramref name="plugin"/> is ESL-flagged, answered from its header <b>document</b> at
+    /// Effective when one is indexed — the source tree is the truth (ADR-0041), and the one write
+    /// door onto this flag (<see cref="EditHeaderIsLight"/>) lands there, so a flag flipped this
+    /// session caps FormID minting immediately with no reconcile in between. The loaded mod object
+    /// (<see cref="PluginFlagPredicates.IsLight"/>) only answers when no header document exists.
+    /// </summary>
+    private static bool IsLightAtEffective(IRecordIndex index, PluginKey plugin, IModGetter? mod)
+    {
+        var headerFormKey = HeaderIndexer.FormKeyFor(ModKey.FromFileName(plugin.Name));
+        if (index.At(RecordRef.Effective).GetDocument(headerFormKey, plugin)?.Body is { } body)
+        {
+            return HeaderDocument.IsLight(Encoding.UTF8.GetBytes(body))
+                || plugin.Name.EndsWith(".esl", StringComparison.OrdinalIgnoreCase);
+        }
+        return IsLightPlugin(mod, plugin);
     }
 
     /// <summary>
@@ -1211,7 +1733,7 @@ public sealed class RecordEditService(
     /// (<see cref="PluginFlagPredicates.IsLight"/>). Checked after ownership, not before: a FormKey
     /// belonging to a different plugin is refused for that reason regardless of its magnitude.</para>
     /// </summary>
-    private static RecordEditResult? RefuseIfNotNativeTarget(string requestedFormKey, PluginKey plugin, IModGetter? mod)
+    private static RecordEditResult? RefuseIfNotNativeTarget(string requestedFormKey, PluginKey plugin, bool isLight)
     {
         var parsed = FormKey.Factory(requestedFormKey);
         var requestedOwner = parsed.ModKey.FileName.String;
@@ -1223,13 +1745,13 @@ public sealed class RecordEditService(
                 "must be native to the plugin it is being created or renumbered into.");
         }
 
-        if (IsLightPlugin(mod, plugin) && parsed.ID > 0xFFF)
+        if (isLight && parsed.ID > PluginFlagPredicates.LightLocalFormIdCap)
         {
             return RecordEditResult.Refused(
                 RecordEditRefusal.LightPluginFormIdOutOfRange,
                 $"{requestedFormKey} exceeds {plugin.Name}'s ESL local FormID range — a light-flagged " +
-                "plugin can only address local FormIDs up to 0xFFF. Choose a FormID within that range, " +
-                "or un-flag the plugin as ESL.");
+                $"plugin can only address local FormIDs up to 0x{PluginFlagPredicates.LightLocalFormIdCap:X}. " +
+                "Choose a FormID within that range, or un-flag the plugin as ESL.");
         }
 
         return null;
@@ -1268,7 +1790,7 @@ public sealed class RecordEditService(
     /// as every other refusal on this write path, not a fault for the caller's generic exception
     /// handling to (mis)classify as "no usable load order."</para>
     /// </summary>
-    private static string? NextFreeNativeFormId(IRecordIndex index, PluginKey plugin, IModGetter? mod)
+    private static string? NextFreeNativeFormId(IRecordIndex index, PluginKey plugin, IModGetter? mod, bool isLight)
     {
         var floor = mod?.GetDefaultInitialNextFormID() ?? 0x800u;
         var highest = index.At(RecordRef.Effective).GetNativeFormKeys(plugin)
@@ -1277,7 +1799,7 @@ public sealed class RecordEditService(
             .DefaultIfEmpty(0u)
             .Max();
         var next = Math.Max(floor, highest + 1);
-        var cap = IsLightPlugin(mod, plugin) ? 0xFFFu : 0xFFFFFFu;
+        var cap = isLight ? PluginFlagPredicates.LightLocalFormIdCap : FormID.FullIdMask;
         return next > cap ? null : $"{next:X6}:{plugin.Name}";
     }
 
@@ -1312,11 +1834,12 @@ public sealed class RecordEditService(
             return RecordEditResult.Refused(RecordEditRefusal.RecordNotFound, "No load order has been received.");
 
         var mod = mirror.LoadOrder!.GetMod(plugin.Name, plugin.Origin!);
-        var formKey = NextFreeNativeFormId(index, plugin, mod);
+        var isLight = IsLightAtEffective(index, plugin, mod);
+        var formKey = NextFreeNativeFormId(index, plugin, mod, isLight);
         return formKey != null
             ? RecordEditResult.Success(formKey)
             : RecordEditResult.Refused(
-                RecordEditRefusal.FormKeySpaceExhausted, FormKeySpaceExhaustedMessage(plugin, IsLightPlugin(mod, plugin)));
+                RecordEditRefusal.FormKeySpaceExhausted, FormKeySpaceExhaustedMessage(plugin, isLight));
     }
 
     /// <summary>
@@ -1567,6 +2090,44 @@ public sealed class RecordEditService(
     /// nudge to give this method (or replace it with) a real write path, not a refusal that quietly
     /// keeps lying about the field being read-only.</para>
     /// </summary>
+    /// <summary>The synthetic header field name the ESL flag is written through — see
+    /// <see cref="EditHeaderIsLight"/>.</summary>
+    internal const string IsLightFieldPath = "is_light";
+
+    /// <summary>
+    /// #290's header write: sets or clears the ESL (<c>Small</c>) flag by transforming the header's
+    /// own current document (<see cref="HeaderDocument.WithLightFlag"/> — document in, canonical
+    /// document out, no in-memory mod consulted, so a stale loaded-plugin object can never leak
+    /// other header values into the write). The root <c>RecordData.json</c> and the index row move
+    /// together, the same two-step every other edit here lands as.
+    /// </summary>
+    private RecordEditResult EditHeaderIsLight(
+        IRecordIndex index, PluginKey plugin, SourceUnit unit, string formKey, JsonElement value)
+    {
+        if (value.ValueKind is not (JsonValueKind.True or JsonValueKind.False))
+        {
+            return RecordEditResult.Refused(
+                RecordEditRefusal.FieldValueShapeMismatch, $"'{IsLightFieldPath}' takes a JSON boolean.");
+        }
+
+        var currentBody = File.Exists(unit.FullPath)
+            ? File.ReadAllBytes(unit.FullPath)
+            : Encoding.UTF8.GetBytes(index.At(RecordRef.Effective).GetDocument(formKey, plugin)!.Body!);
+        var newBody = HeaderDocument.WithLightFlag(currentBody, value.GetBoolean());
+        var newText = Encoding.UTF8.GetString(newBody);
+
+        WriteBodyAtomic(unit.FullPath, newText);
+        index.ApplyWorkingTreeChanges(plugin, [(formKey, newText)]);
+        mirror.ReapplyFilter();
+
+        // Warn, not info, per the #290 ruling: flipping this flag shifts load-order behavior
+        // downstream, so the log keeps a visible record of every change to it.
+        logger.LogWarning(
+            "ESL flag on {Plugin} ({Origin}) set to {IsLight} via {Field}",
+            plugin.Name, plugin.Origin, value.GetBoolean(), IsLightFieldPath);
+        return RecordEditResult.Success();
+    }
+
     private static RecordEditResult RefuseHeaderFieldEdit(
         string fieldPath, IReadOnlyDictionary<string, RecordTableSchema> schemas)
     {

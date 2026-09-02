@@ -46,6 +46,14 @@ internal sealed class RecordCopy(ILoadOrderMirror mirror, SchemaReflector schema
     {
         if (!RecordEditService.IsFreeAtBothRefs(index, destinationPlugin, formKey))
         {
+            // #550 AC7: the explicitly-selected ref already held at Effective is replaced in place,
+            // at its existing slot position — never duplicated, never refused. Held only at Head
+            // (deleted in the working tree) still refuses: nothing at Effective to replace.
+            if (index.At(RecordRef.Effective).GetDocument(formKey, destinationPlugin) != null)
+            {
+                return ReplacePlacedReferenceInPlace(
+                    sourcePlugin, formKey, document, destinationPlugin, destinationModFolder, index, release);
+            }
             return RecordEditResult.Refused(
                 RecordEditRefusal.FormKeyCollision,
                 $"{formKey} is already held by a record in {destinationPlugin.Name} at some ref.");
@@ -132,6 +140,56 @@ internal sealed class RecordCopy(ILoadOrderMirror mirror, SchemaReflector schema
     }
 
     /// <summary>
+    /// #550 AC7's placed-reference replace: the destination's own cell keeps the ref at its exact
+    /// slot position (<see cref="ContainerChildFields.ReplaceInSlot"/> — append-after-remove would
+    /// silently reorder the GRUP), with the source's bytes swapped in. The destination's cell is
+    /// where <i>its</i> copy of the ref lives, which is the right one even when the source has since
+    /// moved the ref to a different cell.
+    /// </summary>
+    private RecordEditResult ReplacePlacedReferenceInPlace(
+        PluginKey sourcePlugin, string formKey, RecordDocument document,
+        PluginKey destinationPlugin, string destinationModFolder, IRecordIndex index, GameRelease release)
+    {
+        var reads = index.At(RecordRef.Effective);
+        var destinationPlacement = reads.GetPlacement(formKey, destinationPlugin)
+            ?? throw new InvalidOperationException(
+                $"{destinationPlugin.Name} holds {formKey} but its index has no placement row for it.");
+        var cellFormKey = destinationPlacement.ParentCell;
+        var cellDocument = reads.GetDocument(cellFormKey, destinationPlugin)
+            ?? throw new InvalidOperationException(
+                $"{destinationPlugin.Name}'s placement row parents {formKey} in {cellFormKey}, which it does not hold.");
+        var cellUnit = SourceUnitResolver.Resolve(
+                reads, destinationPlugin, destinationModFolder, cellFormKey, cellDocument.RecordType,
+                cellDocument.EditorId, release)
+            ?? throw new InvalidOperationException(
+                $"{cellFormKey} is indexed in {destinationPlugin.Name} but SourceUnitResolver cannot find its source unit.");
+
+        var cellRecord = RecordEditService.ReadRecordFromSource(codec, logger, cellUnit.FullPath, cellDocument, release);
+        var found = ContainerChildFields.FindEmbeddedChild(cellRecord, formKey)
+            ?? throw new InvalidOperationException(
+                $"{cellUnit.RelativePath} is indexed as holding {formKey}, but its own text does not carry it.");
+        var replacement = codec
+            .DeserializeFromBytesAsync(Encoding.UTF8.GetBytes(document.Body!), release, document.RecordType)
+            .GetAwaiter().GetResult();
+        ContainerChildFields.ReplaceInSlot(cellRecord, found.SlotName, found.SlotIndex, replacement);
+
+        var newCellBody = RecordEditService.SerializeAndWrite(codec, cellRecord, cellUnit.FullPath, release);
+        var newChildBody = Encoding.UTF8.GetString(
+            codec.SerializeToBytesAsync(replacement, release).GetAwaiter().GetResult());
+        index.ApplyWorkingTreeChanges(destinationPlugin, [(cellFormKey, newCellBody), (formKey, newChildBody)]);
+        mirror.ReapplyFilter();
+
+        if (logger.IsEnabled(LogLevel.Information))
+        {
+            logger.LogInformation(
+                "Copied {FormKey} from {SourcePlugin} ({SourceOrigin}) as an override into {DestinationPlugin} " +
+                "({DestinationOrigin}) — replaced the existing embedded copy in {CellFormKey} at its own slot",
+                formKey, sourcePlugin.Name, sourcePlugin.Origin, destinationPlugin.Name, destinationPlugin.Origin, cellFormKey);
+        }
+        return RecordEditResult.Success();
+    }
+
+    /// <summary>
     /// Mints <paramref name="cellLocation"/>'s exterior CELL
     /// (<paramref name="cellRecord"/> — already the right shape, either the real requested copy with
     /// its embedded children stripped, or a bare auto-created ancestor holding just a copied REFR) at
@@ -141,11 +199,10 @@ internal sealed class RecordCopy(ILoadOrderMirror mirror, SchemaReflector schema
     /// serializing). Shared by <see cref="RecordEditService.CopyRecordAsOverride"/>'s own exterior-Cell
     /// branch and <see cref="CopyPlacedReferenceAsOverride"/>'s own exterior branch.
     ///
-    /// <para>Never mints into a worldspace the destination already overrides: a second mint into an
-    /// already-existing WRLD directory risks a colliding sibling folder for the same FormKey rather
-    /// than landing inside the one that already exists there — the supported case is a destination
-    /// with no CELL/WRLD override to start with, refused rather than silently routed
-    /// around or half-implemented.</para>
+    /// <para>A destination that already overrides the worldspace (#597) keeps that override
+    /// untouched — document, index row and Partial Form flag all exactly as they were — and the new
+    /// block/sub-block/cell merge into its existing directory, resolved by scan
+    /// (<see cref="SpatialContainerMint.MintAsync"/>'s own doc comment has the naming argument).</para>
     ///
     /// <para>Writes the worldspace's and cell's own index rows from the exact bytes
     /// <see cref="SpatialContainerMint.MintAsync"/> wrote to the working tree
@@ -171,14 +228,22 @@ internal sealed class RecordCopy(ILoadOrderMirror mirror, SchemaReflector schema
                 $"{cellFormKey} has no recorded parent worldspace — cannot place it.");
         }
 
+        // The destination may already override the worldspace (#597 — the common real-world case:
+        // any plugin already touching this WRLD). Then the mint merges *into* that override's own
+        // directory — resolved by scanning the tree (its name carries the destination's EditorID,
+        // which the bare synthetic ancestor's never would) — and the WRLD's own document and index
+        // row are left exactly as they are.
         var reads = index.At(RecordRef.Effective);
-        if (reads.GetDocument(worldspaceFormKey, destinationPlugin) != null)
+        var existingWorldspace = reads.GetDocument(worldspaceFormKey, destinationPlugin);
+        string? existingWorldspaceDirectory = null;
+        if (existingWorldspace != null)
         {
-            return RecordEditResult.Refused(
-                RecordEditRefusal.ContainerParentMissingInDestination,
-                $"{destinationPlugin.Name} already overrides worldspace {worldspaceFormKey}, but not cell {cellFormKey} — " +
-                "placing a new cell inside an existing worldspace override is not supported yet; " +
-                "only a destination with neither the worldspace nor the cell can be copied into.");
+            var worldspaceUnit = SourceUnitResolver.Resolve(
+                reads, destinationPlugin, destinationModFolder, worldspaceFormKey,
+                existingWorldspace.RecordType, existingWorldspace.EditorId, release)
+                ?? throw new InvalidOperationException(
+                    $"{worldspaceFormKey} is indexed in {destinationPlugin.Name} but SourceUnitResolver cannot find its source unit.");
+            existingWorldspaceDirectory = Path.GetDirectoryName(worldspaceUnit.FullPath)!;
         }
 
         var sourceWorldspaceDocument = reads.GetDocument(worldspaceFormKey, sourcePlugin)
@@ -189,12 +254,16 @@ internal sealed class RecordCopy(ILoadOrderMirror mirror, SchemaReflector schema
 
         var syntheticMod = SpatialContainerMint.BuildSyntheticWorldspaceMod(
             destinationPlugin, worldspaceAncestor, cellLocation, cellRecord, release);
-        var minted = SpatialContainerMint.MintAsync(syntheticMod, destinationModFolder, destinationPlugin.Name)
+        var minted = SpatialContainerMint.MintAsync(
+                syntheticMod, destinationModFolder, destinationPlugin.Name, existingWorldspaceDirectory)
             .GetAwaiter().GetResult();
 
-        index.CreateWorkingTreeRecord(
-            destinationPlugin, worldspaceFormKey, sourceWorldspaceDocument.RecordType,
-            Encoding.UTF8.GetString(minted.WorldspaceBody));
+        if (existingWorldspace == null)
+        {
+            index.CreateWorkingTreeRecord(
+                destinationPlugin, worldspaceFormKey, sourceWorldspaceDocument.RecordType,
+                Encoding.UTF8.GetString(minted.WorldspaceBody));
+        }
         index.CreateCellLocation(destinationPlugin, cellLocation);
         index.CreateWorkingTreeRecord(destinationPlugin, cellFormKey, "cell", Encoding.UTF8.GetString(minted.CellBody));
 

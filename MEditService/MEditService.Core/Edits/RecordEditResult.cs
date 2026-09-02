@@ -1,3 +1,5 @@
+using MEditService.Core.Records;
+
 namespace MEditService.Core.Edits;
 
 /// <summary>
@@ -206,6 +208,23 @@ public enum RecordEditRefusal
     CopyAsNewRecordDisallowedForType,
 
     /// <summary>
+    /// Copy as Override into a destination plugin that loads <b>before</b> the record's origin —
+    /// the result would not be an override at all but an underride (#439's operation, which carries
+    /// its own semantics this gesture does not implement): the origin's copy would still win at
+    /// runtime, so the "copy" would silently do nothing in game. Narrow by design (#550 AC6): only
+    /// the load-order direction is checked here, nothing else of #439's scope.
+    /// </summary>
+    UnderrideDestination,
+
+    /// <summary>
+    /// A batch copy's commit phase hit a write fault (I/O, permissions) on one item after earlier
+    /// items already landed — the batch stops there and this marks the failed item, so the partial
+    /// landing reaches the client as ADR-0026's structured collection instead of a thrown exception
+    /// that would discard it. Never produced by validation, which refuses the batch whole.
+    /// </summary>
+    BatchWriteFailed,
+
+    /// <summary>
     /// A placed reference's own file was written, but one of the two index
     /// calls that follow it (<c>CreateWorkingTreeRecord</c> for the reference's own row,
     /// <c>ApplyWorkingTreeChanges</c> for its Cell's changed body) threw — a should-never-happen guard
@@ -268,3 +287,23 @@ public sealed record RecordEditResult(bool Applied, RecordEditRefusal Refusal, s
     public static RecordEditResult Refused(RecordEditRefusal refusal, string message) =>
         new(false, refusal, message);
 }
+
+/// <summary>One copy in a batch (#550 AC6/Q4): which record, from where, to where, and which of the
+/// two copy gestures. <see cref="RequestedFormKey"/> only means anything for a copy-as-new.</summary>
+public sealed record RecordCopyRequest(
+    PluginKey SourcePlugin, string FormKey, PluginKey DestinationPlugin, bool AsNewRecord,
+    string? RequestedFormKey = null);
+
+/// <summary>One batch request's own outcome, paired with the record it was for.</summary>
+public sealed record BatchCopyItemOutcome(string FormKey, RecordEditResult Result);
+
+/// <summary>
+/// The batch door's outcome (#550 AC6/Q4): refuse-or-commit-all. A validation failure refuses the
+/// whole batch before anything writes — <see cref="RefusedFormKey"/>/<see cref="Refusal"/> name the
+/// offending request, <see cref="Results"/> is empty. On commit, <see cref="Results"/> carries one
+/// entry per request actually attempted, in order; a genuinely unexpected mid-write failure stops
+/// the batch there, so a partial landing is visible as a shorter list (ADR-0026's structured
+/// partial-success posture — the frontend decides surfacing).
+/// </summary>
+public sealed record BatchCopyOutcome(
+    bool Applied, string? RefusedFormKey, RecordEditResult? Refusal, IReadOnlyList<BatchCopyItemOutcome> Results);

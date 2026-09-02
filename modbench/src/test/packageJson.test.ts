@@ -463,6 +463,27 @@ describe('package.json command titles and categories (#280)', () => {
   });
 });
 
+// #572 ruling 1: Change FormID exists only on a master record in a tracked plugin — an override
+// row (contextValue recordOverride) or an untracked one (recordImmutable) never offers it, while
+// the other record actions stay available there where they are legal.
+describe('package.json record-row context menu — renumber gated to native tracked rows (#572)', () => {
+  const contextMenus = () => pkg.contributes.menus['view/item/context'] as { command: string; when: string }[];
+  const whenOf = (command: string) => contextMenus().find((e) => e.command === command)!.when;
+
+  it('offers Change FormID only on viewItem == record', () => {
+    expect(whenOf('modbench.record.renumber')).toBe('view == modbench.pluginListTree && viewItem == record');
+  });
+
+  it('offers Remove on override rows too', () => {
+    expect(whenOf('modbench.record.delete')).toContain('recordOverride');
+  });
+
+  it('offers both copy gestures on override rows too', () => {
+    expect(whenOf('modbench.record.copyAsOverride')).toContain('recordOverride');
+    expect(whenOf('modbench.record.copyAsNewRecord')).toContain('recordOverride');
+  });
+});
+
 // Origin drift is absorbed automatically by the reconcile verb (ADR-0044) — there is nothing for
 // a plugin row to be, or offer, beyond the two contextValues `PluginListProvider` itself produces
 // (`plugin`, `pluginImplicit`); there is no manual re-read gesture.
@@ -515,7 +536,7 @@ describe('package.json "Open Editor to the Side" reachable from Plugins tree rec
       e.command === 'modbench.openEditorBeside' && e.when.includes('modbench.pluginListTree'));
     expect(entry, 'expected a modbench.openEditorBeside entry on the Plugins tree').toBeTruthy();
     expect(entry!.when).toBe(
-      'view == modbench.pluginListTree && (viewItem == record || viewItem == recordImmutable || viewItem == refr || viewItem == refrImmutable)');
+      'view == modbench.pluginListTree && (viewItem == record || viewItem == recordOverride || viewItem == recordImmutable || viewItem == refr || viewItem == refrImmutable)');
   });
 
   it('leaves the Referenced By group row\'s own existing entry untouched', () => {

@@ -43,8 +43,22 @@ public sealed class ContainerCopyFixture : IDisposable
     public const string QuestEditorId = "SourceQuest";
     public FormKey Quest { get; }
 
+    // A flat record in the source — the negative control for #550 AC7's container-only overwrite
+    // scope (a flat re-copy keeps #436's FormKeyCollision refusal).
+    public const string FlatNpcEditorId = "SourceFlatNpc";
+    public FormKey FlatNpc { get; }
+
     public const string DialogTopicEditorId = "SourceTopic";
     public FormKey DialogTopic { get; }
+
+    // Two responses under the topic — #550 AC5's "DIAL with INFOs": each copied child draws a fresh
+    // FormKey, and Response2's sibling link at Response1 stays pointed at the *original* (never
+    // remapped onto the copies — xEdit doesn't either).
+    public const string Response1EditorId = "SourceResponse1";
+    public FormKey Response1 { get; }
+
+    public const string Response2EditorId = "SourceResponse2";
+    public FormKey Response2 { get; }
 
     // Interior — the non-spatial case: a real block/sub-block pair, but one whose
     // number carries no gameplay meaning (PlacementWalker.Walk's own interior branch, verified: block/
@@ -92,13 +106,31 @@ public sealed class ContainerCopyFixture : IDisposable
     public const string ExteriorCellEditorId = "SourceExteriorCell";
     public FormKey ExteriorCell { get; }
 
+    // Three more SubCells cells, one per #597 shape — each shares progressively more of
+    // ExteriorCell's spatial ancestry, so copying it *after* ExteriorCell exercises "the
+    // destination already overrides the WRLD (and maybe the block, and maybe the sub-block)".
+    public const int OtherBlockX = 5;
+    public const int OtherBlockY = 1;
+    public const int OtherSubX = 2;
+    public const int OtherSubY = 3;
+    public const string OtherBlockCellEditorId = "SourceOtherBlockCell";
+    public FormKey OtherBlockCell { get; }
+
+    public const int SameBlockOtherSubX = -4;
+    public const int SameBlockOtherSubY = 6;
+    public const string SameBlockCellEditorId = "SourceSameBlockCell";
+    public FormKey SameBlockCell { get; }
+
+    public const string SameSubBlockCellEditorId = "SourceSameSubBlockCell";
+    public FormKey SameSubBlockCell { get; }
+
     public const string ExteriorPersistentRefEditorId = "SourceExteriorPersistentRef";
     public FormKey ExteriorPersistentRef { get; }
 
     public const string ExteriorTemporaryRefEditorId = "SourceExteriorTemporaryRef";
     public FormKey ExteriorTemporaryRef { get; }
 
-    private ContainerCopyFixture()
+    private ContainerCopyFixture(bool destinationLoadsFirst)
     {
         SourceModFolder = Directory.CreateTempSubdirectory("medit-container-copy-source-").FullName;
         DestinationModFolder = Directory.CreateTempSubdirectory("medit-container-copy-dest-").FullName;
@@ -107,8 +139,15 @@ public sealed class ContainerCopyFixture : IDisposable
         var sourcePath = Path.Combine(SourceModFolder, SourcePluginName);
         var sourceMod = new Fallout4Mod(ModKey.FromFileName(SourcePluginName), Fallout4Release.Fallout4);
 
+        var flatNpc = sourceMod.Npcs.AddNew(FlatNpcEditorId);
+
         var quest = new Quest(sourceMod) { EditorID = QuestEditorId };
         var dialogTopic = new DialogTopic(sourceMod) { EditorID = DialogTopicEditorId };
+        var response1 = new DialogResponses(sourceMod) { EditorID = Response1EditorId };
+        var response2 = new DialogResponses(sourceMod) { EditorID = Response2EditorId };
+        response2.PreviousDialog.SetTo(response1);
+        dialogTopic.Responses.Add(response1);
+        dialogTopic.Responses.Add(response2);
         quest.DialogTopics.Add(dialogTopic);
         sourceMod.Quests.Add(quest);
 
@@ -169,16 +208,47 @@ public sealed class ContainerCopyFixture : IDisposable
         exteriorBlock.Items.Add(exteriorSubBlock);
         worldspace.SubCells.Add(exteriorBlock);
 
+        var sameSubBlockCell = new Cell(sourceMod)
+        {
+            EditorID = SameSubBlockCellEditorId,
+            Grid = new CellGrid { Point = new P2Int(ExteriorGridX + 1, ExteriorGridY + 1) },
+        };
+        exteriorSubBlock.Items.Add(sameSubBlockCell);
+
+        var sameBlockCell = new Cell(sourceMod)
+        {
+            EditorID = SameBlockCellEditorId,
+            Grid = new CellGrid { Point = new P2Int(ExteriorGridX + 2, ExteriorGridY + 2) },
+        };
+        var sameBlockOtherSub = new WorldspaceSubBlock { BlockNumberX = (short)SameBlockOtherSubX, BlockNumberY = (short)SameBlockOtherSubY };
+        sameBlockOtherSub.Items.Add(sameBlockCell);
+        exteriorBlock.Items.Add(sameBlockOtherSub);
+
+        var otherBlockCell = new Cell(sourceMod)
+        {
+            EditorID = OtherBlockCellEditorId,
+            Grid = new CellGrid { Point = new P2Int(ExteriorGridX + 3, ExteriorGridY + 3) },
+        };
+        var otherSub = new WorldspaceSubBlock { BlockNumberX = (short)OtherSubX, BlockNumberY = (short)OtherSubY };
+        otherSub.Items.Add(otherBlockCell);
+        var otherBlock = new WorldspaceBlock { BlockNumberX = (short)OtherBlockX, BlockNumberY = (short)OtherBlockY };
+        otherBlock.Items.Add(otherSub);
+        worldspace.SubCells.Add(otherBlock);
+
         sourceMod.Worldspaces.Add(worldspace);
 
         sourceMod.WriteToBinary(sourcePath);
         (Quest, DialogTopic) = (quest.FormKey, dialogTopic.FormKey);
+        (Response1, Response2) = (response1.FormKey, response2.FormKey);
+        FlatNpc = flatNpc.FormKey;
         InteriorCell = interiorCell.FormKey;
         (PersistentRef, TemporaryRef) = (persistentRef.FormKey, temporaryRef.FormKey);
         (Navmesh, Landscape) = (navmesh.FormKey, landscape.FormKey);
         (Worldspace, TopCell, TopCellRef) = (worldspace.FormKey, topCell.FormKey, topCellRef.FormKey);
         ExteriorCell = exteriorCell.FormKey;
         (ExteriorPersistentRef, ExteriorTemporaryRef) = (exteriorPersistentRef.FormKey, exteriorTemporaryRef.FormKey);
+        (OtherBlockCell, SameBlockCell, SameSubBlockCell) =
+            (otherBlockCell.FormKey, sameBlockCell.FormKey, sameSubBlockCell.FormKey);
 
         var destinationPath = Path.Combine(DestinationModFolder, DestinationPluginName);
         var destinationMod = new Fallout4Mod(ModKey.FromFileName(DestinationPluginName), Fallout4Release.Fallout4);
@@ -191,8 +261,8 @@ public sealed class ContainerCopyFixture : IDisposable
         ((ILoadOrderMirror)Mirror).Reconcile(
             GameDirectory,
             [
-                new LoadOrderEntry(SourcePluginName, sourcePath, SourceOrigin, Slot: 0, Enabled: true, Winning: true),
-                new LoadOrderEntry(DestinationPluginName, destinationPath, DestinationOrigin, Slot: 1, Enabled: true, Winning: true),
+                new LoadOrderEntry(SourcePluginName, sourcePath, SourceOrigin, Slot: destinationLoadsFirst ? 1 : 0, Enabled: true, Winning: true),
+                new LoadOrderEntry(DestinationPluginName, destinationPath, DestinationOrigin, Slot: destinationLoadsFirst ? 0 : 1, Enabled: true, Winning: true),
             ],
             GameRelease.Fallout4);
 
@@ -200,7 +270,11 @@ public sealed class ContainerCopyFixture : IDisposable
             .TrackAsync(Mirror.LoadOrder!, DestinationOrigin, SourcePreset.Edits).GetAwaiter().GetResult();
     }
 
-    public static ContainerCopyFixture Create() => new();
+    public static ContainerCopyFixture Create() => new(destinationLoadsFirst: false);
+
+    /// <summary>The #550 AC6 underride shape: the destination plugin loads <i>before</i> the source
+    /// records' origin, so any Copy as Override into it would be an underride (#439) — refused.</summary>
+    public static ContainerCopyFixture CreateWithDestinationLoadingFirst() => new(destinationLoadsFirst: true);
 
     private static void AddInteriorCell(Fallout4Mod mod, Cell cell, int blockNumber)
     {

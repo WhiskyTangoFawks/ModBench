@@ -198,6 +198,32 @@ public class LoadOrderMirrorTests(TestPluginFixture fixture)
         }
     }
 
+    // #290: a newly created plugin defaults to an ESL-flagged ESP, silently — no creation prompt;
+    // the flag is an ordinary editable header field afterward. Asserted at the binary, where the
+    // game reads it.
+    [Fact]
+    public void CreatePlugin_DefaultsToAnEslFlaggedEsp()
+    {
+        var data = new PluginFixtureBuilder("cp-esl")
+            .WithPlugin("Base.esp", mod => mod.Npcs.AddNew("ExistingNPC"))
+            .Build();
+        using (data)
+        {
+            using var manager = MakeManager();
+            manager.Reconcile(data.DataFolder, data.Plugins, GameRelease.Fallout4);
+            var modFolder = Path.Combine(data.DataFolder, "SomeMod");
+
+            manager.CreatePlugin("NewPlugin.esp", modFolder, "SomeMod");
+
+            using var written = Mutagen.Bethesda.Plugins.Records.ModFactory.ImportGetter(
+                new Mutagen.Bethesda.Plugins.ModPath(
+                    Mutagen.Bethesda.Plugins.ModKey.FromFileName("NewPlugin.esp"),
+                    Path.Combine(modFolder, "NewPlugin.esp")),
+                GameRelease.Fallout4);
+            Assert.True(((Mutagen.Bethesda.Plugins.Records.IModFlagsGetter)written).IsSmallMaster);
+        }
+    }
+
     // plugins.txt is Mod Management's file (CONTEXT-MAP.md); appending the load-order line is the
     // caller's job, done only once the whole create (and any Track it triggers) has succeeded.
     // This side never reads a plugins.txt either, so the assertion is that no such file is brought
