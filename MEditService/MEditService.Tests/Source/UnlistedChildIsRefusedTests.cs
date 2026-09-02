@@ -109,7 +109,7 @@ public sealed class UnlistedChildIsRefusedTests(CompileRoundTripGateFixture fixt
         var document = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(carrierPath))!.AsObject();
         var list = new System.Text.Json.Nodes.JsonArray();
         foreach (var identity in order) list.Add(identity);
-        document[SourceChildOrder.MemberName]!.AsObject()[key] = list;
+        document[SourceChildOrder.OrderMember]!.AsObject()[key] = list;
 
         File.WriteAllText(
             carrierPath, document.ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));

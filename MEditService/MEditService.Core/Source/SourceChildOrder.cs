@@ -65,10 +65,13 @@ namespace MEditService.Core.Source;
 /// </summary>
 internal static class SourceChildOrder
 {
-    /// <summary>The spliced member's name. Deliberately not a plausible Mutagen field name, so it
-    /// cannot ever collide with a real one the generated reader would otherwise bind.</summary>
-    internal const string MemberName = "MEditChildOrder";
+    /// <summary>The name of the member a carrier document holds its ordered child lists under.
+    /// Deliberately not a plausible Mutagen field name, so it cannot ever collide with a real one
+    /// the generated reader would otherwise bind.</summary>
+    internal const string OrderMember = "MEditChildOrder";
 
+    /// <summary>The default for every <c>fileSystem</c> parameter here — the real disk.</summary>
+    private static readonly IFileSystem Disk = new FileSystem();
 
     /// <summary>
     /// Matches what the whole-mod door's own writer produces, so a carrier this class rewrites is
@@ -253,20 +256,22 @@ internal static class SourceChildOrder
     internal static void MergeCarrierInto(
         string scratchDirectory, string destinationDirectory, IFileSystem? fileSystem = null)
     {
-        var files = (fileSystem ?? new FileSystem()).File;
+        var files = (fileSystem ?? Disk).File;
 
         foreach (var carrierName in new[] { SourceUnitResolver.RecordDataFileName, SourceUnitResolver.GroupRecordDataFileName })
         {
             var scratchCarrier = Path.Combine(scratchDirectory, carrierName);
             if (!files.Exists(scratchCarrier)) continue;
-            if (ReadCarrier(files, scratchCarrier)[MemberName] is not JsonObject orders) continue;
+            if (ReadCarrier(files, scratchCarrier)[OrderMember] is not JsonObject orders) continue;
 
             foreach (var (key, list) in orders)
             {
-                foreach (var entry in (JsonArray)list!)
+                var identities = ((JsonArray)list!).Select(entry => entry!.GetValue<string>()).ToList();
+                Mutate(Path.Combine(destinationDirectory, carrierName), key, fileSystem, destination =>
                 {
-                    Add(Path.Combine(destinationDirectory, carrierName), key, entry!.GetValue<string>(), fileSystem);
-                }
+                    var present = destination.Select(entry => entry!.GetValue<string>()).ToHashSet(StringComparer.Ordinal);
+                    foreach (var identity in identities.Where(present.Add)) destination.Add(identity);
+                });
             }
         }
     }
@@ -322,12 +327,12 @@ internal static class SourceChildOrder
     /// </summary>
     internal static byte[] CarryOrderInto(byte[] freshBytes, string documentPath, IFileSystem? fileSystem = null)
     {
-        var files = (fileSystem ?? new FileSystem()).File;
+        var files = (fileSystem ?? Disk).File;
         if (!files.Exists(documentPath)) return freshBytes;
-        if (ReadCarrier(files, documentPath)[MemberName] is not { } carried) return freshBytes;
+        if (ReadCarrier(files, documentPath)[OrderMember] is not { } carried) return freshBytes;
 
         var document = JsonNode.Parse(freshBytes) as JsonObject ?? new JsonObject();
-        document[MemberName] = carried.DeepClone();
+        document[OrderMember] = carried.DeepClone();
         return Encoding.UTF8.GetBytes(document.ToJsonString(CarrierOptions));
     }
 
@@ -337,9 +342,9 @@ internal static class SourceChildOrder
     /// order without reordering a model to get at it.</summary>
     internal static IReadOnlyList<string> ListAt(string carrierPath, string key, IFileSystem? fileSystem = null)
     {
-        var files = (fileSystem ?? new FileSystem()).File;
+        var files = (fileSystem ?? Disk).File;
         if (!files.Exists(carrierPath)) return [];
-        return ReadCarrier(files, carrierPath)[MemberName]?[key] is not JsonArray list
+        return ReadCarrier(files, carrierPath)[OrderMember]?[key] is not JsonArray list
             ? []
             : [.. list.Select(entry => entry!.GetValue<string>())];
     }
@@ -350,7 +355,7 @@ internal static class SourceChildOrder
     internal static (string Carrier, string Key)? SlotHolding(
         string childrenDirectory, string identity, IFileSystem? fileSystem = null)
     {
-        var files = (fileSystem ?? new FileSystem()).File;
+        var files = (fileSystem ?? Disk).File;
         var parent = Path.GetDirectoryName(childrenDirectory);
 
         string[] candidates = parent is null
@@ -360,7 +365,7 @@ internal static class SourceChildOrder
         foreach (var carrier in candidates)
         {
             if (!files.Exists(carrier)) continue;
-            if (ReadCarrier(files, carrier)[MemberName] is not JsonObject orders) continue;
+            if (ReadCarrier(files, carrier)[OrderMember] is not JsonObject orders) continue;
 
             foreach (var (key, list) in orders)
             {
@@ -377,14 +382,14 @@ internal static class SourceChildOrder
 
     private static void Mutate(string carrierPath, string key, IFileSystem? fileSystem, Action<JsonArray> edit)
     {
-        var system = fileSystem ?? new FileSystem();
+        var system = fileSystem ?? Disk;
         var files = system.File;
         var document = ReadCarrier(files, carrierPath);
-        var orders = document[MemberName] as JsonObject;
+        var orders = document[OrderMember] as JsonObject;
         if (orders is null)
         {
             orders = new JsonObject();
-            document[MemberName] = orders;
+            document[OrderMember] = orders;
         }
 
         // Detached first: a JsonNode already parented cannot be re-assigned into the same document.
@@ -407,7 +412,7 @@ internal static class SourceChildOrder
     /// </summary>
     internal static void SpliceInto(string treeRoot, IModGetter mod, IFileSystem? fileSystem = null)
     {
-        var system = fileSystem ?? new FileSystem();
+        var system = fileSystem ?? Disk;
         var files = system.File;
 
         // Every carrier already in the tree, so the ones this walk does not yield can have their
@@ -438,7 +443,7 @@ internal static class SourceChildOrder
                 orders[collection.Key] = list;
             }
 
-            document[MemberName] = orders;
+            document[OrderMember] = orders;
             system.Directory.CreateDirectory(Path.GetDirectoryName(group.Key)!);
             WriteCarrier(system, group.Key, document);
         }
@@ -446,7 +451,7 @@ internal static class SourceChildOrder
         foreach (var carrier in stale)
         {
             var document = ReadCarrier(files, carrier);
-            if (document.Remove(MemberName)) WriteCarrier(system, carrier, document);
+            if (document.Remove(OrderMember)) WriteCarrier(system, carrier, document);
         }
     }
 
@@ -467,11 +472,11 @@ internal static class SourceChildOrder
     /// </summary>
     internal static void ApplyTo(string treeRoot, IMod mod, IFileSystem? fileSystem = null)
     {
-        var files = (fileSystem ?? new FileSystem()).File;
+        var files = (fileSystem ?? Disk).File;
         foreach (var collection in Enumerate(treeRoot, mod))
         {
             var document = ReadCarrier(files, collection.CarrierPath);
-            var recorded = document[MemberName]?[collection.Key] as JsonArray;
+            var recorded = document[OrderMember]?[collection.Key] as JsonArray;
 
             var identities = collection.Identities;
             var wanted = recorded is null ? [] : recorded.Select(entry => entry!.GetValue<string>()).ToList();
@@ -604,10 +609,22 @@ internal static class SourceChildOrder
     internal static readonly IReadOnlySet<string> EmbeddedListMembers =
         new HashSet<string>(StringComparer.Ordinal) { "Temporary", "Persistent", "NavigationMeshes" };
 
+    /// <summary>
+    /// The coordinate members a Cell/Worldspace block wrapper is named after, spelled through the
+    /// model rather than as loose literals. Spelled against Fallout 4's types because this project
+    /// references that game, but every Mutagen game names them identically (Skyrim's
+    /// <c>CellBlock</c>/<c>WorldspaceBlock</c> carry the same three), which is what lets the walk stay
+    /// reflective — one game's generated types are not a table the other games' would have to be
+    /// registered in.
+    /// </summary>
+    private const string InteriorBlockNumber = nameof(Mutagen.Bethesda.Fallout4.CellBlock.BlockNumber);
+    private const string ExteriorBlockX = nameof(Mutagen.Bethesda.Fallout4.WorldspaceBlock.BlockNumberX);
+    private const string ExteriorBlockY = nameof(Mutagen.Bethesda.Fallout4.WorldspaceBlock.BlockNumberY);
+
     /// <summary>A Cell/Worldspace block wrapper — the levels the writer gives a directory to but that
     /// are not records themselves, identified by the coordinates they are named after.</summary>
     private static bool IsBlock(Type element) =>
-        element.GetProperty("BlockNumber") is not null || element.GetProperty("BlockNumberX") is not null;
+        element.GetProperty(InteriorBlockNumber) is not null || element.GetProperty(ExteriorBlockX) is not null;
 
     /// <summary>The directory name a folder-split child is written under. Always a directory: this is
     /// only ever asked of a child the walk descends into, and a child with folder-split children of its
@@ -624,11 +641,11 @@ internal static class SourceChildOrder
     private static string BlockCoordinatesOf(object block)
     {
         var type = block.GetType();
-        var x = type.GetProperty("BlockNumberX")?.GetValue(block);
-        var y = type.GetProperty("BlockNumberY")?.GetValue(block);
+        var x = type.GetProperty(ExteriorBlockX)?.GetValue(block);
+        var y = type.GetProperty(ExteriorBlockY)?.GetValue(block);
         if (x is not null && y is not null) return $"{x}, {y}";
 
-        var sub = type.GetProperty("BlockNumber")?.GetValue(block);
+        var sub = type.GetProperty(InteriorBlockNumber)?.GetValue(block);
         if (sub is not null) return sub.ToString()!;
 
         throw new InvalidOperationException(

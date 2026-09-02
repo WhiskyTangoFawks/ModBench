@@ -54,7 +54,7 @@ public sealed class CarrierEncodingTests
             var afterSplice = await File.ReadAllTextAsync(carrier);
 
             // The document really did gain the list — otherwise this test proves nothing.
-            Assert.Contains(SourceChildOrder.MemberName, afterSplice, StringComparison.Ordinal);
+            Assert.Contains(SourceChildOrder.OrderMember, afterSplice, StringComparison.Ordinal);
             Assert.Single(SourceChildOrder.ListAt(carrier, nameof(Quest.DialogTopics)));
 
             // ...and every awkward character survived it verbatim, in the spelling the whole-mod
@@ -77,7 +77,7 @@ public sealed class CarrierEncodingTests
     /// comparison is "did anything but the added member change", not "did anything change".</summary>
     private static string WithoutOrderMember(string json)
     {
-        var at = json.IndexOf($"\"{SourceChildOrder.MemberName}\"", StringComparison.Ordinal);
+        var at = json.IndexOf($"\"{SourceChildOrder.OrderMember}\"", StringComparison.Ordinal);
         if (at < 0) return json.Trim();
 
         // The member is written last, so everything from the comma before it to the closing brace is
