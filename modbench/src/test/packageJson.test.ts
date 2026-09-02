@@ -463,25 +463,42 @@ describe('package.json command titles and categories (#280)', () => {
   });
 });
 
-// #572 ruling 1: Change FormID exists only on a master record in a tracked plugin — an override
-// row (contextValue recordOverride) or an untracked one (recordImmutable) never offers it, while
-// the other record actions stay available there where they are legal.
-describe('package.json record-row context menu — renumber gated to native tracked rows (#572)', () => {
+// #572 ruling 1 / #674: Change FormID exists only on a master record in a *tracked* plugin, and is
+// absent — not greyed, not offered-then-refused — everywhere else. Both halves of that ruling are
+// contextValue facts the row states for itself (RecordNode): `recordTracked` is the only row the
+// product will actually renumber, while `recordUntracked` (a master whose plugin holds no `.git`),
+// `recordOverride` (a copy that doesn't own the FormID) and `recordImmutable` never offer it. The
+// other record actions stay available on all of them, where they are legal.
+describe('package.json record-row context menu — renumber gated to native tracked rows (#572, #674)', () => {
   const contextMenus = () => pkg.contributes.menus['view/item/context'] as { command: string; when: string }[];
   const whenOf = (command: string) => contextMenus().find((e) => e.command === command)!.when;
 
-  it('offers Change FormID only on viewItem == record', () => {
-    expect(whenOf('modbench.record.renumber')).toBe('view == modbench.pluginListTree && viewItem == record');
+  it('offers Change FormID only on viewItem == recordTracked', () => {
+    expect(whenOf('modbench.record.renumber')).toBe('view == modbench.pluginListTree && viewItem == recordTracked');
   });
 
-  it('offers Remove on override rows too', () => {
+  // The assertion above pins the whole gate by equality, but it would still pass if
+  // `recordUntracked` were merely misspelled into existence somewhere; this says the untracked
+  // spelling is nowhere in the clause, which is the actual #674 ruling.
+  it('never offers Change FormID on an untracked master row', () => {
+    expect(whenOf('modbench.record.renumber')).not.toContain('recordUntracked');
+  });
+
+  it('offers Remove on override and untracked rows too', () => {
     expect(whenOf('modbench.record.delete')).toContain('recordOverride');
+    expect(whenOf('modbench.record.delete')).toContain('recordUntracked');
   });
 
-  it('offers both copy gestures on override rows too', () => {
-    expect(whenOf('modbench.record.copyAsOverride')).toContain('recordOverride');
-    expect(whenOf('modbench.record.copyAsNewRecord')).toContain('recordOverride');
+  it('offers both copy gestures on override and untracked rows too', () => {
+    for (const command of ['modbench.record.copyAsOverride', 'modbench.record.copyAsNewRecord']) {
+      expect(whenOf(command)).toContain('recordOverride');
+      expect(whenOf(command)).toContain('recordUntracked');
+    }
   });
+
+  // Open Editor to the Side reaches both spellings too, but it has a second entry on the
+  // Referenced By tree, so `whenOf`'s first-match lookup cannot read it — it is pinned by exact
+  // equality in the #284 describe block below instead.
 });
 
 // Origin drift is absorbed automatically by the reconcile verb (ADR-0044) — there is nothing for
@@ -531,12 +548,13 @@ describe('package.json per-plugin Track (#414)', () => {
 describe('package.json "Open Editor to the Side" reachable from Plugins tree record rows (#284)', () => {
   const contextMenus = () => pkg.contributes.menus['view/item/context'] as { command: string; when: string; group: string }[];
 
-  it('offers modbench.openEditorBeside on record, recordImmutable, refr and refrImmutable rows', () => {
+  it('offers modbench.openEditorBeside on every record and placed-reference row', () => {
     const entry = contextMenus().find((e) =>
       e.command === 'modbench.openEditorBeside' && e.when.includes('modbench.pluginListTree'));
     expect(entry, 'expected a modbench.openEditorBeside entry on the Plugins tree').toBeTruthy();
     expect(entry!.when).toBe(
-      'view == modbench.pluginListTree && (viewItem == record || viewItem == recordOverride || viewItem == recordImmutable || viewItem == refr || viewItem == refrImmutable)');
+      'view == modbench.pluginListTree && (viewItem == recordTracked || viewItem == recordUntracked'
+      + ' || viewItem == recordOverride || viewItem == recordImmutable || viewItem == refr || viewItem == refrImmutable)');
   });
 
   it('leaves the Referenced By group row\'s own existing entry untouched', () => {

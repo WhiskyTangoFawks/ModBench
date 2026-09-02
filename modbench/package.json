@@ -890,27 +890,27 @@
         },
         {
           "command": "modbench.openEditorBeside",
-          "when": "view == modbench.pluginListTree && (viewItem == record || viewItem == recordOverride || viewItem == recordImmutable || viewItem == refr || viewItem == refrImmutable)",
+          "when": "view == modbench.pluginListTree && (viewItem == recordTracked || viewItem == recordUntracked || viewItem == recordOverride || viewItem == recordImmutable || viewItem == refr || viewItem == refrImmutable)",
           "group": "modbench@1"
         },
         {
           "command": "modbench.record.delete",
-          "when": "view == modbench.pluginListTree && (viewItem == record || viewItem == recordOverride)",
+          "when": "view == modbench.pluginListTree && (viewItem == recordTracked || viewItem == recordUntracked || viewItem == recordOverride)",
           "group": "recordActions@1"
         },
         {
           "command": "modbench.record.renumber",
-          "when": "view == modbench.pluginListTree && viewItem == record",
+          "when": "view == modbench.pluginListTree && viewItem == recordTracked",
           "group": "recordActions@2"
         },
         {
           "command": "modbench.record.copyAsOverride",
-          "when": "view == modbench.pluginListTree && (viewItem == record || viewItem == recordOverride || viewItem == recordImmutable)",
+          "when": "view == modbench.pluginListTree && (viewItem == recordTracked || viewItem == recordUntracked || viewItem == recordOverride || viewItem == recordImmutable)",
           "group": "recordActions@3"
         },
         {
           "command": "modbench.record.copyAsNewRecord",
-          "when": "view == modbench.pluginListTree && (viewItem == record || viewItem == recordOverride || viewItem == recordImmutable)",
+          "when": "view == modbench.pluginListTree && (viewItem == recordTracked || viewItem == recordUntracked || viewItem == recordOverride || viewItem == recordImmutable)",
           "group": "recordActions@4"
         }
       ],

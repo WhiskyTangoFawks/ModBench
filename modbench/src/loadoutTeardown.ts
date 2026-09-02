@@ -1,5 +1,13 @@
 import type { MarkdownString } from 'vscode';
 
+/** The two whole-load-order sets `PluginTreeProvider` renders record rows off (#674). Both are
+ *  statements about a live backend, so both are cleared together everywhere below — a tracked set
+ *  outliving its backend would keep offering Change FormID on rows nothing backs. */
+interface RecordBrowserSets {
+  setImmutablePlugins(names: string[]): void;
+  setTrackedPlugins(names: string[]): void;
+}
+
 /** The slice of `ExtensionSession` this module's teardown/refresh writers touch, stated
  *  structurally so this file imports from neither bounded context and needs no VS Code
  *  harness to test (#650, folded into #628 — the same extracted-handler seam the checkbox
@@ -9,7 +17,7 @@ export interface TeardownSession {
   pluginsTree?: { setLoadOrder(files: undefined): void; refreshDecorations(): void };
   pluginsTreeView?: { message?: string | MarkdownString };
   pluginsNameFilter?: { refresh(): void };
-  recordBrowserProvider?: { setImmutablePlugins(names: string[]): void };
+  recordBrowserProvider?: RecordBrowserSets;
   backendManager?: { isHealthy: boolean; on(event: 'status', cb: () => void): void; stop(): Promise<void> };
   setFilterActive?: (active: boolean) => void;
   /** #570: the session-load diagnosis collection (Problems panel). Cleared by both teardown
@@ -55,6 +63,7 @@ export function exitToLoadout(session: TeardownSession): void {
   // which held plugins' records matched, same reasoning as the chevrons just above.
   session.loadOrderSync?.setMatches(undefined);
   session.recordBrowserProvider?.setImmutablePlugins([]);
+  session.recordBrowserProvider?.setTrackedPlugins([]);
   // #570: the Problems entries are statements about a live backend's scan, same as the tree
   // badge setLoadOrder just cleared.
   session.loadDiagnostics?.clear();
@@ -68,17 +77,18 @@ export function exitToLoadout(session: TeardownSession): void {
 /** A backend that dies takes the load order with it, and `exitToLoadout` is not on that path — a
  *  crash or a lost connection reaches us only as a status change. Without this the rows keep their
  *  chevrons and expanding one fetches against a backend that is gone, and the record rows
- *  keep a read-only set nothing backs. Both are statements about a live backend, so both
+ *  keep the read-only and tracked sets nothing backs. All are statements about a live backend, so they
  *  go together. */
 export function clearTreeWhenBackendDies(
   session: TeardownSession,
   composite: { setLoadOrder(files: undefined): void },
-  recordBrowser: { setImmutablePlugins(names: string[]): void },
+  recordBrowser: RecordBrowserSets,
 ): void {
   session.backendManager?.on('status', () => {
     if (session.backendManager?.isHealthy) return;
     composite.setLoadOrder(undefined);
     recordBrowser.setImmutablePlugins([]);
+    recordBrowser.setTrackedPlugins([]);
     // ADR-0035 amending ADR-0018: same reasoning as the two above — a statement about
     // which plugins the dead backend's records matched must not seed the next one.
     session.loadOrderSync?.setMatches(undefined);
