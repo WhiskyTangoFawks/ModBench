@@ -16,6 +16,10 @@ namespace MEditService.Core.Source;
 /// Deriving them in one step makes the pair correct by construction instead of by everyone
 /// remembering.</para>
 ///
+/// <para>The writer that consumes a placement is <c>RecordEditService.WritePlaced</c>, which is also
+/// where the write order lives: the file, then the list, and the file taken back if the list write
+/// fails.</para>
+///
 /// <para>They were previously four helpers that had to agree without anything making them:
 /// <see cref="SourceRecordPath.For"/> for flat records, two private path builders in
 /// <c>RecordEditService</c> for containers, and a private key-chooser whose <c>isFlat</c> cascade
@@ -32,12 +36,14 @@ internal readonly record struct SourcePlacement(string RelativePath, string Carr
     /// <summary>
     /// The placement for a record about to be written.
     ///
-    /// <para>Three shapes, and they are the whole taxonomy. A <b>flat</b> record is a file directly in
-    /// its group folder, listed under the group's own name. A <b>top-level container</b> (Quest,
-    /// Worldspace) is a directory in its group folder with its fields in <c>RecordData.json</c>,
-    /// listed the same way. An <b>interior Cell</b> is the exception, and the only one: its directory
-    /// nests under a block/sub-block pair, so the list naming it is the sub-block's own — which is why
-    /// <paramref name="blockPath"/> exists and why nothing else needs it.</para>
+    /// <para>Three of the four shapes — the ones with a group folder of their own. A <b>flat</b> record
+    /// is a file directly in its group folder, listed under the group's own name. A <b>top-level
+    /// container</b> (Quest, Worldspace) is a directory in its group folder with its fields in
+    /// <c>RecordData.json</c>, listed the same way. An <b>interior Cell</b> is the exception among
+    /// them: its directory nests under a block/sub-block pair, so the list naming it is the
+    /// sub-block's own — which is why <paramref name="blockPath"/> exists and why nothing else needs
+    /// it. The fourth shape, a folder-split child with no group folder at all, is
+    /// <see cref="ForSlotChild"/>'s.</para>
     /// </summary>
     /// <param name="blockPath">The block and sub-block directory names an interior Cell nests under,
     /// in order. Required for a Cell and meaningless for anything else — a Cell's placement genuinely
@@ -65,9 +71,8 @@ internal readonly record struct SourcePlacement(string RelativePath, string Carr
 
         var groupFolder = dispatch.GroupFolderNameFor(recordType)
             ?? throw new NotSupportedException(
-                $"'{recordType}' has no group folder at all, so it has no placement of its own — it is " +
-                "a folder-split child, whose directory belongs to its own parent's slot rather than to " +
-                "a group.");
+                $"'{recordType}' has no group folder at all — it is a folder-split child, whose directory " +
+                $"belongs to its own parent's slot rather than to a group; use {nameof(ForSlotChild)}.");
 
         var leaf = SourceUnitResolver.LeafNameFor(FormKey.Factory(formKeyString), editorId, isDirectory: true);
 
@@ -81,4 +86,27 @@ internal readonly record struct SourcePlacement(string RelativePath, string Carr
             blockPath is { Count: > 0 } ? RecordTypeDispatch.SubBlockChildMember : groupFolder);
     }
 
+    /// <summary>
+    /// The placement for a folder-split child — the shape <see cref="For"/> refuses, because it has
+    /// no group folder of its own: a DialogTopic sits in a slot under its Quest's directory, a
+    /// Response in a slot under its DialogTopic's. The list naming it is therefore the parent
+    /// record's own document, keyed by the slot, and the child is a directory (a container with
+    /// children of its own) or a file (a leaf) in that slot.
+    /// </summary>
+    /// <param name="modFolder">The mod folder both returned paths are relative to.</param>
+    /// <param name="parentDirectory">The parent record's own directory, absolute — resolved by the
+    /// caller, because a parent that is not there yet is minted by the caller first.</param>
+    internal static SourcePlacement ForSlotChild(
+        string modFolder, string parentDirectory, string slotName, string formKeyString, string? editorId, bool isDirectory)
+    {
+        var leaf = SourceUnitResolver.LeafNameFor(FormKey.Factory(formKeyString), editorId, isDirectory);
+        var own = isDirectory
+            ? Path.Combine(parentDirectory, slotName, leaf, SourceUnitResolver.RecordDataFileName)
+            : Path.Combine(parentDirectory, slotName, leaf);
+
+        return new SourcePlacement(
+            Path.GetRelativePath(modFolder, own),
+            Path.GetRelativePath(modFolder, SourceChildOrder.CarrierFor(parentDirectory, parentIsRecord: true)),
+            slotName);
+    }
 }

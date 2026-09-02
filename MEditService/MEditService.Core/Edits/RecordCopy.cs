@@ -372,17 +372,12 @@ internal sealed class RecordCopy(ILoadOrderMirror mirror, SchemaReflector schema
         var placement = SourcePlacement.For(
             destinationPlugin.Name, "cell", cellFormKey, editorId: null, release,
             RecordEditService.EnsureInteriorCellBlockPath(destinationModFolder, destinationPlugin.Name, release));
-        var relativePath = placement.RelativePath;
-        var sourcePath = Path.Combine(destinationModFolder, relativePath);
-        var bodyText = SourceUnitResolver.InMintedDirectory(
-            Path.GetDirectoryName(sourcePath)!,
-            () => RecordEditService.SerializeAndWrite(codec, record, sourcePath, release));
-
         // Order is parent data (ADR-0042 decision 4): the cell's own directory is its identity, and
         // its position among the sub-block's cells is one line in the sub-block's own document — which
         // the placement already named, so nothing here re-derives it from the path.
-        SourceChildOrder.Add(
-            Path.Combine(destinationModFolder, placement.CarrierRelativePath), placement.Key, cellFormKey.ToString());
+        var bodyText = RecordEditService.WritePlaced(
+            destinationModFolder, placement, cellFormKey.ToString(),
+            path => RecordEditService.SerializeAndWrite(codec, record, path, release));
 
         index.CreateWorkingTreeRecord(destinationPlugin, cellFormKey, sourceCellDocument.RecordType, bodyText);
         mirror.ReapplyFilter();

@@ -211,17 +211,11 @@ authoritative for its own question.
 **The hand-delete's limit, stated rather than implied.** Honouring a missing file as a deletion makes
 the plugin *readable*; it does not by itself make it *compilable*. The round-trip gate compares the
 tree against what the codec would reserialize from it, and a list still naming the deleted record does
-not match — so a hand delete leaves the plugin's own next Save & Compile refusing until either a
-structural write repairs the list (`SourceChildOrder.PruneMissing`, which `CreateRecord` runs
-defensively) or the mod is re-Tracked. That is exactly the behaviour the superseded numbering scheme
-had for the same situation — a hand-deleted file left a numbering gap, which the compile gate refused
-until a structural write renormalized the folder — so this is a faithful port of the old limit, not a
-new one. **What actually repairs it is narrower than "a structural write".** `SourceChildOrder.PruneMissing`
-has one caller — `CreateRecord` — and it prunes only the one flat group folder that create is writing
-into. So a hand-deleted *flat* record is repaired by creating another record of the same type; a
-hand-deleted **folder-split child** (`DialogTopic.Responses`, the case whose order is gameplay) is
-repaired by nothing short of a re-Track. Closing that properly means repairing on the compile path,
-which is a change to what a compile is allowed to write, and is deliberately not made here.
+not match — so a hand delete leaves the plugin's own next Save & Compile refusing until the author
+either removes the stale entry or re-Tracks. Modbench does not repair it: a tree changed behind its
+back is the author's to put right (maintainer ruling, #566), the same refusal posture git itself takes.
+The superseded numbering scheme had the same limit in the same place — a hand-deleted file left a
+numbering gap the compile gate refused — so this is a faithful port of the old limit, not a new one.
 
 The Cell/Worldspace *embeds* (children inline in the parent document) are kept on our own grounds —
 one document per cell is the tree a human wants — and are excluded from the above precisely because

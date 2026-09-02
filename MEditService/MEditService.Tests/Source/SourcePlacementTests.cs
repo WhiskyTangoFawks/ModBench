@@ -65,6 +65,52 @@ public sealed class SourcePlacementTests
         Assert.Equal("Cells", placement.Key);
     }
 
+    /// <summary>The fourth shape, and the one <see cref="SourcePlacement.For"/> refuses: a folder-split
+    /// child has no group folder of its own. It lives in a slot directory under its parent's own
+    /// directory, and the list naming it is the parent's <c>RecordData.json</c> keyed by the slot —
+    /// a DialogTopic under a Quest, a Response under a DialogTopic. A container child (DialogTopic)
+    /// is a directory with its fields in <c>RecordData.json</c>; a leaf child (Response) is a file.
+    /// Before this existed, six call sites each composed the pair by hand.</summary>
+    [Fact]
+    public void AFolderSplitContainerChild_IsADirectoryInItsParentsSlot_ListedInTheParentsOwnDocument()
+    {
+        var modFolder = Path.Combine(Path.GetTempPath(), "some-mod");
+        var questDirectory = Path.Combine(modFolder, "source", Plugin, "Quests", "SomeQuest - 000800_Vendor.esp");
+
+        var placement = SourcePlacement.ForSlotChild(
+            modFolder, questDirectory, "DialogTopics", "000801:Vendor.esp", "SomeTopic", isDirectory: true);
+
+        Assert.Equal(
+            Path.Combine("source", Plugin, "Quests", "SomeQuest - 000800_Vendor.esp", "DialogTopics",
+                "SomeTopic - 000801_Vendor.esp", "RecordData.json"),
+            placement.RelativePath);
+        Assert.Equal(
+            Path.Combine("source", Plugin, "Quests", "SomeQuest - 000800_Vendor.esp", "RecordData.json"),
+            placement.CarrierRelativePath);
+        Assert.Equal("DialogTopics", placement.Key);
+    }
+
+    [Fact]
+    public void AFolderSplitLeafChild_IsAFileInItsParentsSlot_ListedInTheParentsOwnDocument()
+    {
+        var modFolder = Path.Combine(Path.GetTempPath(), "some-mod");
+        var topicDirectory = Path.Combine(
+            modFolder, "source", Plugin, "Quests", "SomeQuest - 000800_Vendor.esp", "DialogTopics", "SomeTopic - 000801_Vendor.esp");
+
+        var placement = SourcePlacement.ForSlotChild(
+            modFolder, topicDirectory, "Responses", "000802:Vendor.esp", editorId: null, isDirectory: false);
+
+        Assert.Equal(
+            Path.Combine("source", Plugin, "Quests", "SomeQuest - 000800_Vendor.esp", "DialogTopics",
+                "SomeTopic - 000801_Vendor.esp", "Responses", "000802_Vendor.esp.json"),
+            placement.RelativePath);
+        Assert.Equal(
+            Path.Combine("source", Plugin, "Quests", "SomeQuest - 000800_Vendor.esp", "DialogTopics",
+                "SomeTopic - 000801_Vendor.esp", "RecordData.json"),
+            placement.CarrierRelativePath);
+        Assert.Equal("Responses", placement.Key);
+    }
+
     /// <summary>A record with no EditorID is named by its FormKey alone — the whole-mod door's own
     /// second name shape, and the reason nothing may split a leaf on <c>" - "</c> to recover
     /// identity.</summary>

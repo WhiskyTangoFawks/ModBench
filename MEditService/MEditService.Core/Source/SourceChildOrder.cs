@@ -58,11 +58,10 @@ namespace MEditService.Core.Source;
 ///
 /// <para><b>That makes a hand-deleted record readable, not compilable.</b> The round-trip gate
 /// compares the tree against what the codec would reserialize from it, so a list still naming the
-/// deleted record refuses the plugin's own next Save &amp; Compile. <see cref="PruneMissing"/> repairs
-/// it, but only where it runs: <c>CreateRecord</c>, over the one flat group folder it is writing into.
-/// A hand-deleted folder-split child therefore has no repair short of a re-Track. The superseded
-/// numbering scheme had the same limit in the same place (a hand-deleted file left a numbering gap the
-/// compile gate refused), so this is ported deliberately rather than overlooked.</para>
+/// deleted record refuses the plugin's own next Save &amp; Compile until the author repairs the tree
+/// or re-Tracks. Nothing here repairs it for them: a tree changed behind Modbench's back is the
+/// author's to put right (the maintainer's ruling on #566), and the superseded numbering scheme had
+/// the same limit in the same place.</para>
 /// </summary>
 internal static class SourceChildOrder
 {
@@ -375,54 +374,6 @@ internal static class SourceChildOrder
 
         return null;
     }
-
-    /// <summary>
-    /// Drops from <paramref name="carrierPath"/>'s list under <paramref name="key"/> every identity
-    /// that no longer has a file or directory in <paramref name="childrenDirectory"/> — the repair a
-    /// structural write performs defensively, because the tree can have been changed without Modbench
-    /// (root CLAUDE.md's never-assume-exclusive-ownership rule).
-    ///
-    /// <para><b>Reads tolerate a stale entry; compile does not, and that is why this exists.</b> A
-    /// listed child with no file is honoured as a deletion when reading (see <see cref="ApplyTo"/>),
-    /// so the plugin still opens — but the round-trip gate compares the tree against what the codec
-    /// would reserialize from it, and a list naming a record that is not there does not match. Left
-    /// alone, a hand-deleted file would therefore make the plugin's own next Save &amp; Compile refuse
-    /// until a re-Track. This is the direct successor to the group-folder renormalization the
-    /// superseded numbering scheme ran for exactly the same reason.</para>
-    ///
-    /// <para>Presence is tested by asking whether any child's name carries the identity — the same
-    /// direction of the filename question <c>SourceUnitResolver</c> already answers safely (given a
-    /// FormKey, does this name carry it), never the ambiguous inverse of splitting a name into
-    /// EditorID and FormKey.</para>
-    /// </summary>
-    internal static void PruneMissing(
-        string childrenDirectory, string carrierPath, string key, IFileSystem? fileSystem = null)
-    {
-        var system = fileSystem ?? new FileSystem();
-        if (!system.Directory.Exists(childrenDirectory)) return;
-
-        var present = system.Directory.EnumerateFileSystemEntries(childrenDirectory)
-            .Select(Path.GetFileName)
-            .Select(name => name!)
-            .ToList();
-
-        Mutate(carrierPath, key, fileSystem, list =>
-        {
-            for (var i = list.Count - 1; i >= 0; i--)
-            {
-                if (!present.Any(name => NameCarriesIdentity(name, list[i]!.GetValue<string>()))) list.RemoveAt(i);
-            }
-        });
-    }
-
-    /// <summary>Whether <paramref name="leaf"/> is the file or directory of the child recorded as
-    /// <paramref name="identity"/> — delegated to <see cref="SourceUnitResolver.NameCarriesFormKey"/>
-    /// for a record, so the filesafe-FormKey naming rule keeps one owner; a block is named after its
-    /// own coordinates, which are the identity itself.</summary>
-    private static bool NameCarriesIdentity(string leaf, string identity) =>
-        leaf.Equals(identity, StringComparison.Ordinal)
-        || (identity.Contains(':', StringComparison.Ordinal)
-            && SourceUnitResolver.NameCarriesFormKey(leaf, identity));
 
     private static void Mutate(string carrierPath, string key, IFileSystem? fileSystem, Action<JsonArray> edit)
     {

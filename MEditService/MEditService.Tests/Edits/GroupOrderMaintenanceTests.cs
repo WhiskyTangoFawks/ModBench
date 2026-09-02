@@ -159,11 +159,13 @@ public sealed class GroupOrderMaintenanceTests : IDisposable
     ///
     /// <para>That direction of drift is honoured as a deletion rather than refused (ADR-0042
     /// decision 4's asymmetry: the tree says what exists, the parent's list says what order the
-    /// existing ones are in), so this is the end-to-end proof of it — the create succeeds, and the
-    /// result both reads back and compiles with exactly the two records that really exist.</para>
+    /// existing ones are in), so the create succeeds and reads back exactly the two records that
+    /// really exist. But the tree is not repaired for the author: the stale entry is theirs to remove
+    /// (the maintainer's ruling on #566), and until they do, the round-trip gate refuses the compile
+    /// naming the one document that no longer matches.</para>
     /// </summary>
     [Fact]
-    public void CreatingARecord_AfterAnExternalHandDelete_SucceedsAndCompiles()
+    public void CreatingARecord_AfterAnExternalHandDelete_Succeeds_AndCompileRefusesNamingTheStaleList()
     {
         File.Delete(_mod.NpcSourceFile);
 
@@ -175,13 +177,9 @@ public sealed class GroupOrderMaintenanceTests : IDisposable
         Assert.Contains(names, n => n.StartsWith(TrackedModFixture.OtherNpcEditorId, StringComparison.Ordinal));
         Assert.Contains(names, n => n.StartsWith("BrandNew", StringComparison.Ordinal));
 
-        var mod = CompileAndReimport(out var handle);
-        using (handle)
-        {
-            Assert.Equal(2, mod.Npcs.Count);
-            Assert.DoesNotContain(mod.Npcs, n => n.FormKey == _mod.Npc);
-            Assert.Contains(mod.Npcs, n => n.EditorID == "BrandNew");
-        }
+        var compile = CompileService().Compile(_mod.Plugin, new CompileSource.WorkingTree());
+        Assert.False(compile.Succeeded);
+        Assert.Contains(Path.Combine("Npcs", "GroupRecordData.json"), compile.RefusalReason, StringComparison.Ordinal);
     }
 
     // ---- stacked operations, no drift ----

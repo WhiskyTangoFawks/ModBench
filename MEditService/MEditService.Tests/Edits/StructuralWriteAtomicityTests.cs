@@ -6,17 +6,17 @@ using Microsoft.Extensions.Logging.Abstractions;
 namespace MEditService.Tests.Edits;
 
 /// <summary>
-/// A structural write lands the child's file and the parent's ordered child list together, or lands
-/// neither. Order is parent data (ADR-0042 decision 4), so those two writes are one edit split across
-/// two files — and #677/#678 (ADR-0045) already established that an action of this shape commits once
-/// or not at all.
+/// A structural write never leaves a file that no ordered child list names. Order is parent data
+/// (ADR-0042 decision 4), so a create is two writes in one plugin's tree — the record's file and the
+/// parent's list — and the drift rule is deliberately asymmetric: a listed child with no file is
+/// honoured as a deletion, but a file no list names is refused outright and re-Track is the only
+/// recovery. A create that writes the file and then fails to write the list does not leave a
+/// cosmetic inconsistency; it leaves the plugin unreadable.
 ///
-/// <para><b>The two halves fail very differently, which is what makes this worth pinning.</b> The
-/// drift rule is deliberately asymmetric: a listed child with no file is honoured as a deletion, but a
-/// file no list names is refused outright and re-Track is the only recovery. So a create that writes
-/// the file and then fails to write the list does not leave a cosmetic inconsistency — it leaves the
-/// plugin unreadable. The delete path is safe for free (it removes the file first, so an interruption
-/// lands on the tolerated side); the create and copy paths are the ones that need the guarantee.</para>
+/// <para>No transaction is involved — that is the renumber cascade's tool, for the one gesture that
+/// writes into more than one plugin's tree (ADR-0045). A single-plugin write only has to fail on the
+/// tolerated side: the create takes its own file back when the list write fails, and the delete
+/// removes the file before touching the list.</para>
 ///
 /// <para>The failure is injected by making the carrier path unwritable in the one way that needs no
 /// permissions and works identically on every platform: a <i>directory</i> sits where the document
@@ -46,9 +46,8 @@ public sealed class StructuralWriteAtomicityTests : IDisposable
 
         Assert.ThrowsAny<Exception>(() => EditService().CreateRecord(_mod.Plugin, "npc_", "Doomed"));
 
-        // The whole point: no file for a record no list can name. Without the two writes being one
-        // action, the record's file is sitting there unlisted, and the next read of this plugin
-        // refuses the entire tree.
+        // The whole point: no file for a record no list can name. Left behind, the record's file is
+        // sitting there unlisted, and the next read of this plugin refuses the entire tree.
         Assert.Equal(recordFilesBefore, RecordFiles());
         Assert.DoesNotContain(RecordFiles(), name => name.Contains("Doomed", StringComparison.Ordinal));
     }

@@ -383,9 +383,9 @@ plugins are never probed at all.
   an invented position is a gameplay change. Re-Track is the recovery, the same uniform
   answer every other format break gets. The tree is authoritative for whether a child
   exists; the parent's list for the order of the ones that do. A hand delete is honoured at *read* but
-  still refuses at *compile*. For a flat record, creating another record of the same type repairs the
-  list; for a folder-split child, only re-Track does. The superseded scheme had the same limit in the
-  same place, so this is ported rather than introduced.
+  still refuses at *compile*, until the author removes the stale entry or re-Tracks — Modbench does
+  not repair a tree changed behind its back. The superseded scheme had the same limit in the same
+  place, so this is ported rather than introduced.
 - **Refusal posture is git's**: refuse and the user fixes it — rebase-over-dirt,
   deserialize-over-dirt, renumber-forcing compiles. Automation on top may come later;
   none of it is in this milestone.
