@@ -35,6 +35,15 @@ export interface EditingControllerDeps {
   log?: (msg: string) => void;
 }
 
+/** #290: the ProblemDetails extension `WriteEndpointMapping.Refusal` rides beside `detail` for
+ *  the one create-time refusal a header edit can resolve — `undefined` for every other refusal
+ *  (including a transport error, whose `error` never has this shape), so `mutate`'s own
+ *  `onEslContradiction` branch can stay a single truthy check. */
+function eslContradictionMessage(error: unknown): string | undefined {
+  const problem = error as { eslContradiction?: boolean; detail?: string } | undefined;
+  return problem?.eslContradiction ? (problem.detail ?? errorText(error)) : undefined;
+}
+
 /** ADR-0035: how often the in-flight reconcile is asked what it has indexed so far.
  *
  *  500ms matches `BackendManager`'s own `GET /health` cadence — the one in-repo precedent for
@@ -276,7 +285,15 @@ export class EditingController {
    *  `refresh: 'both'` re-reads the tree *and* the per-plugin filter matches — the right answer
    *  for anything that lands a working-tree change (ADR-0035 amending ADR-0018: a changed record
    *  can start or stop matching the active filter). A predicate makes that conditional on the
-   *  response (typed refusals succeed as HTTP but change nothing). */
+   *  response (typed refusals succeed as HTTP but change nothing).
+   *
+   *  `onEslContradiction` is #290's escape hatch, opt-in per call site: when the server's
+   *  ProblemDetails carries the `eslContradiction` extension (createRecord's own twin of
+   *  compile's typed marker) and a caller supplied this, its outcome replaces the ordinary
+   *  toast-and-fail — the caller owns the prompt-and-retry (`editorCommands.ts`'s
+   *  `offerEslFlagRemoval`, the same one compile already uses), this frame only routes around its
+   *  own default when told to. Every other refusal, and every call site that leaves it unset,
+   *  behaves exactly as before. */
   private async mutate<T, R>(spec: {
     op: string;
     failMsg: string;
@@ -284,10 +301,13 @@ export class EditingController {
     refresh?: 'both' | ((data: T | undefined) => boolean);
     map: (data: T | undefined) => R;
     failure: R;
+    onEslContradiction?: (message: string) => Promise<R>;
   }): Promise<R> {
     try {
       const { data, error, response } = await spec.post();
       if (!response.ok) {
+        const eslMessage = spec.onEslContradiction && eslContradictionMessage(error);
+        if (eslMessage) return spec.onEslContradiction!(eslMessage);
         const text = errorText(error);
         this.log(`[EditingController] ${spec.op} failed (${response.status}): ${text}`);
         this.deps.showError(`${spec.failMsg} — ${text}`);
@@ -404,9 +424,17 @@ export class EditingController {
    *
    *  Returns the new FormKey on success, `undefined` on failure (already surfaced) — the caller
    *  (the tree-row command) has nothing further to do with it beyond the refresh below, but a test
-   *  or a future "reveal the new record" gesture can use it. */
+   *  or a future "reveal the new record" gesture can use it.
+   *
+   *  `onEslContradiction` is #290's prompt-and-retry hook: creation can outgrow the ESL range the
+   *  same way compile's own content can (reachable in practice only via a large batch copy landing
+   *  in one gesture, per #290's ruling — an ordinary single-record create starts from an empty
+   *  plugin) — when it does, the caller decides whether to remove the flag, and accepting retries
+   *  this same call once, exactly as `compileAndReport`'s own retry does. Left unset, an
+   *  ESL-contradiction refusal surfaces as the ordinary toast like any other refusal. */
   async createRecord(
     plugin: string, origin: string, recordType: string, editorId?: string, formKey?: string,
+    onEslContradiction?: (message: string) => Promise<boolean>,
   ): Promise<string | undefined> {
     return this.mutate({
       op: `createRecord(${plugin}, ${recordType})`,
@@ -418,6 +446,11 @@ export class EditingController {
       refresh: 'both',
       map: (data) => data?.formKey ?? undefined,
       failure: undefined,
+      onEslContradiction: onEslContradiction && (async (message) => (
+        (await onEslContradiction(message))
+          ? this.createRecord(plugin, origin, recordType, editorId, formKey, onEslContradiction)
+          : undefined
+      )),
     });
   }
 
@@ -486,10 +519,14 @@ export class EditingController {
    *  all, and `createRecord`'s own "land immediately, rename via the grid afterward" posture
    *  already applies the same zero-friction answer to a freshly-created record — extending it here
    *  is consistency with that existing decision, not a fresh divergence. Returns the new FormKey on
-   *  success, `undefined` on failure (already surfaced). */
+   *  success, `undefined` on failure (already surfaced).
+   *
+   *  `onEslContradiction` is `createRecord`'s own #290 prompt-and-retry hook — this is the gesture
+   *  the ruling actually flags as the realistic way to hit it (a destination plugin's ESL space
+   *  outgrown by copies landing into it), so it gets the identical treatment. */
   async copyRecordAsNewRecord(
     formKey: string, sourcePlugin: string, sourceOrigin: string, destinationPlugin: string, destinationOrigin: string,
-    requestedFormKey?: string,
+    requestedFormKey?: string, onEslContradiction?: (message: string) => Promise<boolean>,
   ): Promise<string | undefined> {
     return this.mutate({
       op: `copyRecordAsNewRecord(${formKey})`,
@@ -503,6 +540,14 @@ export class EditingController {
       refresh: 'both',
       map: (data) => data?.newFormKey ?? undefined,
       failure: undefined,
+      onEslContradiction: onEslContradiction && (async (message) => (
+        (await onEslContradiction(message))
+          ? this.copyRecordAsNewRecord(
+            formKey, sourcePlugin, sourceOrigin, destinationPlugin, destinationOrigin, requestedFormKey,
+            onEslContradiction,
+          )
+          : undefined
+      )),
     });
   }
 

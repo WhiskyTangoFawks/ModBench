@@ -6,6 +6,7 @@ import type {
 } from './ApiClient';
 import type { PluginRepository } from './PluginRepository';
 import { recordResourceUri } from './recordResourceUri';
+export { headerFormKeyFor } from './formKeyIdentity';
 
 // Interior-cell listing is the only surface that pages — record-type children (below) load in
 // one call (measured no meaningful cost even at the realistic worst case; see fetchRecords and
@@ -18,11 +19,6 @@ const UNLIMITED_RECORDS = 2147483647;
 
 function formId(formKey: string): string {
   return formKey.split(':')[0];
-}
-
-/** The synthetic FormKey a plugin's header record is indexed at. */
-export function headerFormKeyFor(pluginName: string): string {
-  return `000000:${pluginName}`;
 }
 
 // This provider deliberately has no plugin-row node — the merged tree's plugin rows are

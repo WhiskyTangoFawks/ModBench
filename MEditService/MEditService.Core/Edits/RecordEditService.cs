@@ -1694,8 +1694,31 @@ public sealed class RecordEditService(
         }
 
         targetFormKey = "";
+        // #290: the ESL cap, not the plugin's own FormKey space, is what's actually exhausted —
+        // native space above 0xFFF remains free, and the light-ness is the removable header flag
+        // (not a .esl extension nobody can un-flag). The same way out compile already offers
+        // (remove the flag), surfaced the same way: a typed marker, not a dead end.
+        var eslContradiction = isLight
+            && IsLightByRemovableFlag(index, plugin, mod)
+            && NextFreeNativeFormId(index, plugin, mod, isLight: false) != null;
         return RecordEditResult.Refused(
-            RecordEditRefusal.FormKeySpaceExhausted, FormKeySpaceExhaustedMessage(plugin, isLight));
+            RecordEditRefusal.FormKeySpaceExhausted, FormKeySpaceExhaustedMessage(plugin, isLight, eslContradiction),
+            eslContradiction);
+    }
+
+    /// <summary>
+    /// Whether <paramref name="plugin"/>'s ESL-ness comes from the removable header flag — as
+    /// opposed to a <c>.esl</c> extension, which <see cref="IsLightAtEffective"/> also treats as
+    /// light but which no header edit can un-flag. Same working-tree-first lookup
+    /// <see cref="IsLightAtEffective"/> uses (a flag flipped this session, not yet compiled, still
+    /// answers immediately), minus the extension fallback.
+    /// </summary>
+    private static bool IsLightByRemovableFlag(IRecordIndex index, PluginKey plugin, IModGetter? mod)
+    {
+        var headerFormKey = HeaderIndexer.FormKeyFor(ModKey.FromFileName(plugin.Name));
+        if (index.At(RecordRef.Effective).GetDocument(headerFormKey, plugin)?.Body is { } body)
+            return HeaderDocument.IsLight(Encoding.UTF8.GetBytes(body));
+        return mod?.IsSmallMaster ?? false;
     }
 
     /// <summary>
@@ -1803,12 +1826,20 @@ public sealed class RecordEditService(
         return next > cap ? null : $"{next:X6}:{plugin.Name}";
     }
 
-    private static string FormKeySpaceExhaustedMessage(PluginKey plugin, bool isLight) =>
-        isLight
+    private static string FormKeySpaceExhaustedMessage(PluginKey plugin, bool isLight, bool eslContradiction = false)
+    {
+        if (eslContradiction)
+        {
+            return $"{plugin.Name} has exhausted its ESL FormKey space — every local FormID up to 0xFFF is " +
+                "already in use (a light-flagged plugin's addressable range) — but native space remains " +
+                "free above it. Remove the ESL flag to keep creating records there.";
+        }
+        return isLight
             ? $"{plugin.Name} has exhausted its ESL FormKey space — every local FormID up to 0xFFF is " +
               "already in use (a light-flagged plugin's addressable range). Un-flag it as ESL to use " +
               "the full 0xFFFFFF range."
             : $"{plugin.Name} has exhausted its FormKey space — every local FormID up to 0xFFFFFF is already in use.";
+    }
 
     private static uint LocalId(string formKey) =>
         uint.Parse(formKey[..formKey.IndexOf(':')], NumberStyles.HexNumber, CultureInfo.InvariantCulture);

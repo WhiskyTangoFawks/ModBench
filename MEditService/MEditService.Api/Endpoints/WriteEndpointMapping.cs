@@ -48,6 +48,12 @@ internal static class WriteEndpointMapping
     /// The status code says what <i>kind</i> of problem it is, so an ordinary HTTP client
     /// behaves sanely without knowing our vocabulary; the extension says exactly which one, so an
     /// agent never has to match on prose (ADR-0026).
+    ///
+    /// <para>#290: <c>eslContradiction</c> rides beside it, the create-time twin of
+    /// <c>CompileResult.EslContradiction</c> — true only for the one
+    /// <see cref="RecordEditRefusal.FormKeySpaceExhausted"/> shape a header edit can resolve, so
+    /// the frontend can offer the same accept/decline prompt compile already gives instead of
+    /// leaving the refusal a dead end.</para>
     /// </summary>
     internal static IResult Refusal(RecordEditResult result) => Results.Problem(
         detail: result.Message,
@@ -60,7 +66,11 @@ internal static class WriteEndpointMapping
             // Well-formed, addressed at something real, and still not something we will write.
             _ => 422,
         },
-        extensions: new Dictionary<string, object?> { ["refusal"] = result.Refusal.ToString() });
+        extensions: new Dictionary<string, object?>
+        {
+            ["refusal"] = result.Refusal.ToString(),
+            ["eslContradiction"] = result.EslContradiction,
+        });
 
     /// <summary>
     /// The write path touches a file inside a live git working tree Modbench does not own
