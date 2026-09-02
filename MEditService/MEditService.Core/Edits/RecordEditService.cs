@@ -1245,9 +1245,16 @@ public sealed class RecordEditService(
     /// record the index lists that the tree no longer holds, a referencer with no source unit, an
     /// embedded child missing from its own owner, a link the typed remap did not move — is a typed
     /// refusal returned before the first byte lands, per ADR-0041's refusals-precede-writes rule.
-    /// What stays exposed mid-cascade is genuine I/O only. There is no rollback: a disk failure
-    /// part-way still leaves working-tree dirt, and the thrown message names every repo already
-    /// written so the user knows what to review in the Source Control panel.</para>
+    /// What stays exposed mid-cascade is genuine I/O only.</para>
+    ///
+    /// <para><b>All-or-nothing across every tree it writes</b> (#678, ADR-0045). The genuine-I/O
+    /// failure that #676 left exposed no longer leaves working-tree dirt for the author to hunt
+    /// through: phase two runs through a <see cref="SourceWriteTransaction"/> holding each file's
+    /// pre-image, and a failure part-way restores them in reverse order, then re-derives every
+    /// affected plugin's index rows from its restored tree. The one thing it will not do is overwrite
+    /// work it did not create — a file another tool or the author changed or deleted meanwhile keeps
+    /// its current content and is named in the error instead. Process death is out of scope; the
+    /// compile round-trip gate and re-Track remain its recovery path.</para>
     /// </summary>
     public RecordEditResult RenumberRecord(PluginKey plugin, string formKey, string? requestedFormKey = null)
     {
@@ -1322,44 +1329,31 @@ public sealed class RecordEditService(
         if (ComputeTargetRewrite(index, plugin, modFolder, formKey, targetFormKey, release, out var targetRewrite)
             is { } refusedSelf) return refusedSelf;
 
-        // Phase two. Everything that can still fail here is genuine I/O.
-        var writtenRepos = new List<string>();
+        // Phase two. Everything that can still fail here is genuine I/O — and all of it is
+        // recorded in one transaction, so a failure part-way puts every source tree back (#678, ADR-0045).
+        var transaction = new SourceWriteTransaction();
         try
         {
-            foreach (var rewrite in rewrites)
-            {
-                WriteComputedRewrite(index, rewrite, release);
-                writtenRepos.Add($"{rewrite.Plugin.Name} ({rewrite.Plugin.Origin})");
-            }
-
-            WriteTargetRewrite(index, plugin, targetRewrite, formKey, targetFormKey, release);
-            writtenRepos.Add($"{plugin.Name} ({plugin.Origin})");
+            foreach (var rewrite in rewrites) WriteComputedRewrite(index, transaction, rewrite, release);
+            WriteTargetRewrite(index, transaction, plugin, modFolder, targetRewrite, formKey, targetFormKey, release);
         }
         catch (Exception ex)
         {
-            // No rollback (#676 lands none): a disk failure part-way through leaves the writes that
-            // already landed durably on disk, so this names exactly which repos carry working-tree
-            // dirt from it — each independently reviewable and revertable in the Source Control panel.
             // Deliberately unfiltered rather than `when (ex is IOException or
-            // UnauthorizedAccessException)`, so an unexpected fault carries this disclosure too rather
-            // than silently losing it by falling through to the endpoint's *different*
-            // InvalidOperationException handler ("no usable load order" — a different question
-            // entirely, and a misleading answer to this one). Rethrown as IOException, always,
-            // regardless of the original exception's type, so this reaches the client as the same 500
-            // every other write-path fault does, carrying this richer message instead of the bare one.
-            throw new IOException(
-                $"Renumbering {formKey} to {targetFormKey} failed after writing to: {string.Join(", ", writtenRepos)}. " +
-                "Those repos now hold working-tree dirt from this partial renumber — review and revert " +
-                $"in the Source Control panel as needed. Underlying error: {ex.Message}", ex);
+            // UnauthorizedAccessException)`, so an unexpected fault is rolled back and disclosed too
+            // rather than falling through to the endpoint's *different* InvalidOperationException
+            // handler ("no usable load order" — a different question entirely, and a misleading answer
+            // to this one). Rethrown as IOException, always, regardless of the original exception's
+            // type, so this reaches the client as the same 500 every other write-path fault does.
+            throw new IOException(RollBackFailedRenumber(transaction, plugin, rewrites, formKey, targetFormKey, ex), ex);
         }
         finally
         {
-            // On both outcomes, not just success — a mid-cascade failure still leaves whatever
-            // referencer rewrites already landed (writtenRepos) durably on disk before the throw above,
-            // and _filter must not stay stale for those just because the record's own rewrite is what
-            // failed. Re-applied once rather than per write — cheaper and no less correct, since
-            // SetFilter re-derives the full matching set regardless of how many rows moved since it was
-            // last run.
+            // On both outcomes, not just success. On the failure path the rollback has just put the
+            // files back and the affected plugins have been re-derived from them, and _filter must not
+            // stay stale across either. Re-applied once rather than per write — cheaper and no less
+            // correct, since SetFilter re-derives the full matching set regardless of how many rows
+            // moved since it was last run.
             mirror.ReapplyFilter();
         }
 
@@ -1372,6 +1366,107 @@ public sealed class RecordEditService(
         return RecordEditResult.Success(targetFormKey);
     }
 
+    /// <summary>
+    /// The failure half of the renumber: put every source tree back, re-derive the index from what
+    /// the trees now hold, and compose the message the author sees (#678, ADR-0045).
+    ///
+    /// <para><b>The index is re-derived, not unwound.</b> It is a cache over the source trees
+    /// (CONTEXT.md, Index), so the honest repair after the files go back is to read them again —
+    /// <see cref="ILoadOrderMirror.ReingestPluginFromSource"/>, the same door #672 built for exactly
+    /// this shape of recovery. Unwinding rows one by one would be a second, divergeable
+    /// implementation of what a re-ingest already computes.</para>
+    ///
+    /// <para><b>Paths are named relative to the mod folder</b> — the form the Source Control panel
+    /// lists them in, and the form that carries the plugin's own folder inside it, so two plugins'
+    /// files can never read as the same name. The absolute paths go to the log only.</para>
+    /// </summary>
+    private string RollBackFailedRenumber(
+        SourceWriteTransaction transaction, PluginKey plugin, IReadOnlyList<ComputedRewrite> rewrites,
+        string oldFormKey, string newFormKey, Exception cause)
+    {
+        var unrestored = transaction.Rollback();
+        if (unrestored.Count > 0)
+        {
+            logger.LogWarning(
+                "Rolling back the failed renumber of {OldFormKey} left {Count} path(s) as they stood: {Paths}",
+                oldFormKey, unrestored.Count,
+                string.Join("; ", unrestored.Select(u => $"{u.FullPath} [{u.Reason}{(u.Error is null ? "" : $": {u.Error}")}]")));
+        }
+
+        var notReDerived = new List<string>();
+        foreach (var affected in rewrites.Select(r => r.Plugin).Append(plugin).Distinct())
+        {
+            try
+            {
+                mirror.ReingestPluginFromSource(affected);
+            }
+            catch (Exception ex)
+            {
+                // Already recorded in the load order's own LoadFailures by the re-ingest itself
+                // (ADR-0026); named here too because this message is the one the failed gesture
+                // returns, and "the files went back but the index did not follow" is part of it.
+                logger.LogWarning(ex, "Could not re-derive {Plugin} after rolling back a failed renumber", affected.Name);
+                notReDerived.Add(affected.Name);
+            }
+        }
+
+        var sentences = new List<string>
+        {
+            $"Renumbering {oldFormKey} to {newFormKey} failed.",
+            unrestored.Count == 0
+                ? "Every source tree it had written is back as it was — nothing to review or revert."
+                : "Every source tree it had written is back as it was, except:",
+        };
+
+        sentences.AddRange(new[]
+        {
+            (UnrestoredReason.ChangedByAnother,
+                "changed by something else after this renumber wrote them, so their current content was kept"),
+            (UnrestoredReason.RemovedByAnother,
+                "removed by something else after this renumber wrote them, so they were not put back"),
+            (UnrestoredReason.OccupiedByAnother,
+                "occupied by something else, so what this renumber moved away was not moved back"),
+            (UnrestoredReason.RestoreFailed, "could not be restored"),
+        }.Select(r => NamedPaths(unrestored, r.Item1, r.Item2)).OfType<string>());
+
+        if (notReDerived.Count > 0)
+        {
+            sentences.Add(
+                $"The index could not be re-read from the source of {string.Join(", ", notReDerived)} — " +
+                "reindex or re-Track before editing further.");
+        }
+
+        var modFolders = rewrites.Select(r => r.ModFolder).Append(ModFolders.Of(mirror.LoadOrder, plugin))
+            .OfType<string>().Distinct().ToList();
+        sentences.Add($"Underlying error: {RelativeToModFolders(cause.Message, modFolders)}");
+        return string.Join(" ", sentences);
+    }
+
+    /// <summary>
+    /// The underlying fault's own message, with every affected mod folder's absolute path cut back to
+    /// the same mod-folder-relative form the rest of this message uses. A real filesystem fault names
+    /// the path it failed on — <c>Access to the path '/…/mods/Foo/source/Foo.esp/Races/[0] x.json' is
+    /// denied</c> — and that is exactly the absolute path #678 says goes to the log only. The cause is
+    /// still worth showing (it is the only thing that says <i>why</i>), so it is relativized rather
+    /// than dropped, and the log keeps the untouched original.
+    ///
+    /// <para>Textual, and deliberately so: an exception message is prose, not structure, and there is
+    /// no typed path to reach for. A folder this renumber never touched is not stripped — which is
+    /// correct, since a path outside every affected tree is not one this message is claiming to name
+    /// relatively.</para>
+    /// </summary>
+    private static string RelativeToModFolders(string message, IReadOnlyList<string> modFolders) =>
+        modFolders
+            .OrderByDescending(f => f.Length)
+            .Aggregate(message, (text, folder) => text.Replace(folder + Path.DirectorySeparatorChar, "", StringComparison.Ordinal));
+
+    private static string? NamedPaths(
+        IReadOnlyList<UnrestoredPath> unrestored, UnrestoredReason reason, string phrase)
+    {
+        var named = unrestored.Where(u => u.Reason == reason).Select(u => u.RelativePath).ToList();
+        return named.Count == 0 ? null : $"{string.Join(", ", named)} — {phrase}.";
+    }
+
     /// <summary>One source file the cascade will rewrite, computed in full before any write: the
     /// remapped record graph, the exact bytes it serializes to, and the index rows to be re-derived
     /// from them. <paramref name="Record"/> is the file's own top-level record — the referencer
@@ -1379,6 +1474,7 @@ public sealed class RecordEditService(
     /// inside the owner's document.</summary>
     private sealed record ComputedRewrite(
         PluginKey Plugin,
+        string ModFolder,
         string FilePath,
         IMajorRecord Record,
         IReadOnlyList<(string FormKey, string? Body)> IndexChanges);
@@ -1488,7 +1584,12 @@ public sealed class RecordEditService(
                 changes.Add((embeddedFormKey, SerializeToText(child, release)));
             }
 
-            rewrites.Add(new ComputedRewrite(referencerPlugin, filePath, owner, changes));
+            // Carried on the rewrite rather than recomputed at write time: the write transaction names
+            // every path it could not restore relative to this folder (#678), which is the form the
+            // Source Control panel lists them in.
+            rewrites.Add(new ComputedRewrite(
+                referencerPlugin, ModFolders.TrackedOf(mirror.LoadOrder, referencerPlugin)!,
+                filePath, owner, changes));
         }
 
         return null;
@@ -1546,14 +1647,16 @@ public sealed class RecordEditService(
 
     /// <summary>Phase two for one referencing file: the codec's own write-then-rename
     /// (<see cref="RecordTextCodec.SerializeAsync"/>), so a failure mid-write leaves the previous
-    /// source record intact rather than truncated. Wrapped in
+    /// source record intact rather than truncated. Routed through <paramref name="transaction"/>, which
+    /// holds the file's pre-image for the length of the call and itself wraps the write in
     /// <see cref="SourceUnitResolver.InMintedDirectory{T}"/> like every other source-tree write —
     /// the resolved unit proves the directory already exists, so nothing is normally minted, and the
     /// wrapper is what keeps that true rather than an assumption (#675).</summary>
-    private void WriteComputedRewrite(IRecordIndex index, ComputedRewrite rewrite, GameRelease release)
+    private void WriteComputedRewrite(
+        IRecordIndex index, SourceWriteTransaction transaction, ComputedRewrite rewrite, GameRelease release)
     {
-        SourceUnitResolver.InMintedDirectory(
-            Path.GetDirectoryName(rewrite.FilePath)!,
+        transaction.Write(
+            rewrite.ModFolder, rewrite.FilePath,
             () => _codec.SerializeAsync(rewrite.Record, rewrite.FilePath, release).GetAwaiter().GetResult());
 
         index.ApplyWorkingTreeChanges(rewrite.Plugin, rewrite.IndexChanges);
@@ -1649,8 +1752,8 @@ public sealed class RecordEditService(
     /// <summary>Phase two for the renumbered record: the delete+create pair in source terms, moving
     /// the already-computed bytes onto disk. Dispatches on the target's own source unit shape.</summary>
     private void WriteTargetRewrite(
-        IRecordIndex index, PluginKey plugin, ComputedTarget target, string oldFormKey, string newFormKey,
-        GameRelease release)
+        IRecordIndex index, SourceWriteTransaction transaction, PluginKey plugin, string modFolder,
+        ComputedTarget target, string oldFormKey, string newFormKey, GameRelease release)
     {
         var (unit, document, root, rootBody, childBody) = target;
         if (unit.IsEmbedded)
@@ -1659,8 +1762,8 @@ public sealed class RecordEditService(
             // The owner is reserialized over its existing file and the child's own extracted row is
             // replaced (old FormKey's row nulled, new FormKey's row created from the child alone) —
             // the same two-row shape EditField's own embedded edit uses.
-            SourceUnitResolver.InMintedDirectory(
-                Path.GetDirectoryName(unit.FullPath)!,
+            transaction.Write(
+                modFolder, unit.FullPath,
                 () => _codec.SerializeAsync(root, unit.FullPath, release).GetAwaiter().GetResult());
             index.ApplyRenumber(plugin, new RenumberedRecord(
                 oldFormKey, newFormKey, document.RecordType, childBody!,
@@ -1692,26 +1795,29 @@ public sealed class RecordEditService(
         {
             // Moved whole, not recreated from scratch: a container's nested folder-split children (a
             // Quest's own DialogTopics subtree) travel with it rather than being orphaned.
-            Directory.Move(oldLeafPath, newLeafPath);
+            transaction.Move(modFolder, oldLeafPath, newLeafPath);
             writePath = Path.Combine(newLeafPath, SourceUnitResolver.RecordDataFileName);
         }
         else
         {
             writePath = newLeafPath;
         }
-        // A no-op for the moved-whole branch above (Directory.Move already put the destination in
+        // A no-op for the moved-whole branch above (the move already put the destination in
         // place); for the flat branch this is the group folder, which the resolved unit proves already
-        // exists — so nothing is normally minted here at all, and the wrapper is what keeps that true
-        // rather than an assumption (#675).
-        SourceUnitResolver.InMintedDirectory(
-            Path.GetDirectoryName(writePath)!,
+        // exists — so nothing is normally minted here at all, and the transaction's own
+        // InMintedDirectory wrapper is what keeps that true rather than an assumption (#675).
+        transaction.Write(
+            modFolder, writePath,
             () => _codec.SerializeAsync(record, writePath, release).GetAwaiter().GetResult());
 
-        if (!isDirectoryPerRecord && File.Exists(unit.FullPath)) File.Delete(unit.FullPath);
+        if (!isDirectoryPerRecord && File.Exists(unit.FullPath)) transaction.Delete(modFolder, unit.FullPath);
 
         // This method's own last file-system act — closes the gap the old slot just left (and
         // any pre-existing one besides) so the group directory is contiguous again before this returns.
-        SourceUnitResolver.RenormalizeGroupOrder(parentDirectory);
+        // Recorded like every other act here: an ordering prefix this pass moved is part of what a
+        // failed renumber has to put back, and putting it back in reverse order is what keeps the
+        // restore from colliding with a sibling this pass renamed (#678).
+        SourceUnitResolver.RenormalizeGroupOrder(parentDirectory, transaction, modFolder);
 
         // The whole index side of the renumber in one call, and therefore one transaction (#677):
         // the new identity's rows, the re-points that carry this record's folder-split children and

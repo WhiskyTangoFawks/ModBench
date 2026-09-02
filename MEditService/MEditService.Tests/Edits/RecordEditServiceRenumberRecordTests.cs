@@ -189,15 +189,19 @@ public sealed class RecordEditServiceRenumberRecordTests
         Assert.Contains(index.At(RecordRef.Effective).GetReferencedBy(result.NewFormKey!), r => r.FormKey == two.ReferencerNpc.ToString());
     }
 
-    // A reapply that only runs on the try block's success path leaves _filter
-    // stale for whatever referencer rewrites had already landed durably before the target's own
-    // write failed — the same honest-partial-state doctrine the writtenRepos disclosure follows.
+    // #678 (ADR-0045) overrules what this used to pin. The referencer's rewrite no longer outlives
+    // the target's own write failing: it is rolled back with everything else, so the filter — still
+    // re-applied on the failure path, not only on success — has to show the *restored* tree rather
+    // than the mid-cascade one. Asserting zero is the whole point: before #678 this same filter
+    // answered one, because the referencer's rewrite had landed durably and stayed there.
+    //
     // Chmod-mid-cascade technique from PluginCompileServiceJournalTests: the target mod folder is
     // made unwritable *after* fixture setup (so tracking itself succeeds), so the target's own write
-    // is what fails, once the referencer's computed rewrite has already landed durably. #676 lands no
-    // rollback, so this partial state is still reachable — by genuine I/O failure only.
+    // is what fails — a genuine I/O failure, arriving at a position the referencer's rewrite has
+    // already been written past. The referencer's own mod folder stays writable, which is what lets
+    // the rollback put its file back.
     [Fact]
-    public void RenumberRecord_WhenTheTargetsOwnWriteFailsAfterReferencersLanded_FilterReflectsTheReferencerWrite()
+    public void RenumberRecord_WhenTheTargetsOwnWriteFails_TheFilterReflectsTheRestoredTree()
     {
         using var two = TwoModFixture.Create(trackReferencer: true);
         const string requestedTarget = "900000:Base.esm";
@@ -214,18 +218,31 @@ public sealed class RecordEditServiceRenumberRecordTests
         {
             var ex = Assert.Throws<IOException>(() =>
                 ServiceFor(two.Mirror).RenumberRecord(two.TargetPlugin, two.TargetRace.ToString(), requestedTarget));
-            Assert.Contains(TwoModFixture.ReferencerPluginName, ex.Message, StringComparison.Ordinal);
+            // No repository is named as holding partial damage, because none does.
+            Assert.Contains("back as it was", ex.Message, StringComparison.Ordinal);
+            Assert.DoesNotContain(TwoModFixture.ReferencerPluginName, ex.Message, StringComparison.Ordinal);
+
+            // #678's path rule, asked of the one fault here that is a genuine OS error: the
+            // underlying message names the path it failed on, and no absolute path reaches the
+            // author. The relative remainder does, which is the point — it is still the file the
+            // author would look for.
+            Assert.DoesNotContain(two.TargetModFolder, ex.Message, StringComparison.Ordinal);
+            Assert.Contains(SourceRecordPath.RootFor(TwoModFixture.TargetPluginName), ex.Message, StringComparison.Ordinal);
         }
         finally
         {
             Chmod(two.TargetModFolder, "700"); // restored before TwoModFixture.Dispose() needs to clean up
         }
 
-        // The referencer's rewrite is durably on disk, so the filter — re-materialized even though
-        // the overall gesture threw — must show it.
-        var result = two.Mirror.Reads!.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0));
-        Assert.Equal(1, result.Total);
-        Assert.Equal(two.ReferencerNpc.ToString(), result.Items[0].FormKey);
+        // The referencer's rewrite came back off disk and its rows were re-derived from the restored
+        // file, so the filter — re-materialized even though the overall gesture threw — still matches
+        // nothing, exactly as it did before the gesture ran.
+        Assert.Equal(
+            0, two.Mirror.Reads!.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0)).Total);
+        var referencer = two.Mirror.Index!.At(RecordRef.Effective)
+            .GetDocument(two.ReferencerNpc.ToString(), two.ReferencerPlugin)!;
+        Assert.Contains(two.TargetRace.ToString(), referencer.Body, StringComparison.Ordinal);
+        Assert.DoesNotContain(requestedTarget, referencer.Body, StringComparison.Ordinal);
     }
 
     // Process-shelled rather than File.Set/GetUnixFileMode — same reasoning as
@@ -336,7 +353,7 @@ public sealed class RecordEditServiceRenumberRecordTests
     private sealed class TwoModFixture : IDisposable
     {
         public const string ReferencerPluginName = "Winner.esp";
-        private const string TargetPluginName = "Base.esm";
+        public const string TargetPluginName = "Base.esm";
         private const string TargetOrigin = "TargetMod";
         private const string ReferencerOrigin = "ReferencerMod";
 

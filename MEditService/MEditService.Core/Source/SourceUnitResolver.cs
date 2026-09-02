@@ -501,7 +501,15 @@ internal static class SourceUnitResolver
     /// what is on disk) — the same "re-Track to repair" recovery that gate has always offered, needing
     /// nothing new to keep offering it here.</para>
     /// </summary>
-    internal static void RenormalizeGroupOrder(string groupDirectory)
+    /// <param name="groupDirectory">The group folder whose <c>"[N] "</c> prefixes to close up.</param>
+    /// <param name="transaction">When given, every rename this makes is recorded in it, so a later
+    /// failure in the same action puts the ordering prefixes back (#678, ADR-0045). Only the renumber
+    /// cascade passes one; the other two structural writes renormalize outside any transaction,
+    /// exactly as before — they have no pre-images to restore.</param>
+    /// <param name="modFolder">Required alongside <paramref name="transaction"/>: what a recorded
+    /// path is named relative to when the restore reports on it.</param>
+    internal static void RenormalizeGroupOrder(
+        string groupDirectory, SourceWriteTransaction? transaction = null, string? modFolder = null)
     {
         if (!Directory.Exists(groupDirectory)) return;
 
@@ -520,9 +528,19 @@ internal static class SourceUnitResolver
             var tail = leaf[(leaf.IndexOf("] ", StringComparison.Ordinal) + 2)..];
             var newPath = Path.Combine(groupDirectory, $"[{newIndex}] {tail}");
 
-            if (Directory.Exists(entry)) Directory.Move(entry, newPath);
-            else File.Move(entry, newPath);
+            if (transaction == null) MoveEntry(entry, newPath);
+            else transaction.Move(modFolder!, entry, newPath);
         }
+    }
+
+    /// <summary>Renames a source-tree entry whichever shape it is — a container's directory or a flat
+    /// record's file. One place that knows the distinction, so <see cref="RenormalizeGroupOrder(string)"/>
+    /// and <see cref="SourceWriteTransaction.Move"/> (which undoes what it recorded) cannot disagree
+    /// about it.</summary>
+    internal static void MoveEntry(string from, string to)
+    {
+        if (Directory.Exists(from)) Directory.Move(from, to);
+        else File.Move(from, to);
     }
 
     /// <summary>
