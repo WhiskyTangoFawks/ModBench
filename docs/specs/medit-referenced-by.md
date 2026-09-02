@@ -209,6 +209,14 @@ deferred**, and that narrowing is a recorded decision, not an omission:
   struct members to recover these links would be a second, divergent link enumerator alongside
   whatever `EnumerateFormLinks` becomes once the upstream fix lands, which is exactly the risk
   that refusal rejected.
+- **A referrer whose record type has no schema** — `SchemaReflector.ExcludedTables` is a deliberate
+  product filter (`land`, `navm`, `navi`, plus the collapsed xEdit REFR-signature variants `pgre`,
+  `pmis`, `parw`, `pbar`, `pbea`, `pcon`, `pfla`, `phzd`). Ingest walks the schema's tables, so a
+  record of an excluded type gets no document, no `records` row, and no `form_references` rows at
+  all — not from the reflected field walk, not from the VMAD walk, not from the condition walk. A
+  FormKey one of those records points at is therefore invisible here. That follows from the types
+  not being editable records in mEdit rather than from a gap in reference discovery, and it holds
+  until a type leaves the exclusion list. `PluginIngest.IndexPlugin` says the same thing at the code.
 - **Forward references** (what this record points at) — that is the compare grid's FormKey
   cells, [medit-record-editor.md](medit-record-editor.md).
 

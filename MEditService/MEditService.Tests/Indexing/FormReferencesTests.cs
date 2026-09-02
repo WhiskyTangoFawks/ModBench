@@ -399,4 +399,291 @@ public class FormReferencesTests
         Assert.Contains(rows, r => r.FieldPath == @"VMAD\DefaultScript\Config\Parts[0]\PartRef" && r.Target == target0Fk.ToString());
         Assert.Contains(rows, r => r.FieldPath == @"VMAD\DefaultScript\Config\Parts[1]\PartRef" && r.Target == target1Fk.ToString());
     }
+
+    // ── #671: scripts reachable only through an adapter sub-structure ───────────────────────────
+    //
+    // Each test below indexes a plugin whose *only* mention of `targetFormKey` is the adapter route
+    // named in the test, then asserts the full set of form_references rows aimed at that target —
+    // not just "contains one". That total-set assertion is what makes these non-vacuous: if the
+    // reflected schema walk or the condition walk could also see the same FormKey, the row count
+    // would exceed one and the assertion would fail. Before the adapter walk existed every one of
+    // these saw zero rows, which is the same proof from the other side.
+
+    private static List<(string Source, string Target, string FieldPath, string RecordType)> ReferencesTo(
+        DuckDbRecordIndex repo, FormKey target)
+    {
+        using var cmd = repo.Connection.CreateCommand();
+        cmd.CommandText =
+            "SELECT source_form_key, target_form_key, field_path, record_type FROM form_references WHERE target_form_key = $1";
+        cmd.Parameters.Add(new DuckDBParameter { Value = target.ToString() });
+        using var reader = cmd.ExecuteReader();
+        var rows = new List<(string, string, string, string)>();
+        while (reader.Read())
+            rows.Add((reader.GetString(0), reader.GetString(1), reader.GetString(2), reader.GetString(3)));
+        return rows;
+    }
+
+    private static DuckDbRecordIndex IndexOnly(PluginFixtureData fixture, string pluginName)
+    {
+        var repo = OpenRepo();
+        var mod = LoadMod(fixture.DataFolder, pluginName);
+        repo.Index(mod, Registration.Participating(0), new PluginKey(mod.ModKey.FileName.ToString(), "Data"));
+        repo.UpdateWinners();
+        return repo;
+    }
+
+    private static ScriptEntry ScriptWithObjectProperty(string scriptName, string propName, FormKey target)
+    {
+        var script = new ScriptEntry { Name = scriptName, Flags = ScriptEntry.Flag.Local };
+        var prop = new ScriptObjectProperty { Name = propName, Alias = -1 };
+        prop.Object.SetTo(target);
+        script.Properties.Add(prop);
+        return script;
+    }
+
+    [Fact]
+    public void Index_QuestAliasScriptObjectProperty_IsIndexedInFormReferences()
+    {
+        FormKey targetFormKey = default;
+        FormKey questFormKey = default;
+
+        using var fixture = new PluginFixtureBuilder("form-refs-quest-alias-script")
+            .WithPlugin("QuestAliasScript.esp", mod =>
+            {
+                targetFormKey = mod.Npcs.AddNew("AliasScriptTarget").FormKey;
+                var quest = mod.Quests.AddNew("AliasScriptQuest");
+                questFormKey = quest.FormKey;
+
+                var adapter = new QuestAdapter();
+                var alias = new QuestFragmentAlias();
+                alias.Scripts.Add(ScriptWithObjectProperty("AliasScript", "TargetRef", targetFormKey));
+                adapter.Aliases.Add(alias);
+                quest.VirtualMachineAdapter = adapter;
+            })
+            .Build();
+
+        using var repo = IndexOnly(fixture, "QuestAliasScript.esp");
+
+        var row = Assert.Single(ReferencesTo(repo, targetFormKey));
+        Assert.Equal(questFormKey.ToString(), row.Source);
+        Assert.Equal(@"VMAD\Aliases[0]\AliasScript\TargetRef", row.FieldPath);
+        Assert.Equal("qust", row.RecordType);
+    }
+
+    [Fact]
+    public void Index_QuestAliasOwnScriptObjectProperty_IsIndexedInFormReferences()
+    {
+        FormKey targetFormKey = default;
+        FormKey questFormKey = default;
+
+        using var fixture = new PluginFixtureBuilder("form-refs-quest-alias-property")
+            .WithPlugin("QuestAliasProperty.esp", mod =>
+            {
+                targetFormKey = mod.Npcs.AddNew("AliasPropertyTarget").FormKey;
+                var quest = mod.Quests.AddNew("AliasPropertyQuest");
+                questFormKey = quest.FormKey;
+
+                var adapter = new QuestAdapter();
+                var alias = new QuestFragmentAlias();
+                alias.Property.Object.SetTo(targetFormKey);
+                alias.Property.Alias = -1;
+                adapter.Aliases.Add(alias);
+                quest.VirtualMachineAdapter = adapter;
+            })
+            .Build();
+
+        using var repo = IndexOnly(fixture, "QuestAliasProperty.esp");
+
+        var row = Assert.Single(ReferencesTo(repo, targetFormKey));
+        Assert.Equal(questFormKey.ToString(), row.Source);
+        Assert.Equal(@"VMAD\Aliases[0]\Property", row.FieldPath);
+        Assert.Equal("qust", row.RecordType);
+    }
+
+    [Fact]
+    public void Index_QuestFragmentScriptObjectProperty_IsIndexedInFormReferences()
+    {
+        FormKey targetFormKey = default;
+        FormKey questFormKey = default;
+
+        using var fixture = new PluginFixtureBuilder("form-refs-quest-fragment-script")
+            .WithPlugin("QuestFragmentScript.esp", mod =>
+            {
+                targetFormKey = mod.Npcs.AddNew("QuestFragmentTarget").FormKey;
+                var quest = mod.Quests.AddNew("QuestFragmentQuest");
+                questFormKey = quest.FormKey;
+
+                quest.VirtualMachineAdapter = new QuestAdapter
+                {
+                    Script = ScriptWithObjectProperty("QuestFragments", "TargetRef", targetFormKey),
+                };
+            })
+            .Build();
+
+        using var repo = IndexOnly(fixture, "QuestFragmentScript.esp");
+
+        var row = Assert.Single(ReferencesTo(repo, targetFormKey));
+        Assert.Equal(questFormKey.ToString(), row.Source);
+        Assert.Equal(@"VMAD\Script\QuestFragments\TargetRef", row.FieldPath);
+        Assert.Equal("qust", row.RecordType);
+    }
+
+    [Fact]
+    public void Index_PackageFragmentScriptObjectProperty_IsIndexedInFormReferences()
+    {
+        FormKey targetFormKey = default;
+        FormKey packageFormKey = default;
+
+        using var fixture = new PluginFixtureBuilder("form-refs-package-fragment-script")
+            .WithPlugin("PackageFragmentScript.esp", mod =>
+            {
+                targetFormKey = mod.Npcs.AddNew("PackageFragmentTarget").FormKey;
+                var package = mod.Packages.AddNew("FragmentPackage");
+                packageFormKey = package.FormKey;
+
+                package.VirtualMachineAdapter = new PackageAdapter
+                {
+                    ScriptFragments = new PackageScriptFragments
+                    {
+                        Script = ScriptWithObjectProperty("PackageScript", "TargetRef", targetFormKey),
+                    },
+                };
+            })
+            .Build();
+
+        using var repo = IndexOnly(fixture, "PackageFragmentScript.esp");
+
+        var row = Assert.Single(ReferencesTo(repo, targetFormKey));
+        Assert.Equal(packageFormKey.ToString(), row.Source);
+        Assert.Equal(@"VMAD\ScriptFragments\PackageScript\TargetRef", row.FieldPath);
+        Assert.Equal("pack", row.RecordType);
+    }
+
+    [Fact]
+    public void Index_SceneFragmentScriptObjectProperty_IsIndexedInFormReferences()
+    {
+        FormKey targetFormKey = default;
+        FormKey sceneFormKey = default;
+
+        using var fixture = new PluginFixtureBuilder("form-refs-scene-fragment-script")
+            .WithPlugin("SceneFragmentScript.esp", mod =>
+            {
+                targetFormKey = mod.Npcs.AddNew("SceneFragmentTarget").FormKey;
+                var quest = mod.Quests.AddNew("SceneOwnerQuest");
+                var scene = new Scene(mod) { EditorID = "FragmentScene" };
+                sceneFormKey = scene.FormKey;
+                scene.VirtualMachineAdapter = new SceneAdapter
+                {
+                    ScriptFragments = new SceneScriptFragments
+                    {
+                        Script = ScriptWithObjectProperty("SceneScript", "TargetRef", targetFormKey),
+                    },
+                };
+                quest.Scenes.Add(scene);
+            })
+            .Build();
+
+        using var repo = IndexOnly(fixture, "SceneFragmentScript.esp");
+
+        var row = Assert.Single(ReferencesTo(repo, targetFormKey));
+        Assert.Equal(sceneFormKey.ToString(), row.Source);
+        Assert.Equal(@"VMAD\ScriptFragments\SceneScript\TargetRef", row.FieldPath);
+        Assert.Equal("scen", row.RecordType);
+    }
+
+    [Fact]
+    public void Index_DialogInfoFragmentScriptObjectProperty_IsIndexedInFormReferences()
+    {
+        FormKey targetFormKey = default;
+        FormKey responseFormKey = default;
+
+        using var fixture = new PluginFixtureBuilder("form-refs-info-fragment-script")
+            .WithPlugin("InfoFragmentScript.esp", mod =>
+            {
+                targetFormKey = mod.Npcs.AddNew("InfoFragmentTarget").FormKey;
+                var quest = mod.Quests.AddNew("InfoOwnerQuest");
+                var topic = new DialogTopic(mod) { EditorID = "FragmentTopic" };
+                quest.DialogTopics.Add(topic);
+                var response = new DialogResponses(mod) { EditorID = "FragmentResponse" };
+                responseFormKey = response.FormKey;
+                response.VirtualMachineAdapter = new DialogResponsesAdapter
+                {
+                    ScriptFragments = new ScriptFragments
+                    {
+                        Script = ScriptWithObjectProperty("InfoScript", "TargetRef", targetFormKey),
+                    },
+                };
+                topic.Responses.Add(response);
+            })
+            .Build();
+
+        using var repo = IndexOnly(fixture, "InfoFragmentScript.esp");
+
+        var row = Assert.Single(ReferencesTo(repo, targetFormKey));
+        Assert.Equal(responseFormKey.ToString(), row.Source);
+        Assert.Equal(@"VMAD\ScriptFragments\InfoScript\TargetRef", row.FieldPath);
+        Assert.Equal("info", row.RecordType);
+    }
+
+    // AC4: an adapter-reachable script's properties are walked to the same depth top-level scripts
+    // already are — nested struct members and struct-list members included. One test covers both
+    // shapes on one alias script, so a partial walk (struct but not struct-list, or one level of
+    // nesting only) fails here rather than passing three-quarters of a suite.
+    [Fact]
+    public void Index_QuestAliasScriptNestedStructMembers_AreWalkedToFullDepth()
+    {
+        FormKey nestedTarget = default;
+        FormKey listTarget = default;
+        FormKey questFormKey = default;
+
+        using var fixture = new PluginFixtureBuilder("form-refs-quest-alias-nested")
+            .WithPlugin("QuestAliasNested.esp", mod =>
+            {
+                nestedTarget = mod.Npcs.AddNew("NestedTarget").FormKey;
+                listTarget = mod.Npcs.AddNew("ListTarget").FormKey;
+                var quest = mod.Quests.AddNew("NestedAliasQuest");
+                questFormKey = quest.FormKey;
+
+                var script = new ScriptEntry { Name = "AliasScript", Flags = ScriptEntry.Flag.Local };
+
+                // Struct → Struct → Object
+                var outer = new ScriptStructProperty { Name = "Config" };
+                var outerWrapper = new ScriptEntry();
+                var inner = new ScriptStructProperty { Name = "Inner" };
+                var innerWrapper = new ScriptEntry();
+                var innerObj = new ScriptObjectProperty { Name = "DeepRef", Alias = -1 };
+                innerObj.Object.SetTo(nestedTarget);
+                innerWrapper.Properties.Add(innerObj);
+                inner.Members.Add(innerWrapper);
+                outerWrapper.Properties.Add(inner);
+                outer.Members.Add(outerWrapper);
+                script.Properties.Add(outer);
+
+                // ArrayOfStruct → Object
+                var structList = new ScriptStructListProperty { Name = "Parts" };
+                var instance = new ScriptEntryStructs();
+                var listObj = new ScriptObjectProperty { Name = "PartRef", Alias = -1 };
+                listObj.Object.SetTo(listTarget);
+                instance.Members.Add(listObj);
+                structList.Structs.Add(instance);
+                script.Properties.Add(structList);
+
+                var alias = new QuestFragmentAlias();
+                alias.Scripts.Add(script);
+                var adapter = new QuestAdapter();
+                adapter.Aliases.Add(alias);
+                quest.VirtualMachineAdapter = adapter;
+            })
+            .Build();
+
+        using var repo = IndexOnly(fixture, "QuestAliasNested.esp");
+
+        var nestedRow = Assert.Single(ReferencesTo(repo, nestedTarget));
+        Assert.Equal(questFormKey.ToString(), nestedRow.Source);
+        Assert.Equal(@"VMAD\Aliases[0]\AliasScript\Config\Inner\DeepRef", nestedRow.FieldPath);
+
+        var listRow = Assert.Single(ReferencesTo(repo, listTarget));
+        Assert.Equal(questFormKey.ToString(), listRow.Source);
+        Assert.Equal(@"VMAD\Aliases[0]\AliasScript\Parts[0]\PartRef", listRow.FieldPath);
+    }
 }

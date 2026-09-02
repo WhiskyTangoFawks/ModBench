@@ -525,6 +525,13 @@ internal sealed class PluginIngest
     // repeat the aspect test at its own call site. A record with no VMAD contributes nothing.
     // Internal: WorkingTreeOverlay's own per-record rederivation calls this through its PluginIngest
     // reference (Overlay depends on Ingest, never the reverse).
+    //
+    // #671: a script is not only ever an entry in the adapter's own `Scripts` collection. Four of
+    // Mutagen's adapter subtypes hang further whole ScriptEntries off sub-structures, and a FormKey
+    // named only from one of those used to produce no row at all — invisible in Referenced By and
+    // invisible to the renumber cascade's untracked-referencer refusal, which is exactly the
+    // completeness that refusal's safety argument rests on (#572). Every one of those routes is
+    // enumerated by CollectAdapterScriptRefs below.
     internal static void CollectVmadRefsForRecord(
         IMajorRecordGetter record, string recordType, List<FormRef> refs)
     {
@@ -532,14 +539,75 @@ internal sealed class PluginIngest
 
         var formKey = record.FormKey.ToString();
         foreach (var script in vmad.Scripts)
+            CollectScriptRefs(formKey, recordType, "VMAD", script, refs);
+
+        CollectAdapterScriptRefs(formKey, recordType, vmad, refs);
+    }
+
+    // The scripts an adapter subtype reaches that its own `Scripts` collection does not. Only these
+    // four subtypes carry any: everything else on a fragment (QuestScriptFragment,
+    // ScriptFragment, ScenePhaseFragment) is stage/name metadata with no FormKey-bearing member, so
+    // there is nothing there to walk. Paths are Mutagen's own member names under the same `VMAD\`
+    // root the top-level walk uses, so a route reads off the path directly:
+    // <c>VMAD\Script\...</c> (quest fragment script), <c>VMAD\Aliases[i]\Property</c>,
+    // <c>VMAD\Aliases[i]\{script}\{prop}</c>, <c>VMAD\ScriptFragments\{script}\{prop}</c>.
+    // The `Scripts`/`Properties` collection names stay elided, matching the top-level walk's
+    // existing <c>VMAD\{script}\{prop}</c> shape rather than inventing a second convention.
+    private static void CollectAdapterScriptRefs(
+        string formKey, string recordType, IAVirtualMachineAdapterGetter vmad, List<FormRef> refs)
+    {
+        switch (vmad)
         {
-            foreach (var property in script.Properties)
-            {
-                if (VmadCodec.Parse(property) is not { } parsed) continue;
-                var propPath = $@"VMAD\{script.Name}\{property.Name}";
-                foreach (var r in parsed.Refs)
-                    refs.Add(new FormRef(formKey, r.FormKey, propPath + r.RelativePath, recordType, null));
-            }
+            case IQuestAdapterGetter quest:
+                CollectScriptRefs(formKey, recordType, @"VMAD\Script", quest.Script, refs);
+                for (var i = 0; i < quest.Aliases.Count; i++)
+                {
+                    var alias = quest.Aliases[i];
+                    var aliasPath = $@"VMAD\Aliases[{i}]";
+                    // The alias's own binding target: a bare ScriptObjectProperty rather than a
+                    // named property inside a script, so it contributes its own single row.
+                    if (!alias.Property.Object.IsNull)
+                    {
+                        refs.Add(new FormRef(
+                            formKey, alias.Property.Object.FormKey.ToString(), $@"{aliasPath}\Property",
+                            recordType, null));
+                    }
+
+                    foreach (var script in alias.Scripts)
+                        CollectScriptRefs(formKey, recordType, aliasPath, script, refs);
+                }
+                break;
+
+            case IPackageAdapterGetter { ScriptFragments: { } packageFragments }:
+                CollectScriptRefs(formKey, recordType, @"VMAD\ScriptFragments", packageFragments.Script, refs);
+                break;
+
+            // SceneAdapter's ScriptFragments is an ISceneScriptFragmentsGetter, which derives from
+            // IScriptFragmentsGetter — so this one case covers the scene and dialogue-info adapters
+            // both. PackageScriptFragments above is a separate Mutagen type with the same members
+            // and no shared base, which is why it needs its own case.
+            case ISceneAdapterGetter { ScriptFragments: { } sceneFragments }:
+                CollectScriptRefs(formKey, recordType, @"VMAD\ScriptFragments", sceneFragments.Script, refs);
+                break;
+
+            case IDialogResponsesAdapterGetter { ScriptFragments: { } infoFragments }:
+                CollectScriptRefs(formKey, recordType, @"VMAD\ScriptFragments", infoFragments.Script, refs);
+                break;
+        }
+    }
+
+    // One ScriptEntry's properties, walked to whatever depth VmadCodec.Parse reaches (nested
+    // structs and struct lists included — the codec's own CollectMemberRefs recursion). Shared by
+    // the top-level walk and every adapter route above, so a route cannot see less than the others.
+    private static void CollectScriptRefs(
+        string formKey, string recordType, string prefix, IScriptEntryGetter script, List<FormRef> refs)
+    {
+        foreach (var property in script.Properties)
+        {
+            if (VmadCodec.Parse(property) is not { } parsed) continue;
+            var propPath = $@"{prefix}\{script.Name}\{property.Name}";
+            foreach (var r in parsed.Refs)
+                refs.Add(new FormRef(formKey, r.FormKey, propPath + r.RelativePath, recordType, null));
         }
     }
 
