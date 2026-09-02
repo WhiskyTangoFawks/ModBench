@@ -17,11 +17,18 @@ namespace MEditService.Tests.Source;
 /// characterizes that as it stands today, so the eventual decision on it (accept the epsilon
 /// as-is, or bypass the mask for bit-exact numeric comparison) has a test to flip rather than an
 /// undocumented gap to rediscover.
+///
+/// <para><b>Flipped by #669.</b> The codec decider (mask-equal pairs byte/structurally compared
+/// through their codec documents) sees the differing float spellings the mask's epsilon band
+/// forgave, so the sub-epsilon near-zero mutation is now genuinely refused — the mask's tolerance
+/// no longer decides anything. <c>-0</c> vs <c>0</c> stays accepted (the one respelling a binary
+/// rewrite legitimately produces; <c>FindFirst_OfARealPluginThatOnlyChangesBytesOnRewrite_ReturnsNull</c>
+/// holds).</para>
 /// </summary>
 public sealed class ModelIdentityFloatEpsilonCharacterizationTests
 {
     [Fact]
-    public void FindFirst_WhenAFloatNearZeroChangesByLessThanTheMasksAbsoluteEpsilon_CurrentlyReturnsNull()
+    public void FindFirst_WhenAFloatNearZeroChangesByLessThanTheMasksAbsoluteEpsilon_RefusesViaTheCodecDecider()
     {
         var mod = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
         var npc = mod.Npcs.AddNew("SomeNpc");
@@ -37,6 +44,7 @@ public sealed class ModelIdentityFloatEpsilonCharacterizationTests
 
         var divergence = ModelIdentity.FindFirst(mod, recompiled);
 
-        Assert.Null(divergence);
+        Assert.NotNull(divergence);
+        Assert.Equal(npc.FormKey, divergence!.FormKey);
     }
 }

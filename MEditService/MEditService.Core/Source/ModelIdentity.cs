@@ -102,6 +102,21 @@ public static class ModelIdentity
                 return new Divergence(originalRecord.GetType().Name, originalRecord.FormKey, originalRecord.EditorID,
                     $"differs after being recompiled from its own tracked source — field '{field}' changed.");
             }
+
+            // #669: the mask names fields fast, but it lies by omission (a polymorphic hierarchy's
+            // derived-only fields bind through the base overload and are silently never compared —
+            // the #528/#614 class; upstream fixes withdrawn, pin stays 0.53.1) — so a mask-equal
+            // pair is never the verdict. The codec document is: it is total over the record (#649's
+            // audit enforces that) and has no per-shape equality emitters to lie. Excluded
+            // group-header-derived fields are normalized out first, exactly the set the mask path
+            // already excludes.
+            if (!CodecDocumentsMatch(originalRecord, recompiledRecord, original.GameRelease))
+            {
+                return new Divergence(originalRecord.GetType().Name, originalRecord.FormKey, originalRecord.EditorID,
+                    "differs after being recompiled from its own tracked source — the records' codec " +
+                    "documents differ on a field Mutagen's generated equality mask cannot see " +
+                    "(a derived-only field of a polymorphic sub-record, or similar).");
+            }
         }
 
         // The other direction — a record the recompile produced that the original never had.
@@ -198,7 +213,164 @@ public static class ModelIdentity
             if (OpaqueHeaderFields.Contains(field))
                 return field;
         }
+
+        // #669: TNAM's gap, closed by our own comparer rather than the generated mask — the mask
+        // reports a per-item corruption against the nested leaf's type (never the outer name this
+        // gate matches on) and does not flag a list-count divergence at all (both pinned live in
+        // ModelIdentityTests). Plain value comparisons over the items' own properties — no generated
+        // equality consulted, per this ticket's whole point.
+        if (!TransientTypesMatch(original, recompiled)) return "TransientTypes";
         return null;
+    }
+
+    private static bool TransientTypesMatch(IFallout4ModHeaderGetter original, IFallout4ModHeaderGetter recompiled)
+    {
+        var a = original.TransientTypes;
+        var b = recompiled.TransientTypes;
+        if (a.Count != b.Count) return false;
+        for (var i = 0; i < a.Count; i++)
+        {
+            if (a[i].FormType != b[i].FormType) return false;
+            if (!a[i].Links.Select(l => l.FormKey).SequenceEqual(b[i].Links.Select(l => l.FormKey)))
+                return false;
+        }
+        return true;
+    }
+
+    /// <summary>#669's decider: both records through the codec, byte-compared. Serialized from
+    /// group-header-normalized copies (<see cref="NormalizeGroupHeaderDerivedFields"/>) so the one
+    /// documented exclusion the mask path honors holds here identically. The codec instance is the
+    /// same door every source file is written through — a divergence it reports is a divergence the
+    /// tracked source would carry.</summary>
+    private static bool CodecDocumentsMatch(
+        IMajorRecordGetter original, IMajorRecordGetter recompiled, Mutagen.Bethesda.GameRelease release)
+    {
+        var originalBytes = Codec.SerializeToBytesAsync(NormalizeGroupHeaderDerivedFields(original), release)
+            .GetAwaiter().GetResult();
+        var recompiledBytes = Codec.SerializeToBytesAsync(NormalizeGroupHeaderDerivedFields(recompiled), release)
+            .GetAwaiter().GetResult();
+        if (originalBytes.AsSpan().SequenceEqual(recompiledBytes)) return true;
+
+        // Not byte-identical — decide structurally, honoring exactly the two model-equal respellings
+        // a binary rewrite is entitled to (both observed on the real fixture FindFirst's own
+        // real-plugin test pins, neither inventable): negative zero (-0f parses back as +0f) and a
+        // dictionary-shaped field's enumeration order (Package.Data's Key/Value entries). Anything
+        // else that differs is a genuine divergence.
+        using var originalDoc = System.Text.Json.JsonDocument.Parse(originalBytes);
+        using var recompiledDoc = System.Text.Json.JsonDocument.Parse(recompiledBytes);
+        return JsonModelEquals(originalDoc.RootElement, recompiledDoc.RootElement);
+    }
+
+    private static bool JsonModelEquals(System.Text.Json.JsonElement a, System.Text.Json.JsonElement b)
+    {
+        if (a.ValueKind != b.ValueKind) return false;
+        switch (a.ValueKind)
+        {
+            case System.Text.Json.JsonValueKind.Object:
+                var aProps = a.EnumerateObject().ToDictionary(p => p.Name, p => p.Value, StringComparer.Ordinal);
+                var bProps = b.EnumerateObject().ToDictionary(p => p.Name, p => p.Value, StringComparer.Ordinal);
+                if (aProps.Count != bProps.Count) return false;
+                foreach (var (name, aValue) in aProps)
+                {
+                    if (!bProps.TryGetValue(name, out var bValue) || !JsonModelEquals(aValue, bValue)) return false;
+                }
+                return true;
+            case System.Text.Json.JsonValueKind.Array:
+                var aItems = a.EnumerateArray().ToList();
+                var bItems = b.EnumerateArray().ToList();
+                if (aItems.Count != bItems.Count) return false;
+                // A dictionary serialized by the codec is an array of exactly-{Key, Value} objects —
+                // its enumeration order is not data (dict semantics), so it compares keyed. Every
+                // other array (including every order-sensitive folder-split/embedded list) stays
+                // strictly ordered.
+                if (aItems.Count > 0 && aItems.All(IsKeyValueEntry) && bItems.All(IsKeyValueEntry))
+                {
+                    var byKey = bItems.ToDictionary(e => e.GetProperty("Key").GetRawText(), StringComparer.Ordinal);
+                    return aItems.All(e =>
+                        byKey.TryGetValue(e.GetProperty("Key").GetRawText(), out var match)
+                        && JsonModelEquals(e.GetProperty("Value"), match.GetProperty("Value")));
+                }
+                return aItems.Zip(bItems, JsonModelEquals).All(equal => equal);
+            case System.Text.Json.JsonValueKind.String:
+                return NormalizeNegativeZeros(a.GetString()!) == NormalizeNegativeZeros(b.GetString()!);
+            case System.Text.Json.JsonValueKind.Number:
+                return a.GetRawText() == b.GetRawText() || a.GetDouble().Equals(b.GetDouble());
+            default:
+                return true; // kinds already matched: true/false/null carry no further content
+        }
+    }
+
+    private static bool IsKeyValueEntry(System.Text.Json.JsonElement element)
+    {
+        if (element.ValueKind != System.Text.Json.JsonValueKind.Object) return false;
+        var names = element.EnumerateObject().Select(p => p.Name).ToList();
+        return names.Count == 2 && names.Contains("Key") && names.Contains("Value");
+    }
+
+    /// <summary>The one float respelling treated as identity inside a string-encoded vector
+    /// ("-0, 0, 4.9"): a standalone <c>-0</c> token becomes <c>0</c>. The lookbehind keeps a
+    /// <c>-0</c> inside an identifier (an EditorID like "Mk-0") untouched.</summary>
+    private static string NormalizeNegativeZeros(string text) =>
+        System.Text.RegularExpressions.Regex.Replace(text, @"(?<![\w.])-0(?=$|[,\s""\]}])", "0");
+
+    private static readonly Serialization.RecordTextCodec Codec =
+        new(Microsoft.Extensions.Logging.Abstractions.NullLogger<Serialization.RecordTextCodec>.Instance);
+
+    /// <summary>
+    /// The codec-compare counterpart of <see cref="GroupHeaderDerivedFields"/>: the six types that
+    /// carry group-header-derived fields come back as deep copies with those fields zeroed on the
+    /// record and every nested carrier (a Worldspace's blocks/sub-blocks and TopCell, a Cell inside
+    /// either), so the byte comparison can never fire on the one divergence ADR-0042 decision 2
+    /// excludes. Every other type returns unchanged — no copy paid.
+    /// </summary>
+    private static IMajorRecordGetter NormalizeGroupHeaderDerivedFields(IMajorRecordGetter record)
+    {
+        switch (record)
+        {
+            case ICellGetter cell:
+                var cellCopy = cell.DeepCopy();
+                ZeroCellGroupFields(cellCopy);
+                return cellCopy;
+            case IWorldspaceGetter worldspace:
+                var worldspaceCopy = worldspace.DeepCopy();
+                worldspaceCopy.SubCellsTimestamp = 0;
+                worldspaceCopy.SubCellsUnknown = 0;
+                foreach (var block in worldspaceCopy.SubCells)
+                {
+                    block.LastModified = 0;
+                    block.Unknown = 0;
+                    foreach (var subBlock in block.Items)
+                    {
+                        subBlock.LastModified = 0;
+                        subBlock.Unknown = 0;
+                        foreach (var nestedCell in subBlock.Items) ZeroCellGroupFields(nestedCell);
+                    }
+                }
+                if (worldspaceCopy.TopCell is { } topCell) ZeroCellGroupFields(topCell);
+                return worldspaceCopy;
+            case IQuestGetter quest:
+                var questCopy = quest.DeepCopy();
+                questCopy.Timestamp = 0;
+                questCopy.Unknown = 0;
+                return questCopy;
+            case IDialogTopicGetter topic:
+                var topicCopy = topic.DeepCopy();
+                topicCopy.Timestamp = 0;
+                topicCopy.Unknown = 0;
+                return topicCopy;
+            default:
+                return record;
+        }
+    }
+
+    private static void ZeroCellGroupFields(Cell cell)
+    {
+        cell.Timestamp = 0;
+        cell.UnknownGroupData = 0;
+        cell.PersistentTimestamp = 0;
+        cell.PersistentUnknownGroupData = 0;
+        cell.TemporaryTimestamp = 0;
+        cell.TemporaryUnknownGroupData = 0;
     }
 
     private static string? FirstNonExcludedFailingField(IMajorRecordGetter original, IMajorRecordGetter recompiled)

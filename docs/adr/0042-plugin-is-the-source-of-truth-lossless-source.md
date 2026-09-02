@@ -36,14 +36,28 @@ on Mutagen's own encoding choices (recompressed zlib, `-0.0`→`+0.0`, subrecord
 reordering, derived sizes, ADR-0038's own master pruning, recomputed derived counters), never on
 content. Byte identity was a test of whichever tool last wrote the file, never of our codec.
 
-The verdict: every record in `parse(original)` has a counterpart in `parse(recompiled)` and vice
-versa, and Mutagen's own generated equality mask
+The verdict (#669 amendment, 2026-09-02 — the comparison mechanism actually in force): every
+record in `parse(original)` has a counterpart in `parse(recompiled)` and vice versa, and each pair
+passes a **two-stage check in one door** (`MEditService.Core.Source.ModelIdentity.FindFirst`,
+shared by `TrackService`'s live gate and the test suite's own Compile assertions, one checker and
+one exclusion list). Stage one is Mutagen's generated equality mask
 (`<Type>MixIn.GetEqualsMask(rhs, EqualsMaskHelper.Include.OnlyFailures)`, reached generically by
-reflection — `MEditService.Core.Source.ModelIdentity.FindFirst`, shared by `TrackService`'s live
-gate and the test suite's own Compile assertions, one checker and one exclusion list) reports no
-failing field outside the exclusion table below. The mask, not bare `Equals`: the same survey
-found bare `Equals` false-negatives on byte-identical parses across whole record families (Armor,
-ArmorAddon, Race, Package, Quest, Perk, …) that the mask does not share.
+reflection): a failing field outside the exclusion table below is the verdict, named precisely.
+Stage two is the decider, because **the mask lies by omission and Modbench never depends on
+Mutagen's generated equality being right** (upstream fixes withdrawn — Mutagen PRs #689/#690
+closed, pin stays 0.53.1): a polymorphic hierarchy's derived-only fields bind through the base
+overload and are silently never compared (`PackageDataInt.Data`), and a header `TransientTypes`
+divergence is invisible to it entirely. A mask-equal pair is therefore compared through **the
+codec itself as the oracle**: both records serialize through the same door every source file is
+written through, and the documents must agree structurally — byte-equal fast path, then a
+structural comparison whose only tolerances are the two model-equal respellings a binary rewrite
+is entitled to (`-0`→`0` float spelling, and dictionary-entry enumeration order, both observed on
+real fixtures), with the exclusion table's group-header-derived fields normalized out first. The
+header's `TransientTypes` gets its own plain-value comparer for the same reason. Bare `Equals` is
+never consulted anywhere (the survey found it false-negativing on byte-identical parses across
+whole record families — Armor, ArmorAddon, Race, Package, Quest, Perk, …), and
+`ComparisonDoorBoundaryTests` pins that no production code outside `ModelIdentity` reaches
+`GetEqualsMask` at all.
 
 **Refuses on any content difference, including Mutagen's own write-time defects** (a maintainer
 decision, not a defect in this gate) — confirmed against the real LitR corpus: 16 of 684 plugins
@@ -57,17 +71,14 @@ is `System.Drawing.Color`, quantized to a byte per channel at **parse** time, so
 already destroyed identically on both sides of the comparison before this gate ever runs. Direct
 verification against the full LitR corpus found zero genuine float-precision refusals.)*
 
-**Known limitation, not yet closed: the mask is not literally bit-exact for `Single` fields.**
-Mutagen's generated `FillEqualsMask` compares `Single` (float32) fields with `EqualsWithin`, a
-1e-9 absolute epsilon — a real tolerance band, not the "no tolerance band" this decision otherwise
-states. In practice this is narrower than it sounds: one ulp of a float32 at magnitude *m* is
-≈ *m* × 1.19e-7, so a 1e-9 absolute epsilon is mathematically equivalent to bit-exact for any
-`|value| ≳ 0.01` — the blind spot is confined to values very close to zero. No `Double`-typed
-field in `Mutagen.Bethesda.Fallout4` reaches `EqualsWithin`, so the gap does not extend there.
-`ModelIdentityFloatEpsilonCharacterizationTests` pins the current (accepted, not refused) behavior
-for a sub-epsilon mutation near zero, so the boundary is documented with a test rather than left
-implicit. Whether to accept the epsilon as-is or bypass the mask for bit-exact numeric comparison
-is its own open decision, not resolved here.
+**Former known limitation, closed by #669: the mask's `Single` epsilon no longer decides
+anything.** Mutagen's generated `FillEqualsMask` compares `Single` (float32) fields with
+`EqualsWithin`, a 1e-9 absolute-epsilon tolerance band — but the mask is only stage one now. The
+codec decider sees a sub-epsilon-but-genuinely-different float's own distinct spelling in the
+documents and refuses it, so the verdict is bit-exact for numerics apart from the one deliberate
+tolerance (`-0` vs `0`, a spelling a binary rewrite legitimately produces).
+`ModelIdentityFloatEpsilonCharacterizationTests` pins the refusal, flipped from its
+characterize-the-gap ancestor.
 
 **The one exclusion, and the only one:** derived GRUP-header fields Mutagen's own generated model
 backs onto a handful of record types — populated at parse time from the enclosing group's own
