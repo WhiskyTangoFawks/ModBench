@@ -12,7 +12,7 @@ function makeSession() {
     pluginsTree: { setLoadOrder: vi.fn(), refreshDecorations: vi.fn() },
     pluginsTreeView: { message: 'loading…' as string | undefined },
     pluginsNameFilter: { refresh: vi.fn() },
-    recordBrowserProvider: { setImmutablePlugins: vi.fn() },
+    recordBrowserProvider: { setImmutablePlugins: vi.fn(), setTrackedPlugins: vi.fn() },
     backendManager: { isHealthy: false, on: vi.fn(), stop: vi.fn().mockResolvedValue(undefined) },
     setFilterActive: vi.fn(),
     loadDiagnostics: { clear: vi.fn() },
@@ -20,7 +20,7 @@ function makeSession() {
 }
 
 describe('exitToLoadout', () => {
-  it('clears every statement about the departing backend: match map, chevrons, message, filter UI, immutable set', () => {
+  it('clears every statement about the departing backend: match map, chevrons, message, filter UI, immutable and tracked sets', () => {
     const session = makeSession();
 
     exitToLoadout(session);
@@ -31,6 +31,9 @@ describe('exitToLoadout', () => {
     expect(session.setFilterActive).toHaveBeenCalledWith(false);
     expect(session.loadOrderSync.setMatches).toHaveBeenCalledWith(undefined);
     expect(session.recordBrowserProvider.setImmutablePlugins).toHaveBeenCalledWith([]);
+    // #674: the tracked set is the same class of statement about a live backend as the immutable
+    // one — left behind, it would keep offering Change FormID on rows nothing backs.
+    expect(session.recordBrowserProvider.setTrackedPlugins).toHaveBeenCalledWith([]);
     expect(session.backendManager.stop).toHaveBeenCalled();
     expect(session.loadDiagnostics.clear).toHaveBeenCalled();
   });
@@ -45,19 +48,20 @@ describe('clearTreeWhenBackendDies', () => {
     const session = makeSession();
     session.backendManager.isHealthy = isHealthy;
     const composite = { setLoadOrder: vi.fn() };
-    const recordBrowser = { setImmutablePlugins: vi.fn() };
+    const recordBrowser = { setImmutablePlugins: vi.fn(), setTrackedPlugins: vi.fn() };
     clearTreeWhenBackendDies(session, composite, recordBrowser);
     const statusListener = session.backendManager.on.mock.calls[0][1] as () => void;
     return { session, composite, recordBrowser, statusListener };
   }
 
-  it('an unhealthy status clears the chevrons, the immutable set, and the match map together', () => {
+  it('an unhealthy status clears the chevrons, the immutable and tracked sets, and the match map together', () => {
     const { session, composite, recordBrowser, statusListener } = wire(false);
 
     statusListener();
 
     expect(composite.setLoadOrder).toHaveBeenCalledWith(undefined);
     expect(recordBrowser.setImmutablePlugins).toHaveBeenCalledWith([]);
+    expect(recordBrowser.setTrackedPlugins).toHaveBeenCalledWith([]);
     expect(session.loadOrderSync.setMatches).toHaveBeenCalledWith(undefined);
     expect(session.loadDiagnostics.clear).toHaveBeenCalled();
   });
@@ -69,6 +73,7 @@ describe('clearTreeWhenBackendDies', () => {
 
     expect(composite.setLoadOrder).not.toHaveBeenCalled();
     expect(recordBrowser.setImmutablePlugins).not.toHaveBeenCalled();
+    expect(recordBrowser.setTrackedPlugins).not.toHaveBeenCalled();
     expect(session.loadOrderSync.setMatches).not.toHaveBeenCalled();
   });
 });

@@ -56,6 +56,11 @@ export class RecordNode extends vscode.TreeItem {
     public readonly record: RecordSummary,
     public readonly origin?: string,
     immutable = false,
+    // #674: whether this row's plugin is tracked — `PluginResponse.IsTracked` (ADR-0041: this
+    // copy's origin holds a `.git`), pushed in by `PluginTreeProvider.setTrackedPlugins` off the
+    // reconcile's own plugin list, never probed from here. Defaults false because untracked is the
+    // state that *withholds* a gesture: a caller that has not said gets the narrower row.
+    tracked = false,
     // Set when this row is a Quest or a Dialog Topic — the two container types whose
     // children (dialog topics/branches/scenes, responses) this same row type expands into,
     // rather than forking a dedicated wrapper node the way the worldspace tree's WorldspacesNode/
@@ -74,16 +79,21 @@ export class RecordNode extends vscode.TreeItem {
     const label = record.editorId ? `${record.editorId} [${record.formKey}]` : record.formKey;
     const collapsible = containerChildType && hasContainerChildren;
     super(label, collapsible ? vscode.TreeItemCollapsibleState.Collapsed : vscode.TreeItemCollapsibleState.None);
-    // #572 ruling 1: an override doesn't own its FormID, so Change FormID is only ever offered on
-    // a row whose plugin IS the FormKey's origin ('record'); an override row ('recordOverride')
-    // keeps every other record action via its own when-clauses. FormKey shape is Mutagen's own
-    // "<hex6>:<ModKey>", so the origin is everything after the first colon.
+    // #572 ruling 1 / #674: Change FormID is offered on exactly one kind of row — a master copy
+    // ('recordTracked'/'recordUntracked', i.e. this row's plugin IS the FormKey's origin) in a
+    // tracked plugin. Both halves are refusals the backend would otherwise reach only after the
+    // whole gesture had been walked (RecordEditRefusal.PluginNotTracked and the non-native-target
+    // check), so the row states them and package.json's when-clause reads them. The other three
+    // values keep every other record action via their own when-clauses.
+    // FormKey shape is Mutagen's own "<hex6>:<ModKey>", so the origin is everything after
+    // the first colon.
     const originModKey = record.formKey.slice(record.formKey.indexOf(':') + 1);
     // toLowerCase, not localeCompare: matches the backend's OrdinalIgnoreCase filename semantics
     // without host-locale hazards, and is the comparison renumberConfirm.ts already uses.
     const isNative = originModKey.toLowerCase() === record.plugin.toLowerCase();
     if (immutable) this.contextValue = 'recordImmutable';
-    else this.contextValue = isNative ? 'record' : 'recordOverride';
+    else if (!isNative) this.contextValue = 'recordOverride';
+    else this.contextValue = tracked ? 'recordTracked' : 'recordUntracked';
     this.command = {
       command: 'modbench.openEditor',
       title: 'Open Record',
@@ -293,6 +303,12 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
   // already hands PluginsTreeComposite.setLoadOrder as readOnlyFiles) — record/placed rows under
   // one hide Remove via their contextValue, matching the column header's !immutable `when` gate.
   private readonly immutablePlugins = new Set<string>();
+  // #674: lowercased filenames of the load order's *tracked* plugins, from the same
+  // `GET /plugins` answer the immutable set above comes from (`PluginResponse.IsTracked`,
+  // ADR-0041) — record rows under one offer Change FormID, rows under any other do not. Never a
+  // filesystem probe from here: tracked-ness is a fact the backend derives on every read, and this
+  // provider only relays what the last reconcile was told.
+  private readonly trackedPlugins = new Set<string>();
   private readonly log: (msg: string) => void;
 
   constructor(private readonly repository: PluginRepository, log?: (msg: string) => void) {
@@ -303,6 +319,25 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
     this.immutablePlugins.clear();
     for (const n of names) this.immutablePlugins.add(n.toLowerCase());
     this._onDidChangeTreeData.fire(undefined);
+  }
+
+  /** #674: the tracked set, replaced wholesale on every reconcile the same way
+   *  {@link setImmutablePlugins} is — and, like it, firing a re-render rather than clearing a
+   *  cache, so tracking or untracking a plugin re-derives every affected row's contextValue with
+   *  no repository call and no reload. A `.git` directory appearing or disappearing under a
+   *  plugin's origin is itself a watched event that drives a reconcile (fsWatcher.ts deliberately
+   *  does not filter that one), so both directions arrive on the reconcile path already — whether
+   *  Modbench's own Track gesture caused it or something outside did. */
+  setTrackedPlugins(names: Iterable<string>): void {
+    this.trackedPlugins.clear();
+    for (const n of names) this.trackedPlugins.add(n.toLowerCase());
+    this._onDidChangeTreeData.fire(undefined);
+  }
+
+  // Filename alone, matching the set's own keying: a shadowed copy (origin stated) is immutable
+  // by construction below, so it never reaches the tracked/untracked distinction at all.
+  private isTracked(plugin: string): boolean {
+    return this.trackedPlugins.has(plugin.toLowerCase());
   }
 
   // ADR-0036: a shadowed copy (origin stated) is read-only by construction — an edit to a
@@ -529,7 +564,8 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
       const children = await this.getOrFetch(this.containerChildCache, cacheKey,
         () => this.repository.getContainerChildren(node.record.plugin, node.record.formKey, node.origin));
       return children.map(c => new RecordNode(
-        c, node.origin, this.isImmutable(c.plugin, node.origin), containerChildTypeOf(c.recordType), c.hasContainerChildren));
+        c, node.origin, this.isImmutable(c.plugin, node.origin), this.isTracked(c.plugin),
+        containerChildTypeOf(c.recordType), c.hasContainerChildren));
     });
   }
 
@@ -562,7 +598,8 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
       // own flat record-type listing (not just as someone else's child) still expands into its own
       // container children, the same single mechanism fetchContainerChildren's own recursion uses.
       return cached.items.map(r => new RecordNode(
-        r, node.origin, this.isImmutable(r.plugin, node.origin), containerChildTypeOf(node.recordType), r.hasContainerChildren));
+        r, node.origin, this.isImmutable(r.plugin, node.origin), this.isTracked(r.plugin),
+        containerChildTypeOf(node.recordType), r.hasContainerChildren));
     });
   }
 }

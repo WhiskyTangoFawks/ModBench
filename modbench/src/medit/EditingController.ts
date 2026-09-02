@@ -3,7 +3,7 @@ import type {
   ApiClient, CompileResult, LoadOrderStatus, TrackStatus, ExternalChangeActionResult, RebaseResult,
   CrashRepairOffer,
 } from './ApiClient';
-import { errorText } from './ApiClient';
+import { errorText, isWriteGateTimeout, writeGateBusyMessage } from './ApiClient';
 import type { PluginRepository } from './PluginRepository';
 import { reportSkippedPlugins } from './pluginFailures';
 
@@ -308,6 +308,15 @@ export class EditingController {
       if (!response.ok) {
         const eslMessage = spec.onEslContradiction && eslContradictionMessage(error);
         if (eslMessage) return spec.onEslContradiction!(eslMessage);
+        // #673: contended, not broken — the write was never attempted, so this is worth
+        // repeating, and saying so is the whole reason the extension exists. Before the generic
+        // branch below, which would otherwise relay the backend's own timeout prose verbatim and
+        // read as indistinguishably fatal as a load order that has gone away.
+        if (isWriteGateTimeout(error)) {
+          this.log(`[EditingController] ${spec.op} hit the write gate (${response.status}): ${errorText(error)}`);
+          this.deps.showError(writeGateBusyMessage(spec.failMsg));
+          return spec.failure;
+        }
         const text = errorText(error);
         this.log(`[EditingController] ${spec.op} failed (${response.status}): ${text}`);
         this.deps.showError(`${spec.failMsg} — ${text}`);

@@ -140,6 +140,14 @@ interface HeldPluginFiles {
    *  behind — reaches `loadOrderSync`'s match map. That is what keeps the map from outliving the
    *  state it describes. */
   matches: Map<string, boolean>;
+  /** #674 / ADR-0041: which of those plugins are tracked (`PluginResponse.isTracked` — their mod
+   *  folder holds a `.git`). In the same bundle for the same reason `readOnly` is: it comes off
+   *  this one `GET /plugins` call, and the record rows' Change FormID gate reads it alongside the
+   *  immutable set. The backend derives it on every read, so this is always as fresh as the
+   *  reconcile that fetched it — and a `.git` appearing or vanishing is itself a `mods/**` watcher
+   *  event (see `wireLoadOrderWatchers`), which is what makes tracking and untracking reach the
+   *  rows without a reload. */
+  tracked: Set<string>;
 }
 
 function heldPluginFilesFrom(repository: ApiPluginRepository): () => Promise<HeldPluginFiles> {
@@ -153,6 +161,7 @@ function heldPluginFilesFrom(repository: ApiPluginRepository): () => Promise<Hel
       // described every field as optional (#627), not for anything the backend can actually do.
       masterIssues: new Map(plugins.map((p) => [p.name, p.masterIssues] as const)),
       matches: new Map(plugins.map((p) => [p.name.toLowerCase(), p.hasMatchingRecords] as const)),
+      tracked: new Set(plugins.filter((p) => p.isTracked).map((p) => p.name)),
     };
   };
 }
@@ -1169,6 +1178,10 @@ async function applyLoadOrderToTree(
     // The same read-only set, to the record rows — theirs is contextValue (Remove
     // hidden), the plugin rows' is the tooltip note.
     session.recordBrowserProvider?.setImmutablePlugins(held.readOnly);
+    // #674: and tracked-ness, the record rows' other contextValue axis (Change FormID absent on an
+    // untracked plugin's rows). Every reconcile re-pushes it, which is the whole of AC5 — a `.git`
+    // appearing or vanishing under `mods/` is a watcher event, and a watcher event is a reconcile.
+    session.recordBrowserProvider?.setTrackedPlugins(held.tracked);
     // #570: every reconcile re-runs the malformed-plugin scan — setLoadOrder above just cleared
     // the previous scan's decorations, and this brings the new answer when it lands.
     session.refreshDiagnoses?.();

@@ -943,6 +943,66 @@ describe('EditingController.createRecord', () => {
     });
   });
 
+  // #673 / ADR-0026: the process-wide write gate answers a contended write with 503 +
+  // `writeGateTimeout`, the same shape 503 "no load order held" arrives in. The two want opposite
+  // responses — retry versus reload — so the surface reads the extension, never the prose.
+  describe('#673 write-gate contention', () => {
+    it('says the write is retryable, not that the load order went away', async () => {
+      const client = makeClient();
+      client.POST = vi.fn().mockResolvedValue({
+        error: {
+          writeGateTimeout: true,
+          detail: 'Another write to the record index is still in progress after 5s.',
+        },
+        response: { ok: false, status: 503, text: () => Promise.reject(new Error('unused')) },
+      });
+      const deps = makeDeps({ client });
+
+      const result = await new EditingController(deps).renumberRecord('000800:MyPatch.esp', 'MyPatch.esp', 'ModA');
+
+      expect(result).toBeUndefined();
+      expect(deps.showError).toHaveBeenCalledWith(
+        'mEdit: Could not renumber 000800:MyPatch.esp — another change is still being written. Try again in a moment.',
+      );
+      // Nothing was written, so nothing downstream may be re-derived as though it had been.
+      expect(deps.refreshTree).not.toHaveBeenCalled();
+    });
+
+    // The rival this guards against: keying off the 503 status, or off the detail text, rather
+    // than off the extension. A load order that genuinely went away is also a 503 — and must keep
+    // reading as one.
+    it('leaves the load-order-absent 503 exactly as it was', async () => {
+      const client = makeClient();
+      client.POST = vi.fn().mockResolvedValue(drainedError(503, 'No load order has been received.'));
+      const deps = makeDeps({ client });
+
+      await new EditingController(deps).renumberRecord('000800:MyPatch.esp', 'MyPatch.esp', 'ModA');
+
+      expect(deps.showError).toHaveBeenCalledWith(
+        'mEdit: Could not renumber 000800:MyPatch.esp — No load order has been received.',
+      );
+    });
+
+    // Five of the six gate-wrapped endpoints share `mutate`, so the branch is stated once and
+    // reached by all of them; deleteRecord stands in for the rest. The sixth — the field edit —
+    // does not come through here at all: it shapes its own outcome in `ApiPluginRepository`, and
+    // is covered there, in the same words (`writeGateBusyMessage`).
+    it('reaches every write command that comes through mutate', async () => {
+      const client = makeClient();
+      client.POST = vi.fn().mockResolvedValue({
+        error: { writeGateTimeout: true, detail: 'Another write to the record index is still in progress after 5s.' },
+        response: { ok: false, status: 503, text: () => Promise.reject(new Error('unused')) },
+      });
+      const deps = makeDeps({ client });
+
+      await new EditingController(deps).deleteRecord('000800:MyPatch.esp', 'MyPatch.esp', 'ModA');
+
+      expect(deps.showError).toHaveBeenCalledWith(
+        expect.stringContaining('another change is still being written. Try again in a moment.'),
+      );
+    });
+  });
+
   // #290: the ESL-exhaustion refusal carries the same typed marker compile's own
   // eslContradiction does, wired through mutate()'s onEslContradiction hook rather than the
   // ordinary toast-and-fail — declining leaves the refusal exactly as untouched as any other.
