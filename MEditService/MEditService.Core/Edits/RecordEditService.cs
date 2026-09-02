@@ -572,10 +572,10 @@ public sealed class RecordEditService(
         // Track's eager serialization only created directories for (record type, origin ModKey)
         // combinations the plugin already held — a genuinely new one (the first Weapon a plugin ever
         // held, say) needs its own. The codec deliberately leaves directory-creation policy to its
-        // caller (RecordTextCodec.SerializeAsync's own doc comment).
-        Directory.CreateDirectory(Path.GetDirectoryName(sourcePath)!);
-
-        var newBody = SerializeAndWrite(_codec, record, sourcePath, release);
+        // caller (RecordTextCodec.SerializeAsync's own doc comment); InMintedDirectory is that policy,
+        // and unmints the group folder again if this serialize throws (#675).
+        var newBody = SourceUnitResolver.InMintedDirectory(
+            Path.GetDirectoryName(sourcePath)!, () => SerializeAndWrite(_codec, record, sourcePath, release));
 
         // Defensive, not merely a repeat of the invariant NextOrderIndexFor above already
         // upholds — never-assume-exclusive-ownership means this group folder can already hold a gap
@@ -708,9 +708,7 @@ public sealed class RecordEditService(
                 : ContainerOwnDirectoryPath(destinationModFolder, destinationPlugin.Name, document.RecordType, formKey, document.EditorId, release);
         }
         var sourcePath = Path.Combine(destinationModFolder, relativePath);
-        Directory.CreateDirectory(Path.GetDirectoryName(sourcePath)!);
-
-        WriteBodyAtomic(sourcePath, body);
+        SourceUnitResolver.InMintedDirectory(Path.GetDirectoryName(sourcePath)!, () => WriteBodyAtomic(sourcePath, body));
 
         SourceUnitResolver.RenormalizeGroupOrder(Path.GetDirectoryName(sourcePath)!);
 
@@ -798,9 +796,8 @@ public sealed class RecordEditService(
                 destinationModFolder, destinationPlugin.Name, document.RecordType, targetFormKey, newRecord.EditorID, release);
         }
         var sourcePath = Path.Combine(destinationModFolder, relativePath);
-        Directory.CreateDirectory(Path.GetDirectoryName(sourcePath)!);
-
-        var newBody = SerializeAndWrite(_codec, newRecord, sourcePath, release);
+        var newBody = SourceUnitResolver.InMintedDirectory(
+            Path.GetDirectoryName(sourcePath)!, () => SerializeAndWrite(_codec, newRecord, sourcePath, release));
 
         // The group directory whose [N] prefixes the new leaf joined — the file's own directory for
         // a flat record, the record directory's parent for a directory-per-record one.
@@ -892,8 +889,11 @@ public sealed class RecordEditService(
         var questDirectory = EnsureContainerAncestorDirectory(
             index, reads, sourcePlugin, parentQuest.ParentFormKey, parentQuest.ParentRecordType,
             destinationPlugin, destinationModFolder, release);
+        // Not created here: the topic's own mint below is what justifies this slot folder existing at
+        // all, and Directory.CreateDirectory makes missing ancestors anyway — so the slot rides along
+        // with the topic and is unminted with it if the topic's write fails (#675). NextOrderIndex
+        // answers 0 for a directory that does not exist yet, so nothing between here and there needs it.
         var topicsDirectory = Path.Combine(questDirectory, parentQuest.SlotName);
-        Directory.CreateDirectory(topicsDirectory);
 
         // The topic itself: duplicate under the fresh key, self-link remapped, its own directory at
         // the slot's next order index.
@@ -907,9 +907,9 @@ public sealed class RecordEditService(
             topicsDirectory,
             $"[{SourceUnitResolver.NextOrderIndex(topicsDirectory)}] " +
                 SourceUnitResolver.LeafNameFor(FormKey.Factory(targetFormKey), topicRecord.EditorID, isDirectory: true));
-        Directory.CreateDirectory(topicDirectory);
-        var topicBody = SerializeAndWrite(
-            _codec, topicRecord, Path.Combine(topicDirectory, RecordDataFileName), release);
+        var topicBody = SourceUnitResolver.InMintedDirectory(
+            topicDirectory,
+            () => SerializeAndWrite(_codec, topicRecord, Path.Combine(topicDirectory, RecordDataFileName), release));
         index.CreateWorkingTreeRecord(destinationPlugin, targetFormKey, document.RecordType, topicBody);
 
         // The topic's own membership in the quest's slot: whatever children the destination quest
@@ -949,12 +949,12 @@ public sealed class RecordEditService(
             }
 
             var childSlotDirectory = Path.Combine(topicDirectory, child.SlotName);
-            Directory.CreateDirectory(childSlotDirectory);
             var childPath = Path.Combine(
                 childSlotDirectory,
                 $"[{copiedChildren.Count}] " +
                     SourceUnitResolver.LeafNameFor(FormKey.Factory(childFormKey), childRecord.EditorID, isDirectory: false));
-            var childBody = SerializeAndWrite(_codec, childRecord, childPath, release);
+            var childBody = SourceUnitResolver.InMintedDirectory(
+                childSlotDirectory, () => SerializeAndWrite(_codec, childRecord, childPath, release));
             index.CreateWorkingTreeRecord(destinationPlugin, childFormKey, childDocument.RecordType, childBody);
             copiedChildren.Add((childFormKey, copiedChildren.Count));
         }
@@ -1000,8 +1000,9 @@ public sealed class RecordEditService(
         var topicDirectory = EnsureContainerAncestorDirectory(
             index, reads, sourcePlugin, parentTopic.ParentFormKey, parentTopic.ParentRecordType,
             destinationPlugin, destinationModFolder, release);
+        // Minted by the response's own write below, not ahead of it (#675) — the same
+        // ancestor-rides-along shape CopyDialogTopicAsNewRecord's slot folder takes.
         var slotDirectory = Path.Combine(topicDirectory, parentTopic.SlotName);
-        Directory.CreateDirectory(slotDirectory);
 
         var newRecord = ReadCopySourceRecord(sourcePlugin, formKey, document, release)
             .Duplicate(FormKey.Factory(targetFormKey));
@@ -1014,7 +1015,8 @@ public sealed class RecordEditService(
             slotDirectory,
             $"[{SourceUnitResolver.NextOrderIndex(slotDirectory)}] " +
                 SourceUnitResolver.LeafNameFor(FormKey.Factory(targetFormKey), newRecord.EditorID, isDirectory: false));
-        var newBody = SerializeAndWrite(_codec, newRecord, newPath, release);
+        var newBody = SourceUnitResolver.InMintedDirectory(
+            slotDirectory, () => SerializeAndWrite(_codec, newRecord, newPath, release));
         index.CreateWorkingTreeRecord(destinationPlugin, targetFormKey, document.RecordType, newBody);
         AppendChildToSlot(
             index, reads, destinationPlugin, parentTopic.ParentFormKey, parentTopic.ParentRecordType,
@@ -1076,8 +1078,9 @@ public sealed class RecordEditService(
             var parentDirectory = EnsureContainerAncestorDirectory(
                 index, reads, sourcePlugin, ownParent.Value.ParentFormKey, ownParent.Value.ParentRecordType,
                 destinationPlugin, destinationModFolder, release);
+            // Not created here — the ancestor's own write below mints it along with the ancestor's
+            // directory, so a failure there leaves neither behind (#675).
             var slotDirectory = Path.Combine(parentDirectory, ownParent.Value.SlotName);
-            Directory.CreateDirectory(slotDirectory);
             recordDataPath = Path.Combine(
                 slotDirectory,
                 $"[{SourceUnitResolver.NextOrderIndex(slotDirectory)}] " +
@@ -1085,8 +1088,8 @@ public sealed class RecordEditService(
                 RecordDataFileName);
         }
 
-        Directory.CreateDirectory(Path.GetDirectoryName(recordDataPath)!);
-        var body = SerializeAndWrite(_codec, bare, recordDataPath, release);
+        var body = SourceUnitResolver.InMintedDirectory(
+            Path.GetDirectoryName(recordDataPath)!, () => SerializeAndWrite(_codec, bare, recordDataPath, release));
         index.CreateWorkingTreeRecord(destinationPlugin, ancestorFormKey, ancestorRecordType, body);
         if (ownParent is { } parentSlot)
         {
@@ -1456,10 +1459,14 @@ public sealed class RecordEditService(
         }
         else
         {
-            Directory.CreateDirectory(parentDirectory);
             writePath = newLeafPath;
         }
-        var newBody = SerializeAndWrite(_codec, record, writePath, release);
+        // A no-op for the moved-whole branch above (Directory.Move already put the destination in
+        // place); for the flat branch this is the group folder, which the resolved unit proves already
+        // exists — so nothing is normally minted here at all, and the wrapper is what keeps that true
+        // rather than an assumption (#675).
+        var newBody = SourceUnitResolver.InMintedDirectory(
+            Path.GetDirectoryName(writePath)!, () => SerializeAndWrite(_codec, record, writePath, release));
 
         index.CreateWorkingTreeRecord(plugin, newFormKey, document.RecordType, newBody);
 
@@ -2250,8 +2257,7 @@ public sealed class RecordEditService(
             ?? throw new InvalidOperationException(
                 "This game's schema has no Cell group folder — RefuseIfCopySourceHasNoContainerOfItsOwn should have refused this first.");
         var cellsDirectory = Path.Combine(modFolder, SourceRecordPath.RootFor(pluginName), cellsFolder);
-        Directory.CreateDirectory(cellsDirectory);
-        WriteMinimalGroupRecordDataIfMissing(cellsDirectory, groupType: null);
+        SourceUnitResolver.InMintedDirectory(cellsDirectory, () => WriteMinimalGroupRecordDataIfMissing(cellsDirectory, groupType: null));
 
         var blockDirectory = FindOrMintGroupDirectory(cellsDirectory, "InteriorCellBlock");
         var subBlockDirectory = FindOrMintGroupDirectory(blockDirectory, "InteriorCellSubBlock");
@@ -2274,8 +2280,7 @@ public sealed class RecordEditService(
         if (existing != null) return existing;
 
         var directory = Path.Combine(parentDirectory, "[0] 0");
-        Directory.CreateDirectory(directory);
-        WriteMinimalGroupRecordDataIfMissing(directory, groupType);
+        SourceUnitResolver.InMintedDirectory(directory, () => WriteMinimalGroupRecordDataIfMissing(directory, groupType));
         return directory;
     }
 
