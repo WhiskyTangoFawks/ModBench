@@ -26,6 +26,7 @@ The ADR is the full statement — read it before changing its area.
   startup (ADR-0005, ADR-0032) — never hand-edit. FO4 in tests = fixture, not scope.
 - Partial success = structured failures collection, never swallowed or stringly-typed; the
   frontend decides surfacing (ADR-0026).
+- test fixtures need to be approved. Never inline into git a file that hasn't been approved.
 
 ## Endpoints
 
