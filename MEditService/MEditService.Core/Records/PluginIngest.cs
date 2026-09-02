@@ -100,12 +100,13 @@ internal sealed class PluginIngest
         // while leaving a snapshot behind puts two rows under one (form_key, plugin, origin) at Head.
         //
         // Part of Index()'s own stated contract — "replacing whatever `key` previously held".
-        // SourceIngest.Ingest (its binary fallback) and LoadOrderMirror.ReindexPlugin re-reading a
-        // binary under a dirty tracked plugin both call Index() and write records_committed for the
-        // same key; deleting here rather than at either call site is what makes every present and
-        // future caller inherit it. Never removes a *correct* snapshot: after a full re-index from
-        // one source, a prior divergence describes bytes that no longer relate to what was just
-        // ingested.
+        // SourceIngest.Ingest calls Index() and then writes records_committed for the same key — at
+        // load (LoadOrderMirror's reconcile), on every re-derivation of a tracked plugin
+        // (LoadOrderMirror.ReingestPluginFromSource), and through its own binary fallback, each of
+        // which can land on a key that already holds a snapshot. Deleting here rather than at any of
+        // those call sites is what makes every present and future caller inherit it. Never removes a
+        // *correct* snapshot: after a full re-index from one source, a prior divergence describes
+        // bytes that no longer relate to what was just ingested.
         DeleteExistingForOrigin("records_committed", plugin, origin);
     }
 
