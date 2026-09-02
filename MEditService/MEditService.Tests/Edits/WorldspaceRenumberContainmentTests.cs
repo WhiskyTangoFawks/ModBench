@@ -109,13 +109,13 @@ public sealed class WorldspaceRenumberContainmentTests : IDisposable
 
     // ---- guard against a duplicate TopCell row ----
     //
-    // A plausible wrong implementation calls RepointCellLocationParent *before*
-    // CreateWorkingTreeRecord instead of after (alongside RepointContainerChildParent) — applied and
-    // run directly against this test: it still passed, exactly one row either way. The reason is
-    // RederiveContainmentForRecord's own TopCell write deletes-then-inserts keyed by that cell's own
-    // unchanging cell_form_key, not by parent_worldspace, so it unconditionally clears whatever row
-    // already exists for TopCell regardless of order. Kept anyway as a real regression guard on that
-    // invariant — see IRecordIndex.RepointCellLocationParent's own doc comment.
+    // A plausible wrong implementation puts ApplyRenumber's cell_location re-point step *before* its
+    // create step instead of after — applied and run directly against this test: it still passed,
+    // exactly one row either way. The reason is RederiveContainmentForRecord's own TopCell write
+    // deletes-then-inserts keyed by that cell's own unchanging cell_form_key, not by
+    // parent_worldspace, so it unconditionally clears whatever row already exists for TopCell
+    // regardless of order. Kept anyway as a real regression guard on that invariant — see
+    // IRecordIndex.ApplyRenumber's own doc comment.
 
     [Fact]
     public void RenumberingAWorldspace_LeavesExactlyOneCellLocationRowForItsTopCell_NoDuplicate()

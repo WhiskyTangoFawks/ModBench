@@ -224,58 +224,48 @@ public interface IRecordIndex : IDisposable
         IReadOnlyList<(string ChildFormKey, int SlotIndex)> children);
 
     /// <summary>
-    /// Re-points every <c>container_child</c> row naming <paramref name="oldParentFormKey"/>
-    /// as <c>parent_form_key</c> to <paramref name="newParentFormKey"/> instead — an
-    /// <c>UPDATE</c>, deliberately not a delete-then-rebuild. A renumbered record's folder-split
-    /// children (a renumbered Quest's DialogTopics, a renumbered DialogTopic's Responses) keep their
-    /// own FormKeys and their own files untouched on disk (only the parent's directory name changes,
-    /// moved whole); re-deriving the renumbered record's own new document
-    /// (<see cref="CreateWorkingTreeRecord"/>) cannot recreate their rows, because a folder-split
-    /// child is never embedded in its parent's document for that re-derivation to find
-    /// (<see cref="Source.ContainerChildFields"/>'s own doc comment — the same fact
-    /// <see cref="CreateWorkingTreeRecord"/>'s own re-derivation is already bounded by). Called
-    /// before the old FormKey's row is torn down, so those children's rows are never left orphaned
-    /// even for one transaction.
+    /// The whole index side of a renumber, applied all-or-nothing (#677): the new identity's rows
+    /// are materialized, everything still naming the old identity as its parent is re-pointed onto
+    /// the new one, and the old identity's rows are torn down. One transaction, so a fault anywhere
+    /// in that sequence leaves the index exactly as it found it rather than half-moved — a new
+    /// FormKey present that no source file backs, or children orphaned onto a parent that was never
+    /// torn down.
     ///
-    /// <para>Scoped to exactly the one column a rename invalidates for a record's own children —
-    /// not a general FormKey-rename sweep across every containment column (that broader question,
-    /// e.g. a renumbered container's own position within <i>its</i> parent's slot, is
-    /// tracked as its own follow-up). Harmless to call for any renumbered record:
-    /// the <c>UPDATE</c> matches zero rows for one with no folder-split children of its own.</para>
+    /// <para><b>One composite, not a transaction primitive.</b> This seam deliberately exposes
+    /// neither a connection nor a transaction (ADR-0005: the relational schema is a contract for
+    /// <i>the SQL door only</i>, not a handle callers steer). A renumber is one domain gesture, so it
+    /// is one verb; the steps below are its internals, not a script a caller assembles.</para>
+    ///
+    /// <para><b>The re-points are the two things a re-derivation structurally cannot reach.</b>
+    /// Re-deriving the renumbered record's own new document from <paramref name="renumbered"/>'s body
+    /// recreates only what is <i>embedded</i> in it (<see cref="Source.ContainerChildFields"/>'s own
+    /// doc comment). It therefore cannot recreate a folder-split child's <c>container_child</c> row —
+    /// a renumbered Quest's DialogTopics, a renumbered DialogTopic's Responses keep their own
+    /// FormKeys and their own files, only the parent's directory name having moved — nor an exterior
+    /// cell's <c>cell_location.parent_worldspace</c>, since <c>Worldspace.SubCells</c> holds
+    /// <c>WorldspaceBlock</c>, which is not
+    /// <see cref="Mutagen.Bethesda.Plugins.Records.IMajorRecordGetter"/>, so the re-derivation only
+    /// ever recurses one level, into <c>TopCell</c>. Both re-points are scoped to exactly the one
+    /// column a rename invalidates for a record's own children, and both match zero rows for a
+    /// renumbered record that has none — which is every type other than a container and a Worldspace
+    /// respectively.</para>
+    ///
+    /// <para><b>Neither re-point contends with the re-derivation for a Worldspace's own
+    /// <c>TopCell</c>.</b> That row is rewritten by a delete-then-insert keyed on the cell's own
+    /// unchanging <c>cell_form_key</c>, never on <c>parent_worldspace</c> — so it is replaced whole
+    /// regardless of which parent it currently names, and is never left behind for the re-point's
+    /// <c>WHERE parent_worldspace = old</c> to match a second time. Exactly one row, never two.</para>
+    ///
+    /// <para>Throws <see cref="ArgumentException"/> if <paramref name="key"/> already holds
+    /// <see cref="RenumberedRecord.NewFormKey"/> at either ref — the same refusal
+    /// <see cref="CreateWorkingTreeRecord"/> makes, for the same reason, and made before the
+    /// transaction opens so a collision costs no rollback.</para>
+    ///
+    /// <para><b>No external-change deferral check lives here</b> — the same signpost
+    /// <see cref="ApplyWorkingTreeChanges"/> and <see cref="CreateWorkingTreeRecord"/> carry.
+    /// <c>Edits.RecordEditService.RenumberRecord</c> is the write gesture and owns those refusals.</para>
     /// </summary>
-    void RepointContainerChildParent(PluginKey key, string oldParentFormKey, string newParentFormKey);
-
-    /// <summary>
-    /// Re-points every <c>cell_location</c> row naming <paramref name="oldParentFormKey"/> as
-    /// <c>parent_worldspace</c> to <paramref name="newParentFormKey"/> instead — <see cref="RepointContainerChildParent"/>'s
-    /// own shape, for the sibling gap it explicitly declined: a renumbered Worldspace's <i>exterior</i>
-    /// cells (<c>SubCells</c>) rather than its own folder-split children. <c>Worldspace.SubCells</c>
-    /// holds <c>WorldspaceBlock</c>, which is not <see cref="Mutagen.Bethesda.Plugins.Records.IMajorRecordGetter"/>
-    /// (<see cref="Source.ContainerChildFields"/>'s own doc comment), so
-    /// <c>DuckDbRecordIndex.RederiveContainmentForRecord</c> can never reach an exterior cell — it
-    /// only ever recurses one level, into <c>TopCell</c> — and <see cref="CreateWorkingTreeRecord"/>'s
-    /// re-derivation of the renumbered Worldspace's own new document cannot recreate those rows for
-    /// the same reason it cannot recreate a folder-split child's <c>container_child</c> row.
-    ///
-    /// <para><b>Position relative to <see cref="CreateWorkingTreeRecord"/> does not matter — it is
-    /// called after it, alongside <see cref="RepointContainerChildParent"/>, but either order leaves
-    /// exactly one row for the Worldspace's own <c>TopCell</c>, never two.</b>
-    /// <c>RederiveContainmentForRecord</c>'s own <c>cell_location</c> write for <c>TopCell</c>
-    /// deletes-then-inserts keyed by that cell's own unchanging <c>cell_form_key</c>, never by
-    /// <c>parent_worldspace</c> — so it unconditionally removes whatever row already exists for that
-    /// cell (whichever parent it currently names) and replaces it with a fresh, correct one, regardless
-    /// of whether this method ran before or after it. This method's own <c>UPDATE</c> and that
-    /// delete-then-insert therefore never contend for the same row: an exterior cell's row is never
-    /// touched by <c>CreateWorkingTreeRecord</c>'s re-derivation either way (the same reachability gap
-    /// this method exists to close), and <c>TopCell</c>'s row is never left for this method's
-    /// <c>WHERE parent_worldspace = oldParentFormKey</c> to match once <c>CreateWorkingTreeRecord</c>
-    /// has already run.</para>
-    ///
-    /// <para>Harmless to call for any renumbered record: the <c>UPDATE</c> matches zero rows for one
-    /// with no <c>cell_location</c> children of its own (every renumbered type other than
-    /// Worldspace).</para>
-    /// </summary>
-    void RepointCellLocationParent(PluginKey key, string oldParentFormKey, string newParentFormKey);
+    void ApplyRenumber(PluginKey key, RenumberedRecord renumbered);
 
     /// <summary>
     /// Gives a cell its own <c>cell_location</c> row directly, copied from wherever the caller
@@ -304,3 +294,35 @@ public interface IRecordIndex : IDisposable
     /// </summary>
     void SetFilter(string? sql);
 }
+
+/// <summary>
+/// Everything <see cref="IRecordIndex.ApplyRenumber"/> needs to move a record from one identity to
+/// another: the FormKey it had, the FormKey it now has, and the bytes that back the new one.
+///
+/// <para><b><paramref name="Owner"/> is what distinguishes the two shapes a renumber has.</b> A
+/// record with a source file of its own carries none — its own <paramref name="Body"/> is the whole
+/// story, and the re-points cover the children that file's document cannot describe. An
+/// <i>embedded</i> record has no file of its own: its fields live inside its owner's document, so
+/// the owner is reserialized too and arrives here alongside the child. Nothing is re-pointed on that
+/// path, because an embedded record's containment is entirely re-derived from that owner body.</para>
+///
+/// <para>One nullable <see cref="EmbeddingOwner"/> rather than a nullable FormKey beside a nullable
+/// body: "both or neither" is then the type's own shape rather than a rule a doc comment asks
+/// callers to keep.</para>
+/// </summary>
+/// <param name="OldFormKey">The identity being vacated — its rows are torn down last.</param>
+/// <param name="NewFormKey">The identity being taken. Must be held at neither ref.</param>
+/// <param name="RecordType">The renumbered record's type, for the new row.</param>
+/// <param name="Body">The renumbered record's own new document.</param>
+/// <param name="Owner">The document the renumbered record is embedded in, or <c>null</c> when it has
+/// a source file of its own.</param>
+public sealed record RenumberedRecord(
+    string OldFormKey,
+    string NewFormKey,
+    string RecordType,
+    string Body,
+    EmbeddingOwner? Owner = null);
+
+/// <summary>The reserialized document an embedded renumbered record lives inside, and the FormKey
+/// whose row carries it.</summary>
+public sealed record EmbeddingOwner(string FormKey, string Body);
