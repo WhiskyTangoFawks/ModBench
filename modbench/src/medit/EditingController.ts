@@ -3,7 +3,7 @@ import type {
   ApiClient, CompileResult, LoadOrderStatus, TrackStatus, ExternalChangeActionResult, RebaseResult,
   CrashRepairOffer,
 } from './ApiClient';
-import { errorText } from './ApiClient';
+import { errorText, isWriteGateTimeout, writeGateBusyMessage } from './ApiClient';
 import type { PluginRepository } from './PluginRepository';
 import { reportSkippedPlugins } from './pluginFailures';
 
@@ -42,25 +42,6 @@ export interface EditingControllerDeps {
 function eslContradictionMessage(error: unknown): string | undefined {
   const problem = error as { eslContradiction?: boolean; detail?: string } | undefined;
   return problem?.eslContradiction ? (problem.detail ?? errorText(error)) : undefined;
-}
-
-/** #673: whether this failure is the process-wide write gate timing out on a write already in
- *  flight (`WriteEndpointMapping.WriteGateBusy`). Read off the ProblemDetails extension for the
- *  same reason `eslContradictionMessage` above reads its own (ADR-0026): the status code says what
- *  *kind* of problem this is, and 503 alone cannot tell this apart from the load order having gone
- *  away (`NoLoadOrder`) — while the two want opposite responses, retry versus reload. Matching on
- *  the detail prose would be reading a sentence the backend is free to rewrite. */
-function isWriteGateTimeout(error: unknown): boolean {
-  return (error as { writeGateTimeout?: boolean } | undefined)?.writeGateTimeout === true;
-}
-
-/** What the user is told when the gate timed out. Deliberately *not* the backend's own detail
- *  ("Another write to the record index is still in progress after 5s."), which names an
- *  implementation and a timeout: the only actionable facts are that nothing was written (the gate
- *  is taken *around* the write, so there is no half-applied state) and that repeating the gesture
- *  is the way out. `failMsg` still leads, so the toast keeps saying which gesture this was. */
-function writeGateBusyMessage(failMsg: string): string {
-  return `${failMsg} — another change is still being written. Try again in a moment.`;
 }
 
 /** ADR-0035: how often the in-flight reconcile is asked what it has indexed so far.
@@ -332,7 +313,7 @@ export class EditingController {
         // branch below, which would otherwise relay the backend's own timeout prose verbatim and
         // read as indistinguishably fatal as a load order that has gone away.
         if (isWriteGateTimeout(error)) {
-          this.log(`[EditingController] ${spec.op} hit the write gate (503): ${errorText(error)}`);
+          this.log(`[EditingController] ${spec.op} hit the write gate (${response.status}): ${errorText(error)}`);
           this.deps.showError(writeGateBusyMessage(spec.failMsg));
           return spec.failure;
         }

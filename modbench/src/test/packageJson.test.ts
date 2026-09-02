@@ -477,13 +477,6 @@ describe('package.json record-row context menu — renumber gated to native trac
     expect(whenOf('modbench.record.renumber')).toBe('view == modbench.pluginListTree && viewItem == recordTracked');
   });
 
-  // The assertion above pins the whole gate by equality, but it would still pass if
-  // `recordUntracked` were merely misspelled into existence somewhere; this says the untracked
-  // spelling is nowhere in the clause, which is the actual #674 ruling.
-  it('never offers Change FormID on an untracked master row', () => {
-    expect(whenOf('modbench.record.renumber')).not.toContain('recordUntracked');
-  });
-
   it('offers Remove on override and untracked rows too', () => {
     expect(whenOf('modbench.record.delete')).toContain('recordOverride');
     expect(whenOf('modbench.record.delete')).toContain('recordUntracked');

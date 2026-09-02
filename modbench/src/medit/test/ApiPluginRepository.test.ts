@@ -810,3 +810,78 @@ describe('ApiPluginRepository origin threading', () => {
     expect(client.GET.mock.calls[0][1].params.query).not.toHaveProperty('origin');
   });
 });
+
+// #673: the field edit is the sixth gate-wrapped write endpoint and the only one that does not
+// reach the user through `EditingController.mutate` — it shapes its own outcome, which the record
+// panel's router reports verbatim. Without this branch a contended write reaches the user as the
+// backend's own "Another write to the record index is still in progress after 5s.": implementation
+// prose, no retry cue, nothing marking it transient. It is also the likeliest write to contend,
+// being the one a user can fire repeatedly.
+describe('ApiPluginRepository.editRecordField write-gate contention (#673)', () => {
+  function busyClient() {
+    return {
+      POST: vi.fn().mockResolvedValue({
+        data: undefined,
+        error: {
+          writeGateTimeout: true,
+          detail: 'Another write to the record index is still in progress after 5s.',
+        },
+        response: { ok: false, status: 503 },
+      }),
+    } as any;
+  }
+
+  it('reports the gate timeout as busy-and-retryable, in the same words every other write uses', async () => {
+    const repo = new ApiPluginRepository(busyClient());
+
+    const outcome = await repo.editRecordField('000800:MyPatch.esp', 'MyPatch.esp', 'ModA', 'EDID', 'x');
+
+    expect(outcome).toEqual({
+      applied: false,
+      refusal: 'WriteGateBusy',
+      message: 'Could not edit this record — another change is still being written. Try again in a moment.',
+    });
+  });
+
+  // The rival: keying off the 503, or off the detail prose, instead of the extension. An ordinary
+  // refusal must keep arriving as the backend worded it — that message names the way out (Track
+  // this mod, author a patch plugin) and is deliberately not re-worded on this side.
+  it('leaves an ordinary typed refusal exactly as the backend worded it', async () => {
+    const client = {
+      POST: vi.fn().mockResolvedValue({
+        data: undefined,
+        error: { refusal: 'PluginNotTracked', detail: 'MyPatch.esp is not tracked, so it is read-only.' },
+        response: { ok: false, status: 422 },
+      }),
+    } as any;
+    const repo = new ApiPluginRepository(client);
+
+    const outcome = await repo.editRecordField('000800:MyPatch.esp', 'MyPatch.esp', 'ModA', 'EDID', 'x');
+
+    expect(outcome).toEqual({
+      applied: false,
+      refusal: 'PluginNotTracked',
+      message: 'MyPatch.esp is not tracked, so it is read-only.',
+    });
+  });
+
+  // And a 503 that is genuinely the load order having gone away, which carries no extension.
+  it('leaves the load-order-absent 503 alone', async () => {
+    const client = {
+      POST: vi.fn().mockResolvedValue({
+        data: undefined,
+        error: { detail: 'No load order has been received.' },
+        response: { ok: false, status: 503 },
+      }),
+    } as any;
+    const repo = new ApiPluginRepository(client);
+
+    const outcome = await repo.editRecordField('000800:MyPatch.esp', 'MyPatch.esp', 'ModA', 'EDID', 'x');
+
+    expect(outcome).toEqual({
+      applied: false,
+      refusal: 'Unknown',
+      message: 'No load order has been received.',
+    });
+  });
+});

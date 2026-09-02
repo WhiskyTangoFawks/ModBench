@@ -983,9 +983,11 @@ describe('EditingController.createRecord', () => {
       );
     });
 
-    // Every write command shares `mutate`, so the branch is stated once and reached by all of
-    // them; deleteRecord stands in for the rest.
-    it('reaches every write command, not just renumber', async () => {
+    // Five of the six gate-wrapped endpoints share `mutate`, so the branch is stated once and
+    // reached by all of them; deleteRecord stands in for the rest. The sixth — the field edit —
+    // does not come through here at all: it shapes its own outcome in `ApiPluginRepository`, and
+    // is covered there, in the same words (`writeGateBusyMessage`).
+    it('reaches every write command that comes through mutate', async () => {
       const client = makeClient();
       client.POST = vi.fn().mockResolvedValue({
         error: { writeGateTimeout: true, detail: 'Another write to the record index is still in progress after 5s.' },

@@ -4,12 +4,18 @@ import type {
   WorldspaceSummary, CellReferences, WorldspaceBlocks,
   UnansweredExternalChange, ContainerChildSummary, PluginDiagnosisReport,
 } from './ApiClient';
-import { errorText } from './ApiClient';
+import { errorText, isWriteGateTimeout, writeGateBusyMessage } from './ApiClient';
 
 /**
  * What one field edit came to. A refusal is a first-class outcome here, not an exception —
  * `refusal` is the backend's RecordEditRefusal name, which is what lets the caller act differently
  * for an untracked mod (offer Track) than for a base-game master (name the patch-plugin path).
+ *
+ * Two values are this side's own rather than the backend's: `'Unknown'`, the fallback when a
+ * failure carries no `refusal` extension at all, and `'WriteGateBusy'` (#673) — a contended write
+ * is not a refusal in the backend's sense (nothing judged the edit; the gate timed out before it
+ * was attempted), but it reaches callers through this same outcome, and naming it is what keeps
+ * the output-channel line diagnosable instead of another anonymous `'Unknown'`.
  */
 export type RecordFieldEditOutcome =
   | { applied: true }
@@ -329,6 +335,17 @@ export class ApiPluginRepository implements PluginRepository {
       body: { plugin, origin, fieldPath, value },
     });
     if (response.ok && data?.applied) return { applied: true };
+
+    // #673: the sixth gate-wrapped write endpoint, and the only one that does not reach the user
+    // through `EditingController.mutate` — so the busy branch is stated here too, off the same
+    // extension and in the same words (`writeGateBusyMessage` is the single place that sentence
+    // lives). Before the refusal shaping below, which would otherwise relay the gate's own
+    // implementation prose as though a judgement had been made about this edit.
+    if (isWriteGateTimeout(error)) {
+      const message = writeGateBusyMessage('Could not edit this record');
+      this.log(`[PluginRepository] editRecordField(${formKey}.${fieldPath}) hit the write gate (${response.status})`);
+      return { applied: false, refusal: 'WriteGateBusy', message };
+    }
 
     // The backend's own typed discriminator, read off the ProblemDetails extension rather than
     // re-derived from the status code — the status says what *kind* of problem it is, this says

@@ -141,3 +141,28 @@ export function errorText(error: unknown): string {
   }
   return JSON.stringify(error);
 }
+
+/** #673: whether this failure is the process-wide write gate timing out on a write already in
+ *  flight (`WriteEndpointMapping.WriteGateBusy`). Read off the ProblemDetails extension, never off
+ *  the status code or the prose (ADR-0026): the status says what *kind* of problem this is, and
+ *  503 alone cannot tell this apart from the load order having gone away (`NoLoadOrder`) — while
+ *  the two want opposite responses, retry versus reload. The extension is a
+ *  `Dictionary<string, object?>` with no schema to mirror, so reading it is a cast by necessity,
+ *  exactly as `EditingController`'s own `eslContradictionMessage` reads `#290`'s. */
+export function isWriteGateTimeout(error: unknown): boolean {
+  return (error as { writeGateTimeout?: boolean } | undefined)?.writeGateTimeout === true;
+}
+
+/** What the user is told when the gate timed out — the *one* place that sentence exists, because
+ *  all six gate-wrapped write endpoints reach the user through two different shapes (five through
+ *  `EditingController.mutate`, the field edit through `PluginRepository.editRecordField`) and a
+ *  reworded busy message must stay one string to change.
+ *
+ *  Deliberately not the backend's own detail ("Another write to the record index is still in
+ *  progress after 5s."), which names an implementation and a timeout: the only actionable facts
+ *  are that nothing was written (the gate is taken *around* the write, so there is no half-applied
+ *  state) and that repeating the gesture is the way out. `failMsg` leads, so the message keeps
+ *  saying which gesture this was. */
+export function writeGateBusyMessage(failMsg: string): string {
+  return `${failMsg} — another change is still being written. Try again in a moment.`;
+}

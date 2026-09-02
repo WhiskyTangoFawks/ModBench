@@ -349,19 +349,26 @@ end.
   unconditionally (`xeMainForm.pas`'s `vstNavInitChildren`: `ChildCount := Container.ElementCount`,
   no `LIMIT`), so this also removes an ADR-0034 divergence that never had a demonstrated platform
   limitation behind it.
-- **Record nodes** (`contextValue: "record"`, or `"recordImmutable"` for a row whose plugin is
-  read-only for editing — an immutable plugin or a shadowed copy, which hides Remove/Change
-  FormID… though not Copy, see below): labeled `{EditorID}  [{RecordType}:{FormID}]`
+- **Record nodes** — one of four `contextValue`s, which together carry everything the row's own
+  context menu gates on. `"recordTracked"` and `"recordUntracked"` are both *master* rows (this
+  row's plugin is the FormKey's own origin), told apart by whether the plugin is tracked;
+  `"recordOverride"` is a copy that does not own its FormID; `"recordImmutable"` is any row whose
+  plugin is read-only for editing — an immutable plugin or a shadowed copy — and hides Remove
+  though not Copy, see below. **Change FormID… is offered on `"recordTracked"` alone** (#674): the
+  product refuses to renumber an override, and refuses to write to an untracked plugin at all, so
+  the gesture is *absent* on every other row rather than offered and then refused. Rows are labeled
+  `{EditorID}  [{RecordType}:{FormID}]`
   (FormKey only when no EditorID). Single-click (or Open Record) opens the editor; the context
   menu adds Remove (a confirmation listing every selected record, deleting the whole selection as
-  one batch; no keybinding) and Change FormID… (renumber), with xEdit's own
+  one batch; no keybinding) and, where the row above allows it, Change FormID… (renumber), with xEdit's own
   captions, per [medit-version-control.md](medit-version-control.md) — Add lives on the
   record-type row above a plugin's records. Removing a record deletes its source file as an
   ordinary working-tree change; an uncommitted create has no special-cased handling — its
   source file is simply removed the same way, since it was never committed to begin with.
 - **Copy as Override Into…/Copy as New Record Into…**:
-  available on both `"record"` and `"recordImmutable"` rows — unlike Remove/Change FormID…,
-  copying *from* an immutable or shadowed source is the ordinary case here, not an exception — and
+  available on all four record contextValues, `"recordImmutable"` included — unlike Remove/Change
+  FormID…, copying *from* an immutable or shadowed source is the ordinary case here, not an
+  exception — and
   identically from the record editor's own column header context menu, both entry points sharing
   one implementation path. A native QuickPick picks the destination plugin, filtered to mutable
   plugins only; Copy as Override additionally excludes every plugin that already carries the
@@ -376,8 +383,8 @@ end.
   palette fallback).
 - Context menu availability is driven by node `contextValue`, sourced from whichever side of
   the composite built the row: Mod Management for plugin rows (`"plugin"`, `"pluginImplicit"`),
-  the record browser for everything a row expands into (`"recordType"`, `"record"` /
-  `"recordImmutable"`, `"refr"` / `"refrImmutable"`, and the spatial contextValues below).
+  the record browser for everything a row expands into (`"recordType"`, the four record
+  contextValues above, `"refr"` / `"refrImmutable"`, and the spatial contextValues below).
 
 ### Record filter (SQL)
 
@@ -423,8 +430,9 @@ end.
 - Context menus: a **placed group** has no menu — nothing is contributed against its
   `placedGroup-*` contextValue, so creating a new placed reference isn't a tree-row gesture
   today. A **placed reference** (`contextValue: "refr"` / `"refrImmutable"`) offers only Open to
-  the Side, the one command gated on those two context values; it does not carry Remove or
-  Change FormID… (those gate on `record`/`recordImmutable` only). CELL nodes have no menu.
+  the Side, the one command gated on those two context values; it does not carry Remove (which
+  gates on the three mutable record contextValues) or Change FormID… (`"recordTracked"` alone).
+  CELL nodes have no menu.
 
 ### Quest / dialog topic children
 
