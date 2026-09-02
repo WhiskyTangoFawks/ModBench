@@ -1,8 +1,16 @@
 {
   "ReferencedBy": {
     "003648:Fallout4.esm": {
-      "Count": 1248,
+      "Count": 1249,
       "Sample": [
+        {
+          "EditorId": null,
+          "FieldPath": "VMAD\\Aliases[0]\\Property",
+          "FormKey": "003648:Fallout4.esm",
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm",
+          "RecordType": "qust"
+        },
         {
           "EditorId": "DialogueDiamondCity",
           "FieldPath": "dialog_branches[0].quest",
@@ -30,14 +38,6 @@
         {
           "EditorId": "DialogueDiamondCity",
           "FieldPath": "dialog_topics[101].quest",
-          "FormKey": "003648:Fallout4.esm",
-          "Origin": "Data",
-          "Plugin": "mEditTestSubset.esm",
-          "RecordType": "qust"
-        },
-        {
-          "EditorId": "DialogueDiamondCity",
-          "FieldPath": "dialog_topics[102].quest",
           "FormKey": "003648:Fallout4.esm",
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
@@ -136,7 +136,7 @@
       ]
     },
     "0179EF:Fallout4.esm": {
-      "Count": 144,
+      "Count": 145,
       "Sample": [
         {
           "EditorId": null,
@@ -171,8 +171,8 @@
           "RecordType": "dial"
         },
         {
-          "EditorId": "DialogueGenericPlayer",
-          "FieldPath": "dialog_branches[0].quest",
+          "EditorId": null,
+          "FieldPath": "VMAD\\Aliases[0]\\Property",
           "FormKey": "0179EF:Fallout4.esm",
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
@@ -181,7 +181,7 @@
       ]
     },
     "0179F3:Fallout4.esm": {
-      "Count": 564,
+      "Count": 575,
       "Sample": [
         {
           "EditorId": null,
@@ -200,24 +200,24 @@
           "RecordType": "qust"
         },
         {
-          "EditorId": "DialogueConcordArea",
-          "FieldPath": "dialog_branches[0].quest",
+          "EditorId": null,
+          "FieldPath": "VMAD\\Aliases[0]\\Property",
           "FormKey": "0179F3:Fallout4.esm",
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
           "RecordType": "qust"
         },
         {
-          "EditorId": "DialogueConcordArea",
-          "FieldPath": "dialog_topics[0].quest",
+          "EditorId": null,
+          "FieldPath": "VMAD\\Script\\Fragments:Quests:QF_DialogueConcordArea_000179F3\\Alias_GrandmaMonkAlias",
           "FormKey": "0179F3:Fallout4.esm",
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
           "RecordType": "qust"
         },
         {
-          "EditorId": "DialogueConcordArea",
-          "FieldPath": "dialog_topics[100].quest",
+          "EditorId": null,
+          "FieldPath": "VMAD\\Script\\Fragments:Quests:QF_DialogueConcordArea_000179F3\\Alias_JunLongAlias",
           "FormKey": "0179F3:Fallout4.esm",
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
