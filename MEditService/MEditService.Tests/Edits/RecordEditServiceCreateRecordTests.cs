@@ -90,14 +90,25 @@ public sealed class RecordEditServiceCreateRecordTests
         Assert.True(created.Applied, created.Message);
 
         var npcsDir = Path.Combine(mod.ModFolder, SourceRecordPath.RootFor(TrackedModFixture.PluginName), "Npcs");
-        var names = Directory.GetFiles(npcsDir).Select(Path.GetFileName).Order(StringComparer.Ordinal).ToList();
+        var names = Directory.GetFiles(npcsDir)
+            .Select(Path.GetFileName)
+            .Where(n => !string.Equals(n, "GroupRecordData.json", StringComparison.Ordinal))
+            .Select(n => n!)
+            .Order(StringComparer.Ordinal)
+            .ToList();
 
-        // The delete's own renormalization already closed the gap — the surviving sibling now carries
-        // [0], not the [1] it started at, and the new record appends at the true next contiguous slot,
-        // [1], not [2].
+        // Two record files, neither renamed by the other's arrival or departure — the delete left the
+        // survivor's name alone, and the create did not have to renumber past a gap, because there are
+        // no numbers in these names to leave a gap in.
         Assert.Equal(2, names.Count);
-        Assert.Contains(names, n => n!.StartsWith("[0] UntouchedNpc", StringComparison.Ordinal));
-        Assert.Contains(names, n => n!.StartsWith("[1] AfterTheGap", StringComparison.Ordinal));
+        Assert.Contains(names, n => n.StartsWith("UntouchedNpc", StringComparison.Ordinal));
+        Assert.Contains(names, n => n.StartsWith("AfterTheGap", StringComparison.Ordinal));
+
+        // The group's own ordered child list is the survivor followed by the newcomer, with the
+        // deleted record's entry gone.
+        Assert.Equal(
+            [mod.OtherNpc.ToString(), created.NewFormKey!],
+            SourceChildOrder.ListAt(SourceChildOrder.CarrierFor(npcsDir, parentIsRecord: false), "Npcs"));
     }
 
     [Fact]

@@ -96,16 +96,27 @@ internal static class SourceChildOrder
         };
     }
 
-    /// <summary>The children of an <see cref="IList"/>-shaped member collection, and how to reorder
-    /// it.</summary>
-    private static (IReadOnlyList<object> Children, Action<IReadOnlyList<object>> Rewrite) ListSlot(IList list)
+    /// <summary>
+    /// The children of a list-shaped member collection, and how to reorder it.
+    ///
+    /// <para><b>Enumerated through <see cref="IEnumerable"/> but reordered through
+    /// <see cref="IList"/>, and the asymmetry is the point.</b> The write side walks whatever mod it
+    /// is handed, and a mod parsed as a getter is a <c>BinaryOverlay</c> whose collections are
+    /// read-only — they implement <c>IReadOnlyList</c> and not <c>IList</c>. Discovering collections
+    /// by asking for <c>IList</c> therefore skipped every one of them on an overlay, silently writing
+    /// a tree with no order in it at all. Only the read side ever reorders, and it always holds a
+    /// genuinely settable mod, so the cast belongs in the rewrite rather than in the discovery.</para>
+    /// </summary>
+    private static (IReadOnlyList<object> Children, Action<IReadOnlyList<object>> Rewrite) ListSlot(IEnumerable collection)
     {
-        var children = list.Cast<object>().ToList();
+        var children = collection.Cast<object>().ToList();
         return (children, ordered =>
         {
+            var list = (IList)collection;
             list.Clear();
             foreach (var child in ordered) list.Add(child);
-        });
+        }
+        );
     }
 
     /// <summary>
@@ -134,7 +145,8 @@ internal static class SourceChildOrder
             cacheType.GetMethod("Clear", Type.EmptyTypes)!.Invoke(cache, null);
             var set = cacheType.GetMethod("Set", [element])!;
             foreach (var child in ordered) set.Invoke(cache, [child]);
-        });
+        }
+        );
     }
 
     /// <summary>
@@ -339,6 +351,61 @@ internal static class SourceChildOrder
         return null;
     }
 
+    /// <summary>
+    /// Drops from <paramref name="carrierPath"/>'s list under <paramref name="key"/> every identity
+    /// that no longer has a file or directory in <paramref name="childDirectory"/> — the repair a
+    /// structural write performs defensively, because the tree can have been changed without Modbench
+    /// (root CLAUDE.md's never-assume-exclusive-ownership rule).
+    ///
+    /// <para><b>Reads tolerate a stale entry; compile does not, and that is why this exists.</b> A
+    /// listed child with no file is honoured as a deletion when reading (see <see cref="ApplyTo"/>),
+    /// so the plugin still opens — but the round-trip gate compares the tree against what the codec
+    /// would reserialize from it, and a list naming a record that is not there does not match. Left
+    /// alone, a hand-deleted file would therefore make the plugin's own next Save &amp; Compile refuse
+    /// until a re-Track. This is the direct successor to the group-folder renormalization the
+    /// superseded numbering scheme ran for exactly the same reason.</para>
+    ///
+    /// <para>Presence is tested by asking whether any child's name carries the identity — the same
+    /// direction of the filename question <c>SourceUnitResolver</c> already answers safely (given a
+    /// FormKey, does this name carry it), never the ambiguous inverse of splitting a name into
+    /// EditorID and FormKey.</para>
+    /// </summary>
+    internal static void PruneMissing(
+        string childDirectory, string carrierPath, string key, IFileSystem? fileSystem = null)
+    {
+        var system = fileSystem ?? new FileSystem();
+        if (!system.Directory.Exists(childDirectory)) return;
+
+        var present = system.Directory.EnumerateFileSystemEntries(childDirectory)
+            .Select(Path.GetFileName)
+            .Select(name => name!)
+            .ToList();
+
+        Mutate(carrierPath, key, fileSystem, list =>
+        {
+            for (var i = list.Count - 1; i >= 0; i--)
+            {
+                if (!present.Any(name => NameCarriesIdentity(name, list[i]!.GetValue<string>()))) list.RemoveAt(i);
+            }
+        });
+    }
+
+    /// <summary>Whether <paramref name="leaf"/> is the file or directory of the child recorded as
+    /// <paramref name="identity"/> — the filesafe FormKey it ends with for a record, or the name
+    /// itself for a block, which is named after its own coordinates.</summary>
+    private static bool NameCarriesIdentity(string leaf, string identity)
+    {
+        if (leaf.Equals(identity, StringComparison.Ordinal)) return true;
+
+        var separator = identity.IndexOf(':', StringComparison.Ordinal);
+        if (separator < 0) return false;
+
+        var filesafe = string.Concat(identity.AsSpan(0, separator), "_", identity.AsSpan(separator + 1));
+        var name = leaf.EndsWith(".json", StringComparison.Ordinal) ? leaf[..^".json".Length] : leaf;
+        return name.Equals(filesafe, StringComparison.Ordinal)
+            || name.EndsWith($" - {filesafe}", StringComparison.Ordinal);
+    }
+
     private static void Mutate(string carrierPath, string key, IFileSystem? fileSystem, Action<JsonArray> edit)
     {
         var files = (fileSystem ?? new FileSystem()).File;
@@ -490,8 +557,9 @@ internal static class SourceChildOrder
 
         foreach (var property in FolderSplitProperties(parent.GetType()))
         {
-            if (property.GetValue(parent) is not IList list || list.Count == 0) continue;
-            var (children, rewrite) = ListSlot(list);
+            if (property.GetValue(parent) is not IEnumerable collection) continue;
+            var (children, rewrite) = ListSlot(collection);
+            if (children.Count == 0) continue;
 
             yield return new OrderedCollection(carrier, property.Name, children, rewrite);
 
@@ -574,8 +642,19 @@ internal static class SourceChildOrder
             .Where(p => p.GetIndexParameters().Length == 0 && typeof(IGroupGetter).IsAssignableFrom(p.PropertyType))
             .OrderBy(p => p.Name, StringComparer.Ordinal);
 
-    private static Type? ElementOf(Type type) =>
-        !type.IsGenericType || !typeof(IList).IsAssignableFrom(type) ? null : type.GetGenericArguments().FirstOrDefault();
+    /// <summary>The element type of a list-shaped member, or null when the member is not one.
+    /// Deliberately tests <see cref="IEnumerable"/> rather than <see cref="IList"/> — see
+    /// <see cref="ListSlot"/> for why. Groups are excluded because they are reached at the mod level
+    /// with their own carrier, and strings because every string is an enumerable of chars.</summary>
+    private static Type? ElementOf(Type type)
+    {
+        if (type == typeof(string) || !type.IsGenericType) return null;
+        if (!typeof(IEnumerable).IsAssignableFrom(type)) return null;
+        if (typeof(IGroupGetter).IsAssignableFrom(type)) return null;
+
+        var arguments = type.GetGenericArguments();
+        return arguments.Length == 1 ? arguments[0] : null;
+    }
 
     private static JsonObject ReadCarrier(IFile files, string path) =>
         files.Exists(path)

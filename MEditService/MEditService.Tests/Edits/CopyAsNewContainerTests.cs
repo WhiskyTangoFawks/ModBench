@@ -1,3 +1,4 @@
+using System.Text.Json;
 using MEditService.Core.Edits;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
@@ -103,13 +104,30 @@ public sealed class CopyAsNewContainerTests : IDisposable
         Assert.True(service.CopyRecordAsOverride(
             _fixture.SourcePlugin, _fixture.Quest.ToString(), _fixture.DestinationPlugin).Applied);
         var questFile = _fixture.DestinationSourceFileContaining(ContainerCopyFixture.QuestEditorId);
-        var questBytesBefore = File.ReadAllBytes(questFile);
+        var questBefore = JsonDocument.Parse(File.ReadAllText(questFile));
 
         var result = service.CopyRecordAsNewRecord(
             _fixture.SourcePlugin, _fixture.DialogTopic.ToString(), _fixture.DestinationPlugin);
 
         Assert.True(result.Applied, result.Message);
-        Assert.True(questBytesBefore.AsSpan().SequenceEqual(File.ReadAllBytes(questFile)), "quest document changed bytes");
+
+        // "Untouched" means the quest's own fields, not its file: the new topic is a child of this
+        // quest, and since #566 a parent's document is where its children's order lives (ADR-0042
+        // decision 4). So exactly one thing may differ — the ordered child list gains one entry —
+        // and every field the quest record itself owns must be byte-identical.
+        var questAfter = JsonDocument.Parse(File.ReadAllText(questFile));
+        foreach (var property in questBefore.RootElement.EnumerateObject())
+        {
+            if (property.NameEquals("MEditChildOrder")) continue;
+            Assert.True(
+                questAfter.RootElement.TryGetProperty(property.Name, out var now),
+                $"quest document lost '{property.Name}'");
+            Assert.Equal(property.Value.GetRawText(), now.GetRawText());
+        }
+        Assert.Equal(
+            questBefore.RootElement.EnumerateObject().Count(),
+            questAfter.RootElement.EnumerateObject().Count(p => !p.NameEquals("MEditChildOrder"))
+                + (questBefore.RootElement.TryGetProperty("MEditChildOrder", out _) ? 1 : 0));
 
         var reads = _fixture.Mirror.Index!.At(RecordRef.Effective);
         var questDoc = reads.GetDocument(_fixture.Quest.ToString(), _fixture.DestinationPlugin);

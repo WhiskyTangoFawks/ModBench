@@ -140,8 +140,13 @@ internal static class SpatialContainerMint
 
             if (existingWorldspaceDirectory != null)
             {
-                File.Delete(worldspaceHeaderFile);
+                // Merged before the scratch header is removed, not after: that file is where the
+                // scratch worldspace's own SubCells order lives, and the destination worldspace needs
+                // the new block's identity appended to its list or the next read refuses the tree for
+                // holding a block nothing names. The merge walks directories only, so the header
+                // itself never travels.
                 MergeIntoExistingWorldspace(worldspaceOwnDir, existingWorldspaceDirectory);
+                File.Delete(worldspaceHeaderFile);
             }
             else
             {

@@ -30,7 +30,7 @@ public sealed class SourceTreeMergeTests : IDisposable
         File.WriteAllText(unrelatedFile, "{\"EditorID\":\"SomeQuest\"}");
 
         // New content the mint produced.
-        var newCellDir = Path.Combine(scratch, "Worldspaces", "[0] World", "3, -2", "0, -1", "[0] NewCell");
+        var newCellDir = Path.Combine(scratch, "Worldspaces", "World", "3, -2", "0, -1", "NewCell");
         Directory.CreateDirectory(newCellDir);
         File.WriteAllText(Path.Combine(newCellDir, "RecordData.json"), "{\"EditorID\":\"NewCell\"}");
 
@@ -39,7 +39,7 @@ public sealed class SourceTreeMergeTests : IDisposable
         Assert.Equal("{\"EditorID\":\"SomeQuest\"}", File.ReadAllText(unrelatedFile));
         Assert.Equal(
             "{\"EditorID\":\"NewCell\"}",
-            File.ReadAllText(Path.Combine(destination, "Worldspaces", "[0] World", "3, -2", "0, -1", "[0] NewCell", "RecordData.json")));
+            File.ReadAllText(Path.Combine(destination, "Worldspaces", "World", "3, -2", "0, -1", "NewCell", "RecordData.json")));
     }
 
     // The rival this guards against: an implementation that clears the destination tree before

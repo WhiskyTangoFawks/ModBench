@@ -10,21 +10,20 @@ using Mutagen.Bethesda.Plugins.Records;
 namespace MEditService.Tests.Edits;
 
 /// <summary>
-/// A numbering gap left in a group folder by <see cref="RecordEditService.DeleteRecord"/> (or
-/// <see cref="RecordEditService.RenumberRecord"/>'s own delete+create) makes every subsequent
-/// Save &amp; Compile refuse until the user re-Tracks — <see cref="PluginCompileService"/>'s
-/// round-trip gate regenerates canonical <c>"[N]"</c> prefixes as contiguous in-memory list
-/// position — for a completely benign reason, on the touched plugin's <i>own</i> next compile, with
-/// no container involved at all.
-///
-/// <para>So every structural write (<see cref="RecordEditService.DeleteRecord"/>,
+/// Every structural write (<see cref="RecordEditService.DeleteRecord"/>,
 /// <see cref="RecordEditService.RenumberRecord"/>, <see cref="RecordEditService.CreateRecord"/>)
-/// renormalizes its touched group folder to contiguous <c>[0..k]</c> as its own last file-system act
-/// (<see cref="SourceUnitResolver.RenormalizeGroupOrder"/>). This suite proves the
-/// repro no longer refuses, and that survivors' relative order and content both come through intact.
-/// </para>
+/// leaves the touched group's ordered child list agreeing with the files beside it, so the plugin's
+/// own next Save &amp; Compile succeeds and the survivors keep their relative order and content.
+///
+/// <para>This suite began as the repro for a numbering gap: a delete used to leave a hole in the
+/// <c>"[N] "</c> filename prefixes, which made every subsequent compile refuse until the user
+/// re-Tracked, for an entirely benign reason and with no container involved. #566 removed the class
+/// of defect rather than the instance — there are no prefixes to leave a hole in, and a delete is one
+/// file plus one line in the parent's document (ADR-0042 decision 4). The suite is kept, pointed at
+/// the property that replaced contiguity: the parent's list and the tree agree, and a compile of the
+/// result is faithful.</para>
 /// </summary>
-public sealed class GroupOrderRenormalizationTests : IDisposable
+public sealed class GroupOrderMaintenanceTests : IDisposable
 {
     private readonly TrackedModFixture _mod = TrackedModFixture.Tracked();
 
@@ -51,6 +50,19 @@ public sealed class GroupOrderRenormalizationTests : IDisposable
     private string NpcsDirectory =>
         Path.Combine(_mod.ModFolder, SourceRecordPath.RootFor(TrackedModFixture.PluginName), "Npcs");
 
+    /// <summary>The record files in the Npcs group folder — its own GroupRecordData.json carries the
+    /// order and is not one of them.</summary>
+    private List<string> NpcFiles() =>
+        [.. Directory.GetFiles(NpcsDirectory)
+            .Select(Path.GetFileName)
+            .Where(n => !string.Equals(n, "GroupRecordData.json", StringComparison.Ordinal))
+            .Select(n => n!)
+            .Order(StringComparer.Ordinal)];
+
+    /// <summary>The Npcs group's own ordered child list — where a flat record's position lives now.</summary>
+    private IReadOnlyList<string> NpcOrder() =>
+        SourceChildOrder.ListAt(SourceChildOrder.CarrierFor(NpcsDirectory, parentIsRecord: false), "Npcs");
+
     // ---- the original repro ----
 
     [Fact]
@@ -70,30 +82,35 @@ public sealed class GroupOrderRenormalizationTests : IDisposable
     }
 
     [Fact]
-    public void DeletingTheFirstOfTwo_RenormalizesTheGroupFolder_ToAContiguousSurvivorAtSlotZero()
+    public void DeletingTheFirstOfTwo_LeavesTheSurvivorsFileUntouched_AndDropsOneLineFromTheParent()
     {
+        var survivorNameBefore = NpcFiles()
+            .Single(n => n.StartsWith(TrackedModFixture.OtherNpcEditorId, StringComparison.Ordinal));
+
         var deleted = EditService().DeleteRecord(_mod.Plugin, _mod.Npc.ToString());
         Assert.True(deleted.Applied, deleted.Message);
 
-        var names = Directory.GetFiles(NpcsDirectory).Select(Path.GetFileName).ToList();
-        var survivor = Assert.Single(names);
-        Assert.StartsWith("[0] " + TrackedModFixture.OtherNpcEditorId, survivor, StringComparison.Ordinal);
+        // The survivor was second and is now the only one — and its file was not renamed for it,
+        // which is the whole point of the amendment.
+        var survivor = Assert.Single(NpcFiles());
+        Assert.Equal(survivorNameBefore, survivor);
+
+        Assert.Equal([_mod.OtherNpc.ToString()], NpcOrder());
     }
 
     // ---- renumber, flat ----
 
     [Fact]
-    public void RenumberingTheFirstOfTwo_ThenCompiling_Succeeds_AndTheGroupFolderIsRenormalized()
+    public void RenumberingTheFirstOfTwo_ThenCompiling_Succeeds_AndTheRecordKeepsItsPosition()
     {
         var result = EditService().RenumberRecord(_mod.Plugin, _mod.Npc.ToString());
         Assert.True(result.Applied, result.Message);
 
-        var names = Directory.GetFiles(NpcsDirectory).Select(Path.GetFileName).Order(StringComparer.Ordinal).ToList();
+        var names = NpcFiles();
         Assert.Equal(2, names.Count);
-        // The untouched survivor renormalized down to slot 0 (it was at slot 1)...
-        Assert.Contains(names, n => n!.StartsWith("[0] " + TrackedModFixture.OtherNpcEditorId, StringComparison.Ordinal));
-        // ...and the renumbered record appended at the end (slot 1), not left at a gapped slot 2.
-        Assert.Contains(names, n => n!.StartsWith("[1] " + TrackedModFixture.NpcEditorId, StringComparison.Ordinal));
+        // The renumbered record stays first, under its new FormKey — a renumber repoints the parent's
+        // list entry in place rather than appending, so the untouched sibling never moves either.
+        Assert.Equal([result.NewFormKey!, _mod.OtherNpc.ToString()], NpcOrder());
 
         var mod = CompileAndReimport(out var handle);
         using (handle)
@@ -117,7 +134,8 @@ public sealed class GroupOrderRenormalizationTests : IDisposable
         var deleted = editService.DeleteRecord(container.Plugin, container.DialogTopic2.ToString());
         Assert.True(deleted.Applied, deleted.Message);
 
-        // Without renormalization this refuses: "does not round-trip through its own source ... Re-Track".
+        // Before #566 a mid-list delete left a numbering gap here and this refused outright:
+        // "does not round-trip through its own source ... Re-Track".
         var result = compileService.Compile(container.Plugin, new CompileSource.WorkingTree());
         Assert.True(result.Succeeded, result.RefusalReason);
 
@@ -135,27 +153,35 @@ public sealed class GroupOrderRenormalizationTests : IDisposable
     // ---- CreateRecord's own defensive renormalization ----
 
     /// <summary>
-    /// CreateRecord renormalizes its own group folder too, defensively — never-assume-exclusive-
-    /// ownership means a gap can already be there for a reason nothing in this process caused (a
-    /// hand-deleted sibling file, another tool's edit), and this proves Create closes it rather than
-    /// merely not making it worse.
+    /// A create landing into a group a hand-delete already disturbed — never-assume-exclusive-
+    /// ownership means another tool or the user can remove a sibling file without telling Modbench,
+    /// leaving the parent's list naming a child that is not there.
+    ///
+    /// <para>That direction of drift is honoured as a deletion rather than refused (ADR-0042
+    /// decision 4's asymmetry: the tree says what exists, the parent's list says what order the
+    /// existing ones are in), so this is the end-to-end proof of it — the create succeeds, and the
+    /// result both reads back and compiles with exactly the two records that really exist.</para>
     /// </summary>
     [Fact]
-    public void CreatingARecord_ClosesAPreExistingExternalGap_NotJustAppendingPastIt()
+    public void CreatingARecord_AfterAnExternalHandDelete_SucceedsAndCompiles()
     {
-        // Simulate an externally-introduced gap without going through DeleteRecord (which would close
-        // it itself) — hand-delete the tracked [0] file directly, the way another tool could.
-        var npcFile = _mod.NpcSourceFile;
-        Assert.StartsWith(Path.Combine(NpcsDirectory, "[0]"), npcFile, StringComparison.Ordinal);
-        File.Delete(npcFile);
+        File.Delete(_mod.NpcSourceFile);
 
         var created = EditService().CreateRecord(_mod.Plugin, "npc_", "BrandNew");
         Assert.True(created.Applied, created.Message);
 
-        var names = Directory.GetFiles(NpcsDirectory).Select(Path.GetFileName).Order(StringComparer.Ordinal).ToList();
+        var names = NpcFiles();
         Assert.Equal(2, names.Count);
-        Assert.Contains(names, n => n!.StartsWith("[0] " + TrackedModFixture.OtherNpcEditorId, StringComparison.Ordinal));
-        Assert.Contains(names, n => n!.StartsWith("[1] BrandNew", StringComparison.Ordinal));
+        Assert.Contains(names, n => n.StartsWith(TrackedModFixture.OtherNpcEditorId, StringComparison.Ordinal));
+        Assert.Contains(names, n => n.StartsWith("BrandNew", StringComparison.Ordinal));
+
+        var mod = CompileAndReimport(out var handle);
+        using (handle)
+        {
+            Assert.Equal(2, mod.Npcs.Count);
+            Assert.DoesNotContain(mod.Npcs, n => n.FormKey == _mod.Npc);
+            Assert.Contains(mod.Npcs, n => n.EditorID == "BrandNew");
+        }
     }
 
     // ---- stacked operations, no drift ----

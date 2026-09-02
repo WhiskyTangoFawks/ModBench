@@ -48,17 +48,17 @@ public sealed class SourceWriteTransactionTests : IDisposable
     {
         Seed("Npcs/existing.json", "original");
         Seed("Races/doomed.json", "doomed");
-        Seed("Cells/[0] Home/RecordData.json", "cell");
+        Seed("Cells/Home/RecordData.json", "cell");
         // An empty directory in the tree from the start: it must still be there afterwards, and it is
         // the entry no git-based oracle would see either way.
-        Directory.CreateDirectory(Path_("Cells/[0] Home/Empty"));
+        Directory.CreateDirectory(Path_("Cells/Home/Empty"));
         var before = TreeSnapshot.Of(_root);
 
         var transaction = new SourceWriteTransaction();
         WriteThrough(transaction, "Npcs/existing.json", "rewritten");
         WriteThrough(transaction, "Npcs/created.json", "brand new");
         transaction.Delete(_root, Path_("Races/doomed.json"));
-        transaction.Move(_root, Path_("Cells/[0] Home"), Path_("Cells/[1] Moved"));
+        transaction.Move(_root, Path_("Cells/Home"), Path_("Cells/Moved"));
 
         Assert.NotEqual(before, TreeSnapshot.Of(_root));
         Assert.Empty(transaction.Rollback());
@@ -79,13 +79,16 @@ public sealed class SourceWriteTransactionTests : IDisposable
     [Fact]
     public void Rollback_UndoesActsInReverse_SoARestoreNeverCollidesWithARenamedSibling()
     {
-        Seed("Races/[0] old.json", "old");
+        Seed("Races/old.json", "old");
         var before = TreeSnapshot.Of(_root);
 
+        // The moved file lands on exactly the name the deleted sibling just vacated — which is what
+        // makes reverse order load-bearing: restoring the delete before undoing the move would put
+        // old.json back on top of a file still sitting there.
         var transaction = new SourceWriteTransaction();
-        WriteThrough(transaction, "Races/[1] new.json", "new");
-        transaction.Delete(_root, Path_("Races/[0] old.json"));
-        transaction.Move(_root, Path_("Races/[1] new.json"), Path_("Races/[0] new.json"));
+        WriteThrough(transaction, "Races/new.json", "new");
+        transaction.Delete(_root, Path_("Races/old.json"));
+        transaction.Move(_root, Path_("Races/new.json"), Path_("Races/old.json"));
 
         Assert.Empty(transaction.Rollback());
         Assert.Equal(before, TreeSnapshot.Of(_root));
@@ -230,11 +233,11 @@ public sealed class SourceWriteTransactionTests : IDisposable
 
     private void SeedTree()
     {
-        Seed("Npcs/[0] a.json", "a original");
-        Seed("Npcs/[1] b.json", "b original");
-        Seed("Races/[0] r.json", "r original");
-        Seed("Cells/[0] Home/RecordData.json", "cell original");
-        Directory.CreateDirectory(Path_("Cells/[0] Home/Empty"));
+        Seed("Npcs/a.json", "a original");
+        Seed("Npcs/b.json", "b original");
+        Seed("Races/r.json", "r original");
+        Seed("Cells/Home/RecordData.json", "cell original");
+        Directory.CreateDirectory(Path_("Cells/Home/Empty"));
     }
 
     /// <summary>The same act sequence a renumber makes, in miniature: referencing files rewritten, a
@@ -250,13 +253,13 @@ public sealed class SourceWriteTransactionTests : IDisposable
             perform();
         }
 
-        At(failAt, () => WriteThrough(transaction, "Npcs/[0] a.json", "a rewritten"));
-        At(failAt, () => WriteThrough(transaction, "Npcs/[1] b.json", "b rewritten"));
-        At(failAt, () => transaction.Move(_root, Path_("Cells/[0] Home"), Path_("Cells/[1] Moved")));
-        At(failAt, () => WriteThrough(transaction, "Cells/[1] Moved/RecordData.json", "cell rewritten"));
-        At(failAt, () => WriteThrough(transaction, "Races/[1] r2.json", "r2 new"));
-        At(failAt, () => transaction.Delete(_root, Path_("Races/[0] r.json")));
-        At(failAt, () => transaction.Move(_root, Path_("Races/[1] r2.json"), Path_("Races/[0] r2.json")));
+        At(failAt, () => WriteThrough(transaction, "Npcs/a.json", "a rewritten"));
+        At(failAt, () => WriteThrough(transaction, "Npcs/b.json", "b rewritten"));
+        At(failAt, () => transaction.Move(_root, Path_("Cells/Home"), Path_("Cells/Moved")));
+        At(failAt, () => WriteThrough(transaction, "Cells/Moved/RecordData.json", "cell rewritten"));
+        At(failAt, () => WriteThrough(transaction, "Races/r2-moved.json", "r2 new"));
+        At(failAt, () => transaction.Delete(_root, Path_("Races/r.json")));
+        At(failAt, () => transaction.Move(_root, Path_("Races/r2-moved.json"), Path_("Races/r2.json")));
         return act;
     }
 }

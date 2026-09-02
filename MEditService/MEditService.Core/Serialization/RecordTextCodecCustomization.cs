@@ -8,29 +8,17 @@ namespace MEditService.Core.Serialization;
 /// but not held to that source as
 /// a specification (ADR-0042: "Spriggit has no role in v1").
 ///
-/// <para><b><c>.EnforceRecordOrder()</c> is not a no-op.</b> Beyond
-/// <c>WriteFilePerRecord</c>/<c>ReadFilePerRecord</c>
-/// (which <see cref="RecordTextCodec"/> never calls), the same flag
-/// reaches <c>WriteFolderPerRecord</c>/<c>ReadFolderPerRecord</c> and <c>WriteMajorRecordList</c>/
-/// <c>ReadMajorRecordList</c> — confirmed by decompiling the pinned 1.37.1
-/// <c>Mutagen.Bethesda.Serialization.SourceGenerator</c> assembly directly, not by reading the newer
-/// reference clone under <c>references/mutagen-serialization</c> (that clone tracks 1.38.6, a version
-/// whose <c>Utility/*ParallelHelper.cs</c> refactor does not exist yet at this project's pin — its
-/// <c>Utility</c> namespace at 1.37.1 has only <c>SerializationHelper</c>). All three field
-/// generators that matter here (<c>GroupFieldGenerator</c>, <c>FolderPerRecordGroupFieldGenerator</c>,
-/// and <c>MajorRecordListFieldGenerator</c> — the one that actually governs
-/// <c>DialogTopic.Responses</c>, since that field is a plain list rather than a <c>Group&lt;T&gt;</c>)
-/// read the same single project-wide <c>compilation.Customization.Overall.EnforceRecordOrder</c> bool
-/// and pass it straight through as <c>withNumbering</c>. There is no per-record-type door:
-/// <c>ICustomizationBuilder&lt;TObject&gt;</c> (what <see cref="CellEmbedCustomization"/> and
-/// its sibling use) exposes no <c>FilePerRecord</c>/<c>EnforceRecordOrder</c> at all. So this one call
-/// on this one root builder turns on <c>"[N] "</c> filename numbering for <b>every</b> folder-split
-/// relationship in the whole mod uniformly — flat top-level groups (Weapons, Npcs, …) included, not
-/// only the container-nested lists. That
-/// breadth is deliberate (ADR-0042's re-scope), not an accepted side effect — see
-/// <c>Source.SourceRecordPath</c> and <c>Edits.RecordEditService</c> for what keeps
-/// flat-record point writes (create/rename/renumber) consistent with numbered siblings, given the
-/// prefix is written everywhere, not only under <c>DialogTopic.Responses</c>.</para>
+/// <para><b>Filename numbering is deliberately off, and must stay off</b> (ADR-0042 decision 4, as
+/// amended by #566). The library offers a project-wide ordering flag that prefixes every
+/// folder-split sibling's file name with its list position; Modbench does not use it, because order
+/// is a property of the parent's collection rather than of each child. It is carried in the parent's
+/// own document instead (<c>Source.SourceChildOrder</c>), which is what makes a mid-list insert or
+/// delete one file plus one line rather than a rename cascade through every later sibling. Turning
+/// the flag back on would put a second, contradicting carrier in the tree, and the two would disagree
+/// silently — a numbered name still deserializes perfectly well. <c>RecordOrderCustomizationBanTests</c>
+/// enforces its absence across every production source, not just this one, because the flag is set
+/// per generator compilation and one compilation can seed only one game: a second game means a second
+/// place to set it.</para>
 ///
 /// <para><b>No <c>Omit*</c> call exists, and decision 3 has no exception</b> (ADR-0042 decision 3 —
 /// "nothing is omitted and nothing is re-sorted in the files, ever"; the decision carries no escape

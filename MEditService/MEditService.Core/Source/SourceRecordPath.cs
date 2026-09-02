@@ -61,7 +61,7 @@ internal sealed record SourceRecordIdentity(string PluginFileName, string Record
 /// makes a mid-list insert or delete one file plus one line in one document, instead of a rename
 /// cascade through every later sibling. <see cref="TryParse"/> was always blind to position — it
 /// decomposes nothing but path <i>shape</i> — so it is unchanged by the amendment.</para>
-
+///
 /// <para>The <c>&lt;originModKey&gt;</c> segment (the record's <i>origin</i> plugin — <c>FormKey.ModKey</c>
 /// — never the plugin the record is written into, which is <paramref name="pluginFileName"/> and can
 /// legitimately differ, e.g. an override edited through a patch plugin) is exactly

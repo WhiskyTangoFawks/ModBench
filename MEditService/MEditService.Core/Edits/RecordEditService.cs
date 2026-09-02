@@ -572,10 +572,17 @@ public sealed class RecordEditService(
         // A brand-new sibling lands at the end of its group's ordered child list — one line in one
         // document, and no sibling touched. RefuseIfContainerType above already guarantees
         // FolderNameFor is non-null for recordType.
-        SourceChildOrder.Add(
-            SourceChildOrder.CarrierFor(Path.GetDirectoryName(sourcePath)!, parentIsRecord: false),
-            RecordTypeDispatch.For(release).FolderNameFor(recordType)!,
-            targetFormKey);
+        var groupDirectory = Path.GetDirectoryName(sourcePath)!;
+        var groupCarrier = SourceChildOrder.CarrierFor(groupDirectory, parentIsRecord: false);
+        var groupKey = RecordTypeDispatch.For(release).FolderNameFor(recordType)!;
+        SourceChildOrder.Add(groupCarrier, groupKey, targetFormKey);
+
+        // Defensive, and not a repeat of what Add just did: never-assume-exclusive-ownership means
+        // this group's list can already name a sibling whose file another tool or the user removed,
+        // which reads tolerate but the compile round-trip gate does not. Repairing it as part of this
+        // write is what keeps the plugin's own next Save & Compile working, rather than leaving it for
+        // the author to discover as a refusal.
+        SourceChildOrder.PruneMissing(groupDirectory, groupCarrier, groupKey);
 
         index.CreateWorkingTreeRecord(plugin, targetFormKey, recordType, newBody);
         // A brand-new row can newly match an active filter.
@@ -940,10 +947,15 @@ public sealed class RecordEditService(
             var childSlotDirectory = Path.Combine(topicDirectory, child.SlotName);
             var childPath = Path.Combine(
                 childSlotDirectory,
-                $"[{copiedChildren.Count}] " +
-                    SourceUnitResolver.LeafNameFor(FormKey.Factory(childFormKey), childRecord.EditorID, isDirectory: false));
+                SourceUnitResolver.LeafNameFor(FormKey.Factory(childFormKey), childRecord.EditorID, isDirectory: false));
             var childBody = SourceUnitResolver.InMintedDirectory(
                 childSlotDirectory, () => SerializeAndWrite(_codec, childRecord, childPath, release));
+
+            // Appended in source order, which is the order this loop walks — the new topic's own
+            // document is what says where its responses sit, and a response file it does not name is
+            // drift the next read refuses.
+            SourceChildOrder.Add(
+                SourceChildOrder.CarrierFor(topicDirectory, parentIsRecord: true), child.SlotName, childFormKey);
             index.CreateWorkingTreeRecord(destinationPlugin, childFormKey, childDocument.RecordType, childBody);
             copiedChildren.Add((childFormKey, copiedChildren.Count));
         }
@@ -1055,9 +1067,12 @@ public sealed class RecordEditService(
         ContainerChildRow? ownParent = null;
         if (RecordTypeDispatch.For(release).GroupFolderNameFor(ancestorRecordType) is not null)
         {
-            // A top-level container (Quest): its own directory at the group folder's next index.
+            // A top-level container (Quest): its own directory in the group folder, and its own entry
+            // in that group's ordered child list — a directory the list does not name is drift the
+            // next read refuses outright.
             recordDataPath = Path.Combine(destinationModFolder, ContainerOwnDirectoryPath(
                 destinationModFolder, destinationPlugin.Name, ancestorRecordType, ancestorFormKey, editorId: null, release));
+            AddToOwnGroupOrder(recordDataPath, isFlat: false, ancestorRecordType, ancestorFormKey, release);
         }
         else
         {
