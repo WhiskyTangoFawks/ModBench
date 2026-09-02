@@ -360,6 +360,13 @@ public sealed class TrackService(ILogger<TrackService> logger)
                 InlineWorkDropoff.Instance,
                 cancel);
 
+            // Order is parent data (ADR-0042 decision 4): the writer above names every folder-split
+            // child by identity alone, and this splices each collection's order into its parent's own
+            // document before the tree becomes files. Here rather than inside the generated writer
+            // because this is the one door Track and the external-change absorber already share, so
+            // both get it without the serializers being touched at all.
+            SourceChildOrder.SpliceInto(scratchDir, mod);
+
             // Canonicalization at the door. The whole-mod door's writer goes through the
             // same JSON kernel the per-record codec does, whose own doc comment already established
             // (RecordTextCodec.SerializeCoreAsync) that Newtonsoft's JsonTextWriter has no reachable

@@ -54,7 +54,6 @@ public sealed class RecordTextCodecCustomization : ICustomize
     public void Customize(ICustomizationBuilder builder)
     {
         builder
-            .FilePerRecord()
-            .EnforceRecordOrder();
+            .FilePerRecord();
     }
 }
