@@ -41,10 +41,8 @@ internal abstract class DelegatingRecordIndex(IRecordIndex inner) : IRecordIndex
         PluginKey key, string parentFormKey, string parentRecordType, string slotName,
         IReadOnlyList<(string ChildFormKey, int SlotIndex)> children) =>
         Inner.ReplaceContainerChildSlot(key, parentFormKey, parentRecordType, slotName, children);
-    public virtual void RepointContainerChildParent(PluginKey key, string oldParentFormKey, string newParentFormKey) =>
-        Inner.RepointContainerChildParent(key, oldParentFormKey, newParentFormKey);
-    public virtual void RepointCellLocationParent(PluginKey key, string oldParentFormKey, string newParentFormKey) =>
-        Inner.RepointCellLocationParent(key, oldParentFormKey, newParentFormKey);
+    public virtual void ApplyRenumber(PluginKey key, RenumberedRecord renumbered) =>
+        Inner.ApplyRenumber(key, renumbered);
     public virtual void CreateCellLocation(PluginKey plugin, CellLocationRow row) => Inner.CreateCellLocation(plugin, row);
     public virtual void Dispose() => Inner.Dispose();
 

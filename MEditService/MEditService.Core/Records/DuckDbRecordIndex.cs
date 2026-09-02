@@ -338,17 +338,62 @@ public sealed class DuckDbRecordIndex : IRecordIndex
     /// <summary>See <see cref="IRecordIndex.CreateWorkingTreeRecord"/>.</summary>
     public void CreateWorkingTreeRecord(PluginKey key, string formKey, string recordType, string body)
     {
-        if (_workingTreeOverlay.RowExistsAtEffective(key, formKey) || _workingTreeOverlay.RowExistsAtHead(key, formKey))
-        {
-            throw new ArgumentException(
-                $"{key.Name} ({key.Origin}) already holds {formKey} at some ref — CreateWorkingTreeRecord " +
-                "is only for a FormKey neither ref answers to.", nameof(formKey));
-        }
+        ThrowIfHeldAtEitherRef(key, formKey, nameof(CreateWorkingTreeRecord), nameof(formKey));
 
         using var tx = Connection.BeginTransaction();
         _workingTreeOverlay.CreateWorkingTreeRecord(key, formKey, recordType, body);
         // A create is always structural — a row that did not exist at Effective now does — so this
         // always resweeps, the same trigger ApplyWorkingTreeChanges's own structural deltas use.
+        UpdateWinners();
+        tx.Commit();
+    }
+
+    /// <summary>The both-refs refusal <see cref="CreateWorkingTreeRecord"/> and
+    /// <see cref="ApplyRenumber"/> both make, before either opens a transaction — a collision is a
+    /// caller mistake, and answering it costs no rollback.</summary>
+    private void ThrowIfHeldAtEitherRef(PluginKey key, string formKey, string verb, string parameterName)
+    {
+        if (_workingTreeOverlay.RowExistsAtEffective(key, formKey) || _workingTreeOverlay.RowExistsAtHead(key, formKey))
+        {
+            throw new ArgumentException(
+                $"{key.Name} ({key.Origin}) already holds {formKey} at some ref — {verb} " +
+                "is only for a FormKey neither ref answers to.", parameterName);
+        }
+    }
+
+    /// <summary>See <see cref="IRecordIndex.ApplyRenumber"/>. Every write below runs unwrapped on
+    /// <see cref="Connection"/> and so joins the one transaction opened here — which is the whole
+    /// point of the method: this sequence commits once or not at all.</summary>
+    public void ApplyRenumber(PluginKey key, RenumberedRecord renumbered)
+    {
+        var (oldFormKey, newFormKey, recordType, body, owner) = renumbered;
+        ThrowIfHeldAtEitherRef(key, newFormKey, nameof(ApplyRenumber), nameof(renumbered));
+
+        using var tx = Connection.BeginTransaction();
+
+        // An embedded record's owner was reserialized around the child's new FormKey, and its row has
+        // to pick those bytes up — which is also what re-derives the child's containment, so that
+        // shape needs no re-point at all. First, before the new identity exists, matching the order
+        // the source write itself uses.
+        if (owner is { } embedding)
+            _workingTreeOverlay.ApplyWorkingTreeChanges(key, [(embedding.FormKey, embedding.Body)]);
+
+        _workingTreeOverlay.CreateWorkingTreeRecord(key, newFormKey, recordType, body);
+
+        if (owner is null)
+        {
+            // Before the old identity's rows are torn down below, so the children re-pointed here are
+            // never left naming a parent that no longer exists. See IRecordIndex.ApplyRenumber for
+            // why re-deriving the new document cannot reach either of these.
+            RepointContainerChildParent(key, oldFormKey, newFormKey);
+            RepointCellLocationParent(key, oldFormKey, newFormKey);
+        }
+
+        _workingTreeOverlay.ApplyWorkingTreeChanges(key, [(oldFormKey, null)]);
+
+        // Once, at the end, rather than after each write above: the sequence both creates an Effective
+        // row and removes one, so it is structural whichever way you count it, and UpdateWinners
+        // re-sweeps the whole load order regardless of how many rows moved since it last ran.
         UpdateWinners();
         tx.Commit();
     }
@@ -1316,8 +1361,11 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         }
     }
 
-    /// <summary>See <see cref="IRecordIndex.RepointContainerChildParent"/>.</summary>
-    public void RepointContainerChildParent(PluginKey key, string oldParentFormKey, string newParentFormKey) =>
+    /// <summary>A folder-split child's <c>container_child</c> row follows its parent's new FormKey.
+    /// An <c>UPDATE</c>, deliberately not a delete-then-rebuild: the children themselves did not
+    /// move, only the identity they name. One step of <see cref="ApplyRenumber"/>'s sequence and
+    /// reachable no other way — it runs unwrapped, inside that method's transaction.</summary>
+    private void RepointContainerChildParent(PluginKey key, string oldParentFormKey, string newParentFormKey) =>
         DuckDbSql.ExecuteFor(Connection,
             """
             UPDATE mirror.container_child SET parent_form_key = $1
@@ -1325,8 +1373,10 @@ public sealed class DuckDbRecordIndex : IRecordIndex
             """,
             newParentFormKey, oldParentFormKey, key.Name, key.Origin!);
 
-    /// <summary>See <see cref="IRecordIndex.RepointCellLocationParent"/>.</summary>
-    public void RepointCellLocationParent(PluginKey key, string oldParentFormKey, string newParentFormKey) =>
+    /// <summary>The same shape for an exterior cell's <c>cell_location.parent_worldspace</c>, the
+    /// sibling gap the row above cannot cover. One step of <see cref="ApplyRenumber"/>'s sequence and
+    /// reachable no other way — it runs unwrapped, inside that method's transaction.</summary>
+    private void RepointCellLocationParent(PluginKey key, string oldParentFormKey, string newParentFormKey) =>
         DuckDbSql.ExecuteFor(Connection,
             """
             UPDATE mirror.cell_location SET parent_worldspace = $1

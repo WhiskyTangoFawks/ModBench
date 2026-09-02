@@ -275,9 +275,9 @@ public sealed class ContainmentRederivationTests : IDisposable
     // ---- renumbering a Quest updates its DialogTopics' container_child rows ----
 
     /// <summary>
-    /// The Quest half of the DialogTopic regression above — <c>RepointContainerChildParent</c>
-    /// is fully FormKey-generic (no type branching), so this exercises the exact same mechanism one
-    /// level up the tree; removing the <c>RepointContainerChildParent</c> call fails it.
+    /// The Quest half of the DialogTopic regression above — <c>ApplyRenumber</c>'s
+    /// <c>container_child</c> re-point step is fully FormKey-generic (no type branching), so this
+    /// exercises the exact same mechanism one level up the tree; removing that step fails it.
     /// </summary>
     [Fact]
     public void RenumberingAQuest_RepointsItsDialogTopicsContainerChildRows_ToTheNewParentFormKey_SameLoadOrder()

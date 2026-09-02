@@ -47,9 +47,9 @@ namespace MEditService.Core.Records;
 /// and files untouched — only the parent's own directory name (and therefore FormKey) changes — so
 /// their rows would still name the <i>old</i> parent FormKey, and re-deriving the parent's own
 /// (now-new-FormKey) document cannot repair them: a folder-split child is never embedded in its
-/// parent's document. <c>IRecordIndex.RepointContainerChildParent</c> re-points them with an
-/// <c>UPDATE</c>, run before the old FormKey's own rows are torn down, so a renamed container's
-/// children are never merely deleted out from under it. Still open: a renumbered folder-split
+/// parent's document. <c>IRecordIndex.ApplyRenumber</c> re-points them with an <c>UPDATE</c>, run
+/// before the old FormKey's own rows are torn down and inside the same transaction, so a renamed
+/// container's children are never merely deleted out from under it. Still open: a renumbered folder-split
 /// record's <i>own</i> row as somebody else's child (its position in <i>its</i> parent's slot) — the
 /// general "another record's stale pointer into a renamed record" question, not this table's own
 /// accounting of its own children.</para>
