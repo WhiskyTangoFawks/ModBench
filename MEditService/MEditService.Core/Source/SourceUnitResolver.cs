@@ -83,6 +83,13 @@ internal readonly record struct SourceUnit(
 /// fallback for a type nothing here can place, which is slow and correct rather than fast and
 /// wrong.</para>
 ///
+/// <para>Alongside the question, this class owns the source tree's own directory-level
+/// invariants — the two things a structural write must do to a group folder that are not about
+/// <i>finding</i> anything: <see cref="RenormalizeGroupOrder"/> keeps its <c>"[N] "</c> prefixes
+/// contiguous, and <see cref="InMintedDirectory"/> keeps a failed write from leaving a directory in
+/// it. Both live here rather than in <c>Edits</c> because <c>Source</c> needs them too and does not
+/// depend on <c>Edits</c>.</para>
+///
 /// <para><b>Failure is loud in both directions.</b> No match returns null, which every caller turns
 /// into a typed refusal — never a computed path that might be wrong. More than one match throws
 /// <see cref="AmbiguousSourceUnitException"/>: a FormKey is unique within a mod, so two files
@@ -517,6 +524,66 @@ internal static class SourceUnitResolver
             else File.Move(entry, newPath);
         }
     }
+
+    /// <summary>
+    /// <paramref name="write"/>, run with <paramref name="directory"/> in place — created here rather
+    /// than anywhere earlier, and taken back out again when either that creation or the write itself
+    /// throws, so a gesture that dies part-way leaves no empty directory behind (#675).
+    ///
+    /// <para><b>An empty directory is not harmless debris.</b> Git tracks files, not directories, so a
+    /// record directory with no <c>RecordData.json</c> in it never appears in the Source Control panel
+    /// at all: the author can neither see it nor discard it. Nor is it inert.
+    /// <see cref="NextOrderIndex"/> and <see cref="RenormalizeGroupOrder"/> count every entry carrying
+    /// an <c>"[N] "</c> prefix as a sibling, so a stray record directory silently occupies an ordering
+    /// slot; and the whole-mod reader opens <c>RecordData.json</c> inside <i>every</i> directory of a
+    /// directory-per-record group folder (<c>FolderPerRecordGroupParallelHelper.ReadFilePerRecord</c>
+    /// in <c>references/mutagen-serialization</c>, unconditionally — no existence check), so one empty
+    /// directory there fails the next ingest of the whole plugin.</para>
+    ///
+    /// <para><b>Only what this call minted, and only while it is still empty.</b> The missing ancestors
+    /// are listed <i>before</i> the create, so a directory that already existed — the group folder
+    /// nearly every flat create writes into, above all — is never a candidate for removal. Nor is one
+    /// something else has written into since: <see cref="Directory.Delete(string)"/> without recursion
+    /// refuses a non-empty directory, and that refusal <i>is</i> the emptiness check rather than a racy
+    /// enumeration ahead of it (root CLAUDE.md's never-assume-exclusive-ownership rule). The first
+    /// survivor stops the walk, because every ancestor above a non-empty directory is non-empty too.
+    /// A level that was never reached (the create failed at an ancestor of it) is skipped, not
+    /// treated as a survivor, so the levels this call really did mint are still taken back out.</para>
+    /// </summary>
+    internal static T InMintedDirectory<T>(string directory, Func<T> write)
+    {
+        var minted = new List<string>();
+        for (var level = directory; !string.IsNullOrEmpty(level) && !Directory.Exists(level); level = Path.GetDirectoryName(level))
+            minted.Add(level);
+
+        try
+        {
+            Directory.CreateDirectory(directory);
+            return write();
+        }
+        catch
+        {
+            // Deepest first, by construction of the walk above — so a parent is already empty by the
+            // time it is reached, and needs no second pass.
+            foreach (var stray in minted)
+            {
+                // Never reached at all — the create died at an ancestor of this level, or on this
+                // level's own name. Skip it rather than stopping, so the levels that did land are
+                // still taken back out.
+                if (!Directory.Exists(stray)) continue;
+
+                try { Directory.Delete(stray); }
+                catch (DirectoryNotFoundException) { /* vanished under us; its ancestors still stand */ }
+                catch (IOException) { break; }
+                catch (UnauthorizedAccessException) { break; }
+            }
+            throw;
+        }
+    }
+
+    /// <summary><see cref="InMintedDirectory{T}"/> for a write with no result of its own.</summary>
+    internal static void InMintedDirectory(string directory, Action write) =>
+        InMintedDirectory(directory, () => { write(); return true; });
 
     /// <summary>
     /// <see cref="NextOrderIndex"/>, given a flat record type rather than an already-computed group
