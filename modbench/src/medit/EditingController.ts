@@ -427,11 +427,12 @@ export class EditingController {
    *  or a future "reveal the new record" gesture can use it.
    *
    *  `onEslContradiction` is #290's prompt-and-retry hook: creation can outgrow the ESL range the
-   *  same way compile's own content can (reachable in practice only via a large batch copy landing
-   *  in one gesture, per #290's ruling — an ordinary single-record create starts from an empty
-   *  plugin) — when it does, the caller decides whether to remove the flag, and accepting retries
-   *  this same call once, exactly as `compileAndReport`'s own retry does. Left unset, an
-   *  ESL-contradiction refusal surfaces as the ordinary toast like any other refusal. */
+   *  same way compile's own content can — the allocator's ceiling for a light plugin is local
+   *  `0xFFF`, so a destination already at it refuses the next mint however it filled up. When it
+   *  happens the caller decides whether to remove the
+   *  flag, and accepting retries this same call once, exactly as `compileAndReport`'s own retry
+   *  does. Left unset, an ESL-contradiction refusal surfaces as the ordinary toast like any other
+   *  refusal. */
   async createRecord(
     plugin: string, origin: string, recordType: string, editorId?: string, formKey?: string,
     onEslContradiction?: (message: string) => Promise<boolean>,

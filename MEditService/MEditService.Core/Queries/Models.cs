@@ -373,21 +373,3 @@ public record RecordCopyAsNewRecordRequest(
     string SourcePlugin, string SourceOrigin, string DestinationPlugin, string DestinationOrigin, string? RequestedFormKey);
 
 public record RecordCopyAsNewRecordResponse(bool Applied, string SourceFormKey, string NewFormKey);
-
-/// <summary>One request in the batch copy door (#550 AC6/Q4). <see cref="AsNewRecord"/> picks the
-/// gesture; <see cref="RequestedFormKey"/> only means anything for a copy-as-new.</summary>
-public record BatchCopyItemRequest(
-    string SourcePlugin, string SourceOrigin, string FormKey,
-    string DestinationPlugin, string DestinationOrigin, bool AsNewRecord, string? RequestedFormKey);
-
-public record BatchCopyRequest(IReadOnlyList<BatchCopyItemRequest> Requests);
-
-public record BatchCopyItemResult(string FormKey, bool Applied, string? NewFormKey, string? Refusal, string Message);
-
-/// <summary>Refuse-or-commit-all (#550 AC6): a validation refusal names the offending request in
-/// <see cref="RefusedFormKey"/>/<see cref="Refusal"/> with an empty <see cref="Results"/> — nothing
-/// landed. Otherwise <see cref="Results"/> carries one entry per attempted request in order; a list
-/// shorter than the request count is a partial landing after an unexpected mid-batch failure
-/// (ADR-0026 — the frontend decides surfacing).</summary>
-public record BatchCopyResponse(
-    bool Applied, string? RefusedFormKey, string? Refusal, string? Message, IReadOnlyList<BatchCopyItemResult> Results);

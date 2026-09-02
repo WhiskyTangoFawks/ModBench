@@ -151,26 +151,6 @@ public static class RecordEndpoints
         .ProducesProblem(500)
         .ProducesProblem(503);
 
-        // #550 AC6/Q4: the batch copy door — refuse-or-commit-all, validated server-side in one
-        // place so no client-side pre-validation can drift from what the server would refuse.
-        app.MapPost("/records/copy-batch", (BatchCopyRequest request, RecordEditService edits) =>
-            CopyRecordsBatch(request, edits, logger))
-        .WithName("CopyRecordsBatch")
-        .WithSummary("Copy a multi-selection in one transaction-shaped batch — all validated up front, refuse-or-commit-all.")
-        .WithDescription(
-            "Validates every request through the same gates the single copy gestures use (destination " +
-            "tracked and writable, record type allowed for the gesture, load-order direction) before " +
-            "anything writes; one bad request refuses the whole batch as a unit, named in the response. " +
-            "On commit the requests run in order; a genuinely unexpected mid-batch failure stops there, " +
-            "and the response's per-item results carry the partial landing (ADR-0026 — the frontend " +
-            "decides surfacing). The outcome is always the structured body, never a ProblemDetails " +
-            "refusal: a refused batch is an ordinary answer to a well-formed question.")
-        .WithTags("Records")
-        .Produces<BatchCopyResponse>()
-        .ProducesProblem(400)
-        .ProducesProblem(500)
-        .ProducesProblem(503);
-
         // ADR-0041: Copy as New Record Into… — a deep copy under a fresh FormKey,
         // via Mutagen's own record-level Duplicate. Same collision posture as CreateRecord, reused
         // rather than re-implemented.
@@ -321,60 +301,6 @@ public static class RecordEndpoints
                 logger.LogError(ex, "No usable loadOrder while renumbering {FormKey}", decoded);
                 return WriteEndpointMapping.NoLoadOrder(ex);
             });
-    }
-
-    internal static IResult CopyRecordsBatch(BatchCopyRequest request, RecordEditService edits, ILogger logger)
-    {
-        if (logger.IsEnabled(LogLevel.Information))
-            logger.LogInformation("Received CopyRecordsBatch with {Count} request(s)", request.Requests?.Count ?? 0);
-
-        if (request.Requests is not { Count: > 0 })
-            return Results.Problem("At least one copy request is required.", statusCode: 400);
-        foreach (var item in request.Requests)
-        {
-            if (string.IsNullOrWhiteSpace(item.SourcePlugin) || string.IsNullOrWhiteSpace(item.SourceOrigin)
-                || string.IsNullOrWhiteSpace(item.DestinationPlugin) || string.IsNullOrWhiteSpace(item.DestinationOrigin)
-                || string.IsNullOrWhiteSpace(item.FormKey))
-            {
-                return Results.Problem(
-                    "Every request needs a FormKey and both plugins' name and origin.", statusCode: 400);
-            }
-        }
-
-        try
-        {
-            var outcome = edits.CopyRecordsBatch(request.Requests
-                .Select(r => new RecordCopyRequest(
-                    new PluginKey(r.SourcePlugin, r.SourceOrigin), r.FormKey,
-                    new PluginKey(r.DestinationPlugin, r.DestinationOrigin), r.AsNewRecord, r.RequestedFormKey))
-                .ToList());
-            return Results.Ok(new BatchCopyResponse(
-                outcome.Applied,
-                outcome.RefusedFormKey,
-                outcome.Refusal is { Applied: false } refusal ? refusal.Refusal.ToString() : null,
-                outcome.Refusal?.Message,
-                outcome.Results
-                    .Select(i => new BatchCopyItemResult(
-                        i.FormKey, i.Result.Applied, i.Result.NewFormKey,
-                        i.Result.Applied ? null : i.Result.Refusal.ToString(), i.Result.Message))
-                    .ToList()));
-        }
-        catch (ArgumentException ex)
-        {
-            // A malformed caller-typed RequestedFormKey — same shape as the single copy-as-new's.
-            logger.LogError(ex, "Malformed FormKey in a CopyRecordsBatch request");
-            return WriteEndpointMapping.MalformedFormKey(ex);
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            logger.LogError(ex, "Could not write a source file mid-batch during CopyRecordsBatch");
-            return WriteEndpointMapping.WriteFailure($"Could not write a source file for the batch copy: {ex.Message}");
-        }
-        catch (InvalidOperationException ex)
-        {
-            logger.LogError(ex, "No usable loadOrder during CopyRecordsBatch");
-            return WriteEndpointMapping.NoLoadOrder(ex);
-        }
     }
 
     internal static IResult CopyRecordAsOverride(
