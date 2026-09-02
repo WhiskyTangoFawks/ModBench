@@ -201,14 +201,6 @@ deferred**, and that narrowing is a recorded decision, not an omission:
 - **Reference validation at edit time** — that is a backend concern (ADR-0041: FormLinks
   validate at edit time), surfaced by whichever command made the edit, not
   here.
-- **A referrer whose only link lives inside a VMAD struct-list script property** — Mutagen's own
-  `ScriptStructListProperty.EnumerateFormLinks` does not walk `Structs[*].Members`
-  (Mutagen-Modding/Mutagen upstream issue 688), so this tree cannot list that referrer; the backend's own read
-  (`GetReferencedBy`) has the identical gap Track/Compile refuse on
-  (`docs/specs/medit-repair.md`'s Kind A table). Blocked upstream, not patched here — hand-walking
-  struct members to recover these links would be a second, divergent link enumerator alongside
-  whatever `EnumerateFormLinks` becomes once the upstream fix lands, which is exactly the risk
-  that refusal rejected.
 - **A referrer whose record type has no schema** — `SchemaReflector.ExcludedTables` is a deliberate
   product filter (`land`, `navm`, `navi`, plus the collapsed xEdit REFR-signature variants `pgre`,
   `pmis`, `parw`, `pbar`, `pbea`, `pcon`, `pfla`, `phzd`). Ingest walks the schema's tables, so a
