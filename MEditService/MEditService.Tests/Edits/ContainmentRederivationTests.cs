@@ -427,7 +427,7 @@ public sealed class ContainmentRederivationTests : IDisposable
         var newChildBody = await codec.SerializeToBytesAsync(found.Value.Child, GameRelease.Fallout4);
 
         // Written to the owner's actual source file too (RecordEditService's own
-        // RenumberEmbeddedChild does the same) — a fresh reload ingests the tree, not the live index.
+        // renumber's own embedded branch does the same) — a fresh reload ingests the tree, not the live index.
         var cellFile = _fixture.SourceFileContaining(ContainerModFixture.EmbedCellEditorId);
         await codec.SerializeAsync(owner, cellFile, GameRelease.Fallout4);
 

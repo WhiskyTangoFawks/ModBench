@@ -1239,23 +1239,25 @@ public sealed class RecordEditService(
     /// rewrite is a working-tree change in that plugin's own repo, and an untracked one has no
     /// working tree to write to (the same posture as every other untracked refusal here).</para>
     ///
-    /// <para><b>Write order is deliberate</b>: every referencing repo first, this record's own
-    /// delete+create pair last. A mid-cascade failure then leaves the old FormKey still live at
-    /// Effective — the blast radius is only the referencer repos already written, each independently
-    /// revertable in the Source Control panel, and the target repo (whose own rewrite is the final,
-    /// single-repo step) never enters a half-renumbered state. There is no cross-repo transaction —
-    /// git itself is the recovery mechanism, and the thrown message on a partial failure names every
-    /// repo already written, so the user knows exactly what to review.</para>
+    /// <para><b>Computed whole, then written</b> (#676). The cascade runs in two phases: resolve the
+    /// FormKey mapping and apply it through Mutagen's generated typed remap to produce <i>every</i>
+    /// affected file's new bytes in memory, then write them. Every way the computation can fail — a
+    /// record the index lists that the tree no longer holds, a referencer with no source unit, an
+    /// embedded child missing from its own owner, a link the typed remap did not move — is a typed
+    /// refusal returned before the first byte lands, per ADR-0041's refusals-precede-writes rule.
+    /// What stays exposed mid-cascade is genuine I/O only. There is no rollback: a disk failure
+    /// part-way still leaves working-tree dirt, and the thrown message names every repo already
+    /// written so the user knows what to review in the Source Control panel.</para>
     /// </summary>
     public RecordEditResult RenumberRecord(PluginKey plugin, string formKey, string? requestedFormKey = null)
     {
         // unit is deliberately discarded: this call is only the same existence check
         // EditField/DeleteRecord make (a container's own directory, an embedded child, or a flat
         // record's file all answer here; only "nothing on disk holds this, and the index names no
-        // container that would" still refuses) — RenumberTheRecordItself/RewriteReferenceField each
+        // container that would" still refuses) — ComputeTargetRewrite/ComputeReferencerRewrites each
         // re-resolve fresh, deliberately, rather than trusting this snapshot (their own doc comments).
         // document.RecordType is kept just long enough for the header check below — a ModHeader has
-        // no ordinary FormKey lifecycle a renumber could reassign, and RenumberTheRecordItself would
+        // no ordinary FormKey lifecycle a renumber could reassign, and ComputeTargetRewrite would
         // otherwise crash trying to run it through ReadRecordFromSource's generic per-record pipeline.
         if (ResolveEditTarget(plugin, formKey, out var target) is { } blocked) return blocked;
         var (index, modFolder, release, document, _) = target;
@@ -1274,10 +1276,17 @@ public sealed class RecordEditService(
 
         // Every distinct record that references formKey, source-record-deduplicated: GetReferencedBy
         // is one row per (source record, field), and a record referencing the target through two
-        // fields still only needs its source file rewritten once — the body-level replace below fixes
-        // every occurrence in one write.
+        // fields still only needs its source file rewritten once — one typed remap moves every link
+        // in that record's graph at once.
+        //
+        // The target itself is excluded even when it references itself: its own new content is
+        // computed by ComputeTargetRewrite, which applies the same mapping before stamping the new
+        // FormKey on. Left in this list it would be read and written twice from two independent
+        // in-memory graphs, and the second write would discard the first — the hazard the old
+        // write-then-re-read sequencing hid.
         var referencers = index.At(RecordRef.Effective).GetReferencedBy(formKey)
             .Select(r => (FormKey: r.FormKey, Plugin: new PluginKey(r.Plugin, r.Origin)))
+            .Where(r => r.FormKey != formKey || r.Plugin != plugin)
             .Distinct()
             .ToList();
 
@@ -1297,35 +1306,38 @@ public sealed class RecordEditService(
                 "so the renumber cannot rewrite their FormLinks. Track them first, then try again.");
         }
 
+        // Phase one: nothing below this point touches the filesystem. Any refusal it returns is
+        // returned with the tree exactly as this method found it.
+        if (ComputeReferencerRewrites(index, formKey, targetFormKey, release, referencers, out var rewrites)
+            is { } refusedReferencer) return refusedReferencer;
+        if (ComputeTargetRewrite(index, plugin, modFolder, formKey, targetFormKey, release, out var targetRewrite)
+            is { } refusedSelf) return refusedSelf;
+
+        // Phase two. Everything that can still fail here is genuine I/O.
         var writtenRepos = new List<string>();
         try
         {
-            foreach (var (referencerFormKey, referencerPlugin) in referencers)
+            foreach (var rewrite in rewrites)
             {
-                var referencerModFolder = ModFolders.TrackedOf(mirror.LoadOrder, referencerPlugin)!;
-                RewriteReferenceField(index, referencerPlugin, referencerModFolder, referencerFormKey, formKey, targetFormKey, release);
-                writtenRepos.Add($"{referencerPlugin.Name} ({referencerPlugin.Origin})");
+                WriteComputedRewrite(index, rewrite, release);
+                writtenRepos.Add($"{rewrite.Plugin.Name} ({rewrite.Plugin.Origin})");
             }
 
-            RenumberTheRecordItself(index, plugin, modFolder, formKey, targetFormKey, release);
+            WriteTargetRewrite(index, plugin, targetRewrite, formKey, targetFormKey, release);
             writtenRepos.Add($"{plugin.Name} ({plugin.Origin})");
         }
         catch (Exception ex)
         {
-            // Names exactly which repos already carry working-tree dirt from this partial
-            // cascade — every one of them is independently reviewable and revertable in the Source
-            // Control panel, which is the whole reason write order (referencers first, target last)
-            // matters: nothing here is a half-renumbered *target* record, only whichever referencers
-            // got as far as this exception. Deliberately unfiltered (not `when (ex is IOException or
-            // UnauthorizedAccessException)`): a concurrent external change mid-cascade — another
-            // process deleting a referencer between GetReferencedBy and its own rewrite, say — throws
-            // RewriteReferenceField's/RenumberTheRecordItself's own InvalidOperationException, and
-            // that must carry this same written-repos disclosure rather than silently losing it by
-            // falling through this catch to the endpoint's *different* InvalidOperationException
-            // handler ("no usable load order" — a different question entirely, and a misleading answer
-            // to this one). Rethrown as IOException, always, regardless of the original exception's
-            // type, so this reaches the client as the same 500 every other write-path fault does,
-            // carrying this richer message instead of the bare one.
+            // No rollback (#676 lands none): a disk failure part-way through leaves the writes that
+            // already landed durably on disk, so this names exactly which repos carry working-tree
+            // dirt from it — each independently reviewable and revertable in the Source Control panel.
+            // Deliberately unfiltered rather than `when (ex is IOException or
+            // UnauthorizedAccessException)`, so an unexpected fault carries this disclosure too rather
+            // than silently losing it by falling through to the endpoint's *different*
+            // InvalidOperationException handler ("no usable load order" — a different question
+            // entirely, and a misleading answer to this one). Rethrown as IOException, always,
+            // regardless of the original exception's type, so this reaches the client as the same 500
+            // every other write-path fault does, carrying this richer message instead of the bare one.
             throw new IOException(
                 $"Renumbering {formKey} to {targetFormKey} failed after writing to: {string.Join(", ", writtenRepos)}. " +
                 "Those repos now hold working-tree dirt from this partial renumber — review and revert " +
@@ -1351,86 +1363,251 @@ public sealed class RecordEditService(
         return RecordEditResult.Success(targetFormKey);
     }
 
-    /// <summary>One referencing record's source file, mechanically rewritten to point at the new
-    /// FormKey — a whole-body string replace rather than a field-by-field walk, so it also reaches
-    /// VMAD Object properties and condition Form parameters (never checked by the reflected-column
-    /// <see cref="ValidateFormLinks"/> path, but just as real a reference here).
+    /// <summary>One source file the cascade will rewrite, computed in full before any write: the
+    /// remapped record graph, the exact bytes it serializes to, and the index rows to be re-derived
+    /// from them. <paramref name="Record"/> is the file's own top-level record — the referencer
+    /// itself when it is not embedded, its owner when it is, since an embedded record's fields live
+    /// inside the owner's document.</summary>
+    private sealed record ComputedRewrite(
+        PluginKey Plugin,
+        string FilePath,
+        IMajorRecord Record,
+        IReadOnlyList<(string FormKey, string? Body)> IndexChanges);
+
+    /// <summary>
+    /// Phase one of the cascade for every referencing record: resolve each one's source unit,
+    /// apply the FormKey mapping through Mutagen's generated typed <c>RemapLinks</c>, and serialize
+    /// the result — all in memory. Returns a typed refusal on the first computation that fails, with
+    /// nothing written; <c>null</c> means <paramref name="rewrites"/> carries the whole write set.
     ///
-    /// <para>Resolution is full <see cref="SourceUnitResolver.Resolve"/>, never a flat-path
-    /// assumption, so a referencer that is itself a
-    /// container or an embedded child (a placed ref's own <c>Base</c> FormLink, say) rewrites
-    /// cleanly. The string replace lands on whichever
-    /// file actually carries the text — the referencer's own file when it isn't embedded, its owner's
-    /// file when it is, since an embedded record's fields live inside the owner's document. An embedded
-    /// referencer additionally re-derives its own extracted row from the mutated owner, the same
-    /// two-row shape <see cref="EditField"/>'s own embedded edit uses (owner's body changed, and the
-    /// child's own row must not go stale next to it).</para>
+    /// <para>Referencers are grouped by the file they land in before anything is read, so a
+    /// container document holding several referencing records (two placed refs in one cell, a cell
+    /// and one of its own children) is read, remapped and serialized <i>once</i>. Reading it per
+    /// referencer would give each one an independent graph, and the last write would discard every
+    /// earlier one — a hazard the old write-one-then-re-read-the-next sequencing concealed.</para>
+    ///
+    /// <para><b>Why the typed remap and not a text replace.</b> The whole-body string substitution
+    /// this replaces rewrote every textual occurrence of the FormKey in the file, which for a
+    /// container document means sibling records that never referenced the target, and for any record
+    /// means EditorIDs and string fields that merely spell it. The typed remap moves links and only
+    /// links.</para>
+    ///
+    /// <para><b>Why the assertion after it.</b> The typed remap is precise but not exhaustive:
+    /// <c>ScriptStructListProperty.RemapLinks</c> is generated base-only and never descends into its
+    /// own <c>Structs</c>, so a VMAD <c>ArrayOfStruct</c> property's Object members keep pointing at
+    /// the old FormKey — written up in <c>upstream-mutagen-issue.md</c> at the repository root.
+    /// mEdit's own reference index walks struct-lists (<c>VmadCodec</c>), so a referencer linked only
+    /// that way <i>is</i> in this list, gets loaded here, and is caught by the textual check below
+    /// rather than being written half-remapped. Delete this check when the upstream fix ships.</para>
     /// </summary>
-    private void RewriteReferenceField(
-        IRecordIndex index, PluginKey referencerPlugin, string referencerModFolder,
-        string referencerFormKey, string oldFormKey, string newFormKey, GameRelease release)
+    private RecordEditResult? ComputeReferencerRewrites(
+        IRecordIndex index, string oldFormKey, string newFormKey, GameRelease release,
+        IReadOnlyList<(string FormKey, PluginKey Plugin)> referencers,
+        out List<ComputedRewrite> rewrites)
     {
+        rewrites = [];
         var reads = index.At(RecordRef.Effective);
-        var referencerDoc = reads.GetDocument(referencerFormKey, referencerPlugin)
-            ?? throw new InvalidOperationException(
-                $"{referencerPlugin.Name} no longer holds {referencerFormKey} mid-renumber.");
-
-        if (SourceUnitResolver.Resolve(
-                reads, referencerPlugin, referencerModFolder, referencerFormKey, referencerDoc.RecordType,
-                referencerDoc.EditorId, release)
-            is not { } unit)
+        var mapping = new Dictionary<FormKey, FormKey>
         {
-            throw new InvalidOperationException(
-                $"No source unit in {referencerPlugin.Name}'s tree holds {referencerFormKey} mid-renumber.");
+            [FormKey.Factory(oldFormKey)] = FormKey.Factory(newFormKey),
+        };
+
+        var resolved = new List<(string FormKey, PluginKey Plugin, SourceUnit Unit)>();
+        foreach (var (referencerFormKey, referencerPlugin) in referencers)
+        {
+            if (reads.GetDocument(referencerFormKey, referencerPlugin) is not { } doc)
+            {
+                return RecordEditResult.Refused(
+                    RecordEditRefusal.RecordNotFound,
+                    $"{referencerPlugin.Name} no longer holds {referencerFormKey}, which the index lists " +
+                    $"as referencing {oldFormKey}. Nothing was written — reindex {referencerPlugin.Name} and try again.");
+            }
+
+            var referencerModFolder = ModFolders.TrackedOf(mirror.LoadOrder, referencerPlugin)!;
+            if (SourceUnitResolver.Resolve(
+                    reads, referencerPlugin, referencerModFolder, referencerFormKey, doc.RecordType,
+                    doc.EditorId, release)
+                is not { } unit)
+            {
+                return RecordEditResult.Refused(
+                    RecordEditRefusal.SourceUnitNotFound,
+                    $"No source unit in {referencerPlugin.Name}'s tree holds {referencerFormKey}, which " +
+                    $"references {oldFormKey}. Nothing was written.");
+            }
+
+            resolved.Add((referencerFormKey, referencerPlugin, unit));
         }
 
-        var body = File.Exists(unit.FullPath) ? File.ReadAllText(unit.FullPath) : referencerDoc.Body!;
-        var newBody = body.Replace(oldFormKey, newFormKey, StringComparison.Ordinal);
-
-        File.WriteAllText(unit.FullPath, newBody);
-
-        if (!unit.IsEmbedded)
+        foreach (var group in resolved.GroupBy(r => (r.Plugin, r.Unit.FullPath)))
         {
-            index.ApplyWorkingTreeChanges(referencerPlugin, [(referencerFormKey, newBody)]);
-            return;
+            var (referencerPlugin, filePath) = group.Key;
+            // Every referencer in the group shares one file, so they share its top-level record too.
+            var unit = group.First().Unit;
+            if (reads.GetDocument(unit.OwnerFormKey, referencerPlugin) is not { } ownerDoc)
+            {
+                return RecordEditResult.Refused(
+                    RecordEditRefusal.RecordNotFound,
+                    $"{referencerPlugin.Name} no longer holds {unit.OwnerFormKey}, the record {unit.RelativePath} " +
+                    $"carries. Nothing was written — reindex {referencerPlugin.Name} and try again.");
+            }
+
+            var owner = ReadRecordFromSource(_codec, logger, filePath, ownerDoc, release);
+            ((IFormLinkContainer)owner).RemapLinks(mapping);
+            var ownerBody = Encoding.UTF8.GetString(
+                _codec.SerializeToBytesAsync(owner, release).GetAwaiter().GetResult());
+
+            if (ownerBody.Contains(oldFormKey, StringComparison.Ordinal))
+            {
+                return RecordEditResult.Refused(
+                    RecordEditRefusal.ReferenceRemapIncomplete,
+                    $"{unit.OwnerFormKey} in {referencerPlugin.Name} still carries {oldFormKey} after the typed " +
+                    "link remap, so renumbering it would leave that reference dangling. The known cause is a " +
+                    "script property holding an array of structs, which Mutagen's generated remap does not walk " +
+                    "(see upstream-mutagen-issue.md). Nothing was written.");
+            }
+
+            var changes = new List<(string FormKey, string? Body)> { (unit.OwnerFormKey, ownerBody) };
+            foreach (var (embeddedFormKey, _, _) in group.Where(r => r.Unit.IsEmbedded))
+            {
+                // The child's own extracted row, re-derived from the remapped owner — the same
+                // two-row shape EditField's own embedded edit uses (owner's body changed, and the
+                // child's row must not go stale next to it). A remap never moves a record's own
+                // FormKey, only its links, so the child is still found under the same key.
+                if (ContainerChildFields.FindEmbeddedChild(owner, embeddedFormKey)?.Child is not { } child)
+                {
+                    return RecordEditResult.Refused(
+                        RecordEditRefusal.SourceUnitNotFound,
+                        $"{unit.RelativePath} is indexed as carrying {embeddedFormKey}, but its own text does " +
+                        "not hold it. Nothing was written.");
+                }
+
+                changes.Add((embeddedFormKey, Encoding.UTF8.GetString(
+                    _codec.SerializeToBytesAsync(child, release).GetAwaiter().GetResult())));
+            }
+
+            rewrites.Add(new ComputedRewrite(referencerPlugin, filePath, owner, changes));
         }
 
-        var owner = ReadRecordFromSource(
-            _codec, logger, unit.FullPath, reads.GetDocument(unit.OwnerFormKey, referencerPlugin)!, release);
-        var child = ContainerChildFields.FindEmbeddedChild(owner, referencerFormKey)?.Child
-            ?? throw new InvalidOperationException(
-                $"{unit.RelativePath} no longer carries {referencerFormKey} after its own reference rewrite.");
-        var childBody = Encoding.UTF8.GetString(
-            _codec.SerializeToBytesAsync(child, release).GetAwaiter().GetResult());
-
-        index.ApplyWorkingTreeChanges(
-            referencerPlugin, [(unit.OwnerFormKey, newBody), (referencerFormKey, childBody)]);
+        return null;
     }
 
-    /// <summary>The delete+create pair itself — re-reads the source fresh (rather than trusting the
-    /// caller's earlier snapshot) so a self-reference <see cref="RewriteReferenceField"/> already
-    /// rewrote above is reflected in the body this reserializes under the new FormKey. Dispatches
-    /// on the target's own source unit shape, resolved fresh for the same reason.</summary>
-    private void RenumberTheRecordItself(
-        IRecordIndex index, PluginKey plugin, string modFolder, string oldFormKey, string newFormKey, GameRelease release)
+    /// <summary>Phase two for one referencing file: the codec's own write-then-rename
+    /// (<see cref="RecordTextCodec.SerializeAsync"/>), so a failure mid-write leaves the previous
+    /// source record intact rather than truncated. Wrapped in
+    /// <see cref="SourceUnitResolver.InMintedDirectory{T}"/> like every other source-tree write —
+    /// the resolved unit proves the directory already exists, so nothing is normally minted, and the
+    /// wrapper is what keeps that true rather than an assumption (#675).</summary>
+    private void WriteComputedRewrite(IRecordIndex index, ComputedRewrite rewrite, GameRelease release)
     {
+        SourceUnitResolver.InMintedDirectory(
+            Path.GetDirectoryName(rewrite.FilePath)!,
+            () => _codec.SerializeAsync(rewrite.Record, rewrite.FilePath, release).GetAwaiter().GetResult());
+
+        index.ApplyWorkingTreeChanges(rewrite.Plugin, rewrite.IndexChanges);
+    }
+
+    /// <summary>The renumbered record's own new content, computed before any write. <c>Root</c> is
+    /// the record whose serialization lands at <c>Unit.FullPath</c> — the renumbered record itself
+    /// when it is not embedded, its owner when it is — and <c>ChildBody</c> is the embedded child's
+    /// own extracted body, <c>null</c> for a non-embedded target.</summary>
+    private sealed record ComputedTarget(
+        SourceUnit Unit, RecordDocument Document, IMajorRecord Root, string RootBody, string? ChildBody);
+
+    /// <summary>
+    /// Phase one for the renumbered record itself: read it, move any link it holds to the target
+    /// (a self-reference — the referencer pass deliberately skips it, so this is the only place a
+    /// self-link is remapped), stamp the new FormKey on, and serialize. Nothing here touches the
+    /// filesystem beyond reading; both ways it can fail are typed refusals, not throws.
+    /// </summary>
+    private RecordEditResult? ComputeTargetRewrite(
+        IRecordIndex index, PluginKey plugin, string modFolder, string oldFormKey, string newFormKey,
+        GameRelease release, out ComputedTarget target)
+    {
+        target = null!;
         var reads = index.At(RecordRef.Effective);
-        var document = reads.GetDocument(oldFormKey, plugin)
-            ?? throw new InvalidOperationException($"{plugin.Name} no longer holds {oldFormKey} mid-renumber.");
+        if (reads.GetDocument(oldFormKey, plugin) is not { } document)
+        {
+            return RecordEditResult.Refused(
+                RecordEditRefusal.RecordNotFound,
+                $"{plugin.Name} no longer holds {oldFormKey}. Nothing was written — reindex {plugin.Name} and try again.");
+        }
+
         if (SourceUnitResolver.Resolve(reads, plugin, modFolder, oldFormKey, document.RecordType, document.EditorId, release)
             is not { } unit)
         {
-            throw new InvalidOperationException($"No source unit in {plugin.Name}'s tree holds {oldFormKey} mid-renumber.");
+            return RecordEditResult.Refused(
+                RecordEditRefusal.SourceUnitNotFound,
+                $"No source unit in {plugin.Name}'s tree holds {oldFormKey}. Nothing was written.");
         }
+
+        var mapping = new Dictionary<FormKey, FormKey>
+        {
+            [FormKey.Factory(oldFormKey)] = FormKey.Factory(newFormKey),
+        };
 
         if (unit.IsEmbedded)
         {
-            RenumberEmbeddedChild(index, plugin, unit, oldFormKey, newFormKey, document.RecordType, release);
-            return;
+            if (reads.GetDocument(unit.OwnerFormKey, plugin) is not { } ownerDocument)
+            {
+                return RecordEditResult.Refused(
+                    RecordEditRefusal.RecordNotFound,
+                    $"{plugin.Name} no longer holds {unit.OwnerFormKey}, the record {unit.RelativePath} carries " +
+                    $"{oldFormKey} inside. Nothing was written — reindex {plugin.Name} and try again.");
+            }
+
+            var owner = ReadRecordFromSource(_codec, logger, unit.FullPath, ownerDocument, release);
+            if (ContainerChildFields.FindEmbeddedChild(owner, oldFormKey) is not { } found)
+            {
+                return RecordEditResult.Refused(
+                    RecordEditRefusal.SourceUnitNotFound,
+                    $"{unit.RelativePath} is indexed as holding {oldFormKey}, but its own text does not carry it. " +
+                    "Nothing was written.");
+            }
+
+            // Remapped on the owner, not the child: a sibling embedded in the same document may hold
+            // the self-link, and its own file is this same one.
+            ((IFormLinkContainer)owner).RemapLinks(mapping);
+            ((IMajorRecordInternal)found.Child).FormKey = FormKey.Factory(newFormKey);
+
+            target = new ComputedTarget(
+                unit, document, owner,
+                Encoding.UTF8.GetString(_codec.SerializeToBytesAsync(owner, release).GetAwaiter().GetResult()),
+                Encoding.UTF8.GetString(_codec.SerializeToBytesAsync(found.Child, release).GetAwaiter().GetResult()));
+            return null;
         }
 
         var record = ReadRecordFromSource(_codec, logger, unit.FullPath, document, release);
+        ((IFormLinkContainer)record).RemapLinks(mapping);
         ((IMajorRecordInternal)record).FormKey = FormKey.Factory(newFormKey);
+
+        target = new ComputedTarget(
+            unit, document, record,
+            Encoding.UTF8.GetString(_codec.SerializeToBytesAsync(record, release).GetAwaiter().GetResult()),
+            ChildBody: null);
+        return null;
+    }
+
+    /// <summary>Phase two for the renumbered record: the delete+create pair in source terms, moving
+    /// the already-computed bytes onto disk. Dispatches on the target's own source unit shape.</summary>
+    private void WriteTargetRewrite(
+        IRecordIndex index, PluginKey plugin, ComputedTarget target, string oldFormKey, string newFormKey,
+        GameRelease release)
+    {
+        var (unit, document, root, rootBody, childBody) = target;
+        if (unit.IsEmbedded)
+        {
+            // No file moves: an embedded record has no leaf name of its own to carry a new identity.
+            // The owner is reserialized over its existing file and the child's own extracted row is
+            // replaced (old FormKey's row nulled, new FormKey's row created from the child alone) —
+            // the same two-row shape EditField's own embedded edit uses.
+            _codec.SerializeAsync(root, unit.FullPath, release).GetAwaiter().GetResult();
+            index.ApplyWorkingTreeChanges(plugin, [(unit.OwnerFormKey, rootBody)]);
+            index.CreateWorkingTreeRecord(plugin, newFormKey, document.RecordType, childBody!);
+            index.ApplyWorkingTreeChanges(plugin, [(oldFormKey, null)]);
+            return;
+        }
+
+        var record = root;
 
         // A container's own directory (Cell/Worldspace/Quest, or a nested folder-split child) versus
         // a flat record's single file — the same distinction DeleteRecord makes, both now reading
@@ -1465,10 +1642,11 @@ public sealed class RecordEditService(
         // place); for the flat branch this is the group folder, which the resolved unit proves already
         // exists — so nothing is normally minted here at all, and the wrapper is what keeps that true
         // rather than an assumption (#675).
-        var newBody = SourceUnitResolver.InMintedDirectory(
-            Path.GetDirectoryName(writePath)!, () => SerializeAndWrite(_codec, record, writePath, release));
+        SourceUnitResolver.InMintedDirectory(
+            Path.GetDirectoryName(writePath)!,
+            () => _codec.SerializeAsync(record, writePath, release).GetAwaiter().GetResult());
 
-        index.CreateWorkingTreeRecord(plugin, newFormKey, document.RecordType, newBody);
+        index.CreateWorkingTreeRecord(plugin, newFormKey, document.RecordType, rootBody);
 
         if (!isDirectoryPerRecord && File.Exists(unit.FullPath)) File.Delete(unit.FullPath);
 
@@ -1498,38 +1676,6 @@ public sealed class RecordEditService(
         // either way. A no-op for any renumbered record other than a Worldspace.
         index.RepointCellLocationParent(plugin, oldFormKey, newFormKey);
 
-        index.ApplyWorkingTreeChanges(plugin, [(oldFormKey, null)]);
-    }
-
-    /// <summary>
-    /// The embedded half of a renumber — the child's own <c>FormKey</c> field changes in place
-    /// inside its owner's object graph (no file moves: an embedded record has no leaf name of its own
-    /// to carry a new identity), the owner is reserialized over its existing file, and the child's own
-    /// extracted row is replaced (old FormKey's row nulled, new FormKey's row created from the child
-    /// alone) — the same two-row shape <see cref="EditField"/>'s own embedded edit and
-    /// <see cref="RewriteReferenceField"/>'s embedded-referencer branch both use.
-    /// </summary>
-    private void RenumberEmbeddedChild(
-        IRecordIndex index, PluginKey plugin, SourceUnit unit, string oldFormKey, string newFormKey,
-        string childRecordType, GameRelease release)
-    {
-        var owner = ReadRecordFromSource(
-            _codec, logger, unit.FullPath, index.At(RecordRef.Effective).GetDocument(unit.OwnerFormKey, plugin)!, release);
-
-        if (ContainerChildFields.FindEmbeddedChild(owner, oldFormKey) is not { } found)
-        {
-            throw new InvalidOperationException(
-                $"{unit.RelativePath} is indexed as holding {oldFormKey}, but its own text does not carry it mid-renumber.");
-        }
-
-        ((IMajorRecordInternal)found.Child).FormKey = FormKey.Factory(newFormKey);
-
-        var newOwnerBody = SerializeAndWrite(_codec, owner, unit.FullPath, release);
-        var newChildBody = Encoding.UTF8.GetString(
-            _codec.SerializeToBytesAsync(found.Child, release).GetAwaiter().GetResult());
-
-        index.ApplyWorkingTreeChanges(plugin, [(unit.OwnerFormKey, newOwnerBody)]);
-        index.CreateWorkingTreeRecord(plugin, newFormKey, childRecordType, newChildBody);
         index.ApplyWorkingTreeChanges(plugin, [(oldFormKey, null)]);
     }
 

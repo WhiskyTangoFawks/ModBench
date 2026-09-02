@@ -70,6 +70,23 @@ public enum RecordEditRefusal
     /// auto-allocate.</summary>
     NotNativeRecord,
 
+    /// <summary>
+    /// Renumber: a referencing record was remapped through Mutagen's generated typed
+    /// <c>RemapLinks</c>, and the old FormKey still survives in the bytes that remap produced — the
+    /// link was not moved. The known cause is the upstream gap written up in
+    /// <c>upstream-mutagen-issue.md</c>: <c>ScriptStructListProperty.RemapLinks</c> is generated
+    /// base-only and never descends into its own <c>Structs</c> list, so a VMAD <c>ArrayOfStruct</c>
+    /// script property's Object members are left pointing at the old FormKey. mEdit's own reference
+    /// index does walk them (<c>VmadCodec</c>), which is why such a referencer is found, loaded and
+    /// caught here rather than written half-remapped.
+    ///
+    /// <para>Deliberately conservative: the check is textual over the serialized record, so a
+    /// genuine referencer that <i>also</i> spells the old FormKey inside an EditorID or a string
+    /// field refuses too. A false refusal costs the user a message; a false pass costs them a
+    /// dangling link in a file that reports success.</para>
+    /// </summary>
+    ReferenceRemapIncomplete,
+
     /// <summary>Create/renumber/peek: the plugin's native FormKey space is full — every local ID
     /// up to <c>0xFFFFFF</c> is already in use at one ref or the other. A typed refusal,
     /// not an exception: a full plugin refusing a new record is an ordinary, expected

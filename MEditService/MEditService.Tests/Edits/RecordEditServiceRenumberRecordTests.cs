@@ -25,7 +25,7 @@ public sealed class RecordEditServiceRenumberRecordTests
     /// #661 regression: <see cref="RecordEditService.ResolveEditTarget"/> is the shared gate every
     /// verb touching an existing record passes through, and only <c>EditField</c> was guarded against
     /// the header when the source-unit gate that used to block it (<c>SourceUnitNotFound</c>) came
-    /// down. Traced, not run against production before the fix: <c>RenumberTheRecordItself</c> would
+    /// down. Traced, not run against production before the fix: renumber's own target rewrite would
     /// have deserialized the header's own file through the per-record codec —
     /// <c>codec.DeserializeAsync(path, release, "header")</c> — the exact generic path a
     /// <c>ModHeader</c> cannot flow through, an untyped throw rather than a typed refusal.
@@ -193,9 +193,9 @@ public sealed class RecordEditServiceRenumberRecordTests
     // stale for whatever referencer rewrites had already landed durably before the target's own
     // write failed — the same honest-partial-state doctrine the writtenRepos disclosure follows.
     // Chmod-mid-cascade technique from PluginCompileServiceJournalTests: the target mod folder is
-    // made unwritable *after* fixture setup (so tracking itself succeeds), so RenumberTheRecordItself
-    // — the cascade's last, single-repo step — is what fails, once RewriteReferenceField has already
-    // durably rewritten the referencer's FormLink.
+    // made unwritable *after* fixture setup (so tracking itself succeeds), so the target's own write
+    // is what fails, once the referencer's computed rewrite has already landed durably. #676 lands no
+    // rollback, so this partial state is still reachable — by genuine I/O failure only.
     [Fact]
     public void RenumberRecord_WhenTheTargetsOwnWriteFailsAfterReferencersLanded_FilterReflectsTheReferencerWrite()
     {
@@ -221,8 +221,8 @@ public sealed class RecordEditServiceRenumberRecordTests
             Chmod(two.TargetModFolder, "700"); // restored before TwoModFixture.Dispose() needs to clean up
         }
 
-        // The referencer's rewrite is durably on disk (write order: referencers first, target last),
-        // so the filter — re-materialized even though the overall gesture threw — must show it.
+        // The referencer's rewrite is durably on disk, so the filter — re-materialized even though
+        // the overall gesture threw — must show it.
         var result = two.Mirror.Reads!.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0));
         Assert.Equal(1, result.Total);
         Assert.Equal(two.ReferencerNpc.ToString(), result.Items[0].FormKey);
