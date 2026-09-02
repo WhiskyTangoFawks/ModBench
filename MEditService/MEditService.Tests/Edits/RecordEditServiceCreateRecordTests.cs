@@ -231,6 +231,9 @@ public sealed class RecordEditServiceCreateRecordTests
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.FormKeySpaceExhausted, result.Refusal);
+        // #290: this plugin isn't light at all — un-flagging ESL is not a way out of a full
+        // 0xFFFFFF native space, so the marker must never claim it is.
+        Assert.False(result.EslContradiction);
     }
 
     // An ESL-flagged plugin's local FormID range is 0x000-0xFFF (12 bits) — the game engine
@@ -248,6 +251,23 @@ public sealed class RecordEditServiceCreateRecordTests
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.FormKeySpaceExhausted, result.Refusal);
+    }
+
+    // #290: the same exhaustion above, but the plugin's light-ness is the removable header flag
+    // (TrackedLight's own .esp fixture) and native space above 0xFFF is still free — the create-time
+    // twin of compile's own eslContradiction marker, so the frontend can offer the same
+    // remove-the-flag-and-retry prompt instead of a dead end.
+    [Fact]
+    public void CreateRecord_OnALightEspPlugin_WhenEslRangeExhausted_MarksEslContradiction()
+    {
+        using var mod = TrackedModFixture.TrackedLight();
+        var service = ServiceFor(mod.Mirror);
+        var seeded = service.CreateRecord(mod.Plugin, "npc_", "AtTheEslCap", "000FFF:Fixture.esp");
+        Assert.True(seeded.Applied, seeded.Message);
+
+        var result = service.CreateRecord(mod.Plugin, "npc_", "OneTooMany");
+
+        Assert.True(result.EslContradiction);
     }
 
     [Fact]

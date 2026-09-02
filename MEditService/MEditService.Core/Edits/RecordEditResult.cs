@@ -277,8 +277,16 @@ public enum RecordEditRefusal
 /// <see cref="NewFormKey"/> is null for every gesture except a successful create, renumber or
 /// <c>PeekNextFreeFormKey</c>, which are the only ones that mint or suggest a FormKey the
 /// caller did not already have.
+/// <see cref="EslContradiction"/> is #290's marker, the create-time twin of
+/// <see cref="Edits.CompileResult.EslContradiction"/>: true only for a
+/// <see cref="RecordEditRefusal.FormKeySpaceExhausted"/> refusal caused solely by the ESL cap
+/// (0xFFF) while native space above it remains free, on a plugin whose light-ness is the
+/// removable header flag rather than a <c>.esl</c> extension — the same "remove the flag and
+/// retry" way out compile already offers, surfaced so the frontend can give create the identical
+/// accept/decline prompt instead of a dead-end refusal.
 /// </summary>
-public sealed record RecordEditResult(bool Applied, RecordEditRefusal Refusal, string Message, string? NewFormKey = null)
+public sealed record RecordEditResult(
+    bool Applied, RecordEditRefusal Refusal, string Message, string? NewFormKey = null, bool EslContradiction = false)
 {
     public static RecordEditResult Success() => new(true, RecordEditRefusal.None, "");
 
@@ -286,6 +294,9 @@ public sealed record RecordEditResult(bool Applied, RecordEditRefusal Refusal, s
 
     public static RecordEditResult Refused(RecordEditRefusal refusal, string message) =>
         new(false, refusal, message);
+
+    public static RecordEditResult Refused(RecordEditRefusal refusal, string message, bool eslContradiction) =>
+        new(false, refusal, message, EslContradiction: eslContradiction);
 }
 
 /// <summary>One copy in a batch (#550 AC6/Q4): which record, from where, to where, and which of the

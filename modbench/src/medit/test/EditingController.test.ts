@@ -943,6 +943,89 @@ describe('EditingController.createRecord', () => {
     });
   });
 
+  // #290: the ESL-exhaustion refusal carries the same typed marker compile's own
+  // eslContradiction does, wired through mutate()'s onEslContradiction hook rather than the
+  // ordinary toast-and-fail — declining leaves the refusal exactly as untouched as any other.
+  describe('#290 eslContradiction', () => {
+    it('an ordinary refusal (no eslContradiction extension) never invokes the hook', async () => {
+      const client = makeClient();
+      client.POST = vi.fn().mockResolvedValue(drainedError(422, 'RecordTypeNotFound'));
+      const deps = makeDeps({ client });
+      const onEslContradiction = vi.fn();
+
+      const formKey = await new EditingController(deps).createRecord(
+        'MyPatch.esp', 'ModA', 'npc_', undefined, undefined, onEslContradiction,
+      );
+
+      expect(formKey).toBeUndefined();
+      expect(onEslContradiction).not.toHaveBeenCalled();
+      expect(deps.showError).toHaveBeenCalledWith(expect.stringContaining('RecordTypeNotFound'));
+    });
+
+    it('an eslContradiction refusal calls the hook with the refusal detail, skipping the generic toast', async () => {
+      const client = makeClient();
+      client.POST = vi.fn().mockResolvedValue({
+        error: { eslContradiction: true, detail: 'MyPatch.esp has exhausted its ESL FormKey space' },
+        response: { ok: false, status: 422, text: () => Promise.reject(new Error('unused')) },
+      });
+      const deps = makeDeps({ client });
+      const onEslContradiction = vi.fn().mockResolvedValue(false);
+
+      const formKey = await new EditingController(deps).createRecord(
+        'MyPatch.esp', 'ModA', 'npc_', undefined, undefined, onEslContradiction,
+      );
+
+      expect(formKey).toBeUndefined();
+      expect(onEslContradiction).toHaveBeenCalledWith('MyPatch.esp has exhausted its ESL FormKey space');
+      expect(deps.showError).not.toHaveBeenCalled();
+    });
+
+    it('accepting the hook retries the create once and returns the retry\'s own FormKey', async () => {
+      const client = makeClient();
+      client.POST = vi.fn()
+        .mockResolvedValueOnce({
+          error: { eslContradiction: true, detail: 'exhausted' },
+          response: { ok: false, status: 422, text: () => Promise.reject(new Error('unused')) },
+        })
+        .mockResolvedValueOnce({
+          response: { ok: true, status: 200 },
+          data: { applied: true, formKey: '001000:MyPatch.esp', recordType: 'npc_' },
+        });
+      const deps = makeDeps({ client });
+      const onEslContradiction = vi.fn().mockResolvedValue(true);
+
+      const formKey = await new EditingController(deps).createRecord(
+        'MyPatch.esp', 'ModA', 'npc_', undefined, undefined, onEslContradiction,
+      );
+
+      expect(formKey).toBe('001000:MyPatch.esp');
+      expect(client.POST).toHaveBeenCalledTimes(2);
+      expect(deps.refreshTree).toHaveBeenCalled();
+    });
+
+    it('copyRecordAsNewRecord gets the identical hook and retry shape', async () => {
+      const client = makeClient();
+      client.POST = vi.fn()
+        .mockResolvedValueOnce({
+          error: { eslContradiction: true, detail: 'exhausted' },
+          response: { ok: false, status: 422, text: () => Promise.reject(new Error('unused')) },
+        })
+        .mockResolvedValueOnce({
+          response: { ok: true, status: 200 },
+          data: { applied: true, newFormKey: '001001:MyPatch.esp' },
+        });
+      const deps = makeDeps({ client });
+      const onEslContradiction = vi.fn().mockResolvedValue(true);
+
+      const newFormKey = await new EditingController(deps).copyRecordAsNewRecord(
+        '000801:Fallout4.esm', 'Fallout4.esm', 'Data', 'MyPatch.esp', 'ModA', undefined, onEslContradiction,
+      );
+
+      expect(newFormKey).toBe('001001:MyPatch.esp');
+      expect(client.POST).toHaveBeenCalledTimes(2);
+    });
+  });
+
 });
 
 describe('EditingController.deleteRecord', () => {

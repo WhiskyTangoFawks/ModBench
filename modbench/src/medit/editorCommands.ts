@@ -4,10 +4,11 @@ import * as os from 'os';
 import * as fs from 'fs';
 import { type CompileResult } from './ApiClient';
 import { EditingController } from './EditingController';
-import { InteriorLoadMoreNode, PluginTreeProvider, RecordTypeNode, RecordNode, PlacedNode, headerFormKeyFor } from './PluginTreeProvider';
+import { InteriorLoadMoreNode, PluginTreeProvider, RecordTypeNode, RecordNode, PlacedNode } from './PluginTreeProvider';
 import { ReferencedByGroupNode, referencedByCopyText, type ReferencedByTreeNode } from './ReferencedByTreeProvider';
 import { ActiveRecordTracker } from './ActiveRecordTracker';
 import { type CompileTarget } from './compileTarget';
+import { offerEslFlagRemoval, type EslFlagRemovalTarget } from './eslFlagRemovalPrompt';
 import { ApiPluginRepository, type PluginRepository } from './PluginRepository';
 import { trackedModFoldersOf, registerTrackedRepositories, pluginRepositoriesOf } from './trackedRepositories';
 import { startExternalChangePolling, gateExternalChangePolling, type OpenMergeEditor } from './externalChangeCoordinator';
@@ -265,7 +266,10 @@ export function registerRecordLifecycleCommands(
       const origin = await resolveOriginOrReport({ origin: node.origin, pluginName: node.plugin });
       if (!origin) return;
 
-      const formKey = await controller.createRecord(node.plugin, origin, node.recordType);
+      const formKey = await controller.createRecord(
+        node.plugin, origin, node.recordType, undefined, undefined,
+        message => promptEslFlagRemoval({ name: node.plugin, origin }, message, 'Create the Record', repository),
+      );
       if (formKey) void vscode.window.showInformationMessage(`Modbench: Added ${formKey}.`);
     }),
 
@@ -428,7 +432,8 @@ export async function runCopyRecordCommand(
     if (ok) void vscode.window.showInformationMessage(`Modbench: Copied ${identity.formKey} into ${destination.name}.`);
   } else {
     const newFormKey = await controller.copyRecordAsNewRecord(
-      identity.formKey, identity.plugin, sourceOrigin, destination.name, destination.origin,
+      identity.formKey, identity.plugin, sourceOrigin, destination.name, destination.origin, undefined,
+      message => promptEslFlagRemoval(destination, message, 'Copy the Record', repository),
     );
     if (newFormKey) void vscode.window.showInformationMessage(`Modbench: Copied as ${newFormKey} into ${destination.name}.`);
   }
@@ -589,7 +594,7 @@ export async function compileAndReport(
   const refSuffix = atRef ? ` at "${atRef}"` : '';
   if (!result.succeeded) {
     if (result.eslContradiction
-        && await offerEslFlagRemoval(target, result.refusalReason ?? '', repository)) {
+        && await promptEslFlagRemoval(target, result.refusalReason ?? '', 'Compile', repository)) {
       await compileAndReport(controller, diagnostics, target, atRef, repository);
       return;
     }
@@ -603,26 +608,17 @@ export async function compileAndReport(
   );
 }
 
-/** #290's coherence prompt (the maintainer's always-prompt rule for consequential state): the
- *  plugin no longer fits ESL and the compile's typed marker says the flag is removable. Accept =
- *  an ordinary `is_light` header edit (the flag's one sanctioned door), after which the caller
- *  compiles again; decline (or a refused edit) = false, and the caller's loud typed refusal
- *  stands, with the contradiction as the record of what to fix. */
-async function offerEslFlagRemoval(
-  target: CompileTarget, refusalReason: string, repository: PluginRepository,
+/** `offerEslFlagRemoval`, wired to this extension's own `vscode.window` — the DI-friendly core
+ *  lives in `eslFlagRemovalPrompt.ts` (no `vscode` import, unit-testable directly); every call
+ *  site here goes through this thin binding instead. */
+async function promptEslFlagRemoval(
+  target: EslFlagRemovalTarget, refusalReason: string, verb: string, repository: PluginRepository,
 ): Promise<boolean> {
-  const accept = 'Remove ESL Flag and Compile';
-  const choice = await vscode.window.showWarningMessage(
-    `"${target.name}" no longer fits ESL. Remove the ESL flag and compile?\n\n${refusalReason}`,
-    { modal: true }, accept);
-  if (choice !== accept) return false;
-
-  const outcome = await repository.editRecordField(
-    headerFormKeyFor(target.name), target.name, target.origin, 'is_light', false);
-  if (outcome.applied) return true;
-  void vscode.window.showErrorMessage(
-    `Modbench: Could not remove the ESL flag on "${target.name}" — ${outcome.message}`);
-  return false;
+  return offerEslFlagRemoval(
+    target, refusalReason, verb, repository,
+    (message, options, ...items) => vscode.window.showWarningMessage(message, options, ...items),
+    message => void vscode.window.showErrorMessage(message),
+  );
 }
 
 /** Publishes one compile's diagnostics to the Problems panel, replacing whatever this plugin's
