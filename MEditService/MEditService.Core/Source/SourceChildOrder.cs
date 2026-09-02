@@ -297,18 +297,6 @@ internal static class SourceChildOrder
     }
 
     /// <summary>
-    /// Repoints a child's list entry in place without the caller having to know which list holds it —
-    /// <see cref="RemoveByIdentity"/>'s counterpart for a renumber, which changes the very FormKey the
-    /// list is keyed by and must keep the record's position while doing so.
-    /// </summary>
-    internal static void RenameByIdentity(
-        string childrenDirectory, string oldIdentity, string newIdentity, IFileSystem? fileSystem = null)
-    {
-        if (SlotHolding(childrenDirectory, oldIdentity, fileSystem) is { } slot)
-            Rename(slot.Carrier, slot.Key, oldIdentity, newIdentity, fileSystem);
-    }
-
-    /// <summary>
     /// <paramref name="freshBytes"/> — a record document the codec has just serialized — with whatever
     /// ordered child lists the document already on disk at <paramref name="documentPath"/> carries
     /// merged back into it. Returns <paramref name="freshBytes"/> unchanged when there are none, which

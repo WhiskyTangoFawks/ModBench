@@ -2583,19 +2583,6 @@ public sealed class RecordEditService(
     }
 
     /// <summary>
-    /// The reserialize-and-write-back idiom nearly every write path here repeats: get
-    /// <paramref name="record"/>'s own bytes — what the index will be told next — and write to
-    /// <paramref name="path"/> in one atomic move. Returns the body as text, ready for whichever
-    /// index-notify call the caller makes next.
-    ///
-    /// <para>The two serializations are separate calls, and it is
-    /// <see cref="RecordTextCodec.SerializeToBytesAsync"/>/<see cref="RecordTextCodec.SerializeAsync"/>
-    /// producing identical bytes for the same record — pinned by <c>RecordTextCodecInMemoryTests</c>
-    /// — that makes what the index is told and what lands on disk the same text. Splitting the pair
-    /// across a compute phase and a write phase, as the renumber cascade does, rests on that same
-    /// guarantee and is no weaker than calling this.</para>
-    /// </summary>
-    /// <summary>
     /// One placed child: its own file written by <paramref name="write"/>, then its identity appended
     /// to the ordered child list that names it (ADR-0042 decision 4) — and the file taken back again if
     /// that second write fails. The two writes are one plugin's tree, so this is not a transaction
@@ -2629,6 +2616,19 @@ public sealed class RecordEditService(
             return body;
         });
 
+    /// <summary>
+    /// The reserialize-and-write-back idiom nearly every write path here repeats: get
+    /// <paramref name="record"/>'s own bytes — what the index will be told next — and write to
+    /// <paramref name="path"/> in one atomic move. Returns the body as text, ready for whichever
+    /// index-notify call the caller makes next.
+    ///
+    /// <para>The two serializations are separate calls, and it is
+    /// <see cref="RecordTextCodec.SerializeToBytesAsync"/>/<see cref="RecordTextCodec.SerializeAsync"/>
+    /// producing identical bytes for the same record — pinned by <c>RecordTextCodecInMemoryTests</c>
+    /// — that makes what the index is told and what lands on disk the same text. Splitting the pair
+    /// across a compute phase and a write phase, as the renumber cascade does, rests on that same
+    /// guarantee and is no weaker than calling this.</para>
+    /// </summary>
     internal static string SerializeAndWrite(RecordTextCodec codec, IMajorRecord record, string path, GameRelease release)
     {
         var bytes = codec.SerializeToBytesAsync(record, release).GetAwaiter().GetResult();

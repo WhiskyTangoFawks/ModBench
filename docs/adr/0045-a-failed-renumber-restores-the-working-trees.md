@@ -66,8 +66,7 @@ something broken behind after we are done is not.** This ADR is about failure at
 
 5. **Process death is out of scope.** An in-memory transaction dies with its process. The compile
    round-trip gate and re-Track remain the recovery path for a tree left mid-write by a crash, as
-   they already are for #675's minted directories and for `RenormalizeGroupOrder`'s own half-finished
-   pass. Making failure atomicity survive process death would mean an on-disk journal in the author's
+   they already are for #675's minted directories. Making failure atomicity survive process death would mean an on-disk journal in the author's
    folder — new state, new staleness, new recovery semantics — for a failure mode the existing gate
    already catches.
 
