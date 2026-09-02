@@ -57,6 +57,7 @@ public class ContainerChildQueryServiceTests
         public ILoadOrder? LoadOrder => loadOrder;
         public IRecordReads? Reads => repo;
         public IRecordIndex? Index => null;
+        public IndexWriteGate WriteGate { get; } = new();
         public LoadOrderStatus Status => LoadOrderStatus.None;
         // This double's own tests only ever exercise the Reads/RequireReads() side — loadOrder
         // defaults to null in most of them, which would make a real "both null together"

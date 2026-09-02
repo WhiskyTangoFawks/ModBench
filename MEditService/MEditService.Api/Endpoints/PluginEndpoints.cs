@@ -373,11 +373,14 @@ public static class PluginEndpoints
     // summary (see EndpointReceptionLoggingTests's header comment, the one place that decision is
     // recorded); this method is consistent with its own file's six other handlers, none of which
     // logs on entry either.
-    internal static IResult CreateRecord(string plugin, RecordCreateRequest req, RecordEditService edits, ILoggerFactory loggerFactory)
+    internal static IResult CreateRecord(
+        string plugin, RecordCreateRequest req, RecordEditService edits, IndexWriteGate gate,
+        ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
         var decoded = Uri.UnescapeDataString(plugin);
         return WriteEndpointMapping.Execute(
+            gate,
             logReceived: null,
             validate: () =>
             {

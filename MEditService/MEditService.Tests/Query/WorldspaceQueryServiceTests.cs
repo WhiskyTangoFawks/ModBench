@@ -68,6 +68,7 @@ public class WorldspaceQueryServiceTests
         public IRecordReads? Reads => repo;
         // Read-side double — the worldspace queries never write to the index.
         public IRecordIndex? Index => null;
+        public IndexWriteGate WriteGate { get; } = new();
         // These stubs never load, so they are always in the no-load-order state.
         public LoadOrderStatus Status => LoadOrderStatus.None;
         // This double's own tests only ever exercise the Reads/RequireReads() side — loadOrder

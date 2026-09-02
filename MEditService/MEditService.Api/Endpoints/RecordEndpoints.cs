@@ -71,8 +71,8 @@ public static class RecordEndpoints
         // HTTP clients) reach the same RecordEditService the UI does — there is no second write path,
         // which is exactly why the untracked refusal is expressible here at all.
         app.MapPost("/records/{formKey}/field", (
-            string formKey, RecordFieldEditRequest request, RecordEditService edits) =>
-            EditField(formKey, request, edits, logger))
+            string formKey, RecordFieldEditRequest request, RecordEditService edits, IndexWriteGate gate) =>
+            EditField(formKey, request, edits, gate, logger))
         .WithName("EditRecordField")
         .WithTags("Records")
         .Produces<RecordFieldEditResponse>()
@@ -88,8 +88,8 @@ public static class RecordEndpoints
         // Delete-record — the source file goes away and the null-Body working-tree mechanism takes
         // it from there. Same door, same refusals, same doctrine as EditField above.
         app.MapPost("/records/{formKey}/delete", (
-            string formKey, RecordDeleteRequest request, RecordEditService edits) =>
-            DeleteRecord(formKey, request, edits, logger))
+            string formKey, RecordDeleteRequest request, RecordEditService edits, IndexWriteGate gate) =>
+            DeleteRecord(formKey, request, edits, gate, logger))
         .WithName("DeleteRecord")
         .WithSummary("Delete a record as a working-tree change.")
         .WithDescription(
@@ -109,8 +109,8 @@ public static class RecordEndpoints
 
         // Renumber — a delete+create pair plus the cross-plugin reference cascade.
         app.MapPost("/records/{formKey}/renumber", (
-            string formKey, RecordRenumberRequest request, RecordEditService edits) =>
-            RenumberRecord(formKey, request, edits, logger))
+            string formKey, RecordRenumberRequest request, RecordEditService edits, IndexWriteGate gate) =>
+            RenumberRecord(formKey, request, edits, gate, logger))
         .WithName("RenumberRecord")
         .WithSummary("Renumber a native record's FormKey as a delete+create pair.")
         .WithDescription(
@@ -132,8 +132,8 @@ public static class RecordEndpoints
         // ADR-0041: Copy as Override Into… — the source record's own bytes,
         // landing under the same FormKey in the destination's working tree.
         app.MapPost("/records/{formKey}/copy-as-override", (
-            string formKey, RecordCopyAsOverrideRequest request, RecordEditService edits) =>
-            CopyRecordAsOverride(formKey, request, edits, logger))
+            string formKey, RecordCopyAsOverrideRequest request, RecordEditService edits, IndexWriteGate gate) =>
+            CopyRecordAsOverride(formKey, request, edits, gate, logger))
         .WithName("CopyRecordAsOverride")
         .WithSummary("Copy as Override Into… — the source record's bytes, same FormKey, into a destination plugin.")
         .WithDescription(
@@ -155,8 +155,8 @@ public static class RecordEndpoints
         // via Mutagen's own record-level Duplicate. Same collision posture as CreateRecord, reused
         // rather than re-implemented.
         app.MapPost("/records/{formKey}/copy-as-new-record", (
-            string formKey, RecordCopyAsNewRecordRequest request, RecordEditService edits) =>
-            CopyRecordAsNewRecord(formKey, request, edits, logger))
+            string formKey, RecordCopyAsNewRecordRequest request, RecordEditService edits, IndexWriteGate gate) =>
+            CopyRecordAsNewRecord(formKey, request, edits, gate, logger))
         .WithName("CopyRecordAsNewRecord")
         .WithSummary("Copy as New Record Into… — a deep copy of the source record under a fresh FormKey.")
         .WithDescription(
@@ -188,10 +188,11 @@ public static class RecordEndpoints
     // what's genuinely its own — the log line, the validation, the service call, and the
     // success/failure message shapes.
     internal static IResult EditField(
-        string formKey, RecordFieldEditRequest request, RecordEditService edits, ILogger logger)
+        string formKey, RecordFieldEditRequest request, RecordEditService edits, IndexWriteGate gate, ILogger logger)
     {
         var decoded = Uri.UnescapeDataString(formKey);
         return WriteEndpointMapping.Execute(
+            gate,
             logReceived: () =>
             {
                 if (logger.IsEnabled(LogLevel.Information))
@@ -228,10 +229,12 @@ public static class RecordEndpoints
             });
     }
 
-    internal static IResult DeleteRecord(string formKey, RecordDeleteRequest request, RecordEditService edits, ILogger logger)
+    internal static IResult DeleteRecord(
+        string formKey, RecordDeleteRequest request, RecordEditService edits, IndexWriteGate gate, ILogger logger)
     {
         var decoded = Uri.UnescapeDataString(formKey);
         return WriteEndpointMapping.Execute(
+            gate,
             logReceived: () =>
             {
                 if (logger.IsEnabled(LogLevel.Information))
@@ -258,10 +261,12 @@ public static class RecordEndpoints
             });
     }
 
-    internal static IResult RenumberRecord(string formKey, RecordRenumberRequest request, RecordEditService edits, ILogger logger)
+    internal static IResult RenumberRecord(
+        string formKey, RecordRenumberRequest request, RecordEditService edits, IndexWriteGate gate, ILogger logger)
     {
         var decoded = Uri.UnescapeDataString(formKey);
         return WriteEndpointMapping.Execute(
+            gate,
             logReceived: () =>
             {
                 if (logger.IsEnabled(LogLevel.Information))
@@ -304,10 +309,12 @@ public static class RecordEndpoints
     }
 
     internal static IResult CopyRecordAsOverride(
-        string formKey, RecordCopyAsOverrideRequest request, RecordEditService edits, ILogger logger)
+        string formKey, RecordCopyAsOverrideRequest request, RecordEditService edits, IndexWriteGate gate,
+        ILogger logger)
     {
         var decoded = Uri.UnescapeDataString(formKey);
         return WriteEndpointMapping.Execute(
+            gate,
             logReceived: () =>
             {
                 if (logger.IsEnabled(LogLevel.Information))
@@ -343,10 +350,12 @@ public static class RecordEndpoints
     }
 
     internal static IResult CopyRecordAsNewRecord(
-        string formKey, RecordCopyAsNewRecordRequest request, RecordEditService edits, ILogger logger)
+        string formKey, RecordCopyAsNewRecordRequest request, RecordEditService edits, IndexWriteGate gate,
+        ILogger logger)
     {
         var decoded = Uri.UnescapeDataString(formKey);
         return WriteEndpointMapping.Execute(
+            gate,
             logReceived: () =>
             {
                 if (logger.IsEnabled(LogLevel.Information))

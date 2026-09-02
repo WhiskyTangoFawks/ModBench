@@ -26,6 +26,25 @@ public interface ILoadOrderMirror
     IRecordIndex? Index { get; }
 
     /// <summary>
+    /// #673: the process-wide gate every write to <see cref="Index"/> passes through, so two
+    /// overlapping writes cannot interleave on the one shared DuckDB connection. Exposed here rather
+    /// than registered on its own because the mirror is what <i>owns</i> the index — hanging the gate
+    /// off the same object makes "one index, one gate" true by construction, where a second
+    /// registration could hand some call site a gate that guards nothing.
+    ///
+    /// <para>Outlives any one index: a rebuild replaces the connection, not the ordering of the
+    /// callers reaching it.</para>
+    ///
+    /// <para>Callers that write through <see cref="Index"/> directly — the edit path and the
+    /// read-time source self-heal — take this themselves. The mirror's own write doors
+    /// (<see cref="ReindexPlugin"/>, <see cref="ReingestPluginFromSource"/>,
+    /// <see cref="UnindexPlugin"/>) take it for their callers. Reads never take it at all; see
+    /// <see cref="IndexWriteGate"/>'s own doc comment for why, and for the ordering rule it keeps
+    /// against the implementation's internal lock.</para>
+    /// </summary>
+    IndexWriteGate WriteGate { get; }
+
+    /// <summary>
     /// Where the reconcile is and what it has established so far (ADR-0035). The load order
     /// is readable while it is still being reconciled, so a caller needs a way to ask what is safe
     /// to conclude from what it reads — above all, whether the winner sweep has run. Never null: no

@@ -89,6 +89,24 @@ internal static class WriteEndpointMapping
     internal static IResult NoLoadOrder(InvalidOperationException ex) => Results.Problem(ex.Message, statusCode: 503);
 
     /// <summary>
+    /// #673: this request waited out <see cref="IndexWriteGate.Timeout"/> for a write already in
+    /// flight. 503, the same "not right now" family as <see cref="NoLoadOrder"/> above and
+    /// deliberately <b>not</b> <see cref="WriteFailure"/>'s 500 — the write was never attempted, so
+    /// nothing is half-applied and there is no source file whose failure to be written could be
+    /// reported. A client's correct response is to retry, which a 500 would not tell it.
+    ///
+    /// <para>Carries a <c>writeGateTimeout</c> extension beside the human-readable detail, for the
+    /// same reason <see cref="Refusal"/> carries <c>refusal</c> (ADR-0026): the status code tells an
+    /// ordinary HTTP client what kind of problem this is, and the extension tells an agent exactly
+    /// which one without matching on prose — 503 alone cannot be told apart from
+    /// <see cref="NoLoadOrder"/>, and the two want opposite handling (retry versus reload).</para>
+    /// </summary>
+    internal static IResult WriteGateBusy(IndexWriteGateTimeoutException ex) => Results.Problem(
+        detail: ex.Message,
+        statusCode: 503,
+        extensions: new Dictionary<string, object?> { ["writeGateTimeout"] = true });
+
+    /// <summary>
     /// xEdit's own typed-FormID path reaches Mutagen's <c>FormKey.Factory</c>
     /// (<c>RecordEditService.RefuseIfNotNativeTarget</c>) with no <c>TryFactory</c> guard — a
     /// malformed value (wrong shape, non-hex, missing <c>:</c>) throws <see cref="ArgumentException"/>
@@ -119,7 +137,14 @@ internal static class WriteEndpointMapping
     /// so leaving it <c>null</c> there reproduces letting that exception type propagate unhandled,
     /// exactly as those three sites do today.</para>
     /// </summary>
+    /// <para>#673: <paramref name="gate"/> is taken around <paramref name="execute"/> and nothing
+    /// else. Validation and the reception log run before it, so a malformed request is answered
+    /// without ever queueing; <paramref name="onApplied"/> and every error mapper run after it, so a
+    /// response is shaped while the next write is already free to start. Taking it here rather than
+    /// inside each service is what makes "one write at a time" a property of the write <i>path</i>
+    /// rather than of six independent remembering-to.</para>
     internal static IResult Execute(
+        IndexWriteGate gate,
         Action? logReceived,
         Func<IResult?> validate,
         Func<RecordEditResult> execute,
@@ -135,8 +160,19 @@ internal static class WriteEndpointMapping
 
         try
         {
-            var result = execute();
+            RecordEditResult result;
+            using (gate.Enter()) result = execute();
             return result.Applied ? onApplied(result) : Refusal(result);
+        }
+        catch (IndexWriteGateTimeoutException ex)
+        {
+            // Before the general catches below, and above all before the InvalidOperationException
+            // one: a nested BeginTransaction on the shared connection throws exactly that type
+            // ("Already in a transaction." — DuckDbConnectionIsolationTests), so an unserialized
+            // collision used to reach the client as a 503 claiming the load order had gone away.
+            // This is the honest answer to the same situation, and the gate is what makes it
+            // reachable instead.
+            return WriteGateBusy(ex);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
