@@ -30,7 +30,7 @@ internal readonly record struct SourceUnit(
     /// Cell/Worldspace/Quest, or a nested folder-split child such as a Quest's DialogTopic) rather
     /// than a flat record's single file. One definition here rather than each call site
     /// (<c>RecordEditService.RenameSourceUnit</c>, <c>DeleteRecord</c>,
-    /// <c>RenumberTheRecordItself</c>) retyping the test — alongside <see cref="IsEmbedded"/>,
+    /// <c>WriteTargetRewrite</c>) retyping the test — alongside <see cref="IsEmbedded"/>,
     /// which <see cref="SourceUnit"/> already carries the same way.
     ///
     /// <para><b>The header's own root <c>RecordData.json</c> (#661) is excluded explicitly, not by
