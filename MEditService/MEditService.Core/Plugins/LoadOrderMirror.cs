@@ -574,17 +574,43 @@ public sealed class LoadOrderMirror(
 
         // #672: a tracked copy's truth is its source tree, so it is re-derived from there and its
         // binary is never opened — see the interface's own doc comment for why reading the binary
-        // here was silently discarding uncommitted edits.
-        if (SourceIngest.TreeFor(metadata.Origin, metadata.Path, metadata.Name) is { } sourceTree)
+        // here was silently discarding uncommitted edits. Asked once here as a bare "is this
+        // tracked" question; the door below resolves the tree it actually reads for itself, so
+        // neither has to trust the other's answer about a folder either of them could have lost
+        // in between (root CLAUDE.md's never-assume-exclusive-ownership rule).
+        if (SourceIngest.TreeFor(metadata.Origin, metadata.Path, metadata.Name) != null)
         {
-            ReingestOne(metadata, index, sourceTree, gameRelease);
+            ReingestPluginFromSource(key);
             return Task.CompletedTask;
         }
 
         return ReindexOne(metadata, index, gameRelease);
     }
 
-    /// <summary>See <see cref="ILoadOrderMirror.ReingestPluginFromSource"/>.</summary>
+    /// <summary>
+    /// See <see cref="ILoadOrderMirror.ReingestPluginFromSource"/>. The same
+    /// <see cref="SourceIngest.Ingest"/> the reconcile's own tracked-plugin branch runs, so a
+    /// re-ingest and a first ingest produce the same rows and the same Head state by construction
+    /// rather than by agreement.
+    ///
+    /// <para><b>The whole re-derivation is under <c>_lock</c></b>, unlike the reconcile's own ingest,
+    /// which runs unlocked. The difference is when each of them fires: the reconcile builds an index
+    /// nothing is querying yet and holds <c>_reconcileGate</c> throughout, whereas this door fires
+    /// from the watcher's timer thread against a live index that other mutation doors
+    /// (<see cref="ReindexOne"/>, <see cref="UnindexPlugin"/>, <see cref="ApplyFilter"/>) are all
+    /// serialized against by this same lock. Being the one live mutation that isn't would put two
+    /// writers on one DuckDB connection. The cost is that a <c>Status</c> poll can wait out a
+    /// whole-tree deserialize, which is a stall, not a lie.</para>
+    ///
+    /// <para><b>A failed read is recorded before it is rethrown.</b> This does not degrade to the
+    /// binary the way <see cref="IndexOnePlugin"/>'s first ingest does, and the reason is the
+    /// difference between the two situations: at first ingest there are no rows, so the binary is
+    /// better than nothing; here the index already holds this plugin's source-derived rows, and
+    /// overwriting them with compiled content is the exact silent loss #672 exists to stop. But
+    /// "never silently" binds either way, so the failure still goes into the load order's own
+    /// <see cref="ILoadOrder.LoadFailures"/> (ADR-0026) rather than escaping as a bare exception for
+    /// the caller to log and forget.</para>
+    /// </summary>
     public void ReingestPluginFromSource(PluginKey key)
     {
         var (metadata, index, gameRelease) = RequireHeldCopy(key);
@@ -592,7 +618,33 @@ public sealed class LoadOrderMirror(
             ?? throw new InvalidOperationException(
                 $"Plugin '{key.Name}' from '{key.Origin}' has no source tree to re-ingest; it is not tracked.");
 
-        ReingestOne(metadata, index, sourceTree, gameRelease);
+        if (_logger.IsEnabled(LogLevel.Information))
+        {
+            _logger.LogInformation(
+                "Re-ingesting {Plugin} from its source tree ({Tree})", metadata.Name, sourceTree);
+        }
+
+        lock (_lock)
+        {
+            try
+            {
+                SourceIngest.Ingest(
+                    index, ModFolders.Of(metadata.Origin, metadata.Path)!, sourceTree,
+                    metadata.Registration, metadata.Key, metadata.Path, gameRelease, _schemaReflector, _logger);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Could not re-ingest {Plugin} from its source tree", metadata.Name);
+                _loadOrder?.SetFailure(key,
+                    $"Could not re-read this plugin's source tree ({PluginLoadFailure.ReasonFor(ex)}). Still " +
+                    "showing what was last read from it — the compiled binary is not used for a tracked plugin.");
+                throw;
+            }
+
+            index.UpdateWinners();
+            // Re-derived content can flip filter membership either way.
+            ReapplyFilter();
+        }
     }
 
     /// <summary>The copy <paramref name="key"/> names, and the index and release to act on it with —
@@ -605,36 +657,6 @@ public sealed class LoadOrderMirror(
             var metadata = scope.LoadOrder.Find(key)
                 ?? throw new KeyNotFoundException($"Plugin '{key.Name}' from '{key.Origin}' is not held.");
             return (metadata, scope.Index, _gameRelease);
-        }
-    }
-
-    /// <summary>
-    /// One tracked copy re-derived from its source tree — the same <see cref="SourceIngest.Ingest"/>
-    /// the reconcile's own tracked-plugin branch runs, so a re-ingest and a first ingest produce the
-    /// same rows and the same Head state by construction rather than by agreement.
-    ///
-    /// <para>The ingest itself runs outside <c>_lock</c>, exactly as the reconcile's does: a whole-tree
-    /// deserialize plus a <c>git status</c> is seconds of work, and holding the lock across it would
-    /// queue every read behind it. Only the sweep and the filter re-materialization — the two
-    /// whole-index steps — take the lock.</para>
-    /// </summary>
-    private void ReingestOne(PluginMetadata metadata, IRecordIndex index, string sourceTree, GameRelease gameRelease)
-    {
-        if (_logger.IsEnabled(LogLevel.Information))
-        {
-            _logger.LogInformation(
-                "Re-ingesting {Plugin} from its source tree ({Tree})", metadata.Name, sourceTree);
-        }
-
-        SourceIngest.Ingest(
-            index, ModFolders.Of(metadata.Origin, metadata.Path)!, sourceTree,
-            metadata.Registration, metadata.Key, metadata.Path, gameRelease, _schemaReflector, _logger);
-
-        lock (_lock)
-        {
-            index.UpdateWinners();
-            // Re-derived content can flip filter membership either way.
-            ReapplyFilter();
         }
     }
 

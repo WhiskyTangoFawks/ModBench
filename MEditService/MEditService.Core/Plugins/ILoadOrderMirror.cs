@@ -113,10 +113,13 @@ public interface ILoadOrderMirror
     /// caller that has just moved the source under a live load order (a rollback, a revert, a
     /// checkout) actually wants to say.
     ///
-    /// <para><b>Does not degrade to the binary.</b> If the tree cannot be read, this throws and the
-    /// index keeps serving the source-derived rows it already held — falling back to compiled content
-    /// here would resurrect precisely the silent-loss failure this door exists to prevent. The
-    /// reconcile-time ingest's own binary fallback is a different situation (there are no rows yet).</para>
+    /// <para><b>Does not degrade to the binary, but never fails silently either.</b> If the tree
+    /// cannot be read, the index keeps serving the source-derived rows it already held — falling back
+    /// to compiled content here would resurrect precisely the silent-loss failure this door exists to
+    /// prevent, which is what makes this different from the reconcile-time ingest's own binary
+    /// fallback (there, there are no rows yet, so the binary beats nothing). The failure is recorded
+    /// in <see cref="ILoadOrder.LoadFailures"/> — the same channel <c>GET /load-order/status</c>
+    /// surfaces (ADR-0026) — and then rethrown.</para>
     ///
     /// Throws <see cref="NoLoadOrderException"/> if no load order is held.
     /// Throws <see cref="KeyNotFoundException"/> if no such copy is held.

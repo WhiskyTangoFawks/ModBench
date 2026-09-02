@@ -104,9 +104,9 @@ internal sealed class PluginIngest
         // load (LoadOrderMirror's reconcile), on every re-derivation of a tracked plugin
         // (LoadOrderMirror.ReingestPluginFromSource), and through its own binary fallback, each of
         // which can land on a key that already holds a snapshot. Deleting here rather than at any of
-        // those call sites is what makes every present and future caller inherit it. Never removes a *correct* snapshot: after a full re-index from
-        // one source, a prior divergence describes bytes that no longer relate to what was just
-        // ingested.
+        // those call sites is what makes every present and future caller inherit it. Never removes a
+        // *correct* snapshot: after a full re-index from one source, a prior divergence describes
+        // bytes that no longer relate to what was just ingested.
         DeleteExistingForOrigin("records_committed", plugin, origin);
     }
 

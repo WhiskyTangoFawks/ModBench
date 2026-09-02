@@ -205,6 +205,45 @@ public sealed class SourceIngestTests
         Assert.Equal(WorkingTreeState.None, byFormKey[mod.Race.ToString()].WorkingTreeState);
     }
 
+    // ---- The named source re-ingest door (#672) ----
+
+    /// <summary>
+    /// <see cref="ILoadOrderMirror.ReingestPluginFromSource"/> asked for directly, which is how the
+    /// rollback work uses it: the source tree has moved under a live load order — a revert, a
+    /// checkout, a hand edit — and the index is told to re-derive from it. No reload, no reconcile,
+    /// no watcher; the whole point is that a caller who has just moved the source can say so.
+    /// </summary>
+    [Fact]
+    public void ReingestPluginFromSource_ReDerivesFromTheMovedSourceTree_UnderALiveLoadOrder()
+    {
+        using var mod = TrackedModFixture.Tracked();
+
+        var before = mod.Mirror.Index!.At(RecordRef.Effective).GetDocument(mod.Npc.ToString(), mod.Plugin)!;
+        Assert.Equal(TrackedModFixture.NpcEditorId, before.EditorId);
+
+        var text = File.ReadAllText(mod.NpcSourceFile);
+        File.WriteAllText(mod.NpcSourceFile, text.Replace(
+            TrackedModFixture.NpcEditorId, "ExternallyRenamed", StringComparison.Ordinal));
+
+        ((ILoadOrderMirror)mod.Mirror).ReingestPluginFromSource(mod.Plugin);
+
+        var after = mod.Mirror.Index!.At(RecordRef.Effective).GetDocument(mod.Npc.ToString(), mod.Plugin)!;
+        Assert.Equal("ExternallyRenamed", after.EditorId);
+    }
+
+    /// <summary>An untracked copy has no source truth to re-derive from, so asking this door for one
+    /// is a caller mistake rather than a no-op — the binary re-index
+    /// (<see cref="ILoadOrderMirror.ReindexPlugin"/>) is what serves it, and silently doing that here
+    /// would make the two doors indistinguishable, which is the distinction #672 asked for.</summary>
+    [Fact]
+    public void ReingestPluginFromSource_OnAnUntrackedPlugin_Throws()
+    {
+        using var mod = TrackedModFixture.Untracked();
+
+        Assert.Throws<InvalidOperationException>(
+            () => ((ILoadOrderMirror)mod.Mirror).ReingestPluginFromSource(mod.Plugin));
+    }
+
     // ---- A source tree that cannot be read degrades to the binary, visibly ----
 
     [Fact]
@@ -226,6 +265,40 @@ public sealed class SourceIngestTests
         // ...and the degradation is *visible*, which is the whole mitigation: a user reading
         // pre-Track binary content while believing they are reading their tracked source is the hazard.
         var failure = Assert.Single(reloaded.Status.Failures);
+        Assert.Equal(TrackedModFixture.PluginName, failure.Name);
+        Assert.Contains("source tree", failure.Reason, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// The same unreadable tree, at <b>re-ingest</b> rather than at load — and the answer is
+    /// deliberately the opposite one (#672). At load there are no rows yet, so the binary beats
+    /// nothing; here the index already holds this plugin's source-derived rows, and overwriting them
+    /// with compiled content is exactly the silent loss #672 exists to stop. So the last good
+    /// source-derived answer stands and the caller is told the re-ingest did not happen — but the
+    /// failure is still visible in the load order's own channel, because "never silently" binds
+    /// either way.
+    /// </summary>
+    [Fact]
+    public async Task AnUnreadableSourceTree_AtReindex_KeepsTheSourceDerivedRows_AndSaysSoInTheFailures()
+    {
+        using var mod = TrackedModFixture.Tracked();
+
+        var edited = new RecordEditService(mod.Mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance)
+            .EditField(mod.Plugin, mod.Npc.ToString(), "height_max", JsonDocument.Parse("0.75").RootElement);
+        Assert.True(edited.Applied, edited.Message);
+
+        File.WriteAllText(
+            Path.Combine(mod.ModFolder, SourceRecordPath.RootFor(TrackedModFixture.PluginName), "RecordData.json"),
+            "{ this is not json");
+
+        await Assert.ThrowsAnyAsync<Exception>(() => ((ILoadOrderMirror)mod.Mirror).ReindexPlugin(mod.Plugin));
+
+        // The binary was never consulted: it holds the fixture's untouched height_max, and what
+        // still answers is the edited 0.75 the source-derived rows already carried.
+        var document = mod.Mirror.Index!.At(RecordRef.Effective).GetDocument(mod.Npc.ToString(), mod.Plugin)!;
+        Assert.Equal(0.75f, Assert.IsType<float>(document.Fields.Single(f => f.Metadata.Name == "height_max").Value));
+
+        var failure = Assert.Single(mod.Mirror.Status.Failures);
         Assert.Equal(TrackedModFixture.PluginName, failure.Name);
         Assert.Contains("source tree", failure.Reason, StringComparison.OrdinalIgnoreCase);
     }
