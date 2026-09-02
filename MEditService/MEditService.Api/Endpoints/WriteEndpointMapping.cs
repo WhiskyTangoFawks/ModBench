@@ -137,12 +137,12 @@ internal static class WriteEndpointMapping
     /// so leaving it <c>null</c> there reproduces letting that exception type propagate unhandled,
     /// exactly as those three sites do today.</para>
     /// </summary>
-    /// <para>#673: <paramref name="gate"/> is taken around <paramref name="execute"/> and nothing
-    /// else. Validation and the reception log run before it, so a malformed request is answered
-    /// without ever queueing; <paramref name="onApplied"/> and every error mapper run after it, so a
-    /// response is shaped while the next write is already free to start. Taking it here rather than
-    /// inside each service is what makes "one write at a time" a property of the write <i>path</i>
-    /// rather than of six independent remembering-to.</para>
+    /// <param name="gate">#673: taken around <paramref name="execute"/> and nothing else. Validation
+    /// and the reception log run before it, so a malformed request is answered without ever
+    /// queueing; <paramref name="onApplied"/> and every error mapper run after it, so a response is
+    /// shaped while the next write is already free to start. Taking it here rather than inside each
+    /// service is what makes "one write at a time" a property of the write <i>path</i> rather than
+    /// of six handlers independently remembering to.</param>
     internal static IResult Execute(
         IndexWriteGate gate,
         Action? logReceived,

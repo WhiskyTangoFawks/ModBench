@@ -526,6 +526,12 @@ public sealed class LoadOrderMirror(
     /// </summary>
     public PluginResponse CreatePlugin(string name, string path, string origin)
     {
+        // #673: this indexes a whole new plugin (index.Index below), so it is a write like any
+        // other. _lock alone would not order it against an in-flight edit — the edit path writes
+        // through IRecordIndex without holding _lock at all, so the two would still meet on one
+        // DuckDB connection. Outside _lock, like every other acquisition here.
+        using var _ = WriteGate.Enter();
+
         if (string.IsNullOrWhiteSpace(name))
             throw new ArgumentException("Plugin name cannot be empty.", nameof(name));
         if (string.IsNullOrWhiteSpace(path))
@@ -583,6 +589,12 @@ public sealed class LoadOrderMirror(
         // external-change watcher's timer, with no request behind it and nothing else ordering it
         // against an in-flight edit. Reentrant, so the ReingestPluginFromSource branch below taking
         // it again for its own callers costs a recursion count rather than a deadlock.
+        //
+        // The `using` releases when this method *returns*, not when the returned Task completes,
+        // which is correct only because both branches below are fully synchronous (ReindexOne ends
+        // in `return Task.CompletedTask`). Introducing a real `await` under either would silently
+        // ungate the write: make this method `async` at the same time, so the gate spans the whole
+        // of it.
         using var _ = WriteGate.Enter();
 
         var (metadata, index, gameRelease) = RequireHeldCopy(key);
@@ -728,6 +740,17 @@ public sealed class LoadOrderMirror(
 
     private void ApplyFilter(string? sql)
     {
+        // #673: materializing _filter is an index write, and the filter box is live while an edit
+        // runs — so SetFilter/ClearFilter racing an in-flight edit is the ordinary case, not an
+        // exotic one. Gated here, at the public doors' one shared implementation.
+        //
+        // ReapplyFilter is deliberately *not* gated: every one of its call sites is already inside
+        // a gated write (the edit path, the read-time self-heal, this class's own mutation doors) or
+        // inside the reconcile, which holds _reconcileGate instead. Taking the gate there would add
+        // nothing those callers do not already have, and would newly make a reconcile wait on an
+        // edit.
+        using var _ = WriteGate.Enter();
+
         lock (_lock)
         {
             var (loadOrder, index) = RequireScopeCore();

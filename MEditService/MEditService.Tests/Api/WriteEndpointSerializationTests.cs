@@ -1,6 +1,7 @@
 using MEditService.Api.Endpoints;
 using MEditService.Core.Edits;
 using MEditService.Core.Records;
+using MEditService.Tests.TestSupport;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.HttpResults;
 
@@ -75,28 +76,20 @@ public sealed class WriteEndpointSerializationTests
     /// half-applied and there is no source file to report as unwritable.
     /// </summary>
     [Fact]
-    public async Task AWriteThatWaitsOutTheTimeout_IsServiceUnavailable_NotAWriteFailure()
+    public void AWriteThatWaitsOutTheTimeout_IsServiceUnavailable_NotAWriteFailure()
     {
         var gate = new IndexWriteGate(TimeSpan.FromMilliseconds(150));
-        using var held = new ManualResetEventSlim();
-        using var release = new ManualResetEventSlim();
-        var holder = Task.Run(() =>
-        {
-            using var _ = gate.Enter();
-            held.Set();
-            release.Wait(TimeSpan.FromSeconds(30));
-        });
-        Assert.True(held.Wait(TimeSpan.FromSeconds(10)));
 
+        IResult result;
         var executed = false;
-        var result = Run(gate, () =>
+        using (new GateHeldElsewhere(gate))
         {
-            executed = true;
-            return RecordEditResult.Success();
-        });
-
-        release.Set();
-        await holder.WaitAsync(TimeSpan.FromSeconds(30));
+            result = Run(gate, () =>
+            {
+                executed = true;
+                return RecordEditResult.Success();
+            });
+        }
 
         var problem = Assert.IsType<ProblemHttpResult>(result);
         Assert.Equal(503, problem.StatusCode);

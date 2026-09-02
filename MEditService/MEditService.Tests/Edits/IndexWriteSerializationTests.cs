@@ -4,6 +4,7 @@ using MEditService.Core.Records;
 using MEditService.Core.Schema;
 using MEditService.Core.Serialization;
 using MEditService.Core.Source;
+using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace MEditService.Tests.Edits;
@@ -32,38 +33,6 @@ public sealed class IndexWriteSerializationTests : IDisposable
     private SourceFreshness Freshness() =>
         new(_mod.Mirror, NullLogger<SourceFreshness>.Instance, new RecordTextCodec(NullLogger<RecordTextCodec>.Instance));
 
-    /// <summary>
-    /// Holds the write gate on a helper thread for as long as the returned handle lives — the one
-    /// mechanic every test here shares. Deliberately not on the calling thread: the gate is
-    /// reentrant, so a test that took it itself would observe nothing.
-    /// </summary>
-    private sealed class GateHeldElsewhere : IDisposable
-    {
-        private readonly ManualResetEventSlim _release = new();
-        private readonly Task _holder;
-
-        public GateHeldElsewhere(IndexWriteGate gate)
-        {
-            var held = new ManualResetEventSlim();
-            _holder = Task.Run(() =>
-            {
-                using var _ = gate.Enter();
-                held.Set();
-                _release.Wait(TimeSpan.FromSeconds(30));
-            });
-            if (!held.Wait(TimeSpan.FromSeconds(10)))
-                throw new InvalidOperationException("The helper thread never took the gate.");
-            held.Dispose();
-        }
-
-        public void Dispose()
-        {
-            _release.Set();
-            _holder.GetAwaiter().GetResult();
-            _release.Dispose();
-        }
-    }
-
     /// <summary>Runs <paramref name="work"/> on a background thread and says whether it finished
     /// within <paramref name="within"/>. The task is returned so the caller can let it finish once
     /// the gate is released.</summary>
@@ -73,7 +42,14 @@ public sealed class IndexWriteSerializationTests : IDisposable
         return (task, task.Wait(within));
     }
 
+    // Two different windows on purpose. BlockedWindow is how long a call that *should* be queued is
+    // given to prove it isn't — short, because the helper holds the gate for far longer and a
+    // gateless call finishes in milliseconds. ServedWindow is how long a call that should *not* be
+    // queued is given to finish — generous, because a slow CI box must not turn "was served" into a
+    // failure, and the helper still holds the gate for 30s either way, so a genuinely queued call
+    // cannot sneak in under it.
     private static readonly TimeSpan BlockedWindow = TimeSpan.FromMilliseconds(750);
+    private static readonly TimeSpan ServedWindow = TimeSpan.FromSeconds(10);
     private static readonly TimeSpan Generous = TimeSpan.FromSeconds(30);
 
     // --- AC2: the external-change watcher's timer-driven index writes take the gate ---
@@ -115,6 +91,48 @@ public sealed class IndexWriteSerializationTests : IDisposable
         await work.WaitAsync(Generous);
     }
 
+    // --- The other two live index writes, found by review rather than named in the ticket ---
+
+    /// <summary>
+    /// <c>SetFilter</c> materializes the <c>_filter</c> table — an index write on the same shared
+    /// connection — and the filter box is live while an edit runs, so racing one is the ordinary
+    /// case. <c>_lock</c> alone does not order it against an edit: the edit path writes through
+    /// <c>IRecordIndex</c> without ever taking <c>_lock</c>.
+    /// </summary>
+    [Fact]
+    public async Task SetFilter_WaitsForAnInFlightWriteToRelease()
+    {
+        Task work;
+        using (new GateHeldElsewhere(Mirror.WriteGate))
+        {
+            bool finished;
+            (work, finished) = RunAndWait(() => Mirror.SetFilter("SELECT form_key FROM records"), BlockedWindow);
+            Assert.False(finished, "SetFilter materialized _filter without taking the write gate");
+        }
+
+        await work.WaitAsync(Generous);
+    }
+
+    /// <summary>
+    /// <c>CreatePlugin</c> indexes a whole new plugin. Same reasoning as <c>SetFilter</c> above, and
+    /// it is the sibling of the already-gated <c>CreateRecord</c> on the same surface.
+    /// </summary>
+    [Fact]
+    public async Task CreatePlugin_WaitsForAnInFlightWriteToRelease()
+    {
+        Task work;
+        using (new GateHeldElsewhere(Mirror.WriteGate))
+        {
+            bool finished;
+            (work, finished) = RunAndWait(
+                () => Mirror.CreatePlugin("GatedCreate.esp", _mod.ModFolder, TrackedModFixture.ModFolderOrigin),
+                BlockedWindow);
+            Assert.False(finished, "CreatePlugin indexed a new plugin without taking the write gate");
+        }
+
+        await work.WaitAsync(Generous);
+    }
+
     // --- AC3: the read-path freshness self-heal takes the gate only when it is about to write ---
 
     /// <summary>
@@ -130,7 +148,7 @@ public sealed class IndexWriteSerializationTests : IDisposable
         freshness.Validate(_mod.Npc.ToString()); // settle any first-read self-heal before measuring
 
         using var _ = new GateHeldElsewhere(Mirror.WriteGate);
-        var (_, finished) = RunAndWait(() => freshness.Validate(_mod.Npc.ToString()), BlockedWindow);
+        var (_, finished) = RunAndWait(() => freshness.Validate(_mod.Npc.ToString()), ServedWindow);
 
         Assert.True(finished, "a drift-free read acquired the write gate");
     }
@@ -169,7 +187,7 @@ public sealed class IndexWriteSerializationTests : IDisposable
         PagedResult<RecordSummary>? listing = null;
         var (_, finished) = RunAndWait(
             () => listing = Reads().GetRecords(type: null, plugin: null, search: null, limit: 500, offset: 0),
-            BlockedWindow);
+            ServedWindow);
 
         Assert.True(finished, "a record listing queued behind an in-flight write");
         Assert.NotEmpty(listing!.Items);

@@ -77,6 +77,11 @@ public sealed class IndexWriteGate(TimeSpan? timeout = null)
 /// (ADR-0026: a distinguishable shape, never prose a client has to match on).
 ///
 /// <para>Never a write <i>failure</i>: nothing was attempted, so nothing is half-applied.</para>
+///
+/// <para>The three parameterless/message/inner-exception constructors below are not dead code and
+/// must not be trimmed: Roslynator's RCS1194 ("Implement exception constructors") is an error here
+/// under <c>TreatWarningsAsErrors</c>, so removing them fails the build. <c>NoLoadOrderException</c>
+/// carries the same three for the same reason.</para>
 /// </summary>
 public sealed class IndexWriteGateTimeoutException : TimeoutException
 {
