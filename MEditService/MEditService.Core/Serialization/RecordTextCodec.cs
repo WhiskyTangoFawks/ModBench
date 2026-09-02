@@ -70,22 +70,19 @@ public sealed class RecordTextCodec(ILogger<RecordTextCodec> logger)
 
     public async Task SerializeAsync(IMajorRecordGetter record, string filePath, GameRelease gameRelease, CancellationToken cancel = default)
     {
-        // A container's own RecordData.json carries its folder-split children's order as well as its
-        // own fields (ADR-0042 decision 4), and this method writes only the fields — so the order is
-        // lifted over the write rather than being silently dropped by it. A no-op for every document
-        // that carries no order, which is most of them.
-        var order = Source.SourceChildOrder.CaptureOrder(filePath);
-        await SerializeRecordAsync(record, filePath, gameRelease, cancel).ConfigureAwait(false);
-        Source.SourceChildOrder.RestoreOrder(filePath, order);
-    }
-
-    private async Task SerializeRecordAsync(
-        IMajorRecordGetter record, string filePath, GameRelease gameRelease, CancellationToken cancel)
-    {
         // No Directory.CreateDirectory here, deliberately: this codec's file-writing caller decides
         // directory-creation policy with its own test.
         var directory = Path.GetDirectoryName(filePath);
         var bytes = await SerializeCoreAsync(record, gameRelease, directory ?? string.Empty, cancel).ConfigureAwait(false);
+
+        // A container's own RecordData.json carries its folder-split children's order as well as its
+        // own fields (ADR-0042 decision 4), and this method serializes only the fields — so the order
+        // is carried over into the bytes about to be written rather than being dropped by them. Merged
+        // *before* the write below, never restored by a second write afterwards: a second write would
+        // reopen precisely the torn-file window the temp-and-rename exists to close, and a crash in
+        // that window would lose the order silently. A no-op for every document that carries no order,
+        // which is most of them.
+        bytes = Source.SourceChildOrder.CarryOrderInto(bytes, filePath);
 
         // Write-then-rename, not a direct write to filePath: File.Create truncates its target
         // immediately, before any new byte lands, so a direct write leaves a previously-valid

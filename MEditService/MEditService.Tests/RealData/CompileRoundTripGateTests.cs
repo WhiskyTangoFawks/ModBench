@@ -50,17 +50,19 @@ public sealed class CompileRoundTripGateTests(CompileRoundTripGateFixture fixtur
     : IClassFixture<CompileRoundTripGateFixture>
 {
     /// <summary>
-    /// The source tree <paramref name="pluginPath"/> would produce, obtained through
-    /// <see cref="TrackService.SerializeToPristineFiles"/> — the same door Track and the
-    /// external-change absorber write through — rather than by re-implementing it here.
+    /// The source tree <paramref name="pluginPath"/> would produce — assembled here, from the
+    /// serializer and the splice as two separate steps, rather than by calling the production door
+    /// that composes them.
     ///
-    /// <para>It used to call the whole-mod serializer and assemble the result by hand, which stopped
-    /// being equivalent the moment a tree became more than what that serializer writes: since #566 the
-    /// door also splices each collection's ordered child list into its parent's document (ADR-0042
-    /// decision 4), and a hand-rolled copy silently produced a tree missing every one of them. That is
-    /// precisely the hazard <c>SerializeToPristineFiles</c>' own doc comment names — a second
-    /// implementation satisfying the whitelist guard's letter while defeating its purpose — so this
-    /// delegates instead of duplicating.</para>
+    /// <para><b>The independence is the point, and it was briefly lost.</b> This once called only the
+    /// whole-mod serializer, which stopped being the whole story when the door began splicing ordered
+    /// child lists (ADR-0042 decision 4) — so it silently derived trees missing every carrier.
+    /// The obvious repair was to delegate to <c>TrackService.SerializeToPristineFiles</c>, and that is
+    /// wrong in a way worth recording: it puts identical production code on both sides of a byte
+    /// comparison whose entire job is to detect the tree being wrong, so any defect in the splice
+    /// would agree with itself and pass. Composing the two steps here keeps the comparison able to
+    /// fail — a change to <i>what the door composes</i> shows up as a diff rather than cancelling
+    /// out.</para>
     /// </summary>
     private static Dictionary<string, byte[]> DeriveSourceTreeFromBinary(string pluginPath, GameRelease release)
     {
@@ -72,10 +74,28 @@ public sealed class CompileRoundTripGateTests(CompileRoundTripGateFixture fixtur
         // mod and call the difference a compile failure.
         var mod = ModFactory.ImportSetter(new ModPath(ModKey.FromFileName(pluginFileName), pluginPath), release);
 
-        return TrackService.SerializeToPristineFiles(mod, pluginFileName)
-            .GetAwaiter().GetResult()
-            .ToDictionary(file => file.RelativePath, file => file.Content, StringComparer.Ordinal);
+        var scratch = Directory.CreateTempSubdirectory("medit-compile-derived-").FullName;
+        try
+        {
+            RecordTextCodecGeneratorSeed
+                .SerializeWholeMod((IFallout4ModGetter)mod, scratch, InlineWorkDropoff.Instance, CancellationToken.None)
+                .GetAwaiter().GetResult();
+            SourceChildOrder.SpliceInto(scratch, mod);
+
+            return Directory.EnumerateFiles(scratch, "*.json", SearchOption.AllDirectories)
+                .ToDictionary(
+                    f => Path.Combine(SourceRecordPath.RootFor(pluginFileName), Path.GetRelativePath(scratch, f)),
+                    f => StripCarriageReturns(File.ReadAllBytes(f)));
+        }
+        finally
+        {
+            CompileRoundTripGateFixture.TryDelete(scratch);
+        }
     }
+
+    // TrackService's own canonicalization at the door, mirrored here so the derived tree is compared
+    // against the tracked one on equal terms rather than differing by line endings on Windows.
+    private static byte[] StripCarriageReturns(byte[] bytes) => [.. bytes.Where(b => b != (byte)'\r')];
 
     // The container layout — Cells/<block>/<subblock>/... and Worldspaces/<ws>/<X, Y>/<X, Y>/...
     // nesting — after a real Track. This class's fixture is the one fixture with real populated

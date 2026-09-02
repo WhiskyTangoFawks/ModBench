@@ -369,19 +369,20 @@ internal sealed class RecordCopy(ILoadOrderMirror mirror, SchemaReflector schema
 
         var record = BarePartialFormAncestor(cellFormKey, "cell", release);
 
-        var relativePath = RecordEditService.InteriorCellDestinationPath(
-            destinationModFolder, destinationPlugin.Name, cellFormKey, editorId: null, release);
+        var placement = SourcePlacement.For(
+            destinationPlugin.Name, "cell", cellFormKey, editorId: null, release,
+            RecordEditService.EnsureInteriorCellBlockPath(destinationModFolder, destinationPlugin.Name, release));
+        var relativePath = placement.RelativePath;
         var sourcePath = Path.Combine(destinationModFolder, relativePath);
         var bodyText = SourceUnitResolver.InMintedDirectory(
             Path.GetDirectoryName(sourcePath)!,
             () => RecordEditService.SerializeAndWrite(codec, record, sourcePath, release));
 
         // Order is parent data (ADR-0042 decision 4): the cell's own directory is its identity, and
-        // its position among the sub-block's cells is one line in the sub-block's own document.
+        // its position among the sub-block's cells is one line in the sub-block's own document — which
+        // the placement already named, so nothing here re-derives it from the path.
         SourceChildOrder.Add(
-            SourceChildOrder.CarrierFor(Path.GetDirectoryName(Path.GetDirectoryName(sourcePath)!)!, parentIsRecord: false),
-            nameof(Mutagen.Bethesda.Fallout4.CellSubBlock.Cells),
-            cellFormKey.ToString());
+            Path.Combine(destinationModFolder, placement.CarrierRelativePath), placement.Key, cellFormKey.ToString());
 
         index.CreateWorkingTreeRecord(destinationPlugin, cellFormKey, sourceCellDocument.RecordType, bodyText);
         mirror.ReapplyFilter();

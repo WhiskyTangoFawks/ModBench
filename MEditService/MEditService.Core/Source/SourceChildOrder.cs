@@ -1,6 +1,8 @@
 using System.Collections;
 using System.IO.Abstractions;
 using System.Reflection;
+using System.Text;
+using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Mutagen.Bethesda.Plugins;
@@ -68,10 +70,24 @@ internal static class SourceChildOrder
     internal const string MemberName = "MEditChildOrder";
 
 
-    // Matches what the whole-mod door's own writer produces, so a carrier this class rewrites is
-    // formatted exactly like one it did not (RecordEditService.GroupRecordDataOptions says the same
-    // for its own minimal writes).
-    private static readonly JsonSerializerOptions CarrierOptions = new() { WriteIndented = true };
+    /// <summary>
+    /// Matches what the whole-mod door's own writer produces, so a carrier this class rewrites is
+    /// formatted exactly like one it did not (<c>RecordEditService.GroupRecordDataOptions</c> says the
+    /// same for its own minimal writes).
+    ///
+    /// <para><b><c>UnsafeRelaxedJsonEscaping</c> is load-bearing, not a preference.</b> These writes
+    /// re-emit a <i>whole document</i> that Newtonsoft produced, and <c>System.Text.Json</c>'s default
+    /// encoder escapes <c>'</c>, <c>&amp;</c>, <c>&lt;</c>, <c>&gt;</c>, <c>+</c> and every non-ASCII
+    /// character where Newtonsoft does not. Left at the default, every carrier document — every
+    /// Quest, Worldspace and DialogTopic — would be silently re-encoded the moment it gained an
+    /// ordered child list, giving the tree two encodings, breaking the two-door byte parity ADR-0042
+    /// pins, and turning a one-record edit into a whole-file diff for any EditorID containing an
+    /// apostrophe (which is most FO4 dialogue data). The name is alarming and the alternative is
+    /// worse: this is a file format that must agree byte-for-byte with another writer, not a payload
+    /// being interpolated into HTML. <c>CarrierEncodingTests</c> pins the agreement.</para>
+    /// </summary>
+    private static readonly JsonSerializerOptions CarrierOptions =
+        new() { WriteIndented = true, Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
 
     /// <summary>
     /// One folder-split collection: where its order is carried, under what key, its children in the
@@ -135,16 +151,25 @@ internal static class SourceChildOrder
     {
         var children = ((IEnumerable)group).Cast<object>().ToList();
 
-        // Resolved lazily, and against the cache's own generic argument rather than a child's runtime
-        // type. Both matter: the write side walks an IModGetter, whose records are BinaryOverlay
-        // types that do not derive from the concrete setter type Set takes — picking the overload by
-        // asking whether it accepts a child would find nothing there, and it is also the one side
-        // that never reorders anything. So the lookup belongs inside the delegate, where it only ever
-        // runs on the read side's genuinely-settable mod.
-        var cache = group.GetType().GetProperty("RecordCache")!.GetValue(group)!;
-
         return (children, ordered =>
         {
+            // Reflection over RecordCache, and NOT the non-generic IGroup/IClearable pair that looks
+            // like the obvious way to avoid it. Both apparent simplifications were tried here and both
+            // are wrong at this project's pin:
+            //
+            //  - IGroup.SetUntyped(IEnumerable<IMajorRecord>) infinitely recurses. It forwards to
+            //    SetUntyped of its own ConfirmCorrectType-projected argument, and that projection is
+            //    typed IEnumerable of the group's own element, which binds straight back to the same
+            //    untyped overload by covariance rather than to the typed Set. Observed as a
+            //    StackOverflow that aborted the whole test run.
+            //  - IClearable.Clear() on the generated group is Loqui's "clear every field", not "empty
+            //    the records" — it wipes the group's own metadata (LastModified) alongside its
+            //    children, which is precisely what a flat group's GroupRecordData.json carries.
+            //    Observed as three real-plugin round-trip gate failures naming that file.
+            //
+            // Clearing and refilling RecordCache touches the records and nothing else, which is the
+            // whole intent. Do not "simplify" this without re-reading the two paragraphs above.
+            var cache = group.GetType().GetProperty("RecordCache")!.GetValue(group)!;
             var cacheType = cache.GetType();
             var element = cacheType.GetGenericArguments()[0];
             cacheType.GetMethod("Clear", Type.EmptyTypes)!.Invoke(cache, null);
@@ -279,37 +304,31 @@ internal static class SourceChildOrder
     }
 
     /// <summary>
-    /// The ordered child lists <paramref name="documentPath"/> currently carries, as opaque text to
-    /// hand back to <see cref="RestoreOrder"/> — null when it carries none.
+    /// <paramref name="freshBytes"/> — a record document the codec has just serialized — with whatever
+    /// ordered child lists the document already on disk at <paramref name="documentPath"/> carries
+    /// merged back into it. Returns <paramref name="freshBytes"/> unchanged when there are none, which
+    /// is the overwhelmingly common case.
     ///
-    /// <para><b>A record document is a carrier as well as a record, and the codec only knows about
-    /// the record half.</b> Serializing a container over its own <c>RecordData.json</c> writes exactly
-    /// the record's own fields — so without capture-and-restore around that write, every point write
-    /// to a Quest, Worldspace or DialogTopic silently drops the ordered child list naming its
-    /// folder-split children, and the next read refuses the whole tree as drift. Renumbering a quest
-    /// reproduced precisely that.</para>
+    /// <para><b>A record document is a carrier as well as a record, and the codec only knows about the
+    /// record half.</b> Serializing a container over its own <c>RecordData.json</c> writes exactly the
+    /// record's own fields — so without this, every point write to a Quest, Worldspace or DialogTopic
+    /// silently drops the ordered child list naming its folder-split children, and the next read
+    /// refuses the whole tree as drift. Renumbering a quest reproduced precisely that.</para>
     ///
-    /// <para>Split into two calls rather than wrapped around a delegate because the write it spans is
-    /// asynchronous: a wrapper would have to either block on the write or restore before it finished,
-    /// and the second silently loses the very thing this exists to keep.</para>
+    /// <para>Returns bytes rather than rewriting the file, so the caller still performs exactly one
+    /// atomic write. An earlier shape captured the member, let the codec write, then wrote the member
+    /// back — which reintroduced the torn-write window the codec's own temp-and-rename is there to
+    /// close, and doubled the IO per record.</para>
     /// </summary>
-    internal static string? CaptureOrder(string documentPath, IFileSystem? fileSystem = null)
+    internal static byte[] CarryOrderInto(byte[] freshBytes, string documentPath, IFileSystem? fileSystem = null)
     {
         var files = (fileSystem ?? new FileSystem()).File;
-        return files.Exists(documentPath) ? ReadCarrier(files, documentPath)[MemberName]?.ToJsonString() : null;
-    }
+        if (!files.Exists(documentPath)) return freshBytes;
+        if (ReadCarrier(files, documentPath)[MemberName] is not { } carried) return freshBytes;
 
-    /// <summary>Puts back what <see cref="CaptureOrder"/> took, after the write that would have lost
-    /// it. A no-op for the null it returns when a document carries no order, which is most of
-    /// them.</summary>
-    internal static void RestoreOrder(string documentPath, string? captured, IFileSystem? fileSystem = null)
-    {
-        if (captured is null) return;
-
-        var files = (fileSystem ?? new FileSystem()).File;
-        var document = ReadCarrier(files, documentPath);
-        document[MemberName] = JsonNode.Parse(captured);
-        files.WriteAllText(documentPath, document.ToJsonString(CarrierOptions));
+        var document = JsonNode.Parse(freshBytes) as JsonObject ?? new JsonObject();
+        document[MemberName] = carried.DeepClone();
+        return Encoding.UTF8.GetBytes(document.ToJsonString(CarrierOptions));
     }
 
     /// <summary>The ordered child list <paramref name="carrierPath"/> records under
@@ -438,8 +457,23 @@ internal static class SourceChildOrder
     {
         var system = fileSystem ?? new FileSystem();
         var files = system.File;
+
+        // Every carrier already in the tree, so the ones this walk does not yield can have their
+        // member removed rather than left behind. Emptying a collection is otherwise invisible here:
+        // the walk skips a collection with no children, so nothing would reassign that document's
+        // member and a list naming the vanished child would survive — a tree the read path refuses.
+        // Harmless for Track, which splices a scratch tree that has no carriers yet; load-bearing for
+        // ExternalChangeEditLander, which splices the live source root.
+        var stale = system.Directory.Exists(treeRoot)
+            ? system.Directory
+                .EnumerateFiles(treeRoot, "*.json", SearchOption.AllDirectories)
+                .Where(IsCarrierName)
+                .ToHashSet(StringComparer.Ordinal)
+            : [];
+
         foreach (var group in Enumerate(treeRoot, mod).GroupBy(c => c.CarrierPath, StringComparer.Ordinal))
         {
+            stale.Remove(group.Key);
             var document = ReadCarrier(files, group.Key);
             var orders = new JsonObject();
 
@@ -456,6 +490,21 @@ internal static class SourceChildOrder
             system.Directory.CreateDirectory(Path.GetDirectoryName(group.Key)!);
             files.WriteAllText(group.Key, document.ToJsonString(CarrierOptions));
         }
+
+        foreach (var carrier in stale)
+        {
+            var document = ReadCarrier(files, carrier);
+            if (document.Remove(MemberName)) files.WriteAllText(carrier, document.ToJsonString(CarrierOptions));
+        }
+    }
+
+    /// <summary>Whether a path is one of the two documents that can carry an ordered child list — the
+    /// only files <see cref="SpliceInto"/> may strip a stale member from.</summary>
+    private static bool IsCarrierName(string path)
+    {
+        var leaf = Path.GetFileName(path);
+        return leaf.Equals(SourceUnitResolver.RecordDataFileName, StringComparison.Ordinal)
+            || leaf.Equals(SourceUnitResolver.GroupRecordDataFileName, StringComparison.Ordinal);
     }
 
     /// <summary>

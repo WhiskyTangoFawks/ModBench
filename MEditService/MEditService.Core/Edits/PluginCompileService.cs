@@ -301,9 +301,9 @@ public sealed class PluginCompileService(
     /// than a record via <c>Equals</c> — there is no independent object to compare against here
     /// either, only the regenerated text and the real text.</para>
     ///
-    /// <para>A structural write's own group-folder
-    /// renormalization (<see cref="SourceUnitResolver.RenormalizeGroupOrder"/>) is what keeps a
-    /// gap-leaving delete/renumber from ever reaching this comparison mismatched — this method's own
+    /// <para>A structural write maintaining its parent's ordered child list
+    /// (<see cref="SourceChildOrder"/>) is what keeps a delete or renumber from ever reaching this
+    /// comparison mismatched — this method's own
     /// comparison is byte-exact and per-path. One case it correctly refuses
     /// because of that: a crash mid-renormalization, which leaves a group folder half-renumbered —
     /// this gate catches that the same way it catches any other genuine divergence, pointing at

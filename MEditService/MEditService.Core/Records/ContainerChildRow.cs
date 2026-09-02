@@ -39,8 +39,8 @@ namespace MEditService.Core.Records;
 /// folder-split child (a Quest's DialogTopic, a DialogTopic's Response) has no parent document to
 /// reserialize at all, so its own slot is told explicitly instead, via
 /// <c>IRecordIndex.ReplaceContainerChildSlot</c>, computed the same way
-/// <c>SourceUnitResolver.RenormalizeGroupOrder</c> closes the matching gap in the tree's own
-/// <c>"[N]"</c> file-name prefixes. The alternative — making every reader of this table
+/// <c>SourceChildOrder</c> closes the matching gap in the parent document's own ordered child
+/// list. The alternative — making every reader of this table
 /// existence-check against <c>records</c> instead — was rejected: it would have turned "these tables
 /// track Effective" into a documented falsehood every future reader has to remember, rather than an
 /// invariant the write path upholds.</para>
