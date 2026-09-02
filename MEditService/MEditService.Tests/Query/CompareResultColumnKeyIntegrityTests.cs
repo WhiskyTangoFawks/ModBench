@@ -166,6 +166,7 @@ public sealed class CompareResultColumnKeyIntegrityTests
         public IRecordReads? Reads => reads;
         // This double exists for read-model shape assertions only — nothing here writes.
         public IRecordIndex? Index => null;
+        public IndexWriteGate WriteGate { get; } = new();
         // These stubs never load, so they are always in the no-load-order state.
         public LoadOrderStatus Status => LoadOrderStatus.None;
         public (ILoadOrder LoadOrder, IRecordReads Reads) RequireScope() => (loadOrder, reads);

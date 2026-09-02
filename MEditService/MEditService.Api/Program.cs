@@ -74,6 +74,11 @@ try
     builder.Services.AddSingleton<PluginWriter>();
     builder.Services.AddSingleton<IModImporter, DefaultModImporter>();
     builder.Services.AddSingleton<ILoadOrderMirror, LoadOrderMirror>();
+    // #673: resolved *from* the mirror rather than registered on its own, so there is exactly one
+    // write gate and it is the one the mirror's own write doors and the read-time source self-heal
+    // already take. A bare `AddSingleton<IndexWriteGate>()` would compile, inject cleanly, and
+    // serialize the write endpoints against nothing at all.
+    builder.Services.AddSingleton(sp => sp.GetRequiredService<ILoadOrderMirror>().WriteGate);
     builder.Services.AddSingleton<IRecordQueryService, RecordQueryService>();
     builder.Services.AddSingleton<MalformedPluginQueryService>();
     builder.Services.AddSingleton<IWorldspaceQueryService, WorldspaceQueryService>();

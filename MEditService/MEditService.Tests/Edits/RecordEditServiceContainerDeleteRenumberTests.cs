@@ -155,6 +155,9 @@ public sealed class RecordEditServiceContainerDeleteRenumberTests : IDisposable
         public ILoadOrder? LoadOrder => inner.LoadOrder;
         public IRecordReads? Reads => inner.Reads;
         public IRecordIndex? Index => overrideIndex;
+        // The real mirror's gate, not one of this double's own: everything under test still
+        // serializes against the same object production would use.
+        public IndexWriteGate WriteGate => inner.WriteGate;
         public LoadOrderStatus Status => inner.Status;
         public (ILoadOrder LoadOrder, IRecordReads Reads) RequireScope() => inner.RequireScope();
         public void Reconcile(

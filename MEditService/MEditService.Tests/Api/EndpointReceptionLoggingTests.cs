@@ -113,6 +113,7 @@ public sealed class EndpointReceptionLoggingTests
         public ILoadOrder? LoadOrder => null;
         public IRecordReads? Reads => null;
         public IRecordIndex? Index => null;
+        public IndexWriteGate WriteGate { get; } = new();
         // These stubs never load, so they are always in the no-load-order state.
         public LoadOrderStatus Status => LoadOrderStatus.None;
         public (ILoadOrder LoadOrder, IRecordReads Reads) RequireScope() => throw new NoLoadOrderException();

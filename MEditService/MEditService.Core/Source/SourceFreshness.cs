@@ -82,8 +82,14 @@ public sealed class SourceFreshness(ILoadOrderMirror mirror, ILogger<SourceFresh
             {
                 ValidateOne(index, loadOrder, entry, stack.RecordType, formKey);
             }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException or NotSupportedException)
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException
+                or NotSupportedException or IndexWriteGateTimeoutException)
             {
+                // #673: a self-heal that cannot get the write gate degrades exactly like a source
+                // that cannot be read — this is a read, and it must not start throwing because
+                // another write is in flight. The drift is not lost: nothing was written, so the
+                // next read finds the same divergence and folds it in then.
+                //
                 // A read must degrade to "serve what we have", never fail, when the source cannot be
                 // consulted — the folder vanished mid-read, the file is locked by another tool, git
                 // is mid-rebase, or the tree is corrupt (AmbiguousSourceUnitException: more than one
@@ -132,10 +138,20 @@ public sealed class SourceFreshness(ILoadOrderMirror mirror, ILogger<SourceFresh
             // including a null, which now genuinely is the record's file having been deleted rather
             // than merely not being where its indexed EditorID said it would be. ApplyWorkingTreeChanges
             // decides for itself whether that is a change or a convergence back to committed.
-            index.ApplyWorkingTreeChanges(entry.Plugin, [(formKey, fileText)]);
-            // A read-time self-heal is still a mutation — the row it just folded in can newly
-            // (or no longer) match an active filter, same as an explicit edit would.
-            mirror.ReapplyFilter();
+            //
+            // #673: the gate goes here and nowhere higher. Everything above this line is the
+            // read-and-compare — a small file read per record, run on every point read — and it holds
+            // no gate at all; only the fold-in, reached only when drift was actually found, is a
+            // write and queues like one. Taking the gate at the top of Validate instead would put
+            // every record read in the editor and the compare grid behind every in-flight edit.
+            using (mirror.WriteGate.Enter())
+            {
+                index.ApplyWorkingTreeChanges(entry.Plugin, [(formKey, fileText)]);
+                // A read-time self-heal is still a mutation — the row it just folded in can newly
+                // (or no longer) match an active filter, same as an explicit edit would.
+                mirror.ReapplyFilter();
+            }
+
             if (logger.IsEnabled(LogLevel.Debug))
             {
                 logger.LogDebug(
@@ -255,7 +271,12 @@ public sealed class SourceFreshness(ILoadOrderMirror mirror, ILogger<SourceFresh
         if (headText is not { } resolvedHeadText) return;
         if (string.Equals(resolvedHeadText, committedBody, StringComparison.Ordinal)) return;
 
-        index.SetCommittedBaseline(entry.Plugin, [(formKey, resolvedHeadText)]);
+        // #673: the same rule as the working-tree fold-in above — the gate wraps the write only.
+        // Every early return in this method is a read that concluded there was nothing to do, and
+        // none of them touched it.
+        using (mirror.WriteGate.Enter())
+            index.SetCommittedBaseline(entry.Plugin, [(formKey, resolvedHeadText)]);
+
         if (logger.IsEnabled(LogLevel.Debug))
         {
             logger.LogDebug(
