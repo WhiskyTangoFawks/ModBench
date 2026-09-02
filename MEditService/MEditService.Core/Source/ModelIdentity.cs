@@ -258,10 +258,11 @@ public static class ModelIdentity
         // else that differs is a genuine divergence.
         using var originalDoc = System.Text.Json.JsonDocument.Parse(originalBytes);
         using var recompiledDoc = System.Text.Json.JsonDocument.Parse(recompiledBytes);
-        return JsonModelEquals(originalDoc.RootElement, recompiledDoc.RootElement);
+        return JsonModelEquals(originalDoc.RootElement, recompiledDoc.RootElement, propertyName: null);
     }
 
-    private static bool JsonModelEquals(System.Text.Json.JsonElement a, System.Text.Json.JsonElement b)
+    private static bool JsonModelEquals(
+        System.Text.Json.JsonElement a, System.Text.Json.JsonElement b, string? propertyName)
     {
         if (a.ValueKind != b.ValueKind) return false;
         switch (a.ValueKind)
@@ -272,33 +273,70 @@ public static class ModelIdentity
                 if (aProps.Count != bProps.Count) return false;
                 foreach (var (name, aValue) in aProps)
                 {
-                    if (!bProps.TryGetValue(name, out var bValue) || !JsonModelEquals(aValue, bValue)) return false;
+                    if (!bProps.TryGetValue(name, out var bValue) || !JsonModelEquals(aValue, bValue, name)) return false;
                 }
                 return true;
             case System.Text.Json.JsonValueKind.Array:
                 var aItems = a.EnumerateArray().ToList();
                 var bItems = b.EnumerateArray().ToList();
                 if (aItems.Count != bItems.Count) return false;
-                // A dictionary serialized by the codec is an array of exactly-{Key, Value} objects —
-                // its enumeration order is not data (dict semantics), so it compares keyed. Every
-                // other array (including every order-sensitive folder-split/embedded list) stays
-                // strictly ordered.
-                if (aItems.Count > 0 && aItems.All(IsKeyValueEntry) && bItems.All(IsKeyValueEntry))
+                // A genuine dictionary field's enumeration order is not data, so it compares
+                // keyed — but the element shape alone can't identify one: NpcMorph is an ordered
+                // list whose elements are also exactly {Key, Value}. So keyed comparison requires
+                // BOTH the shape and the field's own name to be a reflected dictionary property
+                // (Mutagen's real IReadOnlyDictionary fields — Package.Data and kin), and every
+                // other array stays strictly ordered.
+                if (aItems.Count > 0 && propertyName != null && DictionaryPropertyNames.Value.Contains(propertyName)
+                    && aItems.All(IsKeyValueEntry) && bItems.All(IsKeyValueEntry))
                 {
-                    var byKey = bItems.ToDictionary(e => e.GetProperty("Key").GetRawText(), StringComparer.Ordinal);
+                    // A duplicated key on either side is not a dictionary any more — unequal
+                    // rather than a thrown error or a guessed pairing.
+                    var byKey = new Dictionary<string, System.Text.Json.JsonElement>(StringComparer.Ordinal);
+                    foreach (var entry in bItems)
+                    {
+                        if (!byKey.TryAdd(entry.GetProperty("Key").GetRawText(), entry)) return false;
+                    }
+                    var seenKeys = new HashSet<string>(StringComparer.Ordinal);
                     return aItems.All(e =>
-                        byKey.TryGetValue(e.GetProperty("Key").GetRawText(), out var match)
-                        && JsonModelEquals(e.GetProperty("Value"), match.GetProperty("Value")));
+                        seenKeys.Add(e.GetProperty("Key").GetRawText())
+                        && byKey.TryGetValue(e.GetProperty("Key").GetRawText(), out var match)
+                        && JsonModelEquals(e.GetProperty("Value"), match.GetProperty("Value"), propertyName));
                 }
-                return aItems.Zip(bItems, JsonModelEquals).All(equal => equal);
+                return aItems.Zip(bItems, (x, y) => JsonModelEquals(x, y, propertyName)).All(equal => equal);
             case System.Text.Json.JsonValueKind.String:
                 return NormalizeNegativeZeros(a.GetString()!) == NormalizeNegativeZeros(b.GetString()!);
             case System.Text.Json.JsonValueKind.Number:
-                return a.GetRawText() == b.GetRawText() || a.GetDouble().Equals(b.GetDouble());
+                // Only zero's spellings are tolerated (-0 vs 0) — a general numeric comparison
+                // would silently forgive genuinely different large integers that collapse to one
+                // double. Text-shaped on purpose: no float arithmetic decides identity here.
+                return a.GetRawText() == b.GetRawText()
+                    || (IsZeroSpelling(a.GetRawText()) && IsZeroSpelling(b.GetRawText()));
             default:
                 return true; // kinds already matched: true/false/null carry no further content
         }
     }
+
+    private static bool IsZeroSpelling(string rawNumber) => rawNumber is "0" or "-0" or "0.0" or "-0.0";
+
+    /// <summary>Every property name that is a genuine dictionary anywhere in the FO4 record model —
+    /// reflected once, the same never-hand-listed posture the schema takes. Gates
+    /// <see cref="JsonModelEquals"/>'s keyed comparison so an ordered list that merely looks
+    /// dictionary-shaped (NpcMorph's {Key, Value} elements) never compares order-insensitively.</summary>
+    private static readonly Lazy<HashSet<string>> DictionaryPropertyNames = new(() =>
+    {
+        var names = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var type in typeof(Fallout4Mod).Assembly.GetTypes())
+        {
+            if (!type.IsClass || type.IsAbstract) continue;
+            foreach (var property in type.GetProperties(BindingFlags.Public | BindingFlags.Instance))
+            {
+                var candidates = property.PropertyType.GetInterfaces().Append(property.PropertyType);
+                if (candidates.Any(i => i.IsGenericType && i.GetGenericTypeDefinition() == typeof(IReadOnlyDictionary<,>)))
+                    names.Add(property.Name);
+            }
+        }
+        return names;
+    });
 
     private static bool IsKeyValueEntry(System.Text.Json.JsonElement element)
     {

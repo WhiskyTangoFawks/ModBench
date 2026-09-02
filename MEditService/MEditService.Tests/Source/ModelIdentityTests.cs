@@ -224,7 +224,8 @@ public sealed class ModelIdentityTests
     }
 
     // ── #669: the one comparison door must not inherit the generated comparers' lies ──
-    // Mutagen's Equals and GetEqualsMask each miss real divergence (upstream #685/#686 withdrawn;
+    // Mutagen's Equals and GetEqualsMask each miss real divergence (upstream reports #685/#686
+    // and PRs #689/#690 closed by our own withdrawal;
     // #528/#614 investigations) and the pin stays 0.53.1 — so the verdict may never depend on them
     // alone. Each of the three known blind spots gets its own named test: a pair differing ONLY in
     // that field must come back unequal from the door.
@@ -246,6 +247,12 @@ public sealed class ModelIdentityTests
         };
         recompiled.Armors.Add(recompiledArmor);
 
+        // Which stage catches it, pinned: generated Equals lies about GenderedItem (upstream #685),
+        // but the MASK turns out to see this sub-field — so this is a pin of stage one, not a
+        // decider gap-closure. If this assertion ever starts failing, the mask regressed and the
+        // decider below is what keeps the verdict honest.
+        Assert.NotEmpty(ModelIdentity.FailingFields(armor, recompiledArmor));
+
         var divergence = ModelIdentity.FindFirst(mod, recompiled);
 
         Assert.NotNull(divergence);
@@ -264,10 +271,37 @@ public sealed class ModelIdentityTests
         recompiledPackage.Data.Add(0, new PackageDataInt { Name = "Count", Data = 99 });
         recompiled.Packages.Add(recompiledPackage);
 
+        // Which stage catches it, pinned: the mask genuinely misses this one — the polymorphic
+        // base-overload binding (#528) never compares PackageDataInt's derived-only Data — so the
+        // codec decider is what refuses it. A future mask fix flips this first assertion, not the
+        // verdict.
+        Assert.Empty(ModelIdentity.FailingFields(package, recompiledPackage));
+
         var divergence = ModelIdentity.FindFirst(mod, recompiled);
 
         Assert.NotNull(divergence);
         Assert.Equal(package.FormKey, divergence!.FormKey);
+    }
+
+    // The dictionary tolerance's boundary, pinned from the review that found it: NpcMorph's
+    // elements are exactly {Key, Value} but Npc.Morphs is an ORDERED list, not a dictionary — a
+    // reorder is a real content change and must be refused, never forgiven as dict enumeration
+    // order (the keyed comparison is gated on reflected IReadOnlyDictionary membership).
+    [Fact]
+    public void FindFirst_WhenAnOrderedKeyValueShapedListIsReordered_ReportsTheDivergence()
+    {
+        var mod = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
+        var npc = mod.Npcs.AddNew("MorphNpc");
+        npc.Morphs.Add(new NpcMorph { Key = 1, Value = 0.25f });
+        npc.Morphs.Add(new NpcMorph { Key = 2, Value = 0.75f });
+
+        var recompiled = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
+        var recompiledNpc = new Npc(npc.FormKey, Fallout4Release.Fallout4) { EditorID = "MorphNpc" };
+        recompiledNpc.Morphs.Add(new NpcMorph { Key = 2, Value = 0.75f });
+        recompiledNpc.Morphs.Add(new NpcMorph { Key = 1, Value = 0.25f });
+        recompiled.Npcs.Add(recompiledNpc);
+
+        Assert.NotNull(ModelIdentity.FindFirst(mod, recompiled));
     }
 
     /// <summary>

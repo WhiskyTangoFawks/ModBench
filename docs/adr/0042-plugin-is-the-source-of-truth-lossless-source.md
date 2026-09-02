@@ -51,8 +51,11 @@ divergence is invisible to it entirely. A mask-equal pair is therefore compared 
 codec itself as the oracle**: both records serialize through the same door every source file is
 written through, and the documents must agree structurally — byte-equal fast path, then a
 structural comparison whose only tolerances are the two model-equal respellings a binary rewrite
-is entitled to (`-0`→`0` float spelling, and dictionary-entry enumeration order, both observed on
-real fixtures), with the exclusion table's group-header-derived fields normalized out first. The
+is entitled to (`-0`→`0` zero spelling — text-matched, no float arithmetic decides identity — and
+enumeration order within a genuine dictionary field, gated on the property being a reflected
+`IReadOnlyDictionary` member so an ordered list that merely looks dictionary-shaped, like
+`Npc.Morphs`, never compares order-insensitively; both tolerances observed on real fixtures),
+with the exclusion table's group-header-derived fields normalized out first. The
 header's `TransientTypes` gets its own plain-value comparer for the same reason. Bare `Equals` is
 never consulted anywhere (the survey found it false-negativing on byte-identical parses across
 whole record families — Armor, ArmorAddon, Race, Package, Quest, Perk, …), and
