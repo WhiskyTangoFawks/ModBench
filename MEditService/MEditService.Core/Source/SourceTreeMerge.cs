@@ -33,8 +33,13 @@ internal static class SourceTreeMerge
                     "refusing to overwrite it.");
             }
 
-            Directory.CreateDirectory(Path.GetDirectoryName(destinationFile)!);
-            File.Copy(sourceFile, destinationFile);
+            // Per file, and unminted on failure: a copy that throws must not leave the block/sub-block/
+            // cell directories it just needed standing empty in the destination tree
+            // (#675 — SourceUnitResolver.InMintedDirectory's own doc comment for why an empty one is
+            // not inert). Not a transaction: earlier files that did land keep their directories, which
+            // is correct — those directories hold content, and this merge is additive by design.
+            SourceUnitResolver.InMintedDirectory(
+                Path.GetDirectoryName(destinationFile)!, () => File.Copy(sourceFile, destinationFile));
         }
     }
 

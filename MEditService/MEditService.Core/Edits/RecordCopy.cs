@@ -372,9 +372,9 @@ internal sealed class RecordCopy(ILoadOrderMirror mirror, SchemaReflector schema
         var relativePath = RecordEditService.InteriorCellDestinationPath(
             destinationModFolder, destinationPlugin.Name, cellFormKey, editorId: null, release);
         var sourcePath = Path.Combine(destinationModFolder, relativePath);
-        Directory.CreateDirectory(Path.GetDirectoryName(sourcePath)!);
-
-        var bodyText = RecordEditService.SerializeAndWrite(codec, record, sourcePath, release);
+        var bodyText = SourceUnitResolver.InMintedDirectory(
+            Path.GetDirectoryName(sourcePath)!,
+            () => RecordEditService.SerializeAndWrite(codec, record, sourcePath, release));
 
         SourceUnitResolver.RenormalizeGroupOrder(Path.GetDirectoryName(sourcePath)!);
 
