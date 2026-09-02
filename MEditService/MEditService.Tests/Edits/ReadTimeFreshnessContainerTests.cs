@@ -40,6 +40,25 @@ public sealed class ReadTimeFreshnessContainerTests : IDisposable
     private string RelativePath(string absolutePath) => Path.GetRelativePath(_fixture.ModFolder, absolutePath);
 
     /// <summary>
+    /// A Quest with folder-split children is a carrier as well as a record: its file holds the
+    /// children's ordered list alongside its own fields, and the index holds only the fields. The
+    /// freshness compare must see through that, or the first read of every such record folds the
+    /// carrier text into the index and reports a clean record as modified.
+    /// </summary>
+    [Fact]
+    public void ReadingAQuestWithFolderSplitChildren_LeavesItsIndexedBodyClean()
+    {
+        Assert.NotNull(Reads().GetRecord(_fixture.Quest.ToString()));
+
+        var index = _fixture.Mirror.Index!;
+        var effective = index.At(Core.Records.RecordRef.Effective).GetDocument(_fixture.Quest.ToString(), _fixture.Plugin)!.Body;
+        var head = index.At(Core.Records.RecordRef.Head).GetDocument(_fixture.Quest.ToString(), _fixture.Plugin)!.Body;
+
+        Assert.DoesNotContain(SourceChildOrder.OrderMember, effective, StringComparison.Ordinal);
+        Assert.Equal(head, effective);
+    }
+
+    /// <summary>
     /// The container case: a Quest's own <c>RecordData.json</c> — no flat path
     /// <c>SourceRecordPath.For</c> can compute, only found on disk.
     ///

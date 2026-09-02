@@ -338,6 +338,31 @@ public sealed class RecordEditServiceContainerDeleteRenumberTests : IDisposable
     /// halves: the parent's list directly, and that a compile of the result reproduces the same order
     /// in the binary (which the list alone does not prove).</para>
     /// </summary>
+    /// <summary>
+    /// Deleting the last child of a folder-split slot must leave the parent's document exactly as the
+    /// whole-mod door would write it for a childless parent — no member at all — because the compile
+    /// gate compares the two byte-for-byte. An empty list left behind is a refusal the author did
+    /// nothing to earn.
+    /// </summary>
+    [Fact]
+    public void DeletingEveryTopicOfAQuest_LeavesNoEmptyListBehind_AndCompiles()
+    {
+        var service = EditService();
+        foreach (var topic in new[] { _fixture.DialogTopic, _fixture.DialogTopic2, _fixture.DialogTopic3 })
+        {
+            var deleted = service.DeleteRecord(_fixture.Plugin, topic.ToString());
+            Assert.True(deleted.Applied, deleted.Message);
+        }
+
+        var questFile = _fixture.SourceFileContaining(ContainerModFixture.QuestEditorId);
+        Assert.DoesNotContain(SourceChildOrder.OrderMember, File.ReadAllText(questFile), StringComparison.Ordinal);
+
+        var compileResult = new PluginCompileService(
+                _fixture.Mirror, new PluginWriter(NullLogger<PluginWriter>.Instance), NullLogger<PluginCompileService>.Instance)
+            .Compile(_fixture.Plugin, new CompileSource.WorkingTree());
+        Assert.True(compileResult.Succeeded, compileResult.RefusalReason);
+    }
+
     [Fact]
     public void RenumberingAMidListFolderSplitChild_RenormalizesSurvivingSiblingsToContiguousSlots_AndCompiles()
     {

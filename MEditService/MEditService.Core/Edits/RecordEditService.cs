@@ -1390,7 +1390,7 @@ public sealed class RecordEditService(
     /// <summary>
     /// The underlying fault's own message, with every affected mod folder's absolute path cut back to
     /// the same mod-folder-relative form the rest of this message uses. A real filesystem fault names
-    /// the path it failed on — <c>Access to the path '/…/mods/Foo/source/Foo.esp/Races/[0] x.json' is
+    /// the path it failed on — <c>Access to the path '/…/mods/Foo/source/Foo.esp/Races/x.json' is
     /// denied</c> — and that is exactly the absolute path #678 says goes to the log only. The cause is
     /// still worth showing (it is the only thing that says <i>why</i>), so it is relativized rather
     /// than dropped, and the log keeps the untouched original.
@@ -2469,7 +2469,7 @@ public sealed class RecordEditService(
     /// never records a block/sub number in <c>cell_location</c> (verified by reading it: every interior
     /// cell's row carries null block/sub, the same as CONTEXT.md's own "the plugin's own single
     /// interior bucket" framing) — so this reuses whichever block/sub-block directory the destination
-    /// already has (any one; the number is never meaningful), minting a fresh <c>[0] 0/[0] 0</c> pair
+    /// already has (any one; the number is never meaningful), minting a fresh <c>0/0</c> pair
     /// only the first time a destination plugin gets an interior cell at all.
     /// </summary>
     internal static IReadOnlyList<string> EnsureInteriorCellBlockPath(

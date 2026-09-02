@@ -190,11 +190,16 @@ public static class ExternalChangeEditLander
     {
         var incomingText = Encoding.UTF8.GetString(codec.SerializeToBytesAsync(record, gameRelease).GetAwaiter().GetResult());
 
-        baselineByPath.TryGetValue(ToGitPath(relativePath), out var baselineText);
+        // Both texts read off a file are compared as the record's own fields: a container's document
+        // also carries its children's ordered list, which the codec's own text never does, and which
+        // SpliceInto rewrites from the binary after landing anyway.
+        var baselineText = baselineByPath.TryGetValue(ToGitPath(relativePath), out var baseline)
+            ? SourceChildOrder.WithoutOrder(baseline)
+            : null;
         if (string.Equals(incomingText, baselineText, StringComparison.Ordinal))
             return null; // the external change never actually touched this record
 
-        var currentText = File.Exists(existingPath) ? File.ReadAllText(existingPath) : null;
+        var currentText = File.Exists(existingPath) ? SourceChildOrder.WithoutOrder(File.ReadAllText(existingPath)) : null;
         return new TouchedRecord(formKey, relativePath, fullPath, existingPath, incomingText, currentText, baselineText);
     }
 

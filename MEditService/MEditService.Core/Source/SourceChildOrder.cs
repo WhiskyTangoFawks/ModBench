@@ -336,6 +336,22 @@ internal static class SourceChildOrder
         return Encoding.UTF8.GetBytes(document.ToJsonString(CarrierOptions));
     }
 
+    /// <summary>
+    /// <paramref name="documentText"/> with its ordered child lists removed — the record's own fields
+    /// alone, which is what the index holds as a record's body. The inverse of
+    /// <see cref="CarryOrderInto"/>, for the read-side compares that hold a carrier's file text in
+    /// one hand and an indexed body in the other (<see cref="SourceFreshness"/>,
+    /// <see cref="ExternalChangeEditLander"/>): without this, every Quest, Worldspace and DialogTopic
+    /// with children reads as changed on every compare, because the file says one thing more than the
+    /// body ever will. Returns the text unchanged when it carries no lists, which is most documents.
+    /// </summary>
+    internal static string WithoutOrder(string documentText)
+    {
+        if (!documentText.Contains(OrderMember, StringComparison.Ordinal)) return documentText;
+        if (JsonNode.Parse(documentText) is not JsonObject document || !document.Remove(OrderMember)) return documentText;
+        return document.ToJsonString(CarrierOptions);
+    }
+
     /// <summary>The ordered child list <paramref name="carrierPath"/> records under
     /// <paramref name="key"/>, or empty when it records none — the read side of
     /// <see cref="Add"/>/<see cref="Remove"/>/<see cref="Rename"/>, for callers that need to see the
@@ -398,7 +414,14 @@ internal static class SourceChildOrder
         foreach (var entry in list) working.Add(entry!.GetValue<string>());
 
         edit(working);
-        orders[key] = working;
+
+        // An emptied list is dropped rather than written as []: the whole-mod door writes nothing
+        // for a childless collection (SpliceInto skips it), and the compile gate compares this
+        // document against that output byte-for-byte — so deleting a parent's last child must leave
+        // its document exactly as a fresh write would.
+        if (working.Count > 0) orders[key] = working;
+        else orders.Remove(key);
+        if (orders.Count == 0) document.Remove(OrderMember);
 
         system.Directory.CreateDirectory(Path.GetDirectoryName(carrierPath)!);
         WriteCarrier(system, carrierPath, document);
@@ -538,6 +561,51 @@ internal static class SourceChildOrder
                     yield return nested;
             }
         }
+
+        // The other kind of top-level group: a *list* group, whose children are block levels rather
+        // than records — Fallout 4's Cells, holding CellBlocks. It is not an IGroupGetter (no
+        // FormKey-keyed cache; a plain list), so the loop above never sees it, and a walk that only
+        // knew the record-keyed shape skipped the whole interior-cell subtree silently: no order
+        // written, none honoured, nothing to refuse. Its carrier is the same GroupRecordData.json a
+        // record group's is; its children nest as blocks, so the walk below them is a block walk.
+        foreach (var property in ListGroupProperties(mod.GetType()))
+        {
+            if (property.GetValue(mod) is not IEnumerable group) continue;
+            var folder = Path.Combine(treeRoot, property.Name);
+            var (blocks, rewrite) = ListGroupSlot(group);
+            if (blocks.Count == 0) continue;
+
+            yield return new OrderedCollection(
+                Path.Combine(folder, SourceUnitResolver.GroupRecordDataFileName), property.Name, blocks, rewrite);
+
+            foreach (var block in blocks)
+            {
+                foreach (var nested in Walk(Path.Combine(folder, LeafOf(block)), block, parentIsRecord: false))
+                    yield return nested;
+            }
+        }
+    }
+
+    /// <summary>
+    /// The blocks of a list group, and how to reorder them. A list group is its own
+    /// <see cref="ICollection{T}"/> of its element type (via <c>IExtendedList</c>), so the reorder
+    /// goes through that interface reflectively — the element type is the group's generic argument,
+    /// so as with <see cref="GroupSlot"/> there is no non-generic surface to call it through.
+    /// </summary>
+    private static (IReadOnlyList<object> Children, Action<IReadOnlyList<object>> Rewrite) ListGroupSlot(IEnumerable group)
+    {
+        var children = group.Cast<object>().ToList();
+        return (children, ordered =>
+        {
+            var element = group.GetType().GetInterfaces()
+                .Single(i => i.IsGenericType && i.GetGenericTypeDefinition() == typeof(IListGroupGetter<>))
+                .GetGenericArguments()[0];
+            var collection = typeof(ICollection<>).MakeGenericType(element);
+            collection.GetMethod(nameof(ICollection<object>.Clear))!.Invoke(group, null);
+            var add = collection.GetMethod(nameof(ICollection<object>.Add))!;
+            foreach (var child in ordered) add.Invoke(group, [child]);
+        }
+        );
     }
 
     /// <summary>
@@ -657,6 +725,11 @@ internal static class SourceChildOrder
     private static IEnumerable<PropertyInfo> GroupProperties(Type type) =>
         type.GetProperties(BindingFlags.Public | BindingFlags.Instance)
             .Where(p => p.GetIndexParameters().Length == 0 && typeof(IGroupGetter).IsAssignableFrom(p.PropertyType))
+            .OrderBy(p => p.Name, StringComparer.Ordinal);
+
+    private static IEnumerable<PropertyInfo> ListGroupProperties(Type type) =>
+        type.GetProperties(BindingFlags.Public | BindingFlags.Instance)
+            .Where(p => p.GetIndexParameters().Length == 0 && typeof(IListGroupGetter).IsAssignableFrom(p.PropertyType))
             .OrderBy(p => p.Name, StringComparer.Ordinal);
 
     /// <summary>The element type of a list-shaped member, or null when the member is not one.
