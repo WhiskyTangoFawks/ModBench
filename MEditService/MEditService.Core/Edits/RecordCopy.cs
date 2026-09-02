@@ -376,7 +376,12 @@ internal sealed class RecordCopy(ILoadOrderMirror mirror, SchemaReflector schema
             Path.GetDirectoryName(sourcePath)!,
             () => RecordEditService.SerializeAndWrite(codec, record, sourcePath, release));
 
-        SourceUnitResolver.RenormalizeGroupOrder(Path.GetDirectoryName(sourcePath)!);
+        // Order is parent data (ADR-0042 decision 4): the cell's own directory is its identity, and
+        // its position among the sub-block's cells is one line in the sub-block's own document.
+        SourceChildOrder.Add(
+            SourceChildOrder.CarrierFor(Path.GetDirectoryName(Path.GetDirectoryName(sourcePath)!)!, parentIsRecord: false),
+            nameof(Mutagen.Bethesda.Fallout4.CellSubBlock.Cells),
+            cellFormKey.ToString());
 
         index.CreateWorkingTreeRecord(destinationPlugin, cellFormKey, sourceCellDocument.RecordType, bodyText);
         mirror.ReapplyFilter();

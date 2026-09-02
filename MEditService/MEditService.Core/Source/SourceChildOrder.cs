@@ -46,10 +46,13 @@ namespace MEditService.Core.Source;
 /// mistaken for one of those records — both confirmed empirically against this project's own
 /// Serialization pin, not read off the newer reference clone.</para>
 ///
-/// <para><b>Drift fails loudly</b> (decision 5's pattern, no new invention): a child on disk the list
-/// does not name, or a list entry with no child, is a named
-/// <see cref="SourceChildOrderDriftException"/> naming the parent and the mismatch. Hand edits and
-/// external tools produce it; re-Track is the recovery.</para>
+/// <para><b>Drift is asymmetric, deliberately.</b> A child on disk the list does not name is refused
+/// loudly (<see cref="SourceChildOrderDriftException"/>, naming the parent and the children): nothing
+/// can say where it belongs, and inventing a position is a gameplay change for
+/// <c>DialogTopic.Responses</c>. A list entry with no file is <i>not</i> refused — it is honoured as a
+/// deletion, because deleting the file is how a record is deleted by hand, and ADR-0041's git-native
+/// working-tree model makes that a first-class edit. The tree is authoritative for whether a child
+/// exists; the parent's list is authoritative for the order of the ones that do.</para>
 /// </summary>
 internal static class SourceChildOrder
 {
@@ -135,6 +138,231 @@ internal static class SourceChildOrder
     }
 
     /// <summary>
+    /// The document that carries a folder-split collection's order, and the key it is carried under.
+    /// The one place a structural write works out where a parent's ordered child list lives, so a
+    /// create, a delete and a renumber cannot each answer it differently.
+    /// </summary>
+    /// <param name="parentDirectory">The directory the children sit in, for a group or a block level;
+    /// the owning record's own directory for a record's member collection.</param>
+    /// <param name="parentIsRecord">Whether that directory is a record's own
+    /// (<c>RecordData.json</c>) rather than a group or block level's
+    /// (<c>GroupRecordData.json</c>).</param>
+    internal static string CarrierFor(string parentDirectory, bool parentIsRecord) =>
+        Path.Combine(parentDirectory, parentIsRecord ? RecordDataFileName : GroupRecordDataFileName);
+
+    /// <summary>
+    /// Appends <paramref name="identity"/> to the ordered child list a structural write just added a
+    /// file for — a create, or the create half of a renumber. Appending rather than inserting is the
+    /// same "new siblings land at the end" rule the superseded numbering scheme had, and it is now a
+    /// one-line change to one document instead of a rename cascade.
+    ///
+    /// <para>Idempotent on the identity: a create that lands a FormKey the list already names leaves
+    /// the list alone rather than double-listing it, so a retried or partially-applied write cannot
+    /// corrupt the order into a shape <see cref="ApplyTo"/> would refuse.</para>
+    /// </summary>
+    internal static void Add(string carrierPath, string key, string identity, IFileSystem? fileSystem = null)
+        => Mutate(carrierPath, key, fileSystem, list =>
+        {
+            if (!list.Any(entry => entry!.GetValue<string>().Equals(identity, StringComparison.Ordinal)))
+                list.Add(identity);
+        });
+
+    /// <summary>
+    /// Drops <paramref name="identity"/> from the ordered child list a structural write just deleted
+    /// the file of. The whole point of the amendment: the siblings after it are untouched, on disk and
+    /// in this list, so a mid-list delete stages as one deletion plus one changed document.
+    /// </summary>
+    internal static void Remove(string carrierPath, string key, string identity, IFileSystem? fileSystem = null)
+        => Mutate(carrierPath, key, fileSystem, list =>
+        {
+            for (var i = list.Count - 1; i >= 0; i--)
+            {
+                if (list[i]!.GetValue<string>().Equals(identity, StringComparison.Ordinal)) list.RemoveAt(i);
+            }
+        });
+
+    /// <summary>
+    /// Repoints a list entry from <paramref name="oldIdentity"/> to <paramref name="newIdentity"/>
+    /// <b>in place</b> — a renumber changes a child's FormKey, which is what this list is keyed by,
+    /// and the record must keep its position while doing so. A remove-then-add would silently move it
+    /// to the end, which for <c>DialogTopic.Responses</c> is a gameplay change rather than a cosmetic
+    /// one.
+    /// </summary>
+    internal static void Rename(
+        string carrierPath, string key, string oldIdentity, string newIdentity, IFileSystem? fileSystem = null)
+        => Mutate(carrierPath, key, fileSystem, list =>
+        {
+            for (var i = 0; i < list.Count; i++)
+            {
+                if (list[i]!.GetValue<string>().Equals(oldIdentity, StringComparison.Ordinal)) list[i] = newIdentity;
+            }
+        });
+
+    /// <summary>
+    /// Folds the ordered child lists a scratch level records into the destination level it is being
+    /// merged into — every identity the scratch names is appended to the destination's list for the
+    /// same key, in scratch order, skipping any the destination already has.
+    ///
+    /// <para>For <see cref="Edits.SpatialContainerMint"/>, which folds a synthetic one-child-per-level
+    /// worldspace subtree into a real one. It reads the keys out of the scratch document rather than
+    /// being told them, so the block/sub-block/cell member names live in exactly one place — the model
+    /// the walk reflects over — and a merge cannot drift from what <see cref="SpliceInto"/> wrote.</para>
+    /// </summary>
+    internal static void MergeCarrierInto(
+        string scratchDirectory, string destinationDirectory, IFileSystem? fileSystem = null)
+    {
+        var files = (fileSystem ?? new FileSystem()).File;
+
+        foreach (var carrierName in new[] { RecordDataFileName, GroupRecordDataFileName })
+        {
+            var scratchCarrier = Path.Combine(scratchDirectory, carrierName);
+            if (!files.Exists(scratchCarrier)) continue;
+            if (ReadCarrier(files, scratchCarrier)[MemberName] is not JsonObject orders) continue;
+
+            foreach (var (key, list) in orders)
+            {
+                foreach (var entry in (JsonArray)list!)
+                {
+                    Add(Path.Combine(destinationDirectory, carrierName), key, entry!.GetValue<string>(), fileSystem);
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Drops <paramref name="identity"/> from whichever ordered child list actually names it, given
+    /// only the directory the child sat in. For deletes, which know the child but not which of the
+    /// two carrier shapes its parent uses.
+    ///
+    /// <para><b>Why search rather than derive.</b> The key differs by level in ways a path does not
+    /// reveal: a top-level group folder is keyed by its own name (<c>Npcs</c>), a member folder by
+    /// its own name too (<c>DialogTopics</c>) but carried one directory up in the owning record's
+    /// document, and a block level by a member name (<c>Cells</c>, <c>Items</c>) that is nowhere in
+    /// the path at all — <c>Cells/0/0</c> is keyed <c>Cells</c>. Deriving that from the path means
+    /// re-encoding the model's own member names in a second place, where a delete could quietly
+    /// disagree with <see cref="Walk"/> about them. Asking the document which list holds this child
+    /// cannot disagree with the document.</para>
+    /// </summary>
+    internal static void RemoveByIdentity(string childDirectory, string identity, IFileSystem? fileSystem = null)
+    {
+        if (SlotHolding(childDirectory, identity, fileSystem) is { } slot)
+            Remove(slot.Carrier, slot.Key, identity, fileSystem);
+    }
+
+    /// <summary>
+    /// Repoints a child's list entry in place without the caller having to know which list holds it —
+    /// <see cref="RemoveByIdentity"/>'s counterpart for a renumber, which changes the very FormKey the
+    /// list is keyed by and must keep the record's position while doing so.
+    /// </summary>
+    internal static void RenameByIdentity(
+        string childDirectory, string oldIdentity, string newIdentity, IFileSystem? fileSystem = null)
+    {
+        if (SlotHolding(childDirectory, oldIdentity, fileSystem) is { } slot)
+            Rename(slot.Carrier, slot.Key, oldIdentity, newIdentity, fileSystem);
+    }
+
+    /// <summary>
+    /// The ordered child lists <paramref name="documentPath"/> currently carries, as opaque text to
+    /// hand back to <see cref="RestoreOrder"/> — null when it carries none.
+    ///
+    /// <para><b>A record document is a carrier as well as a record, and the codec only knows about
+    /// the record half.</b> Serializing a container over its own <c>RecordData.json</c> writes exactly
+    /// the record's own fields — so without capture-and-restore around that write, every point write
+    /// to a Quest, Worldspace or DialogTopic silently drops the ordered child list naming its
+    /// folder-split children, and the next read refuses the whole tree as drift. Renumbering a quest
+    /// reproduced precisely that.</para>
+    ///
+    /// <para>Split into two calls rather than wrapped around a delegate because the write it spans is
+    /// asynchronous: a wrapper would have to either block on the write or restore before it finished,
+    /// and the second silently loses the very thing this exists to keep.</para>
+    /// </summary>
+    internal static string? CaptureOrder(string documentPath, IFileSystem? fileSystem = null)
+    {
+        var files = (fileSystem ?? new FileSystem()).File;
+        return files.Exists(documentPath) ? ReadCarrier(files, documentPath)[MemberName]?.ToJsonString() : null;
+    }
+
+    /// <summary>Puts back what <see cref="CaptureOrder"/> took, after the write that would have lost
+    /// it. A no-op for the null it returns when a document carries no order, which is most of
+    /// them.</summary>
+    internal static void RestoreOrder(string documentPath, string? captured, IFileSystem? fileSystem = null)
+    {
+        if (captured is null) return;
+
+        var files = (fileSystem ?? new FileSystem()).File;
+        var document = ReadCarrier(files, documentPath);
+        document[MemberName] = JsonNode.Parse(captured);
+        files.WriteAllText(documentPath, document.ToJsonString(CarrierOptions));
+    }
+
+    /// <summary>The ordered child list <paramref name="carrierPath"/> records under
+    /// <paramref name="key"/>, or empty when it records none — the read side of
+    /// <see cref="Add"/>/<see cref="Remove"/>/<see cref="Rename"/>, for callers that need to see the
+    /// order without reordering a model to get at it.</summary>
+    internal static IReadOnlyList<string> ListAt(string carrierPath, string key, IFileSystem? fileSystem = null)
+    {
+        var files = (fileSystem ?? new FileSystem()).File;
+        if (!files.Exists(carrierPath)) return [];
+        return ReadCarrier(files, carrierPath)[MemberName]?[key] is not JsonArray list
+            ? []
+            : [.. list.Select(entry => entry!.GetValue<string>())];
+    }
+
+    /// <summary>The carrier and key of the ordered child list naming <paramref name="identity"/>, or
+    /// null when no list does — also what a caller needing to record the carrier it is about to
+    /// change (a transactional renumber, #678) asks for the path.</summary>
+    internal static (string Carrier, string Key)? SlotHolding(
+        string childDirectory, string identity, IFileSystem? fileSystem = null)
+    {
+        var files = (fileSystem ?? new FileSystem()).File;
+        var parent = Path.GetDirectoryName(childDirectory);
+
+        string[] candidates = parent is null
+            ? [CarrierFor(childDirectory, parentIsRecord: false)]
+            : [CarrierFor(childDirectory, parentIsRecord: false), CarrierFor(parent, parentIsRecord: true)];
+
+        foreach (var carrier in candidates)
+        {
+            if (!files.Exists(carrier)) continue;
+            if (ReadCarrier(files, carrier)[MemberName] is not JsonObject orders) continue;
+
+            foreach (var (key, list) in orders)
+            {
+                if (list is JsonArray array
+                    && array.Any(e => e!.GetValue<string>().Equals(identity, StringComparison.Ordinal)))
+                {
+                    return (carrier, key);
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private static void Mutate(string carrierPath, string key, IFileSystem? fileSystem, Action<JsonArray> edit)
+    {
+        var files = (fileSystem ?? new FileSystem()).File;
+        var document = ReadCarrier(files, carrierPath);
+        var orders = document[MemberName] as JsonObject;
+        if (orders is null)
+        {
+            orders = new JsonObject();
+            document[MemberName] = orders;
+        }
+
+        // Detached first: a JsonNode already parented cannot be re-assigned into the same document.
+        var list = orders[key] as JsonArray ?? new JsonArray();
+        var working = new JsonArray();
+        foreach (var entry in list) working.Add(entry!.GetValue<string>());
+
+        edit(working);
+        orders[key] = working;
+
+        (fileSystem ?? new FileSystem()).Directory.CreateDirectory(Path.GetDirectoryName(carrierPath)!);
+        files.WriteAllText(carrierPath, document.ToJsonString(CarrierOptions));
+    }
+
+    /// <summary>
     /// Splices every folder-split collection's order into its parent's document, for a tree
     /// <paramref name="mod"/> was just serialized into. Called between the whole-mod door's write and
     /// the enumeration that turns the tree into committed files, so Track and the external-change
@@ -177,32 +405,35 @@ internal static class SourceChildOrder
             var document = ReadCarrier(files, collection.CarrierPath);
             var recorded = document[MemberName]?[collection.Key ?? string.Empty] as JsonArray;
 
-            if (recorded is null)
-            {
-                throw new SourceChildOrderDriftException(
-                    $"'{Describe(collection)}' has {collection.Children.Count} folder-split " +
-                    $"children on disk, but '{collection.CarrierPath}' records no order for them. " +
-                    "The tree was not written by this version of Modbench, or was edited by hand — re-Track it.");
-            }
-
-            var wanted = recorded.Select(entry => entry!.GetValue<string>()).ToList();
             var identities = collection.Identities;
+            var wanted = recorded is null ? [] : recorded.Select(entry => entry!.GetValue<string>()).ToList();
+
             var byIdentity = new Dictionary<string, object>(StringComparer.Ordinal);
             for (var i = 0; i < identities.Count; i++) byIdentity[identities[i]] = collection.Children[i];
 
-            var missing = wanted.Where(w => !byIdentity.ContainsKey(w)).ToList();
-            var extra = identities.Where(i => !wanted.Contains(i, StringComparer.Ordinal)).ToList();
-            if (missing.Count > 0 || extra.Count > 0)
+            // Present but unlisted: refuse. There is no honest answer for where an unlisted child
+            // goes — appending it would invent a position, and for DialogTopic.Responses an invented
+            // position is a gameplay change. This is the drift ADR-0042 decision 5 refuses loudly,
+            // and re-Track is the recovery.
+            var unlisted = identities.Where(i => !wanted.Contains(i, StringComparer.Ordinal)).ToList();
+            if (unlisted.Count > 0)
             {
                 throw new SourceChildOrderDriftException(
-                    $"'{Describe(collection)}' does not match the ordered child list in " +
-                    $"'{collection.CarrierPath}'. " +
-                    (missing.Count > 0 ? $"Listed but absent from the tree: {string.Join(", ", missing)}. " : string.Empty) +
-                    (extra.Count > 0 ? $"Present in the tree but unlisted: {string.Join(", ", extra)}. " : string.Empty) +
-                    "Re-Track the plugin to rebuild the tree from its binary.");
+                    $"'{Describe(collection)}' holds {unlisted.Count} folder-split " +
+                    $"child(ren) that '{collection.CarrierPath}' does not name: {string.Join(", ", unlisted)}. " +
+                    "Nothing can say where they belong in the order — re-Track the plugin to rebuild " +
+                    "the tree from its binary.");
             }
 
-            collection.Rewrite([.. wanted.Select(identity => byIdentity[identity])]);
+            // Listed but absent: honour it as a deletion, do not refuse. Deleting the file *is* how a
+            // record is deleted by hand — a git checkout, an agent's script, the user's own editor —
+            // and ADR-0041's git-native working-tree model makes that a first-class edit rather than
+            // corruption (SourceIngestTests' own deleted-record pair pins both halves: absent at
+            // Effective, still answerable at Head). The asymmetry is not a softened rule but the
+            // right one: the tree is authoritative for whether a child exists, the parent's list for
+            // what order the existing ones are in. Each stays authoritative for its own question.
+            collection.Rewrite([.. wanted.Where(byIdentity.ContainsKey).Select(identity => byIdentity[identity])]);
+
         }
     }
 

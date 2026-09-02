@@ -37,9 +37,7 @@ public sealed class SourceRecordPathTests
     public void For_ThenTryParse_RoundTripsPluginAndRecordType(
         string pluginFileName, string recordType, string formKeyString, string? editorId)
     {
-        // The order index is never part of identity (this class's own doc comment) — an
-        // arbitrary non-zero value proves TryParse doesn't accidentally depend on it being 0.
-        var path = SourceRecordPath.For(pluginFileName, recordType, formKeyString, editorId, Release, orderIndex: 7);
+        var path = SourceRecordPath.For(pluginFileName, recordType, formKeyString, editorId, Release);
 
         // Everything nests under one root "source/" folder, the plugin its own child directory —
         // not a "<plugin>.source/" sibling tree. Asserted here, not just implied by TryParse round-
@@ -62,15 +60,15 @@ public sealed class SourceRecordPathTests
         Assert.Equal(expectedConcrete, RecordTypeDispatch.For(Release).ConcreteFor(identity.RecordType));
     }
 
-    /// <summary>The order index is a leading <c>"[N] "</c> ahead of everything else <see cref="For"/>
-    /// already produced — exactly <c>SerializationHelper.DecorateWithNumber</c>'s own shape, verified
-    /// against the decompiled 1.37.1 assembly at implementation, not reconstructed from memory.</summary>
+    /// <summary>A file name is identity and nothing else (#566): no position, no ordering prefix —
+    /// the <c>SerializationHelper.RecordFileNameProvider</c> shape alone. This is what makes a
+    /// mid-list insert or delete leave every sibling's name untouched.</summary>
     [Theory]
-    [InlineData("SomeNpc", "[3] SomeNpc - 000800_Vendor.esp.json")]
-    [InlineData(null, "[3] 000800_Vendor.esp.json")]
-    public void For_EmbedsTheOrderIndexAsALeadingBracketedPrefix(string? editorId, string expectedFileName)
+    [InlineData("SomeNpc", "SomeNpc - 000800_Vendor.esp.json")]
+    [InlineData(null, "000800_Vendor.esp.json")]
+    public void For_NamesTheRecordByIdentityAlone_WithNoOrderingPrefix(string? editorId, string expectedFileName)
     {
-        var path = SourceRecordPath.For("Vendor.esp", "npc_", "000800:Vendor.esp", editorId, Release, orderIndex: 3);
+        var path = SourceRecordPath.For("Vendor.esp", "npc_", "000800:Vendor.esp", editorId, Release);
 
         Assert.Equal(expectedFileName, Path.GetFileName(path));
     }
@@ -82,7 +80,7 @@ public sealed class SourceRecordPathTests
     public void For_ForADirectoryPerRecordType_ThrowsNamedException(string recordType)
     {
         var ex = Assert.Throws<NotSupportedException>(
-            () => SourceRecordPath.For("Vendor.esp", recordType, "000800:Vendor.esp", "SomeName", Release, orderIndex: 0));
+            () => SourceRecordPath.For("Vendor.esp", recordType, "000800:Vendor.esp", "SomeName", Release));
 
         Assert.Contains(recordType, ex.Message, StringComparison.Ordinal);
     }
@@ -94,7 +92,7 @@ public sealed class SourceRecordPathTests
         // own (RecordTypeDispatch.FolderNameFor's own doc comment) — the same "ask SourceUnitResolver"
         // refusal as a directory-per-record type, for a structurally different reason.
         Assert.Throws<NotSupportedException>(
-            () => SourceRecordPath.For("Vendor.esp", "placedobject", "000800:Vendor.esp", "SomeRef", Release, orderIndex: 0));
+            () => SourceRecordPath.For("Vendor.esp", "placedobject", "000800:Vendor.esp", "SomeRef", Release));
     }
 
     [Theory]

@@ -90,10 +90,10 @@ public sealed class ExteriorCellCopyCompileTests : IDisposable
         var worldspacesDir = Path.Combine(_fixture.DestinationSourceRoot, "Worldspaces");
         var worldspaceDir = Assert.Single(Directory.EnumerateDirectories(worldspacesDir));
         var newBlockDir = Assert.Single(Directory.EnumerateDirectories(worldspaceDir), d =>
-            SourceUnitResolver.WithoutOrderPrefix(Path.GetFileName(d))
+            Path.GetFileName(d)
                 .Equals($"{ContainerCopyFixture.OtherBlockX}, {ContainerCopyFixture.OtherBlockY}", StringComparison.Ordinal));
         Assert.Single(Directory.EnumerateDirectories(newBlockDir), d =>
-            SourceUnitResolver.WithoutOrderPrefix(Path.GetFileName(d))
+            Path.GetFileName(d)
                 .Equals($"{ContainerCopyFixture.OtherSubX}, {ContainerCopyFixture.OtherSubY}", StringComparison.Ordinal));
 
         var compiled = ImportCompiled();
@@ -131,7 +131,7 @@ public sealed class ExteriorCellCopyCompileTests : IDisposable
         var worldspaceDir = Assert.Single(
             Directory.EnumerateDirectories(Path.Combine(_fixture.DestinationSourceRoot, "Worldspaces")));
         var blockDir = Assert.Single(Directory.EnumerateDirectories(worldspaceDir), d =>
-            SourceUnitResolver.WithoutOrderPrefix(Path.GetFileName(d))
+            Path.GetFileName(d)
                 .Equals($"{ContainerCopyFixture.ExteriorBlockX}, {ContainerCopyFixture.ExteriorBlockY}", StringComparison.Ordinal));
         Assert.Equal(2, Directory.EnumerateDirectories(blockDir).Count());
 

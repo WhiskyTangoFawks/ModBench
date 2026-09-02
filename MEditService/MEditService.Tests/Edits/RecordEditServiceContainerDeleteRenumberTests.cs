@@ -330,15 +330,13 @@ public sealed class RecordEditServiceContainerDeleteRenumberTests : IDisposable
     /// so renumbering the middle of three DialogTopics exercises exactly "delete then
     /// create a mid-list embedded child" in one gesture.
     ///
-    /// <para>A gap-leaving delete or renumber, on any record type, container or not, makes
-    /// <see cref="PluginCompileService"/>'s round-trip gate refuse to compile, because that gate
-    /// regenerates canonical names by contiguous in-memory list position and a gap is by design not
-    /// contiguous. So every structural write renormalizes its
-    /// own touched group folder to contiguous <c>[0..k]</c> as its own last file-system act. This test
-    /// asserts <i>both</i> halves of that — the tree's own renumbered slots directly
-    /// <i>and</i> that a compile of the result
-    /// succeeds and reproduces the survivors' relative order in the binary (what a successful
-    /// compile does not, by itself, prove about the literal on-disk slot numbers).</para>
+    /// <para><b>A renumber keeps the record where it was.</b> Order lives in the parent's own ordered
+    /// child list (ADR-0042 decision 4), keyed by FormKey — so a renumber repoints that one entry in
+    /// place rather than moving the record to the end of the list, which is what the superseded
+    /// numbering scheme did by treating a renumber as delete-then-append. For
+    /// <c>DialogTopic.Responses</c> that difference is gameplay, not cosmetics. This asserts both
+    /// halves: the parent's list directly, and that a compile of the result reproduces the same order
+    /// in the binary (which the list alone does not prove).</para>
     /// </summary>
     [Fact]
     public void RenumberingAMidListFolderSplitChild_RenormalizesSurvivingSiblingsToContiguousSlots_AndCompiles()
@@ -350,28 +348,27 @@ public sealed class RecordEditServiceContainerDeleteRenumberTests : IDisposable
         var result = EditService().RenumberRecord(_fixture.Plugin, _fixture.DialogTopic2.ToString());
         Assert.True(result.Applied, result.Message);
 
-        var slots = Directory.EnumerateDirectories(dialogTopicsDirectory)
-            .Select(d => Path.GetFileName(d))
-            .Select(name => (Index: SourceUnitResolver.TryGetOrderIndex(name)!.Value, Name: name))
-            .OrderBy(s => s.Index)
-            .ToList();
+        // The quest's own document is what carries its DialogTopics' order now — not the child
+        // directory names, which carry identity and nothing else.
+        var questDirectory = Path.GetDirectoryName(dialogTopicsDirectory)!;
+        var order = SourceChildOrder.ListAt(
+            SourceChildOrder.CarrierFor(questDirectory, parentIsRecord: true), "DialogTopics");
 
-        Assert.Equal(3, slots.Count);
-        // The two untouched survivors renormalize to contiguous slots, in their original relative
-        // order — DialogTopic was already slot 0 (untouched); DialogTopic3 moves down from slot 2 to
-        // slot 1, closing the gap the renumbered record's old slot left.
-        Assert.Equal(0, slots[0].Index);
-        Assert.Contains(ContainerModFixture.DialogTopicEditorId, slots[0].Name, StringComparison.Ordinal);
-        Assert.Equal(1, slots[1].Index);
-        Assert.Contains(ContainerModFixture.DialogTopic3EditorId, slots[1].Name, StringComparison.Ordinal);
-        // ...and the renumbered record (same EditorID, new FormKey) appends at the next contiguous slot
-        // (2), never left at a gapped slot further out.
-        Assert.Equal(2, slots[2].Index);
-        Assert.Contains(ContainerModFixture.DialogTopic2EditorId, slots[2].Name, StringComparison.Ordinal);
-        Assert.Contains(result.NewFormKey!.Split(':')[0], slots[2].Name, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(3, order.Count);
+        // Every sibling stays exactly where it was: the two untouched ones are not renamed, not
+        // renumbered, and not moved in the list, and the renumbered record holds its own middle slot
+        // under its new FormKey rather than being appended past its siblings.
+        Assert.Equal(_fixture.DialogTopic.ToString(), order[0]);
+        Assert.Equal(result.NewFormKey, order[1]);
+        Assert.Equal(_fixture.DialogTopic3.ToString(), order[2]);
 
-        // Renormalization's promise: this compiles, and the compiled binary's
-        // DialogTopics preserve the survivors' relative order.
+        // And the directory names themselves carry no position at all.
+        var names = Directory.EnumerateDirectories(dialogTopicsDirectory).Select(Path.GetFileName).ToList();
+        Assert.Equal(3, names.Count);
+        Assert.All(names, n => Assert.DoesNotContain("[", n!, StringComparison.Ordinal));
+
+        // The promise: this compiles, and the compiled binary's DialogTopics are in exactly the
+        // order the quest's document records.
         var compileResult = new PluginCompileService(
                 _fixture.Mirror, new PluginWriter(NullLogger<PluginWriter>.Instance), NullLogger<PluginCompileService>.Instance)
             .Compile(_fixture.Plugin, new CompileSource.WorkingTree());
@@ -382,28 +379,8 @@ public sealed class RecordEditServiceContainerDeleteRenumberTests : IDisposable
             new ModPath(ModKey.FromFileName(ContainerModFixture.PluginName), pluginPath), GameRelease.Fallout4);
         var quest = ((IFallout4ModGetter)overlay).Quests.Single(q => q.FormKey == _fixture.Quest);
         Assert.Equal(
-            [ContainerModFixture.DialogTopicEditorId, ContainerModFixture.DialogTopic3EditorId, ContainerModFixture.DialogTopic2EditorId],
+            [ContainerModFixture.DialogTopicEditorId, ContainerModFixture.DialogTopic2EditorId, ContainerModFixture.DialogTopic3EditorId],
             quest.DialogTopics.Select(t => t.EditorID!).ToArray());
     }
 
-    /// <summary>
-    /// The guard half: a plausible wrong generalization is reaching for
-    /// <see cref="SourceUnitResolver.NextOrderIndexFor"/> — the existing top-level-only helper
-    /// <see cref="RecordEditService.CreateRecord"/> already uses — instead of the lower-level
-    /// <see cref="SourceUnitResolver.NextOrderIndex"/> over the child's <i>own</i> parent directory.
-    /// <see cref="SourceUnitResolver.NextOrderIndexFor"/>'s null-forgiving
-    /// <c>RecordTypeDispatch.FolderNameFor(recordType)!</c> is null for a DialogTopic (no top-level
-    /// group of its own), which <c>Path.Combine</c> then rejects outright — demonstrated directly
-    /// against that helper (observed: <c>ArgumentNullException</c>, "Value cannot be null.
-    /// (Parameter 'path3')" — not the <c>NullReferenceException</c> the doc-comment reasoning alone
-    /// would predict from a bare <c>!</c>, since the null actually reaches <c>Path.Combine</c> as an
-    /// argument rather than being dereferenced) rather than by temporarily breaking
-    /// <see cref="RecordEditService"/> itself.
-    /// </summary>
-    [Fact]
-    public void RenumberOfANestedFolderSplitChild_ThrowsArgumentNull_IfItUsedTheTopLevelOnlyIndexHelper()
-    {
-        Assert.Throws<ArgumentNullException>(() =>
-            SourceUnitResolver.NextOrderIndexFor(_fixture.ModFolder, ContainerModFixture.PluginName, "dial", GameRelease.Fallout4));
-    }
 }

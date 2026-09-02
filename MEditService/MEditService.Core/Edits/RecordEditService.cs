@@ -333,14 +333,11 @@ public sealed class RecordEditService(
         var isDirectoryPerRecord = unit.IsDirectoryPerRecord;
         var oldLeafPath = isDirectoryPerRecord ? Path.GetDirectoryName(unit.FullPath)! : unit.FullPath;
 
-        // An EditorID-only rename must not silently drop the record back to the front of its
-        // siblings (LeafNameFor's own name never carries a prefix) — the old leaf's own "[N] ", if it
-        // has one, rides forward onto the new name unchanged. No siblings need touching: this record's
-        // slot number is exactly what it was before the rename, just spelled with a new EditorID.
-        var oldLeafName = Path.GetFileName(oldLeafPath);
-        var orderIndex = SourceUnitResolver.TryGetOrderIndex(oldLeafName);
+        // An EditorID-only rename cannot disturb this record's position among its siblings, and needs
+        // nothing done to keep it: order lives in the parent's own ordered child list (ADR-0042
+        // decision 4) keyed by FormKey, which a rename does not change. Nothing else is touched —
+        // not one sibling, and not the parent's document either.
         var newLeafName = SourceUnitResolver.LeafNameFor(edited.FormKey, edited.EditorID, isDirectoryPerRecord);
-        if (orderIndex is { } index) newLeafName = $"[{index}] {newLeafName}";
         var newLeafPath = Path.Combine(Path.GetDirectoryName(oldLeafPath)!, newLeafName);
 
         if (string.Equals(oldLeafPath, newLeafPath, StringComparison.Ordinal)) return unit.FullPath;
@@ -413,11 +410,11 @@ public sealed class RecordEditService(
         }
         else
         {
-            // A folder-split child's container_child.SlotIndex mirrors its own "[N]" file-name
-            // prefix — captured before anything moves, so the survivors' new positions can be
-            // computed the same way RenormalizeGroupOrder computes them on disk below (sort by old
-            // rank ascending, assign 0..k-1). Null for a top-level container/flat record, which is
-            // nobody's folder-split child.
+            // A folder-split child's container_child.SlotIndex mirrors its position in the parent's
+            // ordered child list — captured before anything moves, so the survivors' new positions can
+            // be computed the same way the list closes up below (sort by old rank ascending, assign
+            // 0..k-1). Null for a top-level container/flat record, which is nobody's folder-split
+            // child.
             var parentLink = reads.GetContainerParent(plugin, formKey);
 
             // A container's own directory (Cell/Worldspace/Quest, or a nested folder-split child —
@@ -438,11 +435,11 @@ public sealed class RecordEditService(
                 File.Delete(unit.FullPath);
             }
 
-            // The delete's own last file-system act — closes whatever "[N]" gap it just left in
-            // the touched group directory, so the source tree's own working invariant (every group
-            // directory contiguous, SourceUnitResolver's own doc comment) holds again before this
-            // returns, rather than merely being restorable by a later re-Track.
-            SourceUnitResolver.RenormalizeGroupOrder(groupDirectory);
+            // The delete's own last file-system act, and the whole point of ADR-0042 decision 4's
+            // amendment: one line leaves one document. No sibling is renamed, so a mid-list delete
+            // stages as exactly one deletion plus one changed parent — where the superseded numbering
+            // scheme rewrote every later sibling's name to keep its prefixes contiguous.
+            SourceChildOrder.RemoveByIdentity(groupDirectory, formKey);
 
             // container_child's own copy of that same renumbering — the deleted child's row
             // disappears for free (it is simply not among the survivors passed in), and every
@@ -561,12 +558,7 @@ public sealed class RecordEditService(
         var record = MajorRecordInstantiator.Activator(FormKey.Factory(targetFormKey), release, schema.RecordType);
         if (!string.IsNullOrWhiteSpace(editorId)) record.EditorID = editorId;
 
-        // A brand-new sibling goes at the end of its group folder, one past whatever "[N] " is
-        // already the highest there (0 for a plugin's first record of this type).
-        // RefuseIfContainerType above already guarantees FolderNameFor is non-null for recordType.
-        var orderIndex = SourceUnitResolver.NextOrderIndexFor(modFolder, plugin.Name, recordType, release);
-
-        var relativePath = SourceRecordPath.For(plugin.Name, recordType, targetFormKey, record.EditorID, release, orderIndex);
+        var relativePath = SourceRecordPath.For(plugin.Name, recordType, targetFormKey, record.EditorID, release);
         var sourcePath = Path.Combine(modFolder, relativePath);
 
         // Track's eager serialization only created directories for (record type, origin ModKey)
@@ -577,11 +569,13 @@ public sealed class RecordEditService(
         var newBody = SourceUnitResolver.InMintedDirectory(
             Path.GetDirectoryName(sourcePath)!, () => SerializeAndWrite(_codec, record, sourcePath, release));
 
-        // Defensive, not merely a repeat of the invariant NextOrderIndexFor above already
-        // upholds — never-assume-exclusive-ownership means this group folder can already hold a gap
-        // nothing here caused (a hand-deleted sibling, another tool's edit), and this closes it as part
-        // of the same write rather than leaving it for the next structural write to trip over.
-        SourceUnitResolver.RenormalizeGroupOrder(Path.GetDirectoryName(sourcePath)!);
+        // A brand-new sibling lands at the end of its group's ordered child list — one line in one
+        // document, and no sibling touched. RefuseIfContainerType above already guarantees
+        // FolderNameFor is non-null for recordType.
+        SourceChildOrder.Add(
+            SourceChildOrder.CarrierFor(Path.GetDirectoryName(sourcePath)!, parentIsRecord: false),
+            RecordTypeDispatch.For(release).FolderNameFor(recordType)!,
+            targetFormKey);
 
         index.CreateWorkingTreeRecord(plugin, targetFormKey, recordType, newBody);
         // A brand-new row can newly match an active filter.
@@ -685,16 +679,15 @@ public sealed class RecordEditService(
 
         var body = ReadCopySourceBody(sourcePlugin, formKey, document, release);
 
-        // A flat type keeps CreateRecord's own shape (next order index in the destination's own
-        // group folder, a brand-new file there). A directory-per-record container's own top-level
+        // A flat type keeps CreateRecord's own shape (a brand-new file in the destination's own
+        // group folder). A directory-per-record container's own top-level
         // record needs its own RecordData.json directory instead — an interior Cell nests two GRUP
         // levels deeper than Worldspace/Quest do (InteriorCellDestinationPath's own doc comment), which
         // is why it is not just another call to ContainerOwnDirectoryPath.
         string relativePath;
         if (isFlat)
         {
-            var orderIndex = SourceUnitResolver.NextOrderIndexFor(destinationModFolder, destinationPlugin.Name, document.RecordType, release);
-            relativePath = SourceRecordPath.For(destinationPlugin.Name, document.RecordType, formKey, document.EditorId, release, orderIndex);
+            relativePath = SourceRecordPath.For(destinationPlugin.Name, document.RecordType, formKey, document.EditorId, release);
         }
         else
         {
@@ -710,7 +703,7 @@ public sealed class RecordEditService(
         var sourcePath = Path.Combine(destinationModFolder, relativePath);
         SourceUnitResolver.InMintedDirectory(Path.GetDirectoryName(sourcePath)!, () => WriteBodyAtomic(sourcePath, body));
 
-        SourceUnitResolver.RenormalizeGroupOrder(Path.GetDirectoryName(sourcePath)!);
+        AddToOwnGroupOrder(sourcePath, isFlat, document.RecordType, formKey, release);
 
         index.CreateWorkingTreeRecord(destinationPlugin, formKey, document.RecordType, body);
         // A brand-new row can newly match an active filter.
@@ -780,15 +773,14 @@ public sealed class RecordEditService(
             selfLinking.RemapLinks(new Dictionary<FormKey, FormKey> { [FormKey.Factory(formKey)] = FormKey.Factory(targetFormKey) });
         }
 
-        // A flat record is a new file at the group folder's next index; a directory-per-record
+        // A flat record is a new file in the group folder; a directory-per-record
         // container (Quest) is a new RecordData.json directory there instead — same split Copy as
         // Override already makes, and like it, own-record-only: folder-split children never ride
         // along (deep copy is #551's gesture).
         string relativePath;
         if (isFlat)
         {
-            var orderIndex = SourceUnitResolver.NextOrderIndexFor(destinationModFolder, destinationPlugin.Name, document.RecordType, release);
-            relativePath = SourceRecordPath.For(destinationPlugin.Name, document.RecordType, targetFormKey, newRecord.EditorID, release, orderIndex);
+            relativePath = SourceRecordPath.For(destinationPlugin.Name, document.RecordType, targetFormKey, newRecord.EditorID, release);
         }
         else
         {
@@ -799,11 +791,7 @@ public sealed class RecordEditService(
         var newBody = SourceUnitResolver.InMintedDirectory(
             Path.GetDirectoryName(sourcePath)!, () => SerializeAndWrite(_codec, newRecord, sourcePath, release));
 
-        // The group directory whose [N] prefixes the new leaf joined — the file's own directory for
-        // a flat record, the record directory's parent for a directory-per-record one.
-        SourceUnitResolver.RenormalizeGroupOrder(isFlat
-            ? Path.GetDirectoryName(sourcePath)!
-            : Path.GetDirectoryName(Path.GetDirectoryName(sourcePath)!)!);
+        AddToOwnGroupOrder(sourcePath, isFlat, document.RecordType, targetFormKey, release);
 
         index.CreateWorkingTreeRecord(destinationPlugin, targetFormKey, document.RecordType, newBody);
         // A brand-new row can newly match an active filter.
@@ -905,8 +893,9 @@ public sealed class RecordEditService(
         }
         var topicDirectory = Path.Combine(
             topicsDirectory,
-            $"[{SourceUnitResolver.NextOrderIndex(topicsDirectory)}] " +
-                SourceUnitResolver.LeafNameFor(FormKey.Factory(targetFormKey), topicRecord.EditorID, isDirectory: true));
+            SourceUnitResolver.LeafNameFor(FormKey.Factory(targetFormKey), topicRecord.EditorID, isDirectory: true));
+        SourceChildOrder.Add(
+            SourceChildOrder.CarrierFor(questDirectory, parentIsRecord: true), parentQuest.SlotName, targetFormKey);
         var topicBody = SourceUnitResolver.InMintedDirectory(
             topicDirectory,
             () => SerializeAndWrite(_codec, topicRecord, Path.Combine(topicDirectory, RecordDataFileName), release));
@@ -1013,8 +1002,9 @@ public sealed class RecordEditService(
 
         var newPath = Path.Combine(
             slotDirectory,
-            $"[{SourceUnitResolver.NextOrderIndex(slotDirectory)}] " +
-                SourceUnitResolver.LeafNameFor(FormKey.Factory(targetFormKey), newRecord.EditorID, isDirectory: false));
+            SourceUnitResolver.LeafNameFor(FormKey.Factory(targetFormKey), newRecord.EditorID, isDirectory: false));
+        SourceChildOrder.Add(
+            SourceChildOrder.CarrierFor(topicDirectory, parentIsRecord: true), parentTopic.SlotName, targetFormKey);
         var newBody = SourceUnitResolver.InMintedDirectory(
             slotDirectory, () => SerializeAndWrite(_codec, newRecord, newPath, release));
         index.CreateWorkingTreeRecord(destinationPlugin, targetFormKey, document.RecordType, newBody);
@@ -1083,9 +1073,11 @@ public sealed class RecordEditService(
             var slotDirectory = Path.Combine(parentDirectory, ownParent.Value.SlotName);
             recordDataPath = Path.Combine(
                 slotDirectory,
-                $"[{SourceUnitResolver.NextOrderIndex(slotDirectory)}] " +
-                    SourceUnitResolver.LeafNameFor(FormKey.Factory(ancestorFormKey), editorId: null, isDirectory: true),
+                SourceUnitResolver.LeafNameFor(FormKey.Factory(ancestorFormKey), editorId: null, isDirectory: true),
                 RecordDataFileName);
+            SourceChildOrder.Add(
+                SourceChildOrder.CarrierFor(parentDirectory, parentIsRecord: true),
+                ownParent.Value.SlotName, ancestorFormKey);
         }
 
         var body = SourceUnitResolver.InMintedDirectory(
@@ -1781,12 +1773,10 @@ public sealed class RecordEditService(
         var parentDirectory = Path.GetDirectoryName(oldLeafPath)!;
 
         // EditorID does not change across a renumber — only the FormKey half of the leaf name does.
-        // "A delete+create pair in source terms", taken literally: the new
-        // FormKey's leaf goes at the end of the same parent directory (a fresh next index), the same
-        // as an ordinary CreateRecord. The old slot's number is only ever a momentary gap —
-        // the renormalize pass below closes it as this method's own last file-system act.
-        var newOrderIndex = SourceUnitResolver.NextOrderIndex(parentDirectory);
-        var newLeafName = $"[{newOrderIndex}] " +
+        // The record keeps its position: its parent's ordered child list is keyed by FormKey, so the
+        // renumber repoints that one entry in place below rather than moving the record to the end.
+        // For DialogTopic.Responses that distinction is gameplay, not cosmetics.
+        var newLeafName =
             SourceUnitResolver.LeafNameFor(FormKey.Factory(newFormKey), document.EditorId, isDirectoryPerRecord);
         var newLeafPath = Path.Combine(parentDirectory, newLeafName);
 
@@ -1812,12 +1802,15 @@ public sealed class RecordEditService(
 
         if (!isDirectoryPerRecord && File.Exists(unit.FullPath)) transaction.Delete(modFolder, unit.FullPath);
 
-        // This method's own last file-system act — closes the gap the old slot just left (and
-        // any pre-existing one besides) so the group directory is contiguous again before this returns.
-        // Recorded like every other act here: an ordering prefix this pass moved is part of what a
-        // failed renumber has to put back, and putting it back in reverse order is what keeps the
-        // restore from colliding with a sibling this pass renamed (#678).
-        SourceUnitResolver.RenormalizeGroupOrder(parentDirectory, transaction, modFolder);
+        // This method's own last file-system act: the parent's ordered child list follows the record
+        // onto its new FormKey, in place. Recorded like every other act here — the carrier is a file
+        // this pass changed, so a failed renumber has to put it back too (#678, ADR-0045).
+        if (SourceChildOrder.SlotHolding(parentDirectory, oldFormKey) is { } slot)
+        {
+            transaction.Write(
+                modFolder, slot.Carrier,
+                () => SourceChildOrder.Rename(slot.Carrier, slot.Key, oldFormKey, newFormKey));
+        }
 
         // The whole index side of the renumber in one call, and therefore one transaction (#677):
         // the new identity's rows, the re-points that carry this record's folder-split children and
@@ -2528,9 +2521,8 @@ public sealed class RecordEditService(
             ?? throw new InvalidOperationException(
                 $"'{recordType}' has no group folder at all — RefuseIfCopySourceHasNoContainerOfItsOwn should have refused this first.");
         var groupDirectory = Path.Combine(modFolder, SourceRecordPath.RootFor(pluginName), groupFolder);
-        var orderIndex = SourceUnitResolver.NextOrderIndex(groupDirectory);
         var leafName = SourceUnitResolver.LeafNameFor(FormKey.Factory(formKey), editorId, isDirectory: true);
-        var fullPath = Path.Combine(groupDirectory, $"[{orderIndex}] {leafName}", RecordDataFileName);
+        var fullPath = Path.Combine(groupDirectory, leafName, RecordDataFileName);
         return Path.GetRelativePath(modFolder, fullPath);
     }
 
@@ -2559,29 +2551,64 @@ public sealed class RecordEditService(
         var cellsDirectory = Path.Combine(modFolder, SourceRecordPath.RootFor(pluginName), cellsFolder);
         SourceUnitResolver.InMintedDirectory(cellsDirectory, () => WriteMinimalGroupRecordDataIfMissing(cellsDirectory, groupType: null));
 
-        var blockDirectory = FindOrMintGroupDirectory(cellsDirectory, "InteriorCellBlock");
-        var subBlockDirectory = FindOrMintGroupDirectory(blockDirectory, "InteriorCellSubBlock");
+        var blockDirectory = FindOrMintGroupDirectory(
+            cellsDirectory, "InteriorCellBlock", cellsFolder);
+        var subBlockDirectory = FindOrMintGroupDirectory(
+            blockDirectory, "InteriorCellSubBlock", nameof(Mutagen.Bethesda.Fallout4.CellBlock.SubBlocks));
 
-        var orderIndex = SourceUnitResolver.NextOrderIndex(subBlockDirectory);
         var leafName = SourceUnitResolver.LeafNameFor(FormKey.Factory(formKey), editorId, isDirectory: true);
-        var fullPath = Path.Combine(subBlockDirectory, $"[{orderIndex}] {leafName}", RecordDataFileName);
+        var fullPath = Path.Combine(subBlockDirectory, leafName, RecordDataFileName);
         return Path.GetRelativePath(modFolder, fullPath);
     }
 
-    /// <summary>The first existing <c>"[N] &lt;number&gt;"</c> child directory of
-    /// <paramref name="parentDirectory"/>, or a freshly-minted <c>"[0] 0"</c> one carrying
-    /// <paramref name="groupType"/>'s own minimal <c>GroupRecordData.json</c> when none exists yet —
-    /// interior placement's own "reuse whatever bucket already exists" rule
-    /// (<see cref="InteriorCellDestinationPath"/>'s own doc comment).</summary>
-    private static string FindOrMintGroupDirectory(string parentDirectory, string groupType)
+    /// <summary>The first existing child directory of <paramref name="parentDirectory"/>, or a
+    /// freshly-minted <c>"0"</c> one carrying <paramref name="groupType"/>'s own minimal
+    /// <c>GroupRecordData.json</c> when none exists yet — interior placement's own "reuse whatever
+    /// bucket already exists" rule (<see cref="InteriorCellDestinationPath"/>'s own doc
+    /// comment).</summary>
+    /// <param name="orderKey">The member name this level is carried under in
+    /// <paramref name="parentDirectory"/>'s own ordered child list — a freshly minted block has to
+    /// join that list, or the next read refuses the tree as drift.</param>
+    private static string FindOrMintGroupDirectory(string parentDirectory, string groupType, string orderKey)
     {
-        var existing = Directory.EnumerateDirectories(parentDirectory)
-            .FirstOrDefault(d => SourceUnitResolver.TryGetOrderIndex(Path.GetFileName(d)) is not null);
+        var existing = Directory.EnumerateDirectories(parentDirectory).FirstOrDefault();
         if (existing != null) return existing;
 
-        var directory = Path.Combine(parentDirectory, "[0] 0");
+        const string blockNumber = "0";
+        var directory = Path.Combine(parentDirectory, blockNumber);
         SourceUnitResolver.InMintedDirectory(directory, () => WriteMinimalGroupRecordDataIfMissing(directory, groupType));
+        SourceChildOrder.Add(
+            SourceChildOrder.CarrierFor(parentDirectory, parentIsRecord: false), orderKey, blockNumber);
         return directory;
+    }
+
+    /// <summary>
+    /// Adds a freshly-copied record to its own parent's ordered child list (ADR-0042 decision 4) — the
+    /// shared tail of Copy as Override and Copy as New Record, which differ in what they write but not
+    /// in where the result has to be listed.
+    ///
+    /// <para>A flat record is listed in its group folder's own document under the group's name. A
+    /// directory-per-record container is listed one level further up, in the group folder above its
+    /// own directory. An interior Cell is the exception both here and in
+    /// <see cref="InteriorCellDestinationPath"/>, for the same reason: its directory nests under a
+    /// block/sub-block pair rather than sitting in its group folder, so the list that names it is the
+    /// sub-block's, keyed by the sub-block's own member rather than by the group folder.</para>
+    /// </summary>
+    private static void AddToOwnGroupOrder(
+        string sourcePath, bool isFlat, string recordType, string formKey, GameRelease release)
+    {
+        var dispatch = RecordTypeDispatch.For(release);
+        var ownDirectory = isFlat ? Path.GetDirectoryName(sourcePath)! : Path.GetDirectoryName(Path.GetDirectoryName(sourcePath)!)!;
+
+        var key = isFlat
+            ? dispatch.FolderNameFor(recordType)!
+            : dispatch.GroupFolderNameFor(recordType)!;
+
+        if (!isFlat && string.Equals(recordType, "cell", StringComparison.OrdinalIgnoreCase))
+            key = nameof(Mutagen.Bethesda.Fallout4.CellSubBlock.Cells);
+
+        SourceChildOrder.Add(
+            SourceChildOrder.CarrierFor(ownDirectory, parentIsRecord: false), key, formKey);
     }
 
     // Matches Track's own JsonSerializer.SerializeToUtf8Bytes shape

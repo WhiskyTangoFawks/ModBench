@@ -40,7 +40,9 @@ public sealed class RecordEditServiceTests : IDisposable
     public void EditingEditorId_MovesTheSourceFileToItsNewName()
     {
         var oldRelative = _mod.RelativeSourcePath(_mod.Npc, "npc_", TrackedModFixture.NpcEditorId);
-        var oldPrefix = SourceUnitResolver.TryGetOrderIndex(Path.GetFileName(oldRelative));
+        var groupDirectory = Path.GetDirectoryName(Path.Combine(_mod.ModFolder, oldRelative))!;
+        var carrier = SourceChildOrder.CarrierFor(groupDirectory, parentIsRecord: false);
+        var orderBefore = SourceChildOrder.ListAt(carrier, "Npcs");
         Assert.True(File.Exists(Path.Combine(_mod.ModFolder, oldRelative)));
 
         var result = Service().EditField(_mod.Plugin, _mod.Npc.ToString(), "editor_id", Json("\"RenamedNpc\""));
@@ -51,16 +53,15 @@ public sealed class RecordEditServiceTests : IDisposable
         // actually is right now (SourceUnitResolver, live off disk), and before the rename that is
         // still the old file (FormKey-suffix matching finds it under either EditorID).
         //
-        // That same disk-live resolution is also why "the file is findable at its expected new name"
-        // alone would NOT catch a rename that drops the "[N] " order prefix: FormKey-suffix matching
-        // is deliberately blind to it and would still find the (wrongly unprefixed) file. The prefix
-        // check right below is the assertion that actually rules that out — verified against the real
-        // rival (RenameSourceUnit with prefix-preservation removed): it passes the File.Exists checks
-        // here unchanged and only this one goes red.
+        // A rename must not disturb the record's position among its siblings. Since #566 that
+        // position is the parent's own ordered child list, keyed by FormKey — which a rename does not
+        // change — so the assertion is that the list is untouched, byte for byte, rather than that a
+        // prefix rode forward onto the new name.
         var newRelative = _mod.RelativeSourcePath(_mod.Npc, "npc_", "RenamedNpc");
         var moved = Path.Combine(_mod.ModFolder, newRelative);
         Assert.True(File.Exists(moved));
-        Assert.Equal(oldPrefix, SourceUnitResolver.TryGetOrderIndex(Path.GetFileName(newRelative)));
+        Assert.Equal(orderBefore, SourceChildOrder.ListAt(carrier, "Npcs"));
+        Assert.DoesNotContain("[", Path.GetFileName(newRelative), StringComparison.Ordinal);
         Assert.Contains("\"EditorID\": \"RenamedNpc\"", File.ReadAllText(moved), StringComparison.Ordinal);
         Assert.Equal("RenamedNpc", _mod.Mirror.Index!.At(RecordRef.Effective).GetDocument(_mod.Npc.ToString(), _mod.Plugin)!.EditorId);
     }

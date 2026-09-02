@@ -48,12 +48,6 @@ public static class ExternalChangeEditLander
         var deepParsed = ModFactory.ImportSetter(
             new ModPath(ModKey.FromFileName(pluginName), pluginPath), gameRelease, LocalizedStrings.ForRead(modFolder));
         var touched = new List<TouchedRecord>();
-        // SourceRecordPath.For needs each record's position among its own group-folder
-        // siblings. EnumerateMajorRecords walks the externally-changed binary's own deserialized
-        // object graph, which preserves each group's real GRUP order — so a running per-group counter,
-        // incremented in the same walk, reproduces exactly the index Track would assign this same
-        // binary, with no separate scan.
-        var orderIndexByGroup = new Dictionary<string, int>(StringComparer.Ordinal);
         foreach (var record in deepParsed.EnumerateMajorRecords())
         {
             var recordType = SourceRecordType.Resolve(record, schemas);
@@ -114,21 +108,18 @@ public static class ExternalChangeEditLander
                 continue;
             }
 
-            var orderIndex = orderIndexByGroup.GetValueOrDefault(groupFolder);
-            orderIndexByGroup[groupFolder] = orderIndex + 1;
-
             var formKey = record.FormKey.ToString();
-            var relativePath = SourceRecordPath.For(pluginName, recordType, formKey, record.EditorID, gameRelease, orderIndex);
+            var relativePath = SourceRecordPath.For(pluginName, recordType, formKey, record.EditorID, gameRelease);
 
-            // An external add/delete anywhere earlier in this group shifts every
-            // later sibling's own order index, hence its own file name, even when that sibling's own
-            // fields never changed — this record can therefore already have a real file sitting at its
-            // *old* index. Resolved by FormKey suffix (index- and EditorID-blind, the same lookup
-            // RecordEditService's own point writes use), not assumed to be wherever the freshly
-            // computed name says, so the collision check below reads the record's actual current
-            // working-tree text and landing can clean the stale old file up instead of leaving two
-            // files claiming one FormKey behind (exactly the corruption AmbiguousSourceUnitException
-            // exists to catch elsewhere).
+            // A file name carries identity and nothing else since #566, so an external add or delete
+            // no longer shifts any sibling's name — that whole class of stale file is gone with the
+            // ordering prefix. What remains is this record's own rename: an external EditorID change
+            // moves its file, so it can already have a real file under its *old* EditorID. Resolved by
+            // FormKey suffix (EditorID-blind, the same lookup RecordEditService's own point writes
+            // use) rather than assumed to be wherever the freshly computed name says, so the collision
+            // check below reads the record's actual current working-tree text and landing can clean
+            // the stale file up instead of leaving two files claiming one FormKey behind (exactly the
+            // corruption AmbiguousSourceUnitException exists to catch elsewhere).
             var existingPath = SourceUnitResolver.FlatSourcePath(
                 modFolder, pluginName, recordType, formKey, record.EditorID, gameRelease);
             var fullPath = Path.Combine(modFolder, relativePath);
@@ -155,14 +146,21 @@ public static class ExternalChangeEditLander
 
         foreach (var t in touched)
         {
-            // The stale file at the old order index, if this record's index shifted — never left
-            // behind as a duplicate (see this record's own construction, above).
+            // The stale file under this record's old EditorID, if it was renamed externally — never
+            // left behind as a duplicate (see this record's own construction, above).
             if (!string.Equals(t.ExistingPath, t.FullPath, StringComparison.Ordinal) && File.Exists(t.ExistingPath))
                 File.Delete(t.ExistingPath);
 
             Directory.CreateDirectory(Path.GetDirectoryName(t.FullPath)!);
             File.WriteAllText(t.FullPath, t.IncomingText);
         }
+
+        // Order is parent data (ADR-0042 decision 4), and the binary that changed underneath us is
+        // what says what the order now is. Rewriting every carrier from the parsed binary — rather
+        // than editing individual lists per landed record — is what makes an external add, delete and
+        // reorder all land the same way, with nothing left for a per-record path to get wrong.
+        SourceChildOrder.SpliceInto(
+            Path.Combine(modFolder, SourceRecordPath.RootFor(pluginName)), deepParsed);
 
         // The working tree (touched records' new dirt included) is now the state that corresponds to
         // this binary — atRef: null snapshots it as it stands, the same idiom Save & Compile parks

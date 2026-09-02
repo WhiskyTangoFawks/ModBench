@@ -34,9 +34,9 @@ namespace MEditService.Core.Edits;
 /// having one of its own: both go through the same gateway, over the same tree, with the same
 /// sequential dropoff, so there is no second reader to drift from the first.</para>
 ///
-/// <para><b>Child order is preserved, and can be claimed.</b>
-/// <c>RecordTextCodecCustomization</c> turns <c>Overall.EnforceRecordOrder</c> on, so every
-/// folder-split sibling's file name carries its real GRUP position and a compile reproduces it —
+/// <para><b>Child order is preserved, and can be claimed.</b> Every folder-split list carries its
+/// real GRUP order as an ordered child list in its parent's own document (ADR-0042 decision 4), which
+/// the whole-mod read door restores before this ever sees the mod, so a compile reproduces it —
 /// verified byte-for-byte on the committed fixture (<c>CompileRoundTripGateTests</c>,
 /// <c>DialogueOrderDamageTests</c>).</para>
 /// </summary>
