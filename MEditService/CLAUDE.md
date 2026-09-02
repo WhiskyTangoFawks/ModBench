@@ -7,8 +7,10 @@ C# ASP.NET Core backend. Root [CLAUDE.md](../CLAUDE.md) for project-wide invaria
 The ADR is the full statement — read it before changing its area.
 
 - **A tracked plugin's source tree is its source of truth; the binary serves untracked plugins**
-  (ADR-0041, ADR-0042). An unreadable source tree degrades to the binary with a visible
-  `PluginLoadFailure`, never silently.
+  (ADR-0041, ADR-0042). At first ingest an unreadable source tree degrades to the binary with a
+  visible `PluginLoadFailure`, never silently. At re-ingest it does not — there are already
+  source-derived rows to protect, so the failure is recorded and rethrown rather than the rows
+  overwritten with stale compiled content.
 - **Plugin identity is compound, everywhere** (ADR-0036): `PluginKey(Name, Origin)` on every seam
   member, wire DTO and cache key — a bare filename is never an identity.
 - **Registration is visibility** (ADR-0001): a plugin answers a read iff it has a `registrations`
