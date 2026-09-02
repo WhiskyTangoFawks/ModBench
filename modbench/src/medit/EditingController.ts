@@ -428,9 +428,8 @@ export class EditingController {
    *
    *  `onEslContradiction` is #290's prompt-and-retry hook: creation can outgrow the ESL range the
    *  same way compile's own content can — the allocator's ceiling for a light plugin is local
-   *  `0xFFF`, so a destination already at it refuses the next mint however it filled up. (#670
-   *  removed the batch copy door this comment used to name as the way to get there in one gesture;
-   *  the refusal itself is unchanged.) When it happens the caller decides whether to remove the
+   *  `0xFFF`, so a destination already at it refuses the next mint however it filled up. When it
+   *  happens the caller decides whether to remove the
    *  flag, and accepting retries this same call once, exactly as `compileAndReport`'s own retry
    *  does. Left unset, an ESL-contradiction refusal surfaces as the ordinary toast like any other
    *  refusal. */
