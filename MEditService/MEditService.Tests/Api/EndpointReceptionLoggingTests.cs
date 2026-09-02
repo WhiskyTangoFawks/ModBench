@@ -123,6 +123,7 @@ public sealed class EndpointReceptionLoggingTests
         public PluginResponse CreatePlugin(string name, string path, string origin) =>
             new(name, name, 0, false, false, [], 0, false, true, origin, [], true, true, true);
         public Task ReindexPlugin(PluginKey key) => throw new NotSupportedException();
+        public void ReingestPluginFromSource(PluginKey key) => throw new NotSupportedException();
         public void UnindexPlugin(PluginKey key) => throw new NotSupportedException();
         public void SetFilter(string sql) => throw new NotSupportedException();
         public void ClearFilter() => throw new NotSupportedException();

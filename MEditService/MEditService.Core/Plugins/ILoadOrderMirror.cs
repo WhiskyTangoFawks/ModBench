@@ -85,15 +85,45 @@ public interface ILoadOrderMirror
     PluginResponse CreatePlugin(string name, string path, string origin);
 
     /// <summary>
-    /// ADR-0001: re-reads exactly the copy <paramref name="key"/> names and re-indexes it,
-    /// then recomputes winners — the runtime mirror's answer to an indexed binary whose bytes moved
-    /// under a held load order (MO2, xEdit, Steam, or the user). Keyed by <see cref="PluginKey"/>
-    /// rather than by filename, so it can reach a losing copy too, not only whichever copy a bare
-    /// filename would resolve to.
+    /// ADR-0001: re-derives exactly the copy <paramref name="key"/> names, then recomputes winners —
+    /// the runtime mirror's answer to an indexed binary whose bytes moved under a held load order
+    /// (MO2, xEdit, Steam, or the user). Keyed by <see cref="PluginKey"/> rather than by filename, so
+    /// it can reach a losing copy too, not only whichever copy a bare filename would resolve to.
+    ///
+    /// <para><b>Which truth it reads is the plugin's, not the caller's</b> (#672). An <i>untracked</i>
+    /// copy is re-read from its binary, which is its source of truth. A <i>tracked</i> copy is
+    /// re-derived from its source tree instead, which is its source of truth (ADR-0041/ADR-0042) —
+    /// this delegates to <see cref="ReingestPluginFromSource"/> and never opens the binary for it.
+    /// Reading the binary for a tracked copy would replace source-derived rows with compiled content
+    /// and silently discard the author's uncommitted edits, which is exactly what a Track followed by
+    /// a Save &amp; Compile used to do: Track does not reconcile the load order, so a copy that was
+    /// untracked at the last reconcile keeps its index-mirror watch, and the compile's own write fires
+    /// it.</para>
+    ///
     /// Throws <see cref="NoLoadOrderException"/> if no load order is held.
     /// Throws <see cref="KeyNotFoundException"/> if no such copy is held.
     /// </summary>
     Task ReindexPlugin(PluginKey key);
+
+    /// <summary>
+    /// Re-derives the tracked copy <paramref name="key"/> names from its <b>source tree</b> —
+    /// its rows and its committed-versus-working-tree divergence alike — and recomputes winners. The
+    /// source-truth counterpart of <see cref="ReindexPlugin"/>'s binary re-read, and a distinct
+    /// operation from it: this one names the truth it reads rather than inferring it, which is what a
+    /// caller that has just moved the source under a live load order (a rollback, a revert, a
+    /// checkout) actually wants to say.
+    ///
+    /// <para><b>Does not degrade to the binary.</b> If the tree cannot be read, this throws and the
+    /// index keeps serving the source-derived rows it already held — falling back to compiled content
+    /// here would resurrect precisely the silent-loss failure this door exists to prevent. The
+    /// reconcile-time ingest's own binary fallback is a different situation (there are no rows yet).</para>
+    ///
+    /// Throws <see cref="NoLoadOrderException"/> if no load order is held.
+    /// Throws <see cref="KeyNotFoundException"/> if no such copy is held.
+    /// Throws <see cref="InvalidOperationException"/> if that copy has no source tree — it is not
+    /// tracked, so it has no source truth to re-derive from.
+    /// </summary>
+    void ReingestPluginFromSource(PluginKey key);
 
     /// <summary>
     /// ADR-0001: <paramref name="key"/>'s file is gone from disk, so its rows go with it

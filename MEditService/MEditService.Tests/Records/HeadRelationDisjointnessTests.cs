@@ -24,12 +24,23 @@ namespace MEditService.Tests.Records;
 public sealed class HeadRelationDisjointnessTests
 {
     /// <summary>
-    /// The case no amount of care inside <c>SourceIngest</c> can cover, because it never goes near it:
-    /// <see cref="ILoadOrderMirror.ReindexPlugin"/> re-reads the <i>binary</i> and calls
-    /// <see cref="IRecordIndex.Index"/> straight, for a plugin whose records are already dirty.
+    /// <see cref="ILoadOrderMirror.ReindexPlugin"/> over a plugin whose records are already dirty —
+    /// the shape #672 is about: a tracked plugin gets re-indexed by the stale index-mirror watch that
+    /// survived its Track, and the author's uncommitted source edits must come through it intact.
+    ///
+    /// <para>Asserts the edit itself, not merely that the resulting tables are well-formed: a
+    /// re-index that re-read the <i>binary</i> would also leave exactly one row at Head — a perfectly
+    /// disjoint pair of relations describing content the author never wrote. So the row count is kept
+    /// (it is this suite's own invariant) and the surviving value and divergence are asserted beside
+    /// it.</para>
+    ///
+    /// <para>Read straight off <see cref="IRecordIndex"/> rather than through
+    /// <c>RecordQueryService</c>, deliberately: <c>SourceFreshness</c> re-derives a record from its
+    /// source file on every editor read, so a query-service read would repair the damage before it
+    /// could be observed and this test would pass against the very behaviour it exists to forbid.</para>
     /// </summary>
     [Fact]
-    public async Task ReindexingAPluginWithADirtyRecord_LeavesExactlyOneRowAtHead()
+    public async Task ReindexingATrackedPluginWithADirtyRecord_KeepsTheUncommittedEdit_AndLeavesExactlyOneRowAtHead()
     {
         using var mod = TrackedModFixture.Tracked();
 
@@ -44,6 +55,18 @@ public sealed class HeadRelationDisjointnessTests
                 .Items.Single(r => r.FormKey == mod.Npc.ToString()).WorkingTreeState);
 
         await ((ILoadOrderMirror)mod.Mirror).ReindexPlugin(mod.Plugin);
+
+        // The edit survives: Effective still serves the source's 0.75, not the binary's untouched
+        // value (the binary was written by the fixture and has never been compiled since).
+        var effective = mod.Mirror.Index!.At(RecordRef.Effective).GetDocument(mod.Npc.ToString(), mod.Plugin)!;
+        Assert.Equal(0.75f, Assert.IsType<float>(effective.Fields.Single(f => f.Metadata.Name == "height_max").Value));
+
+        // ...and so does the divergence it created: the record is still committed-versus-working-tree
+        // dirty, so it is still diffable and revertable.
+        Assert.Equal(
+            WorkingTreeState.Modified,
+            mod.Mirror.Index!.At(RecordRef.Effective).Search(new RecordQuery(Plugin: mod.Plugin, Limit: 100))
+                .Items.Single(r => r.FormKey == mod.Npc.ToString()).WorkingTreeState);
 
         var atHead = mod.Mirror.Index!.At(RecordRef.Head)
             .Search(new RecordQuery(Plugin: mod.Plugin, Limit: int.MaxValue))

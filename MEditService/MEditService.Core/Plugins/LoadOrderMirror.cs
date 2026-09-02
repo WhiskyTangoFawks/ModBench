@@ -570,18 +570,72 @@ public sealed class LoadOrderMirror(
     /// <summary>See <see cref="ILoadOrderMirror.ReindexPlugin(PluginKey)"/>.</summary>
     public Task ReindexPlugin(PluginKey key)
     {
-        PluginMetadata metadata;
-        IRecordIndex index;
-        GameRelease gameRelease;
-        lock (_lock)
+        var (metadata, index, gameRelease) = RequireHeldCopy(key);
+
+        // #672: a tracked copy's truth is its source tree, so it is re-derived from there and its
+        // binary is never opened — see the interface's own doc comment for why reading the binary
+        // here was silently discarding uncommitted edits.
+        if (SourceIngest.TreeFor(metadata.Origin, metadata.Path, metadata.Name) is { } sourceTree)
         {
-            var scope = RequireScopeCore();
-            metadata = scope.LoadOrder.Find(key)
-                ?? throw new KeyNotFoundException($"Plugin '{key.Name}' from '{key.Origin}' is not held.");
-            (index, gameRelease) = (scope.Index, _gameRelease);
+            ReingestOne(metadata, index, sourceTree, gameRelease);
+            return Task.CompletedTask;
         }
 
         return ReindexOne(metadata, index, gameRelease);
+    }
+
+    /// <summary>See <see cref="ILoadOrderMirror.ReingestPluginFromSource"/>.</summary>
+    public void ReingestPluginFromSource(PluginKey key)
+    {
+        var (metadata, index, gameRelease) = RequireHeldCopy(key);
+        var sourceTree = SourceIngest.TreeFor(metadata.Origin, metadata.Path, metadata.Name)
+            ?? throw new InvalidOperationException(
+                $"Plugin '{key.Name}' from '{key.Origin}' has no source tree to re-ingest; it is not tracked.");
+
+        ReingestOne(metadata, index, sourceTree, gameRelease);
+    }
+
+    /// <summary>The copy <paramref name="key"/> names, and the index and release to act on it with —
+    /// the one held-and-known gate both re-derivation doors above share.</summary>
+    private (PluginMetadata Metadata, IRecordIndex Index, GameRelease GameRelease) RequireHeldCopy(PluginKey key)
+    {
+        lock (_lock)
+        {
+            var scope = RequireScopeCore();
+            var metadata = scope.LoadOrder.Find(key)
+                ?? throw new KeyNotFoundException($"Plugin '{key.Name}' from '{key.Origin}' is not held.");
+            return (metadata, scope.Index, _gameRelease);
+        }
+    }
+
+    /// <summary>
+    /// One tracked copy re-derived from its source tree — the same <see cref="SourceIngest.Ingest"/>
+    /// the reconcile's own tracked-plugin branch runs, so a re-ingest and a first ingest produce the
+    /// same rows and the same Head state by construction rather than by agreement.
+    ///
+    /// <para>The ingest itself runs outside <c>_lock</c>, exactly as the reconcile's does: a whole-tree
+    /// deserialize plus a <c>git status</c> is seconds of work, and holding the lock across it would
+    /// queue every read behind it. Only the sweep and the filter re-materialization — the two
+    /// whole-index steps — take the lock.</para>
+    /// </summary>
+    private void ReingestOne(PluginMetadata metadata, IRecordIndex index, string sourceTree, GameRelease gameRelease)
+    {
+        if (_logger.IsEnabled(LogLevel.Information))
+        {
+            _logger.LogInformation(
+                "Re-ingesting {Plugin} from its source tree ({Tree})", metadata.Name, sourceTree);
+        }
+
+        SourceIngest.Ingest(
+            index, ModFolders.Of(metadata.Origin, metadata.Path)!, sourceTree,
+            metadata.Registration, metadata.Key, metadata.Path, gameRelease, _schemaReflector, _logger);
+
+        lock (_lock)
+        {
+            index.UpdateWinners();
+            // Re-derived content can flip filter membership either way.
+            ReapplyFilter();
+        }
     }
 
     private Task ReindexOne(PluginMetadata metadata, IRecordIndex index, GameRelease gameRelease)

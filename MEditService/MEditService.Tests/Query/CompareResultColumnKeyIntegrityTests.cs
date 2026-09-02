@@ -173,6 +173,7 @@ public sealed class CompareResultColumnKeyIntegrityTests
         public void Close() => throw new NotSupportedException();
         public PluginResponse CreatePlugin(string name, string path, string origin) => throw new NotSupportedException();
         public Task ReindexPlugin(PluginKey key) => throw new NotSupportedException();
+        public void ReingestPluginFromSource(PluginKey key) => throw new NotSupportedException();
         public void UnindexPlugin(PluginKey key) => throw new NotSupportedException();
         public void SetFilter(string sql) => throw new NotSupportedException();
         public void ClearFilter() => throw new NotSupportedException();
