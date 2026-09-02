@@ -382,7 +382,9 @@ plugins are never probed at all.
   children — nothing can say where an unlisted child belongs, and for `DialogTopic.Responses`
   an invented position is a gameplay change. Re-Track is the recovery, the same uniform
   answer every other format break gets. The tree is authoritative for whether a child
-  exists; the parent's list for the order of the ones that do.
+  exists; the parent's list for the order of the ones that do. A hand delete is honoured at *read* but
+  still refuses at *compile* until a structural write repairs the list or the mod is re-Tracked —
+  the same limit the superseded scheme had, ported rather than introduced.
 - **Refusal posture is git's**: refuse and the user fixes it — rebase-over-dirt,
   deserialize-over-dirt, renumber-forcing compiles. Automation on top may come later;
   none of it is in this milestone.

@@ -7,11 +7,12 @@ namespace MEditService.Tests.Serialization;
 /// disagree silently, because a numbered name still deserializes fine.
 ///
 /// <para><b>Why a source-text ban rather than trusting one deleted line.</b> The flag is set per
-/// generator compilation, and one compilation can seed exactly one game — so a codebase that grows a
-/// second game grows a second customization class to set it in, and a third game a third. "Delete it
-/// in one place" stops being true the moment the backend is multi-game, which is live work on another
-/// branch right now. The author of a new game's seed will copy an existing one; this is what tells
-/// them, immediately, that the copied line is not wanted.</para>
+/// generator compilation, and one compilation can seed exactly one game, because record type names
+/// collide across games. A second game therefore needs a second customization class to set it in, and
+/// a third a third — so "we deleted it, in the one place it was" is a fact about today's assembly
+/// count rather than an invariant. The author of a new game's seed will copy an existing one; this is
+/// what tells them immediately that the copied line is not wanted, and it costs a grep per test
+/// run.</para>
 ///
 /// <para><b>Production sources only, deliberately.</b> Test files legitimately name the flag in prose
 /// while explaining the numbering they used to assert, and a ban that caught comments would fire on

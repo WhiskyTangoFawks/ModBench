@@ -50,23 +50,6 @@ public sealed class CompileRoundTripGateTests(CompileRoundTripGateFixture fixtur
     : IClassFixture<CompileRoundTripGateFixture>
 {
     /// <summary>
-    /// Deep-parses <paramref name="pluginPath"/> and re-derives the source tree it would produce,
-    /// through the same whole-mod door Track itself writes through.
-    ///
-    /// <para><b>Whole-mod, not per-record.</b> <c>SourceRecordPath.For</c> covers flat records only
-    /// and throws for the Cells/Worldspaces/Quests this fixture is full of. Reconstructing their
-    /// directory nesting by hand here would mean owning a second copy of the serializer's own layout
-    /// policy; calling the serializer is both shorter and the only version that cannot drift from what
-    /// Track wrote. Tests may call the door — the whitelist scan in
-    /// <c>RecordTextCodecGeneratorSeedTests</c> is scoped to <c>MEditService.Core</c> sources.</para>
-    ///
-    /// <para>One post-step makes the derived tree comparable rather than merely similar, and it is
-    /// Track's own (<c>TrackService.TrackAsync</c>): the <c>\r</c> strip. Everything in the tree, the
-    /// mod header's own root document included, is inside the comparison — Track writes no sidecar
-    /// beside it (ADR-0042: "Spriggit has no role in v1"), so there is nothing left to
-    /// exclude.</para>
-    /// </summary>
-    /// <summary>
     /// The source tree <paramref name="pluginPath"/> would produce, obtained through
     /// <see cref="TrackService.SerializeToPristineFiles"/> — the same door Track and the
     /// external-change absorber write through — rather than by re-implementing it here.

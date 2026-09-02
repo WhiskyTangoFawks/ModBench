@@ -53,6 +53,13 @@ namespace MEditService.Core.Source;
 /// deletion, because deleting the file is how a record is deleted by hand, and ADR-0041's git-native
 /// working-tree model makes that a first-class edit. The tree is authoritative for whether a child
 /// exists; the parent's list is authoritative for the order of the ones that do.</para>
+///
+/// <para><b>That makes a hand-deleted record readable, not compilable.</b> The round-trip gate
+/// compares the tree against what the codec would reserialize from it, so a list still naming the
+/// deleted record refuses the plugin's own next Save &amp; Compile until <see cref="PruneMissing"/>
+/// repairs it or the mod is re-Tracked. The superseded numbering scheme had exactly this limit for
+/// exactly this case (a hand-deleted file left a numbering gap the compile gate refused); it is
+/// ported deliberately, not overlooked.</para>
 /// </summary>
 internal static class SourceChildOrder
 {
@@ -60,8 +67,6 @@ internal static class SourceChildOrder
     /// cannot ever collide with a real one the generated reader would otherwise bind.</summary>
     internal const string MemberName = "MEditChildOrder";
 
-    private const string GroupRecordDataFileName = "GroupRecordData.json";
-    private const string RecordDataFileName = "RecordData.json";
 
     // Matches what the whole-mod door's own writer produces, so a carrier this class rewrites is
     // formatted exactly like one it did not (RecordEditService.GroupRecordDataOptions says the same
@@ -80,7 +85,7 @@ internal static class SourceChildOrder
     /// </summary>
     private readonly record struct OrderedCollection(
         string CarrierPath,
-        string? Key,
+        string Key,
         IReadOnlyList<object> Children,
         Action<IReadOnlyList<object>> Rewrite)
     {
@@ -160,7 +165,7 @@ internal static class SourceChildOrder
     /// (<c>RecordData.json</c>) rather than a group or block level's
     /// (<c>GroupRecordData.json</c>).</param>
     internal static string CarrierFor(string parentDirectory, bool parentIsRecord) =>
-        Path.Combine(parentDirectory, parentIsRecord ? RecordDataFileName : GroupRecordDataFileName);
+        Path.Combine(parentDirectory, parentIsRecord ? SourceUnitResolver.RecordDataFileName : SourceUnitResolver.GroupRecordDataFileName);
 
     /// <summary>
     /// Appends <paramref name="identity"/> to the ordered child list a structural write just added a
@@ -225,7 +230,7 @@ internal static class SourceChildOrder
     {
         var files = (fileSystem ?? new FileSystem()).File;
 
-        foreach (var carrierName in new[] { RecordDataFileName, GroupRecordDataFileName })
+        foreach (var carrierName in new[] { SourceUnitResolver.RecordDataFileName, SourceUnitResolver.GroupRecordDataFileName })
         {
             var scratchCarrier = Path.Combine(scratchDirectory, carrierName);
             if (!files.Exists(scratchCarrier)) continue;
@@ -391,24 +396,18 @@ internal static class SourceChildOrder
     }
 
     /// <summary>Whether <paramref name="leaf"/> is the file or directory of the child recorded as
-    /// <paramref name="identity"/> — the filesafe FormKey it ends with for a record, or the name
-    /// itself for a block, which is named after its own coordinates.</summary>
-    private static bool NameCarriesIdentity(string leaf, string identity)
-    {
-        if (leaf.Equals(identity, StringComparison.Ordinal)) return true;
-
-        var separator = identity.IndexOf(':', StringComparison.Ordinal);
-        if (separator < 0) return false;
-
-        var filesafe = string.Concat(identity.AsSpan(0, separator), "_", identity.AsSpan(separator + 1));
-        var name = leaf.EndsWith(".json", StringComparison.Ordinal) ? leaf[..^".json".Length] : leaf;
-        return name.Equals(filesafe, StringComparison.Ordinal)
-            || name.EndsWith($" - {filesafe}", StringComparison.Ordinal);
-    }
+    /// <paramref name="identity"/> — delegated to <see cref="SourceUnitResolver.NameCarriesFormKey"/>
+    /// for a record, so the filesafe-FormKey naming rule keeps one owner; a block is named after its
+    /// own coordinates, which are the identity itself.</summary>
+    private static bool NameCarriesIdentity(string leaf, string identity) =>
+        leaf.Equals(identity, StringComparison.Ordinal)
+        || (identity.Contains(':', StringComparison.Ordinal)
+            && SourceUnitResolver.NameCarriesFormKey(leaf, identity));
 
     private static void Mutate(string carrierPath, string key, IFileSystem? fileSystem, Action<JsonArray> edit)
     {
-        var files = (fileSystem ?? new FileSystem()).File;
+        var system = fileSystem ?? new FileSystem();
+        var files = system.File;
         var document = ReadCarrier(files, carrierPath);
         var orders = document[MemberName] as JsonObject;
         if (orders is null)
@@ -425,7 +424,7 @@ internal static class SourceChildOrder
         edit(working);
         orders[key] = working;
 
-        (fileSystem ?? new FileSystem()).Directory.CreateDirectory(Path.GetDirectoryName(carrierPath)!);
+        system.Directory.CreateDirectory(Path.GetDirectoryName(carrierPath)!);
         files.WriteAllText(carrierPath, document.ToJsonString(CarrierOptions));
     }
 
@@ -437,7 +436,8 @@ internal static class SourceChildOrder
     /// </summary>
     internal static void SpliceInto(string treeRoot, IModGetter mod, IFileSystem? fileSystem = null)
     {
-        var files = (fileSystem ?? new FileSystem()).File;
+        var system = fileSystem ?? new FileSystem();
+        var files = system.File;
         foreach (var group in Enumerate(treeRoot, mod).GroupBy(c => c.CarrierPath, StringComparer.Ordinal))
         {
             var document = ReadCarrier(files, group.Key);
@@ -449,11 +449,11 @@ internal static class SourceChildOrder
                 foreach (var identity in collection.Identities) list.Add(identity);
                 // A keyless collection is the folder's own single group; a keyed one is a named
                 // member of the record whose document this is.
-                orders[collection.Key ?? string.Empty] = list;
+                orders[collection.Key] = list;
             }
 
             document[MemberName] = orders;
-            (fileSystem ?? new FileSystem()).Directory.CreateDirectory(Path.GetDirectoryName(group.Key)!);
+            system.Directory.CreateDirectory(Path.GetDirectoryName(group.Key)!);
             files.WriteAllText(group.Key, document.ToJsonString(CarrierOptions));
         }
     }
@@ -470,7 +470,7 @@ internal static class SourceChildOrder
         foreach (var collection in Enumerate(treeRoot, mod))
         {
             var document = ReadCarrier(files, collection.CarrierPath);
-            var recorded = document[MemberName]?[collection.Key ?? string.Empty] as JsonArray;
+            var recorded = document[MemberName]?[collection.Key] as JsonArray;
 
             var identities = collection.Identities;
             var wanted = recorded is null ? [] : recorded.Select(entry => entry!.GetValue<string>()).ToList();
@@ -505,7 +505,7 @@ internal static class SourceChildOrder
     }
 
     private static string Describe(OrderedCollection collection) =>
-        collection.Key is null ? collection.CarrierPath : $"{collection.Key} under {collection.CarrierPath}";
+        $"{collection.Key} under {collection.CarrierPath}";
 
     /// <summary>
     /// Every folder-split collection in <paramref name="mod"/>, paired with the document that carries
@@ -524,7 +524,7 @@ internal static class SourceChildOrder
             // A top-level group's records live in the group's own folder, whose GroupRecordData.json
             // carries their order.
             yield return new OrderedCollection(
-                Path.Combine(folder, GroupRecordDataFileName), property.Name, records, rewrite);
+                Path.Combine(folder, SourceUnitResolver.GroupRecordDataFileName), property.Name, records, rewrite);
 
             foreach (var record in records)
             {
@@ -552,8 +552,7 @@ internal static class SourceChildOrder
     /// </summary>
     private static IEnumerable<OrderedCollection> Walk(string parentDirectory, object parent, bool parentIsRecord)
     {
-        var carrier = Path.Combine(
-            parentDirectory, parentIsRecord ? RecordDataFileName : GroupRecordDataFileName);
+        var carrier = CarrierFor(parentDirectory, parentIsRecord);
 
         foreach (var property in FolderSplitProperties(parent.GetType()))
         {
@@ -663,12 +662,16 @@ internal static class SourceChildOrder
 }
 
 /// <summary>
-/// The tree's folder-split children and the ordered child lists in their parents' documents do not
-/// agree — a file the list does not name, or a list entry with no file. Hand edits and other tools
+/// The tree holds a folder-split child its parent's ordered child list does not name. Only that
+/// direction: a list entry with <i>no</i> file is honoured as a deletion rather than refused (see
+/// <see cref="SourceChildOrder.ApplyTo"/>), so it never reaches this. Hand edits and other tools
 /// both produce it (root CLAUDE.md's never-assume-exclusive-ownership rule), and ADR-0042 decision 5
 /// gives it the same uniform answer every other format break gets: fail loudly, naming the mismatch,
-/// and re-Track to recover. Named rather than a bare invalid-operation so the endpoint layer can map
-/// it, exactly as <see cref="SourceRoundTripFailedException"/> is.
+/// and re-Track to recover. Named rather than a bare invalid-operation because it is thrown on the
+/// <i>read</i> path and surfaces through the degradation both readers already have: ingest records it
+/// as a <c>PluginLoadFailure</c> naming this type and serves the compiled binary rather than failing
+/// the load, and a compile refuses. No endpoint catches it directly and none needs to — a bespoke
+/// catch would be scaffolding for a case that already has an answer.
 /// </summary>
 public sealed class SourceChildOrderDriftException : InvalidOperationException
 {

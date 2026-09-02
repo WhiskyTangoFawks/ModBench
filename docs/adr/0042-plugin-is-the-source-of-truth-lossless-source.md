@@ -208,6 +208,17 @@ Effective, still answerable at Head). The split is principled: **the tree is aut
 a child exists; the parent's list is authoritative for the order of the ones that do.** Each stays
 authoritative for its own question.
 
+**The hand-delete's limit, stated rather than implied.** Honouring a missing file as a deletion makes
+the plugin *readable*; it does not by itself make it *compilable*. The round-trip gate compares the
+tree against what the codec would reserialize from it, and a list still naming the deleted record does
+not match — so a hand delete leaves the plugin's own next Save & Compile refusing until either a
+structural write repairs the list (`SourceChildOrder.PruneMissing`, which `CreateRecord` runs
+defensively) or the mod is re-Tracked. That is exactly the behaviour the superseded numbering scheme
+had for the same situation — a hand-deleted file left a numbering gap, which the compile gate refused
+until a structural write renormalized the folder — so this is a faithful port of the old limit, not a
+new one. Closing it properly means repairing on the compile path, which is a change to what a compile
+is allowed to write and is deliberately not made here.
+
 The Cell/Worldspace *embeds* (children inline in the parent document) are kept on our own grounds —
 one document per cell is the tree a human wants — and are excluded from the above precisely because
 they have no folder to order.

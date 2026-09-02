@@ -103,6 +103,11 @@ internal static class SourceUnitResolver
     /// extension).</summary>
     internal const string RecordDataFileName = "RecordData.json";
 
+    /// <summary>The whole-mod door's own name for a group or block level's own metadata file
+    /// (<c>SerializationHelper.TypicalGroupFileName</c>). Also the carrier for those levels' ordered
+    /// child lists (<see cref="SourceChildOrder"/>), which is why it is shared rather than private.</summary>
+    internal const string GroupRecordDataFileName = "GroupRecordData.json";
+
     private const string JsonSuffix = ".json";
 
     /// <summary>
@@ -408,6 +413,19 @@ internal static class SourceUnitResolver
     // does. Anchored at both ends rather than a bare Contains, so a name that merely happens to
     // embed the text cannot match. A name carries no position at all since #566 moved order into the
     // parent's document, so there is nothing to strip before matching.
+    /// <summary>Whether <paramref name="leaf"/> is the file or directory name of the record with
+    /// <paramref name="formKey"/> — the same question <see cref="NameCarries"/> answers, asked in the
+    /// one direction that is unambiguous (given a FormKey, does this name carry it) rather than the
+    /// inverse of splitting a name into EditorID and FormKey, which an EditorID containing
+    /// <c>" - "</c> makes undecidable. Shared so the naming rule has one owner: a second
+    /// reconstruction of <c>{hex6}_{ModKey}</c> elsewhere is exactly the drift this class exists to
+    /// prevent.</summary>
+    internal static bool NameCarriesFormKey(string leaf, string formKey)
+    {
+        var filesafe = FilesafeFormKey(formKey);
+        return NameCarries(leaf, filesafe) || NameCarries(leaf, filesafe + JsonSuffix);
+    }
+
     private static bool NameCarries(string leaf, string tail) =>
         leaf.Equals(tail, StringComparison.Ordinal)
         || (leaf.EndsWith(tail, StringComparison.Ordinal)
