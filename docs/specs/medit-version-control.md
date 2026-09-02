@@ -222,8 +222,11 @@ using git.
   against both refs and lands as a working-tree source file (absent at Head; rediscovered
   at reconcile if uncompiled); delete confirms modally and removes the source file (still
   served at Head); renumber is a delete+create pair with a cross-repo reference cascade —
-  referencing repos write first, the target last, any untracked referencer refuses up
-  front, and a typed refusal covers overrides, collisions, and FormKey-space exhaustion.
+  the whole cascade is computed in memory before anything is written, so every failure that
+  can be foreseen is a typed refusal preceding the first write (an untracked referencer,
+  an override, a collision, FormKey-space exhaustion, a reference the typed remap cannot
+  rewrite), and a failure in the writes themselves restores every affected working tree
+  rather than leaving partial damage to be reverted by hand (ADR-0045).
 - Untracked plugins are hard read-only with signposting (`Modbench: Track…`, or the
   patch-plugin path for vanilla masters).
 
