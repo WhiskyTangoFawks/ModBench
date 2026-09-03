@@ -249,9 +249,9 @@ public enum RecordEditRefusal
     /// <summary>
     /// #642: the payload names a sub-field that exists in the schema but carries no write delegate
     /// for a reason that is not a discriminator no-op. Since #643 wired nested Loqui structs into
-    /// the shared struct applier and #699 wired scalar-element lists into the shared list applier,
-    /// this is the genuinely unwritable residue only: nested condition data (no discriminator can
-    /// ever reach it) and a list whose element type has no JSON converter.
+    /// the shared struct applier and #699 scalar-element lists into the shared list applier, this
+    /// is the genuinely unwritable residue only — <c>SchemaReflector.SubFieldSpec.TargetingRefuses</c>
+    /// names its one producer.
     /// Distinct from <see cref="FieldValueShapeMismatch"/>: that refusal's message ("send a value
     /// this field accepts") would be false here — the payload's shape was never the problem, the
     /// named sub-field simply has no write door. A sub-field the payload never names is unaffected —

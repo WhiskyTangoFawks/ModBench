@@ -54,12 +54,11 @@ internal enum FieldApplyOutcome
     /// <summary>
     /// Mirrors <see cref="MEditService.Core.Schema.ApplyOutcome.SubFieldReadOnly"/> one-for-one
     /// (#642) — the payload names a sub-field the schema knows about but that carries no write
-    /// delegate for a reason that is not a discriminator no-op (since #643 and #699: the unwritable
-    /// residue only — nested condition data, a list whose element type has no JSON converter). Its
-    /// own value rather than
-    /// folded into <see cref="ValueShapeMismatch"/>: the two need different messages — "send a
-    /// value this field accepts" is actively false here, since the value's shape was never the
-    /// problem.
+    /// delegate for a reason that is not a discriminator no-op (since #643 and #699, the unwritable
+    /// residue only — see <c>SchemaReflector.SubFieldSpec.TargetingRefuses</c>). Its own value
+    /// rather than folded into <see cref="ValueShapeMismatch"/>: the two need different messages —
+    /// "send a value this field accepts" is actively false here, since the value's shape was never
+    /// the problem.
     /// </summary>
     NestedFieldReadOnly,
 

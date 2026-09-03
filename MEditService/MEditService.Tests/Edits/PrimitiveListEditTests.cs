@@ -194,6 +194,19 @@ public sealed class PrimitiveListEditTests : IDisposable
         Assert.Equal(before, _fixture.MaterialObjectBody());
     }
 
+    /// <summary><c>ArrayOpWriter.DefaultElementValue</c> has no hex arm, so an added element arrives
+    /// as <c>""</c> — which is the empty slice in Mutagen's own grammar, not a refusal.</summary>
+    [Fact]
+    public void ArrayAdd_TopLevelByteSliceListColumn_AppendsAnEmptySlice()
+    {
+        var result = _fixture.Service().EditField(
+            _fixture.Plugin, _fixture.MaterialObject.ToString(), "dnams",
+            Json("""{"op": "array_add", "path": []}"""));
+
+        Assert.True(result.Applied, result.Message);
+        Assert.Contains("\"0x0102\",\n    \"[]\"", _fixture.MaterialObjectBody(), StringComparison.Ordinal);
+    }
+
     // ── AC 4: the ordinary array-op envelope, on a nested primitive list ──────────────────────
 
     private const string NestedListPath =

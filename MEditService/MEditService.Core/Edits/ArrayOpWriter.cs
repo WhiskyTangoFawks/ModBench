@@ -258,6 +258,9 @@ internal static class ArrayOpWriter
         "enum" => meta.EnumValues.Count > 0 ? meta.EnumValues[0] : "",
         "struct" => new JsonObject(),
         "array" => new JsonArray(),
+        // Mutagen's own empty-slice token, which is what a byte-slice element's Extract emits for
+        // one. Explicit rather than riding the catch-all "" below, which reads as an absent slice.
+        "hex" => "[]",
         _ => "",
     };
 

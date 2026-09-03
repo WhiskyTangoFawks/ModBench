@@ -70,9 +70,10 @@ public enum ApplyOutcome
     /// but that carries no write delegate for a reason that is not a discriminator no-op. Since
     /// #643 wired nested Loqui structs into the shared <c>ApplyStructJson</c> and #699 wired
     /// scalar-element lists into the shared <c>ApplyListSubFieldJson</c>, the opted-in set is the
-    /// genuinely unwritable residue: a nested struct with no usable write door (no resolvable
-    /// setter, or nested condition data whose discriminator can never appear in a payload) and a
-    /// list whose element type has no JSON converter. Distinct from <see cref="PropertyNotFound"/>'s sibling-merge no-op and from the two
+    /// genuinely unwritable residue: a nested struct with no usable write door — no resolvable
+    /// setter, or nested condition data whose discriminator can never appear in a payload
+    /// (<c>SchemaReflector.SubFieldSpec.TargetingRefuses</c> is where that set is decided).
+    /// Distinct from <see cref="PropertyNotFound"/>'s sibling-merge no-op and from the two
     /// deliberate discriminator fields (<c>value_type</c>/<c>concrete_type</c>, consumed before the
     /// object exists and never meant to be applied to it) — those two stay a silent skip via
     /// <c>SubFieldSpec.TargetingRefuses</c> staying <c>false</c>. Only reached when the payload

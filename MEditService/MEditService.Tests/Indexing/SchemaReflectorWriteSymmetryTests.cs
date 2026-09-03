@@ -116,6 +116,24 @@ public class SchemaReflectorWriteSymmetryTests
         Assert.Equal(["scco.xnams"], residue);
     }
 
+    /// <summary>#690 made a byte slice a hex leaf; #699 made it one as a <i>list element</i> too, at
+    /// both levels. Pinned by path because the nested one (<c>PackageBranch.Unknown</c>) needs a
+    /// PACK record no edit-path fixture builds, and its writability is still a fact worth holding.
+    /// </summary>
+    [Fact]
+    public void EveryByteSliceElementList_IsWritable()
+    {
+        var byteSliceLists = new[] { "dlvw.tnams", "mato.dnams", "pack.procedure_tree.unknown" };
+
+        var declaredReadOnly = Facts()
+            .Where(f => byteSliceLists.Contains(f.Path, StringComparer.Ordinal) && f.ReadOnlyReason != null)
+            .Select(f => $"{f.Path}: {f.ReadOnlyReason}")
+            .ToList();
+
+        Assert.Empty(declaredReadOnly);
+        Assert.Equal(3, Facts().Count(f => byteSliceLists.Contains(f.Path, StringComparer.Ordinal)));
+    }
+
     /// <summary>
     /// The plugin header's three columns (#661 made them reachable) are declared read-only with real
     /// reasons rather than being anomalies — the live population commitment 3 was written for. Pinned

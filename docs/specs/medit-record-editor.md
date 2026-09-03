@@ -378,10 +378,14 @@ already empty: matching xEdit's own guard (`Element.EditValue` must be non-empty
   `mato.dnams`) and one nested inside a struct or array element
   (`race.subgraphs[].animation_paths`, `scen.actions[].npc_headtracking_actor_ids`) take the whole
   array as one value, and the ordinary array-op envelope (add/remove/move), exactly as a FormLink or
-  struct-element list does. The element is built by the same converter its scalar-column twin uses,
-  so an element the converter declines refuses the whole array before anything is attached. There is
-  no length gate on a hex *element*, unlike a hex column: replacing the list gives an element no
-  predecessor at its own position whose size it could have established.
+  struct-element list does. The element is built by the same `PrimitiveMap` converter its
+  scalar-column twin uses, so an element the converter declines refuses the whole array before
+  anything is attached. There is no length gate on a hex *element*, unlike a hex column: replacing
+  the list gives an element no predecessor at its own position whose size it could have established,
+  so a wrong-width element is caught by the compile that follows, if at all. Two element shapes a
+  *scalar* leaf writes have no list arm — a translated string, and an enum — and a list of an
+  integer width `PrimitiveMap` lacks (`scco.xnams`, `long`) reads but does not write; those are the
+  whole of the read-only residue, named by their own reason.
   **Read/write symmetry is structural, not conventional** (#649). A leaf carries either a writer or
   a named read-only reason — `ColumnSpec.Apply`/`SubFieldSpec.Apply` are a two-case union, so a leaf
   that reads but silently cannot be written is no longer representable, and an audit asserts every
@@ -409,9 +413,8 @@ already empty: matching xEdit's own guard (`Element.EditValue` must be non-empty
   the vector-struct list. Editing a Color leaf preserves any existing alpha byte it does not name.
   **Naming a sub-field that genuinely has no write path is itself a refusal**
   (`RecordEditRefusal.NestedFieldReadOnly`, #642). Since #643 and #699 that is the unwritable
-  residue only: nested condition data (its discriminator can never appear in a payload) and a list
-  whose element type has no JSON converter (Fallout 4's one case is `scco.xnams`, a list of
-  `long`). Targeting one used to report success while
+  residue only: nested condition data, whose discriminator can never appear in a payload. Targeting
+  one used to report success while
   discarding the value; it refuses the whole write instead, and the message says the sub-field is
   not editable rather than implying the value was invalid.
   Three cases stay distinct and must not be collapsed: a sub-field **absent** from the payload is

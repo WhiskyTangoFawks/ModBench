@@ -900,10 +900,9 @@ public sealed partial class SchemaReflector
         // the raw JSON before the object they'd apply to even exists, and every abstract-union/
         // OMOD-properties payload names one on every write, so ApplySubFields must keep skipping them
         // silently regardless of this flag's default. Since #643 wired nested Loqui structs into the
-        // shared ApplyStructJson, exactly two producers still set this true, each for its own
-        // unwritable residue: BuildStructSubField (no resolvable setter, or an excluded abstract
-        // union with no discriminator — ConditionData) and BuildListSubField (a list whose element
-        // type has no JSON converter). Defaults false so any future
+        // shared ApplyStructJson and #699 nested lists into the shared ApplyListSubFieldJson, one
+        // producer sets this true: BuildStructSubField, for a nested struct with no resolvable
+        // setter or an excluded abstract union with no discriminator (ConditionData). Defaults false so any future
         // null-Apply producer stays a silent skip unless it deliberately opts in.
         bool TargetingRefuses = false)
     {
@@ -1041,9 +1040,13 @@ public sealed partial class SchemaReflector
         "list element template: a list is written as one whole value through its owning field";
 
     /// <summary>A list whose element type the reflector can classify for reading but cannot build
-    /// from a payload — an integer width <see cref="PrimitiveMap"/> does not carry (Fallout 4's one
-    /// live case is <c>scco.xnams</c>, a list of <c>long</c>). Every other element shape has an arm
-    /// in <see cref="BuildListElement"/>.</summary>
+    /// from a payload. Only <see cref="BuildListColumn"/> produces it, because
+    /// <see cref="BuildElementMeta"/> (its read side) classifies more element shapes than
+    /// <see cref="BuildListElement"/> can build: an integer width <see cref="PrimitiveMap"/> lacks
+    /// while <c>IntegerTypes</c> carries it — Fallout 4's one live case is <c>scco.xnams</c>, a list
+    /// of <c>long</c> — and a translated-string element, which <see cref="ClassifyLeaf"/> would
+    /// convert for a scalar leaf but no list arm reaches. Closing the integer gap in
+    /// <see cref="PrimitiveMap"/> would leave this reason with no Fallout 4 case at all.</summary>
     internal const string UnconvertibleElementListReason =
         "list element: the element type has no JSON converter, so no element can be built from a payload";
 
@@ -2087,8 +2090,7 @@ public sealed partial class SchemaReflector
             // ValueRejected instead of an uncaught throw. Same catch list
             // ConvertWidenedJson already uses, widened with ArgumentException/InvalidOperationException
             // for the two dispatch shapes that method doesn't need to cover.
-            catch (Exception ex) when (ex is FormatException or OverflowException or InvalidCastException
-                                           or ArgumentException or InvalidOperationException)
+            catch (Exception ex) when (IsDecliningConverterException(ex))
             {
                 if (logger.IsEnabled(LogLevel.Trace)) { logger.LogTrace(ex, "Apply skipped for property {Property}", pName); }
                 return ApplyOutcome.ValueRejected;
@@ -2168,11 +2170,18 @@ public sealed partial class SchemaReflector
         && core.GetGenericTypeDefinition() == typeof(ReadOnlyMemorySlice<>)
         && core.GetGenericArguments()[0] == typeof(byte);
 
+    // Both slice types, because which one arrives depends on which side of the record is in hand: a
+    // getter overlay's list yields ReadOnlyMemorySlice, while a mutable record's SliceList<byte>
+    // yields MemorySlice — and ArrayOpWriter reads a column's current value off the mutable record.
     private static string? HexText(object? raw) => raw switch
     {
-        ReadOnlyMemorySlice<byte> s => s.Length == 0 ? "[]" : "0x" + Convert.ToHexString(s.Span),
+        ReadOnlyMemorySlice<byte> s => HexText(s.Span),
+        MemorySlice<byte> s => HexText(s.Span),
         _ => null,
     };
+
+    private static string HexText(ReadOnlySpan<byte> bytes) =>
+        bytes.Length == 0 ? "[]" : "0x" + Convert.ToHexString(bytes);
 
     /// <summary>Hex, with an optional <c>0x</c> prefix, or Mutagen's <c>"[]"</c> for an empty
     /// slice. Odd-length and non-hex text have no byte reading and decline here rather than being
@@ -2507,20 +2516,14 @@ public sealed partial class SchemaReflector
 
         var g = SubGetter(prop);
         var pName = prop.Name;
-        var apply = CanBuildListElements(elementType, isFl, isLoqui, isVector)
-            ? LeafWrite.Writable<object>(
-                (obj, json) => ApplyListSubFieldJson(obj, json, pName, isFl, elementType, elemSubFields))
-            : LeafWrite.ReadOnly<object>(UnconvertibleElementListReason);
-
+        // Unconditionally writable: BuildListElementSpec above returns non-null for exactly the
+        // element shapes BuildListElement can build, so past its guard there is no unwritable case
+        // left to spell. TargetingRefuses therefore keeps its false default.
         return new(colName, "array", Empty, Empty,
             obj => g(obj) is IEnumerable list ? BuildListItems(list, elementType, elemSubFields) : null,
-            apply,
-            ElementSpec: elementSpec,
-            // #649: `apply` is a LeafWrite and therefore never null — the old `apply == null` test
-            // silently became `false` here when the type narrowed, which reopened #642's silent
-            // discard for this exact shape. Ask the
-            // question the type actually answers.
-            TargetingRefuses: apply.Writer == null);
+            LeafWrite.Writable<object>(
+                (obj, json) => ApplyListSubFieldJson(obj, json, pName, isFl, elementType, elemSubFields)),
+            ElementSpec: elementSpec);
     }
 
     // ApplyListJson's own sub-field twin: writes a struct/array-nested list's whole value, same
@@ -2679,7 +2682,7 @@ public sealed partial class SchemaReflector
         }
 
         var pName = prop.Name;
-        var apply = CanBuildListElements(elementType, isFl, isLoqui, isVector)
+        var apply = CanBuildListElements(elementType)
             ? LeafWrite.Writable<IMajorRecord>(
                 (record, json) => ApplyListJson(record, json, pName, isFl, elementType, elemSubFields))
             : LeafWrite.ReadOnly<IMajorRecord>(UnconvertibleElementListReason);
@@ -2821,9 +2824,11 @@ public sealed partial class SchemaReflector
     ///
     /// <para>A byte-slice element is built as the <c>MemorySlice&lt;byte&gt;</c> Mutagen's own
     /// <c>SliceList&lt;byte&gt;.Add</c> takes, not the read side's <c>ReadOnlyMemorySlice</c>. There
-    /// is no length gate here, unlike <see cref="MakeHexApplier"/>: a list element has no
-    /// predecessor at its own position to have established a size, since the whole list is
-    /// replaced.</para>
+    /// is no length gate here, unlike <see cref="MakeHexApplier"/>: replacing the whole list gives
+    /// an element no predecessor at its own position whose size it could have established, and
+    /// matching by position would be a guess. The gate's protection — a fixed-width subrecord kept
+    /// at its width — therefore does not extend to list elements; a wrong-width element is caught,
+    /// if at all, by the compile that follows.</para>
     /// </summary>
     private static object? BuildScalarListElement(JsonElement elem, Type elemCore)
     {
@@ -2838,18 +2843,28 @@ public sealed partial class SchemaReflector
         {
             return convert(elem);
         }
-        catch (Exception ex) when (ex is FormatException or OverflowException or InvalidCastException
-                                       or ArgumentException or InvalidOperationException)
+        catch (Exception ex) when (IsDecliningConverterException(ex))
         {
             return null;
         }
     }
 
+    /// <summary>A converter declining its input, as opposed to a defect. <c>PrimitiveMap</c>'s and
+    /// <c>ClassifyEnumLeaf</c>'s converters signal a wrong JSON token kind, an unrecognised enum
+    /// member or an unparseable number by throwing — <c>GetInt32</c>/<c>GetBoolean</c> throw
+    /// <see cref="InvalidOperationException"/>, <c>Enum.Parse</c> throws
+    /// <see cref="ArgumentException"/>, <c>long.Parse</c> throws <see cref="FormatException"/> — so
+    /// this list, not a null return, is what turns a declined value into a refusal.</summary>
+    private static bool IsDecliningConverterException(Exception ex) =>
+        ex is FormatException or OverflowException or InvalidCastException
+            or ArgumentException or InvalidOperationException;
+
     /// <summary>Whether <see cref="BuildListElement"/> has an arm that can build this list's
-    /// elements — the one question the top-level column and its struct-nested twin both ask, so the
-    /// two cannot drift into disagreeing about which lists are writable.</summary>
-    private static bool CanBuildListElements(Type elementType, bool isFl, bool isLoqui, bool isVector) =>
-        isFl || isLoqui || isVector
+    /// elements. The one question the top-level column and its struct-nested twin both ask, asked
+    /// in one place so the two answer it identically. It re-states <see cref="BuildListElement"/>'s
+    /// arms rather than sharing them, so a new arm there needs a matching case here.</summary>
+    private static bool CanBuildListElements(Type elementType) =>
+        IsFormLink(elementType) || IsLoquiInterface(elementType) || IsVectorStructType(elementType)
         || IsByteSlice(elementType)
         || TryMapPrimitive(elementType, out _, out _, out _);
 
@@ -2866,6 +2881,9 @@ public sealed partial class SchemaReflector
             return Activator.CreateInstance(flType, fk);
         }
 
+        // elemCore, not elemConcreteType: the mutable list's own generic argument is the element
+        // type only for the shapes that construct one (SliceList<byte>'s is `byte`, not the
+        // ReadOnlyMemorySlice the read side and this converter both speak).
         if (subFields == null)
         {
             if (BuildScalarListElement(elem, elemCore) is { } scalar) return scalar;
