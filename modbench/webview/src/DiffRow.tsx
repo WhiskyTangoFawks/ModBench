@@ -160,6 +160,10 @@ export interface RowContext {
   path: PathSegment[];
   overrideMeta?: FieldMetadata;
   rootField: string;
+  // True ancestor-hop count, independent of `path` — `path` resets to `[]` whenever a row starts
+  // a fresh write subtree (subtreeFor, RecordPanel.tsx), but a VMAD property or Condition field
+  // still visually nests under its script/element row and must indent accordingly.
+  depth: number;
 }
 
 // ADR-0034: identifies one value cell, panel-wide — the state RecordPanel (the only
@@ -304,7 +308,7 @@ export function DiffRow({
           undefined only for struct-child/grandchild rows, which RecordPanel never wires with
           one (no expand button there either), so this is a true no-op only for those. */}
       <td
-        style={{ ...baseCell, opacity: 0.75, userSelect: 'text', paddingLeft: context.path.length > 0 ? 24 : undefined }}
+        style={{ ...baseCell, opacity: 0.75, userSelect: 'text', paddingLeft: context.depth > 0 ? 24 : undefined }}
         onDoubleClick={onToggle}
       >
         {(hasChildren || isFlagsRow) && (

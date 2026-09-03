@@ -72,7 +72,7 @@ function baseProps(overrides: Partial<React.ComponentProps<typeof DiffRow>> = {}
     // without saying so.
     editableColumns: new Set(),
     onOpen: vi.fn(),
-    context: { path: [], rootField: effectiveDiff.fieldName },
+    context: { path: [], rootField: effectiveDiff.fieldName, depth: 0 },
     // rowKey matches diff().fieldName below — the same identity RecordPanel derives
     // for its own `key=` at each nesting level (top-level/array-element/struct-child/grandchild).
     rowKey: 'Name',
@@ -296,7 +296,7 @@ describe('DiffRow — FormKey leaf resolution is independent of the parent field
       columns: [diskColumn(master)],
       overrideMap: { [columnKey('Fallout4.esm', null)]: master },
       fieldMetaMap: { [parentFieldName]: fkMeta },
-      context: { path, overrideMeta: fkMeta, rootField: parentFieldName },
+      context: { path, overrideMeta: fkMeta, rootField: parentFieldName, depth: path.length },
     });
   }
 
@@ -512,7 +512,7 @@ describe('DiffRow — string cell right-click menu (#258 / ADR-0039)', () => {
     renderRow({
       editableColumns: new Set([columnKey('MyMod.esp', null)]),
       onEditCell: vi.fn(),
-      context: { path, rootField: 'Struct' },
+      context: { path, rootField: 'Struct', depth: path.length },
     });
     const ctx = stringContext('disk-value', 1);
     expect(ctx.path).toEqual(path);
@@ -563,7 +563,7 @@ describe('DiffRow — array parent/element right-click context (#535)', () => {
       fieldMetaMap: { Items: intArrayMeta },
       editableColumns: new Set([columnKey('MyMod.esp', null)]),
       onEditCell: vi.fn(),
-      context: { path: [], rootField: 'Items' },
+      context: { path: [], rootField: 'Items', depth: 0 },
       hasChildren: true, isExpanded: false,
     });
     const ctx = vscodeContextFor('[2]', 1);
@@ -583,7 +583,7 @@ describe('DiffRow — array parent/element right-click context (#535)', () => {
       diff: arrayDiff(),
       editableColumns: new Set([columnKey('MyMod.esp', null)]),
       onEditCell: vi.fn(),
-      context: { path, rootField: 'Container', overrideMeta: intArrayMeta },
+      context: { path, rootField: 'Container', overrideMeta: intArrayMeta, depth: path.length },
       hasChildren: true, isExpanded: false,
     });
     const ctx = vscodeContextFor('[2]', 1);
@@ -597,7 +597,7 @@ describe('DiffRow — array parent/element right-click context (#535)', () => {
       diff: diff({ fieldName: '[1]', values: { 'Fallout4.esm': 2, 'MyMod.esp': 2 } }),
       editableColumns: new Set([columnKey('MyMod.esp', null)]),
       onEditCell: vi.fn(),
-      context: { path, rootField: 'Items', overrideMeta: intMetaLeaf },
+      context: { path, rootField: 'Items', overrideMeta: intMetaLeaf, depth: path.length },
     });
     const ctx = vscodeContextFor('2', 1);
     expect(ctx.webviewSection).toBe('arrayElement');
@@ -615,10 +615,27 @@ describe('DiffRow — array parent/element right-click context (#535)', () => {
       diff: diff({ fieldName: '[0]', values: { 'Fallout4.esm': 5, 'MyMod.esp': 5 } }),
       editableColumns: new Set([columnKey('MyMod.esp', null)]),
       onEditCell: vi.fn(),
-      context: { path, rootField: 'Container', overrideMeta: intMetaLeaf },
+      context: { path, rootField: 'Container', overrideMeta: intMetaLeaf, depth: path.length },
     });
     const ctx = vscodeContextFor('5', 1);
     expect(ctx.path).toEqual(path);
     expect(ctx.rootField).toBe('Container');
+  });
+});
+
+describe('DiffRow — label indentation', () => {
+  // A VMAD property or Condition field starts a fresh write subtree (subtreeFor resets `path` to
+  // `[]` on any row carrying `wirePath`, RecordPanel.tsx), so `path.length` alone can't tell this
+  // row apart from a true top-level one — only `depth` (the ancestor-hop count that survives the
+  // reset) can. Regression for the bug where these rows rendered flush with their container
+  // instead of indented under it.
+  it('indents a row whose path was reset by a wirePath subtree but whose depth is nonzero', () => {
+    renderRow({ context: { path: [], rootField: 'Condition\\0\\Function', depth: 2 } });
+    expect(screen.getByText('Name').closest('td')).toHaveStyle({ paddingLeft: '24px' });
+  });
+
+  it('does not indent a true top-level row', () => {
+    renderRow({ context: { path: [], rootField: 'Name', depth: 0 } });
+    expect(screen.getByText('Name').closest('td')).not.toHaveStyle({ paddingLeft: '24px' });
   });
 });

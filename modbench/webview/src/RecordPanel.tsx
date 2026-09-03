@@ -608,7 +608,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
   // gestures, not just Add.
   function buildRows(
     diff: FieldDiff, meta: FieldMetadata | undefined, path: PathSegment[],
-    rootField: string, rootDiff: FieldDiff, rowKey: string, isUnsortedArrayElement = false,
+    rootField: string, rootDiff: FieldDiff, rowKey: string, isUnsortedArrayElement = false, depth = 0,
   ): React.ReactNode[] {
     const hasChildren = (diff.children?.length ?? 0) > 0;
     const isExpanded = expandedStructs.has(rowKey);
@@ -631,7 +631,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
         onArrayMoveDown={isUnsortedArrayElement ? (plugin: ColumnKey) => handleArrayOp(plugin, path, rootField, 'moveDown', meta) : undefined}
         collapsedColumns={collapsedColumns}
         onOpen={handleOpen}
-        context={{ path, overrideMeta: meta, rootField }}
+        context={{ path, overrideMeta: meta, rootField, depth }}
         rowKey={rowKey}
         focusedCell={focusedCell}
         onFocusCell={handleFocusCell}
@@ -650,11 +650,11 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
     for (const child of diff.children ?? []) {
       const childRowKey = `${rowKey}.${child.fieldName}`;
       if (meta.type === 'array' && meta.elementType) {
-        rows.push(...buildArrayElementRows(child, meta.elementType, path, rootField, rootDiff, childRowKey));
+        rows.push(...buildArrayElementRows(child, meta.elementType, path, rootField, rootDiff, childRowKey, depth));
       } else if (meta.type === 'struct') {
         const memberMeta = meta.fields?.find(f => f.name === child.fieldName);
         const sub = subtreeFor(child, { kind: 'member', name: child.fieldName }, path, rootField, rootDiff);
-        rows.push(...buildRows(child, memberMeta, sub.path, sub.rootField, sub.rootDiff, childRowKey));
+        rows.push(...buildRows(child, memberMeta, sub.path, sub.rootField, sub.rootDiff, childRowKey, false, depth + 1));
       }
     }
     return rows;
@@ -662,12 +662,12 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
 
   function buildArrayElementRows(
     child: FieldDiff, elementMeta: FieldMetadata, arrayPath: PathSegment[], rootField: string, rootDiff: FieldDiff,
-    childRowKey: string,
+    childRowKey: string, depth: number,
   ): React.ReactNode[] {
     const seg: PathSegment = elementMeta.isSortable
       ? { kind: 'sortKey', key: child.fieldName }
       : { kind: 'index', index: parseElementIndex(child.fieldName) };
-    return buildRows(child, elementMeta, [...arrayPath, seg], rootField, rootDiff, childRowKey, !elementMeta.isSortable);
+    return buildRows(child, elementMeta, [...arrayPath, seg], rootField, rootDiff, childRowKey, !elementMeta.isSortable, depth + 1);
   }
 
   return (
