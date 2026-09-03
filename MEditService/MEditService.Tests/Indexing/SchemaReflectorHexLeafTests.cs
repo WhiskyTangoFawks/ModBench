@@ -156,15 +156,14 @@ public sealed class SchemaReflectorHexLeafTests
     }
 
     [Theory]
-    [InlineData("\"0xAABB\"", "one byte short")]
-    [InlineData("\"0xAABBCCDD\"", "one byte long")]
-    public void Write_HexOfADifferentLength_IsRejected(string value, string why)
+    [InlineData("\"0xAABB\"")]      // one byte short
+    [InlineData("\"0xAABBCCDD\"")]  // one byte long
+    public void Write_HexOfADifferentLength_IsRejected(string value)
     {
         var grass = NewGrass();
 
         Assert.Equal(ApplyOutcome.ValueRejected, Write(grass, value));
         Assert.Equal(new byte[] { 0x01, 0x02, 0x03 }, grass.Unknown3.ToArray());
-        Assert.NotEmpty(why);
     }
 
     /// <summary>
@@ -186,23 +185,13 @@ public sealed class SchemaReflectorHexLeafTests
         Assert.Null(worldspace.OffsetData);
     }
 
-    /// <summary>Length is counted in <i>bytes</i>, not characters: six hex characters are three
-    /// bytes, and a rival counting characters would accept a three-character value here.</summary>
-    [Fact]
-    public void Write_OddLengthHex_IsRejected()
-    {
-        var grass = NewGrass();
-
-        Assert.Equal(ApplyOutcome.ValueRejected, Write(grass, "\"0xABC\""));
-        Assert.Equal(new byte[] { 0x01, 0x02, 0x03 }, grass.Unknown3.ToArray());
-    }
-
     [Theory]
+    [InlineData("\"0xABC\"")]      // odd-length hex: no byte reading at all
     [InlineData("\"0xZZZZZZ\"")]   // right length, not hex
     [InlineData("\"hello!\"")]     // right length, not hex, no prefix
     [InlineData("17")]             // not a string at all
     [InlineData("[\"0xAABBCC\"]")] // an array, not a scalar
-    public void Write_NonHex_IsRejected(string value)
+    public void Write_TextWithNoByteReading_IsRejected(string value)
     {
         var grass = NewGrass();
 
@@ -214,11 +203,10 @@ public sealed class SchemaReflectorHexLeafTests
     // A sub-field applier is a different closure from a column applier, so a length gate wired only
     // at the top level would leave every nested blob writable to any length.
     //
-    // A whole-list write builds each element fresh, so the size the gate reads is the constructor's
-    // own — which is exactly the right one either way. Furniture.MarkerParameters[].Unknown is
-    // fixed-size, and Mutagen initialises it to its 3 bytes, so the gate holds. A variable-length
-    // blob (Debris.Models[].TextureFileHashes) initialises to null, has no established size, and
-    // accepts any length — which is what a variable-length subrecord should do.
+    // A whole-list write builds each element fresh, so the size the nested gate reads is that
+    // element's own constructor default, never a pre-write element at the same index — index
+    // correspondence does not survive a whole-list write, and gating on it would refuse an ordinary
+    // reorder past a different-length sibling (ByteSliceArrayOpEditTests.TwoModels).
 
     private static ApplyOutcome WriteMarkerParameters(Furniture furniture, string unknownHex) =>
         Column("furn", "marker_parameters").Apply.Writer!(
@@ -247,6 +235,41 @@ public sealed class SchemaReflectorHexLeafTests
 
         Assert.Equal(ApplyOutcome.ValueRejected, WriteMarkerParameters(furniture, unknownHex));
         Assert.Null(furniture.MarkerParameters);
+    }
+
+    private static ApplyOutcome WriteDebrisModels(Debris debris, string hashesHex) =>
+        Column("debr", "models").Apply.Writer!(
+            debris, Json($$"""[{"percentage": 50, "model_filename": "A.nif", "texture_file_hashes": {{hashesHex}}}]"""));
+
+    /// <summary>The gate's other half: a blob the element constructor leaves absent has no
+    /// established size, so a whole-list write may give it a length the record did not hold.</summary>
+    [Fact]
+    public void WriteNested_OntoAVariableLengthBlob_AcceptsALengthTheRecordDidNotAlreadyHold()
+    {
+        var debris = new Debris(FormKey.Factory("123456:Fixture.esp"), Fallout4Release.Fallout4);
+
+        Assert.Equal(ApplyOutcome.Applied, WriteDebrisModels(debris, "\"0xAABBCCDD\""));
+        Assert.Equal(new byte[] { 0xAA, 0xBB, 0xCC, 0xDD }, debris.Models![0].TextureFileHashes!.Value.ToArray());
+
+        Assert.Equal(ApplyOutcome.Applied, WriteDebrisModels(debris, "\"0x1122\""));
+        Assert.Equal(new byte[] { 0x11, 0x22 }, debris.Models![0].TextureFileHashes!.Value.ToArray());
+    }
+
+    /// <summary>
+    /// The hex applier resolves its property off the receiver's runtime type, so its own
+    /// <c>SetValue</c> is an open-world call — a same-named property of another shape must decline
+    /// the value rather than throw out of the write path. Pinned through the shared write
+    /// (<c>SchemaReflector.SetOrDecline</c>) at the one place Fallout 4 supplies a mismatched pair:
+    /// <c>weap.unknown</c> is a Single, <c>Grass.Unknown</c> a Byte. No byte-slice column has such a
+    /// twin today, which is exactly why the containment cannot be pinned on one directly.
+    /// </summary>
+    [Fact]
+    public void Write_OntoARecordWhoseSameNamedPropertyIsAnotherShape_Declines()
+    {
+        var grass = NewGrass();
+
+        Assert.Equal(ApplyOutcome.ValueRejected,
+            Column("weap", "unknown").Apply.Writer!(grass, Json("1.5")));
     }
 
     /// <summary>A non-nullable slice has no null to be set to, so JSON <c>null</c> is refused the
