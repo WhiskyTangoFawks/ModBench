@@ -1046,9 +1046,10 @@ public sealed partial class SchemaReflector
     internal const string PrimitiveElementListReason =
         "primitive-element list: no element write path exists at any nesting level";
 
-    /// <summary>A leaf whose LeafSpec produced no converter and is not a form link. Not reachable for
-    /// any shape ClassifyLeaf currently returns — every one of them has a converter or is a FormLink —
-    /// so this is the honest name for a branch that exists to keep the choice total.</summary>
+    /// <summary>A leaf whose LeafSpec produced no converter and is neither a form link nor a byte
+    /// slice. Not reachable for any shape ClassifyLeaf currently returns — every one of them has a
+    /// converter or is one of those two — so this is the honest name for a branch that exists to
+    /// keep the choice total.</summary>
     internal const string NoConverterReason =
         "leaf with no JSON converter and no form-link write path";
 
@@ -1174,9 +1175,10 @@ public sealed partial class SchemaReflector
             return "gendered Male/Female pair — 20 fields; real data, deferred pending a presentation decision";
 
         // 2 fields: Weather.CloudTextures (a slice of String) and Weather.NAM4 (a slice of Single).
-        // A byte slice is an ordinary hex leaf (#690); these two are not blobs at all but arrays of
-        // typed elements, and an array of strings or floats is a list shape, not a hex string.
-        if (open == typeof(ReadOnlyMemorySlice<>))
+        // A slice of typed elements is a list shape; only a byte slice has a hex reading, and the
+        // element-type test is what keeps a byte slice reaching an untaught site loud rather than
+        // dropped under a reason that would be false of it.
+        if (open == typeof(ReadOnlyMemorySlice<>) && !IsByteSlice(shape))
             return "non-byte element slice — 2 fields; an array of typed elements, not a hex blob";
 
         // 4 fields: LandscapeVertexHeightMap-style grids. Real data, tiny population, no grid shape.
@@ -1459,6 +1461,7 @@ public sealed partial class SchemaReflector
             { } c => LeafWrite.Writable(MakeApplier(pName, nullable: true, c, logger)),
             null when IsFormLink(core) => LeafWrite.Writable<object>(
                 (obj, val) => ApplyFormLinkJson(obj, val, pName, logger)),
+            null when IsByteSlice(core) => LeafWrite.Writable(MakeHexApplier(pName, nullable: true)),
             _ => LeafWrite.ReadOnly<object>(NoConverterReason),
         };
 
@@ -2048,8 +2051,7 @@ public sealed partial class SchemaReflector
     }
 
     // The one applier shared by columns and sub-fields: writes a converted JSON value onto a
-    // property. Operates on `object`; the column path adapts the IMajorRecord receiver via
-    // MakeColumnApplier.
+    // property. Operates on `object`, which a column path takes as-is (Func is contravariant).
     //
     // Answers ApplyOutcome rather than being a void Action so each caller can tell a real
     // refusal (ValueRejected, PropertyNotFound at the top-level-column layer) from the sub-field
@@ -2097,22 +2099,9 @@ public sealed partial class SchemaReflector
         };
     }
 
-    // MakeApplier's own ApplyOutcome carries
-    // straight through to the column, since a top-level scalar column's failure modes (no such
-    // property on the runtime type, a converter that threw or declined) are real refusals at this
-    // layer, not the sub-field layer's "shared leaf-union member absent on this concrete leaf"
-    // no-op. RecordFieldWriter.TryApply is what translates PropertyNotFound/ValueRejected into their
-    // own named refusals.
-    private static Func<IMajorRecord, JsonElement, ApplyOutcome> MakeColumnApplier(
-        string pName, bool nullable, Func<JsonElement, object?> conv, ILogger logger)
-    {
-        var applier = MakeApplier(pName, nullable, conv, logger);
-        return (record, val) => applier(record, val);
-    }
-
     // A FormLink column's own failure modes (an
     // unparseable FormKey, a missing property) surface as ApplyOutcome.ValueRejected /
-    // .PropertyNotFound the same way MakeColumnApplier's scalar siblings do.
+    // .PropertyNotFound the same way this column's scalar siblings do.
     private static Func<IMajorRecord, JsonElement, ApplyOutcome> FormLinkColumnApplier(string pName, ILogger logger) =>
         (record, val) => ApplyFormLinkJson(record, val, pName, logger);
 
@@ -2167,11 +2156,9 @@ public sealed partial class SchemaReflector
         obj => { try { return prop.GetValue(obj); } catch { return null; } };
 
     // ── Byte slices, as hex (#690) ────────────────────────────────────────────
-    // The wire and document form is Mutagen's own, not a second spelling of it:
-    // NewtonsoftJsonSerializationWriterKernel.WriteBytes emits "0x" + uppercase hex, "[]" for an
-    // empty slice and "" for an absent one, and its reader accepts exactly those. Extract answers
-    // the same string the generated json_extract view reads out of the document, so the two agree
-    // by construction rather than by two implementations happening to match.
+    // The text form is Mutagen's own (NewtonsoftJsonSerializationWriterKernel.WriteBytes): "0x" +
+    // uppercase hex, "[]" empty, "" absent. Reading and writing that exact grammar is what makes
+    // Extract and the generated json_extract view answer the same string for the same record.
 
     private const string HexApiType = "hex";
 
@@ -2182,41 +2169,48 @@ public sealed partial class SchemaReflector
 
     private static string? HexText(object? raw) => raw switch
     {
-        ReadOnlyMemorySlice<byte> s => s.Length == 0 ? "[]" : "0x" + System.Convert.ToHexString(s.Span),
+        ReadOnlyMemorySlice<byte> s => s.Length == 0 ? "[]" : "0x" + Convert.ToHexString(s.Span),
         _ => null,
     };
 
-    /// <summary>Mutagen's own byte-text grammar, as a parse: <c>""</c> is absent, <c>"[]"</c> is
-    /// empty, anything else is hex with an optional <c>0x</c> prefix. Odd-length or non-hex text
-    /// has no byte reading at all and declines — <c>Convert.FromHexString</c> throws for both
-    /// rather than truncating, which is why neither needs a length check of its own.</summary>
-    private static bool TryParseHex(string text, out byte[]? bytes)
+    /// <summary>Hex, with an optional <c>0x</c> prefix, or Mutagen's <c>"[]"</c> for an empty
+    /// slice. Odd-length and non-hex text have no byte reading and decline here rather than being
+    /// silently truncated to one.</summary>
+    private static bool TryParseHex(string text, out byte[] bytes)
     {
-        bytes = null;
-        if (text.Length == 0) return true;
         if (text == "[]") { bytes = []; return true; }
 
         var span = text.AsSpan();
         if (span.StartsWith("0x", StringComparison.OrdinalIgnoreCase)) span = span[2..];
         try
         {
-            bytes = System.Convert.FromHexString(span);
+            bytes = Convert.FromHexString(span);
             return true;
         }
         catch (FormatException)
         {
+            bytes = [];
             return false;
         }
     }
 
-    /// <summary>
-    /// Writes hex onto a byte slice, refusing any text whose <i>byte</i> length differs from the
-    /// one already there. mEdit cannot read a blob's internal structure, so it cannot know which
-    /// bytes a resize would move; refusing the resize is the only answer that cannot corrupt the
-    /// subrecord. A slice that is absent or empty has no established size for the new value to
-    /// differ from, and the write sets one — otherwise a never-populated blob would be permanently
-    /// unwritable.
-    /// </summary>
+    /// <summary>Absent, in Mutagen's own byte-text grammar and in JSON: both spell "there is no
+    /// slice here".</summary>
+    private static bool IsAbsentSlice(JsonElement val) =>
+        val.ValueKind == JsonValueKind.Null || (val.ValueKind == JsonValueKind.String && val.GetString()!.Length == 0);
+
+    /// <summary>Whether writing <paramref name="newLength"/> bytes over <paramref name="existing"/>
+    /// would resize the slice. Nothing here can read a blob's internal structure, so nothing here
+    /// can know which bytes a resize would move. An absent or empty slice has no established size
+    /// and accepts any; a property this applier cannot read a slice out of at all refuses rather
+    /// than skipping the question.</summary>
+    private static bool ResizeRefused(object? existing, int newLength) => existing switch
+    {
+        null => false,
+        MemorySlice<byte> slice => slice.Length > 0 && slice.Length != newLength,
+        _ => true,
+    };
+
     private static Func<object, JsonElement, ApplyOutcome> MakeHexApplier(string pName, bool nullable)
     {
         var resolve = ResolveProperty(pName);
@@ -2225,32 +2219,20 @@ public sealed partial class SchemaReflector
             var rp = resolve(obj.GetType());
             if (rp == null) return ApplyOutcome.PropertyNotFound;
 
-            byte[]? bytes;
-            if (val.ValueKind == JsonValueKind.Null) bytes = null;
-            else if (val.ValueKind != JsonValueKind.String) return ApplyOutcome.ValueRejected;
-            else if (!TryParseHex(val.GetString()!, out bytes)) return ApplyOutcome.ValueRejected;
-
-            if (bytes == null)
+            if (IsAbsentSlice(val))
             {
                 if (!nullable) return ApplyOutcome.ValueRejected;
                 rp.SetValue(obj, null);
                 return ApplyOutcome.Applied;
             }
 
-            if (rp.GetValue(obj) is MemorySlice<byte> { Length: > 0 } existing && existing.Length != bytes.Length)
-                return ApplyOutcome.ValueRejected;
+            if (val.ValueKind != JsonValueKind.String) return ApplyOutcome.ValueRejected;
+            if (!TryParseHex(val.GetString()!, out var bytes)) return ApplyOutcome.ValueRejected;
+            if (ResizeRefused(rp.GetValue(obj), bytes.Length)) return ApplyOutcome.ValueRejected;
 
             rp.SetValue(obj, new MemorySlice<byte>(bytes));
             return ApplyOutcome.Applied;
         };
-    }
-
-    // MakeHexApplier adapted to the column receiver, the same way MakeColumnApplier adapts
-    // MakeApplier's: a top-level blob column and a nested one refuse identically.
-    private static Func<IMajorRecord, JsonElement, ApplyOutcome> HexColumnApplier(string pName, bool nullable)
-    {
-        var applier = MakeHexApplier(pName, nullable);
-        return (record, val) => applier(record, val);
     }
 
     // Answers ApplyOutcome the same way MakeApplier does, so a top-level
@@ -2657,9 +2639,12 @@ public sealed partial class SchemaReflector
         var pName = prop.Name;
         var apply = leaf.Convert switch
         {
-            { } c => LeafWrite.Writable(MakeColumnApplier(pName, nullable, c, logger)),
+            // An object-receiver applier is a column applier: Func is contravariant in its
+            // parameters, and a column's ApplyOutcome is MakeApplier's own, carried straight
+            // through. RecordFieldWriter.TryApply translates it into a named refusal.
+            { } c => LeafWrite.Writable<IMajorRecord>(MakeApplier(pName, nullable, c, logger)),
             null when IsFormLink(core) => LeafWrite.Writable(FormLinkColumnApplier(pName, logger)),
-            null when IsByteSlice(core) => LeafWrite.Writable(HexColumnApplier(pName, nullable)),
+            null when IsByteSlice(core) => LeafWrite.Writable<IMajorRecord>(MakeHexApplier(pName, nullable)),
             _ => LeafWrite.ReadOnly<IMajorRecord>(NoConverterReason),
         };
         return new(leaf.DuckDbType, r => leaf.Get(r), leaf.ApiType, leaf.ValidFormKeyTypes, leaf.EnumValues,

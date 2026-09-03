@@ -6,6 +6,7 @@ using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
+using Noggog;
 
 namespace MEditService.Tests.Indexing;
 
@@ -87,9 +88,6 @@ public sealed class SchemaReflectorHexLeafTests
         Assert.Null(Column("wrld", "offset_data").Extract(worldspace));
     }
 
-    /// <summary>A slice with no value yet has no established size, so the first write sets one.
-    /// The alternative — refusing every write to a null slice because its length is not equal to
-    /// nothing — would make a never-populated blob permanently unwritable.</summary>
     [Fact]
     public void Write_AnyLengthOntoAnAbsentNullableSlice_IsApplied()
     {
@@ -99,6 +97,32 @@ public sealed class SchemaReflectorHexLeafTests
         Assert.Equal(ApplyOutcome.Applied, apply(worldspace, Json("\"0xAABBCCDD\"")));
         Assert.Equal(new byte[] { 0xAA, 0xBB, 0xCC, 0xDD }, worldspace.OffsetData!.Value.ToArray());
         Assert.Equal(ApplyOutcome.Applied, apply(worldspace, Json("null")));
+        Assert.Null(worldspace.OffsetData);
+    }
+
+    /// <summary>
+    /// The exclusion that still names <c>ReadOnlyMemorySlice&lt;&gt;</c> covers its non-byte
+    /// elements only. Were it to match on the open generic alone, a byte slice reaching a dispatch
+    /// site nobody taught would be dropped silently under a reason that is false of it — the
+    /// total-classification invariant reporting an anomaly is what must happen instead.
+    /// </summary>
+    [Fact]
+    public void TheRemainingSliceExclusion_DoesNotCoverAByteSlice()
+    {
+        Assert.Null(SchemaReflector.ExcludedShapeReason(typeof(ReadOnlyMemorySlice<byte>)));
+        Assert.NotNull(SchemaReflector.ExcludedShapeReason(typeof(ReadOnlyMemorySlice<float>)));
+    }
+
+    /// <summary>Mutagen writes an absent slice as the empty string, so reading its own document
+    /// back must clear the slice rather than write it zero bytes.</summary>
+    [Fact]
+    public void Write_MutagensAbsentMarker_ClearsANullableSlice()
+    {
+        var worldspace = new Worldspace(FormKey.Factory("123456:Fixture.esp"), Fallout4Release.Fallout4);
+        var apply = Column("wrld", "offset_data").Apply.Writer!;
+        Assert.Equal(ApplyOutcome.Applied, apply(worldspace, Json("\"0xAABB\"")));
+
+        Assert.Equal(ApplyOutcome.Applied, apply(worldspace, Json("\"\"")));
         Assert.Null(worldspace.OffsetData);
     }
 
@@ -188,9 +212,13 @@ public sealed class SchemaReflectorHexLeafTests
 
     // ── The same refusals, one level down (#690 AC #3) ────────────────────────
     // A sub-field applier is a different closure from a column applier, so a length gate wired only
-    // at the top level would leave every nested blob — the overwhelming majority of them — writable
-    // to any length. Furniture.MarkerParameters[].Unknown is a 3-byte non-nullable slice inside a
-    // list element, which is exactly that shape.
+    // at the top level would leave every nested blob writable to any length.
+    //
+    // A whole-list write builds each element fresh, so the size the gate reads is the constructor's
+    // own — which is exactly the right one either way. Furniture.MarkerParameters[].Unknown is
+    // fixed-size, and Mutagen initialises it to its 3 bytes, so the gate holds. A variable-length
+    // blob (Debris.Models[].TextureFileHashes) initialises to null, has no established size, and
+    // accepts any length — which is what a variable-length subrecord should do.
 
     private static ApplyOutcome WriteMarkerParameters(Furniture furniture, string unknownHex) =>
         Column("furn", "marker_parameters").Apply.Writer!(
@@ -200,7 +228,7 @@ public sealed class SchemaReflectorHexLeafTests
         new(FormKey.Factory("123456:Fixture.esp"), Fallout4Release.Fallout4);
 
     [Fact]
-    public void WriteNested_HexOfTheDeclaredLength_IsApplied()
+    public void WriteNested_HexOfTheSizeTheElementWasBuiltWith_IsApplied()
     {
         var furniture = NewFurniture();
 
