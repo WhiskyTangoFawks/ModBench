@@ -400,7 +400,7 @@ public sealed class SchemaReflectorLeafCoverageCompletenessTests
     private static readonly HashSet<Type> PrimitiveTypes =
     [
         typeof(bool), typeof(byte), typeof(sbyte), typeof(short), typeof(ushort),
-        typeof(int), typeof(uint), typeof(ulong), typeof(float), typeof(string),
+        typeof(int), typeof(uint), typeof(long), typeof(ulong), typeof(float), typeof(string),
     ];
 
     private static bool IsFormLink(Type type) => typeof(IFormLinkGetter).IsAssignableFrom(type);

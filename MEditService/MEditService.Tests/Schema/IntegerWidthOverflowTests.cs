@@ -29,6 +29,7 @@ public class IntegerWidthOverflowTests
         "misc" => new MiscItem(FormKey.Null, Fallout4Release.Fallout4),
         "imad" => new ImageSpaceAdapter(FormKey.Null, Fallout4Release.Fallout4),
         "weap" => new Weapon(FormKey.Null, Fallout4Release.Fallout4),
+        "scco" => new SceneCollection(FormKey.Null, Fallout4Release.Fallout4),
         _ => throw new ArgumentOutOfRangeException(nameof(table)),
     };
 
@@ -36,8 +37,9 @@ public class IntegerWidthOverflowTests
     /// in both directions. The four narrowed widths (byte/sbyte/short/ushort) cast from
     /// <c>GetInt32</c> and are what <c>checked</c> fixes; int/uint/ulong reach <c>GetInt32</c>/
     /// <c>GetUInt32</c>/<c>GetUInt64</c>, the JSON reader's own range-checked accessors, and are here
-    /// so the whole table is pinned to one answer rather than three widths being taken on
-    /// trust.</summary>
+    /// so the whole table is pinned to one answer rather than three widths being taken on trust.
+    /// <c>long</c> is the one width with no Fallout 4 scalar column to name; it is pinned at the list
+    /// position instead, by <see cref="LongListElement_IsRejectedOnlyOutsideItsWidth"/>.</summary>
     [Theory]
     // byte
     [InlineData("npc_", "energy_level", "256")]
@@ -78,6 +80,21 @@ public class IntegerWidthOverflowTests
     public void InRangeScalar_IsApplied(string table, string column, string value)
     {
         Assert.Equal(ApplyOutcome.Applied, Writer(table, column)(Record(table), Json(value)));
+    }
+
+    /// <summary>The one width held at the list position instead: Fallout 4 has no <c>long</c> scalar
+    /// column at all — <c>scco.xnams</c>, a list of <c>long</c>, is the whole population — so the same range
+    /// question is asked of the list element the shared converter table serves. <c>GetInt64</c>
+    /// range-checks itself and throws <see cref="FormatException"/>, so the answer matches the
+    /// widths above without a <c>checked</c> cast.</summary>
+    [Theory]
+    [InlineData("[9223372036854775808]", ApplyOutcome.ValueRejected)]
+    [InlineData("[-9223372036854775809]", ApplyOutcome.ValueRejected)]
+    [InlineData("[1.5]", ApplyOutcome.ValueRejected)]
+    [InlineData("[9223372036854775807, -9223372036854775808]", ApplyOutcome.Applied)]
+    public void LongListElement_IsRejectedOnlyOutsideItsWidth(string value, ApplyOutcome expected)
+    {
+        Assert.Equal(expected, Writer("scco", "xnams")(Record("scco"), Json(value)));
     }
 
     /// <summary>AC 3, the pair the ticket turns on: 4096 into a byte is the same answer whether it
