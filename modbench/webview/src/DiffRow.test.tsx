@@ -631,11 +631,79 @@ describe('DiffRow — label indentation', () => {
   // instead of indented under it.
   it('indents a row whose path was reset by a wirePath subtree but whose depth is nonzero', () => {
     renderRow({ context: { path: [], rootField: 'Condition\\0\\Function', depth: 2 } });
-    expect(screen.getByText('Name').closest('td')).toHaveStyle({ paddingLeft: '24px' });
+    expect(screen.getByText('Name').closest('td')).toHaveStyle({ paddingLeft: '48px' });
   });
 
   it('does not indent a true top-level row', () => {
     renderRow({ context: { path: [], rootField: 'Name', depth: 0 } });
     expect(screen.getByText('Name').closest('td')).not.toHaveStyle({ paddingLeft: '24px' });
+  });
+
+  // #689: a grandchild sits two levels in, not one — a flat indent for every depth > 0 renders a
+  // struct member and its own sub-member as siblings.
+  it('indents each level by one further step', () => {
+    for (const [depth, padding] of [[1, '24px'], [2, '48px'], [3, '72px']] as const) {
+      const { unmount } = renderRow({ context: { path: [], rootField: 'Name', depth } });
+      expect(screen.getByText('Name').closest('td')).toHaveStyle({ paddingLeft: padding });
+      unmount();
+    }
+  });
+});
+
+// #689: `{…}`/`[n]` states that something is present but collapsed. A column whose plugin has
+// no element there — an array slot past its own length, a union member its own leaf doesn't
+// declare, an absent struct — has nothing to collapse, so its cell stays empty.
+describe('DiffRow — a collapsed container row, per column', () => {
+  const structMeta: FieldMetadata = {
+    name: 'Location', type: 'struct', isArray: false, validFormKeyTypes: [], enumValues: [],
+    fields: [{ name: 'aliasId', type: 'int', isArray: false, validFormKeyTypes: [], enumValues: [] }],
+  };
+  const arrayMeta: FieldMetadata = {
+    name: 'Items', type: 'array', isArray: true, validFormKeyTypes: [], enumValues: [],
+    elementType: { name: '', type: 'int', isArray: false, validFormKeyTypes: [], enumValues: [] },
+  };
+
+  function renderContainer(values: Record<string, unknown>, meta: FieldMetadata = structMeta) {
+    return renderRow({
+      diff: diff({ fieldName: meta.name, values }),
+      context: { path: [], rootField: meta.name, overrideMeta: meta, depth: 0 },
+      hasChildren: true, isExpanded: false,
+    });
+  }
+
+  function cellText(columnIndex: number): string {
+    return screen.getByText('Location').closest('tr')!.querySelectorAll('td')[columnIndex + 1].textContent ?? '';
+  }
+
+  it('shows the placeholder only in the column that has the element', () => {
+    renderContainer({ 'Fallout4.esm': { aliasId: 5 }, 'MyMod.esp': null });
+    expect(cellText(0)).toBe('{…}');
+    expect(cellText(1)).toBe('');
+  });
+
+  it('shows the placeholder in every column when both plugins have the element', () => {
+    renderContainer({ 'Fallout4.esm': { aliasId: 5 }, 'MyMod.esp': { aliasId: 7 } });
+    expect(cellText(0)).toBe('{…}');
+    expect(cellText(1)).toBe('{…}');
+  });
+
+  it('shows the element count only in the column that has the array', () => {
+    renderRow({
+      diff: diff({ fieldName: 'Items', values: { 'Fallout4.esm': [1, 2, 3], 'MyMod.esp': null } }),
+      context: { path: [], rootField: 'Items', overrideMeta: arrayMeta, depth: 0 },
+      hasChildren: true, isExpanded: false,
+    });
+    const cells = screen.getByText('Items').closest('tr')!.querySelectorAll('td');
+    expect(cells[1].textContent).toBe('[3]');
+    expect(cells[2].textContent).toBe('');
+  });
+
+  // A structural container no plugin carries a value for — the always-present "Scripts (VMAD)"
+  // wrapper (vmadTreeAdapter.ts) is one — is present in every column. There is nothing there for a
+  // column to lack, so every column keeps its placeholder.
+  it('keeps the placeholder in every column for a container no plugin carries a value for', () => {
+    renderContainer({});
+    expect(cellText(0)).toBe('{…}');
+    expect(cellText(1)).toBe('{…}');
   });
 });

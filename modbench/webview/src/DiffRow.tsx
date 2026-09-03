@@ -42,6 +42,9 @@ interface RenderCellExtras {
   // The row's own collapse state, threaded to the one leaf that renders differently for it
   // (FlagCell's compact summary) — a row collapses as a row, all columns together.
   rowCollapsed?: boolean;
+  // This column's plugin has no element on this row at all (DiffRow's own `hasElement`). Only the
+  // two container branches consult it — a scalar leaf already renders its own null as "—".
+  absent?: boolean;
 }
 
 // ADR-0041: leaves render read-only unless the caller supplies `onCommit` — the presence of
@@ -52,8 +55,11 @@ function renderCell(
   meta: FieldMetadata,
   isFocused: boolean,
   onOpen: (fk: string) => void,
-  { checkError, resolution, summaryLabel, onCommit, rowCollapsed }: RenderCellExtras = {},
+  { checkError, resolution, summaryLabel, onCommit, rowCollapsed, absent }: RenderCellExtras = {},
 ): React.ReactNode {
+  // "[3]"/"{…}" say a container is present and merely unexpanded. Nothing stands in for a
+  // container this column's plugin doesn't have.
+  if (absent && (meta.type === 'array' || meta.type === 'struct')) return null;
   if (meta.type === 'formKey') {
     return (
       <FormKeyCell
@@ -187,6 +193,10 @@ function isCellFocused(focusedCell: FocusedCell | null, rowKey: string, plugin: 
   return focusedCell?.rowKey === rowKey && focusedCell.plugin === plugin;
 }
 
+// One step of label indentation per ancestor hop. A flat step for every depth > 0 would render a
+// struct member and its own sub-member as siblings.
+const INDENT_PER_LEVEL = 24;
+
 interface DiffRowProps {
   diff: FieldDiff;
   columns: Column[];
@@ -297,6 +307,10 @@ export function DiffRow({
   // put the row in expandedStructs.
   const isFlagsRow = meta.type === 'enum' && !!meta.isBitmask;
   const rowExpanded = !!isExpanded;
+  // A row no column carries a value for holds nothing but its children (vmadTreeAdapter.ts's
+  // always-present "Scripts (VMAD)" wrapper is one), so it is present in every column — nothing
+  // there is absent relative to anything, and `hasElement` below stays true throughout.
+  const rowIsStructural = Object.values(diff.values).every(v => v == null);
 
   return (
     <tr style={{ backgroundColor: getRowBg(rowConflictAll), ...(isRowFocused ? focusedRowStyle : undefined) }}>
@@ -308,7 +322,7 @@ export function DiffRow({
           undefined only for struct-child/grandchild rows, which RecordPanel never wires with
           one (no expand button there either), so this is a true no-op only for those. */}
       <td
-        style={{ ...baseCell, opacity: 0.75, userSelect: 'text', paddingLeft: context.depth > 0 ? 24 : undefined }}
+        style={{ ...baseCell, opacity: 0.75, userSelect: 'text', paddingLeft: context.depth > 0 ? context.depth * INDENT_PER_LEVEL : undefined }}
         onDoubleClick={onToggle}
       >
         {(hasChildren || isFlagsRow) && (
@@ -352,6 +366,9 @@ export function DiffRow({
           // leaf branch below hand DiskCell the identical value a scalar/flag/formKey cell would
           // display and a struct/array cell would otherwise only show as "{…}"/"[3]".
           const copyText = modelValue(diff.values[key], meta, diff.resolutions?.[key]);
+          // Whether this column's plugin has an element on this row at all: an array slot within
+          // its own length, a union member its own concrete leaf declares, a struct it carries.
+          const hasElement = rowIsStructural || diff.values[key] != null;
           // Array ops are offered only on a writable column —
           // the same gate onEditCell/onCommit already use. `arrayLength` is deliberately not
           // threaded down to this row, so canMoveDown reads
@@ -436,7 +453,7 @@ export function DiffRow({
                 arrayOps={arrayOps}
                 vscodeContext={vscodeContext}
               >
-                {!isExpanded && (
+                {!isExpanded && hasElement && (
                   <span style={{ opacity: 0.5, display: 'inline-flex', alignItems: 'center' }}>
                     {collapsedLabel}<CheckErrorIcon checkError={checkError} />
                   </span>
@@ -459,6 +476,7 @@ export function DiffRow({
                 summaryLabel: diff.collapsedSummary?.[key],
                 onCommit: cellEditable ? (v: unknown) => onEditCell(key, v) : undefined,
                 rowCollapsed: isFlagsRow && !rowExpanded,
+                absent: !hasElement,
               })}
             </DiskCell>
           );
