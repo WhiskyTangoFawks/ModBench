@@ -2,6 +2,7 @@
 // Mutagen, no backend. Reads only the header region (24-byte major-record
 // header + its declared field-data length), never the whole plugin.
 
+import { extname } from 'node:path';
 import { open } from 'node:fs/promises';
 
 const HEADER_LENGTH = 24; // FO4 major-record header: sig(4) + size(4) + flags(4) + formID(4) + VC1(4) + formVersion(2) + VC2(2)
@@ -12,6 +13,9 @@ const SUBRECORD_HEADER_LENGTH = 6; // sig(4) + size(2, LE uint16)
  *  vanillaMasters.ts (Data-folder plugin discovery); defined once here since both
  *  already depend on this module. */
 export const PLUGIN_EXTENSIONS = new Set(['.esp', '.esm', '.esl']);
+
+/** Whether a filename carries a plugin extension (case-insensitive). */
+export const isPluginFile = (name: string): boolean => PLUGIN_EXTENSIONS.has(extname(name).toLowerCase());
 
 export async function readMasters(pluginPath: string): Promise<string[]> {
   const handle = await open(pluginPath, 'r');

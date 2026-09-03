@@ -244,13 +244,8 @@ export function registerOverwriteView(
     }),
   ];
 }
-/** #680: the live triggers of the plugins reconcile (pluginsReconcile.ts) — every signal that
- *  can change which plugin files are present: a file appearing or vanishing in a mod, a mod
- *  enabled or disabled (modlist.txt), a plugin landing in overwrite/. Never plugins.txt itself:
- *  an edit to the file changes nothing on disk. Default debounce, so a mod install's burst of
- *  file events becomes one run; overlapping runs are safe regardless (the reconcile re-reads
- *  the file under the plugins mutex). The reconcile's own write is what the plugins.txt watcher
- *  then picks up for the tree and the Editing sync. */
+/** The live triggers of the plugins reconcile (#680): every signal that can change which plugin
+ *  files are present. Never plugins.txt itself — an edit to the file changes nothing on disk. */
 export function registerPluginsReconcileWatchers(instanceRoot: string, run: () => void): vscode.Disposable[] {
   return [
     createModsWatcher(instanceRoot, run),

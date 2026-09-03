@@ -9,10 +9,10 @@
 // catalog.
 
 import { readdir } from 'node:fs/promises';
-import { extname, join } from 'node:path';
+import { join } from 'node:path';
 import type { IModlistSource } from './model';
 import { buildFileConflictIndex, foldPath, rootLevelWinnerMods, rootLevelWinners, type FileConflictIndex } from './fileConflictIndex';
-import { PLUGIN_EXTENSIONS } from './masterReader';
+import { isPluginFile } from './masterReader';
 import { findUnlistedPlugins } from './unlistedPlugins';
 
 // Reserved origin values (ADR-0036): the game's Data directory, and MO2's overwrite
@@ -144,7 +144,7 @@ export async function buildLoadOrderSnapshot(
 
   // overwrite/'s own unlisted plugins — winning-most, but no line names them.
   const strays: LoadOrderPlugin[] = [...overwriteFiles]
-    .filter(([folded, real]) => !slotByName.has(folded) && PLUGIN_EXTENSIONS.has(extname(real).toLowerCase()))
+    .filter(([folded, real]) => !slotByName.has(folded) && isPluginFile(real))
     .map(([, real]) => ({
       name: real, path: join(instanceRoot, 'overwrite', real), origin: OVERWRITE_ORIGIN, slot: null, enabled: false, winning: true,
     }));

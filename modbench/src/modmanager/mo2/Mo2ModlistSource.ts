@@ -274,9 +274,8 @@ export class Mo2ModlistSource implements IModlistSource {
     return join(this.instanceRoot, 'profiles', profile, 'plugins.txt');
   }
 
-  /** Read-modify-write under the plugins mutex. A transform that returns the text unchanged
-   *  writes nothing: the file's bytes and mtime stay as they were, so a no-op never fires the
-   *  plugins.txt watcher (and the Editing sync behind it) for nothing. */
+  /** Read-modify-write under the plugins mutex; an unchanged result writes nothing, so a no-op
+   *  never fires the plugins.txt watcher. */
   private modifyPlugins(fn: (text: string) => string): Promise<void> {
     const task = this.pluginsMutex.then(async () => {
       const path = await this.pluginsPath();
@@ -310,10 +309,9 @@ export class Mo2ModlistSource implements IModlistSource {
     await this.modifyPlugins((t) => appendPluginInText(t, pluginName));
   }
 
-  /** The plugins reconcile's write (#680): `delta` sees the entry names freshly parsed inside
-   *  the mutex — never a caller's earlier read — and its prune/append land in one write, so two
-   *  overlapping reconciles can't double-append and the watcher sees one change, not many. New
-   *  lines are disabled: discovery is not user intent to enable. Returns the delta applied. */
+  /** The plugins reconcile's write (#680): `delta` sees the names parsed inside the mutex, so
+   *  overlapping runs can't double-append; prune and append land in one write. New lines are
+   *  disabled — discovery is not user intent to enable. Returns the delta applied. */
   async reconcilePluginLines(delta: (listed: string[]) => PluginLinesDelta): Promise<PluginLinesDelta> {
     let applied: PluginLinesDelta = { append: [], prune: [] };
     await this.modifyPlugins((t) => {

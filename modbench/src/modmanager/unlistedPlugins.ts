@@ -10,9 +10,8 @@
 // (ADR-0044): a losing or unnamed copy is registered the same as any other, never loaded
 // separately on demand.
 
-import { extname } from 'node:path';
 import { foldPath, type FileConflictIndex } from './fileConflictIndex';
-import { PLUGIN_EXTENSIONS } from './masterReader';
+import { isPluginFile } from './masterReader';
 
 /** A plugin file the load order does not hold, addressed the way the backend addresses every
  *  plugin: (origin, filename) plus the physical path to read it from (ADR-0036). */
@@ -31,7 +30,7 @@ export interface LoadedPlugin {
 }
 
 function isRootLevelPlugin(relativePath: string): boolean {
-  return !relativePath.includes('/') && PLUGIN_EXTENSIONS.has(extname(relativePath).toLowerCase());
+  return !relativePath.includes('/') && isPluginFile(relativePath);
 }
 
 /** Every root-level plugin file provided by an enabled mod that `loadOrder` does not already hold.

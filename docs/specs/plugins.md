@@ -650,12 +650,13 @@ overflow, then native **Collapse All** last.
   provides with no line gets one **appended, disabled** (discovery is not user intent to enable),
   ascending case-folded; every line whose plugin nothing provides — no enabled mod, not
   `overwrite/`, not the game's `Data/` folder (DLC and Creation Club lines stay) — is **pruned**.
-  A `.mohidden` file is not present. Matching is case-insensitive throughout. The edit is
+  A `.mohidden` file is not present. An implicit master (rendered from `Data/`, never from a
+  line) is never appended, even when a mod ships a copy. Matching is case-insensitive throughout. The edit is
   surgical (ADR-0021): one read-modify-write under the plugins mutex, the delta computed from a
   fresh parse, no write at all when nothing changed. It runs once at startup (after the modlist
   reconcile) and behind the `mods/`, `modlist.txt` and `overwrite/` watchers — never the
   `plugins.txt` watcher, since an edit to the file changes nothing on disk. Its write is what the
-  `plugins.txt` watcher then picks up for this tree and for Editing's load-order sync. Any
+  `plugins.txt` watcher then picks up for this tree and for Editing's Plugin load order sync. Any
   failure to enumerate disk aborts the whole run (a walk that errored must never read as
   "everything vanished"); with the game directory unresolved it appends but prunes nothing.
   Silent by ruling: no prompt, no toast, the Output line is the record. Between a file appearing

@@ -3,10 +3,10 @@
 // instanceRoot + a precomputed FileConflictIndex; no vscode import.
 
 import { stat } from 'node:fs/promises';
-import { extname, join } from 'node:path';
+import { join } from 'node:path';
 import type { ModlistEntry } from './model';
 import type { FileConflictIndex } from './fileConflictIndex';
-import { PLUGIN_EXTENSIONS, readMasters } from './masterReader';
+import { readMasters, isPluginFile } from './masterReader';
 
 export type ModStatus =
   | { kind: 'ok' }
@@ -22,7 +22,7 @@ export interface ModStatusResult {
 }
 
 function isPlugin(relativePath: string): boolean {
-  return PLUGIN_EXTENSIONS.has(extname(relativePath).toLowerCase());
+  return isPluginFile(relativePath);
 }
 
 /** Lowercased basenames of every plugin any enabled mod provides. */

@@ -1010,6 +1010,12 @@ function registerLoadoutView(session: ExtensionSession, deps: LoadoutViewDeps): 
     session.loadOrderSync = makeLoadOrderSync({
       session, instanceRoot, modlistSource, controller, outputChannel, heldPluginFiles, showCrashRepairOffers, gameDirResolver,
     });
+    // #680: plugins.txt converges on what disk provides; the write reaches the Plugins tree and
+    // Editing's Plugin load order sync through the plugins.txt watcher (wireLoadOrderWatchers).
+    const reconcilePlugins = () => reconcilePluginsWithDisk({
+      source: modlistSource, instanceRoot, dataFolder, channel: outputChannel,
+      buildIndex: (entries) => buildFileConflictIndex(entries, instanceRoot, (msg) => outputChannel.debug(msg)),
+    });
     const { pluginListProvider, disposables: pluginListDisposables } =
       registerPluginListView({ session, modlistSource, outputChannel, reporter: makeReporter(outputChannel, 'pluginList'), instanceRoot, dataFolder, recordBrowser });
     const { modListView, modListFilter, updateProfileDescription } =
@@ -1055,17 +1061,9 @@ function registerLoadoutView(session: ExtensionSession, deps: LoadoutViewDeps): 
       ...registerPluginsReconcileWatchers(instanceRoot, () => void reconcilePlugins()),
       ...pluginListDisposables,
     );
-    // #680: plugins.txt converges on what disk provides — the Plugins tree is a pure read of the
-    // file, so this write is the only way a plugin file with no line ever gets a row. The write
-    // reaches the tree and Editing through the plugins.txt watcher (wireLoadOrderWatchers).
-    const reconcilePlugins = () => reconcilePluginsWithDisk({
-      source: modlistSource, instanceRoot, dataFolder, channel: outputChannel,
-      buildIndex: (entries, root) => buildFileConflictIndex(entries, root, (msg) => outputChannel.debug(msg)),
-    });
-    // #93: the watcher above only covers changes made while Modbench runs; this one-time
-    // pass reconciles what happened while it wasn't (folders added or deleted outside). The
-    // plugins pass follows it, so a folder registered here is a known mod by the time plugins
-    // are reconciled.
+    // #93 / #680: the watchers above cover changes made while Modbench runs; these one-time
+    // passes reconcile what happened while it wasn't. Plugins follow mods, so a folder registered
+    // by the first pass is a known mod for the second.
     void reconcileModlistWithModsDir(modlistSource, () => modListProvider.invalidate(), outputChannel)
       .then(reconcilePlugins);
     const { downloadsProvider, disposables: downloadsDisposables } = registerDownloadsView(instanceRoot, outputChannel);

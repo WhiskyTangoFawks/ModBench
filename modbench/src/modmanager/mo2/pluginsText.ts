@@ -80,10 +80,7 @@ function appendEntryLine(bomless: string, pluginName: string, enabled: boolean):
 }
 
 /** Set a plugin's enabled state by adding/removing its leading `*` marker. A name with no entry
- *  line has no marker to toggle and leaves the text untouched: the Plugins tree is a pure read
- *  of plugins.txt (#680), so no row exists for such a name and the only way here is a stale
- *  cache. Always a single fresh read of `text`, so the caller never needs its own idea of whether
- *  the name is already listed to be current. */
+ *  line has no marker to toggle and leaves the text untouched (#680). */
 export function setPluginEnabledInText(text: string, pluginName: string, enabled: boolean): string {
   return withBomPreserved(text, (bomless) => {
     for (const { start, contentEnd } of lineRanges(bomless)) {
@@ -104,9 +101,8 @@ export function setPluginEnabledInText(text: string, pluginName: string, enabled
   });
 }
 
-/** Append a new entry line at the winning end: enabled for the New Plugin gesture, disabled
- *  for the plugins reconcile's disk-discovered plugin (#680 — discovery is not user intent to
- *  enable). Throws if the name is already present — never a silent duplicate line. */
+/** Append a new entry line at the winning end — enabled for the New Plugin gesture, disabled
+ *  for the plugins reconcile (#680). Throws if the name is already present. */
 export function appendPluginInText(text: string, pluginName: string, enabled = true): string {
   return withBomPreserved(text, (bomless) => {
     for (const { start, contentEnd } of lineRanges(bomless)) {
@@ -119,11 +115,8 @@ export function appendPluginInText(text: string, pluginName: string, enabled = t
   });
 }
 
-/** Remove a plugin's entry line outright — the plugins reconcile's prune (#680): a line whose
- *  file no enabled mod, overwrite/, nor the game's Data folder provides. Byte-faithful: only the
- *  one line goes; comment/blank lines and every other byte survive. Throws if the name has no
- *  entry line — the caller computed the name from a fresh parse, so absence is a bug, never a
- *  silent no-op. The plugins twin of `modlistText.ts`'s `removeModFromText`. */
+/** Remove a plugin's entry line, byte-faithfully (the plugins reconcile's prune, #680). Throws
+ *  if the name has no entry line. The plugins twin of `modlistText.ts`'s `removeModFromText`. */
 export function removePluginFromText(text: string, pluginName: string): string {
   return withBomPreserved(text, (bomless) => {
     const lines = splitLinesKeepEol(bomless);

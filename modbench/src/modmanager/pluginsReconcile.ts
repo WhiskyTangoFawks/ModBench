@@ -1,46 +1,38 @@
-// #680: plugins.txt is the complete, authoritative inventory the Plugins tree reads — never a
-// view enriched with what disk has and the file lacks. When disk disagrees, the file is updated,
-// the way MO2's own refresh + full rewrite converges (`references/modorganizer/src/pluginlist.cpp`,
-// `PluginList::refresh()`: a discovered file joins the model, a vanished one is erased, and the
-// whole model is written back). Modbench's edit is surgical instead of a rewrite (ADR-0021):
-// append a disabled line per newly-discovered plugin, remove the line of a plugin nothing
-// provides. The Mods tree already does exactly this for modlist.txt vs mods/ (#93,
-// startupModlistReconcile.ts); this is the plugins twin.
+// #680: plugins.txt is the complete inventory the Plugins tree reads; when disk disagrees, the
+// file is updated (docs/specs/plugins.md, "Rows are exactly plugins.txt's lines"). The plugins
+// twin of startupModlistReconcile.ts.
 
 import { readdir } from 'node:fs/promises';
-import { basename, extname, join } from 'node:path';
+import { basename, join } from 'node:path';
 import { foldPath, rootLevelWinners, type FileConflictIndex } from './fileConflictIndex';
-import { PLUGIN_EXTENSIONS } from './masterReader';
+import { isPluginFile } from './masterReader';
 import type { ModlistEntry } from './model';
+import { discoverImplicitMasters } from './vanillaMasters';
 
 export interface PluginLinesDelta {
-  /** Real on-disk names to append, disabled, at the winning end — ascending case-folded, so a
-   *  batch lands in a deterministic order rather than `readdir`'s. */
+  /** Real on-disk names to append, disabled, ascending case-folded. */
   append: string[];
   /** plugins.txt names (as written) whose line goes. */
   prune: string[];
 }
 
-/** The pure core: `listed` is plugins.txt's entry names in file order; `provided` maps the
- *  case-folded name of every root-level plugin file an enabled mod or overwrite/ provides to its
- *  real on-disk name (append source AND presence); `dataFolded` is the case-folded names in the
- *  game's Data folder (presence only — DLC/Creation Club lines are kept, never created here;
- *  ADR-0044 leaves vanilla to the backend). `undefined` Data means the game directory is
- *  unresolved: with presence unknowable, nothing is pruned, but append needs no Data and still
- *  runs. */
+/** `provided`: case-folded name → real name of every plugin an enabled mod or overwrite/
+ *  provides (the append source, and presence). `inData`: case-folded names in the game's Data
+ *  folder — presence only, never an append source; `undefined` (game directory unresolved)
+ *  makes presence unknowable, so nothing is pruned. */
 export function pluginLinesDelta(
   listed: readonly string[],
   provided: ReadonlyMap<string, string>,
-  dataFolded: ReadonlySet<string> | undefined,
+  inData: ReadonlySet<string> | undefined,
 ): PluginLinesDelta {
   const listedFolded = new Set(listed.map(foldPath));
   const append = [...provided]
     .filter(([folded]) => !listedFolded.has(folded))
     .map(([, real]) => real)
     .sort((a, b) => foldPath(a).localeCompare(foldPath(b)));
-  const prune = dataFolded === undefined
+  const prune = inData === undefined
     ? []
-    : listed.filter((name) => !provided.has(foldPath(name)) && !dataFolded.has(foldPath(name)));
+    : listed.filter((name) => !provided.has(foldPath(name)) && !inData.has(foldPath(name)));
   return { append, prune };
 }
 
@@ -50,59 +42,62 @@ export interface PluginsReconcileDeps {
     reconcilePluginLines(delta: (listed: string[]) => PluginLinesDelta): Promise<PluginLinesDelta>;
   };
   instanceRoot: string;
-  /** A getter, like `PluginListProviderOptions.dataFolder`: the game directory setting is
-   *  editable while Modbench runs. Resolves `undefined` when unresolved. */
+  /** A getter: the game directory setting is editable while Modbench runs. */
   dataFolder: () => Promise<string | undefined>;
-  buildIndex: (entries: ModlistEntry[], instanceRoot: string) => Promise<FileConflictIndex>;
+  buildIndex: (entries: ModlistEntry[]) => Promise<FileConflictIndex>;
   channel: { info(msg: string): void; error(msg: string): void };
 }
 
-const isPlugin = (name: string): boolean => PLUGIN_EXTENSIONS.has(extname(name).toLowerCase());
-
-/** Root-level plugin files directly under `folder`, case-folded → real name. Missing folder
- *  (`overwrite/` isn't created until the first purge deposits a stray) means none; any other
- *  readdir failure propagates, so the caller aborts rather than reading it as "nothing here". A
- *  `.mohidden` file's extension is `.mohidden`, so MO2's hide-by-rename is excluded by the same
- *  extension test — hidden is not present, exactly as MO2's own VFS has it. */
+/** Root-level plugin files directly under `folder`, case-folded → real name. A `.mohidden`
+ *  file fails the extension test, so MO2's hide-by-rename reads as absent. */
 async function rootLevelPlugins(folder: string): Promise<Map<string, string>> {
-  let dirents;
+  const dirents = await readdir(folder, { withFileTypes: true });
+  return new Map(dirents.filter((d) => d.isFile() && isPluginFile(d.name)).map((d) => [foldPath(d.name), d.name]));
+}
+
+/** overwrite/ doesn't exist until the first purge deposits a stray file, so ENOENT is "none"
+ *  here — for any other folder it is an enumeration failure and aborts the run. */
+async function overwritePlugins(instanceRoot: string): Promise<Map<string, string>> {
   try {
-    dirents = await readdir(folder, { withFileTypes: true });
+    return await rootLevelPlugins(join(instanceRoot, 'overwrite'));
   } catch (err) {
     if ((err as NodeJS.ErrnoException).code === 'ENOENT') return new Map();
     throw err;
   }
-  return new Map(dirents.filter((d) => d.isFile() && isPlugin(d.name)).map((d) => [foldPath(d.name), d.name]));
 }
 
-/** Bring the active profile's plugins.txt into line with what disk provides, then stop: the
- *  write re-fires the plugins.txt watcher, which is how the tree and Editing's load-order sync
- *  learn of it (ADR-0044) — no direct call to either from here. Runs on startup and behind the
- *  mods/, modlist.txt and overwrite/ watchers (extension.ts); never on the plugins.txt watcher,
- *  since an edit to the file changes nothing on disk. Idempotent: a run that finds nothing to
- *  do writes nothing. Any failure to enumerate disk aborts the whole run — a walk that errored
- *  must never read as "everything vanished" and mass-prune — logged, never thrown (ADR-0026
- *  background tier; the same posture as `reconcileModlistWithModsDir`). Disk is the source of
- *  truth (the #93 ruling), so no prompt and no toast: the log line is the record. */
+/** Every plugin an enabled mod or overwrite/ provides, case-folded → real name, overwrite/ on
+ *  top. An implicit master is left out: the tree renders it from Data, never from a line, so a
+ *  mod's copy of one must not earn a line. */
+function providedPlugins(
+  index: FileConflictIndex, overwrite: ReadonlyMap<string, string>, implicit: ReadonlySet<string>,
+): Map<string, string> {
+  const provided = new Map<string, string>();
+  for (const [folded, winnerPath] of rootLevelWinners(index)) {
+    if (isPluginFile(winnerPath)) provided.set(folded, basename(winnerPath));
+  }
+  for (const [folded, real] of overwrite) provided.set(folded, real);
+  for (const folded of implicit) provided.delete(folded);
+  return provided;
+}
+
+/** Bring the active profile's plugins.txt into line with what disk provides. The write is
+ *  picked up by the plugins.txt watcher like any other edit; nothing is called from here. Any
+ *  failure to enumerate disk aborts the whole run — an errored walk must never read as
+ *  "everything vanished" — logged, never thrown (ADR-0026 background tier). Disk is the source
+ *  of truth (#93), so the log line is the only record. */
 export async function reconcilePluginsWithDisk(deps: PluginsReconcileDeps): Promise<void> {
   try {
     const [index, overwrite, dataFolder] = await Promise.all([
-      deps.source.readModlist().then((entries) => deps.buildIndex(entries, deps.instanceRoot)),
-      rootLevelPlugins(join(deps.instanceRoot, 'overwrite')),
+      deps.source.readModlist().then(deps.buildIndex),
+      overwritePlugins(deps.instanceRoot),
       deps.dataFolder(),
     ]);
-    // Enabled mods' winners first, then overwrite/ on top — winning-most, and the real name a
-    // line gets when both provide a plugin.
-    const provided = new Map<string, string>();
-    for (const [folded, winnerPath] of rootLevelWinners(index)) {
-      if (isPlugin(winnerPath)) provided.set(folded, basename(winnerPath));
-    }
-    for (const [folded, real] of overwrite) provided.set(folded, real);
-    const dataFolded = dataFolder === undefined
-      ? undefined
-      : new Set((await rootLevelPlugins(dataFolder)).keys());
+    const inData = dataFolder === undefined ? undefined : new Set((await rootLevelPlugins(dataFolder)).keys());
+    const implicit = new Set((await discoverImplicitMasters(dataFolder, () => {})).map(foldPath));
+    const provided = providedPlugins(index, overwrite, implicit);
 
-    const { append, prune } = await deps.source.reconcilePluginLines((listed) => pluginLinesDelta(listed, provided, dataFolded));
+    const { append, prune } = await deps.source.reconcilePluginLines((listed) => pluginLinesDelta(listed, provided, inData));
     if (append.length > 0) {
       deps.channel.info(`[modmanager] Plugins reconcile appended ${append.length} disabled plugins.txt line(s) for plugin(s) on disk with no line: ${append.join(', ')}`);
     }

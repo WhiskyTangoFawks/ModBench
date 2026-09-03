@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { pluginLinesDelta, reconcilePluginsWithDisk } from './pluginsReconcile';
 import { Mo2ModlistSource } from './mo2/Mo2ModlistSource';
 import { buildFileConflictIndex } from './fileConflictIndex';
+import { buildTes4Buffer } from './test/buildTes4Buffer';
 
 const provided = (...names: string[]) => new Map(names.map((n) => [n.toLowerCase(), n] as const));
 const folded = (...names: string[]) => new Set(names.map((n) => n.toLowerCase()));
@@ -52,7 +53,7 @@ describe('reconcilePluginsWithDisk — plugins.txt converges on what disk provid
       source: new Mo2ModlistSource(dir),
       instanceRoot: dir,
       dataFolder: () => Promise.resolve(dataFolder ?? undefined),
-      buildIndex: (entries, root) => buildIndex(entries, root, () => {}),
+      buildIndex: (entries) => buildIndex(entries, dir, () => {}),
       channel,
     });
 
@@ -106,6 +107,25 @@ describe('reconcilePluginsWithDisk — plugins.txt converges on what disk provid
     await run();
 
     expect(await plugins()).toBe('*Base.esp\r\n');
+  });
+
+  it('an implicit master (a vanilla plugin in Data) that an enabled mod also ships is never appended: the tree has no line-backed row for it', async () => {
+    await writeFile(join(dir, 'Game', 'Data', 'Fallout4.esm'), buildTes4Buffer([]));
+    await writeFile(join(dir, 'mods', 'Provider', 'Fallout4.esm'), buildTes4Buffer([]));
+
+    await run();
+
+    expect(await plugins()).toBe('# header\r\n*Base.esp\r\n');
+  });
+
+  it('a Data folder that resolved but is gone from disk aborts the run: nothing pruned, error logged', async () => {
+    await writeFile(pluginsPath(), '*Base.esp\r\n*DLCCoast.esm\r\n');
+    await rm(join(dir, 'Game', 'Data'), { recursive: true });
+
+    await run();
+
+    expect(await plugins()).toBe('*Base.esp\r\n*DLCCoast.esm\r\n');
+    expect(channel.error).toHaveBeenCalledWith(expect.stringContaining('ENOENT'));
   });
 
   it('with the game directory unresolved, still appends but prunes nothing', async () => {
