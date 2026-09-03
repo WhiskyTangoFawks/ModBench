@@ -142,7 +142,7 @@ public sealed class SchemaReflectorLeafCoverageCompletenessTests
         // Condition/ConditionData and AVirtualMachineAdapter (VMAD) are
         // ALSO genuinely `abstract`, structurally identical to ANpcLevel/AQuestAlias — the
         // mechanism's own IsAbstract gate would cover them the same way. It doesn't:
-        // SchemaAnnotations.ExcludedAbstractUnions names both explicitly, because they are
+        // SchemaAnnotations.ExcludedUnions names both explicitly, because they are
         // permanently outside the reflected schema by documented architectural boundary
         // (MEditService/CLAUDE.md:232-235), not because the mechanism can't model them. Not this
         // file's own exclusion list either — nothing here would ever surface a Condition/VMAD field

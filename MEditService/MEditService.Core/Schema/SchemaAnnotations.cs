@@ -20,9 +20,14 @@ namespace MEditService.Core.Schema;
 /// than excluded-with-a-reason, because an exclusion says "real data we chose not to present".
 /// Keyed on the declaring type because some of these names are real data elsewhere (<c>Type</c> is
 /// a genuine enum on Keyword and others).</param>
-/// <param name="ExcludedAbstractUnions">Abstract setter classes the union-leaf expansion must not
-/// model, because their concept is presented by a dedicated section rather than the reflected
-/// schema.</param>
+/// <param name="ExcludedUnions">Loqui base classes the union-leaf expansion must not model —
+/// their concept is presented by a dedicated section rather than the reflected schema, or their
+/// leaves cannot be read safely. A struct column whose class is or derives from one is not a
+/// column either.</param>
+/// <param name="CycleTruncations">Getter interfaces the walk may re-enter on its own path and
+/// stop at silently, because the game's data format cannot nest them (a Fallout 4 Papyrus struct
+/// member is never itself a struct or a struct array), so the shape is already complete. Any other
+/// re-entry is a true type cycle and fails schema generation naming the chain.</param>
 /// <param name="EmptySubSchemaTypes">Getter interfaces whose sub-schema is known to come out empty,
 /// each with a reasoned entry in <c>SchemaReflectorLeafCoverageCompletenessTests.KnownGaps</c>; the
 /// walk reports them as excluded rather than unclassified.</param>
@@ -34,7 +39,8 @@ namespace MEditService.Core.Schema;
 internal sealed record SchemaAnnotations(
     HashSet<(string TypeName, string MemberName)> ExcludedColumns,
     HashSet<(string TypeName, string MemberName)> ExcludedMembers,
-    HashSet<string> ExcludedAbstractUnions,
+    HashSet<string> ExcludedUnions,
+    HashSet<string> CycleTruncations,
     HashSet<string> EmptySubSchemaTypes,
     HashSet<(string TypeName, string MemberName)> AlphaBearingColorFields)
 {
@@ -92,7 +98,14 @@ internal sealed record SchemaAnnotations(
                 ("IObjectModStringPropertyGetter`1", "Unused"),
                 ("IObjectModEnumPropertyGetter`1", "Unused"),
             ],
-            ExcludedAbstractUnions: [.. ConditionAndVmadUnions],
+            ExcludedUnions:
+            [
+                .. ConditionAndVmadUnions,
+                // A concrete base with two leaves, one of whose binary-overlay Type getter is an
+                // unimplemented throw upstream; the full scheme is on KnownGaps' ISceneActionGetter.Type.
+                "ASceneActionType",
+            ],
+            CycleTruncations: ["IScriptStructPropertyGetter", "IScriptStructListPropertyGetter"],
             EmptySubSchemaTypes:
             [
                 .. EmptySubSchemaTypesInEveryGame,
@@ -103,7 +116,8 @@ internal sealed record SchemaAnnotations(
         [GameCategory.Skyrim] = new(
             ExcludedColumns: [.. GrupTimestampColumns],
             ExcludedMembers: [.. PlumbingMembers, ("IGlobalGetter", "TypeChar")],
-            ExcludedAbstractUnions: [.. ConditionAndVmadUnions],
+            ExcludedUnions: [.. ConditionAndVmadUnions],
+            CycleTruncations: [],
             EmptySubSchemaTypes: [.. EmptySubSchemaTypesInEveryGame],
             AlphaBearingColorFields: [.. RgbaColorFields]),
 
@@ -115,7 +129,8 @@ internal sealed record SchemaAnnotations(
                 ("IObjectModStringPropertyGetter`1", "Unused"),
                 ("IObjectModEnumPropertyGetter`1", "Unused"),
             ],
-            ExcludedAbstractUnions: [.. ConditionAndVmadUnions],
+            ExcludedUnions: [.. ConditionAndVmadUnions],
+            CycleTruncations: [],
             EmptySubSchemaTypes: [.. EmptySubSchemaTypesInEveryGame],
             AlphaBearingColorFields: [.. RgbaColorFields]),
     };
@@ -128,7 +143,13 @@ internal sealed record SchemaAnnotations(
 
     public bool IsExcludedColumn(PropertyInfo prop) => ExcludedColumns.Contains(Key(prop));
     public bool IsExcludedMember(PropertyInfo prop) => ExcludedMembers.Contains(Key(prop));
-    public bool IsExcludedAbstractUnion(Type setterType) => ExcludedAbstractUnions.Contains(setterType.Name);
+    public bool IsExcludedUnion(Type setterType)
+    {
+        for (var t = setterType; t != null; t = t.BaseType)
+            if (ExcludedUnions.Contains(t.Name)) return true;
+        return false;
+    }
+    public bool IsCycleTruncation(Type getterInterface) => CycleTruncations.Contains(getterInterface.Name);
     public bool IsEmptySubSchemaType(Type getterInterface) => EmptySubSchemaTypes.Contains(getterInterface.Name);
     public bool HasAlphaLeaf(PropertyInfo prop) => AlphaBearingColorFields.Contains(Key(prop));
 
@@ -159,7 +180,8 @@ internal sealed record SchemaAnnotations(
         [
             .. UnresolvedMembers(nameof(ExcludedColumns), ExcludedColumns),
             .. UnresolvedMembers(nameof(ExcludedMembers), ExcludedMembers),
-            .. UnresolvedTypes(nameof(ExcludedAbstractUnions), ExcludedAbstractUnions),
+            .. UnresolvedTypes(nameof(ExcludedUnions), ExcludedUnions),
+            .. UnresolvedTypes(nameof(CycleTruncations), CycleTruncations),
             .. UnresolvedTypes(nameof(EmptySubSchemaTypes), EmptySubSchemaTypes),
             .. UnresolvedMembers(nameof(AlphaBearingColorFields), AlphaBearingColorFields),
         ];

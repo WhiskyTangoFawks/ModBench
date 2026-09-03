@@ -16,7 +16,7 @@ namespace MEditService.Tests.Edits;
 /// beside it stopped being residue at #699, which made it writable at both levels — see
 /// <see cref="PrimitiveListEditTests"/>.)
 /// <c>ConditionData</c> is abstract and named in
-/// <c>SchemaAnnotations.ExcludedAbstractUnions</c>, so its sub-schema exposes no
+/// <c>SchemaAnnotations.ExcludedUnions</c>, so its sub-schema exposes no
 /// <c>concrete_type</c> discriminator and no payload can ever carry the one thing
 /// <c>ApplyStructJson</c> would need — <c>BuildStructSubField</c> keeps it on #642's honest
 /// refusal instead of wiring a delegate that could never succeed.

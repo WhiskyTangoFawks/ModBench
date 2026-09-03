@@ -50,7 +50,7 @@ public sealed class SchemaAnnotationTests
     [Fact]
     public void ExcludedAbstractUnion_ReflectionDidNotFind_FailsSchemaGenerationNamingTheEntry()
     {
-        var reflector = Fallout4With(a => a with { ExcludedAbstractUnions = [.. a.ExcludedAbstractUnions, "ANoSuchUnion"] });
+        var reflector = Fallout4With(a => a with { ExcludedUnions = [.. a.ExcludedUnions, "ANoSuchUnion"] });
         AssertFailsNaming(reflector, "ANoSuchUnion");
     }
 

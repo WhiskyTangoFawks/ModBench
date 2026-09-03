@@ -997,7 +997,7 @@ VMAD/Condition rows included since they render through this exact code now:
    `KnownGaps` entry.
    `Condition`/`ConditionData` and `AVirtualMachineAdapter` (VMAD) are *also* genuinely `abstract`,
    structurally identical to `ANpcLevel` — deliberately excluded by name
-   (`SchemaAnnotations.ExcludedAbstractUnions`) rather than covered, because they are
+   (`SchemaAnnotations.ExcludedUnions`) rather than covered, because they are
    permanently outside the reflected schema by design (VMAD/condition reconstitution stays in
    `Queries/RecordDocumentCodecs`, operating on the document body — `MEditService/CLAUDE.md`); this
    mechanism could technically model them, and must not.
