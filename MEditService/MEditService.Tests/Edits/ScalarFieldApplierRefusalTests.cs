@@ -104,6 +104,23 @@ public sealed class ScalarFieldApplierRefusalTests : IDisposable
         Assert.Equal(before, NpcBody());
     }
 
+    /// <summary>#707: a value outside the column's own integer width is refused at the same door,
+    /// with the same typed reason, as the byte-element list that shares the converter
+    /// (<c>PrimitiveListEditTests.TopLevelIntListColumn_OutOfRangeElement_RefusesTheWholeWrite</c>) —
+    /// the two positions of one narrowing table, held to the same answer for the same value.</summary>
+    [Fact]
+    public void EnergyLevelByteColumn_OutOfRangeValue_IsRefusedAndWritesNothing()
+    {
+        var before = NpcBody();
+
+        var result = Service().EditField(_mod.Plugin, _mod.Npc.ToString(), "energy_level", Json("4096"));
+
+        Assert.False(result.Applied);
+        Assert.Equal(RecordEditRefusal.FieldValueShapeMismatch, result.Refusal);
+        Assert.Contains("energy_level", result.Message, StringComparison.Ordinal);
+        Assert.Equal(before, NpcBody());
+    }
+
     /// <summary>Scalar direction: a well-formed value still lands and still reports applied —
     /// the positive control proving the refusals above are about the value, not about this field
     /// having gone read-only by accident.</summary>

@@ -133,23 +133,24 @@ public sealed class PrimitiveListEditTests : IDisposable
     }
 
     /// <summary>
-    /// <b>A defect, pinned rather than blessed.</b> <c>SchemaReflector.PrimitiveMap</c>'s narrowing
-    /// converters are unchecked casts (<c>(byte)v.GetInt32()</c>), so a value the element type cannot
-    /// hold is silently truncated instead of refused — 4096 lands as 0. That is the converter table
-    /// every scalar column has always used; making scalar lists writable only widens where it is
-    /// reachable. Recorded here so the gap is visible and this test is what has to change when the
-    /// converters start refusing (<c>checked</c> throws <c>OverflowException</c>, which both
-    /// <c>MakeApplier</c> and <c>BuildScalarListElement</c> already turn into a refusal).
+    /// #707: a value the element type cannot hold refuses the whole write rather than narrowing into
+    /// it — <c>SchemaReflector.PrimitiveMap</c>'s converters cast <c>checked</c>, so 4096 into a byte
+    /// element throws <c>OverflowException</c>, which <c>BuildScalarListElement</c> turns into the
+    /// same refusal a non-numeric element already gets. The in-range sibling does not land either:
+    /// the array is one atomic value.
     /// </summary>
     [Fact]
-    public void TopLevelIntListColumn_OutOfRangeElement_IsSilentlyNarrowedByTheSharedConverter()
+    public void TopLevelIntListColumn_OutOfRangeElement_RefusesTheWholeWrite()
     {
+        var before = _fixture.MiscItemBody();
+
         var result = _fixture.Service().EditField(
             _fixture.Plugin, _fixture.MiscItem.ToString(), "component_display_indices", Json("[3, 4096]"));
 
-        Assert.True(result.Applied, result.Message);
-        Assert.Contains("\"ComponentDisplayIndices\": [\n    3,\n    0\n  ]",
-            _fixture.MiscItemBody(), StringComparison.Ordinal);
+        Assert.False(result.Applied);
+        Assert.Equal(RecordEditRefusal.FieldValueShapeMismatch, result.Refusal);
+        Assert.Contains("component_display_indices", result.Message, StringComparison.Ordinal);
+        Assert.Equal(before, _fixture.MiscItemBody());
     }
 
     /// <summary>A value that is not a number at all still refuses the whole write.</summary>

@@ -1905,10 +1905,13 @@ public sealed partial class SchemaReflector
     private static readonly Dictionary<Type, (string DuckDbType, string ApiType, Func<JsonElement, object?> Converter)> PrimitiveMap = new()
     {
         [typeof(bool)] = ("BOOLEAN", "bool", v => (object)v.GetBoolean()),
-        [typeof(byte)] = ("INTEGER", "int", v => (object)(byte)v.GetInt32()),
-        [typeof(sbyte)] = ("INTEGER", "int", v => (object)(sbyte)v.GetInt32()),
-        [typeof(short)] = ("INTEGER", "int", v => (object)(short)v.GetInt32()),
-        [typeof(ushort)] = ("INTEGER", "int", v => (object)(ushort)v.GetInt32()),
+        // #707: checked, so a value the width cannot hold throws OverflowException — which
+        // MakeApplier and BuildScalarListElement both already turn into a refusal — rather than
+        // wrapping into a different number the caller never typed.
+        [typeof(byte)] = ("INTEGER", "int", v => (object)checked((byte)v.GetInt32())),
+        [typeof(sbyte)] = ("INTEGER", "int", v => (object)checked((sbyte)v.GetInt32())),
+        [typeof(short)] = ("INTEGER", "int", v => (object)checked((short)v.GetInt32())),
+        [typeof(ushort)] = ("INTEGER", "int", v => (object)checked((ushort)v.GetInt32())),
         [typeof(int)] = ("INTEGER", "int", v => (object)v.GetInt32()),
         [typeof(uint)] = ("INTEGER", "int", v => (object)v.GetUInt32()),
         [typeof(ulong)] = ("BIGINT", "int", v => (object)v.GetUInt64()),
