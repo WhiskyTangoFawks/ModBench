@@ -373,6 +373,18 @@ already empty: matching xEdit's own guard (`Element.EditValue` must be non-empty
   existing value object is reused only when it is already the same concrete type; and a write with
   one bad member anywhere in the nested tree refuses the whole write before anything is written,
   leaving the working tree byte-identical.
+  **A list of bare scalars writes through the same one path** (#699) — a string/number/hex-element
+  list at the record's own top level (`race.movement_type_names`, `sndr.sound_files`,
+  `mato.dnams`) and one nested inside a struct or array element
+  (`race.subgraphs[].animation_paths`, `scen.actions[].npc_headtracking_actor_ids`) take the whole
+  array as one value, and the ordinary array-op envelope (add/remove/move), exactly as a FormLink or
+  struct-element list does. The element is built by the same `PrimitiveMap` converter its
+  scalar-column twin uses, so an element the converter declines refuses the whole array before
+  anything is attached. There is no length gate on a hex *element*, unlike a hex column: replacing
+  the list gives an element no predecessor at its own position whose size it could have established,
+  so a wrong-width element is caught by the compile that follows, if at all. The read-only residue,
+  named by its own reason, is a list whose element type reads but has no converter — an integer
+  width `PrimitiveMap` lacks (`scco.xnams`, `long`), or a translated string.
   **Read/write symmetry is structural, not conventional** (#649). A leaf carries either a writer or
   a named read-only reason — `ColumnSpec.Apply`/`SubFieldSpec.Apply` are a two-case union, so a leaf
   that reads but silently cannot be written is no longer representable, and an audit asserts every
@@ -388,8 +400,9 @@ already empty: matching xEdit's own guard (`Element.EditValue` must be non-empty
   length change to a slice that already has one, which is what holds fixed-size subrecords to their
   size without a hand-written table. The exclusion survives only for the two slices whose elements
   are not bytes — `Weather.CloudTextures` (`<String>`) and `Weather.NAM4` (`<Single>`) — which are
-  list shapes rather than blobs. A byte slice appearing as a *list element* reads but does not yet
-  write, refusing by name.
+  list shapes rather than blobs. A byte slice appearing as a *list element* (`dlvw.tnams`,
+  `mato.dnams`, `pack.procedure_tree[].unknown`) reads and writes in the same grammar, through the
+  list's own applier (#699).
   **Atomic values are a table, not a handler branch.** `System.Drawing.Color` is its first entry,
   presented as xEdit presents it (`wbByteColors`): `red`/`green`/`blue` byte sub-fields, editable
   through the one write path like any struct member. Four fields — `ActionRecord.Color`,
@@ -398,12 +411,10 @@ already empty: matching xEdit's own guard (`Element.EditValue` must be non-empty
   type, and is not reflectable from Mutagen, so it is a transcribed allowlist in the same idiom as
   the vector-struct list. Editing a Color leaf preserves any existing alpha byte it does not name.
   **Naming a sub-field that genuinely has no write path is itself a refusal**
-  (`RecordEditRefusal.NestedFieldReadOnly`, #642). Since #643 that is the unwritable residue only:
-  nested condition data (its discriminator can never appear in a payload) and primitive-element
-  nested lists (no element write path at any level — refusal is parity with their top-level
-  columns, which already refuse as `FieldReadOnly`). Targeting one used to report success while
-  discarding the value; it refuses the whole write instead, and the message says the sub-field is
-  not editable rather than implying the value was invalid.
+  (`RecordEditRefusal.NestedFieldReadOnly`, #642). Since #643 and #699 that is the unwritable
+  residue only: nested condition data, whose discriminator can never appear in a payload. Naming it
+  refuses the whole write, and the message says the sub-field is not editable rather than implying
+  the value was invalid.
   Three cases stay distinct and must not be collapsed: a sub-field **absent** from the payload is
   skipped (absence is not targeting); the `value_type` and `concrete_type` **discriminators** are
   read off the raw JSON before the object exists and are deliberately never applied, so naming one
