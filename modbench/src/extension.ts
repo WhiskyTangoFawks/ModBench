@@ -44,9 +44,10 @@ import { registerNameFilter, type NameFilter } from './nameFilter';
 import { onPluginCheckboxChanged } from './pluginCheckboxHandler';
 import { registerEditorCommands, registerRecordLifecycleCommands, makeResolveOriginOrReport, runCopyRecordCommand, makeMergeEditorOpener, compileAndReport, reportCompileTargetError, registerHeldTrackedRepositories, refreshSourceControlFor, wireExternalChangePolling, type MinimalRepository } from './medit/editorCommands';
 import { reconcileModlistWithModsDir } from './modmanager/startupModlistReconcile';
+import { reconcilePluginsWithDisk } from './modmanager/pluginsReconcile';
 import { say, exitToLoadout, clearTreeWhenBackendDies, refreshMatchingPlugins } from './loadoutTeardown';
 import { publishLoadDiagnoses, groupDiagnosesByPlugin } from './medit/loadDiagnostics';
-import { registerModInstallCommands, registerModContextCommands, registerSeparatorCommands, registerOverwriteView, registerModsAutoRegisterWatcher, registerNotMo2InstanceWelcome, createModListView, registerDownloadsView, isStandaloneDeployment, registerDeploymentModeContext, registerDeployCommands, registerLaunchCommand, registerModListCoreCommands } from './modmanager/modManagementCommands';
+import { registerModInstallCommands, registerModContextCommands, registerSeparatorCommands, registerOverwriteView, registerModsAutoRegisterWatcher, registerPluginsReconcileWatchers, registerNotMo2InstanceWelcome, createModListView, registerDownloadsView, isStandaloneDeployment, registerDeploymentModeContext, registerDeployCommands, registerLaunchCommand, registerModListCoreCommands } from './modmanager/modManagementCommands';
 import { onModCheckboxChanged } from './modmanager/modCheckboxHandler';
 import { meditConfig, makeDetectPaths, setMo2InstanceContext } from './workspaceConfig';
 
@@ -1009,6 +1010,12 @@ function registerLoadoutView(session: ExtensionSession, deps: LoadoutViewDeps): 
     session.loadOrderSync = makeLoadOrderSync({
       session, instanceRoot, modlistSource, controller, outputChannel, heldPluginFiles, showCrashRepairOffers, gameDirResolver,
     });
+    // #680: plugins.txt converges on what disk provides; the write reaches the Plugins tree and
+    // Editing's Plugin load order sync through the plugins.txt watcher (wireLoadOrderWatchers).
+    const reconcilePlugins = () => reconcilePluginsWithDisk({
+      source: modlistSource, instanceRoot, dataFolder, channel: outputChannel,
+      buildIndex: (entries) => buildFileConflictIndex(entries, instanceRoot, (msg) => outputChannel.debug(msg)),
+    });
     const { pluginListProvider, disposables: pluginListDisposables } =
       registerPluginListView({ session, modlistSource, outputChannel, reporter: makeReporter(outputChannel, 'pluginList'), instanceRoot, dataFolder, recordBrowser });
     const { modListView, modListFilter, updateProfileDescription } =
@@ -1051,11 +1058,14 @@ function registerLoadoutView(session: ExtensionSession, deps: LoadoutViewDeps): 
       ...registerSeparatorCommands(modlistSource, runModAction),
       ...registerOverwriteView(instanceRoot, modListProvider, outputChannel),
       registerModsAutoRegisterWatcher(instanceRoot, modlistSource, modListProvider, outputChannel),
+      ...registerPluginsReconcileWatchers(instanceRoot, () => void reconcilePlugins()),
       ...pluginListDisposables,
     );
-    // #93: the watcher above only covers changes made while Modbench runs; this one-time
-    // pass reconciles what happened while it wasn't (folders added or deleted outside).
-    void reconcileModlistWithModsDir(modlistSource, () => modListProvider.invalidate(), outputChannel);
+    // #93 / #680: the watchers above cover changes made while Modbench runs; these one-time
+    // passes reconcile what happened while it wasn't. Plugins follow mods, so a folder registered
+    // by the first pass is a known mod for the second.
+    void reconcileModlistWithModsDir(modlistSource, () => modListProvider.invalidate(), outputChannel)
+      .then(reconcilePlugins);
     const { downloadsProvider, disposables: downloadsDisposables } = registerDownloadsView(instanceRoot, outputChannel);
     context.subscriptions.push(...downloadsDisposables);
     const refreshAll = makeRefreshAll(modListProvider, pluginListProvider, downloadsProvider, updateProfileDescription);

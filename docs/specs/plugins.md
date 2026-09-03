@@ -642,25 +642,26 @@ overflow, then native **Collapse All** last.
   (the never-assume-exclusive-ownership invariant in `CLAUDE.md`). The composition happens in
   `wirePluginListInvalidation.ts`, which adds the invalidation alongside the existing
   `sync.request()` fan-out rather than replacing it — no watcher was added.
-- **Rows come from disk, not only from `plugins.txt`** (#617). A plugin file an enabled mod
-  provides at its root that has no `plugins.txt` line at all still gets a row, appended after the
-  listed ones. It is an **ordinary row** — same construction as every other, unchecked because
-  nothing lists it, no distinguishing text, icon or dimming — matching how MO2 surfaces a plugin
-  it has discovered but not yet recorded. Modbench does **not** write the plugin into
-  `plugins.txt` to make this happen: enabling a mod only flips a `modlist.txt` prefix, so
-  discovery stays a read of disk and nothing outside Modbench's own edits ever provokes a write.
-  Matching against already-listed names is case-insensitive, so a plugin whose file and
-  `plugins.txt` line differ only in case appears once, spelled as `plugins.txt` spells it. The
-  discovery shares the `FileConflictIndex` walk the badge pass already performs — no second walk,
-  no extra disk I/O per render — and degrades with it: if that walk fails, the tab loses both
-  badges and disk-derived rows together rather than showing half a tree, and says so.
-  Ticking such a row's checkbox appends it to `plugins.txt`, enabled, at the end of the entry
-  lines — the maintainer's ruling on #654, matching what MO2 itself does on its own save step.
-  Unticking one is a no-op (there is nothing to disable). This is the one write discovery itself
-  never makes: `setPluginEnabledInText` (the same pure text transform the write path already ran
-  through) appends instead of throwing when a name has no entry line at all, rather than the
-  provider consulting its own last-rendered row cache — which can go stale between a watcher
-  invalidate and the next render, and this write always re-reads `plugins.txt` fresh regardless.
+- **Rows are exactly `plugins.txt`'s lines; the file converges on disk** (#680). The tree never
+  merges disk into the file's inventory — a plugin file with no `plugins.txt` line has no row.
+  Instead a **plugins reconcile** (`pluginsReconcile.ts`, the plugins twin of the Mods tree's
+  `modlist.txt`-vs-`mods/` reconcile, #93) updates the file to match disk, the way MO2's own
+  refresh-then-full-rewrite converges: every root-level plugin an enabled mod or `overwrite/`
+  provides with no line gets one **appended, disabled** (discovery is not user intent to enable),
+  ascending case-folded; every line whose plugin nothing provides — no enabled mod, not
+  `overwrite/`, not the game's `Data/` folder (DLC and Creation Club lines stay) — is **pruned**.
+  A `.mohidden` file is not present. An implicit master (rendered from `Data/`, never from a
+  line) is never appended, even when a mod ships a copy. Matching is case-insensitive throughout. The edit is
+  surgical (ADR-0021): one read-modify-write under the plugins mutex, the delta computed from a
+  fresh parse, no write at all when nothing changed. It runs once at startup (after the modlist
+  reconcile) and behind the `mods/`, `modlist.txt` and `overwrite/` watchers — never the
+  `plugins.txt` watcher, since an edit to the file changes nothing on disk. Its write is what the
+  `plugins.txt` watcher then picks up for this tree and for Editing's Plugin load order sync. Any
+  failure to enumerate disk aborts the whole run (a walk that errored must never read as
+  "everything vanished"); with the game directory unresolved it appends but prunes nothing.
+  Silent by ruling: no prompt, no toast, the Output line is the record. Between a file appearing
+  on disk and the reconcile's write, the tree shows the file exactly as it is — no transitional
+  decoration. A checkbox toggle on a name whose line has meanwhile gone is a no-op.
 
 ### Row context menu
 

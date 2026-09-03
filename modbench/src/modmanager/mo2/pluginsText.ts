@@ -58,16 +58,16 @@ export function parsePlugins(text: string): PluginEntry[] {
   return entries;
 }
 
-/** Splice a new, always-enabled entry line for `pluginName` at the winning end (bottom: "bottom
- *  wins record overrides", this file's own header comment) of `bomless`, landing before any
- *  trailing comment/blank lines rather than after them — the same "before the tail" placement
+/** Splice a new entry line for `pluginName` at the winning end (bottom: "bottom wins record
+ *  overrides", this file's own header comment) of `bomless`, landing before any trailing
+ *  comment/blank lines rather than after them — the same "before the tail" placement
  *  `movePluginsInText`'s own end-of-file case uses. Byte-faithful: every existing byte survives
  *  untouched, and the new line's EOL matches whatever the file already uses. Caller has already
- *  established the name has no entry line — shared by `appendPluginInText` (the New Plugin
- *  gesture) and `setPluginEnabledInText`'s ticking-an-unlisted-row case (#654). */
-function appendEntryLine(bomless: string, pluginName: string): string {
+ *  established the name has no entry line. */
+function appendEntryLine(bomless: string, pluginName: string, enabled: boolean): string {
   const eol = detectEol(bomless);
-  if (bomless.length === 0) return `*${pluginName}${eol}`;
+  const line = `${enabled ? '*' : ''}${pluginName}${eol}`;
+  if (bomless.length === 0) return line;
 
   const lines = splitLinesKeepEol(bomless);
   const last = lines[lines.length - 1];
@@ -75,16 +75,12 @@ function appendEntryLine(bomless: string, pluginName: string): string {
 
   const entryLineIdx = [...lines.keys()].filter((i) => isEntryLine(lines[i]));
   const insertAt = entryLineIdx.length === 0 ? lines.length : entryLineIdx.at(-1)! + 1;
-  lines.splice(insertAt, 0, `*${pluginName}${eol}`);
+  lines.splice(insertAt, 0, line);
   return lines.join('');
 }
 
 /** Set a plugin's enabled state by adding/removing its leading `*` marker. A name with no entry
- *  line at all is a synthesized/unlisted row (#617: a plugin file on disk with no plugins.txt
- *  line) — there is no marker to toggle. Per the #654 ruling, ticking one appends it, enabled,
- *  exactly as `appendPluginInText` does for the New Plugin gesture; unticking one is a no-op
- *  (nothing to disable), returning the text untouched. Always a single fresh read of `text`, so
- *  the caller never needs its own idea of whether the name is already listed to be current. */
+ *  line has no marker to toggle and leaves the text untouched (#680). */
 export function setPluginEnabledInText(text: string, pluginName: string, enabled: boolean): string {
   return withBomPreserved(text, (bomless) => {
     for (const { start, contentEnd } of lineRanges(bomless)) {
@@ -101,15 +97,13 @@ export function setPluginEnabledInText(text: string, pluginName: string, enabled
       if (enabled) return bomless.slice(0, markerAt) + '*' + bomless.slice(markerAt);
       return bomless.slice(0, markerAt) + bomless.slice(markerAt + 1); // drop the leading *
     }
-    return enabled ? appendEntryLine(bomless, pluginName) : bomless;
+    return bomless;
   });
 }
 
-/** The New Plugin gesture's own write — appends a new, always-enabled entry line at the winning
- *  end. Throws if the name is already present — never a silent duplicate line (unlike
- *  `setPluginEnabledInText`'s ticking-an-unlisted-row case, which is reached only for a name a
- *  caller already knows has no entry line, so there is nothing to guard there). */
-export function appendPluginInText(text: string, pluginName: string): string {
+/** Append a new entry line at the winning end — enabled for the New Plugin gesture, disabled
+ *  for the plugins reconcile (#680). Throws if the name is already present. */
+export function appendPluginInText(text: string, pluginName: string, enabled = true): string {
   return withBomPreserved(text, (bomless) => {
     for (const { start, contentEnd } of lineRanges(bomless)) {
       const content = bomless.slice(start, contentEnd);
@@ -117,7 +111,19 @@ export function appendPluginInText(text: string, pluginName: string): string {
         throw new Error(`Plugin already in plugins.txt: ${pluginName}`);
       }
     }
-    return appendEntryLine(bomless, pluginName);
+    return appendEntryLine(bomless, pluginName, enabled);
+  });
+}
+
+/** Remove a plugin's entry line, byte-faithfully (the plugins reconcile's prune, #680). Throws
+ *  if the name has no entry line. The plugins twin of `modlistText.ts`'s `removeModFromText`. */
+export function removePluginFromText(text: string, pluginName: string): string {
+  return withBomPreserved(text, (bomless) => {
+    const lines = splitLinesKeepEol(bomless);
+    const idx = lines.findIndex((l) => isEntryLine(l) && pluginNameOf(l) === pluginName);
+    if (idx === -1) throw new Error(`Plugin not found in plugins.txt: ${pluginName}`);
+    lines.splice(idx, 1);
+    return lines.join('');
   });
 }
 

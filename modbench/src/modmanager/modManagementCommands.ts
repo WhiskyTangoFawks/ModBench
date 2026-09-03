@@ -6,6 +6,7 @@ import { Mo2ModlistSource } from './mo2/Mo2ModlistSource';
 import { ModListProvider, ModNode, OverwriteNode, SeparatorNode, type ModlistNode } from './ModListProvider';
 import { createOverwriteWatcher } from './overwriteWatcher';
 import { createModsWatcher } from './modsWatcher';
+import { createModlistWatcher } from './modlistWatcher';
 import { OverwriteDecorationProvider } from './OverwriteDecorationProvider';
 import type { GameDirectory } from './gameDirectory';
 import { type GameDirectoryResolver } from './gameDirectoryResolver';
@@ -243,6 +244,16 @@ export function registerOverwriteView(
     }),
   ];
 }
+/** The live triggers of the plugins reconcile (#680): every signal that can change which plugin
+ *  files are present. Never plugins.txt itself — an edit to the file changes nothing on disk. */
+export function registerPluginsReconcileWatchers(instanceRoot: string, run: () => void): vscode.Disposable[] {
+  return [
+    createModsWatcher(instanceRoot, run),
+    createModlistWatcher(instanceRoot, run),
+    createOverwriteWatcher(instanceRoot, run),
+  ];
+}
+
 /** Auto-registration: a live watcher that adds a modlist.txt entry for
  *  any mods/<name>/ folder that appears while Modbench is running (dragged
  *  into Explorer, extracted by hand, or installed some other way outside

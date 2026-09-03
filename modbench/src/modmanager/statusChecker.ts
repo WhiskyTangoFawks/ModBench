@@ -3,10 +3,10 @@
 // instanceRoot + a precomputed FileConflictIndex; no vscode import.
 
 import { stat } from 'node:fs/promises';
-import { extname, join } from 'node:path';
+import { join } from 'node:path';
 import type { ModlistEntry } from './model';
 import type { FileConflictIndex } from './fileConflictIndex';
-import { PLUGIN_EXTENSIONS, readMasters } from './masterReader';
+import { readMasters, isPluginFile } from './masterReader';
 
 export type ModStatus =
   | { kind: 'ok' }
@@ -22,7 +22,7 @@ export interface ModStatusResult {
 }
 
 function isPlugin(relativePath: string): boolean {
-  return PLUGIN_EXTENSIONS.has(extname(relativePath).toLowerCase());
+  return isPluginFile(relativePath);
 }
 
 /** Lowercased basenames of every plugin any enabled mod provides. */
@@ -181,10 +181,8 @@ export function checkMasterOrder(
  *  no masters, never throwing and never blanking other plugins' verdicts.
  *
  *  `winnerByName` is `rootLevelWinners(index)` — the caller's, not recomputed here. It's a full
- *  O(total-files-across-all-mods) scan/allocation over the index, and issue #617 gave this
- *  function a sibling consumer of the exact same index in the same render
- *  (`PluginListProvider.discoverUnlistedPluginNames`); computing it twice per render was the
- *  actual defect, not a hypothetical one. */
+ *  O(total-files-across-all-mods) scan/allocation over the index; the caller builds it once per
+ *  render and hands it in. */
 export async function computePluginOrderStatuses(
   order: string[],
   winnerByName: Map<string, string>,

@@ -4,8 +4,8 @@
 // Data folder, degrading to an empty set rather than failing the whole tree load.
 
 import { readdir, stat } from 'node:fs/promises';
-import { extname, join } from 'node:path';
-import { PLUGIN_EXTENSIONS, readMasters } from './masterReader';
+import { join } from 'node:path';
+import { readMasters, isPluginFile } from './masterReader';
 
 export async function readVanillaMasters(
   dataFolder: string | undefined,
@@ -15,7 +15,7 @@ export async function readVanillaMasters(
   try {
     const dataFiles = await readdir(dataFolder);
     return new Set(
-      dataFiles.filter((f) => PLUGIN_EXTENSIONS.has(extname(f).toLowerCase())).map((f) => f.toLowerCase()),
+      dataFiles.filter(isPluginFile).map((f) => f.toLowerCase()),
     );
   } catch (e) {
     log(`[vanillaMasters] could not resolve vanilla masters: ${e instanceof Error ? e.message : String(e)}`);
@@ -50,7 +50,7 @@ export async function discoverImplicitMasters(
     log(`[vanillaMasters] could not resolve implicit masters: ${e instanceof Error ? e.message : String(e)}`);
     return [];
   }
-  const candidates = dataFiles.filter((f) => PLUGIN_EXTENSIONS.has(extname(f).toLowerCase()));
+  const candidates = dataFiles.filter(isPluginFile);
   const vanilla = await filterNonHardlinked(dataFolder, candidates, log);
   const { readable, edges } = await buildMasterDependencyGraph(dataFolder, vanilla, log);
   return topoSortImplicitMasters(readable, edges, log);
