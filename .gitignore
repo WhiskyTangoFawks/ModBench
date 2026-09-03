@@ -46,4 +46,8 @@ Thumbs.db
 
 # Source reference (read-only, not part of this project)
 references/
+
+# Local MO2 test instances (manual-test skill)
 DevList/
+DevListSkyrim/
+DevListStarfield/
