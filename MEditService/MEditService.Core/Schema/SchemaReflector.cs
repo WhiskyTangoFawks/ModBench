@@ -1470,7 +1470,7 @@ public sealed partial class SchemaReflector
             { } c => LeafWrite.Writable(MakeApplier(pName, nullable: true, c, logger)),
             null when IsFormLink(core) => LeafWrite.Writable<object>(
                 (obj, val) => ApplyFormLinkJson(obj, val, pName, logger)),
-            null when IsByteSlice(core) => LeafWrite.Writable(MakeHexApplier(pName, nullable: true)),
+            null when IsByteSlice(core) => LeafWrite.Writable(MakeHexApplier(pName, nullable: true, logger)),
             _ => LeafWrite.ReadOnly<object>(NoConverterReason),
         };
 
@@ -2074,6 +2074,25 @@ public sealed partial class SchemaReflector
         return t => cache.GetOrAdd(t, tt => tt.GetProperty(pName, BindingFlags.Public | BindingFlags.Instance));
     }
 
+    /// <summary>Every leaf applier's own write. <see cref="ResolveProperty"/> resolves off the
+    /// receiver's <i>runtime</i> type, so this is an open-world call: a same-named property of
+    /// another shape declines the value (<see cref="ArgumentException"/>) instead of throwing out
+    /// of the write path.</summary>
+    private static ApplyOutcome SetOrDecline(
+        PropertyInfo rp, object obj, object? value, string pName, ILogger logger)
+    {
+        try
+        {
+            rp.SetValue(obj, value);
+            return ApplyOutcome.Applied;
+        }
+        catch (ArgumentException ex)
+        {
+            if (logger.IsEnabled(LogLevel.Trace)) { logger.LogTrace(ex, "Apply skipped for property {Property}", pName); }
+            return ApplyOutcome.ValueRejected;
+        }
+    }
+
     // The one applier shared by columns and sub-fields: writes a converted JSON value onto a
     // property. Operates on `object`, which a column path takes as-is (Func is contravariant).
     //
@@ -2091,11 +2110,7 @@ public sealed partial class SchemaReflector
             var rp = resolve(obj.GetType());
             if (rp == null) return ApplyOutcome.PropertyNotFound;
             if (val.ValueKind == JsonValueKind.Null)
-            {
-                if (!nullable) return ApplyOutcome.ValueRejected;
-                rp.SetValue(obj, null);
-                return ApplyOutcome.Applied;
-            }
+                return nullable ? SetOrDecline(rp, obj, null, pName, logger) : ApplyOutcome.ValueRejected;
 
             object? v;
             try
@@ -2117,8 +2132,7 @@ public sealed partial class SchemaReflector
             }
 
             if (v == null) return ApplyOutcome.ValueRejected;
-            rp.SetValue(obj, v);
-            return ApplyOutcome.Applied;
+            return SetOrDecline(rp, obj, v, pName, logger);
         };
     }
 
@@ -2167,7 +2181,7 @@ public sealed partial class SchemaReflector
             { } c => LeafWrite.Writable(MakeApplier(pName, nullable, c, logger)),
             null when IsFormLink(core) => LeafWrite.Writable<object>(
                 (obj, val) => ApplyFormLinkJson(obj, val, pName, logger)),
-            null when IsByteSlice(core) => LeafWrite.Writable(MakeHexApplier(pName, nullable)),
+            null when IsByteSlice(core) => LeafWrite.Writable(MakeHexApplier(pName, nullable, logger)),
             _ => LeafWrite.ReadOnly<object>(NoConverterReason),
         };
         return new(colName, leaf.ApiType, leaf.ValidFormKeyTypes, leaf.EnumValues,
@@ -2241,7 +2255,7 @@ public sealed partial class SchemaReflector
         _ => true,
     };
 
-    private static Func<object, JsonElement, ApplyOutcome> MakeHexApplier(string pName, bool nullable)
+    private static Func<object, JsonElement, ApplyOutcome> MakeHexApplier(string pName, bool nullable, ILogger logger)
     {
         var resolve = ResolveProperty(pName);
         return (obj, val) =>
@@ -2250,18 +2264,13 @@ public sealed partial class SchemaReflector
             if (rp == null) return ApplyOutcome.PropertyNotFound;
 
             if (IsAbsentSlice(val))
-            {
-                if (!nullable) return ApplyOutcome.ValueRejected;
-                rp.SetValue(obj, null);
-                return ApplyOutcome.Applied;
-            }
+                return nullable ? SetOrDecline(rp, obj, null, pName, logger) : ApplyOutcome.ValueRejected;
 
             if (val.ValueKind != JsonValueKind.String) return ApplyOutcome.ValueRejected;
             if (!TryParseHex(val.GetString()!, out var bytes)) return ApplyOutcome.ValueRejected;
             if (ResizeRefused(rp.GetValue(obj), bytes.Length)) return ApplyOutcome.ValueRejected;
 
-            rp.SetValue(obj, new MemorySlice<byte>(bytes));
-            return ApplyOutcome.Applied;
+            return SetOrDecline(rp, obj, new MemorySlice<byte>(bytes), pName, logger);
         };
     }
 
@@ -2661,7 +2670,7 @@ public sealed partial class SchemaReflector
             // through. RecordFieldWriter.TryApply translates it into a named refusal.
             { } c => LeafWrite.Writable<IMajorRecord>(MakeApplier(pName, nullable, c, logger)),
             null when IsFormLink(core) => LeafWrite.Writable(FormLinkColumnApplier(pName, logger)),
-            null when IsByteSlice(core) => LeafWrite.Writable<IMajorRecord>(MakeHexApplier(pName, nullable)),
+            null when IsByteSlice(core) => LeafWrite.Writable<IMajorRecord>(MakeHexApplier(pName, nullable, logger)),
             _ => LeafWrite.ReadOnly<IMajorRecord>(NoConverterReason),
         };
         return new(leaf.DuckDbType, r => leaf.Get(r), leaf.ApiType, leaf.ValidFormKeyTypes, leaf.EnumValues,

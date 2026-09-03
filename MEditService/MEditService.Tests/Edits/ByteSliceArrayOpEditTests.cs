@@ -24,9 +24,12 @@ public sealed class ByteSliceArrayOpEditTests : IDisposable
 
     private const string DebrisEditorId = "FixtureDebris";
 
+    // The two blobs are deliberately different lengths: a nested length gate reading the pre-write
+    // element at its own index would refuse the reorder below, since an array op rewrites the whole
+    // list and index i afterwards holds a different element than it did before.
     private static readonly string[] TwoModels =
     [
-        """{"percentage": 50, "model_filename": "First.nif", "texture_file_hashes": "0x11223344"}""",
+        """{"percentage": 50, "model_filename": "First.nif", "texture_file_hashes": "0x1122"}""",
         """{"percentage": 50, "model_filename": "Second.nif", "texture_file_hashes": "0xAABBCCDD"}""",
     ];
 
@@ -55,7 +58,7 @@ public sealed class ByteSliceArrayOpEditTests : IDisposable
 
         Assert.True(result.Applied, result.Message);
         var body = DebrisBody(debris);
-        Assert.DoesNotContain("0x11223344", body, StringComparison.Ordinal);
+        Assert.DoesNotContain("0x1122", body, StringComparison.Ordinal);
         Assert.Contains("0xAABBCCDD", body, StringComparison.Ordinal);
     }
 
@@ -69,7 +72,7 @@ public sealed class ByteSliceArrayOpEditTests : IDisposable
 
         Assert.True(result.Applied, result.Message);
         var body = DebrisBody(debris);
-        Assert.Contains("0x11223344", body, StringComparison.Ordinal);
+        Assert.Contains("0x1122", body, StringComparison.Ordinal);
         Assert.Contains("0xAABBCCDD", body, StringComparison.Ordinal);
     }
 }
