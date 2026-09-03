@@ -32,7 +32,7 @@ public sealed class RecordEditServiceTests : IDisposable
     /// well as rewrite it — otherwise path and content disagree, and the tree claims a record still has
     /// the name it no longer has.
     ///
-    /// <para><c>SchemaReflector.BaseSkip</c> excludes <c>EditorID</c> from the reflected
+    /// <para><c>SchemaReflector.MajorRecordHeaderMembers</c> excludes <c>EditorID</c> from the reflected
     /// columns (it is a row identity column, carried separately), so <c>RecordFieldWriter</c> alone
     /// would answer <c>FieldNotFound</c> — this edit needs its own dedicated path.</para>
     /// </summary>

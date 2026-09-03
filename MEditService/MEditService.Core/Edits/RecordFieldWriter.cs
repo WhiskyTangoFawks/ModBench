@@ -165,7 +165,7 @@ internal static class RecordFieldWriter
 
     /// <summary>
     /// EditorID, dispatched ahead of the reflected columns because it is not one of them:
-    /// <see cref="MEditService.Core.Schema.SchemaReflector"/>'s <c>BaseSkip</c> excludes it alongside
+    /// <see cref="MEditService.Core.Schema.SchemaReflector"/>'s <c>MajorRecordHeaderMembers</c> excludes it alongside
     /// <c>FormKey</c>, since both are the row's own identity columns carried separately rather than
     /// record data. That exclusion is right for the schema and is left alone, so the edit is
     /// dispatched here rather than by widening the reflected schema.
@@ -209,7 +209,7 @@ internal static class RecordFieldWriter
     /// <summary>
     /// The one sanctioned write to header flag bit 14 — dispatched ahead of the reflected
     /// columns for the same reason <see cref="ApplyEditorId"/> is: <c>MajorRecordFlagsRaw</c> is in
-    /// <see cref="MEditService.Core.Schema.SchemaReflector"/>'s <c>BaseSkip</c> (it is GRUP/header
+    /// <see cref="MEditService.Core.Schema.SchemaReflector"/>'s <c>MajorRecordHeaderMembers</c> (it is header
     /// metadata, not record data), so nothing in the reflected schema could ever reach it.
     ///
     /// <para>Gated by <see cref="Schema.PartialFormFlag.IsPartialFormable"/> — the same container-type

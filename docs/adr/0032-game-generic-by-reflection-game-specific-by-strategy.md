@@ -5,8 +5,13 @@ status: accepted
 # Reflection where the record shape is uniform; per-game strategy where Mutagen's shape diverges
 
 mEdit generalizes across Bethesda games (root `CLAUDE.md`), and its schema layer earns that
-generality cheaply: `SchemaReflector` is ~930 lines with **zero** per-game branches. It reflects
-over the `Mutagen.Bethesda.{Category}` assembly's major-record getters and turns them into tables.
+generality cheaply: `SchemaReflector` has **zero** per-game branches. It reflects over the
+`Mutagen.Bethesda.{Category}` assembly's major-record getters and turns them into tables. The
+per-game facts reflection cannot see — a member that is GRUP metadata rather than record data,
+padding xEdit never renders, which Color fields carry an alpha byte — enter only as
+`SchemaAnnotations`: one table per concern per game, keyed by Mutagen type name and member name,
+overlaid on reflection and validated before the game's schema is built, so an entry naming a type
+or member reflection did not find fails schema generation and names the entry.
 This works because major records satisfy reflection's precondition — a **uniform shape** (getter
 properties → columns) that varies across games only in *naming*, never in *structure*. `VmadCodec`
 leans on the same fact from the other side: `AVirtualMachineAdapter`/`ScriptEntry`/`ScriptProperty`

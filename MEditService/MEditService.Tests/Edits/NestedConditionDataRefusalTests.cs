@@ -15,7 +15,7 @@ namespace MEditService.Tests.Edits;
 /// #643's other unwritable-residue category beside primitive-element lists
 /// (<see cref="NestedScalarListSubFieldRefusalTests"/>): nested condition data.
 /// <c>ConditionData</c> is abstract and named in
-/// <c>SchemaReflector.AbstractUnionExcludedTypeNames</c>, so its sub-schema exposes no
+/// <c>SchemaAnnotations.ExcludedAbstractUnions</c>, so its sub-schema exposes no
 /// <c>concrete_type</c> discriminator and no payload can ever carry the one thing
 /// <c>ApplyStructJson</c> would need — <c>BuildStructSubField</c> keeps it on #642's honest
 /// refusal instead of wiring a delegate that could never succeed.

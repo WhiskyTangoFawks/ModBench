@@ -54,24 +54,19 @@ public sealed class SchemaReflectorLeafCoverageCompletenessTests
 {
     private const GameCategory Category = GameCategory.Fallout4;
 
-    // SchemaReflector.BaseSkip — record-header metadata (FormKey, EditorID, ...), not per-record
-    // data; SchemaReflector.LoquiSkipProps — Loqui's own infrastructure members on a sub-record
-    // interface (CommonInstance, StaticRegistration, ...), never real data at any depth. Both are
-    // `private` (InternalsVisibleTo doesn't reach private), so this is a deliberate, small,
-    // hand-kept mirror rather than a reference — a drift here fails as a false-positive gap, loudly,
-    // not silently, which is the failure mode this suite is supposed to prefer.
+    // SchemaReflector.MajorRecordHeaderMembers plus SchemaAnnotations.ExcludedColumns — record-header
+    // metadata (FormKey, EditorID, the GRUP timestamps), not per-record data; Loqui's own
+    // Registration handle (SchemaAnnotations.ExcludedMembers) — never real data at any depth. A
+    // deliberate, small, hand-kept mirror by name rather than a reference — a drift here fails as a
+    // false-positive gap, loudly, not silently, which is the failure mode this suite is supposed to
+    // prefer.
     private static readonly HashSet<string> BaseSkip = new(StringComparer.Ordinal)
     {
-        "FormKey", "EditorID", "IsCompressed", "FormVersion", "VersionControl",
-        "MajorRecordFlagsRaw", "SubgraphRevision",
+        "FormKey", "EditorID", "IsCompressed", "FormVersion", "VersionControl", "MajorRecordFlagsRaw",
         "Timestamp", "TemporaryTimestamp", "PersistentTimestamp",
     };
 
-    private static readonly HashSet<string> LoquiSkipProps = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "CommonInstance", "CommonSetterInstance", "CommonSetterTranslationInstance",
-        "StaticRegistration", "Registration",
-    };
+    private static readonly HashSet<string> LoquiSkipProps = new(StringComparer.OrdinalIgnoreCase) { "Registration" };
 
     // Known, accepted gaps — every one named and explained, never passed over silently. (OwnerType
     // .Name, PropertyName) at whichever depth the pair is walked.
@@ -147,7 +142,7 @@ public sealed class SchemaReflectorLeafCoverageCompletenessTests
         // Condition/ConditionData and AVirtualMachineAdapter (VMAD) are
         // ALSO genuinely `abstract`, structurally identical to ANpcLevel/AQuestAlias — the
         // mechanism's own IsAbstract gate would cover them the same way. It doesn't:
-        // SchemaReflector.AbstractUnionExcludedTypeNames names both explicitly, because they are
+        // SchemaAnnotations.ExcludedAbstractUnions names both explicitly, because they are
         // permanently outside the reflected schema by documented architectural boundary
         // (MEditService/CLAUDE.md:232-235), not because the mechanism can't model them. Not this
         // file's own exclusion list either — nothing here would ever surface a Condition/VMAD field

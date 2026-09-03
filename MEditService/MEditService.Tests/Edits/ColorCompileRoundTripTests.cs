@@ -97,7 +97,7 @@ public sealed class ColorCompileRoundTripTests : IDisposable
     // ── Coordinator's addition: one compile proof per allowlist row ────────────────────────────
 
     /// <summary>
-    /// Every row of <c>SchemaReflector.AlphaBearingColorFields</c> gets its own compile proof that an
+    /// Every row of <c>SchemaAnnotations.AlphaBearingColorFields</c> gets its own compile proof that an
     /// alpha edit actually reaches the binary — the empirical half of the alpha loop, since nothing
     /// in metadata can assert "this field's alpha is meaningful" (the binary type is not
     /// reflectable). Four rows, four records, no representative standing in for the others.

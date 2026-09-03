@@ -15,10 +15,20 @@ using Noggog;
 
 namespace MEditService.Core.Schema;
 
-public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = null)
+public sealed partial class SchemaReflector
 {
-    // Stryker disable once NullCoalescing: logger init; only usage is a defensive LogTrace in catch — unreachable from tests without artificial exception injection
-    private readonly ILogger _logger = logger ?? NullLogger<SchemaReflector>.Instance;
+    private readonly ILogger _logger;
+    private readonly Func<GameCategory, SchemaAnnotations> _annotationsFor;
+
+    public SchemaReflector(ILogger<SchemaReflector>? logger = null) : this(SchemaAnnotations.For, logger) { }
+
+    /// <summary>Test seam: the annotation tables to overlay, in place of the shipped ones.</summary>
+    internal SchemaReflector(Func<GameCategory, SchemaAnnotations> annotationsFor, ILogger<SchemaReflector>? logger = null)
+    {
+        _annotationsFor = annotationsFor;
+        // Stryker disable once NullCoalescing: logger init; only usage is a defensive LogTrace in catch — unreachable from tests without artificial exception injection
+        _logger = logger ?? NullLogger<SchemaReflector>.Instance;
+    }
 
     // Deliberate product filter: not standard editable refs (placed refr/achr are
     // indexed as normal records so the worldspace tree, record editor, and agent queries are
@@ -39,9 +49,15 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
     private static readonly HashSet<string> ExcludedTables =
         new(NonEditableRefTypes.Concat(XEditRefSignatureVariants), StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>What one game category's assembly resolved to, handed to every walk: the getter
+    /// type → table map every FormLink lookup needs, and the game's <see cref="SchemaAnnotations"/>.</summary>
+    private sealed record GameReflection(
+        IReadOnlyDictionary<Type, string> GetterTypeToTable,
+        SchemaAnnotations Annotations);
+
     private sealed record GameSchemaCache(
         IReadOnlyDictionary<string, RecordTableSchema> Schemas,
-        IReadOnlyDictionary<Type, string> GetterTypeToTable);
+        GameReflection Game);
 
     private readonly ConcurrentDictionary<GameCategory, GameSchemaCache> _cache = new();
 
@@ -95,10 +111,13 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
     }
 
     private GameSchemaCache GetCache(GameCategory category, Assembly assembly) =>
-        _cache.GetOrAdd(category, c => BuildForCategory(c, assembly, _logger));
+        _cache.GetOrAdd(category, c => BuildForCategory(c, assembly, _annotationsFor(c), _logger));
 
-    private static GameSchemaCache BuildForCategory(GameCategory category, Assembly assembly, ILogger logger)
+    private static GameSchemaCache BuildForCategory(
+        GameCategory category, Assembly assembly, SchemaAnnotations annotations, ILogger logger)
     {
+        annotations.Validate(assembly);
+
         var majorRecordGetterType =
             assembly.GetType($"Mutagen.Bethesda.{category}.I{category}MajorRecordGetter")!;
 
@@ -143,13 +162,15 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         // FormLink<IGameSettingFloatGetter> anywhere in the schema fails to resolve
         // ValidFormKeyTypes to ["gmst"] whenever Float isn't that run's winner
         // (GetFormLinkValidTypes below looks types up in this same dictionary).
-        var getterTypeToTable = siblingsByTable
-            .SelectMany(kv => kv.Value.Select(t => (Type: t, Table: kv.Key)))
-            .ToDictionary(x => x.Type, x => x.Table);
+        var game = new GameReflection(
+            siblingsByTable
+                .SelectMany(kv => kv.Value.Select(t => (Type: t, Table: kv.Key)))
+                .ToDictionary(x => x.Type, x => x.Table),
+            annotations);
 
         // Resolved once per category (condition codecs are stateless per-call factories,
         // and the codec itself doesn't vary per table) — passed into BuildSchema so it can skip
-        // condition-shaped properties the same way baseSkip skips other fields, keeping the
+        // condition-shaped properties the same way the header members are skipped, keeping the
         // Conditions section (Fallout4ConditionCodec.Extract) as the one place they're surfaced.
         var conditionCodec = ConditionCodecRegistry.For(category);
 
@@ -166,19 +187,19 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         {
             schemas[tableName] = BuildSchema(
                 tableName, getterType, siblingsByTable[tableName],
-                getterTypeToTable, logger, conditionCodec, vmadInterfaceType);
+                game, logger, conditionCodec, vmadInterfaceType);
         }
 
-        AddHeaderSchemaIfAvailable(schemas, category, assembly, getterTypeToTable, logger);
+        AddHeaderSchemaIfAvailable(schemas, category, assembly, game, logger);
 
-        return new GameSchemaCache(schemas, getterTypeToTable);
+        return new GameSchemaCache(schemas, game);
     }
 
     private static void AddHeaderSchemaIfAvailable(
         Dictionary<string, RecordTableSchema> schemas, GameCategory category, Assembly assembly,
-        IReadOnlyDictionary<Type, string> getterTypeToTable, ILogger logger)
+        GameReflection game, ILogger logger)
     {
-        if (BuildHeaderSchema(category, assembly, getterTypeToTable, logger) is { } headerSchema)
+        if (BuildHeaderSchema(category, assembly, game, logger) is { } headerSchema)
             schemas[HeaderIndexer.RecordType] = headerSchema;
     }
 
@@ -202,7 +223,7 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
     // HeaderColumnExtract, which reflects over the live CLR property and never sees this string.
     private static RecordTableSchema? BuildHeaderSchema(
         GameCategory category, Assembly assembly,
-        IReadOnlyDictionary<Type, string> getterTypeToTable, ILogger logger)
+        GameReflection game, ILogger logger)
     {
         var modGetterType = assembly.GetType($"Mutagen.Bethesda.{category}.I{category}ModGetter");
         var modHeaderProp = modGetterType?.GetProperty("ModHeader", BindingFlags.Public | BindingFlags.Instance);
@@ -217,7 +238,7 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         var extracts = new List<Func<IModGetter, object?>>();
 
         var authorProp = headerGetterType.GetProperty("Author", BindingFlags.Public | BindingFlags.Instance);
-        if (authorProp != null && ClassifyLeaf(authorProp, authorProp.PropertyType, getterTypeToTable) is { } authorLeaf)
+        if (authorProp != null && ClassifyLeaf(authorProp, authorProp.PropertyType, game) is { } authorLeaf)
         {
             // ViewDefaultLiteral threaded through like ProjectColumn does for every other column
             // (#631, now that the header has a generated view). Author is a string, so
@@ -314,29 +335,16 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         return LightMasterFlagNames.Contains(mutagenName) ? "ESL" : mutagenName;
     }
 
-    // The three GRUP-timestamp properties are on this list for the same reason
-    // MajorRecordFlagsRaw and FormVersion are — they are not record data. A timestamp
-    // here belongs to the GRUP that contains the record, not to the record, so it stays out of the
-    // queryable schema on that ground alone (ADR-0042's own file/view-layer split: the source
-    // document is the lossless side, this reflected schema is the queryable-projection side, and the
-    // two are allowed to diverge here on purpose). Note the *serializer* does write these
-    // properties to the file (RecordTextCodecCustomization does not omit
-    // Cell.PersistentTimestamp/TemporaryTimestamp or Worldspace.SubCellsTimestamp — ADR-0042
-    // decision 3 has no exception): a reflected column and a source-document field are different
-    // promises, and only the file's is required to be lossless
-    // (GrupTimestamps_AreAbsentFromSchemaAndViewsAlike).
-    //
-    // CAVEAT for whoever hits this next: the skip is BY PROPERTY NAME ACROSS EVERY RECORD TYPE. If a
-    // future game has a record type where Timestamp/TemporaryTimestamp/PersistentTimestamp is
-    // genuine per-record data rather than GRUP metadata, this list would wrongly drop it. The rule to
-    // re-verify is whether the field is conceptually the record's own data or its containing GRUP's
-    // — not "extend the list because a new name looks similar", and not "does the serializer emit
-    // it", since that question doesn't distinguish the two cases.
-    private static readonly HashSet<string> BaseSkip = new(StringComparer.OrdinalIgnoreCase)
+    // The record header's own members, declared by Mutagen.Bethesda.Core's IMajorRecordGetter for
+    // every game: identity and header metadata, not record data, so never a column. A structural
+    // fact of the base interface rather than a per-game annotation — nameof keeps it bound to the
+    // real members at compile time. Per-game header-adjacent members (the GRUP timestamps a record
+    // carries for the group that contains it) are SchemaAnnotations.ExcludedColumns instead.
+    private static readonly HashSet<string> MajorRecordHeaderMembers = new(StringComparer.OrdinalIgnoreCase)
     {
-        "FormKey", "EditorID", "IsCompressed", "FormVersion", "VersionControl",
-        "MajorRecordFlagsRaw", "SubgraphRevision",
-        "Timestamp", "TemporaryTimestamp", "PersistentTimestamp"
+        nameof(IMajorRecordGetter.FormKey), nameof(IMajorRecordGetter.EditorID),
+        nameof(IMajorRecordGetter.IsCompressed), nameof(IMajorRecordGetter.FormVersion),
+        nameof(IMajorRecordGetter.VersionControl), nameof(IMajorRecordGetter.MajorRecordFlagsRaw),
     };
 
     // RecordType (used for enumeration in DuckDbRecordIndex.IndexRecordTable) stays bound to
@@ -348,10 +356,10 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
     // has nothing to gain from pointing at the abstract base.
     private static RecordTableSchema BuildSchema(
         string tableName, Type getterType, List<Type> siblingGetterTypes,
-        IReadOnlyDictionary<Type, string> getterTypeToTable, ILogger logger,
+        GameReflection game, ILogger logger,
         IConditionCodec? conditionCodec, Type? vmadInterfaceType)
     {
-        var columns = ReflectColumns(getterType, conditionCodec, vmadInterfaceType, getterTypeToTable, logger);
+        var columns = ReflectColumns(getterType, conditionCodec, vmadInterfaceType, game, logger);
 
         // Union in every other concrete subclass sharing this signature (siblingGetterTypes
         // is just [getterType] for the overwhelming majority of tables, so this loop is a no-op
@@ -366,7 +374,7 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
             foreach (var sibling in siblingGetterTypes)
             {
                 if (sibling == getterType) continue;
-                var siblingColumns = ReflectColumns(sibling, conditionCodec, vmadInterfaceType, getterTypeToTable, logger);
+                var siblingColumns = ReflectColumns(sibling, conditionCodec, vmadInterfaceType, game, logger);
                 foreach (var siblingSpec in siblingColumns)
                     MergeSiblingColumn(columns, widenedDispatch, nonScalarMergeDispatch, getterType, sibling, siblingSpec);
             }
@@ -400,11 +408,12 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
     // (vmadInterfaceType == null) skips nothing.
     private static List<ColumnSpec> ReflectColumns(
         Type getterType, IConditionCodec? conditionCodec, Type? vmadInterfaceType,
-        IReadOnlyDictionary<Type, string> getterTypeToTable, ILogger logger)
+        GameReflection game, ILogger logger)
     {
         var grouped = GetAllInterfaceProperties(getterType)
-            .Where(p => !BaseSkip.Contains(p.Name))
-            .Where(p => !IsInfrastructureProperty(p))
+            .Where(p => !MajorRecordHeaderMembers.Contains(p.Name))
+            .Where(p => !game.Annotations.IsExcludedColumn(p))
+            .Where(p => !game.Annotations.IsExcludedMember(p))
             .Where(p => conditionCodec == null || !conditionCodec.IsConditionListField(getterType, p.Name))
             .Where(p => vmadInterfaceType == null
                         || !vmadInterfaceType.IsAssignableFrom(getterType)
@@ -420,7 +429,7 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
             var prop = group.Aggregate((best, candidate) =>
                 best.DeclaringType!.IsAssignableFrom(candidate.DeclaringType!) ? candidate : best);
 
-            var info = GetColumnInfo(prop, getterTypeToTable, logger);
+            var info = GetColumnInfo(prop, game, logger);
             if (info == null) continue;
 
             columns.Add(new ColumnSpec(
@@ -913,13 +922,6 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
 
     private static readonly string[] Empty = [];
 
-    private static readonly HashSet<string> LoquiSkipProps =
-        new(StringComparer.OrdinalIgnoreCase)
-        {
-            "CommonInstance", "CommonSetterInstance", "CommonSetterTranslationInstance",
-            "StaticRegistration", "Registration",
-        };
-
     private static IEnumerable<PropertyInfo> GetAllInterfaceProperties(Type type) =>
         type.GetInterfaces()
             .Append(type)
@@ -1008,48 +1010,7 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         new("red", "R"), new("green", "G"), new("blue", "B"), new("alpha", "A"),
     ];
 
-    /// <summary>
-    /// The Color-typed fields xEdit renders <i>with</i> an Alpha leaf — its <c>wbByteRGBA</c>
-    /// definition (wbDefinitionsCommon.pas:6372-6386: Red/Green/Blue/Alpha, all U8). Every other
-    /// Color field in the schema takes <c>wbByteColors</c>'s 3-leaf shape instead
-    /// (wbDefinitionsCommon.pas:6291-6305), whose fourth byte is declared <c>wbUnused(1)</c> and is
-    /// never rendered as a field there.
-    ///
-    /// <para><b>Why a hand-transcribed table.</b> Which of the two shapes a colour takes is a
-    /// property of the <i>field</i>, not of its type: all 60 Color-typed getter properties in
-    /// Fallout 4 are the same <c>System.Drawing.Color</c>. Mutagen answers the same question with
-    /// <c>ColorBinaryType</c>, but selects it inside generated binary-translation call sites
-    /// (<c>frame.ReadColor(ColorBinaryType.Alpha)</c>) — not on the type, not an attribute, not
-    /// reachable from a property walk. Four transcribed rows are smaller than any mechanism that
-    /// could infer it, so this is a workaround rather than ADR-0034's "genuine platform limitation
-    /// that cannot be worked around", and the xEdit shape is matched exactly rather than diverged
-    /// from. Same transcribed-from-xEdit idiom this file already uses for
-    /// <see cref="VectorStructTypes"/> and <c>ObjectModPropertyLeafSkip</c>.</para>
-    ///
-    /// <para><b>Safe by agreement, not by luck.</b> All four are <c>ColorBinaryType.Alpha</c> on the
-    /// Mutagen side (Keyword_Generated.cs:1875, LocationReferenceType_Generated.cs:1510,
-    /// ActionRecord_Generated.cs:1766, Location_Generated.cs:5435), so every field that renders an
-    /// alpha leaf is also a field whose alpha byte Mutagen actually writes
-    /// (ColorBinaryTranslation.cs:21-26). There is no field where the two disagree, which is what
-    /// makes an alpha edit here unable to be silently discarded at compile.</para>
-    ///
-    /// <para>Keyed on the declaring getter interface rather than the table name so it generalizes:
-    /// the same four fields are <c>wbByteRGBA</c> in Skyrim too (wbDefinitionsTES5.pas:5321 KYWD,
-    /// :5326 LCRT, :5331 AACT, :6511 LCTN). <c>internal</c> for the completeness guard in
-    /// <c>SchemaReflectorAtomicValueTests</c>, which fails loudly if a row stops resolving.</para>
-    /// </summary>
-    internal static readonly (string OwnerGetterTypeName, string PropertyName)[] AlphaBearingColorFields =
-    [
-        ("IKeywordGetter", "Color"),                // KYWD — wbDefinitionsFO4.pas:7028
-        ("ILocationReferenceTypeGetter", "Color"),  // LCRT — wbDefinitionsFO4.pas:7040
-        ("IActionRecordGetter", "Color"),           // AACT — wbDefinitionsFO4.pas:7051
-        ("ILocationGetter", "Color"),               // LCTN — wbDefinitionsFO4.pas:8256
-    ];
-
-    private static bool HasAlphaLeaf(PropertyInfo prop) =>
-        AlphaBearingColorFields.Any(e =>
-            e.PropertyName == prop.Name && e.OwnerGetterTypeName == prop.DeclaringType?.Name);
-
+    // Which Color fields carry an alpha leaf is a per-game fact: SchemaAnnotations.AlphaBearingColorFields.
     private static bool IsAtomicValueType(Type core) => core == typeof(System.Drawing.Color);
 
     // ── Total classification: the default branch is a reported anomaly, never silence ──────────
@@ -1103,11 +1064,11 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
               $"<{string.Join(", ", type.GetGenericArguments().Select(TypeLabel))}>"
             : type.Name;
 
-    private static T? ReportUnclassified<T>(ILogger logger, PropertyInfo prop, Type shape, string site)
+    private static T? ReportUnclassified<T>(GameReflection game, ILogger logger, PropertyInfo prop, Type shape, string site)
         where T : class
     {
         var owner = prop.DeclaringType?.Name ?? "?";
-        if (ExcludedShapeReason(shape) is { } reason)
+        if ((ExcludedShapeReason(shape) ?? EmptySubSchemaReason(game, shape)) is { } reason)
         {
             // Named, so not an anomaly — but still said out loud, at Debug, so a real run can answer
             // "why is this field missing?" without anyone reading this file. Guarded because
@@ -1126,41 +1087,9 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         return null;
     }
 
-    // ── Mutagen/Loqui plumbing the walk reaches, which is not editor surface and never will be ──
-    // Skipped, deliberately NOT excluded-with-a-reason: an exclusion says "real data we chose not to
-    // present", and saying that about infrastructure would be a lie in the code. All six already
-    // produced no column and no sub-field (they reached the old silent default), so skipping them
-    // earlier changes no emitted schema — asserted by both goldens staying put.
-    //
-    // Keyed on (declaring interface, property) rather than by name alone, because one of these names
-    // is commonplace real data elsewhere: `Type` is a genuine enum field on Keyword, SoundOutputModel,
-    // NpcFaceTintingLayer and others, and skipping it globally would be catastrophic. The pair form
-    // cannot swallow a future real property that merely shares a name.
-    //
-    // This also closes an asymmetry #649 surfaced: BaseSkip filters columns only and LoquiSkipProps
-    // filters sub-fields only, so `Registration` was skipped as a sub-field but not as a column, and
-    // `FormKey` the exact opposite. These pairs close both directions precisely. A blanket merge of
-    // the two lists was considered and declined: it would also skip names like `EditorID` and
-    // `PersistentTimestamp` at nesting depth, where nothing shows they are unwanted, for no observed
-    // gain over these six.
-    //
-    // Six rows, eight anomaly messages: `ILinkIdentifier.Type` and `IBinaryItem.BinaryWriteTranslator`
-    // are each reachable from both the column and the sub-field dispatch, so disabling this filter
-    // reproduces 8 distinct reports for these 6 properties. Two valid countings of one set — noted
-    // because the mismatch reads as an error until you know why.
-    private static readonly (string OwnerTypeName, string PropertyName)[] InfrastructurePropertySkips =
-    [
-        ("ILoquiObject", "Registration"),                    // Loqui's own registration handle
-        ("IBinaryItem", "BinaryWriteTranslator"),            // Mutagen's binary write-strategy object
-        ("ILinkIdentifier", "Type"),                         // a System.Type, not a record field
-        ("IFormKeyGetter", "FormKey"),                       // record identity; BaseSkip's sub-field-side twin
-        ("IGlobalGetter", "TypeChar"),                       // GLOB's derived subclass discriminant char
-        ("IAMagicEffectArchetypeGetter", "AssociationKey"),  // IFormLinkIdentifier alias of Association
-    ];
-
-    private static bool IsInfrastructureProperty(PropertyInfo prop) =>
-        InfrastructurePropertySkips.Any(s =>
-            s.PropertyName == prop.Name && s.OwnerTypeName == prop.DeclaringType?.Name);
+    // Mutagen/Loqui plumbing the walk reaches (SchemaAnnotations.ExcludedMembers) is skipped, not
+    // excluded-with-a-reason: an exclusion says "real data we chose not to present", and saying that
+    // about infrastructure would be a lie in the code.
 
     // ── Explicitly excluded shapes: real data, deliberately not presented ───────────────────────
     // #649 commitment 2's third outcome, and a first-class one: a shape the walk genuinely reaches
@@ -1213,10 +1142,9 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
                 if (!IsLoquiInterface(core) || IsFormLink(core)) continue;
 
                 foreach (var member in GetAllInterfaceProperties(core)
-                             .Where(p => !LoquiSkipProps.Contains(p.Name))
-                             .Where(p => !IsInfrastructureProperty(p)))
+                             .Where(p => !cache.Game.Annotations.IsExcludedMember(p)))
                 {
-                    if (GetSubFieldInfo(member, cache.GetterTypeToTable, 1, _logger) is not { } spec) continue;
+                    if (GetSubFieldInfo(member, cache.Game, 1, _logger) is not { } spec) continue;
 
                     // The LEAF's own shape, not its enclosing struct's: a primitive-element list or an
                     // excluded VMAD struct sitting inside a perfectly writable struct is not itself
@@ -1275,25 +1203,17 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         if (shape == typeof(RecordType))
             return "Mutagen RecordType signature — 7 fields; candidate atomic value, presentation undecided";
 
-        // 11 fields: a Loqui struct whose own sub-schema comes out empty, so there is nothing to
-        // present. Deliberately NOT restated here — every one already carries a reasoned entry in
-        // SchemaReflectorLeafCoverageCompletenessTests.KnownGaps (ASceneActionType's two independent
-        // blockers, ScenePhaseUnusedData's byte-blob-only membership, and the rest). Two independent
-        // sets of reasons for one set of facts would drift, and silently.
-        return EmptySubSchemaTypeNames.Contains(shape.Name)
-            ? "empty sub-schema — see SchemaReflectorLeafCoverageCompletenessTests.KnownGaps"
-            : null;
+        return null;
     }
 
-    private static readonly HashSet<string> EmptySubSchemaTypeNames = new(StringComparer.Ordinal)
-    {
-        "IScenePhaseUnusedDataGetter",      // byte-blob-only members
-        "IPlacedGetter",                     // abstract placed-record base, no members of its own
-        "IScriptFragmentGetter",             // VMAD-adjacent, outside the reflected pipeline by design
-        "IScriptEntryGetter",                // ditto
-        "IFindMatchingRefFromEventGetter",  // package-data leaf whose own members are all excluded shapes
-        "IASceneActionTypeGetter",          // deliberately not abstract upstream; see KnownGaps
-    };
+    // 11 fields in Fallout 4: a Loqui struct whose own sub-schema comes out empty, so there is
+    // nothing to present. The reasons are deliberately NOT restated here — every one already carries
+    // a reasoned entry in SchemaReflectorLeafCoverageCompletenessTests.KnownGaps. Two independent
+    // sets of reasons for one set of facts would drift, and silently.
+    private static string? EmptySubSchemaReason(GameReflection game, Type shape) =>
+        game.Annotations.IsEmptySubSchemaType(shape)
+            ? "empty sub-schema — see SchemaReflectorLeafCoverageCompletenessTests.KnownGaps"
+            : null;
 
     /// <summary>Every excluded shape's reason, for the audit's own non-vacuity guard.</summary>
     internal static IReadOnlyList<string> ExcludedShapeLabels =>
@@ -1307,8 +1227,8 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
 
     // The components this property decomposes into. Per-property rather than per-type precisely
     // because of the alpha allowlist: two fields of the identical CLR type get different shapes.
-    private static AtomicValueComponent[] AtomicValueComponentsFor(PropertyInfo prop) =>
-        HasAlphaLeaf(prop) ? ColorRgbaComponents : ColorRgbComponents;
+    private static AtomicValueComponent[] AtomicValueComponentsFor(GameReflection game, PropertyInfo prop) =>
+        game.Annotations.HasAlphaLeaf(prop) ? ColorRgbaComponents : ColorRgbComponents;
 
     // The mutable staging target an atomic value's Apply writes onto before the immutable value is
     // rebuilt from it. System.Drawing.Color's own R/G/B/A are get-only, so the vector-struct trick
@@ -1325,10 +1245,10 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
     }
 
     private static string[] GetFormLinkValidTypes(
-        Type core, IReadOnlyDictionary<Type, string> getterTypeToTable)
+        Type core, GameReflection game)
     {
         var linked = core.IsGenericType ? core.GetGenericArguments()[0] : null;
-        return linked != null && getterTypeToTable.TryGetValue(linked, out var tn)
+        return linked != null && game.GetterTypeToTable.TryGetValue(linked, out var tn)
             ? [tn] : Empty;
     }
 
@@ -1356,15 +1276,14 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
     // ClassType of its own) while everything else can be discovered by reflection alone.
     private static List<SubFieldSpec> BuildSubSchema(
         Type getterInterface,
-        IReadOnlyDictionary<Type, string> getterTypeToTable,
+        GameReflection game,
         ILogger logger,
         int depth = 0)
     {
         if (depth > 3) return [];
 
         var grouped = GetAllInterfaceProperties(getterInterface)
-            .Where(p => !LoquiSkipProps.Contains(p.Name))
-            .Where(p => !IsInfrastructureProperty(p))
+            .Where(p => !game.Annotations.IsExcludedMember(p))
             .GroupBy(p => ToSnakeCase(p.Name), StringComparer.OrdinalIgnoreCase);
 
         var result = new List<SubFieldSpec>();
@@ -1373,15 +1292,15 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
             var prop = group.Aggregate((best, candidate) =>
                 best.DeclaringType!.IsAssignableFrom(candidate.DeclaringType!) ? candidate : best);
 
-            var spec = GetSubFieldInfo(prop, getterTypeToTable, depth + 1, logger);
+            var spec = GetSubFieldInfo(prop, game, depth + 1, logger);
             if (spec != null) result.Add(spec);
         }
 
         if (IsObjectModPropertyBase(getterInterface))
-            result.AddRange(BuildObjectModPropertyLeafFields(getterInterface, getterTypeToTable, logger));
-        else if (TryGetAbstractUnionLeaves(getterInterface, out var unionLeaves))
+            result.AddRange(BuildObjectModPropertyLeafFields(getterInterface, game, logger));
+        else if (TryGetAbstractUnionLeaves(getterInterface, game, out var unionLeaves))
             result.AddRange(BuildAbstractUnionLeafFields(
-                getterInterface, unionLeaves, getterTypeToTable, depth + 1, logger));
+                getterInterface, unionLeaves, game, depth + 1, logger));
 
         return result;
     }
@@ -1417,15 +1336,6 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         ("IObjectModFormLinkFloatPropertyGetter`1", "FormIdFloat"),
     ];
 
-    // Mutagen's own name for this member says everything: a reserved padding uint32 on
-    // ObjectModStringProperty/ObjectModEnumProperty. xEdit's own definition agrees — the
-    // corresponding bytes are wbUnused(3)/wbUnused(2) in wbDefinitionsFO4.pas's
-    // wbObjectModProperties, never rendered as a field there either. Excluded here rather than
-    // surfaced as a meaningless "unused" column just because both leaves happen to declare it
-    // with the same uint32 shape.
-    private static readonly HashSet<string> ObjectModPropertyLeafSkip =
-        new(StringComparer.OrdinalIgnoreCase) { "Unused" };
-
     private static bool IsObjectModPropertyBase(Type getterInterface) =>
         getterInterface.IsGenericType &&
         getterInterface.GetGenericTypeDefinition().Name == "IAObjectModPropertyGetter`1";
@@ -1453,7 +1363,7 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
     // synthesized here, not one of the seven leaves' own declared members — which is what
     // ApplyListJson's discriminator-driven concrete-type resolution reads.
     private static List<SubFieldSpec> BuildObjectModPropertyLeafFields(
-        Type baseGetterInterface, IReadOnlyDictionary<Type, string> getterTypeToTable, ILogger logger)
+        Type baseGetterInterface, GameReflection game, ILogger logger)
     {
         var ns = baseGetterInterface.Namespace;
         var asm = baseGetterInterface.Assembly;
@@ -1481,7 +1391,7 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
 
         var members = leaves
             .SelectMany(leaf => leaf.LeafType.GetProperties(BindingFlags.Public | BindingFlags.Instance)
-                .Where(p => !ObjectModPropertyLeafSkip.Contains(p.Name))
+                .Where(p => !game.Annotations.IsExcludedMember(p))
                 .Select(p => (LeafType: leaf.LeafType, Prop: p)))
             .GroupBy(m => ToSnakeCase(m.Prop.Name), StringComparer.OrdinalIgnoreCase);
 
@@ -1495,7 +1405,7 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
                 .ToList();
 
             result.Add(distinctTypes.Count == 1
-                ? BuildTypedLeafUnionField(group.Key, list, getterTypeToTable, logger)
+                ? BuildTypedLeafUnionField(group.Key, list, game, logger)
                 : BuildWidenedLeafUnionField(group.Key, list, logger));
         }
 
@@ -1528,11 +1438,11 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
 
     private static SubFieldSpec BuildTypedLeafUnionField(
         string colName, List<(Type LeafType, PropertyInfo Prop)> members,
-        IReadOnlyDictionary<Type, string> getterTypeToTable, ILogger logger)
+        GameReflection game, ILogger logger)
     {
         var core = Nullable.GetUnderlyingType(members[0].Prop.PropertyType) ?? members[0].Prop.PropertyType;
         var perLeaf = members
-            .Select(m => (m.LeafType, Leaf: ClassifyLeaf(m.Prop, core, getterTypeToTable)!))
+            .Select(m => (m.LeafType, Leaf: ClassifyLeaf(m.Prop, core, game)!))
             .ToList();
         var rep = perLeaf[0].Leaf;
         // Every member in this group shares one CLR property name (that agreement is what put it
@@ -1714,35 +1624,21 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         return leaves;
     }
 
-    // Condition/ConditionData (CTDA) and AVirtualMachineAdapter (VMAD) are
-    // both `public abstract partial class` — structurally identical to ANpcLevel/AQuestAlias — but
-    // permanently outside the reflected schema by documented architectural boundary
-    // (MEditService/CLAUDE.md: "VMAD/condition reconstitution survives at the query-service
-    // level, Queries/RecordDocumentCodecs, operating on RecordDocument.Body — rejected from the seam
-    // itself, same as raw SQL"). The existing exclusion mechanisms (IConditionCodec.
-    // IsConditionListField, BuildSchema's own vmadInterfaceType check) gate a *named top-level
-    // property* in ReflectColumns, keyed by (declaring type, property name) — neither is reachable
-    // from here, where BuildSubSchema's own recursive walk has already descended past any such
-    // property into an abstract type with no memory of which field led to it (Condition's own
-    // "Data" member specifically: never itself excluded by IsConditionListField, since that check
-    // only ever names the *list* fields like Perk.Conditions/Quest.DialogConditions, not a nested
-    // struct member two levels beyond one). No existing mechanism reaches this call site, so this
-    // is a narrow, named exclusion — checked by the resolved concrete Setter type's own name
-    // against exactly the two documented boundary types, not a heuristic on the "A<Name>" prefix.
-    private static readonly HashSet<string> AbstractUnionExcludedTypeNames =
-        new(StringComparer.Ordinal) { "Condition", "ConditionData", "AVirtualMachineAdapter" };
-
     // getterInterface qualifies when its own Setter type (GetSetterType) is an abstract class,
-    // outside the excluded boundary above, with at least one discoverable concrete leaf. OMOD's own
-    // IAObjectModPropertyGetter<T> is excluded by BuildSubSchema's own caller order
+    // outside SchemaAnnotations.ExcludedAbstractUnions (Condition/ConditionData and
+    // AVirtualMachineAdapter — structurally identical to ANpcLevel/AQuestAlias, but owned by their
+    // dedicated sections: IsConditionListField and the vmadInterfaceType check only gate a *named
+    // top-level property* in ReflectColumns, and BuildSubSchema's recursive walk reaches these
+    // abstract types with no memory of which field led to it), with at least one discoverable
+    // concrete leaf. OMOD's own IAObjectModPropertyGetter<T> is excluded by BuildSubSchema's own caller order
     // (IsObjectModPropertyBase checked first), not by anything here — its Setter type
     // (AObjectModProperty<T>) is abstract too, but this method is simply never reached for it.
     private static bool TryGetAbstractUnionLeaves(
-        Type getterInterface, out List<(Type GetterType, string ClassName)> leaves)
+        Type getterInterface, GameReflection game, out List<(Type GetterType, string ClassName)> leaves)
     {
         leaves = [];
         if (GetSetterType(getterInterface) is not { IsAbstract: true } setterType) return false;
-        if (AbstractUnionExcludedTypeNames.Contains(setterType.Name)) return false;
+        if (game.Annotations.IsExcludedAbstractUnion(setterType)) return false;
         leaves = FindAbstractUnionLeaves(setterType);
         return leaves.Count > 0;
     }
@@ -1759,12 +1655,12 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
     private static List<SubFieldSpec> BuildAbstractUnionLeafFields(
         Type getterInterface,
         List<(Type GetterType, string ClassName)> leaves,
-        IReadOnlyDictionary<Type, string> getterTypeToTable,
+        GameReflection game,
         int depth,
         ILogger logger)
     {
         var baseMemberNames = GetAllInterfaceProperties(getterInterface)
-            .Where(p => !LoquiSkipProps.Contains(p.Name))
+            .Where(p => !game.Annotations.IsExcludedMember(p))
             .Select(p => ToSnakeCase(p.Name))
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
@@ -1772,7 +1668,7 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
             leaf.GetterType,
             leaf.ClassName,
             Members: GetAllInterfaceProperties(leaf.GetterType)
-                .Where(p => !LoquiSkipProps.Contains(p.Name) && !baseMemberNames.Contains(ToSnakeCase(p.Name)))
+                .Where(p => !game.Annotations.IsExcludedMember(p) && !baseMemberNames.Contains(ToSnakeCase(p.Name)))
                 .GroupBy(p => ToSnakeCase(p.Name), StringComparer.OrdinalIgnoreCase)
                 .ToDictionary(
                     g => g.Key,
@@ -1791,7 +1687,7 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
                 .Select(l => ((l.GetterType, l.ClassName), Prop: l.Members[name]))
                 .ToList();
 
-            if (BuildAbstractUnionMemberField(name, declaring, getterTypeToTable, depth, logger) is { } field)
+            if (BuildAbstractUnionMemberField(name, declaring, game, depth, logger) is { } field)
                 result.Add(field);
         }
 
@@ -1821,12 +1717,12 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
     private static SubFieldSpec? BuildAbstractUnionMemberField(
         string colName,
         List<((Type GetterType, string ClassName) Leaf, PropertyInfo Prop)> declaring,
-        IReadOnlyDictionary<Type, string> getterTypeToTable,
+        GameReflection game,
         int depth,
         ILogger logger)
     {
         var perLeafSpecs = declaring
-            .Select(d => (d.Leaf, Spec: GetSubFieldInfo(d.Prop, getterTypeToTable, depth, logger)))
+            .Select(d => (d.Leaf, Spec: GetSubFieldInfo(d.Prop, game, depth, logger)))
             .Where(d => d.Spec != null)
             .ToList();
         if (perLeafSpecs.Count == 0) return null;
@@ -1935,7 +1831,7 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
 
     // Element metadata for use in FieldMetadata.ElementType.
     private static FieldMetadata? BuildElementMeta(
-        Type elementType, IReadOnlyDictionary<Type, string> getterTypeToTable, ILogger logger)
+        Type elementType, GameReflection game, ILogger logger)
     {
         var core = Nullable.GetUnderlyingType(elementType) ?? elementType;
 
@@ -1945,13 +1841,13 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
             // data error) — getter interfaces can't statically distinguish this from a non-nullable
             // scalar anyway (see IsNullableFormLink), so default permissive here regardless.
             return new FieldMetadata("", "formKey", false,
-                GetFormLinkValidTypes(core, getterTypeToTable), Empty,
+                GetFormLinkValidTypes(core, game), Empty,
                 IsSortable: true, AllowsNull: true);
         }
 
         if (IsLoquiInterface(core))
         {
-            var sub = BuildSubSchema(core, getterTypeToTable, logger);
+            var sub = BuildSubSchema(core, game, logger);
             return sub.Count == 0
                 ? null
                 : new FieldMetadata("", "struct", false, Empty, Empty,
@@ -1967,7 +1863,7 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         // would recurse forever over several of these types' own self-referencing `Point` property.
         if (IsVectorStructType(core))
         {
-            var sub = BuildVectorComponentSubFields(core, getterTypeToTable, 0, logger);
+            var sub = BuildVectorComponentSubFields(core, game, 0, logger);
             return sub.Count == 0
                 ? null
                 : new FieldMetadata("", "struct", false, Empty, Empty,
@@ -2069,7 +1965,7 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
     // Classifies the leaf kinds shared by both dispatch paths: primitive, translated-string,
     // enum, form-link. Returns null for list/loqui-struct — the callers handle those.
     private static LeafSpec? ClassifyLeaf(
-        PropertyInfo prop, Type core, IReadOnlyDictionary<Type, string> getterTypeToTable)
+        PropertyInfo prop, Type core, GameReflection game)
     {
         if (TryMapPrimitive(core, out var duckDb, out var apiType, out var conv))
         {
@@ -2098,7 +1994,7 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         if (IsFormLink(core))
         {
             var g = SubGetter(prop);
-            return new("formKey", "VARCHAR", GetFormLinkValidTypes(core, getterTypeToTable), Empty,
+            return new("formKey", "VARCHAR", GetFormLinkValidTypes(core, game), Empty,
                 obj => (g(obj) as IFormLinkGetter)?.FormKeyNullable?.ToString(),
                 Convert: null,
                 AllowsNull: IsNullableFormLink(core));
@@ -2224,7 +2120,7 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
 
     private static SubFieldSpec? GetSubFieldInfo(
         PropertyInfo prop,
-        IReadOnlyDictionary<Type, string> getterTypeToTable,
+        GameReflection game,
         int depth,
         ILogger logger)
     {
@@ -2235,15 +2131,15 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         var nullable = Nullable.GetUnderlyingType(type) != null || !type.IsValueType;
         var colName = ToSnakeCase(prop.Name);
 
-        return ClassifyLeaf(prop, core, getterTypeToTable) switch
+        return ClassifyLeaf(prop, core, game) switch
         {
             { } leaf => ProjectSubField(prop, colName, core, nullable, leaf, logger),
-            null when IsAtomicValueType(core) => BuildAtomicValueSubField(prop, core, colName, logger),
-            null when IsVectorStructType(core) => BuildVectorSubField(prop, core, colName, getterTypeToTable, depth, logger),
+            null when IsAtomicValueType(core) => BuildAtomicValueSubField(prop, core, colName, game, logger),
+            null when IsVectorStructType(core) => BuildVectorSubField(prop, core, colName, game, depth, logger),
             null when IsListType(core, out var elementType) =>
-                BuildListSubField(prop, colName, elementType, getterTypeToTable, logger),
-            null when IsLoquiInterface(core) => BuildStructSubField(prop, core, colName, getterTypeToTable, depth, logger),
-            _ => ReportUnclassified<SubFieldSpec>(logger, prop, core, "sub-field"),
+                BuildListSubField(prop, colName, elementType, game, logger),
+            null when IsLoquiInterface(core) => BuildStructSubField(prop, core, colName, game, depth, logger),
+            _ => ReportUnclassified<SubFieldSpec>(game, logger, prop, core, "sub-field"),
         };
     }
 
@@ -2311,16 +2207,16 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
     // The unwritable residue keeps #642's refusal instead of a delegate that could never succeed:
     // a getter type with no resolvable Setter class at all, and an abstract Setter whose own
     // sub-schema exposes no concrete_type discriminator (today exactly ConditionData — excluded
-    // from union-leaf expansion by AbstractUnionExcludedTypeNames, so no payload can ever carry the
+    // from union-leaf expansion by SchemaAnnotations.ExcludedAbstractUnions, so no payload can ever carry the
     // discriminator ApplyStructJson would need; refusing up front as not-editable names the real
     // problem, where a ValueRejected from the missing discriminator would claim the value's shape
     // was wrong).
     private static SubFieldSpec? BuildStructSubField(
         PropertyInfo prop, Type core, string colName,
-        IReadOnlyDictionary<Type, string> getterTypeToTable, int depth, ILogger logger)
+        GameReflection game, int depth, ILogger logger)
     {
-        var sub = BuildSubSchema(core, getterTypeToTable, logger, depth);
-        if (sub.Count == 0) return ReportUnclassified<SubFieldSpec>(logger, prop, core, "empty nested struct");
+        var sub = BuildSubSchema(core, game, logger, depth);
+        if (sub.Count == 0) return ReportUnclassified<SubFieldSpec>(game, logger, prop, core, "empty nested struct");
         var g = SubGetter(prop);
         var pName = prop.Name;
         var setterType = GetSetterType(core);
@@ -2357,20 +2253,20 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
     // makes this list produce exactly 2 sub-fields for a P2 type and 3 for a P3 type with no
     // count-specific branch anywhere in this file.
     private static List<SubFieldSpec> BuildVectorComponentSubFields(
-        Type vectorType, IReadOnlyDictionary<Type, string> getterTypeToTable, int depth, ILogger logger)
+        Type vectorType, GameReflection game, int depth, ILogger logger)
     {
         var result = new List<SubFieldSpec>();
         foreach (var name in VectorComponentNames)
         {
             var componentProp = vectorType.GetProperty(name, BindingFlags.Public | BindingFlags.Instance);
             if (componentProp == null) continue;
-            if (GetSubFieldInfo(componentProp, getterTypeToTable, depth + 1, logger) is { } spec)
+            if (GetSubFieldInfo(componentProp, game, depth + 1, logger) is { } spec)
                 result.Add(spec);
         }
         return result;
     }
 
-    // ── The atomic-value class: build (see AlphaBearingColorFields for the shape decision) ──────
+    // ── The atomic-value class: build (see SchemaAnnotations.AlphaBearingColorFields for the shape) ──
 
     // One component's own sub-field. Read and write deliberately target different runtime types:
     // Extract reads off the real immutable value (a System.Drawing.Color), while Apply resolves the
@@ -2429,9 +2325,9 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
     }
 
     private static SubFieldSpec BuildAtomicValueSubField(
-        PropertyInfo prop, Type core, string colName, ILogger logger)
+        PropertyInfo prop, Type core, string colName, GameReflection game, ILogger logger)
     {
-        var components = BuildAtomicValueComponentSubFields(core, AtomicValueComponentsFor(prop), logger);
+        var components = BuildAtomicValueComponentSubFields(core, AtomicValueComponentsFor(game, prop), logger);
         var g = SubGetter(prop);
         var pName = prop.Name;
         return new(colName, "struct", Empty, Empty,
@@ -2440,9 +2336,9 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
             SubFields: components);
     }
 
-    private static ColumnInfoResult BuildAtomicValueColumn(PropertyInfo prop, Type core, ILogger logger)
+    private static ColumnInfoResult BuildAtomicValueColumn(PropertyInfo prop, Type core, GameReflection game, ILogger logger)
     {
-        var components = BuildAtomicValueComponentSubFields(core, AtomicValueComponentsFor(prop), logger);
+        var components = BuildAtomicValueComponentSubFields(core, AtomicValueComponentsFor(game, prop), logger);
         var pName = prop.Name;
         return new("VARCHAR",
             r => TryGet(r, prop) is { } v ? JsonSerializer.Serialize(ExtractSubObject(v, components)) : null,
@@ -2461,9 +2357,9 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
     // enclosing property.
     private static SubFieldSpec? BuildVectorSubField(
         PropertyInfo prop, Type core, string colName,
-        IReadOnlyDictionary<Type, string> getterTypeToTable, int depth, ILogger logger)
+        GameReflection game, int depth, ILogger logger)
     {
-        var components = BuildVectorComponentSubFields(core, getterTypeToTable, depth, logger);
+        var components = BuildVectorComponentSubFields(core, game, depth, logger);
         if (components.Count == 0) return null;
         var g = SubGetter(prop);
         var pName = prop.Name;
@@ -2492,23 +2388,23 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
     // identically to a top-level array column of the same shape.
     private static List<SubFieldSpec>? BuildListElementSubFields(
         Type elementType, bool isLoqui, bool isVector,
-        IReadOnlyDictionary<Type, string> getterTypeToTable, ILogger logger)
+        GameReflection game, ILogger logger)
     {
-        if (isLoqui) return BuildSubSchema(elementType, getterTypeToTable, logger);
-        if (isVector) return BuildVectorComponentSubFields(elementType, getterTypeToTable, 0, logger);
+        if (isLoqui) return BuildSubSchema(elementType, game, logger);
+        if (isVector) return BuildVectorComponentSubFields(elementType, game, 0, logger);
         return null;
     }
 
     private static SubFieldSpec? BuildListElementSpec(
         Type elementType, bool isFl, IReadOnlyList<SubFieldSpec>? elemSubFields,
-        IReadOnlyDictionary<Type, string> getterTypeToTable)
+        GameReflection game)
     {
         if (elemSubFields != null)
             return new("", "struct", Empty, Empty, _ => null,
                 Apply: LeafWrite.ReadOnly<object>(ElementTemplateReason), SubFields: elemSubFields);
         if (isFl)
         {
-            return new("", "formKey", GetFormLinkValidTypes(elementType, getterTypeToTable), Empty,
+            return new("", "formKey", GetFormLinkValidTypes(elementType, game), Empty,
                 _ => null, Apply: LeafWrite.ReadOnly<object>(ElementTemplateReason), AllowsNull: true);
         }
         return TryMapPrimitive(elementType, out _, out var elemApiType, out _)
@@ -2518,22 +2414,22 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
 
     private static SubFieldSpec? BuildListSubField(
         PropertyInfo prop, string colName, Type elementType,
-        IReadOnlyDictionary<Type, string> getterTypeToTable, ILogger logger)
+        GameReflection game, ILogger logger)
     {
         var isFl = IsFormLink(elementType);
         var isLoqui = !isFl && IsLoquiInterface(elementType);
         var isVector = !isFl && !isLoqui && IsVectorStructType(elementType);
 
-        var elemSubFields = BuildListElementSubFields(elementType, isLoqui, isVector, getterTypeToTable, logger);
+        var elemSubFields = BuildListElementSubFields(elementType, isLoqui, isVector, game, logger);
 
         // Mirrors BuildElementMeta's own branches, but building a SubFieldSpec directly rather than
         // a FieldMetadata — this method's caller (GetSubFieldInfo) needs the reflection-time shape
         // (ElementSpec.ToFieldMetadata() below is what turns it into wire metadata), and elemSubFields
         // above has already done the Loqui/vector element work, so there is nothing to gain from routing
         // through BuildElementMeta's own FieldMetadata output and converting it back.
-        var elementSpec = BuildListElementSpec(elementType, isFl, elemSubFields, getterTypeToTable);
+        var elementSpec = BuildListElementSpec(elementType, isFl, elemSubFields, game);
         if (elementSpec == null)
-            return ReportUnclassified<SubFieldSpec>(logger, prop, elementType, "nested list element");
+            return ReportUnclassified<SubFieldSpec>(game, logger, prop, elementType, "nested list element");
 
         var g = SubGetter(prop);
         var pName = prop.Name;
@@ -2643,20 +2539,20 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
     // ── GetColumnInfo ─────────────────────────────────────────────────────────
 
     private static ColumnInfoResult? GetColumnInfo(
-        PropertyInfo prop, IReadOnlyDictionary<Type, string> getterTypeToTable, ILogger logger)
+        PropertyInfo prop, GameReflection game, ILogger logger)
     {
         var type = prop.PropertyType;
         var core = Nullable.GetUnderlyingType(type) ?? type;
         var nullable = Nullable.GetUnderlyingType(type) != null || !type.IsValueType;
 
-        return ClassifyLeaf(prop, core, getterTypeToTable) switch
+        return ClassifyLeaf(prop, core, game) switch
         {
             { } leaf => ProjectColumn(prop, core, nullable, leaf, logger),
-            null when IsAtomicValueType(core) => BuildAtomicValueColumn(prop, core, logger),
-            null when IsVectorStructType(core) => BuildVectorColumn(prop, core, getterTypeToTable, logger),
-            null when IsListType(core, out var elementType) => BuildListColumn(prop, elementType, getterTypeToTable, logger),
-            null when IsLoquiInterface(core) => BuildStructColumn(prop, core, getterTypeToTable, logger),
-            _ => ReportUnclassified<ColumnInfoResult>(logger, prop, core, "column"),
+            null when IsAtomicValueType(core) => BuildAtomicValueColumn(prop, core, game, logger),
+            null when IsVectorStructType(core) => BuildVectorColumn(prop, core, game, logger),
+            null when IsListType(core, out var elementType) => BuildListColumn(prop, elementType, game, logger),
+            null when IsLoquiInterface(core) => BuildStructColumn(prop, core, game, logger),
+            _ => ReportUnclassified<ColumnInfoResult>(game, logger, prop, core, "column"),
         };
     }
 
@@ -2684,7 +2580,7 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
     // ── IReadOnlyList<T> ──────────────────────────────────────────────────────
 
     private static ColumnInfoResult? BuildListColumn(
-        PropertyInfo prop, Type elementType, IReadOnlyDictionary<Type, string> getterTypeToTable, ILogger logger)
+        PropertyInfo prop, Type elementType, GameReflection game, ILogger logger)
     {
         var isFl = IsFormLink(elementType);
         var isLoqui = !isFl && IsLoquiInterface(elementType);
@@ -2693,10 +2589,10 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         // pattern as GetColumnInfo/GetSubFieldInfo/BuildElementMeta above.
         var isVector = !isFl && !isLoqui && IsVectorStructType(elementType);
 
-        var elemSubFields = BuildListElementSubFields(elementType, isLoqui, isVector, getterTypeToTable, logger);
+        var elemSubFields = BuildListElementSubFields(elementType, isLoqui, isVector, game, logger);
 
-        var elemMeta = BuildElementMeta(elementType, getterTypeToTable, logger);
-        if (elemMeta == null) return ReportUnclassified<ColumnInfoResult>(logger, prop, elementType, "list element");
+        var elemMeta = BuildElementMeta(elementType, game, logger);
+        if (elemMeta == null) return ReportUnclassified<ColumnInfoResult>(game, logger, prop, elementType, "list element");
 
         object? Extractor(IMajorRecordGetter r)
         {
@@ -2991,10 +2887,10 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
     }
 
     private static ColumnInfoResult? BuildStructColumn(
-        PropertyInfo prop, Type core, IReadOnlyDictionary<Type, string> getterTypeToTable, ILogger logger)
+        PropertyInfo prop, Type core, GameReflection game, ILogger logger)
     {
-        var subFields = BuildSubSchema(core, getterTypeToTable, logger);
-        if (subFields.Count == 0) return ReportUnclassified<ColumnInfoResult>(logger, prop, core, "empty struct");
+        var subFields = BuildSubSchema(core, game, logger);
+        if (subFields.Count == 0) return ReportUnclassified<ColumnInfoResult>(game, logger, prop, core, "empty struct");
 
         var subFieldMetas = subFields.ConvertAll(s => s.ToFieldMetadata());
 
@@ -3034,9 +2930,9 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
     // Position is mirrored into the `placement` side table (PlacementWalker) with no write-time
     // re-derivation. That refusal covers this path; see its own doc comment for the guard.
     private static ColumnInfoResult? BuildVectorColumn(
-        PropertyInfo prop, Type core, IReadOnlyDictionary<Type, string> getterTypeToTable, ILogger logger)
+        PropertyInfo prop, Type core, GameReflection game, ILogger logger)
     {
-        var components = BuildVectorComponentSubFields(core, getterTypeToTable, 0, logger);
+        var components = BuildVectorComponentSubFields(core, game, 0, logger);
         if (components.Count == 0) return null;
 
         var subFieldMetas = components.ConvertAll(s => s.ToFieldMetadata());
