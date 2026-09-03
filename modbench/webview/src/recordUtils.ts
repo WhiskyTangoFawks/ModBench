@@ -377,7 +377,7 @@ export function setAtPath(root: unknown, path: readonly PathSegment[], value: un
 // the same two hops this mirrors). Reading `fieldMetaMap[rootField].elementType` directly
 // would only find the right element type when the array itself is the subtree root —
 // for a *nested* array it would name the wrong node's (or, off a struct root, no) elementType, and
-// defaultElementValue would build a malformed added element from the fallback.
+// defaultAdapterElementValue would build a malformed added element from the fallback.
 // `?? undefined` on the way out: the wire's `elementType`/`fields` are `T | null` (a genuinely
 // absent element schema), while every caller here treats "no metadata" as `undefined`. Collapsing
 // the two at this one boundary keeps the null out of the callers rather than widening each of them.
@@ -390,11 +390,21 @@ export function metaAtPath(meta: FieldMetadata | undefined, path: readonly PathS
   return cur ?? undefined;
 }
 
-// Keyed off the compare grid's
-// own FieldMetadata shape rather than VMAD's raw node JSON, which the two do not share.
+// The default element for an array the *adapters* synthesize — a VMAD property's own instances, a
+// Condition group's conditions. Keyed off the compare grid's own FieldMetadata shape rather than
+// VMAD's raw node JSON, which the two do not share.
+//
+// #710: a reflected column's array has no default here and never will. Its Add posts an op
+// envelope carrying nothing but `{op, path}`, and ArrayOpWriter.DefaultElementValue decides what
+// the new element is, server-side, from the same schema the write path validates against — the one
+// place that can name an abstract union's leaf and have the write accept it. The two functions are
+// therefore not rival definitions of the same thing: this one defaults an element of a shape that
+// has no CLR constructor at all (a VMAD node list is its members), which is exactly why it must
+// build one member at a time where the reflected default names nothing it does not have to.
+//
 // The `default` arm is deliberate, not lazy: an unrecognized/future `type` returns '' rather than
 // falling through to `undefined`, which would silently append a hole into a saved array.
-export function defaultElementValue(meta: FieldMetadata): unknown {
+export function defaultAdapterElementValue(meta: FieldMetadata): unknown {
   // An explicit override wins outright — a condition list's own elementType carries
   // one (a real `ParsedCondition`, since its wire shape doesn't match this function's generic
   // per-display-field-name struct default). Absent for every ordinary/VMAD elementType.
@@ -404,7 +414,7 @@ export function defaultElementValue(meta: FieldMetadata): unknown {
     case 'int': case 'float': return 0;
     case 'bool': return false;
     case 'enum': return meta.enumValues[0] ?? '';
-    case 'struct': return Object.fromEntries((meta.fields ?? []).map(f => [f.name, defaultElementValue(f)]));
+    case 'struct': return Object.fromEntries((meta.fields ?? []).map(f => [f.name, defaultAdapterElementValue(f)]));
     case 'array': return [];
     // A VMAD ArrayOfObject's default element.
     case 'vmadObject': return { formKey: '', alias: -1 };

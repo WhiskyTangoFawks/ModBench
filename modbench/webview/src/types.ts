@@ -34,11 +34,12 @@ export type FieldType =
  *  the column's own mutability — the Condition section's AND/OR gate is the one row that needs it;
  *  every other field's editability still comes purely from the column (immutableSet), matching the
  *  "per column, never a mode" rule. `defaultValue` overrides recordUtils.ts's generic
- *  defaultElementValue for a synthesized elementType whose real wire shape isn't the generic
+ *  defaultAdapterElementValue for a synthesized elementType whose real wire shape isn't the generic
  *  per-field-type default: a new condition's shape is `ParsedCondition`, not an object keyed by
  *  the display field names with a per-type scalar default in each. */
 export type FieldMetadata =
-  Omit<Schemas['FieldMetadata'], 'type' | 'elementType' | 'fields' | 'isSortable' | 'allowsNull' | 'isBitmask'> & {
+  Omit<Schemas['FieldMetadata'],
+    'type' | 'elementType' | 'fields' | 'isSortable' | 'allowsNull' | 'isBitmask' | 'isDiscriminator'> & {
     type: FieldType;
     elementType?: FieldMetadata | null;   // present when type === 'array'
     fields?: FieldMetadata[] | null;      // present when type === 'struct'
@@ -54,6 +55,7 @@ export type FieldMetadata =
     isSortable?: boolean;   // on elementType: true for pure FormLink arrays
     allowsNull?: boolean;   // for 'formKey': true when the Mutagen type is IFormLinkNullable<T>
     isBitmask?: boolean;    // true when the C# enum has [Flags]
+    isDiscriminator?: boolean; // this field names which concrete class its object is
   };
 
 export type FieldValue = Omit<Schemas['FieldValue'], 'metadata'> & { metadata: FieldMetadata };

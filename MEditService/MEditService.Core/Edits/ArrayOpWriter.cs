@@ -232,12 +232,12 @@ internal static class ArrayOpWriter
     // would silently add nothing at all (SchemaReflector.BuildListElement's own isFl branch returns
     // null for an unparseable element, and its caller only adds non-null items).
     //
-    // "struct" sends an *empty* object rather than one field-defaulted member at a time: the write
-    // path itself (BuildListElement's non-isFl branch) already constructs a fresh instance via
+    // "struct" names nothing but the element's discriminator, if it has one: the write path itself
+    // (BuildListElement's non-isFl branch) already constructs a fresh instance via
     // Activator.CreateInstance before applying anything, which hands every field its own CLR
-    // default for free — an empty object payload then names nothing, so ApplySubFields skips every
-    // member ("absence is not targeting") and the freshly-constructed defaults stand untouched. This
-    // sidesteps two problems a field-by-field default can't solve from FieldMetadata alone: a
+    // default for free — an unnamed member is then skipped by ApplySubFields ("absence is not
+    // targeting") and the freshly-constructed defaults stand untouched. This sidesteps two problems
+    // a field-by-field default can't solve from FieldMetadata alone: a
     // "struct"-typed member that is actually a #642 read-only nested Loqui struct (naming it at all,
     // with any value, refuses the whole write) and a "enum" member whose wire shape FieldMetadata's
     // own IsBitmask flag doesn't reliably predict (ColumnSpec's own IsFlagsEnum, which does, isn't on
@@ -256,13 +256,28 @@ internal static class ArrayOpWriter
         "bool" => false,
         "enum" when meta.IsBitmask => new JsonArray(),
         "enum" => meta.EnumValues.Count > 0 ? meta.EnumValues[0] : "",
-        "struct" => new JsonObject(),
+        "struct" => DefaultStructElement(meta),
         "array" => new JsonArray(),
         // Mutagen's own empty-slice token, which is what a byte-slice element's Extract emits for
         // one. Explicit rather than riding the catch-all "" below, which reads as an absent slice.
         "hex" => "[]",
         _ => "",
     };
+
+    // #710: the one member a default struct element names. A discriminator is not a member of the
+    // instance at all — it is read off the payload to choose which concrete class to construct,
+    // before that object exists (SchemaReflector.ResolveAbstractListElementType) — so an element of
+    // an abstract-element array that omits it cannot be built and is refused
+    // (ListElementTypeUnresolved). It starts as the first leaf the schema lists, the same default
+    // any other closed choice takes above. A struct with no discriminator (the ordinary case)
+    // still defaults to the empty object.
+    private static JsonObject DefaultStructElement(FieldMetadata meta)
+    {
+        var element = new JsonObject();
+        foreach (var field in meta.Fields ?? [])
+            if (field.IsDiscriminator && field.EnumValues.Count > 0) element[field.Name] = field.EnumValues[0];
+        return element;
+    }
 
     // The read-only nested-Loqui-struct member #642 introduced (SchemaReflector.BuildStructSubField's
     // own Apply: null / TargetingRefuses: true) is still *extracted* for display even though nothing

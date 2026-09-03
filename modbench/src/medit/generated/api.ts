@@ -728,6 +728,7 @@ export interface components {
             enumBitValues?: string[] | null;
             enumLabels?: string[] | null;
             displayLabel?: string | null;
+            isDiscriminator: boolean;
         };
         FieldValue: {
             metadata: components["schemas"]["FieldMetadata"];

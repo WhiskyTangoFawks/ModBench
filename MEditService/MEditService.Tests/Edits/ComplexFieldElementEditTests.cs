@@ -251,6 +251,43 @@ public sealed class ComplexFieldElementEditTests : IDisposable
     }
 
     /// <summary>
+    /// #710: <c>array_add</c> against an abstract-element array whose discriminator is OMOD's own
+    /// <c>value_type</c> rather than the general <c>concrete_type</c> — the same rule, stated once
+    /// (<c>ArrayOpWriter.DefaultStructElement</c>): a default element names its discriminator and
+    /// nothing else, starting at the first leaf the schema lists. Without it the whole gesture is
+    /// refused <c>ListElementTypeUnresolved</c>, because an empty object names no class to build.
+    /// </summary>
+    [Fact]
+    public void OmodPropertiesArray_ArrayAdd_AppendsOneElementOfTheFirstLeafTheSchemaLists()
+    {
+        using var omod = new OmodFixture();
+
+        var result = omod.Service().EditField(omod.Plugin, omod.ArmorMod.ToString(), "properties",
+            Json("""{"op": "array_add", "path": []}"""));
+
+        Assert.Equal(RecordEditRefusal.None, result.Refusal);
+        Assert.True(result.Applied, result.Message);
+
+        var properties = JsonDocument.Parse(omod.Body()).RootElement.GetProperty("Properties");
+        Assert.Equal(2, properties.GetArrayLength());
+        // Mutagen's own document spelling of the leaf class the discriminator named — OMOD's leaf
+        // classes are ObjectMod<ValueType>Property, closed over the owning record's Property enum.
+        Assert.StartsWith(
+            $"ObjectMod{FirstLeaf("omod", "properties", "value_type")}Property",
+            properties[1].GetProperty("MutagenObjectType").GetString(),
+            StringComparison.Ordinal);
+    }
+
+    /// <summary>The first leaf of an abstract-element array's own discriminator, read off the
+    /// reflected schema — the rule is "the first leaf the schema lists", so a literal class name
+    /// here would pin the leaf instead of the rule.</summary>
+    private static string FirstLeaf(string table, string column, string discriminator) =>
+        SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4)[table]
+            .RecordColumns.Single(c => c.Name == column)
+            .ElementType!.Fields!.Single(f => f.Name == discriminator)
+            .EnumValues[0];
+
+    /// <summary>
     /// Move Up/Move Down: reordering two elements of <i>different</i> concrete leaf types is
     /// the one shape that would defeat a position-based "reuse the existing element's type by index"
     /// design — the element now at index 0 is Float-shaped data, not the Int that used to be there. Each
