@@ -83,12 +83,13 @@ internal readonly record struct SourceUnit(
 /// fallback for a type nothing here can place, which is slow and correct rather than fast and
 /// wrong.</para>
 ///
-/// <para>Alongside the question, this class owns the source tree's own directory-level
-/// invariants — the two things a structural write must do to a group folder that are not about
-/// <i>finding</i> anything: <see cref="RenormalizeGroupOrder"/> keeps its <c>"[N] "</c> prefixes
-/// contiguous, and <see cref="InMintedDirectory"/> keeps a failed write from leaving a directory in
-/// it. Both live here rather than in <c>Edits</c> because <c>Source</c> needs them too and does not
-/// depend on <c>Edits</c>.</para>
+/// <para>Alongside the question, this class owns a source-tree directory-level invariant that is not
+/// about <i>finding</i> anything: <see cref="InMintedDirectory"/> keeps a failed write from leaving
+/// an empty directory behind. It lives here rather than in <c>Edits</c> because <c>Source</c> needs
+/// it too and does not depend on <c>Edits</c>. Sibling <i>ordering</i> used to be the other such
+/// invariant; since #566 order is carried in the parent's own document
+/// (<see cref="SourceChildOrder"/>) rather than in sibling file names, so there is no longer a
+/// group-folder-wide contiguity property for a structural write to restore.</para>
 ///
 /// <para><b>Failure is loud in both directions.</b> No match returns null, which every caller turns
 /// into a typed refusal — never a computed path that might be wrong. More than one match throws
@@ -101,6 +102,11 @@ internal static class SourceUnitResolver
     /// (<c>SerializationHelper.RecordDataFileNameWithoutExtension</c> plus the JSON kernel's
     /// extension).</summary>
     internal const string RecordDataFileName = "RecordData.json";
+
+    /// <summary>The whole-mod door's own name for a group or block level's own metadata file
+    /// (<c>SerializationHelper.TypicalGroupFileName</c>). Also the carrier for those levels' ordered
+    /// child lists (<see cref="SourceChildOrder"/>), which is why it is shared rather than private.</summary>
+    internal const string GroupRecordDataFileName = "GroupRecordData.json";
 
     private const string JsonSuffix = ".json";
 
@@ -202,20 +208,19 @@ internal static class SourceUnitResolver
     /// so the caller's existing "edit from the indexed body and rewrite the file" recovery is
     /// untouched.</para>
     ///
-    /// <para><b>The ordering prefix shrank the guess's hit rate, and did not remove it.</b> <see cref="SourceRecordPath.For"/>
-    /// needs the record's order index to compute an exact name, which this method does not have
-    /// without a scan — so the "computed" guess below is index 0 specifically, which still resolves
-    /// with zero scan for every group that has exactly one member (common) or whose first-ever sibling
-    /// is being looked up right after a fresh create (also common). Every other position falls straight
-    /// through to the same one-directory, non-recursive suffix scan below, which is FormKey-suffix
-    /// matching (<see cref="NameCarries"/>) and blind to position.</para>
+    /// <para><b>The computed guess is exact again since #566.</b> A file name carries identity and
+    /// nothing else now that order lives in the parent's own document, so
+    /// <see cref="SourceRecordPath.For"/> reproduces it outright from the FormKey and EditorID this
+    /// method is handed — the scan below is reached only when the record's EditorID on disk disagrees
+    /// with the index's copy of it (exactly the mid-rename disagreement this class exists to survive),
+    /// not, as before, for every sibling that merely sat at a position other than the first.</para>
     /// </summary>
     internal static string FlatSourcePath(
         string modFolder, string pluginFileName, string recordType, string formKey, string? editorId,
         GameRelease release)
     {
         var computed = Path.Combine(
-            modFolder, SourceRecordPath.For(pluginFileName, recordType, formKey, editorId, release, orderIndex: 0));
+            modFolder, SourceRecordPath.For(pluginFileName, recordType, formKey, editorId, release));
         if (File.Exists(computed)) return computed;
 
         var groupFolder = RecordTypeDispatch.For(release).FolderNameFor(recordType);
@@ -331,22 +336,21 @@ internal static class SourceUnitResolver
     }
 
     /// <summary>The tails <paramref name="leaf"/> carries under <see cref="NameCarries"/> — the whole
-    /// name (order prefix stripped), plus whatever follows each <c>" - "</c> in it. More than one
+    /// name, plus whatever follows each <c>" - "</c> in it. More than one
     /// candidate arises only when an EditorID itself contains <c>" - "</c>, which is legal and is
     /// precisely why a file name cannot be split into EditorID and FormKey unambiguously (see
     /// <see cref="SourceRecordIdentity"/>'s own doc comment); counting every candidate costs nothing,
     /// because a candidate that is not a real filesafe FormKey is never looked up.</summary>
     private static IEnumerable<string> TailsCarriedBy(string leaf)
     {
-        var trimmed = WithoutOrderPrefix(leaf);
-        yield return trimmed;
+        yield return leaf;
 
         const string separator = " - ";
-        var at = trimmed.IndexOf(separator, StringComparison.Ordinal);
+        var at = leaf.IndexOf(separator, StringComparison.Ordinal);
         while (at >= 0)
         {
-            yield return trimmed[(at + separator.Length)..];
-            at = trimmed.IndexOf(separator, at + separator.Length, StringComparison.Ordinal);
+            yield return leaf[(at + separator.Length)..];
+            at = leaf.IndexOf(separator, at + separator.Length, StringComparison.Ordinal);
         }
     }
 
@@ -407,135 +411,29 @@ internal static class SourceUnitResolver
     // The whole-mod door's own two name shapes (SerializationHelper.RecordFileNameProvider): the
     // filesafe FormKey alone when the record has no EditorID, or "<EditorID> - " ahead of it when it
     // does. Anchored at both ends rather than a bare Contains, so a name that merely happens to
-    // embed the text cannot match. The leading "[N] " ordering prefix is stripped first, so
-    // FormKey-suffix matching stays exactly as blind to a record's position as it always was.
-    private static bool NameCarries(string leaf, string tail)
+    // embed the text cannot match. A name carries no position at all since #566 moved order into the
+    // parent's document, so there is nothing to strip before matching.
+    /// <summary>Whether <paramref name="leaf"/> is the file or directory name of the record with
+    /// <paramref name="formKey"/> — the same question <see cref="NameCarries"/> answers, asked in the
+    /// one direction that is unambiguous (given a FormKey, does this name carry it) rather than the
+    /// inverse of splitting a name into EditorID and FormKey, which an EditorID containing
+    /// <c>" - "</c> makes undecidable. Shared so the naming rule has one owner: a second
+    /// reconstruction of <c>{hex6}_{ModKey}</c> elsewhere is exactly the drift this class exists to
+    /// prevent.</summary>
+    internal static bool NameCarriesFormKey(string leaf, string formKey)
     {
-        var trimmed = WithoutOrderPrefix(leaf);
-        return trimmed.Equals(tail, StringComparison.Ordinal)
-            || (trimmed.EndsWith(tail, StringComparison.Ordinal)
-                && trimmed.EndsWith($" - {tail}", StringComparison.Ordinal));
+        var filesafe = FilesafeFormKey(formKey);
+        return NameCarries(leaf, filesafe) || NameCarries(leaf, filesafe + JsonSuffix);
     }
 
-    /// <summary>Strips a leading <c>"[N] "</c> ordering prefix when <paramref name="leaf"/>
-    /// genuinely has one — never on a false positive, so an EditorID that happens to start with a
-    /// bracketed number of its own (legal, if unusual) is left alone.</summary>
-    internal static string WithoutOrderPrefix(string leaf) =>
-        TryGetOrderIndex(leaf) is null ? leaf : leaf[(leaf.IndexOf("] ", StringComparison.Ordinal) + 2)..];
-
-    /// <summary>
-    /// The <c>"[N] "</c> ordering prefix <paramref name="leaf"/> carries, or null when it has
-    /// none — used both to recognise one (<see cref="WithoutOrderPrefix"/>,
-    /// <see cref="NextOrderIndex"/>) and to carry an existing sibling's own index across a rename
-    /// (<see cref="Edits.RecordEditService.RenameSourceUnit"/>: an EditorID edit must not silently drop
-    /// a record back to the front of its siblings). Mirrors what the whole-mod door's own reader does
-    /// for the same reason (<c>SerializationHelper.TrimOrdering</c>/<c>TryGetNumber</c> in the
-    /// decompiled 1.37.1 assembly), reimplemented rather than shared because neither is public API.
-    /// </summary>
-    internal static int? TryGetOrderIndex(string leaf)
-    {
-        if (leaf.Length == 0 || leaf[0] != '[') return null;
-        var closeBracket = leaf.IndexOf("] ", StringComparison.Ordinal);
-        if (closeBracket < 2) return null;
-        return int.TryParse(leaf.AsSpan(1, closeBracket - 1), out var number) ? number : null;
-    }
-
-    /// <summary>
-    /// The index a brand-new sibling should carry — one past the highest
-    /// <c>"[N] "</c> prefix already present in <paramref name="groupDirectory"/> (0 for an empty or
-    /// not-yet-created folder). <see cref="RenormalizeGroupOrder"/> keeps every group directory
-    /// gap-free as its own last file-system act after every structural write, so max+1 and the plain
-    /// sibling <i>count</i> coincide in the steady state — max+1 stays the expression here regardless,
-    /// because it also does the right thing (still no collision, no premature renormalization needed)
-    /// on a directory this call cannot itself prove is gap-free: one Modbench has not yet renormalized
-    /// mid-write, or one an external tool left mid-edit (root CLAUDE.md's
-    /// never-assume-exclusive-ownership rule) — count alone would collide against a real higher "[N]"
-    /// in either of those, max+1 never does.
-    /// </summary>
-    internal static int NextOrderIndex(string groupDirectory)
-    {
-        if (!Directory.Exists(groupDirectory)) return 0;
-
-        var highest = -1;
-        foreach (var entry in Directory.EnumerateFileSystemEntries(groupDirectory))
-        {
-            if (TryGetOrderIndex(Path.GetFileName(entry)) is int number && number > highest)
-                highest = number;
-        }
-
-        return highest + 1;
-    }
-
-    /// <summary>
-    /// Closes whatever gap a structural write (delete, renumber's delete+create, or a
-    /// defensively-checked create) just left or could have inherited — a gap-leaving
-    /// delete would otherwise permanently break that plugin's Save &amp; Compile (round-trip
-    /// regenerates canonical
-    /// <c>"[N]"</c> prefixes as contiguous list position, which a gap can never match).
-    /// <see cref="Edits.RecordEditService"/>'s three structural-write entry points call this as their
-    /// own last file-system act, so a group directory is contiguous <c>[0..k]</c> again by the time any
-    /// of them returns — the source tree's own working invariant (this class's own doc comment) stays
-    /// true, rather than being merely restorable by a re-Track.
-    ///
-    /// <para><b>Renaming smallest-rank-first is always collision-free — the proof, so the next reader
-    /// does not have to re-derive it.</b> Sort survivors by their <i>current</i> index ascending; a
-    /// survivor's rank <c>i</c> among them is its new index. For the <c>i</c>-th smallest old index,
-    /// there are exactly <c>i</c> other survivors with a strictly smaller old index, all distinct
-    /// non-negative integers, so the old index is always <c>&gt;= i</c> — the new index (rank) can
-    /// never exceed the old one. That means the destination name <c>"[i] ..."</c> is, for every rename
-    /// in ascending-rank order, either a genuine gap nothing occupies yet, or the name an earlier
-    /// (smaller-rank, already-processed) rename in this very pass just vacated — never a name a
-    /// still-to-be-renamed survivor is sitting on. No temp-name shuffle is needed, and nothing here can
-    /// produce a transient duplicate <c>"[i]"</c>.</para>
-    ///
-    /// <para>Survivors' relative order is preserved by construction: sorting by old index ascending and
-    /// assigning ranks ascending cannot reorder anyone relative to anyone else, whether or not gaps
-    /// existed. Only the tail after <c>"] "</c> is ever touched by <see cref="TryGetOrderIndex"/>'s own
-    /// parse — the EditorID/FormKey segment a survivor's name carries is never altered, only its own
-    /// index prefix.</para>
-    ///
-    /// <para><b>Fail-safe by construction, not by any new journal.</b> This is the last file-system act
-    /// of the write that called it; a crash mid-pass leaves a
-    /// half-renumbered group, which <see cref="Edits.PluginCompileService"/>'s existing byte-exact
-    /// round-trip gate already refuses correctly (some sibling's canonical name will not match
-    /// what is on disk) — the same "re-Track to repair" recovery that gate has always offered, needing
-    /// nothing new to keep offering it here.</para>
-    /// </summary>
-    /// <param name="groupDirectory">The group folder whose <c>"[N] "</c> prefixes to close up.</param>
-    /// <param name="transaction">When given, every rename this makes is recorded in it, so a later
-    /// failure in the same action puts the ordering prefixes back (#678, ADR-0045). Only the renumber
-    /// cascade passes one; the other two structural writes renormalize outside any transaction,
-    /// exactly as before — they have no pre-images to restore.</param>
-    /// <param name="modFolder">Required alongside <paramref name="transaction"/>: what a recorded
-    /// path is named relative to when the restore reports on it.</param>
-    internal static void RenormalizeGroupOrder(
-        string groupDirectory, SourceWriteTransaction? transaction = null, string? modFolder = null)
-    {
-        if (!Directory.Exists(groupDirectory)) return;
-
-        var survivors = Directory.EnumerateFileSystemEntries(groupDirectory)
-            .Select(entry => (Entry: entry, Index: TryGetOrderIndex(Path.GetFileName(entry))))
-            .Where(s => s.Index is not null)
-            .OrderBy(s => s.Index!.Value)
-            .ToList();
-
-        for (var newIndex = 0; newIndex < survivors.Count; newIndex++)
-        {
-            var (entry, oldIndex) = survivors[newIndex];
-            if (oldIndex == newIndex) continue;
-
-            var leaf = Path.GetFileName(entry);
-            var tail = leaf[(leaf.IndexOf("] ", StringComparison.Ordinal) + 2)..];
-            var newPath = Path.Combine(groupDirectory, $"[{newIndex}] {tail}");
-
-            if (transaction == null) MoveEntry(entry, newPath);
-            else transaction.Move(modFolder!, entry, newPath);
-        }
-    }
+    private static bool NameCarries(string leaf, string tail) =>
+        leaf.Equals(tail, StringComparison.Ordinal)
+        || (leaf.EndsWith(tail, StringComparison.Ordinal)
+            && leaf.EndsWith($" - {tail}", StringComparison.Ordinal));
 
     /// <summary>Renames a source-tree entry whichever shape it is — a container's directory or a flat
-    /// record's file. One place that knows the distinction, so <see cref="RenormalizeGroupOrder(string)"/>
-    /// and <see cref="SourceWriteTransaction.Move"/> (which undoes what it recorded) cannot disagree
+    /// record's file. One place that knows the distinction, so every caller and
+    /// <see cref="SourceWriteTransaction.Move"/> (which undoes what it recorded) cannot disagree
     /// about it.</summary>
     internal static void MoveEntry(string from, string to)
     {
@@ -550,10 +448,8 @@ internal static class SourceUnitResolver
     ///
     /// <para><b>An empty directory is not harmless debris.</b> Git tracks files, not directories, so a
     /// record directory with no <c>RecordData.json</c> in it never appears in the Source Control panel
-    /// at all: the author can neither see it nor discard it. Nor is it inert.
-    /// <see cref="NextOrderIndex"/> and <see cref="RenormalizeGroupOrder"/> count every entry carrying
-    /// an <c>"[N] "</c> prefix as a sibling, so a stray record directory silently occupies an ordering
-    /// slot; and the whole-mod reader opens <c>RecordData.json</c> inside <i>every</i> directory of a
+    /// at all: the author can neither see it nor discard it. Nor is it inert: the whole-mod reader
+    /// opens <c>RecordData.json</c> inside <i>every</i> directory of a
     /// directory-per-record group folder (<c>FolderPerRecordGroupParallelHelper.ReadFilePerRecord</c>
     /// in <c>references/mutagen-serialization</c>, unconditionally — no existence check), so one empty
     /// directory there fails the next ingest of the whole plugin.</para>
@@ -602,26 +498,6 @@ internal static class SourceUnitResolver
     /// <summary><see cref="InMintedDirectory{T}"/> for a write with no result of its own.</summary>
     internal static void InMintedDirectory(string directory, Action write) =>
         InMintedDirectory(directory, () => { write(); return true; });
-
-    /// <summary>
-    /// <see cref="NextOrderIndex"/>, given a flat record type rather than an already-computed group
-    /// directory — the two call sites that mint a brand-new flat-record file
-    /// (<see cref="Edits.RecordEditService.CreateRecord"/> and <see cref="Edits.RecordEditService.RenumberRecord"/>'s
-    /// own delete+create) both need "where does this type's group folder live" answered the same way,
-    /// and duplicating that <c>Path.Combine</c>/<c>FolderNameFor</c> pair at each site is exactly the
-    /// kind of drift this class exists to prevent. Callers must already know <paramref name="recordType"/>
-    /// has a flat group folder (both do, having passed <c>RefuseIfContainerType</c> first) — this does
-    /// not re-check, so a caller that hasn't would NRE on the null-forgiving <c>FolderNameFor</c> rather
-    /// than fail closed silently. Both callers also renormalize their own group directory
-    /// afterward, so a gap this returns into is transient at worst, closed before either call returns.
-    /// </summary>
-    internal static int NextOrderIndexFor(string modFolder, string pluginFileName, string recordType, GameRelease release)
-    {
-        var groupDirectory = Path.Combine(
-            modFolder, SourceRecordPath.RootFor(pluginFileName),
-            RecordTypeDispatch.For(release).FolderNameFor(recordType)!);
-        return NextOrderIndex(groupDirectory);
-    }
 
     /// <summary>
     /// The subtree to search, relative to the source root — the narrowing that keeps a point write off

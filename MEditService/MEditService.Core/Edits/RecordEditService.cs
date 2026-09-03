@@ -333,14 +333,11 @@ public sealed class RecordEditService(
         var isDirectoryPerRecord = unit.IsDirectoryPerRecord;
         var oldLeafPath = isDirectoryPerRecord ? Path.GetDirectoryName(unit.FullPath)! : unit.FullPath;
 
-        // An EditorID-only rename must not silently drop the record back to the front of its
-        // siblings (LeafNameFor's own name never carries a prefix) — the old leaf's own "[N] ", if it
-        // has one, rides forward onto the new name unchanged. No siblings need touching: this record's
-        // slot number is exactly what it was before the rename, just spelled with a new EditorID.
-        var oldLeafName = Path.GetFileName(oldLeafPath);
-        var orderIndex = SourceUnitResolver.TryGetOrderIndex(oldLeafName);
+        // An EditorID-only rename cannot disturb this record's position among its siblings, and needs
+        // nothing done to keep it: order lives in the parent's own ordered child list (ADR-0042
+        // decision 4) keyed by FormKey, which a rename does not change. Nothing else is touched —
+        // not one sibling, and not the parent's document either.
         var newLeafName = SourceUnitResolver.LeafNameFor(edited.FormKey, edited.EditorID, isDirectoryPerRecord);
-        if (orderIndex is { } index) newLeafName = $"[{index}] {newLeafName}";
         var newLeafPath = Path.Combine(Path.GetDirectoryName(oldLeafPath)!, newLeafName);
 
         if (string.Equals(oldLeafPath, newLeafPath, StringComparison.Ordinal)) return unit.FullPath;
@@ -413,11 +410,11 @@ public sealed class RecordEditService(
         }
         else
         {
-            // A folder-split child's container_child.SlotIndex mirrors its own "[N]" file-name
-            // prefix — captured before anything moves, so the survivors' new positions can be
-            // computed the same way RenormalizeGroupOrder computes them on disk below (sort by old
-            // rank ascending, assign 0..k-1). Null for a top-level container/flat record, which is
-            // nobody's folder-split child.
+            // A folder-split child's container_child.SlotIndex mirrors its position in the parent's
+            // ordered child list — captured before anything moves, so the survivors' new positions can
+            // be computed the same way the list closes up below (sort by old rank ascending, assign
+            // 0..k-1). Null for a top-level container/flat record, which is nobody's folder-split
+            // child.
             var parentLink = reads.GetContainerParent(plugin, formKey);
 
             // A container's own directory (Cell/Worldspace/Quest, or a nested folder-split child —
@@ -438,11 +435,11 @@ public sealed class RecordEditService(
                 File.Delete(unit.FullPath);
             }
 
-            // The delete's own last file-system act — closes whatever "[N]" gap it just left in
-            // the touched group directory, so the source tree's own working invariant (every group
-            // directory contiguous, SourceUnitResolver's own doc comment) holds again before this
-            // returns, rather than merely being restorable by a later re-Track.
-            SourceUnitResolver.RenormalizeGroupOrder(groupDirectory);
+            // The delete's own last file-system act, and the whole point of ADR-0042 decision 4's
+            // amendment: one line leaves one document. No sibling is renamed, so a mid-list delete
+            // stages as exactly one deletion plus one changed parent — where the superseded numbering
+            // scheme rewrote every later sibling's name to keep its prefixes contiguous.
+            SourceChildOrder.RemoveByIdentity(groupDirectory, formKey);
 
             // container_child's own copy of that same renumbering — the deleted child's row
             // disappears for free (it is simply not among the survivors passed in), and every
@@ -561,27 +558,12 @@ public sealed class RecordEditService(
         var record = MajorRecordInstantiator.Activator(FormKey.Factory(targetFormKey), release, schema.RecordType);
         if (!string.IsNullOrWhiteSpace(editorId)) record.EditorID = editorId;
 
-        // A brand-new sibling goes at the end of its group folder, one past whatever "[N] " is
-        // already the highest there (0 for a plugin's first record of this type).
-        // RefuseIfContainerType above already guarantees FolderNameFor is non-null for recordType.
-        var orderIndex = SourceUnitResolver.NextOrderIndexFor(modFolder, plugin.Name, recordType, release);
-
-        var relativePath = SourceRecordPath.For(plugin.Name, recordType, targetFormKey, record.EditorID, release, orderIndex);
-        var sourcePath = Path.Combine(modFolder, relativePath);
-
-        // Track's eager serialization only created directories for (record type, origin ModKey)
-        // combinations the plugin already held — a genuinely new one (the first Weapon a plugin ever
-        // held, say) needs its own. The codec deliberately leaves directory-creation policy to its
-        // caller (RecordTextCodec.SerializeAsync's own doc comment); InMintedDirectory is that policy,
-        // and unmints the group folder again if this serialize throws (#675).
-        var newBody = SourceUnitResolver.InMintedDirectory(
-            Path.GetDirectoryName(sourcePath)!, () => SerializeAndWrite(_codec, record, sourcePath, release));
-
-        // Defensive, not merely a repeat of the invariant NextOrderIndexFor above already
-        // upholds — never-assume-exclusive-ownership means this group folder can already hold a gap
-        // nothing here caused (a hand-deleted sibling, another tool's edit), and this closes it as part
-        // of the same write rather than leaving it for the next structural write to trip over.
-        SourceUnitResolver.RenormalizeGroupOrder(Path.GetDirectoryName(sourcePath)!);
+        // RefuseIfContainerType above guarantees this is a flat record, so the placement needs no
+        // block path. The group folder is minted by the write itself when the plugin has never held
+        // this type (Track only made folders for types it already had).
+        var placement = SourcePlacement.For(plugin.Name, recordType, targetFormKey, record.EditorID, release);
+        var relativePath = placement.RelativePath;
+        var newBody = WritePlaced(modFolder, placement, targetFormKey, path => SerializeAndWrite(_codec, record, path, release));
 
         index.CreateWorkingTreeRecord(plugin, targetFormKey, recordType, newBody);
         // A brand-new row can newly match an active filter.
@@ -685,32 +667,27 @@ public sealed class RecordEditService(
 
         var body = ReadCopySourceBody(sourcePlugin, formKey, document, release);
 
-        // A flat type keeps CreateRecord's own shape (next order index in the destination's own
-        // group folder, a brand-new file there). A directory-per-record container's own top-level
-        // record needs its own RecordData.json directory instead — an interior Cell nests two GRUP
-        // levels deeper than Worldspace/Quest do (InteriorCellDestinationPath's own doc comment), which
-        // is why it is not just another call to ContainerOwnDirectoryPath.
-        string relativePath;
-        if (isFlat)
-        {
-            var orderIndex = SourceUnitResolver.NextOrderIndexFor(destinationModFolder, destinationPlugin.Name, document.RecordType, release);
-            relativePath = SourceRecordPath.For(destinationPlugin.Name, document.RecordType, formKey, document.EditorId, release, orderIndex);
-        }
-        else
+        if (!isFlat)
         {
             // A plain Copy as Override is own-fields-only for every record type — for a
             // container whose document embeds its own children inline (Cell, Worldspace) that means
             // stripping them here, rather than the verbatim-bytes fast path a flat record keeps. A
             // no-op in practice for Quest (its folder-split children were never inlined to begin with).
             body = StripEmbeddedChildrenForShallowCopy(body, document.RecordType, release);
-            relativePath = isCell
-                ? InteriorCellDestinationPath(destinationModFolder, destinationPlugin.Name, formKey, document.EditorId, release)
-                : ContainerOwnDirectoryPath(destinationModFolder, destinationPlugin.Name, document.RecordType, formKey, document.EditorId, release);
         }
-        var sourcePath = Path.Combine(destinationModFolder, relativePath);
-        SourceUnitResolver.InMintedDirectory(Path.GetDirectoryName(sourcePath)!, () => WriteBodyAtomic(sourcePath, body));
 
-        SourceUnitResolver.RenormalizeGroupOrder(Path.GetDirectoryName(sourcePath)!);
+        // Where the record goes and which list names it, from one place — a Cell's block bucket is the
+        // only thing that has to be resolved first, because it is chosen (or minted) rather than
+        // derived.
+        var destination = SourcePlacement.For(
+            destinationPlugin.Name, document.RecordType, formKey, document.EditorId, release,
+            isCell ? EnsureInteriorCellBlockPath(destinationModFolder, destinationPlugin.Name, release) : null);
+        var relativePath = destination.RelativePath;
+        WritePlaced(destinationModFolder, destination, formKey, path =>
+        {
+            WriteBodyAtomic(path, body);
+            return body;
+        });
 
         index.CreateWorkingTreeRecord(destinationPlugin, formKey, document.RecordType, body);
         // A brand-new row can newly match an active filter.
@@ -780,30 +757,15 @@ public sealed class RecordEditService(
             selfLinking.RemapLinks(new Dictionary<FormKey, FormKey> { [FormKey.Factory(formKey)] = FormKey.Factory(targetFormKey) });
         }
 
-        // A flat record is a new file at the group folder's next index; a directory-per-record
+        // A flat record is a new file in the group folder; a directory-per-record
         // container (Quest) is a new RecordData.json directory there instead — same split Copy as
         // Override already makes, and like it, own-record-only: folder-split children never ride
         // along (deep copy is #551's gesture).
-        string relativePath;
-        if (isFlat)
-        {
-            var orderIndex = SourceUnitResolver.NextOrderIndexFor(destinationModFolder, destinationPlugin.Name, document.RecordType, release);
-            relativePath = SourceRecordPath.For(destinationPlugin.Name, document.RecordType, targetFormKey, newRecord.EditorID, release, orderIndex);
-        }
-        else
-        {
-            relativePath = ContainerOwnDirectoryPath(
-                destinationModFolder, destinationPlugin.Name, document.RecordType, targetFormKey, newRecord.EditorID, release);
-        }
-        var sourcePath = Path.Combine(destinationModFolder, relativePath);
-        var newBody = SourceUnitResolver.InMintedDirectory(
-            Path.GetDirectoryName(sourcePath)!, () => SerializeAndWrite(_codec, newRecord, sourcePath, release));
-
-        // The group directory whose [N] prefixes the new leaf joined — the file's own directory for
-        // a flat record, the record directory's parent for a directory-per-record one.
-        SourceUnitResolver.RenormalizeGroupOrder(isFlat
-            ? Path.GetDirectoryName(sourcePath)!
-            : Path.GetDirectoryName(Path.GetDirectoryName(sourcePath)!)!);
+        var placement = SourcePlacement.For(
+            destinationPlugin.Name, document.RecordType, targetFormKey, newRecord.EditorID, release);
+        var relativePath = placement.RelativePath;
+        var newBody = WritePlaced(
+            destinationModFolder, placement, targetFormKey, path => SerializeAndWrite(_codec, newRecord, path, release));
 
         index.CreateWorkingTreeRecord(destinationPlugin, targetFormKey, document.RecordType, newBody);
         // A brand-new row can newly match an active filter.
@@ -889,27 +851,22 @@ public sealed class RecordEditService(
         var questDirectory = EnsureContainerAncestorDirectory(
             index, reads, sourcePlugin, parentQuest.ParentFormKey, parentQuest.ParentRecordType,
             destinationPlugin, destinationModFolder, release);
-        // Not created here: the topic's own mint below is what justifies this slot folder existing at
-        // all, and Directory.CreateDirectory makes missing ancestors anyway — so the slot rides along
-        // with the topic and is unminted with it if the topic's write fails (#675). NextOrderIndex
-        // answers 0 for a directory that does not exist yet, so nothing between here and there needs it.
-        var topicsDirectory = Path.Combine(questDirectory, parentQuest.SlotName);
 
-        // The topic itself: duplicate under the fresh key, self-link remapped, its own directory at
-        // the slot's next order index.
+        // The topic itself: duplicate under the fresh key, self-link remapped, its own directory in
+        // the quest's slot and its entry at the end of the quest's list for that slot. The slot
+        // folder is minted by the topic's own write, so it is unminted with it if that write fails
+        // (#675).
         var topicRecord = ReadCopySourceRecord(sourcePlugin, formKey, document, release)
             .Duplicate(FormKey.Factory(targetFormKey));
         if (topicRecord is IFormLinkContainer selfLinking)
         {
             selfLinking.RemapLinks(new Dictionary<FormKey, FormKey> { [FormKey.Factory(formKey)] = FormKey.Factory(targetFormKey) });
         }
-        var topicDirectory = Path.Combine(
-            topicsDirectory,
-            $"[{SourceUnitResolver.NextOrderIndex(topicsDirectory)}] " +
-                SourceUnitResolver.LeafNameFor(FormKey.Factory(targetFormKey), topicRecord.EditorID, isDirectory: true));
-        var topicBody = SourceUnitResolver.InMintedDirectory(
-            topicDirectory,
-            () => SerializeAndWrite(_codec, topicRecord, Path.Combine(topicDirectory, RecordDataFileName), release));
+        var topicPlacement = SourcePlacement.ForSlotChild(
+            destinationModFolder, questDirectory, parentQuest.SlotName, targetFormKey, topicRecord.EditorID, isDirectory: true);
+        var topicDirectory = Path.GetDirectoryName(Path.Combine(destinationModFolder, topicPlacement.RelativePath))!;
+        var topicBody = WritePlaced(
+            destinationModFolder, topicPlacement, targetFormKey, path => SerializeAndWrite(_codec, topicRecord, path, release));
         index.CreateWorkingTreeRecord(destinationPlugin, targetFormKey, document.RecordType, topicBody);
 
         // The topic's own membership in the quest's slot: whatever children the destination quest
@@ -948,13 +905,12 @@ public sealed class RecordEditService(
                     new Dictionary<FormKey, FormKey> { [FormKey.Factory(child.ChildFormKey)] = FormKey.Factory(childFormKey) });
             }
 
-            var childSlotDirectory = Path.Combine(topicDirectory, child.SlotName);
-            var childPath = Path.Combine(
-                childSlotDirectory,
-                $"[{copiedChildren.Count}] " +
-                    SourceUnitResolver.LeafNameFor(FormKey.Factory(childFormKey), childRecord.EditorID, isDirectory: false));
-            var childBody = SourceUnitResolver.InMintedDirectory(
-                childSlotDirectory, () => SerializeAndWrite(_codec, childRecord, childPath, release));
+            // Appended in source order, which is the order this loop walks — the new topic's own
+            // document is what says where its responses sit.
+            var childPlacement = SourcePlacement.ForSlotChild(
+                destinationModFolder, topicDirectory, child.SlotName, childFormKey, childRecord.EditorID, isDirectory: false);
+            var childBody = WritePlaced(
+                destinationModFolder, childPlacement, childFormKey, path => SerializeAndWrite(_codec, childRecord, path, release));
             index.CreateWorkingTreeRecord(destinationPlugin, childFormKey, childDocument.RecordType, childBody);
             copiedChildren.Add((childFormKey, copiedChildren.Count));
         }
@@ -1000,9 +956,6 @@ public sealed class RecordEditService(
         var topicDirectory = EnsureContainerAncestorDirectory(
             index, reads, sourcePlugin, parentTopic.ParentFormKey, parentTopic.ParentRecordType,
             destinationPlugin, destinationModFolder, release);
-        // Minted by the response's own write below, not ahead of it (#675) — the same
-        // ancestor-rides-along shape CopyDialogTopicAsNewRecord's slot folder takes.
-        var slotDirectory = Path.Combine(topicDirectory, parentTopic.SlotName);
 
         var newRecord = ReadCopySourceRecord(sourcePlugin, formKey, document, release)
             .Duplicate(FormKey.Factory(targetFormKey));
@@ -1011,12 +964,11 @@ public sealed class RecordEditService(
             selfLinking.RemapLinks(new Dictionary<FormKey, FormKey> { [FormKey.Factory(formKey)] = FormKey.Factory(targetFormKey) });
         }
 
-        var newPath = Path.Combine(
-            slotDirectory,
-            $"[{SourceUnitResolver.NextOrderIndex(slotDirectory)}] " +
-                SourceUnitResolver.LeafNameFor(FormKey.Factory(targetFormKey), newRecord.EditorID, isDirectory: false));
-        var newBody = SourceUnitResolver.InMintedDirectory(
-            slotDirectory, () => SerializeAndWrite(_codec, newRecord, newPath, release));
+        // The slot folder is minted by the response's own write, not ahead of it (#675).
+        var placement = SourcePlacement.ForSlotChild(
+            destinationModFolder, topicDirectory, parentTopic.SlotName, targetFormKey, newRecord.EditorID, isDirectory: false);
+        var newBody = WritePlaced(
+            destinationModFolder, placement, targetFormKey, path => SerializeAndWrite(_codec, newRecord, path, release));
         index.CreateWorkingTreeRecord(destinationPlugin, targetFormKey, document.RecordType, newBody);
         AppendChildToSlot(
             index, reads, destinationPlugin, parentTopic.ParentFormKey, parentTopic.ParentRecordType,
@@ -1061,13 +1013,12 @@ public sealed class RecordEditService(
             FormKey.Factory(ancestorFormKey), release, schemaReflector.GetSchemas(release)[ancestorRecordType].RecordType);
         PartialFormFlag.Set(bare, true);
 
-        string recordDataPath;
+        SourcePlacement placement;
         ContainerChildRow? ownParent = null;
         if (RecordTypeDispatch.For(release).GroupFolderNameFor(ancestorRecordType) is not null)
         {
-            // A top-level container (Quest): its own directory at the group folder's next index.
-            recordDataPath = Path.Combine(destinationModFolder, ContainerOwnDirectoryPath(
-                destinationModFolder, destinationPlugin.Name, ancestorRecordType, ancestorFormKey, editorId: null, release));
+            // A top-level container (Quest): its own directory in the group folder, listed by the group.
+            placement = SourcePlacement.For(destinationPlugin.Name, ancestorRecordType, ancestorFormKey, editorId: null, release);
         }
         else
         {
@@ -1078,18 +1029,12 @@ public sealed class RecordEditService(
             var parentDirectory = EnsureContainerAncestorDirectory(
                 index, reads, sourcePlugin, ownParent.Value.ParentFormKey, ownParent.Value.ParentRecordType,
                 destinationPlugin, destinationModFolder, release);
-            // Not created here — the ancestor's own write below mints it along with the ancestor's
-            // directory, so a failure there leaves neither behind (#675).
-            var slotDirectory = Path.Combine(parentDirectory, ownParent.Value.SlotName);
-            recordDataPath = Path.Combine(
-                slotDirectory,
-                $"[{SourceUnitResolver.NextOrderIndex(slotDirectory)}] " +
-                    SourceUnitResolver.LeafNameFor(FormKey.Factory(ancestorFormKey), editorId: null, isDirectory: true),
-                RecordDataFileName);
+            placement = SourcePlacement.ForSlotChild(
+                destinationModFolder, parentDirectory, ownParent.Value.SlotName, ancestorFormKey, editorId: null, isDirectory: true);
         }
 
-        var body = SourceUnitResolver.InMintedDirectory(
-            Path.GetDirectoryName(recordDataPath)!, () => SerializeAndWrite(_codec, bare, recordDataPath, release));
+        var recordDataPath = Path.Combine(destinationModFolder, placement.RelativePath);
+        var body = WritePlaced(destinationModFolder, placement, ancestorFormKey, path => SerializeAndWrite(_codec, bare, path, release));
         index.CreateWorkingTreeRecord(destinationPlugin, ancestorFormKey, ancestorRecordType, body);
         if (ownParent is { } parentSlot)
         {
@@ -1101,8 +1046,8 @@ public sealed class RecordEditService(
     }
 
     /// <summary>One new child appended at the end of a folder-split slot's <c>container_child</c>
-    /// rows — existing children keep their order, re-based contiguous, the same shape
-    /// <see cref="SourceUnitResolver.RenormalizeGroupOrder"/> keeps the matching file names in.</summary>
+    /// rows — existing children keep their order, re-based contiguous, mirroring the parent
+    /// document's own ordered child list (<see cref="SourceChildOrder"/>).</summary>
     private static void AppendChildToSlot(
         IRecordIndex index, IRecordReads reads, PluginKey destinationPlugin,
         string parentFormKey, string parentRecordType, string slotName, string childFormKey)
@@ -1445,7 +1390,7 @@ public sealed class RecordEditService(
     /// <summary>
     /// The underlying fault's own message, with every affected mod folder's absolute path cut back to
     /// the same mod-folder-relative form the rest of this message uses. A real filesystem fault names
-    /// the path it failed on — <c>Access to the path '/…/mods/Foo/source/Foo.esp/Races/[0] x.json' is
+    /// the path it failed on — <c>Access to the path '/…/mods/Foo/source/Foo.esp/Races/x.json' is
     /// denied</c> — and that is exactly the absolute path #678 says goes to the log only. The cause is
     /// still worth showing (it is the only thing that says <i>why</i>), so it is relativized rather
     /// than dropped, and the log keeps the untouched original.
@@ -1781,12 +1726,10 @@ public sealed class RecordEditService(
         var parentDirectory = Path.GetDirectoryName(oldLeafPath)!;
 
         // EditorID does not change across a renumber — only the FormKey half of the leaf name does.
-        // "A delete+create pair in source terms", taken literally: the new
-        // FormKey's leaf goes at the end of the same parent directory (a fresh next index), the same
-        // as an ordinary CreateRecord. The old slot's number is only ever a momentary gap —
-        // the renormalize pass below closes it as this method's own last file-system act.
-        var newOrderIndex = SourceUnitResolver.NextOrderIndex(parentDirectory);
-        var newLeafName = $"[{newOrderIndex}] " +
+        // The record keeps its position: its parent's ordered child list is keyed by FormKey, so the
+        // renumber repoints that one entry in place below rather than moving the record to the end.
+        // For DialogTopic.Responses that distinction is gameplay, not cosmetics.
+        var newLeafName =
             SourceUnitResolver.LeafNameFor(FormKey.Factory(newFormKey), document.EditorId, isDirectoryPerRecord);
         var newLeafPath = Path.Combine(parentDirectory, newLeafName);
 
@@ -1812,12 +1755,15 @@ public sealed class RecordEditService(
 
         if (!isDirectoryPerRecord && File.Exists(unit.FullPath)) transaction.Delete(modFolder, unit.FullPath);
 
-        // This method's own last file-system act — closes the gap the old slot just left (and
-        // any pre-existing one besides) so the group directory is contiguous again before this returns.
-        // Recorded like every other act here: an ordering prefix this pass moved is part of what a
-        // failed renumber has to put back, and putting it back in reverse order is what keeps the
-        // restore from colliding with a sibling this pass renamed (#678).
-        SourceUnitResolver.RenormalizeGroupOrder(parentDirectory, transaction, modFolder);
+        // This method's own last file-system act: the parent's ordered child list follows the record
+        // onto its new FormKey, in place. Recorded like every other act here — the carrier is a file
+        // this pass changed, so a failed renumber has to put it back too (#678, ADR-0045).
+        if (SourceChildOrder.SlotHolding(parentDirectory, oldFormKey) is { } slot)
+        {
+            transaction.Write(
+                modFolder, slot.Carrier,
+                () => SourceChildOrder.Rename(slot.Carrier, slot.Key, oldFormKey, newFormKey));
+        }
 
         // The whole index side of the renumber in one call, and therefore one transaction (#677):
         // the new identity's rows, the re-points that carry this record's folder-split children and
@@ -2514,44 +2460,20 @@ public sealed class RecordEditService(
     }
 
     /// <summary>
-    /// The destination path for a directory-per-record container's own top-level record —
-    /// Worldspace or Quest, whose directory sits directly under its own group folder with no further
-    /// nesting (verified against a real Track output: <c>Worldspaces/[0] &lt;name&gt;/RecordData.json</c>).
-    /// Cell is deliberately not handled here: its directory nests under an interior block/sub-block
-    /// path (or an exterior worldspace one), which this simple "next index in one
-    /// flat group folder" scheme does not compute.
-    /// </summary>
-    private static string ContainerOwnDirectoryPath(
-        string modFolder, string pluginName, string recordType, string formKey, string? editorId, GameRelease release)
-    {
-        var groupFolder = RecordTypeDispatch.For(release).GroupFolderNameFor(recordType)
-            ?? throw new InvalidOperationException(
-                $"'{recordType}' has no group folder at all — RefuseIfCopySourceHasNoContainerOfItsOwn should have refused this first.");
-        var groupDirectory = Path.Combine(modFolder, SourceRecordPath.RootFor(pluginName), groupFolder);
-        var orderIndex = SourceUnitResolver.NextOrderIndex(groupDirectory);
-        var leafName = SourceUnitResolver.LeafNameFor(FormKey.Factory(formKey), editorId, isDirectory: true);
-        var fullPath = Path.Combine(groupDirectory, $"[{orderIndex}] {leafName}", RecordDataFileName);
-        return Path.GetRelativePath(modFolder, fullPath);
-    }
-
-    // The whole-mod door's own directory-per-record file name — SourceRecordPath keeps its own copy of
-    // this literal private, so this restates the same well-known constant rather than exposing it.
-    private const string RecordDataFileName = "RecordData.json";
-
-    /// <summary>
-    /// The destination path for an interior Cell — the one directory-per-record type
-    /// <see cref="ContainerOwnDirectoryPath"/> does not handle, since its own directory nests two GRUP
-    /// levels deep (<c>Cells/&lt;block&gt;/&lt;sub-block&gt;/&lt;name&gt;/RecordData.json</c>, verified
+    /// The block and sub-block directory names an interior Cell nests under, reusing whichever pair
+    /// the destination already has and minting one the first time — everything a
+    /// <see cref="SourcePlacement"/> needs to place a Cell, and the reason a Cell needs anything extra
+    /// at all: its own directory nests two GRUP levels deep (<c>Cells/&lt;block&gt;/&lt;sub-block&gt;/&lt;name&gt;/RecordData.json</c>, verified
     /// against a real Track output) rather than sitting directly under its group folder. Interior
     /// placement carries no gameplay meaning at all — <c>PlacementWalker.Walk</c>'s own interior branch
     /// never records a block/sub number in <c>cell_location</c> (verified by reading it: every interior
     /// cell's row carries null block/sub, the same as CONTEXT.md's own "the plugin's own single
     /// interior bucket" framing) — so this reuses whichever block/sub-block directory the destination
-    /// already has (any one; the number is never meaningful), minting a fresh <c>[0] 0/[0] 0</c> pair
+    /// already has (any one; the number is never meaningful), minting a fresh <c>0/0</c> pair
     /// only the first time a destination plugin gets an interior cell at all.
     /// </summary>
-    internal static string InteriorCellDestinationPath(
-        string modFolder, string pluginName, string formKey, string? editorId, GameRelease release)
+    internal static IReadOnlyList<string> EnsureInteriorCellBlockPath(
+        string modFolder, string pluginName, GameRelease release)
     {
         var cellsFolder = RecordTypeDispatch.For(release).GroupFolderNameFor("cell")
             ?? throw new InvalidOperationException(
@@ -2559,28 +2481,38 @@ public sealed class RecordEditService(
         var cellsDirectory = Path.Combine(modFolder, SourceRecordPath.RootFor(pluginName), cellsFolder);
         SourceUnitResolver.InMintedDirectory(cellsDirectory, () => WriteMinimalGroupRecordDataIfMissing(cellsDirectory, groupType: null));
 
-        var blockDirectory = FindOrMintGroupDirectory(cellsDirectory, "InteriorCellBlock");
-        var subBlockDirectory = FindOrMintGroupDirectory(blockDirectory, "InteriorCellSubBlock");
+        var blockDirectory = FindOrMintGroupDirectory(
+            cellsDirectory, "InteriorCellBlock", cellsFolder);
+        var subBlockDirectory = FindOrMintGroupDirectory(
+            blockDirectory, "InteriorCellSubBlock", RecordTypeDispatch.BlockChildMember);
 
-        var orderIndex = SourceUnitResolver.NextOrderIndex(subBlockDirectory);
-        var leafName = SourceUnitResolver.LeafNameFor(FormKey.Factory(formKey), editorId, isDirectory: true);
-        var fullPath = Path.Combine(subBlockDirectory, $"[{orderIndex}] {leafName}", RecordDataFileName);
-        return Path.GetRelativePath(modFolder, fullPath);
+        return [Path.GetFileName(blockDirectory), Path.GetFileName(subBlockDirectory)];
     }
 
-    /// <summary>The first existing <c>"[N] &lt;number&gt;"</c> child directory of
-    /// <paramref name="parentDirectory"/>, or a freshly-minted <c>"[0] 0"</c> one carrying
-    /// <paramref name="groupType"/>'s own minimal <c>GroupRecordData.json</c> when none exists yet —
-    /// interior placement's own "reuse whatever bucket already exists" rule
-    /// (<see cref="InteriorCellDestinationPath"/>'s own doc comment).</summary>
-    private static string FindOrMintGroupDirectory(string parentDirectory, string groupType)
+    /// <summary>The first existing child directory of <paramref name="parentDirectory"/>, or a
+    /// freshly-minted <c>"0"</c> one carrying <paramref name="groupType"/>'s own minimal
+    /// <c>GroupRecordData.json</c> when none exists yet — interior placement's own "reuse whatever
+    /// bucket already exists" rule (<see cref="EnsureInteriorCellBlockPath"/>'s own doc
+    /// comment).</summary>
+    /// <param name="orderKey">The member name this level is carried under in
+    /// <paramref name="parentDirectory"/>'s own ordered child list — a freshly minted block has to
+    /// join that list, or the next read refuses the tree as drift.</param>
+    private static string FindOrMintGroupDirectory(string parentDirectory, string groupType, string orderKey)
     {
-        var existing = Directory.EnumerateDirectories(parentDirectory)
-            .FirstOrDefault(d => SourceUnitResolver.TryGetOrderIndex(Path.GetFileName(d)) is not null);
+        var existing = Directory.EnumerateDirectories(parentDirectory).FirstOrDefault();
         if (existing != null) return existing;
 
-        var directory = Path.Combine(parentDirectory, "[0] 0");
-        SourceUnitResolver.InMintedDirectory(directory, () => WriteMinimalGroupRecordDataIfMissing(directory, groupType));
+        const string blockNumber = "0";
+        var directory = Path.Combine(parentDirectory, blockNumber);
+        WritePlaced(
+            SourceChildOrder.CarrierFor(directory, parentIsRecord: false),
+            SourceChildOrder.CarrierFor(parentDirectory, parentIsRecord: false),
+            orderKey, blockNumber,
+            _ =>
+            {
+                WriteMinimalGroupRecordDataIfMissing(directory, groupType);
+                return "";
+            });
         return directory;
     }
 
@@ -2649,6 +2581,40 @@ public sealed class RecordEditService(
             .DeserializeFromBytesAsync(Encoding.UTF8.GetBytes(document.Body!), release, document.RecordType)
             .GetAwaiter().GetResult();
     }
+
+    /// <summary>
+    /// One placed child: its own file written by <paramref name="write"/>, then its identity appended
+    /// to the ordered child list that names it (ADR-0042 decision 4) — and the file taken back again if
+    /// that second write fails. The two writes are one plugin's tree, so this is not a transaction
+    /// (that is the renumber cascade's tool, for the one gesture that writes into more than one
+    /// plugin's tree, ADR-0045); it only has to fail on the tolerated side of the drift rule. A file
+    /// no list names refuses the whole plugin at the next read, so it is the one thing a failed write
+    /// must never leave. Both writes sit inside one <see cref="SourceUnitResolver.InMintedDirectory{T}"/>,
+    /// so a directory minted for the file — a group folder for the plugin's first record of a type, a
+    /// slot folder for a parent's first child — is taken out again when either write throws (#675).
+    /// </summary>
+    /// <param name="write">Writes the file at the path it is handed and returns what it wrote.</param>
+    internal static string WritePlaced(string modFolder, SourcePlacement placement, string identity, Func<string, string> write) =>
+        WritePlaced(
+            Path.Combine(modFolder, placement.RelativePath),
+            Path.Combine(modFolder, placement.CarrierRelativePath),
+            placement.Key, identity, write);
+
+    private static string WritePlaced(string path, string carrier, string key, string identity, Func<string, string> write) =>
+        SourceUnitResolver.InMintedDirectory(Path.GetDirectoryName(path)!, () =>
+        {
+            var body = write(path);
+            try
+            {
+                SourceChildOrder.Add(carrier, key, identity);
+            }
+            catch
+            {
+                File.Delete(path);
+                throw;
+            }
+            return body;
+        });
 
     /// <summary>
     /// The reserialize-and-write-back idiom nearly every write path here repeats: get

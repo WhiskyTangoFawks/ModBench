@@ -183,29 +183,43 @@ public sealed class RenumberRollbackTests
         Assert.Contains("removed by something else", thrown.Message, StringComparison.Ordinal);
     }
 
-    // ---- ordering prefixes, containers, and the index ----
+    // ---- ordering, containers, and the index ----
 
     /// <summary>
-    /// The renumber's delete+create renames the group's ordering prefixes as its own last act. Those
-    /// renames are part of what a failure has to put back — undone in reverse, so nothing is ever
-    /// asked to move into a name a sibling still occupies.
+    /// A renumber repoints the record's entry in its parent's ordered child list, in place, as its own
+    /// last act (ADR-0042 decision 4). That document is a file this pass changed, so it is part of
+    /// what a failure has to put back — restored with everything else, byte for byte.
+    ///
+    /// <para>This began as the same assertion over <c>"[N] "</c> filename prefixes, which the renumber
+    /// used to renormalize across the whole group folder. #566 replaced that with a one-line edit to
+    /// one document; the rollback obligation is unchanged, which is why the test is kept rather than
+    /// deleted — only the file it watches moved.</para>
     /// </summary>
     [Fact]
-    public void GroupOrderingPrefixesReturnToTheirPreActionValues()
+    public void TheParentsOrderedChildList_ReturnsToItsPreActionValue()
     {
         using var fixture = new CascadeRollbackFixture();
         var racesFolder = Path.GetDirectoryName(
             fixture.SourceFileOf(fixture.TargetPlugin, fixture.Race, "race", CascadeRollbackFixture.RaceEditorId))!;
-        var before = Directory.GetFileSystemEntries(racesFolder).Select(Path.GetFileName).Order(StringComparer.Ordinal).ToList();
-        Assert.Contains(before, name => name!.StartsWith('['));
+
+        var carrier = SourceChildOrder.CarrierFor(racesFolder, parentIsRecord: false);
+        var orderBefore = File.ReadAllBytes(carrier);
+        Assert.Contains(fixture.Race.ToString(), SourceChildOrder.ListAt(carrier, "Races"), StringComparer.Ordinal);
+
+        var entriesBefore = Directory.GetFileSystemEntries(racesFolder)
+            .Select(Path.GetFileName).Order(StringComparer.Ordinal).ToList();
 
         var failing = new FailingIndex(fixture.Mirror.Index!, failAt: 3);
         Assert.Throws<IOException>(() =>
             ServiceFor(new IndexOverridingMirror(fixture.Mirror, failing))
                 .RenumberRecord(fixture.TargetPlugin, fixture.Race.ToString()));
 
+        Assert.True(
+            orderBefore.AsSpan().SequenceEqual(File.ReadAllBytes(carrier)),
+            "the parent's ordered child list did not return to its pre-action bytes");
         Assert.Equal(
-            before, Directory.GetFileSystemEntries(racesFolder).Select(Path.GetFileName).Order(StringComparer.Ordinal).ToList());
+            entriesBefore,
+            Directory.GetFileSystemEntries(racesFolder).Select(Path.GetFileName).Order(StringComparer.Ordinal).ToList());
     }
 
     /// <summary>
@@ -310,7 +324,7 @@ public sealed class RenumberRollbackTests
         var snapshotBefore = TreeSnapshot.Of(fixture.ModFolder);
         var statusBefore = fixture.GitStatus();
 
-        Directory.CreateDirectory(Path.Combine(fixture.SourceRoot, "[9] Stray Record Directory"));
+        Directory.CreateDirectory(Path.Combine(fixture.SourceRoot, "Stray Record Directory"));
 
         Assert.Equal(statusBefore, fixture.GitStatus());
         Assert.NotEqual(snapshotBefore, TreeSnapshot.Of(fixture.ModFolder));

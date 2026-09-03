@@ -50,25 +50,28 @@ public sealed class CompileRoundTripGateTests(CompileRoundTripGateFixture fixtur
     : IClassFixture<CompileRoundTripGateFixture>
 {
     /// <summary>
-    /// Deep-parses <paramref name="pluginPath"/> and re-derives the source tree it would produce,
-    /// through the same whole-mod door Track itself writes through.
+    /// The source tree <paramref name="pluginPath"/> would produce — assembled here, from the
+    /// serializer and the splice as two separate steps, rather than by calling the production door
+    /// that composes them.
     ///
-    /// <para><b>Whole-mod, not per-record.</b> <c>SourceRecordPath.For</c> covers flat records only
-    /// and throws for the Cells/Worldspaces/Quests this fixture is full of. Reconstructing their
-    /// directory nesting by hand here would mean owning a second copy of the serializer's own layout
-    /// policy; calling the serializer is both shorter and the only version that cannot drift from what
-    /// Track wrote. Tests may call the door — the whitelist scan in
-    /// <c>RecordTextCodecGeneratorSeedTests</c> is scoped to <c>MEditService.Core</c> sources.</para>
-    ///
-    /// <para>One post-step makes the derived tree comparable rather than merely similar, and it is
-    /// Track's own (<c>TrackService.TrackAsync</c>): the <c>\r</c> strip. Everything in the tree, the
-    /// mod header's own root document included, is inside the comparison — Track writes no sidecar
-    /// beside it (ADR-0042: "Spriggit has no role in v1"), so there is nothing left to
-    /// exclude.</para>
+    /// <para><b>The independence is the point, and it was briefly lost.</b> This once called only the
+    /// whole-mod serializer, which stopped being the whole story when the door began splicing ordered
+    /// child lists (ADR-0042 decision 4) — so it silently derived trees missing every carrier.
+    /// The obvious repair was to delegate to <c>TrackService.SerializeToPristineFiles</c>, and that is
+    /// wrong in a way worth recording: it puts identical production code on both sides of a byte
+    /// comparison whose entire job is to detect the tree being wrong, so any defect in the splice
+    /// would agree with itself and pass. Composing the two steps here keeps the comparison able to
+    /// fail — a change to <i>what the door composes</i> shows up as a diff rather than cancelling
+    /// out.</para>
     /// </summary>
     private static Dictionary<string, byte[]> DeriveSourceTreeFromBinary(string pluginPath, GameRelease release)
     {
         var pluginFileName = Path.GetFileName(pluginPath);
+
+        // ImportSetter, not ImportGetter — a binary overlay reports some derived fields differently
+        // from a fully-materialized parse (Cell.Lighting.Versioning's break flags, observed), so
+        // deriving through an overlay would compare the tracked tree against a *differently parsed*
+        // mod and call the difference a compile failure.
         var mod = ModFactory.ImportSetter(new ModPath(ModKey.FromFileName(pluginFileName), pluginPath), release);
 
         var scratch = Directory.CreateTempSubdirectory("medit-compile-derived-").FullName;
@@ -77,11 +80,11 @@ public sealed class CompileRoundTripGateTests(CompileRoundTripGateFixture fixtur
             RecordTextCodecGeneratorSeed
                 .SerializeWholeMod((IFallout4ModGetter)mod, scratch, InlineWorkDropoff.Instance, CancellationToken.None)
                 .GetAwaiter().GetResult();
+            SourceChildOrder.SpliceInto(scratch, mod);
 
             return Directory.EnumerateFiles(scratch, "*.json", SearchOption.AllDirectories)
                 .ToDictionary(
-                    f => Path.Combine(
-                        SourceRecordPath.RootFor(pluginFileName), Path.GetRelativePath(scratch, f)),
+                    f => Path.Combine(SourceRecordPath.RootFor(pluginFileName), Path.GetRelativePath(scratch, f)),
                     f => StripCarriageReturns(File.ReadAllBytes(f)));
         }
         finally
@@ -120,45 +123,55 @@ public sealed class CompileRoundTripGateTests(CompileRoundTripGateFixture fixtur
     }
 
     /// <summary>
-    /// <c>DialogTopic.Responses</c> is the one folder-split relationship this fixture
-    /// measurably damages without a filename order carrier (96 of 283
-    /// multi-response topics permute under an unprefixed scheme). Once
-    /// <c>RecordTextCodecCustomization</c> turns <c>EnforceRecordOrder</c> on, every
-    /// <c>Responses</c> folder Track writes must carry a contiguous <c>"[N] "</c> prefix, one number
-    /// per sibling, zero gaps and zero duplicates — proven directly against what Track put on disk,
-    /// not against a proxy. A build with the flag left off writes unprefixed names here, which is
-    /// exactly the regression this test exists to catch.
+    /// <c>DialogTopic.Responses</c> is the one folder-split relationship this fixture measurably
+    /// damages without an order carrier: 96 of 283 multi-response topics permute when nothing records
+    /// the order (measured). Since #566 the carrier is the topic's own document, so every
+    /// multi-response topic Track writes must name each of its response files exactly once in its
+    /// <c>Responses</c> list — no file unnamed, no name without a file. Proven against what Track put
+    /// on disk, not against a proxy.
+    ///
+    /// <para>The <i>order</i> that list records is asserted end-to-end by
+    /// <c>DialogueOrderDamageTests</c>, which reads the tree back and compares against the original
+    /// binary's own GRUP order; this is the structural half — that the carrier is present and complete
+    /// for every topic, which is what a build that forgot to splice would break.</para>
     /// </summary>
     [Fact]
-    public void Track_OfTheRealFixture_PrefixesDialogTopicResponseFileNamesInGrupOrder()
+    public void Track_OfTheRealFixture_NamesEveryDialogTopicResponseInItsTopicsOrderedChildList()
     {
         var responseDirs = Directory.EnumerateDirectories(fixture.SourceRoot, "Responses", SearchOption.AllDirectories)
             .ToList();
         Assert.NotEmpty(responseDirs);
 
         var multiResponseDirs = responseDirs
-            .Select(dir => Directory.EnumerateFiles(dir, "*.json", SearchOption.TopDirectoryOnly)
-                .Select(Path.GetFileName)
-                .ToList())
-            .Where(names => names.Count > 1)
+            .Where(dir => Directory.EnumerateFiles(dir, "*.json", SearchOption.TopDirectoryOnly).Count() > 1)
             .ToList();
         Assert.NotEmpty(multiResponseDirs);
 
-        foreach (var names in multiResponseDirs)
+        foreach (var dir in multiResponseDirs)
         {
-            var matches = names
-                .Select(n => System.Text.RegularExpressions.Regex.Match(n!, @"^\[(\d+)\] "))
+            var files = Directory.EnumerateFiles(dir, "*.json", SearchOption.TopDirectoryOnly)
+                .Select(Path.GetFileName)
+                .Select(name => name!)
                 .ToList();
 
-            Assert.True(matches.All(m => m.Success),
-                $"Expected every file under a multi-response Responses folder to start with '[N] ', " +
-                $"but found: {string.Join(", ", names)}");
+            // A file name is identity alone now — the position it used to carry lives in the topic's
+            // own document, one directory up.
+            Assert.All(files, name => Assert.DoesNotContain("[", name, StringComparison.Ordinal));
 
-            var numbers = matches
-                .Select(m => int.Parse(m.Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture))
-                .Order()
-                .ToList();
-            Assert.Equal(Enumerable.Range(0, names.Count).ToList(), numbers);
+            var topicDirectory = Path.GetDirectoryName(dir)!;
+            var order = SourceChildOrder.ListAt(
+                SourceChildOrder.CarrierFor(topicDirectory, parentIsRecord: true), "Responses");
+
+            Assert.Equal(files.Count, order.Count);
+            Assert.Equal(order.Count, order.Distinct(StringComparer.Ordinal).Count());
+
+            // Every listed FormKey has a file carrying it, and every file is listed — the exact
+            // agreement the read side refuses a tree for lacking.
+            foreach (var identity in order)
+            {
+                var filesafe = identity.Replace(':', '_');
+                Assert.Contains(files, name => name.EndsWith($"{filesafe}.json", StringComparison.Ordinal));
+            }
         }
     }
 

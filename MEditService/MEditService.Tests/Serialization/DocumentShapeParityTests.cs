@@ -134,7 +134,7 @@ public sealed class DocumentShapeParityTests
     /// <para><b><c>LastModified</c>/<c>SubCellsTimestamp</c>:</b>
     /// with <c>.OmitLastModifiedData()</c> in <see cref="Serialization.RecordTextCodecCustomization"/>,
     /// this test fails with "Assert.Contains() Failure: Sub-string not found" against a
-    /// <c>Cells/[0] 0/GroupRecordData.json</c> that is empty (<c>{}</c>).</para>
+    /// <c>Cells/0/GroupRecordData.json</c> that is empty (<c>{}</c>).</para>
     /// </summary>
     [Fact]
     public async Task Serialize_OfASyntheticModWithNonDefaultGroupAndHeaderFields_WritesThemUnomitted()
@@ -164,7 +164,7 @@ public sealed class DocumentShapeParityTests
             Assert.Contains($"\"OverriddenForms\"", rootText, StringComparison.Ordinal);
             Assert.Contains(overriddenForm.ToString(), rootText, StringComparison.Ordinal);
 
-            var cellGroupFile = Path.Combine(dir.FullName, "Cells", "[0] 0", "GroupRecordData.json");
+            var cellGroupFile = Path.Combine(dir.FullName, "Cells", "0", "GroupRecordData.json");
             Assert.True(File.Exists(cellGroupFile), $"Expected {cellGroupFile} to exist.");
             Assert.Contains("\"LastModified\": 424242", await File.ReadAllTextAsync(cellGroupFile), StringComparison.Ordinal);
 

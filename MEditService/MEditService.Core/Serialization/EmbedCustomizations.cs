@@ -14,8 +14,8 @@ namespace MEditService.Core.Serialization;
 /// customization ADR-0042 rules out on principle, not merely a feature this project's Serialization
 /// pin happens to lack: "nothing is omitted and nothing is re-sorted in the files — ever" (decision
 /// 3). Reordering a Cell's own children for diff-cleanliness would be a permanent, silent loss of
-/// the binary's actual child order — the same kind of loss the folder-split <c>"[N] "</c> ordering
-/// prefix exists to prevent —
+/// the binary's actual child order — the same kind of loss a folder-split list's own ordered child
+/// list exists to prevent (ADR-0042 decision 4) —
 /// so this is never adopted, regardless of what a future Serialization bump makes available. Nothing
 /// else in Spriggit's FO4 customization suite is an embed: everything else there is <c>SortList</c>
 /// or <c>Omit</c>, neither of which this project uses.</para>

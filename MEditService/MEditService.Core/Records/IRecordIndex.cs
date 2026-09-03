@@ -208,7 +208,7 @@ public interface IRecordIndex : IDisposable
     /// <summary>
     /// Replaces every <c>container_child</c> row for one (<paramref name="parentFormKey"/>,
     /// <paramref name="slotName"/>) folder-split slot with exactly <paramref name="children"/> — the
-    /// counterpart to <see cref="MEditService.Core.Source.SourceUnitResolver.RenormalizeGroupOrder"/> for a slot whose child
+    /// counterpart to <see cref="MEditService.Core.Source.SourceChildOrder"/> for a slot whose child
     /// <i>set</i> a delete or renumber changed. A folder-split child (a Quest's DialogTopic, a
     /// DialogTopic's Response) has no file of its own the parent's document embeds
     /// (<see cref="ApplyWorkingTreeChanges"/>'s own re-derivation only reaches an <b>embedded</b>

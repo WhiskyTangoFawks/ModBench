@@ -90,10 +90,10 @@ public sealed class ExteriorCellCopyCompileTests : IDisposable
         var worldspacesDir = Path.Combine(_fixture.DestinationSourceRoot, "Worldspaces");
         var worldspaceDir = Assert.Single(Directory.EnumerateDirectories(worldspacesDir));
         var newBlockDir = Assert.Single(Directory.EnumerateDirectories(worldspaceDir), d =>
-            SourceUnitResolver.WithoutOrderPrefix(Path.GetFileName(d))
+            Path.GetFileName(d)
                 .Equals($"{ContainerCopyFixture.OtherBlockX}, {ContainerCopyFixture.OtherBlockY}", StringComparison.Ordinal));
         Assert.Single(Directory.EnumerateDirectories(newBlockDir), d =>
-            SourceUnitResolver.WithoutOrderPrefix(Path.GetFileName(d))
+            Path.GetFileName(d)
                 .Equals($"{ContainerCopyFixture.OtherSubX}, {ContainerCopyFixture.OtherSubY}", StringComparison.Ordinal));
 
         var compiled = ImportCompiled();
@@ -131,7 +131,7 @@ public sealed class ExteriorCellCopyCompileTests : IDisposable
         var worldspaceDir = Assert.Single(
             Directory.EnumerateDirectories(Path.Combine(_fixture.DestinationSourceRoot, "Worldspaces")));
         var blockDir = Assert.Single(Directory.EnumerateDirectories(worldspaceDir), d =>
-            SourceUnitResolver.WithoutOrderPrefix(Path.GetFileName(d))
+            Path.GetFileName(d)
                 .Equals($"{ContainerCopyFixture.ExteriorBlockX}, {ContainerCopyFixture.ExteriorBlockY}", StringComparison.Ordinal));
         Assert.Equal(2, Directory.EnumerateDirectories(blockDir).Count());
 
@@ -167,11 +167,24 @@ public sealed class ExteriorCellCopyCompileTests : IDisposable
         var after = Directory
             .EnumerateFiles(_fixture.DestinationSourceRoot, "*", SearchOption.AllDirectories)
             .ToDictionary(f => f, File.ReadAllBytes);
+        // Every existing file is byte-identical except the sub-block's own GroupRecordData.json, which
+        // must change: it carries the ordered child list the new cell has to join (ADR-0042 decision
+        // 4), and a cell directory its parent does not name is drift the next read refuses. That one
+        // document is the whole cost of "touches nothing else" — no sibling cell is rewritten or
+        // renamed, which is the property this test is really about.
         foreach (var (path, bytes) in before)
         {
             Assert.True(after.ContainsKey(path), $"{path} disappeared");
+            if (Path.GetFileName(path).Equals("GroupRecordData.json", StringComparison.Ordinal)) continue;
             Assert.True(bytes.AsSpan().SequenceEqual(after[path]), $"{path} changed bytes");
         }
+
+        var reordered = before.Keys
+            .Where(p => Path.GetFileName(p).Equals("GroupRecordData.json", StringComparison.Ordinal))
+            .Where(p => !before[p].AsSpan().SequenceEqual(after[p]))
+            .ToList();
+        Assert.Single(reordered);
+
         var added = after.Keys.Except(before.Keys).ToList();
         var newCellFile = Assert.Single(added);
         Assert.Contains(ContainerCopyFixture.SameSubBlockCellEditorId, File.ReadAllText(newCellFile), StringComparison.Ordinal);

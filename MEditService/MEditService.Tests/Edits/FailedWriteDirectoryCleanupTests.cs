@@ -82,12 +82,14 @@ public sealed class FailedWriteDirectoryCleanupTests
         var before = EntriesUnderSource(mod);
         var npcsDirectory = Path.Combine(
             mod.ModFolder, SourceRecordPath.RootFor(TrackedModFixture.PluginName), "Npcs");
-        Assert.Equal(2, Directory.GetFiles(npcsDirectory).Length);
+
+        // Two records plus the group's own GroupRecordData.json, which carries their order since #566.
+        Assert.Equal(3, Directory.GetFiles(npcsDirectory).Length);
 
         Assert.ThrowsAny<Exception>(() => ServiceFor(mod).CreateRecord(mod.Plugin, "npc_", OverLongEditorId));
 
         Assert.True(Directory.Exists(npcsDirectory));
-        Assert.Equal(2, Directory.GetFiles(npcsDirectory).Length);
+        Assert.Equal(3, Directory.GetFiles(npcsDirectory).Length);
         Assert.Equal(before, EntriesUnderSource(mod));
     }
 
@@ -131,7 +133,7 @@ public sealed class FailedWriteDirectoryCleanupTests
         using var tree = new TempTree();
         var keeper = Path.Combine(tree.Root, "already-here.json");
         File.WriteAllText(keeper, "{}");
-        var target = Path.Combine(tree.Root, "Quests", "[0] Q", "DialogTopics");
+        var target = Path.Combine(tree.Root, "Quests", "Q", "DialogTopics");
 
         Assert.Throws<InvalidOperationException>(() => SourceUnitResolver.InMintedDirectory(
             target, () => throw new InvalidOperationException("the write failed")));
@@ -147,7 +149,7 @@ public sealed class FailedWriteDirectoryCleanupTests
     public void InMintedDirectory_WhenTheCreateItselfFailsAtTheDeepestLevel_StillRemovesTheAncestorsItMade()
     {
         using var tree = new TempTree();
-        var target = Path.Combine(tree.Root, "Quests", "[0] Q", new string('B', 300));
+        var target = Path.Combine(tree.Root, "Quests", "Q", new string('B', 300));
 
         Assert.ThrowsAny<Exception>(() => SourceUnitResolver.InMintedDirectory(target, () => 0));
 
@@ -163,7 +165,7 @@ public sealed class FailedWriteDirectoryCleanupTests
         using var tree = new TempTree();
         var target = Path.Combine(tree.Root, "Npcs");
         Directory.CreateDirectory(target);
-        var keeper = Path.Combine(target, "[0] a-record.json");
+        var keeper = Path.Combine(target, "a-record.json");
         File.WriteAllText(keeper, "{}");
 
         Assert.Throws<InvalidOperationException>(() => SourceUnitResolver.InMintedDirectory(
@@ -180,7 +182,7 @@ public sealed class FailedWriteDirectoryCleanupTests
     public void InMintedDirectory_NeverRemovesAMintedDirectoryAnotherWriterHasFilledMeanwhile()
     {
         using var tree = new TempTree();
-        var target = Path.Combine(tree.Root, "Quests", "[0] Q");
+        var target = Path.Combine(tree.Root, "Quests", "Q");
         var intruder = Path.Combine(target, "somebody-elses.json");
 
         Assert.Throws<InvalidOperationException>(() => SourceUnitResolver.InMintedDirectory(target, () =>
@@ -199,7 +201,7 @@ public sealed class FailedWriteDirectoryCleanupTests
     public void InMintedDirectory_WhenTheWriteSucceeds_KeepsTheChain_AndReturnsWhatTheWriteReturned()
     {
         using var tree = new TempTree();
-        var target = Path.Combine(tree.Root, "Quests", "[0] Q");
+        var target = Path.Combine(tree.Root, "Quests", "Q");
 
         var written = SourceUnitResolver.InMintedDirectory(target, () =>
         {
@@ -230,7 +232,7 @@ public sealed class FailedWriteDirectoryCleanupTests
 
         // A sub-block the destination already holds, byte-identical in both trees — the merge's own
         // convergence rule skips it, and nothing here may remove it.
-        var alreadyThere = Path.Combine("[0] W", "[0] 3, -2", "RecordData.json");
+        var alreadyThere = Path.Combine("W", "3, -2", "RecordData.json");
         foreach (var root in new[] { source, destination })
         {
             var path = Path.Combine(root, alreadyThere);
@@ -239,13 +241,13 @@ public sealed class FailedWriteDirectoryCleanupTests
         }
 
         // A second sub-block, new to the destination, whose file cannot be copied.
-        var doomed = Path.Combine(source, "[0] W", "[1] 5, 1", "RecordData.json");
+        var doomed = Path.Combine(source, "W", "5, 1", "RecordData.json");
         Directory.CreateDirectory(Path.GetDirectoryName(doomed)!);
         File.CreateSymbolicLink(doomed, Path.Combine(tree.Root, "nothing-is-here.json"));
 
         Assert.ThrowsAny<Exception>(() => SourceTreeMerge.MergeAdditively(source, destination));
 
-        Assert.False(Directory.Exists(Path.Combine(destination, "[0] W", "[1] 5, 1")));
+        Assert.False(Directory.Exists(Path.Combine(destination, "W", "5, 1")));
         Assert.True(File.Exists(Path.Combine(destination, alreadyThere)));
     }
 }

@@ -96,7 +96,7 @@ public sealed record PluginDiagnosis(string? Anchor, string DefectClass, string?
     /// names as "the offender") is the anchor, taken from the deepest
     /// <see cref="FilePathedException"/> anywhere in <paramref name="ex"/>'s own exception tree.
     /// <paramref name="treeRoot"/> is the <c>source/&lt;plugin&gt;/</c> directory itself, so the
-    /// anchor reads as a path within it (e.g. <c>Npcs/[0] FixtureNpc - 000802_Fixture.esp.json</c>) —
+    /// anchor reads as a path within it (e.g. <c>Npcs/FixtureNpc - 000802_Fixture.esp.json</c>) —
     /// the file's own name already carries EditorID and FormKey by <c>SourceUnitResolver</c>'s own
     /// naming convention.</summary>
     public static PluginDiagnosis FromSourceReadException(Exception ex, string treeRoot)

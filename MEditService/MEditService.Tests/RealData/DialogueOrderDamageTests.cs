@@ -18,11 +18,17 @@ namespace MEditService.Tests.RealData;
 /// the tracked source tree exactly the way <see cref="Edits.PluginCompileService"/> does, and compare
 /// each DialogTopic's <c>Responses</c> order there against the original binary's own GRUP order.
 ///
-/// <para>Baseline this replaces (measured on this exact fixture): 96 of 283
-/// multi-response DIALs permuted, 1,540 INFO slots moved, under an unprefixed filename scheme.
-/// Expected
-/// here, with <c>Overall.EnforceRecordOrder</c> on: 0 and 0 — the prefix carries the real position,
-/// so writing the tree and reading it back is lossless for order, not merely stable.</para>
+/// <para>Baseline this replaces (measured on this exact fixture): 96 of 283 multi-response DIALs
+/// permuted, 1,540 INFO slots moved, when nothing records the order at all. Expected here: 0 and 0 —
+/// each topic's own document carries its responses' order (ADR-0042 decision 4), and the whole-mod
+/// read door restores it, so writing the tree and reading it back is lossless for order rather than
+/// merely stable.</para>
+///
+/// <para><b>This is the end-to-end assertion that the carrier works, and it is deliberately untouched
+/// by #566 apart from this comment.</b> It never named the mechanism in its assertions — it compares
+/// the written tree against the original binary's own GRUP order — so it went red when the filename
+/// numbering was removed and green again once the parent-document carrier replaced it, without a
+/// single expected value changing.</para>
 /// </summary>
 public sealed class DialogueOrderDamageTests : IDisposable
 {

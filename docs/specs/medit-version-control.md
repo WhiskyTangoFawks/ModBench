@@ -194,6 +194,16 @@ using git.
   ours on the panel.
 - Source diffs are readable by construction: canonical JSON formatting (stable key
   order, fixed indentation) means a one-field edit is a one-line diff.
+- **A structural edit is as small in the panel as it is in meaning.** Deleting one record
+  from an ordered container shows **one deletion and one changed parent document** — never
+  a rename of every later sibling. Child files are named by identity alone; their order is
+  a list in the parent's own document (ADR-0042 decision 4), so an insert is one file plus
+  one line and a reorder is a parent-document diff on its own. This is a property of the
+  format, not of the panel: it holds the same in the terminal, in a merge, and in a
+  reviewer's diff. The superseded scheme numbered child filenames, which made a
+  single-record delete of one of 13 siblings show 25 entries here — content-identical
+  renames that unstaged `git status` cannot pair up and collapse, and no git config
+  changes that.
 - **Branch gestures have honest consequences, not guards.** Checking out any ref —
   `main` included — changes the working-tree text, and every editing surface follows it
   at the next read (read-time freshness). The binary does not change until Save &
@@ -363,6 +373,19 @@ plugins are never probed at all.
 - **`meta.ini` is a source, never content**: read for trailer values at baseline moments,
   never committed (ADR-0041 — never track a file that changes for non-content
   reasons).
+- **Order is parent data, and drift in it is asymmetric** (ADR-0042 decision 4). A
+  folder-split child's file name carries identity and never position; the parent's own
+  document carries the ordered list. Hand editing the tree therefore has two different
+  outcomes, on purpose: **deleting a child file is honoured as a deletion** (it is how a
+  record is deleted by hand, and the git-native model above makes that first-class), while
+  **adding a child the parent's list does not name is refused**, naming the parent and the
+  children — nothing can say where an unlisted child belongs, and for `DialogTopic.Responses`
+  an invented position is a gameplay change. Re-Track is the recovery, the same uniform
+  answer every other format break gets. The tree is authoritative for whether a child
+  exists; the parent's list for the order of the ones that do. A hand delete is honoured at *read* but
+  still refuses at *compile*, until the author removes the stale entry or re-Tracks — Modbench does
+  not repair a tree changed behind its back. The superseded scheme had the same limit in the same
+  place, so this is ported rather than introduced.
 - **Refusal posture is git's**: refuse and the user fixes it — rebase-over-dirt,
   deserialize-over-dirt, renumber-forcing compiles. Automation on top may come later;
   none of it is in this milestone.

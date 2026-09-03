@@ -145,14 +145,14 @@ public static class SourceRepository
     ///
     /// <para><b><c>cat-file -p</c>, deliberately not <c>git show</c>.</b> <c>git show
     /// &lt;rev&gt;:&lt;path&gt;</c> treats a <b>missing</b> path as a pathspec and applies glob magic to
-    /// it — verified empirically against git 2.43: for a path containing <c>[</c>/<c>]</c> (exactly
-    /// what a folder-split child's <c>"[N] "</c> ordering prefix puts there) that does not exist at
+    /// it — verified empirically against git 2.43: for a path containing <c>[</c>/<c>]</c> that does
+    /// not exist at
     /// <paramref name="modFolder"/>'s <c>HEAD</c>, <c>git show</c> exits <b>0</b> with <b>empty</b>
     /// output instead of failing — a silent "found nothing" masquerading as "found an empty file",
     /// which fed straight into <see cref="Records.DuckDbRecordIndex.SetCommittedBaseline"/> as a
     /// real (empty) baseline body and crashed there on the malformed-JSON insert. <c>git cat-file -p
     /// &lt;rev&gt;:&lt;path&gt;</c> resolves the same object syntax but never applies pathspec
-    /// glob-matching to the path half, so a missing bracketed path fails loudly (exit 128) exactly
+    /// glob-matching to the path half, so a missing glob-shaped path fails loudly (exit 128) exactly
     /// like a missing unbracketed one always did — restoring the null this method's own contract
     /// promises instead of a lying empty string.</para>
     /// </summary>
@@ -197,8 +197,7 @@ public static class SourceRepository
 
             // cat-file -p, not show — see ReadCommittedSourceText's own doc comment (this path
             // came from ls-tree so it always exists, but there is no reason to keep the one git
-            // subcommand that mishandles a bracketed "[N] "-prefixed path when a safe one is right
-            // there).
+            // subcommand that mishandles a glob-shaped path when a safe one is right there).
             if (!GitCli.TryRun(gitDir, modFolder, out var text, "cat-file", "-p", $"{gitRef}:{relativePath}")) continue;
             results.Add((relativePath, System.Text.Encoding.UTF8.GetBytes(text)));
         }

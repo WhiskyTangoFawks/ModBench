@@ -65,13 +65,12 @@ public sealed class PluginCompileServiceRefusalTests : IDisposable
         // blind to the EditorID argument) — exactly wrong for this test, which needs a synthetic,
         // not-yet-existing second name for the same FormKey. Computed directly through
         // SourceRecordPath.For with an out-of-range order index instead, so it can never coincide with
-        // a real sibling's own index (collision detection matches on FormKey suffix alone regardless,
-        // per SourceUnitResolver.NameCarries — the index is only here to keep this path visibly
-        // synthetic).
+        // a real sibling's own name (collision detection matches on FormKey suffix alone regardless,
+        // per SourceUnitResolver.NameCarries — the differing EditorID is only here to keep this path
+        // visibly synthetic).
         var npcSourceText = File.ReadAllText(_mod.NpcSourceFile);
         var duplicatePath = Path.Combine(_mod.ModFolder, SourceRecordPath.For(
-            TrackedModFixture.PluginName, "npc_", _mod.Npc.ToString(), "CopyOfFixtureNpc", GameRelease.Fallout4,
-            orderIndex: 99));
+            TrackedModFixture.PluginName, "npc_", _mod.Npc.ToString(), "CopyOfFixtureNpc", GameRelease.Fallout4));
         Assert.NotEqual(_mod.NpcSourceFile, duplicatePath);
         File.WriteAllText(duplicatePath, npcSourceText);
 

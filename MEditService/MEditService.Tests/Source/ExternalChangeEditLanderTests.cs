@@ -115,9 +115,16 @@ public sealed class ExternalChangeEditLanderTests : IDisposable
     /// (here, <c>MiddleNpc</c>'s) is not cleaned up — <c>Keep</c> only ever iterates records the
     /// incoming binary still holds, so it has no way to notice one dropped out entirely (this method
     /// has no external-deletion detection of any kind).</para>
+    ///
+    /// <para><b>#566 removed the defect rather than the symptom.</b> The duplicate arose because a
+    /// sibling's file name carried its list position, so an external mid-list delete renamed every
+    /// later sibling and left the pre-rename file behind. Names carry identity alone now, so a
+    /// sibling's deletion moves nothing: this test is kept, inverted, as the pin that it stays that
+    /// way — the surviving record's file must be at the very same path, byte-identical, with the
+    /// deleted record gone from the group's ordered child list instead.</para>
     /// </summary>
     [Fact]
-    public void Keep_AfterAnExternalMidListDelete_MovesTheLaterSiblingWithoutLeavingADuplicateFile()
+    public void Keep_AfterAnExternalMidListDelete_LeavesTheLaterSiblingEntirelyUntouched()
     {
         var middleFormKey = FormKey.Factory($"{0x900:X6}:{TrackedModFixture.PluginName}");
 
@@ -142,11 +149,13 @@ public sealed class ExternalChangeEditLanderTests : IDisposable
         var otherNpcPathBeforeDelete = SourceUnitResolver.FlatSourcePath(
             _mod.ModFolder, TrackedModFixture.PluginName, "npc_", _mod.OtherNpc.ToString(),
             TrackedModFixture.OtherNpcEditorId, GameRelease.Fallout4);
-        Assert.StartsWith("[2] UntouchedNpc", Path.GetFileNameWithoutExtension(otherNpcPathBeforeDelete), StringComparison.Ordinal);
+        Assert.StartsWith("UntouchedNpc", Path.GetFileNameWithoutExtension(otherNpcPathBeforeDelete), StringComparison.Ordinal);
         var otherNpcTextBeforeDelete = File.ReadAllText(otherNpcPathBeforeDelete);
 
-        // Step 2: MiddleNpc is deleted externally — UntouchedNpc's own index shifts from 2 to 1, with
-        // no change to its own fields at all.
+        // Step 2: MiddleNpc is deleted externally. Before #566 this shifted UntouchedNpc's own index
+        // from 2 to 1 and therefore renamed its file, with no change to its fields at all; now nothing
+        // about UntouchedNpc moves, and the quest of "did the stale file get cleaned up" is answered
+        // by there being no stale file to make.
         var secondMod = new Fallout4Mod(ModKey.FromFileName(TrackedModFixture.PluginName), Fallout4Release.Fallout4);
         var race2 = new Race(_mod.Race, Fallout4Release.Fallout4) { EditorID = TrackedModFixture.RaceEditorId };
         secondMod.Races.Add(race2);
@@ -161,15 +170,19 @@ public sealed class ExternalChangeEditLanderTests : IDisposable
             _mod.ModFolder, _mod.Plugin, PluginPath, GameRelease.Fallout4, _mod.Mirror.Index!.At(RecordRef.Effective), SharedSchemaReflector.Instance);
         Assert.True(secondLand.Applied, secondLand.RefusalReason);
 
-        // The old [2] file is gone — not left behind as a duplicate claiming the same FormKey.
-        Assert.False(File.Exists(otherNpcPathBeforeDelete), $"expected the stale file at {otherNpcPathBeforeDelete} to be cleaned up");
-
-        // Exactly one file for UntouchedNpc remains, at its new index, with its content intact.
+        // Exactly one file for UntouchedNpc, at the same path it already had, with its content
+        // intact — a sibling's external deletion is not an event in this record's life at all.
         var npcsDir = Path.Combine(_mod.ModFolder, SourceRecordPath.RootFor(TrackedModFixture.PluginName), "Npcs");
         var otherNpcFiles = Directory.GetFiles(npcsDir, "*UntouchedNpc*");
         var survivor = Assert.Single(otherNpcFiles);
-        Assert.StartsWith("[1] UntouchedNpc", Path.GetFileNameWithoutExtension(survivor), StringComparison.Ordinal);
+        Assert.Equal(otherNpcPathBeforeDelete, survivor);
         Assert.Equal(otherNpcTextBeforeDelete, File.ReadAllText(survivor));
+
+        // The deleted sibling is gone from the group's ordered child list, and the survivor keeps its
+        // relative position behind the record that was not deleted.
+        Assert.Equal(
+            [_mod.Npc.ToString(), _mod.OtherNpc.ToString()],
+            SourceChildOrder.ListAt(SourceChildOrder.CarrierFor(npcsDir, parentIsRecord: false), "Npcs"));
     }
 
     /// <summary><c>Keep</c> reads the parked baseline through

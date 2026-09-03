@@ -180,8 +180,8 @@ public sealed class ContainmentRederivationTests : IDisposable
 
         var after = index.At(RecordRef.Effective).GetContainerChildren(_fixture.Plugin, _fixture.Quest.ToString());
         Assert.DoesNotContain(after, c => c.ChildFormKey == _fixture.DialogTopic2.ToString());
-        // The survivor after the deleted slot renumbers down by one — exactly what
-        // SourceUnitResolver.RenormalizeGroupOrder just did to its file name on disk.
+        // The survivor after the deleted slot renumbers down by one — exactly what the delete just
+        // did to the parent document's own ordered child list (SourceChildOrder.RemoveByIdentity).
         Assert.Equal(
             [(_fixture.DialogTopic.ToString(), 0), (_fixture.DialogTopic3.ToString(), 1)],
             after.OrderBy(c => c.SlotIndex).Select(c => (c.ChildFormKey, c.SlotIndex)));
