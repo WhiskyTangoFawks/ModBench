@@ -150,15 +150,7 @@ public sealed class SchemaReflectorLeafCoverageCompletenessTests
         // off the depth-0 walk this file does), so there is nothing to name in KnownGaps for them.
         ("ISceneActionGetter", "Type"),            // ASceneActionType — deliberately not abstract; see above
 
-        // ── Category 3: a real, non-abstract Loqui struct whose only members are themselves an
-        // unrecognized shape — a raw byte blob, not a Noggog vector struct.
-        // ScenePhaseUnusedData appears on both Scene's own phase
-        // data and SceneAction; the same reason both are named.
-        ("ISceneGetter", "Unused"),                // ScenePhaseUnusedData
-        ("ISceneGetter", "Unused2"),               // ScenePhaseUnusedData
-        ("ISceneActionGetter", "Unused"),          // ScenePhaseUnusedData
-
-        // ── Category 4: not a reflector gap at all — a false positive of this test's own simplistic
+        // ── Category 3: not a reflector gap at all — a false positive of this test's own simplistic
         // column-name matching against the sibling-shape merge. DamageType and its sibling
         // DamageTypeIndexed share one GRUP signature and both declare a `DamageTypes` property with
         // *different* shapes (IReadOnlyList<IDamageTypeItemGetter> vs IReadOnlyList<UInt32>) —

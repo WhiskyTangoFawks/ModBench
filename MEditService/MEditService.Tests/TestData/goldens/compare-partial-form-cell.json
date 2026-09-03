@@ -54,12 +54,14 @@
           "regions": null,
           "sky_and_weather_from_region": null,
           "temporary_unknown_group_data": 0,
+          "tvdt": null,
           "unknown_group_data": 0,
           "version2": 0,
           "water": null,
           "water_environment_map": null,
           "water_height": 100,
-          "water_velocity": null
+          "water_velocity": null,
+          "xwcn": null
         },
         "FormKey": "000800:Base.esm",
         "IsPartialForm": false,
@@ -106,12 +108,14 @@
           "regions": null,
           "sky_and_weather_from_region": null,
           "temporary_unknown_group_data": 0,
+          "tvdt": null,
           "unknown_group_data": 0,
           "version2": 0,
           "water": null,
           "water_environment_map": null,
           "water_height": 999,
-          "water_velocity": null
+          "water_velocity": null,
+          "xwcn": null
         },
         "FormKey": "000800:Base.esm",
         "IsPartialForm": true,
@@ -207,7 +211,12 @@
           "teleport_loc_name": null,
           "unknown": 0,
           "version2": 0,
-          "water_velocity": null
+          "water_velocity": null,
+          "xcvl": null,
+          "xcvr": null,
+          "xcza": null,
+          "xord": null,
+          "xwcn": null
         },
         "FormKey": "000800:Partial.esp",
         "IsPartialForm": false,

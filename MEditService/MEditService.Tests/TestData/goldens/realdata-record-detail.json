@@ -273,6 +273,7 @@
         },
         "model": {
           "color_remapping_index": null,
+          "data": "0x0400000000000000000000000000000000000000",
           "file": "CreationClub\\_Shared\\VRWorkshop\\SetDressing\\VRWorkshop_EnemySpawner01.nif",
           "flags": null,
           "material_swap": null
@@ -334,6 +335,7 @@
         },
         "model": {
           "color_remapping_index": null,
+          "data": "0x0400000000000000000000000000000000000000",
           "file": "CreationClub\\_Shared\\VRWorkshop\\SetDressing\\VRWorkshop_EnemySpawner01.nif",
           "flags": null,
           "material_swap": null
@@ -395,6 +397,7 @@
         },
         "model": {
           "color_remapping_index": null,
+          "data": "0x0400000000000000000000000000000000000000",
           "file": "CreationClub\\_Shared\\VRWorkshop\\SetDressing\\VRWorkshop_EnemySpawner01.nif",
           "flags": null,
           "material_swap": null
@@ -788,6 +791,7 @@
         ],
         "stagger_rating": 0,
         "template_armor": null,
+        "unused": "0x000000",
         "value": 140,
         "version2": 3,
         "weight": 12
@@ -1122,6 +1126,7 @@
         ],
         "stagger_rating": 0,
         "template_armor": null,
+        "unused": "0x000000",
         "value": 200,
         "version2": 3,
         "weight": 15
@@ -1456,6 +1461,7 @@
         ],
         "stagger_rating": 0,
         "template_armor": null,
+        "unused": "0x000000",
         "value": 200,
         "version2": 3,
         "weight": 15
@@ -1953,6 +1959,7 @@
         "in_pre_vis_file_of": "00DB61:Fallout4.esm",
         "is_deleted": false,
         "landscape": {
+          "data": "0x1D000000",
           "editor_id": null,
           "fallout4_major_record_flags": 262144,
           "form_version": 130,
@@ -10532,6 +10539,7 @@
               ],
               "waypoints": []
             },
+            "nnam": null,
             "onam": null,
             "pre_cut_map_entries": [],
             "version2": 6,
@@ -10558,12 +10566,14 @@
         ],
         "sky_and_weather_from_region": null,
         "temporary_unknown_group_data": 1,
+        "tvdt": null,
         "unknown_group_data": 0,
         "version2": 11,
         "water": null,
         "water_environment_map": null,
         "water_height": 3.4028235E+38,
-        "water_velocity": null
+        "water_velocity": null,
+        "xwcn": null
       },
       "FormKey": "00DB41:Fallout4.esm",
       "IsWinner": true,
@@ -11241,6 +11251,7 @@
         "in_pre_vis_file_of": "00DB61:Fallout4.esm",
         "is_deleted": false,
         "landscape": {
+          "data": "0x1D000000",
           "editor_id": null,
           "fallout4_major_record_flags": 262144,
           "form_version": 130,
@@ -24980,6 +24991,7 @@
               ],
               "waypoints": []
             },
+            "nnam": null,
             "onam": null,
             "pre_cut_map_entries": [],
             "version2": 8,
@@ -25005,12 +25017,14 @@
         ],
         "sky_and_weather_from_region": null,
         "temporary_unknown_group_data": 1,
+        "tvdt": null,
         "unknown_group_data": 0,
         "version2": 11,
         "water": null,
         "water_environment_map": null,
         "water_height": 3.4028235E+38,
-        "water_velocity": null
+        "water_velocity": null,
+        "xwcn": null
       },
       "FormKey": "00DB42:Fallout4.esm",
       "IsWinner": true,
@@ -25643,6 +25657,7 @@
         "in_pre_vis_file_of": "00DB61:Fallout4.esm",
         "is_deleted": false,
         "landscape": {
+          "data": "0x1D000000",
           "editor_id": null,
           "fallout4_major_record_flags": 262144,
           "form_version": 128,
@@ -40837,6 +40852,7 @@
               ],
               "waypoints": []
             },
+            "nnam": null,
             "onam": null,
             "pre_cut_map_entries": [],
             "version2": 6,
@@ -40861,12 +40877,14 @@
         ],
         "sky_and_weather_from_region": null,
         "temporary_unknown_group_data": 0,
+        "tvdt": null,
         "unknown_group_data": 0,
         "version2": 11,
         "water": null,
         "water_environment_map": null,
         "water_height": 3.4028235E+38,
-        "water_velocity": null
+        "water_velocity": null,
+        "xwcn": null
       },
       "FormKey": "00DB43:Fallout4.esm",
       "IsWinner": true,
@@ -41240,6 +41258,7 @@
         },
         "forced_alias": null,
         "greet_distance": null,
+        "intv": null,
         "is_deleted": false,
         "major_flags": "0",
         "override_file_name": null,
@@ -41262,6 +41281,7 @@
             "speaker_idle_animation": null,
             "stop_on_scene_end": false,
             "text": "",
+            "text_hash": "0x405461B3151AD001",
             "unknown": 1
           }
         ],
@@ -41297,6 +41317,7 @@
         },
         "forced_alias": null,
         "greet_distance": null,
+        "intv": null,
         "is_deleted": false,
         "major_flags": "0",
         "override_file_name": null,
@@ -41319,6 +41340,7 @@
             "speaker_idle_animation": null,
             "stop_on_scene_end": false,
             "text": "",
+            "text_hash": "0x6011A0B0151AD001",
             "unknown": 1
           }
         ],
@@ -41354,6 +41376,7 @@
         },
         "forced_alias": null,
         "greet_distance": null,
+        "intv": null,
         "is_deleted": false,
         "major_flags": "0",
         "override_file_name": null,
@@ -41376,6 +41399,7 @@
             "speaker_idle_animation": null,
             "stop_on_scene_end": false,
             "text": "",
+            "text_hash": "0x80B7CDAD151AD001",
             "unknown": 1
           }
         ],
@@ -41503,6 +41527,7 @@
         "major_flags": "2048",
         "model": {
           "color_remapping_index": null,
+          "data": "0x0400000000000000000000000000000000000000",
           "file": "Props\\Note_LowPoly.nif",
           "flags": null,
           "material_swap": null
@@ -41557,6 +41582,7 @@
         "major_flags": "2048",
         "model": {
           "color_remapping_index": null,
+          "data": "0x0400000000000000000000000000000000000000",
           "file": "Props\\Note_LowPoly.nif",
           "flags": null,
           "material_swap": null
@@ -41611,6 +41637,7 @@
         "major_flags": "2048",
         "model": {
           "color_remapping_index": null,
+          "data": "0x0400000000000000000000000000000000000000",
           "file": "Props\\Note_LowPoly.nif",
           "flags": null,
           "material_swap": null
@@ -41746,6 +41773,7 @@
         "major_flags": "262144",
         "mood": "Neutral",
         "morphs": [],
+        "nam5": "0xFF00",
         "nam7": null,
         "name": "",
         "native_terminal": null,
@@ -41892,6 +41920,7 @@
         "sleeping_outfit": null,
         "sound_level": "Normal",
         "sounds": null,
+        "sounds_finalize": null,
         "spectator_override_package_list": null,
         "template_actors": null,
         "texture_lighting": {
@@ -42016,6 +42045,7 @@
         "major_flags": "262144",
         "mood": "Neutral",
         "morphs": [],
+        "nam5": "0xFF00",
         "nam7": null,
         "name": null,
         "native_terminal": null,
@@ -42104,6 +42134,7 @@
         "sleeping_outfit": null,
         "sound_level": "Normal",
         "sounds": null,
+        "sounds_finalize": null,
         "spectator_override_package_list": null,
         "template_actors": {
           "ai_data_template": "2499C7:Fallout4.esm",
@@ -42241,6 +42272,7 @@
         "major_flags": "262144",
         "mood": "Neutral",
         "morphs": [],
+        "nam5": "0xFF00",
         "nam7": null,
         "name": null,
         "native_terminal": null,
@@ -42373,6 +42405,7 @@
         "sleeping_outfit": null,
         "sound_level": "Normal",
         "sounds": null,
+        "sounds_finalize": null,
         "spectator_override_package_list": null,
         "template_actors": {
           "ai_data_template": "0E6B42:Fallout4.esm",
@@ -42437,6 +42470,7 @@
             "external": null,
             "external_alias_location": null,
             "factions": [],
+            "find_matching_ref_from_event": null,
             "find_matching_ref_near_alias": null,
             "flags": 656,
             "forced_reference": null,
@@ -42470,6 +42504,7 @@
             "external": null,
             "external_alias_location": null,
             "factions": [],
+            "find_matching_ref_from_event": null,
             "find_matching_ref_near_alias": null,
             "flags": 656,
             "forced_reference": null,
@@ -42503,6 +42538,7 @@
             "external": null,
             "external_alias_location": null,
             "factions": [],
+            "find_matching_ref_from_event": null,
             "find_matching_ref_near_alias": null,
             "flags": 656,
             "forced_reference": null,
@@ -42536,6 +42572,7 @@
             "external": null,
             "external_alias_location": null,
             "factions": [],
+            "find_matching_ref_from_event": null,
             "find_matching_ref_near_alias": null,
             "flags": 656,
             "forced_reference": null,
@@ -42569,6 +42606,7 @@
             "external": null,
             "external_alias_location": null,
             "factions": [],
+            "find_matching_ref_from_event": null,
             "find_matching_ref_near_alias": null,
             "flags": 656,
             "forced_reference": null,
@@ -42602,6 +42640,7 @@
             "external": null,
             "external_alias_location": null,
             "factions": [],
+            "find_matching_ref_from_event": null,
             "find_matching_ref_near_alias": null,
             "flags": 656,
             "forced_reference": null,
@@ -42635,6 +42674,7 @@
             "external": null,
             "external_alias_location": null,
             "factions": [],
+            "find_matching_ref_from_event": null,
             "find_matching_ref_near_alias": null,
             "flags": 656,
             "forced_reference": null,
@@ -42668,6 +42708,7 @@
             "external": null,
             "external_alias_location": null,
             "factions": [],
+            "find_matching_ref_from_event": null,
             "find_matching_ref_near_alias": null,
             "flags": 656,
             "forced_reference": null,
@@ -42701,6 +42742,7 @@
             "external": null,
             "external_alias_location": null,
             "factions": [],
+            "find_matching_ref_from_event": null,
             "find_matching_ref_near_alias": null,
             "flags": 656,
             "forced_reference": null,
@@ -42734,6 +42776,7 @@
             "external": null,
             "external_alias_location": null,
             "factions": [],
+            "find_matching_ref_from_event": null,
             "find_matching_ref_near_alias": null,
             "flags": 656,
             "forced_reference": null,
@@ -42767,6 +42810,7 @@
             "external": null,
             "external_alias_location": null,
             "factions": [],
+            "find_matching_ref_from_event": null,
             "find_matching_ref_near_alias": null,
             "flags": 656,
             "forced_reference": null,
@@ -42800,6 +42844,7 @@
             "external": null,
             "external_alias_location": null,
             "factions": [],
+            "find_matching_ref_from_event": null,
             "find_matching_ref_near_alias": null,
             "flags": 656,
             "forced_reference": null,
@@ -42833,6 +42878,7 @@
             "external": null,
             "external_alias_location": null,
             "factions": [],
+            "find_matching_ref_from_event": null,
             "find_matching_ref_near_alias": null,
             "flags": 656,
             "forced_reference": null,
@@ -42866,6 +42912,7 @@
             "external": null,
             "external_alias_location": null,
             "factions": [],
+            "find_matching_ref_from_event": null,
             "find_matching_ref_near_alias": null,
             "flags": 656,
             "forced_reference": null,
@@ -42899,6 +42946,7 @@
             "external": null,
             "external_alias_location": null,
             "factions": [],
+            "find_matching_ref_from_event": null,
             "find_matching_ref_near_alias": null,
             "flags": 656,
             "forced_reference": null,
@@ -42932,6 +42980,7 @@
             "external": null,
             "external_alias_location": null,
             "factions": [],
+            "find_matching_ref_from_event": null,
             "find_matching_ref_near_alias": null,
             "flags": 656,
             "forced_reference": null,
@@ -42965,6 +43014,7 @@
             "external": null,
             "external_alias_location": null,
             "factions": [],
+            "find_matching_ref_from_event": null,
             "find_matching_ref_near_alias": null,
             "flags": 656,
             "forced_reference": null,
@@ -42998,6 +43048,7 @@
             "external": null,
             "external_alias_location": null,
             "factions": [],
+            "find_matching_ref_from_event": null,
             "find_matching_ref_near_alias": null,
             "flags": 656,
             "forced_reference": null,
@@ -43031,6 +43082,7 @@
             "external": null,
             "external_alias_location": null,
             "factions": [],
+            "find_matching_ref_from_event": null,
             "find_matching_ref_near_alias": null,
             "flags": 656,
             "forced_reference": null,
@@ -43064,6 +43116,7 @@
             "external": null,
             "external_alias_location": null,
             "factions": [],
+            "find_matching_ref_from_event": null,
             "find_matching_ref_near_alias": null,
             "flags": 656,
             "forced_reference": null,
@@ -43097,6 +43150,7 @@
             "external": null,
             "external_alias_location": null,
             "factions": [],
+            "find_matching_ref_from_event": null,
             "find_matching_ref_near_alias": null,
             "flags": 656,
             "forced_reference": null,
@@ -43130,6 +43184,7 @@
             "external": null,
             "external_alias_location": null,
             "factions": [],
+            "find_matching_ref_from_event": null,
             "find_matching_ref_near_alias": null,
             "flags": 656,
             "forced_reference": null,
@@ -43163,6 +43218,7 @@
             "external": null,
             "external_alias_location": null,
             "factions": [],
+            "find_matching_ref_from_event": null,
             "find_matching_ref_near_alias": null,
             "flags": 656,
             "forced_reference": null,
@@ -43196,6 +43252,7 @@
             "external": null,
             "external_alias_location": null,
             "factions": [],
+            "find_matching_ref_from_event": null,
             "find_matching_ref_near_alias": null,
             "flags": 656,
             "forced_reference": null,
@@ -43229,6 +43286,7 @@
             "external": null,
             "external_alias_location": null,
             "factions": [],
+            "find_matching_ref_from_event": null,
             "find_matching_ref_near_alias": null,
             "flags": 656,
             "forced_reference": null,
@@ -43262,6 +43320,7 @@
             "external": null,
             "external_alias_location": null,
             "factions": [],
+            "find_matching_ref_from_event": null,
             "find_matching_ref_near_alias": null,
             "flags": 656,
             "forced_reference": null,
@@ -43295,6 +43354,7 @@
             "external": null,
             "external_alias_location": null,
             "factions": [],
+            "find_matching_ref_from_event": null,
             "find_matching_ref_near_alias": null,
             "flags": 4240,
             "forced_reference": null,
@@ -43328,6 +43388,7 @@
             "external": null,
             "external_alias_location": null,
             "factions": [],
+            "find_matching_ref_from_event": null,
             "find_matching_ref_near_alias": null,
             "flags": 4240,
             "forced_reference": null,
@@ -43361,6 +43422,7 @@
             "external": null,
             "external_alias_location": null,
             "factions": [],
+            "find_matching_ref_from_event": null,
             "find_matching_ref_near_alias": null,
             "flags": 4240,
             "forced_reference": null,
@@ -43397,6 +43459,7 @@
             },
             "external_alias_location": null,
             "factions": [],
+            "find_matching_ref_from_event": null,
             "find_matching_ref_near_alias": null,
             "flags": 17825794,
             "forced_reference": null,
@@ -43430,6 +43493,7 @@
             "external": null,
             "external_alias_location": null,
             "factions": [],
+            "find_matching_ref_from_event": null,
             "find_matching_ref_near_alias": null,
             "flags": 4240,
             "forced_reference": null,
@@ -43463,6 +43527,7 @@
             "external": null,
             "external_alias_location": null,
             "factions": [],
+            "find_matching_ref_from_event": null,
             "find_matching_ref_near_alias": null,
             "flags": 4240,
             "forced_reference": null,
@@ -43496,6 +43561,7 @@
             "external": null,
             "external_alias_location": null,
             "factions": [],
+            "find_matching_ref_from_event": null,
             "find_matching_ref_near_alias": null,
             "flags": 144,
             "forced_reference": null,
@@ -44304,6 +44370,7 @@
             "external": null,
             "external_alias_location": null,
             "factions": [],
+            "find_matching_ref_from_event": null,
             "find_matching_ref_near_alias": null,
             "flags": 0,
             "forced_reference": null,
@@ -44337,6 +44404,7 @@
             "external": null,
             "external_alias_location": null,
             "factions": [],
+            "find_matching_ref_from_event": null,
             "find_matching_ref_near_alias": null,
             "flags": 8,
             "forced_reference": null,
@@ -44412,6 +44480,7 @@
             "external": null,
             "external_alias_location": null,
             "factions": null,
+            "find_matching_ref_from_event": null,
             "find_matching_ref_near_alias": null,
             "flags": 0,
             "forced_reference": null,
@@ -44445,6 +44514,7 @@
             "external": null,
             "external_alias_location": null,
             "factions": [],
+            "find_matching_ref_from_event": null,
             "find_matching_ref_near_alias": null,
             "flags": 8,
             "forced_reference": null,
@@ -44478,6 +44548,7 @@
             "external": null,
             "external_alias_location": null,
             "factions": [],
+            "find_matching_ref_from_event": null,
             "find_matching_ref_near_alias": null,
             "flags": 8,
             "forced_reference": null,
@@ -44511,6 +44582,7 @@
             "external": null,
             "external_alias_location": null,
             "factions": [],
+            "find_matching_ref_from_event": null,
             "find_matching_ref_near_alias": null,
             "flags": 0,
             "forced_reference": null,
@@ -44548,6 +44620,7 @@
             "external": null,
             "external_alias_location": null,
             "factions": [],
+            "find_matching_ref_from_event": null,
             "find_matching_ref_near_alias": null,
             "flags": 0,
             "forced_reference": null,
@@ -44584,6 +44657,7 @@
             "external": null,
             "external_alias_location": null,
             "factions": [],
+            "find_matching_ref_from_event": null,
             "find_matching_ref_near_alias": null,
             "flags": 0,
             "forced_reference": null,
@@ -44626,6 +44700,7 @@
             "external": null,
             "external_alias_location": null,
             "factions": [],
+            "find_matching_ref_from_event": null,
             "find_matching_ref_near_alias": null,
             "flags": 0,
             "forced_reference": null,
@@ -44662,6 +44737,7 @@
             "external": null,
             "external_alias_location": null,
             "factions": [],
+            "find_matching_ref_from_event": null,
             "find_matching_ref_near_alias": null,
             "flags": 0,
             "forced_reference": null,
@@ -44697,6 +44773,7 @@
             "external": null,
             "external_alias_location": null,
             "factions": [],
+            "find_matching_ref_from_event": null,
             "find_matching_ref_near_alias": null,
             "flags": 128,
             "forced_reference": null,
@@ -44730,6 +44807,7 @@
             "external": null,
             "external_alias_location": null,
             "factions": [],
+            "find_matching_ref_from_event": null,
             "find_matching_ref_near_alias": null,
             "flags": 0,
             "forced_reference": "01E2EA:Fallout4.esm",
@@ -44763,6 +44841,7 @@
             "external": null,
             "external_alias_location": null,
             "factions": [],
+            "find_matching_ref_from_event": null,
             "find_matching_ref_near_alias": null,
             "flags": 0,
             "forced_reference": null,
@@ -44800,6 +44879,7 @@
             "external": null,
             "external_alias_location": null,
             "factions": [],
+            "find_matching_ref_from_event": null,
             "find_matching_ref_near_alias": null,
             "flags": 0,
             "forced_reference": "01D318:Fallout4.esm",
@@ -44836,6 +44916,7 @@
             },
             "external_alias_location": null,
             "factions": [],
+            "find_matching_ref_from_event": null,
             "find_matching_ref_near_alias": null,
             "flags": 17825942,
             "forced_reference": null,
@@ -44919,7 +45000,8 @@
                       "run_on_type": "Subject",
                       "unknown3": -1
                     },
-                    "flags": 0
+                    "flags": 0,
+                    "unknown1": "0xEFA241"
                   },
                   {
                     "compare_operator": "LessThan",
@@ -44928,7 +45010,8 @@
                       "run_on_type": "Subject",
                       "unknown3": -1
                     },
-                    "flags": 0
+                    "flags": 0,
+                    "unknown1": "0xEFA241"
                   }
                 ],
                 "entry": null,
@@ -45001,7 +45084,8 @@
                       "run_on_type": "Subject",
                       "unknown3": -1
                     },
-                    "flags": 1
+                    "flags": 1,
+                    "unknown1": "0xEFA241"
                   },
                   {
                     "compare_operator": "EqualTo",
@@ -45010,7 +45094,8 @@
                       "run_on_type": "Subject",
                       "unknown3": -1
                     },
-                    "flags": 1
+                    "flags": 1,
+                    "unknown1": "0xEFA241"
                   }
                 ],
                 "entry": null,
@@ -46276,6 +46361,8 @@
         "subgraph_template_race": "06B4EC:Fallout4.esm",
         "subgraphs": [],
         "unarmed_weapon": "1C403B:Fallout4.esm",
+        "unknown": "0xFFFFFFFFFFFFFFFF",
+        "unknown2": "0x0000803E0000A04021010000000000000000000000000000000000000000000000000000",
         "version2": 9,
         "xpvalue": 0
       },
@@ -47293,6 +47380,8 @@
         "subgraph_template_race": "01D698:Fallout4.esm",
         "subgraphs": [],
         "unarmed_weapon": "0C2C2B:Fallout4.esm",
+        "unknown": "0x0000000001000000",
+        "unknown2": "0x00000000000000000000000000000000000000000000000000000000000096C300000000",
         "version2": 2,
         "xpvalue": 0
       },
@@ -48245,6 +48334,8 @@
           }
         ],
         "unarmed_weapon": null,
+        "unknown": "0xFFFFFFFFFFFFFFFF",
+        "unknown2": "0x00000000000000000000000000000000000000000000000000000000000096C300000000",
         "version2": 0,
         "xpvalue": 10
       },
@@ -48339,7 +48430,12 @@
         "teleport_loc_name": null,
         "unknown": 0,
         "version2": 1,
-        "water_velocity": null
+        "water_velocity": null,
+        "xcvl": null,
+        "xcvr": null,
+        "xcza": null,
+        "xord": null,
+        "xwcn": null
       },
       "FormKey": "0782AA:Fallout4.esm",
       "IsWinner": true,
@@ -48430,7 +48526,12 @@
         "teleport_loc_name": null,
         "unknown": 0,
         "version2": 0,
-        "water_velocity": null
+        "water_velocity": null,
+        "xcvl": null,
+        "xcvr": null,
+        "xcza": null,
+        "xord": null,
+        "xwcn": null
       },
       "FormKey": "0782B7:Fallout4.esm",
       "IsWinner": true,
@@ -48519,7 +48620,12 @@
         "teleport_loc_name": null,
         "unknown": 0,
         "version2": 1,
-        "water_velocity": null
+        "water_velocity": null,
+        "xcvl": null,
+        "xcvr": null,
+        "xcza": null,
+        "xord": null,
+        "xwcn": null
       },
       "FormKey": "0782B8:Fallout4.esm",
       "IsWinner": true,
@@ -48572,9 +48678,11 @@
             "set_parent_quest_stage": null,
             "start_phase": 0,
             "start_scenes": [],
+            "stsc": null,
             "timer_max_seconds": null,
             "timer_min_seconds": null,
-            "topic": null
+            "topic": null,
+            "unused": null
           },
           {
             "alias_id": 1,
@@ -48613,9 +48721,11 @@
             "set_parent_quest_stage": null,
             "start_phase": 2,
             "start_scenes": [],
+            "stsc": null,
             "timer_max_seconds": null,
             "timer_min_seconds": null,
-            "topic": null
+            "topic": null,
+            "unused": null
           },
           {
             "alias_id": 1,
@@ -48654,9 +48764,11 @@
             "set_parent_quest_stage": null,
             "start_phase": 1,
             "start_scenes": [],
+            "stsc": null,
             "timer_max_seconds": null,
             "timer_min_seconds": null,
-            "topic": null
+            "topic": null,
+            "unused": null
           }
         ],
         "actors": [
@@ -48705,7 +48817,10 @@
         "quest": "003648:Fallout4.esm",
         "set_parent_quest_stage": null,
         "template": null,
-        "version2": 6
+        "unused": null,
+        "unused2": null,
+        "version2": 6,
+        "vnam": "0x03000000030000000300000003000000"
       },
       "FormKey": "004E1E:Fallout4.esm",
       "IsWinner": true,
@@ -48756,9 +48871,11 @@
             "set_parent_quest_stage": null,
             "start_phase": 0,
             "start_scenes": [],
+            "stsc": null,
             "timer_max_seconds": null,
             "timer_min_seconds": null,
-            "topic": null
+            "topic": null,
+            "unused": null
           },
           {
             "alias_id": 2,
@@ -48797,9 +48914,11 @@
             "set_parent_quest_stage": null,
             "start_phase": 1,
             "start_scenes": [],
+            "stsc": null,
             "timer_max_seconds": null,
             "timer_min_seconds": null,
-            "topic": null
+            "topic": null,
+            "unused": null
           },
           {
             "alias_id": 2,
@@ -48838,9 +48957,11 @@
             "set_parent_quest_stage": null,
             "start_phase": 3,
             "start_scenes": [],
+            "stsc": null,
             "timer_max_seconds": null,
             "timer_min_seconds": null,
-            "topic": null
+            "topic": null,
+            "unused": null
           },
           {
             "alias_id": 2,
@@ -48879,9 +49000,11 @@
             "set_parent_quest_stage": null,
             "start_phase": 2,
             "start_scenes": [],
+            "stsc": null,
             "timer_max_seconds": null,
             "timer_min_seconds": null,
-            "topic": null
+            "topic": null,
+            "unused": null
           }
         ],
         "actors": [
@@ -48938,7 +49061,10 @@
         "quest": "003648:Fallout4.esm",
         "set_parent_quest_stage": null,
         "template": null,
-        "version2": 6
+        "unused": null,
+        "unused2": null,
+        "version2": 6,
+        "vnam": "0x03000000030000000300000003000000"
       },
       "FormKey": "00583D:Fallout4.esm",
       "IsWinner": true,
@@ -48991,9 +49117,11 @@
             "set_parent_quest_stage": null,
             "start_phase": 0,
             "start_scenes": [],
+            "stsc": null,
             "timer_max_seconds": null,
             "timer_min_seconds": null,
-            "topic": null
+            "topic": null,
+            "unused": null
           },
           {
             "alias_id": 3,
@@ -49032,9 +49160,11 @@
             "set_parent_quest_stage": null,
             "start_phase": 1,
             "start_scenes": [],
+            "stsc": null,
             "timer_max_seconds": null,
             "timer_min_seconds": null,
-            "topic": null
+            "topic": null,
+            "unused": null
           },
           {
             "alias_id": 3,
@@ -49082,7 +49212,8 @@
                       "run_on_type": "Subject",
                       "unknown3": -1
                     },
-                    "flags": 0
+                    "flags": 0,
+                    "unknown1": "0x8CFA0D"
                   }
                 ],
                 "phase_index": 0,
@@ -49090,9 +49221,11 @@
                 "start_phase_for_scene": null
               }
             ],
+            "stsc": null,
             "timer_max_seconds": null,
             "timer_min_seconds": null,
-            "topic": null
+            "topic": null,
+            "unused": null
           }
         ],
         "actors": [
@@ -49141,7 +49274,10 @@
         "quest": "003648:Fallout4.esm",
         "set_parent_quest_stage": null,
         "template": null,
-        "version2": 7
+        "unused": null,
+        "unused2": null,
+        "version2": 7,
+        "vnam": "0x03000000030000000300000003000000"
       },
       "FormKey": "017B27:Fallout4.esm",
       "IsWinner": true,
@@ -49215,6 +49351,7 @@
         "filter": null,
         "first_person_model": {
           "color_remapping_index": null,
+          "data": "0x0400000000000000000000000000000000000000",
           "file": "Weapons\\RocketHammer\\RocketHammer1st_1.nif",
           "flags": null,
           "material_swap": null
@@ -49242,6 +49379,7 @@
         "mo4_f": null,
         "model": {
           "color_remapping_index": null,
+          "data": "0x0400000000000000000000000000000000000000",
           "file": "Weapons\\RocketHammer\\RocketHammer1st.nif",
           "flags": null,
           "material_swap": null
@@ -49482,6 +49620,7 @@
         "filter": null,
         "first_person_model": {
           "color_remapping_index": null,
+          "data": "0x0400000000000000000000000000000000000000",
           "file": "Weapons\\AlienBlaster\\AlienBlaster_1.nif",
           "flags": null,
           "material_swap": null
@@ -49515,6 +49654,7 @@
         "mo4_f": null,
         "model": {
           "color_remapping_index": null,
+          "data": "0x04000000040000000000000002000000010000002FED9B2864647300607B9D87F6819D4B64647300607B9D87E86848AB64647300607B9D870F2C2A00646473001CDB88C55CF1E05C6267736D96CFA1BC",
           "file": "Weapons\\AlienBlaster\\AlienBlaster.nif",
           "flags": null,
           "material_swap": null
@@ -49702,6 +49842,7 @@
         "filter": null,
         "first_person_model": {
           "color_remapping_index": null,
+          "data": "0x0400000000000000000000000000000000000000",
           "file": "Weapons\\GaussRifle\\GaussRifle_1.nif",
           "flags": null,
           "material_swap": null
@@ -49735,6 +49876,7 @@
         "mo4_f": null,
         "model": {
           "color_remapping_index": null,
+          "data": "0x0400000000000000000000000000000000000000",
           "file": "Weapons\\GaussRifle\\GaussRifle.nif",
           "flags": null,
           "material_swap": null
@@ -50022,6 +50164,7 @@
       "EditorId": "Commonwealth",
       "Fields": {
         "canopy_shadow": null,
+        "cell_size_data": null,
         "climate": null,
         "cloud_model": null,
         "default_level_data": null,
@@ -50053,6 +50196,7 @@
           "x": 0,
           "y": 0
         },
+        "offset_data": null,
         "parent": null,
         "sub_cells": [],
         "sub_cells_timestamp": 0,
@@ -50106,13 +50250,15 @@
           "temporary_timestamp": 0,
           "temporary_unknown_group_data": 0,
           "timestamp": 1187602,
+          "tvdt": null,
           "unknown_group_data": 0,
           "version2": 7,
           "version_control": 5578510,
           "water": null,
           "water_environment_map": null,
           "water_height": 3.4028235E+38,
-          "water_velocity": null
+          "water_velocity": null,
+          "xwcn": null
         },
         "version2": 0,
         "water": null,

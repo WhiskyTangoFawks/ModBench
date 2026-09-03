@@ -149,3 +149,39 @@ describe('ScalarCell — immutable string cell (#258 / ADR-0039)', () => {
     expect(screen.getByText('Dogmeat').closest('[data-open-trigger]')).toBeNull();
   });
 });
+
+/**
+ * #690: a byte-slice field is an ordinary reflected leaf whose widget comes from its metadata
+ * `type` alone — a hex row edits as text because the schema says the field is hex, never because
+ * the value happens to look like hex. The wrong-length and non-hex refusals are the writer's
+ * (PRD corollary 6), so the cell's job is only to hand the typed text over verbatim.
+ */
+describe('ScalarCell — a hex row (#690)', () => {
+  const hexMeta = meta({ name: 'unknown3', type: 'hex' });
+
+  it('edits as text and commits the typed hex verbatim', () => {
+    const onCommit = vi.fn();
+    render(<ScalarCell value="0x11223344" meta={hexMeta} editable isFocused onCommit={onCommit} />);
+
+    fireEvent.click(screen.getByText('0x11223344'));
+    const input = screen.getByRole('textbox');
+    expect(input.getAttribute('type')).toBe('text');
+
+    fireEvent.change(input, { target: { value: '0xAABBCCDD' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+
+    expect(onCommit).toHaveBeenCalledWith('0xAABBCCDD');
+  });
+
+  it('hands a value the writer will refuse straight through, rather than silently correcting it', () => {
+    const onCommit = vi.fn();
+    render(<ScalarCell value="0x11223344" meta={hexMeta} editable isFocused onCommit={onCommit} />);
+
+    fireEvent.click(screen.getByText('0x11223344'));
+    const input = screen.getByRole('textbox');
+    fireEvent.change(input, { target: { value: '0xNOTHEX' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+
+    expect(onCommit).toHaveBeenCalledWith('0xNOTHEX');
+  });
+});

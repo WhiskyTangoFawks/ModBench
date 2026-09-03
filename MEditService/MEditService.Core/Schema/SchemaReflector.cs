@@ -1046,9 +1046,10 @@ public sealed partial class SchemaReflector
     internal const string PrimitiveElementListReason =
         "primitive-element list: no element write path exists at any nesting level";
 
-    /// <summary>A leaf whose LeafSpec produced no converter and is not a form link. Not reachable for
-    /// any shape ClassifyLeaf currently returns — every one of them has a converter or is a FormLink —
-    /// so this is the honest name for a branch that exists to keep the choice total.</summary>
+    /// <summary>A leaf whose LeafSpec produced no converter and is neither a form link nor a byte
+    /// slice. Not reachable for any shape ClassifyLeaf currently returns — every one of them has a
+    /// converter or is one of those two — so this is the honest name for a branch that exists to
+    /// keep the choice total.</summary>
     internal const string NoConverterReason =
         "leaf with no JSON converter and no form-link write path";
 
@@ -1173,10 +1174,12 @@ public sealed partial class SchemaReflector
         if (open == typeof(IGenderedItemGetter<>))
             return "gendered Male/Female pair — 20 fields; real data, deferred pending a presentation decision";
 
-        // 83 fields: raw binary blobs (Model.Data and friends). xEdit renders these as opaque hex
-        // "Unknown" fields; mEdit has no hex editor, and inventing one is a UI decision.
-        if (open == typeof(ReadOnlyMemorySlice<>))
-            return "raw byte/element blob — 83 fields; no hex presentation exists";
+        // 2 fields: Weather.CloudTextures (a slice of String) and Weather.NAM4 (a slice of Single).
+        // A slice of typed elements is a list shape; only a byte slice has a hex reading, and the
+        // element-type test is what keeps a byte slice reaching an untaught site loud rather than
+        // dropped under a reason that would be false of it.
+        if (open == typeof(ReadOnlyMemorySlice<>) && !IsByteSlice(shape))
+            return "non-byte element slice — 2 fields; an array of typed elements, not a hex blob";
 
         // 4 fields: LandscapeVertexHeightMap-style grids. Real data, tiny population, no grid shape.
         if (open == typeof(IReadOnlyArray2d<>))
@@ -1458,6 +1461,7 @@ public sealed partial class SchemaReflector
             { } c => LeafWrite.Writable(MakeApplier(pName, nullable: true, c, logger)),
             null when IsFormLink(core) => LeafWrite.Writable<object>(
                 (obj, val) => ApplyFormLinkJson(obj, val, pName, logger)),
+            null when IsByteSlice(core) => LeafWrite.Writable(MakeHexApplier(pName, nullable: true)),
             _ => LeafWrite.ReadOnly<object>(NoConverterReason),
         };
 
@@ -1867,6 +1871,7 @@ public sealed partial class SchemaReflector
             _ when core == typeof(float) => new("", "float", false, Empty, Empty),
             _ when core == typeof(string) || IsTranslatedString(core) => new("", "string", false, Empty, Empty),
             _ when IntegerTypes.Contains(core) => new("", "int", false, Empty, Empty),
+            _ when IsByteSlice(core) => new("", HexApiType, false, Empty, Empty),
             _ => null,
         };
     }
@@ -1980,6 +1985,12 @@ public sealed partial class SchemaReflector
                 v => new TranslatedString(Language.English, v.GetString()));
         }
 
+        if (IsByteSlice(core))
+        {
+            var g = SubGetter(prop);
+            return new(HexApiType, "VARCHAR", Empty, Empty, obj => HexText(g(obj)), Convert: null);
+        }
+
         if (core.IsEnum)
             return ClassifyEnumLeaf(prop, core);
 
@@ -2040,8 +2051,7 @@ public sealed partial class SchemaReflector
     }
 
     // The one applier shared by columns and sub-fields: writes a converted JSON value onto a
-    // property. Operates on `object`; the column path adapts the IMajorRecord receiver via
-    // MakeColumnApplier.
+    // property. Operates on `object`, which a column path takes as-is (Func is contravariant).
     //
     // Answers ApplyOutcome rather than being a void Action so each caller can tell a real
     // refusal (ValueRejected, PropertyNotFound at the top-level-column layer) from the sub-field
@@ -2089,22 +2099,9 @@ public sealed partial class SchemaReflector
         };
     }
 
-    // MakeApplier's own ApplyOutcome carries
-    // straight through to the column, since a top-level scalar column's failure modes (no such
-    // property on the runtime type, a converter that threw or declined) are real refusals at this
-    // layer, not the sub-field layer's "shared leaf-union member absent on this concrete leaf"
-    // no-op. RecordFieldWriter.TryApply is what translates PropertyNotFound/ValueRejected into their
-    // own named refusals.
-    private static Func<IMajorRecord, JsonElement, ApplyOutcome> MakeColumnApplier(
-        string pName, bool nullable, Func<JsonElement, object?> conv, ILogger logger)
-    {
-        var applier = MakeApplier(pName, nullable, conv, logger);
-        return (record, val) => applier(record, val);
-    }
-
     // A FormLink column's own failure modes (an
     // unparseable FormKey, a missing property) surface as ApplyOutcome.ValueRejected /
-    // .PropertyNotFound the same way MakeColumnApplier's scalar siblings do.
+    // .PropertyNotFound the same way this column's scalar siblings do.
     private static Func<IMajorRecord, JsonElement, ApplyOutcome> FormLinkColumnApplier(string pName, ILogger logger) =>
         (record, val) => ApplyFormLinkJson(record, val, pName, logger);
 
@@ -2147,6 +2144,7 @@ public sealed partial class SchemaReflector
             { } c => LeafWrite.Writable(MakeApplier(pName, nullable, c, logger)),
             null when IsFormLink(core) => LeafWrite.Writable<object>(
                 (obj, val) => ApplyFormLinkJson(obj, val, pName, logger)),
+            null when IsByteSlice(core) => LeafWrite.Writable(MakeHexApplier(pName, nullable)),
             _ => LeafWrite.ReadOnly<object>(NoConverterReason),
         };
         return new(colName, leaf.ApiType, leaf.ValidFormKeyTypes, leaf.EnumValues,
@@ -2156,6 +2154,86 @@ public sealed partial class SchemaReflector
 
     private static Func<object, object?> SubGetter(PropertyInfo prop) =>
         obj => { try { return prop.GetValue(obj); } catch { return null; } };
+
+    // ── Byte slices, as hex (#690) ────────────────────────────────────────────
+    // The text form is Mutagen's own (NewtonsoftJsonSerializationWriterKernel.WriteBytes): "0x" +
+    // uppercase hex, "[]" empty, "" absent. Reading and writing that exact grammar is what makes
+    // Extract and the generated json_extract view answer the same string for the same record.
+
+    private const string HexApiType = "hex";
+
+    private static bool IsByteSlice(Type core) =>
+        core.IsGenericType
+        && core.GetGenericTypeDefinition() == typeof(ReadOnlyMemorySlice<>)
+        && core.GetGenericArguments()[0] == typeof(byte);
+
+    private static string? HexText(object? raw) => raw switch
+    {
+        ReadOnlyMemorySlice<byte> s => s.Length == 0 ? "[]" : "0x" + Convert.ToHexString(s.Span),
+        _ => null,
+    };
+
+    /// <summary>Hex, with an optional <c>0x</c> prefix, or Mutagen's <c>"[]"</c> for an empty
+    /// slice. Odd-length and non-hex text have no byte reading and decline here rather than being
+    /// silently truncated to one.</summary>
+    private static bool TryParseHex(string text, out byte[] bytes)
+    {
+        if (text == "[]") { bytes = []; return true; }
+
+        var span = text.AsSpan();
+        if (span.StartsWith("0x", StringComparison.OrdinalIgnoreCase)) span = span[2..];
+        try
+        {
+            bytes = Convert.FromHexString(span);
+            return true;
+        }
+        catch (FormatException)
+        {
+            bytes = [];
+            return false;
+        }
+    }
+
+    /// <summary>Absent, in Mutagen's own byte-text grammar and in JSON: both spell "there is no
+    /// slice here".</summary>
+    private static bool IsAbsentSlice(JsonElement val) =>
+        val.ValueKind == JsonValueKind.Null || (val.ValueKind == JsonValueKind.String && val.GetString()!.Length == 0);
+
+    /// <summary>Whether writing <paramref name="newLength"/> bytes over <paramref name="existing"/>
+    /// would resize the slice. Nothing here can read a blob's internal structure, so nothing here
+    /// can know which bytes a resize would move. An absent or empty slice has no established size
+    /// and accepts any; a property this applier cannot read a slice out of at all refuses rather
+    /// than skipping the question.</summary>
+    private static bool ResizeRefused(object? existing, int newLength) => existing switch
+    {
+        null => false,
+        MemorySlice<byte> slice => slice.Length > 0 && slice.Length != newLength,
+        _ => true,
+    };
+
+    private static Func<object, JsonElement, ApplyOutcome> MakeHexApplier(string pName, bool nullable)
+    {
+        var resolve = ResolveProperty(pName);
+        return (obj, val) =>
+        {
+            var rp = resolve(obj.GetType());
+            if (rp == null) return ApplyOutcome.PropertyNotFound;
+
+            if (IsAbsentSlice(val))
+            {
+                if (!nullable) return ApplyOutcome.ValueRejected;
+                rp.SetValue(obj, null);
+                return ApplyOutcome.Applied;
+            }
+
+            if (val.ValueKind != JsonValueKind.String) return ApplyOutcome.ValueRejected;
+            if (!TryParseHex(val.GetString()!, out var bytes)) return ApplyOutcome.ValueRejected;
+            if (ResizeRefused(rp.GetValue(obj), bytes.Length)) return ApplyOutcome.ValueRejected;
+
+            rp.SetValue(obj, new MemorySlice<byte>(bytes));
+            return ApplyOutcome.Applied;
+        };
+    }
 
     // Answers ApplyOutcome the same way MakeApplier does, so a top-level
     // FormLink column's own malformed-value write (a missing property, an unparseable FormKey
@@ -2399,6 +2477,9 @@ public sealed partial class SchemaReflector
             return new("", "formKey", GetFormLinkValidTypes(elementType, game), Empty,
                 _ => null, Apply: LeafWrite.ReadOnly<object>(ElementTemplateReason), AllowsNull: true);
         }
+
+        if (IsByteSlice(elementType))
+            return new("", HexApiType, Empty, Empty, _ => null, Apply: LeafWrite.ReadOnly<object>(ElementTemplateReason));
         return TryMapPrimitive(elementType, out _, out var elemApiType, out _)
             ? new("", elemApiType, Empty, Empty, _ => null, Apply: LeafWrite.ReadOnly<object>(ElementTemplateReason))
             : null;
@@ -2512,11 +2593,13 @@ public sealed partial class SchemaReflector
         IEnumerable items, Type elementType, IReadOnlyList<SubFieldSpec>? subFields)
     {
         var isFl = IsFormLink(elementType);
+        var isBlob = IsByteSlice(elementType);
         var result = new List<object?>();
         foreach (var item in items)
         {
             if (isFl) result.Add((item as IFormLinkGetter)?.FormKeyNullable?.ToString());
             else if (subFields != null) result.Add(ExtractSubObject(item, subFields));
+            else if (isBlob) result.Add(HexText(item));
             else result.Add(item);
         }
         return result;
@@ -2556,8 +2639,12 @@ public sealed partial class SchemaReflector
         var pName = prop.Name;
         var apply = leaf.Convert switch
         {
-            { } c => LeafWrite.Writable(MakeColumnApplier(pName, nullable, c, logger)),
+            // An object-receiver applier is a column applier: Func is contravariant in its
+            // parameters, and a column's ApplyOutcome is MakeApplier's own, carried straight
+            // through. RecordFieldWriter.TryApply translates it into a named refusal.
+            { } c => LeafWrite.Writable<IMajorRecord>(MakeApplier(pName, nullable, c, logger)),
             null when IsFormLink(core) => LeafWrite.Writable(FormLinkColumnApplier(pName, logger)),
+            null when IsByteSlice(core) => LeafWrite.Writable<IMajorRecord>(MakeHexApplier(pName, nullable)),
             _ => LeafWrite.ReadOnly<IMajorRecord>(NoConverterReason),
         };
         return new(leaf.DuckDbType, r => leaf.Get(r), leaf.ApiType, leaf.ValidFormKeyTypes, leaf.EnumValues,

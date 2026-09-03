@@ -257,7 +257,7 @@ public sealed class RecordQueryServiceTests : IDisposable
         Assert.All(detail.Fields, f =>
         {
             Assert.NotEmpty(f.Metadata.Name);
-            Assert.Contains(f.Metadata.Type, new[] { "string", "int", "float", "bool", "enum", "formKey", "array", "struct" });
+            Assert.Contains(f.Metadata.Type, new[] { "string", "int", "float", "bool", "enum", "formKey", "array", "struct", "hex" });
         });
     }
 
