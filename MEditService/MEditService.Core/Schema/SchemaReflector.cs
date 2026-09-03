@@ -1173,10 +1173,11 @@ public sealed partial class SchemaReflector
         if (open == typeof(IGenderedItemGetter<>))
             return "gendered Male/Female pair — 20 fields; real data, deferred pending a presentation decision";
 
-        // 83 fields: raw binary blobs (Model.Data and friends). xEdit renders these as opaque hex
-        // "Unknown" fields; mEdit has no hex editor, and inventing one is a UI decision.
+        // 2 fields: Weather.CloudTextures (a slice of String) and Weather.NAM4 (a slice of Single).
+        // A byte slice is an ordinary hex leaf (#690); these two are not blobs at all but arrays of
+        // typed elements, and an array of strings or floats is a list shape, not a hex string.
         if (open == typeof(ReadOnlyMemorySlice<>))
-            return "raw byte/element blob — 83 fields; no hex presentation exists";
+            return "non-byte element slice — 2 fields; an array of typed elements, not a hex blob";
 
         // 4 fields: LandscapeVertexHeightMap-style grids. Real data, tiny population, no grid shape.
         if (open == typeof(IReadOnlyArray2d<>))
@@ -1867,6 +1868,7 @@ public sealed partial class SchemaReflector
             _ when core == typeof(float) => new("", "float", false, Empty, Empty),
             _ when core == typeof(string) || IsTranslatedString(core) => new("", "string", false, Empty, Empty),
             _ when IntegerTypes.Contains(core) => new("", "int", false, Empty, Empty),
+            _ when IsByteSlice(core) => new("", HexApiType, false, Empty, Empty),
             _ => null,
         };
     }
@@ -1978,6 +1980,12 @@ public sealed partial class SchemaReflector
             return new("string", "VARCHAR", Empty, Empty,
                 obj => { try { return (g(obj) as ITranslatedStringGetter)?.String; } catch { return null; } }, // Stryker disable once Block: silent accessor lambda — lookup-backed strings throw when game strings files are absent (see MEditService CLAUDE.md)
                 v => new TranslatedString(Language.English, v.GetString()));
+        }
+
+        if (IsByteSlice(core))
+        {
+            var g = SubGetter(prop);
+            return new(HexApiType, "VARCHAR", Empty, Empty, obj => HexText(g(obj)), Convert: null);
         }
 
         if (core.IsEnum)
@@ -2147,6 +2155,7 @@ public sealed partial class SchemaReflector
             { } c => LeafWrite.Writable(MakeApplier(pName, nullable, c, logger)),
             null when IsFormLink(core) => LeafWrite.Writable<object>(
                 (obj, val) => ApplyFormLinkJson(obj, val, pName, logger)),
+            null when IsByteSlice(core) => LeafWrite.Writable(MakeHexApplier(pName, nullable)),
             _ => LeafWrite.ReadOnly<object>(NoConverterReason),
         };
         return new(colName, leaf.ApiType, leaf.ValidFormKeyTypes, leaf.EnumValues,
@@ -2156,6 +2165,93 @@ public sealed partial class SchemaReflector
 
     private static Func<object, object?> SubGetter(PropertyInfo prop) =>
         obj => { try { return prop.GetValue(obj); } catch { return null; } };
+
+    // ── Byte slices, as hex (#690) ────────────────────────────────────────────
+    // The wire and document form is Mutagen's own, not a second spelling of it:
+    // NewtonsoftJsonSerializationWriterKernel.WriteBytes emits "0x" + uppercase hex, "[]" for an
+    // empty slice and "" for an absent one, and its reader accepts exactly those. Extract answers
+    // the same string the generated json_extract view reads out of the document, so the two agree
+    // by construction rather than by two implementations happening to match.
+
+    private const string HexApiType = "hex";
+
+    private static bool IsByteSlice(Type core) =>
+        core.IsGenericType
+        && core.GetGenericTypeDefinition() == typeof(ReadOnlyMemorySlice<>)
+        && core.GetGenericArguments()[0] == typeof(byte);
+
+    private static string? HexText(object? raw) => raw switch
+    {
+        ReadOnlyMemorySlice<byte> s => s.Length == 0 ? "[]" : "0x" + System.Convert.ToHexString(s.Span),
+        _ => null,
+    };
+
+    /// <summary>Mutagen's own byte-text grammar, as a parse: <c>""</c> is absent, <c>"[]"</c> is
+    /// empty, anything else is hex with an optional <c>0x</c> prefix. Odd-length or non-hex text
+    /// has no byte reading at all and declines — <c>Convert.FromHexString</c> throws for both
+    /// rather than truncating, which is why neither needs a length check of its own.</summary>
+    private static bool TryParseHex(string text, out byte[]? bytes)
+    {
+        bytes = null;
+        if (text.Length == 0) return true;
+        if (text == "[]") { bytes = []; return true; }
+
+        var span = text.AsSpan();
+        if (span.StartsWith("0x", StringComparison.OrdinalIgnoreCase)) span = span[2..];
+        try
+        {
+            bytes = System.Convert.FromHexString(span);
+            return true;
+        }
+        catch (FormatException)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Writes hex onto a byte slice, refusing any text whose <i>byte</i> length differs from the
+    /// one already there. mEdit cannot read a blob's internal structure, so it cannot know which
+    /// bytes a resize would move; refusing the resize is the only answer that cannot corrupt the
+    /// subrecord. A slice that is absent or empty has no established size for the new value to
+    /// differ from, and the write sets one — otherwise a never-populated blob would be permanently
+    /// unwritable.
+    /// </summary>
+    private static Func<object, JsonElement, ApplyOutcome> MakeHexApplier(string pName, bool nullable)
+    {
+        var resolve = ResolveProperty(pName);
+        return (obj, val) =>
+        {
+            var rp = resolve(obj.GetType());
+            if (rp == null) return ApplyOutcome.PropertyNotFound;
+
+            byte[]? bytes;
+            if (val.ValueKind == JsonValueKind.Null) bytes = null;
+            else if (val.ValueKind != JsonValueKind.String) return ApplyOutcome.ValueRejected;
+            else if (!TryParseHex(val.GetString()!, out bytes)) return ApplyOutcome.ValueRejected;
+
+            if (bytes == null)
+            {
+                if (!nullable) return ApplyOutcome.ValueRejected;
+                rp.SetValue(obj, null);
+                return ApplyOutcome.Applied;
+            }
+
+            if (rp.GetValue(obj) is MemorySlice<byte> { Length: > 0 } existing && existing.Length != bytes.Length)
+                return ApplyOutcome.ValueRejected;
+
+            rp.SetValue(obj, new MemorySlice<byte>(bytes));
+            return ApplyOutcome.Applied;
+        };
+    }
+
+    // MakeHexApplier adapted to the column receiver, the same way MakeColumnApplier adapts
+    // MakeApplier's: a top-level blob column and a nested one refuse identically.
+    private static Func<IMajorRecord, JsonElement, ApplyOutcome> HexColumnApplier(string pName, bool nullable)
+    {
+        var applier = MakeHexApplier(pName, nullable);
+        return (record, val) => applier(record, val);
+    }
 
     // Answers ApplyOutcome the same way MakeApplier does, so a top-level
     // FormLink column's own malformed-value write (a missing property, an unparseable FormKey
@@ -2399,6 +2495,9 @@ public sealed partial class SchemaReflector
             return new("", "formKey", GetFormLinkValidTypes(elementType, game), Empty,
                 _ => null, Apply: LeafWrite.ReadOnly<object>(ElementTemplateReason), AllowsNull: true);
         }
+
+        if (IsByteSlice(elementType))
+            return new("", HexApiType, Empty, Empty, _ => null, Apply: LeafWrite.ReadOnly<object>(ElementTemplateReason));
         return TryMapPrimitive(elementType, out _, out var elemApiType, out _)
             ? new("", elemApiType, Empty, Empty, _ => null, Apply: LeafWrite.ReadOnly<object>(ElementTemplateReason))
             : null;
@@ -2512,11 +2611,13 @@ public sealed partial class SchemaReflector
         IEnumerable items, Type elementType, IReadOnlyList<SubFieldSpec>? subFields)
     {
         var isFl = IsFormLink(elementType);
+        var isBlob = IsByteSlice(elementType);
         var result = new List<object?>();
         foreach (var item in items)
         {
             if (isFl) result.Add((item as IFormLinkGetter)?.FormKeyNullable?.ToString());
             else if (subFields != null) result.Add(ExtractSubObject(item, subFields));
+            else if (isBlob) result.Add(HexText(item));
             else result.Add(item);
         }
         return result;
@@ -2558,6 +2659,7 @@ public sealed partial class SchemaReflector
         {
             { } c => LeafWrite.Writable(MakeColumnApplier(pName, nullable, c, logger)),
             null when IsFormLink(core) => LeafWrite.Writable(FormLinkColumnApplier(pName, logger)),
+            null when IsByteSlice(core) => LeafWrite.Writable(HexColumnApplier(pName, nullable)),
             _ => LeafWrite.ReadOnly<IMajorRecord>(NoConverterReason),
         };
         return new(leaf.DuckDbType, r => leaf.Get(r), leaf.ApiType, leaf.ValidFormKeyTypes, leaf.EnumValues,

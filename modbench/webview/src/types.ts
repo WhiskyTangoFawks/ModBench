@@ -27,7 +27,7 @@ export type ParsedCondition = Schemas['ParsedCondition'];
  *  their own value's shape rather than from a second per-plugin metadata branch DiffRow would
  *  otherwise need. */
 export type FieldType =
-  | 'string' | 'int' | 'float' | 'bool' | 'enum' | 'formKey' | 'struct' | 'array'
+  | 'string' | 'int' | 'float' | 'bool' | 'enum' | 'formKey' | 'struct' | 'array' | 'hex'
   | 'vmadObject' | 'conditionFunction' | 'conditionRunOn' | 'conditionComparison' | 'conditionParam';
 
 /** `readOnly`/`defaultValue` are likewise adapter-only. `readOnly` is unconditional, regardless of

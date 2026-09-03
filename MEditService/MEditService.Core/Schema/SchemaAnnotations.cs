@@ -66,7 +66,6 @@ internal sealed record SchemaAnnotations(
         "IPlacedGetter",                     // abstract placed-record base, no members of its own
         "IScriptFragmentGetter",             // VMAD-adjacent, outside the reflected pipeline by design
         "IScriptEntryGetter",                // ditto
-        "IFindMatchingRefFromEventGetter",  // package-data leaf whose own members are all excluded shapes
     ];
 
     // wbByteRGBA in Fallout 4 (wbDefinitionsFO4.pas:7028 KYWD, :7040 LCRT, :7051 AACT, :8256 LCTN),
@@ -97,7 +96,6 @@ internal sealed record SchemaAnnotations(
             EmptySubSchemaTypes:
             [
                 .. EmptySubSchemaTypesInEveryGame,
-                "IScenePhaseUnusedDataGetter",  // byte-blob-only members
                 "IASceneActionTypeGetter",      // deliberately not abstract upstream; see KnownGaps
             ],
             AlphaBearingColorFields: [.. RgbaColorFields]),
@@ -106,7 +104,7 @@ internal sealed record SchemaAnnotations(
             ExcludedColumns: [.. GrupTimestampColumns],
             ExcludedMembers: [.. PlumbingMembers, ("IGlobalGetter", "TypeChar")],
             ExcludedAbstractUnions: [.. ConditionAndVmadUnions],
-            EmptySubSchemaTypes: [.. EmptySubSchemaTypesInEveryGame, "IScenePhaseUnusedDataGetter"],
+            EmptySubSchemaTypes: [.. EmptySubSchemaTypesInEveryGame],
             AlphaBearingColorFields: [.. RgbaColorFields]),
 
         [GameCategory.Starfield] = new(
