@@ -27,19 +27,22 @@ export function buildColumns(overrides: CompareOverride[]): Column[] {
   return overrides.map(o => ({ kind: 'disk' as const, key: columnKey(o.plugin, o.origin), override: o }));
 }
 
-// The *reason* a column is read-only — `immutableSet` alone (RecordPanelClient.ts) says
-// only that it is, which is genuinely ambiguous: a vanilla/DLC master is immutable and still named
-// by the load order, while a copy the load order doesn't name (ADR-0036) is immutable
-// *because* it isn't. a losing copy's registration derives IsImmutable:true alongside
+// Every column carries exactly one of these, always shown (PluginHeader) — never a silent
+// fourth "nothing to say" case, which used to read as a defect ("did my Track even work?") rather
+// than as the writable state it was. `immutableSet` alone (RecordPanelClient.ts) says only that a
+// column is immutable, which is genuinely ambiguous: a vanilla/DLC master is immutable and still
+// named by the load order, while a copy the load order doesn't name (ADR-0036) is immutable
+// *because* it isn't. A losing copy's registration derives IsImmutable:true alongside
 // InLoadOrder:false, so the two are never independent on the wire today — but a reader that only
 // checked isImmutable couldn't tell them apart, and PluginHeader needs to: the tooltip names a
 // different cause, and only the second dims (ADR-0035's "non-participating copies render dimmed").
-// ADR-0041: `untracked` is the only one of the three the user can undo —
+// ADR-0041: `untracked` is the only one of the four the user can undo —
 // "editing requires tracking; viewing never does", and the escape is one command, once, per mod.
-export type ReadOnlyReason = 'vanillaMaster' | 'notInLoadOrder' | 'untracked' | null;
+export type ColumnStatus = 'vanillaMaster' | 'notInLoadOrder' | 'untracked' | 'tracked';
 
 /**
- * Why this column cannot be written, or null when it can.
+ * This column's status, for PluginHeader's own label — always exactly one of the four, never
+ * absent.
  *
  * Ordered by what the user can do about it, deliberately: the two reasons they cannot fix here come
  * first, so a vanilla master is never told to run Track — a command that does not apply to it and
@@ -50,11 +53,11 @@ export type ReadOnlyReason = 'vanillaMaster' | 'notInLoadOrder' | 'untracked' | 
  * is not silently reporting every column as untracked; the record editor,
  * which is the surface that gates on it, always passes it.
  */
-export function readOnlyReason(
+export function columnStatus(
   isImmutable: boolean, inLoadOrder: boolean, isTracked = true,
-): ReadOnlyReason {
+): ColumnStatus {
   if (isImmutable) return inLoadOrder ? 'vanillaMaster' : 'notInLoadOrder';
-  return isTracked ? null : 'untracked';
+  return isTracked ? 'tracked' : 'untracked';
 }
 
 // ADR-0036: "origin appears inline in the header only when two loaded copies share a

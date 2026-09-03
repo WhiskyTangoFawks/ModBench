@@ -2,7 +2,7 @@ import '@testing-library/jest-dom';
 import { describe, it, expect } from 'vitest';
 import {
   buildColumns,
-  readOnlyReason,
+  columnStatus,
   collidingFilenames,
   parseElementIndex,
   getAtPath,
@@ -73,22 +73,22 @@ describe('buildColumns', () => {
   });
 });
 
-// The *reason* a column is read-only, distinct from the fact that it is — `immutableSet`
+// Every column carries exactly one of four statuses, always shown (PluginHeader) — `immutableSet`
 // alone can't tell a vanilla master (isImmutable, still inLoadOrder) apart from a copy the load
 // order doesn't name (isImmutable *because* !inLoadOrder — a losing copy's registration derives
 // both, ADR-0044). PluginHeader needs both to word the tooltip and decide whether to dim.
-describe('readOnlyReason', () => {
-  it('is null for a mutable column, regardless of inLoadOrder', () => {
-    expect(readOnlyReason(false, true)).toBeNull();
-    expect(readOnlyReason(false, false)).toBeNull();
+describe('columnStatus', () => {
+  it('is "tracked" for a mutable, tracked column, regardless of inLoadOrder', () => {
+    expect(columnStatus(false, true)).toBe('tracked');
+    expect(columnStatus(false, false)).toBe('tracked');
   });
 
   it('is "vanillaMaster" for an immutable column still named by the load order', () => {
-    expect(readOnlyReason(true, true)).toBe('vanillaMaster');
+    expect(columnStatus(true, true)).toBe('vanillaMaster');
   });
 
   it('is "notInLoadOrder" for an immutable column the load order does not name', () => {
-    expect(readOnlyReason(true, false)).toBe('notInLoadOrder');
+    expect(columnStatus(true, false)).toBe('notInLoadOrder');
   });
 
   // ADR-0041: "editing requires tracking; viewing never does". A mutable, loaded plugin in
@@ -96,18 +96,18 @@ describe('readOnlyReason', () => {
   // why it needs its own value rather than folding into the two above — each names a different way
   // out, and offering the wrong one is worse than offering none.
   it('is "untracked" for an otherwise editable column whose mod has no repository', () => {
-    expect(readOnlyReason(false, true, false)).toBe('untracked');
+    expect(columnStatus(false, true, false)).toBe('untracked');
   });
 
-  it('is null once that same column is tracked', () => {
-    expect(readOnlyReason(false, true, true)).toBeNull();
+  it('is "tracked" once that same column is tracked', () => {
+    expect(columnStatus(false, true, true)).toBe('tracked');
   });
 
   // Precedence, not an accident of ordering: a vanilla master cannot be tracked at all, so hearing
   // "run Track on it" would send the user somewhere that leads nowhere.
   it('prefers the reason the user cannot fix over the one they can', () => {
-    expect(readOnlyReason(true, true, false)).toBe('vanillaMaster');
-    expect(readOnlyReason(true, false, false)).toBe('notInLoadOrder');
+    expect(columnStatus(true, true, false)).toBe('vanillaMaster');
+    expect(columnStatus(true, false, false)).toBe('notInLoadOrder');
   });
 });
 

@@ -1,13 +1,13 @@
 import React from 'react';
 import type { RecordDetail } from './types';
-import { readOnlyReason } from './recordUtils';
+import { columnStatus, type ColumnStatus } from './recordUtils';
 
 interface PluginHeaderProps {
   override: RecordDetail;
   isImmutable: boolean;
   // ADR-0035: whether the effective load order actually names this copy — distinct from
   // isImmutable (a vanilla master is immutable and still true here; a shadowed copy is immutable
-  // *because* this is false). See recordUtils.ts's readOnlyReason for the derivation this
+  // *because* this is false). See recordUtils.ts's columnStatus for the derivation this
   // component consumes to word its own tooltip. Dimming itself is *not* this component's job —
   // RecordPanel's own <th> applies DIMMED_OPACITY once, at the header-cell level; setting it
   // again on a nested element would compound (CSS opacity multiplies on nesting — 0.55 twice
@@ -15,7 +15,7 @@ interface PluginHeaderProps {
   inLoadOrder: boolean;
   // ADR-0041: whether this plugin's mod folder is tracked. Distinct from the two flags
   // above and checked after them — an immutable plugin's read-only-ness is not something tracking
-  // can lift, so its own reason wins (see recordUtils.ts's readOnlyReason).
+  // can lift, so its own reason wins (see recordUtils.ts's columnStatus).
   isTracked: boolean;
   // ADR-0036: "origin appears inline in the header only when two loaded copies share a
   // filename" — decided by the caller (RecordPanel, via recordUtils.ts's collidingFilenames over
@@ -70,7 +70,11 @@ interface PluginHeaderProps {
 // different answers: a plugin in a mod folder is one Track away from editable, while a base-game
 // master can never be tracked at all and its blessed path is a patch plugin instead. Neither
 // message names the other's way out; that is asserted, not left to review.
-const READ_ONLY_TEXT: Record<'vanillaMaster' | 'notInLoadOrder' | 'untracked', { label: string; title: string }> = {
+//
+// Every ColumnStatus gets an entry, `tracked` included — a writable column states that plainly
+// rather than saying nothing, which used to read as "did my Track even work?" instead of as the
+// state it was.
+const STATUS_TEXT: Record<ColumnStatus, { label: string; title: string }> = {
   vanillaMaster: {
     label: '(read-only)',
     title:
@@ -99,6 +103,10 @@ const READ_ONLY_TEXT: Record<'vanillaMaster' | 'notInLoadOrder' | 'untracked', {
       + 'Run \u201cModbench: Track\u2026\u201d on it once to start editing \u2014 '
       + 'its records become text in the mod\u2019s own git repository, and your edits show up in Source Control.',
   },
+  tracked: {
+    label: '(tracked)',
+    title: 'This plugin\u2019s mod is tracked \u2014 its records are editable, and your edits show up in Source Control.',
+  },
 };
 
 // ADR-0038: nothing may declare a master directly —
@@ -116,7 +124,7 @@ export function PluginHeader({
   override: o, isImmutable, inLoadOrder, isTracked, showOriginInline, collapsed, onToggleCollapse,
   vscodeContext, onTogglePartialForm,
 }: PluginHeaderProps) {
-  const reason = readOnlyReason(isImmutable, inLoadOrder, isTracked);
+  const status = columnStatus(isImmutable, inLoadOrder, isTracked);
   // The same three facts that decide every other field's writability on this column — an
   // immutable, not-in-load-order or untracked column offers no affordance that could ever land, so
   // the checkbox is disabled (never hidden — the current state must stay visible) rather than a
@@ -139,14 +147,12 @@ export function PluginHeader({
           <div style={{ fontWeight: 400, opacity: 0.6, fontSize: '11px' }}>
             [{o.loadOrderIndex}]{o.isWinner ? ' ✓ winner' : ''}
           </div>
-          {reason && (
-            <div
-              style={{ marginTop: 3, fontSize: '10px', opacity: 0.55, fontStyle: 'italic' }}
-              title={READ_ONLY_TEXT[reason].title}
-            >
-              {READ_ONLY_TEXT[reason].label}
-            </div>
-          )}
+          <div
+            style={{ marginTop: 3, fontSize: '10px', opacity: 0.55, fontStyle: 'italic' }}
+            title={STATUS_TEXT[status].title}
+          >
+            {STATUS_TEXT[status].label}
+          </div>
           {o.isPartialFormable && (
             <label
               style={{ display: 'block', marginTop: 3, fontSize: '10px', opacity: 0.85 }}

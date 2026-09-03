@@ -191,11 +191,12 @@ describe('PluginHeader — untracked signposting (#415)', () => {
     expect(title.getAttribute('title')).not.toMatch(/Modbench: Track\u2026/);
   });
 
-  it('says nothing at all once the mod is tracked', () => {
+  it('shows "(tracked)" once the mod is tracked, not silence', () => {
     render(<PluginHeader {...baseProps()} isTracked />);
 
     expect(screen.queryByText('(untracked)')).toBeNull();
     expect(screen.queryByText('(read-only)')).toBeNull();
+    expect(screen.getByText('(tracked)')).toBeInTheDocument();
   });
 });
 
