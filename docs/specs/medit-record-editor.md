@@ -417,8 +417,10 @@ already empty: matching xEdit's own guard (`Element.EditValue` must be non-empty
   the value was invalid.
   Three cases stay distinct and must not be collapsed: a sub-field **absent** from the payload is
   skipped (absence is not targeting); the `value_type` and `concrete_type` **discriminators** are
-  read off the raw JSON before the object exists and are deliberately never applied, so naming one
-  is also a silent skip; only a sub-field the schema exposes with no write delegate refuses.
+  read off the raw JSON to decide which concrete type to construct, before the object any member
+  could be applied to exists — so naming one is a silent skip at the member level, and the edit it
+  carries has already been honoured by the enclosing object's own construction (#688); only a
+  sub-field the schema exposes with no write delegate refuses.
 - **A `string` cell's right-click menu opens the extended editor** — **Open in Editor…**
   ([ADR-0039](../adr/0039-no-left-click-leaves-the-record-panel.md); ADR-0034
   divergence #2). xEdit's own answer for this surface is `TfrmViewElements`, a separate modeless
@@ -951,7 +953,20 @@ VMAD/Condition rows included since they render through this exact code now:
    `value_type` resolves — no per-type table, and OMOD's own `BuildObjectModPropertyLeafFields`
    stays alongside it unmerged, since OMOD's leaf discovery is a genuinely different mechanism (a
    generic base with no reflectively-enumerable subclasses of its own), not a special case of this
-   one. `Npc.Level` (a single struct field, xEdit's `ACBS\Level`/`Level Mult`) and `Quest.Aliases`
+   one.
+   **Which leaf an element is, is itself an editable field** (#688). `concrete_type` is an `enum`
+   over the union's leaves, so switching one is an ordinary edit of the enclosing struct/array:
+   the editor resends the element with that one member changed, the write path builds the named
+   leaf, applies every member the payload also names that the new leaf declares, and leaves the
+   rest at the fresh instance's own defaults — the outgoing leaf's own members are dropped, not
+   refused. The user is never shown a Mutagen class name: the reflected metadata labels the row
+   (`FieldMetadata.DisplayLabel`, "Kind") and every value (`EnumLabels`, aligned with
+   `EnumValues`), each leaf named by what distinguishes it from its own base —
+   `QuestReferenceAlias` under `AQuestAlias` is "Reference". That is a pure function of two type
+   names, so it needs no per-game table; a leaf that *is* its base (`NpcLevel` under `ANpcLevel`)
+   keeps its own name, spaced. xEdit's own per-field presentation of these choices arrives with
+   the condition and script-property surfaces.
+   `Npc.Level` (a single struct field, xEdit's `ACBS\Level`/`Level Mult`) and `Quest.Aliases`
    (a list field, xEdit's `ALST`/`ALLS`/`ALCS`) are the two mandatory record editor fields this
    closes; the mechanism also covers, as a byproduct, `Book.Teaches`, `ColorRecord.Data`,
    `Holotape.Data`, `SoundDescriptor.Data`, `Perk.Effects`, `MagicEffect.Archetype`,

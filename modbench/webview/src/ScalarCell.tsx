@@ -28,6 +28,14 @@ interface ScalarCellProps {
   displayOverride?: string;
 }
 
+// What an enum value is *called*, when the schema says its own value is a wire token rather than
+// something to read (an abstract union's `concrete_type` carries Mutagen class names, #688).
+// Positional against enumValues, the same alignment enumBitValues already uses.
+function enumLabel(value: unknown, meta: FieldMetadata): string | undefined {
+  const index = meta.enumValues.indexOf(String(value));
+  return index < 0 ? undefined : meta.enumLabels?.[index] ?? undefined;
+}
+
 function ScalarText({ value, meta, displayOverride, ariaLabel }: {
   value: unknown; meta: FieldMetadata; displayOverride?: string; ariaLabel?: string;
 }) {
@@ -61,6 +69,9 @@ function ScalarText({ value, meta, displayOverride, ariaLabel }: {
 export function ScalarCell({
   value, meta, editable = false, isFocused = true, onCommit, ariaLabel, displayOverride,
 }: ScalarCellProps) {
+  // A caller's own override still wins: it is about this one cell, where the schema's label is
+  // about the value itself.
+  const shownLabel = displayOverride ?? enumLabel(value, meta);
   const [draft, setDraft] = useState(() => modelValue(value, meta));
   const [prevValue, setPrevValue] = useState(value);
   const [active, setActive] = useState(false);
@@ -76,7 +87,7 @@ export function ScalarCell({
   // its own long-value-read path is the right-click menu, wired at DiskCell/DiffRow, not a
   // gesture handled by this component.
   if (!editable || !onCommit) {
-    return <ScalarText value={value} meta={meta} displayOverride={displayOverride} ariaLabel={ariaLabel} />;
+    return <ScalarText value={value} meta={meta} displayOverride={shownLabel} ariaLabel={ariaLabel} />;
   }
 
   if (!active) {
@@ -91,7 +102,7 @@ export function ScalarCell({
         onDoubleClick={() => setActive(true)}
         style={{ display: 'block', minHeight: '1em' }}
       >
-        <ScalarText value={value} meta={meta} displayOverride={displayOverride} ariaLabel={ariaLabel} />
+        <ScalarText value={value} meta={meta} displayOverride={shownLabel} ariaLabel={ariaLabel} />
       </span>
     );
   }
@@ -140,7 +151,8 @@ export function ScalarCell({
         onBlur={() => { commitIfChanged(draft); setActive(false); }}
         style={inputBase}
       >
-        {meta.enumValues.map(ev => <option key={ev}>{ev}</option>)}
+        {meta.enumValues.map((ev, i) =>
+          <option key={ev} value={ev}>{meta.enumLabels?.[i] ?? ev}</option>)}
       </select>
     );
   }

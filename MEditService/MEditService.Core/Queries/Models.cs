@@ -128,7 +128,20 @@ public record FieldMetadata(
     bool IsSortable = false,                     // true when element is a pure FormLink
     bool AllowsNull = false,                     // for 'formKey': true when the Mutagen type is IFormLinkNullable<T>
     bool IsBitmask = false,                      // for 'enum': true when the C# enum has [Flags]
-    IReadOnlyList<string>? EnumBitValues = null); // for 'enum' + IsBitmask: decimal string bit values aligned with EnumValues
+    IReadOnlyList<string>? EnumBitValues = null, // for 'enum' + IsBitmask: decimal string bit values aligned with EnumValues
+
+    // ── Presentation (#686 corollary 4: a fact the editor needs rides on the field it concerns) ──
+    // Both null for an ordinary field, whose row label is its own name and whose enum members are
+    // already the game's own vocabulary. An abstract union's `concrete_type` discriminator sets
+    // both: its values are Mutagen class names, which the user is never shown.
+
+    /// <summary>Aligned with <see cref="EnumValues"/> — what the editor displays for each value,
+    /// where the value itself is a wire token rather than something to read.</summary>
+    IReadOnlyList<string>? EnumLabels = null,
+
+    /// <summary>What the editor titles this field's row, when <see cref="Name"/> is a wire name
+    /// rather than a readable one.</summary>
+    string? DisplayLabel = null);
 
 // Value contract: a bitmask field (Metadata.IsBitmask) carries its combined flags as a decimal
 // string, not a number — so values above 2^53 survive JSON round-tripping without IEEE 754 loss.

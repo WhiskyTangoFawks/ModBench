@@ -1393,3 +1393,107 @@ describe('RecordPanel — union element rows', () => {
     expect(labelCell('alias_id')).toHaveStyle({ paddingLeft: '72px' });
   });
 });
+
+// #688: an abstract union's own leaf is an ordinary editable field. The reflector labels the row
+// and every leaf (FieldMetadata.displayLabel/enumLabels), because a Mutagen class name is a wire
+// token the user is never shown — so the panel must display the labels and post the values.
+const unionFieldMeta: FieldMetadata = {
+  name: 'Level',
+  type: 'struct',
+  isArray: false,
+  validFormKeyTypes: [],
+  enumValues: [],
+  fields: [
+    { name: 'level', type: 'int', isArray: false, validFormKeyTypes: [], enumValues: [] },
+    {
+      name: 'concrete_type', type: 'enum', isArray: false, validFormKeyTypes: [],
+      enumValues: ['NpcLevel', 'PcLevelMult'],
+      enumLabels: ['Npc Level', 'Pc Level Mult'],
+      displayLabel: 'Kind',
+    },
+  ],
+};
+
+const unionValue = { level: 5, concrete_type: 'NpcLevel' };
+
+const unionCompareResult = {
+  conflictAll: 'OnlyOne',
+  overrides: [
+    {
+      formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', loadOrderIndex: 0, isWinner: true,
+      editorId: 'TestNPC', fields: [{ metadata: unionFieldMeta, value: unionValue }],
+      conflictThis: 'OnlyOne',
+    },
+  ],
+  diffs: [
+    {
+      fieldName: 'Level',
+      values: { 'MyMod.esp': unionValue },
+      winnerColumn: 'MyMod.esp', winnerValue: unionValue, cellStates: {},
+      children: [
+        {
+          fieldName: 'level', values: { 'MyMod.esp': 5 },
+          winnerColumn: 'MyMod.esp', winnerValue: 5, cellStates: {},
+        },
+        {
+          fieldName: 'concrete_type', values: { 'MyMod.esp': 'NpcLevel' },
+          winnerColumn: 'MyMod.esp', winnerValue: 'NpcLevel', cellStates: {},
+        },
+      ],
+    },
+  ],
+};
+
+const unionTrackedPluginsResponse = [
+  { name: 'MyMod.esp', isImmutable: false, loadOrderIndex: 0, isTracked: true },
+];
+
+describe('RecordPanel — an abstract union\'s leaf is an editable field (#688)', () => {
+  beforeEach(() => {
+    vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
+  });
+
+  afterEach(() => vi.unstubAllGlobals());
+
+  async function expandLevel() {
+    renderPanel(unionCompareResult, { plugins: unionTrackedPluginsResponse });
+    await waitFor(() => expect(screen.getByText('Level')).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: '▶' }));
+    await waitFor(() => expect(screen.getByText('Kind')).toBeInTheDocument());
+  }
+
+  it('labels the row from the schema and never shows the class name it holds', async () => {
+    await expandLevel();
+
+    expect(screen.queryByText('concrete_type')).not.toBeInTheDocument();
+    expect(screen.getByText('Npc Level')).toBeInTheDocument();
+    expect(screen.queryByText('NpcLevel')).not.toBeInTheDocument();
+  });
+
+  it('opens a dropdown of the union\'s leaves, listed by label', async () => {
+    await expandLevel();
+
+    fireEvent.doubleClick(screen.getByText('Npc Level'));
+
+    const options = within(screen.getByRole('combobox')).getAllByRole('option');
+    expect(options.map(o => o.textContent)).toEqual(['Npc Level', 'Pc Level Mult']);
+  });
+
+  it('posts an ordinary field edit carrying the chosen leaf\'s own wire value, not its label', async () => {
+    await expandLevel();
+    fireEvent.doubleClick(screen.getByText('Npc Level'));
+    vi.mocked(vscode.postMessage).mockClear();
+
+    const select = screen.getByRole('combobox');
+    fireEvent.change(select, { target: { value: 'PcLevelMult' } });
+    fireEvent.blur(select);
+
+    expect(vscode.postMessage).toHaveBeenCalledWith(expect.objectContaining({
+      type: WEBVIEW_TO_EXTENSION.EDIT_FIELD,
+      formKey: '000001:Fallout4.esm',
+      plugin: 'MyMod.esp',
+      fieldPath: 'Level',
+      value: { level: 5, concrete_type: 'PcLevelMult' },
+    }));
+  });
+});

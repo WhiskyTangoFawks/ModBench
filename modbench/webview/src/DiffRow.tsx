@@ -329,7 +329,9 @@ export function DiffRow({
         {(hasChildren || isFlagsRow) && (
           <button style={toggleBtnStyle} onClick={onToggle}>{rowExpanded ? '▼' : '▶'}</button>
         )}
-        {diff.fieldName}
+        {/* The schema's own label when the field's name is a wire name rather than a readable
+            one (an abstract union's `concrete_type` is "Kind", #688). */}
+        {meta.displayLabel ?? diff.fieldName}
       </td>
       {columns.map(col => {
         if (col.kind === 'disk') {
