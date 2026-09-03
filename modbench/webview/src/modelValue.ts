@@ -2,10 +2,10 @@ import { toStr } from './recordUtils';
 import { formKeyLabel } from './FormKeyLink';
 import type { FieldMetadata, FormKeyResolution } from './types';
 
-// ADR-0034: the single definition of "the string a cell's editor shows" per field
-// type — xEdit's `Element.EditValue`. Ctrl+C copies exactly this string (DiffRow), and it is also
-// what ScalarCell/FlagCell source their own display/draft text from, so copy and the editor can
-// never drift apart — there is nothing here to keep in sync, only one place that knows.
+// ADR-0034: the single definition of "the value a cell's editor holds" per field type — xEdit's
+// `Element.EditValue`. ScalarCell's draft and FlagCell's checkbox state are sourced from it, and
+// `displayValue` below is the one place that turns it into what the cell reads out, so what the
+// user sees and what Ctrl+C copies cannot drift from each other or from the editor.
 //
 // FormKey stays a thin dispatch onto `formKeyLabel` (the shared composite builder, also used
 // directly by FormKeyCell/FormKeyLink) rather than being reimplemented here — there is only one
@@ -36,6 +36,14 @@ export function modelValue(value: unknown, meta: FieldMetadata, resolution?: For
     default:
       return toStr(value);
   }
+}
+
+// What the cell reads out. Identical to the edit value except for an enum whose own values are wire
+// tokens rather than words (an abstract union's `concrete_type` carries Mutagen class names), where
+// the schema labels each value — positionally, the same alignment enumBitValues already uses.
+export function displayValue(value: unknown, meta: FieldMetadata, resolution?: FormKeyResolution): string {
+  if (meta.type !== 'enum' || meta.isBitmask) return modelValue(value, meta, resolution);
+  return meta.enumLabels?.[meta.enumValues.indexOf(String(value))] ?? modelValue(value, meta);
 }
 
 // Shared by modelValue's own flags branch and FlagCell's checkbox-state

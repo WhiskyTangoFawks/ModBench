@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { modelValue } from './modelValue';
+import { displayValue, modelValue } from './modelValue';
 import { mono, fg } from './gridStyles';
 import type { FieldMetadata } from './types';
 
@@ -34,7 +34,7 @@ function ScalarText({ value, meta, displayOverride, ariaLabel }: {
   if (displayOverride != null) return <span aria-label={ariaLabel}>{displayOverride}</span>;
   return value == null
     ? <span aria-label={ariaLabel} style={{ opacity: 0.35 }}>—</span>
-    : <span aria-label={ariaLabel}>{modelValue(value, meta)}</span>;
+    : <span aria-label={ariaLabel}>{displayValue(value, meta)}</span>;
 }
 
 /**
@@ -140,7 +140,8 @@ export function ScalarCell({
         onBlur={() => { commitIfChanged(draft); setActive(false); }}
         style={inputBase}
       >
-        {meta.enumValues.map(ev => <option key={ev}>{ev}</option>)}
+        {meta.enumValues.map(ev =>
+          <option key={ev} value={ev}>{displayValue(ev, meta)}</option>)}
       </select>
     );
   }

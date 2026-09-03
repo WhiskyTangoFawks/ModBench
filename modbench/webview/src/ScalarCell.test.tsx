@@ -185,3 +185,42 @@ describe('ScalarCell — a hex row (#690)', () => {
     expect(onCommit).toHaveBeenCalledWith('0xNOTHEX');
   });
 });
+
+// #688: some enums carry values that are wire tokens, not words — an abstract union's
+// `concrete_type` holds Mutagen class names. The schema names each one (enumLabels, positional
+// against enumValues); the cell shows those and commits the value behind them.
+describe('ScalarCell — an enum whose values are wire tokens (#688)', () => {
+  const kind = meta({
+    name: 'concrete_type', type: 'enum',
+    enumValues: ['NpcLevel', 'PcLevelMult'],
+    enumLabels: ['Npc Level', 'Pc Level Mult'],
+  });
+
+  it('shows the label at rest, never the value behind it', () => {
+    render(<ScalarCell value="NpcLevel" meta={kind} editable onCommit={vi.fn()} />);
+
+    expect(screen.getByText('Npc Level')).toBeInTheDocument();
+    expect(screen.queryByText('NpcLevel')).toBeNull();
+  });
+
+  it('commits the chosen option\'s own value, not the label the user read', () => {
+    const onCommit = vi.fn();
+    render(<ScalarCell value="NpcLevel" meta={kind} editable onCommit={onCommit} />);
+    fireEvent.doubleClick(screen.getByText('Npc Level'));
+
+    const select = screen.getByRole('combobox');
+    fireEvent.change(select, { target: { value: 'PcLevelMult' } });
+    fireEvent.blur(select);
+
+    expect(onCommit).toHaveBeenCalledWith('PcLevelMult');
+  });
+
+  it('falls back to the values themselves for an ordinary enum, which has no labels', () => {
+    const plain = meta({ type: 'enum', enumValues: ['Alpha', 'Beta'] });
+    render(<ScalarCell value="Alpha" meta={plain} editable onCommit={vi.fn()} />);
+
+    expect(screen.getByText('Alpha')).toBeInTheDocument();
+    fireEvent.doubleClick(screen.getByText('Alpha'));
+    expect(screen.getAllByRole('option').map(o => o.textContent)).toEqual(['Alpha', 'Beta']);
+  });
+});

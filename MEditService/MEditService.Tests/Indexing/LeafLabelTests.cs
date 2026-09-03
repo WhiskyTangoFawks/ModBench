@@ -1,0 +1,38 @@
+using MEditService.Core.Schema;
+
+namespace MEditService.Tests.Indexing;
+
+/// <summary>
+/// The label a union leaf is offered under, as a function of two type names alone — no schema, no
+/// game. <see cref="AbstractUnionDiscriminatorMetadataTests"/> is the counterpart that asserts what
+/// this produces across every abstract union Fallout 4 actually has.
+/// </summary>
+public class LeafLabelTests
+{
+    [Theory]
+    // The base's words, dropped from the head and the tail of the leaf's.
+    [InlineData("AQuestAlias", "QuestReferenceAlias", "Reference")]
+    [InlineData("AQuestAlias", "QuestCollectionAlias", "Collection")]
+    [InlineData("AMagicEffectArchetype", "MagicEffectBoundArchetype", "Bound")]
+    // A base that isn't spelled A<Name> keeps its whole name, so less is in common.
+    [InlineData("OwnerTarget", "NpcOwner", "Npc Owner")]
+    // A leaf that is its own base keeps its own name rather than emptying out.
+    [InlineData("ANpcLevel", "NpcLevel", "Npc Level")]
+    [InlineData("ANpcLevel", "PcLevelMult", "Pc Level Mult")]
+    // A leaf with nothing in common with its base keeps all of its own words.
+    [InlineData("ASomethingElse", "PerkQuestEffect", "Perk Quest Effect")]
+    public void Labels(string abstractBaseName, string leafClassName, string expected) =>
+        Assert.Equal(expected, LeafLabel.For(abstractBaseName, leafClassName));
+
+    /// <summary>
+    /// An acronym is a word, not a run of letters to flatten: splitting on the snake_case boundary
+    /// alone would answer "Npcdata" here, which is neither the class name nor English.
+    /// </summary>
+    [Fact]
+    public void KeepsAnAcronymWhole()
+    {
+        Assert.Equal("NPC Data", LeafLabel.For("AOwnerTarget", "NPCData"));
+        // And an acronym is matched against the base as one word, like any other.
+        Assert.Equal("Data", LeafLabel.For("ANPCTarget", "NPCData"));
+    }
+}

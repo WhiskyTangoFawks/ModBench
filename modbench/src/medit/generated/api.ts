@@ -726,6 +726,8 @@ export interface components {
             allowsNull: boolean;
             isBitmask: boolean;
             enumBitValues?: string[] | null;
+            enumLabels?: string[] | null;
+            displayLabel?: string | null;
         };
         FieldValue: {
             metadata: components["schemas"]["FieldMetadata"];

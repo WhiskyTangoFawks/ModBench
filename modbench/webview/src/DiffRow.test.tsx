@@ -706,3 +706,42 @@ describe('DiffRow — a collapsed container row, per column', () => {
     expect(cellText(1)).toBe('{…}');
   });
 });
+
+// #688: a labelled enum (an abstract union's `concrete_type`, whose values are Mutagen class
+// names) reads out as its label everywhere the cell speaks — including Ctrl+C, which ADR-0034
+// binds to the same one string the cell displays.
+describe('DiffRow — an enum whose values are wire tokens', () => {
+  const kindMeta: FieldMetadata = {
+    name: 'concrete_type', type: 'enum', isArray: false, validFormKeyTypes: [],
+    enumValues: ['QuestReferenceAlias', 'QuestLocationAlias'],
+    enumLabels: ['Reference', 'Location'],
+    displayLabel: 'Kind',
+  };
+  const kindDiff = diff({
+    fieldName: 'concrete_type',
+    values: { 'Fallout4.esm': 'QuestReferenceAlias', 'MyMod.esp': 'QuestReferenceAlias' },
+    winnerValue: 'QuestReferenceAlias',
+  });
+
+  function renderKindRow() {
+    return renderRow({
+      diff: kindDiff, fieldMetaMap: { concrete_type: kindMeta }, rowKey: 'concrete_type',
+      context: { path: [], rootField: 'concrete_type', depth: 0, overrideMeta: kindMeta },
+    });
+  }
+
+  it('titles the row from the schema rather than from the wire name', () => {
+    renderKindRow();
+    expect(screen.getByText('Kind')).toBeInTheDocument();
+    expect(screen.queryByText('concrete_type')).not.toBeInTheDocument();
+  });
+
+  it('copies what the cell reads, not the class name behind it', () => {
+    renderKindRow();
+    copyToClipboard.mockClear();
+
+    fireEvent.keyDown(screen.getAllByText('Reference')[0].closest('td')!, { key: 'c', ctrlKey: true });
+
+    expect(copyToClipboard).toHaveBeenCalledWith('Reference');
+  });
+});

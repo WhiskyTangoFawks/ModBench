@@ -182,6 +182,66 @@ public sealed class AbstractUnionEditTests : IDisposable
         Assert.Equal(before, _fixture.QuestBody());
     }
 
+    /// <summary>
+    /// #688: the discriminator is an editable field, so switching a leaf is an ordinary edit of the
+    /// enclosing array — the editor re-sends the element it already had with one member changed,
+    /// leaf-only members of the outgoing leaf still in it. What must come out the other side: every
+    /// member the incoming leaf shares kept, its own members left at the fresh instance's defaults,
+    /// the outgoing leaf's own members gone rather than refusing the write for naming them, and
+    /// nothing else in the document touched.
+    ///
+    /// <para>"Otherwise byte-identical" is asserted against the written document's own raw text
+    /// slices (<c>GetRawText</c>), never a re-serialisation of both sides, which would normalise
+    /// away exactly the differences this is looking for.</para>
+    /// </summary>
+    [Fact]
+    public void Aliases_SwitchingElementLeaf_KeepsSharedMembers_DefaultsLeafOnlyOnes_AndLeavesTheRestOfTheDocumentAlone()
+    {
+        // The element under test, spelled once: only its leaf changes between the two writes, the
+        // way the editor's own resend does.
+        static JsonElement Aliases(string leaf) => Json($$"""
+            [{"concrete_type": "{{leaf}}", "name": "Switched", "closest_to_alias": 7, "id": 1,
+              "reference_alias_location": {"alias_id": 5} },
+             {"concrete_type": "QuestReferenceAlias", "name": "Sibling", "closest_to_alias": 9, "id": 2}]
+            """);
+
+        var setUp = _fixture.Service().EditField(
+            _fixture.Plugin, _fixture.Quest.ToString(), "aliases", Aliases("QuestLocationAlias"));
+        Assert.True(setUp.Applied, setUp.Message);
+        var before = _fixture.QuestBody();
+
+        var result = _fixture.Service().EditField(
+            _fixture.Plugin, _fixture.Quest.ToString(), "aliases", Aliases("QuestReferenceAlias"));
+
+        Assert.True(result.Applied, result.Message);
+        var after = _fixture.QuestBody();
+
+        var switched = Written(after)[0];
+        // Mutagen's own document spelling of which concrete class it wrote.
+        Assert.Equal("QuestReferenceAlias", switched.GetProperty("MutagenObjectType").GetString());
+        Assert.Equal("Switched", switched.GetProperty("Name").GetString());
+        Assert.Equal(7, switched.GetProperty("ClosestToAlias").GetInt32());
+        Assert.Equal(1, switched.GetProperty("ID").GetInt32());
+        // The outgoing leaf's own member is not on the incoming one at all: it is dropped, not
+        // carried over onto some same-named member, and naming it does not refuse the write.
+        Assert.False(switched.TryGetProperty("ReferenceAliasLocation", out _));
+        // A member only the incoming leaf declares stays at the fresh instance's own default —
+        // no value survives from the element that was there before.
+        Assert.False(switched.TryGetProperty("Location", out _));
+
+        Assert.Equal(Written(before)[1].GetRawText(), Written(after)[1].GetRawText());
+        foreach (var property in JsonDocument.Parse(before).RootElement.EnumerateObject())
+        {
+            if (property.NameEquals("Aliases")) continue;
+            Assert.Equal(
+                property.Value.GetRawText(),
+                JsonDocument.Parse(after).RootElement.GetProperty(property.Name).GetRawText());
+        }
+    }
+
+    private static List<JsonElement> Written(string body) =>
+        [.. JsonDocument.Parse(body).RootElement.GetProperty("Aliases").EnumerateArray()];
+
     [Fact]
     public void Aliases_UnrecognizedElementDiscriminator_IsRefusedAndWritesNothing()
     {
