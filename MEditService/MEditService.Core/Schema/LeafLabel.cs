@@ -7,7 +7,7 @@ namespace MEditService.Core.Schema;
 /// A pure function of two type names — no game knowledge, no table — so it holds for any game's
 /// Mutagen assembly. <c>RecordDisplayNames</c>' counterpart for the types a record type contains.
 /// </summary>
-public static partial class LeafLabel
+internal static partial class LeafLabel
 {
     /// <summary>
     /// <c>QuestReferenceAlias</c> under <c>AQuestAlias</c> is "Reference": the base's own words are
@@ -49,7 +49,9 @@ public static partial class LeafLabel
 
     // Splits PascalCase at a word boundary while leaving the casing alone, so an acronym survives
     // as itself: "NPCData" is "NPC Data", not "Npcdata". Two boundaries — a capital after a
-    // lowercase or digit, and the last capital of a run that starts a new word.
+    // lowercase or digit, and the last capital of a run that starts a new word. Deliberately not
+    // SchemaReflector's own snake_case boundary: that one answers "where does a field name break",
+    // where a run of capitals is one word to lowercase, and reading it back out is lossy.
     [GeneratedRegex("(?<=[a-z0-9])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])")]
     private static partial Regex WordBoundary();
 }

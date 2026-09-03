@@ -228,16 +228,20 @@ gesture already builds on.
 
 #### Why copy is uniform now
 
-`Ctrl+C` copies the focused cell's **model value**, the same string its editor would show — xEdit's
-`Element.EditValue`. It never reads DOM text and never needs a selection, so it does not care which
-widget the cell renders. That removes the old model's two holes at once: `bool`/`enum`/`flags` on a
+`Ctrl+C` copies the focused cell's **displayed value**, the same string the cell reads out — xEdit's
+`Element.EditValue`, labelled where the schema labels it. It never reads DOM text and never needs a
+selection, so it does not care which widget the cell renders. That removes the old model's two holes at once: `bool`/`enum`/`flags` on a
 mutable column had no copy path because their editor was a control rather than text, which produced
 the inversion where a read-only column could hand over its value and an editable one could not.
 Neither survives. One function, `modelValue` (webview `modelValue.ts`), defines this string per
-field type and is the only place either the copy path or a leaf's own display/editor reads it from
-— string/int/float/bool/enum pass through unchanged from what the editor already showed; flags
-render their active names, comma-separated, never the bitmask; a FormKey renders the same
-`EditorID [FormKey]` composite the picker and `FormKeyLink` already use.
+field type — string/int/float/bool/enum pass through unchanged from what the editor already showed;
+flags render their active names, comma-separated, never the bitmask; a FormKey renders the same
+`EditorID [FormKey]` composite the picker and `FormKeyLink` already use. `displayValue`, beside it,
+is the one place that turns that into what the cell *reads out*, and is what both the copy path and
+a leaf's own resting text ask — so what the user sees and what `Ctrl+C` hands over cannot drift.
+The two differ for exactly one shape: an enum whose values are wire tokens rather than words (an
+abstract union's `concrete_type`, #688), where the schema labels each value and the label is what
+is displayed and copied. The editor still holds, and a payload still carries, the value itself.
 
 **Struct and array summary rows are the one exception to "the same string the editor shows"** —
 they have no editor to match, since a compound field is edited through its child rows, not as a
@@ -254,7 +258,7 @@ alternative that seems nicer" for a gesture ADR-0034 would otherwise forbid dive
 
 #### Ctrl+X only actually clears some types
 
-`Ctrl+X` copies the focused cell's model value, then attempts to clear it by running `''` through
+`Ctrl+X` copies the focused cell's displayed value, then attempts to clear it by running `''` through
 the same coercion `Ctrl+V` uses for a pasted string — there is no separate, per-type "default
 value" table. `''` coerces cleanly for `string` (the empty string itself), bitmask `flags` (no
 active bits), and `formKey` (no reference), so those three types are the ones Ctrl+X visibly
