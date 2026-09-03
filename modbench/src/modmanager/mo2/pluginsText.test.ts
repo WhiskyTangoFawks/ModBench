@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { parsePlugins, setPluginEnabledInText, movePluginsInText, dropIndexForMove, appendPluginInText } from './pluginsText';
+import { parsePlugins, setPluginEnabledInText, movePluginsInText, dropIndexForMove, appendPluginInText, removePluginFromText } from './pluginsText';
 import type { PluginEntry } from '../model';
 
 const fixtureDir = join(__dirname, '..', 'test', 'fixtures', 'mo2-instance');
@@ -83,17 +83,12 @@ describe('setPluginEnabledInText — byte-faithful surgical edit', () => {
     expect(out.length).toBe(input.length + 1);
   });
 
-  // #654: a name with no entry line is a synthesized/unlisted row (#617) — there is nothing to
-  // toggle. Enabling one appends it (see the describe block below); disabling one is a no-op.
-  it('disabling a plugin name with no entry line is a no-op, byte-identical', () => {
+  // #680: the tree is a pure read of plugins.txt, so a row with no entry line cannot exist;
+  // a toggle for such a name has nothing to flip and leaves the file byte-identical either way.
+  it('toggling a plugin name with no entry line is a no-op in both directions, byte-identical', () => {
     const input = defaultPlugins();
     expect(setPluginEnabledInText(input, 'No Such.esp', false)).toBe(input);
-  });
-
-  it('enabling a plugin name with no entry line appends it, enabled, at the winning end', () => {
-    const input = defaultPlugins();
-    const out = setPluginEnabledInText(input, 'No Such.esp', true);
-    expect(out).toBe(input + '*No Such.esp\r\n');
+    expect(setPluginEnabledInText(input, 'No Such.esp', true)).toBe(input);
   });
 
   it('preserves a leading BOM when toggling the first line', () => {
@@ -156,6 +151,14 @@ describe('appendPluginInText — byte-faithful append at the winning end', () =>
     expect(appendPluginInText('', 'Only.esp')).toBe('*Only.esp\n');
   });
 
+  // #680: the plugins reconcile appends a disk-discovered plugin *disabled* — discovery is not
+  // user intent to enable — so the same append lands a bare line with no marker.
+  it('appends a disabled entry line (no marker) when asked to', () => {
+    const input = '*A.esp\r\nB.esp\r\n';
+    expect(appendPluginInText(input, 'New.esp', false)).toBe('*A.esp\r\nB.esp\r\nNew.esp\r\n');
+    expect(appendPluginInText('', 'Only.esp', false)).toBe('Only.esp\n');
+  });
+
   it('preserves a trailing comment/blank line by landing before it, not after', () => {
     const input = '*A.esp\r\nB.esp\r\n# trailing comment\r\n';
     const out = appendPluginInText(input, 'New.esp');
@@ -181,6 +184,25 @@ describe('appendPluginInText — byte-faithful append at the winning end', () =>
   it('#635: a file with both LF- and CRLF-terminated lines uses CRLF for the new line, not the first line\'s own LF — the ruled behaviour change (this module\'s own detectEol used to sniff the first line, LF here; consolidated onto the shared whole-file-scan, which sees the CRLF line further down)', () => {
     const out = appendPluginInText('*A.esp\nB.esp\r\n', 'New.esp');
     expect(out).toBe('*A.esp\nB.esp\r\n*New.esp\r\n');
+  });
+});
+
+describe('removePluginFromText — byte-faithful line removal (#680)', () => {
+  it('removes exactly the named entry line, leaving every other byte (CRLF, comment, blank) identical', () => {
+    const input = '# header\r\n*A.esp\r\n\r\nB.esp\r\n*C.esp\r\n';
+    expect(removePluginFromText(input, 'B.esp')).toBe('# header\r\n*A.esp\r\n\r\n*C.esp\r\n');
+  });
+
+  it('removes an enabled entry by its name, not its marker', () => {
+    expect(removePluginFromText('*A.esp\r\n*B.esp\r\n', 'A.esp')).toBe('*B.esp\r\n');
+  });
+
+  it('preserves a leading BOM', () => {
+    expect(removePluginFromText('\uFEFF*First.esp\r\n*Second.esp\r\n', 'First.esp')).toBe('\uFEFF*Second.esp\r\n');
+  });
+
+  it('throws when the name has no entry line', () => {
+    expect(() => removePluginFromText('*A.esp\r\n', 'Nope.esp')).toThrow(/Nope\.esp/);
   });
 });
 

@@ -16,7 +16,8 @@ import {
   unlistedModNames,
   deadModEntryNames,
 } from './modlistText';
-import { appendPluginInText, movePluginsInText, parsePlugins, setPluginEnabledInText } from './pluginsText';
+import { appendPluginInText, movePluginsInText, parsePlugins, removePluginFromText, setPluginEnabledInText } from './pluginsText';
+import type { PluginLinesDelta } from '../pluginsReconcile';
 import { parseMetaIni, writeMetaIni } from './metaIni';
 import { setUninstalledInText } from './downloads';
 import { readGameName, readSelectedProfile, setSelectedProfileInText } from './modOrganizerIni';
@@ -273,10 +274,15 @@ export class Mo2ModlistSource implements IModlistSource {
     return join(this.instanceRoot, 'profiles', profile, 'plugins.txt');
   }
 
+  /** Read-modify-write under the plugins mutex. A transform that returns the text unchanged
+   *  writes nothing: the file's bytes and mtime stay as they were, so a no-op never fires the
+   *  plugins.txt watcher (and the Editing sync behind it) for nothing. */
   private modifyPlugins(fn: (text: string) => string): Promise<void> {
     const task = this.pluginsMutex.then(async () => {
       const path = await this.pluginsPath();
-      await writeFile(path, fn(await readFile(path, 'utf8')));
+      const before = await readFile(path, 'utf8');
+      const after = fn(before);
+      if (after !== before) await writeFile(path, after);
     });
     // Chain tail must never stay rejected, or every later call would hang forever
     // waiting on a dead link — only the caller's own `task` should see the error.
@@ -302,6 +308,22 @@ export class Mo2ModlistSource implements IModlistSource {
 
   async appendPlugin(pluginName: string): Promise<void> {
     await this.modifyPlugins((t) => appendPluginInText(t, pluginName));
+  }
+
+  /** The plugins reconcile's write (#680): `delta` sees the entry names freshly parsed inside
+   *  the mutex — never a caller's earlier read — and its prune/append land in one write, so two
+   *  overlapping reconciles can't double-append and the watcher sees one change, not many. New
+   *  lines are disabled: discovery is not user intent to enable. Returns the delta applied. */
+  async reconcilePluginLines(delta: (listed: string[]) => PluginLinesDelta): Promise<PluginLinesDelta> {
+    let applied: PluginLinesDelta = { append: [], prune: [] };
+    await this.modifyPlugins((t) => {
+      applied = delta(parsePlugins(t).map((e) => e.name));
+      let out = t;
+      for (const name of applied.prune) out = removePluginFromText(out, name);
+      for (const name of applied.append) out = appendPluginInText(out, name, false);
+      return out;
+    });
+    return applied;
   }
 
   private async readPluginEntries(): Promise<PluginEntry[]> {

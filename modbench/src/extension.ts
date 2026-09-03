@@ -44,9 +44,10 @@ import { registerNameFilter, type NameFilter } from './nameFilter';
 import { onPluginCheckboxChanged } from './pluginCheckboxHandler';
 import { registerEditorCommands, registerRecordLifecycleCommands, makeResolveOriginOrReport, runCopyRecordCommand, makeMergeEditorOpener, compileAndReport, reportCompileTargetError, registerHeldTrackedRepositories, refreshSourceControlFor, wireExternalChangePolling, type MinimalRepository } from './medit/editorCommands';
 import { reconcileModlistWithModsDir } from './modmanager/startupModlistReconcile';
+import { reconcilePluginsWithDisk } from './modmanager/pluginsReconcile';
 import { say, exitToLoadout, clearTreeWhenBackendDies, refreshMatchingPlugins } from './loadoutTeardown';
 import { publishLoadDiagnoses, groupDiagnosesByPlugin } from './medit/loadDiagnostics';
-import { registerModInstallCommands, registerModContextCommands, registerSeparatorCommands, registerOverwriteView, registerModsAutoRegisterWatcher, registerNotMo2InstanceWelcome, createModListView, registerDownloadsView, isStandaloneDeployment, registerDeploymentModeContext, registerDeployCommands, registerLaunchCommand, registerModListCoreCommands } from './modmanager/modManagementCommands';
+import { registerModInstallCommands, registerModContextCommands, registerSeparatorCommands, registerOverwriteView, registerModsAutoRegisterWatcher, registerPluginsReconcileWatchers, registerNotMo2InstanceWelcome, createModListView, registerDownloadsView, isStandaloneDeployment, registerDeploymentModeContext, registerDeployCommands, registerLaunchCommand, registerModListCoreCommands } from './modmanager/modManagementCommands';
 import { onModCheckboxChanged } from './modmanager/modCheckboxHandler';
 import { meditConfig, makeDetectPaths, setMo2InstanceContext } from './workspaceConfig';
 
@@ -1051,11 +1052,22 @@ function registerLoadoutView(session: ExtensionSession, deps: LoadoutViewDeps): 
       ...registerSeparatorCommands(modlistSource, runModAction),
       ...registerOverwriteView(instanceRoot, modListProvider, outputChannel),
       registerModsAutoRegisterWatcher(instanceRoot, modlistSource, modListProvider, outputChannel),
+      ...registerPluginsReconcileWatchers(instanceRoot, () => void reconcilePlugins()),
       ...pluginListDisposables,
     );
+    // #680: plugins.txt converges on what disk provides — the Plugins tree is a pure read of the
+    // file, so this write is the only way a plugin file with no line ever gets a row. The write
+    // reaches the tree and Editing through the plugins.txt watcher (wireLoadOrderWatchers).
+    const reconcilePlugins = () => reconcilePluginsWithDisk({
+      source: modlistSource, instanceRoot, dataFolder, channel: outputChannel,
+      buildIndex: (entries, root) => buildFileConflictIndex(entries, root, (msg) => outputChannel.debug(msg)),
+    });
     // #93: the watcher above only covers changes made while Modbench runs; this one-time
-    // pass reconciles what happened while it wasn't (folders added or deleted outside).
-    void reconcileModlistWithModsDir(modlistSource, () => modListProvider.invalidate(), outputChannel);
+    // pass reconciles what happened while it wasn't (folders added or deleted outside). The
+    // plugins pass follows it, so a folder registered here is a known mod by the time plugins
+    // are reconciled.
+    void reconcileModlistWithModsDir(modlistSource, () => modListProvider.invalidate(), outputChannel)
+      .then(reconcilePlugins);
     const { downloadsProvider, disposables: downloadsDisposables } = registerDownloadsView(instanceRoot, outputChannel);
     context.subscriptions.push(...downloadsDisposables);
     const refreshAll = makeRefreshAll(modListProvider, pluginListProvider, downloadsProvider, updateProfileDescription);
