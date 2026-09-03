@@ -98,14 +98,13 @@ public class SchemaReflectorWriteSymmetryTests
     }
 
     /// <summary>
-    /// #699 made every list whose elements the reflector can build writable at both levels, which
-    /// leaves one live Fallout 4 residue: <c>scco.xnams</c>, a list of <c>long</c> — an integer width
-    /// <c>PrimitiveMap</c> classifies for reading (via <c>BuildElementMeta</c>'s wider integer set)
-    /// but has no converter for. Named exactly, so that widening the converter table, or losing the
-    /// residue reason altogether, has to come here and say so.
+    /// Every Fallout 4 list has a converter for its element type, so
+    /// <c>SchemaReflector.UnconvertibleElementListReason</c> describes no live leaf — it keeps the
+    /// classification total (see its own doc for the shapes it covers). A converter table that drops
+    /// an integer width <c>BuildElementMeta</c> still reads has to come here and declare a residue.
     /// </summary>
     [Fact]
-    public void TheOnlyUnconvertibleElementList_IsTheOneIntegerWidthWithNoConverter()
+    public void EveryElementList_HasAConverter()
     {
         var residue = Facts()
             .Where(f => f.ReadOnlyReason == SchemaReflector.UnconvertibleElementListReason)
@@ -113,7 +112,7 @@ public class SchemaReflectorWriteSymmetryTests
             .Order(StringComparer.Ordinal)
             .ToList();
 
-        Assert.Equal(["scco.xnams"], residue);
+        Assert.Empty(residue);
     }
 
     /// <summary>#690 made a byte slice a hex leaf; #699 made it one as a <i>list element</i> too, at

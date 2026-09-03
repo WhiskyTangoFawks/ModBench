@@ -386,9 +386,10 @@ already empty: matching xEdit's own guard (`Element.EditValue` must be non-empty
   scalar-column twin uses, so an element the converter declines refuses the whole array before
   anything is attached. There is no length gate on a hex *element*, unlike a hex column: replacing
   the list gives an element no predecessor at its own position whose size it could have established,
-  so a wrong-width element is caught by the compile that follows, if at all. The read-only residue,
-  named by its own reason, is a list whose element type reads but has no converter — an integer
-  width `PrimitiveMap` lacks (`scco.xnams`, `long`), or a translated string.
+  so a wrong-width element is caught by the compile that follows, if at all. A list whose element type
+  reads but has no converter — a translated string, or an integer width `PrimitiveMap` lacks — is
+  read-only under its own named reason; no Fallout 4 list is either, so the reason keeps the
+  classification total rather than describing live data.
   **Read/write symmetry is structural, not conventional** (#649). A leaf carries either a writer or
   a named read-only reason — `ColumnSpec.Apply`/`SubFieldSpec.Apply` are a two-case union, so a leaf
   that reads but silently cannot be written is no longer representable, and an audit asserts every

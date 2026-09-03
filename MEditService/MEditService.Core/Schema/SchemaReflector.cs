@@ -1042,9 +1042,10 @@ public sealed partial class SchemaReflector
         "list element template: a list is written as one whole value through its owning field";
 
     /// <summary>A list whose element type <see cref="BuildElementMeta"/> classifies for reading but
-    /// <see cref="BuildListElement"/> has no arm to build: an integer width <see cref="PrimitiveMap"/>
-    /// lacks while <c>IntegerTypes</c> carries it (Fallout 4's one live case is <c>scco.xnams</c>, a
-    /// list of <c>long</c>), or a translated string. Only <see cref="BuildListColumn"/> produces it.
+    /// <see cref="BuildListElement"/> has no arm to build: a translated string, or an integer width
+    /// <see cref="PrimitiveMap"/> lacks while <c>IntegerTypes</c> carries it. No Fallout 4 leaf is
+    /// either, so this keeps the classification total rather than describing live data. Only
+    /// <see cref="BuildListColumn"/> produces it.
     /// </summary>
     internal const string UnconvertibleElementListReason =
         "list element: the element type has no JSON converter, so no element can be built from a payload";
@@ -1992,6 +1993,9 @@ public sealed partial class SchemaReflector
         [typeof(ushort)] = ("INTEGER", "int", v => (object)checked((ushort)v.GetInt32())),
         [typeof(int)] = ("INTEGER", "int", v => (object)v.GetInt32()),
         [typeof(uint)] = ("INTEGER", "int", v => (object)v.GetUInt32()),
+        // A 64-bit width presents as "int" like every other integer: the wire vocabulary has no wider
+        // member, and a value past 2^53 would need the decimal-string carriage a bitmask uses.
+        [typeof(long)] = ("BIGINT", "int", v => (object)v.GetInt64()),
         [typeof(ulong)] = ("BIGINT", "int", v => (object)v.GetUInt64()),
         [typeof(float)] = ("FLOAT", "float", v => (object)v.GetSingle()),
         [typeof(string)] = ("VARCHAR", "string", v => v.GetString()),
