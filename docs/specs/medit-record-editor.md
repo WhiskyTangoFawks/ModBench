@@ -382,10 +382,9 @@ already empty: matching xEdit's own guard (`Element.EditValue` must be non-empty
   scalar-column twin uses, so an element the converter declines refuses the whole array before
   anything is attached. There is no length gate on a hex *element*, unlike a hex column: replacing
   the list gives an element no predecessor at its own position whose size it could have established,
-  so a wrong-width element is caught by the compile that follows, if at all. Two element shapes a
-  *scalar* leaf writes have no list arm — a translated string, and an enum — and a list of an
-  integer width `PrimitiveMap` lacks (`scco.xnams`, `long`) reads but does not write; those are the
-  whole of the read-only residue, named by their own reason.
+  so a wrong-width element is caught by the compile that follows, if at all. The read-only residue,
+  named by its own reason, is a list whose element type reads but has no converter — an integer
+  width `PrimitiveMap` lacks (`scco.xnams`, `long`), or a translated string.
   **Read/write symmetry is structural, not conventional** (#649). A leaf carries either a writer or
   a named read-only reason — `ColumnSpec.Apply`/`SubFieldSpec.Apply` are a two-case union, so a leaf
   that reads but silently cannot be written is no longer representable, and an audit asserts every
@@ -413,10 +412,9 @@ already empty: matching xEdit's own guard (`Element.EditValue` must be non-empty
   the vector-struct list. Editing a Color leaf preserves any existing alpha byte it does not name.
   **Naming a sub-field that genuinely has no write path is itself a refusal**
   (`RecordEditRefusal.NestedFieldReadOnly`, #642). Since #643 and #699 that is the unwritable
-  residue only: nested condition data, whose discriminator can never appear in a payload. Targeting
-  one used to report success while
-  discarding the value; it refuses the whole write instead, and the message says the sub-field is
-  not editable rather than implying the value was invalid.
+  residue only: nested condition data, whose discriminator can never appear in a payload. Naming it
+  refuses the whole write, and the message says the sub-field is not editable rather than implying
+  the value was invalid.
   Three cases stay distinct and must not be collapsed: a sub-field **absent** from the payload is
   skipped (absence is not targeting); the `value_type` and `concrete_type` **discriminators** are
   read off the raw JSON before the object exists and are deliberately never applied, so naming one

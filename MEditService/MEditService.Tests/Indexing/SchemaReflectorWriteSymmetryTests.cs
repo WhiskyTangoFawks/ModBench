@@ -131,7 +131,7 @@ public class SchemaReflectorWriteSymmetryTests
             .ToList();
 
         Assert.Empty(declaredReadOnly);
-        Assert.Equal(3, Facts().Count(f => byteSliceLists.Contains(f.Path, StringComparer.Ordinal)));
+        Assert.Equal(byteSliceLists.Length, Facts().Count(f => byteSliceLists.Contains(f.Path, StringComparer.Ordinal)));
     }
 
     /// <summary>

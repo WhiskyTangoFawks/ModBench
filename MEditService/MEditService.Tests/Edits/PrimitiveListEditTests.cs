@@ -194,8 +194,8 @@ public sealed class PrimitiveListEditTests : IDisposable
         Assert.Equal(before, _fixture.MaterialObjectBody());
     }
 
-    /// <summary><c>ArrayOpWriter.DefaultElementValue</c> has no hex arm, so an added element arrives
-    /// as <c>""</c> — which is the empty slice in Mutagen's own grammar, not a refusal.</summary>
+    /// <summary>An added byte-slice element arrives as <c>ArrayOpWriter.DefaultElementValue</c>'s
+    /// <c>"[]"</c>, Mutagen's own empty-slice token, and is written as an empty slice.</summary>
     [Fact]
     public void ArrayAdd_TopLevelByteSliceListColumn_AppendsAnEmptySlice()
     {

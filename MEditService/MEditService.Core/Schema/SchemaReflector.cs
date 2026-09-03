@@ -902,8 +902,8 @@ public sealed partial class SchemaReflector
         // silently regardless of this flag's default. Since #643 wired nested Loqui structs into the
         // shared ApplyStructJson and #699 nested lists into the shared ApplyListSubFieldJson, one
         // producer sets this true: BuildStructSubField, for a nested struct with no resolvable
-        // setter or an excluded abstract union with no discriminator (ConditionData). Defaults false so any future
-        // null-Apply producer stays a silent skip unless it deliberately opts in.
+        // setter or an excluded abstract union with no discriminator (ConditionData). Defaults
+        // false so any future null-Apply producer stays a silent skip unless it deliberately opts in.
         bool TargetingRefuses = false)
     {
         // Mirrors ColumnSpec.IsArray's own derivation (ReflectColumns: `info.ApiType ==
@@ -1039,14 +1039,11 @@ public sealed partial class SchemaReflector
     internal const string ElementTemplateReason =
         "list element template: a list is written as one whole value through its owning field";
 
-    /// <summary>A list whose element type the reflector can classify for reading but cannot build
-    /// from a payload. Only <see cref="BuildListColumn"/> produces it, because
-    /// <see cref="BuildElementMeta"/> (its read side) classifies more element shapes than
-    /// <see cref="BuildListElement"/> can build: an integer width <see cref="PrimitiveMap"/> lacks
-    /// while <c>IntegerTypes</c> carries it — Fallout 4's one live case is <c>scco.xnams</c>, a list
-    /// of <c>long</c> — and a translated-string element, which <see cref="ClassifyLeaf"/> would
-    /// convert for a scalar leaf but no list arm reaches. Closing the integer gap in
-    /// <see cref="PrimitiveMap"/> would leave this reason with no Fallout 4 case at all.</summary>
+    /// <summary>A list whose element type <see cref="BuildElementMeta"/> classifies for reading but
+    /// <see cref="BuildListElement"/> has no arm to build: an integer width <see cref="PrimitiveMap"/>
+    /// lacks while <c>IntegerTypes</c> carries it (Fallout 4's one live case is <c>scco.xnams</c>, a
+    /// list of <c>long</c>), or a translated string. Only <see cref="BuildListColumn"/> produces it.
+    /// </summary>
     internal const string UnconvertibleElementListReason =
         "list element: the element type has no JSON converter, so no element can be built from a payload";
 
@@ -2682,7 +2679,11 @@ public sealed partial class SchemaReflector
         }
 
         var pName = prop.Name;
-        var apply = CanBuildListElements(elementType)
+        // BuildListElementSpec answers for exactly the element shapes BuildListElement can build, so
+        // it is the writability question too. A column has to ask it because it got here on the
+        // wider classification BuildElementMeta above performs; BuildListSubField does not, because
+        // its own null-guard on this same call already answered it.
+        var apply = BuildListElementSpec(elementType, isFl, elemSubFields, game) != null
             ? LeafWrite.Writable<IMajorRecord>(
                 (record, json) => ApplyListJson(record, json, pName, isFl, elementType, elemSubFields))
             : LeafWrite.ReadOnly<IMajorRecord>(UnconvertibleElementListReason);
@@ -2725,7 +2726,7 @@ public sealed partial class SchemaReflector
     /// unresolved element type.</para>
     ///
     /// <para>#642: an element that names a sub-field with no write door (since #643 and #699, the
-    /// unwritable residue only — condition data, a list whose element type has no JSON converter; nested Loqui
+    /// unwritable residue only — condition data; nested Loqui
     /// structs like <c>QuestReferenceAlias.Location</c> write through the shared
     /// <c>ApplyStructJson</c> instead) answers <see cref="ApplyOutcome.SubFieldReadOnly"/>,
     /// propagated here from <see cref="BuildListElement"/>'s own outcome rather than folded into
@@ -2823,12 +2824,9 @@ public sealed partial class SchemaReflector
     /// array rather than an element silently missing from it.
     ///
     /// <para>A byte-slice element is built as the <c>MemorySlice&lt;byte&gt;</c> Mutagen's own
-    /// <c>SliceList&lt;byte&gt;.Add</c> takes, not the read side's <c>ReadOnlyMemorySlice</c>. There
-    /// is no length gate here, unlike <see cref="MakeHexApplier"/>: replacing the whole list gives
-    /// an element no predecessor at its own position whose size it could have established, and
-    /// matching by position would be a guess. The gate's protection — a fixed-width subrecord kept
-    /// at its width — therefore does not extend to list elements; a wrong-width element is caught,
-    /// if at all, by the compile that follows.</para>
+    /// <c>SliceList&lt;byte&gt;.Add</c> takes, not the read side's <c>ReadOnlyMemorySlice</c>. It
+    /// carries no length gate, unlike <see cref="MakeHexApplier"/>: replacing the whole list gives
+    /// an element no predecessor at its own position whose size it could have established.</para>
     /// </summary>
     private static object? BuildScalarListElement(JsonElement elem, Type elemCore)
     {
@@ -2858,15 +2856,6 @@ public sealed partial class SchemaReflector
     private static bool IsDecliningConverterException(Exception ex) =>
         ex is FormatException or OverflowException or InvalidCastException
             or ArgumentException or InvalidOperationException;
-
-    /// <summary>Whether <see cref="BuildListElement"/> has an arm that can build this list's
-    /// elements. The one question the top-level column and its struct-nested twin both ask, asked
-    /// in one place so the two answer it identically. It re-states <see cref="BuildListElement"/>'s
-    /// arms rather than sharing them, so a new arm there needs a matching case here.</summary>
-    private static bool CanBuildListElements(Type elementType) =>
-        IsFormLink(elementType) || IsLoquiInterface(elementType) || IsVectorStructType(elementType)
-        || IsByteSlice(elementType)
-        || TryMapPrimitive(elementType, out _, out _, out _);
 
     private static object? BuildListElement(
         JsonElement elem, bool isFl, Type elemCore, Type elemConcreteType, IReadOnlyList<SubFieldSpec>? subFields,
