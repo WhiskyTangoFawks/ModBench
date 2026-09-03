@@ -82,8 +82,8 @@ public class IntegerWidthOverflowTests
         Assert.Equal(ApplyOutcome.Applied, Writer(table, column)(Record(table), Json(value)));
     }
 
-    /// <summary>#708's width, held one position over: Fallout 4 has no <c>long</c> scalar column at
-    /// all — <c>scco.xnams</c>, a list of <c>long</c>, is the whole population — so the same range
+    /// <summary>The one width held at the list position instead: Fallout 4 has no <c>long</c> scalar
+    /// column at all — <c>scco.xnams</c>, a list of <c>long</c>, is the whole population — so the same range
     /// question is asked of the list element the shared converter table serves. <c>GetInt64</c>
     /// range-checks itself and throws <see cref="FormatException"/>, so the answer matches the
     /// widths above without a <c>checked</c> cast.</summary>

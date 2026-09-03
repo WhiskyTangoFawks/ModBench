@@ -1048,7 +1048,7 @@ public sealed partial class SchemaReflector
 
     /// <summary>A list whose element type <see cref="BuildElementMeta"/> classifies for reading but
     /// <see cref="BuildListElement"/> has no arm to build: a translated string, or an integer width
-    /// <see cref="PrimitiveMap"/> lacks while <c>IntegerTypes</c> carries it — no Fallout 4 leaf is
+    /// <see cref="PrimitiveMap"/> lacks while <c>IntegerTypes</c> carries it. No Fallout 4 leaf is
     /// either, so this keeps the classification total rather than describing live data. Only
     /// <see cref="BuildListColumn"/> produces it.
     /// </summary>
@@ -1914,8 +1914,8 @@ public sealed partial class SchemaReflector
         [typeof(ushort)] = ("INTEGER", "int", v => (object)checked((ushort)v.GetInt32())),
         [typeof(int)] = ("INTEGER", "int", v => (object)v.GetInt32()),
         [typeof(uint)] = ("INTEGER", "int", v => (object)v.GetUInt32()),
-        // The two 64-bit widths present as "int" like every other integer: the wire vocabulary has no
-        // wider member, and a value past 2^53 would need the decimal-string carriage a bitmask uses.
+        // A 64-bit width presents as "int" like every other integer: the wire vocabulary has no wider
+        // member, and a value past 2^53 would need the decimal-string carriage a bitmask uses.
         [typeof(long)] = ("BIGINT", "int", v => (object)v.GetInt64()),
         [typeof(ulong)] = ("BIGINT", "int", v => (object)v.GetUInt64()),
         [typeof(float)] = ("FLOAT", "float", v => (object)v.GetSingle()),

@@ -166,10 +166,9 @@ public sealed class PrimitiveListEditTests : IDisposable
         Assert.Equal(before, _fixture.MiscItemBody());
     }
 
-    /// <summary>#708: <c>long</c> joined the converter table, so Fallout 4's one list of 64-bit
-    /// integers writes through the same door — <c>scco.xnams</c>, a Scene Collection's packed
-    /// (X, Y) layout coordinates. The values land as they were sent and read back from the record's
-    /// own source document.</summary>
+    /// <summary>Fallout 4's one list of 64-bit integers takes the same door as every other primitive
+    /// list: <c>scco.xnams</c>, a Scene Collection's packed (X, Y) layout coordinates. The values
+    /// land as they were sent and read back from the record's own source document.</summary>
     [Fact]
     public void TopLevelLongListColumn_Write_AppliesAndReadsBack()
     {

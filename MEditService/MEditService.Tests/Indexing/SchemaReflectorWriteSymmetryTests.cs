@@ -98,14 +98,13 @@ public class SchemaReflectorWriteSymmetryTests
     }
 
     /// <summary>
-    /// #699 made every list whose elements the reflector can build writable at both levels; #708 gave
-    /// <c>long</c> the converter its last residue, <c>scco.xnams</c>, was waiting on. No Fallout 4
-    /// list is unconvertible now, so the reason survives only to keep the classification total —
-    /// and a converter table that drops an integer width <c>BuildElementMeta</c> still reads has to
-    /// come back here and re-declare a residue.
+    /// Every Fallout 4 list has a converter for its element type, so
+    /// <c>SchemaReflector.UnconvertibleElementListReason</c> describes no live leaf — it keeps the
+    /// classification total (see its own doc for the shapes it covers). A converter table that drops
+    /// an integer width <c>BuildElementMeta</c> still reads has to come here and declare a residue.
     /// </summary>
     [Fact]
-    public void NoElementList_IsUnconvertible()
+    public void EveryElementList_HasAConverter()
     {
         var residue = Facts()
             .Where(f => f.ReadOnlyReason == SchemaReflector.UnconvertibleElementListReason)
