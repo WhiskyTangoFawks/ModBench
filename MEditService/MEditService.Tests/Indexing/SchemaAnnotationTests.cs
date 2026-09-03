@@ -30,6 +30,15 @@ public sealed class SchemaAnnotationTests
     }
 
     [Theory]
+    [InlineData("ICellGetter", "NoSuchMember")]
+    [InlineData("INoSuchGetter", "Timestamp")]
+    public void ExcludedColumn_ReflectionDidNotFind_FailsSchemaGenerationNamingTheEntry(string type, string member)
+    {
+        var reflector = Fallout4With(a => a with { ExcludedColumns = [.. a.ExcludedColumns, (type, member)] });
+        AssertFailsNaming(reflector, $"{type}.{member}");
+    }
+
+    [Theory]
     [InlineData("IKeywordGetter", "NoSuchMember")]
     [InlineData("INoSuchGetter", "Color")]
     public void AlphaBearingColorField_ReflectionDidNotFind_FailsSchemaGenerationNamingTheEntry(string type, string member)

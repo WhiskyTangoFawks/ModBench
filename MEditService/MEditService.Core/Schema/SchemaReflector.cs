@@ -1010,7 +1010,6 @@ public sealed partial class SchemaReflector
         new("red", "R"), new("green", "G"), new("blue", "B"), new("alpha", "A"),
     ];
 
-    // Which Color fields carry an alpha leaf is a per-game fact: SchemaAnnotations.AlphaBearingColorFields.
     private static bool IsAtomicValueType(Type core) => core == typeof(System.Drawing.Color);
 
     // ── Total classification: the default branch is a reported anomaly, never silence ──────────
@@ -1086,10 +1085,6 @@ public sealed partial class SchemaReflector
             owner, prop.Name, TypeLabel(shape), site);
         return null;
     }
-
-    // Mutagen/Loqui plumbing the walk reaches (SchemaAnnotations.ExcludedMembers) is skipped, not
-    // excluded-with-a-reason: an exclusion says "real data we chose not to present", and saying that
-    // about infrastructure would be a lie in the code.
 
     // ── Explicitly excluded shapes: real data, deliberately not presented ───────────────────────
     // #649 commitment 2's third outcome, and a first-class one: a shape the walk genuinely reaches
@@ -1206,10 +1201,7 @@ public sealed partial class SchemaReflector
         return null;
     }
 
-    // 11 fields in Fallout 4: a Loqui struct whose own sub-schema comes out empty, so there is
-    // nothing to present. The reasons are deliberately NOT restated here — every one already carries
-    // a reasoned entry in SchemaReflectorLeafCoverageCompletenessTests.KnownGaps. Two independent
-    // sets of reasons for one set of facts would drift, and silently.
+    // A Loqui struct whose own sub-schema comes out empty, so there is nothing to present.
     private static string? EmptySubSchemaReason(GameReflection game, Type shape) =>
         game.Annotations.IsEmptySubSchemaType(shape)
             ? "empty sub-schema — see SchemaReflectorLeafCoverageCompletenessTests.KnownGaps"
