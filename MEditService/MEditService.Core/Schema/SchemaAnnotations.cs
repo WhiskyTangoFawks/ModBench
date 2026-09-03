@@ -47,7 +47,7 @@ internal sealed record SchemaAnnotations(
         ("IDialogTopicGetter", "Timestamp"),
     ];
 
-    // Mutagen.Bethesda.Core / Loqui plumbing every game's getters implement, plus one alias.
+    // Not editor surface in any game: Mutagen.Bethesda.Core / Loqui plumbing, and one generated alias.
     private static readonly (string, string)[] PlumbingMembers =
     [
         ("ILoquiObject", "Registration"),                    // Loqui's own registration handle
@@ -55,13 +55,6 @@ internal sealed record SchemaAnnotations(
         ("ILinkIdentifier", "Type"),                         // a System.Type, not a record field
         ("IFormKeyGetter", "FormKey"),                       // record identity, the header's own column
         ("IAMagicEffectArchetypeGetter", "AssociationKey"),  // IFormLinkIdentifier alias of Association
-    ];
-
-    // Reserved padding: wbUnused(3)/wbUnused(2) in wbDefinitionsFO4.pas's wbObjectModProperties.
-    private static readonly (string, string)[] ObjectModPaddingMembers =
-    [
-        ("IObjectModStringPropertyGetter`1", "Unused"),
-        ("IObjectModEnumPropertyGetter`1", "Unused"),
     ];
 
     // Condition/ConditionData (CTDA) and AVirtualMachineAdapter (VMAD) are abstract exactly like
@@ -76,9 +69,9 @@ internal sealed record SchemaAnnotations(
         "IFindMatchingRefFromEventGetter",  // package-data leaf whose own members are all excluded shapes
     ];
 
-    // wbByteRGBA in Fallout 4 (wbDefinitionsFO4.pas:7028 KYWD, :7040 LCRT, :7051 AACT, :8256 LCTN)
-    // and in Skyrim (wbDefinitionsTES5.pas:5321, :5326, :5331, :6511); ColorBinaryType.Alpha on the
-    // Mutagen side (Keyword_Generated.cs:1875, LocationReferenceType_Generated.cs:1510,
+    // wbByteRGBA in Fallout 4 (wbDefinitionsFO4.pas:7028 KYWD, :7040 LCRT, :7051 AACT, :8256 LCTN),
+    // Skyrim (wbDefinitionsTES5.pas:5321, :5326, :5331, :6511) and Starfield (wbDefinitionsSF1.pas:13697,
+    // :13759, :9519, :13963); ColorBinaryType.Alpha on the Mutagen side (Keyword_Generated.cs:1875, LocationReferenceType_Generated.cs:1510,
     // ActionRecord_Generated.cs:1766, Location_Generated.cs:5435).
     private static readonly (string, string)[] RgbaColorFields =
     [
@@ -95,8 +88,10 @@ internal sealed record SchemaAnnotations(
             ExcludedMembers:
             [
                 .. PlumbingMembers,
-                .. ObjectModPaddingMembers,
                 ("IGlobalGetter", "TypeChar"),  // GLOB's derived subclass discriminant char
+                // Reserved padding Mutagen names Unused in both games; wbUnused(3)/wbUnused(2) in wbDefinitionsFO4.pas's wbObjectModProperties
+                ("IObjectModStringPropertyGetter`1", "Unused"),
+                ("IObjectModEnumPropertyGetter`1", "Unused"),
             ],
             ExcludedAbstractUnions: [.. ConditionAndVmadUnions],
             EmptySubSchemaTypes:
@@ -116,7 +111,12 @@ internal sealed record SchemaAnnotations(
 
         [GameCategory.Starfield] = new(
             ExcludedColumns: [.. GrupTimestampColumns, ("IQuestGetter", "Timestamp")],
-            ExcludedMembers: [.. PlumbingMembers, .. ObjectModPaddingMembers],
+            ExcludedMembers:
+            [
+                .. PlumbingMembers,
+                ("IObjectModStringPropertyGetter`1", "Unused"),
+                ("IObjectModEnumPropertyGetter`1", "Unused"),
+            ],
             ExcludedAbstractUnions: [.. ConditionAndVmadUnions],
             EmptySubSchemaTypes: [.. EmptySubSchemaTypesInEveryGame],
             AlphaBearingColorFields: [.. RgbaColorFields]),
@@ -152,12 +152,10 @@ internal sealed record SchemaAnnotations(
         bool MemberFound((string TypeName, string MemberName) entry) => typesByName[entry.TypeName]
             .Any(t => t.GetProperties(BindingFlags.Public | BindingFlags.Instance).Any(p => p.Name == entry.MemberName));
 
-        IEnumerable<string> Unresolved<T>(string concern, IEnumerable<T> entries, Func<T, bool> found, Func<T, string> label) =>
-            entries.Where(e => !found(e)).Select(e => $"{concern}: {label(e)}");
         IEnumerable<string> UnresolvedMembers(string concern, IEnumerable<(string TypeName, string MemberName)> entries) =>
-            Unresolved(concern, entries, MemberFound, e => $"{e.TypeName}.{e.MemberName}");
+            entries.Where(e => !MemberFound(e)).Select(e => $"{concern}: {e.TypeName}.{e.MemberName}");
         IEnumerable<string> UnresolvedTypes(string concern, IEnumerable<string> entries) =>
-            Unresolved(concern, entries, TypeFound, t => t);
+            entries.Where(t => !TypeFound(t)).Select(t => $"{concern}: {t}");
 
         string[] missing =
         [
