@@ -904,6 +904,9 @@ describe('EditingController.track', () => {
       body: { origin: 'ModA', preset: 'Edits' },
     });
     expect(deps.refreshTree).toHaveBeenCalled();
+    // Any record panel already open on this plugin is showing a stale "(untracked)" label until
+    // it refetches — same broadcast the reconcile path uses to keep panels current.
+    expect(deps.notifyConflictsComputed).toHaveBeenCalled();
   });
 
 });

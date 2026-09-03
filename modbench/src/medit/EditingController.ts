@@ -423,7 +423,12 @@ export class EditingController {
     // Tracked-ness (.git presence) isn't plugin metadata the tree renders itself, but the caller
     // still needs a chance to re-register the new repo with vscode.git's SCM panel. Not
     // `refresh: 'both'`: tracking changes no record, so the filter-match set is untouched.
-    if (tracked) this.deps.refreshTree();
+    // notifyConflictsComputed also tells every open record panel to refetch its plugin list, so a
+    // panel already open on this plugin drops its stale "(untracked)" label without a reopen.
+    if (tracked) {
+      this.deps.refreshTree();
+      this.deps.notifyConflictsComputed();
+    }
     return tracked;
   }
 
