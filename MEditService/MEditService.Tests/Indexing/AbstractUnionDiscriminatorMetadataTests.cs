@@ -112,6 +112,8 @@ public class AbstractUnionDiscriminatorMetadataTests
         string table, string path, FieldMetadata meta, int depth)
     {
         yield return (table, path, meta);
+        // The reflected schema's own nesting is bounded (BuildSubSchema stops at depth 3, and an
+        // array element adds one hop per level); this only stops a walk if that ever changes.
         if (depth > 12) yield break;
         if (meta.ElementType != null)
             foreach (var f in Walk(table, path + "[]", meta.ElementType, depth + 1)) yield return f;

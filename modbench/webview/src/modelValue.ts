@@ -38,6 +38,17 @@ export function modelValue(value: unknown, meta: FieldMetadata, resolution?: For
   }
 }
 
+// What the cell *reads out*, as against what its editor holds: identical for every field except an
+// enum whose own values are wire tokens rather than words (an abstract union's `concrete_type`
+// carries Mutagen class names, #688), where the schema supplies a label per value — positionally,
+// the same alignment enumBitValues already uses. One place knows that mapping, so a cell's resting
+// text and the string Ctrl+C copies cannot disagree. modelValue stays the *edit* value: the select
+// binds and commits it, and it is what a payload carries.
+export function displayValue(value: unknown, meta: FieldMetadata, resolution?: FormKeyResolution): string {
+  if (meta.type !== 'enum' || meta.isBitmask) return modelValue(value, meta, resolution);
+  return meta.enumLabels?.[meta.enumValues.indexOf(String(value))] ?? modelValue(value, meta);
+}
+
 // Shared by modelValue's own flags branch and FlagCell's checkbox-state
 // computation — one BigInt parse, not two. Bitmask values arrive as decimal strings
 // (the backend's contract — see Models.cs) so combined flags above 2^53 survive JSON without

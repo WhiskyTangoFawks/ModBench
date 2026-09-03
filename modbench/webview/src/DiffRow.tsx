@@ -6,7 +6,7 @@ import { VmadObjectCell } from './VmadObjectCell';
 import { ConditionFunctionCell, ConditionRunOnCell, ConditionComparisonCell, ConditionParamCell } from './ConditionCells';
 import { CheckErrorIcon } from './CheckErrorIcon';
 import { DiskCell } from './DiskCell';
-import { modelValue } from './modelValue';
+import { displayValue, modelValue } from './modelValue';
 import { copyToClipboard } from './nativeBridge';
 import { baseCell, toggleBtnStyle, getCellStyle, focusedRowStyle, DIMMED_OPACITY } from './gridStyles';
 import {
@@ -364,11 +364,11 @@ export function DiffRow({
           // the one per-row override on top of immutableSet's per-column rule.
           const isFocused = isCellFocused(focusedCell, rowKey, key);
           // ADR-0034: the string Ctrl+C copies for this cell — the same value used
-          // for display below (diff.values[key]), run through the one shared modelValue
+          // for display below (diff.values[key]), run through the one shared displayValue
           // function, computed once here so both the struct/array-summary branch and the
           // leaf branch below hand DiskCell the identical value a scalar/flag/formKey cell would
           // display and a struct/array cell would otherwise only show as "{…}"/"[3]".
-          const copyText = modelValue(diff.values[key], meta, diff.resolutions?.[key]);
+          const copyText = displayValue(diff.values[key], meta, diff.resolutions?.[key]);
           // Whether this column's plugin has an element on this row at all: an array slot within
           // its own length, a union member its own concrete leaf declares, a struct it carries.
           const hasElement = rowIsStructural || diff.values[key] != null;
