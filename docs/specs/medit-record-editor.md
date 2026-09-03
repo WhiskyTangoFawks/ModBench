@@ -380,8 +380,16 @@ already empty: matching xEdit's own guard (`Element.EditValue` must be non-empty
   reflection walk reaches lands in exactly one structural class or is a **reported anomaly**, never
   silence. Shapes with no class yet are excluded by name with their live count, so a gap is a
   written-down decision rather than an absence — `IGenderedItemGetter<T>` (20 fields across Race,
-  ArmorAddon, Armor, AssociationType and Rank), raw byte slices, `Percent`, `TimeOnly`, `RecordType`,
+  ArmorAddon, Armor, AssociationType and Rank), `Percent`, `TimeOnly`, `RecordType`,
   `IReadOnlyArray2d`, `IReadOnlyDictionary`.
+  **A byte slice is a hex leaf.** `ReadOnlyMemorySlice<byte>` reads and writes as `"0x"` followed by
+  uppercase hex — Mutagen's own document spelling, so the reflected column and the `json_extract`
+  view over `records.body` agree on the text. The writer refuses a non-hex value, and refuses any
+  length change to a slice that already has one, which is what holds fixed-size subrecords to their
+  size without a hand-written table. The exclusion survives only for the two slices whose elements
+  are not bytes — `Weather.CloudTextures` (`<String>`) and `Weather.NAM4` (`<Single>`) — which are
+  list shapes rather than blobs. A byte slice appearing as a *list element* reads but does not yet
+  write, refusing by name.
   **Atomic values are a table, not a handler branch.** `System.Drawing.Color` is its first entry,
   presented as xEdit presents it (`wbByteColors`): `red`/`green`/`blue` byte sub-fields, editable
   through the one write path like any struct member. Four fields — `ActionRecord.Color`,
