@@ -639,8 +639,7 @@ describe('DiffRow — label indentation', () => {
     expect(screen.getByText('Name').closest('td')).not.toHaveStyle({ paddingLeft: '24px' });
   });
 
-  // #689: a grandchild sits two levels in, not one — a flat indent for every depth > 0 renders a
-  // struct member and its own sub-member as siblings.
+  // #689: a grandchild sits two levels in, not one.
   it('indents each level by one further step', () => {
     for (const [depth, padding] of [[1, '24px'], [2, '48px'], [3, '72px']] as const) {
       const { unmount } = renderRow({ context: { path: [], rootField: 'Name', depth } });

@@ -1301,6 +1301,26 @@ const mixedLeafAliasResult = {
   }],
 };
 
+// Both plugins carry the same leaf, so the backend's own per-column union (ConflictClassifier's
+// BuildStructChildren drops a member null in every column) leaves only that leaf's members.
+const singleLeafAliasResult = {
+  ...mixedLeafAliasResult,
+  overrides: mixedLeafAliasResult.overrides.map(o => ({ ...o, fields: [{ metadata: aliasesMeta, value: [masterAlias] }] })),
+  diffs: [{
+    ...mixedLeafAliasResult.diffs[0],
+    values: { 'Fallout4.esm': [masterAlias], 'MyMod.esp': [masterAlias] },
+    children: [{
+      ...mixedLeafAliasResult.diffs[0].children[0],
+      values: { 'Fallout4.esm': masterAlias, 'MyMod.esp': masterAlias },
+      children: mixedLeafAliasResult.diffs[0].children[0].children
+        .filter(c => c.fieldName !== 'external')
+        .map(c => (c.fieldName === 'location'
+          ? { ...c, values: { 'Fallout4.esm': { alias_id: 5 }, 'MyMod.esp': { alias_id: 5 } } }
+          : c)),
+    }],
+  }],
+};
+
 describe('RecordPanel — union element rows', () => {
   beforeEach(() => {
     vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
@@ -1347,6 +1367,19 @@ describe('RecordPanel — union element rows', () => {
     const externalCells = labelCell('external').closest('tr')!.querySelectorAll('td');
     expect(externalCells[1].textContent).toBe('');
     expect(externalCells[2].textContent).toBe('{…}');
+  });
+
+  // The rows an element shows are the ones its own plugins carry, never one per schema member: a
+  // single-leaf element's `children` name only that leaf's members (the other leaves' are null in
+  // every column and never reach the webview), so the other leaves' members render no rows at all.
+  it('shows no row for a member no plugin\'s leaf declares', async () => {
+    renderPanel(singleLeafAliasResult);
+    await waitFor(() => rows().getByText('aliases'));
+    expandRow('aliases');
+    await waitFor(() => rows().getByText('[0]'));
+    expandRow('[0]');
+    await waitFor(() => rows().getByText('location'));
+    expect(rows().queryByText('external')).not.toBeInTheDocument();
   });
 
   it('indents each nesting level by its own depth', async () => {

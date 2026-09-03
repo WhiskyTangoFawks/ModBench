@@ -58,7 +58,9 @@ function renderCell(
   { checkError, resolution, summaryLabel, onCommit, rowCollapsed, absent }: RenderCellExtras = {},
 ): React.ReactNode {
   // "[3]"/"{…}" say a container is present and merely unexpanded. Nothing stands in for a
-  // container this column's plugin doesn't have.
+  // container this column's plugin doesn't have. Containers only: an absent scalar keeps
+  // ScalarCell's own "—", the panel-wide reading of "this column has no value here" that its
+  // editor gesture is already built around.
   if (absent && (meta.type === 'array' || meta.type === 'struct')) return null;
   if (meta.type === 'formKey') {
     return (
@@ -193,8 +195,7 @@ function isCellFocused(focusedCell: FocusedCell | null, rowKey: string, plugin: 
   return focusedCell?.rowKey === rowKey && focusedCell.plugin === plugin;
 }
 
-// One step of label indentation per ancestor hop. A flat step for every depth > 0 would render a
-// struct member and its own sub-member as siblings.
+// One step of label indentation per ancestor hop, so a row's indent reads as its real depth.
 const INDENT_PER_LEVEL = 24;
 
 interface DiffRowProps {
@@ -322,7 +323,7 @@ export function DiffRow({
           undefined only for struct-child/grandchild rows, which RecordPanel never wires with
           one (no expand button there either), so this is a true no-op only for those. */}
       <td
-        style={{ ...baseCell, opacity: 0.75, userSelect: 'text', paddingLeft: context.depth > 0 ? context.depth * INDENT_PER_LEVEL : undefined }}
+        style={{ ...baseCell, opacity: 0.75, userSelect: 'text', paddingLeft: context.depth * INDENT_PER_LEVEL || undefined }}
         onDoubleClick={onToggle}
       >
         {(hasChildren || isFlagsRow) && (
