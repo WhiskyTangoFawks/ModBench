@@ -166,6 +166,40 @@ public sealed class PrimitiveListEditTests : IDisposable
         Assert.Equal(before, _fixture.MiscItemBody());
     }
 
+    /// <summary>#708: <c>long</c> joined the converter table, so Fallout 4's one list of 64-bit
+    /// integers writes through the same door — <c>scco.xnams</c>, a Scene Collection's packed
+    /// (X, Y) layout coordinates. The values land as they were sent and read back from the record's
+    /// own source document.</summary>
+    [Fact]
+    public void TopLevelLongListColumn_Write_AppliesAndReadsBack()
+    {
+        var result = _fixture.Service().EditField(
+            _fixture.Plugin, _fixture.SceneCollection.ToString(), "xnams",
+            Json("[8589934591, -4294967296]"));
+
+        Assert.True(result.Applied, result.Message);
+        Assert.Contains("\"XNAMs\": [\n    8589934591,\n    -4294967296\n  ]",
+            _fixture.SceneCollectionBody(), StringComparison.Ordinal);
+    }
+
+    /// <summary>The same width rule every other integer element takes: a value past
+    /// <c>long</c>'s range refuses the whole array, and the in-range sibling does not land
+    /// either.</summary>
+    [Fact]
+    public void TopLevelLongListColumn_OutOfRangeElement_RefusesTheWholeWrite()
+    {
+        var before = _fixture.SceneCollectionBody();
+
+        var result = _fixture.Service().EditField(
+            _fixture.Plugin, _fixture.SceneCollection.ToString(), "xnams",
+            Json("[7, 9223372036854775808]"));
+
+        Assert.False(result.Applied);
+        Assert.Equal(RecordEditRefusal.FieldValueShapeMismatch, result.Refusal);
+        Assert.Contains("xnams", result.Message, StringComparison.Ordinal);
+        Assert.Equal(before, _fixture.SceneCollectionBody());
+    }
+
     /// <summary>#690 made a byte slice a hex leaf that reads and writes; as a <i>list element</i> it
     /// was still extracted and never written, landing on the same refusal this ticket reverses. It
     /// writes now, in Mutagen's own <c>0x</c>-prefixed grammar.</summary>
@@ -264,7 +298,8 @@ public sealed class PrimitiveListEditTests : IDisposable
     }
 
     /// <summary>One real mod folder holding one RACE (two subgraphs, so "the element I edited
-    /// changed and its sibling did not" is answerable) and one MATO (a byte-slice list) — the
+    /// changed and its sibling did not" is answerable), one MATO (a byte-slice list), one MISC (a
+    /// narrow-integer list) and one SCCO (Fallout 4's only list of <c>long</c>) — the
     /// self-contained-fixture-per-file convention every other edit-path test file follows.</summary>
     private sealed class Fixture : IDisposable
     {
@@ -282,6 +317,7 @@ public sealed class PrimitiveListEditTests : IDisposable
         public FormKey Race { get; }
         public FormKey MaterialObject { get; }
         public FormKey MiscItem { get; }
+        public FormKey SceneCollection { get; }
 
         public Fixture()
         {
@@ -313,6 +349,10 @@ public sealed class PrimitiveListEditTests : IDisposable
             misc.ComponentDisplayIndices = [1];
             MiscItem = misc.FormKey;
 
+            var scco = mod.SceneCollections.AddNew("Scco708");
+            scco.XNAMs.Add(1L);
+            SceneCollection = scco.FormKey;
+
             mod.WriteToBinary(pluginPath);
 
             _mirror = new LoadOrderMirror(
@@ -333,6 +373,8 @@ public sealed class PrimitiveListEditTests : IDisposable
         public string MaterialObjectBody() => Body(MaterialObject);
 
         public string MiscItemBody() => Body(MiscItem);
+
+        public string SceneCollectionBody() => Body(SceneCollection);
 
         /// <summary>The record's own source document as it sits on disk — the file a git diff shows,
         /// not a re-serialisation of anything this test built.</summary>
