@@ -804,10 +804,27 @@ describe('PluginListProvider — externally-appeared plugin picked up as an appe
     expect(nodes.map((n) => n.plugin.name)).toEqual(['BASE.esp']);
   });
 
-  // The checkbox affordance for a synthesized row is out of scope (filed separately for a
-  // maintainer ruling on whether ticking it should append the plugins.txt line) — this pins
-  // that it fails safe rather than silently doing nothing or partially writing.
-  it('toggling a synthesized row rejects, and leaves plugins.txt byte-identical on disk', async () => {
+  // #654: ticking a synthesized (unlisted) row is the user's obvious first gesture on a
+  // newly-visible plugin — append it to plugins.txt as enabled, matching what MO2 itself does on
+  // save, rather than failing the toggle (the maintainer ruling this session: option 1 of #654).
+  it('ticking a synthesized row appends it to plugins.txt, enabled', async () => {
+    await writeFile(join(dir, 'mods', 'Provider', 'New.esp'), buildTes4Buffer([]));
+    const p = provider();
+    await pluginNodes(p); // populate the cache
+
+    await p.setPluginEnabled('New.esp', true);
+
+    const pluginsPath = join(dir, 'profiles', 'Default', 'plugins.txt');
+    expect(await readFile(pluginsPath, 'utf8')).toBe('*Base.esp\r\n*New.esp\r\n');
+
+    const nodes = await pluginNodes(p);
+    expect(nodes.map((n) => n.plugin.name)).toEqual(['Base.esp', 'New.esp']);
+    expect(nodes[1].checkboxState).toBe(1); // Checked
+  });
+
+  // Rows render unchecked, so this shouldn't normally fire from the UI — but nothing should
+  // write plugins.txt in response to a request to disable a line that was never there.
+  it('unticking a synthesized row is a no-op: plugins.txt stays byte-identical', async () => {
     await writeFile(join(dir, 'mods', 'Provider', 'New.esp'), buildTes4Buffer([]));
     const p = provider();
     await pluginNodes(p); // populate the cache
@@ -815,10 +832,9 @@ describe('PluginListProvider — externally-appeared plugin picked up as an appe
     const pluginsPath = join(dir, 'profiles', 'Default', 'plugins.txt');
     const before = await readFile(pluginsPath, 'utf8');
 
-    await expect(p.setPluginEnabled('New.esp', true)).rejects.toThrow('Plugin not found in plugins.txt');
+    await p.setPluginEnabled('New.esp', false);
 
-    const after = await readFile(pluginsPath, 'utf8');
-    expect(after).toBe(before);
+    expect(await readFile(pluginsPath, 'utf8')).toBe(before);
   });
 });
 
