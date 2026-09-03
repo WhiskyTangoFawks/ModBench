@@ -25,7 +25,7 @@ namespace MEditService.Core.Records;
 ///
 /// <para>Consequently a view never carries an always-NULL column. The only fields that would have
 /// become one — the GRUP timestamps, which the serializer never emits — left the reflected schema
-/// entirely instead (see <c>SchemaReflector.BaseSkip</c>), so the schema does not claim them either.</para>
+/// entirely instead (<c>SchemaAnnotations.ExcludedColumns</c>), so the schema does not claim them either.</para>
 /// </summary>
 internal static class RecordViewBuilder
 {

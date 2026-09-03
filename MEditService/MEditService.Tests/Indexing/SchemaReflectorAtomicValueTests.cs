@@ -27,8 +27,8 @@ namespace MEditService.Tests.Indexing;
 /// (<c>frame.ReadColor(ColorBinaryType.Alpha)</c>) — it is not on the CLR type, not an attribute, and
 /// not reachable from a property walk. A four-row table transcribed from xEdit is smaller than any
 /// mechanism that could infer it, so ADR-0034's "genuine platform limitation" carve-out does not
-/// apply: the workaround is four rows. This file already carries the same transcribed-from-xEdit
-/// idiom in <c>VectorStructTypes</c>, <c>ObjectModPropertyLeafSkip</c> and <c>RecordDisplayNames</c>.</para>
+/// apply: the workaround is four rows — the same transcribed-from-xEdit idiom as the rest of
+/// <c>SchemaAnnotations</c>, <c>SchemaReflector.VectorStructTypes</c> and <c>RecordDisplayNames</c>.</para>
 ///
 /// <para><b>The alpha loop is closed empirically, not structurally.</b> Nothing here can assert "this
 /// field has no meaningful alpha" from metadata, because the binary type is not reflectable. What is
@@ -106,7 +106,7 @@ public class SchemaReflectorAtomicValueTests
         var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
 
         var unresolved = new List<string>();
-        foreach (var (ownerGetterTypeName, propertyName) in SchemaReflector.AlphaBearingColorFields)
+        foreach (var (ownerGetterTypeName, propertyName) in SchemaAnnotations.For(GameCategory.Fallout4).AlphaBearingColorFields)
         {
             var schema = schemas.Values.SingleOrDefault(s => s.RecordType.Name == ownerGetterTypeName);
             if (schema == null) { unresolved.Add($"{ownerGetterTypeName} (no schema)"); continue; }
@@ -135,6 +135,6 @@ public class SchemaReflectorAtomicValueTests
                 ("ILocationGetter", "Color"),
                 ("ILocationReferenceTypeGetter", "Color"),
             ],
-            SchemaReflector.AlphaBearingColorFields.OrderBy(e => e.OwnerGetterTypeName, StringComparer.Ordinal).ToArray());
+            SchemaAnnotations.For(GameCategory.Fallout4).AlphaBearingColorFields.OrderBy(e => e.TypeName, StringComparer.Ordinal).ToArray());
     }
 }

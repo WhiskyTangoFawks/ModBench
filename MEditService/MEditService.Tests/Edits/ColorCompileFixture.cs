@@ -22,7 +22,7 @@ namespace MEditService.Tests.Edits;
 /// (3 leaves). Its alpha byte exists on disk and must survive a red/green/blue-only edit untouched.
 /// Seeded with a non-255 alpha precisely so "preserved" is distinguishable from "defaulted".</item>
 /// <item><b>Keyword / LocationReferenceType / ActionRecord / Location</b> — the whole
-/// <c>SchemaReflector.AlphaBearingColorFields</c> allowlist, xEdit's <c>wbByteRGBA</c> (4 leaves).
+/// <c>SchemaAnnotations.AlphaBearingColorFields</c> allowlist, xEdit's <c>wbByteRGBA</c> (4 leaves).
 /// One record each so every row of a hand-transcribed table gets its own compile proof rather than
 /// one representative standing in for four.</item>
 /// <item><b>MaterialObject</b> — <c>ColorBinaryType.NoAlphaFloat</c>, the float-encoded storage

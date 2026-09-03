@@ -175,7 +175,7 @@ public sealed class AbstractUnionCompileRoundTripTests : IDisposable
     /// shape of this test.
     ///
     /// <para><c>ColorData.Color</c> is <c>ColorBinaryType.Alpha</c> (ColorData_Generated.cs:1057) but
-    /// is deliberately not on <c>SchemaReflector.AlphaBearingColorFields</c>: xEdit's CLFM colour is
+    /// is deliberately not on <c>SchemaAnnotations.AlphaBearingColorFields</c>: xEdit's CLFM colour is
     /// <c>wbByteColors</c>-shaped (wbDefinitionsFO4.pas:9660, inside the union it comments out in
     /// favour of a formatted integer because its own decider can't run during copying — Mutagen models
     /// that union properly, so mEdit follows the shape xEdit intended rather than its workaround).

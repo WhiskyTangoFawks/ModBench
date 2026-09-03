@@ -55,7 +55,7 @@ public sealed class RecordFieldWriterTests
     }
 
     // is_partial_form dispatches ahead of the reflected columns, same tier as editor_id —
-    // BaseSkip excludes MajorRecordFlagsRaw from the reflected schema entirely, so NoSchemas here
+    // MajorRecordHeaderMembers excludes MajorRecordFlagsRaw from the reflected schema entirely, so NoSchemas here
     // proves the dispatch never needs a schema lookup to reach it.
     [Fact]
     public void TryApply_IsPartialForm_OnCell_SetTrue_Applied()
