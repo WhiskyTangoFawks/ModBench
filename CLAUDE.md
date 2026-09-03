@@ -45,5 +45,18 @@ npm run package           # build alpha .vsix — pinned local @vscode/vsce, no 
   Gitignored, so **absent from every `git worktree`** — read it at the main checkout's absolute
   path; a relative grep from a worktree silently matches nothing.
 
+## Comment Discipline
+- Clean code is self-evidently what it does. If code needs a comment to explain *what* it's doing,
+  that's usually a smell — prefer renaming/restructuring so the code speaks for itself. Reserve
+  comments for the non-obvious: *why*, a surprising constraint, a fact the code can't express on
+  its own.
+- Comments and doc comments describe current behavior only. Never narrate how the code used to
+  work — no "previously," "used to," "no longer," "originally." That framing rots the moment the
+  next change lands, and nobody comes back to delete it.
+- Rationale earns at most a sentence or two inline. If it needs a paragraph, it belongs in a commit
+  message or an ADR — link to it, don't inline the narrative.
+- Default to shorter. A comment justifying its own length by covering "four separable concerns" is
+  a signal the method has four separable concerns, not that the comment is doing its job.
+
 CLAUDE.MD Files are owned by the developer. Any edit to a claude.md developer needs explicit permission,
 given for the exact edit to be made.
