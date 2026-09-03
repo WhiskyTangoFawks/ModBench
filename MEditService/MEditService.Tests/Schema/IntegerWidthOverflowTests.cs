@@ -7,17 +7,10 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Tests.Schema;
 
-/// <summary>
-/// #707: a value the column's own integer width cannot hold is refused, not truncated into it.
-/// <c>SchemaReflector.PrimitiveMap</c>'s narrowing converters are the one table both positions share
-/// — a scalar column (<c>MakeApplier</c>) and a bare-scalar list element
-/// (<c>BuildScalarListElement</c>) — so the two agree by construction, and these tests hold them to
-/// it at the <see cref="ColumnSpec.Apply"/> seam, one layer below the edit service.
-///
-/// <para>The rule: an out-of-range value refuses the <i>whole</i> write, never the offending element
-/// alone — the same all-or-nothing every other declined element already gets
-/// (<c>ApplyListJson</c>'s fold), so a refused array never lands with a hole in it.</para>
-/// </summary>
+/// <summary>#707: a value the column's own integer width cannot hold refuses the whole write rather
+/// than truncating into it. Held at the <see cref="ColumnSpec.Apply"/> seam, where the one converter
+/// table <c>SchemaReflector.PrimitiveMap</c> serves both positions — a scalar column and a
+/// bare-scalar list element — so the two cannot drift apart.</summary>
 public class IntegerWidthOverflowTests
 {
     private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
@@ -25,7 +18,7 @@ public class IntegerWidthOverflowTests
     private static Func<IMajorRecord, JsonElement, ApplyOutcome> Writer(string table, string column)
     {
         var col = SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4)[table]
-            .RecordColumns.First(c => c.Name == column);
+            .RecordColumns.Single(c => c.Name == column);
         return col.Apply.Writer!;
     }
 
@@ -34,13 +27,17 @@ public class IntegerWidthOverflowTests
         "npc_" => new Npc(FormKey.Null, Fallout4Release.Fallout4),
         "revb" => new ReverbParameters(FormKey.Null, Fallout4Release.Fallout4),
         "misc" => new MiscItem(FormKey.Null, Fallout4Release.Fallout4),
+        "imad" => new ImageSpaceAdapter(FormKey.Null, Fallout4Release.Fallout4),
+        "weap" => new Weapon(FormKey.Null, Fallout4Release.Fallout4),
         _ => throw new ArgumentOutOfRangeException(nameof(table)),
     };
 
-    /// <summary>One column per integer width, each given a value one step outside it in both
-    /// directions. The four narrowed widths (byte/sbyte/short/ushort) cast from <c>GetInt32</c> and
-    /// are what <c>checked</c> fixes; <c>uint</c> reaches <c>GetUInt32</c>, the JSON reader's own
-    /// range-checked accessor, and is here to pin that the whole table answers alike.</summary>
+    /// <summary>One column per integer width the table maps, each given a value one step outside it
+    /// in both directions. The four narrowed widths (byte/sbyte/short/ushort) cast from
+    /// <c>GetInt32</c> and are what <c>checked</c> fixes; int/uint/ulong reach <c>GetInt32</c>/
+    /// <c>GetUInt32</c>/<c>GetUInt64</c>, the JSON reader's own range-checked accessors, and are here
+    /// so the whole table is pinned to one answer rather than three widths being taken on
+    /// trust.</summary>
     [Theory]
     // byte
     [InlineData("npc_", "energy_level", "256")]
@@ -57,6 +54,12 @@ public class IntegerWidthOverflowTests
     // uint
     [InlineData("npc_", "aggro_radius_warn", "4294967296")]
     [InlineData("npc_", "aggro_radius_warn", "-1")]
+    // int
+    [InlineData("weap", "unknown3", "2147483648")]
+    [InlineData("weap", "unknown3", "-2147483649")]
+    // ulong
+    [InlineData("imad", "unknown", "18446744073709551616")]
+    [InlineData("imad", "unknown", "-1")]
     public void OutOfRangeScalar_IsRejected(string table, string column, string value)
     {
         Assert.Equal(ApplyOutcome.ValueRejected, Writer(table, column)(Record(table), Json(value)));
@@ -70,6 +73,8 @@ public class IntegerWidthOverflowTests
     [InlineData("npc_", "xp_value_offset", "32767")]
     [InlineData("npc_", "calculated_health", "65535")]
     [InlineData("npc_", "aggro_radius_warn", "4294967295")]
+    [InlineData("weap", "unknown3", "2147483647")]
+    [InlineData("imad", "unknown", "18446744073709551615")]
     public void InRangeScalar_IsApplied(string table, string column, string value)
     {
         Assert.Equal(ApplyOutcome.Applied, Writer(table, column)(Record(table), Json(value)));

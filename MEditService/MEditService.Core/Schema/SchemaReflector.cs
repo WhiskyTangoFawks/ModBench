@@ -1905,9 +1905,8 @@ public sealed partial class SchemaReflector
     private static readonly Dictionary<Type, (string DuckDbType, string ApiType, Func<JsonElement, object?> Converter)> PrimitiveMap = new()
     {
         [typeof(bool)] = ("BOOLEAN", "bool", v => (object)v.GetBoolean()),
-        // #707: checked, so a value the width cannot hold throws OverflowException — which
-        // MakeApplier and BuildScalarListElement both already turn into a refusal — rather than
-        // wrapping into a different number the caller never typed.
+        // checked, so a value the width cannot hold throws rather than wrapping into a different
+        // number the caller never typed — see IsDecliningConverterException for what that becomes.
         [typeof(byte)] = ("INTEGER", "int", v => (object)checked((byte)v.GetInt32())),
         [typeof(sbyte)] = ("INTEGER", "int", v => (object)checked((sbyte)v.GetInt32())),
         [typeof(short)] = ("INTEGER", "int", v => (object)checked((short)v.GetInt32())),

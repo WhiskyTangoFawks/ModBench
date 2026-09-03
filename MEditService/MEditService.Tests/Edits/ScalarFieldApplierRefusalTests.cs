@@ -104,10 +104,9 @@ public sealed class ScalarFieldApplierRefusalTests : IDisposable
         Assert.Equal(before, NpcBody());
     }
 
-    /// <summary>#707: a value outside the column's own integer width is refused at the same door,
-    /// with the same typed reason, as the byte-element list that shares the converter
-    /// (<c>PrimitiveListEditTests.TopLevelIntListColumn_OutOfRangeElement_RefusesTheWholeWrite</c>) —
-    /// the two positions of one narrowing table, held to the same answer for the same value.</summary>
+    /// <summary>#707: a value outside the column's own integer width is refused at this door with the
+    /// same typed reason a byte-element list gets for the same value — one <c>PrimitiveMap</c>
+    /// converter, two positions, one answer.</summary>
     [Fact]
     public void EnergyLevelByteColumn_OutOfRangeValue_IsRefusedAndWritesNothing()
     {
