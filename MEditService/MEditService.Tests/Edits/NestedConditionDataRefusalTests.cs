@@ -12,8 +12,9 @@ using Mutagen.Bethesda.Plugins;
 namespace MEditService.Tests.Edits;
 
 /// <summary>
-/// #643's other unwritable-residue category beside primitive-element lists
-/// (<see cref="NestedScalarListSubFieldRefusalTests"/>): nested condition data.
+/// #643's other unwritable-residue category: nested condition data. (The primitive-element list
+/// beside it stopped being residue at #699, which made it writable at both levels — see
+/// <see cref="PrimitiveListEditTests"/>.)
 /// <c>ConditionData</c> is abstract and named in
 /// <c>SchemaAnnotations.ExcludedAbstractUnions</c>, so its sub-schema exposes no
 /// <c>concrete_type</c> discriminator and no payload can ever carry the one thing
@@ -60,7 +61,7 @@ public sealed class NestedConditionDataRefusalTests : IDisposable
 
     /// <summary>Absence is not targeting: the same element write with <c>conditions</c> omitted
     /// entirely still applies, and the named value lands — mirroring
-    /// <see cref="NestedScalarListSubFieldRefusalTests.Subgraphs_ElementOmittingAnimationPaths_StillApplies"/>.</summary>
+    /// <see cref="NestedStructSubFieldEditTests"/>' own omitted-target case.</summary>
     [Fact]
     public void MenuButtons_ElementOmittingConditions_StillApplies()
     {

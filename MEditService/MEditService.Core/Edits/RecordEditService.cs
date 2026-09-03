@@ -2354,8 +2354,9 @@ public sealed class RecordEditService(
         // #642: the payload named a sub-field inside this struct/array column that has no write
         // delegate — never ValueShapeMismatch's "send a value this field accepts", which would be
         // false: the shape was fine, the named sub-field just has no write door. Since #643 wired
-        // nested Loqui structs into the shared struct applier this only fires for the genuinely
-        // unwritable residue (condition data, primitive-element nested lists).
+        // nested Loqui structs into the shared struct applier, and #699 scalar-element lists into
+        // the shared list applier, this only fires for the genuinely unwritable residue (condition
+        // data, a list whose element type has no JSON converter).
         if (outcome == FieldApplyOutcome.NestedFieldReadOnly)
         {
             return RecordEditResult.Refused(

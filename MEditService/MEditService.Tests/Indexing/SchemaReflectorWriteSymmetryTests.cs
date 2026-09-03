@@ -75,7 +75,7 @@ public class SchemaReflectorWriteSymmetryTests
         {
             SchemaReflector.DiscriminatorReason,
             SchemaReflector.ElementTemplateReason,
-            SchemaReflector.PrimitiveElementListReason,
+            SchemaReflector.UnconvertibleElementListReason,
             SchemaReflector.NoConverterReason,
             SchemaReflector.HeaderNoWritePathReason,
         };
@@ -95,6 +95,25 @@ public class SchemaReflectorWriteSymmetryTests
         Assert.True(unknown.Count == 0,
             "A read-only reason appeared that this audit does not know about. Adding one is fine — add " +
             $"it here too, so the vocabulary stays closed:\n  {string.Join("\n  ", unknown)}");
+    }
+
+    /// <summary>
+    /// #699 made every list whose elements the reflector can build writable at both levels, which
+    /// leaves one live Fallout 4 residue: <c>scco.xnams</c>, a list of <c>long</c> — an integer width
+    /// <c>PrimitiveMap</c> classifies for reading (via <c>BuildElementMeta</c>'s wider integer set)
+    /// but has no converter for. Named exactly, so that widening the converter table, or losing the
+    /// residue reason altogether, has to come here and say so.
+    /// </summary>
+    [Fact]
+    public void TheOnlyUnconvertibleElementList_IsTheOneIntegerWidthWithNoConverter()
+    {
+        var residue = Facts()
+            .Where(f => f.ReadOnlyReason == SchemaReflector.UnconvertibleElementListReason)
+            .Select(f => f.Path)
+            .Order(StringComparer.Ordinal)
+            .ToList();
+
+        Assert.Equal(["scco.xnams"], residue);
     }
 
     /// <summary>

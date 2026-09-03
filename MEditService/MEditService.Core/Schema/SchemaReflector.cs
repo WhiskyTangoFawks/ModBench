@@ -902,8 +902,8 @@ public sealed partial class SchemaReflector
         // silently regardless of this flag's default. Since #643 wired nested Loqui structs into the
         // shared ApplyStructJson, exactly two producers still set this true, each for its own
         // unwritable residue: BuildStructSubField (no resolvable setter, or an excluded abstract
-        // union with no discriminator — ConditionData) and BuildListSubField (a primitive-element
-        // nested list, which has no element write path at any level). Defaults false so any future
+        // union with no discriminator — ConditionData) and BuildListSubField (a list whose element
+        // type has no JSON converter). Defaults false so any future
         // null-Apply producer stays a silent skip unless it deliberately opts in.
         bool TargetingRefuses = false)
     {
@@ -1040,11 +1040,12 @@ public sealed partial class SchemaReflector
     internal const string ElementTemplateReason =
         "list element template: a list is written as one whole value through its owning field";
 
-    /// <summary>A list whose elements are bare primitives — BuildListElement has FormLink/Loqui/vector
-    /// branches only, so there is no element write path at any level. Refused honestly rather than
-    /// silently discarded (#642/#643).</summary>
-    internal const string PrimitiveElementListReason =
-        "primitive-element list: no element write path exists at any nesting level";
+    /// <summary>A list whose element type the reflector can classify for reading but cannot build
+    /// from a payload — an integer width <see cref="PrimitiveMap"/> does not carry (Fallout 4's one
+    /// live case is <c>scco.xnams</c>, a list of <c>long</c>). Every other element shape has an arm
+    /// in <see cref="BuildListElement"/>.</summary>
+    internal const string UnconvertibleElementListReason =
+        "list element: the element type has no JSON converter, so no element can be built from a payload";
 
     /// <summary>A leaf whose LeafSpec produced no converter and is neither a form link nor a byte
     /// slice. Not reachable for any shape ClassifyLeaf currently returns — every one of them has a
@@ -1142,8 +1143,8 @@ public sealed partial class SchemaReflector
                 {
                     if (GetSubFieldInfo(member, cache.Game, 1, _logger) is not { } spec) continue;
 
-                    // The LEAF's own shape, not its enclosing struct's: a primitive-element list or an
-                    // excluded VMAD struct sitting inside a perfectly writable struct is not itself
+                    // The LEAF's own shape, not its enclosing struct's: an unconvertible-element list
+                    // or an excluded VMAD struct inside a perfectly writable struct is not itself
                     // writable-shaped, and reporting the parent here would accuse it of lying.
                     var leaf = Nullable.GetUnderlyingType(member.PropertyType) ?? member.PropertyType;
                     var leafStruct = IsLoquiInterface(leaf) && !IsFormLink(leaf) ? leaf : null;
@@ -2506,25 +2507,18 @@ public sealed partial class SchemaReflector
 
         var g = SubGetter(prop);
         var pName = prop.Name;
-        var apply = isFl || isLoqui || isVector
+        var apply = CanBuildListElements(elementType, isFl, isLoqui, isVector)
             ? LeafWrite.Writable<object>(
                 (obj, json) => ApplyListSubFieldJson(obj, json, pName, isFl, elementType, elemSubFields))
-            : LeafWrite.ReadOnly<object>(PrimitiveElementListReason);
+            : LeafWrite.ReadOnly<object>(UnconvertibleElementListReason);
 
         return new(colName, "array", Empty, Empty,
             obj => g(obj) is IEnumerable list ? BuildListItems(list, elementType, elemSubFields) : null,
             apply,
             ElementSpec: elementSpec,
-            // #643: a primitive-element nested list (Race.Subgraphs[].AnimationPaths, ...) has no
-            // write door — BuildListElement has no primitive branch, only FormLink/Loqui/vector —
-            // and its own top-level twin (BuildListColumn's identical null) already refuses as
-            // FieldReadOnly, so a payload naming this shape takes #642's honest refusal too rather
-            // than the silent discard the survey caught. Making the shape writable at both levels
-            // is a separate capability, deliberately not built here (maintainer decision at #643's
-            // gate).
             // #649: `apply` is a LeafWrite and therefore never null — the old `apply == null` test
             // silently became `false` here when the type narrowed, which reopened #642's silent
-            // discard for this exact shape (caught by NestedScalarListSubFieldRefusalTests). Ask the
+            // discard for this exact shape. Ask the
             // question the type actually answers.
             TargetingRefuses: apply.Writer == null);
     }
@@ -2685,10 +2679,10 @@ public sealed partial class SchemaReflector
         }
 
         var pName = prop.Name;
-        var apply = isFl || isLoqui || isVector
+        var apply = CanBuildListElements(elementType, isFl, isLoqui, isVector)
             ? LeafWrite.Writable<IMajorRecord>(
                 (record, json) => ApplyListJson(record, json, pName, isFl, elementType, elemSubFields))
-            : LeafWrite.ReadOnly<IMajorRecord>(PrimitiveElementListReason);
+            : LeafWrite.ReadOnly<IMajorRecord>(UnconvertibleElementListReason);
 
         return new("VARCHAR", Extractor, "array", Empty, Empty, apply,
             ElementMeta: elemMeta);
@@ -2727,8 +2721,8 @@ public sealed partial class SchemaReflector
     /// also fail this way, that inference would misclassify a declined sub-field value as an
     /// unresolved element type.</para>
     ///
-    /// <para>#642: an element that names a sub-field with no write door (since #643, the
-    /// unwritable residue only — condition data, a primitive-element nested list; nested Loqui
+    /// <para>#642: an element that names a sub-field with no write door (since #643 and #699, the
+    /// unwritable residue only — condition data, a list whose element type has no JSON converter; nested Loqui
     /// structs like <c>QuestReferenceAlias.Location</c> write through the shared
     /// <c>ApplyStructJson</c> instead) answers <see cref="ApplyOutcome.SubFieldReadOnly"/>,
     /// propagated here from <see cref="BuildListElement"/>'s own outcome rather than folded into
@@ -2819,6 +2813,46 @@ public sealed partial class SchemaReflector
         return setterType.IsGenericTypeDefinition ? setterType.MakeGenericType(typeArgs) : setterType;
     }
 
+    /// <summary>One bare-scalar list element, built from its own JSON token — the same
+    /// <see cref="PrimitiveMap"/> converter and the same hex grammar a scalar leaf of that type
+    /// already writes, so a list of strings and a string column agree about what a string is. Null
+    /// means the token could not be converted, which the caller turns into a refusal of the whole
+    /// array rather than an element silently missing from it.
+    ///
+    /// <para>A byte-slice element is built as the <c>MemorySlice&lt;byte&gt;</c> Mutagen's own
+    /// <c>SliceList&lt;byte&gt;.Add</c> takes, not the read side's <c>ReadOnlyMemorySlice</c>. There
+    /// is no length gate here, unlike <see cref="MakeHexApplier"/>: a list element has no
+    /// predecessor at its own position to have established a size, since the whole list is
+    /// replaced.</para>
+    /// </summary>
+    private static object? BuildScalarListElement(JsonElement elem, Type elemCore)
+    {
+        if (IsByteSlice(elemCore))
+        {
+            if (elem.ValueKind != JsonValueKind.String) return null;
+            return TryParseHex(elem.GetString()!, out var bytes) ? new MemorySlice<byte>(bytes) : (object?)null;
+        }
+
+        if (!TryMapPrimitive(elemCore, out _, out _, out var convert)) return null;
+        try
+        {
+            return convert(elem);
+        }
+        catch (Exception ex) when (ex is FormatException or OverflowException or InvalidCastException
+                                       or ArgumentException or InvalidOperationException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>Whether <see cref="BuildListElement"/> has an arm that can build this list's
+    /// elements — the one question the top-level column and its struct-nested twin both ask, so the
+    /// two cannot drift into disagreeing about which lists are writable.</summary>
+    private static bool CanBuildListElements(Type elementType, bool isFl, bool isLoqui, bool isVector) =>
+        isFl || isLoqui || isVector
+        || IsByteSlice(elementType)
+        || TryMapPrimitive(elementType, out _, out _, out _);
+
     private static object? BuildListElement(
         JsonElement elem, bool isFl, Type elemCore, Type elemConcreteType, IReadOnlyList<SubFieldSpec>? subFields,
         out ApplyOutcome outcome)
@@ -2830,6 +2864,13 @@ public sealed partial class SchemaReflector
             if (fkStr == null || !FormKey.TryFactory(fkStr, out var fk)) return null;
             var flType = typeof(FormLink<>).MakeGenericType(elemCore.GetGenericArguments()[0]);
             return Activator.CreateInstance(flType, fk);
+        }
+
+        if (subFields == null)
+        {
+            if (BuildScalarListElement(elem, elemCore) is { } scalar) return scalar;
+            outcome = ApplyOutcome.ValueRejected;
+            return null;
         }
 
         var elemObj = Activator.CreateInstance(elemConcreteType)!;
