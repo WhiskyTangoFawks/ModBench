@@ -1,6 +1,6 @@
 import '@testing-library/jest-dom';
 import React from 'react';
-import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act, within } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 vi.mock('./vscode', () => ({ vscode: { postMessage: vi.fn() } }));
@@ -1223,5 +1223,173 @@ describe('RecordPanel — column collapse (issue #3)', () => {
     await waitFor(() => screen.getByText('MyMod.esp'));
     // Still collapsed after navigating to a new record in the same panel load order.
     expect(screen.queryByText('Override Name')).not.toBeInTheDocument();
+  });
+});
+
+// #689: a quest alias is an abstract union — each element is one concrete leaf, and the leaves
+// declare different members. Two plugins can disagree on which leaf an element is, so the element's
+// rows are the union of both leaves' members, each rendered only in the columns that have it.
+const intSubMeta = (name: string): FieldMetadata =>
+  ({ name, type: 'int', isArray: false, validFormKeyTypes: [], enumValues: [] });
+
+const aliasesMeta: FieldMetadata = {
+  name: 'aliases', type: 'array', isArray: true, validFormKeyTypes: [], enumValues: [],
+  elementType: {
+    name: '', type: 'struct', isArray: false, validFormKeyTypes: [], enumValues: [],
+    fields: [
+      { name: 'name', type: 'string', isArray: false, validFormKeyTypes: [], enumValues: [] },
+      {
+        name: 'location', type: 'struct', isArray: false, validFormKeyTypes: [], enumValues: [],
+        fields: [intSubMeta('alias_id')],
+      },
+      {
+        name: 'external', type: 'struct', isArray: false, validFormKeyTypes: [], enumValues: [],
+        fields: [intSubMeta('alias_id')],
+      },
+    ],
+  },
+};
+
+const masterAlias = { name: 'RefAlias', location: { alias_id: 5 }, external: null };
+const overrideAlias = { name: 'RefAlias', location: null, external: { alias_id: 7 } };
+
+const mixedLeafAliasResult = {
+  conflictAll: 'Conflict',
+  overrides: [
+    {
+      formKey: '000001:Fallout4.esm', plugin: 'Fallout4.esm', loadOrderIndex: 0, isWinner: false,
+      editorId: 'TestQuest', fields: [{ metadata: aliasesMeta, value: [masterAlias] }], conflictThis: 'Master',
+    },
+    {
+      formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', loadOrderIndex: 1, isWinner: true,
+      editorId: 'TestQuest', fields: [{ metadata: aliasesMeta, value: [overrideAlias] }], conflictThis: 'ConflictWins',
+    },
+  ],
+  diffs: [{
+    fieldName: 'aliases',
+    values: { 'Fallout4.esm': [masterAlias], 'MyMod.esp': [overrideAlias] },
+    winnerColumn: 'MyMod.esp', winnerValue: [overrideAlias], cellStates: {},
+    children: [{
+      fieldName: '[0]',
+      values: { 'Fallout4.esm': masterAlias, 'MyMod.esp': overrideAlias },
+      winnerColumn: 'MyMod.esp', winnerValue: overrideAlias, cellStates: {},
+      children: [
+        {
+          fieldName: 'name', values: { 'Fallout4.esm': 'RefAlias', 'MyMod.esp': 'RefAlias' },
+          winnerColumn: 'MyMod.esp', winnerValue: 'RefAlias', cellStates: {},
+        },
+        {
+          fieldName: 'location',
+          values: { 'Fallout4.esm': { alias_id: 5 }, 'MyMod.esp': null },
+          winnerColumn: 'Fallout4.esm', winnerValue: { alias_id: 5 }, cellStates: {},
+          children: [{
+            fieldName: 'alias_id', values: { 'Fallout4.esm': 5, 'MyMod.esp': null },
+            winnerColumn: 'Fallout4.esm', winnerValue: 5, cellStates: {},
+          }],
+        },
+        {
+          fieldName: 'external',
+          values: { 'Fallout4.esm': null, 'MyMod.esp': { alias_id: 7 } },
+          winnerColumn: 'MyMod.esp', winnerValue: { alias_id: 7 }, cellStates: {},
+          children: [{
+            fieldName: 'alias_id', values: { 'Fallout4.esm': null, 'MyMod.esp': 7 },
+            winnerColumn: 'MyMod.esp', winnerValue: 7, cellStates: {},
+          }],
+        },
+      ],
+    }],
+  }],
+};
+
+// Both plugins carry the same leaf, so the backend's own per-column union (ConflictClassifier's
+// BuildStructChildren drops a member null in every column) leaves only that leaf's members.
+const singleLeafAliasResult = {
+  ...mixedLeafAliasResult,
+  overrides: mixedLeafAliasResult.overrides.map(o => ({ ...o, fields: [{ metadata: aliasesMeta, value: [masterAlias] }] })),
+  diffs: [{
+    ...mixedLeafAliasResult.diffs[0],
+    values: { 'Fallout4.esm': [masterAlias], 'MyMod.esp': [masterAlias] },
+    children: [{
+      ...mixedLeafAliasResult.diffs[0].children[0],
+      values: { 'Fallout4.esm': masterAlias, 'MyMod.esp': masterAlias },
+      children: mixedLeafAliasResult.diffs[0].children[0].children
+        .filter(c => c.fieldName !== 'external')
+        .map(c => (c.fieldName === 'location'
+          ? { ...c, values: { 'Fallout4.esm': { alias_id: 5 }, 'MyMod.esp': { alias_id: 5 } } }
+          : c)),
+    }],
+  }],
+};
+
+describe('RecordPanel — union element rows', () => {
+  beforeEach(() => {
+    vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  // Scoped to the grid's own body — the column headers carry their own load-order index, so
+  // "[0]" is not unique document-wide.
+  const rows = () => within(screen.getByRole('table').querySelector('tbody')!);
+
+  function labelCell(label: string): HTMLElement {
+    return rows().getByText(label).closest('td')!;
+  }
+
+  function expandRow(label: string) {
+    fireEvent.click(labelCell(label).querySelector('button')!);
+  }
+
+  async function renderExpandedElement() {
+    renderPanel(mixedLeafAliasResult);
+    await waitFor(() => rows().getByText('aliases'));
+    expandRow('aliases');
+    await waitFor(() => rows().getByText('[0]'));
+    expandRow('[0]');
+    await waitFor(() => rows().getByText('location'));
+  }
+
+  it('shows the union of both plugins\' leaf members', async () => {
+    await renderExpandedElement();
+    expect(rows().getByText('name')).toBeInTheDocument();
+    expect(rows().getByText('location')).toBeInTheDocument();
+    expect(rows().getByText('external')).toBeInTheDocument();
+  });
+
+  it('renders an empty cell for the column whose leaf lacks the member', async () => {
+    await renderExpandedElement();
+    const locationCells = labelCell('location').closest('tr')!.querySelectorAll('td');
+    expect(locationCells[1].textContent).toBe('{…}');
+    expect(locationCells[2].textContent).toBe('');
+
+    const externalCells = labelCell('external').closest('tr')!.querySelectorAll('td');
+    expect(externalCells[1].textContent).toBe('');
+    expect(externalCells[2].textContent).toBe('{…}');
+  });
+
+  // The rows an element shows are the ones its own plugins carry, never one per schema member: a
+  // single-leaf element's `children` name only that leaf's members (the other leaves' are null in
+  // every column and never reach the webview), so the other leaves' members render no rows at all.
+  it('shows no row for a member no plugin\'s leaf declares', async () => {
+    renderPanel(singleLeafAliasResult);
+    await waitFor(() => rows().getByText('aliases'));
+    expandRow('aliases');
+    await waitFor(() => rows().getByText('[0]'));
+    expandRow('[0]');
+    await waitFor(() => rows().getByText('location'));
+    expect(rows().queryByText('external')).not.toBeInTheDocument();
+  });
+
+  it('indents each nesting level by its own depth', async () => {
+    await renderExpandedElement();
+    expect(labelCell('aliases')).not.toHaveStyle({ paddingLeft: '24px' });
+    expect(labelCell('[0]')).toHaveStyle({ paddingLeft: '24px' });
+    expect(labelCell('location')).toHaveStyle({ paddingLeft: '48px' });
+
+    expandRow('location');
+    await waitFor(() => rows().getByText('alias_id'));
+    expect(labelCell('alias_id')).toHaveStyle({ paddingLeft: '72px' });
   });
 });

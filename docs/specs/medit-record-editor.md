@@ -218,6 +218,14 @@ The only cells that open *nothing* are struct and array summary rows, which rend
 (`{…}`, `[3]`) rather than a value. They remain focusable, copyable and draggable — dragging one
 copies the whole structure, as xEdit does when you drag by the header.
 
+The placeholder is a statement that a container is present and merely collapsed, so it is drawn
+per column, not per row: a column whose plugin has no container there — an array slot past its own
+length, an abstract-union member its concrete leaf doesn't declare, an absent struct — renders an
+empty cell. The exception is a row *no* column carries a value for, which holds nothing but its
+children and is therefore present in every column; it keeps its placeholder throughout. An absent
+*scalar* is unchanged: it renders `—`, the panel-wide reading of "no value here" its editor
+gesture already builds on.
+
 #### Why copy is uniform now
 
 `Ctrl+C` copies the focused cell's **model value**, the same string its editor would show — xEdit's
@@ -896,7 +904,8 @@ VMAD/Condition rows included since they render through this exact code now:
    resolution, not a well-formedness proxy, so a dangling reference (one pointing outside the
    index) no longer looks followable.
 3. **Structs and arrays are always collapsible**, default collapsed; expand state is
-   per-load order, not persisted across restarts. Array **element values** offer the inline-edit
+   per-load order, not persisted across restarts. A row's label indents one step per ancestor
+   hop, so a grandchild reads as sitting inside its parent rather than beside it. Array **element values** offer the inline-edit
    gesture everywhere (plain and struct-element arrays alike); committing one reconstructs the
    array's (or struct-array element's) whole value before the write, per the reconstruction
    CONTEXT.md's Complex-field entry's atomic-write model requires for a per-element gesture.
