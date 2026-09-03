@@ -173,12 +173,24 @@ describe('Mo2ModlistSource — writes (against a tmp copy)', () => {
     ]);
   });
 
-  it('setPluginEnabled throws for an absent plugin, and does not block a later mutation', async () => {
-    await expect(src.setPluginEnabled('No Such.esp', false)).rejects.toThrow(/not found/);
+  // #654: an absent plugin is a synthesized/unlisted row's checkbox (#617) — disabling one is a
+  // no-op, enabling one appends it. Neither throws, so this also pins that a later mutation isn't
+  // blocked (the old, superseded behaviour here did throw).
+  it('disabling an absent plugin is a no-op, and does not block a later mutation', async () => {
+    const before = await readFile(pluginsPath(), 'utf8');
+    await src.setPluginEnabled('No Such.esp', false);
+    expect(await readFile(pluginsPath(), 'utf8')).toBe(before);
+
     await src.setPluginEnabled('Unofficial Fallout 4 Patch.esp', false);
     const after = await readFile(pluginsPath(), 'utf8');
     expect(after).toContain('Unofficial Fallout 4 Patch.esp\r\n');
     expect(after).not.toContain('*Unofficial Fallout 4 Patch.esp');
+  });
+
+  it('enabling an absent plugin appends it, enabled', async () => {
+    const before = await readFile(pluginsPath(), 'utf8');
+    await src.setPluginEnabled('No Such.esp', true);
+    expect(await readFile(pluginsPath(), 'utf8')).toBe(before + '*No Such.esp\r\n');
   });
 
   // The New Plugin gesture's own write to disk.

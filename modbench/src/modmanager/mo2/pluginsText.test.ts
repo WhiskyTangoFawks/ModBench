@@ -83,8 +83,17 @@ describe('setPluginEnabledInText — byte-faithful surgical edit', () => {
     expect(out.length).toBe(input.length + 1);
   });
 
-  it('throws when the plugin name is not present', () => {
-    expect(() => setPluginEnabledInText(defaultPlugins(), 'No Such.esp', false)).toThrow(/No Such\.esp/);
+  // #654: a name with no entry line is a synthesized/unlisted row (#617) — there is nothing to
+  // toggle. Enabling one appends it (see the describe block below); disabling one is a no-op.
+  it('disabling a plugin name with no entry line is a no-op, byte-identical', () => {
+    const input = defaultPlugins();
+    expect(setPluginEnabledInText(input, 'No Such.esp', false)).toBe(input);
+  });
+
+  it('enabling a plugin name with no entry line appends it, enabled, at the winning end', () => {
+    const input = defaultPlugins();
+    const out = setPluginEnabledInText(input, 'No Such.esp', true);
+    expect(out).toBe(input + '*No Such.esp\r\n');
   });
 
   it('preserves a leading BOM when toggling the first line', () => {

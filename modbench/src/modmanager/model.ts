@@ -73,8 +73,9 @@ export interface IModlistSource {
   /** plugins.txt load order, enabled-only (the `*`-prefixed lines) — the plugins
    *  that actually load, used to build the editing backend's load-order snapshot. */
   readEnabledPlugins(): Promise<string[]>;
-  /** Set a plugin's enabled state (plugins.txt's `*` marker), byte-faithfully.
-   *  Throws if the plugin is absent. */
+  /** Set a plugin's enabled state (plugins.txt's `*` marker), byte-faithfully. A name with no
+   *  entry line at all is a synthesized/unlisted row (#617); enabling one appends it instead
+   *  (#654's ruling), disabling one is a no-op — see `setPluginEnabledInText`. */
   setPluginEnabled(pluginName: string, enabled: boolean): Promise<void>;
   /** Move one or more plugins (by name) so the moved block occupies entry-index
    *  `toIndex` among plugins.txt's lines (top = loads first), counting entries

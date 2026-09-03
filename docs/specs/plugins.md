@@ -654,7 +654,13 @@ overflow, then native **Collapse All** last.
   discovery shares the `FileConflictIndex` walk the badge pass already performs — no second walk,
   no extra disk I/O per render — and degrades with it: if that walk fails, the tab loses both
   badges and disk-derived rows together rather than showing half a tree, and says so.
-  Ticking such a row currently fails (there is no line to toggle); see #654.
+  Ticking such a row's checkbox appends it to `plugins.txt`, enabled, at the end of the entry
+  lines — the maintainer's ruling on #654, matching what MO2 itself does on its own save step.
+  Unticking one is a no-op (there is nothing to disable). This is the one write discovery itself
+  never makes: `setPluginEnabledInText` (the same pure text transform the write path already ran
+  through) appends instead of throwing when a name has no entry line at all, rather than the
+  provider consulting its own last-rendered row cache — which can go stale between a watcher
+  invalidate and the next render, and this write always re-reads `plugins.txt` fresh regardless.
 
 ### Row context menu
 

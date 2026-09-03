@@ -174,8 +174,10 @@ export interface PluginParticipationChange {
  *  a file plugins.txt never listed gets a synthetic row — there, `priority = -1` and `enabled`
  *  defaults false unless force-loaded; here, appended after the listed rows with no `*` line, so
  *  the ordinary `enabledSet.has(name)` check below renders it unchecked with no code path change.
- *  This never writes plugins.txt, matching what enabling a mod itself does (nothing to
+ *  Discovery itself never writes plugins.txt, matching what enabling a mod itself does (nothing to
  *  plugins.txt — only `modlist.txt`'s prefix flips, confirmed by reading `Mo2ModlistSource.setEnabled`).
+ *  Ticking the resulting row's checkbox is a separate write (#654's ruling) — see
+ *  `setPluginEnabledInText`.
  *  Sorted ascending, case-folded — deterministic across renders, not an artifact of `readdir` order,
  *  matching `unlistedModNames`'s own ascending-sort convention for the analogous Mods-tree case
  *  (`mo2/modlistText.ts`).
@@ -273,7 +275,13 @@ export class PluginListProvider
   /** Toggle a plugin's `*` (enabled) state, writing plugins.txt immediately, then
    *  invalidate so the tree re-reads the persisted state. Fires `onDidChangeParticipation`
    *  after the write succeeds (ADR-0035 § Live mutation) — the composition root's cue to
-   *  apply the same change to a running backend, live. */
+   *  apply the same change to a running backend, live.
+   *
+   *  A name with no entry line — a synthesized row (#617: a plugin file on disk with no
+   *  plugins.txt line) — has nothing to toggle. `source.setPluginEnabled` handles that itself
+   *  (#654's ruling: ticking appends it, enabled, matching MO2's own save-step behaviour;
+   *  unticking is a no-op), reading plugins.txt fresh rather than this provider's own possibly
+   *  stale row cache — see `setPluginEnabledInText`'s own doc comment. */
   async setPluginEnabled(pluginName: string, enabled: boolean): Promise<void> {
     await this.source.setPluginEnabled(pluginName, enabled);
     this.invalidate();
