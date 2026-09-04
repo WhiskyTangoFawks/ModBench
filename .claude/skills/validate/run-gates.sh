@@ -16,6 +16,18 @@ done
 
 ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
 
+echo "=== Gate 1: Comment discipline ==="
+COMMENT_FILES=$(cd "$ROOT" && git diff --name-only --diff-filter=AM main -- '*.cs' '*.ts' '*.tsx' '*.md' \
+  | grep -Ev '^(references/|modbench/src/medit/generated/|tools/)|/(node_modules|bin|obj|dist|out)/' \
+  | while read -r f; do [[ -f "$f" ]] && echo "$f"; done)
+if [[ -n "$COMMENT_FILES" ]]; then
+  COMMENT_OK=true
+  VALE="$(bash "$ROOT/.claude/skills/validate/install-vale.sh")" || COMMENT_OK=false
+  (cd "$ROOT" && echo "$COMMENT_FILES" | xargs -d '\n' "$VALE" --config=.vale.ini) || COMMENT_OK=false
+  (cd "$ROOT" && echo "$COMMENT_FILES" | grep -Ev '\.md$' | xargs -d '\n' -r python3 .claude/hooks/comment-shape.py) || COMMENT_OK=false
+  $COMMENT_OK || { echo "--- COMMENT GATE FAILED ---"; FAILED=true; }
+fi
+
 if $BACKEND; then
   echo "=== Gate 2: Backend format ==="
   (cd "$ROOT/MEditService" && dotnet format --verify-no-changes) && \
