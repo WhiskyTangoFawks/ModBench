@@ -730,7 +730,7 @@ describe('RecordPanel — Partial Form header toggle (#539)', () => {
 
 // #620 and this ticket's own triage both missed their mark at this exact layer: every prior
 // flags-cell test (FlagCell.test.tsx, DiffRow.test.tsx's "#426" block) hand-feeds
-// editableColumns/onEditCell/isBitmask rather than deriving them from a real load() response the
+// editableColumns/onEditCell/the flag metadata rather than deriving them from a real load() response the
 // way editableColumns (RecordPanel.tsx's own four-condition gate) actually is in the running
 // extension. This block is the first test in the suite that drives the gesture through that real
 // computation — for a scalar cell (the issue's own working comparison case) and a flags cell
