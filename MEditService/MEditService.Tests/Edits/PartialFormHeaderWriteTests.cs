@@ -115,8 +115,8 @@ public sealed class PartialFormHeaderWriteTests : IDisposable
         Assert.Equal(RecordEditRefusal.FieldNotFound, result.Refusal);
     }
 
-    // The write flips only header-flag bit 14 — a byte-diff over the record's own source file, not
-    // just an in-memory assertion, so a codec-level bug (e.g.
+    // A byte-diff over the record's own source file rather than an in-memory assertion, so a codec
+    // reserializing more than the one changed property is caught too.
     [Fact]
     public void EditField_ClearingIsPartialForm_ChangesOnlyBit14InSourceFile()
     {

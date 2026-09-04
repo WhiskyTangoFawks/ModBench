@@ -7,7 +7,9 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Tests.Plugins;
 
-// ADR-0001: one index file per MO2 instance.
+// ADR-0001: one index file per MO2 instance. The two instances share one game directory on purpose,
+// the shape the bug lives in: keyed by the Data install both get one index file; keyed by the
+// instance they never meet.
 public sealed class InstanceScopedIndexTests : IDisposable
 {
     private const string Origin = "Unofficial Patch";

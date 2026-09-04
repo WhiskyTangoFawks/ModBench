@@ -120,6 +120,8 @@ public sealed class BackendContentRootTests
         }
     }
 
+    // Faithful to the extension's published native executable even through the dotnet muxer:
+    // AppContext.BaseDirectory, which the content root anchors to, resolves identically either way.
     private static Process Spawn(IReadOnlyList<string> extraArgs, string workingDirectory, List<string> capturedLines)
     {
         var psi = new ProcessStartInfo("dotnet")

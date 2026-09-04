@@ -69,6 +69,8 @@ public sealed class ExternalChangeAbsorberTests : IDisposable
         Assert.Null(ExternalChangeDeferral.Unanswered(_mod.ModFolder, TrackedModFixture.PluginName));
     }
 
+    // Absorb shares Track's own serializer rather than a per-record tree writer, because the pristine
+    // commit writes only what it is handed with no merge: anything forgotten leaves the baseline.
     [Fact]
     public void Absorb_WritesACompleteSourceTree_IncludingTheModHeader()
     {

@@ -13,8 +13,8 @@ public class SchemaReflectorTotalClassificationTests
     private static List<LogEntry> BuildAndCollect()
     {
         var entries = new List<LogEntry>();
-        // Debug minimum: excluded shapes report at Debug (anomalies at Warning), and the default
-        // Information floor would silently drop exactly the lines the exclusion facts below read.
+        // A private reflector: the shared one is built once with a null logger and caches, so it has
+        // no anomalies left to report. Debug minimum, since the default floor drops those lines.
         using var factory = LoggerFactory.Create(b => b
             .SetMinimumLevel(LogLevel.Debug)
             .AddProvider(new CollectingLoggerProvider(entries)));

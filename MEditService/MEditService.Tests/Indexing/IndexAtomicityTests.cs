@@ -43,8 +43,9 @@ public class IndexAtomicityTests
 
         using var repo = OpenRepo();
 
-        // form_lookup's flush runs after the main record-table appends have committed, so without an
-        // enclosing transaction the npc_ rows would survive the throw.
+        // form_lookup, not form_references: it is appended unconditionally for any indexed record,
+        // and its flush runs after the record-table appends, so without an enclosing transaction the
+        // npc_ rows would survive the throw.
         using (var drop = repo.Connection.CreateCommand())
         {
             drop.CommandText = "DROP TABLE mirror.form_lookup";

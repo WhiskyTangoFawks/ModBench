@@ -153,7 +153,8 @@ public sealed class WinnersDerivedTableTests : IDisposable
         Assert.Null(WinnerOf(index, RecordRef.Effective, _npc));
         Assert.Null(index.At(RecordRef.Head).GetDocument(_npc));
 
-        // ...and then a reconciliation pass finds Base.esm's copy in HEAD's tree after all.
+        // Base.esm, not the plugin that had been winning: a stale winners table naming Over.esp
+        // would leave this row losing to a plugin holding nothing at Head.
         index.SeedCommittedOnly(BaseKey, [(_npc, "npc_", baseBody)]);
 
         Assert.Equal(Expected(BaseKey), WinnerOf(index, RecordRef.Head, _npc));

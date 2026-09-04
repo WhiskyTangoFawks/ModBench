@@ -81,6 +81,8 @@ public class SchemaReflectorWriteSymmetryTests
     [Fact]
     public void EveryByteSliceElementList_IsWritable()
     {
+        // Pinned by path because the nested one needs a PACK record no edit-path fixture builds, and
+        // its writability is still a fact worth holding.
         var byteSliceLists = new[] { "dlvw.tnams", "mato.dnams", "pack.procedure_tree.unknown" };
 
         var declaredReadOnly = Facts()

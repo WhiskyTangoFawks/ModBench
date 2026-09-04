@@ -8,8 +8,9 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Tests.Api;
 
-// ADR-0036 through the real load path, so bugs at the joins between phases are reachable, unlike a
-// same-filename pair built below LoadOrder.
+// ADR-0036 through the real load path, so bugs at the joins between phases are reachable. Both
+// copies need real mod-folder origins: ColumnKey.Of elides the reserved DataDirectory one, so a
+// default-origin fixture passes either way.
 public sealed class DuplicateFilenameLoadOrderApiTests(LoadedApiFixture<TestPluginFixture> loaded)
     : IClassFixture<LoadedApiFixture<TestPluginFixture>>
 {

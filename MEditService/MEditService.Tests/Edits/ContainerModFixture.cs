@@ -177,8 +177,8 @@ public sealed class ContainerModFixture : IDisposable
             .Select(l => UnquotePorcelainLine(l.Trim()))
             .ToList();
 
-    // "XY <path>": <path> is C-quoted exactly when it needs to be. Track sets core.quotePath=false,
-    // so only \\ and \" can arise here, but this is written generally rather than special-cased.
+    // Unavoidable, not defensive: plain porcelain v1 C-quotes any path containing a space
+    // unconditionally — core.quotePath governs only bytes above 0x80 — and these names all have one.
     private static string UnquotePorcelainLine(string line)
     {
         var space = line.IndexOf(' ');

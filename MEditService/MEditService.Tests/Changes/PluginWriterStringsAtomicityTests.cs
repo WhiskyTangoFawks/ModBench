@@ -7,8 +7,9 @@ using Mutagen.Bethesda.Strings;
 
 namespace MEditService.Tests.Changes;
 
-/// <summary>Only Normal and DL sources carry content here, but <c>StringsWriter.Dispose</c> writes a zero-
-/// entry <c>.ILSTRINGS</c> stub regardless, so all three extensions ride the same assertions.</summary>
+/// <summary>Fallout 4's one IL-sourced field sits on a nested group not worth building, so only
+/// Normal and DL carry content; <c>StringsWriter.Dispose</c> stubs the third anyway, so all three
+/// ride one set of assertions.</summary>
 public sealed class PluginWriterStringsAtomicityTests : IDisposable
 {
     private const string PluginName = "StringsFixture.esp";

@@ -161,7 +161,7 @@ public sealed class ModelIdentityTests
         Assert.Null(field);
     }
 
-    // ── #669: the comparison door must not inherit the generated comparers' lies ──
+    // ── The comparison door must not inherit the generated comparers' lies ──
     //
     // Mutagen's Equals and GetEqualsMask each miss real divergence and the pin stays 0.53.1, so the
     // verdict may never depend on them alone.

@@ -6,7 +6,7 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Tests.Source;
 
-/// <summary>The standing defence against the next <c>Quest.Scenes</c>: a Mutagen bump adding a child- major
+/// <summary>The standing defence against the next <c>Quest.Scenes</c>: a Mutagen bump adding a child-major
 /// field nobody put in the hand-maintained table.</summary>
 public sealed class ContainerChildFieldsCompletenessTests
 {

@@ -8,8 +8,9 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 namespace MEditService.Tests.Records;
 
-/// <summary><c>records_head</c>'s <c>UNION ALL</c> is exact only if its halves are disjoint; the way to
-/// break it is re-seeding <c>records</c> for a key that still has a snapshot.</summary>
+/// <summary><c>records_head</c>'s <c>UNION ALL</c> is exact only if its halves are disjoint. Read
+/// straight off the index, since a read-time self-heal would repair the damage before it could be
+/// seen.</summary>
 public sealed class HeadRelationDisjointnessTests
 {
     [Fact]

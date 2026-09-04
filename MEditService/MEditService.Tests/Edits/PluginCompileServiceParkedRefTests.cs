@@ -93,6 +93,8 @@ public sealed class PluginCompileServiceParkedRefTests : IDisposable
             if (File.Exists(scratchIndex)) File.Delete(scratchIndex);
         }
 
+        // The scratch directory's owning IDisposable must exist before the directory is populated: a
+        // throw during populate happens before `using` binds, so Dispose never runs and it leaks.
         var before = Directory.GetDirectories(Path.GetTempPath(), $"{scratchPrefix}*").ToHashSet(StringComparer.Ordinal);
 
         Assert.ThrowsAny<IOException>(

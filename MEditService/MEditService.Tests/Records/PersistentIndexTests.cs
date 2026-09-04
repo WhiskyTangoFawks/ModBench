@@ -216,8 +216,8 @@ public class PersistentIndexTests : IDisposable
         Assert.NotNull(second.IndexedContentHash(KeyOf("Alpha.esp")));
     }
 
-    // ADR-0001 point 6: DuckDB refuses a second open, and that refusal must never be answered by
-    // rebuilding, since deleting a file another process holds open succeeds on POSIX.
+    // DuckDB.NET shares one database instance per path in a process, so a second open here joins
+    // the first rather than contending; the cross-process refusal (ADR-0001 point 6) is out of reach.
     [Fact]
     public void ASecondIndexOverTheSameFile_LeavesTheFirstOnesRowsIntact()
     {

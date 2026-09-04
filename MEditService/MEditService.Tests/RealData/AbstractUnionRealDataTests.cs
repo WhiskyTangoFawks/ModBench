@@ -7,8 +7,9 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Tests.RealData;
 
-/// <summary>Read through the lazy binary overlay, where a per-property custom translation could diverge
-/// from the eager shape.</summary>
+/// <summary>Read through the lazy binary overlay, where a per-property custom translation could
+/// diverge from the eager shape. Quest aliases are the real overlay proof: Mutagen materializes
+/// <c>Npc.Level</c> eagerly whatever the read mode.</summary>
 public sealed class AbstractUnionRealDataTests
 {
     private static readonly IReadOnlyDictionary<string, RecordTableSchema> Schemas =

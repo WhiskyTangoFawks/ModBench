@@ -10,8 +10,8 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Tests.Indexing;
 
-/// <summary>VMAD is the one concrete-base union that matters and it is excluded from the shipped
-/// schema by design, so every test lifts that exclusion through the annotation seam.</summary>
+/// <summary>A concrete Loqui base with subclasses in the same assembly (ScriptProperty and its
+/// fourteen leaves) is a union like an abstract one, with the base itself as one more leaf.</summary>
 public sealed class ConcreteBaseUnionSchemaTests
 {
     private static ColumnSpec NpcAdapterColumn(SchemaReflector reflector) =>
@@ -132,6 +132,8 @@ public sealed class ConcreteBaseUnionSchemaTests
         Assert.Equal("0x0102", layers[1].GetProperty("alpha_layer_data").GetString());
     }
 
+    // The pin is asserted so a Mutagen bump that changes the concrete-base census fails here, where
+    // each ruling can be revisited, rather than silently widening the schema.
     [Fact]
     public void ConcreteBasesWithSubclasses_InThePinnedFallout4Assembly_AreExactlyTheRuledOnSix()
     {

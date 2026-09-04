@@ -241,6 +241,8 @@ public sealed class AbstractUnionCompileRoundTripTests : IDisposable
         Assert.Equal(_fixture.ActorValueInformation, archetype.ActorValue.FormKey);
     }
 
+    // ValueModifier deliberately: every other Type has a named case in ReadArchetype and would
+    // reparse as a more specific leaf, so only the default case rebuilds the literal base.
     [Fact]
     public void Archetype_SwitchingToTheBaseLeaf_ItsOwnRealTypeFieldCompilesAndReparses()
     {
@@ -284,7 +286,10 @@ public sealed class AbstractUnionCompileRoundTripTests : IDisposable
         Assert.Equal(0.75f, filter.QValue);
     }
 
-    // ── #643: the two nested abstract unions — reached one level inside another struct column ──
+    // ── The two nested abstract unions — reached one level inside another struct column ──
+    //
+    // NearSelf, not NearReference: PLVD's binary discriminator is the Type value, so a
+    // LocationFallback holding a known kind cannot survive a binary round trip as a fallback.
 
     [Fact]
     public void VendorLocationTarget_NestedStructEdit_CompilesAndReparsesTheNewValue()

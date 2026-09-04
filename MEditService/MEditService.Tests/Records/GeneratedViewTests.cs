@@ -31,9 +31,8 @@ public sealed class GeneratedViewTests(CutDownPluginFixture fixture) : IClassFix
     [Fact]
     public void EveryRecordType_HasAView_NamedAsItsTableWas()
     {
-        // No exclusion since #631: the plugin header has a document, so it has a view like every
-        // other type — which is what keeps a `header` relation at the SQL door now that its wide
-        // table is gone.
+        // The plugin header has a document, so it has a view like every other type — no exclusion:
+        // that view is what keeps a `header` relation at the SQL door (#631).
         var expected = SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4).Keys
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 

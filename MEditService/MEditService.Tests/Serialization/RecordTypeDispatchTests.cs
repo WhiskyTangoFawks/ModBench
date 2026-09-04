@@ -103,8 +103,9 @@ public class RecordTypeDispatchTests
             var filePath = Path.Combine(dir.FullName, "unsupported.json");
             await codec.SerializeAsync(MakeGlobalFloat(), filePath, GameRelease.Fallout4);
 
-            // Rewrite only the discriminator, leaving a structurally valid GlobalFloat document
-            // behind it — so what fails is the type resolution and nothing else.
+            // A GlobalFloat, not an Npc: only path-ambiguous types self-describe, so an Npc document
+            // has no discriminator left to corrupt. Rewriting only it leaves type resolution the
+            // one thing that can fail.
             var text = await File.ReadAllTextAsync(filePath);
             Assert.Contains("\"MutagenObjectType\": \"GlobalFloat\"", text, StringComparison.Ordinal);
             await File.WriteAllTextAsync(filePath,

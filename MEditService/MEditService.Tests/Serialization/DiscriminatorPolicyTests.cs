@@ -55,6 +55,8 @@ public sealed class DiscriminatorPolicyTests
         Assert.Equal("GlobalFloat", doc.RootElement.GetProperty(Discriminator).GetString());
     }
 
+    // The two spellings record_type can carry — the GRUP signature ingest stores, and the lowercased
+    // CLR name Track's source path falls back to — must both route to the discriminated deserializer.
     [Theory]
     [InlineData("glob")]
     [InlineData("globalfloat")]

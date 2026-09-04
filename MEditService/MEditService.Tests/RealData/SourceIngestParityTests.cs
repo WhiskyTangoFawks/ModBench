@@ -107,6 +107,8 @@ public sealed class SourceIngestParityTests : IDisposable
         Assert.True(CountOf(_fromBinary, "cell") > 0, "fixture holds no cells");
     }
 
+    // One unpaged query: Search orders by editor_id, which is non-unique and null for every placed
+    // ref, so LIMIT/OFFSET pages silently skip and repeat rows.
     private List<string> AllFormKeys(LoadOrderMirror mirror) =>
         [.. mirror.Index!.At(RecordRef.Effective).Search(new RecordQuery(Plugin: _plugin, Limit: int.MaxValue)).Items.Select(i => i.FormKey)];
 

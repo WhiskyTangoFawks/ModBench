@@ -160,6 +160,8 @@ public sealed class EditFieldApiTests(LoadedApiFixture<TestPluginFixture> loaded
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
+    // Asserted against the served OpenAPI document because that is the artifact the frontend client
+    // is generated from, so absent here is what makes the verb uncallable.
     [Fact]
     public async Task OpenApiDocument_RecordRoute_OffersNoMutatingVerb()
     {

@@ -130,7 +130,8 @@ public class RecordTextCodecTests
         }
     }
 
-    // Canonical formatting must not depend on which OS wrote the file.
+    // Canonical formatting must not depend on which OS wrote the file. The JSON kernel indents from
+    // its private inner TextWriter's NewLine, which the codec cannot configure, so it normalizes after.
     [Fact]
     public async Task SerializeAsync_NeverEmitsACarriageReturn()
     {

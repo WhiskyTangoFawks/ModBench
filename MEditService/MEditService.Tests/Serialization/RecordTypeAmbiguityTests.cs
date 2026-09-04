@@ -54,6 +54,8 @@ public sealed class RecordTypeAmbiguityTests
     public void IsPathAmbiguous_MatchesTheWholeModDoorsOwnPolicy(string recordType, bool expected) =>
         Assert.Equal(expected, Dispatch.IsPathAmbiguous(recordType));
 
+    // Ingest hands the serializer binary-overlay getters, whose runtime type does not derive from
+    // the concrete setter class, so the rule cannot be assignability against the group element.
     [Fact]
     public void IsPathAmbiguous_ForAnOverlayReadersOwnRuntimeType_AnswersAsForTheConcreteType()
     {

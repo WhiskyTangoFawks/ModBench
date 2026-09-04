@@ -136,6 +136,8 @@ public sealed class RecordEditServiceContainerDeleteRenumberTests : IDisposable
             StringComparison.Ordinal);
     }
 
+    // Worldspace.TopCell is the only single-value embedded slot this gesture can reach: SchemaReflector
+    // publishes no schema for land or navm, so GetDocument answers null for the Cell slots.
     [Fact]
     public void DeletingASingleValueEmbeddedSlot_NullsTheSlot_AndCascadesItsOwnDescendant()
     {

@@ -284,7 +284,8 @@ public sealed class RecordQueryServiceTests : IDisposable
         }
     }
 
-    // ADR-0035: VMAD's conflict contribution must be participation-aware too.
+    // ADR-0035. A third plugin makes this a two-participant NoConflict, not the OnlyOne shortcut;
+    // only the disabled last plugin differs, which an unfiltered winner pass would escalate.
     [Fact]
     public void GetCompare_VmadDiffersOnlyInDisabledPlugin_ReturnsNoConflict()
     {

@@ -6,9 +6,9 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 namespace MEditService.Tests.Edits;
 
-/// <summary>Asserts on real <c>git status</c>: the defect was a delete showing as 25 entries, since
-/// unstaged porcelain cannot collapse content-identical renames. A tree-shape assertion would pass
-/// either way.</summary>
+/// <summary>Asserts on real <c>git status</c>: unstaged porcelain cannot collapse content-identical
+/// renames, so a mid-list delete surfaces as many entries. A tree-shape assertion would pass either
+/// way.</summary>
 public sealed class MidListDeleteStagesWithoutRenamesTests : IClassFixture<ContainerModFixture>, IDisposable
 {
     private readonly ContainerModFixture _fixture;

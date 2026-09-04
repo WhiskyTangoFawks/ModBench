@@ -19,6 +19,7 @@ public sealed class BridgeKnowsNothingOfLoadOrdersTests
             $"Bridge source file(s) reference a forbidden namespace: {string.Join(", ", offenders)}");
     }
 
+    // Internal so a rival can be applied to and removed from a file copy without touching git state.
     internal static List<string> ScanBridgeSources(string bridgeSourceDirectory)
     {
         var offenders = new List<string>();

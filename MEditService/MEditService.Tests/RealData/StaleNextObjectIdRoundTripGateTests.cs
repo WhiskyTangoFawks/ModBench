@@ -12,8 +12,9 @@ using Noggog.WorkEngine;
 
 namespace MEditService.Tests.RealData;
 
-/// <summary>Three real plugins whose stored <c>HEDR.NextObjectID</c>/<c>NumRecords</c> differ from
-/// Mutagen's recompute, each through a different branch.</summary>
+/// <summary>Nothing in-game reads <c>HEDR.NextObjectID</c>/<c>NumRecords</c> and authoring tools
+/// leave them stale, so fidelity means the stored value verbatim. Real plugins, since the
+/// Mutagen-written fixture cannot show it.</summary>
 public sealed class StaleNextObjectIdRoundTripGateTests
 {
     public static TheoryData<string, uint, uint> Fixtures => new()

@@ -2,7 +2,7 @@ using MEditService.Core.Source;
 
 namespace MEditService.Tests.Source;
 
-/// <summary>Checked before touching git at all: an unguarded second Track would <c>git init</c> (a no- op),
+/// <summary>Checked before touching git at all: an unguarded second Track would <c>git init</c> (a no-op),
 /// fail at <c>checkout -b edit</c>, then delete the real <c>.git</c> as its own half-init.</summary>
 public sealed class SourceRepositoryTrackAlreadyTrackedTests
 {

@@ -8,11 +8,13 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Tests.RealData;
 
-/// <summary>One ~36s Track per class instead of per fact (a per-test Track was 6 of the suite's 9
+/// <summary>One ~36s Track per class instead of per fact (a per-test Track costs 6 of the suite's 9
 /// minutes).</summary>
 public sealed class CompileRoundTripGateFixture : IDisposable
 {
     public string ModFolder { get; } = Directory.CreateTempSubdirectory("medit-compile-roundtrip-").FullName;
+    // Snapshotted after Track and before any Compile: the two Compile facts overwrite ModFolder's
+    // plugin binary with non-Track bytes, so mutating facts copy this instead of Tracking again.
     public string TrackedTemplateFolder { get; } =
         Directory.CreateTempSubdirectory("medit-compile-roundtrip-template-").FullName;
     public string GameDirectory { get; } = Directory.CreateTempSubdirectory("medit-compile-roundtrip-game-").FullName;
@@ -60,6 +62,8 @@ public sealed class CompileRoundTripGateFixture : IDisposable
 
     public Dictionary<string, byte[]> ReadSourceTree() => ReadSourceTree(ModFolder);
 
+    // Track's repo is a plain non-bare git init rooted at the mod folder, so it bakes in no absolute
+    // paths and a recursive copy including .git yields a complete working repo.
     public static void CopyDirectory(string sourceModFolder, string destinationModFolder)
     {
         foreach (var dir in Directory.EnumerateDirectories(sourceModFolder, "*", SearchOption.AllDirectories))

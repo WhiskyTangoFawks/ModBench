@@ -51,6 +51,8 @@ public sealed class ArrayOpEditTests : IDisposable
         Assert.Contains(second, body, StringComparison.Ordinal);
     }
 
+    // A real git status is the only honest no-op check: falling through to an ordinary write
+    // reserializes the whole document, and reserialization is not guaranteed byte-stable.
     [Fact]
     public void ArrayRemove_IndexPastTheEnd_IsANoOpThatCommitsNothing()
     {
@@ -61,6 +63,8 @@ public sealed class ArrayOpEditTests : IDisposable
         Assert.Empty(_mod.GitStatus());
     }
 
+    // The non-empty array names a rival the empty case cannot rule out: an implementation that
+    // clamps an out-of-range index to the nearest valid one and removes that element instead.
     [Fact]
     public void ArrayRemove_IndexPastTheEndOfANonEmptyArray_IsANoOpThatKeepsEveryElement()
     {
@@ -156,6 +160,8 @@ public sealed class ArrayOpEditTests : IDisposable
 
     // ── array_add ────────────────────────────────────────────────────────────
 
+    // A struct-element array, not keywords: BuildListElement returns null for an unresolvable bare
+    // FormLink element, so that shape is silently dropped rather than refused.
     [Fact]
     public void ArrayAdd_StructElementArray_AppendsADefaultElement()
     {

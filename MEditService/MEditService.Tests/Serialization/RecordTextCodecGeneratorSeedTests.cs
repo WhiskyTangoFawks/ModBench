@@ -118,7 +118,8 @@ public class RecordTextCodecGeneratorSeedTests
         Assert.Empty(offendingFiles);
     }
 
-    // The guard at the bootstrap receiver rather than at either gateway method's name.
+    // The guard sits at the bootstrap receiver rather than either gateway method's name because a
+    // second bootstrap-shaped call site for the same mod-typed seed does not compile at all.
     [Fact]
     public void CoreSources_NameTheBootstrapReceiverOnlyInTheGatewayFile()
     {

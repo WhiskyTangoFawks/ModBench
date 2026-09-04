@@ -85,6 +85,8 @@ public sealed class ExternalChangeEditLanderTests : IDisposable
         Assert.Equal(myOwnEditText, File.ReadAllText(_mod.NpcSourceFile));
     }
 
+    // A flat Npc group, not the obvious DialogTopic chain: both container shapes hit Keep's "no flat
+    // source path yet" skip before ever reaching the order-index counter.
     [Fact]
     public void Keep_AfterAnExternalMidListDelete_LeavesTheLaterSiblingEntirelyUntouched()
     {

@@ -11,6 +11,8 @@ internal static class Golden
 {
     private const string UpdateVariable = "MEDIT_GOLDEN_UPDATE";
 
+    // The same converter Program.cs registers, so an enum lands in the golden as the string the
+    // endpoint sends rather than a bare integer the wire cannot produce.
     private static readonly JsonSerializerOptions SerializeOptions =
         new() { WriteIndented = false, Converters = { new JsonStringEnumConverter() } };
     private static readonly JsonSerializerOptions WriteOptions = new() { WriteIndented = true };

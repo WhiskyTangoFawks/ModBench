@@ -10,7 +10,9 @@ using Noggog;
 
 namespace MEditService.Tests.Edits;
 
-/// <summary>Two real mod folders, a container-rich untracked source and a tracked destination.</summary>
+/// <summary>Two mod folders because <see cref="ContainerModFixture"/> holds one and cannot ask
+/// whether a copy crosses plugins; the source stays untracked, since every read here is served
+/// from the index rather than the tree.</summary>
 public sealed class ContainerCopyFixture : IDisposable
 {
     public const string SourcePluginName = "ContainerSource.esm";

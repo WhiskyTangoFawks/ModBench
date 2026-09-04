@@ -9,7 +9,7 @@ using Mutagen.Bethesda;
 namespace MEditService.Tests.Source;
 
 /// <summary>Head answering nothing is what tells "ingest-from-source produces this state" apart from "the
-/// state stopped being produced"; it goes red the moment ingest seeds both refs from one whole- tree
+/// state stopped being produced"; it goes red the moment ingest seeds both refs from one whole-tree
 /// read.</summary>
 public sealed class WorkingTreeCreateSurvivesRestartTests
 {

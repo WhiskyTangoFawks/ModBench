@@ -174,6 +174,8 @@ public sealed class AbstractUnionEditTests : IDisposable
         // no value survives from the element that was there before.
         Assert.False(switched.TryGetProperty("Location", out _));
 
+        // Raw text slices, never a re-serialization of both sides, which would normalize away
+        // exactly the differences being looked for.
         Assert.Equal(Written(before)[1].GetRawText(), Written(after)[1].GetRawText());
         foreach (var property in JsonDocument.Parse(before).RootElement.EnumerateObject())
         {

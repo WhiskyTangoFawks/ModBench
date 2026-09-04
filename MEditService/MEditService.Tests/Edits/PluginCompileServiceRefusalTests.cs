@@ -38,8 +38,8 @@ public sealed class PluginCompileServiceRefusalTests : IDisposable
     [Fact]
     public void Compile_WithTwoFilesInOneGroupFolderClaimingTheSameFormKey_RefusesNamingTheFormKey()
     {
-        // Same group, same FormKey, a different EditorID in the file name: what an interrupted
-        // rename leaves behind.
+        // Asked of the tree, not the compiled mod: the whole-mod read ends each group with a
+        // FormKey-keyed SetTo, so the pair collapses silently before compile ever sees it.
         var npcSourceText = File.ReadAllText(_mod.NpcSourceFile);
         var duplicatePath = Path.Combine(_mod.ModFolder, SourceRecordPath.For(
             TrackedModFixture.PluginName, "npc_", _mod.Npc.ToString(), "CopyOfFixtureNpc", GameRelease.Fallout4));
@@ -65,6 +65,8 @@ public sealed class PluginCompileServiceRefusalTests : IDisposable
         Assert.Empty(result.Masters);
     }
 
+    // The generated deserializer is lenient both ways — an unrecognized property is skipped, a
+    // missing one left at its default — so a renamed key reproduces a breaking codec change exactly.
     [Fact]
     public void Compile_WithSourceFieldRenamedToOneTheCodecNoLongerReads_RefusesNamingTheFile()
     {

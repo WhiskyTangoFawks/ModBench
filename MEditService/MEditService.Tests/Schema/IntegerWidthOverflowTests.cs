@@ -71,6 +71,8 @@ public class IntegerWidthOverflowTests
         Assert.Equal(ApplyOutcome.Applied, Writer(table, column)(Record(table), Json(value)));
     }
 
+    // long is the one width Fallout 4 gives no scalar column, so the list position is the whole
+    // population and the width is pinned there instead.
     [Theory]
     [InlineData("[9223372036854775808]", ApplyOutcome.ValueRejected)]
     [InlineData("[-9223372036854775809]", ApplyOutcome.ValueRejected)]

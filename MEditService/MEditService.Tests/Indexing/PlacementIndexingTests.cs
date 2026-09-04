@@ -163,9 +163,9 @@ public class PlacementIndexingTests
         finally { dir.Delete(recursive: true); }
     }
 
-    // Mirrors FormReferencesTests.Index_ReIndexSamePlugin_ReplacesRatherThanDuplicates:
     // IndexPlacement must clear a plugin's prior placement/cell_location rows before rebuilding, the
-    // same way every other indexed table does — otherwise a re-index (e.g.
+    // way every other indexed table does; otherwise re-scanning after an external edit duplicates
+    // rows instead of replacing them.
     [Fact]
     public void Index_ReIndexSamePlugin_ReplacesPlacementAndCellLocationRatherThanDuplicating()
     {

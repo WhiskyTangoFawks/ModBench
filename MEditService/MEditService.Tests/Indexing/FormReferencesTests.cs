@@ -400,7 +400,7 @@ public class FormReferencesTests
         Assert.Contains(rows, r => r.FieldPath == "virtual_machine_adapter.scripts[0].properties[0].structs[1].members[0].object" && r.Target == target1Fk.ToString());
     }
 
-    // ── #671: scripts reachable only through an adapter sub-structure ──
+    // ── Scripts reachable only through an adapter sub-structure ──
     //
     // Each test asserts the full set of form_references rows aimed at the target, not just "contains
     // one": another walk seeing that FormKey would push the count past one and fail.

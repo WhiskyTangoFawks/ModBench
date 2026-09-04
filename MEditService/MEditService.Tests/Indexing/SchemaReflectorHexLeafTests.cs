@@ -212,6 +212,8 @@ public sealed class SchemaReflectorHexLeafTests
         Column("debr", "models").Apply.Writer!(
             debris, Json($$"""[{"percentage": 50, "model_filename": "A.nif", "texture_file_hashes": {{hashesHex}}}]"""));
 
+    // A whole-list write builds each element fresh, so the gate reads the constructor's own default
+    // size; gating on the pre-write element instead would refuse an ordinary reorder.
     [Fact]
     public void WriteNested_OntoAVariableLengthBlob_AcceptsALengthTheRecordDidNotAlreadyHold()
     {
@@ -224,6 +226,8 @@ public sealed class SchemaReflectorHexLeafTests
         Assert.Equal(new byte[] { 0x11, 0x22 }, debris.Models![0].TextureFileHashes!.Value.ToArray());
     }
 
+    // No byte-slice column has a same-named twin of another shape, so the containment is pinned
+    // through the one mismatched pair Fallout 4 supplies.
     [Fact]
     public void Write_OntoARecordWhoseSameNamedPropertyIsAnotherShape_Declines()
     {

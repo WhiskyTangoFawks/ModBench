@@ -139,6 +139,8 @@ public sealed class SourceWriteTransactionTests : IDisposable
         WriteThrough(transaction, "Npcs/first.json", "ours");
         transaction.Delete(_root, Path_("Races/second.json"));
 
+        // A directory where the deleted file stood: real, unwritable on every platform, and needing
+        // no permission bits a privileged test runner would sail through.
         Directory.CreateDirectory(Path_("Races/second.json"));
 
         var only = Assert.Single(transaction.Rollback());

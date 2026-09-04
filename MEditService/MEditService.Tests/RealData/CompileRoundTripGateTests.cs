@@ -20,6 +20,8 @@ namespace MEditService.Tests.RealData;
 public sealed class CompileRoundTripGateTests(CompileRoundTripGateFixture fixture)
     : IClassFixture<CompileRoundTripGateFixture>
 {
+    // Composed from serializer plus splice rather than delegating to TrackService's own writer: that
+    // would put identical production code on both sides, so a splice defect would agree with itself.
     private static Dictionary<string, byte[]> DeriveSourceTreeFromBinary(string pluginPath, GameRelease release)
     {
         var pluginFileName = Path.GetFileName(pluginPath);
@@ -112,6 +114,8 @@ public sealed class CompileRoundTripGateTests(CompileRoundTripGateFixture fixtur
         }
     }
 
+    // This cell because its timestamps are a real deep-copied value, not a coincidental zero that
+    // would pass whether or not the field was suppressed.
     [Fact]
     public void Track_OfTheRealFixture_WritesCellTimestampData()
     {
@@ -123,6 +127,8 @@ public sealed class CompileRoundTripGateTests(CompileRoundTripGateFixture fixtur
         Assert.Contains("\"TemporaryTimestamp\": 138972", cellText, StringComparison.Ordinal);
     }
 
+    // This response because its condition Unknown1 is a real non-default pad from Fallout4.esm, so a
+    // missing-field bug cannot pass by writing a coincidental zero.
     [Fact]
     public void Track_OfTheRealFixture_WritesConditionUnknown1AndHeaderStats()
     {
@@ -175,6 +181,8 @@ public sealed class CompileRoundTripGateTests(CompileRoundTripGateFixture fixtur
             $"Compile is not byte-stable across repeated runs: write1 {write1.Length:N0} B vs write2 {write2.Length:N0} B.");
     }
 
+    // A flat NPC, whose source unit is one file, so "exactly one file changed" has an unambiguous
+    // expected value; an embedded child's edit would legitimately change its parent's file too.
     [Fact]
     public void Compile_AfterOneFieldEdit_ChangesExactlyThatRecordsFileInTheReserializedTree()
     {
@@ -211,6 +219,8 @@ public sealed class CompileRoundTripGateTests(CompileRoundTripGateFixture fixtur
         Assert.Equal([expectedPath], changed);
     }
 
+    // The middle response on purpose: renaming an edge slot would mask a renumbering bug that shifts
+    // later siblings.
     [Fact]
     public void Compile_AfterRenamingAResponsesEditorId_PreservesTheDialogTopicsInfoOrder()
     {

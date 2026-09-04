@@ -1,7 +1,8 @@
 namespace MEditService.Tests.Serialization;
 
-/// <summary>A source-text ban rather than one deleted line: each game needs its own seed class,
-/// and the author of the next one will copy an existing one. Production sources only.</summary>
+/// <summary>A source-text ban, not one deleted line: record type names collide across games, so one
+/// generator compilation seeds one game and each game needs its own seed class the flag could
+/// reappear in.</summary>
 public sealed class RecordOrderCustomizationBanTests
 {
     [Fact]

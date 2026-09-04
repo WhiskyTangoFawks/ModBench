@@ -26,16 +26,16 @@ public sealed class SchemaReflectorLeafCoverageCompletenessTests
 
     private static readonly HashSet<string> LoquiSkipProps = new(StringComparer.OrdinalIgnoreCase) { "Registration" };
 
-    // Known, accepted gaps — every one named and explained, never passed over silently. (OwnerType
-    // .Name, PropertyName) at whichever depth the pair is walked.
+    // Known, accepted gaps, keyed (OwnerType.Name, PropertyName) at whichever depth the pair is
+    // walked — every one named and explained, never passed over silently.
     private static readonly HashSet<(string Owner, string Property)> KnownGaps = new()
     {
-        // ── Category 2 (closed for every real abstract union): a base interface whose per-subclass data
-        //
-        // lives on concrete classes inheriting from it.
-        ("ISceneActionGetter", "Type"),            // ASceneActionType — deliberately not abstract; see above
+        // ASceneActionType is the one union base Mutagen leaves non-abstract on purpose: expanding
+        // it would crash on SceneActionTypicalType's throwing overlay getter
+        // (docs/specs/medit-record-editor.md).
+        ("ISceneActionGetter", "Type"),
 
-        // ── Category 3: a false positive of this test's own column-name matching. DamageType and
+        // A false positive of this test's own column-name matching. DamageType and
         // DamageTypeIndexed declare `DamageTypes` with different shapes, and MergeSiblingColumn resolves
         // the disagreement by renaming, which a PropertyName-based lookup does not account for.
         ("IDamageTypeItemGetter", "ActorValue"),

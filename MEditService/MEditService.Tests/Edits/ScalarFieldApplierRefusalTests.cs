@@ -154,7 +154,8 @@ public sealed class ScalarFieldApplierRefusalTests : IDisposable
     }
 
     // The sibling-merge "column exists on the schema, not on this instance" shape, which
-    // TrackedModFixture's NPC has no equivalent of.
+    // TrackedModFixture's NPC has no equivalent of. GlobalShort rather than GlobalBool: Mutagen's
+    // GlobalBool writes FLTV as one byte and reads back expecting four.
     private sealed class GlobFixture : IDisposable
     {
         private const string PluginName = "Glob532.esp";

@@ -6,6 +6,7 @@ namespace MEditService.Tests.Edits;
 /// edit performs; the lossy direction happens once at Track, upstream of any edit.</summary>
 public class ColorQuantizationTests
 {
+    // A hand-copy of Mutagen's own write formula, the pin that lets an upstream change be noticed.
     private static float Dequantize(byte component) => (float)(component / 255d);
 
     [Fact]
