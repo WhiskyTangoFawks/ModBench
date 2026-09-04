@@ -165,7 +165,7 @@ export function ScalarCell({
       onFocus={e => e.currentTarget.select()}
       onBlur={() => { commitIfChanged(coerce()); setActive(false); }}
       // Enter only leaves the cell; the blur above is the one commit path.
-      onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+      onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur(); }}
       style={inputBase}
     />
   );

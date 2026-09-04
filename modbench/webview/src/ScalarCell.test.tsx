@@ -93,7 +93,6 @@ describe('ScalarCell — committing (#415 AC1)', () => {
     render(<ScalarCell value="before" meta={meta()} editable isFocused onCommit={onCommit} />);
     fireEvent.click(screen.getByText('before'));
     const input = screen.getByRole('textbox');
-    input.focus();
 
     fireEvent.change(input, { target: { value: 'after' } });
     fireEvent.keyDown(input, { key: 'Enter' });
