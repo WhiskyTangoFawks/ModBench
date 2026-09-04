@@ -21,9 +21,10 @@ the focused cell's model value in both column kinds; `Ctrl+X`/`Ctrl+V` are the m
 of that same contract — clipboard read/write both round-trip through the extension host, and both
 commit through the ordinary onEdit path, coercing the pasted string the same way the typed-editor
 path does. A pasted reference into a FormKey cell still goes through its QuickPick editor,
-not a closed-cell paste of its own — see the FormKey paste note below. Unsorted-array arity/order
-ops (Add/Remove/Move Up/Move Down) live on the right-click
-menu with `Insert`/`Delete`/`Ctrl+↑`/`Ctrl+↓` as accelerators; there are no inline ▲▼✕/＋
+not a closed-cell paste of its own — see the FormKey paste note below. Array arity/order
+ops live on the right-click menu with `Insert`/`Delete`/`Ctrl+↑`/`Ctrl+↓` as accelerators, in the
+two sets *Array arity and order* below defines — Add/Remove/Move Up/Move Down on an unsorted array,
+Add/Remove alone on a keyed one; there are no inline ▲▼✕/＋
 buttons. There is no read-only value
 surface: an immutable cell opens nothing on plain click, second click, `F2`, or double click —
 **a `string` cell included** (ADR-0039) — with Ctrl+C on the focused cell as every
@@ -142,7 +143,7 @@ better idea.
   expand/collapse that node.
 - **The keyboard acts on the focused cell** — `F2` edit · `Ctrl+C` copy · `Ctrl+X` cut ·
   `Ctrl+V` paste · `Insert` add a list entry · `Delete` remove the entry or clear the value ·
-  `Ctrl+↑`/`Ctrl+↓` reorder within an unsorted list. **Clipboard operations carry the cell's model
+  `Ctrl+↑`/`Ctrl+↓` reorder within an unsorted list (a keyed list has no order to change). **Clipboard operations carry the cell's model
   value, not selected text**, so they work identically whether the cell renders a text box, a
   dropdown, a checkbox or a link, and in both column kinds. Copy needs no text surface and no
   selection, which is why neither exists here.
@@ -150,11 +151,11 @@ better idea.
   Available from any cell regardless of the *source* column's mutability (only the drop target's
   mutability gates the drop); applies to compound (struct/array) fields via their header/summary
   row exactly as it applies to a scalar leaf's value. **The cursor does not advertise it** — a
-  resting cell shows the default arrow, as in xEdit. `grab` on every value cell was the earlier
-  model's attempt to make one cursor state two gestures at once; with click meaning focus there is nothing
-  for the cursor to disambiguate.
+  resting cell shows the default arrow, as in xEdit. With click meaning focus there is nothing
+  for the cursor to disambiguate, so no cell advertises a `grab`.
 - **Right-click** — the only place a named, discrete action lives. On a **value cell** that is the
-  list structure ops (**Add** / **Remove** / **Move Up** / **Move Down** — there is no **Clear**),
+  list structure ops (**Add** / **Remove** / **Move Up** / **Move Down** — there is no **Clear**;
+  a keyed array offers the first two only),
   which are
   also the `Insert`/`Delete`/`Ctrl+↑`/`Ctrl+↓` accelerators above — the menu is the canonical
   definition and the keys are shortcuts onto it, exactly as in xEdit, and there are **no inline
@@ -248,13 +249,35 @@ one that has to be honest about what a struct/array is and to round-trip (`JSON.
 same value); prose does neither.
 
 **A collapsed array element may still *read* as prose**, through the **presentation table**
-(`webview/src/presentation.ts`): a table keyed by the schema's own leaf type names, whose entries are
-pure functions of an element's metadata, its value, and the FormKey resolutions the diff already
-carries. An element whose leaf has an entry renders that string in place of `{…}` while collapsed;
-every other row is unchanged, and no entry affects the edit value or the copy value. The table is
-the **only** place in the webview where a game's own reading conventions live — a game-shaped rule
-anywhere else in `webview/` is in the wrong file. Its first entries are Fallout 4's two `Condition`
-leaves (*Conditions* below).
+(`webview/src/presentation.ts`), whose entries
+address an element's metadata, its value, the FormKey resolutions the diff already carries, and —
+one level deep — how its children read. An element whose leaf has an entry renders that string in
+place of `{…}` while collapsed; every other row is unchanged, and no entry affects the edit value or
+the copy value. The table is the **only** place in the webview where a game's own reading
+conventions live — a game-shaped rule anywhere else in `webview/` is in the wrong file. Its entries
+are Fallout 4's two `Condition` leaves (*Conditions* below) and its `ScriptEntry`, `ScriptProperty`
+and `ScriptObjectProperty` (*Scripts* below).
+
+**The key is the leaf a value turned out to be, not the one its schema promised**: the value of
+whichever member the schema marks as the discriminator (`concrete_type`, OMOD's `value_type`) where
+the element has one, and `FieldMetadata.LeafTypeName` — the reflected type name, which the backend
+sets on every `struct` and on nothing else — where it does not. A union is exactly where the two
+disagree, so the discriminator answers alone: a union whose value names no leaf reads as nothing
+rather than as its declared base, since a concrete base is one of its own leaves (#701).
+
+Three rules complete the lookup:
+
+- **A leaf with no entry of its own reads by its declared base's entry.** A union's leaves mostly
+  share one reading and differ only in which member holds the value — fifteen script-property leaves,
+  one entry. This is reached only *after* the value has named a leaf, which is what keeps it distinct
+  from the rule above: "the table knows only the family's reading" and "the value names no leaf" are
+  different claims and get different answers.
+- **A formatter may read its children's summaries, one level deep.** xEdit's summary passthrough
+  (`SetSummaryPassthroughMaxDepth(1)`): a container reads as its children do, and a child whose own
+  value is a list or a nested struct reads by name and kind alone.
+- **An unreadable element inside a passthrough takes the grid's `{…}`.** Dropping it would make a
+  two-property script read like a one-property script — the summary must have one entry per element
+  the column holds.
 
 #### Ctrl+X only actually clears some types
 
@@ -483,17 +506,23 @@ already empty: matching xEdit's own guard (`Element.EditValue` must be non-empty
     extended editor at whatever depth it sits. A composite leaf's own inner string widget doesn't — its outer
     `FieldMetadata.type` isn't `'string'`, which is what this menu entry keys on (a noted gap). A `string` cell that
     doesn't reach it keeps its inline editor on every left-click gesture, unchanged.
-- **Unsorted array fields have arity and order operations** — **Move Up** / **Move Down** (swap
-  with the neighbour) and **Remove** on an element row, and **Add** on the parent array row,
-  appending a default-valued element. They live in the **right-click menu**, with
+- **Array arity and order come in two sets, and one array kind has neither.** An **unsorted**
+  (`wbArray`) array offers all four — **Move Up** / **Move Down** (swap with the neighbour) and
+  **Remove** on an element row, and **Add** on the parent array row, appending a default-valued
+  element. A **keyed** array — `wbArrayS` sorted by a key read off the element, addressed by that
+  key rather than by index — offers **Add** and **Remove** and no **Move**: it is stored back in
+  key order on every write, so no move a user could make would change the file. An array
+  **sorted by its own element value** (a plain FormLink list,
+  `FieldMetadata.ElementType.IsSortable`) offers none of the four, because its elements have no
+  identity apart from their values. The entries a set does not include are absent, not disabled.
+  They live in the **right-click menu**, with
   `Ctrl+↑` / `Ctrl+↓` / `Delete` / `Insert` as accelerators onto the same menu items — xEdit's
   arrangement exactly, and required by the no-second-route rule: **there are no inline ▲▼✕
   buttons.** (Mechanism:
   a native `webview/context` menu on the element/parent cell, `Insert`/`Delete`/`Ctrl+↑`/`Ctrl+↓`
   as DOM keydown accelerators on the focused cell, no extension-host round trip needed for the
   keys since `onArrayEdit`/`onArrayAdd` are pure in-webview state.) Add is available regardless of
-  the array's expand state, matching xEdit. Sorted (`wbArrayS`) arrays offer none of these — order is derived from the
-  sort key, so the entries are absent, not merely disabled. **The ops post a server-side op
+  the array's expand state, matching xEdit. **The ops post a server-side op
   envelope** (`{op, path}`, #630) through the ordinary edit path; the backend reads the record's
   own current value, computes the result, and applies it as the same atomic whole-array
   complex-field write CONTEXT.md describes — so the write itself is unchanged, only who computes
@@ -503,9 +532,16 @@ already empty: matching xEdit's own guard (`Element.EditValue` must be non-empty
   same reconstruction: the whole array (or struct-array element) is rebuilt before the write, so
   it lands atomically rather than being silently lost. The context-menu ops' wire payload
   carries the element's full `path` + `rootField` (the addressing contract), so ops on an
-  array nested inside a struct or another array land at the element's real depth, and Add
-  resolves its default element from the nested array's own element type via `metaAtPath` — a
-  bare element index would truncate both. There is no free
+  array nested inside a struct or another array land at the element's real depth. **A path is a
+  chain of four hop kinds**: a `member` names a struct's member; an `index` an unsorted array's
+  element by position; a `key` a keyed array's element **by key, resolved per column** — the same
+  key names a different position, or none at all, in each plugin's own array, which is exactly what
+  lets a plugin carrying fewer scripts than its master read as an absence at those keys; and a
+  `sortKey` an element of an array sorted by its own value. Add
+  resolves its default element from the nested array's own element type via `metaAtPath`, and a
+  bare element index would truncate both that and the depth. **An op's `key` hop is resolved against the record's own
+  schema, never against the payload's claim**: the key members are the ones the array declares, and
+  a key hop into an array the schema does not key is refused. There is no free
   drag-reorder and no auto-sort.
   Every array field takes this path, at every depth, including a script's properties and a
   Papyrus scalar-array property's elements — there is no client-side arity computation left.
@@ -703,6 +739,43 @@ cannot represent two of it. A newly added element carries its discriminator and 
 names it — adding a second unnamed element to the same array is exactly what the duplicate refusal
 catches.
 
+**How a collapsed script reads.** Three entries in the presentation table cover the whole family,
+after xEdit's `wbScriptEntry` (`Core/wbDefinitionsFO4.pas:3956`), `wbScriptProperty` (`:3883`) and
+`wbScriptPropertyObject` (`:3823`):
+
+- a **script** reads `ScriptName(<each property>)` — its own name, then its properties passed
+  straight through rather than counted;
+- a **property** reads `Name: Kind = value`, where *Kind* is the schema's own word for the leaf,
+  taken from the discriminator member's own label — never a Mutagen class name written here;
+- an **object binding** reads as a property whose value is `Object, Alias[…]`, and read outside the
+  property union — as an element of a plain list of bindings — as just `Object, Alias[…]`. One
+  class serves both ways, and which it is, is what the presence of a discriminator label says.
+
+Fourteen of the fifteen property leaves reach one entry through the base-entry rule; only the
+object binding needs its own, for its value. **Passthrough stops at depth 1** (xEdit's
+`SetSummaryPassthroughMaxDepth(1)`): a property whose value is a list or a nested struct reads by
+name and kind alone, its value living on the rows it expands to, and a property with no reading at
+all still contributes the grid's `{…}` so a two-property script never reads like a one-property one.
+
+Three rulings inside that shape, recorded because they are rulings and not facts read off xEdit:
+
+- **An alias slot reads `None` for -1, `Player` for -2, and its own number otherwise.** xEdit
+  resolves a higher number through the owning quest's alias list; the compare wire carries no alias
+  list, and a bare number is what xEdit itself prints with `wbResolveAlias` off, so the wire is not
+  grown for this. If it ever is, the growth is precise: `FormKeyResolution` gains the resolved alias
+  name for a member the schema marks as an alias index, populated backend-side like every other
+  resolution — never a second lookup the webview performs.
+- **No length cap.** xEdit's own caps (`SetSummaryPassthroughMaxLength`, 80 on a script's properties
+  and 100 on the scripts list) answer a fixed-width tree column. The cell this lands in already
+  ellipsizes at its own width, so the summary carries every element and lets the grid decide how
+  much fits.
+- **`', '` joins a passthrough's elements.** xEdit sets a delimiter per definition
+  (`SetSummaryDelimiter`) for a struct's own members, but nothing in the clone shows how a
+  passed-through *list* joins its elements — the machinery is absent
+  ([ADR-0034](../adr/0034-xedit-is-the-ux-reference-for-the-record-editor.md)). Comma-space is the
+  ruling — a delimiter the definitions do use (`SetSummaryDelimiter(', ')`), and the one that reads
+  as a list rather than as one run-on token.
+
 The arrays xEdit declares plain `wbArray` stay positional, and each is a fact rather than an
 omission: INFO/PACK/SCEN fragment lists carry "do NOT sort" in the definitions themselves, an
 array-of-struct property's instances are positional, and a scalar-array property's elements have no
@@ -757,6 +830,15 @@ The editor reads the same map, for the same two halves, over metadata alone — 
   it would be showing the same value twice, wrongly) or data no reader consults. The one divergence
   from xEdit is that xEdit renders CIS1/CIS2 as their own always-present rows, so a stale parameter
   string it would show is not shown here until the cascade clears it.
+
+**How a collapsed condition reads.** Its presentation entry is xEdit's own `wbConditionToStr`
+(`Core/wbDefinitionsCommon.pas`): the Run On prefix with its spaces stripped — or the reference in
+parentheses where Run On is `Reference` — then the function and the parameter slots
+`SiblingsInUse` says it uses, then the comparison operator, then the comparison value, then the
+conjunction joining this condition to the next, absent on the list's last element. A slot Mutagen
+carries as a string reads on its own row rather than in the call, exactly as in xEdit, and a call
+whose first slot is left out has no parentheses at all. An operator outside the schema's own six
+reads as no operator: the condition still reads, missing only the sign.
 
 **The function picker is the schema's own enum.** On Fallout 4 that is the `function` member's
 479-member enum, rendered by the ordinary enum cell; on a shape whose `ConditionData` is one class
@@ -816,9 +898,10 @@ These apply everywhere a field value is rendered — the one compare grid and an
    gesture everywhere (plain and struct-element arrays alike); committing one reconstructs the
    array's (or struct-array element's) whole value before the write, per the reconstruction
    CONTEXT.md's Complex-field entry's atomic-write model requires for a per-element gesture.
-   Array **arity and order** are editable for **unsorted** arrays (add / remove /
-   move-up / move-down, swap-based, on non-immutable columns) and **absent** for sorted
-   (`wbArrayS`) arrays, whose order is sort-key-derived — these ops use the same
+   Array **arity and order** come in the two sets *Array arity and order* defines: **unsorted**
+   arrays offer add / remove / move-up / move-down (swap-based, on non-immutable columns), **keyed**
+   arrays offer add / remove and no move (they are written back in key order regardless), and an
+   array sorted by its own element value offers none — these ops use the same
    whole-array reconstruction. A list whose element's concrete type is
    polymorphic (OMOD `properties`' `AObjectModProperty<T>`, seven concrete leaves) resolves
    each element's own type from a `value_type` discriminator sub-field at write time; an
@@ -838,6 +921,10 @@ These apply everywhere a field value is rendered — the one compare grid and an
    stays alongside it unmerged, since OMOD's leaf discovery is a genuinely different mechanism (a
    generic base with no reflectively-enumerable subclasses of its own), not a special case of this
    one.
+   **Every struct declares its own class**, union or not: `FieldMetadata.LeafTypeName` carries the
+   reflected type name on every `struct` and is null on every other type. The discriminator is a
+   different claim — the schema's name says which class was *promised*, the discriminator's value
+   which one a value *turned out to be*, and a union is exactly where the two disagree.
    **Which leaf an element is, is itself an editable field** (#688). `concrete_type` is an `enum`
    over the union's leaves, so switching one is an ordinary edit of the enclosing struct/array:
    the editor resends the element with that one member changed, the write path builds the named
@@ -962,10 +1049,12 @@ new value, so a large array or struct edit can't flood the panel.
   reviewing and reverting a working-tree change happens in the native Source Control panel — both
   [medit-version-control.md](medit-version-control.md).
 - **Referenced By** — a separate tree, [medit-referenced-by.md](medit-referenced-by.md).
-- **Array arity/order editing of *sorted* (`wbArrayS`) arrays** — deliberately absent: order is
-  derived from the sort key, so add/remove/reorder controls do not render on them. Unsorted
-  (`wbArray`) arrays have field-grid arity/order controls (arity changes write the
-  whole array as one field edit).
+- **Reordering any sorted (`wbArrayS`) array** — deliberately absent: order is derived from the
+  key, and the array is written back in key order regardless, so no reorder control could change
+  the file. A **keyed** array still has add and remove; an array sorted by its own element value
+  has neither, its elements having no identity apart from their values. Unsorted (`wbArray`) arrays
+  have all four field-grid arity/order controls (arity changes write the whole array as one field
+  edit).
 
 ## Further Notes
 

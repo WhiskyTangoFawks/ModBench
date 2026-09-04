@@ -39,6 +39,26 @@ or operate it, and where the addition overlaps ground xEdit does cover, xEdit's 
 semantics carry into it. First instance: the transposed record view, an optional
 plugins-as-rows orientation on top of the default plugins-as-columns grid.
 
+### Citing the reference: definitions are trustworthy, the machinery may be absent
+
+The `references/TES5Edit` clone is internally inconsistent, and the inconsistency is a trap.
+`wbDefinitionsFO4.pas` calls `SetSummaryKey` 74 times and `SetSummaryPassthroughMaxLength` twice;
+`Core/wbInterface.pas` declares **no** `Summary` member at all, and `Core/wbImplementation.pas` has
+34 `Summary` occurrences (`ToSummary`, `GetElementSummary`, six `GetSummary` overrides) but no
+`SetSummaryKey`, `SetSummaryDelimiter` or `SetSummaryPassthroughMaxDepth`. **A definition is a fact
+about the format; the machinery that consumes it may simply not be in the clone.** So: cite the
+definition, rule the composition yourself, and say in the document which of the two you did. Absence
+of machinery is never evidence that a definition means nothing — and it is never a licence to
+present a ruling as an xEdit fact.
+
+One composition rule earned that way, because every future summary shape needs it: **a
+`wbStructSK([n])`'s sort-key member leads its summary unless the definition sets
+`dfSummaryNoSortKey`** — and a definition sets that flag exactly when member `n` already appears
+inside its own `SetSummaryKey`. Eight sites carry the flag in `wbDefinitionsFO4.pas`
+(`:1044`, `:3409`, `:3836`, `:6861`, `:7871`, `:10327`, `:10343`, `:11128`) and all eight hold, with
+no counterexample. It is why a script reads under its own name and a script object binding, whose
+sort key is already in its summary key, does not.
+
 ### The gesture model
 
 | Gesture | Meaning |

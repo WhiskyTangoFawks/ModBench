@@ -65,7 +65,7 @@ A record with the `IsPartialForm` header flag intentionally omits fields it does
 
 ### Sorted vs unsorted arrays
 
-`wbArrayS` (sorted) arrays in xEdit must be matched by sort key before comparing elements, not by array index. Positional mismatch between two versions of a sorted array is not a conflict — the arrays just need to be sorted first. For unsorted arrays (e.g. quest script fragments: OnBegin, OnEnd, OnChange), order is semantically significant and positional mismatch is a real conflict.
+`wbArrayS` (sorted) arrays in xEdit must be matched by sort key before comparing elements, not by array index. Where the key is a member read off the element rather than the element's own value — a script's name, a property's name, a fragment's index — that key is what aligns the columns (`ConflictClassifier`'s keyed build), so a plugin carrying fewer elements than its master reads as an absence at those keys instead of shifting every row after it. Positional mismatch between two versions of a sorted array is not a conflict — the arrays just need to be sorted first. For unsorted arrays (e.g. quest script fragments: OnBegin, OnEnd, OnChange), order is semantically significant and positional mismatch is a real conflict.
 
 ## Decision
 
