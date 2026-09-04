@@ -49,9 +49,9 @@ public interface IRecordIndex : IDisposable
     /// participating registrations compete.</summary>
     void UpdateWinners();
 
-    /// <summary>Folds working-tree changes into the read model: a null <c>Body</c> is a deletion, a
-    /// byte-equal body a convergence. Unknown FormKeys are skipped. Every write gesture enters
-    /// through <c>RecordEditService</c>, which owns deferral refusals.</summary>
+    /// <summary>Folds working-tree changes into the read model: null Body deletes, byte-equal body
+    /// converges. No deferral check here: read-time self-heal must keep folding source in while an
+    /// external-change question is open.</summary>
     void ApplyWorkingTreeChanges(PluginKey key, IReadOnlyList<(string FormKey, string? Body)> deltas);
 
     /// <summary>Materializes a record that exists at neither ref, the one case
@@ -81,9 +81,9 @@ public interface IRecordIndex : IDisposable
         PluginKey key, string parentFormKey, string parentRecordType, string slotName,
         IReadOnlyList<(string ChildFormKey, int SlotIndex)> children);
 
-    /// <summary>The index side of a renumber, one transaction: materialize the new identity, re-point
-    /// folder-split children and exterior cells (unreachable by re-derivation), tear the old one
-    /// down. Throws if the new FormKey is held.</summary>
+    /// <summary>One transaction: materialize the new identity, re-point folder-split children and
+    /// exterior cells, tear the old down. The TopCell re-derivation keys on cell_form_key, so the
+    /// re-point cannot hit it twice.</summary>
     void ApplyRenumber(PluginKey key, RenumberedRecord renumbered);
 
     /// <summary>Gives a cell a <c>cell_location</c> row copied from wherever the caller has it — never
@@ -97,9 +97,8 @@ public interface IRecordIndex : IDisposable
     void SetFilter(string? sql);
 }
 
-/// <summary>What <see cref="IRecordIndex.ApplyRenumber"/> needs. <c>Owner</c> is null for a record
-/// with a source file of its own; an embedded record's owner is reserialized too and arrives
-/// alongside it.</summary>
+/// <summary>What <see cref="IRecordIndex.ApplyRenumber"/> needs. One nullable <c>Owner</c> rather than
+/// a nullable FormKey plus body, so "both or neither" is the type's shape.</summary>
 public sealed record RenumberedRecord(
     string OldFormKey,
     string NewFormKey,

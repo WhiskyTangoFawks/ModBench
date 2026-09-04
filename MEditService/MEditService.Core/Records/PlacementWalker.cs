@@ -6,11 +6,9 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Core.Records;
 
-/// <summary>A placed reference's row in the <c>placement</c> side table.</summary>
 public readonly record struct PlacementRow(
     string FormKey, string ParentCell, string PlacementGroup, float? PosX, float? PosY, float? PosZ);
 
-/// <summary>A cell's row in the <c>cell_location</c> side table.</summary>
 public readonly record struct CellLocationRow(
     string CellFormKey, string? ParentWorldspace,
     int? BlockX, int? BlockY, int? SubX, int? SubY, int? GridX, int? GridY, bool IsInterior);

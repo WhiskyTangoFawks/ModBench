@@ -5,3 +5,5 @@ namespace MEditService.Core.Records;
 /// write path re-derives it.</summary>
 public readonly record struct ContainerChildRow(
     string ChildFormKey, string ParentFormKey, string ParentRecordType, string SlotName, int SlotIndex);
+// Rejected: having every reader existence-check against records instead, which would make "these
+// tables track Effective" a documented falsehood.

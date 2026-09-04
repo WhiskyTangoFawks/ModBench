@@ -195,9 +195,8 @@ public sealed class TableDdlBuilder(SchemaReflector reflector)
             """);
     }
 
-    // ADR-0001: (record_ref, form_key) -> (plugin, origin); winning is a function of registration
-    // alone, so re-registering changes who wins without touching a record row. No PRIMARY KEY: the
-    // ART index across the wholesale rebuild measured 6x the sweep itself.
+    // ADR-0001: winning is a function of registration alone. No PRIMARY KEY on any appended table:
+    // re-index is delete-then-append, and the ART index across the rebuild measured 6x the sweep.
     private static void CreateWinnersTable(DuckDBConnection connection)
     {
         Execute(connection, $"""

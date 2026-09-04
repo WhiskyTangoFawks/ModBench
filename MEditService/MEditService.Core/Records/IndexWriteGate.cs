@@ -5,6 +5,10 @@ namespace MEditService.Core.Records;
 /// outside <c>LoadOrderMirror._lock</c>, never inside.</summary>
 public sealed class IndexWriteGate(TimeSpan? timeout = null)
 {
+    // On one DuckDBConnection a second BeginTransaction throws and an unwrapped statement joins the
+    // other caller's transaction, dying with its rollback. Reads skip the gate: listing during an
+    // edit is the ordinary case and must not queue behind it.
+
     /// <summary>Long enough that no legitimate write hits it (a whole-plugin re-derivation is tens of
     /// seconds on a large plugin), short enough that a stuck one is reported rather than hung on.</summary>
     public static readonly TimeSpan DefaultTimeout = TimeSpan.FromMinutes(2);
