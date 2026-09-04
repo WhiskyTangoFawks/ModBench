@@ -41,11 +41,8 @@ export type FieldType =
 export type FieldMetadata =
   // `isDiscriminator` is dropped rather than narrowed: it says which concrete class an object is,
   // which is the write path's decision alone (ArrayOpWriter) — the webview reads no such field.
-  // `isBitmask` is dropped for the same reason: it restates "every member carries a bit", which
-  // `flagBits` (modelValue.ts) reads off the members themselves, for wire and adapter metadata
-  // alike.
   Omit<Schemas['FieldMetadata'],
-    'type' | 'elementType' | 'fields' | 'isSortable' | 'allowsNull' | 'isBitmask' | 'isDiscriminator'> & {
+    'type' | 'elementType' | 'fields' | 'isSortable' | 'allowsNull' | 'isDiscriminator'> & {
     type: FieldType;
     elementType?: FieldMetadata | null;   // present when type === 'array'
     fields?: FieldMetadata[] | null;      // present when type === 'struct'

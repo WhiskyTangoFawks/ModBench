@@ -90,6 +90,21 @@ describe('modelValue — flags', () => {
     const broken: FieldMetadata = { name: 'X', type: 'enum', isArray: false, validFormKeyTypes: [], enumMembers: [{ value: 'A' }] };
     expect(() => modelValue(3, broken)).not.toThrow();
   });
+
+  // "every member carries a bit" is vacuously true of no members at all, so an enum with an empty
+  // domain would render as a (permanently empty) flag list where a plain value belongs.
+  it('an enum with no members at all is not a flag list', () => {
+    const empty: FieldMetadata = { name: 'X', type: 'enum', isArray: false, validFormKeyTypes: [], enumMembers: [] };
+    expect(modelValue('Whatever', empty)).toBe('Whatever');
+  });
+
+  it('a partly-bitless member list is not a flag list', () => {
+    const mixed: FieldMetadata = {
+      name: 'X', type: 'enum', isArray: false, validFormKeyTypes: [],
+      enumMembers: [{ value: 'A', bitValue: '1' }, { value: 'B' }],
+    };
+    expect(modelValue('3', mixed)).toBe('3');
+  });
 });
 
 describe('modelValue — formKey', () => {

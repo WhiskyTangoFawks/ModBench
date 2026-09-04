@@ -731,7 +731,6 @@ export interface components {
             allowsNull: boolean;
             displayLabel?: string | null;
             isDiscriminator: boolean;
-            readonly isBitmask?: boolean;
         };
         FieldValue: {
             metadata: components["schemas"]["FieldMetadata"];

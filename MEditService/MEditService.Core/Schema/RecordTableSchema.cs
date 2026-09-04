@@ -210,9 +210,9 @@ public sealed record ColumnSpec(
     /// </summary>
     public bool IsViewable => !IsArray && SubFields == null && !IsWidened;
 
-    /// <summary>See <see cref="FieldMetadata.IsBitmask"/> — derived from the members here for the
-    /// same reason, so a column and the metadata it projects into cannot answer differently.</summary>
-    public bool IsBitmask => EnumMembers.Count > 0 && EnumMembers.All(m => m.BitValue != null);
+    /// <summary>See <see cref="FieldMetadata.IsBitmask"/> — the same question off the same members,
+    /// so a column and the metadata it projects into cannot answer differently.</summary>
+    public bool IsBitmask => EnumMember.IsBitmask(EnumMembers);
 
     public FieldMetadata ToFieldMetadata() =>
         new(Name, ApiType, IsArray, ValidFormKeyTypes, EnumMembers, ElementType, SubFields,

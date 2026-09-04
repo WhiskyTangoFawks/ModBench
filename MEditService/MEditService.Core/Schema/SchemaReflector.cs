@@ -451,7 +451,9 @@ public sealed partial class SchemaReflector
     // sibling too) from DMGT's DamageTypes (not mergeable — DamageType's element is a struct of two
     // formlinks, DamageTypeIndexed's is a bare uint, no field names in common at all). Two enum
     // leaves are always considered compatible here — their domains get unioned by the caller, not
-    // by this check — everything else (Type, IsArray, AllowsNull, IsBitmask, and recursively
+    // by this check — with one exception: bit-ness is part of an enum's domain (every member
+    // carries a bit, or none does), and a union of a bitmask domain with a plain one is neither, so
+    // that much must still match. Everything else (Type, IsArray, AllowsNull, and recursively
     // Fields/ElementType) must match exactly, including field *presence*: a name only one side
     // declares is a real conflict, not something a domain union can paper over.
     private static bool IsSameShapeExceptEnumDomain(FieldMetadata? a, FieldMetadata? b)
@@ -2121,10 +2123,7 @@ public sealed partial class SchemaReflector
         else if (Enum.IsDefined(core, Enum.ToObject(core, 0))) defaultLiteral = $"'{Enum.GetName(core, Enum.ToObject(core, 0))}'";
         else defaultLiteral = null;
 
-        // Count-guarded exactly like FieldMetadata.IsBitmask: an enum with no members at all
-        // (AObjectModification.NoneProperty) vacuously satisfies "every member carries a bit" and
-        // would otherwise store as BIGINT, which its own values are not.
-        return members.Length > 0 && members.All(m => m.BitValue != null)
+        return EnumMember.IsBitmask(members)
             ? new("enum", "BIGINT", Empty, members,
                 obj => g(obj) is { } v ? (object?)Convert.ToInt64(v, System.Globalization.CultureInfo.InvariantCulture) : null,
                 v => Enum.ToObject(core, ReadBitmaskLong(v)),

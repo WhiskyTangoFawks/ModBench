@@ -49,10 +49,21 @@ public class ColumnSpecTests
         Assert.True(col.ToFieldMetadata().IsBitmask);
     }
 
-    [Fact]
-    public void ToFieldMetadata_MembersWithNoBit_IsNotABitmask()
+    [Theory]
+    // A member with no bit is not a checkbox, so a field is a bitmask only when every one of its
+    // members carries one. "Every" over no members at all is vacuously true and would make an
+    // empty-domain enum (Fallout 4's NoneProperty) a bitmask, which is why the count is guarded.
+    [InlineData("no member carries a bit")]
+    [InlineData("only some members carry a bit")]
+    [InlineData("there are no members at all")]
+    public void ToFieldMetadata_IsNotABitmaskWhen(string shape)
     {
-        var col = MakeColumn(apiType: "enum", enumMembers: [new("X"), new("Y")]);
-        Assert.False(col.ToFieldMetadata().IsBitmask);
+        EnumMember[] members = shape switch
+        {
+            "no member carries a bit" => [new("X"), new("Y")],
+            "only some members carry a bit" => [new("X", "1"), new("Y")],
+            _ => [],
+        };
+        Assert.False(MakeColumn(apiType: "enum", enumMembers: members).ToFieldMetadata().IsBitmask);
     }
 }

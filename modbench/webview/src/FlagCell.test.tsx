@@ -114,7 +114,7 @@ describe('FlagCell — editing', () => {
 });
 
 describe('FlagCell — bitless member guard (V4)', () => {
-  it('renders nothing when isBitmask but a member carries no bit', () => {
+  it('renders nothing when a member carries no bit', () => {
     const meta = { ...flagMeta, enumMembers: flagMeta.enumMembers.map(({ value }) => ({ value })) };
     const { container } = render(<FlagCell value={3} meta={meta} editable onCommit={vi.fn()} />);
     expect(container).toBeEmptyDOMElement();

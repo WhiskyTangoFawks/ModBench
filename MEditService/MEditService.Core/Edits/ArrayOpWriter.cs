@@ -239,7 +239,7 @@ internal static class ArrayOpWriter
     // a field-by-field default can't solve from FieldMetadata alone: a "struct"-typed member that
     // is actually a #642 read-only nested Loqui struct (naming it at all,
     // with any value, refuses the whole write) and a "enum" member whose wire shape FieldMetadata's
-    // own IsBitmask flag doesn't reliably predict (ColumnSpec's own IsFlagsEnum, which does, isn't on
+    // own IsBitmask doesn't reliably predict (ColumnSpec's own IsFlagsEnum, which does, isn't on
     // the wire type) — both are simply never named, and the constructed instance's own default is
     // already correct for either.
     //
