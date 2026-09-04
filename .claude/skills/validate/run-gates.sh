@@ -17,14 +17,19 @@ done
 ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
 
 echo "=== Gate 1: Comment discipline ==="
-COMMENT_FILES=$(cd "$ROOT" && git diff --name-only --diff-filter=AM main -- '*.cs' '*.ts' '*.tsx' '*.md' \
-  | grep -Ev '^(references/|modbench/src/medit/generated/|tools/)|/(node_modules|bin|obj|dist|out)/' \
+EXCLUDE_RE='^(references/|modbench/src/medit/generated/|tools/)|/(node_modules|bin|obj|dist|out)/'
+COMMENT_CODE=$(cd "$ROOT" && git ls-files '*.cs' '*.ts' '*.tsx' \
+  | grep -Ev "$EXCLUDE_RE" \
   | while read -r f; do [[ -f "$f" ]] && echo "$f"; done)
+COMMENT_DOCS=$(cd "$ROOT" && git diff --name-only --diff-filter=AM main -- '*.md' \
+  | grep -Ev "$EXCLUDE_RE" \
+  | while read -r f; do [[ -f "$f" ]] && echo "$f"; done)
+COMMENT_FILES=$(printf '%s\n%s\n' "$COMMENT_CODE" "$COMMENT_DOCS" | grep -v '^$')
 if [[ -n "$COMMENT_FILES" ]]; then
   COMMENT_OK=true
   VALE="$(bash "$ROOT/.claude/skills/validate/install-vale.sh")" || COMMENT_OK=false
   (cd "$ROOT" && echo "$COMMENT_FILES" | xargs -d '\n' "$VALE" --config=.vale.ini) || COMMENT_OK=false
-  (cd "$ROOT" && echo "$COMMENT_FILES" | grep -Ev '\.md$' | xargs -d '\n' -r python3 .claude/hooks/comment-shape.py) || COMMENT_OK=false
+  (cd "$ROOT" && echo "$COMMENT_CODE" | grep -v '^$' | xargs -d '\n' -r python3 .claude/hooks/comment-shape.py) || COMMENT_OK=false
   $COMMENT_OK || { echo "--- COMMENT GATE FAILED ---"; FAILED=true; }
 fi
 
