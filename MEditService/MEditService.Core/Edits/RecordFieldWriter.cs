@@ -6,94 +6,39 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Core.Edits;
 
-/// <summary>What applying one field value to one record can come to.</summary>
 internal enum FieldApplyOutcome
 {
     Applied,
 
-    /// <summary>The field exists but carries no write delegate — a read-only column (masters,
-    /// FormKey, the widened text columns). Never a silent no-op: the caller refuses.</summary>
+    /// <summary>Never a silent no-op: the caller refuses.</summary>
     ReadOnly,
 
-    /// <summary>No field of this name on this record type schema, <i>or</i> the schema names
-    /// one but this particular record's own runtime type doesn't declare the backing property — the
-    /// sibling-merge case, e.g. GLOB's <c>output_char</c> column exists only on <c>GlobalFloat</c>
-    /// among the four GLOB subclasses (<see cref="ColumnSpec.Apply"/> answering
-    /// <c>ApplyOutcome.PropertyNotFound</c>). Both read the same to a caller: this record genuinely
-    /// has no such field.</summary>
+    /// <summary>Also a schema column this record's runtime subclass lacks (sibling-merge, e.g. GLOB's <c>output_char</c>).</summary>
     NotFound,
 
-    /// <summary>The field is writable, but the value is not the shape it takes — an array field
-    /// given something that is not a JSON array, or a struct field given something that is not a JSON
-    /// object. That is the shape a per-element edit sends when nothing reconstructed the whole complex
-    /// value first — never conflated with success: the applier must not return without writing while
-    /// <see cref="RecordFieldWriter.TryApply"/> answers <see cref="Applied"/>.
-    ///
-    /// <para>Also covers a scalar or FormLink column whose <see cref="ColumnSpec.Apply"/>
-    /// answered <c>ApplyOutcome.ValueRejected</c> — a converter that threw or declined (an
-    /// unrecognised enum member, a non-numeric string), a JSON <c>null</c> into a non-nullable
-    /// column, or an unparseable/wrongly-shaped FormKey. Reused deliberately rather than given its
-    /// own <c>RecordEditRefusal</c> member: unlike <c>ListElementTypeUnresolved</c> (whose fix
-    /// is a specific, different action — name a discriminator), there is no more specific actionable
-    /// fix here beyond "send a value this field accepts", which is exactly what this outcome's
-    /// existing generic message already says.</para>
-    /// </summary>
+    /// <summary>Never conflated with success: the applier must not return without writing while the edit
+    /// reports Applied. Also a scalar/FormLink converter that declined; the fix is the same, send a
+    /// value the field accepts.</summary>
     ValueShapeMismatch,
 
-    /// <summary>
-    /// Mirrors <see cref="MEditService.Core.Schema.ApplyOutcome.ListElementTypeUnresolved"/>
-    /// one-for-one — an array field given an array, where at least one element's own concrete type is
-    /// abstract and couldn't be determined from its own payload. Its own value rather than folded into
-    /// <see cref="ValueShapeMismatch"/>: inferring it from "the outcome was a rejection and the value
-    /// happens to be a genuine JSON array" cannot work — a well-typed element's own declined sub-field
-    /// value reaches a rejection with a genuine JSON array too, so only the applier's own answer can
-    /// tell them apart.
-    /// </summary>
+    /// <summary>Its own value because it cannot be inferred from "rejected and the value is an array": a
+    /// well-typed element's declined sub-field reaches that shape too.</summary>
     ListElementTypeUnresolved,
 
-    /// <summary>
-    /// Mirrors <see cref="MEditService.Core.Schema.ApplyOutcome.SubFieldReadOnly"/> one-for-one
-    /// (#642) — the payload names a sub-field the schema knows about but that carries no write
-    /// delegate for a reason that is not a discriminator no-op (since #643 and #699, the unwritable
-    /// residue only — see <c>SubFieldSpec.TargetingRefuses</c>). Its own value
-    /// rather than folded into <see cref="ValueShapeMismatch"/>: the two need different messages —
-    /// "send a value this field accepts" is actively false here, since the value's shape was never
-    /// the problem.
-    /// </summary>
+    /// <summary>Its own value because "send a value this field accepts" is false here: the shape was never the problem.</summary>
     NestedFieldReadOnly,
 
-    /// <summary>
-    /// #630: an array op envelope (<c>array_remove</c>/<c>array_move_up</c>/<c>array_move_down</c>)
-    /// whose own boundary check answered "nothing to do" — removing past the array's end, or moving
-    /// the first element up / the last element down. Its own outcome rather than folded into
-    /// <see cref="Applied"/>: <see cref="RecordEditService"/> must commit nothing for it (no rename,
-    /// no re-serialize, no working-tree write, no <c>ReapplyFilter</c>), which only a distinct
-    /// outcome lets it tell apart from a change that genuinely landed. Never a refusal — a boundary
-    /// op is not a mistake the caller needs to fix, it is a request that was already satisfied.
-    /// </summary>
+    /// <summary>A boundary array op (remove past the end, move first up/last down): nothing to commit, and
+    /// never a refusal, since the request was already satisfied.</summary>
     NoOp,
 
-    /// <summary>
-    /// Two elements of one keyed array (<see cref="Schema.ColumnSpec.KeyMembers"/>) share a key —
-    /// two scripts of one name, two properties of one name, two quest fragments on one stage. The
-    /// key identifies the element, so a second one holding it is not an addition but a collision
-    /// the array cannot represent: xEdit writes these sorted by that key
-    /// (<c>wbDefinitionsFO4.pas</c>'s <c>wbArrayS</c>), and the game reads whichever it meets first.
-    ///
-    /// <para>Its own outcome rather than <see cref="ValueShapeMismatch"/>: the payload was exactly
-    /// the shape the field takes, and the way out is specific — rename or remove one of the two —
-    /// so the refusal names the key it is talking about, which only a distinct outcome carrying that
-    /// key can do.</para>
-    /// </summary>
+    /// <summary>xEdit writes keyed arrays sorted by key (<c>wbArrayS</c>) and the game reads whichever it
+    /// meets first, so a duplicate is a collision; the outcome carries the key so the refusal can name it.</summary>
     DuplicateKeyInKeyedArray,
 }
 
-/// <summary>What applying one field value came to, and — for the one outcome that has something to
-/// say beyond its own name — the key it is talking about. One value rather than an outcome plus a
-/// companion out-parameter, so a caller cannot hold the refusal without the key it has to name:
-/// the constructor rejects a <see cref="FieldApplyOutcome.DuplicateKeyInKeyedArray"/> carrying no
-/// key, which is what makes the implicit conversion from a bare outcome safe to keep for the
-/// twelve that carry nothing.</summary>
+/// <summary>The constructor rejects a duplicate-key outcome with no key, which is what keeps the implicit
+/// conversion from a bare outcome safe.</summary>
 internal readonly record struct FieldApplyResult
 {
     internal FieldApplyResult(FieldApplyOutcome outcome, string? duplicateKey = null)
@@ -114,17 +59,8 @@ internal readonly record struct FieldApplyResult
     public static implicit operator FieldApplyResult(FieldApplyOutcome outcome) => new(outcome);
 }
 
-/// <summary>
-/// Applies one field value to one live Mutagen record — the single dispatch point every write path
-/// goes through. Only the dispatch lives here: the field semantics live in the codecs it dispatches
-/// *to* (<see cref="ColumnSpec.Apply"/>), not in a second implementation.
-///
-/// <para>Complex fields (CONTEXT.md: array or struct) are applied as one atomic value, never
-/// per-element — <see cref="ColumnSpec.Apply"/> takes the whole field's JSON, which is exactly the
-/// field-level write ADR-0041 asks for. The record this mutates is a throwaway: the edit path
-/// deserializes the record's source text, applies here, and re-serializes. Nothing about a loaded
-/// plugin is touched.</para>
-/// </summary>
+/// <summary>The single dispatch point for applying a field value; semantics live in <see cref="ColumnSpec.Apply"/>.
+/// Complex fields are applied as one atomic value, never per-element, and the record mutated is a throwaway.</summary>
 internal static class RecordFieldWriter
 {
     internal static FieldApplyResult TryApply(
@@ -146,9 +82,8 @@ internal static class RecordFieldWriter
         if (col == null)
             return FieldApplyOutcome.NotFound;
 
-        // #630: an array arity/order op envelope — a JSON object carrying an "op" string member,
-        // detected by shape rather than by path, since it only ever targets an ordinary reflected
-        // column.
+        // An array op envelope is detected by shape (an object with an "op" member), since it only
+        // ever targets an ordinary reflected column.
         if (TryGetOpName(value, out var arrayOpName) && ArrayOpWriter.IsArrayOp(arrayOpName))
             return ArrayOpWriter.Apply(record, col, arrayOpName, value);
 
@@ -160,9 +95,7 @@ internal static class RecordFieldWriter
         value = KeyedArrays.Normalize(value, col.ToFieldMetadata(), out var duplicateKey);
         if (duplicateKey != null) return new(FieldApplyOutcome.DuplicateKeyInKeyedArray, duplicateKey);
 
-        // The applier's own answer, not an assumption — each of these is a different
-        // reason with a different fix (see FieldApplyOutcome's own docs), so each translates to its
-        // own outcome rather than one undifferentiated refusal.
+        // Each applier answer is a different reason with a different fix, so each maps to its own outcome.
         return apply(record, value) switch
         {
             ApplyOutcome.Applied => FieldApplyOutcome.Applied,
@@ -173,33 +106,12 @@ internal static class RecordFieldWriter
         };
     }
 
-    /// <summary>
-    /// The field path an EditorID edit arrives under — the same snake_case spelling every reflected
-    /// column uses, and the same one the read model already publishes the value under
-    /// (<c>form_lookup.editor_id</c>, <c>RecordViewBuilder</c>'s own <c>editor_id</c>). Internal
-    /// rather than private so <see cref="RecordEditService"/>'s Partial Form guard can
-    /// exempt exactly this literal rather than duplicating it.
-    /// </summary>
+    /// <summary>Internal so <see cref="RecordEditService"/>'s Partial Form guard can exempt exactly this literal.</summary>
     internal const string EditorIdFieldPath = "editor_id";
 
-    /// <summary>
-    /// EditorID, dispatched ahead of the reflected columns because it is not one of them:
-    /// <see cref="MEditService.Core.Schema.SchemaReflector"/>'s <c>MajorRecordHeaderMembers</c> excludes it alongside
-    /// <c>FormKey</c>, since both are the row's own identity columns carried separately rather than
-    /// record data. That exclusion is right for the schema and is left alone, so the edit is
-    /// dispatched here rather than by widening the reflected schema.
-    ///
-    /// <para>Unlike <c>FormKey</c> — which is genuinely read-only here, because moving one is a
-    /// renumber with a reference cascade (<c>RecordEditService.RenumberRecord</c>) — an EditorID is
-    /// ordinary editable data that xEdit has always let you change. What makes it special is only that
-    /// the source unit's <i>file name</i> carries it, which is <c>RecordEditService</c>'s problem and
-    /// not this method's: the field lands here, and the rename follows from it there.</para>
-    ///
-    /// <para>A JSON null clears the EditorID, which is legal (the layout has a bare-FormKey file name
-    /// for exactly that case). Anything that is not a string or null is not an EditorID and is refused
-    /// as <see cref="FieldApplyOutcome.NotFound"/>, matching how every other mistyped value fails
-    /// rather than throwing out of the write path.</para>
-    /// </summary>
+    // Dispatched ahead of the reflected columns because SchemaReflector excludes EditorID as an
+    // identity column. Null clears it (legal: the layout has a bare-FormKey file name); anything else
+    // is refused as NotFound like every other mistyped value.
     private static FieldApplyOutcome ApplyEditorId(IMajorRecord record, JsonElement value)
     {
         switch (value.ValueKind)
@@ -215,37 +127,13 @@ internal static class RecordFieldWriter
         }
     }
 
-    /// <summary>
-    /// The field path a Partial Form header-flag edit arrives under — snake_case, matching
-    /// <see cref="EditorIdFieldPath"/>'s own convention. Internal so
-    /// <see cref="RecordEditService"/>'s Partial Form guard can exempt exactly this literal (a
-    /// flagged record's own fields are read-only, but this is the one write that must reach the
-    /// flag itself — clearing it is the only way out of that read-only state) and so its own
-    /// bit-14-only write-surface guard can name it too.
-    /// </summary>
+    /// <summary>Internal so <see cref="RecordEditService"/>'s Partial Form guard can exempt it: clearing
+    /// the flag is the only way out of that read-only state.</summary>
     internal const string IsPartialFormFieldPath = "is_partial_form";
 
-    /// <summary>
-    /// The one sanctioned write to header flag bit 14 — dispatched ahead of the reflected
-    /// columns for the same reason <see cref="ApplyEditorId"/> is: <c>MajorRecordFlagsRaw</c> is in
-    /// <see cref="MEditService.Core.Schema.SchemaReflector"/>'s <c>MajorRecordHeaderMembers</c> (it is header
-    /// metadata, not record data), so nothing in the reflected schema could ever reach it.
-    ///
-    /// <para>Gated by <see cref="Schema.PartialFormFlag.IsPartialFormable"/> — the same container-type
-    /// gate the read half (<see cref="Schema.PartialFormFlag.IsSet"/>) already uses:
-    /// a record type that can never carry the flag refuses here as
-    /// <see cref="FieldApplyOutcome.NotFound"/> (no silent no-op — matching every other refusal in
-    /// this class), never silently flipping bit 14's unrelated meaning on that type. xEdit's own
-    /// <c>SetIsPartialForm</c> (<c>wbImplementation.pas:14157</c>) instead silently coerces an
-    /// ineligible <c>aValue</c> to <c>False</c> — a deliberate divergence, not a missed gesture: this
-    /// is an internal write-path contract question (every other <see cref="FieldApplyOutcome"/> here
-    /// refuses loudly), not a record-editing UX one, so ADR-0034's xEdit-is-the-reference rule does
-    /// not reach it.</para>
-    ///
-    /// <para>A non-boolean value is not an <c>is_partial_form</c> edit and is refused as
-    /// <see cref="FieldApplyOutcome.NotFound"/>, mirroring <see cref="ApplyEditorId"/>'s own handling
-    /// of a mistyped value.</para>
-    /// </summary>
+    // MajorRecordFlagsRaw is header metadata the reflected schema never reaches. An ineligible type
+    // refuses rather than flipping bit 14's other meaning; xEdit's SetIsPartialForm coerces to
+    // False instead, a deliberate divergence on an internal contract ADR-0034 does not reach.
     private static FieldApplyOutcome ApplyIsPartialForm(IMajorRecord record, JsonElement value)
     {
         if (value.ValueKind != JsonValueKind.True && value.ValueKind != JsonValueKind.False)
@@ -258,10 +146,8 @@ internal static class RecordFieldWriter
         return FieldApplyOutcome.Applied;
     }
 
-    // Never throws on a malformed envelope: a non-object value, an absent "op", or a non-string
-    // "op" all simply fail to match, so a plain scalar write (a JSON number/string/bool/array, or
-    // an object-shaped struct value) can never be mistaken for one — those never carry an "op"
-    // member — and the caller falls back to the ordinary whole-value write.
+    // Never throws on a malformed envelope: a non-object, absent or non-string "op" simply fails to
+    // match, so a plain scalar or struct write falls back to the whole-value write.
     private static bool TryGetOpName(JsonElement value, out string opName)
     {
         opName = "";

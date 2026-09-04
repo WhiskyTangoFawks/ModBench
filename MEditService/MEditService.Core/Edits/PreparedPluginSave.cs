@@ -1,16 +1,7 @@
 namespace MEditService.Core.Edits;
 
-/// <summary>An uncommitted plugin write: a temp-written binary (and, for a Localized mod, its temp-written
-/// strings files) plus the timestamped <c>.bak</c> already made — <see cref="Commit"/> to make it real,
-/// <see cref="Dispose"/> to discard the temp state either way.
-///
-/// <para><paramref name="stringsFiles"/> is a Localized mod's <c>.STRINGS</c>/<c>.DLSTRINGS</c>/
-/// <c>.ILSTRINGS</c> files, each already written whole to a temp path by
-/// <see cref="PluginWriter.PrepareFromModAsync"/> — empty for a non-Localized mod.
-/// <see cref="Commit"/> moves each into its real destination alongside the plugin binary; nothing
-/// here is ADR-0008's timestamped <c>.bak</c> concern (that stays scoped to the plugin itself),
-/// only the same temp-write-then-rename discipline.</para>
-/// </summary>
+/// <summary>An uncommitted plugin write: temp-written binary and strings files plus the <c>.bak</c>
+/// already made. Commit renames them into place; Dispose discards the temp state either way.</summary>
 public sealed class PreparedPluginSave(
     string tmpPath,
     string finalPath,
@@ -33,10 +24,8 @@ public sealed class PreparedPluginSave(
         // threw), so no overwrite is needed here
         File.Move(tmpPath, finalPath);
 
-        // Every strings write already succeeded (it happened during Prepare, into temp) by
-        // the time Commit runs, so this is pure rename — the same "only move once everything has
-        // succeeded" guarantee the plugin binary itself gets above. overwrite:true because a second
-        // save of the same Localized plugin is the common case, not the first.
+        // Every strings write succeeded during Prepare, so Commit is pure rename. Overwrite, because a
+        // re-save of the same Localized plugin is the common case, not the first.
         foreach (var (tempStringsPath, finalStringsPath) in _stringsFiles)
         {
             Directory.CreateDirectory(Path.GetDirectoryName(finalStringsPath)!);

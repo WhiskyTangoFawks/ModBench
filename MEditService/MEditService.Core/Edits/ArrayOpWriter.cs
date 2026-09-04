@@ -6,22 +6,9 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Core.Edits;
 
-/// <summary>
-/// #630: the four array arity/order op envelopes — <c>array_remove</c>/<c>array_move_up</c>/
-/// <c>array_move_down</c>/<c>array_add</c> — computed here instead of round-tripped as a
-/// client-computed whole array through the webview. Scope is ordinary reflected fields only
-/// (<see cref="ColumnSpec"/>-backed columns), which includes a script's properties and a Papyrus
-/// scalar-array property's elements.
-///
-/// <para>Each op reads the column's own <i>current</i> value (<see cref="ColumnSpec.Extract"/>),
-/// walks the envelope's own <c>path</c> to the target array — an ordinary reflected field's wire
-/// <c>fieldPath</c> never encodes nesting, only the value tree does, the same convention
-/// <c>RecordPanel.tsx</c>'s own (now-deleted) client-side <c>handleArrayOp</c> used — mutates a JSON
-/// copy, and hands the whole reconstructed value to the exact same <see cref="ColumnSpec.Apply"/>
-/// every ordinary complex-field write already goes through. That reuse is deliberate: every existing
-/// write-path guarantee (#642's <c>NestedFieldReadOnly</c> included) applies unchanged, because this
-/// class only computes <i>what</i> gets written, never how.</para>
-/// </summary>
+/// <summary>Computes the array ops (remove, move, add) server-side and hands the whole rebuilt value
+/// to <see cref="ColumnSpec.Apply"/>, so every existing write-path guarantee applies unchanged: this
+/// class decides what is written, never how.</summary>
 internal static class ArrayOpWriter
 {
     private static readonly HashSet<string> OpNames =
@@ -46,28 +33,21 @@ internal static class ArrayOpWriter
         var arrayPath = isAdd ? path : path[..Math.Max(path.Count - 1, 0)];
         if (!isAdd && path.Count == 0) return FieldApplyOutcome.ValueShapeMismatch;
 
-        // An array op only ever targets a column that is itself array-shaped (a bare top-level
-        // array) or struct-shaped (an array nested one or more hops inside it) — never a genuinely
-        // scalar column, whose own Extract is the raw CLR value (not JSON text) and would otherwise
-        // reach JsonNode.Parse below as an unparseable string.
+        // Only array- or struct-shaped columns arrive here; a scalar column's Extract is a raw CLR value,
+        // not JSON text, and would reach JsonNode.Parse as an unparseable string.
         if (!col.IsArray && col.SubFields == null) return FieldApplyOutcome.ValueShapeMismatch;
 
-        // A never-populated column's own Extract answers null, not the empty shape it would
-        // otherwise hold — Mutagen distinguishes "no list/struct at all" from "an empty/default one"
-        // at the property level even though both mean the same thing to an array op (there is
-        // nothing to remove/move from either, and Add starts a list from nothing the same way it
-        // appends to an existing empty one). `root` is seeded with the container shape its own
-        // first hop needs (object for a 'member' hop, array otherwise/none) so ResolveOrCreate below
-        // always has a real, attachable node to build the rest of the path onto — never null itself.
+        // An unpopulated column extracts as null, not an empty shape (Mutagen distinguishes the two), so
+        // root is seeded with the container its first hop needs and ResolveOrCreate always has a node
+        // to attach onto.
         var currentJson = col.Extract(record) as string;
         JsonNode root;
         if (currentJson != null) root = JsonNode.Parse(currentJson)!;
         else if (arrayPath.Count > 0 && arrayPath[0] is MemberSegment) root = new JsonObject();
         else root = new JsonArray();
 
-        // The walk carries the schema alongside the value, so a hop's meaning comes from the
-        // record's own metadata rather than from the envelope: a key hop's key members are the
-        // array's declared ones, and a key hop into an array the schema does not key is refused.
+        // The walk carries the schema with the value: a key hop reads the array's declared key members,
+        // never the envelope's, and a key hop into an unkeyed array is refused.
         var (array, arrayMeta) = ResolveOrCreate(root, arrayPath, col.ToFieldMetadata());
         if (array == null) return FieldApplyOutcome.ValueShapeMismatch;
 
@@ -87,9 +67,8 @@ internal static class ArrayOpWriter
         if (!changed) return FieldApplyOutcome.NoOp;
 
         StripNulls(root);
-        // The reconstructed value goes through the same keyed-array normalization a hand-authored
-        // payload does (RecordFieldWriter.TryApply): an element appended to a keyed array lands in
-        // key order, and a second element added before the first one was given a key collides with it.
+        // The reconstructed value goes through the same keyed-array normalization a hand-authored payload
+        // does, so a second element added before the first was keyed collides with it.
         var newValue = KeyedArrays.Normalize(
             JsonSerializer.SerializeToElement(root), col.ToFieldMetadata(), out var duplicateKey);
         if (duplicateKey != null) return new(FieldApplyOutcome.DuplicateKeyInKeyedArray, duplicateKey);
@@ -107,10 +86,8 @@ internal static class ArrayOpWriter
     // ── path segments ("member"/"index"/"key" — a pure-FormLink array offers no array op at all,
     // so no "sortKey" hop reaches here; see recordUtils.ts's own PathSegment doc comment) ─────────
 
-    /// <summary>Where this hop's element sits in the array it is resolved against, or null when the
-    /// hop names no element there at all: a member hop, or a key hop into an array the schema does
-    /// not key. A key no element in that array carries answers -1, which every mutation below reads
-    /// as "nothing to do" the same way an out-of-range index does.</summary>
+    // A key no element carries resolves to -1, which every mutation reads as "nothing to do", the
+    // same as an out-of-range index.
     private interface IPathSegment
     {
         int? IndexIn(JsonArray array, FieldMetadata? arrayMeta);
@@ -126,10 +103,8 @@ internal static class ArrayOpWriter
         public int? IndexIn(JsonArray array, FieldMetadata? arrayMeta) => Index;
     }
 
-    /// <summary>A keyed array's element, named by its key. The key members that key is read against
-    /// are the array's own declared ones, never the envelope's — the envelope carries them for the
-    /// webview's sake (recordUtils.ts resolves the same hop with no schema in scope) and this side
-    /// reads its own schema.</summary>
+    // The key is read against the array's own declared key members, never the envelope's; the
+    // envelope carries them only for the webview, which has no schema in scope.
     private sealed record KeySegment(string Key) : IPathSegment
     {
         public int? IndexIn(JsonArray array, FieldMetadata? arrayMeta) =>
@@ -165,22 +140,8 @@ internal static class ArrayOpWriter
         return result;
     }
 
-    // Walks `path` from `node` down to the target array and its schema together, treating an absent
-    // (or explicitly null) hop at any depth as "nothing here yet" rather than a shape mismatch: a
-    // struct member, or a struct-nested array, that was never populated defaults to an empty
-    // container the same way an unset top-level array column does, so remove/move correctly answer
-    // NoOp against it (nothing to remove/move from a freshly-built empty array either) and add
-    // correctly starts a fresh list. Every synthesized container is attached back onto its own
-    // parent as it's created — a value built but never attached would vanish the moment `root` is
-    // re-serialized, which a node returned in isolation (e.g. `new JsonArray()`, unattached) cannot
-    // guarantee. `root` itself is never null (the caller seeds it to match the first hop before
-    // calling this), so there is always somewhere real to attach into. A hop that *is* present but
-    // of the wrong shape (an element hop into an object, a member hop into an array, or a final
-    // value that is neither an array nor an absence) is a genuine mismatch and answers a null array.
-    //
-    // The schema travels alongside the value rather than in a pass of its own, because the key hop
-    // needs both at the same depth: which element a key names is read off the value, and which
-    // members that key is are read off the schema.
+    // An absent or null hop is "nothing yet", never a mismatch, so remove/move answer NoOp and add
+    // starts a list; the schema rides along because a key hop needs both at one depth.
     private static (JsonArray? Array, FieldMetadata? Meta) ResolveOrCreate(
         JsonNode root, IReadOnlyList<IPathSegment> path, FieldMetadata? rootMeta)
     {
@@ -202,11 +163,8 @@ internal static class ArrayOpWriter
         return (current as JsonArray, meta);
     }
 
-    // One hop of the walk above: the child this segment names, synthesized and attached when the hop
-    // is a struct member nothing has populated yet. Null where the hop names a shape that isn't
-    // there — an element hop into an object, a member hop into an array, or an element no array here
-    // answers to (an absent array *element* is never synthesized, only a struct member or a nested
-    // array/struct value is).
+    // One hop of the walk: synthesizes a struct member nothing populated yet, but never an absent array
+    // element. Null where the hop names a shape that isn't there.
     private static JsonNode? StepInto(
         JsonNode? current, IPathSegment seg, FieldMetadata? meta, Func<JsonNode> nextContainer)
     {
@@ -254,27 +212,9 @@ internal static class ArrayOpWriter
         return true; // never a no-op
     }
 
-    // A struct element's own sub-fields are never individually defaulted here (see the "struct" arm
-    // below). 'formKey'
-    // defaults to the string "Null" (Mutagen's own wire sentinel for an explicitly-unset FormLink —
-    // the same token its codec already round-trips, seen verbatim in ColumnSpec.Extract's own
-    // output for a field nobody set) rather than "" — "" is not a parseable FormKey
-    // (FormKey.TryFactory has no case for the empty string), so a bare-FormLink-array Add sending it
-    // would silently add nothing at all (ListLeaves.BuildListElement's own isFl branch returns
-    // null for an unparseable element, and its caller only adds non-null items).
-    //
-    // "struct" names nothing but the element's discriminator, if it has one: the write path itself
-    // (BuildListElement's non-isFl branch) already constructs a fresh instance via
-    // Activator.CreateInstance before applying anything, which hands every field its own CLR
-    // default for free — an unnamed member is then skipped by ApplySubFields ("absence is not
-    // targeting") and the freshly-constructed defaults stand untouched. This sidesteps two problems
-    // a field-by-field default can't solve from FieldMetadata alone: a "struct"-typed member that
-    // is actually a #642 read-only nested Loqui struct (naming it at all,
-    // with any value, refuses the whole write) and a "enum" member whose wire shape FieldMetadata's
-    // own IsBitmask doesn't reliably predict (ColumnSpec's own IsFlagsEnum, which does, isn't on
-    // the wire type) — both are simply never named, and the constructed instance's own default is
-    // already correct for either.
-    //
+    // 'formKey' defaults to "Null", Mutagen's sentinel for an unset FormLink, because "" is not a
+    // parseable FormKey and would add nothing; "struct" names only the discriminator so a read-only
+    // nested struct is never named.
     private static JsonNode? DefaultElementValue(FieldMetadata? meta) => meta?.Type switch
     {
         "string" => "",
@@ -291,41 +231,21 @@ internal static class ArrayOpWriter
         _ => "",
     };
 
-    // A discriminator is the one member a default struct element names, and it starts as the first
-    // leaf the schema lists (docs/specs/medit-record-editor.md, "A new array element's default is
-    // the backend's"). An ordinary struct, having none, still defaults to the empty object.
+    // A discriminator is the one member a default struct element names, starting as the schema's first
+    // leaf (docs/specs/medit-record-editor.md, "A new array element's default is the backend's").
     private static JsonObject DefaultStructElement(FieldMetadata meta)
     {
         var element = new JsonObject();
-        // A discriminator's members are its union's leaves, and a union with no leaf is not
-        // reflected as one at all (LoquiUnions.TryGetUnion requires at least one, and
-        // OMOD's leaf table is a literal) — so the count guard is what keeps the indexer total,
-        // not a case that can arrive.
+        // A union with no leaf is not reflected as one at all (LoquiUnions.TryGetUnion requires one), so
+        // the count guard keeps the indexer total rather than handling a case that can arrive.
         foreach (var field in meta.Fields ?? [])
             if (field.IsDiscriminator && field.EnumMembers.Count > 0) element[field.Name] = field.EnumMembers[0].Value;
         return element;
     }
 
-    // The read-only nested-Loqui-struct member #642 introduced (StructLeaves.BuildStructSubField's
-    // own read-only Apply with TargetingRefuses: true) is still *extracted* for display even though nothing
-    // writes it — so an untouched element's own unset such member round-trips here as an explicit
-    // JSON null, and ApplySubFields/ApplyListJson treat a *named* member as targeting it regardless
-    // of value (absence is what "not targeting" means, never nullity — see ApplySubFields's own doc
-    // comment). Left un-stripped, every array op on an array containing such an element would refuse
-    // — even one that never touches that element — purely because the reconstruction happened to
-    // name a key it never meant to write. Stripping every null-valued member before resubmission
-    // restores "absence is not targeting" for the common (unset) case; a genuinely *non-null* nested
-    // value still correctly refuses (ArrayOpEditTests pins both).
-    //
-    // This is a blunt tool in general — JSON null is meaningful elsewhere in this same write path
-    // (MakeApplier/ApplySubFields: a null clears a nullable FormLink, and a non-nullable column
-    // refuses one outright rather than treating it as absence) — but it is safe *here* specifically
-    // because of where this JSON tree came from: `root` above is always the freshly-`Extract`ed
-    // current value of the whole field, never a caller-supplied payload. Every null this strips is
-    // therefore already exactly what the record's own persisted state holds for that member — there
-    // is no edit to lose, because nothing here ever *wrote* a null; it only declined to re-name one
-    // that was already there. A hand-authored payload naming a field explicitly as null (the general
-    // case MakeApplier/ApplySubFields still have to honor) never reaches this function at all.
+    // A read-only nested struct member round-trips as an explicit JSON null, which counts as
+    // targeting it, so un-stripped every op would refuse; safe because this tree is the field's
+    // current value, not a caller payload.
     private static void StripNulls(JsonNode? node)
     {
         switch (node)
