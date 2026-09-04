@@ -4,20 +4,11 @@ using MEditService.Core.Queries;
 
 namespace MEditService.Core.Edits;
 
-/// <summary>
-/// The write-side half of a keyed array (<see cref="FieldMetadata.KeyMembers"/>): a payload is put
-/// into key order before it is applied, and two elements sharing a key are refused by name.
-///
-/// <para>Applied to the whole payload of one field write, at whatever depth the keyed arrays sit —
-/// a record's <c>virtual_machine_adapter</c> arrives as one atomic value (CONTEXT.md's complex
-/// field) carrying scripts, their properties and their struct members, every one of them keyed. The
-/// walk is driven by the field's own metadata rather than by the payload's shape, so a member the
-/// schema does not describe is left exactly as it arrived.</para>
-///
-/// <para>Ordering here rather than inside the appliers is deliberate: it is the same question for a
-/// top-level array column and for an array nested six hops inside a struct, and answering it once
-/// over the metadata tree is what keeps the two from disagreeing.</para>
-/// </summary>
+/// <summary>The write-side half of a keyed array (<see cref="FieldMetadata.KeyMembers"/>): one
+/// field write's whole payload put into key order, and two elements sharing a key refused by name.
+/// Driven by the field's metadata rather than the payload's shape, at whatever depth the keyed
+/// arrays sit — a top-level array column and one nested six hops inside a struct are the same
+/// question, answered once here rather than in each applier.</summary>
 internal static class KeyedArrays
 {
     /// <summary>The payload with every keyed array it contains put into key order, or — when one
@@ -33,8 +24,8 @@ internal static class KeyedArrays
         return duplicateKey == null ? JsonSerializer.SerializeToElement(root) : value;
     }
 
-    /// <summary>Whether this field's metadata names a keyed array at any depth — asked before the
-    /// payload is reparsed, so an ordinary field pays nothing for a concept it does not use.</summary>
+    /// <summary>Asked before the payload is reparsed, so an ordinary field pays nothing for a
+    /// concept it does not use.</summary>
     private static bool Carries(FieldMetadata meta) =>
         meta.KeyMembers != null
         || (meta.ElementType != null && Carries(meta.ElementType))

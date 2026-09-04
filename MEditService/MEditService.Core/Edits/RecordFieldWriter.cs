@@ -89,12 +89,28 @@ internal enum FieldApplyOutcome
 }
 
 /// <summary>What applying one field value came to, and — for the one outcome that has something to
-/// say beyond its own name — the key it is talking about. A record struct rather than a bare
-/// <see cref="FieldApplyOutcome"/> so the outcome and its detail are one value: a caller cannot
-/// hold the refusal without the key it has to name. Implicitly convertible from the outcome, since
-/// every other outcome carries nothing.</summary>
-internal readonly record struct FieldApplyResult(FieldApplyOutcome Outcome, string? DuplicateKey = null)
+/// say beyond its own name — the key it is talking about. One value rather than an outcome plus a
+/// companion out-parameter, so a caller cannot hold the refusal without the key it has to name:
+/// the constructor rejects a <see cref="FieldApplyOutcome.DuplicateKeyInKeyedArray"/> carrying no
+/// key, which is what makes the implicit conversion from a bare outcome safe to keep for the
+/// twelve that carry nothing.</summary>
+internal readonly record struct FieldApplyResult
 {
+    internal FieldApplyResult(FieldApplyOutcome outcome, string? duplicateKey = null)
+    {
+        if ((outcome == FieldApplyOutcome.DuplicateKeyInKeyedArray) != (duplicateKey is not null))
+        {
+            throw new ArgumentException(
+                "A duplicate-key refusal names its key, and no other outcome carries one.", nameof(duplicateKey));
+        }
+
+        Outcome = outcome;
+        DuplicateKey = duplicateKey;
+    }
+
+    internal FieldApplyOutcome Outcome { get; }
+    internal string? DuplicateKey { get; }
+
     public static implicit operator FieldApplyResult(FieldApplyOutcome outcome) => new(outcome);
 }
 

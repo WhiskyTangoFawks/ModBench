@@ -286,10 +286,12 @@ public sealed class VmadEditTests : IDisposable
         // The fixture wrote stage 10 before stage 5; the key is (Stage, StageIndex), so the write
         // stores them the other way round.
         Assert.Equal([5, 10], written.Select(f => f!["Stage"]!.GetValue<int>()));
-        Assert.Equal("Renamed", written.Single(f => f!["Stage"]!.GetValue<int>() == 10)!["ScriptName"]!.GetValue<string>());
-        Assert.All(
-            ConditionEditTests.DocumentDiff(before, _fixture.Body(_fixture.Quest)),
-            d => Assert.StartsWith("VirtualMachineAdapter.Fragments[", d, StringComparison.Ordinal));
+        // The edited fragment differs by exactly its ScriptName; the other is byte-identical.
+        var after = ByName(written, "Stage");
+        var beforeByStage = ByName(
+            JsonNode.Parse(before)!["VirtualMachineAdapter"]!["Fragments"]!.AsArray(), "Stage");
+        Assert.Equal(beforeByStage["5"], after["5"]);
+        Assert.Equal(beforeByStage["10"].Replace("\"Ten\"", "\"Renamed\"", StringComparison.Ordinal), after["10"]);
     }
 
     [Fact]
@@ -307,10 +309,11 @@ public sealed class VmadEditTests : IDisposable
             ["ScriptFragments"]!["Fragments"]!.AsArray();
         // The fixture wrote index 2 before index 1; a single-member key sorts them by value.
         Assert.Equal([1, 2], written.Select(f => f!["Index"]!.GetValue<int>()));
-        Assert.Equal("Renamed", written.Single(f => f!["Index"]!.GetValue<int>() == 2)!["ScriptName"]!.GetValue<string>());
-        Assert.All(
-            ConditionEditTests.DocumentDiff(before, _fixture.Body(_fixture.Perk)),
-            d => Assert.StartsWith("VirtualMachineAdapter.ScriptFragments.Fragments[", d, StringComparison.Ordinal));
+        var after = ByName(written, "Index");
+        var beforeByIndex = ByName(
+            JsonNode.Parse(before)!["VirtualMachineAdapter"]!["ScriptFragments"]!["Fragments"]!.AsArray(), "Index");
+        Assert.Equal(beforeByIndex["1"], after["1"]);
+        Assert.Equal(beforeByIndex["2"].Replace("\"Two\"", "\"Renamed\"", StringComparison.Ordinal), after["2"]);
     }
 
     [Fact]
@@ -330,9 +333,55 @@ public sealed class VmadEditTests : IDisposable
         // the pair sorts among itself by flag value (OnStart = 1 before OnCompletion = 2). A key of
         // the index alone would have refused this record's own data as a duplicate.
         Assert.Equal(["ZeroEnd", "OneStart", "OneEnd"], written.Select(f => f!["ScriptName"]!.GetValue<string>()));
-        Assert.All(
-            ConditionEditTests.DocumentDiff(before, _fixture.Body(_fixture.Scene)),
-            d => Assert.StartsWith("VirtualMachineAdapter.ScriptFragments.PhaseFragments[", d, StringComparison.Ordinal));
+        var after = ByName(written, "ScriptName");
+        var beforeByName = ByName(
+            JsonNode.Parse(before)!["VirtualMachineAdapter"]!["ScriptFragments"]!["PhaseFragments"]!.AsArray(),
+            "ScriptName");
+        Assert.Equal(beforeByName["\"ZeroEnd\""], after["\"ZeroEnd\""]);
+        Assert.Equal(beforeByName["\"OneEnd\""], after["\"OneEnd\""]);
+        Assert.Equal(
+            beforeByName["\"OneStart\""].Replace("\"F1S\"", "\"Renamed\"", StringComparison.Ordinal),
+            after["\"OneStart\""]);
+    }
+
+    // ── an absent nested struct ──────────────────────────────────────────────
+
+    /// <summary>A scene adapter carries no <c>on_begin</c>/<c>on_end</c> fragment unless someone
+    /// authored one, so the record's own read value gives them as null — and a resend of a read
+    /// value must be accepted, not refused. It stays absent afterwards: nothing is written for a
+    /// null either way.</summary>
+    [Fact]
+    public void ResendingAnAdapterWhoseNestedStructIsAbsent_LeavesItAbsent()
+    {
+        // The first resend also puts the phase fragments in key order, so the settled document is
+        // the one to compare against: from there a resend is the identity, null member included.
+        _fixture.Normalize(_fixture.Scene);
+        var before = _fixture.Body(_fixture.Scene);
+        Assert.Null(_fixture.Adapter(_fixture.Scene)["script_fragments"]!["on_begin"]);
+
+        _fixture.Normalize(_fixture.Scene);
+
+        Assert.Null(_fixture.Adapter(_fixture.Scene)["script_fragments"]!["on_begin"]);
+        Assert.Equal(before, _fixture.Body(_fixture.Scene));
+    }
+
+    /// <summary>The other direction, which is what keeps the rule above from being a delete
+    /// gesture nobody asked for: a null over a struct the record <i>does</i> carry is refused, and
+    /// writes nothing. A Loqui member the record format requires could not survive being cleared,
+    /// and this is what stops a payload doing it by accident.</summary>
+    [Fact]
+    public void NullingAStructTheRecordCarries_IsRefusedAndWritesNothing()
+    {
+        var before = _fixture.Body(_fixture.Quest);
+        var adapter = _fixture.Adapter(_fixture.Quest);
+        Assert.NotNull(adapter["script"]);
+        adapter["script"] = null;
+
+        var result = Edit(_fixture.Quest, adapter);
+
+        Assert.False(result.Applied);
+        Assert.Equal(RecordEditRefusal.FieldValueShapeMismatch, result.Refusal);
+        Assert.Equal(before, _fixture.Body(_fixture.Quest));
     }
 
     // ── the duplicate key ────────────────────────────────────────────────────
@@ -379,6 +428,11 @@ public sealed class VmadEditTests : IDisposable
     private static Dictionary<string, string> WrittenScripts(string body) =>
         JsonNode.Parse(body)!["VirtualMachineAdapter"]!["Scripts"]!.AsArray()
             .ToDictionary(s => s!["Name"]!.GetValue<string>(), s => s!.ToJsonString(), StringComparer.Ordinal);
+
+    /// <summary>Each element's own written text, by whatever names it — what a gesture aimed at
+    /// one element has to leave byte-identical in every other, wherever the sort moved them to.</summary>
+    private static Dictionary<string, string> ByName(JsonArray written, string member) =>
+        written.ToDictionary(e => e![member]!.ToJsonString(), e => e!.ToJsonString(), StringComparer.Ordinal);
 
     private static JsonNode WrittenProperty(string body, string script, string property) =>
         JsonNode.Parse(body)!["VirtualMachineAdapter"]!["Scripts"]!.AsArray()

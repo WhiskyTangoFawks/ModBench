@@ -49,7 +49,8 @@ internal static class FormRefPathBuilder
             return;
         }
 
-        if (meta.Type is not ("struct" or "array")) return;
+        var walkable = meta.Type == "struct" ? meta.Fields != null : meta.Type == "array" && meta.ElementType != null;
+        if (!walkable) return;
 
         // A struct or array *column*'s own Extract answers the serialized VARCHAR the document
         // stores; one nested inside it answers the parsed JsonElement. Coerced once, here, so
@@ -69,9 +70,9 @@ internal static class FormRefPathBuilder
         FieldMetadata meta, object? value, string path,
         Action<string, string?, bool, IReadOnlyList<string>> onFormKeyLeaf)
     {
-        if (meta.Fields == null || value is not JsonElement { ValueKind: JsonValueKind.Object } obj) return;
-        var idle = IdleMembers(meta.Fields, obj);
-        foreach (var field in meta.Fields)
+        if (value is not JsonElement { ValueKind: JsonValueKind.Object } obj) return;
+        var idle = IdleMembers(meta.Fields!, obj);
+        foreach (var field in meta.Fields!)
         {
             if (idle?.Contains(field.Name) == true) continue;
             if (obj.TryGetProperty(field.Name, out var prop))
@@ -109,9 +110,8 @@ internal static class FormRefPathBuilder
         FieldMetadata meta, object? value, string path,
         Action<string, string?, bool, IReadOnlyList<string>> onFormKeyLeaf)
     {
-        if (meta.ElementType == null) return;
         ForEachElement(value, (idx, elem) =>
-            Walk(meta.ElementType, elem, $"{path}[{idx}]", onFormKeyLeaf));
+            Walk(meta.ElementType!, elem, $"{path}[{idx}]", onFormKeyLeaf));
     }
 
     private static bool IsRealRef(string? s) => s is not null && s != "Null";
