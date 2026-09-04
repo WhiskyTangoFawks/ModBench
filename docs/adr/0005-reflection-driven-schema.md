@@ -28,7 +28,7 @@ the `winners` table respectively (ADR-0001). The index is a persistent per-insta
   scalar leaves only. This is what keeps user filter SQL (ADR-0018) working unchanged against the
   documents table. Arrays, structs and other non-scalar fields are not view columns.
 - **Editor field metadata** — the `ColumnSpec` tree the record editor renders and edits from.
-- **The record codec** (ADR-0032) — the serializer that produces the documents in the first
+- **The record codec** (ADR-0042) — the serializer that produces the documents in the first
   place.
 
 **Typed reads reconstitute; they never read the views.** `GetDocument`, `GetOverrideStack` and

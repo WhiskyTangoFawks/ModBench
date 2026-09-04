@@ -152,7 +152,8 @@ internal sealed class RecordTypeDispatch
     /// appears nowhere in the path.
     ///
     /// <para><b>Here rather than at the call site because this is the layer that owns game-specific
-    /// naming</b> (ADR-0032, and root CLAUDE.md's "generalize across Bethesda games"). The write path
+    /// naming</b> (root CLAUDE.md's "generalize across Bethesda games"; the reflected schema's own
+    /// per-game facts live in annotation tables instead, ADR-0032). The write path
     /// in <c>Source</c>/<c>Edits</c> asks this class instead of naming a Fallout 4 type directly and
     /// quietly binding itself to one game.</para>
     ///
