@@ -1,0 +1,2008 @@
+{
+  "scripted-npc": {
+    "Adapter": {
+      "CellStates": {
+        "Top.esp": "Override"
+      },
+      "Children": [
+        {
+          "CellStates": {
+            "Top.esp": "IdenticalToMaster"
+          },
+          "Children": null,
+          "ConflictAll": "NoConflict",
+          "FieldName": "version",
+          "Resolutions": null,
+          "Values": {
+            "Base.esm": 6,
+            "Top.esp": 6
+          },
+          "WinnerColumn": "Top.esp",
+          "WinnerValue": 6
+        },
+        {
+          "CellStates": {
+            "Top.esp": "IdenticalToMaster"
+          },
+          "Children": null,
+          "ConflictAll": "NoConflict",
+          "FieldName": "object_format",
+          "Resolutions": null,
+          "Values": {
+            "Base.esm": 2,
+            "Top.esp": 2
+          },
+          "WinnerColumn": "Top.esp",
+          "WinnerValue": 2
+        },
+        {
+          "CellStates": {
+            "Top.esp": "Override"
+          },
+          "Children": [
+            {
+              "CellStates": {},
+              "Children": [
+                {
+                  "CellStates": {},
+                  "Children": null,
+                  "ConflictAll": "NoConflict",
+                  "FieldName": "name",
+                  "Resolutions": null,
+                  "Values": {
+                    "Base.esm": "Ambush",
+                    "Top.esp": null
+                  },
+                  "WinnerColumn": "Base.esm",
+                  "WinnerValue": "Ambush"
+                },
+                {
+                  "CellStates": {},
+                  "Children": null,
+                  "ConflictAll": "NoConflict",
+                  "FieldName": "flags",
+                  "Resolutions": null,
+                  "Values": {
+                    "Base.esm": "Local",
+                    "Top.esp": null
+                  },
+                  "WinnerColumn": "Base.esm",
+                  "WinnerValue": "Local"
+                },
+                {
+                  "CellStates": {},
+                  "Children": [
+                    {
+                      "CellStates": {},
+                      "Children": [
+                        {
+                          "CellStates": {},
+                          "Children": null,
+                          "ConflictAll": "NoConflict",
+                          "FieldName": "name",
+                          "Resolutions": null,
+                          "Values": {
+                            "Base.esm": "Radius",
+                            "Top.esp": null
+                          },
+                          "WinnerColumn": "Base.esm",
+                          "WinnerValue": "Radius"
+                        },
+                        {
+                          "CellStates": {},
+                          "Children": null,
+                          "ConflictAll": "NoConflict",
+                          "FieldName": "flags",
+                          "Resolutions": null,
+                          "Values": {
+                            "Base.esm": "Edited",
+                            "Top.esp": null
+                          },
+                          "WinnerColumn": "Base.esm",
+                          "WinnerValue": "Edited"
+                        },
+                        {
+                          "CellStates": {},
+                          "Children": null,
+                          "ConflictAll": "NoConflict",
+                          "FieldName": "data_int",
+                          "Resolutions": null,
+                          "Values": {
+                            "Base.esm": 10,
+                            "Top.esp": null
+                          },
+                          "WinnerColumn": "Base.esm",
+                          "WinnerValue": 10
+                        },
+                        {
+                          "CellStates": {},
+                          "Children": null,
+                          "ConflictAll": "NoConflict",
+                          "FieldName": "concrete_type",
+                          "Resolutions": null,
+                          "Values": {
+                            "Base.esm": "ScriptIntProperty",
+                            "Top.esp": null
+                          },
+                          "WinnerColumn": "Base.esm",
+                          "WinnerValue": "ScriptIntProperty"
+                        }
+                      ],
+                      "ConflictAll": "NoConflict",
+                      "FieldName": "Radius",
+                      "Resolutions": null,
+                      "Values": {
+                        "Base.esm": {
+                          "alias": null,
+                          "concrete_type": "ScriptIntProperty",
+                          "data_bool": null,
+                          "data_bool_array": null,
+                          "data_float": null,
+                          "data_float_array": null,
+                          "data_int": 10,
+                          "data_int_array": null,
+                          "data_string": null,
+                          "data_string_array": null,
+                          "flags": "Edited",
+                          "members": null,
+                          "name": "Radius",
+                          "object": null,
+                          "objects": null,
+                          "structs": null,
+                          "unused": null
+                        },
+                        "Top.esp": null
+                      },
+                      "WinnerColumn": "Base.esm",
+                      "WinnerValue": {
+                        "alias": null,
+                        "concrete_type": "ScriptIntProperty",
+                        "data_bool": null,
+                        "data_bool_array": null,
+                        "data_float": null,
+                        "data_float_array": null,
+                        "data_int": 10,
+                        "data_int_array": null,
+                        "data_string": null,
+                        "data_string_array": null,
+                        "flags": "Edited",
+                        "members": null,
+                        "name": "Radius",
+                        "object": null,
+                        "objects": null,
+                        "structs": null,
+                        "unused": null
+                      }
+                    }
+                  ],
+                  "ConflictAll": "NoConflict",
+                  "FieldName": "properties",
+                  "Resolutions": null,
+                  "Values": {
+                    "Base.esm": [
+                      {
+                        "alias": null,
+                        "concrete_type": "ScriptIntProperty",
+                        "data_bool": null,
+                        "data_bool_array": null,
+                        "data_float": null,
+                        "data_float_array": null,
+                        "data_int": 10,
+                        "data_int_array": null,
+                        "data_string": null,
+                        "data_string_array": null,
+                        "flags": "Edited",
+                        "members": null,
+                        "name": "Radius",
+                        "object": null,
+                        "objects": null,
+                        "structs": null,
+                        "unused": null
+                      }
+                    ],
+                    "Top.esp": null
+                  },
+                  "WinnerColumn": "Base.esm",
+                  "WinnerValue": [
+                    {
+                      "alias": null,
+                      "concrete_type": "ScriptIntProperty",
+                      "data_bool": null,
+                      "data_bool_array": null,
+                      "data_float": null,
+                      "data_float_array": null,
+                      "data_int": 10,
+                      "data_int_array": null,
+                      "data_string": null,
+                      "data_string_array": null,
+                      "flags": "Edited",
+                      "members": null,
+                      "name": "Radius",
+                      "object": null,
+                      "objects": null,
+                      "structs": null,
+                      "unused": null
+                    }
+                  ]
+                }
+              ],
+              "ConflictAll": "NoConflict",
+              "FieldName": "Ambush",
+              "Resolutions": null,
+              "Values": {
+                "Base.esm": {
+                  "flags": "Local",
+                  "name": "Ambush",
+                  "properties": [
+                    {
+                      "alias": null,
+                      "concrete_type": "ScriptIntProperty",
+                      "data_bool": null,
+                      "data_bool_array": null,
+                      "data_float": null,
+                      "data_float_array": null,
+                      "data_int": 10,
+                      "data_int_array": null,
+                      "data_string": null,
+                      "data_string_array": null,
+                      "flags": "Edited",
+                      "members": null,
+                      "name": "Radius",
+                      "object": null,
+                      "objects": null,
+                      "structs": null,
+                      "unused": null
+                    }
+                  ]
+                },
+                "Top.esp": null
+              },
+              "WinnerColumn": "Base.esm",
+              "WinnerValue": {
+                "flags": "Local",
+                "name": "Ambush",
+                "properties": [
+                  {
+                    "alias": null,
+                    "concrete_type": "ScriptIntProperty",
+                    "data_bool": null,
+                    "data_bool_array": null,
+                    "data_float": null,
+                    "data_float_array": null,
+                    "data_int": 10,
+                    "data_int_array": null,
+                    "data_string": null,
+                    "data_string_array": null,
+                    "flags": "Edited",
+                    "members": null,
+                    "name": "Radius",
+                    "object": null,
+                    "objects": null,
+                    "structs": null,
+                    "unused": null
+                  }
+                ]
+              }
+            },
+            {
+              "CellStates": {
+                "Top.esp": "IdenticalToMaster"
+              },
+              "Children": [
+                {
+                  "CellStates": {
+                    "Top.esp": "IdenticalToMaster"
+                  },
+                  "Children": null,
+                  "ConflictAll": "NoConflict",
+                  "FieldName": "name",
+                  "Resolutions": null,
+                  "Values": {
+                    "Base.esm": "Guard",
+                    "Top.esp": "Guard"
+                  },
+                  "WinnerColumn": "Top.esp",
+                  "WinnerValue": "Guard"
+                },
+                {
+                  "CellStates": {
+                    "Top.esp": "IdenticalToMaster"
+                  },
+                  "Children": null,
+                  "ConflictAll": "NoConflict",
+                  "FieldName": "flags",
+                  "Resolutions": null,
+                  "Values": {
+                    "Base.esm": "Local",
+                    "Top.esp": "Local"
+                  },
+                  "WinnerColumn": "Top.esp",
+                  "WinnerValue": "Local"
+                },
+                {
+                  "CellStates": {
+                    "Top.esp": "IdenticalToMaster"
+                  },
+                  "Children": [
+                    {
+                      "CellStates": {
+                        "Top.esp": "IdenticalToMaster"
+                      },
+                      "Children": [
+                        {
+                          "CellStates": {
+                            "Top.esp": "IdenticalToMaster"
+                          },
+                          "Children": null,
+                          "ConflictAll": "NoConflict",
+                          "FieldName": "name",
+                          "Resolutions": null,
+                          "Values": {
+                            "Base.esm": "Radius",
+                            "Top.esp": "Radius"
+                          },
+                          "WinnerColumn": "Top.esp",
+                          "WinnerValue": "Radius"
+                        },
+                        {
+                          "CellStates": {
+                            "Top.esp": "IdenticalToMaster"
+                          },
+                          "Children": null,
+                          "ConflictAll": "NoConflict",
+                          "FieldName": "flags",
+                          "Resolutions": null,
+                          "Values": {
+                            "Base.esm": "Edited",
+                            "Top.esp": "Edited"
+                          },
+                          "WinnerColumn": "Top.esp",
+                          "WinnerValue": "Edited"
+                        },
+                        {
+                          "CellStates": {
+                            "Top.esp": "IdenticalToMaster"
+                          },
+                          "Children": null,
+                          "ConflictAll": "NoConflict",
+                          "FieldName": "data_int",
+                          "Resolutions": null,
+                          "Values": {
+                            "Base.esm": 20,
+                            "Top.esp": 20
+                          },
+                          "WinnerColumn": "Top.esp",
+                          "WinnerValue": 20
+                        },
+                        {
+                          "CellStates": {
+                            "Top.esp": "IdenticalToMaster"
+                          },
+                          "Children": null,
+                          "ConflictAll": "NoConflict",
+                          "FieldName": "concrete_type",
+                          "Resolutions": null,
+                          "Values": {
+                            "Base.esm": "ScriptIntProperty",
+                            "Top.esp": "ScriptIntProperty"
+                          },
+                          "WinnerColumn": "Top.esp",
+                          "WinnerValue": "ScriptIntProperty"
+                        }
+                      ],
+                      "ConflictAll": "NoConflict",
+                      "FieldName": "Radius",
+                      "Resolutions": null,
+                      "Values": {
+                        "Base.esm": {
+                          "alias": null,
+                          "concrete_type": "ScriptIntProperty",
+                          "data_bool": null,
+                          "data_bool_array": null,
+                          "data_float": null,
+                          "data_float_array": null,
+                          "data_int": 20,
+                          "data_int_array": null,
+                          "data_string": null,
+                          "data_string_array": null,
+                          "flags": "Edited",
+                          "members": null,
+                          "name": "Radius",
+                          "object": null,
+                          "objects": null,
+                          "structs": null,
+                          "unused": null
+                        },
+                        "Top.esp": {
+                          "alias": null,
+                          "concrete_type": "ScriptIntProperty",
+                          "data_bool": null,
+                          "data_bool_array": null,
+                          "data_float": null,
+                          "data_float_array": null,
+                          "data_int": 20,
+                          "data_int_array": null,
+                          "data_string": null,
+                          "data_string_array": null,
+                          "flags": "Edited",
+                          "members": null,
+                          "name": "Radius",
+                          "object": null,
+                          "objects": null,
+                          "structs": null,
+                          "unused": null
+                        }
+                      },
+                      "WinnerColumn": "Top.esp",
+                      "WinnerValue": {
+                        "alias": null,
+                        "concrete_type": "ScriptIntProperty",
+                        "data_bool": null,
+                        "data_bool_array": null,
+                        "data_float": null,
+                        "data_float_array": null,
+                        "data_int": 20,
+                        "data_int_array": null,
+                        "data_string": null,
+                        "data_string_array": null,
+                        "flags": "Edited",
+                        "members": null,
+                        "name": "Radius",
+                        "object": null,
+                        "objects": null,
+                        "structs": null,
+                        "unused": null
+                      }
+                    }
+                  ],
+                  "ConflictAll": "NoConflict",
+                  "FieldName": "properties",
+                  "Resolutions": null,
+                  "Values": {
+                    "Base.esm": [
+                      {
+                        "alias": null,
+                        "concrete_type": "ScriptIntProperty",
+                        "data_bool": null,
+                        "data_bool_array": null,
+                        "data_float": null,
+                        "data_float_array": null,
+                        "data_int": 20,
+                        "data_int_array": null,
+                        "data_string": null,
+                        "data_string_array": null,
+                        "flags": "Edited",
+                        "members": null,
+                        "name": "Radius",
+                        "object": null,
+                        "objects": null,
+                        "structs": null,
+                        "unused": null
+                      }
+                    ],
+                    "Top.esp": [
+                      {
+                        "alias": null,
+                        "concrete_type": "ScriptIntProperty",
+                        "data_bool": null,
+                        "data_bool_array": null,
+                        "data_float": null,
+                        "data_float_array": null,
+                        "data_int": 20,
+                        "data_int_array": null,
+                        "data_string": null,
+                        "data_string_array": null,
+                        "flags": "Edited",
+                        "members": null,
+                        "name": "Radius",
+                        "object": null,
+                        "objects": null,
+                        "structs": null,
+                        "unused": null
+                      }
+                    ]
+                  },
+                  "WinnerColumn": "Top.esp",
+                  "WinnerValue": [
+                    {
+                      "alias": null,
+                      "concrete_type": "ScriptIntProperty",
+                      "data_bool": null,
+                      "data_bool_array": null,
+                      "data_float": null,
+                      "data_float_array": null,
+                      "data_int": 20,
+                      "data_int_array": null,
+                      "data_string": null,
+                      "data_string_array": null,
+                      "flags": "Edited",
+                      "members": null,
+                      "name": "Radius",
+                      "object": null,
+                      "objects": null,
+                      "structs": null,
+                      "unused": null
+                    }
+                  ]
+                }
+              ],
+              "ConflictAll": "NoConflict",
+              "FieldName": "Guard",
+              "Resolutions": null,
+              "Values": {
+                "Base.esm": {
+                  "flags": "Local",
+                  "name": "Guard",
+                  "properties": [
+                    {
+                      "alias": null,
+                      "concrete_type": "ScriptIntProperty",
+                      "data_bool": null,
+                      "data_bool_array": null,
+                      "data_float": null,
+                      "data_float_array": null,
+                      "data_int": 20,
+                      "data_int_array": null,
+                      "data_string": null,
+                      "data_string_array": null,
+                      "flags": "Edited",
+                      "members": null,
+                      "name": "Radius",
+                      "object": null,
+                      "objects": null,
+                      "structs": null,
+                      "unused": null
+                    }
+                  ]
+                },
+                "Top.esp": {
+                  "flags": "Local",
+                  "name": "Guard",
+                  "properties": [
+                    {
+                      "alias": null,
+                      "concrete_type": "ScriptIntProperty",
+                      "data_bool": null,
+                      "data_bool_array": null,
+                      "data_float": null,
+                      "data_float_array": null,
+                      "data_int": 20,
+                      "data_int_array": null,
+                      "data_string": null,
+                      "data_string_array": null,
+                      "flags": "Edited",
+                      "members": null,
+                      "name": "Radius",
+                      "object": null,
+                      "objects": null,
+                      "structs": null,
+                      "unused": null
+                    }
+                  ]
+                }
+              },
+              "WinnerColumn": "Top.esp",
+              "WinnerValue": {
+                "flags": "Local",
+                "name": "Guard",
+                "properties": [
+                  {
+                    "alias": null,
+                    "concrete_type": "ScriptIntProperty",
+                    "data_bool": null,
+                    "data_bool_array": null,
+                    "data_float": null,
+                    "data_float_array": null,
+                    "data_int": 20,
+                    "data_int_array": null,
+                    "data_string": null,
+                    "data_string_array": null,
+                    "flags": "Edited",
+                    "members": null,
+                    "name": "Radius",
+                    "object": null,
+                    "objects": null,
+                    "structs": null,
+                    "unused": null
+                  }
+                ]
+              }
+            }
+          ],
+          "ConflictAll": "Override",
+          "FieldName": "scripts",
+          "Resolutions": null,
+          "Values": {
+            "Base.esm": [
+              {
+                "flags": "Local",
+                "name": "Ambush",
+                "properties": [
+                  {
+                    "alias": null,
+                    "concrete_type": "ScriptIntProperty",
+                    "data_bool": null,
+                    "data_bool_array": null,
+                    "data_float": null,
+                    "data_float_array": null,
+                    "data_int": 10,
+                    "data_int_array": null,
+                    "data_string": null,
+                    "data_string_array": null,
+                    "flags": "Edited",
+                    "members": null,
+                    "name": "Radius",
+                    "object": null,
+                    "objects": null,
+                    "structs": null,
+                    "unused": null
+                  }
+                ]
+              },
+              {
+                "flags": "Local",
+                "name": "Guard",
+                "properties": [
+                  {
+                    "alias": null,
+                    "concrete_type": "ScriptIntProperty",
+                    "data_bool": null,
+                    "data_bool_array": null,
+                    "data_float": null,
+                    "data_float_array": null,
+                    "data_int": 20,
+                    "data_int_array": null,
+                    "data_string": null,
+                    "data_string_array": null,
+                    "flags": "Edited",
+                    "members": null,
+                    "name": "Radius",
+                    "object": null,
+                    "objects": null,
+                    "structs": null,
+                    "unused": null
+                  }
+                ]
+              }
+            ],
+            "Top.esp": [
+              {
+                "flags": "Local",
+                "name": "Guard",
+                "properties": [
+                  {
+                    "alias": null,
+                    "concrete_type": "ScriptIntProperty",
+                    "data_bool": null,
+                    "data_bool_array": null,
+                    "data_float": null,
+                    "data_float_array": null,
+                    "data_int": 20,
+                    "data_int_array": null,
+                    "data_string": null,
+                    "data_string_array": null,
+                    "flags": "Edited",
+                    "members": null,
+                    "name": "Radius",
+                    "object": null,
+                    "objects": null,
+                    "structs": null,
+                    "unused": null
+                  }
+                ]
+              }
+            ]
+          },
+          "WinnerColumn": "Top.esp",
+          "WinnerValue": [
+            {
+              "flags": "Local",
+              "name": "Guard",
+              "properties": [
+                {
+                  "alias": null,
+                  "concrete_type": "ScriptIntProperty",
+                  "data_bool": null,
+                  "data_bool_array": null,
+                  "data_float": null,
+                  "data_float_array": null,
+                  "data_int": 20,
+                  "data_int_array": null,
+                  "data_string": null,
+                  "data_string_array": null,
+                  "flags": "Edited",
+                  "members": null,
+                  "name": "Radius",
+                  "object": null,
+                  "objects": null,
+                  "structs": null,
+                  "unused": null
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "ConflictAll": "Override",
+      "FieldName": "virtual_machine_adapter",
+      "Resolutions": null,
+      "Values": {
+        "Base.esm": {
+          "object_format": 2,
+          "scripts": [
+            {
+              "flags": "Local",
+              "name": "Ambush",
+              "properties": [
+                {
+                  "alias": null,
+                  "concrete_type": "ScriptIntProperty",
+                  "data_bool": null,
+                  "data_bool_array": null,
+                  "data_float": null,
+                  "data_float_array": null,
+                  "data_int": 10,
+                  "data_int_array": null,
+                  "data_string": null,
+                  "data_string_array": null,
+                  "flags": "Edited",
+                  "members": null,
+                  "name": "Radius",
+                  "object": null,
+                  "objects": null,
+                  "structs": null,
+                  "unused": null
+                }
+              ]
+            },
+            {
+              "flags": "Local",
+              "name": "Guard",
+              "properties": [
+                {
+                  "alias": null,
+                  "concrete_type": "ScriptIntProperty",
+                  "data_bool": null,
+                  "data_bool_array": null,
+                  "data_float": null,
+                  "data_float_array": null,
+                  "data_int": 20,
+                  "data_int_array": null,
+                  "data_string": null,
+                  "data_string_array": null,
+                  "flags": "Edited",
+                  "members": null,
+                  "name": "Radius",
+                  "object": null,
+                  "objects": null,
+                  "structs": null,
+                  "unused": null
+                }
+              ]
+            }
+          ],
+          "version": 6
+        },
+        "Top.esp": {
+          "object_format": 2,
+          "scripts": [
+            {
+              "flags": "Local",
+              "name": "Guard",
+              "properties": [
+                {
+                  "alias": null,
+                  "concrete_type": "ScriptIntProperty",
+                  "data_bool": null,
+                  "data_bool_array": null,
+                  "data_float": null,
+                  "data_float_array": null,
+                  "data_int": 20,
+                  "data_int_array": null,
+                  "data_string": null,
+                  "data_string_array": null,
+                  "flags": "Edited",
+                  "members": null,
+                  "name": "Radius",
+                  "object": null,
+                  "objects": null,
+                  "structs": null,
+                  "unused": null
+                }
+              ]
+            }
+          ],
+          "version": 6
+        }
+      },
+      "WinnerColumn": "Top.esp",
+      "WinnerValue": {
+        "object_format": 2,
+        "scripts": [
+          {
+            "flags": "Local",
+            "name": "Guard",
+            "properties": [
+              {
+                "alias": null,
+                "concrete_type": "ScriptIntProperty",
+                "data_bool": null,
+                "data_bool_array": null,
+                "data_float": null,
+                "data_float_array": null,
+                "data_int": 20,
+                "data_int_array": null,
+                "data_string": null,
+                "data_string_array": null,
+                "flags": "Edited",
+                "members": null,
+                "name": "Radius",
+                "object": null,
+                "objects": null,
+                "structs": null,
+                "unused": null
+              }
+            ]
+          }
+        ],
+        "version": 6
+      }
+    },
+    "ConflictAll": "Override"
+  },
+  "scripted-quest": {
+    "Adapter": {
+      "CellStates": {
+        "Top.esp": "Override"
+      },
+      "Children": [
+        {
+          "CellStates": {
+            "Top.esp": "IdenticalToMaster"
+          },
+          "Children": null,
+          "ConflictAll": "NoConflict",
+          "FieldName": "version",
+          "Resolutions": null,
+          "Values": {
+            "Base.esm": 6,
+            "Top.esp": 6
+          },
+          "WinnerColumn": "Top.esp",
+          "WinnerValue": 6
+        },
+        {
+          "CellStates": {
+            "Top.esp": "IdenticalToMaster"
+          },
+          "Children": null,
+          "ConflictAll": "NoConflict",
+          "FieldName": "object_format",
+          "Resolutions": null,
+          "Values": {
+            "Base.esm": 2,
+            "Top.esp": 2
+          },
+          "WinnerColumn": "Top.esp",
+          "WinnerValue": 2
+        },
+        {
+          "CellStates": {
+            "Top.esp": "IdenticalToMaster"
+          },
+          "Children": null,
+          "ConflictAll": "NoConflict",
+          "FieldName": "scripts",
+          "Resolutions": null,
+          "Values": {
+            "Base.esm": [],
+            "Top.esp": []
+          },
+          "WinnerColumn": "Top.esp",
+          "WinnerValue": []
+        },
+        {
+          "CellStates": {
+            "Top.esp": "IdenticalToMaster"
+          },
+          "Children": null,
+          "ConflictAll": "NoConflict",
+          "FieldName": "versioning",
+          "Resolutions": null,
+          "Values": {
+            "Base.esm": 0,
+            "Top.esp": 0
+          },
+          "WinnerColumn": "Top.esp",
+          "WinnerValue": 0
+        },
+        {
+          "CellStates": {
+            "Top.esp": "IdenticalToMaster"
+          },
+          "Children": null,
+          "ConflictAll": "NoConflict",
+          "FieldName": "extra_bind_data_version",
+          "Resolutions": null,
+          "Values": {
+            "Base.esm": 3,
+            "Top.esp": 3
+          },
+          "WinnerColumn": "Top.esp",
+          "WinnerValue": 3
+        },
+        {
+          "CellStates": {
+            "Top.esp": "IdenticalToMaster"
+          },
+          "Children": [
+            {
+              "CellStates": {
+                "Top.esp": "IdenticalToMaster"
+              },
+              "Children": null,
+              "ConflictAll": "NoConflict",
+              "FieldName": "name",
+              "Resolutions": null,
+              "Values": {
+                "Base.esm": "",
+                "Top.esp": ""
+              },
+              "WinnerColumn": "Top.esp",
+              "WinnerValue": ""
+            },
+            {
+              "CellStates": {
+                "Top.esp": "IdenticalToMaster"
+              },
+              "Children": null,
+              "ConflictAll": "NoConflict",
+              "FieldName": "flags",
+              "Resolutions": null,
+              "Values": {
+                "Base.esm": "Local",
+                "Top.esp": "Local"
+              },
+              "WinnerColumn": "Top.esp",
+              "WinnerValue": "Local"
+            },
+            {
+              "CellStates": {
+                "Top.esp": "IdenticalToMaster"
+              },
+              "Children": null,
+              "ConflictAll": "NoConflict",
+              "FieldName": "properties",
+              "Resolutions": null,
+              "Values": {
+                "Base.esm": [],
+                "Top.esp": []
+              },
+              "WinnerColumn": "Top.esp",
+              "WinnerValue": []
+            }
+          ],
+          "ConflictAll": "NoConflict",
+          "FieldName": "script",
+          "Resolutions": null,
+          "Values": {
+            "Base.esm": {
+              "flags": "Local",
+              "name": "",
+              "properties": []
+            },
+            "Top.esp": {
+              "flags": "Local",
+              "name": "",
+              "properties": []
+            }
+          },
+          "WinnerColumn": "Top.esp",
+          "WinnerValue": {
+            "flags": "Local",
+            "name": "",
+            "properties": []
+          }
+        },
+        {
+          "CellStates": {
+            "Top.esp": "IdenticalToMaster"
+          },
+          "Children": null,
+          "ConflictAll": "NoConflict",
+          "FieldName": "fragments",
+          "Resolutions": null,
+          "Values": {
+            "Base.esm": [],
+            "Top.esp": []
+          },
+          "WinnerColumn": "Top.esp",
+          "WinnerValue": []
+        },
+        {
+          "CellStates": {
+            "Top.esp": "Override"
+          },
+          "Children": [
+            {
+              "CellStates": {
+                "Top.esp": "Override"
+              },
+              "Children": [
+                {
+                  "CellStates": {
+                    "Top.esp": "IdenticalToMaster"
+                  },
+                  "Children": [
+                    {
+                      "CellStates": {
+                        "Top.esp": "IdenticalToMaster"
+                      },
+                      "Children": null,
+                      "ConflictAll": "NoConflict",
+                      "FieldName": "name",
+                      "Resolutions": null,
+                      "Values": {
+                        "Base.esm": "",
+                        "Top.esp": ""
+                      },
+                      "WinnerColumn": "Top.esp",
+                      "WinnerValue": ""
+                    },
+                    {
+                      "CellStates": {
+                        "Top.esp": "IdenticalToMaster"
+                      },
+                      "Children": null,
+                      "ConflictAll": "NoConflict",
+                      "FieldName": "flags",
+                      "Resolutions": null,
+                      "Values": {
+                        "Base.esm": "Edited",
+                        "Top.esp": "Edited"
+                      },
+                      "WinnerColumn": "Top.esp",
+                      "WinnerValue": "Edited"
+                    },
+                    {
+                      "CellStates": {
+                        "Top.esp": "IdenticalToMaster"
+                      },
+                      "Children": null,
+                      "ConflictAll": "NoConflict",
+                      "FieldName": "object",
+                      "Resolutions": null,
+                      "Values": {
+                        "Base.esm": "Null",
+                        "Top.esp": "Null"
+                      },
+                      "WinnerColumn": "Top.esp",
+                      "WinnerValue": "Null"
+                    },
+                    {
+                      "CellStates": {
+                        "Top.esp": "IdenticalToMaster"
+                      },
+                      "Children": null,
+                      "ConflictAll": "NoConflict",
+                      "FieldName": "alias",
+                      "Resolutions": null,
+                      "Values": {
+                        "Base.esm": 0,
+                        "Top.esp": 0
+                      },
+                      "WinnerColumn": "Top.esp",
+                      "WinnerValue": 0
+                    },
+                    {
+                      "CellStates": {
+                        "Top.esp": "IdenticalToMaster"
+                      },
+                      "Children": null,
+                      "ConflictAll": "NoConflict",
+                      "FieldName": "unused",
+                      "Resolutions": null,
+                      "Values": {
+                        "Base.esm": 0,
+                        "Top.esp": 0
+                      },
+                      "WinnerColumn": "Top.esp",
+                      "WinnerValue": 0
+                    }
+                  ],
+                  "ConflictAll": "NoConflict",
+                  "FieldName": "property",
+                  "Resolutions": null,
+                  "Values": {
+                    "Base.esm": {
+                      "alias": 0,
+                      "flags": "Edited",
+                      "name": "",
+                      "object": "Null",
+                      "unused": 0
+                    },
+                    "Top.esp": {
+                      "alias": 0,
+                      "flags": "Edited",
+                      "name": "",
+                      "object": "Null",
+                      "unused": 0
+                    }
+                  },
+                  "WinnerColumn": "Top.esp",
+                  "WinnerValue": {
+                    "alias": 0,
+                    "flags": "Edited",
+                    "name": "",
+                    "object": "Null",
+                    "unused": 0
+                  }
+                },
+                {
+                  "CellStates": {
+                    "Top.esp": "IdenticalToMaster"
+                  },
+                  "Children": null,
+                  "ConflictAll": "NoConflict",
+                  "FieldName": "version",
+                  "Resolutions": null,
+                  "Values": {
+                    "Base.esm": 6,
+                    "Top.esp": 6
+                  },
+                  "WinnerColumn": "Top.esp",
+                  "WinnerValue": 6
+                },
+                {
+                  "CellStates": {
+                    "Top.esp": "IdenticalToMaster"
+                  },
+                  "Children": null,
+                  "ConflictAll": "NoConflict",
+                  "FieldName": "object_format",
+                  "Resolutions": null,
+                  "Values": {
+                    "Base.esm": 2,
+                    "Top.esp": 2
+                  },
+                  "WinnerColumn": "Top.esp",
+                  "WinnerValue": 2
+                },
+                {
+                  "CellStates": {
+                    "Top.esp": "Override"
+                  },
+                  "Children": [
+                    {
+                      "CellStates": {
+                        "Top.esp": "Override"
+                      },
+                      "Children": [
+                        {
+                          "CellStates": {
+                            "Top.esp": "IdenticalToMaster"
+                          },
+                          "Children": null,
+                          "ConflictAll": "NoConflict",
+                          "FieldName": "name",
+                          "Resolutions": null,
+                          "Values": {
+                            "Base.esm": "AliasScript",
+                            "Top.esp": "AliasScript"
+                          },
+                          "WinnerColumn": "Top.esp",
+                          "WinnerValue": "AliasScript"
+                        },
+                        {
+                          "CellStates": {
+                            "Top.esp": "IdenticalToMaster"
+                          },
+                          "Children": null,
+                          "ConflictAll": "NoConflict",
+                          "FieldName": "flags",
+                          "Resolutions": null,
+                          "Values": {
+                            "Base.esm": "Local",
+                            "Top.esp": "Local"
+                          },
+                          "WinnerColumn": "Top.esp",
+                          "WinnerValue": "Local"
+                        },
+                        {
+                          "CellStates": {
+                            "Top.esp": "Override"
+                          },
+                          "Children": [
+                            {
+                              "CellStates": {
+                                "Top.esp": "Override"
+                              },
+                              "Children": [
+                                {
+                                  "CellStates": {
+                                    "Top.esp": "IdenticalToMaster"
+                                  },
+                                  "Children": null,
+                                  "ConflictAll": "NoConflict",
+                                  "FieldName": "name",
+                                  "Resolutions": null,
+                                  "Values": {
+                                    "Base.esm": "Level",
+                                    "Top.esp": "Level"
+                                  },
+                                  "WinnerColumn": "Top.esp",
+                                  "WinnerValue": "Level"
+                                },
+                                {
+                                  "CellStates": {
+                                    "Top.esp": "IdenticalToMaster"
+                                  },
+                                  "Children": null,
+                                  "ConflictAll": "NoConflict",
+                                  "FieldName": "flags",
+                                  "Resolutions": null,
+                                  "Values": {
+                                    "Base.esm": "Edited",
+                                    "Top.esp": "Edited"
+                                  },
+                                  "WinnerColumn": "Top.esp",
+                                  "WinnerValue": "Edited"
+                                },
+                                {
+                                  "CellStates": {
+                                    "Top.esp": "Override"
+                                  },
+                                  "Children": null,
+                                  "ConflictAll": "Override",
+                                  "FieldName": "data_int",
+                                  "Resolutions": null,
+                                  "Values": {
+                                    "Base.esm": 1,
+                                    "Top.esp": 2
+                                  },
+                                  "WinnerColumn": "Top.esp",
+                                  "WinnerValue": 2
+                                },
+                                {
+                                  "CellStates": {
+                                    "Top.esp": "IdenticalToMaster"
+                                  },
+                                  "Children": null,
+                                  "ConflictAll": "NoConflict",
+                                  "FieldName": "concrete_type",
+                                  "Resolutions": null,
+                                  "Values": {
+                                    "Base.esm": "ScriptIntProperty",
+                                    "Top.esp": "ScriptIntProperty"
+                                  },
+                                  "WinnerColumn": "Top.esp",
+                                  "WinnerValue": "ScriptIntProperty"
+                                }
+                              ],
+                              "ConflictAll": "Override",
+                              "FieldName": "Level",
+                              "Resolutions": null,
+                              "Values": {
+                                "Base.esm": {
+                                  "alias": null,
+                                  "concrete_type": "ScriptIntProperty",
+                                  "data_bool": null,
+                                  "data_bool_array": null,
+                                  "data_float": null,
+                                  "data_float_array": null,
+                                  "data_int": 1,
+                                  "data_int_array": null,
+                                  "data_string": null,
+                                  "data_string_array": null,
+                                  "flags": "Edited",
+                                  "members": null,
+                                  "name": "Level",
+                                  "object": null,
+                                  "objects": null,
+                                  "structs": null,
+                                  "unused": null
+                                },
+                                "Top.esp": {
+                                  "alias": null,
+                                  "concrete_type": "ScriptIntProperty",
+                                  "data_bool": null,
+                                  "data_bool_array": null,
+                                  "data_float": null,
+                                  "data_float_array": null,
+                                  "data_int": 2,
+                                  "data_int_array": null,
+                                  "data_string": null,
+                                  "data_string_array": null,
+                                  "flags": "Edited",
+                                  "members": null,
+                                  "name": "Level",
+                                  "object": null,
+                                  "objects": null,
+                                  "structs": null,
+                                  "unused": null
+                                }
+                              },
+                              "WinnerColumn": "Top.esp",
+                              "WinnerValue": {
+                                "alias": null,
+                                "concrete_type": "ScriptIntProperty",
+                                "data_bool": null,
+                                "data_bool_array": null,
+                                "data_float": null,
+                                "data_float_array": null,
+                                "data_int": 2,
+                                "data_int_array": null,
+                                "data_string": null,
+                                "data_string_array": null,
+                                "flags": "Edited",
+                                "members": null,
+                                "name": "Level",
+                                "object": null,
+                                "objects": null,
+                                "structs": null,
+                                "unused": null
+                              }
+                            }
+                          ],
+                          "ConflictAll": "Override",
+                          "FieldName": "properties",
+                          "Resolutions": null,
+                          "Values": {
+                            "Base.esm": [
+                              {
+                                "alias": null,
+                                "concrete_type": "ScriptIntProperty",
+                                "data_bool": null,
+                                "data_bool_array": null,
+                                "data_float": null,
+                                "data_float_array": null,
+                                "data_int": 1,
+                                "data_int_array": null,
+                                "data_string": null,
+                                "data_string_array": null,
+                                "flags": "Edited",
+                                "members": null,
+                                "name": "Level",
+                                "object": null,
+                                "objects": null,
+                                "structs": null,
+                                "unused": null
+                              }
+                            ],
+                            "Top.esp": [
+                              {
+                                "alias": null,
+                                "concrete_type": "ScriptIntProperty",
+                                "data_bool": null,
+                                "data_bool_array": null,
+                                "data_float": null,
+                                "data_float_array": null,
+                                "data_int": 2,
+                                "data_int_array": null,
+                                "data_string": null,
+                                "data_string_array": null,
+                                "flags": "Edited",
+                                "members": null,
+                                "name": "Level",
+                                "object": null,
+                                "objects": null,
+                                "structs": null,
+                                "unused": null
+                              }
+                            ]
+                          },
+                          "WinnerColumn": "Top.esp",
+                          "WinnerValue": [
+                            {
+                              "alias": null,
+                              "concrete_type": "ScriptIntProperty",
+                              "data_bool": null,
+                              "data_bool_array": null,
+                              "data_float": null,
+                              "data_float_array": null,
+                              "data_int": 2,
+                              "data_int_array": null,
+                              "data_string": null,
+                              "data_string_array": null,
+                              "flags": "Edited",
+                              "members": null,
+                              "name": "Level",
+                              "object": null,
+                              "objects": null,
+                              "structs": null,
+                              "unused": null
+                            }
+                          ]
+                        }
+                      ],
+                      "ConflictAll": "Override",
+                      "FieldName": "AliasScript",
+                      "Resolutions": null,
+                      "Values": {
+                        "Base.esm": {
+                          "flags": "Local",
+                          "name": "AliasScript",
+                          "properties": [
+                            {
+                              "alias": null,
+                              "concrete_type": "ScriptIntProperty",
+                              "data_bool": null,
+                              "data_bool_array": null,
+                              "data_float": null,
+                              "data_float_array": null,
+                              "data_int": 1,
+                              "data_int_array": null,
+                              "data_string": null,
+                              "data_string_array": null,
+                              "flags": "Edited",
+                              "members": null,
+                              "name": "Level",
+                              "object": null,
+                              "objects": null,
+                              "structs": null,
+                              "unused": null
+                            }
+                          ]
+                        },
+                        "Top.esp": {
+                          "flags": "Local",
+                          "name": "AliasScript",
+                          "properties": [
+                            {
+                              "alias": null,
+                              "concrete_type": "ScriptIntProperty",
+                              "data_bool": null,
+                              "data_bool_array": null,
+                              "data_float": null,
+                              "data_float_array": null,
+                              "data_int": 2,
+                              "data_int_array": null,
+                              "data_string": null,
+                              "data_string_array": null,
+                              "flags": "Edited",
+                              "members": null,
+                              "name": "Level",
+                              "object": null,
+                              "objects": null,
+                              "structs": null,
+                              "unused": null
+                            }
+                          ]
+                        }
+                      },
+                      "WinnerColumn": "Top.esp",
+                      "WinnerValue": {
+                        "flags": "Local",
+                        "name": "AliasScript",
+                        "properties": [
+                          {
+                            "alias": null,
+                            "concrete_type": "ScriptIntProperty",
+                            "data_bool": null,
+                            "data_bool_array": null,
+                            "data_float": null,
+                            "data_float_array": null,
+                            "data_int": 2,
+                            "data_int_array": null,
+                            "data_string": null,
+                            "data_string_array": null,
+                            "flags": "Edited",
+                            "members": null,
+                            "name": "Level",
+                            "object": null,
+                            "objects": null,
+                            "structs": null,
+                            "unused": null
+                          }
+                        ]
+                      }
+                    }
+                  ],
+                  "ConflictAll": "Override",
+                  "FieldName": "scripts",
+                  "Resolutions": null,
+                  "Values": {
+                    "Base.esm": [
+                      {
+                        "flags": "Local",
+                        "name": "AliasScript",
+                        "properties": [
+                          {
+                            "alias": null,
+                            "concrete_type": "ScriptIntProperty",
+                            "data_bool": null,
+                            "data_bool_array": null,
+                            "data_float": null,
+                            "data_float_array": null,
+                            "data_int": 1,
+                            "data_int_array": null,
+                            "data_string": null,
+                            "data_string_array": null,
+                            "flags": "Edited",
+                            "members": null,
+                            "name": "Level",
+                            "object": null,
+                            "objects": null,
+                            "structs": null,
+                            "unused": null
+                          }
+                        ]
+                      }
+                    ],
+                    "Top.esp": [
+                      {
+                        "flags": "Local",
+                        "name": "AliasScript",
+                        "properties": [
+                          {
+                            "alias": null,
+                            "concrete_type": "ScriptIntProperty",
+                            "data_bool": null,
+                            "data_bool_array": null,
+                            "data_float": null,
+                            "data_float_array": null,
+                            "data_int": 2,
+                            "data_int_array": null,
+                            "data_string": null,
+                            "data_string_array": null,
+                            "flags": "Edited",
+                            "members": null,
+                            "name": "Level",
+                            "object": null,
+                            "objects": null,
+                            "structs": null,
+                            "unused": null
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  "WinnerColumn": "Top.esp",
+                  "WinnerValue": [
+                    {
+                      "flags": "Local",
+                      "name": "AliasScript",
+                      "properties": [
+                        {
+                          "alias": null,
+                          "concrete_type": "ScriptIntProperty",
+                          "data_bool": null,
+                          "data_bool_array": null,
+                          "data_float": null,
+                          "data_float_array": null,
+                          "data_int": 2,
+                          "data_int_array": null,
+                          "data_string": null,
+                          "data_string_array": null,
+                          "flags": "Edited",
+                          "members": null,
+                          "name": "Level",
+                          "object": null,
+                          "objects": null,
+                          "structs": null,
+                          "unused": null
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ],
+              "ConflictAll": "Override",
+              "FieldName": "0",
+              "Resolutions": null,
+              "Values": {
+                "Base.esm": {
+                  "object_format": 2,
+                  "property": {
+                    "alias": 0,
+                    "flags": "Edited",
+                    "name": "",
+                    "object": "Null",
+                    "unused": 0
+                  },
+                  "scripts": [
+                    {
+                      "flags": "Local",
+                      "name": "AliasScript",
+                      "properties": [
+                        {
+                          "alias": null,
+                          "concrete_type": "ScriptIntProperty",
+                          "data_bool": null,
+                          "data_bool_array": null,
+                          "data_float": null,
+                          "data_float_array": null,
+                          "data_int": 1,
+                          "data_int_array": null,
+                          "data_string": null,
+                          "data_string_array": null,
+                          "flags": "Edited",
+                          "members": null,
+                          "name": "Level",
+                          "object": null,
+                          "objects": null,
+                          "structs": null,
+                          "unused": null
+                        }
+                      ]
+                    }
+                  ],
+                  "version": 6
+                },
+                "Top.esp": {
+                  "object_format": 2,
+                  "property": {
+                    "alias": 0,
+                    "flags": "Edited",
+                    "name": "",
+                    "object": "Null",
+                    "unused": 0
+                  },
+                  "scripts": [
+                    {
+                      "flags": "Local",
+                      "name": "AliasScript",
+                      "properties": [
+                        {
+                          "alias": null,
+                          "concrete_type": "ScriptIntProperty",
+                          "data_bool": null,
+                          "data_bool_array": null,
+                          "data_float": null,
+                          "data_float_array": null,
+                          "data_int": 2,
+                          "data_int_array": null,
+                          "data_string": null,
+                          "data_string_array": null,
+                          "flags": "Edited",
+                          "members": null,
+                          "name": "Level",
+                          "object": null,
+                          "objects": null,
+                          "structs": null,
+                          "unused": null
+                        }
+                      ]
+                    }
+                  ],
+                  "version": 6
+                }
+              },
+              "WinnerColumn": "Top.esp",
+              "WinnerValue": {
+                "object_format": 2,
+                "property": {
+                  "alias": 0,
+                  "flags": "Edited",
+                  "name": "",
+                  "object": "Null",
+                  "unused": 0
+                },
+                "scripts": [
+                  {
+                    "flags": "Local",
+                    "name": "AliasScript",
+                    "properties": [
+                      {
+                        "alias": null,
+                        "concrete_type": "ScriptIntProperty",
+                        "data_bool": null,
+                        "data_bool_array": null,
+                        "data_float": null,
+                        "data_float_array": null,
+                        "data_int": 2,
+                        "data_int_array": null,
+                        "data_string": null,
+                        "data_string_array": null,
+                        "flags": "Edited",
+                        "members": null,
+                        "name": "Level",
+                        "object": null,
+                        "objects": null,
+                        "structs": null,
+                        "unused": null
+                      }
+                    ]
+                  }
+                ],
+                "version": 6
+              }
+            }
+          ],
+          "ConflictAll": "Override",
+          "FieldName": "aliases",
+          "Resolutions": null,
+          "Values": {
+            "Base.esm": [
+              {
+                "object_format": 2,
+                "property": {
+                  "alias": 0,
+                  "flags": "Edited",
+                  "name": "",
+                  "object": "Null",
+                  "unused": 0
+                },
+                "scripts": [
+                  {
+                    "flags": "Local",
+                    "name": "AliasScript",
+                    "properties": [
+                      {
+                        "alias": null,
+                        "concrete_type": "ScriptIntProperty",
+                        "data_bool": null,
+                        "data_bool_array": null,
+                        "data_float": null,
+                        "data_float_array": null,
+                        "data_int": 1,
+                        "data_int_array": null,
+                        "data_string": null,
+                        "data_string_array": null,
+                        "flags": "Edited",
+                        "members": null,
+                        "name": "Level",
+                        "object": null,
+                        "objects": null,
+                        "structs": null,
+                        "unused": null
+                      }
+                    ]
+                  }
+                ],
+                "version": 6
+              }
+            ],
+            "Top.esp": [
+              {
+                "object_format": 2,
+                "property": {
+                  "alias": 0,
+                  "flags": "Edited",
+                  "name": "",
+                  "object": "Null",
+                  "unused": 0
+                },
+                "scripts": [
+                  {
+                    "flags": "Local",
+                    "name": "AliasScript",
+                    "properties": [
+                      {
+                        "alias": null,
+                        "concrete_type": "ScriptIntProperty",
+                        "data_bool": null,
+                        "data_bool_array": null,
+                        "data_float": null,
+                        "data_float_array": null,
+                        "data_int": 2,
+                        "data_int_array": null,
+                        "data_string": null,
+                        "data_string_array": null,
+                        "flags": "Edited",
+                        "members": null,
+                        "name": "Level",
+                        "object": null,
+                        "objects": null,
+                        "structs": null,
+                        "unused": null
+                      }
+                    ]
+                  }
+                ],
+                "version": 6
+              }
+            ]
+          },
+          "WinnerColumn": "Top.esp",
+          "WinnerValue": [
+            {
+              "object_format": 2,
+              "property": {
+                "alias": 0,
+                "flags": "Edited",
+                "name": "",
+                "object": "Null",
+                "unused": 0
+              },
+              "scripts": [
+                {
+                  "flags": "Local",
+                  "name": "AliasScript",
+                  "properties": [
+                    {
+                      "alias": null,
+                      "concrete_type": "ScriptIntProperty",
+                      "data_bool": null,
+                      "data_bool_array": null,
+                      "data_float": null,
+                      "data_float_array": null,
+                      "data_int": 2,
+                      "data_int_array": null,
+                      "data_string": null,
+                      "data_string_array": null,
+                      "flags": "Edited",
+                      "members": null,
+                      "name": "Level",
+                      "object": null,
+                      "objects": null,
+                      "structs": null,
+                      "unused": null
+                    }
+                  ]
+                }
+              ],
+              "version": 6
+            }
+          ]
+        }
+      ],
+      "ConflictAll": "Override",
+      "FieldName": "virtual_machine_adapter",
+      "Resolutions": null,
+      "Values": {
+        "Base.esm": {
+          "aliases": [
+            {
+              "object_format": 2,
+              "property": {
+                "alias": 0,
+                "flags": "Edited",
+                "name": "",
+                "object": "Null",
+                "unused": 0
+              },
+              "scripts": [
+                {
+                  "flags": "Local",
+                  "name": "AliasScript",
+                  "properties": [
+                    {
+                      "alias": null,
+                      "concrete_type": "ScriptIntProperty",
+                      "data_bool": null,
+                      "data_bool_array": null,
+                      "data_float": null,
+                      "data_float_array": null,
+                      "data_int": 1,
+                      "data_int_array": null,
+                      "data_string": null,
+                      "data_string_array": null,
+                      "flags": "Edited",
+                      "members": null,
+                      "name": "Level",
+                      "object": null,
+                      "objects": null,
+                      "structs": null,
+                      "unused": null
+                    }
+                  ]
+                }
+              ],
+              "version": 6
+            }
+          ],
+          "extra_bind_data_version": 3,
+          "fragments": [],
+          "object_format": 2,
+          "script": {
+            "flags": "Local",
+            "name": "",
+            "properties": []
+          },
+          "scripts": [],
+          "version": 6,
+          "versioning": 0
+        },
+        "Top.esp": {
+          "aliases": [
+            {
+              "object_format": 2,
+              "property": {
+                "alias": 0,
+                "flags": "Edited",
+                "name": "",
+                "object": "Null",
+                "unused": 0
+              },
+              "scripts": [
+                {
+                  "flags": "Local",
+                  "name": "AliasScript",
+                  "properties": [
+                    {
+                      "alias": null,
+                      "concrete_type": "ScriptIntProperty",
+                      "data_bool": null,
+                      "data_bool_array": null,
+                      "data_float": null,
+                      "data_float_array": null,
+                      "data_int": 2,
+                      "data_int_array": null,
+                      "data_string": null,
+                      "data_string_array": null,
+                      "flags": "Edited",
+                      "members": null,
+                      "name": "Level",
+                      "object": null,
+                      "objects": null,
+                      "structs": null,
+                      "unused": null
+                    }
+                  ]
+                }
+              ],
+              "version": 6
+            }
+          ],
+          "extra_bind_data_version": 3,
+          "fragments": [],
+          "object_format": 2,
+          "script": {
+            "flags": "Local",
+            "name": "",
+            "properties": []
+          },
+          "scripts": [],
+          "version": 6,
+          "versioning": 0
+        }
+      },
+      "WinnerColumn": "Top.esp",
+      "WinnerValue": {
+        "aliases": [
+          {
+            "object_format": 2,
+            "property": {
+              "alias": 0,
+              "flags": "Edited",
+              "name": "",
+              "object": "Null",
+              "unused": 0
+            },
+            "scripts": [
+              {
+                "flags": "Local",
+                "name": "AliasScript",
+                "properties": [
+                  {
+                    "alias": null,
+                    "concrete_type": "ScriptIntProperty",
+                    "data_bool": null,
+                    "data_bool_array": null,
+                    "data_float": null,
+                    "data_float_array": null,
+                    "data_int": 2,
+                    "data_int_array": null,
+                    "data_string": null,
+                    "data_string_array": null,
+                    "flags": "Edited",
+                    "members": null,
+                    "name": "Level",
+                    "object": null,
+                    "objects": null,
+                    "structs": null,
+                    "unused": null
+                  }
+                ]
+              }
+            ],
+            "version": 6
+          }
+        ],
+        "extra_bind_data_version": 3,
+        "fragments": [],
+        "object_format": 2,
+        "script": {
+          "flags": "Local",
+          "name": "",
+          "properties": []
+        },
+        "scripts": [],
+        "version": 6,
+        "versioning": 0
+      }
+    },
+    "ConflictAll": "Override"
+  }
+}

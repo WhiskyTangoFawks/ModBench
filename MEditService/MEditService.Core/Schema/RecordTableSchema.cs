@@ -200,7 +200,10 @@ public sealed record ColumnSpec(
     /// without this a non-nullable field would read NULL through a view where the wide table held
     /// the default value.
     /// </summary>
-    string? ViewDefaultLiteral = null)
+    string? ViewDefaultLiteral = null,
+
+    /// <summary>See <see cref="FieldMetadata.KeyMembers"/>.</summary>
+    IReadOnlyList<string>? KeyMembers = null)
 {
     /// <summary>
     /// Whether a generated view can carry this column at all: scalar leaves only.
@@ -216,7 +219,7 @@ public sealed record ColumnSpec(
 
     public FieldMetadata ToFieldMetadata() =>
         new(Name, ApiType, IsArray, ValidFormKeyTypes, EnumMembers, ElementType, SubFields,
-            AllowsNull: AllowsNull);
+            AllowsNull: AllowsNull, KeyMembers: KeyMembers);
 }
 
 public sealed class RecordTableSchema
@@ -232,17 +235,6 @@ public sealed class RecordTableSchema
     /// payloads). Defaults to <see cref="TableName"/> if the table isn't in the lookup.
     /// </summary>
     public required string DisplayName { get; init; }
-
-    /// <summary>
-    /// Whether this record type can carry a VMAD (script attachment) subrecord — computed once at
-    /// schema-reflection time from Mutagen's own type system
-    /// (<c>IHaveVirtualMachineAdapterGetter</c>), the same interface
-    /// <see cref="Records.DuckDbRecordIndex.IndexVmad"/> already keys off. Drives
-    /// whether the frontend renders a Scripts (VMAD) section at all, rather than relying on
-    /// per-record data (a VMAD-capable type with no scripts yet should still show an empty,
-    /// addable section; a VMAD-incapable type like CMPO must never show one).
-    /// </summary>
-    public required bool HasVmad { get; init; }
 
     /// <summary>
     /// Per-mod column extractors for the synthetic "header" record type only (null for every

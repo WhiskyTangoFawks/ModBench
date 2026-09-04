@@ -7,19 +7,9 @@ import {
   parseElementIndex,
   getAtPath,
   setAtPath,
-  reduceConflictAll,
-  aggregateConflictAll,
-  hasElementAt,
-  moveArrayElement,
-  removeArrayElement,
-  appendArrayElement,
-  defaultAdapterElementValue,
   arrayElementContext,
   arrayParentContext,
   combineVscodeContexts,
-  vmadScriptsContext,
-  vmadScriptContext,
-  vmadPropertyContext,
   headerCellContext,
   stringValueContext,
   metaAtPath,
@@ -190,140 +180,6 @@ describe('getAtPath', () => {
   });
 });
 
-// Mirrors MEditService.Core/Queries/ConflictRules.cs's Reduce, used by
-// vmadTreeAdapter.ts to compute its own synthesized FieldDiff nodes'
-// bottom-up conflictAll.
-describe('reduceConflictAll', () => {
-  it('returns NoConflict for no cell states', () => {
-    expect(reduceConflictAll([])).toBe('NoConflict');
-  });
-
-  it('returns NoConflict when every state is IdenticalToMaster', () => {
-    expect(reduceConflictAll(['IdenticalToMaster', 'IdenticalToMaster'])).toBe('NoConflict');
-  });
-
-  it('returns Override when the worst state is an uncontested Override', () => {
-    expect(reduceConflictAll(['IdenticalToMaster', 'Override'])).toBe('Override');
-  });
-
-  it('returns Conflict when any state is ConflictWins', () => {
-    expect(reduceConflictAll(['Override', 'ConflictWins'])).toBe('Conflict');
-  });
-
-  it('returns Conflict when any state is ConflictLoses', () => {
-    expect(reduceConflictAll(['ConflictLoses'])).toBe('Conflict');
-  });
-});
-
-describe('aggregateConflictAll', () => {
-  it('reduces just the own cell states when there are no children', () => {
-    expect(aggregateConflictAll({ 'MyMod.esp': 'Override' })).toBe('Override');
-  });
-
-  it('reduces just the own cell states when children is undefined or empty', () => {
-    expect(aggregateConflictAll({}, undefined)).toBe('NoConflict');
-    expect(aggregateConflictAll({}, [])).toBe('NoConflict');
-  });
-
-  // The requirement at the adapter seam: a struct/array node with no conflict of its
-  // own still escalates to the worse of its children — collapsing it must not hide that something
-  // inside differs.
-  it('escalates from a conflicting child even when the node has no own-cell-state conflict', () => {
-    expect(aggregateConflictAll({}, [{ conflictAll: 'Conflict' }, { conflictAll: 'NoConflict' }])).toBe('Conflict');
-  });
-
-  it('does not let an agreeing child pull the aggregate down below the node’s own state', () => {
-    expect(aggregateConflictAll({ 'MyMod.esp': 'Override' }, [{ conflictAll: 'NoConflict' }])).toBe('Override');
-  });
-
-  it('a child with no conflictAll of its own contributes nothing (safe default)', () => {
-    expect(aggregateConflictAll({}, [{ conflictAll: undefined }])).toBe('NoConflict');
-  });
-});
-
-// The pure array-arity/order mutations behind Move Up/Move Down/Remove/Add.
-describe('hasElementAt', () => {
-  it('is true within bounds, false at or past length, false for a negative index', () => {
-    expect(hasElementAt(3, 0)).toBe(true);
-    expect(hasElementAt(3, 2)).toBe(true);
-    expect(hasElementAt(3, 3)).toBe(false);
-    expect(hasElementAt(3, -1)).toBe(false);
-  });
-});
-
-describe('moveArrayElement', () => {
-  it('swaps the element at index with its neighbour one position up', () => {
-    expect(moveArrayElement(['a', 'b', 'c'], 1, -1)).toEqual(['b', 'a', 'c']);
-  });
-
-  it('swaps the element at index with its neighbour one position down', () => {
-    expect(moveArrayElement(['a', 'b', 'c'], 0, 1)).toEqual(['b', 'a', 'c']);
-  });
-
-  it('returns the array unchanged when the move would go out of bounds', () => {
-    expect(moveArrayElement(['a', 'b', 'c'], 0, -1)).toEqual(['a', 'b', 'c']);
-    expect(moveArrayElement(['a', 'b', 'c'], 2, 1)).toEqual(['a', 'b', 'c']);
-  });
-
-  // `index` itself, not just the swap target, must be bounds-checked — a row's index
-  // comes from the union-aligned tree across every plugin's column and can equal or exceed *this
-  // specific plugin's* own array length even though the swap target alone looks in range.
-  it('returns the array unchanged when index itself is out of bounds, even if the swap target is in range', () => {
-    const arr = ['a', 'b'];
-    expect(moveArrayElement(arr, 2, -1)).toBe(arr);
-    expect(moveArrayElement(arr, 5, -1)).toBe(arr);
-    expect(moveArrayElement(arr, -1, 1)).toBe(arr);
-  });
-});
-
-describe('removeArrayElement', () => {
-  it('drops the element at the given index, leaving the others in order', () => {
-    expect(removeArrayElement(['a', 'b', 'c'], 1)).toEqual(['a', 'c']);
-  });
-
-  it('returns the same array reference, unchanged, when the index is out of bounds', () => {
-    const arr = ['a', 'b'];
-    expect(removeArrayElement(arr, 2)).toBe(arr);
-    expect(removeArrayElement(arr, -1)).toBe(arr);
-  });
-});
-
-describe('appendArrayElement', () => {
-  it('appends the given value to the end of the array', () => {
-    expect(appendArrayElement(['a', 'b'], 'c')).toEqual(['a', 'b', 'c']);
-  });
-
-  it('does not mutate the source array', () => {
-    const source = ['a', 'b'];
-    appendArrayElement(source, 'c');
-    expect(source).toEqual(['a', 'b']);
-  });
-});
-
-// #710: the adapter path's half of one rule. A reflected column's element is defaulted by
-// ArrayOpWriter, never here — but a script-property element (#694) carries the
-// same `concrete_type` discriminator, and must start at the same leaf the backend would choose:
-// the first the schema lists. Its agreeing backend half is
-// MEditService.Tests.Edits.UnionArrayAddInventoryTests.ArrayAdd_BuildsAnElementTheWritePathAccepts.
-describe('defaultAdapterElementValue — a struct element carrying a discriminator', () => {
-  const unionElement: FieldMetadata = {
-    name: '', type: 'struct', isArray: false, validFormKeyTypes: [], enumMembers: [],
-    fields: [
-      {
-        name: 'concrete_type', type: 'enum', isArray: false, validFormKeyTypes: [],
-        enumMembers: [{ value: 'QuestReferenceAlias' }, { value: 'QuestLocationAlias' },
-          { value: 'QuestCollectionAlias' }],
-      },
-      { name: 'name', type: 'string', isArray: false, validFormKeyTypes: [], enumMembers: [] },
-    ],
-  };
-
-  it('starts at the first leaf the schema lists', () => {
-    expect(defaultAdapterElementValue(unionElement)).toEqual(
-      { concrete_type: 'QuestReferenceAlias', name: '' });
-  });
-});
-
 // `path` is the row's own restage coordinates (PathSegment[]), never a bare scalar
 // index — a top-level array's element is a one-hop path (`[{kind:'index',index:N}]`), but
 // an array nested inside a struct/array needs every hop from the subtree root, which a scalar
@@ -423,52 +279,22 @@ describe('combineVscodeContexts', () => {
 
   it('combines two contexts\' webviewSection into one space-separated token list', () => {
     const result = combineVscodeContexts(
-      arrayParentContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', String.raw`VMAD\S\Levels`, []),
-      vmadPropertyContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', 'S', 'Levels'),
+      arrayElementContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', 'tags', [{ kind: 'index', index: 0 }], 2),
+      stringValueContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', 'tags', 'a', false, [{ kind: 'index', index: 0 }], 'tags'),
     );
     const parsed = JSON.parse(result!);
-    expect(parsed.webviewSection).toBe('arrayParent vmadProperty');
+    expect(parsed.webviewSection).toBe('arrayElement stringValue');
   });
 
   it('merges every other key from both contexts (so package.json\'s when clauses can read either)', () => {
     const result = combineVscodeContexts(
-      arrayParentContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', String.raw`VMAD\S\Levels`, []),
-      vmadPropertyContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', 'S', 'Levels'),
+      arrayElementContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', 'tags', [{ kind: 'index', index: 0 }], 2),
+      stringValueContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', 'tags', 'a', false, [{ kind: 'index', index: 0 }], 'tags'),
     );
     const parsed = JSON.parse(result!);
-    expect(parsed.scriptName).toBe('S');
-    expect(parsed.propName).toBe('Levels');
-    expect(parsed.rootField).toBe(String.raw`VMAD\S\Levels`);
-  });
-});
-
-describe('vmadScriptsContext / vmadScriptContext / vmadPropertyContext', () => {
-  it('vmadScriptsContext identifies the "Scripts (VMAD)" wrapper row', () => {
-    expect(vmadScriptsContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA')).toEqual({
-      webviewSection: 'vmadScripts', formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'ModA',
-      preventDefaultContextMenuItems: true,
-    });
-  });
-
-  it('vmadScriptContext identifies a script row, carrying its current flags for the QuickPick seed', () => {
-    expect(vmadScriptContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', 'MyScript', 'Local')).toEqual({
-      webviewSection: 'vmadScript', formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'ModA', scriptName: 'MyScript',
-      currentFlags: 'Local', preventDefaultContextMenuItems: true,
-    });
-  });
-
-  it('vmadScriptContext carries a null currentFlags when the column has no disk value', () => {
-    expect(vmadScriptContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', 'MyScript', null)).toEqual({
-      webviewSection: 'vmadScript', formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'ModA', scriptName: 'MyScript',
-      currentFlags: null, preventDefaultContextMenuItems: true,
-    });
-  });
-
-  it('vmadPropertyContext identifies a property row', () => {
-    expect(vmadPropertyContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', 'MyScript', 'Health')).toEqual({
-      webviewSection: 'vmadProperty', formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'ModA',
-      scriptName: 'MyScript', propName: 'Health', preventDefaultContextMenuItems: true,
-    });
+    expect(parsed.canMoveDown).toBe(true);
+    expect(parsed.value).toBe('a');
+    expect(parsed.rootField).toBe('tags');
   });
 });
 

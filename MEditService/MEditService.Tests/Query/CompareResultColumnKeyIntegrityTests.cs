@@ -31,7 +31,7 @@ namespace MEditService.Tests.Query;
 // The set of "which dictionaries are column-keyed" is derived by reflecting over the
 // [ColumnKeyed] attribute on the DTOs themselves (Queries/Models.cs), not hand-typed here — a
 // hand-typed allowlist is exactly the mechanism that let a column-keyed dictionary
-// (VmadPropertyDiff.Raw) go unchecked, plus one dead entry (ClassifyResult.PluginStates, never itself serialized) linger.
+// go unchecked, plus one dead entry (ClassifyResult.PluginStates, never itself serialized) linger.
 // See ColumnKeyedAttribute's own doc comment (Queries/ColumnKey.cs).
 public sealed class CompareResultColumnKeyIntegrityTests
 {
@@ -183,12 +183,10 @@ public sealed class CompareResultColumnKeyIntegrityTests
     [Fact]
     public void GetCompare_SameFilenameTwoOrigins_EveryDictionaryKeyIsARealColumnKey()
     {
-        // Perk (not Npc): a Fallout4 record type carrying both VMAD *and* a top-level Conditions
-        // field at once, so a single record reaches every column-keyed dictionary this test guards
-        // as well as the nested condition subtree. VmadPropertyDiff.Raw is populated only for
-        // struct/structList VMAD properties — the one the old hand-typed allowlist missed
-        // entirely, and one an Npc-based fixture (whose single VMAD property was a plain scalar
-        // bool) never reached.
+        // Perk (not Npc): a Fallout4 record type carrying both a script adapter *and* a top-level
+        // Conditions field at once, so a single record reaches every column-keyed dictionary this
+        // test guards as well as the nested condition subtree, several levels down inside a struct
+        // property and an array-of-struct property both.
         var mod = new Fallout4Mod(ModKey.FromFileName("Shared.esp"), Fallout4Release.Fallout4);
         var perk = mod.Perks.AddNew("SharedPerk");
 
@@ -196,9 +194,6 @@ public sealed class CompareResultColumnKeyIntegrityTests
         var script = new ScriptEntry { Name = "S", Flags = ScriptEntry.Flag.Local };
         script.Properties.Add(new ScriptBoolProperty { Name = "IsActive", Data = true });
 
-        // Struct property (kind "struct") — VmadPropertyDiff.Raw is populated only for struct/
-        // structList, the exact gap the old allowlist ("raw" absent from ColumnDictProperties) left
-        // unchecked.
         var structProp = new ScriptStructProperty { Name = "Config" };
         var structMember = new ScriptEntry { Name = "SubScript" };
         structMember.Properties.Add(new ScriptFloatProperty { Name = "Factor", Data = 1.5f });
@@ -257,13 +252,13 @@ public sealed class CompareResultColumnKeyIntegrityTests
         // structList Raw and non-empty condition subtrees — assert that directly first, so a
         // future fixture regression that accidentally stops exercising these paths fails loudly
         // here rather than the JSON walk silently passing over empty objects.
-        Assert.NotNull(compare.Vmad);
-        var configProp = compare.Vmad.Scripts.Single().Properties.Single(p => p.Name == "Config");
-        Assert.Equal("struct", configProp.Kind);
-        Assert.NotEmpty(configProp.Raw ?? []);
-        var itemsProp = compare.Vmad.Scripts.Single().Properties.Single(p => p.Name == "Items");
-        Assert.Equal("structList", itemsProp.Kind);
-        Assert.NotEmpty(itemsProp.Raw ?? []);
+        var properties = Assert.Single(compare.Diffs, d => d.FieldName == "virtual_machine_adapter")
+            .Children!.Single(c => c.FieldName == "scripts")
+            .Children!.Single()
+            .Children!.Single(c => c.FieldName == "properties")
+            .Children!;
+        Assert.NotEmpty(properties.Single(p => p.FieldName == "Config").Children!.Single(c => c.FieldName == "members").Children!);
+        Assert.NotEmpty(properties.Single(p => p.FieldName == "Items").Children!.Single(c => c.FieldName == "structs").Children!);
 
         // #692: conditions reach the grid as an ordinary reflected array column, so the walk's
         // condition coverage is a nested FieldDiff subtree with per-column Values/CellStates.

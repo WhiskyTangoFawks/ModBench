@@ -328,35 +328,6 @@ public sealed class RecordQueryServiceTests : IDisposable
     }
 
     [Fact]
-    public void GetCompare_NpcRecord_HasVmadIsTrue()
-    {
-        var all = _svc.GetRecords(type: "npc_", plugin: null, search: "TestNPC01", limit: 1, offset: 0);
-        var compare = _svc.GetCompare(all.Items[0].FormKey);
-
-        Assert.NotNull(compare);
-        Assert.True(compare!.HasVmad);
-    }
-
-    [Fact]
-    public void GetCompare_CmpoRecord_HasVmadIsFalse()
-    {
-        // CMPO ("Component") categorically cannot carry VMAD — the capability flag
-        // must be false even though this specific record obviously has no VMAD data either way,
-        // distinguishing "this type can never have scripts" from "this record has none yet".
-        FormKey componentKey = default;
-        var data = new PluginFixtureBuilder("rqs-vmad-cmpo")
-            .WithPlugin("Base.esp", mod => componentKey = mod.Components.AddNew("SomeComponent").FormKey)
-            .Build();
-        using (data)
-            WithCompareService(data, svc =>
-            {
-                var compare = svc.GetCompare(componentKey.ToString());
-                Assert.NotNull(compare);
-                Assert.False(compare!.HasVmad);
-            });
-    }
-
-    [Fact]
     public void GetCompare_RecordIdenticalExceptVmad_ClassifiesAsConflict()
     {
         FormKey npcKey = default;
@@ -378,27 +349,25 @@ public sealed class RecordQueryServiceTests : IDisposable
             var compare = svc.GetCompare(npcKey.ToString());
 
             Assert.NotNull(compare);
-            // Non-VMAD fields are identical overrides, so only VMAD differs — yet the record is conflicted.
+            // Non-VMAD fields are identical overrides, so only the adapter differs — yet the record
+            // is conflicted, and the diff reaches the one property that disagrees.
             Assert.Equal(ConflictAll.Conflict, compare!.ConflictAll);
-            Assert.NotNull(compare.Vmad);
-            var script = Assert.Single(compare.Vmad!.Scripts);
-            var prop = script.Properties.First(p => p.Name == "Power");
-            Assert.Equal("Top.esp", prop.WinnerColumn);
+            Assert.Equal("Top.esp", PowerPropertyDiff(compare).WinnerColumn);
         }
     }
 
     [Fact]
-    public void GetCompare_NoOverrideHasVmad_VmadIsNull()
+    public void GetCompare_NoOverrideCarriesAnAdapter_OmitsTheFieldEntirely()
     {
         var all = _svc.GetRecords(type: "npc_", plugin: null, search: "TestNPC01", limit: 1, offset: 0);
         var compare = _svc.GetCompare(all.Items[0].FormKey);
 
         Assert.NotNull(compare);
-        Assert.Null(compare!.Vmad);
+        Assert.DoesNotContain(compare!.Diffs, d => d.FieldName == VmadField);
     }
 
     [Fact]
-    public void GetCompare_OnlyOverrideHasVmad_PopulatesVmad()
+    public void GetCompare_OnlyOverrideCarriesAnAdapter_StillDiffsTheField()
     {
         FormKey npcKey = default;
         var data = new PluginFixtureBuilder("rqs-vmad-added")
@@ -411,7 +380,8 @@ public sealed class RecordQueryServiceTests : IDisposable
             {
                 var compare = svc.GetCompare(npcKey.ToString());
                 Assert.NotNull(compare);
-                Assert.NotNull(compare!.Vmad); // master lacks VMAD, override adds it → still present
+                // The master carries no adapter and the override adds one → still a diff row.
+                Assert.Contains(compare!.Diffs, d => d.FieldName == VmadField);
                 Assert.Equal(ConflictAll.Override, compare.ConflictAll);
             });
     }
@@ -554,7 +524,7 @@ public sealed class RecordQueryServiceTests : IDisposable
             {
                 var compare = svc.GetCompare(npcKey.ToString())!;
                 var fieldStates = compare.Diffs.First(d => d.FieldName == "aggression").CellStates;
-                var vmadStates = compare.Vmad!.Scripts[0].Properties.First(p => p.Name == "Power").CellStates;
+                var vmadStates = PowerPropertyDiff(compare).CellStates;
 
                 Assert.Equal(ConflictThis.ConflictLoses, fieldStates["Mid.esp"]);
                 Assert.Equal(ConflictThis.ConflictWins, fieldStates["Top.esp"]);
@@ -653,6 +623,19 @@ public sealed class RecordQueryServiceTests : IDisposable
         npc.VirtualMachineAdapter = ScriptVmad(power);
         return npc.FormKey;
     }
+
+    private const string VmadField = "virtual_machine_adapter";
+
+    /// <summary>The <c>Power</c> property of the one script <see cref="ScriptVmad"/> attaches,
+    /// reached through the ordinary reflected diff tree — <c>virtual_machine_adapter</c>, its
+    /// <c>scripts</c> array keyed by script name, that script's <c>properties</c> array keyed by
+    /// property name. Every hop is a keyed array, so the labels are the keys rather than indices.</summary>
+    private static FieldDiff PowerPropertyDiff(CompareResult compare) =>
+        compare.Diffs.First(d => d.FieldName == VmadField)
+            .Children!.First(c => c.FieldName == "scripts")
+            .Children!.First(c => c.FieldName == "S")
+            .Children!.First(c => c.FieldName == "properties")
+            .Children!.First(c => c.FieldName == "Power");
 
     private static VirtualMachineAdapter ScriptVmad(int power)
     {

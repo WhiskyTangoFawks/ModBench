@@ -21,12 +21,6 @@ internal static class ColumnReflection
         nameof(IMajorRecordGetter.VersionControl), nameof(IMajorRecordGetter.MajorRecordFlagsRaw),
     };
 
-    // The virtual-machine-adapter property — it's already surfaced by the
-    // dedicated Scripts (VMAD) section (HasVmad, set in SchemaReflector.BuildSchema, and
-    // RecordQueryService.GetVmad), so reflecting it again here would duplicate it as an opaque
-    // struct column. The gate is the same annotation that keeps the walk from modelling the
-    // adapter's leaves (SchemaAnnotations.ExcludedUnions): a struct column whose Loqui class is, or
-    // derives from, an excluded union is not a column. One annotation, one concept.
     internal static List<ColumnSpec> ReflectColumns(
         Type getterType, GameReflection game, ILogger logger)
     {
@@ -57,7 +51,8 @@ internal static class ColumnReflection
                 SubFields: info.SubFieldMetas,
                 AllowsNull: info.AllowsNull,
                 IsFlagsEnum: info.IsFlagsEnum,
-                ViewDefaultLiteral: info.ViewDefaultLiteral));
+                ViewDefaultLiteral: info.ViewDefaultLiteral,
+                KeyMembers: info.KeyMembers));
         }
 
         return columns;

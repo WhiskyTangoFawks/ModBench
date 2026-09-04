@@ -579,8 +579,6 @@ export interface components {
             overrides: components["schemas"]["CompareOverride"][];
             diffs: components["schemas"]["FieldDiff"][];
             conflictAll: components["schemas"]["ConflictAll"];
-            hasVmad: boolean;
-            vmad?: components["schemas"]["VmadCompare"] | null;
         };
         CompileDiagnostic: {
             formKey: string;
@@ -669,6 +667,7 @@ export interface components {
             siblingsInUse?: {
                 [key: string]: string[];
             } | null;
+            keyMembers?: string[] | null;
         };
         FieldValue: {
             metadata: components["schemas"]["FieldMetadata"];
@@ -918,41 +917,6 @@ export interface components {
             metaChanged: boolean;
             oldVersion?: string | null;
             newVersion?: string | null;
-        };
-        VmadCompare: {
-            scripts: components["schemas"]["VmadScriptDiff"][];
-        };
-        VmadPropertyDiff: {
-            name: string;
-            kind: string;
-            values: {
-                [key: string]: unknown;
-            };
-            types: {
-                [key: string]: string;
-            };
-            winnerColumn: string;
-            cellStates: {
-                [key: string]: components["schemas"]["ConflictThis"];
-            };
-            children?: components["schemas"]["VmadPropertyDiff"][] | null;
-            raw?: {
-                [key: string]: unknown;
-            } | null;
-            resolutions?: {
-                [key: string]: components["schemas"]["FormKeyResolution"];
-            } | null;
-        };
-        VmadScriptDiff: {
-            name: string;
-            flags: {
-                [key: string]: string | null;
-            };
-            winnerColumn: string;
-            cellStates: {
-                [key: string]: components["schemas"]["ConflictThis"];
-            };
-            properties: components["schemas"]["VmadPropertyDiff"][];
         };
         /** @enum {string} */
         WorkingTreeState: "None" | "Modified" | "Added";

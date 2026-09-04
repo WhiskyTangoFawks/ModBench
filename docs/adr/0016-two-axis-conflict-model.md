@@ -132,12 +132,8 @@ own default palette tints even its no-conflict row state; mEdit's compare grid d
 `NoConflict`/`OnlyOne` unpainted at both scopes so a background color is reserved for "something
 here needs attention" — the signal a record-wide smear would muddy.
 
-VMAD rows (synthesized by `vmadTreeAdapter.ts` into the same `FieldDiff` shape) compute their own
-per-node `ConflictAll` the same way, in TypeScript (`recordUtils.ts`'s
-`reduceConflictAll`/`aggregateConflictAll`, mirroring `ConflictRules.Reduce`/`Escalate` by hand) —
-their own backend DTO (`VmadPropertyDiff`) carries no such field, since it is folded into the
-unified tree entirely on the frontend. A condition is an ordinary reflected field and carries the
-backend's own `ConflictAll` like any other.
+Every row's `ConflictAll` is the backend's own — a condition, a script property and a plain
+scalar alike. Nothing on the frontend computes one.
 
 Both scopes reuse one `ConflictAll`→row-background mapping
 (`docs/specs/medit-record-editor.md`); only the granularity of computation differs.

@@ -4,7 +4,8 @@
       "CheckErrors": {
         "activate_parents": "parents[0].reference: [1A6C7C:Fallout4.esm] \u003CError: Could not be resolved\u003E",
         "base": "[084912:Fallout4.esm] \u003CError: Could not be resolved\u003E",
-        "linked_references": "[0].keyword_or_reference: [02C967:Fallout4.esm] \u003CError: Could not be resolved\u003E; [0].reference: [1A6C7D:Fallout4.esm] \u003CError: Could not be resolved\u003E; [1].keyword_or_reference: [05D5E6:Fallout4.esm] \u003CError: Could not be resolved\u003E"
+        "linked_references": "[0].keyword_or_reference: [02C967:Fallout4.esm] \u003CError: Could not be resolved\u003E; [0].reference: [1A6C7D:Fallout4.esm] \u003CError: Could not be resolved\u003E; [1].keyword_or_reference: [05D5E6:Fallout4.esm] \u003CError: Could not be resolved\u003E",
+        "virtual_machine_adapter": "scripts[0].properties[0].object: [05D5E6:Fallout4.esm] \u003CError: Could not be resolved\u003E"
       },
       "EditorId": null,
       "Fields": {
@@ -70,7 +71,38 @@
         },
         "scale": null,
         "spline_connections": [],
-        "version2": 3
+        "version2": 3,
+        "virtual_machine_adapter": {
+          "object_format": 2,
+          "scripts": [
+            {
+              "flags": "Inherited",
+              "name": "MasterAmbushActorScript",
+              "properties": [
+                {
+                  "alias": -1,
+                  "concrete_type": "ScriptObjectProperty",
+                  "data_bool": null,
+                  "data_bool_array": null,
+                  "data_float": null,
+                  "data_float_array": null,
+                  "data_int": null,
+                  "data_int_array": null,
+                  "data_string": null,
+                  "data_string_array": null,
+                  "flags": "Edited",
+                  "members": null,
+                  "name": "LinkKeyword",
+                  "object": "05D5E6:Fallout4.esm",
+                  "objects": null,
+                  "structs": null,
+                  "unused": 0
+                }
+              ]
+            }
+          ],
+          "version": 6
+        }
       },
       "FormKey": "1A6C6F:Fallout4.esm",
       "IsWinner": true,
@@ -83,7 +115,8 @@
       "CheckErrors": {
         "activate_parents": "parents[0].reference: [1A6C7C:Fallout4.esm] \u003CError: Could not be resolved\u003E",
         "base": "[084912:Fallout4.esm] \u003CError: Could not be resolved\u003E",
-        "linked_references": "[0].keyword_or_reference: [02C967:Fallout4.esm] \u003CError: Could not be resolved\u003E; [1].keyword_or_reference: Found a NULL reference, expected: ; [2].keyword_or_reference: [05D5E6:Fallout4.esm] \u003CError: Could not be resolved\u003E"
+        "linked_references": "[0].keyword_or_reference: [02C967:Fallout4.esm] \u003CError: Could not be resolved\u003E; [1].keyword_or_reference: Found a NULL reference, expected: ; [2].keyword_or_reference: [05D5E6:Fallout4.esm] \u003CError: Could not be resolved\u003E",
+        "virtual_machine_adapter": "scripts[0].properties[0].object: [05D5E6:Fallout4.esm] \u003CError: Could not be resolved\u003E"
       },
       "EditorId": null,
       "Fields": {
@@ -154,7 +187,38 @@
         },
         "scale": null,
         "spline_connections": [],
-        "version2": 2
+        "version2": 2,
+        "virtual_machine_adapter": {
+          "object_format": 2,
+          "scripts": [
+            {
+              "flags": "Inherited",
+              "name": "MasterAmbushActorScript",
+              "properties": [
+                {
+                  "alias": -1,
+                  "concrete_type": "ScriptObjectProperty",
+                  "data_bool": null,
+                  "data_bool_array": null,
+                  "data_float": null,
+                  "data_float_array": null,
+                  "data_int": null,
+                  "data_int_array": null,
+                  "data_string": null,
+                  "data_string_array": null,
+                  "flags": "Edited",
+                  "members": null,
+                  "name": "LinkKeyword",
+                  "object": "05D5E6:Fallout4.esm",
+                  "objects": null,
+                  "structs": null,
+                  "unused": 0
+                }
+              ]
+            }
+          ],
+          "version": 6
+        }
       },
       "FormKey": "1A6C71:Fallout4.esm",
       "IsWinner": true,
@@ -167,7 +231,8 @@
       "CheckErrors": {
         "activate_parents": "parents[0].reference: [1A6C7C:Fallout4.esm] \u003CError: Could not be resolved\u003E",
         "base": "[084912:Fallout4.esm] \u003CError: Could not be resolved\u003E",
-        "linked_references": "[0].keyword_or_reference: [02C967:Fallout4.esm] \u003CError: Could not be resolved\u003E; [1].keyword_or_reference: [05D5E6:Fallout4.esm] \u003CError: Could not be resolved\u003E"
+        "linked_references": "[0].keyword_or_reference: [02C967:Fallout4.esm] \u003CError: Could not be resolved\u003E; [1].keyword_or_reference: [05D5E6:Fallout4.esm] \u003CError: Could not be resolved\u003E",
+        "virtual_machine_adapter": "scripts[0].properties[0].object: [05D5E6:Fallout4.esm] \u003CError: Could not be resolved\u003E"
       },
       "EditorId": null,
       "Fields": {
@@ -233,7 +298,38 @@
         },
         "scale": null,
         "spline_connections": [],
-        "version2": 1
+        "version2": 1,
+        "virtual_machine_adapter": {
+          "object_format": 2,
+          "scripts": [
+            {
+              "flags": "Inherited",
+              "name": "MasterAmbushActorScript",
+              "properties": [
+                {
+                  "alias": -1,
+                  "concrete_type": "ScriptObjectProperty",
+                  "data_bool": null,
+                  "data_bool_array": null,
+                  "data_float": null,
+                  "data_float_array": null,
+                  "data_int": null,
+                  "data_int_array": null,
+                  "data_string": null,
+                  "data_string_array": null,
+                  "flags": "Edited",
+                  "members": null,
+                  "name": "LinkKeyword",
+                  "object": "05D5E6:Fallout4.esm",
+                  "objects": null,
+                  "structs": null,
+                  "unused": 0
+                }
+              ]
+            }
+          ],
+          "version": 6
+        }
       },
       "FormKey": "1A6C7B:Fallout4.esm",
       "IsWinner": true,
@@ -247,7 +343,8 @@
     {
       "CheckErrors": {
         "keywords": "[0]: [24A350:Fallout4.esm] \u003CError: Could not be resolved\u003E; [1]: [1CD02B:Fallout4.esm] \u003CError: Could not be resolved\u003E",
-        "preview_transform": "[24A3A0:Fallout4.esm] \u003CError: Could not be resolved\u003E"
+        "preview_transform": "[24A3A0:Fallout4.esm] \u003CError: Could not be resolved\u003E",
+        "virtual_machine_adapter": "scripts[1].properties[1].object: [24A375:Fallout4.esm] \u003CError: Could not be resolved\u003E; scripts[1].properties[2].object: [24A3E5:Fallout4.esm] \u003CError: Could not be resolved\u003E; scripts[1].properties[3].object: [0F8617:Fallout4.esm] \u003CError: Could not be resolved\u003E"
       },
       "EditorId": "VRWorkshopShared_AttackMarker_SentryBot",
       "Fields": {
@@ -298,6 +395,99 @@
         "properties": null,
         "radio_receiver": null,
         "version2": 2,
+        "virtual_machine_adapter": {
+          "object_format": 2,
+          "scripts": [
+            {
+              "flags": "Local",
+              "name": "DefaultBlockActivationOnLoad",
+              "properties": []
+            },
+            {
+              "flags": "Local",
+              "name": "CreationClub:VRWorkshops:VRWorkshopAttackMarkerScript",
+              "properties": [
+                {
+                  "alias": -1,
+                  "concrete_type": "ScriptObjectProperty",
+                  "data_bool": null,
+                  "data_bool_array": null,
+                  "data_float": null,
+                  "data_float_array": null,
+                  "data_int": null,
+                  "data_int_array": null,
+                  "data_string": null,
+                  "data_string_array": null,
+                  "flags": "Edited",
+                  "members": null,
+                  "name": "VRWorkshop_TutorialShown_VRAttackMarker",
+                  "object": "24A341:Fallout4.esm",
+                  "objects": null,
+                  "structs": null,
+                  "unused": 0
+                },
+                {
+                  "alias": -1,
+                  "concrete_type": "ScriptObjectProperty",
+                  "data_bool": null,
+                  "data_bool_array": null,
+                  "data_float": null,
+                  "data_float_array": null,
+                  "data_int": null,
+                  "data_int_array": null,
+                  "data_string": null,
+                  "data_string_array": null,
+                  "flags": "Edited",
+                  "members": null,
+                  "name": "VRWorkshop_TutorialMessage_AttackMarker",
+                  "object": "24A375:Fallout4.esm",
+                  "objects": null,
+                  "structs": null,
+                  "unused": 0
+                },
+                {
+                  "alias": -1,
+                  "concrete_type": "ScriptObjectProperty",
+                  "data_bool": null,
+                  "data_bool_array": null,
+                  "data_float": null,
+                  "data_float_array": null,
+                  "data_int": null,
+                  "data_int_array": null,
+                  "data_string": null,
+                  "data_string_array": null,
+                  "flags": "Edited",
+                  "members": null,
+                  "name": "VRWorkshopShared_NPCHologramFXAbility",
+                  "object": "24A3E5:Fallout4.esm",
+                  "objects": null,
+                  "structs": null,
+                  "unused": 0
+                },
+                {
+                  "alias": -1,
+                  "concrete_type": "ScriptObjectProperty",
+                  "data_bool": null,
+                  "data_bool_array": null,
+                  "data_float": null,
+                  "data_float_array": null,
+                  "data_int": null,
+                  "data_int_array": null,
+                  "data_string": null,
+                  "data_string_array": null,
+                  "flags": "Edited",
+                  "members": null,
+                  "name": "VRWorkshop_EnemyType",
+                  "object": "0F8617:Fallout4.esm",
+                  "objects": null,
+                  "structs": null,
+                  "unused": 0
+                }
+              ]
+            }
+          ],
+          "version": 6
+        },
         "water_type": null
       },
       "FormKey": "24A313:Fallout4.esm",
@@ -310,7 +500,8 @@
     {
       "CheckErrors": {
         "keywords": "[0]: [24A350:Fallout4.esm] \u003CError: Could not be resolved\u003E; [1]: [1CD02B:Fallout4.esm] \u003CError: Could not be resolved\u003E",
-        "preview_transform": "[24A3A0:Fallout4.esm] \u003CError: Could not be resolved\u003E"
+        "preview_transform": "[24A3A0:Fallout4.esm] \u003CError: Could not be resolved\u003E",
+        "virtual_machine_adapter": "scripts[1].properties[1].object: [24A375:Fallout4.esm] \u003CError: Could not be resolved\u003E; scripts[1].properties[2].object: [24A3E5:Fallout4.esm] \u003CError: Could not be resolved\u003E; scripts[1].properties[3].object: [0342C9:Fallout4.esm] \u003CError: Could not be resolved\u003E"
       },
       "EditorId": "VRWorkshopShared_AttackMarker_Molerat",
       "Fields": {
@@ -361,6 +552,99 @@
         "properties": null,
         "radio_receiver": null,
         "version2": 2,
+        "virtual_machine_adapter": {
+          "object_format": 2,
+          "scripts": [
+            {
+              "flags": "Local",
+              "name": "DefaultBlockActivationOnLoad",
+              "properties": []
+            },
+            {
+              "flags": "Local",
+              "name": "CreationClub:VRWorkshops:VRWorkshopAttackMarkerScript",
+              "properties": [
+                {
+                  "alias": -1,
+                  "concrete_type": "ScriptObjectProperty",
+                  "data_bool": null,
+                  "data_bool_array": null,
+                  "data_float": null,
+                  "data_float_array": null,
+                  "data_int": null,
+                  "data_int_array": null,
+                  "data_string": null,
+                  "data_string_array": null,
+                  "flags": "Edited",
+                  "members": null,
+                  "name": "VRWorkshop_TutorialShown_VRAttackMarker",
+                  "object": "24A341:Fallout4.esm",
+                  "objects": null,
+                  "structs": null,
+                  "unused": 0
+                },
+                {
+                  "alias": -1,
+                  "concrete_type": "ScriptObjectProperty",
+                  "data_bool": null,
+                  "data_bool_array": null,
+                  "data_float": null,
+                  "data_float_array": null,
+                  "data_int": null,
+                  "data_int_array": null,
+                  "data_string": null,
+                  "data_string_array": null,
+                  "flags": "Edited",
+                  "members": null,
+                  "name": "VRWorkshop_TutorialMessage_AttackMarker",
+                  "object": "24A375:Fallout4.esm",
+                  "objects": null,
+                  "structs": null,
+                  "unused": 0
+                },
+                {
+                  "alias": -1,
+                  "concrete_type": "ScriptObjectProperty",
+                  "data_bool": null,
+                  "data_bool_array": null,
+                  "data_float": null,
+                  "data_float_array": null,
+                  "data_int": null,
+                  "data_int_array": null,
+                  "data_string": null,
+                  "data_string_array": null,
+                  "flags": "Edited",
+                  "members": null,
+                  "name": "VRWorkshopShared_NPCHologramFXAbility",
+                  "object": "24A3E5:Fallout4.esm",
+                  "objects": null,
+                  "structs": null,
+                  "unused": 0
+                },
+                {
+                  "alias": -1,
+                  "concrete_type": "ScriptObjectProperty",
+                  "data_bool": null,
+                  "data_bool_array": null,
+                  "data_float": null,
+                  "data_float_array": null,
+                  "data_int": null,
+                  "data_int_array": null,
+                  "data_string": null,
+                  "data_string_array": null,
+                  "flags": "Edited",
+                  "members": null,
+                  "name": "VRWorkshop_EnemyType",
+                  "object": "0342C9:Fallout4.esm",
+                  "objects": null,
+                  "structs": null,
+                  "unused": 0
+                }
+              ]
+            }
+          ],
+          "version": 6
+        },
         "water_type": null
       },
       "FormKey": "24A314:Fallout4.esm",
@@ -373,7 +657,8 @@
     {
       "CheckErrors": {
         "keywords": "[0]: [24A350:Fallout4.esm] \u003CError: Could not be resolved\u003E; [1]: [1CD02B:Fallout4.esm] \u003CError: Could not be resolved\u003E",
-        "preview_transform": "[24A3A0:Fallout4.esm] \u003CError: Could not be resolved\u003E"
+        "preview_transform": "[24A3A0:Fallout4.esm] \u003CError: Could not be resolved\u003E",
+        "virtual_machine_adapter": "scripts[1].properties[1].object: [24A375:Fallout4.esm] \u003CError: Could not be resolved\u003E; scripts[1].properties[2].object: [24A3E5:Fallout4.esm] \u003CError: Could not be resolved\u003E; scripts[1].properties[3].object: [075337:Fallout4.esm] \u003CError: Could not be resolved\u003E"
       },
       "EditorId": "VRWorkshopShared_AttackMarker_FeralGhoul",
       "Fields": {
@@ -424,6 +709,99 @@
         "properties": null,
         "radio_receiver": null,
         "version2": 2,
+        "virtual_machine_adapter": {
+          "object_format": 2,
+          "scripts": [
+            {
+              "flags": "Local",
+              "name": "DefaultBlockActivationOnLoad",
+              "properties": []
+            },
+            {
+              "flags": "Local",
+              "name": "CreationClub:VRWorkshops:VRWorkshopAttackMarkerScript",
+              "properties": [
+                {
+                  "alias": -1,
+                  "concrete_type": "ScriptObjectProperty",
+                  "data_bool": null,
+                  "data_bool_array": null,
+                  "data_float": null,
+                  "data_float_array": null,
+                  "data_int": null,
+                  "data_int_array": null,
+                  "data_string": null,
+                  "data_string_array": null,
+                  "flags": "Edited",
+                  "members": null,
+                  "name": "VRWorkshop_TutorialShown_VRAttackMarker",
+                  "object": "24A341:Fallout4.esm",
+                  "objects": null,
+                  "structs": null,
+                  "unused": 0
+                },
+                {
+                  "alias": -1,
+                  "concrete_type": "ScriptObjectProperty",
+                  "data_bool": null,
+                  "data_bool_array": null,
+                  "data_float": null,
+                  "data_float_array": null,
+                  "data_int": null,
+                  "data_int_array": null,
+                  "data_string": null,
+                  "data_string_array": null,
+                  "flags": "Edited",
+                  "members": null,
+                  "name": "VRWorkshop_TutorialMessage_AttackMarker",
+                  "object": "24A375:Fallout4.esm",
+                  "objects": null,
+                  "structs": null,
+                  "unused": 0
+                },
+                {
+                  "alias": -1,
+                  "concrete_type": "ScriptObjectProperty",
+                  "data_bool": null,
+                  "data_bool_array": null,
+                  "data_float": null,
+                  "data_float_array": null,
+                  "data_int": null,
+                  "data_int_array": null,
+                  "data_string": null,
+                  "data_string_array": null,
+                  "flags": "Edited",
+                  "members": null,
+                  "name": "VRWorkshopShared_NPCHologramFXAbility",
+                  "object": "24A3E5:Fallout4.esm",
+                  "objects": null,
+                  "structs": null,
+                  "unused": 0
+                },
+                {
+                  "alias": -1,
+                  "concrete_type": "ScriptObjectProperty",
+                  "data_bool": null,
+                  "data_bool_array": null,
+                  "data_float": null,
+                  "data_float_array": null,
+                  "data_int": null,
+                  "data_int_array": null,
+                  "data_string": null,
+                  "data_string_array": null,
+                  "flags": "Edited",
+                  "members": null,
+                  "name": "VRWorkshop_EnemyType",
+                  "object": "075337:Fallout4.esm",
+                  "objects": null,
+                  "structs": null,
+                  "unused": 0
+                }
+              ]
+            }
+          ],
+          "version": 6
+        },
         "water_type": null
       },
       "FormKey": "24A315:Fallout4.esm",
@@ -797,6 +1175,7 @@
         "unused": "0x000000",
         "value": 140,
         "version2": 3,
+        "virtual_machine_adapter": null,
         "weight": 12
       },
       "FormKey": "24A3FE:Fallout4.esm",
@@ -1132,6 +1511,7 @@
         "unused": "0x000000",
         "value": 200,
         "version2": 3,
+        "virtual_machine_adapter": null,
         "weight": 15
       },
       "FormKey": "24A3FF:Fallout4.esm",
@@ -1467,6 +1847,7 @@
         "unused": "0x000000",
         "value": 200,
         "version2": 3,
+        "virtual_machine_adapter": null,
         "weight": 15
       },
       "FormKey": "24A400:Fallout4.esm",
@@ -41443,7 +41824,8 @@
         "start_scene_phase": "",
         "subtitle_priority": "Low",
         "topic": null,
-        "version2": 0
+        "version2": 0,
+        "virtual_machine_adapter": null
       },
       "FormKey": "0057DE:Fallout4.esm",
       "IsWinner": true,
@@ -41503,7 +41885,8 @@
         "start_scene_phase": "",
         "subtitle_priority": "Low",
         "topic": null,
-        "version2": 12
+        "version2": 12,
+        "virtual_machine_adapter": null
       },
       "FormKey": "0057DF:Fallout4.esm",
       "IsWinner": true,
@@ -41563,7 +41946,8 @@
         "start_scene_phase": "",
         "subtitle_priority": "Low",
         "topic": null,
-        "version2": 13
+        "version2": 13,
+        "virtual_machine_adapter": null
       },
       "FormKey": "0057E0:Fallout4.esm",
       "IsWinner": true,
@@ -41660,7 +42044,8 @@
     {
       "CheckErrors": {
         "components": "[0].component: [01FAC2:Fallout4.esm] \u003CError: Could not be resolved\u003E",
-        "preview_transform": "[2488FF:Fallout4.esm] \u003CError: Could not be resolved\u003E"
+        "preview_transform": "[2488FF:Fallout4.esm] \u003CError: Could not be resolved\u003E",
+        "virtual_machine_adapter": "scripts[0].properties[0].object: [0731A3:Fallout4.esm] \u003CError: Could not be resolved\u003E; scripts[0].properties[2].object: [091FD4:Fallout4.esm] \u003CError: Could not be resolved\u003E"
       },
       "EditorId": "shipment_Wood_250",
       "Fields": {
@@ -41703,6 +42088,94 @@
         "put_down_sound": null,
         "value": 500,
         "version2": 3,
+        "virtual_machine_adapter": {
+          "object_format": 2,
+          "scripts": [
+            {
+              "flags": "Local",
+              "name": "ShipmentScript",
+              "properties": [
+                {
+                  "alias": -1,
+                  "concrete_type": "ScriptObjectProperty",
+                  "data_bool": null,
+                  "data_bool_array": null,
+                  "data_float": null,
+                  "data_float_array": null,
+                  "data_int": null,
+                  "data_int_array": null,
+                  "data_string": null,
+                  "data_string_array": null,
+                  "flags": "Edited",
+                  "members": null,
+                  "name": "ScrapMisc",
+                  "object": "0731A3:Fallout4.esm",
+                  "objects": null,
+                  "structs": null,
+                  "unused": 0
+                },
+                {
+                  "alias": -1,
+                  "concrete_type": "ScriptObjectProperty",
+                  "data_bool": null,
+                  "data_bool_array": null,
+                  "data_float": null,
+                  "data_float_array": null,
+                  "data_int": null,
+                  "data_int_array": null,
+                  "data_string": null,
+                  "data_string_array": null,
+                  "flags": "Edited",
+                  "members": null,
+                  "name": "pShipment",
+                  "object": "24A068:Fallout4.esm",
+                  "objects": null,
+                  "structs": null,
+                  "unused": 0
+                },
+                {
+                  "alias": -1,
+                  "concrete_type": "ScriptObjectProperty",
+                  "data_bool": null,
+                  "data_bool_array": null,
+                  "data_float": null,
+                  "data_float_array": null,
+                  "data_int": null,
+                  "data_int_array": null,
+                  "data_string": null,
+                  "data_string_array": null,
+                  "flags": "Edited",
+                  "members": null,
+                  "name": "pWorkbench_General",
+                  "object": "091FD4:Fallout4.esm",
+                  "objects": null,
+                  "structs": null,
+                  "unused": 0
+                },
+                {
+                  "alias": null,
+                  "concrete_type": "ScriptIntProperty",
+                  "data_bool": null,
+                  "data_bool_array": null,
+                  "data_float": null,
+                  "data_float_array": null,
+                  "data_int": 100,
+                  "data_int_array": null,
+                  "data_string": null,
+                  "data_string_array": null,
+                  "flags": "Edited",
+                  "members": null,
+                  "name": "nAmount",
+                  "object": null,
+                  "objects": null,
+                  "structs": null,
+                  "unused": null
+                }
+              ]
+            }
+          ],
+          "version": 6
+        },
         "weight": 0
       },
       "FormKey": "24A068:Fallout4.esm",
@@ -41715,7 +42188,8 @@
     {
       "CheckErrors": {
         "components": "[0].component: [01FAB9:Fallout4.esm] \u003CError: Could not be resolved\u003E",
-        "preview_transform": "[2488FF:Fallout4.esm] \u003CError: Could not be resolved\u003E"
+        "preview_transform": "[2488FF:Fallout4.esm] \u003CError: Could not be resolved\u003E",
+        "virtual_machine_adapter": "scripts[0].properties[0].object: [106D98:Fallout4.esm] \u003CError: Could not be resolved\u003E; scripts[0].properties[2].object: [091FD4:Fallout4.esm] \u003CError: Could not be resolved\u003E"
       },
       "EditorId": "shipment_Rubber_large",
       "Fields": {
@@ -41758,6 +42232,94 @@
         "put_down_sound": null,
         "value": 1000,
         "version2": 3,
+        "virtual_machine_adapter": {
+          "object_format": 2,
+          "scripts": [
+            {
+              "flags": "Local",
+              "name": "ShipmentScript",
+              "properties": [
+                {
+                  "alias": -1,
+                  "concrete_type": "ScriptObjectProperty",
+                  "data_bool": null,
+                  "data_bool_array": null,
+                  "data_float": null,
+                  "data_float_array": null,
+                  "data_int": null,
+                  "data_int_array": null,
+                  "data_string": null,
+                  "data_string_array": null,
+                  "flags": "Edited",
+                  "members": null,
+                  "name": "ScrapMisc",
+                  "object": "106D98:Fallout4.esm",
+                  "objects": null,
+                  "structs": null,
+                  "unused": 0
+                },
+                {
+                  "alias": -1,
+                  "concrete_type": "ScriptObjectProperty",
+                  "data_bool": null,
+                  "data_bool_array": null,
+                  "data_float": null,
+                  "data_float_array": null,
+                  "data_int": null,
+                  "data_int_array": null,
+                  "data_string": null,
+                  "data_string_array": null,
+                  "flags": "Edited",
+                  "members": null,
+                  "name": "pShipment",
+                  "object": "24A069:Fallout4.esm",
+                  "objects": null,
+                  "structs": null,
+                  "unused": 0
+                },
+                {
+                  "alias": -1,
+                  "concrete_type": "ScriptObjectProperty",
+                  "data_bool": null,
+                  "data_bool_array": null,
+                  "data_float": null,
+                  "data_float_array": null,
+                  "data_int": null,
+                  "data_int_array": null,
+                  "data_string": null,
+                  "data_string_array": null,
+                  "flags": "Edited",
+                  "members": null,
+                  "name": "pWorkbench_General",
+                  "object": "091FD4:Fallout4.esm",
+                  "objects": null,
+                  "structs": null,
+                  "unused": 0
+                },
+                {
+                  "alias": null,
+                  "concrete_type": "ScriptIntProperty",
+                  "data_bool": null,
+                  "data_bool_array": null,
+                  "data_float": null,
+                  "data_float_array": null,
+                  "data_int": 25,
+                  "data_int_array": null,
+                  "data_string": null,
+                  "data_string_array": null,
+                  "flags": "Edited",
+                  "members": null,
+                  "name": "nAmount",
+                  "object": null,
+                  "objects": null,
+                  "structs": null,
+                  "unused": null
+                }
+              ]
+            }
+          ],
+          "version": 6
+        },
         "weight": 0
       },
       "FormKey": "24A069:Fallout4.esm",
@@ -41770,7 +42332,8 @@
     {
       "CheckErrors": {
         "components": "[0].component: [01FA9A:Fallout4.esm] \u003CError: Could not be resolved\u003E",
-        "preview_transform": "[2488FF:Fallout4.esm] \u003CError: Could not be resolved\u003E"
+        "preview_transform": "[2488FF:Fallout4.esm] \u003CError: Could not be resolved\u003E",
+        "virtual_machine_adapter": "scripts[0].properties[0].object: [0AEC5E:Fallout4.esm] \u003CError: Could not be resolved\u003E; scripts[0].properties[2].object: [091FD4:Fallout4.esm] \u003CError: Could not be resolved\u003E"
       },
       "EditorId": "shipment_Ceramic_large",
       "Fields": {
@@ -41813,6 +42376,94 @@
         "put_down_sound": null,
         "value": 350,
         "version2": 3,
+        "virtual_machine_adapter": {
+          "object_format": 2,
+          "scripts": [
+            {
+              "flags": "Local",
+              "name": "ShipmentScript",
+              "properties": [
+                {
+                  "alias": -1,
+                  "concrete_type": "ScriptObjectProperty",
+                  "data_bool": null,
+                  "data_bool_array": null,
+                  "data_float": null,
+                  "data_float_array": null,
+                  "data_int": null,
+                  "data_int_array": null,
+                  "data_string": null,
+                  "data_string_array": null,
+                  "flags": "Edited",
+                  "members": null,
+                  "name": "ScrapMisc",
+                  "object": "0AEC5E:Fallout4.esm",
+                  "objects": null,
+                  "structs": null,
+                  "unused": 0
+                },
+                {
+                  "alias": -1,
+                  "concrete_type": "ScriptObjectProperty",
+                  "data_bool": null,
+                  "data_bool_array": null,
+                  "data_float": null,
+                  "data_float_array": null,
+                  "data_int": null,
+                  "data_int_array": null,
+                  "data_string": null,
+                  "data_string_array": null,
+                  "flags": "Edited",
+                  "members": null,
+                  "name": "pShipment",
+                  "object": "24A06B:Fallout4.esm",
+                  "objects": null,
+                  "structs": null,
+                  "unused": 0
+                },
+                {
+                  "alias": -1,
+                  "concrete_type": "ScriptObjectProperty",
+                  "data_bool": null,
+                  "data_bool_array": null,
+                  "data_float": null,
+                  "data_float_array": null,
+                  "data_int": null,
+                  "data_int_array": null,
+                  "data_string": null,
+                  "data_string_array": null,
+                  "flags": "Edited",
+                  "members": null,
+                  "name": "pWorkbench_General",
+                  "object": "091FD4:Fallout4.esm",
+                  "objects": null,
+                  "structs": null,
+                  "unused": 0
+                },
+                {
+                  "alias": null,
+                  "concrete_type": "ScriptIntProperty",
+                  "data_bool": null,
+                  "data_bool_array": null,
+                  "data_float": null,
+                  "data_float_array": null,
+                  "data_int": 25,
+                  "data_int_array": null,
+                  "data_string": null,
+                  "data_string_array": null,
+                  "flags": "Edited",
+                  "members": null,
+                  "name": "nAmount",
+                  "object": null,
+                  "objects": null,
+                  "structs": null,
+                  "unused": null
+                }
+              ]
+            }
+          ],
+          "version": 6
+        },
         "weight": 0
       },
       "FormKey": "24A06B:Fallout4.esm",
@@ -41839,6 +42490,7 @@
         "perks": "[0].perk: [02A6FC:Fallout4.esm] \u003CError: Could not be resolved\u003E; [1].perk: [0A2775:Fallout4.esm] \u003CError: Could not be resolved\u003E",
         "race": "[04716C:Fallout4.esm] \u003CError: Could not be resolved\u003E",
         "skin": "[0475DD:Fallout4.esm] \u003CError: Could not be resolved\u003E",
+        "virtual_machine_adapter": "scripts[0].properties[1].object: [087BA5:Fallout4.esm] \u003CError: Could not be resolved\u003E; scripts[0].properties[2].object: [0475DF:Fallout4.esm] \u003CError: Could not be resolved\u003E",
         "voice": "[0480FC:Fallout4.esm] \u003CError: Could not be resolved\u003E"
       },
       "EditorId": "EncRadRoachAmbushLegendary",
@@ -42085,6 +42737,138 @@
         "unused": 0,
         "use_template_actors": "0",
         "version2": 2,
+        "virtual_machine_adapter": {
+          "object_format": 2,
+          "scripts": [
+            {
+              "flags": "Local",
+              "name": "RadroachLegendaryScript",
+              "properties": [
+                {
+                  "alias": null,
+                  "concrete_type": "ScriptFloatProperty",
+                  "data_bool": null,
+                  "data_bool_array": null,
+                  "data_float": 0.5,
+                  "data_float_array": null,
+                  "data_int": null,
+                  "data_int_array": null,
+                  "data_string": null,
+                  "data_string_array": null,
+                  "flags": "Edited",
+                  "members": null,
+                  "name": "SpawnDelay",
+                  "object": null,
+                  "objects": null,
+                  "structs": null,
+                  "unused": null
+                },
+                {
+                  "alias": -1,
+                  "concrete_type": "ScriptObjectProperty",
+                  "data_bool": null,
+                  "data_bool_array": null,
+                  "data_float": null,
+                  "data_float_array": null,
+                  "data_int": null,
+                  "data_int_array": null,
+                  "data_string": null,
+                  "data_string_array": null,
+                  "flags": "Edited",
+                  "members": null,
+                  "name": "DeathExplosion",
+                  "object": "087BA5:Fallout4.esm",
+                  "objects": null,
+                  "structs": null,
+                  "unused": 0
+                },
+                {
+                  "alias": -1,
+                  "concrete_type": "ScriptObjectProperty",
+                  "data_bool": null,
+                  "data_bool_array": null,
+                  "data_float": null,
+                  "data_float_array": null,
+                  "data_int": null,
+                  "data_int_array": null,
+                  "data_string": null,
+                  "data_string_array": null,
+                  "flags": "Edited",
+                  "members": null,
+                  "name": "EncRadRoach",
+                  "object": "0475DF:Fallout4.esm",
+                  "objects": null,
+                  "structs": null,
+                  "unused": 0
+                }
+              ]
+            },
+            {
+              "flags": "Local",
+              "name": "MasterAmbushActorScript",
+              "properties": [
+                {
+                  "alias": -1,
+                  "concrete_type": "ScriptObjectProperty",
+                  "data_bool": null,
+                  "data_bool_array": null,
+                  "data_float": null,
+                  "data_float_array": null,
+                  "data_int": null,
+                  "data_int_array": null,
+                  "data_string": null,
+                  "data_string_array": null,
+                  "flags": "Edited",
+                  "members": null,
+                  "name": "Aggression",
+                  "object": "0002BC:Fallout4.esm",
+                  "objects": null,
+                  "structs": null,
+                  "unused": 0
+                },
+                {
+                  "alias": null,
+                  "concrete_type": "ScriptBoolProperty",
+                  "data_bool": true,
+                  "data_bool_array": null,
+                  "data_float": null,
+                  "data_float_array": null,
+                  "data_int": null,
+                  "data_int_array": null,
+                  "data_string": null,
+                  "data_string_array": null,
+                  "flags": "Edited",
+                  "members": null,
+                  "name": "ambushOnTrigger",
+                  "object": null,
+                  "objects": null,
+                  "structs": null,
+                  "unused": null
+                },
+                {
+                  "alias": -1,
+                  "concrete_type": "ScriptObjectProperty",
+                  "data_bool": null,
+                  "data_bool_array": null,
+                  "data_float": null,
+                  "data_float_array": null,
+                  "data_int": null,
+                  "data_int_array": null,
+                  "data_string": null,
+                  "data_string_array": null,
+                  "flags": "Edited",
+                  "members": null,
+                  "name": "Suspicious",
+                  "object": "0002EC:Fallout4.esm",
+                  "objects": null,
+                  "structs": null,
+                  "unused": 0
+                }
+              ]
+            }
+          ],
+          "version": 6
+        },
         "voice": "0480FC:Fallout4.esm",
         "weight": {
           "fat": 0,
@@ -42117,6 +42901,7 @@
         "race": "[090C33:Fallout4.esm] \u003CError: Could not be resolved\u003E",
         "skin": "[090C35:Fallout4.esm] \u003CError: Could not be resolved\u003E",
         "template_actors": "trait_template: [2499C7:Fallout4.esm] \u003CError: Could not be resolved\u003E; stats_template: [2499C7:Fallout4.esm] \u003CError: Could not be resolved\u003E; factions_template: [2499C7:Fallout4.esm] \u003CError: Could not be resolved\u003E; spell_list_template: Found a NULL reference, expected: ; ai_data_template: [2499C7:Fallout4.esm] \u003CError: Could not be resolved\u003E; ai_packages_template: [2499C7:Fallout4.esm] \u003CError: Could not be resolved\u003E; model_or_animation_template: Found a NULL reference, expected: ; base_data_template: [2499C7:Fallout4.esm] \u003CError: Could not be resolved\u003E; inventory_template: [2499C7:Fallout4.esm] \u003CError: Could not be resolved\u003E; script_template: Found a NULL reference, expected: ; def_pack_list_template: [2499C7:Fallout4.esm] \u003CError: Could not be resolved\u003E; attack_data_template: [2499C7:Fallout4.esm] \u003CError: Could not be resolved\u003E; keywords_template: Found a NULL reference, expected: ",
+        "virtual_machine_adapter": "scripts[0].properties[0].object: [121299:Fallout4.esm] \u003CError: Could not be resolved\u003E",
         "voice": "[0C9B5D:Fallout4.esm] \u003CError: Could not be resolved\u003E"
       },
       "EditorId": "LvlMutantHoundLegendary",
@@ -42313,6 +43098,37 @@
         "unused": 0,
         "use_template_actors": "3511",
         "version2": 0,
+        "virtual_machine_adapter": {
+          "object_format": 2,
+          "scripts": [
+            {
+              "flags": "Local",
+              "name": "FEVHoundEventScript",
+              "properties": [
+                {
+                  "alias": -1,
+                  "concrete_type": "ScriptObjectProperty",
+                  "data_bool": null,
+                  "data_bool_array": null,
+                  "data_float": null,
+                  "data_float_array": null,
+                  "data_int": null,
+                  "data_int_array": null,
+                  "data_string": null,
+                  "data_string_array": null,
+                  "flags": "Edited",
+                  "members": null,
+                  "name": "FEVHoundAttack",
+                  "object": "121299:Fallout4.esm",
+                  "objects": null,
+                  "structs": null,
+                  "unused": 0
+                }
+              ]
+            }
+          ],
+          "version": 6
+        },
         "voice": "0C9B5D:Fallout4.esm",
         "weight": {
           "fat": 0,
@@ -42335,7 +43151,8 @@
         "default_template": "[1628EF:Fallout4.esm] \u003CError: Could not be resolved\u003E",
         "items": "[0].item.item: [023736:Fallout4.esm] \u003CError: Could not be resolved\u003E; [1].item.item: [04F4A6:Fallout4.esm] \u003CError: Could not be resolved\u003E; [2].item.item: [24A364:Fallout4.esm] \u003CError: Could not be resolved\u003E",
         "perks": "[0].perk: [0A2775:Fallout4.esm] \u003CError: Could not be resolved\u003E; [1].perk: [0A2776:Fallout4.esm] \u003CError: Could not be resolved\u003E; [2].perk: [1FE6B8:Fallout4.esm] \u003CError: Could not be resolved\u003E; [3].perk: [20AEE4:Fallout4.esm] \u003CError: Could not be resolved\u003E; [4].perk: [20AEE9:Fallout4.esm] \u003CError: Could not be resolved\u003E; [5].perk: [20AEEA:Fallout4.esm] \u003CError: Could not be resolved\u003E; [6].perk: [20AEEB:Fallout4.esm] \u003CError: Could not be resolved\u003E; [7].perk: [20AEEC:Fallout4.esm] \u003CError: Could not be resolved\u003E; [8].perk: [20AEED:Fallout4.esm] \u003CError: Could not be resolved\u003E; [9].perk: [20AEEE:Fallout4.esm] \u003CError: Could not be resolved\u003E; [10].perk: [20AEEF:Fallout4.esm] \u003CError: Could not be resolved\u003E; [11].perk: [20AEF0:Fallout4.esm] \u003CError: Could not be resolved\u003E; [12].perk: [20AEF1:Fallout4.esm] \u003CError: Could not be resolved\u003E; [13].perk: [20AEF2:Fallout4.esm] \u003CError: Could not be resolved\u003E; [14].perk: [24A389:Fallout4.esm] \u003CError: Could not be resolved\u003E",
-        "template_actors": "trait_template: [1628EF:Fallout4.esm] \u003CError: Could not be resolved\u003E; stats_template: [1628EF:Fallout4.esm] \u003CError: Could not be resolved\u003E; factions_template: [0E6B42:Fallout4.esm] \u003CError: Could not be resolved\u003E; spell_list_template: Found a NULL reference, expected: ; ai_data_template: [0E6B42:Fallout4.esm] \u003CError: Could not be resolved\u003E; ai_packages_template: [1628EF:Fallout4.esm] \u003CError: Could not be resolved\u003E; model_or_animation_template: Found a NULL reference, expected: ; base_data_template: [1628EF:Fallout4.esm] \u003CError: Could not be resolved\u003E; inventory_template: Found a NULL reference, expected: ; script_template: Found a NULL reference, expected: ; def_pack_list_template: [1628EF:Fallout4.esm] \u003CError: Could not be resolved\u003E; attack_data_template: [1628EF:Fallout4.esm] \u003CError: Could not be resolved\u003E; keywords_template: [1628EF:Fallout4.esm] \u003CError: Could not be resolved\u003E"
+        "template_actors": "trait_template: [1628EF:Fallout4.esm] \u003CError: Could not be resolved\u003E; stats_template: [1628EF:Fallout4.esm] \u003CError: Could not be resolved\u003E; factions_template: [0E6B42:Fallout4.esm] \u003CError: Could not be resolved\u003E; spell_list_template: Found a NULL reference, expected: ; ai_data_template: [0E6B42:Fallout4.esm] \u003CError: Could not be resolved\u003E; ai_packages_template: [1628EF:Fallout4.esm] \u003CError: Could not be resolved\u003E; model_or_animation_template: Found a NULL reference, expected: ; base_data_template: [1628EF:Fallout4.esm] \u003CError: Could not be resolved\u003E; inventory_template: Found a NULL reference, expected: ; script_template: Found a NULL reference, expected: ; def_pack_list_template: [1628EF:Fallout4.esm] \u003CError: Could not be resolved\u003E; attack_data_template: [1628EF:Fallout4.esm] \u003CError: Could not be resolved\u003E; keywords_template: [1628EF:Fallout4.esm] \u003CError: Could not be resolved\u003E",
+        "virtual_machine_adapter": "scripts[0].properties[0].object: [050DC9:Fallout4.esm] \u003CError: Could not be resolved\u003E; scripts[0].properties[2].object: [18B1CA:Fallout4.esm] \u003CError: Could not be resolved\u003E"
       },
       "EditorId": "VRWorkshopShared_LvlSynthCourser",
       "Fields": {
@@ -42584,6 +43401,75 @@
         "unused": 0,
         "use_template_actors": "7351",
         "version2": 2,
+        "virtual_machine_adapter": {
+          "object_format": 2,
+          "scripts": [
+            {
+              "flags": "Local",
+              "name": "SynthCourserTeleportScript",
+              "properties": [
+                {
+                  "alias": -1,
+                  "concrete_type": "ScriptObjectProperty",
+                  "data_bool": null,
+                  "data_bool_array": null,
+                  "data_float": null,
+                  "data_float_array": null,
+                  "data_int": null,
+                  "data_int_array": null,
+                  "data_string": null,
+                  "data_string_array": null,
+                  "flags": "Edited",
+                  "members": null,
+                  "name": "LvlSynthTeleport",
+                  "object": "050DC9:Fallout4.esm",
+                  "objects": null,
+                  "structs": null,
+                  "unused": 0
+                },
+                {
+                  "alias": null,
+                  "concrete_type": "ScriptFloatProperty",
+                  "data_bool": null,
+                  "data_bool_array": null,
+                  "data_float": 1,
+                  "data_float_array": null,
+                  "data_int": null,
+                  "data_int_array": null,
+                  "data_string": null,
+                  "data_string_array": null,
+                  "flags": "Edited",
+                  "members": null,
+                  "name": "chanceToTeleport",
+                  "object": null,
+                  "objects": null,
+                  "structs": null,
+                  "unused": null
+                },
+                {
+                  "alias": -1,
+                  "concrete_type": "ScriptObjectProperty",
+                  "data_bool": null,
+                  "data_bool_array": null,
+                  "data_float": null,
+                  "data_float_array": null,
+                  "data_int": null,
+                  "data_int_array": null,
+                  "data_string": null,
+                  "data_string_array": null,
+                  "flags": "Edited",
+                  "members": null,
+                  "name": "LL_ChanceNone_SynthCourserTeleport",
+                  "object": "18B1CA:Fallout4.esm",
+                  "objects": null,
+                  "structs": null,
+                  "unused": 0
+                }
+              ]
+            }
+          ],
+          "version": 6
+        },
         "voice": null,
         "weight": {
           "fat": 0.33333334,
@@ -42605,7 +43491,8 @@
       "CheckErrors": {
         "aliases": "[1].unique_actor: [002CB7:Fallout4.esm] \u003CError: Could not be resolved\u003E; [2].unique_actor: [002CBF:Fallout4.esm] \u003CError: Could not be resolved\u003E; [3].unique_actor: [002F20:Fallout4.esm] \u003CError: Could not be resolved\u003E; [4].unique_actor: [002EFA:Fallout4.esm] \u003CError: Could not be resolved\u003E; [5].unique_actor: [002F28:Fallout4.esm] \u003CError: Could not be resolved\u003E; [6].unique_actor: [002CDA:Fallout4.esm] \u003CError: Could not be resolved\u003E; [7].unique_actor: [002CCB:Fallout4.esm] \u003CError: Could not be resolved\u003E; [8].unique_actor: [002CB2:Fallout4.esm] \u003CError: Could not be resolved\u003E; [9].unique_actor: [002CD6:Fallout4.esm] \u003CError: Could not be resolved\u003E; [10].unique_actor: [002CBB:Fallout4.esm] \u003CError: Could not be resolved\u003E; [11].unique_actor: [002CC1:Fallout4.esm] \u003CError: Could not be resolved\u003E; [12].unique_actor: [002CC6:Fallout4.esm] \u003CError: Could not be resolved\u003E; [13].unique_actor: [0222A2:Fallout4.esm] \u003CError: Could not be resolved\u003E; [14].unique_actor: [002F1C:Fallout4.esm] \u003CError: Could not be resolved\u003E; [15].unique_actor: [004DEC:Fallout4.esm] \u003CError: Could not be resolved\u003E; [16].unique_actor: [002CCF:Fallout4.esm] \u003CError: Could not be resolved\u003E; [17].unique_actor: [002F0E:Fallout4.esm] \u003CError: Could not be resolved\u003E; [18].unique_actor: [002EF8:Fallout4.esm] \u003CError: Could not be resolved\u003E; [19].unique_actor: [002F02:Fallout4.esm] \u003CError: Could not be resolved\u003E; [20].unique_actor: [002F10:Fallout4.esm] \u003CError: Could not be resolved\u003E; [21].unique_actor: [0399DD:Fallout4.esm] \u003CError: Could not be resolved\u003E; [22].unique_actor: [002F1E:Fallout4.esm] \u003CError: Could not be resolved\u003E; [23].unique_actor: [002CD4:Fallout4.esm] \u003CError: Could not be resolved\u003E; [24].unique_actor: [002F22:Fallout4.esm] \u003CError: Could not be resolved\u003E; [25].unique_actor: [002EFE:Fallout4.esm] \u003CError: Could not be resolved\u003E; [26].unique_actor: [002EFC:Fallout4.esm] \u003CError: Could not be resolved\u003E; [27].unique_actor: [020B8E:Fallout4.esm] \u003CError: Could not be resolved\u003E; [28].unique_actor: [04B240:Fallout4.esm] \u003CError: Could not be resolved\u003E; [29].external.quest: [0289E4:Fallout4.esm] \u003CError: Could not be resolved\u003E; [30].unique_actor: [002F0A:Fallout4.esm] \u003CError: Could not be resolved\u003E; [31].unique_actor: [0B2FC7:Fallout4.esm] \u003CError: Could not be resolved\u003E; [32].unique_actor: [002F14:Fallout4.esm] \u003CError: Could not be resolved\u003E",
         "location": "[002CEF:Fallout4.esm] \u003CError: Could not be resolved\u003E",
-        "text_display_globals": "[0]: [043C28:Fallout4.esm] \u003CError: Could not be resolved\u003E; [1]: [026A98:Fallout4.esm] \u003CError: Could not be resolved\u003E; [2]: [043C79:Fallout4.esm] \u003CError: Could not be resolved\u003E; [3]: [0D35FA:Fallout4.esm] \u003CError: Could not be resolved\u003E"
+        "text_display_globals": "[0]: [043C28:Fallout4.esm] \u003CError: Could not be resolved\u003E; [1]: [026A98:Fallout4.esm] \u003CError: Could not be resolved\u003E; [2]: [043C79:Fallout4.esm] \u003CError: Could not be resolved\u003E; [3]: [0D35FA:Fallout4.esm] \u003CError: Could not be resolved\u003E",
+        "virtual_machine_adapter": "scripts[0].properties[0].object: [022B41:Fallout4.esm] \u003CError: Could not be resolved\u003E; scripts[0].properties[1].object: [022B3E:Fallout4.esm] \u003CError: Could not be resolved\u003E; scripts[0].properties[2].object: [022B3F:Fallout4.esm] \u003CError: Could not be resolved\u003E; scripts[0].properties[3].object: [022B42:Fallout4.esm] \u003CError: Could not be resolved\u003E; scripts[0].properties[4].object: [022B40:Fallout4.esm] \u003CError: Could not be resolved\u003E; script.properties[0].object: [0229E5:Fallout4.esm] \u003CError: Could not be resolved\u003E; script.properties[1].object: [0AE51C:Fallout4.esm] \u003CError: Could not be resolved\u003E; script.properties[3].object: [12CF27:Fallout4.esm] \u003CError: Could not be resolved\u003E; script.properties[5].object: [01F25E:Fallout4.esm] \u003CError: Could not be resolved\u003E; script.properties[6].object: [0D35FA:Fallout4.esm] \u003CError: Could not be resolved\u003E; script.properties[7].object: [14191C:Fallout4.esm] \u003CError: Could not be resolved\u003E; script.properties[8].object: [0E9A43:Fallout4.esm] \u003CError: Could not be resolved\u003E; script.properties[9].object: [01F961:Fallout4.esm] \u003CError: Could not be resolved\u003E; script.properties[10].object: [0AEC4F:Fallout4.esm] \u003CError: Could not be resolved\u003E; aliases[0].scripts[0].properties[0].object: [0785F2:Fallout4.esm] \u003CError: Could not be resolved\u003E; aliases[0].scripts[0].properties[1].objects[0].object: [06A698:Fallout4.esm] \u003CError: Could not be resolved\u003E"
       },
       "EditorId": "DialogueDiamondCity",
       "Fields": {
@@ -44496,7 +45383,536 @@
         ],
         "unknown": 0,
         "unused_conditions": [],
-        "version2": 1
+        "version2": 1,
+        "virtual_machine_adapter": {
+          "aliases": [
+            {
+              "object_format": 2,
+              "property": {
+                "alias": 36,
+                "flags": "Edited",
+                "name": "",
+                "object": "003648:Fallout4.esm",
+                "unused": 0
+              },
+              "scripts": [
+                {
+                  "flags": "Local",
+                  "name": "DefaultAliasReadWhileSittingScript",
+                  "properties": [
+                    {
+                      "alias": -1,
+                      "concrete_type": "ScriptObjectProperty",
+                      "data_bool": null,
+                      "data_bool_array": null,
+                      "data_float": null,
+                      "data_float_array": null,
+                      "data_int": null,
+                      "data_int_array": null,
+                      "data_string": null,
+                      "data_string_array": null,
+                      "flags": "Edited",
+                      "members": null,
+                      "name": "IdleBookReadStart",
+                      "object": "0785F2:Fallout4.esm",
+                      "objects": null,
+                      "structs": null,
+                      "unused": 0
+                    },
+                    {
+                      "alias": null,
+                      "concrete_type": "ScriptObjectListProperty",
+                      "data_bool": null,
+                      "data_bool_array": null,
+                      "data_float": null,
+                      "data_float_array": null,
+                      "data_int": null,
+                      "data_int_array": null,
+                      "data_string": null,
+                      "data_string_array": null,
+                      "flags": "Edited",
+                      "members": null,
+                      "name": "ReadingPackages",
+                      "object": null,
+                      "objects": [
+                        {
+                          "alias": -1,
+                          "flags": "Edited",
+                          "name": "",
+                          "object": "06A698:Fallout4.esm",
+                          "unused": 0
+                        }
+                      ],
+                      "structs": null,
+                      "unused": null
+                    }
+                  ]
+                }
+              ],
+              "version": 6
+            }
+          ],
+          "extra_bind_data_version": 3,
+          "fragments": [
+            {
+              "fragment_name": "Fragment_Stage_0070_Item_00",
+              "script_name": "Fragments:Quests:QF_DialogueDiamondCity_00003648",
+              "stage": 70,
+              "stage_index": 0,
+              "unknown": 0,
+              "unknown2": 1
+            },
+            {
+              "fragment_name": "Fragment_Stage_0045_Item_00",
+              "script_name": "Fragments:Quests:QF_DialogueDiamondCity_00003648",
+              "stage": 45,
+              "stage_index": 0,
+              "unknown": 0,
+              "unknown2": 1
+            },
+            {
+              "fragment_name": "Fragment_Stage_0010_Item_00",
+              "script_name": "Fragments:Quests:QF_DialogueDiamondCity_00003648",
+              "stage": 10,
+              "stage_index": 0,
+              "unknown": 0,
+              "unknown2": 1
+            },
+            {
+              "fragment_name": "Fragment_Stage_0500_Item_00",
+              "script_name": "Fragments:Quests:QF_DialogueDiamondCity_00003648",
+              "stage": 500,
+              "stage_index": 0,
+              "unknown": 0,
+              "unknown2": 1
+            },
+            {
+              "fragment_name": "Fragment_Stage_0190_Item_00",
+              "script_name": "Fragments:Quests:QF_DialogueDiamondCity_00003648",
+              "stage": 190,
+              "stage_index": 0,
+              "unknown": 0,
+              "unknown2": 1
+            },
+            {
+              "fragment_name": "Fragment_Stage_0040_Item_00",
+              "script_name": "Fragments:Quests:QF_DialogueDiamondCity_00003648",
+              "stage": 40,
+              "stage_index": 0,
+              "unknown": 0,
+              "unknown2": 1
+            },
+            {
+              "fragment_name": "Fragment_Stage_0005_Item_00",
+              "script_name": "Fragments:Quests:QF_DialogueDiamondCity_00003648",
+              "stage": 5,
+              "stage_index": 0,
+              "unknown": 0,
+              "unknown2": 1
+            },
+            {
+              "fragment_name": "Fragment_Stage_0111_Item_00",
+              "script_name": "Fragments:Quests:QF_DialogueDiamondCity_00003648",
+              "stage": 111,
+              "stage_index": 0,
+              "unknown": 0,
+              "unknown2": 1
+            },
+            {
+              "fragment_name": "Fragment_Stage_0600_Item_00",
+              "script_name": "Fragments:Quests:QF_DialogueDiamondCity_00003648",
+              "stage": 600,
+              "stage_index": 0,
+              "unknown": 0,
+              "unknown2": 1
+            },
+            {
+              "fragment_name": "Fragment_Stage_0065_Item_00",
+              "script_name": "Fragments:Quests:QF_DialogueDiamondCity_00003648",
+              "stage": 65,
+              "stage_index": 0,
+              "unknown": 0,
+              "unknown2": 1
+            },
+            {
+              "fragment_name": "Fragment_Stage_0060_Item_00",
+              "script_name": "Fragments:Quests:QF_DialogueDiamondCity_00003648",
+              "stage": 60,
+              "stage_index": 0,
+              "unknown": 0,
+              "unknown2": 1
+            },
+            {
+              "fragment_name": "Fragment_Stage_0017_Item_00",
+              "script_name": "Fragments:Quests:QF_DialogueDiamondCity_00003648",
+              "stage": 17,
+              "stage_index": 0,
+              "unknown": 0,
+              "unknown2": 1
+            },
+            {
+              "fragment_name": "Fragment_Stage_0170_Item_00",
+              "script_name": "Fragments:Quests:QF_DialogueDiamondCity_00003648",
+              "stage": 170,
+              "stage_index": 0,
+              "unknown": 0,
+              "unknown2": 1
+            },
+            {
+              "fragment_name": "Fragment_Stage_0112_Item_00",
+              "script_name": "Fragments:Quests:QF_DialogueDiamondCity_00003648",
+              "stage": 112,
+              "stage_index": 0,
+              "unknown": 0,
+              "unknown2": 1
+            },
+            {
+              "fragment_name": "Fragment_Stage_0064_Item_00",
+              "script_name": "Fragments:Quests:QF_DialogueDiamondCity_00003648",
+              "stage": 64,
+              "stage_index": 0,
+              "unknown": 0,
+              "unknown2": 1
+            },
+            {
+              "fragment_name": "Fragment_Stage_0300_Item_00",
+              "script_name": "Fragments:Quests:QF_DialogueDiamondCity_00003648",
+              "stage": 300,
+              "stage_index": 0,
+              "unknown": 0,
+              "unknown2": 1
+            },
+            {
+              "fragment_name": "Fragment_Stage_0113_Item_00",
+              "script_name": "Fragments:Quests:QF_DialogueDiamondCity_00003648",
+              "stage": 113,
+              "stage_index": 0,
+              "unknown": 0,
+              "unknown2": 1
+            }
+          ],
+          "object_format": 2,
+          "script": {
+            "flags": "Local",
+            "name": "Fragments:Quests:QF_DialogueDiamondCity_00003648",
+            "properties": [
+              {
+                "alias": -1,
+                "concrete_type": "ScriptObjectProperty",
+                "data_bool": null,
+                "data_bool_array": null,
+                "data_float": null,
+                "data_float_array": null,
+                "data_int": null,
+                "data_int_array": null,
+                "data_string": null,
+                "data_string_array": null,
+                "flags": "Edited",
+                "members": null,
+                "name": "pMQ103",
+                "object": "0229E5:Fallout4.esm",
+                "objects": null,
+                "structs": null,
+                "unused": 0
+              },
+              {
+                "alias": -1,
+                "concrete_type": "ScriptObjectProperty",
+                "data_bool": null,
+                "data_bool_array": null,
+                "data_float": null,
+                "data_float_array": null,
+                "data_int": null,
+                "data_int_array": null,
+                "data_string": null,
+                "data_string_array": null,
+                "flags": "Edited",
+                "members": null,
+                "name": "BoS301",
+                "object": "0AE51C:Fallout4.esm",
+                "objects": null,
+                "structs": null,
+                "unused": 0
+              },
+              {
+                "alias": -1,
+                "concrete_type": "ScriptObjectProperty",
+                "data_bool": null,
+                "data_bool_array": null,
+                "data_float": null,
+                "data_float_array": null,
+                "data_int": null,
+                "data_int_array": null,
+                "data_string": null,
+                "data_string_array": null,
+                "flags": "Edited",
+                "members": null,
+                "name": "Caps001",
+                "object": "00000F:Fallout4.esm",
+                "objects": null,
+                "structs": null,
+                "unused": 0
+              },
+              {
+                "alias": -1,
+                "concrete_type": "ScriptObjectProperty",
+                "data_bool": null,
+                "data_bool_array": null,
+                "data_float": null,
+                "data_float_array": null,
+                "data_int": null,
+                "data_int_array": null,
+                "data_string": null,
+                "data_string_array": null,
+                "flags": "Edited",
+                "members": null,
+                "name": "PublickOccurencesArticle01",
+                "object": "12CF27:Fallout4.esm",
+                "objects": null,
+                "structs": null,
+                "unused": 0
+              },
+              {
+                "alias": -1,
+                "concrete_type": "ScriptObjectProperty",
+                "data_bool": null,
+                "data_bool_array": null,
+                "data_float": null,
+                "data_float_array": null,
+                "data_int": null,
+                "data_int_array": null,
+                "data_string": null,
+                "data_string_array": null,
+                "flags": "Edited",
+                "members": null,
+                "name": "pCaps001",
+                "object": "00000F:Fallout4.esm",
+                "objects": null,
+                "structs": null,
+                "unused": 0
+              },
+              {
+                "alias": -1,
+                "concrete_type": "ScriptObjectProperty",
+                "data_bool": null,
+                "data_bool_array": null,
+                "data_float": null,
+                "data_float_array": null,
+                "data_int": null,
+                "data_int_array": null,
+                "data_string": null,
+                "data_string_array": null,
+                "flags": "Edited",
+                "members": null,
+                "name": "pMQ04",
+                "object": "01F25E:Fallout4.esm",
+                "objects": null,
+                "structs": null,
+                "unused": 0
+              },
+              {
+                "alias": -1,
+                "concrete_type": "ScriptObjectProperty",
+                "data_bool": null,
+                "data_bool_array": null,
+                "data_float": null,
+                "data_float_array": null,
+                "data_int": null,
+                "data_int_array": null,
+                "data_string": null,
+                "data_string_array": null,
+                "flags": "Edited",
+                "members": null,
+                "name": "ServiceCostBuyHouse",
+                "object": "0D35FA:Fallout4.esm",
+                "objects": null,
+                "structs": null,
+                "unused": 0
+              },
+              {
+                "alias": -1,
+                "concrete_type": "ScriptObjectProperty",
+                "data_bool": null,
+                "data_bool_array": null,
+                "data_float": null,
+                "data_float_array": null,
+                "data_int": null,
+                "data_int_array": null,
+                "data_string": null,
+                "data_string_array": null,
+                "flags": "Edited",
+                "members": null,
+                "name": "FFDiamondCity02",
+                "object": "14191C:Fallout4.esm",
+                "objects": null,
+                "structs": null,
+                "unused": 0
+              },
+              {
+                "alias": -1,
+                "concrete_type": "ScriptObjectProperty",
+                "data_bool": null,
+                "data_bool_array": null,
+                "data_float": null,
+                "data_float_array": null,
+                "data_int": null,
+                "data_int_array": null,
+                "data_string": null,
+                "data_string_array": null,
+                "flags": "Edited",
+                "members": null,
+                "name": "DN070WorldSeriesBat",
+                "object": "0E9A43:Fallout4.esm",
+                "objects": null,
+                "structs": null,
+                "unused": 0
+              },
+              {
+                "alias": -1,
+                "concrete_type": "ScriptObjectProperty",
+                "data_bool": null,
+                "data_bool_array": null,
+                "data_float": null,
+                "data_float_array": null,
+                "data_int": null,
+                "data_int_array": null,
+                "data_string": null,
+                "data_string_array": null,
+                "flags": "Edited",
+                "members": null,
+                "name": "pFFDiamondCity02",
+                "object": "01F961:Fallout4.esm",
+                "objects": null,
+                "structs": null,
+                "unused": 0
+              },
+              {
+                "alias": 71,
+                "concrete_type": "ScriptObjectProperty",
+                "data_bool": null,
+                "data_bool_array": null,
+                "data_float": null,
+                "data_float_array": null,
+                "data_int": null,
+                "data_int_array": null,
+                "data_string": null,
+                "data_string_array": null,
+                "flags": "Edited",
+                "members": null,
+                "name": "CustomItem_WorldSeriesBat",
+                "object": "0AEC4F:Fallout4.esm",
+                "objects": null,
+                "structs": null,
+                "unused": 0
+              }
+            ]
+          },
+          "scripts": [
+            {
+              "flags": "Local",
+              "name": "DialogueDiamondCityScript",
+              "properties": [
+                {
+                  "alias": -1,
+                  "concrete_type": "ScriptObjectProperty",
+                  "data_bool": null,
+                  "data_bool_array": null,
+                  "data_float": null,
+                  "data_float_array": null,
+                  "data_int": null,
+                  "data_int_array": null,
+                  "data_string": null,
+                  "data_string_array": null,
+                  "flags": "Edited",
+                  "members": null,
+                  "name": "ThirdBase",
+                  "object": "022B41:Fallout4.esm",
+                  "objects": null,
+                  "structs": null,
+                  "unused": 0
+                },
+                {
+                  "alias": -1,
+                  "concrete_type": "ScriptObjectProperty",
+                  "data_bool": null,
+                  "data_bool_array": null,
+                  "data_float": null,
+                  "data_float_array": null,
+                  "data_int": null,
+                  "data_int_array": null,
+                  "data_string": null,
+                  "data_string_array": null,
+                  "flags": "Edited",
+                  "members": null,
+                  "name": "StartBase",
+                  "object": "022B3E:Fallout4.esm",
+                  "objects": null,
+                  "structs": null,
+                  "unused": 0
+                },
+                {
+                  "alias": -1,
+                  "concrete_type": "ScriptObjectProperty",
+                  "data_bool": null,
+                  "data_bool_array": null,
+                  "data_float": null,
+                  "data_float_array": null,
+                  "data_int": null,
+                  "data_int_array": null,
+                  "data_string": null,
+                  "data_string_array": null,
+                  "flags": "Edited",
+                  "members": null,
+                  "name": "FirstBase",
+                  "object": "022B3F:Fallout4.esm",
+                  "objects": null,
+                  "structs": null,
+                  "unused": 0
+                },
+                {
+                  "alias": -1,
+                  "concrete_type": "ScriptObjectProperty",
+                  "data_bool": null,
+                  "data_bool_array": null,
+                  "data_float": null,
+                  "data_float_array": null,
+                  "data_int": null,
+                  "data_int_array": null,
+                  "data_string": null,
+                  "data_string_array": null,
+                  "flags": "Edited",
+                  "members": null,
+                  "name": "HomeBase",
+                  "object": "022B42:Fallout4.esm",
+                  "objects": null,
+                  "structs": null,
+                  "unused": 0
+                },
+                {
+                  "alias": -1,
+                  "concrete_type": "ScriptObjectProperty",
+                  "data_bool": null,
+                  "data_bool_array": null,
+                  "data_float": null,
+                  "data_float_array": null,
+                  "data_int": null,
+                  "data_int_array": null,
+                  "data_string": null,
+                  "data_string_array": null,
+                  "flags": "Edited",
+                  "members": null,
+                  "name": "SecondBase",
+                  "object": "022B40:Fallout4.esm",
+                  "objects": null,
+                  "structs": null,
+                  "unused": 0
+                }
+              ]
+            }
+          ],
+          "version": 6,
+          "versioning": 0
+        }
       },
       "FormKey": "003648:Fallout4.esm",
       "IsWinner": true,
@@ -44507,7 +45923,8 @@
     },
     {
       "CheckErrors": {
-        "aliases": "[1].unique_actor: [01D15C:Fallout4.esm] \u003CError: Could not be resolved\u003E"
+        "aliases": "[1].unique_actor: [01D15C:Fallout4.esm] \u003CError: Could not be resolved\u003E",
+        "virtual_machine_adapter": "aliases[0].scripts[0].properties[0].object: [1820BF:Fallout4.esm] \u003CError: Could not be resolved\u003E; aliases[0].scripts[0].properties[1].object: [1820C0:Fallout4.esm] \u003CError: Could not be resolved\u003E"
       },
       "EditorId": "DialogueGenericPlayer",
       "Fields": {
@@ -44633,7 +46050,79 @@
         "text_display_globals": [],
         "unknown": 0,
         "unused_conditions": [],
-        "version2": 5
+        "version2": 5,
+        "virtual_machine_adapter": {
+          "aliases": [
+            {
+              "object_format": 2,
+              "property": {
+                "alias": 0,
+                "flags": "Edited",
+                "name": "",
+                "object": "0179EF:Fallout4.esm",
+                "unused": 0
+              },
+              "scripts": [
+                {
+                  "flags": "Local",
+                  "name": "PlayerWorkbenchScript",
+                  "properties": [
+                    {
+                      "alias": -1,
+                      "concrete_type": "ScriptObjectProperty",
+                      "data_bool": null,
+                      "data_bool_array": null,
+                      "data_float": null,
+                      "data_float_array": null,
+                      "data_int": null,
+                      "data_int_array": null,
+                      "data_string": null,
+                      "data_string_array": null,
+                      "flags": "Edited",
+                      "members": null,
+                      "name": "WorkbenchPlayerGruntTopic",
+                      "object": "1820BF:Fallout4.esm",
+                      "objects": null,
+                      "structs": null,
+                      "unused": 0
+                    },
+                    {
+                      "alias": -1,
+                      "concrete_type": "ScriptObjectProperty",
+                      "data_bool": null,
+                      "data_bool_array": null,
+                      "data_float": null,
+                      "data_float_array": null,
+                      "data_int": null,
+                      "data_int_array": null,
+                      "data_string": null,
+                      "data_string_array": null,
+                      "flags": "Edited",
+                      "members": null,
+                      "name": "WorkbenchPlayerHumWhistleTopic",
+                      "object": "1820C0:Fallout4.esm",
+                      "objects": null,
+                      "structs": null,
+                      "unused": 0
+                    }
+                  ]
+                }
+              ],
+              "version": 6
+            }
+          ],
+          "extra_bind_data_version": 3,
+          "fragments": [],
+          "object_format": 2,
+          "script": {
+            "flags": "Local",
+            "name": "",
+            "properties": []
+          },
+          "scripts": [],
+          "version": 6,
+          "versioning": 0
+        }
       },
       "FormKey": "0179EF:Fallout4.esm",
       "IsWinner": true,
@@ -44645,7 +46134,8 @@
     {
       "CheckErrors": {
         "aliases": "[0].specific_location: [01D807:Fallout4.esm] \u003CError: Could not be resolved\u003E; [2].unique_actor: [0179FF:Fallout4.esm] \u003CError: Could not be resolved\u003E; [3].unique_actor: [019FD8:Fallout4.esm] \u003CError: Could not be resolved\u003E; [3].package_data[0]: [01F5BD:Fallout4.esm] \u003CError: Could not be resolved\u003E; [3].package_data[1]: [23C9E8:Fallout4.esm] \u003CError: Could not be resolved\u003E; [3].package_data[2]: [01E66D:Fallout4.esm] \u003CError: Could not be resolved\u003E; [4].unique_actor: [019FDA:Fallout4.esm] \u003CError: Could not be resolved\u003E; [4].package_data[0]: [115BD7:Fallout4.esm] \u003CError: Could not be resolved\u003E; [4].package_data[1]: [072757:Fallout4.esm] \u003CError: Could not be resolved\u003E; [5].unique_actor: [019FD9:Fallout4.esm] \u003CError: Could not be resolved\u003E; [5].combat_override_package_list: [01D417:Fallout4.esm] \u003CError: Could not be resolved\u003E; [5].package_data[0]: [05DF28:Fallout4.esm] \u003CError: Could not be resolved\u003E; [5].package_data[1]: [05E5C7:Fallout4.esm] \u003CError: Could not be resolved\u003E; [5].package_data[2]: [01D414:Fallout4.esm] \u003CError: Could not be resolved\u003E; [5].package_data[3]: [01F5B8:Fallout4.esm] \u003CError: Could not be resolved\u003E; [5].package_data[4]: [0A878D:Fallout4.esm] \u003CError: Could not be resolved\u003E; [5].package_data[5]: [022B3C:Fallout4.esm] \u003CError: Could not be resolved\u003E; [5].package_data[6]: [03FE3C:Fallout4.esm] \u003CError: Could not be resolved\u003E; [5].package_data[7]: [022AA4:Fallout4.esm] \u003CError: Could not be resolved\u003E; [6].unique_actor: [019FDC:Fallout4.esm] \u003CError: Could not be resolved\u003E; [6].package_data[0]: [115BD9:Fallout4.esm] \u003CError: Could not be resolved\u003E; [6].package_data[1]: [071437:Fallout4.esm] \u003CError: Could not be resolved\u003E; [7].unique_actor: [019FDB:Fallout4.esm] \u003CError: Could not be resolved\u003E; [7].package_data[0]: [115BD8:Fallout4.esm] \u003CError: Could not be resolved\u003E; [8].unique_actor: [01D15C:Fallout4.esm] \u003CError: Could not be resolved\u003E; [9].forced_reference: [01E2EA:Fallout4.esm] \u003CError: Could not be resolved\u003E; [9].voice_types: [019FD9:Fallout4.esm] \u003CError: Could not be resolved\u003E; [10].location.ref_type: [07828C:Fallout4.esm] \u003CError: Could not be resolved\u003E; [11].forced_reference: [01D318:Fallout4.esm] \u003CError: Could not be resolved\u003E; [12].external.quest: [0289E4:Fallout4.esm] \u003CError: Could not be resolved\u003E",
-        "stages": "[2].log_entries[0].conditions[1].data.parameter_one_record: [01CC2A:Fallout4.esm] \u003CError: Could not be resolved\u003E; [6].log_entries[1].conditions[0].data.parameter_one_record: [0229E5:Fallout4.esm] \u003CError: Could not be resolved\u003E; [6].log_entries[1].conditions[1].data.parameter_one_record: [0B1752:Fallout4.esm] \u003CError: Could not be resolved\u003E"
+        "stages": "[2].log_entries[0].conditions[1].data.parameter_one_record: [01CC2A:Fallout4.esm] \u003CError: Could not be resolved\u003E; [6].log_entries[1].conditions[0].data.parameter_one_record: [0229E5:Fallout4.esm] \u003CError: Could not be resolved\u003E; [6].log_entries[1].conditions[1].data.parameter_one_record: [0B1752:Fallout4.esm] \u003CError: Could not be resolved\u003E",
+        "virtual_machine_adapter": "scripts[0].properties[1].object: [067FF9:Fallout4.esm] \u003CError: Could not be resolved\u003E; script.properties[1].object: [05DEE4:Fallout4.esm] \u003CError: Could not be resolved\u003E; script.properties[2].object: [1A001C:Fallout4.esm] \u003CError: Could not be resolved\u003E; script.properties[7].object: [01CC2A:Fallout4.esm] \u003CError: Could not be resolved\u003E; script.properties[8].object: [01CC2A:Fallout4.esm] \u003CError: Could not be resolved\u003E; script.properties[12].object: [0C1897:Fallout4.esm] \u003CError: Could not be resolved\u003E; aliases[0].scripts[0].properties[1].objects[0].object: [01D807:Fallout4.esm] \u003CError: Could not be resolved\u003E"
       },
       "EditorId": "DialogueConcordArea",
       "Fields": {
@@ -45383,7 +46873,475 @@
         "text_display_globals": [],
         "unknown": 0,
         "unused_conditions": [],
-        "version2": 11
+        "version2": 11,
+        "virtual_machine_adapter": {
+          "aliases": [
+            {
+              "object_format": 2,
+              "property": {
+                "alias": 0,
+                "flags": "Edited",
+                "name": "",
+                "object": "0179F3:Fallout4.esm",
+                "unused": 0
+              },
+              "scripts": [
+                {
+                  "flags": "Local",
+                  "name": "DefaultAliasPlayerChangeLocation",
+                  "properties": [
+                    {
+                      "alias": null,
+                      "concrete_type": "ScriptIntProperty",
+                      "data_bool": null,
+                      "data_bool_array": null,
+                      "data_float": null,
+                      "data_float_array": null,
+                      "data_int": 200,
+                      "data_int_array": null,
+                      "data_string": null,
+                      "data_string_array": null,
+                      "flags": "Edited",
+                      "members": null,
+                      "name": "StageToSet",
+                      "object": null,
+                      "objects": null,
+                      "structs": null,
+                      "unused": null
+                    },
+                    {
+                      "alias": null,
+                      "concrete_type": "ScriptObjectListProperty",
+                      "data_bool": null,
+                      "data_bool_array": null,
+                      "data_float": null,
+                      "data_float_array": null,
+                      "data_int": null,
+                      "data_int_array": null,
+                      "data_string": null,
+                      "data_string_array": null,
+                      "flags": "Edited",
+                      "members": null,
+                      "name": "LeavingOneOfTheseLocations",
+                      "object": null,
+                      "objects": [
+                        {
+                          "alias": -1,
+                          "flags": "Edited",
+                          "name": "",
+                          "object": "01D807:Fallout4.esm",
+                          "unused": 0
+                        }
+                      ],
+                      "structs": null,
+                      "unused": null
+                    },
+                    {
+                      "alias": null,
+                      "concrete_type": "ScriptIntProperty",
+                      "data_bool": null,
+                      "data_bool_array": null,
+                      "data_float": null,
+                      "data_float_array": null,
+                      "data_int": 100,
+                      "data_int_array": null,
+                      "data_string": null,
+                      "data_string_array": null,
+                      "flags": "Edited",
+                      "members": null,
+                      "name": "preReqStage",
+                      "object": null,
+                      "objects": null,
+                      "structs": null,
+                      "unused": null
+                    }
+                  ]
+                }
+              ],
+              "version": 6
+            }
+          ],
+          "extra_bind_data_version": 3,
+          "fragments": [
+            {
+              "fragment_name": "Fragment_Stage_0040_Item_00",
+              "script_name": "Fragments:Quests:QF_DialogueConcordArea_000179F3",
+              "stage": 40,
+              "stage_index": 0,
+              "unknown": 0,
+              "unknown2": 1
+            },
+            {
+              "fragment_name": "Fragment_Stage_0005_Item_00",
+              "script_name": "Fragments:Quests:QF_DialogueConcordArea_000179F3",
+              "stage": 5,
+              "stage_index": 0,
+              "unknown": 0,
+              "unknown2": 1
+            },
+            {
+              "fragment_name": "Fragment_Stage_0010_Item_00",
+              "script_name": "Fragments:Quests:QF_DialogueConcordArea_000179F3",
+              "stage": 10,
+              "stage_index": 0,
+              "unknown": 0,
+              "unknown2": 1
+            },
+            {
+              "fragment_name": "Fragment_Stage_0050_Item_00",
+              "script_name": "Fragments:Quests:QF_DialogueConcordArea_000179F3",
+              "stage": 50,
+              "stage_index": 0,
+              "unknown": 0,
+              "unknown2": 1
+            },
+            {
+              "fragment_name": "Fragment_Stage_0050_Item_01",
+              "script_name": "Fragments:Quests:QF_DialogueConcordArea_000179F3",
+              "stage": 50,
+              "stage_index": 1,
+              "unknown": 0,
+              "unknown2": 1
+            },
+            {
+              "fragment_name": "Fragment_Stage_0015_Item_00",
+              "script_name": "Fragments:Quests:QF_DialogueConcordArea_000179F3",
+              "stage": 15,
+              "stage_index": 0,
+              "unknown": 0,
+              "unknown2": 1
+            },
+            {
+              "fragment_name": "Fragment_Stage_0200_Item_00",
+              "script_name": "Fragments:Quests:QF_DialogueConcordArea_000179F3",
+              "stage": 200,
+              "stage_index": 0,
+              "unknown": 0,
+              "unknown2": 1
+            }
+          ],
+          "object_format": 2,
+          "script": {
+            "flags": "Local",
+            "name": "Fragments:Quests:QF_DialogueConcordArea_000179F3",
+            "properties": [
+              {
+                "alias": 15,
+                "concrete_type": "ScriptObjectProperty",
+                "data_bool": null,
+                "data_bool_array": null,
+                "data_float": null,
+                "data_float_array": null,
+                "data_int": null,
+                "data_int_array": null,
+                "data_string": null,
+                "data_string_array": null,
+                "flags": "Edited",
+                "members": null,
+                "name": "Alias_JunLongAlias",
+                "object": "0179F3:Fallout4.esm",
+                "objects": null,
+                "structs": null,
+                "unused": 0
+              },
+              {
+                "alias": -1,
+                "concrete_type": "ScriptObjectProperty",
+                "data_bool": null,
+                "data_bool_array": null,
+                "data_float": null,
+                "data_float_array": null,
+                "data_int": null,
+                "data_int_array": null,
+                "data_string": null,
+                "data_string_array": null,
+                "flags": "Edited",
+                "members": null,
+                "name": "Min01",
+                "object": "05DEE4:Fallout4.esm",
+                "objects": null,
+                "structs": null,
+                "unused": 0
+              },
+              {
+                "alias": -1,
+                "concrete_type": "ScriptObjectProperty",
+                "data_bool": null,
+                "data_bool_array": null,
+                "data_float": null,
+                "data_float_array": null,
+                "data_int": null,
+                "data_int_array": null,
+                "data_string": null,
+                "data_string_array": null,
+                "flags": "Edited",
+                "members": null,
+                "name": "Min00",
+                "object": "1A001C:Fallout4.esm",
+                "objects": null,
+                "structs": null,
+                "unused": 0
+              },
+              {
+                "alias": 4,
+                "concrete_type": "ScriptObjectProperty",
+                "data_bool": null,
+                "data_bool_array": null,
+                "data_float": null,
+                "data_float_array": null,
+                "data_int": null,
+                "data_int_array": null,
+                "data_string": null,
+                "data_string_array": null,
+                "flags": "Edited",
+                "members": null,
+                "name": "Alias_PrestonGarveyAlias",
+                "object": "0179F3:Fallout4.esm",
+                "objects": null,
+                "structs": null,
+                "unused": 0
+              },
+              {
+                "alias": 14,
+                "concrete_type": "ScriptObjectProperty",
+                "data_bool": null,
+                "data_bool_array": null,
+                "data_float": null,
+                "data_float_array": null,
+                "data_int": null,
+                "data_int_array": null,
+                "data_string": null,
+                "data_string_array": null,
+                "flags": "Edited",
+                "members": null,
+                "name": "Alias_MuseumInsideEntranceMarker",
+                "object": "0179F3:Fallout4.esm",
+                "objects": null,
+                "structs": null,
+                "unused": 0
+              },
+              {
+                "alias": -1,
+                "concrete_type": "ScriptObjectProperty",
+                "data_bool": null,
+                "data_bool_array": null,
+                "data_float": null,
+                "data_float_array": null,
+                "data_int": null,
+                "data_int_array": null,
+                "data_string": null,
+                "data_string_array": null,
+                "flags": "Edited",
+                "members": null,
+                "name": "PrestonStartScene",
+                "object": "01A4D6:Fallout4.esm",
+                "objects": null,
+                "structs": null,
+                "unused": 0
+              },
+              {
+                "alias": -1,
+                "concrete_type": "ScriptObjectProperty",
+                "data_bool": null,
+                "data_bool_array": null,
+                "data_float": null,
+                "data_float_array": null,
+                "data_int": null,
+                "data_int_array": null,
+                "data_string": null,
+                "data_string_array": null,
+                "flags": "Edited",
+                "members": null,
+                "name": "GrandmaMonkWarning",
+                "object": "03E088:Fallout4.esm",
+                "objects": null,
+                "structs": null,
+                "unused": 0
+              },
+              {
+                "alias": -1,
+                "concrete_type": "ScriptObjectProperty",
+                "data_bool": null,
+                "data_bool_array": null,
+                "data_float": null,
+                "data_float_array": null,
+                "data_int": null,
+                "data_int_array": null,
+                "data_string": null,
+                "data_string_array": null,
+                "flags": "Edited",
+                "members": null,
+                "name": "pMQ03",
+                "object": "01CC2A:Fallout4.esm",
+                "objects": null,
+                "structs": null,
+                "unused": 0
+              },
+              {
+                "alias": -1,
+                "concrete_type": "ScriptObjectProperty",
+                "data_bool": null,
+                "data_bool_array": null,
+                "data_float": null,
+                "data_float_array": null,
+                "data_int": null,
+                "data_int_array": null,
+                "data_string": null,
+                "data_string_array": null,
+                "flags": "Edited",
+                "members": null,
+                "name": "MQ102",
+                "object": "01CC2A:Fallout4.esm",
+                "objects": null,
+                "structs": null,
+                "unused": 0
+              },
+              {
+                "alias": 2,
+                "concrete_type": "ScriptObjectProperty",
+                "data_bool": null,
+                "data_bool_array": null,
+                "data_float": null,
+                "data_float_array": null,
+                "data_int": null,
+                "data_int_array": null,
+                "data_string": null,
+                "data_string_array": null,
+                "flags": "Edited",
+                "members": null,
+                "name": "Alias_GrandmaMonkAlias",
+                "object": "0179F3:Fallout4.esm",
+                "objects": null,
+                "structs": null,
+                "unused": 0
+              },
+              {
+                "alias": 6,
+                "concrete_type": "ScriptObjectProperty",
+                "data_bool": null,
+                "data_bool_array": null,
+                "data_float": null,
+                "data_float_array": null,
+                "data_int": null,
+                "data_int_array": null,
+                "data_string": null,
+                "data_string_array": null,
+                "flags": "Edited",
+                "members": null,
+                "name": "Alias_MarcyLongAlias",
+                "object": "0179F3:Fallout4.esm",
+                "objects": null,
+                "structs": null,
+                "unused": 0
+              },
+              {
+                "alias": 3,
+                "concrete_type": "ScriptObjectProperty",
+                "data_bool": null,
+                "data_bool_array": null,
+                "data_float": null,
+                "data_float_array": null,
+                "data_int": null,
+                "data_int_array": null,
+                "data_string": null,
+                "data_string_array": null,
+                "flags": "Edited",
+                "members": null,
+                "name": "Alias_SturgesAlias",
+                "object": "0179F3:Fallout4.esm",
+                "objects": null,
+                "structs": null,
+                "unused": 0
+              },
+              {
+                "alias": -1,
+                "concrete_type": "ScriptObjectProperty",
+                "data_bool": null,
+                "data_bool_array": null,
+                "data_float": null,
+                "data_float_array": null,
+                "data_int": null,
+                "data_int_array": null,
+                "data_string": null,
+                "data_string_array": null,
+                "flags": "Edited",
+                "members": null,
+                "name": "AmmoFusionCell",
+                "object": "0C1897:Fallout4.esm",
+                "objects": null,
+                "structs": null,
+                "unused": 0
+              }
+            ]
+          },
+          "scripts": [
+            {
+              "flags": "Local",
+              "name": "DIalogueConcordScript",
+              "properties": [
+                {
+                  "alias": null,
+                  "concrete_type": "ScriptIntProperty",
+                  "data_bool": null,
+                  "data_bool_array": null,
+                  "data_float": null,
+                  "data_float_array": null,
+                  "data_int": 0,
+                  "data_int_array": null,
+                  "data_string": null,
+                  "data_string_array": null,
+                  "flags": "Edited",
+                  "members": null,
+                  "name": "IntroState",
+                  "object": null,
+                  "objects": null,
+                  "structs": null,
+                  "unused": null
+                },
+                {
+                  "alias": -1,
+                  "concrete_type": "ScriptObjectProperty",
+                  "data_bool": null,
+                  "data_bool_array": null,
+                  "data_float": null,
+                  "data_float_array": null,
+                  "data_int": null,
+                  "data_int_array": null,
+                  "data_string": null,
+                  "data_string_array": null,
+                  "flags": "Edited",
+                  "members": null,
+                  "name": "MinutemenCentralQuest",
+                  "object": "067FF9:Fallout4.esm",
+                  "objects": null,
+                  "structs": null,
+                  "unused": 0
+                },
+                {
+                  "alias": null,
+                  "concrete_type": "ScriptIntProperty",
+                  "data_bool": null,
+                  "data_bool_array": null,
+                  "data_float": null,
+                  "data_float_array": null,
+                  "data_int": 0,
+                  "data_int_array": null,
+                  "data_string": null,
+                  "data_string_array": null,
+                  "flags": "Edited",
+                  "members": null,
+                  "name": "IntroPlayerOpinion",
+                  "object": null,
+                  "objects": null,
+                  "structs": null,
+                  "unused": null
+                }
+              ]
+            }
+          ],
+          "version": 6,
+          "versioning": 0
+        }
       },
       "FormKey": "0179F3:Fallout4.esm",
       "IsWinner": true,
@@ -48675,6 +50633,7 @@
         "teleport_loc_name": null,
         "unknown": 0,
         "version2": 1,
+        "virtual_machine_adapter": null,
         "water_velocity": null,
         "xcvl": null,
         "xcvr": null,
@@ -48771,6 +50730,7 @@
         "teleport_loc_name": null,
         "unknown": 0,
         "version2": 0,
+        "virtual_machine_adapter": null,
         "water_velocity": null,
         "xcvl": null,
         "xcvr": null,
@@ -48865,6 +50825,7 @@
         "teleport_loc_name": null,
         "unknown": 0,
         "version2": 1,
+        "virtual_machine_adapter": null,
         "water_velocity": null,
         "xcvl": null,
         "xcvr": null,
@@ -49066,6 +51027,7 @@
         "unused": null,
         "unused2": null,
         "version2": 6,
+        "virtual_machine_adapter": null,
         "vnam": "0x03000000030000000300000003000000"
       },
       "FormKey": "004E1E:Fallout4.esm",
@@ -49311,6 +51273,7 @@
         "unused": null,
         "unused2": null,
         "version2": 6,
+        "virtual_machine_adapter": null,
         "vnam": "0x03000000030000000300000003000000"
       },
       "FormKey": "00583D:Fallout4.esm",
@@ -49540,6 +51503,26 @@
         "unused": null,
         "unused2": null,
         "version2": 7,
+        "virtual_machine_adapter": {
+          "object_format": 2,
+          "script_fragments": {
+            "extra_bind_data_version": 3,
+            "on_begin": null,
+            "on_end": {
+              "extra_bind_data_version": 1,
+              "fragment_name": "Fragment_End",
+              "script_name": "Fragments:Scenes:SF_NatGreetScene_00017B27"
+            },
+            "phase_fragments": [],
+            "script": {
+              "flags": "Local",
+              "name": "Fragments:Scenes:SF_NatGreetScene_00017B27",
+              "properties": []
+            }
+          },
+          "scripts": [],
+          "version": 6
+        },
         "vnam": "0x03000000030000000300000003000000"
       },
       "FormKey": "017B27:Fallout4.esm",
@@ -49784,6 +51767,7 @@
         "unknown3": 2139095039,
         "value": 1180,
         "version2": 7,
+        "virtual_machine_adapter": null,
         "weight": 20,
         "zoom": null
       },
@@ -50011,6 +51995,7 @@
         "unknown3": 2139095039,
         "value": 2500,
         "version2": 3,
+        "virtual_machine_adapter": null,
         "weight": 2,
         "zoom": null
       },
@@ -50408,6 +52393,7 @@
         "unknown3": 2139095039,
         "value": 2500,
         "version2": 6,
+        "virtual_machine_adapter": null,
         "weight": 8,
         "zoom": null
       },

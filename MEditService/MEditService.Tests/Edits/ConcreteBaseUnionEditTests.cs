@@ -16,9 +16,10 @@ namespace MEditService.Tests.Edits;
 /// #701, the write half: a script property is a union over a concrete base, so switching its
 /// leaf is the same ordinary edit of the enclosing array #688 made it for an abstract one —
 /// members the incoming leaf shares are kept, its own members start at defaults, the outgoing
-/// leaf's own members are dropped. VMAD is reflected here only because the fixture's reflector
-/// lifts the shipped exclusion; the edit lands through <c>RecordEditService</c> as a real Mutagen
-/// binary write and re-parse, and is read back off the written document's own text.
+/// leaf's own members are dropped. The edit lands through <c>RecordEditService</c> as a real
+/// Mutagen binary write and re-parse, and is read back off the written document's own text — by
+/// property name, since a script's properties are a keyed array stored in name order rather than
+/// in the order the payload listed them.
 /// </summary>
 public sealed class ConcreteBaseUnionEditTests : IDisposable
 {
@@ -46,15 +47,15 @@ public sealed class ConcreteBaseUnionEditTests : IDisposable
             _fixture.Plugin, _fixture.Npc.ToString(), "virtual_machine_adapter", Adapter("ScriptIntProperty"));
         Assert.True(setUp.Applied, setUp.Message);
         var before = WrittenProperties(_fixture.NpcBody());
-        Assert.Equal("ScriptIntProperty", before[0].GetProperty("MutagenObjectType").GetString());
-        Assert.Equal(42, before[0].GetProperty("Data").GetInt32());
+        Assert.Equal("ScriptIntProperty", before["Switched"].GetProperty("MutagenObjectType").GetString());
+        Assert.Equal(42, before["Switched"].GetProperty("Data").GetInt32());
 
         var result = _fixture.Service().EditField(
             _fixture.Plugin, _fixture.Npc.ToString(), "virtual_machine_adapter", Adapter("ScriptFloatProperty"));
 
         Assert.True(result.Applied, result.Message);
         var after = WrittenProperties(_fixture.NpcBody());
-        var switched = after[0];
+        var switched = after["Switched"];
         Assert.Equal("ScriptFloatProperty", switched.GetProperty("MutagenObjectType").GetString());
         Assert.Equal("Switched", switched.GetProperty("Name").GetString());
         Assert.Equal("Removed", switched.GetProperty("Flags").GetString());
@@ -62,7 +63,7 @@ public sealed class ConcreteBaseUnionEditTests : IDisposable
         // document's serializer leaves out — the int that rode along in data_int is the outgoing
         // leaf's member, dropped rather than carried over.
         Assert.False(switched.TryGetProperty("Data", out _));
-        Assert.Equal(before[1].GetRawText(), after[1].GetRawText());
+        Assert.Equal(before["Sibling"].GetRawText(), after["Sibling"].GetRawText());
     }
 
     /// <summary>The base is a leaf of its own: a property of type None is a bare ScriptProperty.</summary>
@@ -73,7 +74,7 @@ public sealed class ConcreteBaseUnionEditTests : IDisposable
             _fixture.Plugin, _fixture.Npc.ToString(), "virtual_machine_adapter", Adapter("ScriptProperty"));
 
         Assert.True(result.Applied, result.Message);
-        var written = WrittenProperties(_fixture.NpcBody())[0];
+        var written = WrittenProperties(_fixture.NpcBody())["Switched"];
         Assert.Equal("ScriptProperty", written.GetProperty("MutagenObjectType").GetString());
         Assert.Equal("Switched", written.GetProperty("Name").GetString());
     }
@@ -95,9 +96,10 @@ public sealed class ConcreteBaseUnionEditTests : IDisposable
         Assert.Equal(before, _fixture.NpcBody());
     }
 
-    private static List<JsonElement> WrittenProperties(string body) =>
-        [.. JsonDocument.Parse(body).RootElement.GetProperty("VirtualMachineAdapter")
-            .GetProperty("Scripts")[0].GetProperty("Properties").EnumerateArray()];
+    private static Dictionary<string, JsonElement> WrittenProperties(string body) =>
+        JsonDocument.Parse(body).RootElement.GetProperty("VirtualMachineAdapter")
+            .GetProperty("Scripts")[0].GetProperty("Properties").EnumerateArray()
+            .ToDictionary(p => p.GetProperty("Name").GetString()!, StringComparer.Ordinal);
 
     private sealed class ScriptedNpcFixture : IDisposable
     {
@@ -132,7 +134,7 @@ public sealed class ConcreteBaseUnionEditTests : IDisposable
             mod.WriteToBinary(pluginPath);
 
             _mirror = new LoadOrderMirror(
-                new DuckDbRecordIndexFactory(VmadReflectedSchemaReflector.Instance, new TableDdlBuilder(VmadReflectedSchemaReflector.Instance)));
+                new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
             ((ILoadOrderMirror)_mirror).Reconcile(
                 _gameDirectory, [new LoadOrderEntry(PluginName, pluginPath, Origin, Slot: 0, Enabled: true, Winning: true)],
                 GameRelease.Fallout4);
@@ -142,7 +144,7 @@ public sealed class ConcreteBaseUnionEditTests : IDisposable
         }
 
         public RecordEditService Service() =>
-            new(_mirror, VmadReflectedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
+            new(_mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
 
         public string NpcBody() => _mirror.Index!.At(RecordRef.Effective).GetDocument(Npc.ToString(), Plugin)!.Body!;
 

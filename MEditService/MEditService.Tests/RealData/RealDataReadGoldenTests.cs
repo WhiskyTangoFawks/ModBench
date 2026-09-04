@@ -34,14 +34,6 @@ public sealed class RealDataReadGoldenTests(CutDownPluginFixture fixture) : ICla
     private static readonly IReadOnlyDictionary<string, RecordTableSchema> Schemas =
         SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4);
 
-    // GetVmad is rejected from IRecordReads/IRecordIndex — reconstitution
-    // lives in Queries/RecordDocumentCodecs, operating on RecordDocument.Body.
-    private VmadData? GetVmad(string formKey)
-    {
-        var document = _repo.At(RecordRef.Effective).GetDocument(formKey, new PluginKey(TestPluginName, Origin));
-        return document == null ? null : RecordDocumentCodecs.GetVmad(document, GameRelease.Fallout4, NullLogger.Instance);
-    }
-
     /// <summary>Record types the cut-down plugin actually carries, in a fixed order.</summary>
     private static readonly string[] Types =
         ["achr", "acti", "armo", "cell", "dial", "dlbr", "fact", "glob", "info", "kywd", "misc", "npc_", "qust", "race", "refr", "scen", "weap", "wrld"];
@@ -93,19 +85,6 @@ public sealed class RealDataReadGoldenTests(CutDownPluginFixture fixture) : ICla
                 .ToList());
 
         Golden.Verify("realdata-record-detail", captured);
-    }
-
-    [Fact]
-    public void Vmad_ForEveryRecordType_MatchesGolden()
-    {
-        var captured = Types
-            .SelectMany(type => FormKeysOf(type).Select(fk => (Type: type, FormKey: fk)))
-            .Select(r => (r.Type, r.FormKey, Vmad: GetVmad(r.FormKey)))
-            .Where(r => r.Vmad != null)
-            .ToDictionary(r => $"{r.Type}/{r.FormKey}", r => r.Vmad);
-
-        Assert.NotEmpty(captured); // the fixture must actually exercise VMAD, or this golden is vacuous
-        Golden.Verify("realdata-vmad", captured);
     }
 
     [Fact]

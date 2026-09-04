@@ -18,7 +18,7 @@ ingest. This is the same shape as `form_references` (indexed on `target_form_key
 `record_type`/`editor_id`) — that table answers "what refers to this FormKey", one row per
 *reference edge*; this one answers "what is this FormKey", one row per *record*.
 
-`FieldDiff` and `VmadPropertyDiff` carry a resolution signal per FormKey value, using a three-way
+`FieldDiff` carries a resolution signal per FormKey value, using a three-way
 distinction (not found / found, wrong type / found, valid type) rather than a boolean — a
 resolvable-but-wrong-type reference is real information xEdit surfaces (it allows the jump; "could
 not be resolved" is reserved for records absent from the index). `Queries/` populates the signal
@@ -29,9 +29,6 @@ Server-side resolution is the only design that satisfies the affordance requirem
 Ctrl-hover affordance must decide whether to render *before* the hover occurs (a false affordance
 is the failure ADR-0026 exists to prevent), and the compare grid's EditorID hyperlinks must render
 at rest.
-
-VMAD's FormKey-valued properties reference ordinary major records, not VMAD-internal data, so they
-resolve through the same lookup — no VMAD-specific resolver.
 
 ## Alternatives rejected
 

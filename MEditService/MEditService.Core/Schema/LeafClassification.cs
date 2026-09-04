@@ -122,7 +122,7 @@ internal static class LeafClassification
             return new("formKey", "VARCHAR", GetFormLinkValidTypes(core, game), LeafSpec.NoEnumMembers,
                 obj => (g(obj) as IFormLinkGetter)?.FormKeyNullable?.ToString(),
                 Convert: null,
-                AllowsNull: ReflectedTypes.IsNullableFormLink(core));
+                AllowsNull: ReflectedTypes.IsNullableFormLink(core) || game.Annotations.IsPermittedNullFormLink(prop));
         }
 
         return null;

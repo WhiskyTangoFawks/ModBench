@@ -41,49 +41,26 @@ public class SchemaReflectorTests
         Assert.False(schemas.ContainsKey("navi"));
     }
 
-    // ── VMAD capability gate ───────────────────────────────────────────────────
+    // ── the virtual-machine adapter is an ordinary reflected column ───────────
 
     [Fact]
-    public void GetSchemas_Cmpo_HasVmad_IsFalse()
+    public void GetSchemas_Npc_VirtualMachineAdapter_IsAReflectedStructColumn()
+    {
+        var columns = _reflector.GetSchemas(GameRelease.Fallout4)["npc_"].RecordColumns;
+
+        var adapter = Assert.Single(columns, c => c.Name == "virtual_machine_adapter");
+        Assert.Equal("struct", adapter.ApiType);
+        Assert.NotNull(adapter.Apply.Writer);
+    }
+
+    [Fact]
+    public void GetSchemas_Cmpo_CarriesNoAdapter_BecauseTheRecordTypeHasNone()
     {
         // CMPO ("Component") has no VMAD subrecord per xEdit's format definition
-        // (wbDefinitionsFO4.pas) — Component_Generated.cs doesn't implement
-        // IHaveVirtualMachineAdapterGetter, so the schema-level flag must be false.
-        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
-        Assert.False(schemas["cmpo"].HasVmad);
-    }
+        // (wbDefinitionsFO4.pas), and Component_Generated.cs declares no VirtualMachineAdapter
+        // property — so the column's absence is the record type's own shape, not an exclusion.
+        var columns = _reflector.GetSchemas(GameRelease.Fallout4)["cmpo"].RecordColumns;
 
-    [Fact]
-    public void GetSchemas_Npc_HasVmad_IsTrue()
-    {
-        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
-        Assert.True(schemas["npc_"].HasVmad);
-    }
-
-    // ── VMAD is surfaced once, by the Scripts (VMAD) section ────────────────────
-
-    [Fact]
-    public void GetSchemas_Npc_VirtualMachineAdapterProperty_ExcludedFromGenericColumns()
-    {
-        // Npc.VirtualMachineAdapter is already surfaced by the dedicated Scripts (VMAD) section
-        // (HasVmad above) — reflecting it again here would duplicate it as a plain struct column.
-        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
-        var columns = schemas["npc_"].RecordColumns;
-        Assert.DoesNotContain(columns, c => c.Name == "virtual_machine_adapter");
-    }
-
-    [Fact]
-    public void GetSchemas_Cmpo_NoVmadInterface_RecordColumnsUnaffectedByVmadExclusion()
-    {
-        // Pins that a record type without VMAD (Component/CMPO, see GetSchemas_Cmpo_HasVmad_IsFalse
-        // above) keeps its ordinary columns (AutoCalcValue) and has no `virtual_machine_adapter` one.
-        // This does not, and cannot, distinguish the type-scoped exclusion from a name-only one: CMPO
-        // never had a VirtualMachineAdapter property to begin with, so both shapes pass here vacuously
-        // (confirmed by deleting the type-scoping `.Where` entirely — only the npc_ test above goes
-        // red). It's a characterization guard against a future filter of some other shape, not a test
-        // of the type-scoping itself.
-        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
-        var columns = schemas["cmpo"].RecordColumns;
         Assert.DoesNotContain(columns, c => c.Name == "virtual_machine_adapter");
         Assert.Contains(columns, c => c.Name == "auto_calc_value");
     }

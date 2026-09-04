@@ -51,7 +51,8 @@ export function idleMembers(structMeta: FieldMetadata, structValues: readonly un
  * numeric parameter as a plain `Int32`, and the write path rejects a JSON null into a non-nullable
  * column, which fails the *whole* array write, not just that member.
  *
- * Deliberately not `recordUtils.defaultAdapterElementValue`, which answers a different question —
+ * Deliberately not a general "a default value for this shape" helper, which answers a different
+ * question —
  * what a VMAD adapter's synthesized element starts as (#710 keeps every reflected default on the
  * backend). This is what an existing reflected member reads as once it carries nothing.
  */

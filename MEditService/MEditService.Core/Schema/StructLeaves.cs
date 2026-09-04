@@ -81,6 +81,7 @@ internal static class StructLeaves
     private static ApplyOutcome ApplyStructJson(
         object target, JsonElement json, string pName, Type setterType, IReadOnlyList<SubFieldSpec> subFields)
     {
+        if (json.ValueKind == JsonValueKind.Null) return ApplyAbsentStruct(target, pName);
         if (json.ValueKind != JsonValueKind.Object) return ApplyOutcome.ValueRejected;
 
         var concreteType = setterType;
@@ -101,6 +102,20 @@ internal static class StructLeaves
         if (subOutcome != ApplyOutcome.Applied) return subOutcome;
         if (rp.CanWrite) rp.SetValue(target, obj);
         return ApplyOutcome.Applied;
+    }
+
+    /// <summary>A struct the payload gives as <c>null</c> is the absence of one, which is exactly
+    /// what this field's own <c>Extract</c> answers for a subrecord the record does not carry (a
+    /// scene adapter's <c>on_begin</c> fragment, say) — so resending a record's own read value has
+    /// to mean "still none". Accepted only when the target genuinely holds none, and nothing is
+    /// written either way: a null over a struct that <i>is</i> there would be a delete gesture,
+    /// which no caller asks for and which a Loqui member the record format requires could not
+    /// survive.</summary>
+    private static ApplyOutcome ApplyAbsentStruct(object target, string pName)
+    {
+        var rp = target.GetType().GetProperty(pName, BindingFlags.Public | BindingFlags.Instance);
+        if (rp == null) return ApplyOutcome.PropertyNotFound;
+        return ReflectedTypes.ReadOrNull(target, rp) == null ? ApplyOutcome.Applied : ApplyOutcome.ValueRejected;
     }
 
     // A union base is written by the leaf the payload names: abstract, so nothing else could be

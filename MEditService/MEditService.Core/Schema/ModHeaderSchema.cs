@@ -121,7 +121,6 @@ internal static class ModHeaderSchema
             RecordType = headerGetterType,
             RecordColumns = columns,
             HeaderColumnExtract = extracts,
-            HasVmad = false, // a mod header is never a major record; VMAD is structurally not a concept here
         };
     }
 

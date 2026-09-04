@@ -18,7 +18,7 @@ namespace MEditService.Core.Records;
 /// <see cref="IRecordIndex.Unindex"/> do to a plugin's own rows across every ingest-owned table
 /// (<c>records</c>/<c>records_committed</c>/<c>form_lookup</c>/<c>form_references</c>/
 /// <c>placement</c>/<c>cell_location</c>/<c>container_child</c>), plus the record-level collectors
-/// (<see cref="CollectFormRefs"/>/<see cref="CollectVmadRefsForRecord"/>) and append primitives
+/// (<see cref="CollectFormRefs"/>) and append primitives
 /// <see cref="WorkingTreeOverlay"/>
 /// reuses for per-record rederivation — that reuse is deliberate: an edit's derived rows
 /// must come from the identical code a fresh ingest would produce them with, or the two could drift
@@ -67,14 +67,13 @@ internal sealed class PluginIngest
 
     /// <summary>Everything about one record that the index derives from the record itself, computed
     /// off the appender thread: the document bytes and their git-blob hash, the extracted
-    /// form/VMAD refs, and the container-child slots. Only writing it is sequential.</summary>
+    /// form refs, and the container-child slots. Only writing it is sequential.</summary>
     private sealed record PreparedRecord(
         IMajorRecordGetter Record, byte[] Body, string ContentHash, List<FormRef> Refs,
-        List<ContainerChildRow> ChildRows, bool HasVmad);
+        List<ContainerChildRow> ChildRows);
 
     private sealed class RefCounters
     {
-        public int Vmad;
         public long PrepareMs;
         public long AppendMs;
     }
@@ -136,20 +135,11 @@ internal sealed class PluginIngest
         }
         var documentsMs = phaseTimer.ElapsedMilliseconds;
 
-        // RecordIndexingLoggingTests pins these summary texts/levels; the counts come from the one
-        // pass above.
-        if (_logger.IsEnabled(LogLevel.Debug))
-        {
-            _logger.LogDebug("Indexed VMAD for {Count} records in {Plugin}", counters.Vmad, plugin);
-        }
-
-        // VMAD refs are collected inside IndexRecordTable's one pass, walking the live
-        // object rather than round-tripping through the document that pass just wrote, so both the
-        // generic and the VMAD Object refs land in the shared list before the single form_references
-        // flush below, while GetVmad reads the document on demand. What that pass
+        // Refs are collected inside IndexRecordTable's one pass, walking the live object rather
+        // than round-tripping through the document that pass just wrote, so they land in the
+        // shared list before the single form_references flush below. What that pass
         // does not see is exactly what has no schema (SchemaReflector.ExcludedTables — the placed
-        // projectile types): those records have no document and no row, and contribute no
-        // VMAD refs either.
+        // projectile types): those records have no document, no row and no refs.
 
         phaseTimer.Restart();
         IndexPlacement(pluginMod, plugin, origin);
@@ -212,8 +202,7 @@ internal sealed class PluginIngest
     public void DeleteAllRowsFor(string plugin, string origin)
     {
         // Every record row is in `records`, the plugin header's included (#631 — no per-type table
-        // survives). Deleting this plugin's `records` rows also removes the one thing
-        // GetVmad reads.
+        // survives).
         DeleteExistingForOrigin("records", plugin, origin);
         // "Removes every trace of key" has to include the Head side. A leftover snapshot would
         // keep answering at Head for a plugin the load order no longer holds — the exact opposite of
@@ -249,23 +238,6 @@ internal sealed class PluginIngest
         var refs = new List<FormRef>();
         CollectFormRefs(refs, record, recordType, schema);
 
-        // Same per-record NotImplementedException guard the old whole-plugin VMAD walk had: a live
-        // binary-overlay accessor for a not-yet-implemented property type can still throw here.
-        var hasVmad = false;
-        if (record is IHaveVirtualMachineAdapterGetter { VirtualMachineAdapter: not null })
-        {
-            try
-            {
-                CollectVmadRefsForRecord(record, recordType, refs);
-                hasVmad = true;
-            }
-            catch (NotImplementedException ex)
-            {
-                _logger.LogWarning(ex,
-                    "Skipping VMAD for {FormKey} — property type not implemented in Mutagen",
-                    record.FormKey);
-            }
-        }
         // Every record is serialized straight from the getter ingest already holds, container or
         // not: a container's document carries its embedded children, because that is what its
         // source file holds — the whole point of one document shape (ADR-0041). A tracked plugin
@@ -277,7 +249,7 @@ internal sealed class PluginIngest
         // Hashed from the codec's own bytes rather than from a string: identical for the valid
         // UTF-8 the codec emits, but this keeps the hash defined by what the source file would
         // contain, not by a round trip through .NET's string encoder.
-        return new PreparedRecord(record, body, GitBlobHash.Of(body), refs, childRows, hasVmad);
+        return new PreparedRecord(record, body, GitBlobHash.Of(body), refs, childRows);
     }
 
     private static void AppendPrepared(
@@ -380,17 +352,11 @@ internal sealed class PluginIngest
                 refs.AddRange(p.Refs);
                 containerChildRows.AddRange(p.ChildRows);
                 lookupRows.Add((record.FormKey.ToString(), tableName, record.EditorID));
-                if (p.HasVmad) counters.Vmad++;
                 if (_logger.IsEnabled(LogLevel.Trace))
                 {
-                    // RecordIndexingLoggingTests pins these per-record trace texts.
+                    // RecordIndexingLoggingTests pins this per-record trace text.
                     _logger.LogTrace("Appended {RecordType} record {FormKey} ({EditorID}) from {Plugin}",
                         tableName, record.FormKey, record.EditorID, plugin);
-                    if (p.HasVmad)
-                    {
-                        _logger.LogTrace("Indexed VMAD for {FormKey} ({RecordType}) in {Plugin}",
-                            record.FormKey, tableName, plugin);
-                    }
                 }
             }
             counters.AppendMs += batchTimer.ElapsedMilliseconds;
@@ -449,99 +415,6 @@ internal sealed class PluginIngest
         {
             FormRefPathBuilder.Walk(col, c => c.Extract(record), (path, fk) =>
                 refs.Add(new FormRef(sourceFormKey, fk, path, tableName, sourceEditorId)));
-        }
-    }
-
-    // One record's VMAD Object-property refs — the body of the loop above, extracted so
-    // per-record re-derivation walks VMAD through the identical code rather than a second copy of it.
-    // The parameter is IMajorRecordGetter rather than the VMAD aspect interface because the
-    // re-derivation path holds a record reconstituted from its document, and would otherwise have to
-    // repeat the aspect test at its own call site. A record with no VMAD contributes nothing.
-    // Internal: WorkingTreeOverlay's own per-record rederivation calls this through its PluginIngest
-    // reference (Overlay depends on Ingest, never the reverse).
-    //
-    // #671: a script is not only ever an entry in the adapter's own `Scripts` collection. Four of
-    // Mutagen's adapter subtypes hang further whole ScriptEntries off sub-structures, and a FormKey
-    // named only from one of those used to produce no row at all — invisible in Referenced By and
-    // invisible to the renumber cascade's untracked-referencer refusal, which is exactly the
-    // completeness that refusal's safety argument rests on (#572). Every one of those routes is
-    // enumerated by CollectAdapterScriptRefs below.
-    internal static void CollectVmadRefsForRecord(
-        IMajorRecordGetter record, string recordType, List<FormRef> refs)
-    {
-        if (record is not IHaveVirtualMachineAdapterGetter { VirtualMachineAdapter: { } vmad }) return;
-
-        var formKey = record.FormKey.ToString();
-        foreach (var script in vmad.Scripts)
-            CollectScriptRefs(formKey, recordType, "VMAD", script, refs);
-
-        CollectAdapterScriptRefs(formKey, recordType, vmad, refs);
-    }
-
-    // The scripts an adapter subtype reaches that its own `Scripts` collection does not. Only these
-    // four subtypes carry any: everything else on a fragment (QuestScriptFragment,
-    // ScriptFragment, ScenePhaseFragment) is stage/name metadata with no FormKey-bearing member, so
-    // there is nothing there to walk. Paths are Mutagen's own member names under the same `VMAD\`
-    // root the top-level walk uses, so a route reads off the path directly:
-    // <c>VMAD\Script\...</c> (quest fragment script), <c>VMAD\Aliases[i]\Property</c>,
-    // <c>VMAD\Aliases[i]\{script}\{prop}</c>, <c>VMAD\ScriptFragments\{script}\{prop}</c>.
-    // The `Scripts`/`Properties` collection names stay elided, matching the top-level walk's
-    // existing <c>VMAD\{script}\{prop}</c> shape rather than inventing a second convention.
-    private static void CollectAdapterScriptRefs(
-        string formKey, string recordType, IAVirtualMachineAdapterGetter vmad, List<FormRef> refs)
-    {
-        switch (vmad)
-        {
-            case IQuestAdapterGetter quest:
-                CollectScriptRefs(formKey, recordType, @"VMAD\Script", quest.Script, refs);
-                for (var i = 0; i < quest.Aliases.Count; i++)
-                {
-                    var alias = quest.Aliases[i];
-                    var aliasPath = $@"VMAD\Aliases[{i}]";
-                    // The alias's own binding target: a bare ScriptObjectProperty rather than a
-                    // named property inside a script, so it contributes its own single row.
-                    if (!alias.Property.Object.IsNull)
-                    {
-                        refs.Add(new FormRef(
-                            formKey, alias.Property.Object.FormKey.ToString(), $@"{aliasPath}\Property",
-                            recordType, null));
-                    }
-
-                    foreach (var script in alias.Scripts)
-                        CollectScriptRefs(formKey, recordType, aliasPath, script, refs);
-                }
-                break;
-
-            case IPackageAdapterGetter { ScriptFragments: { } packageFragments }:
-                CollectScriptRefs(formKey, recordType, @"VMAD\ScriptFragments", packageFragments.Script, refs);
-                break;
-
-            // SceneAdapter's ScriptFragments is an ISceneScriptFragmentsGetter, which derives from
-            // IScriptFragmentsGetter — so this one case covers the scene and dialogue-info adapters
-            // both. PackageScriptFragments above is a separate Mutagen type with the same members
-            // and no shared base, which is why it needs its own case.
-            case ISceneAdapterGetter { ScriptFragments: { } sceneFragments }:
-                CollectScriptRefs(formKey, recordType, @"VMAD\ScriptFragments", sceneFragments.Script, refs);
-                break;
-
-            case IDialogResponsesAdapterGetter { ScriptFragments: { } infoFragments }:
-                CollectScriptRefs(formKey, recordType, @"VMAD\ScriptFragments", infoFragments.Script, refs);
-                break;
-        }
-    }
-
-    // One ScriptEntry's properties, walked to whatever depth VmadCodec.Parse reaches (nested
-    // structs and struct lists included — the codec's own CollectMemberRefs recursion). Shared by
-    // the top-level walk and every adapter route above, so a route cannot see less than the others.
-    private static void CollectScriptRefs(
-        string formKey, string recordType, string prefix, IScriptEntryGetter script, List<FormRef> refs)
-    {
-        foreach (var property in script.Properties)
-        {
-            if (VmadCodec.Parse(property) is not { } parsed) continue;
-            var propPath = $@"{prefix}\{script.Name}\{property.Name}";
-            foreach (var r in parsed.Refs)
-                refs.Add(new FormRef(formKey, r.FormKey, propPath + r.RelativePath, recordType, null));
         }
     }
 

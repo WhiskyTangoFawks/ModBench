@@ -624,13 +624,11 @@ describe('DiffRow — array parent/element right-click context (#535)', () => {
 });
 
 describe('DiffRow — label indentation', () => {
-  // A VMAD property starts a fresh write subtree (subtreeFor resets `path` to
-  // `[]` on any row carrying `wirePath`, RecordPanel.tsx), so `path.length` alone can't tell this
-  // row apart from a true top-level one — only `depth` (the ancestor-hop count that survives the
-  // reset) can. Regression for the bug where these rows rendered flush with their container
-  // instead of indented under it.
-  it('indents a row whose path was reset by a wirePath subtree but whose depth is nonzero', () => {
-    renderRow({ context: { path: [], rootField: 'VMAD\\Script\\Health', depth: 2 } });
+  // `depth` is the ancestor-hop count, tracked independently of `path` — a row whose `path` is
+  // empty is not necessarily top-level, so only `depth` can tell the two apart. Regression for the
+  // bug where such rows rendered flush with their container instead of indented under it.
+  it('indents a row whose path is empty but whose depth is nonzero', () => {
+    renderRow({ context: { path: [], rootField: 'Health', depth: 2 } });
     expect(screen.getByText('Name').closest('td')).toHaveStyle({ paddingLeft: '48px' });
   });
 
@@ -697,9 +695,8 @@ describe('DiffRow — a collapsed container row, per column', () => {
     expect(cells[2].textContent).toBe('');
   });
 
-  // A structural container no plugin carries a value for — the always-present "Scripts (VMAD)"
-  // wrapper (vmadTreeAdapter.ts) is one — is present in every column. There is nothing there for a
-  // column to lack, so every column keeps its placeholder.
+  // A structural container no plugin carries a value for is present in every column. There is
+  // nothing there for a column to lack, so every column keeps its placeholder.
   it('keeps the placeholder in every column for a container no plugin carries a value for', () => {
     renderContainer({});
     expect(cellText(0)).toBe('{…}');

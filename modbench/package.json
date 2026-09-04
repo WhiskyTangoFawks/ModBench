@@ -171,36 +171,6 @@
         "category": "Modbench"
       },
       {
-        "command": "modbench.vmad.addScript",
-        "title": "Add Script…",
-        "category": "Modbench"
-      },
-      {
-        "command": "modbench.vmad.removeScript",
-        "title": "Remove Script",
-        "category": "Modbench"
-      },
-      {
-        "command": "modbench.vmad.addProperty",
-        "title": "Add Property…",
-        "category": "Modbench"
-      },
-      {
-        "command": "modbench.vmad.removeProperty",
-        "title": "Remove Property",
-        "category": "Modbench"
-      },
-      {
-        "command": "modbench.vmad.setScriptFlags",
-        "title": "Set Script Flags…",
-        "category": "Modbench"
-      },
-      {
-        "command": "modbench.vmad.setPropertyFlags",
-        "title": "Set Property Flags…",
-        "category": "Modbench"
-      },
-      {
         "command": "modbench.field.openExtended",
         "title": "Open in Editor…",
         "category": "Modbench"
@@ -262,7 +232,7 @@
         "icon": "$(account)",
         "category": "Modbench"
       },
-                  {
+      {
         "command": "modbench.modList.view.winningAtTop",
         "title": "Show Winning Mods at Top",
         "icon": "$(triangle-down)",
@@ -510,30 +480,6 @@
           "when": "false"
         },
         {
-          "command": "modbench.vmad.addScript",
-          "when": "false"
-        },
-        {
-          "command": "modbench.vmad.removeScript",
-          "when": "false"
-        },
-        {
-          "command": "modbench.vmad.addProperty",
-          "when": "false"
-        },
-        {
-          "command": "modbench.vmad.removeProperty",
-          "when": "false"
-        },
-        {
-          "command": "modbench.vmad.setScriptFlags",
-          "when": "false"
-        },
-        {
-          "command": "modbench.vmad.setPropertyFlags",
-          "when": "false"
-        },
-        {
           "command": "modbench.field.openExtended",
           "when": "false"
         },
@@ -684,7 +630,7 @@
           "when": "view == modbench.pluginListTree",
           "group": "navigation@3"
         },
-                        {
+        {
           "command": "modbench.modList.filter",
           "when": "view == modbench.modList && !modbench.modList.filterActive",
           "group": "navigation@1"
@@ -934,36 +880,6 @@
           "command": "modbench.array.moveDown",
           "when": "webviewId == 'modbench' && webviewSection =~ /\\barrayElement\\b/ && canMoveDown",
           "group": "modbench@4"
-        },
-        {
-          "command": "modbench.vmad.addScript",
-          "when": "webviewId == 'modbench' && webviewSection =~ /\\bvmadScripts\\b/",
-          "group": "modbench@5"
-        },
-        {
-          "command": "modbench.vmad.addProperty",
-          "when": "webviewId == 'modbench' && webviewSection =~ /\\bvmadScript\\b/",
-          "group": "modbench@6"
-        },
-        {
-          "command": "modbench.vmad.removeScript",
-          "when": "webviewId == 'modbench' && webviewSection =~ /\\bvmadScript\\b/",
-          "group": "modbench@7"
-        },
-        {
-          "command": "modbench.vmad.setScriptFlags",
-          "when": "webviewId == 'modbench' && webviewSection =~ /\\bvmadScript\\b/",
-          "group": "modbench@8"
-        },
-        {
-          "command": "modbench.vmad.removeProperty",
-          "when": "webviewId == 'modbench' && webviewSection =~ /\\bvmadProperty\\b/",
-          "group": "modbench@9"
-        },
-        {
-          "command": "modbench.vmad.setPropertyFlags",
-          "when": "webviewId == 'modbench' && webviewSection =~ /\\bvmadProperty\\b/",
-          "group": "modbench@10"
         },
         {
           "command": "modbench.record.copyAsOverride",

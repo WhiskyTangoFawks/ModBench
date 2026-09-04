@@ -14,4 +14,5 @@ internal sealed record ColumnInfoResult(
     IReadOnlyList<FieldMetadata>? SubFieldMetas = null,
     bool AllowsNull = false,
     bool IsFlagsEnum = false,
-    string? ViewDefaultLiteral = null);
+    string? ViewDefaultLiteral = null,
+    IReadOnlyList<string>? KeyMembers = null);

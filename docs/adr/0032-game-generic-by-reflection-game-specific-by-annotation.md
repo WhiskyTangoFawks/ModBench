@@ -50,6 +50,6 @@ Two consequences worth stating outright, because neither is obvious:
 - A shape the walk reaches and no one has decided a presentation for is named and counted
   (`SchemaRefusals`), not silently dropped — the honest third outcome beside "reflected" and
   "annotated".
-- `VmadCodec` remains the one Mutagen-edge codec (ADR-0030). Its subject is a byte-identical,
-  same-named type family across Skyrim/FO4/Starfield, so it generalizes by a namespace swap; that
-  is a property of VMAD's shape, not a general licence for a per-game codec.
+- There is no hand-written Mutagen-edge codec left. The virtual-machine adapter was the last one;
+  it is reflected like every other field, with its per-game facts (which of its arrays are keyed,
+  and by what) in an annotation table validated against the assembly like all the others.

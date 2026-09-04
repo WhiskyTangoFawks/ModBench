@@ -13,12 +13,12 @@ import { ApiPluginRepository, type PluginRepository } from './PluginRepository';
 import { trackedModFoldersOf, registerTrackedRepositories, pluginRepositoriesOf } from './trackedRepositories';
 import { startExternalChangePolling, gateExternalChangePolling, type OpenMergeEditor } from './externalChangeCoordinator';
 import { buildWebviewHtml } from './webviewHtml';
-import { EXTENSION_TO_WEBVIEW, type ExtensionToWebview, type VmadScriptsContext, type VmadScriptContext, type VmadPropertyContext, type ColumnHeaderContext } from './messages';
+import { EXTENSION_TO_WEBVIEW, type ExtensionToWebview, type ColumnHeaderContext } from './messages';
 import { copyTargetPlugins, type CopyGesture } from './copyTargetPlugins';
 import { renumberConfirmMessage } from './renumberConfirm';
-import { routeRecordPanelMessage, pickScriptNameViaInputBox, type RouteRecordPanelMessageDeps } from './recordPanelMessageRouter';
+import { routeRecordPanelMessage, type RouteRecordPanelMessageDeps } from './recordPanelMessageRouter';
 import { RecordDecorationProvider } from './RecordDecorationProvider';
-import { broadcastToRecordPanels, makeOnRecordEdited } from './onRecordEdited';
+import { makeOnRecordEdited } from './onRecordEdited';
 import { registerForwarderCommands } from './recordPanelForwarderCommands';
 import { makeReporter } from '../reporter';
 
@@ -53,69 +53,12 @@ export interface EditorCommandDeps {
   outputChannel: vscode.LogOutputChannel;
 }
 /** Editor-side commands, grouped by what they belong to: the record view/navigation/filter
- *  commands, the record panel's own message-forwarded commands, and VMAD's host-resolved prompts
- *  (Add Script, Set Script/Property Flags) — three distinct concerns under the one webview
- *  surface, named here rather than left as an unlabeled flat list. */
+ *  commands and the record panel's own message-forwarded commands — two distinct concerns under
+ *  the one webview surface, named here rather than left as an unlabeled flat list. */
 export function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposable[] {
   return [
     ...registerRecordViewCommands(deps),
     ...registerForwarderCommands(deps.recordPanels),
-    ...registerVmadPromptCommands(deps.recordPanels),
-  ];
-}
-// Set Script Flags/Set Property Flags' own QuickPick choices — VMAD's fixed,
-// stable flag vocabulary (the binary format's own enum, VmadCodec.cs's ScriptEntry.Flag/
-// ScriptProperty.Flag). Mirrored here rather than imported from webview/src/vmadOps.ts across the
-// webview/extension-host process boundary (nothing else on this side needs that module).
-export const VMAD_SCRIPT_FLAGS = ['Local', 'Inherited', 'Removed', 'InheritedAndRemoved'] as const;
-export const VMAD_PROP_FLAGS = ['Edited', 'Removed'] as const;
-// The VMAD commands that resolve something host-side (a native input box or QuickPick) before
-// there is a message to build, so they can't live in recordPanelForwarderCommands.ts's own
-// table alongside their sibling VMAD commands (Remove Script, Add Property, Remove Property —
-// all pure forwards, moved there). Reached from the "Scripts (VMAD)" wrapper row (Add Script), a
-// script row (Set Script Flags), or a property row (Set Property Flags). Add Script needs its own
-// native input box (pickScriptNameViaInputBox — no round trip through the webview) since there is
-// no existing row to right-click for a script that doesn't exist yet. Set Script/Property Flags
-// run their own native QuickPick here, seeded (script only — no per-property read model carries a
-// current flag) the same way the FormKey picker sorts its own seed to the front.
-export function registerVmadPromptCommands(recordPanels: Set<vscode.WebviewPanel>): vscode.Disposable[] {
-  return [
-    vscode.commands.registerCommand('modbench.vmad.addScript', async (ctx?: VmadScriptsContext) => {
-      if (!ctx) return;
-      const name = await pickScriptNameViaInputBox();
-      if (name == null) return;
-      broadcastToRecordPanels(recordPanels, {
-        type: EXTENSION_TO_WEBVIEW.VMAD_STRUCTURAL_OP, formKey: ctx.formKey, plugin: ctx.plugin, origin: ctx.origin,
-        fieldPath: `VMAD\\${name}`, value: { op: 'add_script' },
-      });
-    }),
-    // "Seeded with the current value" means the script's own current flag is
-    // sorted to the front of the QuickPick's item array — showQuickPick has no activeItem option
-    // the way createQuickPick does, so array order is the only way to pre-highlight an item, the
-    // same convention pickFormKeyViaQuickPick already uses.
-    vscode.commands.registerCommand('modbench.vmad.setScriptFlags', async (ctx?: VmadScriptContext) => {
-      if (!ctx) return;
-      const items = ctx.currentFlags && (VMAD_SCRIPT_FLAGS as readonly string[]).includes(ctx.currentFlags)
-        ? [ctx.currentFlags, ...VMAD_SCRIPT_FLAGS.filter(f => f !== ctx.currentFlags)]
-        : [...VMAD_SCRIPT_FLAGS];
-      const picked = await vscode.window.showQuickPick(items, { placeHolder: 'Script flags' });
-      if (!picked) return;
-      broadcastToRecordPanels(recordPanels, {
-        type: EXTENSION_TO_WEBVIEW.VMAD_STRUCTURAL_OP, formKey: ctx.formKey, plugin: ctx.plugin, origin: ctx.origin,
-        fieldPath: `VMAD\\${ctx.scriptName}`, value: { op: 'set_flags', flags: picked },
-      });
-    }),
-    // No current-value seed — VmadPropertyContext (messages.ts) carries none;
-    // the read model has never surfaced a per-property flag.
-    vscode.commands.registerCommand('modbench.vmad.setPropertyFlags', async (ctx?: VmadPropertyContext) => {
-      if (!ctx) return;
-      const picked = await vscode.window.showQuickPick([...VMAD_PROP_FLAGS], { placeHolder: 'Property flags' });
-      if (!picked) return;
-      broadcastToRecordPanels(recordPanels, {
-        type: EXTENSION_TO_WEBVIEW.VMAD_STRUCTURAL_OP, formKey: ctx.formKey, plugin: ctx.plugin, origin: ctx.origin,
-        fieldPath: `VMAD\\${ctx.scriptName}\\${ctx.propName}`, value: { op: 'set_flags', flags: picked },
-      });
-    }),
   ];
 }
 /** Record view/navigation + filter commands. */

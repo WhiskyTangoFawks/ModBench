@@ -24,7 +24,6 @@ public sealed class SwaggerSchemaTests
     // $ref cannot carry a sibling `nullable` keyword.
     [Theory]
     [InlineData("FieldMetadata", "elementType", "FieldMetadata")] // FieldMetadata? ElementType
-    [InlineData("CompareResult", "vmad", "VmadCompare")] // VmadCompare? Vmad
     public async Task NullableRefProperty_IsNullableViaAllOfWrapper(string schemaName, string propertyName, string refTarget)
     {
         var root = await GetSchemaAsync();

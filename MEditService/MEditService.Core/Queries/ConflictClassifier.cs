@@ -163,7 +163,7 @@ public sealed class ConflictClassifier(ILogger<ConflictClassifier>? logger = nul
                 if (meta?.Fields != null)
                     children = BuildStructChildren(meta.Fields, values, ctx);
                 else if (meta?.ElementType != null)
-                    children = BuildArrayChildren(meta.ElementType, values, ctx, MaxArrayChildCount, fieldName);
+                    children = BuildArrayChildren(meta, values, ctx, MaxArrayChildCount, fieldName);
                 var resolutions = BuildResolutions(meta, values, ctx.ResolveFormKey, ctx.Release);
                 var conflictAll = AggregateConflictAll(cellStates, children);
                 return new FieldDiff(fieldName, values, winnerColumn, winnerValue, cellStates, conflictAll, children, resolutions);
@@ -195,12 +195,13 @@ public sealed class ConflictClassifier(ILogger<ConflictClassifier>? logger = nul
     }
 
     private static List<FieldDiff>? BuildArrayChildren(
-        FieldMetadata elementMeta,
+        FieldMetadata arrayMeta,
         Dictionary<string, object?> parentValues,
         DiffContext ctx,
         int maxChildren,
         string parentFieldName)
     {
+        var elementMeta = arrayMeta.ElementType!;
         var arrays = parentValues.ToDictionary(
             kv => kv.Key,
             kv => kv.Value is System.Text.Json.JsonElement je &&
@@ -208,12 +209,16 @@ public sealed class ConflictClassifier(ILogger<ConflictClassifier>? logger = nul
                 ? (System.Text.Json.JsonElement?)je : null);
 
         var builder = new ArrayChildrenBuilder(elementMeta, arrays, ctx, maxChildren, parentFieldName);
-        var children = elementMeta.IsSortable ? builder.BuildSorted() : builder.BuildPositional();
+        List<FieldDiff>? children;
+        if (arrayMeta.KeyMembers is { } keyMembers) children = builder.BuildKeyed(keyMembers);
+        else if (elementMeta.IsSortable) children = builder.BuildSorted();
+        else children = builder.BuildPositional();
         return children is { Count: > 0 } ? children : null;
     }
 
-    // One array field's per-element diff expansion: sorted arrays diff by element key
-    // (union across plugins), unsorted arrays diff by position.
+    // One array field's per-element diff expansion: a keyed array (FieldMetadata.KeyMembers) diffs
+    // by the key its elements carry, a pure-FormLink array by the element value itself, and every
+    // other array by position.
     private sealed class ArrayChildrenBuilder(
         FieldMetadata elementMeta,
         Dictionary<string, System.Text.Json.JsonElement?> arrays,
@@ -225,14 +230,48 @@ public sealed class ConflictClassifier(ILogger<ConflictClassifier>? logger = nul
         private readonly string _masterColumn = ctx.MasterColumn;
         private readonly ILogger _logger = ctx.Logger;
 
-        public List<FieldDiff>? BuildSorted()
+        /// <summary>A keyed array aligns element-for-element by key across plugins, so a script
+        /// one plugin does not carry is an absence at that key rather than a shift of everything
+        /// after it — the positional reading of the same two arrays would report every element from
+        /// the missing one onwards as a conflict. Rows come out in key order, which is also the
+        /// order the write path stores them in (Edits.KeyedArrays), so the grid reads the same way
+        /// the file does.</summary>
+        public List<FieldDiff>? BuildKeyed(IReadOnlyList<string> keyMembers) =>
+            BuildAligned(e => ElementKey.Of(e, keyMembers), (a, b) => a.CompareTo(b));
+
+        /// <summary>A pure-FormLink array's element <i>is</i> its key. A non-string element — the
+        /// JSON null a never-set slot serializes as — has none and is not a row at all. Rows stay
+        /// in first-seen order across the load order, since the elements carry no order of their
+        /// own beyond the one the plugins wrote them in.</summary>
+        public List<FieldDiff>? BuildSorted() =>
+            BuildAligned(
+                e => e.ValueKind == System.Text.Json.JsonValueKind.String ? ElementKey.OfValue(e.GetString()!) : null,
+                order: null);
+
+        /// <summary>One row per key in the union across plugins, each carrying whichever element
+        /// each plugin holds at that key and null where it holds none. One EnumerateArray pass per
+        /// plugin, and one definition of what happens to a second element sharing a key: the first
+        /// wins. The write path refuses to store such a pair
+        /// (<see cref="Edits.RecordEditRefusal.DuplicateKeyInKeyedArray"/>), but a plugin another
+        /// tool wrote can still hold one, and the grid has to show something.</summary>
+        private List<FieldDiff>? BuildAligned(
+            Func<System.Text.Json.JsonElement, ElementKey?> keyOf, Comparison<ElementKey>? order)
         {
-            var union = _records
-                .Where(r => arrays.GetValueOrDefault(ColumnKey.Of(r.Plugin, r.Origin)) != null)
-                .SelectMany(r => arrays[ColumnKey.Of(r.Plugin, r.Origin)]!.Value.EnumerateArray()
-                    .Select(e => e.GetString()).OfType<string>())
-                .Distinct(StringComparer.Ordinal)
-                .ToList();
+            var byPlugin = new Dictionary<string, Dictionary<string, object?>>(StringComparer.Ordinal);
+            var union = new List<ElementKey>();
+            var seen = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var r in _records)
+            {
+                var column = ColumnKey.Of(r.Plugin, r.Origin);
+                if (arrays.GetValueOrDefault(column) is not { } array) continue;
+                var lookup = new Dictionary<string, object?>(StringComparer.Ordinal);
+                foreach (var element in array.EnumerateArray())
+                {
+                    if (keyOf(element) is not { } key) continue;
+                    if (lookup.TryAdd(key.Text, element) && seen.Add(key.Text)) union.Add(key);
+                }
+                byPlugin[column] = lookup;
+            }
 
             if (union.Count > maxChildren)
             {
@@ -240,19 +279,15 @@ public sealed class ConflictClassifier(ILogger<ConflictClassifier>? logger = nul
                 return null;
             }
 
-            var lookups = BuildPluginLookups();
+            if (order != null) union.Sort(order);
 
-            var children = new List<FieldDiff>();
-            foreach (var key in union)
-            {
-                var subValues = arrays.ToDictionary(
+            return [.. union.Select(key => MakeChild(
+                key.Text,
+                arrays.ToDictionary(
                     kv => kv.Key,
-                    kv => lookups.TryGetValue(kv.Key, out var lk) && lk.TryGetValue(key, out var el)
-                        ? el : null);
-
-                children.Add(MakeChild(key, subValues));
-            }
-            return children;
+                    kv => byPlugin.TryGetValue(kv.Key, out var lookup) && lookup.TryGetValue(key.Text, out var el)
+                        ? el
+                        : null)))];
         }
 
         public List<FieldDiff>? BuildPositional()
@@ -285,23 +320,6 @@ public sealed class ConflictClassifier(ILogger<ConflictClassifier>? logger = nul
                 children.Add(MakeChild($"[{i}]", subValues));
             }
             return children;
-        }
-
-        // One EnumerateArray pass per plugin; avoids O(u×p×e) scan per key in BuildSorted.
-        private Dictionary<string, Dictionary<string, object?>> BuildPluginLookups()
-        {
-            var lookups = new Dictionary<string, Dictionary<string, object?>>();
-            foreach (var kv in arrays.Where(kv => kv.Value != null))
-            {
-                var pluginLookup = new Dictionary<string, object?>(StringComparer.Ordinal);
-                foreach (var el in kv.Value!.Value.EnumerateArray())
-                {
-                    var k = el.GetString();
-                    if (k != null) pluginLookup.TryAdd(k, el); // keep first on dup key
-                }
-                lookups[kv.Key] = pluginLookup;
-            }
-            return lookups;
         }
 
         private FieldDiff MakeChild(string label, Dictionary<string, object?> subValues)
@@ -341,7 +359,7 @@ public sealed class ConflictClassifier(ILogger<ConflictClassifier>? logger = nul
 
             List<FieldDiff>? subChildren = null;
             if (subField.IsArray && subField.ElementType != null)
-                subChildren = BuildArrayChildren(subField.ElementType, subValues, ctx, MaxArrayChildCount, subField.Name);
+                subChildren = BuildArrayChildren(subField, subValues, ctx, MaxArrayChildCount, subField.Name);
             else if (subField.Fields != null)
                 subChildren = BuildStructChildren(subField.Fields, subValues, ctx);
 

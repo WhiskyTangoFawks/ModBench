@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text.Json;
 using MEditService.Core.Queries;
 using MEditService.Core.Records;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -44,21 +45,23 @@ public sealed class CutDownPluginIndexTests(CutDownPluginFixture fixture) : ICla
             "Expected the cut-down plugin to contain placed references (REFR/ACHR).");
     }
 
-    // VMAD reconstitutes from the record's own document (there is no vmad_scripts table), so this
-    // goes through GetVmad instead of a table count. Deliberately still concrete rather than a bare
-    // "GetVmad doesn't throw" check: FormKey 2499C4:Fallout4.esm is a real NPC in the curated slice
-    // known to carry two scripts, one named RadroachLegendaryScript (pinned in the realdata-vmad.json
-    // golden too) — a weakened "returns non-null somewhere" assertion would pass even if GetVmad
-    // silently dropped every script but one.
+    // The adapter is an ordinary reflected column, so its value arrives on the record's own
+    // document like every other field's. Deliberately concrete rather than a bare "the field is
+    // there" check: FormKey 2499C4:Fallout4.esm is a real NPC in the curated slice known to carry
+    // two scripts, one named RadroachLegendaryScript — a weakened assertion would pass even if the
+    // read silently dropped every script but one.
     [Fact]
-    public void Index_RealScripts_ReconstitutesVmadFromDocument()
+    public void Index_RealScripts_ReadTheAdapterOffTheDocument()
     {
         var document = _fixture.Repo.At(RecordRef.Effective).GetDocument("2499C4:Fallout4.esm", new PluginKey(CutDownPluginFixture.PluginFileName, "Data"));
-        var vmad = document == null ? null : RecordDocumentCodecs.GetVmad(document, GameRelease.Fallout4, NullLogger.Instance);
 
-        Assert.NotNull(vmad);
-        Assert.Equal(2, vmad.Scripts.Count);
-        Assert.Contains(vmad.Scripts, s => s.Name == "RadroachLegendaryScript");
+        Assert.NotNull(document);
+        var adapter = Assert.Single(document!.Fields, f => f.Metadata.Name == "virtual_machine_adapter");
+        using var value = JsonDocument.Parse(
+            adapter.Value is JsonElement json ? json.GetRawText() : (string)adapter.Value!);
+        var scripts = value.RootElement.GetProperty("scripts");
+        Assert.Equal(2, scripts.GetArrayLength());
+        Assert.Contains(scripts.EnumerateArray(), s => s.GetProperty("name").GetString() == "RadroachLegendaryScript");
     }
 
     [Fact]

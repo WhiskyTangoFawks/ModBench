@@ -35,7 +35,7 @@ describe('FormKeyLink — label', () => {
     expect(link.style.textOverflow).toBe('ellipsis');
     expect(link.style.whiteSpace).toBe('nowrap');
     expect(link.style.maxWidth).toBe('100%');
-    // Load-bearing: FormKeyCell and VmadSection wrap this in a `display: inline-flex` span, so the
+    // Load-bearing: FormKeyCell wraps this in a `display: inline-flex` span, so the
     // link is a flex item, and a flex item's default `min-width: auto` refuses to shrink below its
     // content — which silently cancels the ellipsis above.
     expect(link.style.minWidth).toBe('0');

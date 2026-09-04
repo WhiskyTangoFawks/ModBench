@@ -4,14 +4,6 @@
       "Count": 1390,
       "Sample": [
         {
-          "EditorId": null,
-          "FieldPath": "VMAD\\Aliases[0]\\Property",
-          "FormKey": "003648:Fallout4.esm",
-          "Origin": "Data",
-          "Plugin": "mEditTestSubset.esm",
-          "RecordType": "qust"
-        },
-        {
           "EditorId": "DialogueDiamondCity",
           "FieldPath": "dialog_branches[0].quest",
           "FormKey": "003648:Fallout4.esm",
@@ -38,6 +30,14 @@
         {
           "EditorId": "DialogueDiamondCity",
           "FieldPath": "dialog_topics[0].responses[166].conditions[1].data.parameter_one_record",
+          "FormKey": "003648:Fallout4.esm",
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm",
+          "RecordType": "qust"
+        },
+        {
+          "EditorId": "DialogueDiamondCity",
+          "FieldPath": "dialog_topics[0].responses[20].conditions[0].data.parameter_one_record",
           "FormKey": "003648:Fallout4.esm",
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
@@ -171,8 +171,8 @@
           "RecordType": "dial"
         },
         {
-          "EditorId": null,
-          "FieldPath": "VMAD\\Aliases[0]\\Property",
+          "EditorId": "DialogueGenericPlayer",
+          "FieldPath": "dialog_branches[0].quest",
           "FormKey": "0179EF:Fallout4.esm",
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
@@ -200,24 +200,24 @@
           "RecordType": "dial"
         },
         {
-          "EditorId": null,
-          "FieldPath": "VMAD\\Aliases[0]\\Property",
+          "EditorId": "DialogueConcordArea",
+          "FieldPath": "dialog_branches[0].quest",
           "FormKey": "0179F3:Fallout4.esm",
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
           "RecordType": "qust"
         },
         {
-          "EditorId": null,
-          "FieldPath": "VMAD\\Script\\Fragments:Quests:QF_DialogueConcordArea_000179F3\\Alias_GrandmaMonkAlias",
+          "EditorId": "DialogueConcordArea",
+          "FieldPath": "dialog_topics[0].quest",
           "FormKey": "0179F3:Fallout4.esm",
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
           "RecordType": "qust"
         },
         {
-          "EditorId": null,
-          "FieldPath": "VMAD\\Script\\Fragments:Quests:QF_DialogueConcordArea_000179F3\\Alias_JunLongAlias",
+          "EditorId": "DialogueConcordArea",
+          "FieldPath": "dialog_topics[0].responses[41].conditions[2].data.parameter_one_record",
           "FormKey": "0179F3:Fallout4.esm",
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
@@ -363,7 +363,7 @@
       ]
     },
     "1A6C6F:Fallout4.esm": {
-      "Count": 1,
+      "Count": 2,
       "Sample": [
         {
           "EditorId": null,
@@ -372,6 +372,14 @@
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
           "RecordType": "achr"
+        },
+        {
+          "EditorId": null,
+          "FieldPath": "activate_parents.parents[0].reference",
+          "FormKey": "2169D2:Fallout4.esm",
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm",
+          "RecordType": "refr"
         }
       ]
     },
@@ -405,8 +413,8 @@
       "Count": 1,
       "Sample": [
         {
-          "EditorId": null,
-          "FieldPath": "VMAD\\ShipmentScript\\pShipment",
+          "EditorId": "shipment_Wood_250",
+          "FieldPath": "virtual_machine_adapter.scripts[0].properties[1].object",
           "FormKey": "24A068:Fallout4.esm",
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
@@ -418,8 +426,8 @@
       "Count": 1,
       "Sample": [
         {
-          "EditorId": null,
-          "FieldPath": "VMAD\\ShipmentScript\\pShipment",
+          "EditorId": "shipment_Rubber_large",
+          "FieldPath": "virtual_machine_adapter.scripts[0].properties[1].object",
           "FormKey": "24A069:Fallout4.esm",
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
@@ -431,8 +439,8 @@
       "Count": 1,
       "Sample": [
         {
-          "EditorId": null,
-          "FieldPath": "VMAD\\ShipmentScript\\pShipment",
+          "EditorId": "shipment_Ceramic_large",
+          "FieldPath": "virtual_machine_adapter.scripts[0].properties[1].object",
           "FormKey": "24A06B:Fallout4.esm",
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
@@ -444,24 +452,24 @@
       "Count": 3,
       "Sample": [
         {
-          "EditorId": null,
-          "FieldPath": "VMAD\\CreationClub:VRWorkshops:VRWorkshopAttackMarkerScript\\VRWorkshop_TutorialShown_VRAttackMarker",
+          "EditorId": "VRWorkshopShared_AttackMarker_SentryBot",
+          "FieldPath": "virtual_machine_adapter.scripts[1].properties[0].object",
           "FormKey": "24A313:Fallout4.esm",
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
           "RecordType": "acti"
         },
         {
-          "EditorId": null,
-          "FieldPath": "VMAD\\CreationClub:VRWorkshops:VRWorkshopAttackMarkerScript\\VRWorkshop_TutorialShown_VRAttackMarker",
+          "EditorId": "VRWorkshopShared_AttackMarker_Molerat",
+          "FieldPath": "virtual_machine_adapter.scripts[1].properties[0].object",
           "FormKey": "24A314:Fallout4.esm",
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
           "RecordType": "acti"
         },
         {
-          "EditorId": null,
-          "FieldPath": "VMAD\\CreationClub:VRWorkshops:VRWorkshopAttackMarkerScript\\VRWorkshop_TutorialShown_VRAttackMarker",
+          "EditorId": "VRWorkshopShared_AttackMarker_FeralGhoul",
+          "FieldPath": "virtual_machine_adapter.scripts[1].properties[0].object",
           "FormKey": "24A315:Fallout4.esm",
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",

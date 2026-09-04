@@ -19,8 +19,7 @@ namespace MEditService.Core.Records;
 /// seam.
 ///
 /// <para><b>Depends on <see cref="PluginIngest"/>, one-directionally</b>:
-/// rederivation reuses ingest's own collectors (<see cref="PluginIngest.CollectFormRefs"/>/
-/// <see cref="PluginIngest.CollectVmadRefsForRecord"/>)
+/// rederivation reuses ingest's own collector (<see cref="PluginIngest.CollectFormRefs"/>)
 /// and append primitives, deliberately — an edit's derived rows must come from the identical code a
 /// fresh ingest would produce them with, or the two could drift apart. PluginIngest never
 /// references this class back.</para>
@@ -398,7 +397,6 @@ internal sealed class WorkingTreeOverlay
         // Through PluginIngest — Overlay depends on Ingest for the collectors so a
         // per-record rederivation cannot describe a different graph than a fresh ingest would.
         PluginIngest.CollectFormRefs(refs, record, recordType, schema);
-        PluginIngest.CollectVmadRefsForRecord(record, recordType, refs);
 
         DeleteFormReferencesForRecord(key, formKey);
         if (refs.Count > 0)

@@ -1,4 +1,4 @@
-import type { ColumnKey, CompareOverride, ConflictAll, ConflictThis, FieldMetadata, PathSegment } from './types';
+import type { ColumnKey, CompareOverride, FieldMetadata, PathSegment } from './types';
 import { columnKey } from './types';
 
 export function toStr(v: unknown): string {
@@ -77,48 +77,14 @@ export function parseElementIndex(fieldName: string): number {
   return Number.parseInt(fieldName.slice(1, -1), 10);
 }
 
-// The one definition of "does this plugin's own array actually
-// have an element at this index" — a row's index comes from the union-aligned tree across every
-// plugin's column (an ordinary array with differing per-plugin lengths, or VMAD's own
-// positional alignment), not from this one plugin's own array, so it can be at or past *this
-// specific* array's length even though the row itself exists (a sibling plugin has more elements
-// there). `length` rather than the array itself so arrayElementContext (which only ever has
-// `arrayLength`, no array) can share it too.
+// The one definition of "does this plugin's own array actually have an element at this index" — a
+// row's index comes from the union-aligned tree across every plugin's column (an array with
+// differing per-plugin lengths), not from this one plugin's own array, so it can be at or past
+// *this specific* array's length even though the row itself exists (a sibling plugin has more
+// elements there). `length` rather than the array itself so arrayElementContext (which only ever
+// has `arrayLength`, no array) can share it too.
 export function hasElementAt(length: number, index: number): boolean {
   return index >= 0 && index < length;
-}
-
-// #630: the three pure array-arity/order mutations behind Move Up/Move Down/Remove/Add — for an
-// ordinary reflected field these moved server-side (RecordFieldWriter/ArrayOpWriter compute the
-// result from the record's own current value and schema); the surviving callers are
-// RecordPanel's own VMAD carve-outs (routed through computeArrayOpClientSide), deliberately out
-// of #630's scope — a Papyrus scalar-array property's own arity ops belong in VmadCodec's own
-// structural-op vocabulary, not ArrayOpWriter's ColumnSpec-backed one.
-// Each returns a new array; the carve-out commits the whole thing via onEditCell, the same as any
-// other field commit.
-//
-// `index` itself must be bounds-checked here, not just the swap target `j` (index ===
-// array.length, direction -1 → j = index - 1, which passes a j-only guard) — without it, the
-// destructuring swap extends the array by one slot and duplicates a value instead of the "return
-// the array unchanged" no-op every other boundary already gets.
-export function moveArrayElement(array: unknown[], index: number, direction: -1 | 1): unknown[] {
-  const j = index + direction;
-  if (!hasElementAt(array.length, index) || !hasElementAt(array.length, j)) return array;
-  const next = [...array];
-  [next[index], next[j]] = [next[j], next[index]];
-  return next;
-}
-
-// Bounds-checked the same way moveArrayElement is — `Array.prototype.filter` already
-// leaves the *content* unchanged for an out-of-range index, but it still hands back a new array
-// reference, which defeats a caller's reference-equality no-op check.
-export function removeArrayElement(array: unknown[], index: number): unknown[] {
-  if (!hasElementAt(array.length, index)) return array;
-  return array.filter((_, i) => i !== index);
-}
-
-export function appendArrayElement(array: unknown[], value: unknown): unknown[] {
-  return [...array, value];
 }
 
 // ── Native right-click menu contexts ──────────────────────────────────────────
@@ -126,17 +92,17 @@ export function appendArrayElement(array: unknown[], value: unknown): unknown[] 
 // VS Code's own `contributes.menus["webview/context"]` gates on a `data-vscode-context` attribute
 // carrying JSON VS Code parses itself and hands to the invoked command — never a rendered
 // `<ul role="menu">`. `combineVscodeContexts` below lets one row carry more than one of these at
-// once (a VMAD array-of-scalars property is both an array parent/element and a VMAD structural-op
-// target), so each builder returns the plain object rather than a JSON string itself.
+// once (an array element row is both an element and, through its parent, part of that array), so
+// each builder returns the plain object rather than a JSON string itself.
 // The two interfaces themselves live in `src/medit/messages.ts` (imported below), not here —
 // extension.ts's own command handlers need the identical shape to type the `ctx` parameter VS
 // Code hands them, and that module is the one place both processes already share a contract.
 export type {
-  ArrayElementContext, ArrayParentContext, VmadScriptsContext, VmadScriptContext, VmadPropertyContext, ColumnHeaderContext,
+  ArrayElementContext, ArrayParentContext, ColumnHeaderContext,
   StringValueContext,
 } from './messages';
 import type {
-  ArrayElementContext, ArrayParentContext, VmadScriptsContext, VmadScriptContext, VmadPropertyContext, ColumnHeaderContext,
+  ArrayElementContext, ArrayParentContext, ColumnHeaderContext,
   StringValueContext,
 } from './messages';
 
@@ -175,32 +141,6 @@ export function arrayParentContext(
 }
 
 // Same mechanism as arrayElementContext/arrayParentContext
-// above, carried by VMAD's own row kinds instead — see VmadScriptsContext/VmadScriptContext/
-// VmadPropertyContext's own doc comment (messages.ts) for why no extra identity travels beyond
-// script/property name.
-export function vmadScriptsContext(formKey: string, plugin: string, origin: string): VmadScriptsContext {
-  return { webviewSection: 'vmadScripts', formKey, plugin, origin, preventDefaultContextMenuItems: true };
-}
-
-export function vmadScriptContext(
-  formKey: string, plugin: string, origin: string, scriptName: string, currentFlags: string | null,
-): VmadScriptContext {
-  return { webviewSection: 'vmadScript', formKey, plugin, origin, scriptName, currentFlags, preventDefaultContextMenuItems: true };
-}
-
-export function vmadPropertyContext(
-  formKey: string, plugin: string, origin: string, scriptName: string, propName: string,
-): VmadPropertyContext {
-  return {
-    webviewSection: 'vmadProperty', formKey, plugin, origin, scriptName, propName, preventDefaultContextMenuItems: true,
-  };
-}
-
-// The record editor's column header — Copy as Override Into…/Copy as New Record
-// Into… as native `webview/context` entries, the same mechanism every other row-level menu
-// here already uses. No mutable/immutable/tracked gating baked in here: the column's own
-// read-only-ness is irrelevant to whether it can be a *source* — copying from a vanilla master is
-// the headline case — so every column carries this context unconditionally.
 export function headerCellContext(formKey: string, plugin: string, origin: string): ColumnHeaderContext {
   return { webviewSection: 'recordHeader', formKey, plugin, origin, preventDefaultContextMenuItems: true };
 }
@@ -214,7 +154,7 @@ export function headerCellContext(formKey: string, plugin: string, origin: strin
 //
 // `path`/`rootField` are the row's own restage coordinates (RowContext, DiffRow.tsx) — both
 // already in scope at every call site (DiffRow already builds `context.path`/`context.rootField`
-// for its own array/VMAD contexts), so a save from the extended editor reaches RecordPanel's
+// for its own array contexts), so a save from the extended editor reaches RecordPanel's
 // whole-field reconstruction (handleCellCommit, the same one an inline edit
 // goes through) instead of committing the saved text alone under `rootField`.
 export function stringValueContext(
@@ -244,79 +184,6 @@ export function combineVscodeContexts(...contexts: (object | undefined)[]): stri
     Object.assign(merged, rest);
   }
   return JSON.stringify({ ...merged, webviewSection: sections.join(' ') });
-}
-
-// Used by VMAD's tree adapter (vmadTreeAdapter.ts), which aligns its own array elements
-// positionally across plugins (VmadConflictClassifier.IndexedChildren), and whose
-// backend reports *every* plugin at *every* union-aligned position, null past that plugin's own
-// real length (always trailing — a plugin's own list is contiguous, so a null here only ever means
-// "this plugin's list ends before this position," never a genuine mid-list hole). Reconstructing
-// each plugin's own array must skip those nulls rather than carry them through as literal filler:
-// otherwise a shorter
-// plugin's "current array" ends up padded to the union's length, so a Remove/Move on it restages
-// an array still containing the padding nulls (VmadCodec.RebuildList's `el.GetInt32()`/
-// `GetBoolean()`/`GetSingle()` throw on a JSON null element at save time). Shared
-// rather than duplicated across the two adapters, so they can't drift.
-export function sparseArrayByPlugin<T>(perPositionValues: Record<string, T | null>[]): Record<string, T[]> {
-  const result: Record<string, T[]> = {};
-  for (const [i, values] of perPositionValues.entries()) {
-    for (const [plugin, value] of Object.entries(values)) {
-      if (value == null) continue;
-      if (!result[plugin]) result[plugin] = [];
-      result[plugin][i] = value;
-    }
-  }
-  return result;
-}
-
-// ── Conflict aggregation ──────────────────────────────────────────────────────
-//
-// The compare grid colors each row from its own FieldDiff.conflictAll (DiffRow), not a
-// record-wide value smeared across every row. The backend computes it for an ordinary reflected
-// field (MEditService.Core/Queries/ConflictClassifier.cs's AggregateConflictAll); VMAD
-// rows are synthesized entirely on the frontend (vmadTreeAdapter.ts) from
-// its own backend DTO (VmadPropertyDiff), which carries no such field itself —
-// so that adapter computes it here, at every node it builds, using the identical rule the
-// backend applies. Kept in sync by design (same rule, mirrored by hand across the two languages),
-// not by shared code — there is no cross-language module to share.
-
-// Mirrors ConflictRules.Reduce: folds a set of per-plugin ConflictThis cell states into the
-// ConflictAll they imply — any ConflictWins/ConflictLoses => Conflict; else any Override =>
-// Override; else NoConflict. Never produces OnlyOne/ConflictCritical — those are record-wide-only
-// terminal states (the Plugins-tree badge), which no per-node value ever needs to express.
-export function reduceConflictAll(states: ConflictThis[]): ConflictAll {
-  let hasConflict = false;
-  let hasOverride = false;
-  for (const state of states) {
-    if (state === 'ConflictWins' || state === 'ConflictLoses') hasConflict = true;
-    else if (state === 'Override') hasOverride = true;
-  }
-  if (hasConflict) return 'Conflict';
-  if (hasOverride) return 'Override';
-  return 'NoConflict';
-}
-
-// OnlyOne/ConflictCritical are included only so this satisfies TS's Record<ConflictAll, number>
-// exhaustiveness check — reduceConflictAll/aggregateConflictAll never produce or compare against
-// them (both are record-wide-only terminal states), so their severity numbers are never read.
-const CONFLICT_ALL_SEVERITY: Record<ConflictAll, number> = {
-  NoConflict: 0, Override: 1, Conflict: 2, OnlyOne: 3, ConflictCritical: 3,
-};
-
-// A node's own bottom-up conflictAll: its own cellStates reduced, then folded with each
-// already-built child's own (already-aggregated) conflictAll via "worst of two" — mirrors
-// ConflictRules.Escalate, restricted to the three non-terminal states this ever sees.
-export function aggregateConflictAll(
-  ownCellStates: Record<string, ConflictThis>,
-  children?: ({ conflictAll?: ConflictAll } | undefined)[] | null,
-): ConflictAll {
-  let result = reduceConflictAll(Object.values(ownCellStates));
-  for (const child of children ?? []) {
-    if (child?.conflictAll && CONFLICT_ALL_SEVERITY[child.conflictAll] > CONFLICT_ALL_SEVERITY[result]) {
-      result = child.conflictAll;
-    }
-  }
-  return result;
 }
 
 // ── Generic path-based node access ────────────────────────────────────────────
@@ -367,14 +234,13 @@ export function setAtPath(root: unknown, path: readonly PathSegment[], value: un
 }
 
 // getAtPath/setAtPath's metadata-side counterpart, over FieldMetadata instead of a value — #630:
-// still needed by the array-op broadcast handler (RecordPanel.tsx) for its own VMAD
-// carve-outs ('add' on either needs an element schema to default from), which has only
-// the wire's rootField/path to work with, never a render-time `context.overrideMeta` the way DiffRow's own
-// buildRows resolves a row's meta by hand (member → `.fields`, index/sortKey → `.elementType`,
-// the same two hops this mirrors). Reading `fieldMetaMap[rootField].elementType` directly
-// would only find the right element type when the array itself is the subtree root —
-// for a *nested* array it would name the wrong node's (or, off a struct root, no) elementType, and
-// defaultAdapterElementValue would build a malformed added element from the fallback.
+// used by the presentation table (presentation.ts) and the string cell's extended-editor commit,
+// which have only the wire's rootField/path to work with, never a render-time
+// `context.overrideMeta` the way DiffRow's own buildRows resolves a row's meta by hand (member →
+// `.fields`, index/sortKey → `.elementType`, the same two hops this mirrors). Reading
+// `fieldMetaMap[rootField].elementType` directly would only find the right element type when the
+// array itself is the subtree root — for a *nested* array it would name the wrong node's (or, off
+// a struct root, no) elementType.
 // `?? undefined` on the way out: the wire's `elementType`/`fields` are `T | null` (a genuinely
 // absent element schema), while every caller here treats "no metadata" as `undefined`. Collapsing
 // the two at this one boundary keeps the null out of the callers rather than widening each of them.
@@ -387,27 +253,3 @@ export function metaAtPath(meta: FieldMetadata | undefined, path: readonly PathS
   return cur ?? undefined;
 }
 
-// The default element for an array the *adapter* synthesizes — a VMAD property's own instances.
-// Keyed off the compare grid's own FieldMetadata shape rather than
-// VMAD's raw node JSON, which the two do not share. A reflected column's array has no default here
-// at all: its Add posts `{op, path}` and ArrayOpWriter builds the element
-// (docs/specs/medit-record-editor.md, "A new array element's default is the backend's").
-//
-// The `default` arm is deliberate, not lazy: an unrecognized/future `type` returns '' rather than
-// falling through to `undefined`, which would silently append a hole into a saved array.
-export function defaultAdapterElementValue(meta: FieldMetadata): unknown {
-  switch (meta.type) {
-    case 'string': case 'formKey': return '';
-    case 'int': case 'float': return 0;
-    case 'bool': return false;
-    // An adapter element that carries a discriminator (a script property's, once #694 renders one)
-    // starts at the same first leaf ArrayOpWriter picks for a reflected element — one rule, stated
-    // in docs/specs/medit-record-editor.md, and this arm is where the adapter path obeys it.
-    case 'enum': return meta.enumMembers[0]?.value ?? '';
-    case 'struct': return Object.fromEntries((meta.fields ?? []).map(f => [f.name, defaultAdapterElementValue(f)]));
-    case 'array': return [];
-    // A VMAD ArrayOfObject's default element.
-    case 'vmadObject': return { formKey: '', alias: -1 };
-    default: return '';
-  }
-}

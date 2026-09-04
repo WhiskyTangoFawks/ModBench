@@ -25,7 +25,7 @@ public sealed class ConcreteBaseUnionSchemaTests
     [Fact]
     public void VmadExclusionLifted_AdapterIsAnOrdinaryStructColumn()
     {
-        var column = NpcAdapterColumn(VmadReflectedSchemaReflector.Instance);
+        var column = NpcAdapterColumn(SharedSchemaReflector.Instance);
 
         Assert.Equal("struct", column.ApiType);
         Assert.Contains(column.SubFields!, f => f.Name == "scripts");
@@ -38,7 +38,7 @@ public sealed class ConcreteBaseUnionSchemaTests
     [Fact]
     public void ScriptProperty_ConcreteType_ListsFourteenLeavesAndTheBaseItself()
     {
-        var element = ScriptPropertyElement(NpcAdapterColumn(VmadReflectedSchemaReflector.Instance));
+        var element = ScriptPropertyElement(NpcAdapterColumn(SharedSchemaReflector.Instance));
 
         var discriminator = element.Fields!.Single(f => f.Name == "concrete_type");
         Assert.Equal("enum", discriminator.Type);
@@ -61,7 +61,7 @@ public sealed class ConcreteBaseUnionSchemaTests
     [Fact]
     public void ReEntryWithNoDocumentedTruncation_FailsSchemaGenerationNamingTheChain()
     {
-        var reflector = VmadReflectedSchemaReflector.Fallout4With(a => VmadReflectedSchemaReflector.WithVmadReflected(a) with { CycleTruncations = [] });
+        var reflector = AmendedSchemaReflector.Fallout4With(a => a with { CycleTruncations = [] });
 
         var ex = Assert.Throws<InvalidOperationException>(() => reflector.GetSchemas(GameRelease.Fallout4));
 
@@ -77,7 +77,7 @@ public sealed class ConcreteBaseUnionSchemaTests
     [Fact]
     public void ScriptProperty_DataMember_IsOneFieldPerShape()
     {
-        var element = ScriptPropertyElement(NpcAdapterColumn(VmadReflectedSchemaReflector.Instance));
+        var element = ScriptPropertyElement(NpcAdapterColumn(SharedSchemaReflector.Instance));
 
         var data = element.Fields!.Where(f => f.Name.StartsWith("data", StringComparison.Ordinal))
             .ToDictionary(f => f.Name, f => f.IsArray ? f.ElementType!.Type + "[]" : f.Type);
@@ -97,7 +97,7 @@ public sealed class ConcreteBaseUnionSchemaTests
     [Fact]
     public void ScriptProperty_ObjectLeafAndStructLeaf_ExposeTheirOwnMembers()
     {
-        var element = ScriptPropertyElement(NpcAdapterColumn(VmadReflectedSchemaReflector.Instance));
+        var element = ScriptPropertyElement(NpcAdapterColumn(SharedSchemaReflector.Instance));
         var byName = element.Fields!.ToDictionary(f => f.Name);
 
         Assert.Equal("formKey", byName["object"].Type);
@@ -118,7 +118,7 @@ public sealed class ConcreteBaseUnionSchemaTests
     [InlineData("structs")]
     public void InsideAStructLeaf_NeitherStructLeafIsOfferedAgain(string structLeafList)
     {
-        var element = ScriptPropertyElement(NpcAdapterColumn(VmadReflectedSchemaReflector.Instance));
+        var element = ScriptPropertyElement(NpcAdapterColumn(SharedSchemaReflector.Instance));
         var nestedElement = element.Fields!.Single(f => f.Name == structLeafList).ElementType!;
         var nestedProperty = nestedElement.Fields!.Single(f => f.Name == (structLeafList == "members" ? "properties" : "members")).ElementType!;
 

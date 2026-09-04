@@ -1,7 +1,7 @@
 namespace MEditService.Core.Queries;
 
 // Single owner of the ADR-0016 two-axis model's decision rules: both ConflictClassifier (generic
-// reflected fields) and VmadConflictClassifier fold their per-plugin values through the same cell
+// reflected fields) folds its per-plugin values through the same cell
 // classification and row-level reduction here, so a rule change can't drift between the two paths.
 public static class ConflictRules
 {
@@ -12,7 +12,7 @@ public static class ConflictRules
     // compares pre-canonicalized strings.
     // ADR-0035: a non-participating plugin's override/input never contributes to conflict
     // classification — filtered out before any diff/winner/cell-state computation, not just masked
-    // in the result. Shared by ConflictClassifier/VmadConflictClassifier
+    // in the result. Used by ConflictClassifier
     // so the "what does an absent key mean" default (fail-open: true) can't drift between the three.
     // Null pluginParticipates (the default) means every plugin participates.
     public static IReadOnlyList<T> FilterParticipating<T>(

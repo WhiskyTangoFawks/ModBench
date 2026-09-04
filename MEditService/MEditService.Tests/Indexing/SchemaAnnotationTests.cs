@@ -24,7 +24,7 @@ public sealed class SchemaAnnotationTests
     [InlineData("INoSuchGetter", "Name")]        // the type does not resolve at all
     public void ExcludedMember_ReflectionDidNotFind_FailsSchemaGenerationNamingTheEntry(string type, string member)
     {
-        var reflector = VmadReflectedSchemaReflector.Fallout4With(a => a with { ExcludedMembers = [.. a.ExcludedMembers, (type, member)] });
+        var reflector = AmendedSchemaReflector.Fallout4With(a => a with { ExcludedMembers = [.. a.ExcludedMembers, (type, member)] });
         AssertFailsNaming(reflector, $"{type}.{member}");
     }
 
@@ -33,7 +33,7 @@ public sealed class SchemaAnnotationTests
     [InlineData("INoSuchGetter", "Timestamp")]
     public void ExcludedColumn_ReflectionDidNotFind_FailsSchemaGenerationNamingTheEntry(string type, string member)
     {
-        var reflector = VmadReflectedSchemaReflector.Fallout4With(a => a with { ExcludedColumns = [.. a.ExcludedColumns, (type, member)] });
+        var reflector = AmendedSchemaReflector.Fallout4With(a => a with { ExcludedColumns = [.. a.ExcludedColumns, (type, member)] });
         AssertFailsNaming(reflector, $"{type}.{member}");
     }
 
@@ -42,21 +42,44 @@ public sealed class SchemaAnnotationTests
     [InlineData("INoSuchGetter", "Color")]
     public void AlphaBearingColorField_ReflectionDidNotFind_FailsSchemaGenerationNamingTheEntry(string type, string member)
     {
-        var reflector = VmadReflectedSchemaReflector.Fallout4With(a => a with { AlphaBearingColorFields = [.. a.AlphaBearingColorFields, (type, member)] });
+        var reflector = AmendedSchemaReflector.Fallout4With(a => a with { AlphaBearingColorFields = [.. a.AlphaBearingColorFields, (type, member)] });
         AssertFailsNaming(reflector, $"{type}.{member}");
+    }
+
+    [Theory]
+    [InlineData("IScriptEntryGetter", "NoSuchMember", "name", "IScriptEntryGetter.NoSuchMember")]
+    [InlineData("INoSuchGetter", "Properties", "name", "INoSuchGetter.Properties")]
+    // The member resolves but is not a list at all — a key means nothing without elements to key.
+    [InlineData("IScriptEntryGetter", "Name", "name", "IScriptEntryGetter.Name is not a list")]
+    // The list resolves; the key names a member its element does not have. This is the one that
+    // fails quietly without validation: every element would share the empty key, collapsing the
+    // array to one compare row and refusing every second element as a duplicate on write.
+    [InlineData("IScriptEntryGetter", "Properties", "no_such_key", "names key no_such_key, which IScriptPropertyGetter does not reach at no_such_key")]
+    // A key that reaches a list rather than a value — one element, one key.
+    [InlineData("IAVirtualMachineAdapterGetter", "Scripts", "properties", "which is itself a list")]
+    // A dotted key whose first hop is a scalar, so there is nothing to descend into.
+    [InlineData("IAVirtualMachineAdapterGetter", "Scripts", "name.alias", "whose name hop is not a struct to descend into")]
+    public void KeyedArray_ReflectionDidNotFind_FailsSchemaGenerationNamingTheEntry(
+        string type, string member, string key, string expected)
+    {
+        var reflector = AmendedSchemaReflector.Fallout4With(a => a with
+        {
+            KeyedArrays = new(a.KeyedArrays) { [(type, member)] = new[] { key } },
+        });
+        AssertFailsNaming(reflector, expected);
     }
 
     [Fact]
     public void ExcludedUnion_ReflectionDidNotFind_FailsSchemaGenerationNamingTheEntry()
     {
-        var reflector = VmadReflectedSchemaReflector.Fallout4With(a => a with { ExcludedUnions = [.. a.ExcludedUnions, "ANoSuchUnion"] });
+        var reflector = AmendedSchemaReflector.Fallout4With(a => a with { ExcludedUnions = [.. a.ExcludedUnions, "ANoSuchUnion"] });
         AssertFailsNaming(reflector, "ANoSuchUnion");
     }
 
     [Fact]
     public void EmptySubSchemaType_ReflectionDidNotFind_FailsSchemaGenerationNamingTheEntry()
     {
-        var reflector = VmadReflectedSchemaReflector.Fallout4With(a => a with { EmptySubSchemaTypes = [.. a.EmptySubSchemaTypes, "INoSuchGetter"] });
+        var reflector = AmendedSchemaReflector.Fallout4With(a => a with { EmptySubSchemaTypes = [.. a.EmptySubSchemaTypes, "INoSuchGetter"] });
         AssertFailsNaming(reflector, "INoSuchGetter");
     }
 
@@ -69,7 +92,7 @@ public sealed class SchemaAnnotationTests
     [InlineData("INoSuchGetter", "Function")]
     public void SiblingsInUse_GoverningMemberReflectionDidNotFind_FailsSchemaGenerationNamingTheEntry(string type, string member)
     {
-        var reflector = VmadReflectedSchemaReflector.Fallout4With(a => a with
+        var reflector = AmendedSchemaReflector.Fallout4With(a => a with
         {
             SiblingsInUse = new(a.SiblingsInUse) { [(type, member)] = new Dictionary<string, IReadOnlyList<string>>() },
         });
@@ -79,7 +102,7 @@ public sealed class SchemaAnnotationTests
     [Fact]
     public void SiblingsInUse_GoverningFromANonEnumMember_FailsSchemaGenerationNamingTheEntry()
     {
-        var reflector = VmadReflectedSchemaReflector.Fallout4With(a => a with
+        var reflector = AmendedSchemaReflector.Fallout4With(a => a with
         {
             SiblingsInUse = new(a.SiblingsInUse)
             {
@@ -92,7 +115,7 @@ public sealed class SchemaAnnotationTests
     [Fact]
     public void SiblingsInUse_NamingAValueTheDomainDoesNotHave_FailsSchemaGenerationNamingTheEntry()
     {
-        var reflector = VmadReflectedSchemaReflector.Fallout4With(a => a with
+        var reflector = AmendedSchemaReflector.Fallout4With(a => a with
         {
             SiblingsInUse = new(a.SiblingsInUse)
             {
@@ -111,7 +134,7 @@ public sealed class SchemaAnnotationTests
     [Fact]
     public void SiblingsInUse_OmittingAValueTheDomainHas_FailsSchemaGenerationNamingTheEntry()
     {
-        var reflector = VmadReflectedSchemaReflector.Fallout4With(a => a with
+        var reflector = AmendedSchemaReflector.Fallout4With(a => a with
         {
             SiblingsInUse = new(a.SiblingsInUse)
             {
@@ -127,7 +150,7 @@ public sealed class SchemaAnnotationTests
     [Fact]
     public void SiblingsInUse_NamingASiblingTheTypeDoesNotDeclare_FailsSchemaGenerationNamingTheEntry()
     {
-        var reflector = VmadReflectedSchemaReflector.Fallout4With(a => a with
+        var reflector = AmendedSchemaReflector.Fallout4With(a => a with
         {
             SiblingsInUse = new(a.SiblingsInUse)
             {

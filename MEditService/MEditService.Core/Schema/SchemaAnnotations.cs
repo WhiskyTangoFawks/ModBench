@@ -37,6 +37,18 @@ namespace MEditService.Core.Schema;
 /// since an unnamed value would silently idle every member the row governs — and every name it
 /// lists must be a member of the same declaring type. Validated in all four directions, so a
 /// Mutagen rename or addition on either side of the relationship fails schema generation.</param>
+/// <param name="KeyedArrays">List members whose elements are identified by a key read off the
+/// element itself rather than by position — xEdit's <c>wbArrayS</c>. Keyed by the declaring type and
+/// the list member; the value is the element member(s) the key is made of, in key order, as
+/// wire (snake_case) names, dotted to reach one nested struct member down. A keyed array is aligned
+/// across plugins by key in the compare grid and written back in key order, and two elements sharing
+/// a key are refused. Validated against the element type, so a Mutagen rename on either side fails
+/// schema generation.</param>
+/// <param name="PermittedNullFormLinks">FormLink members Mutagen types as non-nullable that the
+/// game's own format leaves unset as a matter of course, so an unset one is a value rather than a
+/// dangling reference (<see cref="Queries.CheckErrorBuilder"/>) and a resend of the record's own
+/// read value is not refused. The CLR type cannot answer this: Mutagen only marks a link nullable
+/// when its generated model happens to use <c>IFormLinkNullable</c>.</param>
 /// <param name="AlphaBearingColorFields">The Color fields xEdit renders with an Alpha leaf
 /// (<c>wbByteRGBA</c>); every other Color field takes the 3-leaf <c>wbByteColors</c> shape. A
 /// property of the field, not the type — Mutagen selects <c>ColorBinaryType</c> inside generated
@@ -49,6 +61,8 @@ internal sealed record SchemaAnnotations(
     HashSet<string> CycleTruncations,
     HashSet<string> EmptySubSchemaTypes,
     Dictionary<(string TypeName, string MemberName), IReadOnlyDictionary<string, IReadOnlyList<string>>> SiblingsInUse,
+    Dictionary<(string TypeName, string MemberName), IReadOnlyList<string>> KeyedArrays,
+    HashSet<(string TypeName, string MemberName)> PermittedNullFormLinks,
     HashSet<(string TypeName, string MemberName)> AlphaBearingColorFields)
 {
     // Rows every game shares are named once here; a row true of only some games is written inline
@@ -70,15 +84,16 @@ internal sealed record SchemaAnnotations(
         ("IAMagicEffectArchetypeGetter", "AssociationKey"),  // IFormLinkIdentifier alias of Association
     ];
 
-    // AVirtualMachineAdapter (VMAD) is abstract exactly like ANpcLevel/AQuestAlias, but its own
-    // section owns it (Queries/RecordDocumentCodecs).
-    private static readonly string[] VmadUnions = ["AVirtualMachineAdapter"];
-
     private static readonly string[] EmptySubSchemaTypesInEveryGame =
     [
         "IPlacedGetter",                     // abstract placed-record base, no members of its own
-        "IScriptFragmentGetter",             // VMAD-adjacent, outside the reflected pipeline by design
-        "IScriptEntryGetter",                // ditto
+        // A whole script, and a fragment's own script binding, hung off a fragment struct. Both are
+        // reflected in full wherever the walk still has breadth for them (a PERK/PACK/SCEN adapter's
+        // own script_fragments.script); this names the deeper positions — an adapter reached through
+        // a list element, so already several hops in — where the sub-schema comes out empty and the
+        // struct would otherwise be an unclassified anomaly.
+        "IScriptFragmentGetter",
+        "IScriptEntryGetter",
     ];
 
     // wbByteRGBA in Fallout 4 (wbDefinitionsFO4.pas:7028 KYWD, :7040 LCRT, :7051 AACT, :8256 LCTN),
@@ -107,7 +122,6 @@ internal sealed record SchemaAnnotations(
             ],
             ExcludedUnions:
             [
-                .. VmadUnions,
                 // A concrete base with two leaves, one of whose binary-overlay Type getter is an
                 // unimplemented throw upstream; the full scheme is on KnownGaps' ISceneActionGetter.Type.
                 "ASceneActionType",
@@ -123,17 +137,22 @@ internal sealed record SchemaAnnotations(
                 [("IFunctionConditionDataGetter", "Function")] = Fallout4ConditionAnnotations.FunctionParameterSlots,
                 [("IConditionDataGetter", "RunOnType")] = Fallout4ConditionAnnotations.RunOnReference,
             },
+            KeyedArrays: Fallout4VmadAnnotations.KeyedArrays.ToDictionary(
+                r => (r.TypeName, r.MemberName), r => (IReadOnlyList<string>)r.KeyMembers),
+            PermittedNullFormLinks: [.. Fallout4VmadAnnotations.PermittedNullFormLinks],
             AlphaBearingColorFields: [.. RgbaColorFields]),
 
         [GameCategory.Skyrim] = new(
             ExcludedColumns: [.. GrupTimestampColumns],
             ExcludedMembers: [.. PlumbingMembers, ("IGlobalGetter", "TypeChar")],
-            ExcludedUnions: [.. VmadUnions],
+            ExcludedUnions: [],
             CycleTruncations: [],
             EmptySubSchemaTypes: [.. EmptySubSchemaTypesInEveryGame],
-            // #706 owns Skyrim's condition rows: this repo builds no Skyrim schema, so a table
-            // written here could not be validated against the assembly it describes.
+            // #706 owns Skyrim's condition and keyed-array rows: this repo builds no Skyrim schema,
+            // so a table written here could not be validated against the assembly it describes.
             SiblingsInUse: [],
+            KeyedArrays: [],
+            PermittedNullFormLinks: [],
             AlphaBearingColorFields: [.. RgbaColorFields]),
 
         [GameCategory.Starfield] = new(
@@ -144,14 +163,16 @@ internal sealed record SchemaAnnotations(
                 ("IObjectModStringPropertyGetter`1", "Unused"),
                 ("IObjectModEnumPropertyGetter`1", "Unused"),
             ],
-            ExcludedUnions: [.. VmadUnions],
+            ExcludedUnions: [],
             // Starfield's VirtualMachineAdapter.xml declares the same struct-property chain as
             // Fallout 4's, unverified against a built Starfield schema. Empty is loud, not wrong: a
             // lifted VMAD exclusion fails generation naming the chain rather than truncating silently.
             CycleTruncations: [],
             EmptySubSchemaTypes: [.. EmptySubSchemaTypesInEveryGame],
-            // #706 owns Starfield's condition rows, for the same reason as Skyrim's above.
+            // #706 owns Starfield's condition and keyed-array rows, for the same reason as Skyrim's above.
             SiblingsInUse: [],
+            KeyedArrays: [],
+            PermittedNullFormLinks: [],
             AlphaBearingColorFields: [.. RgbaColorFields]),
     };
 
@@ -172,8 +193,10 @@ internal sealed record SchemaAnnotations(
     public bool IsCycleTruncation(Type getterInterface) => CycleTruncations.Contains(getterInterface.Name);
     public bool IsEmptySubSchemaType(Type getterInterface) => EmptySubSchemaTypes.Contains(getterInterface.Name);
     public bool HasAlphaLeaf(PropertyInfo prop) => AlphaBearingColorFields.Contains(Key(prop));
+    public bool IsPermittedNullFormLink(PropertyInfo prop) => PermittedNullFormLinks.Contains(Key(prop));
     public IReadOnlyDictionary<string, IReadOnlyList<string>>? SiblingsInUseFor(PropertyInfo prop) =>
         SiblingsInUse.GetValueOrDefault(Key(prop));
+    public IReadOnlyList<string>? KeyMembersFor(PropertyInfo prop) => KeyedArrays.GetValueOrDefault(Key(prop));
 
     private static (string, string) Key(PropertyInfo prop) => (prop.DeclaringType!.Name, prop.Name);
 
@@ -216,6 +239,55 @@ internal sealed record SchemaAnnotations(
         }
     }
 
+    /// <summary>Everything about a <see cref="KeyedArrays"/> row reflection has to agree with: the
+    /// member is a list, and each key path resolves member by member off the element type under the
+    /// schema's own snake_case naming. A row naming a key the element does not have would key every
+    /// element alike, silently collapsing the array to one row in the compare grid and refusing
+    /// every second element as a duplicate on write.</summary>
+    private IEnumerable<string> UnresolvedKeyMembers(ILookup<string, Type> typesByName)
+    {
+        foreach (var (entry, keyMembers) in KeyedArrays)
+        {
+            var declaring = typesByName[entry.TypeName].FirstOrDefault(t => t.GetProperty(entry.MemberName) != null);
+            if (declaring == null) continue;   // already reported by UnresolvedMembers above
+
+            var label = $"{nameof(KeyedArrays)}: {entry.TypeName}.{entry.MemberName}";
+            if (!ReflectedTypes.IsListType(declaring.GetProperty(entry.MemberName)!.PropertyType, out var elementType))
+            {
+                yield return $"{label} is not a list";
+                continue;
+            }
+
+            foreach (var keyPath in keyMembers)
+            {
+                if (UnresolvedKeyPath(elementType, keyPath) is { } why) yield return $"{label} {why}";
+            }
+        }
+    }
+
+    private static string? UnresolvedKeyPath(Type elementType, string keyPath)
+    {
+        var owner = elementType;
+        var segments = keyPath.Split('.');
+        for (var i = 0; i < segments.Length; i++)
+        {
+            var prop = ReflectedTypes.GetAllInterfaceProperties(owner)
+                .FirstOrDefault(p => ReflectedTypes.ToSnakeCase(p.Name).Equals(segments[i], StringComparison.OrdinalIgnoreCase));
+            if (prop == null) return $"names key {keyPath}, which {owner.Name} does not reach at {segments[i]}";
+            if (i == segments.Length - 1)
+            {
+                return ReflectedTypes.IsListType(prop.PropertyType, out _)
+                    ? $"names key {keyPath}, which is itself a list — a key is one value per element"
+                    : null;
+            }
+
+            if (!ReflectedTypes.IsLoquiInterface(prop.PropertyType))
+                return $"names key {keyPath}, whose {segments[i]} hop is not a struct to descend into";
+            owner = prop.PropertyType;
+        }
+        return null;
+    }
+
     /// <summary>
     /// Resolves every entry against the game assembly's own types and every interface they
     /// implement (which is where Loqui's and Mutagen.Bethesda.Core's plumbing interfaces come from).
@@ -245,8 +317,11 @@ internal sealed record SchemaAnnotations(
             .. UnresolvedTypes(nameof(CycleTruncations), CycleTruncations),
             .. UnresolvedTypes(nameof(EmptySubSchemaTypes), EmptySubSchemaTypes),
             .. UnresolvedMembers(nameof(AlphaBearingColorFields), AlphaBearingColorFields),
+            .. UnresolvedMembers(nameof(PermittedNullFormLinks), PermittedNullFormLinks),
             .. UnresolvedMembers(nameof(SiblingsInUse), SiblingsInUse.Keys),
             .. UnresolvedSiblingRelations(typesByName),
+            .. UnresolvedMembers(nameof(KeyedArrays), KeyedArrays.Keys),
+            .. UnresolvedKeyMembers(typesByName),
         ];
 
         if (missing.Length > 0)

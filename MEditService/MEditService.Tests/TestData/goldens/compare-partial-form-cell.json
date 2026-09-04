@@ -211,6 +211,7 @@
           "teleport_loc_name": null,
           "unknown": 0,
           "version2": 0,
+          "virtual_machine_adapter": null,
           "water_velocity": null,
           "xcvl": null,
           "xcvr": null,

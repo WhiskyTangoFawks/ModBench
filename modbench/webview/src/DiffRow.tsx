@@ -2,7 +2,6 @@ import React from 'react';
 import { FlagCell } from './FlagCell';
 import { ScalarCell } from './ScalarCell';
 import { FormKeyCell } from './FormKeyCell';
-import { VmadObjectCell } from './VmadObjectCell';
 import { CheckErrorIcon } from './CheckErrorIcon';
 import { DiskCell } from './DiskCell';
 import { displayValue, flagBits, modelValue } from './modelValue';
@@ -10,10 +9,8 @@ import { copyToClipboard } from './nativeBridge';
 import { baseCell, toggleBtnStyle, getCellStyle, focusedRowStyle, DIMMED_OPACITY } from './gridStyles';
 import {
   arrayElementContext, arrayParentContext, combineVscodeContexts,
-  vmadScriptsContext, vmadScriptContext, vmadPropertyContext, stringValueContext, type Column, type PathSegment,
+  stringValueContext, type Column, type PathSegment,
 } from './recordUtils';
-import { WRAPPER_NAME } from './vmadTreeAdapter';
-import { parseVmadPath } from './vmadOps';
 import type { ColumnKey, CompareOverride, ConflictAll, FieldDiff, FieldMetadata, FormKeyResolution } from './types';
 
 
@@ -97,17 +94,6 @@ function renderCell(
       />
     );
   }
-  // VMAD's synthesized composite leaf type picks its own widget from its own value's shape,
-  // dispatched here alongside 'formKey'. Same editable rule as every other branch above —
-  // presence of somewhere to write, ORed with the per-row readOnly veto.
-  if (meta.type === 'vmadObject') {
-    return (
-      <VmadObjectCell
-        value={value} onOpen={onOpen} resolution={resolution}
-        editable={onCommit != null && !meta.readOnly} onCommit={onCommit}
-      />
-    );
-  }
   return (
     <ScalarCell
       value={value}
@@ -121,23 +107,21 @@ function renderCell(
   );
 }
 
-// A row's coordinates in the unified tree, at arbitrary nesting depth — VMAD's own struct
-// data (Schema/VmadCodec.cs: "the (de)serializer descends to arbitrary depth") genuinely needs
+// A row's coordinates in the unified tree, at arbitrary nesting depth — a script property's own
+// struct data genuinely needs
 // more than any fixed set of levels. `path` is the chain of hops from the root
 // value this row's edits ultimately restage (see recordUtils.ts's getAtPath/setAtPath, the one
 // generic implementation every depth shares) down to this row's own value — `[]` at the root.
 // `overrideMeta` is this row's own metadata, present at every depth except the root (which reads
 // from `fieldMetaMap` instead, keyed by the diff tree's own top-level field name). `rootField` is
 // the wire path staged as one atomic change for every row in this subtree — constant across the
-// whole chain, equal to `diff.fieldName` for an ordinary field, and a VMAD row's own synthesized
-// wire path where the two differ from its display label.
+// whole chain, and equal to the subtree root's own `diff.fieldName`.
 export interface RowContext {
   path: PathSegment[];
   overrideMeta?: FieldMetadata;
   rootField: string;
-  // True ancestor-hop count, independent of `path` — `path` resets to `[]` whenever a row starts
-  // a fresh write subtree (subtreeFor, RecordPanel.tsx), but a VMAD property
-  // still visually nests under its script/element row and must indent accordingly.
+  // True ancestor-hop count, tracked independently of `path` so indentation stays a property of
+  // where a row sits in the tree rather than of how far into a value it addresses.
   depth: number;
 }
 
@@ -234,9 +218,7 @@ export function DiffRow({
 }: Readonly<DiffRowProps>) {
   // Prefer the caller's own `context.overrideMeta` whenever it's supplied — RecordPanel
   // always passes one (its recursive builder resolves every row's metadata itself, including
-  // the true top-level one), including for a row whose own `path` has just reset to `[]` because
-  // it's a synthesized subtree root (a VMAD property) rather than a genuine
-  // top-level `diffs` entry — `path.length === 0` alone can no longer distinguish the two. Falling
+  // the true top-level one). Falling
   // back to `fieldMetaMap` only when `overrideMeta` is genuinely absent keeps every caller that
   // still relies on that lookup (DiffRow.test.tsx's own top-level fixtures) working unchanged.
   const meta = context.overrideMeta ?? fieldMetaMap[diff.fieldName];
@@ -257,15 +239,6 @@ export function DiffRow({
   const isUnsortedArrayParentRow = meta.type === 'array' && !!meta.elementType && !meta.elementType.isSortable;
   const lastPathSegment = context.path[context.path.length - 1];
   const isUnsortedArrayElementRow = lastPathSegment?.kind === 'index';
-  // A VMAD row's own kind, derived from context.rootField/
-  // path exactly the way isUnsortedArrayParentRow/Element above derive an array row's — no new
-  // FieldDiff field, since vmadTreeAdapter.ts's own shape (buildVmadRows' doc comment) is fixed:
-  // the wrapper is the subtree root itself (`path: []`, rootField the wrapper's own name), a
-  // script is one member-hop below it, and a property is a *different* subtree's own root
-  // (subtreeFor resets on FieldDiff.wirePath) whose rootField is its VMAD\Script\Prop wire path.
-  const isVmadWrapperRow = context.rootField === WRAPPER_NAME && context.path.length === 0;
-  const isVmadScriptRow = context.rootField === WRAPPER_NAME && context.path.length === 1 && context.path[0]?.kind === 'member';
-  const vmadPropertyPath = context.path.length === 0 ? parseVmadPath(context.rootField) : null;
   const isRowFocused = focusedCell?.rowKey === rowKey;
   // This row paints its own node's bottom-up conflict state, not a record-wide value
   // smeared onto every row. A struct/array row with children defers to its own children's tints
@@ -281,9 +254,9 @@ export function DiffRow({
   // put the row in expandedStructs.
   const isFlagsRow = meta.type === 'enum' && flagBits(meta) != null;
   const rowExpanded = !!isExpanded;
-  // A row no column carries a value for holds nothing but its children (vmadTreeAdapter.ts's
-  // always-present "Scripts (VMAD)" wrapper is one), so it is present in every column — nothing
-  // there is absent relative to anything, and `hasElement` below stays true throughout.
+  // A row no column carries a value for holds nothing but its children, so it is present in every
+  // column — nothing there is absent relative to anything, and `hasElement` below stays true
+  // throughout.
   const rowIsStructural = Object.values(diff.values).every(v => v == null);
 
   return (
@@ -350,7 +323,8 @@ export function DiffRow({
           // threaded down to this row, so canMoveDown reads
           // permissive (true) rather than gating the menu item's presence on this plugin's own
           // real length the way canMoveUp already does via `index > 0`; the underlying op still
-          // safely no-ops at the true boundary (moveArrayElement's own bounds check).
+          // safely no-ops at the true boundary (ArrayOpWriter answers a move past either end
+          // as a NoOp that commits nothing).
           const arrayEditable = !!onEditCell && editableColumns.has(key) && (isUnsortedArrayParentRow || isUnsortedArrayElementRow);
           const arrayOps = arrayEditable ? {
             add: isUnsortedArrayParentRow ? () => onArrayAdd?.(key) : undefined,
@@ -358,11 +332,6 @@ export function DiffRow({
             moveUp: isUnsortedArrayElementRow ? () => onArrayMoveUp?.(key) : undefined,
             moveDown: isUnsortedArrayElementRow ? () => onArrayMoveDown?.(key) : undefined,
           } : undefined;
-          // VMAD structural ops offer no keyboard accelerator
-          // (right-click-menu-only, unlike array ops' Insert/Delete/
-          // Ctrl+↑/↓) — only the vscodeContext half of DiskCell's contract applies here, wired
-          // below alongside the array contexts on the same writable-column gate.
-          const vmadEditable = !!onEditCell && editableColumns.has(key) && (isVmadWrapperRow || isVmadScriptRow || !!vmadPropertyPath);
           // The one definition of "this cell can be written" — onEditCell wired, the
           // column in editableColumns, and no per-row readOnly veto. Hoisted above vscodeContext
           // because
@@ -371,10 +340,9 @@ export function DiffRow({
           // whether the cell is writable.
           const cellEditable = !!onEditCell && editableColumns.has(key) && !meta.readOnly;
           // ADR-0039: a `string` cell always carries its own right-click context — mutable
-          // or immutable alike, unlike arrayEditable/vmadEditable above which only attach on a
-          // writable column. A read-only tab is still the only way to read a long immutable value
-          // in full.
-          const vscodeContext = (arrayEditable || vmadEditable || meta.type === 'string') ? combineVscodeContexts(
+          // or immutable alike, unlike arrayEditable above which only attaches on a writable
+          // column. A read-only tab is still the only way to read a long immutable value in full.
+          const vscodeContext = (arrayEditable || meta.type === 'string') ? combineVscodeContexts(
             // `context.path` addresses the array itself here (this row *is* the array) —
             // `[]` for a top-level array.
             isUnsortedArrayParentRow
@@ -387,21 +355,6 @@ export function DiffRow({
               ? arrayElementContext(
                   col.override.formKey, col.override.plugin, col.override.origin, rootField,
                   context.path, Number.MAX_SAFE_INTEGER,
-                )
-              : undefined,
-            vmadEditable && isVmadWrapperRow
-              ? vmadScriptsContext(col.override.formKey, col.override.plugin, col.override.origin)
-              : undefined,
-            vmadEditable && isVmadScriptRow && context.path[0]?.kind === 'member'
-              ? vmadScriptContext(
-                  col.override.formKey, col.override.plugin, col.override.origin, context.path[0].name,
-                  typeof diff.values[key] === 'string' ? diff.values[key] : null,
-                )
-              : undefined,
-            vmadEditable && vmadPropertyPath
-              ? vmadPropertyContext(
-                  col.override.formKey, col.override.plugin, col.override.origin,
-                  vmadPropertyPath.script, vmadPropertyPath.prop,
                 )
               : undefined,
             meta.type === 'string'
