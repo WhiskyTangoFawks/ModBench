@@ -14,7 +14,7 @@ namespace MEditService.Tests.Edits;
 /// <summary>
 /// The scalar half of the silent-success defect — the *complex* half (array/struct shape guards)
 /// is <c>ComplexFieldElementEditTests</c>' job. What this file pins:
-/// <c>SchemaReflector.MakeApplier</c> (missing property,
+/// <c>LeafWriters.MakeApplier</c> (missing property,
 /// declined converter, JSON <c>null</c> into a non-nullable column) and
 /// <c>FormLinkColumnApplier</c>/<c>ApplyFormLinkJson</c> (missing property, unparseable/wrongly-shaped
 /// FormKey) both answered success unconditionally, no matter what they actually wrote.
@@ -55,7 +55,7 @@ public sealed class ScalarFieldApplierRefusalTests : IDisposable
     /// Pre-fix observed result: an uncaught <c>System.InvalidOperationException</c> ("The requested
     /// operation requires an element of type 'Number', but the target element has type 'String'.")
     /// propagating straight out of <c>EditField</c> — confirmed by running this test against
-    /// unmodified <c>SchemaReflector.MakeApplier</c>, not assumed from reading. Not a graceful
+    /// unmodified <c>LeafWriters.MakeApplier</c>, not assumed from reading. Not a graceful
     /// refusal and not a reported success either — a crash, more severe than a
     /// silent no-op.
     /// </summary>

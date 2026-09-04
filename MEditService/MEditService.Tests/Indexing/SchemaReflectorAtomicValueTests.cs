@@ -28,7 +28,7 @@ namespace MEditService.Tests.Indexing;
 /// not reachable from a property walk. A four-row table transcribed from xEdit is smaller than any
 /// mechanism that could infer it, so ADR-0034's "genuine platform limitation" carve-out does not
 /// apply: the workaround is four rows — the same transcribed-from-xEdit idiom as the rest of
-/// <c>SchemaAnnotations</c>, <c>SchemaReflector.VectorStructTypes</c> and <c>RecordDisplayNames</c>.</para>
+/// <c>SchemaAnnotations</c>, <c>ReflectedTypes.VectorStructTypes</c> and <c>RecordDisplayNames</c>.</para>
 ///
 /// <para><b>The alpha loop is closed empirically, not structurally.</b> Nothing here can assert "this
 /// field has no meaningful alpha" from metadata, because the binary type is not reflectable. What is

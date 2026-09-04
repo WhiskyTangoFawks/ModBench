@@ -31,7 +31,7 @@ internal static class HeaderIndexer
 
     /// <summary>
     /// The header's masters field name — the reflected schema's own column
-    /// (<c>SchemaReflector.BuildHeaderSchema</c>), which carries <c>Apply: null</c> so a write against
+    /// (<c>ModHeaderSchema.BuildHeaderSchema</c>), which carries a read-only <c>Apply</c> so a write against
     /// it is refused as not-writable rather than silently accepted (#335/ADR-0038: masters are wholly
     /// content-derived at compile time, unconditionally, so there is nothing to key a write-time
     /// override off of).
@@ -39,9 +39,9 @@ internal static class HeaderIndexer
     /// <para><b>Reachable since #661, and not specially enforced when it is.</b> The header became a
     /// first-class source unit, so <c>EditField</c> no longer refuses it at the gate
     /// (<c>RecordEditRefusal.SourceUnitNotFound</c>) — it answers off the schema instead
-    /// (<c>RecordEditService.RefuseHeaderFieldEdit</c>) and reaches this column's <c>Apply: null</c>
-    /// for real. That refusal (<c>FieldReadOnly</c>) is not masters-specific: every header column
-    /// carries <c>Apply: null</c> today — <c>author</c>/<c>flags</c> simply because giving them a
+    /// (<c>RecordEditService.RefuseHeaderFieldEdit</c>) and reaches this column's read-only
+    /// <c>Apply</c> for real. That refusal (<c>FieldReadOnly</c>) is not masters-specific: every header column
+    /// is read-only today — <c>author</c>/<c>flags</c> simply because giving them a
     /// write delegate is #290's work, not this ticket's — so masters refuses for the identical reason
     /// its writable-looking siblings do. This constant is never consulted as a runtime branch anywhere;
     /// the missing delegate is the entire enforcement.</para>

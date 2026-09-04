@@ -204,7 +204,7 @@ public sealed class PartialFormHeaderWriteTests : IDisposable
         var before = File.ReadAllText(path);
 
         // major_flags is Cell.MajorFlags's own reflected bitmask column — a plain decimal BIGINT
-        // that replaces MajorRecordFlagsRaw wholesale (SchemaReflector.ReadBitmaskLong /
+        // that replaces MajorRecordFlagsRaw wholesale (LeafClassification.ReadBitmaskLong /
         // Enum.ToObject), so writing PersistentBit | PartialFormBit sets bit 14 as a side effect.
         var result = Service().EditField(
             Plugin, PartialCell.ToString(), "major_flags",

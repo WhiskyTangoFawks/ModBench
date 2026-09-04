@@ -48,7 +48,7 @@ public class SchemaReflectorTotalClassificationTests
 
     private static List<string> Anomalies() =>
         BuildAndCollect()
-            .Where(e => e.Message.StartsWith(SchemaReflector.UnclassifiedAnomalyPrefix, StringComparison.Ordinal))
+            .Where(e => e.Message.StartsWith(SchemaRefusals.UnclassifiedAnomalyPrefix, StringComparison.Ordinal))
             .Select(e => e.Message)
             .Distinct()
             .Order(StringComparer.Ordinal)
@@ -76,7 +76,7 @@ public class SchemaReflectorTotalClassificationTests
     [Fact]
     public void EveryExcludedShape_CarriesANamedReason()
     {
-        var reasons = SchemaReflector.ExcludedShapeLabels;
+        var reasons = SchemaRefusals.ExcludedShapeLabels;
 
         Assert.NotEmpty(reasons);
         Assert.All(reasons, r => Assert.False(string.IsNullOrWhiteSpace(r)));
@@ -86,7 +86,7 @@ public class SchemaReflectorTotalClassificationTests
     }
 
     /// <summary>
-    /// The 20 fields <c>SchemaReflector.ExcludedShapeReason</c>'s <c>IGenderedItemGetter</c> entry
+    /// The 20 fields <c>SchemaRefusals.ExcludedShapeReason</c>'s <c>IGenderedItemGetter</c> entry
     /// defers. Enumerated rather than counted so the deferral names its own contents: someone reading
     /// the exclusion reaches this list, not a shrug. If Mutagen adds or removes a gendered field this
     /// fails, which is the point — the size of a deferred gap should not drift unnoticed.

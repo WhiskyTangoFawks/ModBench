@@ -45,7 +45,7 @@ namespace MEditService.Tests.Edits;
 /// <para><b>The two nested abstract unions are here since #643</b> — <c>NavmeshGeometry.Parent</c>
 /// and <c>LocationTargetRadius.Target</c>, reached one level *inside* another struct column
 /// (<c>Static.NavmeshGeometry</c> / <c>Faction.VendorLocation</c>). This paragraph used to document
-/// them as the gap: <c>SchemaReflector.BuildStructSubField</c> returned <c>Apply: null</c>
+/// them as the gap: <c>StructLeaves.BuildStructSubField</c> returned <c>Apply: null</c>
 /// unconditionally, so these two types had no write path through
 /// <see cref="RecordEditService.EditField"/> at all — the read/write divergence #360's precedent
 /// warns about, found by #611, refused honestly by #642, and closed by #643's shared
@@ -365,7 +365,7 @@ public sealed class AbstractUnionCompileRoundTripTests : IDisposable
     [Fact]
     public void Effects_WholeArrayWrite_OverdriveToStateVariableFilter_CompilesAndReparsesAsTheNewConcreteType()
     {
-        // "qvalue", not "q_value" — SchemaReflector.ToSnakeCase only inserts an underscore before an
+        // "qvalue", not "q_value" — ReflectedTypes.ToSnakeCase only inserts an underscore before an
         // uppercase letter preceded by a lowercase/digit ((?<=[a-z0-9])([A-Z])); "QValue"'s two
         // adjacent capitals never trip that lookbehind, so it lowercases straight through.
         var result = EditService().EditField(

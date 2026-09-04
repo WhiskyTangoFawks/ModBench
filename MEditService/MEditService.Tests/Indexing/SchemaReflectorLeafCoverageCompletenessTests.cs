@@ -54,7 +54,7 @@ public sealed class SchemaReflectorLeafCoverageCompletenessTests
 {
     private const GameCategory Category = GameCategory.Fallout4;
 
-    // SchemaReflector.MajorRecordHeaderMembers plus SchemaAnnotations.ExcludedColumns — record-header
+    // ColumnReflection.MajorRecordHeaderMembers plus SchemaAnnotations.ExcludedColumns — record-header
     // metadata (FormKey, EditorID, the GRUP timestamps), not per-record data; Loqui's own
     // Registration handle (SchemaAnnotations.ExcludedMembers) — never real data at any depth. A
     // deliberate, small, hand-kept mirror by name rather than a reference — a drift here fails as a
@@ -76,7 +76,7 @@ public sealed class SchemaReflectorLeafCoverageCompletenessTests
         // own "A<Name>" naming convention) whose real per-subclass data lives on concrete classes
         // that inherit *from* the abstract base — solved narrowly at first for one
         // case (OMOD's own Properties element, BuildObjectModPropertyLeafFields), then generalized
-        // reflectively (SchemaReflector.BuildUnionLeafFields) for every "A<Name>" type
+        // reflectively (LoquiUnions.BuildUnionLeafFields) for every "A<Name>" type
         // whose generated C# class is actually `abstract`.
         // CoveredAbstractUnions/CoveredNestedAbstractUnions below are the "asserted, not incidental"
         // set this mechanism covers. Two names differ from what the naming convention suggests,
@@ -226,7 +226,7 @@ public sealed class SchemaReflectorLeafCoverageCompletenessTests
                 {
                     var nestedFields = column.IsArray ? column.ElementType?.Fields : column.SubFields;
                     if (nestedFields == null) continue;
-                    var match = nestedFields.SingleOrDefault(f => f.Name == SchemaReflector.ToSnakeCase(property));
+                    var match = nestedFields.SingleOrDefault(f => f.Name == ReflectedTypes.ToSnakeCase(property));
                     if (match == null) continue;
                     // Confirm this column's own nested type is really `owner`, not a same-named
                     // property on some unrelated struct — cheap enough: re-derive via NestedGetterType.
@@ -314,7 +314,7 @@ public sealed class SchemaReflectorLeafCoverageCompletenessTests
                 {
                     if (KnownGaps.Contains((nestedType.Name, nestedProp.Name))) continue;
 
-                    var expectedName = SchemaReflector.ToSnakeCase(nestedProp.Name);
+                    var expectedName = ReflectedTypes.ToSnakeCase(nestedProp.Name);
                     if (subFields != null && subFields.Any(f => f.Name == expectedName)) continue;
 
                     gaps.Add($"{schema.RecordType.Name}.{column.PropertyName}.{nestedProp.Name} " +
@@ -337,7 +337,7 @@ public sealed class SchemaReflectorLeafCoverageCompletenessTests
     //
     // Noggog's small value-vector structs (see IsVectorStructType) are special-cased to exactly
     // X/Y/Z rather than a generic property walk, mirroring
-    // SchemaReflector.BuildVectorComponentSubFields' own explicit scope: every one of these types
+    // VectorStructLeaves.BuildVectorComponentSubFields' own explicit scope: every one of these types
     // carries real geometry-helper properties (Length, Magnitude, SqrMagnitude, Normalized,
     // Absolute) that are computed, not serialized data, and several (P3Int16, P2UInt8, P3UInt8,
     // P3UInt16) have their own self-referencing Point (`P3Int16 Point => this`) — "all public
@@ -391,7 +391,7 @@ public sealed class SchemaReflectorLeafCoverageCompletenessTests
             || IsVectorStructType(core);
     }
 
-    // Mirrors SchemaReflector.PrimitiveMap's key set.
+    // Mirrors LeafClassification.PrimitiveMap's key set.
     private static readonly HashSet<Type> PrimitiveTypes =
     [
         typeof(bool), typeof(byte), typeof(sbyte), typeof(short), typeof(ushort),
@@ -404,7 +404,7 @@ public sealed class SchemaReflectorLeafCoverageCompletenessTests
         type.IsInterface && !IsFormLink(type)
         && type.GetProperty("StaticRegistration", BindingFlags.Public | BindingFlags.Static) != null;
 
-    // Mirrors SchemaReflector.VectorStructTypes — every Noggog small value-vector struct actually
+    // Mirrors ReflectedTypes.VectorStructTypes — every Noggog small value-vector struct actually
     // reachable in FO4's schema graph (verified by grepping
     // references/Mutagen/Mutagen.Bethesda.Fallout4, not assumed):
     // P2Int (Cell.Grid.Point), P2UInt8 (WorldDefaultLevelData), P2Int16 (WorldspaceMaxHeight and

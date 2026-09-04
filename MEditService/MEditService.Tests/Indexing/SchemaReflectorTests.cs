@@ -657,7 +657,7 @@ public class SchemaReflectorTests
     /// (which already refuses most malformed FormKey strings before <c>ColumnSpec.Apply</c> is ever
     /// reached at the public <c>EditField</c> door — see <c>ScalarFieldApplierRefusalTests</c>'s own
     /// note on this). Calling <c>Apply</c> directly is what actually exercises
-    /// <c>SchemaReflector.ApplyFormLinkJson</c>'s own behaviour: a malformed string must not be a
+    /// <c>LeafWriters.ApplyFormLinkJson</c>'s own behaviour: a malformed string must not be a
     /// silent no-op reported as <c>ApplyOutcome.Applied</c> for a caller that reaches this column
     /// without going through <c>ValidateFormLinks</c> first.
     /// </summary>
@@ -859,25 +859,25 @@ public class SchemaReflectorTests
     [Fact]
     public void ToSnakeCase_WordBoundary_InsertsUnderscore()
     {
-        Assert.Equal("aggro_radius", SchemaReflector.ToSnakeCase("AggroRadius"));
+        Assert.Equal("aggro_radius", ReflectedTypes.ToSnakeCase("AggroRadius"));
     }
 
     [Fact]
     public void ToSnakeCase_SingleWord_LowercasesOnly()
     {
-        Assert.Equal("name", SchemaReflector.ToSnakeCase("Name"));
+        Assert.Equal("name", ReflectedTypes.ToSnakeCase("Name"));
     }
 
     [Fact]
     public void ToSnakeCase_MultipleWordBoundaries_AllConverted()
     {
-        Assert.Equal("aggro_radius_behavior_enabled", SchemaReflector.ToSnakeCase("AggroRadiusBehaviorEnabled"));
+        Assert.Equal("aggro_radius_behavior_enabled", ReflectedTypes.ToSnakeCase("AggroRadiusBehaviorEnabled"));
     }
 
     [Fact]
     public void ToSnakeCase_AlreadyLowercase_Unchanged()
     {
-        Assert.Equal("name", SchemaReflector.ToSnakeCase("name"));
+        Assert.Equal("name", ReflectedTypes.ToSnakeCase("name"));
     }
 
     // ── Float column ──────────────────────────────────────────────────────────
@@ -1437,7 +1437,7 @@ public class SchemaReflectorTests
         // exercises the mapping directly against every Mutagen member name it must key off of,
         // proving the mapping is keyed by name, not by bit position, and includes a non-Fallout
         // member name ("LightMaster").
-        Assert.Equal(expected, SchemaReflector.MapToXEditFlagName(mutagenName));
+        Assert.Equal(expected, ModHeaderSchema.MapToXEditFlagName(mutagenName));
     }
 
     [Fact]

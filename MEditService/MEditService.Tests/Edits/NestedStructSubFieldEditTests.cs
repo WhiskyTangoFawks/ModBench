@@ -13,7 +13,7 @@ namespace MEditService.Tests.Edits;
 
 /// <summary>
 /// #643: a nested Loqui struct sub-field one level inside a struct column
-/// (<c>SchemaReflector.BuildStructSubField</c>) is writable through the one write path, with the
+/// (<c>StructLeaves.BuildStructSubField</c>) is writable through the one write path, with the
 /// same semantics the top-level struct column has (the shared <c>ApplyStructJson</c>). This file
 /// was #642's <c>NestedStructSubFieldRefusalTests</c> — the refusal it pinned is deliberately
 /// removed by #643 for every writable nested struct, so the pin flips to the round trip it used to

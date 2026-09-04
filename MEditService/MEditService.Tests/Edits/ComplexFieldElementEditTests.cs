@@ -158,7 +158,7 @@ public sealed class ComplexFieldElementEditTests : IDisposable
     /// <summary>
     /// An abstract list element (OMOD's <c>AObjectModProperty&lt;T&gt;</c>) whose payload carries no
     /// <c>value_type</c> discriminator can never be constructed — the naive design
-    /// (<c>SchemaReflector.BuildListElement</c> activating the list's generic argument directly) threw
+    /// (<c>ListLeaves.BuildListElement</c> activating the list's generic argument directly) threw
     /// <see cref="MissingMethodException"/> straight out of the write path (uncaught, not this refusal)
     /// for <i>any</i> write to this field, discriminator or not. This is otherwise a well-formed
     /// whole-array write (an array, one well-shaped element) — the only thing wrong with it is the

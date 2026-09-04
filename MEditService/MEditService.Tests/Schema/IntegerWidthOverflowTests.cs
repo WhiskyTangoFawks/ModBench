@@ -9,7 +9,7 @@ namespace MEditService.Tests.Schema;
 
 /// <summary>#707: a value the column's own integer width cannot hold refuses the whole write rather
 /// than truncating into it. Held at the <see cref="ColumnSpec.Apply"/> seam, where the one converter
-/// table <c>SchemaReflector.PrimitiveMap</c> serves both positions — a scalar column and a
+/// table <c>LeafClassification.PrimitiveMap</c> serves both positions — a scalar column and a
 /// bare-scalar list element — so the two cannot drift apart.</summary>
 public class IntegerWidthOverflowTests
 {

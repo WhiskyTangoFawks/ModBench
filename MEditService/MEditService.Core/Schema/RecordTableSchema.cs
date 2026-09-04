@@ -7,7 +7,7 @@ namespace MEditService.Core.Schema;
 
 /// <summary>
 /// What one write attempt against a single leaf property came to — shared by
-/// <see cref="ColumnSpec.Apply"/> (record-level) and <c>SchemaReflector</c>'s own sub-field appliers
+/// <see cref="ColumnSpec.Apply"/> (record-level) and <c>SubFieldReflection</c>'s own sub-field appliers
 /// (a struct member or array element, one level down from a column).
 ///
 /// <para><see cref="PropertyNotFound"/>
@@ -16,8 +16,8 @@ namespace MEditService.Core.Schema;
 /// <c>false</c>, the same reasoning behind <c>RecordEditRefusal.ListElementTypeUnresolved</c>
 /// a level up. The two are not merely a top-level-column distinction, either: one level down,
 /// inside a sub-field shared by several concrete sibling leaf types that don't all declare it (OMOD's
-/// own sparse leaf-union — <c>SchemaReflector.BuildObjectModPropertyLeafFields</c>), <see cref="PropertyNotFound"/>
-/// is an <i>expected, silent</i> outcome (see <c>SchemaReflector.ApplySubFields</c>), while
+/// own sparse leaf-union — <c>ObjectModPropertyLeaves.BuildObjectModPropertyLeafFields</c>), <see cref="PropertyNotFound"/>
+/// is an <i>expected, silent</i> outcome (see <c>SubFieldValues.ApplySubFields</c>), while
 /// <see cref="ValueRejected"/> there still fails the whole struct/array write — the same distinction,
 /// with different consequences depending on which layer answers it.</para>
 /// </summary>
@@ -37,7 +37,7 @@ public enum ApplyOutcome
     /// leaf types that don't all declare it (OMOD's sparse leaf-union — <c>value</c>, <c>value2</c>,
     /// <c>record</c>, <c>enum_int_value</c>, <c>function_type</c>), the identical outcome is an
     /// expected, silent no-op: the property simply does not apply to <i>this</i> element's concrete
-    /// leaf, by design, not a defect — <c>SchemaReflector.ApplySubFields</c> is what tells the two
+    /// leaf, by design, not a defect — <c>SubFieldValues.ApplySubFields</c> is what tells the two
     /// apart, since only it knows which layer it is answering for.</para>
     /// </summary>
     PropertyNotFound,
@@ -55,10 +55,10 @@ public enum ApplyOutcome
     /// The array <i>is</i> the JSON shape the field takes, but at least one element belongs to a
     /// union (OMOD <c>properties</c>' <c>AObjectModProperty&lt;T&gt;</c>, <c>qust.aliases</c>, a
     /// landscape layer) and its concrete leaf could not be determined from that element's own payload
-    /// (<c>SchemaReflector.ResolveListElementType</c>). Its own value, distinct from
+    /// (<c>ListLeaves.ResolveListElementType</c>). Its own value, distinct from
     /// <see cref="ValueRejected"/>: inferring it from "a rejection whose value is a genuine JSON
     /// array" is ambiguous — a well-typed element whose own <i>sub-field</i> value is declined
-    /// (<c>ApplySubFields</c>' fold, still <see cref="ValueRejected"/>) matches that description
+    /// (<c>SubFieldValues.ApplySubFields</c>' fold, still <see cref="ValueRejected"/>) matches that description
     /// too, and the two need different messages (name a discriminator vs. send a value this field
     /// accepts). Answering the outcome directly, rather than reconstructing it from the value's
     /// shape, is what keeps the two unambiguous.
@@ -66,19 +66,19 @@ public enum ApplyOutcome
     ListElementTypeUnresolved,
 
     /// <summary>
-    /// #642: the payload names a sub-field the schema knows about (<c>SchemaReflector.SubFieldSpec</c>)
+    /// #642: the payload names a sub-field the schema knows about (<c>SubFieldSpec</c>)
     /// but that carries no write delegate for a reason that is not a discriminator no-op. Since
-    /// #643 wired nested Loqui structs into the shared <c>ApplyStructJson</c> and #699 wired
-    /// scalar-element lists into the shared <c>ApplyListSubFieldJson</c>, the opted-in set is the
+    /// #643 wired nested Loqui structs into the shared <c>StructLeaves.ApplyStructJson</c> and #699 wired
+    /// scalar-element lists into the shared <c>ListLeaves.ApplyListSubFieldJson</c>, the opted-in set is the
     /// genuinely unwritable residue: a nested struct with no usable write door — no resolvable
     /// setter, or nested condition data whose discriminator can never appear in a payload
-    /// (<c>SchemaReflector.SubFieldSpec.TargetingRefuses</c> is where that set is decided).
+    /// (<c>SubFieldSpec.TargetingRefuses</c> is where that set is decided).
     /// Distinct from <see cref="PropertyNotFound"/>'s sibling-merge no-op and from the two
     /// deliberate discriminator fields (<c>value_type</c>/<c>concrete_type</c>, consumed before the
     /// object exists and never meant to be applied to it) — those two stay a silent skip via
     /// <c>SubFieldSpec.TargetingRefuses</c> staying <c>false</c>. Only reached when the payload
     /// actually names the sub-field — one absent from the payload never reaches this outcome, the same
-    /// "absence is not targeting" rule <c>SchemaReflector.ApplySubFields</c> already applies to every
+    /// "absence is not targeting" rule <c>SubFieldValues.ApplySubFields</c> already applies to every
     /// other member.
     /// </summary>
     SubFieldReadOnly,

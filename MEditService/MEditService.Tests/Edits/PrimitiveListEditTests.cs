@@ -16,7 +16,7 @@ namespace MEditService.Tests.Edits;
 /// #699: a list whose elements are bare scalars is written through the same door every other array
 /// takes, at the record's own top level (<c>race.movement_type_names</c>, <c>mato.dnams</c>) and one
 /// level in, inside an array element (<c>race.subgraphs[].animation_paths</c>). The element itself is
-/// built by <c>SchemaReflector.BuildListElement</c>'s scalar arm, so the whole-value write, the
+/// built by <c>ListLeaves.BuildListElement</c>'s scalar arm, so the whole-value write, the
 /// array-op envelope and the refuse-before-attach guarantee all apply unchanged.
 /// </summary>
 public sealed class PrimitiveListEditTests : IDisposable
@@ -134,7 +134,7 @@ public sealed class PrimitiveListEditTests : IDisposable
 
     /// <summary>
     /// #707: a value the element type cannot hold refuses the whole write rather than narrowing into
-    /// it — <c>SchemaReflector.PrimitiveMap</c>'s converters cast <c>checked</c>, so 4096 into a byte
+    /// it — <c>LeafClassification.PrimitiveMap</c>'s converters cast <c>checked</c>, so 4096 into a byte
     /// element throws <c>OverflowException</c>, which <c>BuildScalarListElement</c> turns into the
     /// same refusal a non-numeric element already gets. The in-range sibling does not land either:
     /// the array is one atomic value.
