@@ -408,6 +408,9 @@ public sealed class LoadOrderMirror(
     // the write path builds its link cache from it. What this establishes is only "never consult the
     // binary for a tracked plugin's content".
 
+    // Moving masters and record count onto the tree as well is a further step, not this one: it
+    // would reach into LoadOrder's mod registry and the save path.
+
     // A failed source read degrades to the binary, but records a real PluginLoadFailure: a silent
     // fallback would leave the user reading pre-Track binary content believing it was their source.
     private void IndexOnePlugin(
@@ -597,7 +600,6 @@ public sealed class LoadOrderMirror(
     {
         var modKey = ModKey.FromFileName(Path.GetFileName(metadata.Path));
         var modPath = new ModPath(modKey, metadata.Path);
-        // Same explicit strings parameters every other deep-parse call site builds.
         using var loaded = _modImporter.Import(
             modPath, gameRelease, LocalizedStrings.ForRead(ModFolders.Of(metadata.Origin, metadata.Path), _loadOrder!.DataFolderPath));
 
@@ -629,7 +631,7 @@ public sealed class LoadOrderMirror(
                     "{Plugin} ({Origin}) is gone from disk; removing it from the index", key.Name, key.Origin);
             }
             _index.Unindex(key);
-            // A removal moves winners for every FormKey it held, exactly as an re-index does.
+            // A removal moves winners for every FormKey it held, exactly as a re-index does.
             _index.UpdateWinners();
             // Deleted rows cannot match a filter that a stale _filter still lists them in.
             ReapplyFilter();

@@ -16,9 +16,9 @@ public interface ILoadOrderMirror
     /// consumers keep being handed a surface with no ingest or mutation verbs on it at all.</summary>
     IRecordIndex? Index { get; }
 
-    /// <summary>The gate every index write passes through, so two writes cannot interleave on the
-    /// one shared DuckDB connection. On the mirror because it owns the index; a separate
-    /// registration could hand out a gate that guards nothing.</summary>
+    /// <summary>On the mirror because it owns the index: a separate registration could hand out a
+    /// gate that guards nothing. The mirror's write doors take it for their callers; a caller
+    /// writing through Index takes it itself.</summary>
     IndexWriteGate WriteGate { get; }
 
     /// <summary>Where the reconcile is and what it has established so far (ADR-0035): the load
@@ -67,8 +67,8 @@ public interface ILoadOrderMirror
 
     void ClearFilter();
 
-    /// <summary>Every mutation must call this, or <c>_filter</c> stays a snapshot of a matching set
-    /// that has moved. Never throws: a fault degrades to the stale table rather than 500ing a write
-    /// that already succeeded.</summary>
+    /// <summary>Every mutation must call this or _filter stays a snapshot of a matching set that has
+    /// moved. Never throws, no-ops without a filter: a read must never throw (SourceFreshness), and
+    /// the write this follows already succeeded.</summary>
     void ReapplyFilter();
 }
