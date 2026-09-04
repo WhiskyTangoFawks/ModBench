@@ -423,6 +423,151 @@ public sealed class VmadEditTests : IDisposable
         Assert.Contains("10 / 0", result.Message, StringComparison.Ordinal);
     }
 
+    // ── addressing one keyed element by its key ──────────────────────────────
+    //
+    // #716: a keyed array's rows are labelled by key, not by position, and one path is shared by
+    // every column of the compare grid — so an array op names its element with a "key" hop and the
+    // writer resolves it against the array it actually walked to. Each test here reads the record's
+    // own document back, since a payload that addressed the wrong element still applies cleanly.
+
+    private static JsonObject KeyHop(string key, params string[] members) =>
+        new() { ["kind"] = "key", ["key"] = key, ["members"] = new JsonArray([.. members.Select(m => (JsonNode)m!)]) };
+
+    private static JsonObject MemberHop(string name) => new() { ["kind"] = "member", ["name"] = name };
+
+    /// <summary>The corrupting case. The quest's fragments are keyed on (stage, stage_index), so
+    /// the row for stage 10 is labelled "10 / 0" — text whose <i>second character is a digit</i>,
+    /// which reading it as an index parses to a perfectly valid 0. Element 0 is stage 5.</summary>
+    [Fact]
+    public void RemovingAQuestFragmentByItsCompositeKey_RemovesThatFragment_NotTheOneAtTheIndexTheKeyParsesTo()
+    {
+        _fixture.Normalize(_fixture.Quest);
+        var before = _fixture.Body(_fixture.Quest);
+        var beforeByStage = ByName(
+            JsonNode.Parse(before)!["VirtualMachineAdapter"]!["Fragments"]!.AsArray(), "Stage");
+        // In key order stage 5 is element 0 and stage 10 is element 1, so removing the wrong one is
+        // observable rather than a coin flip.
+        Assert.Equal([5, 10], JsonNode.Parse(before)!["VirtualMachineAdapter"]!["Fragments"]!
+            .AsArray().Select(f => f!["Stage"]!.GetValue<int>()));
+
+        var result = Edit(_fixture.Quest, new JsonObject
+        {
+            ["op"] = "array_remove",
+            ["path"] = new JsonArray(MemberHop("fragments"), KeyHop("10 / 0", "stage", "stage_index")),
+        });
+
+        Assert.True(result.Applied, result.Message);
+        var written = JsonNode.Parse(_fixture.Body(_fixture.Quest))!["VirtualMachineAdapter"]!["Fragments"]!.AsArray();
+        Assert.Equal([5], written.Select(f => f!["Stage"]!.GetValue<int>()));
+        Assert.Equal(beforeByStage["5"], written[0]!.ToJsonString());
+    }
+
+    /// <summary>A key hop mid-path, twice over, and a move whose effect is visible: the scalar
+    /// array being reordered is reached through the script's key and the property's key rather than
+    /// through either one's position.</summary>
+    [Fact]
+    public void MovingAScalarArrayElementReachedThroughTwoKeyHops_ReordersThatArrayAlone()
+    {
+        _fixture.Normalize(_fixture.Npc);
+        var before = _fixture.Body(_fixture.Npc);
+
+        var result = Edit(_fixture.Npc, new JsonObject
+        {
+            ["op"] = "array_move_up",
+            ["path"] = new JsonArray(
+                MemberHop("scripts"), KeyHop("Alpha", "name"),
+                MemberHop("properties"), KeyHop("Tags", "name"),
+                MemberHop("data_string_array"),
+                new JsonObject { ["kind"] = "index", ["index"] = 1 }),
+        });
+
+        Assert.True(result.Applied, result.Message);
+        var after = _fixture.Body(_fixture.Npc);
+        Assert.Equal(
+            ["b", "a"],
+            WrittenProperty(after, "Alpha", "Tags")["Data"]!.AsArray().Select(e => e!.GetValue<string>()));
+        Assert.All(
+            ConditionEditTests.DocumentDiff(before, after),
+            d => Assert.StartsWith("VirtualMachineAdapter.Scripts[0].Properties[3].Data[", d, StringComparison.Ordinal));
+    }
+
+    /// <summary>A dotted key member: a quest alias is keyed on <c>property.alias</c>, so the key is
+    /// the alias number read out of the alias's own object property, and the row is labelled
+    /// "0".</summary>
+    [Fact]
+    public void RemovingAnAliasScriptsPropertyReachedThroughADottedAliasKey_RemovesThatProperty()
+    {
+        _fixture.Normalize(_fixture.Quest);
+        var before = _fixture.Body(_fixture.Quest);
+
+        var result = Edit(_fixture.Quest, new JsonObject
+        {
+            ["op"] = "array_remove",
+            ["path"] = new JsonArray(
+                MemberHop("aliases"), KeyHop("0", "property.alias"),
+                MemberHop("scripts"), KeyHop("AliasScript", "name"),
+                MemberHop("properties"), KeyHop("Level", "name")),
+        });
+
+        Assert.True(result.Applied, result.Message);
+        var after = _fixture.Body(_fixture.Quest);
+        // The alias's own script keeps its identity and loses exactly its one property; an empty
+        // Properties list is simply absent from the source document.
+        Assert.Equal(
+            """[{"Property":{"Name":"","Alias":0},"Scripts":[{"Name":"AliasScript"}]}]""",
+            JsonNode.Parse(after)!["VirtualMachineAdapter"]!["Aliases"]!.ToJsonString());
+        Assert.All(
+            ConditionEditTests.DocumentDiff(before, after),
+            d => Assert.StartsWith("VirtualMachineAdapter.Aliases[0].Scripts[0].Properties", d, StringComparison.Ordinal));
+    }
+
+    /// <summary>A freshly added element carries its discriminator and nothing else (#710), so its
+    /// key is the empty one — a real key, and the only handle the user has on the row until they
+    /// name it.</summary>
+    [Fact]
+    public void AFreshlyAddedScriptIsAddressableByItsEmptyKey()
+    {
+        _fixture.Normalize(_fixture.Npc);
+        var before = _fixture.Body(_fixture.Npc);
+
+        var added = Edit(_fixture.Npc, new JsonObject
+        {
+            ["op"] = "array_add",
+            ["path"] = new JsonArray(MemberHop("scripts")),
+        });
+        Assert.True(added.Applied, added.Message);
+        // The unnamed script sorts first: the empty key precedes every other.
+        Assert.Equal(["", "Alpha", "Beta"], WrittenScriptNames(_fixture.Body(_fixture.Npc)));
+
+        var removed = Edit(_fixture.Npc, new JsonObject
+        {
+            ["op"] = "array_remove",
+            ["path"] = new JsonArray(MemberHop("scripts"), KeyHop("", "name")),
+        });
+
+        Assert.True(removed.Applied, removed.Message);
+        Assert.Equal(before, _fixture.Body(_fixture.Npc));
+    }
+
+    /// <summary>A key nothing in this array carries is nothing to remove — the same no-op answer an
+    /// out-of-range index already gets (<c>ArrayOpEditTests</c>), and never a write aimed somewhere
+    /// else.</summary>
+    [Fact]
+    public void RemovingByAKeyNoElementCarries_WritesNothing()
+    {
+        _fixture.Normalize(_fixture.Npc);
+        var before = _fixture.Body(_fixture.Npc);
+
+        var result = Edit(_fixture.Npc, new JsonObject
+        {
+            ["op"] = "array_remove",
+            ["path"] = new JsonArray(MemberHop("scripts"), KeyHop("Gamma", "name")),
+        });
+
+        Assert.True(result.Applied, result.Message);
+        Assert.Equal(before, _fixture.Body(_fixture.Npc));
+    }
+
     /// <summary>Each written script's own text, by name — what a gesture that was not about a
     /// script has to leave byte-identical, wherever the sort moved it to.</summary>
     private static Dictionary<string, string> WrittenScripts(string body) =>

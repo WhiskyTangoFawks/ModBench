@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { PluginHeader } from './PluginHeader';
 import { DiffRow, type FocusedCell } from './DiffRow';
 import {
-  buildColumns, parseElementIndex, collidingFilenames,
+  buildColumns, parseElementIndex, keyedElementIndex, collidingFilenames,
   getAtPath, setAtPath, metaAtPath,
   headerCellContext, combineVscodeContexts,
 } from './recordUtils';
@@ -426,7 +426,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
       const childRowKey = `${rowKey}.${child.fieldName}`;
       if (meta.type === 'array' && meta.elementType) {
         rows.push(...buildArrayElementRows(
-          child, meta.elementType, path, rootField, rootDiff, childRowKey, depth, diff.values));
+          child, meta, path, rootField, rootDiff, childRowKey, depth, diff.values));
       } else if (meta.type === 'struct') {
         const memberMeta = meta.fields?.find(f => f.name === child.fieldName);
         rows.push(...buildRows(
@@ -437,23 +437,36 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
     return rows;
   }
 
+  // How the backend labelled this child is what says how to address it, since both answers come
+  // from the same array metadata: a keyed array's children are named by key (ConflictClassifier's
+  // BuildKeyed), a pure-FormLink array's by the element value, and every other array's by "[N]".
+  function elementSegment(arrayMeta: FieldMetadata, fieldName: string): PathSegment {
+    if (arrayMeta.keyMembers) return { kind: 'key', key: fieldName, members: arrayMeta.keyMembers };
+    if (arrayMeta.elementType?.isSortable) return { kind: 'sortKey', key: fieldName };
+    return { kind: 'index', index: parseElementIndex(fieldName) };
+  }
+
   function buildArrayElementRows(
-    child: FieldDiff, elementMeta: FieldMetadata, arrayPath: PathSegment[], rootField: string, rootDiff: FieldDiff,
+    child: FieldDiff, arrayMeta: FieldMetadata, arrayPath: PathSegment[], rootField: string, rootDiff: FieldDiff,
     childRowKey: string, depth: number, listValues: Record<string, unknown>,
   ): React.ReactNode[] {
-    const seg: PathSegment = elementMeta.isSortable
-      ? { kind: 'sortKey', key: child.fieldName }
-      : { kind: 'index', index: parseElementIndex(child.fieldName) };
+    const elementMeta = arrayMeta.elementType!;
+    const seg = elementSegment(arrayMeta, child.fieldName);
     // The presentation table's unit is one element of a list, and "is this the last one" is a
     // question about the list — which only this frame, the one that descended into it, can answer.
     // Same rule `isUnsortedArrayElement` already follows: a row is never told by itself.
     const collapsedSummary = collapsedSummaries(child, elementMeta, column => {
       const list = listValues[column];
-      return !Array.isArray(list) || seg.kind !== 'index' || seg.index === list.length - 1;
+      if (!Array.isArray(list)) return true;
+      if (seg.kind === 'index') return seg.index === list.length - 1;
+      // A keyed element sits at a different position in each column, so this is asked of that
+      // column's own array rather than answered once for the row.
+      if (seg.kind === 'key') return keyedElementIndex(list, seg) === list.length - 1;
+      return true;
     });
     return buildRows(
       child, elementMeta, [...arrayPath, seg], rootField, rootDiff, childRowKey,
-      !elementMeta.isSortable, depth + 1, collapsedSummary);
+      seg.kind !== 'sortKey', depth + 1, collapsedSummary);
   }
 
   return (

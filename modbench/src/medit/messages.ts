@@ -156,15 +156,26 @@ export interface ColumnHeaderContext {
 // (the reflected field it stages under) down to a given row's
 // own value — a struct hop addressed by member name, an unsorted-array hop by position, a sorted
 // (pure FormLink) array hop by the element's own value (nothing addresses *beneath* a sortKey
-// hop). Lives here, not in a webview module, because StringValueContext/
+// hop), and a keyed array's hop by the key its element carries. Lives here, not in a webview
+// module, because StringValueContext/
 // FIELD_OPEN_EXTENDED_EDITOR below need it, and this module is the one the extension host already imports
 // directly (extension.ts) — importing a webview type into the host would run the dependency the
 // wrong way. The webview re-exports this (webview/src/messages.ts, webview/src/types.ts) rather
 // than the reverse.
+//
+// `key` addresses a keyed array's element (FieldMetadata.keyMembers) the way `sortKey` addresses a
+// sorted one's: by what the element *is*, never by where it sits. One path is shared by every
+// column of a row, and the same element sits at a different position in each — a plugin missing
+// the first script holds the second at index 0 — so a keyed element has no position a path could
+// carry. `members` travels with the key because the segment is resolved in three places that hold
+// no schema between them (getAtPath/setAtPath, the extension host forwarding an array op, and
+// ArrayOpWriter's own path grammar); carrying it makes the hop self-describing, exactly as
+// `sortKey` is.
 export type PathSegment =
   | { kind: 'member'; name: string }
   | { kind: 'index'; index: number }
-  | { kind: 'sortKey'; key: string };
+  | { kind: 'sortKey'; key: string }
+  | { kind: 'key'; key: string; members: string[] };
 
 // ADR-0039: a `string` value cell's own right-click identity — the extended editor's only
 // trigger; no left-click gesture reaches it. `value`/`readOnly` travel here

@@ -40,12 +40,11 @@ internal static class ArrayOpWriter
         if (path == null) return FieldApplyOutcome.ValueShapeMismatch;
 
         // 'array_add' addresses the array itself; every other op addresses one of its elements, so
-        // the array is one hop shorter than the envelope's own path (the last hop is the element's
-        // own index) — the same convention the deleted client-side handleArrayOp always used.
+        // the array is one hop shorter than the envelope's own path (the last hop names the
+        // element, by position or by key).
         var isAdd = opName == "array_add";
         var arrayPath = isAdd ? path : path[..Math.Max(path.Count - 1, 0)];
-        var index = isAdd ? -1 : LastIndex(path);
-        if (!isAdd && index == null) return FieldApplyOutcome.ValueShapeMismatch;
+        if (!isAdd && path.Count == 0) return FieldApplyOutcome.ValueShapeMismatch;
 
         // An array op only ever targets a column that is itself array-shaped (a bare top-level
         // array) or struct-shaped (an array nested one or more hops inside it) — never a genuinely
@@ -69,11 +68,15 @@ internal static class ArrayOpWriter
         if (ResolveOrCreate(root, arrayPath) is not { } array)
             return FieldApplyOutcome.ValueShapeMismatch;
 
+        // The element hop is resolved against the array it was just walked to, never before it: a
+        // key names an element, and where that element sits is a fact about this record's own array.
+        var index = isAdd ? -1 : ElementIndex(array, path[^1]);
+
         var changed = opName switch
         {
-            "array_remove" => TryRemove(array, index!.Value),
-            "array_move_up" => TryMove(array, index!.Value, -1),
-            "array_move_down" => TryMove(array, index!.Value, 1),
+            "array_remove" => TryRemove(array, index),
+            "array_move_up" => TryMove(array, index, -1),
+            "array_move_down" => TryMove(array, index, 1),
             "array_add" => TryAppend(array, ResolveElementMeta(col, arrayPath)),
             _ => false,
         };
@@ -97,10 +100,10 @@ internal static class ArrayOpWriter
         };
     }
 
-    // ── path segments ("member"/"index" only — array ops only ever reach an unsorted array, whose
-    // rows never carry a "sortKey" hop; see recordUtils.ts's own PathSegment doc comment) ─────────
+    // ── path segments ("member"/"index"/"key" — a pure-FormLink array offers no array op at all,
+    // so no "sortKey" hop reaches here; see recordUtils.ts's own PathSegment doc comment) ─────────
 
-    private sealed record PathSegment(string Kind, string? Name, int? Index);
+    private sealed record PathSegment(string Kind, string? Name, int? Index, string? Key, IReadOnlyList<string>? Members);
 
     private static List<PathSegment>? ParsePath(JsonElement pathEl)
     {
@@ -111,17 +114,49 @@ internal static class ArrayOpWriter
                 return null;
             var kind = kindEl.GetString()!;
             if (kind == "member" && seg.TryGetProperty("name", out var nameEl) && nameEl.ValueKind == JsonValueKind.String)
-                result.Add(new PathSegment("member", nameEl.GetString(), null));
+                result.Add(new PathSegment("member", nameEl.GetString(), null, null, null));
             else if (kind == "index" && seg.TryGetProperty("index", out var idxEl) && idxEl.ValueKind == JsonValueKind.Number)
-                result.Add(new PathSegment("index", null, idxEl.GetInt32()));
+                result.Add(new PathSegment("index", null, idxEl.GetInt32(), null, null));
+            else if (kind == "key" && ParseKeyMembers(seg) is { } members
+                     && seg.TryGetProperty("key", out var keyEl) && keyEl.ValueKind == JsonValueKind.String)
+                result.Add(new PathSegment("key", null, null, keyEl.GetString(), members));
             else
                 return null;
         }
         return result;
     }
 
-    private static int? LastIndex(IReadOnlyList<PathSegment> path) =>
-        path.Count > 0 && path[^1] is { Kind: "index", Index: { } i } ? i : null;
+    private static List<string>? ParseKeyMembers(JsonElement seg)
+    {
+        if (!seg.TryGetProperty("members", out var membersEl) || membersEl.ValueKind != JsonValueKind.Array) return null;
+        var members = new List<string>();
+        foreach (var member in membersEl.EnumerateArray())
+        {
+            if (member.ValueKind != JsonValueKind.String) return null;
+            members.Add(member.GetString()!);
+        }
+        return members.Count > 0 ? members : null;
+    }
+
+    // Where the final hop's element sits in the array it was resolved against — its own position for
+    // an "index" hop, and for a "key" hop wherever this array holds the element that key names.
+    // A key no element here carries answers -1, which every mutation below already reads as
+    // "nothing to do" the same way an out-of-range index does.
+    private static int ElementIndex(JsonArray array, PathSegment seg) => seg switch
+    {
+        { Kind: "index", Index: { } i } => i,
+        { Kind: "key", Key: { } key, Members: { } members } => IndexOfKey(array, key, members),
+        _ => -1,
+    };
+
+    private static int IndexOfKey(JsonArray array, string key, IReadOnlyList<string> members)
+    {
+        for (var i = 0; i < array.Count; i++)
+        {
+            if (string.Equals(ElementKey.Of(array[i], members).Text, key, StringComparison.Ordinal)) return i;
+        }
+        return -1;
+    }
 
     // Walks `path` from `node` down to the target array, treating an absent (or explicitly null)
     // hop at any depth as "nothing here yet" rather than a shape mismatch: a struct member, or a
@@ -153,7 +188,8 @@ internal static class ArrayOpWriter
                 if (child == null) { child = NextContainer(); obj[seg.Name!] = child; }
                 current = child;
             }
-            else if (seg.Kind == "index" && current is JsonArray arr && seg.Index is { } idx && idx >= 0 && idx < arr.Count)
+            else if (seg.Kind != "member" && current is JsonArray arr && ElementIndex(arr, seg) is var idx
+                     && idx >= 0 && idx < arr.Count)
             {
                 var child = arr[idx];
                 if (child == null) { child = NextContainer(); arr[idx] = child; }
@@ -161,9 +197,9 @@ internal static class ArrayOpWriter
             }
             else
             {
-                return null; // hop doesn't match the shape actually there, or names an index that
-                             // doesn't exist yet (an absent array *element* is never synthesized —
-                             // only a struct member or a nested array/struct value is)
+                return null; // hop doesn't match the shape actually there, or names an index (or a
+                             // key) no element there answers to (an absent array *element* is never
+                             // synthesized — only a struct member or a nested array/struct value is)
             }
         }
         return current as JsonArray;
