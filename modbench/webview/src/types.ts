@@ -46,8 +46,8 @@ export type FieldValue = Omit<Schemas['FieldValue'], 'metadata'> & { metadata: F
 // ADR-0036: a compare-grid column is identified by (plugin, origin), not plugin alone —
 // two columns can share a filename (shadowed copies). `ColumnKey` is a branded
 // string, minted only by `columnKey()` below, so every place that carries column identity
-// (focusedCell, collapsedColumns, immutableSet, overrideMap's key, the drag source,
-// addPropertyTarget — see DiffRow.tsx/RecordPanel.tsx) can be typed as `ColumnKey` rather than
+// (focusedCell, collapsedColumns, immutableSet, overrideMap's key, the drag source
+// — see DiffRow.tsx/RecordPanel.tsx) can be typed as `ColumnKey` rather than
 // `string`: comparing it against a bare `plugin` string becomes a compile error instead of a
 // silent same-filename collision. `Record<ColumnKey, T>`/`{ [k: string]: T }` still erase the
 // brand (a mapped type over a non-literal string collapses to an index signature) — the
