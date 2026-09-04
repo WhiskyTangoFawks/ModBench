@@ -38,6 +38,8 @@ export type FieldType =
  *  per-field-type default: a new condition's shape is `ParsedCondition`, not an object keyed by
  *  the display field names with a per-type scalar default in each. */
 export type FieldMetadata =
+  // `isDiscriminator` is dropped rather than narrowed: it says which concrete class an object is,
+  // which is the write path's decision alone (ArrayOpWriter) — the webview reads no such field.
   Omit<Schemas['FieldMetadata'],
     'type' | 'elementType' | 'fields' | 'isSortable' | 'allowsNull' | 'isBitmask' | 'isDiscriminator'> & {
     type: FieldType;
@@ -55,7 +57,6 @@ export type FieldMetadata =
     isSortable?: boolean;   // on elementType: true for pure FormLink arrays
     allowsNull?: boolean;   // for 'formKey': true when the Mutagen type is IFormLinkNullable<T>
     isBitmask?: boolean;    // true when the C# enum has [Flags]
-    isDiscriminator?: boolean; // this field names which concrete class its object is
   };
 
 export type FieldValue = Omit<Schemas['FieldValue'], 'metadata'> & { metadata: FieldMetadata };

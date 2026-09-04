@@ -237,8 +237,8 @@ internal static class ArrayOpWriter
     // Activator.CreateInstance before applying anything, which hands every field its own CLR
     // default for free — an unnamed member is then skipped by ApplySubFields ("absence is not
     // targeting") and the freshly-constructed defaults stand untouched. This sidesteps two problems
-    // a field-by-field default can't solve from FieldMetadata alone: a
-    // "struct"-typed member that is actually a #642 read-only nested Loqui struct (naming it at all,
+    // a field-by-field default can't solve from FieldMetadata alone: a "struct"-typed member that
+    // is actually a #642 read-only nested Loqui struct (naming it at all,
     // with any value, refuses the whole write) and a "enum" member whose wire shape FieldMetadata's
     // own IsBitmask flag doesn't reliably predict (ColumnSpec's own IsFlagsEnum, which does, isn't on
     // the wire type) — both are simply never named, and the constructed instance's own default is
@@ -264,16 +264,16 @@ internal static class ArrayOpWriter
         _ => "",
     };
 
-    // #710: the one member a default struct element names. A discriminator is not a member of the
-    // instance at all — it is read off the payload to choose which concrete class to construct,
-    // before that object exists (SchemaReflector.ResolveAbstractListElementType) — so an element of
-    // an abstract-element array that omits it cannot be built and is refused
-    // (ListElementTypeUnresolved). It starts as the first leaf the schema lists, the same default
-    // any other closed choice takes above. A struct with no discriminator (the ordinary case)
-    // still defaults to the empty object.
+    // A discriminator is the one member a default struct element names, and it starts as the first
+    // leaf the schema lists (docs/specs/medit-record-editor.md, "A new array element's default is
+    // the backend's"). An ordinary struct, having none, still defaults to the empty object.
     private static JsonObject DefaultStructElement(FieldMetadata meta)
     {
         var element = new JsonObject();
+        // A discriminator's EnumValues are its union's leaves, and a union with no leaf is not
+        // reflected as one at all (SchemaReflector.TryGetAbstractUnion requires at least one, and
+        // OMOD's leaf table is a literal) — so the count guard is what keeps the indexer total,
+        // not a case that can arrive.
         foreach (var field in meta.Fields ?? [])
             if (field.IsDiscriminator && field.EnumValues.Count > 0) element[field.Name] = field.EnumValues[0];
         return element;

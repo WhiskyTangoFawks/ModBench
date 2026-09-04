@@ -33,7 +33,6 @@ const aliasesMeta: FieldMetadata = {
         enumValues: ['QuestReferenceAlias', 'QuestLocationAlias', 'QuestCollectionAlias'],
         enumLabels: ['Reference', 'Location', 'Collection'],
         displayLabel: 'Kind',
-        isDiscriminator: true,
       },
       { name: 'name', type: 'string', isArray: false, validFormKeyTypes: [], enumValues: [] },
     ],

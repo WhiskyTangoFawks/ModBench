@@ -909,9 +909,8 @@ public sealed partial class SchemaReflector
         // FieldMetadata's own doc comments. Set only by BuildAbstractUnionDiscriminatorField.
         IReadOnlyList<string>? EnumLabels = null,
         string? DisplayLabel = null,
-        // #710: this field names the concrete class its enclosing object is, so a default element
-        // for an abstract-element array must carry it — see FieldMetadata's own doc comment. Set by
-        // the two discriminator fields this record's TargetingRefuses comment above already names.
+        // Set by the two discriminator fields the TargetingRefuses comment above already names —
+        // see FieldMetadata's own doc comment for what it means.
         bool IsDiscriminator = false)
     {
         // Mirrors ColumnSpec.IsArray's own derivation (ReflectColumns: `info.ApiType ==

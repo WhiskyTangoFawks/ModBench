@@ -273,19 +273,10 @@ public sealed class ComplexFieldElementEditTests : IDisposable
         // Mutagen's own document spelling of the leaf class the discriminator named — OMOD's leaf
         // classes are ObjectMod<ValueType>Property, closed over the owning record's Property enum.
         Assert.StartsWith(
-            $"ObjectMod{FirstLeaf("omod", "properties", "value_type")}Property",
+            $"ObjectMod{SharedSchemaReflector.FirstArrayElementLeaf("omod", "properties", "value_type")}Property",
             properties[1].GetProperty("MutagenObjectType").GetString(),
             StringComparison.Ordinal);
     }
-
-    /// <summary>The first leaf of an abstract-element array's own discriminator, read off the
-    /// reflected schema — the rule is "the first leaf the schema lists", so a literal class name
-    /// here would pin the leaf instead of the rule.</summary>
-    private static string FirstLeaf(string table, string column, string discriminator) =>
-        SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4)[table]
-            .RecordColumns.Single(c => c.Name == column)
-            .ElementType!.Fields!.Single(f => f.Name == discriminator)
-            .EnumValues[0];
 
     /// <summary>
     /// Move Up/Move Down: reordering two elements of <i>different</i> concrete leaf types is

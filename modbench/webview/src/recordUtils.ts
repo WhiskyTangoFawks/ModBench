@@ -392,15 +392,9 @@ export function metaAtPath(meta: FieldMetadata | undefined, path: readonly PathS
 
 // The default element for an array the *adapters* synthesize — a VMAD property's own instances, a
 // Condition group's conditions. Keyed off the compare grid's own FieldMetadata shape rather than
-// VMAD's raw node JSON, which the two do not share.
-//
-// #710: a reflected column's array has no default here and never will. Its Add posts an op
-// envelope carrying nothing but `{op, path}`, and ArrayOpWriter.DefaultElementValue decides what
-// the new element is, server-side, from the same schema the write path validates against — the one
-// place that can name an abstract union's leaf and have the write accept it. The two functions are
-// therefore not rival definitions of the same thing: this one defaults an element of a shape that
-// has no CLR constructor at all (a VMAD node list is its members), which is exactly why it must
-// build one member at a time where the reflected default names nothing it does not have to.
+// VMAD's raw node JSON, which the two do not share. A reflected column's array has no default here
+// at all: its Add posts `{op, path}` and ArrayOpWriter builds the element
+// (docs/specs/medit-record-editor.md, "A new array element's default is the backend's").
 //
 // The `default` arm is deliberate, not lazy: an unrecognized/future `type` returns '' rather than
 // falling through to `undefined`, which would silently append a hole into a saved array.
@@ -413,6 +407,9 @@ export function defaultAdapterElementValue(meta: FieldMetadata): unknown {
     case 'string': case 'formKey': return '';
     case 'int': case 'float': return 0;
     case 'bool': return false;
+    // An adapter element that carries a discriminator (a script property's, once #694 renders one)
+    // starts at the same first leaf ArrayOpWriter picks for a reflected element — one rule, stated
+    // in docs/specs/medit-record-editor.md, and this arm is where the adapter path obeys it.
     case 'enum': return meta.enumValues[0] ?? '';
     case 'struct': return Object.fromEntries((meta.fields ?? []).map(f => [f.name, defaultAdapterElementValue(f)]));
     case 'array': return [];
