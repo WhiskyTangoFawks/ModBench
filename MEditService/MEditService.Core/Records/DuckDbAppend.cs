@@ -2,9 +2,6 @@ using DuckDB.NET.Data;
 
 namespace MEditService.Core.Records;
 
-/// <summary>
-/// Shared null-aware DuckDB appender helpers, used by the VMAD and placement indexing paths.
-/// </summary>
 internal static class DuckDbAppend
 {
     public static void Nullable(IDuckDBAppenderRow row, bool? val)

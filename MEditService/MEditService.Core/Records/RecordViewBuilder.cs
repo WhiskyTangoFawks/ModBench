@@ -5,38 +5,15 @@ using MEditService.Core.Schema;
 
 namespace MEditService.Core.Records;
 
-/// <summary>
-/// Emits one <c>json_extract</c> view per record type over the <c>records</c> documents table
-/// (ADR-0041).
-///
-/// <para>The views exist for <b>the SQL door only</b>: user filter SQL and <c>medit.query</c>
-/// scripts (invariant 8). Nothing in C# reads them — typed reads reconstitute from the document and
-/// run the same ColumnSpec extractors. That separation is what lets
-/// the two shapes differ honestly: the document is Mutagen's serializer shape, and it has no
-/// per-column correspondence to the reflected schema at all.</para>
-///
-/// <para><b>Scalar leaves only, and the rule is mechanical.</b> A view carries primitives, plain
-/// enums, flags enums, FormLinks and translated strings; it omits arrays, structs and the
-/// widened columns. The omissions are not a curated field list — they fall out of
-/// <see cref="ColumnSpec.IsViewable"/>, which reads flags the reflector set from the CLR type. The
-/// principle: <i>no column rather than a column with broken semantics</i>. A nested array
-/// has no faithful scalar rendering, and a widened column's JSON holds a number for one sibling
-/// subclass and a string for another, so a single cast could only be wrong for somebody.</para>
-///
-/// <para>Consequently a view never carries an always-NULL column. The only fields that would have
-/// become one — the GRUP timestamps, which the serializer never emits — left the reflected schema
-/// entirely instead (<c>SchemaAnnotations.ExcludedColumns</c>), so the schema does not claim them either.</para>
-/// </summary>
+/// <summary>One <c>json_extract</c> view per record type over <c>records</c>, for the SQL door only
+/// (ADR-0041). Scalar leaves only, decided by <see cref="ColumnSpec.IsViewable"/>: no column over
+/// one with broken semantics.</summary>
 internal static class RecordViewBuilder
 {
     internal static void CreateViews(DuckDBConnection connection, IReadOnlyDictionary<string, RecordTableSchema> schemas)
     {
-        // No exceptions since #631. The plugin header used to be skipped here because it had no
-        // document to project a view over; now it has one like every other type, so it keeps a
-        // `header` relation at the SQL door rather than losing one when its wide table went. Its
-        // columns sit a level deeper in the document than a record's ($.ModHeader.Author, not
-        // $.Author) — which needs nothing special here: that nesting is in the column's own
-        // PropertyName and Projection just reads it.
+        // The header's columns sit a level deeper in the document ($.ModHeader.Author); that nesting
+        // is in the column's own PropertyName, so Projection needs nothing special.
         foreach (var (tableName, schema) in schemas)
         {
             using var cmd = connection.CreateCommand();
@@ -71,11 +48,9 @@ internal static class RecordViewBuilder
         }
         else if (col.DuckDbType == "VARCHAR")
         {
-            // One projection covers plain strings, enums, FormLinks and translated strings. A
-            // translated string is an object ({TargetLanguage, Value}), everything else is a bare
-            // scalar — so try the .Value path first and fall back to the property itself. That
-            // fallback is why translated strings need no marker of their own: the probe returns
-            // NULL for a non-object and the COALESCE moves on.
+            // One projection covers plain strings, enums, FormLinks and translated strings: a
+            // translated string is an object ({TargetLanguage, Value}), so probe .Value first; the
+            // probe returns NULL for a bare scalar and COALESCE moves on.
             raw = $"COALESCE(json_extract_string(body, '$.{col.PropertyName}.Value'), json_extract_string(body, {path}))";
         }
         else

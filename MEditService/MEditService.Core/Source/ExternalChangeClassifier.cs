@@ -2,46 +2,28 @@ using System.Security.Cryptography;
 
 namespace MEditService.Core.Source;
 
-/// <summary>
-/// The external-change classification step, shared verbatim by the live watcher (<c>MEditService.Bridge</c>) and
-/// the load-time hash check (fired from the reconcile path) — the reason it lives here rather
-/// than in the bridge assembly is exactly that sharing: both callers need the identical decision,
-/// and only one of them (the load-time check, wired from <c>MEditService.Api</c>) can never depend
-/// on the bridge project without a circular reference back through this one.
-///
-/// <para>Reads only what git and <c>meta.ini</c> already hold — no load order, no DB, matching every
-/// other class in this folder.</para>
-/// </summary>
+/// <summary>The external-change classification step, shared by the live watcher (<c>MEditService.Bridge</c>)
+/// and the load-time hash check: both need the identical decision, and the load-time check cannot
+/// depend on the bridge assembly.</summary>
 public static class ExternalChangeClassifier
 {
-    /// <summary>
-    /// Classifies <paramref name="observedBinaryBytes"/> — the bytes now sitting on disk for
-    /// <paramref name="plugin"/> in <paramref name="modFolder"/> — against what Modbench last knew.
-    /// Null when there is nothing to classify against: an untracked (or destroyed) mod folder is not
-    /// this dialog at all (ADR-0041's "reads as untracked" — exit path 4), so the caller's own
-    /// <see cref="SourceRepository.IsTracked"/> gate is what keeps this from ever being asked about
-    /// one.
-    /// </summary>
+    /// <summary>Null when there is nothing to classify against: an untracked or destroyed mod folder is
+    /// not this dialog at all (ADR-0041's "reads as untracked" exit path).</summary>
     public static ExternalChangeClassification? Classify(string modFolder, string plugin, byte[] observedBinaryBytes)
     {
         if (!SourceRepository.IsTracked(modFolder)) return null;
 
-        // A marker here means the mismatch is Modbench's own interrupted compile — the repair and
-        // external-change prompts must never both fire for one event, so this is checked
-        // first and unconditionally, before any hash comparison: an interrupted batch whose
-        // surviving binary hash happens to still agree with the parked ref (plausible: the write
-        // landed but the batch crashed before the marker was cleared) still routes to repair, not
-        // here.
+        // A marker means Modbench's own interrupted compile. Checked first and unconditionally so the
+        // repair and external-change prompts never both fire: a surviving binary whose hash still matches
+        // the parked ref must route to repair.
         if (CompileJournal.UnfinishedBatch(modFolder) != null)
             return new ExternalChangeClassification.CrashRecovery();
 
         var observedSha256 = Convert.ToHexStringLower(SHA256.HashData(observedBinaryBytes));
         var parkedSha256 = SourceRepository.ParkedCompileBinarySha256(modFolder, plugin);
 
-        // Case-insensitive: ParkCompileSnapshot writes Convert.ToHexString (uppercase); this compares
-        // against a lowercase hash. A missing/orphaned parked ref (parkedSha256 null) is never treated
-        // as a match — the pinned decision is to degrade to asking the dialog's question, never to
-        // guess self-echo from an absent reference.
+        // Case-insensitive: ParkCompileSnapshot writes uppercase hex. A missing parked ref is never a
+        // match — degrade to asking the dialog's question, never guess self-echo from an absent reference.
         if (parkedSha256 != null && string.Equals(observedSha256, parkedSha256, StringComparison.OrdinalIgnoreCase))
             return new ExternalChangeClassification.SelfEcho();
 
@@ -49,9 +31,8 @@ public static class ExternalChangeClassifier
         var newVersion = MetaIni.ReadVersion(modFolder);
         var newMetaSha256 = MetaIni.ComputeSha256(modFolder);
 
-        // "Trailers may inform defaults, never actions" (ADR-0041 amendment): unchanged or no trailer
-        // both mean MetaChanged = false, which is what selects "Keep as My Edit" as the dialog's
-        // default — the two cases are deliberately not distinguished any further than that.
+        // "Trailers may inform defaults, never actions" (ADR-0041 amendment): unchanged or absent both mean
+        // MetaChanged = false, which selects "Keep as My Edit" as the default.
         var metaChanged = baseline?.MetaSha256 != null && newMetaSha256 != null
             && !string.Equals(baseline.MetaSha256, newMetaSha256, StringComparison.OrdinalIgnoreCase);
 
@@ -73,8 +54,7 @@ public abstract record ExternalChangeClassification
     public sealed record CrashRecovery : ExternalChangeClassification;
 
     /// <summary>A genuine external change — xEdit, a mod update, a hand edit. <see cref="MetaChanged"/>
-    /// is the dialog's default-button tell; <see cref="OldVersion"/>/<see cref="NewVersion"/> are the
-    /// evidence shown in the dialog's detail text when it fired.</summary>
+    /// is the dialog's default-button tell; the versions are the evidence shown in its detail text.</summary>
     public sealed record ExternalChange(bool MetaChanged, string? OldVersion, string? NewVersion) : ExternalChangeClassification;
 
     private ExternalChangeClassification()

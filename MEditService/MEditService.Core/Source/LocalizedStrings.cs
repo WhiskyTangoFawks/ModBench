@@ -7,51 +7,27 @@ using Mutagen.Bethesda.Strings;
 
 namespace MEditService.Core.Source;
 
-/// <summary>
-/// Every deep parse (Track, compile round-trip verification, load order ingest's binary path,
-/// external-change absorption) needs to tell Mutagen where a Localized plugin's own
-/// <c>.STRINGS</c>/<c>.DLSTRINGS</c>/<c>.ILSTRINGS</c> files live. Passing no
-/// <see cref="BinaryReadParameters"/> at all does not mean "no localization support" — Mutagen still
-/// tries to resolve one, via a plugin-listings path that only exists in a genuine game install
-/// (<c>%LocalAppData%\&lt;Game&gt;\Plugins.txt</c> on Windows) and throws outright when it can't be
-/// determined, which is always on a non-Windows host with no such folder. Modbench's mirror are
-/// always explicit (ADR-0022) and never consult that file, so the fix is not "give it a real one" —
-/// it's "stop the implicit lookup from ever running", by handing Mutagen a strings folder directly.
-/// </summary>
+/// <summary>Passing no <see cref="BinaryReadParameters"/> is not "no localization": Mutagen still
+/// resolves a plugin-listings path that only a real game install has, and throws otherwise.
+/// Handing it a strings folder directly stops that implicit lookup.</summary>
 public static class LocalizedStrings
 {
-    /// <summary>
-    /// Mutagen's own plugin-listings resolution (<c>PluginListingsPathProvider.Get</c>) reads the
-    /// <c>LocalAppData</c> environment variable directly, with no injectable seam to substitute — the
-    /// only lever the pinned Mutagen version exposes is the env var itself. Called from
-    /// <see cref="ForRead(string?, string)"/> — every deep-parse call site already goes through it to
-    /// get its <see cref="BinaryReadParameters"/>, so this always runs before the first parse that
-    /// could need it, with no separate wiring and no dependence on which caller happens to run first.
-    /// Idempotent and permanent, the same shape <c>MEditService.Api/Program.cs</c> used for this exact
-    /// reason before this became the one shared place it lives: never overwrites a real value, and the
-    /// placeholder is never read for content (Modbench never lists plugins from it).
-    /// </summary>
+    /// <summary>Mutagen's listings resolution reads the <c>LocalAppData</c> environment variable with no
+    /// injectable seam; the env var is the only lever. Never overwrites a real value, and the
+    /// placeholder is never read for content.</summary>
     internal static void EnsureLocalAppDataDefault()
     {
         if (string.IsNullOrEmpty(Environment.GetEnvironmentVariable("LocalAppData")))
             Environment.SetEnvironmentVariable("LocalAppData", Path.GetTempPath());
     }
 
-    /// <summary>
-    /// The folder a plugin's own loose strings files would live in: its mod folder's own
-    /// <c>Strings/</c> first, falling back to the game Data folder's <c>Strings/</c> for a plugin with
-    /// no mod folder at all (a vanilla/DLC master, per <see cref="ModFolders.Of(string, string)"/>).
-    /// </summary>
+    /// <summary>The mod folder's own <c>Strings/</c>, falling back to the game Data folder's for a plugin
+    /// with no mod folder (a vanilla/DLC master).</summary>
     public static string FolderFor(string? modFolder, string dataFolderPath) =>
         Path.Combine(modFolder ?? dataFolderPath, "Strings");
 
-    /// <summary>
-    /// Read parameters for every deep-parse call site: an explicit strings folder (see
-    /// <see cref="FolderFor"/>) so Mutagen never falls through to its own implicit, listings-path-
-    /// dependent resolution, and the same folder as the BSA-scan root so a mod that also ships its
-    /// strings packed in an archive still resolves (safe now that <see cref="EnsureLocalAppDataDefault"/>
-    /// has already run).
-    /// </summary>
+    /// <summary>An explicit strings folder so Mutagen never falls through to its implicit resolution, and
+    /// the same folder as the BSA-scan root so archive-packed strings still resolve.</summary>
     public static BinaryReadParameters ForRead(string? modFolder, string dataFolderPath)
     {
         EnsureLocalAppDataDefault();
@@ -65,26 +41,12 @@ public static class LocalizedStrings
         };
     }
 
-    /// <summary>
-    /// <see cref="ForRead(string?, string)"/> for a caller that only ever has a mod folder in scope —
-    /// external-change absorption and landing, both of which only ever run against an already-tracked
-    /// (and therefore mod-folder-having) plugin, so there is no Data-folder case to fall back to.
-    /// </summary>
+    /// <summary>For callers that only ever run against a tracked plugin, which always has a mod folder.</summary>
     public static BinaryReadParameters ForRead(string modFolder) => ForRead(modFolder, modFolder);
 
-    /// <summary>
-    /// A Localized plugin whose strings files are missing must be refused by name, never
-    /// with Mutagen's own listings-path exception (which <see cref="EnsureLocalAppDataDefault"/> now
-    /// prevents) and never silently — <see cref="Mutagen.Bethesda.Strings.TranslatedString.TryLookup"/>
-    /// returns <see langword="false"/> for a missing file with no exception at all, so nothing else
-    /// would ever notice. Mutagen's own writer (<c>StringsWriter.Dispose</c>) always emits all three
-    /// source files for a language the moment any string in that language is registered — even an
-    /// otherwise-empty one — so a real Localized plugin missing any one of the three has lost data,
-    /// not merely omitted an unused source. Checked for English only: the one language Modbench reads
-    /// and writes today (translation/multi-language UX is deliberately out of scope).
-    /// </summary>
-    /// <returns>The missing file's own name, or null when every expected file is present (or the
-    /// plugin is not Localized at all, in which case there is nothing to check).</returns>
+    /// <summary>A missing strings file is refused by name: <c>TranslatedString.TryLookup</c> returns false
+    /// silently for one. Mutagen's writer always emits all three files for a language, so a missing one
+    /// is lost data.</summary>
     public static string? FindMissingStringsFile(
         IModGetter mod, string pluginName, string? modFolder, string dataFolderPath, GameRelease gameRelease)
     {
@@ -97,6 +59,7 @@ public static class LocalizedStrings
 
         foreach (var source in new[] { StringsSource.Normal, StringsSource.IL, StringsSource.DL })
         {
+            // English only; multi-language is deliberately out of scope.
             var fileName = StringsUtility.GetFileName(languageFormat, modKey, Language.English, source);
             if (!File.Exists(Path.Combine(stringsFolder, fileName)))
                 return fileName;

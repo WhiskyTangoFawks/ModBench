@@ -2,40 +2,18 @@ using System.Text.Json;
 
 namespace MEditService.Core.Source;
 
-/// <summary>
-/// The compile journal, built against the recovery unit the
-/// ADR-0041 amendment gives compile — <c>refs/medit/last-compile/&lt;plugin&gt;</c>.
-///
-/// <para><b>What a crash mid-batch can and cannot corrupt</b>: each individual plugin's own binary
-/// write is already atomic by construction (temp-file-then-rename, <see cref="SourceRepository.ParkCompileSnapshot"/>
-/// only ever runs after that rename lands) — a crash can never leave one plugin's own binary/parked-ref
-/// pair inconsistent with itself. What it *can* leave is a multi-plugin batch silently half-done: plugin
-/// A compiled, plugin B didn't, and nothing says so — the user (or the external-change dialog) has no way to tell
-/// "everything in this Save &amp; Compile landed" from "only some of it did". This class exists for that
-/// gap alone.</para>
-///
-/// <para><b>Marker, not registry</b> — git's own idiom for an in-progress porcelain operation
-/// (<c>.git/MERGE_MSG</c>, <c>.git/rebase-merge/</c>): a plain file inside the repo's own <c>.git</c>,
-/// written before a batch starts, updated as each plugin's compile lands, and deleted when the whole
-/// batch has. A multi-plugin batch can span mod folders (each mod folder is its own repo), so recovery
-/// is per-repo by construction — one marker per <c>.git</c>, named by nothing but that folder.</para>
-/// </summary>
+/// <summary>Journals a compile batch so a crash cannot leave it silently half-done; a single plugin's
+/// binary write is already atomic. A marker file inside <c>.git</c>, one per repo — a batch can
+/// span mod folders.</summary>
 public static class CompileJournal
 {
     private const string MarkerFileName = "MEDIT_COMPILE_JOURNAL";
 
     private static string MarkerPath(string modFolder) => Path.Combine(modFolder, ".git", MarkerFileName);
 
-    /// <summary>
-    /// Runs <paramref name="compileOne"/> once per plugin in <paramref name="plugins"/>, journaling
-    /// the batch around it: the marker is written before the first call (naming every plugin in the
-    /// batch, none yet landed), rewritten after each successful compile (that plugin moves from
-    /// unlanded to landed), and deleted only once every plugin has landed. A plugin that refuses
-    /// (<paramref name="compileOne"/> returns <see langword="false"/>) stops the batch there — its own
-    /// name, and everything after it, stays in the marker's unlanded set, which is exactly what a crash
-    /// at that same point would also leave behind; the two cases are deliberately indistinguishable to
-    /// a reader; both mean "some assumed the compiled state of this repo forward and it wasn't there".
-    /// </summary>
+    /// <summary>The marker is written before the first compile, rewritten after each landed plugin, and
+    /// deleted only once every plugin has landed. A refusal stops the batch and leaves the rest
+    /// unlanded — deliberately indistinguishable from a crash.</summary>
     public static IReadOnlyList<string> RunBatch(
         string modFolder, IReadOnlyList<string> plugins, Func<string, bool> compileOne)
     {
@@ -58,12 +36,8 @@ public static class CompileJournal
         return landed;
     }
 
-    /// <summary>
-    /// A journal marker present in <paramref name="modFolder"/>'s repo, or null when the last batch
-    /// (if any) completed cleanly — the one small public read the crash-repair offer and the
-    /// external-change dialog both route on: a marker here means the mismatch between what's on disk
-    /// and what the parked refs say is Modbench's own interrupted compile, not an external change.
-    /// </summary>
+    /// <summary>The marker's content, or null when the last batch completed cleanly: a marker means the
+    /// disk/parked-ref mismatch is Modbench's own interrupted compile, not an external change.</summary>
     public static CompileJournalState? UnfinishedBatch(string modFolder)
     {
         var path = MarkerPath(modFolder);
@@ -83,9 +57,7 @@ public static class CompileJournal
         var json = JsonSerializer.Serialize(new { plugins, landed });
         var path = MarkerPath(modFolder);
 
-        // Same write-then-rename discipline as every other write this arc makes (RecordTextCodec,
-        // PreparedPluginSave) — a marker that's itself torn by a second, unrelated crash mid-write
-        // would defeat the entire point of having one.
+        // Write-then-rename: a marker torn by a second crash mid-write would defeat the point of having one.
         var tempPath = path + ".tmp";
         File.WriteAllText(tempPath, json);
         File.Move(tempPath, path, overwrite: true);

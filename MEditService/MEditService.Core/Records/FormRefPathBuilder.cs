@@ -11,10 +11,9 @@ internal static class FormRefPathBuilder
 
     public static void Walk(ColumnSpec col, Func<ColumnSpec, object?> getValue, RefVisitor visitor)
     {
-        // A column whose metadata tree holds no formKey leaf cannot yield a ref, so its value
-        // is never even extracted — for an array/struct column that extraction is a JSON serialize
-        // (SchemaReflector) the walk below would only parse straight back, per record. Decided once
-        // per ColumnSpec: the metadata is a pure function of the schema, which is built at startup.
+        // A column whose metadata holds no formKey leaf never has its value extracted: for an
+        // array/struct column that extraction is a JSON serialize the walk would only parse back.
+        // Decided once per ColumnSpec; the schema is built at startup.
         var (meta, carriesFormKeys) = Plans.GetOrAdd(col, static c =>
         {
             var m = c.ToFieldMetadata();
@@ -54,7 +53,7 @@ internal static class FormRefPathBuilder
 
         // A struct or array *column*'s own Extract answers the serialized VARCHAR the document
         // stores; one nested inside it answers the parsed JsonElement. Coerced once, here, so
-        // neither shape reaches the two walks below and every level of the tree sees the same one.
+        // neither shape reaches the two walks below.
         if (value is string text)
         {
             using var doc = JsonDocument.Parse(text);
@@ -80,13 +79,9 @@ internal static class FormRefPathBuilder
         }
     }
 
-    /// <summary>The members this object's own governing values say carry no data, or null when
-    /// nothing here governs anything — which is every struct but a condition's, so the walk pays no
-    /// allocation for a concept two members use. See <see cref="FieldMetadata.SiblingsInUse"/>.
-    /// An idle member is not walked at all, so an unused parameter slot is neither a reference nor a
-    /// dangling one: Mutagen aliases a condition's number and record parameters onto the same four
-    /// bytes, so a quest-stage index reads as a FormID and would otherwise be filed as a reference
-    /// to whatever record happens to hold it.</summary>
+    // Mutagen aliases a condition's number and record parameters onto the same four bytes, so an
+    // idle parameter slot is not walked: a quest-stage index would otherwise be filed as a
+    // reference to whatever record holds that FormID.
     private static HashSet<string>? IdleMembers(IReadOnlyList<FieldMetadata> fields, JsonElement obj)
     {
         HashSet<string>? idle = null;

@@ -1,15 +1,8 @@
 namespace MEditService.Core.Records;
 
-/// <summary>
-/// ADR-0001 point 6: the instance's index file is open in another process — a second
-/// Modbench window on the same MO2 instance. A DuckDB file admits one writer and Modbench runs one
-/// service per VS Code window, so the second load is refused by name: no read-only mode (a second
-/// mode every index-writing path would have to detect), no waiting (a hang with no signal), never
-/// a second file (silent divergence). Distinct from a file DuckDB cannot make sense of, which is
-/// rebuilt — deleting a file another process holds open succeeds on POSIX and would destroy that
-/// window's live index. <see cref="IndexStore.IsAnotherWriter"/> is the classifier;
-/// <c>PUT /load-order</c> answers it 423 Locked with this message.
-/// </summary>
+/// <summary>The instance's index file is open in another process (ADR-0001 point 6). Refused by
+/// name rather than read-only, waited on, or given a second file; distinct from a corrupt file,
+/// which is rebuilt.</summary>
 public sealed class IndexHeldElsewhereException : Exception
 {
     // RCS1194: the three standard constructors for well-behaved rethrow callers. The index throws
