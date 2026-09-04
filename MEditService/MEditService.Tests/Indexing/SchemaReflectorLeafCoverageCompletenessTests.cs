@@ -76,7 +76,7 @@ public sealed class SchemaReflectorLeafCoverageCompletenessTests
         // own "A<Name>" naming convention) whose real per-subclass data lives on concrete classes
         // that inherit *from* the abstract base — solved narrowly at first for one
         // case (OMOD's own Properties element, BuildObjectModPropertyLeafFields), then generalized
-        // reflectively (SchemaReflector.BuildAbstractUnionLeafFields) for every "A<Name>" type
+        // reflectively (SchemaReflector.BuildUnionLeafFields) for every "A<Name>" type
         // whose generated C# class is actually `abstract`.
         // CoveredAbstractUnions/CoveredNestedAbstractUnions below are the "asserted, not incidental"
         // set this mechanism covers. Two names differ from what the naming convention suggests,
@@ -86,11 +86,9 @@ public sealed class SchemaReflectorLeafCoverageCompletenessTests
         // ASceneActionType is the one "A<Name>"-named exception: its generated class
         // (ASceneActionType_Generated.cs) is `public partial class ASceneActionType`, not `public
         // abstract partial class` — confirmed against the real source, not assumed from the naming
-        // convention. The mechanism keys off IsAbstract precisely so it never guesses a
-        // discriminator scheme onto a type it cannot safely tell apart from an ordinary instantiable
-        // one (any type the mechanism cannot faithfully model must fall
-        // through to the empty sub-schema) — so this one correctly declines rather than being
-        // silently mis-covered.
+        // convention. A concrete base with subclasses is a union too, so this one is kept out by
+        // name (SchemaAnnotations.ExcludedUnions) for the second reason below, and falls through
+        // to the empty sub-schema.
         //
         // The scheme (Scene.xml declares SceneAction.Type as `binary="Custom"`, so Loqui generates
         // no read/write code for it at all — it is entirely hand-written): SceneAction.cs reads the
@@ -112,17 +110,15 @@ public sealed class SchemaReflectorLeafCoverageCompletenessTests
         // FillBinaryHTIDParsingCustom/HTIDParsingCustomParse in the same file). So Mutagen's 2-way CLR
         // split corresponds correctly to xEdit's 7-way union; it is just not isomorphic to it.
         //
-        // Two independent reasons this is not reflectively wireable, not one — fixing only the first
-        // walks straight into the second:
+        // Two independent reasons this stays excluded — the first is why it needs naming at all,
+        // the second is why it must be:
         //   1. Structural: Scene.xml's ASceneActionType (`<Object name="ASceneActionType"
         //      objType="Subrecord" />`) deliberately omits `abstract="true"`, where Npc.xml's
         //      ANpcLevel (a genuine abstract union) has it (`<Object name="ANpcLevel" abstract="true"
-        //      ...>`). That is Mutagen's own schema-authoring choice, not an oversight, so IsAbstract
-        //      is the *correct* signal for this type — this is not a false negative to engineer
-        //      around; there is no other reflectable marker (no schema attribute, no discriminator
-        //      property on IASceneActionTypeGetter) that says "this base is only ever one of these
-        //      two hand-picked leaves."
-        //   2. Concrete: even a name-keyed special case bypassing IsAbstract would crash. SceneAction
+        //      ...>`). That is Mutagen's own schema-authoring choice, not an oversight: a bare
+        //      ASceneActionType is never what the parser builds, so the base-as-a-leaf reading a
+        //      concrete union gets would be a choice nobody can make.
+        //   2. Concrete: expanding it anyway would crash. SceneAction
         //      TypicalType's own Type property (SceneAction.TypeEnum) has no real implementation on
         //      the binary-overlay read path — SceneActionTypicalType.cs's entire override is
         //      `SceneActionTypicalTypeBinaryOverlay.Type => throw new NotImplementedException();`,
@@ -135,18 +131,17 @@ public sealed class SchemaReflectorLeafCoverageCompletenessTests
         //      a live defect, not a hypothetical, and one this census test (type-level only) would
         //      never catch on its own.
         //
-        // Contingent, not permanent: if Mutagen ever implements that overlay getter for real and
-        // marks ASceneActionType abstract in Scene.xml (bringing it in line with ANpcLevel/
-        // AQuestAlias), both blockers lift together and the existing mechanism would cover this
-        // type with no extension needed — "cannot yet", not "cannot". Until then, KnownGaps stays.
+        // Contingent, not permanent: if Mutagen ever implements that overlay getter for real,
+        // dropping the ExcludedUnions row covers this type with no extension needed — "cannot
+        // yet", not "cannot". Until then, KnownGaps stays.
         // Condition/ConditionData and AVirtualMachineAdapter (VMAD) are
         // ALSO genuinely `abstract`, structurally identical to ANpcLevel/AQuestAlias — the
-        // mechanism's own IsAbstract gate would cover them the same way. It doesn't:
-        // SchemaAnnotations.ExcludedAbstractUnions names both explicitly, because they are
+        // mechanism would cover them the same way. It doesn't:
+        // SchemaAnnotations.ExcludedUnions names both explicitly, because they are
         // permanently outside the reflected schema by documented architectural boundary
         // (MEditService/CLAUDE.md:232-235), not because the mechanism can't model them. Not this
         // file's own exclusion list either — nothing here would ever surface a Condition/VMAD field
-        // as a gap to begin with (BaseSkip/IsConditionListField/vmadInterfaceType already keep them
+        // as a gap to begin with (BaseSkip/IsConditionListField/IsExcludedUnionColumn already keep them
         // off the depth-0 walk this file does), so there is nothing to name in KnownGaps for them.
         ("ISceneActionGetter", "Type"),            // ASceneActionType — deliberately not abstract; see above
 

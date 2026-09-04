@@ -1,4 +1,5 @@
 using MEditService.Core.Schema;
+using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 
 namespace MEditService.Tests.Indexing;
@@ -11,9 +12,6 @@ namespace MEditService.Tests.Indexing;
 /// </summary>
 public sealed class SchemaAnnotationTests
 {
-    private static SchemaReflector Fallout4With(Func<SchemaAnnotations, SchemaAnnotations> amend) =>
-        new(category => amend(SchemaAnnotations.For(category)));
-
     private static void AssertFailsNaming(SchemaReflector reflector, string entry)
     {
         var ex = Assert.Throws<InvalidOperationException>(() => reflector.GetSchemas(GameRelease.Fallout4));
@@ -25,7 +23,7 @@ public sealed class SchemaAnnotationTests
     [InlineData("INoSuchGetter", "Name")]        // the type does not resolve at all
     public void ExcludedMember_ReflectionDidNotFind_FailsSchemaGenerationNamingTheEntry(string type, string member)
     {
-        var reflector = Fallout4With(a => a with { ExcludedMembers = [.. a.ExcludedMembers, (type, member)] });
+        var reflector = VmadReflectedSchemaReflector.Fallout4With(a => a with { ExcludedMembers = [.. a.ExcludedMembers, (type, member)] });
         AssertFailsNaming(reflector, $"{type}.{member}");
     }
 
@@ -34,7 +32,7 @@ public sealed class SchemaAnnotationTests
     [InlineData("INoSuchGetter", "Timestamp")]
     public void ExcludedColumn_ReflectionDidNotFind_FailsSchemaGenerationNamingTheEntry(string type, string member)
     {
-        var reflector = Fallout4With(a => a with { ExcludedColumns = [.. a.ExcludedColumns, (type, member)] });
+        var reflector = VmadReflectedSchemaReflector.Fallout4With(a => a with { ExcludedColumns = [.. a.ExcludedColumns, (type, member)] });
         AssertFailsNaming(reflector, $"{type}.{member}");
     }
 
@@ -43,21 +41,21 @@ public sealed class SchemaAnnotationTests
     [InlineData("INoSuchGetter", "Color")]
     public void AlphaBearingColorField_ReflectionDidNotFind_FailsSchemaGenerationNamingTheEntry(string type, string member)
     {
-        var reflector = Fallout4With(a => a with { AlphaBearingColorFields = [.. a.AlphaBearingColorFields, (type, member)] });
+        var reflector = VmadReflectedSchemaReflector.Fallout4With(a => a with { AlphaBearingColorFields = [.. a.AlphaBearingColorFields, (type, member)] });
         AssertFailsNaming(reflector, $"{type}.{member}");
     }
 
     [Fact]
-    public void ExcludedAbstractUnion_ReflectionDidNotFind_FailsSchemaGenerationNamingTheEntry()
+    public void ExcludedUnion_ReflectionDidNotFind_FailsSchemaGenerationNamingTheEntry()
     {
-        var reflector = Fallout4With(a => a with { ExcludedAbstractUnions = [.. a.ExcludedAbstractUnions, "ANoSuchUnion"] });
+        var reflector = VmadReflectedSchemaReflector.Fallout4With(a => a with { ExcludedUnions = [.. a.ExcludedUnions, "ANoSuchUnion"] });
         AssertFailsNaming(reflector, "ANoSuchUnion");
     }
 
     [Fact]
     public void EmptySubSchemaType_ReflectionDidNotFind_FailsSchemaGenerationNamingTheEntry()
     {
-        var reflector = Fallout4With(a => a with { EmptySubSchemaTypes = [.. a.EmptySubSchemaTypes, "INoSuchGetter"] });
+        var reflector = VmadReflectedSchemaReflector.Fallout4With(a => a with { EmptySubSchemaTypes = [.. a.EmptySubSchemaTypes, "INoSuchGetter"] });
         AssertFailsNaming(reflector, "INoSuchGetter");
     }
 

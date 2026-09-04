@@ -55,7 +55,7 @@ public enum ApplyOutcome
     /// The array <i>is</i> the JSON shape the field takes, but at least one element's own
     /// concrete type is abstract (OMOD <c>properties</c>' <c>AObjectModProperty&lt;T&gt;</c> today)
     /// and could not be determined from that element's own payload
-    /// (<c>SchemaReflector.ResolveAbstractListElementType</c>). Its own value, distinct from
+    /// (<c>SchemaReflector.ResolveListElementType</c>). Its own value, distinct from
     /// <see cref="ValueRejected"/>: inferring it from "a rejection whose value is a genuine JSON
     /// array" is ambiguous — a well-typed element whose own <i>sub-field</i> value is declined
     /// (<c>ApplySubFields</c>' fold, still <see cref="ValueRejected"/>) matches that description

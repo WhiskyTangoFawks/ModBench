@@ -997,21 +997,37 @@ VMAD/Condition rows included since they render through this exact code now:
    own — #643 extended the write side down through nesting (`SchemaReflector.BuildStructSubField`
    wires the same shared struct applier `BuildStructColumn` uses, at every depth the read schema
    builds), so a nested struct sub-field writes with identical discriminator-resolution and
-   refuse-before-attach semantics to a top-level struct column. Not every `A<Name>`
-   type in the assembly qualifies: one (`ASceneActionType`) shares the naming convention without its
-   generated class actually being `abstract`, so the mechanism correctly declines it (empty
-   sub-schema, same as before) rather than guessing a discriminator scheme onto a type it cannot
-   safely tell apart from an ordinary one. Its real discriminator is now known: a raw
-   `ANAM` `UInt16` tag read by hand-written custom binary code, `4` selecting `SceneActionStartScene`
-   and every other value collapsing into `SceneActionTypicalType`. It stays declined on purpose —
-   Mutagen's own `Scene.xml` deliberately omits `abstract="true"` here where `Npc.xml` sets it for
-   `ANpcLevel`, so `IsAbstract` is the *correct* signal rather than a false negative; and wiring it
-   anyway would reach `SceneActionTypicalType`'s binary-overlay `Type` getter, which is an
-   unimplemented `throw` upstream. The full scheme and both blockers are recorded on the
-   `KnownGaps` entry.
+   refuse-before-attach semantics to a top-level struct column.
+   A base need not be `abstract` to be a union (#701): a concrete class with subclasses in the
+   same assembly is one too, its leaves the subclasses plus the base itself — a script property
+   (`ScriptProperty`, fourteen leaves, a bare `ScriptProperty` for a property of type None) is
+   the case that matters, `Landscape.Layers`' `BaseLayer`/`AlphaLayer` the other one the shipped
+   schema reaches. Where leaves declare a same-named member of *different* shape (a script
+   property's `Data` is an int, a float, a bool, a string or a list of each, by leaf), the name
+   is split into one field per shape, suffixed by it (`data_int`, `data_float`,
+   `data_string_array`), each written only onto a leaf of that shape. On write, a concrete-base
+   union resolves its leaf from `concrete_type` exactly as an abstract one does — an element
+   sent without it is refused, never quietly built as the base. Expanding the struct
+   leaf is what lets the walk reach `ScriptStructProperty.Members` -> `ScriptEntry.Properties`
+   -> `ScriptProperty` again, so the walk keeps the getter types it is inside on its stack: a
+   type re-entered on that path is a type cycle and fails schema generation naming the chain,
+   unless the game's annotation table names it as a point its own data format cannot nest past
+   (`SchemaAnnotations.CycleTruncations`; Fallout 4 Papyrus structs hold no struct or struct
+   array, so inside either struct leaf neither is offered again and the walk ends there). A
+   re-entry whose loop runs through such a point is let through for the same reason — every
+   lap passes it, and it is entered once — which is what lets `ScriptEntry` be re-entered
+   under a struct leaf's `Members` before the walk ends. That is a
+   different mechanism from the depth cap, which bounds struct nesting and resets across a
+   list hop.
+   `ASceneActionType` is a concrete base with two leaves the mechanism must not expand
+   (`SchemaAnnotations.ExcludedUnions`): its real discriminator is a raw `ANAM` `UInt16` tag
+   read by hand-written custom binary code, `4` selecting `SceneActionStartScene` and every
+   other value collapsing into `SceneActionTypicalType`, whose binary-overlay `Type` getter is
+   an unimplemented `throw` upstream — wiring it would crash the first read of a real scene.
+   The full scheme is recorded on the `KnownGaps` entry.
    `Condition`/`ConditionData` and `AVirtualMachineAdapter` (VMAD) are *also* genuinely `abstract`,
    structurally identical to `ANpcLevel` — deliberately excluded by name
-   (`SchemaAnnotations.ExcludedAbstractUnions`) rather than covered, because they are
+   (`SchemaAnnotations.ExcludedUnions`) rather than covered, because they are
    permanently outside the reflected schema by design (VMAD/condition reconstitution stays in
    `Queries/RecordDocumentCodecs`, operating on the document body — `MEditService/CLAUDE.md`); this
    mechanism could technically model them, and must not.

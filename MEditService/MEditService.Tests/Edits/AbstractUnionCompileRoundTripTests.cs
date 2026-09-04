@@ -270,7 +270,7 @@ public sealed class AbstractUnionCompileRoundTripTests : IDisposable
 
     /// <summary>
     /// <c>PerkEntryPointAddRangeToValue</c> inherits <c>APerkEffect</c> through the two-level
-    /// <c>APerkEntryPointEffect</c> chain — <c>FindAbstractUnionLeaves</c>' own doc comment says
+    /// <c>APerkEntryPointEffect</c> chain — <c>IndexLeavesByBase</c>' own doc comment says
     /// <c>IsAssignableFrom</c>'s transitivity finds this the same way it finds a one-level leaf, with
     /// no depth-specific code; this fact is the write-side half of that claim.
     /// </summary>
