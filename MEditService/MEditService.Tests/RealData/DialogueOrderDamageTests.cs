@@ -15,7 +15,8 @@ namespace MEditService.Tests.RealData;
 /// <summary>
 /// "Order damage", measured against the tree Track <i>actually wrote</i> — not against a
 /// sorted-filename proxy: deserialize the mod from
-/// the tracked source tree exactly the way <see cref="Edits.PluginCompileService"/> does, and compare
+/// the tracked source tree exactly the way <see
+/// cref="MEditService.Core.Edits.PluginCompileService"/> does, and compare
 /// each DialogTopic's <c>Responses</c> order there against the original binary's own GRUP order.
 ///
 /// <para>Baseline this replaces (measured on this exact fixture): 96 of 283 multi-response DIALs

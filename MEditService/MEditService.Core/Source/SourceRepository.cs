@@ -206,7 +206,7 @@ public static class SourceRepository
 
     /// <summary>
     /// Re-parks <c>refs/medit/last-compile/&lt;plugin&gt;</c> at a floating snapshot of the tree
-    /// <paramref name="source"/> just compiled from — no HEAD, branch, or index movement (the
+    /// the caller just compiled from — no HEAD, branch, or index movement (the
     /// <c>git stash create</c> idiom, ADR-0041's 2026-08-19 amendment), message carrying a
     /// <c>Binary-SHA256</c> trailer for the binary the caller just finished writing. Track already
     /// initializes this ref to the pristine baseline; every compile after that re-points it

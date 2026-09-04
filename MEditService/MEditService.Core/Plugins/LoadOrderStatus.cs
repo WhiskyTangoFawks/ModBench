@@ -31,18 +31,20 @@ public sealed record IndexedPlugin(string Name, string Origin);
 /// What the mirror can honestly say about itself right now (ADR-0035). Exists so that an
 /// absent conflict badge is never mistakable for "no conflict": a caller reading
 /// <see cref="ConflictsComputed"/> false knows nothing has looked yet.
+///
+/// <para><see cref="TotalPlugins"/> is how many plugin copies the last snapshot resolved to — the
+/// denominator for progress; copies that fail to open still count toward it.
+/// <see cref="IndexedPlugins"/> holds those whose indexing has completed, in the order they landed,
+/// and a plugin appears there only once it is wholly queryable. <see cref="Failures"/> holds the
+/// copies that could not be opened or indexed, as they are discovered — not held back until the
+/// reconcile finishes (ADR-0026).</para>
+///
+/// <para><see cref="ConflictsComputed"/> says whether the winner sweep has run since the last
+/// change to the registered set. Distinct from <see cref="State"/> being
+/// <see cref="LoadOrderState.Ready"/>, though the two coincide today: the sweep is whole-set, so
+/// every reconcile that changes anything leaves winners stale until it is re-run. A caller deciding
+/// whether to render conflict information must read this one, not the state.</para>
 /// </summary>
-/// <param name="TotalPlugins">How many plugin copies the last snapshot resolved to — the
-/// denominator for progress. Copies that fail to open still count toward it.</param>
-/// <param name="IndexedPlugins">Those whose indexing has completed, in the order they landed. A
-/// plugin appears here only once it is wholly queryable.</param>
-/// <param name="ConflictsComputed">Whether the winner sweep has run since the last change to the
-/// registered set. Distinct from <see cref="State"/> being <see cref="LoadOrderState.Ready"/>,
-/// though the two coincide today: the sweep is whole-set, so every reconcile that changes anything
-/// leaves winners stale until it is re-run. A caller deciding whether to render conflict
-/// information must read this one, not the state.</param>
-/// <param name="Failures">Plugin copies that could not be opened or indexed, as they are discovered
-/// — not held back until the reconcile finishes (ADR-0026).</param>
 public sealed record LoadOrderStatus(
     LoadOrderState State,
     int TotalPlugins,

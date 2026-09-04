@@ -22,7 +22,7 @@ public sealed class RecordEditServiceRenumberRecordTests
         new(mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
 
     /// <summary>
-    /// #661 regression: <see cref="RecordEditService.ResolveEditTarget"/> is the shared gate every
+    /// #661 regression: <c>RecordEditService.ResolveEditTarget</c> is the shared gate every
     /// verb touching an existing record passes through, and only <c>EditField</c> was guarded against
     /// the header when the source-unit gate that used to block it (<c>SourceUnitNotFound</c>) came
     /// down. Traced, not run against production before the fix: renumber's own target rewrite would

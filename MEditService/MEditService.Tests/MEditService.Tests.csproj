@@ -9,7 +9,7 @@
          CA1816: GC.SuppressFinalize not needed in test fixtures;
          CA1859: interface-typed fields are intentional in tests;
          CA1861: constant array args are fine in tests -->
-    <NoWarn>CA1707;CA1711;CA1816;CA1859;CA1861</NoWarn>
+    <NoWarn>$(NoWarn);CA1707;CA1711;CA1816;CA1859;CA1861</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>

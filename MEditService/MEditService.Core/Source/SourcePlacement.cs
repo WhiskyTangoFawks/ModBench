@@ -44,11 +44,12 @@ internal readonly record struct SourcePlacement(string RelativePath, string Carr
     /// sub-block's own — which is why <paramref name="blockPath"/> exists and why nothing else needs
     /// it. The fourth shape, a folder-split child with no group folder at all, is
     /// <see cref="ForSlotChild"/>'s.</para>
+    ///
+    /// <para><paramref name="blockPath"/> is the block and sub-block directory names an interior Cell
+    /// nests under, in order. Required for a Cell and meaningless for anything else — a Cell's
+    /// placement genuinely cannot be computed without knowing which bucket it lands in, and that
+    /// choice belongs to the caller that already reuses or mints one.</para>
     /// </summary>
-    /// <param name="blockPath">The block and sub-block directory names an interior Cell nests under,
-    /// in order. Required for a Cell and meaningless for anything else — a Cell's placement genuinely
-    /// cannot be computed without knowing which bucket it lands in, and that choice belongs to the
-    /// caller that already reuses or mints one.</param>
     internal static SourcePlacement For(
         string pluginFileName,
         string recordType,
@@ -92,10 +93,11 @@ internal readonly record struct SourcePlacement(string RelativePath, string Carr
     /// Response in a slot under its DialogTopic's. The list naming it is therefore the parent
     /// record's own document, keyed by the slot, and the child is a directory (a container with
     /// children of its own) or a file (a leaf) in that slot.
+    ///
+    /// <para><paramref name="parentDirectory"/> is absolute and resolved by the caller, because a
+    /// parent that is not there yet is minted by the caller first; both returned paths are relative
+    /// to <paramref name="modFolder"/>.</para>
     /// </summary>
-    /// <param name="modFolder">The mod folder both returned paths are relative to.</param>
-    /// <param name="parentDirectory">The parent record's own directory, absolute — resolved by the
-    /// caller, because a parent that is not there yet is minted by the caller first.</param>
     internal static SourcePlacement ForSlotChild(
         string modFolder, string parentDirectory, string slotName, string formKeyString, string? editorId, bool isDirectory)
     {

@@ -71,13 +71,14 @@ internal static class SourceIngest
     /// file. The caller decides what a failed source read means for the load order; this method does not
     /// degrade on its own account, because "quietly served you the binary instead" is precisely the
     /// silent lie the caller's own visible failure exists to prevent.</para>
-    /// </summary>
-    /// <param name="binaryPath">The plugin's compiled binary — indexed here only as the file this
-    /// key's rows are <i>stamped against</i>, never as their content, which is the whole point
-    /// of this class. A tracked plugin re-ingests from source on every load regardless of that stamp
-    /// (<c>LoadOrderMirror.Reconcile</c> decides that); what the stamp buys is that a binary
+    ///
+    /// <para><paramref name="binaryPath"/> is the plugin's compiled binary — indexed here only as the
+    /// file this key's rows are <i>stamped against</i>, never as their content, which is the whole
+    /// point of this class. A tracked plugin re-ingests from source on every load regardless of that
+    /// stamp (<c>LoadOrderMirror.Reconcile</c> decides that); what the stamp buys is that a binary
     /// deleted or replaced out of band still takes its stale rows with it at the next validation,
-    /// exactly as an untracked plugin's would.</param>
+    /// exactly as an untracked plugin's would.</para>
+    /// </summary>
     internal static void Ingest(
         IRecordIndex index, string modFolder, string sourceTree, Registration registration,
         PluginKey key, string binaryPath, GameRelease gameRelease, SchemaReflector schemaReflector,
@@ -296,7 +297,7 @@ internal static class SourceIngest
     /// <c>SchemaReflector</c> deliberately excludes a handful of types from the read model
     /// (<c>land</c>/<c>navm</c>/<c>navi</c>, the rare REFR-flavour placement variants) — they are never
     /// independently queryable, so seeding a Head-only row for one would create a
-    /// <c>records_committed</c> entry <see cref="IRecordIndex.GetDocument(string, PluginKey)"/> could
+    /// <c>records_committed</c> entry <see cref="IRecordReads.GetDocument(string, PluginKey)"/> could
     /// never read back. The edit and create branches need no equivalent guard: their targets
     /// (<see cref="IRecordIndex.SetCommittedBaseline"/>, <see cref="IRecordIndex.MarkWorkingTreeOnly"/>)
     /// already no-op for a FormKey the index never indexed, the same missing-data rule the flat path

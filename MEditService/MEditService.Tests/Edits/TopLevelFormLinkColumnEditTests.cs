@@ -28,7 +28,7 @@ namespace MEditService.Tests.Edits;
 /// because this exact column class should carry its own end-to-end proof, not a citation to
 /// generic coverage that happens to use a different field. Only
 /// <see cref="EditField_TopLevelFormLinkColumn_AcceptsAValidTarget_LandsAsWorkingTreeChange"/>
-/// exercises the write delegate itself.
+/// exercises the write delegate itself.</para>
 /// </summary>
 public sealed class TopLevelFormLinkColumnEditTests : IDisposable
 {

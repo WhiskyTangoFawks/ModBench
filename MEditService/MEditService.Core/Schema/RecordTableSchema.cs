@@ -99,8 +99,10 @@ public enum ApplyOutcome
 /// a sentence saying why. A detected-only guard is one deleted assertion away from silence, which is
 /// the failure mode this ticket exists to close.</para>
 ///
-/// <para>Constructed only through <see cref="Writable"/> and <see cref="ReadOnly"/>. Both properties
-/// are get-only, so a <c>with</c> expression cannot reopen the choice from outside either.</para>
+/// <para>Constructed only through <see
+/// cref="LeafWrite.Writable{TTarget}(Func{TTarget, JsonElement, ApplyOutcome})"/> and
+/// <see cref="LeafWrite.ReadOnly{TTarget}(string)"/>. Both properties are get-only, so a
+/// <c>with</c> expression cannot reopen the choice from outside either.</para>
 /// </summary>
 /// <typeparam name="TTarget">What the writer writes onto — <c>IMajorRecord</c> for a top-level
 /// column, <c>object</c> for a struct member or array element one or more levels down.</typeparam>
@@ -145,6 +147,46 @@ public static class LeafWrite
             : new(null, reason);
 }
 
+/// <summary>
+/// One column of a record type's wide table: how to read it off a record, how to write it back, and
+/// what a generated view may do with it.
+///
+/// <para><see cref="Apply"/> writes this column's whole value onto a record, or is read-only with a
+/// named reason. A complex field (CONTEXT.md: array or struct) is written as one atomic value, so
+/// an applier handed something that is not array-/object-shaped has nothing it could sensibly write
+/// and answers a non-Applied outcome, which <see cref="Edits.RecordFieldWriter.TryApply"/> turns
+/// into a refusal naming the field. Returning an outcome rather than being a fire-and-forget
+/// <c>Action</c> is what makes a silently lost edit unrepresentable: a guard cannot no-op its way
+/// into "applied". See <see cref="ApplyOutcome"/> for why the failure outcomes are distinct.</para>
+///
+/// <para><b>View-generation facts.</b> <see cref="IsWidened"/>, <see cref="IsFlagsEnum"/> and
+/// <see cref="ViewDefaultLiteral"/> are three things the generated <c>json_extract</c> views
+/// (ADR-0041) need to know that nothing else does. All set mechanically at reflection time from the
+/// CLR type — never from a curated list of field names, which is the property the rule turns
+/// on.</para>
+///
+/// <para><see cref="IsWidened"/> means this column is a scalar widen: several concrete subclasses
+/// share one GRUP signature and disagree about the field's type, so it became a read-only text
+/// column whose <see cref="Extract"/> dispatches on the record's runtime type. It has no single
+/// JSON path with consistent semantics — the document holds a number for one sibling and a string
+/// for another — so views omit it entirely rather than emit a column that means different things
+/// per row. Exactly two in Fallout 4: gmst.data and glob.data.</para>
+///
+/// <para><see cref="IsFlagsEnum"/> means the underlying CLR enum carries
+/// <see cref="FlagsAttribute"/>, so the serializer writes it as a JSON <i>array of member names</i>
+/// rather than a scalar. Deliberately NOT <c>IsBitmask</c>, which means something narrower ("has
+/// power-of-two members") and disagrees on real data: misc.major_flags is not a bitmask by that
+/// test yet still serializes as <c>["0x800"]</c>. Views join the names with ", ".</para>
+///
+/// <para><see cref="ViewDefaultLiteral"/> is the SQL literal a view COALESCEs this column to when
+/// the document omits the property, or null when NULL is the honest answer. Mutagen's serializer
+/// omits any field equal to its default, so without this a non-nullable field would read NULL
+/// through a view where the wide table held the default value.</para>
+///
+/// <para><see cref="KeyMembers"/> names, for a keyed array, the element members whose values
+/// identify an element; null for every other column. <see cref="LeafTypeName"/> is this column's
+/// <see cref="Queries.FieldMetadata.LeafTypeName"/>.</para>
+/// </summary>
 public sealed record ColumnSpec(
     string Name,
     string PropertyName,
@@ -153,59 +195,15 @@ public sealed record ColumnSpec(
     string ApiType,
     IReadOnlyList<string> ValidFormKeyTypes,
     IReadOnlyList<EnumMember> EnumMembers,
-    /// <summary>
-    /// Writes this column's whole value onto a record, or <c>null</c> when the column is read-only.
-    ///
-    /// <para>A complex field (CONTEXT.md: array or struct) is written as one atomic value, so an
-    /// applier handed something that is not array-/object-shaped has nothing it could sensibly
-    /// write and answers a non-Applied outcome, which <c>RecordFieldWriter.TryApply</c> turns into
-    /// a refusal naming the field. Returning an outcome rather than being a fire-and-forget
-    /// <c>Action</c> is what makes a silently lost edit unrepresentable: a guard cannot no-op its
-    /// way into "applied". See <see cref="ApplyOutcome"/> for why the failure outcomes are
-    /// distinct.</para>
-    /// </summary>
     LeafWrite<IMajorRecord> Apply,
     bool IsArray = false,
     FieldMetadata? ElementType = null,
     IReadOnlyList<FieldMetadata>? SubFields = null,
     bool AllowsNull = false,
-
-    // ── View-generation facts ─────────────────────────────────────────────────
-    // Three things the generated json_extract views (ADR-0041) need to know that nothing else
-    // does. All set mechanically at reflection time from the CLR type — never from a curated list
-    // of field names, which is the property the rule turns on.
-
-    /// <summary>
-    /// This column is a scalar widen: several concrete subclasses share one GRUP signature
-    /// and disagree about the field's type, so it became a read-only text column whose Extract
-    /// dispatches on the record's runtime type. It has no single JSON path with consistent
-    /// semantics — the document holds a number for one sibling and a string for another — so views
-    /// omit it entirely rather than emit a column that means different things per row. Exactly two
-    /// in Fallout 4: gmst.data and glob.data.
-    /// </summary>
     bool IsWidened = false,
-
-    /// <summary>
-    /// The underlying CLR enum carries <see cref="FlagsAttribute"/>, so the serializer writes it as
-    /// a JSON <i>array of member names</i> rather than a scalar. Deliberately NOT
-    /// <see cref="IsBitmask"/>, which means something narrower ("has power-of-two members") and
-    /// disagrees on real data: misc.major_flags is not a bitmask by that test yet still serializes
-    /// as <c>["0x800"]</c>. Views join the names with ", ".
-    /// </summary>
     bool IsFlagsEnum = false,
-
-    /// <summary>
-    /// The SQL literal a view COALESCEs this column to when the document omits the property, or null
-    /// when NULL is the honest answer. Mutagen's serializer omits any field equal to its default, so
-    /// without this a non-nullable field would read NULL through a view where the wide table held
-    /// the default value.
-    /// </summary>
     string? ViewDefaultLiteral = null,
-
-    /// <summary>See <see cref="FieldMetadata.KeyMembers"/>.</summary>
     IReadOnlyList<string>? KeyMembers = null,
-
-    /// <summary>See <see cref="FieldMetadata.LeafTypeName"/>.</summary>
     string? LeafTypeName = null)
 {
     /// <summary>

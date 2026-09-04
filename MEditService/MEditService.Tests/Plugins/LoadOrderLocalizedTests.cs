@@ -8,10 +8,11 @@ using Mutagen.Bethesda.Strings;
 namespace MEditService.Tests.Plugins;
 
 /// <summary>
-/// Load order ingest's binary path (<see cref="LoadOrder.OpenAll"/> — the "binary is for
+/// Load order ingest's binary path (<c>LoadOrder.OpenAll</c> — the "binary is for
 /// untracked plugins" overlay, ADR-0041) shows a Localized plugin's real strings
 /// rather than throwing or reading empty ones. A Data-directory-origin plugin, deliberately: this is
-/// the one case with no mod folder at all, where <see cref="Source.LocalizedStrings.ForRead"/> must
+/// the one case with no mod folder at all, where
+/// <see cref="MEditService.Core.Source.LocalizedStrings.ForRead(string, string)"/> must
 /// fall back to the game Data folder rather than a mod folder that does not exist.
 /// </summary>
 public sealed class LoadOrderLocalizedTests

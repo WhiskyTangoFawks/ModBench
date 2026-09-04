@@ -145,7 +145,7 @@ public sealed class ExternalChangeWatcherTests
     /// <see cref="PluginWriter.SaveFromModAsync"/>/<c>PreparedPluginSave.Commit</c>), not a hand-written
     /// byte-identical write standing in for one. Distinct from <see cref="Watch_DoesNotQueueASelfEcho"/>
     /// above (which proves the classifier-level compare, using a fabricated echo) and from
-    /// <see cref="ExternalChangeClassifierTests.Classify_ReportsSelfEcho_ForTheBinaryARealCompileJustWrote"/>
+    /// <c>ExternalChangeClassifierTests.Classify_ReportsSelfEcho_ForTheBinaryARealCompileJustWrote</c>
     /// (which proves the same real-compile case but calls the classifier directly, bypassing the
     /// watcher's own event plumbing entirely).
     /// </summary>

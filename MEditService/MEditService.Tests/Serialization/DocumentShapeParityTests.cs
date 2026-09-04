@@ -132,7 +132,8 @@ public sealed class DocumentShapeParityTests
     /// <c>"OverriddenForms"</c> key at all.</para>
     ///
     /// <para><b><c>LastModified</c>/<c>SubCellsTimestamp</c>:</b>
-    /// with <c>.OmitLastModifiedData()</c> in <see cref="Serialization.RecordTextCodecCustomization"/>,
+    /// with <c>.OmitLastModifiedData()</c> in
+    /// <see cref="MEditService.Core.Serialization.RecordTextCodecCustomization"/>,
     /// this test fails with "Assert.Contains() Failure: Sub-string not found" against a
     /// <c>Cells/0/GroupRecordData.json</c> that is empty (<c>{}</c>).</para>
     /// </summary>

@@ -13,7 +13,8 @@ using Microsoft.Extensions.Logging.Abstractions;
 namespace MEditService.Tests.Api;
 
 /// <summary>
-/// The HTTP door over <see cref="ExternalChangeLoadOrderHook"/>'s crash-repair offers — thin,
+/// The HTTP door over <see cref="MEditService.Api.ExternalChangeLoadOrderHook"/>'s crash-repair
+/// offers — thin,
 /// mapping-only assertions (the same posture as <c>ExternalChangeEndpointsTests</c>),
 /// proving the response actually carries what the hook found
 /// rather than re-deriving every hook-level scenario here.

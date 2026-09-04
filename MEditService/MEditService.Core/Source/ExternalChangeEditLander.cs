@@ -12,7 +12,7 @@ using Mutagen.Bethesda.Plugins.Records;
 namespace MEditService.Core.Source;
 
 /// <summary>
-/// The "Keep as My Edit" exit path: the externally-changed binary at <paramref name="pluginPath"/>
+/// The "Keep as My Edit" exit path: the externally-changed binary at <c>pluginPath</c>
 /// lands as working-tree dirt on exactly the records it actually touched — never a wholesale
 /// re-serialize like <see cref="ExternalChangeAbsorber.Absorb"/>, because landing here must not
 /// clobber the user's own unrelated working-tree edits.

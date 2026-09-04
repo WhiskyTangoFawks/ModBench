@@ -63,7 +63,7 @@ internal sealed record SourceRecordIdentity(string PluginFileName, string Record
 /// decomposes nothing but path <i>shape</i> — so it is unchanged by the amendment.</para>
 ///
 /// <para>The <c>&lt;originModKey&gt;</c> segment (the record's <i>origin</i> plugin — <c>FormKey.ModKey</c>
-/// — never the plugin the record is written into, which is <paramref name="pluginFileName"/> and can
+/// — never the plugin the record is written into, which is <c>pluginFileName</c> and can
 /// legitimately differ, e.g. an override edited through a patch plugin) is exactly
 /// <see cref="FormKey.ToFilesafeString"/>'s own <c>ModKey.FileName</c>, so two records from different
 /// masters sharing a local ID never collide on one path.</para>

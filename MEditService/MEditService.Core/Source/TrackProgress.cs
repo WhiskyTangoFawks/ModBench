@@ -2,7 +2,9 @@ using System.Text.Json.Serialization;
 
 namespace MEditService.Core.Source;
 
-/// <summary>The phases <see cref="TrackService.TrackAsync"/> moves through, in order — enough to
+/// <summary>The phases <see
+/// cref="TrackService.TrackAsync(Plugins.ILoadOrder, string, SourcePreset, CancellationToken)"/>
+/// moves through, in order — enough to
 /// narrate a mega-plugin's worst-case tens-of-seconds Track without a
 /// literal percentage: <c>Idle</c> (nothing in flight), <c>Parsing</c> (deep-parsing each plugin —
 /// <see cref="TrackProgress.PluginsTotal"/> is the plugin count, known up front), <c>Serializing</c>

@@ -81,7 +81,8 @@ public sealed class RecordEditServiceContainerDeleteRenumberTests : IDisposable
     /// <summary>
     /// <c>EnumerateDescendantFormKeys</c> must not pick the worldspace's TopCell via
     /// <c>FirstOrDefault(c => c.BlockX == null)</c> — the same blind spot
-    /// <see cref="Queries.WorldspaceQueryService.GetWorldspaceBlocks"/> guards against: a
+    /// <see cref="MEditService.Core.Queries.WorldspaceQueryService.GetWorldspaceBlocks"/> guards
+    /// against: a
     /// second block-less cell-location row (anomalous, but the data can't rule it out — see that
     /// method's own doc comment on why it only warns rather than refuses) never reaches the cascade
     /// at all. Real Mutagen can't produce this shape itself (<c>Worldspace.TopCell</c> is a single-valued

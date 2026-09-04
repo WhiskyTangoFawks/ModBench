@@ -9,7 +9,8 @@ namespace MEditService.Tests.Api;
 /// <summary>
 /// At the actual wire: after renumbering a record, <c>GET /records?plugin=...</c> must
 /// no longer list the old FormKey and <c>GET /records/{oldFormKey}</c> must 404 rather than keep
-/// serving a fully-populated, stale record. <see cref="RecordEditServiceRenumberRecordTests"/> pins
+/// serving a fully-populated, stale record. <see
+/// cref="Edits.RecordEditServiceRenumberRecordTests"/> pins
 /// the same fact at the <c>IRecordReads</c> layer (the seam <c>RecordQueryService</c> sits on); this
 /// is the one round-trip through the real endpoints, the same <see cref="LoadedApiFixture{TPlugin}"/>
 /// harness <c>EditFieldApiTests</c> already uses.

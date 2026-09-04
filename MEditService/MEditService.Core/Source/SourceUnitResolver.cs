@@ -71,7 +71,7 @@ internal readonly record struct SourceUnit(
 /// directory-naming policy. Reading the disk needs neither: <b>it is the one source that cannot drift
 /// from the serializer, because it is the serializer's own output</b> — which is also the
 /// never-assume-exclusive-ownership answer, since anything may have moved a file since Modbench last
-/// looked.
+/// looked.</para>
 ///
 /// <para><b>What it costs, measured.</b> A full-tree scan of a
 /// 20 MB mega-plugin's tree (18,880 files / 31,145 directories) is <b>0.39 s warm</b> — a visible stall on
@@ -124,6 +124,8 @@ internal static class SourceUnitResolver
     /// <param name="editorId">Its EditorID, used only to compute a flat path — the scan matches on
     /// the FormKey suffix alone, so a stale EditorID can never send it to the wrong file.</param>
     /// <param name="release">The game release, for the folder-name reflection.</param>
+    /// <param name="cache">Optional memo of scans already done, shared across one gesture's
+    /// resolutions.</param>
     internal static SourceUnit? Resolve(
         IRecordReads reads, PluginKey plugin, string modFolder,
         string formKey, string recordType, string? editorId, GameRelease release,

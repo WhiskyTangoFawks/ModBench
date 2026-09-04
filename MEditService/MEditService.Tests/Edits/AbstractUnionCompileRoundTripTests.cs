@@ -57,7 +57,7 @@ namespace MEditService.Tests.Edits;
 /// discriminator-only: <c>System.Drawing.Color</c> is a shape <c>SchemaReflector</c> has never
 /// reflected anywhere in the schema (filed as #641, general, not specific to this mechanism), so the
 /// <c>ColorData</c> leaf contributes zero real sub-fields today — see
-/// <see cref="Data_SwitchingConcreteType_IndexToColorData_CompilesAndReparsesAsColorDataWithNoColorField"/>'s
+/// <c>Data_SwitchingConcreteType_IndexToColorData_CompilesAndReparsesAsColorDataWithNoColorField</c>'s
 /// own doc comment.</para>
 /// </summary>
 public sealed class AbstractUnionCompileRoundTripTests : IDisposable

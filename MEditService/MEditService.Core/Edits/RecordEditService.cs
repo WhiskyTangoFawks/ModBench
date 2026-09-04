@@ -1906,7 +1906,7 @@ public sealed class RecordEditService(
     ///
     /// <para>Once a typed target is confirmed native, it must also fit
     /// <paramref name="plugin"/>'s own addressable range — the full <c>0xFFFFFF</c> native space, or
-    /// only <c>0x000</c>-<c>0xFFF</c> when <paramref name="mod"/> is ESL-flagged
+    /// only <c>0x000</c>-<c>0xFFF</c> when <paramref name="plugin"/> is ESL-flagged
     /// (<see cref="PluginFlagPredicates.IsLight"/>). Checked after ownership, not before: a FormKey
     /// belonging to a different plugin is refused for that reason regardless of its magnitude.</para>
     /// </summary>
@@ -2247,7 +2247,8 @@ public sealed class RecordEditService(
     /// <c>Applied: True</c> and took the fixture's unrelated NPC source file with it.
     /// <see cref="RenumberRecord"/>'s own path would instead hit an untyped throw
     /// (<see cref="ReadRecordFromSource"/> deserializing "header" through the generic per-record
-    /// codec, which cannot carry a <see cref="ModHeader"/> at all) — smaller blast radius, same
+    /// codec, which cannot carry a <see cref="Mutagen.Bethesda.Plugins.Records.IModHeaderCommon"/>
+    /// at all) — smaller blast radius, same
     /// missing gate.</para>
     /// </summary>
     private static RecordEditResult? RefuseIfHeader(string recordType) =>
@@ -2261,9 +2262,10 @@ public sealed class RecordEditService(
     /// The header's own field-edit gate (#661), reached from <see cref="EditField"/> once source-unit
     /// resolution stops refusing a header FormKey at <see cref="RecordEditRefusal.SourceUnitNotFound"/>.
     /// Answers exactly the question <see cref="RecordFieldWriter.TryApply"/> would — does the named
-    /// column exist, does it carry a write delegate — without ever needing a <see cref="ModHeader"/>
-    /// instance, which the generic <see cref="IMajorRecord"/> pipeline that question normally runs
-    /// through cannot accept in the first place. Reuses <see cref="RefuseFieldOutcome"/> so a header
+    /// column exist, does it carry a write delegate — without ever needing a
+    /// <see cref="Mutagen.Bethesda.Plugins.Records.IModHeaderCommon"/> instance, which the generic
+    /// <see cref="IMajorRecord"/> pipeline that question normally runs through cannot accept in the
+    /// first place. Reuses <see cref="RefuseFieldOutcome"/> so a header
     /// field's refusal reads identically to every other read-only column's, rather than inventing a
     /// second wording for the same outcome.
     ///
@@ -2517,10 +2519,9 @@ public sealed class RecordEditService(
     /// freshly-minted <c>"0"</c> one carrying <paramref name="groupType"/>'s own minimal
     /// <c>GroupRecordData.json</c> when none exists yet — interior placement's own "reuse whatever
     /// bucket already exists" rule (<see cref="EnsureInteriorCellBlockPath"/>'s own doc
-    /// comment).</summary>
-    /// <param name="orderKey">The member name this level is carried under in
+    /// comment). <paramref name="orderKey"/> is the member name this level is carried under in
     /// <paramref name="parentDirectory"/>'s own ordered child list — a freshly minted block has to
-    /// join that list, or the next read refuses the tree as drift.</param>
+    /// join that list, or the next read refuses the tree as drift.</summary>
     private static string FindOrMintGroupDirectory(string parentDirectory, string groupType, string orderKey)
     {
         var existing = Directory.EnumerateDirectories(parentDirectory).FirstOrDefault();
@@ -2616,8 +2617,10 @@ public sealed class RecordEditService(
     /// must never leave. Both writes sit inside one <see cref="SourceUnitResolver.InMintedDirectory{T}"/>,
     /// so a directory minted for the file — a group folder for the plugin's first record of a type, a
     /// slot folder for a parent's first child — is taken out again when either write throws (#675).
+    ///
+    /// <para><paramref name="write"/> writes the file at the path it is handed and returns what it
+    /// wrote.</para>
     /// </summary>
-    /// <param name="write">Writes the file at the path it is handed and returns what it wrote.</param>
     internal static string WritePlaced(string modFolder, SourcePlacement placement, string identity, Func<string, string> write) =>
         WritePlaced(
             Path.Combine(modFolder, placement.RelativePath),

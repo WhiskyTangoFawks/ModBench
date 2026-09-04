@@ -115,7 +115,7 @@ internal sealed class RecordTypeDispatch
     /// <c>FolderPerRecordGroupFieldGenerator</c>/<c>GroupParallelHelper</c> in
     /// <c>references/mutagen-serialization</c>). Null for three reasons a caller must treat alike —
     /// "this flat helper cannot answer, ask SourceUnitResolver instead": the type has
-    /// no top-level group at all (a placed ref, a landscape — the same set <see cref="IsPathAmbiguous"/>'s
+    /// no top-level group at all (a placed ref, a landscape — the same set <see cref="IsPathAmbiguous(string)"/>'s
     /// doc comment already names), the type is one of <see cref="DirectoryPerRecordFolders"/> (its
     /// own directory holds a <c>RecordData.json</c>, not a flat file), or <paramref name="recordType"/>
     /// does not resolve to a concrete type at all.

@@ -11,7 +11,7 @@ namespace MEditService.Core.Source;
 /// only ever runs after that rename lands) — a crash can never leave one plugin's own binary/parked-ref
 /// pair inconsistent with itself. What it *can* leave is a multi-plugin batch silently half-done: plugin
 /// A compiled, plugin B didn't, and nothing says so — the user (or the external-change dialog) has no way to tell
-/// "everything in this Save & Compile landed" from "only some of it did". This class exists for that
+/// "everything in this Save &amp; Compile landed" from "only some of it did". This class exists for that
 /// gap alone.</para>
 ///
 /// <para><b>Marker, not registry</b> — git's own idiom for an in-progress porcelain operation

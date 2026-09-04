@@ -27,7 +27,7 @@ internal enum FieldApplyOutcome
     /// given something that is not a JSON array, or a struct field given something that is not a JSON
     /// object. That is the shape a per-element edit sends when nothing reconstructed the whole complex
     /// value first — never conflated with success: the applier must not return without writing while
-    /// <see cref="TryApply"/> answers <see cref="Applied"/>.
+    /// <see cref="RecordFieldWriter.TryApply"/> answers <see cref="Applied"/>.
     ///
     /// <para>Also covers a scalar or FormLink column whose <see cref="ColumnSpec.Apply"/>
     /// answered <c>ApplyOutcome.ValueRejected</c> — a converter that threw or declined (an
@@ -74,7 +74,7 @@ internal enum FieldApplyOutcome
     NoOp,
 
     /// <summary>
-    /// Two elements of one keyed array (<see cref="FieldMetadata.KeyMembers"/>) share a key —
+    /// Two elements of one keyed array (<see cref="Schema.ColumnSpec.KeyMembers"/>) share a key —
     /// two scripts of one name, two properties of one name, two quest fragments on one stage. The
     /// key identifies the element, so a second one holding it is not an addition but a collision
     /// the array cannot represent: xEdit writes these sorted by that key

@@ -307,7 +307,8 @@ public sealed class DuckDbRecordIndex : IRecordIndex
     // --- Working-tree changes ---
 
     /// <summary>See <see cref="IRecordIndex.ApplyWorkingTreeChanges"/>. One transaction for the whole
-    /// batch, matching <see cref="Index"/>'s own discipline: a throw partway leaves the prior read
+    /// batch, matching <see cref="Index(IModGetter, Registration, PluginKey, string)"/>'s own
+    /// discipline: a throw partway leaves the prior read
     /// model intact rather than a half-applied edit whose Effective and Head disagree about which
     /// records diverged.</summary>
     public void ApplyWorkingTreeChanges(PluginKey key, IReadOnlyList<(string FormKey, string? Body)> deltas)
@@ -457,7 +458,8 @@ public sealed class DuckDbRecordIndex : IRecordIndex
     /// <c>RecordRefDivergenceTests</c> pins for the unedited case.
     ///
     /// <para>The reads that answer from the <i>extracted</i> index tables rather than from documents
-    /// — <see cref="Resolve"/>, <see cref="GetReferencedBy"/>, <see cref="GetPlacement"/> — answer
+    /// — <see cref="IRecordReads.Resolve"/>, <see cref="IRecordReads.GetReferencedBy"/>,
+    /// <see cref="GetPlacement"/> — answer
     /// identically at both refs, deliberately: those tables carry no ref dimension, they track
     /// Effective (a FormKey should resolve to what the link points at *now*), and the committed
     /// question consumers actually ask is a document question, answered from

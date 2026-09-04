@@ -16,7 +16,7 @@ namespace MEditService.Core.Serialization;
 /// <c>IMutagenSerializationBootstrap</c> (that's <c>MutagenJsonConverter.Instance</c>) and inspects
 /// argument 0's compile-time type. Whatever concrete type that is becomes the root of the object
 /// graph the generator walks and emits <c>_Serialization</c> classes for. This runs at compile time,
-/// during the generator pass — <see cref="Touch"/> below does not need to ever execute, let alone
+/// during the generator pass — <see cref="SerializeWholeMod"/> below does not need to ever execute, let alone
 /// execute with a real mod, for this to work.
 ///
 /// Decompiling the generator's actual output settled three things empirically — do not re-derive
@@ -93,7 +93,7 @@ namespace MEditService.Core.Serialization;
 /// must be unique within a generator"</c> — reproduced, not a hypothetical).
 /// So exactly <b>one</b> textual <c>MutagenJsonConverter.Instance.X(...)</c> call
 /// site may exist in this assembly, ever, here — every real caller goes through this method, never
-/// through the mixin directly. <see cref="RecordTextCodecGeneratorSeedTests"/>' whitelist scan
+/// through the mixin directly. <c>RecordTextCodecGeneratorSeedTests</c>' whitelist scan
 /// enforces that the mixin's own generated type name never appears outside this file; the deeper
 /// constraint this paragraph adds — one bootstrap call site total — has no test of its own beyond "the
 /// build fails" if it is ever violated.
@@ -137,17 +137,21 @@ internal static class RecordTextCodecGeneratorSeed
     /// inside generated code, naming a file no source in this repo mentions. Reproduced, then fixed by
     /// naming the argument; reordering does not help (whatever lands on index 5 gets picked instead,
     /// e.g. <c>ICreateStream</c>). Keep the name.</para>
+    ///
+    /// <para><paramref name="fileSystem"/> is the filesystem the door writes through, or
+    /// <see langword="null"/> for the real one. Named here rather than left to the mixin's own
+    /// default so a caller that must not touch the disk can say so — <c>HeaderDocument.Write</c>
+    /// pairs a non-creating filesystem with a <paramref name="streamCreator"/> that captures the
+    /// root document in memory.</para>
+    ///
+    /// <para><paramref name="streamCreator"/> is where each file's bytes actually go, or
+    /// <see langword="null"/> for real files. Under <c>.FilePerRecord()</c> the mixin takes the
+    /// <i>root</i> <c>RecordData.json</c>'s own stream from here too (traced in
+    /// <c>MixinGenerator</c>'s <c>SerializeInternal</c>: <c>exceptionPath = Path.Combine(path,
+    /// RecordDataFileName)</c>, then <c>streamCreator.GetStreamFor(fileSystem, exceptionPath,
+    /// write: true)</c>) — which is what lets a caller capture the mod header's own document
+    /// without writing a tree.</para>
     /// </summary>
-    /// <param name="fileSystem">The filesystem the door writes through, or <see langword="null"/> for
-    /// the real one. Named here rather than left to the mixin's own default so a caller that must not
-    /// touch the disk can say so — <c>HeaderDocument.Write</c> pairs a non-creating filesystem with a
-    /// <paramref name="streamCreator"/> that captures the root document in memory.</param>
-    /// <param name="streamCreator">Where each file's bytes actually go, or <see langword="null"/> for
-    /// real files. Under <c>.FilePerRecord()</c> the mixin takes the <i>root</i>
-    /// <c>RecordData.json</c>'s own stream from here too (traced in <c>MixinGenerator</c>'s
-    /// <c>SerializeInternal</c>: <c>exceptionPath = Path.Combine(path, RecordDataFileName)</c>, then
-    /// <c>streamCreator.GetStreamFor(fileSystem, exceptionPath, write: true)</c>) — which is what lets
-    /// a caller capture the mod header's own document without writing a tree.</param>
     internal static Task SerializeWholeMod(
         IFallout4ModGetter mod, string folder, Noggog.WorkEngine.IWorkDropoff workDropoff, CancellationToken cancel,
         IFileSystem? fileSystem = null, ICreateStream? streamCreator = null)
@@ -175,7 +179,7 @@ internal static class RecordTextCodecGeneratorSeed
     ///
     /// <para>Sequential dropoff for the same reason the write side names one (a real upstream race
     /// in the parallel helpers), stated explicitly so a swap is a visible diff
-    /// that <see cref="RecordTextCodecGeneratorSeedTests"/>' own guard can catch.</para>
+    /// that <c>RecordTextCodecGeneratorSeedTests</c>' own guard can catch.</para>
     /// </summary>
     /// <param name="folder">The tree root to read.</param>
     /// <param name="workDropoff">Sequential, for the reason above.</param>
