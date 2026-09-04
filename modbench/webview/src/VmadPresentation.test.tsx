@@ -21,7 +21,7 @@ import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION } from './messages';
 // `ScriptProperty`, `ScriptObjectProperty` as declared type names) — trimmed to the leaves these
 // cases name. The keyed arrays and their key members are Fallout4VmadAnnotations.KeyedArrays.
 
-const leaf = (name: string, type: string, extra: Partial<FieldMetadata> = {}): FieldMetadata =>
+const field = (name: string, type: string, extra: Partial<FieldMetadata> = {}): FieldMetadata =>
   ({ name, type: type as FieldMetadata['type'], isArray: false, validFormKeyTypes: [], enumMembers: [], ...extra });
 
 // LeafLabel.For('ScriptProperty', leaf) — the base's own words dropped from head and tail.
@@ -39,7 +39,7 @@ const PROPERTY_LEAVES: Record<string, string> = {
 const objectBindingMeta = (name: string, extra: Partial<FieldMetadata> = {}): FieldMetadata => ({
   name, type: 'struct', isArray: false, validFormKeyTypes: [], enumMembers: [],
   leafTypeName: 'ScriptObjectProperty',
-  fields: [leaf('object', 'formKey'), leaf('alias', 'int')],
+  fields: [field('object', 'formKey'), field('alias', 'int')],
   ...extra,
 });
 
@@ -47,17 +47,17 @@ const propertyMeta: FieldMetadata = {
   name: '', type: 'struct', isArray: false, validFormKeyTypes: [], enumMembers: [],
   leafTypeName: 'ScriptProperty',
   fields: [
-    leaf('name', 'string'),
-    leaf('flags', 'enum', { enumMembers: [{ value: 'Edited', bitValue: '1', label: null }] }),
-    leaf('data_bool', 'bool'),
-    leaf('data_float', 'float'),
-    leaf('data_int', 'int'),
-    leaf('data_string', 'string'),
-    leaf('data_string_array', 'array', { isArray: true, elementType: leaf('', 'string') }),
-    leaf('object', 'formKey'),
-    leaf('alias', 'int'),
-    leaf('objects', 'array', { isArray: true, elementType: objectBindingMeta('') }),
-    leaf('concrete_type', 'enum', {
+    field('name', 'string'),
+    field('flags', 'enum', { enumMembers: [{ value: 'Edited', bitValue: '1', label: null }] }),
+    field('data_bool', 'bool'),
+    field('data_float', 'float'),
+    field('data_int', 'int'),
+    field('data_string', 'string'),
+    field('data_string_array', 'array', { isArray: true, elementType: field('', 'string') }),
+    field('object', 'formKey'),
+    field('alias', 'int'),
+    field('objects', 'array', { isArray: true, elementType: objectBindingMeta('') }),
+    field('concrete_type', 'enum', {
       displayLabel: 'Kind', isDiscriminator: true,
       enumMembers: Object.entries(PROPERTY_LEAVES).map(([value, label]) => ({ value, bitValue: null, label })),
     }),
@@ -71,9 +71,9 @@ const scriptsMeta: FieldMetadata = {
     name: '', type: 'struct', isArray: false, validFormKeyTypes: [], enumMembers: [],
     leafTypeName: 'ScriptEntry',
     fields: [
-      leaf('name', 'string'),
-      leaf('flags', 'enum', { enumMembers: [{ value: 'Local', bitValue: '1', label: null }] }),
-      leaf('properties', 'array', { isArray: true, keyMembers: ['name'], elementType: propertyMeta }),
+      field('name', 'string'),
+      field('flags', 'enum', { enumMembers: [{ value: 'Local', bitValue: '1', label: null }] }),
+      field('properties', 'array', { isArray: true, keyMembers: ['name'], elementType: propertyMeta }),
     ],
   },
 };
@@ -100,19 +100,22 @@ const PLUGIN = 'MyMod.esp';
 // like. Keyed array children are named by their key text (ElementKey.Text), positional ones by
 // "[N]"; the two together are what "keyed row identity" is a claim about.
 
+/** ElementKey.Text: the element's key members, joined the way the backend joins them. */
+const keyTextOf = (keyMembers: string[], element: unknown): string =>
+  keyMembers.map(m => String((element as Obj)[m] ?? '')).join(' / ');
+
 function keysOf(meta: FieldMetadata, values: Record<string, unknown>): string[] {
   const lists = Object.values(values).map(v => (Array.isArray(v) ? v : []));
-  if (meta.keyMembers) {
-    const keyText = (e: unknown) => meta.keyMembers!.map(m => String((e as Obj)[m] ?? '')).join(' / ');
-    return [...new Set(lists.flatMap(l => l.map(keyText)))].sort();
-  }
+  const { keyMembers } = meta;
+  if (keyMembers) return [...new Set(lists.flatMap(l => l.map(e => keyTextOf(keyMembers, e))))].sort();
   return Array.from({ length: Math.max(0, ...lists.map(l => l.length)) }, (_, i) => `[${i}]`);
 }
 
 function elementAt(meta: FieldMetadata, list: unknown, key: string): unknown {
   if (!Array.isArray(list)) return null;
-  if (!meta.keyMembers) return list[Number(key.slice(1, -1))] ?? null;
-  return list.find(e => meta.keyMembers!.map(m => String((e as Obj)[m] ?? '')).join(' / ') === key) ?? null;
+  const { keyMembers } = meta;
+  if (!keyMembers) return list[Number(key.slice(1, -1))] ?? null;
+  return list.find(e => keyTextOf(keyMembers, e) === key) ?? null;
 }
 
 function buildDiff(
@@ -178,18 +181,19 @@ function renderPanel() {
   return render(<RecordPanel client={client} />);
 }
 
-/** The row whose Field column reads `field`, as a list of its cells' text. */
-function rowCells(field: string): string[] {
+/** The Field-column cell of the row that reads `field`. */
+function fieldCell(field: string): HTMLTableCellElement {
   const td = screen.getAllByText(field).find(el => el.tagName === 'TD');
   expect(td, `no row named ${field}`).toBeDefined();
-  return Array.from(td!.closest('tr')!.querySelectorAll('td')).map(c => c.textContent ?? '');
+  return td as HTMLTableCellElement;
 }
 
-const summaryOf = (field: string): string => rowCells(field)[1];
+/** What that row's one column reads out. */
+const summaryOf = (field: string): string =>
+  fieldCell(field).closest('tr')!.querySelectorAll('td')[1].textContent ?? '';
 
 const expandRow = (field: string) =>
-  fireEvent.click(rowCells(field) && screen.getAllByText(field).find(el => el.tagName === 'TD')!
-    .closest('tr')!.querySelector('button')!);
+  fireEvent.click(fieldCell(field).closest('tr')!.querySelector('button')!);
 
 async function expandScripts() {
   await waitFor(() => screen.getByText('scripts'));
@@ -215,14 +219,13 @@ afterEach(() => vi.unstubAllGlobals());
 describe('#695 — a collapsed script reads as xEdit prose', () => {
   it('a script reads under its own name with every property passed through, not counted', async () => {
     currentCompare = oneColumn([script('Guard', [
-      property('Radius', 'ScriptIntProperty', { data_int: 10 }),
       property('Awake', 'ScriptBoolProperty', { data_bool: true }),
+      property('Radius', 'ScriptIntProperty', { data_int: 10 }),
     ])]);
     renderPanel();
     await expandScripts();
     await waitFor(() => screen.getByText('Guard'));
 
-    // In key order, which is the order the properties list is stored and rendered in.
     expect(summaryOf('Guard')).toBe('Guard(Awake: Bool = true, Radius: Int = 10)');
   });
 
@@ -318,7 +321,10 @@ describe('#695 — a collapsed script reads as xEdit prose', () => {
 
 describe('#695 — the alias slot of an object binding', () => {
   const withAlias = (alias: number) => oneColumn(
-    [script('Guard', [property('Owner', 'ScriptObjectProperty', { object: null, alias })])]);
+    [script('Guard', [property('Owner', 'ScriptObjectProperty', {
+      object: '00000014:Fallout4.esm', alias,
+    })])],
+    { '00000014:Fallout4.esm': 'PlayerRef' });
 
   it.each([[-1, 'None'], [-2, 'Player'], [3, '3']])(
     'alias %i reads as %s', async (alias, expected) => {
@@ -327,7 +333,8 @@ describe('#695 — the alias slot of an object binding', () => {
       await expandScripts();
       await waitFor(() => screen.getByText('Guard'));
 
-      expect(summaryOf('Guard')).toBe(`Guard(Owner: Object = , Alias[${expected}])`);
+      expect(summaryOf('Guard'))
+        .toBe(`Guard(Owner: Object = PlayerRef [00000014:Fallout4.esm], Alias[${expected}])`);
     });
 });
 
@@ -399,5 +406,40 @@ describe('#695 — Add Script is the generic array gesture', () => {
       { fieldPath?: string; value?: unknown } | undefined;
     expect(posted?.fieldPath).toBe('scripts');
     expect(posted?.value).toEqual({ op: 'array_add', path: [] });
+  });
+
+  it('the added script is a row of its own in that plugin’s column, and is nameable there', async () => {
+    currentCompare = oneColumn([script('Guard')]);
+    renderPanel();
+    await expandScripts();
+    await waitFor(() => screen.getByText('Guard'));
+
+    // What the panel re-reads once the write lands: the new script's key is empty until the user
+    // names it (#710), so it sorts first and its row is named by that empty key.
+    reloadWith(oneColumn([script(''), script('Guard')]));
+    await waitFor(() => expect(document.querySelectorAll('tbody tr')).toHaveLength(3));
+
+    // First of the two script rows, since the empty key sorts before every named one.
+    const added = document.querySelectorAll('tbody tr')[1];
+    // Its Field column holds nothing but the disclosure control: the key is still empty.
+    expect(added.querySelectorAll('td')[0].textContent).toBe('▶');
+    expect(added.querySelectorAll('td')[1].textContent).toBe('()');
+
+    // Nameable: its own `name` cell takes an edit like any other string cell, and the whole
+    // scripts field commits with the name on the element that had none.
+    fireEvent.click(added.querySelector('button')!);
+    await waitFor(() => screen.getAllByText('name'));
+    const nameCell = screen.getAllByText('name')[0].closest('tr')!.querySelectorAll('td')[1];
+    fireEvent.doubleClick(nameCell.querySelector('[data-open-trigger]')!);
+    const input = nameCell.querySelector('input')!;
+    fireEvent.change(input, { target: { value: 'Ambush' } });
+    fireEvent.blur(input);
+
+    const calls = (vscode.postMessage as ReturnType<typeof vi.fn>).mock.calls;
+    const edit = [...calls].reverse()
+      .find(([m]) => (m as { type?: string }).type === WEBVIEW_TO_EXTENSION.EDIT_FIELD)?.[0] as
+      { fieldPath?: string; value?: Obj[] } | undefined;
+    expect(edit?.fieldPath).toBe('scripts');
+    expect(edit?.value?.map(e => e.name)).toEqual(['Ambush', 'Guard']);
   });
 });

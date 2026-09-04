@@ -50,7 +50,7 @@ type Summarizer = (row: SummaryRow) => string;
 // actually uses; the comparison operator; the comparison value; and the conjunction that joins this
 // condition to the next, absent on the list's last element.
 
-const COMPARISON_OPERATORS: Record<string, string> = {
+const COMPARISON_OPERATORS: Record<string, string | undefined> = {
   EqualTo: '=', NotEqualTo: '<>', GreaterThan: '>', GreaterThanOrEqualTo: '>=',
   LessThan: '<', LessThanOrEqualTo: '<=',
 };
@@ -112,19 +112,6 @@ const floatComparison = (row: SummaryRow): string =>
 
 const globalComparison = (row: SummaryRow): string => row.member('comparison_value_form_key').shortName;
 
-const PRESENTATION_TABLE: Record<string, Summarizer | undefined> = {
-  ConditionFloat: row => conditionSummary(row, floatComparison),
-  ConditionGlobal: row => conditionSummary(row, globalComparison),
-  ScriptEntry: scriptEntry,
-  // Reached by every leaf of the script-property union that has no reading of its own.
-  ScriptProperty: row => scriptProperty(row, scriptPropertyValue(row)),
-  // The one class that is both: a leaf of that union, and the element type of a list of bindings.
-  // As a property it takes the property's own shape with the binding as its value; on its own it
-  // is the binding.
-  ScriptObjectProperty: row =>
-    (discriminatorOf(row.member().meta) == null ? scriptObject(row) : scriptProperty(row, scriptObject(row))),
-};
-
 // ── Fallout 4 scripts ────────────────────────────────────────────────────────
 //
 // xEdit's own wbScriptEntry / wbScriptProperty / wbScriptPropertyObject summaries
@@ -132,6 +119,10 @@ const PRESENTATION_TABLE: Record<string, Summarizer | undefined> = {
 // sort-key member leads the summary unless the definition sets `dfSummaryNoSortKey` — which is why
 // a script reads under its own name and an object binding, whose sort key is already in its summary
 // key, does not.
+
+/** The two alias slots that name something rather than an entry in a quest's alias list
+ *  (wbAliasToStr, wbDefinitionsCommon.pas:3137). */
+const RESERVED_ALIASES: Record<string, string | undefined> = { '-1': 'None', '-2': 'Player' };
 
 /** How a script object binding reads: the bound record as its own cell shows it, then the alias
  *  slot. xEdit resolves an alias number past the two reserved ones through the owning quest's own
@@ -141,10 +132,6 @@ function scriptObject(row: SummaryRow): string {
   const alias = row.member('alias').label;
   return `${row.member('object').label}, Alias[${RESERVED_ALIASES[alias] ?? alias}]`;
 }
-
-/** The two alias slots that name something rather than an entry in a quest's alias list
- *  (wbAliasToStr, wbDefinitionsCommon.pas:3137). */
-const RESERVED_ALIASES: Record<string, string | undefined> = { '-1': 'None', '-2': 'Player' };
 
 /** The member each single-valued property leaf keeps its value in. A leaf whose value is a list or
  *  a nested struct is absent: xEdit passes a property's own value through only one level deep
@@ -175,6 +162,19 @@ function scriptPropertyValue(row: SummaryRow): string {
 function scriptEntry(row: SummaryRow): string {
   return `${row.member('name').label}(${row.elements('properties').join(', ')})`;
 }
+
+const PRESENTATION_TABLE: Record<string, Summarizer | undefined> = {
+  ConditionFloat: row => conditionSummary(row, floatComparison),
+  ConditionGlobal: row => conditionSummary(row, globalComparison),
+  ScriptEntry: scriptEntry,
+  // Reached by every leaf of the script-property union that has no reading of its own.
+  ScriptProperty: row => scriptProperty(row, scriptPropertyValue(row)),
+  // The one class that is both: a leaf of that union, and the element type of a list of bindings.
+  // As a property it takes the property's own shape with the binding as its value; on its own it
+  // is the binding.
+  ScriptObjectProperty: row =>
+    (discriminatorOf(row.member().meta) == null ? scriptObject(row) : scriptProperty(row, scriptObject(row))),
+};
 
 // ── The lookup the grid uses ─────────────────────────────────────────────────
 
@@ -245,24 +245,22 @@ function summaryIn(
 ): string | undefined {
   const value = diff.values[column];
   const found = summarizerFor(meta, value);
-  if (!found || !meta) return undefined;
-
-  const memberOf = (path: string[]) => {
-    const memberMeta = metaAtPath(meta, memberPath(path));
-    const memberValue = getAtPath(value, memberPath(path));
-    const resolution = diffAt(diff, path)?.resolutions?.[column];
-    return {
-      value: memberValue,
-      meta: memberMeta,
-      label: memberMeta ? displayValue(memberValue, memberMeta, resolution) : toStr(memberValue),
-      shortName: resolution?.editorId ?? toStr(memberValue),
-    };
-  };
+  if (!found) return undefined;
 
   return found.summarize({
     isLast,
     leaf: found.leaf,
-    member: (...path) => memberOf(path),
+    member: (...path) => {
+      const memberMeta = metaAtPath(meta, memberPath(path));
+      const memberValue = getAtPath(value, memberPath(path));
+      const resolution = diffAt(diff, path)?.resolutions?.[column];
+      return {
+        value: memberValue,
+        meta: memberMeta,
+        label: memberMeta ? displayValue(memberValue, memberMeta, resolution) : toStr(memberValue),
+        shortName: resolution?.editorId ?? toStr(memberValue),
+      };
+    },
     elements: (...path) => {
       const listMeta = metaAtPath(meta, memberPath(path))?.elementType ?? undefined;
       const present = (diffAt(diff, path)?.children ?? []).filter(c => c.values[column] != null);
