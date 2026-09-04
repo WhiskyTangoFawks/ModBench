@@ -46,17 +46,19 @@ npm run package           # build alpha .vsix — pinned local @vscode/vsce, no 
   path; a relative grep from a worktree silently matches nothing.
 
 ## Comment Discipline
-- Clean code is self-evidently what it does. If code needs a comment to explain *what* it's doing,
-  that's usually a smell — prefer renaming/restructuring so the code speaks for itself. Reserve
-  comments for the non-obvious: *why*, a surprising constraint, a fact the code can't express on
-  its own.
-- Comments and doc comments describe current behavior only. Never narrate how the code used to
-  work — no "previously," "used to," "no longer," "originally." That framing rots the moment the
-  next change lands, and nobody comes back to delete it.
-- Rationale earns at most a sentence or two inline. If it needs a paragraph, it belongs in a commit
-  message or an ADR — link to it, don't inline the narrative.
-- Default to shorter. A comment justifying its own length by covering "four separable concerns" is
-  a signal the method has four separable concerns, not that the comment is doing its job.
+- A comment exists only to say what the code and its names cannot: a why, a constraint from
+  outside the code (a Mutagen quirk, a game-format fact), or a decision with its rejected
+  alternative. A comment that explains *what* is a rename or a restructure waiting to happen.
+- Hard limits. A doc comment is at most three lines. A member whose name says what it does
+  gets none. Private members get none unless the constraint is non-obvious. Tests get none:
+  the test name and its assertions are the documentation.
+- No narration of the call graph. A comment does not list its callers, its callees, the tests
+  that cover it, or the ticket that introduced it. `<see cref>` only where the reader must go
+  to that symbol to understand this one.
+- Rationale longer than two sentences goes in the commit message or an ADR, linked from the
+  code.
+- In review, a comment that breaks any rule above is a finding, and the fix is deletion, not
+  rewriting.
 
 CLAUDE.MD Files are owned by the developer. Any edit to a claude.md developer needs explicit permission,
 given for the exact edit to be made.
