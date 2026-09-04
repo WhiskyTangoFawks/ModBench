@@ -758,3 +758,136 @@ describe('RecordPanel — the extended editor commits the whole field, at any de
     expect(lastEditField()?.value).toBe('6');
   });
 });
+
+// #716: a keyed array's rows are labelled by the key their element carries
+// (ConflictClassifier.BuildKeyed), and one row's path is shared by every column — so the path
+// addresses the element by key and each column resolves it against its own array. The master here
+// carries only `Guard`, the override carries `Ambush` before it: the same key, two positions.
+describe('RecordPanel — a keyed array\'s element is addressed by key, per column (#716)', () => {
+  const scriptMeta: FieldMetadata = {
+    name: 'Scripts', type: 'array', isArray: true, validFormKeyTypes: [], enumMembers: [],
+    keyMembers: ['name'],
+    elementType: {
+      name: '', type: 'struct', isArray: false, validFormKeyTypes: [], enumMembers: [],
+      fields: [
+        { name: 'name', type: 'string', isArray: false, validFormKeyTypes: [], enumMembers: [] },
+        { name: 'flags', type: 'string', isArray: false, validFormKeyTypes: [], enumMembers: [] },
+      ],
+    },
+  };
+
+  const master = [{ name: 'Guard', flags: 'm' }];
+  const override = [{ name: 'Ambush', flags: 'a' }, { name: 'Guard', flags: 'g' }];
+
+  const keyedResult = {
+    conflictAll: 'Override',
+    overrides: [
+      {
+        formKey: '000001:Fallout4.esm', plugin: 'Fallout4.esm', origin: 'Data',
+        loadOrderIndex: 0, isWinner: false, editorId: 'TestNPC',
+        fields: [{ metadata: scriptMeta, value: master }], conflictThis: 'Master',
+      },
+      {
+        formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'Data',
+        loadOrderIndex: 1, isWinner: true, editorId: 'TestNPC',
+        fields: [{ metadata: scriptMeta, value: override }], conflictThis: 'Override',
+      },
+    ],
+    diffs: [{
+      fieldName: 'Scripts',
+      values: { 'Fallout4.esm': master, 'MyMod.esp': override },
+      winnerColumn: 'MyMod.esp', winnerValue: override,
+      cellStates: {},
+      children: [
+        {
+          fieldName: 'Ambush',
+          values: { 'MyMod.esp': override[0] },
+          winnerColumn: 'MyMod.esp', winnerValue: override[0], cellStates: {},
+          children: [
+            { fieldName: 'name', values: { 'MyMod.esp': 'Ambush' }, winnerColumn: 'MyMod.esp', winnerValue: 'Ambush', cellStates: {} },
+            { fieldName: 'flags', values: { 'MyMod.esp': 'a' }, winnerColumn: 'MyMod.esp', winnerValue: 'a', cellStates: {} },
+          ],
+        },
+        {
+          fieldName: 'Guard',
+          values: { 'Fallout4.esm': master[0], 'MyMod.esp': override[1] },
+          winnerColumn: 'MyMod.esp', winnerValue: override[1], cellStates: {},
+          children: [
+            { fieldName: 'name', values: { 'Fallout4.esm': 'Guard', 'MyMod.esp': 'Guard' }, winnerColumn: 'MyMod.esp', winnerValue: 'Guard', cellStates: {} },
+            { fieldName: 'flags', values: { 'Fallout4.esm': 'm', 'MyMod.esp': 'g' }, winnerColumn: 'MyMod.esp', winnerValue: 'g', cellStates: {} },
+          ],
+        },
+      ],
+    }],
+  };
+
+  function renderEditablePanel() {
+    const client: RecordPanelClient = {
+      load: vi.fn().mockImplementation(() => Promise.resolve({
+        ok: true,
+        result: keyedResult,
+        immutableSet: new Set([columnKey('Fallout4.esm', null)]),
+        notInLoadOrderSet: new Set(),
+        trackedSet: new Set([columnKey('MyMod.esp', null)]),
+        conflictsComputed: true,
+      } as unknown as LoadResult)),
+    };
+    return render(<RecordPanel client={client} />);
+  }
+
+  function lastEditField(): { fieldPath?: string; value?: unknown } | undefined {
+    const calls = (vscode.postMessage as ReturnType<typeof vi.fn>).mock.calls;
+    const call = [...calls].reverse().find(([m]) => (m as { type?: string }).type === WEBVIEW_TO_EXTENSION.EDIT_FIELD);
+    return call?.[0] as { fieldPath?: string; value?: unknown } | undefined;
+  }
+
+  beforeEach(() => {
+    vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
+    (vscode.postMessage as ReturnType<typeof vi.fn>).mockClear();
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  async function expandTo(label: string) {
+    renderEditablePanel();
+    await waitFor(() => screen.getByText('Scripts'));
+    fireEvent.click(screen.getByText('Scripts').closest('tr')!.querySelector('button')!);
+    await waitFor(() => screen.getByText(label));
+    // The row's own label cell comes first; once expanded, the key text also appears as the value
+    // of the element's own `name` member.
+    fireEvent.click(screen.getAllByText(label)[0].closest('tr')!.querySelector('button')!);
+    await waitFor(() => screen.getAllByText('flags'));
+  }
+
+  // `Guard` is element 1 in the column being written and element 0 in the master. The rival — the
+  // shipped `{kind:'index', index: parseElementIndex('Guard')}` — parses NaN, and the property it
+  // then writes is dropped by JSON.stringify, so it posts the array unchanged.
+  it('a value edit on a keyed element writes that element, at its own position in this column', async () => {
+    await expandTo('Guard');
+    const row = screen.getAllByText('flags')[0].closest('tr')!;
+    const cells = row.querySelectorAll('td');
+    const cell = cells[cells.length - 1] as HTMLElement;
+    fireEvent.doubleClick(within(cell).getByText('g'));
+    const input = cell.querySelector('input')!;
+    fireEvent.change(input, { target: { value: 'EDITED' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+
+    expect(lastEditField()?.fieldPath).toBe('Scripts');
+    expect(lastEditField()?.value).toEqual([{ name: 'Ambush', flags: 'a' }, { name: 'Guard', flags: 'EDITED' }]);
+  });
+
+  // Delete on the focused element cell posts the op envelope naming the element by key — an index
+  // could not name it, since the two columns hold it in different places.
+  it('Delete on a keyed element posts an array_remove naming the key', async () => {
+    await expandTo('Guard');
+    const row = screen.getAllByText('Guard')[0].closest('tr')!;
+    const cells = row.querySelectorAll('td');
+    const cell = cells[cells.length - 1] as HTMLElement;
+    fireEvent.click(cell);
+    fireEvent.keyDown(cell, { key: 'Delete' });
+
+    expect(lastEditField()?.value).toEqual({
+      op: 'array_remove',
+      path: [{ kind: 'key', key: 'Guard', members: ['name'] }],
+    });
+  });
+});
