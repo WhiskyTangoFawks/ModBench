@@ -1,22 +1,12 @@
 namespace MEditService.Core.Edits;
 
-/// <summary>
-/// One diagnostic <see cref="PluginCompileService.Compile"/> found while compiling — semantic
-/// breakage (a dangling FormLink, an unplaceable stripped-container child) that does not stop the
-/// binary from being written. Returned, never side-effected: publishing these to VS Code's Problems
-/// panel against the source files is the caller's (extension wiring's) job, which is what keeps this
-/// module testable through its own seam.
-/// </summary>
+/// <summary>Semantic breakage that does not stop the binary being written. Returned, never
+/// side-effected: publishing to the Problems panel is the caller's job.</summary>
 public sealed record CompileDiagnostic(string FormKey, string SourceRelativePath, string Message);
 
-/// <summary>
-/// A refusal
-/// (<see cref="Refused"/>) is a typed result naming why, never an exception — reserved for a state
-/// that is <b>structurally impossible to emit</b> (a FormKey collision the write pipeline cannot
-/// encode without renumbering, or a source record with no parent slot anywhere in the plugin's own
-/// container structure). Everything else — dangling FormLinks and kin — compiles successfully with
-/// <see cref="Diagnostics"/> describing what's wrong.
-/// </summary>
+/// <summary>A refusal is typed, never an exception, and reserved for a state structurally impossible
+/// to emit (a FormKey collision, a record with no parent slot); everything else compiles with
+/// <see cref="Diagnostics"/>.</summary>
 public sealed record CompileResult(
     bool Succeeded,
     string? RefusalReason,

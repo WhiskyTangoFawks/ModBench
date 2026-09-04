@@ -4,16 +4,13 @@ using MEditService.Core.Queries;
 
 namespace MEditService.Core.Edits;
 
-/// <summary>The write-side half of a keyed array (<see cref="FieldMetadata.KeyMembers"/>): one
-/// field write's whole payload put into key order, and two elements sharing a key refused by name.
-/// Driven by the field's metadata rather than the payload's shape, at whatever depth the keyed
-/// arrays sit — a top-level array column and one nested six hops inside a struct are the same
-/// question, answered once here rather than in each applier.</summary>
+/// <summary>Key order and duplicate-key refusal for keyed arrays, driven by field metadata at any
+/// depth, so a top-level array and one nested inside a struct are answered once here rather than
+/// per applier.</summary>
 internal static class KeyedArrays
 {
-    /// <summary>The payload with every keyed array it contains put into key order, or — when one
-    /// array holds two elements sharing a key — the payload untouched and that key named. A field
-    /// whose metadata describes no keyed array anywhere is returned unchanged and unparsed.</summary>
+    /// <summary>The payload with every keyed array in key order, or untouched with the duplicate key
+    /// named. A field with no keyed array is returned unparsed.</summary>
     internal static JsonElement Normalize(JsonElement value, FieldMetadata meta, out string? duplicateKey)
     {
         duplicateKey = null;
@@ -24,8 +21,6 @@ internal static class KeyedArrays
         return duplicateKey == null ? JsonSerializer.SerializeToElement(root) : value;
     }
 
-    /// <summary>Asked before the payload is reparsed, so an ordinary field pays nothing for a
-    /// concept it does not use.</summary>
     private static bool Carries(FieldMetadata meta) =>
         meta.KeyMembers != null
         || (meta.ElementType != null && Carries(meta.ElementType))

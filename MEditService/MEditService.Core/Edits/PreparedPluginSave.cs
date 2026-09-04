@@ -1,16 +1,7 @@
 namespace MEditService.Core.Edits;
 
-/// <summary>An uncommitted plugin write: a temp-written binary (and, for a Localized mod, its temp-written
-/// strings files) plus the timestamped <c>.bak</c> already made — <see cref="Commit"/> to make it real,
-/// <see cref="Dispose"/> to discard the temp state either way.
-///
-/// <para><paramref name="stringsFiles"/> is a Localized mod's <c>.STRINGS</c>/<c>.DLSTRINGS</c>/
-/// <c>.ILSTRINGS</c> files, each already written whole to a temp path by
-/// <see cref="PluginWriter.PrepareFromModAsync"/> — empty for a non-Localized mod.
-/// <see cref="Commit"/> moves each into its real destination alongside the plugin binary; nothing
-/// here is ADR-0008's timestamped <c>.bak</c> concern (that stays scoped to the plugin itself),
-/// only the same temp-write-then-rename discipline.</para>
-/// </summary>
+/// <summary>An uncommitted plugin write: temp-written binary and strings files plus the <c>.bak</c>
+/// already made. Commit renames them into place; Dispose discards the temp state either way.</summary>
 public sealed class PreparedPluginSave(
     string tmpPath,
     string finalPath,

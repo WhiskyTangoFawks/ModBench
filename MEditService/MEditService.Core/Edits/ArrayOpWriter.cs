@@ -6,22 +6,9 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Core.Edits;
 
-/// <summary>
-/// #630: the four array arity/order op envelopes — <c>array_remove</c>/<c>array_move_up</c>/
-/// <c>array_move_down</c>/<c>array_add</c> — computed here instead of round-tripped as a
-/// client-computed whole array through the webview. Scope is ordinary reflected fields only
-/// (<see cref="ColumnSpec"/>-backed columns), which includes a script's properties and a Papyrus
-/// scalar-array property's elements.
-///
-/// <para>Each op reads the column's own <i>current</i> value (<see cref="ColumnSpec.Extract"/>),
-/// walks the envelope's own <c>path</c> to the target array — an ordinary reflected field's wire
-/// <c>fieldPath</c> never encodes nesting, only the value tree does, the same convention
-/// <c>RecordPanel.tsx</c>'s own (now-deleted) client-side <c>handleArrayOp</c> used — mutates a JSON
-/// copy, and hands the whole reconstructed value to the exact same <see cref="ColumnSpec.Apply"/>
-/// every ordinary complex-field write already goes through. That reuse is deliberate: every existing
-/// write-path guarantee (#642's <c>NestedFieldReadOnly</c> included) applies unchanged, because this
-/// class only computes <i>what</i> gets written, never how.</para>
-/// </summary>
+/// <summary>Computes the array ops (remove, move, add) server-side and hands the whole rebuilt value
+/// to <see cref="ColumnSpec.Apply"/>, so every existing write-path guarantee applies unchanged: this
+/// class decides what is written, never how.</summary>
 internal static class ArrayOpWriter
 {
     private static readonly HashSet<string> OpNames =
@@ -107,10 +94,8 @@ internal static class ArrayOpWriter
     // ── path segments ("member"/"index"/"key" — a pure-FormLink array offers no array op at all,
     // so no "sortKey" hop reaches here; see recordUtils.ts's own PathSegment doc comment) ─────────
 
-    /// <summary>Where this hop's element sits in the array it is resolved against, or null when the
-    /// hop names no element there at all: a member hop, or a key hop into an array the schema does
-    /// not key. A key no element in that array carries answers -1, which every mutation below reads
-    /// as "nothing to do" the same way an out-of-range index does.</summary>
+    // A key no element carries resolves to -1, which every mutation reads as "nothing to do", the
+    // same as an out-of-range index.
     private interface IPathSegment
     {
         int? IndexIn(JsonArray array, FieldMetadata? arrayMeta);
@@ -126,10 +111,8 @@ internal static class ArrayOpWriter
         public int? IndexIn(JsonArray array, FieldMetadata? arrayMeta) => Index;
     }
 
-    /// <summary>A keyed array's element, named by its key. The key members that key is read against
-    /// are the array's own declared ones, never the envelope's — the envelope carries them for the
-    /// webview's sake (recordUtils.ts resolves the same hop with no schema in scope) and this side
-    /// reads its own schema.</summary>
+    // The key is read against the array's own declared key members, never the envelope's; the
+    // envelope carries them only for the webview, which has no schema in scope.
     private sealed record KeySegment(string Key) : IPathSegment
     {
         public int? IndexIn(JsonArray array, FieldMetadata? arrayMeta) =>

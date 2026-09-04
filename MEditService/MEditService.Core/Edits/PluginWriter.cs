@@ -10,30 +10,16 @@ using Mutagen.Bethesda.Strings.DI;
 
 namespace MEditService.Core.Edits;
 
-/// <summary>
-/// Writes a plugin binary: import, write to a sibling temp file, commit by rename, drop a
-/// timestamped <c>.bak</c> beside it (ADR-0008), prune the oldest.
-///
-/// Mechanism only, no edit semantics: ADR-0041's Save &amp; Compile serializes a working tree into
-/// a mod and hands it here to become bytes on disk.
-///
-/// The binary round-trip stability gate runs through <see cref="SaveAsync"/> and stays the
-/// permanent guard on it.
-/// </summary>
+/// <summary>Writes a plugin binary: sibling temp file, commit by rename, timestamped <c>.bak</c>
+/// beside it (ADR-0008), oldest pruned. Mechanism only, no edit semantics.</summary>
 public sealed class PluginWriter(ILogger<PluginWriter> logger)
 {
     private const int MaxBackups = 5;
 
     private readonly ILogger<PluginWriter> _logger = logger;
 
-    /// <summary>
-    /// Imports the plugin at <paramref name="pluginPath"/> and writes it back out to a temp file,
-    /// returning the uncommitted result. <paramref name="loadOrder"/> (ADR-0038): plugin
-    /// filenames in the load order's current load order, used to order the written master list
-    /// explicitly (xEdit-familiar canonical form on disk — ADR-0034 at the file level) rather than
-    /// leaving it to Mutagen's undefined default. Optional, because PluginWriter has no load order
-    /// concept of its own.
-    /// </summary>
+    /// <summary><paramref name="loadOrder"/> orders the written master list explicitly (ADR-0038,
+    /// xEdit's canonical form) rather than leaving it to Mutagen's undefined default.</summary>
     public static Task<PreparedPluginSave> PrepareAsync(
         string pluginPath,
         GameRelease gameRelease,
@@ -48,13 +34,8 @@ public sealed class PluginWriter(ILogger<PluginWriter> logger)
         return PrepareFromModAsync(mod, pluginPath, loadOrder);
     }
 
-    /// <summary>
-    /// <see cref="PrepareAsync"/>'s other half: writes an already-assembled <paramref name="mod"/>
-    /// rather than importing one from <paramref name="pluginPath"/> first — Save &amp; Compile's own
-    /// entry point, since compile's mod is deserialized whole from the source tree
-    /// (<see cref="PluginCompileService"/>), never read off the binary it is about to replace.
-    /// <paramref name="pluginPath"/> is still where the backup comes from and where the result lands.
-    /// </summary>
+    /// <summary>Writes an already-assembled mod: compile's mod comes from the source tree, never off
+    /// the binary it replaces. <paramref name="pluginPath"/> still supplies the backup and destination.</summary>
     public static async Task<PreparedPluginSave> PrepareFromModAsync(
         IMod mod,
         string pluginPath,
@@ -168,8 +149,7 @@ public sealed class PluginWriter(ILogger<PluginWriter> logger)
         return prep.BackupPath;
     }
 
-    /// <summary><see cref="SaveAsync"/>'s <see cref="PrepareFromModAsync"/> counterpart — Save &amp;
-    /// Compile's own entry point.</summary>
+    /// <summary>Save &amp; Compile's entry point: <see cref="SaveAsync"/> for an already-assembled mod.</summary>
     public async Task<string> SaveFromModAsync(
         IMod mod,
         string pluginPath,
