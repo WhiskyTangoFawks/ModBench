@@ -203,7 +203,10 @@ public sealed record ColumnSpec(
     string? ViewDefaultLiteral = null,
 
     /// <summary>See <see cref="FieldMetadata.KeyMembers"/>.</summary>
-    IReadOnlyList<string>? KeyMembers = null)
+    IReadOnlyList<string>? KeyMembers = null,
+
+    /// <summary>See <see cref="FieldMetadata.LeafTypeName"/>.</summary>
+    string? LeafTypeName = null)
 {
     /// <summary>
     /// Whether a generated view can carry this column at all: scalar leaves only.
@@ -219,7 +222,7 @@ public sealed record ColumnSpec(
 
     public FieldMetadata ToFieldMetadata() =>
         new(Name, ApiType, IsArray, ValidFormKeyTypes, EnumMembers, ElementType, SubFields,
-            AllowsNull: AllowsNull, KeyMembers: KeyMembers);
+            AllowsNull: AllowsNull, KeyMembers: KeyMembers, LeafTypeName: LeafTypeName);
 }
 
 public sealed class RecordTableSchema

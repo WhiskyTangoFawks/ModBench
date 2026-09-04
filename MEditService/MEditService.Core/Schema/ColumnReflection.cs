@@ -52,7 +52,8 @@ internal static class ColumnReflection
                 AllowsNull: info.AllowsNull,
                 IsFlagsEnum: info.IsFlagsEnum,
                 ViewDefaultLiteral: info.ViewDefaultLiteral,
-                KeyMembers: info.KeyMembers));
+                KeyMembers: info.KeyMembers,
+                LeafTypeName: info.LeafTypeName));
         }
 
         return columns;

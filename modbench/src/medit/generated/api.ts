@@ -668,6 +668,7 @@ export interface components {
                 [key: string]: string[];
             } | null;
             keyMembers?: string[] | null;
+            leafTypeName?: string | null;
         };
         FieldValue: {
             metadata: components["schemas"]["FieldMetadata"];

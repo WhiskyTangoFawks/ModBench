@@ -39,6 +39,7 @@ const FUNCTION_SLOTS: Record<string, string[]> = {
 
 const dataMeta: FieldMetadata = {
   name: 'data', type: 'struct', isArray: false, validFormKeyTypes: [], enumMembers: [],
+  leafTypeName: 'ConditionData',
   fields: [
     leaf('run_on_type', 'enum', {
       enumMembers: RUN_ON_VALUES.map(value => ({ value, bitValue: null, label: null })),
@@ -73,6 +74,7 @@ const conditionsMeta: FieldMetadata = {
   name: 'conditions', type: 'array', isArray: true, validFormKeyTypes: [], enumMembers: [],
   elementType: {
     name: '', type: 'struct', isArray: false, validFormKeyTypes: [], enumMembers: [],
+    leafTypeName: 'Condition',
     fields: [
       dataMeta,
       leaf('compare_operator', 'enum', {
@@ -130,6 +132,7 @@ const PLUGIN = 'MyMod.esp';
 // conditions and nothing else.
 function compareResult(
   byColumn: Record<string, Condition[]>, resolutions: Record<string, string> = {},
+  meta: FieldMetadata = conditionsMeta,
 ) {
   const columns = Object.keys(byColumn);
   const at = (column: string, index: number, path: string[]): unknown =>
@@ -162,7 +165,7 @@ function compareResult(
     overrides: columns.map((plugin, i) => ({
       formKey: '000001:MyMod.esp', plugin, origin: 'Data',
       loadOrderIndex: i + 1, isWinner: i === 0, editorId: 'TestCobj',
-      fields: [{ metadata: conditionsMeta, value: byColumn[plugin] }], conflictThis: 'Master',
+      fields: [{ metadata: meta, value: byColumn[plugin] }], conflictThis: 'Master',
     })),
     diffs: [{
       fieldName: 'conditions',
@@ -179,8 +182,9 @@ function compareResult(
 }
 
 // The single-column case every rule below but one is stated in.
-const oneColumn = (elements: Condition[], resolutions: Record<string, string> = {}) =>
-  compareResult({ [PLUGIN]: elements }, resolutions);
+const oneColumn = (
+  elements: Condition[], resolutions: Record<string, string> = {}, meta: FieldMetadata = conditionsMeta,
+) => compareResult({ [PLUGIN]: elements }, resolutions, meta);
 
 let currentCompare: unknown = null;
 
@@ -367,6 +371,34 @@ describe('#693 — a collapsed condition reads as xEdit prose', () => {
 
     await waitFor(() => screen.getByText('data'));
     expect(summaryOf(0)).toBe('');
+  });
+});
+
+// #717: the table's key is the leaf's type name — the discriminator's value where the leaf is a
+// union, the schema's declared type name where it is not. The cases above are the other half of
+// this rule: every one of them has an element declaring `Condition`, a type name the table has no
+// entry for, and reads its summary off the `concrete_type` value regardless.
+
+describe('#717 — a leaf with no discriminator is keyed by its declared type name', () => {
+  // Stated with an entry the table already has, so this is a claim about the key alone. The
+  // summary shapes a script entry or a script object read as are #695's.
+  const notAUnion: FieldMetadata = {
+    ...conditionsMeta,
+    elementType: {
+      ...conditionsMeta.elementType!,
+      leafTypeName: 'ConditionFloat',
+      fields: conditionsMeta.elementType!.fields!.filter(f => !f.isDiscriminator),
+    },
+  };
+
+  it('reads its summary, where before it had no key at all', async () => {
+    const noDiscriminator = condition({}, { function: 'IsSneaking' });
+    delete noDiscriminator.concrete_type;
+    currentCompare = oneColumn([noDiscriminator], {}, notAUnion);
+    renderPanel();
+    await expandConditions();
+
+    expect(summaryOf(0)).toBe('Subject.IsSneaking = 1.000000');
   });
 });
 

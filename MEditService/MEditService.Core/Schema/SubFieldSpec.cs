@@ -39,7 +39,9 @@ internal sealed record SubFieldSpec(
     // SubFieldReflection.ProjectSubField, for the enum leaf the table names.
     IReadOnlyDictionary<string, IReadOnlyList<string>>? SiblingsInUse = null,
     // See FieldMetadata.KeyMembers. Set from the game's annotation table by ListLeaves.
-    IReadOnlyList<string>? KeyMembers = null)
+    IReadOnlyList<string>? KeyMembers = null,
+    // See FieldMetadata.LeafTypeName. Set by every producer of an ApiType of "struct".
+    string? LeafTypeName = null)
 {
     // Mirrors ColumnSpec.IsArray's own derivation (ColumnReflection.ReflectColumns: `info.ApiType ==
     // "array"`) rather than adding a redundant constructor flag that could disagree with ApiType.
@@ -51,5 +53,6 @@ internal sealed record SubFieldSpec(
             DisplayLabel: DisplayLabel,
             IsDiscriminator: IsDiscriminator,
             SiblingsInUse: SiblingsInUse,
-            KeyMembers: KeyMembers);
+            KeyMembers: KeyMembers,
+            LeafTypeName: LeafTypeName);
 }

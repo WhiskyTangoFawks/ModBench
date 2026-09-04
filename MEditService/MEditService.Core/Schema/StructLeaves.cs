@@ -40,6 +40,7 @@ internal static class StructLeaves
                     "nested struct with no usable write door: no resolvable Loqui setter class, or an " +
                     "excluded union whose discriminator can never appear in a payload"),
             SubFields: sub,
+            LeafTypeName: ReflectedTypes.StructTypeName(core),
             // #642: a payload that names an unwritable sub-field must refuse the whole write rather
             // than silently drop it while the caller reports success (SubFieldSpec's own doc comment
             // has the full "a read-only leaf is not one thing" reasoning).
@@ -156,6 +157,6 @@ internal static class StructLeaves
         }
 
         return new("VARCHAR", Extractor, "struct", LeafSpec.NoFormKeyTypes, LeafSpec.NoEnumMembers, apply,
-            SubFieldMetas: subFieldMetas);
+            SubFieldMetas: subFieldMetas, LeafTypeName: ReflectedTypes.StructTypeName(core));
     }
 }

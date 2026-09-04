@@ -96,7 +96,8 @@ internal static class SubFieldReflection
             return sub.Count == 0
                 ? null
                 : new FieldMetadata("", "struct", false, LeafSpec.NoFormKeyTypes, LeafSpec.NoEnumMembers,
-                Fields: [.. sub.Select(s => s.ToFieldMetadata())]);
+                Fields: [.. sub.Select(s => s.ToFieldMetadata())],
+                LeafTypeName: ReflectedTypes.StructTypeName(core));
         }
 
         // A list of vector-struct elements (e.g. IslandData.Vertices, a list of P3Float,
@@ -112,7 +113,8 @@ internal static class SubFieldReflection
             return sub.Count == 0
                 ? null
                 : new FieldMetadata("", "struct", false, LeafSpec.NoFormKeyTypes, LeafSpec.NoEnumMembers,
-                Fields: [.. sub.Select(s => s.ToFieldMetadata())]);
+                Fields: [.. sub.Select(s => s.ToFieldMetadata())],
+                LeafTypeName: ReflectedTypes.StructTypeName(core));
         }
 
         return core switch

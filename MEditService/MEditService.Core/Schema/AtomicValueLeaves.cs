@@ -123,7 +123,8 @@ internal static class AtomicValueLeaves
         return new(colName, "struct", LeafSpec.NoFormKeyTypes, LeafSpec.NoEnumMembers,
             obj => { var v = g(obj); return v == null ? null : SubFieldValues.ExtractSubObject(v, components); },
             Apply: LeafWrite.Writable<object>((obj, val) => ApplyAtomicValueJson(obj, val, pName, components)),
-            SubFields: components);
+            SubFields: components,
+            LeafTypeName: ReflectedTypes.StructTypeName(core));
     }
 
     internal static ColumnInfoResult BuildAtomicValueColumn(PropertyInfo prop, Type core, GameReflection game, ILogger logger)
@@ -134,6 +135,7 @@ internal static class AtomicValueLeaves
             r => ReflectedTypes.ReadOrNull(r, prop) is { } v ? JsonSerializer.Serialize(SubFieldValues.ExtractSubObject(v, components)) : null,
             "struct", LeafSpec.NoFormKeyTypes, LeafSpec.NoEnumMembers,
             Apply: LeafWrite.Writable<IMajorRecord>((record, val) => ApplyAtomicValueJson(record, val, pName, components)),
-            SubFieldMetas: components.ConvertAll(c => c.ToFieldMetadata()));
+            SubFieldMetas: components.ConvertAll(c => c.ToFieldMetadata()),
+            LeafTypeName: ReflectedTypes.StructTypeName(core));
     }
 }
