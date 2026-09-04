@@ -258,9 +258,9 @@ public class SchemaReflectorTests
     }
 
     [Fact]
-    public void GetSchemas_Omod_PropertiesColumn_PropertySubField_EnumValuesIsUnionOfSiblingEnums()
+    public void GetSchemas_Omod_PropertiesColumn_PropertySubField_EnumMembersAreUnionOfSiblingEnums()
     {
-        // Design decision: the `property` sub-field's EnumValues become the union of every
+        // Design decision: the `property` sub-field's members become the union of every
         // sibling's own T enum member names — Armor.Property, Npc.Property, Weapon.Property (and
         // AObjectModification.NoneProperty, which has zero members, contributing nothing). Member
         // names below are transcribed directly from the real Mutagen source (Armor.cs, Npc.cs,
@@ -271,11 +271,12 @@ public class SchemaReflectorTests
         var properties = schemas["omod"].RecordColumns.Single(c => c.Name == "properties");
         var propertyField = properties.ElementType!.Fields!.Single(f => f.Name == "property");
 
-        Assert.Contains("BodyPart", propertyField.EnumValues); // Armor.Property-only member
-        Assert.Contains("ForcedInventory", propertyField.EnumValues); // Npc.Property-only member
-        Assert.Contains("AmmoCapacity", propertyField.EnumValues); // Weapon.Property-only member
-        Assert.Contains("Keywords", propertyField.EnumValues); // shared by Armor.Property and Npc.Property — union must not duplicate it
-        Assert.Equal(propertyField.EnumValues.Count, propertyField.EnumValues.Distinct().Count());
+        var values = propertyField.EnumMembers.Select(m => m.Value).ToList();
+        Assert.Contains("BodyPart", values); // Armor.Property-only member
+        Assert.Contains("ForcedInventory", values); // Npc.Property-only member
+        Assert.Contains("AmmoCapacity", values); // Weapon.Property-only member
+        Assert.Contains("Keywords", values); // shared by Armor.Property and Npc.Property — union must not duplicate it
+        Assert.Equal(values.Count, values.Distinct().Count());
     }
 
     // ── OMOD's Properties element must surface the property's actual Value ─────────────────────
@@ -611,15 +612,15 @@ public class SchemaReflectorTests
     }
 
     [Fact]
-    public void GetSchemas_Npc_EnumColumn_MapsToVarcharWithEnumValues()
+    public void GetSchemas_Npc_EnumColumn_MapsToVarcharWithEnumMembers()
     {
         var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
         var col = schemas["npc_"].RecordColumns.FirstOrDefault(c => c.Name == "aggression");
         Assert.NotNull(col);
         Assert.Equal("VARCHAR", col.DuckDbType);
         Assert.Equal("enum", col.ApiType);
-        Assert.NotEmpty(col.EnumValues);
-        Assert.Contains("Unaggressive", col.EnumValues);
+        Assert.NotEmpty(col.EnumMembers);
+        Assert.Contains("Unaggressive", col.EnumMembers.Select(m => m.Value));
     }
 
     [Fact]
@@ -1286,59 +1287,44 @@ public class SchemaReflectorTests
     }
 
     [Fact]
-    public void GetSchemas_Npc_FlagColumn_HasEnumBitValues()
-    {
-        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
-        var col = schemas["npc_"].RecordColumns.FirstOrDefault(c => c.Name == "flags");
-        Assert.NotNull(col);
-        Assert.NotNull(col!.EnumBitValues);
-        Assert.Equal(col.EnumValues.Count, col.EnumBitValues!.Count);
-        Assert.All(col.EnumBitValues, s =>
-        {
-            long v = long.Parse(s, System.Globalization.CultureInfo.InvariantCulture);
-            Assert.True(v > 0 && (v & (v - 1)) == 0);
-        });
-    }
-
-    [Fact]
-    public void GetSchemas_Npc_EnumColumn_EnumBitValuesIsNull()
+    public void GetSchemas_Npc_EnumColumn_MembersCarryNoBit()
     {
         var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
         var col = schemas["npc_"].RecordColumns.FirstOrDefault(c => c.Name == "aggression");
         Assert.NotNull(col);
-        Assert.Null(col!.EnumBitValues);
+        Assert.All(col!.EnumMembers, m => Assert.Null(m.BitValue));
     }
 
     [Fact]
-    public void GetSchemas_FlagColumn_EnumBitValues_ContainsOnlyPowerOfTwo()
+    public void GetSchemas_FlagColumn_EveryMemberCarriesAnAtomicBit()
     {
-        // GetEnumMeta must filter out None=0 and composite values — only atomic power-of-two
+        // GetEnumMembers must filter out None=0 and composite values — only atomic power-of-two
         // bits should appear. The Npc.Flag enum has only clean power-of-two values, so this
         // test guards against regressions that re-introduce 0 or composite entries.
         var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
         var col = schemas["npc_"].RecordColumns.FirstOrDefault(c => c.Name == "flags");
         Assert.NotNull(col);
-        Assert.NotNull(col!.EnumBitValues);
-        Assert.DoesNotContain("0", col.EnumBitValues!);
-        Assert.All(col.EnumBitValues, s =>
+        Assert.NotEmpty(col!.EnumMembers);
+        Assert.All(col.EnumMembers, m =>
         {
-            long v = long.Parse(s, System.Globalization.CultureInfo.InvariantCulture);
-            Assert.True(v > 0 && (v & (v - 1)) == 0, $"Expected a power-of-two bit value, got {s}");
+            Assert.NotNull(m.BitValue);
+            long v = long.Parse(m.BitValue!, System.Globalization.CultureInfo.InvariantCulture);
+            Assert.True(v > 0 && (v & (v - 1)) == 0, $"Expected a power-of-two bit value, got {m.BitValue}");
         });
     }
 
     [Fact]
-    public void GetSchemas_Race_FlagColumn_HighBitEnumBitValues_SerializedAsStrings()
+    public void GetSchemas_Race_FlagColumn_HighBitValues_SerializedAsStrings()
     {
         // Race.Flag is ulong-backed with LowPriorityPushable = 2^53 and
         // CannotUsePlayableItems = 2^54 — both beyond JS Number MAX_SAFE_INTEGER.
-        // EnumBitValues must be string so the frontend can parse them as BigInt.
+        // A member's BitValue must be string so the frontend can parse it as BigInt.
         var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
         var col = schemas["race"].RecordColumns.Single(c => c.Name == "flags");
-        Assert.NotNull(col.EnumBitValues);
-        Assert.Contains("9007199254740992", col.EnumBitValues!);   // LowPriorityPushable = 2^53
-        Assert.Contains("18014398509481984", col.EnumBitValues!);  // CannotUsePlayableItems = 2^54
-        Assert.Contains("1", col.EnumBitValues!);                   // Playable (low-bit sanity check)
+        var bits = col.EnumMembers.Select(m => m.BitValue).ToList();
+        Assert.Contains("9007199254740992", bits);   // LowPriorityPushable = 2^53
+        Assert.Contains("18014398509481984", bits);  // CannotUsePlayableItems = 2^54
+        Assert.Contains("1", bits);                   // Playable (low-bit sanity check)
     }
 
     [Fact]
@@ -1370,7 +1356,7 @@ public class SchemaReflectorTests
         var npc = new Mutagen.Bethesda.Fallout4.Npc(
             Mutagen.Bethesda.Plugins.FormKey.Factory("000001:Fallout4.esm"),
             Mutagen.Bethesda.Fallout4.Fallout4Release.Fallout4);
-        var bit = long.Parse(col.EnumBitValues![0], System.Globalization.CultureInfo.InvariantCulture);
+        var bit = long.Parse(col.EnumMembers[0].BitValue!, System.Globalization.CultureInfo.InvariantCulture);
 
         col.Apply.Writer!(npc, System.Text.Json.JsonDocument.Parse(bit.ToString(System.Globalization.CultureInfo.InvariantCulture)).RootElement);
 
@@ -1381,13 +1367,13 @@ public class SchemaReflectorTests
     public void GetSchemas_Misc_CompositeFlagsEnum_IsNotBitmask()
     {
         // MiscItem.MajorFlag has [Flags] but CalcFromComponents=11 and PackInUseOnly=13 —
-        // both non-power-of-two. GetEnumMeta must fall back to plain-enum treatment.
+        // both non-power-of-two. GetEnumMembers must fall back to plain-enum treatment.
         var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
         Assert.True(schemas.ContainsKey("misc"), "misc schema must be present");
         var col = schemas["misc"].RecordColumns.FirstOrDefault(c => c.Name == "major_flags");
         Assert.NotNull(col);
         Assert.False(col!.IsBitmask);
-        Assert.Null(col.EnumBitValues);
+        Assert.All(col.EnumMembers, m => Assert.Null(m.BitValue));
     }
 
     // ── Plugin header as a first-class record ─────────────────────────────────
@@ -1422,11 +1408,19 @@ public class SchemaReflectorTests
         Assert.Equal("BIGINT", col!.DuckDbType);
         Assert.Equal("enum", col.ApiType);
         Assert.True(col.IsBitmask);
-        Assert.Contains("ESM", col.EnumValues);
-        Assert.DoesNotContain("Master", col.EnumValues);
-        Assert.Contains("ESL", col.EnumValues);
-        Assert.DoesNotContain("Small", col.EnumValues);
-        Assert.Contains("Localized", col.EnumValues);
+        var values = col.EnumMembers.Select(m => m.Value).ToList();
+        Assert.Contains("ESM", values);
+        Assert.DoesNotContain("Master", values);
+        Assert.Contains("ESL", values);
+        Assert.DoesNotContain("Small", values);
+        Assert.Contains("Localized", values);
+
+        // Renaming for display must leave each member holding its own bit.
+        Assert.Equal("1", col.EnumMembers.Single(m => m.Value == "ESM").BitValue);
+        Assert.Equal(
+            ((long)Mutagen.Bethesda.Fallout4.Fallout4ModHeader.HeaderFlag.Small).ToString(
+                System.Globalization.CultureInfo.InvariantCulture),
+            col.EnumMembers.Single(m => m.Value == "ESL").BitValue);
     }
 
     [Theory]
@@ -1444,25 +1438,6 @@ public class SchemaReflectorTests
         // proving the mapping is keyed by name, not by bit position, and includes a non-Fallout
         // member name ("LightMaster").
         Assert.Equal(expected, SchemaReflector.MapToXEditFlagName(mutagenName));
-    }
-
-    [Fact]
-    public void GetSchemas_Header_FlagsColumn_EnumValuesStayPositionallyAlignedWithBitValues()
-    {
-        // Renaming for xEdit display must not disturb the parallel EnumValues/EnumBitValues
-        // arrays that consumers index in lockstep.
-        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
-        var col = schemas["header"].RecordColumns.FirstOrDefault(c => c.Name == "flags");
-        Assert.NotNull(col);
-        Assert.NotNull(col!.EnumBitValues);
-        Assert.Equal(col.EnumValues.Count, col.EnumBitValues!.Count);
-
-        var esmIndex = col.EnumValues.ToList().IndexOf("ESM");
-        Assert.Equal("1", col.EnumBitValues[esmIndex]);
-
-        var eslIndex = col.EnumValues.ToList().IndexOf("ESL");
-        Assert.Equal(((long)Mutagen.Bethesda.Fallout4.Fallout4ModHeader.HeaderFlag.Small).ToString(
-            System.Globalization.CultureInfo.InvariantCulture), col.EnumBitValues[eslIndex]);
     }
 
     [Fact]

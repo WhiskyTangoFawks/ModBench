@@ -243,7 +243,7 @@ public sealed class AbstractUnionEditTests : IDisposable
     /// #710: the <c>array_add</c> envelope (<c>ArrayOpWriter</c>) against an abstract-union array.
     /// The base is abstract, so an empty object names no class that could be constructed — the
     /// default element carries the union's discriminator, and nothing else, and starts as the first
-    /// leaf the schema lists (<c>concrete_type</c>'s own <c>EnumValues[0]</c>, the default any
+    /// leaf the schema lists (<c>concrete_type</c>'s own <c>EnumMembers[0]</c>, the default any
     /// closed choice takes here). Every other member is left absent so the freshly-constructed
     /// instance's own defaults stand.
     ///

@@ -11,9 +11,8 @@ const flagMeta: FieldMetadata = {
   type: 'enum',
   isArray: false,
   validFormKeyTypes: [],
-  enumValues: ['A', 'B', 'C', 'D'],
-  enumBitValues: ['1', '2', '4', '8'],
-  isBitmask: true,
+  enumMembers: [{ value: 'A', bitValue: '1' }, { value: 'B', bitValue: '2' },
+    { value: 'C', bitValue: '4' }, { value: 'D', bitValue: '8' }],
 };
 
 const sparseFlags: FieldMetadata = {
@@ -21,9 +20,8 @@ const sparseFlags: FieldMetadata = {
   type: 'enum',
   isArray: false,
   validFormKeyTypes: [],
-  enumValues: ['X', 'Z'],
-  enumBitValues: ['1', '4'],   // non-sequential: Z is bit 4, not bit 1
-  isBitmask: true,
+  // non-sequential: Z is bit 4, not bit 1
+  enumMembers: [{ value: 'X', bitValue: '1' }, { value: 'Z', bitValue: '4' }],
 };
 
 // Maintainer ruling 2026-09-01 (deliberate ADR-0034 divergence, recorded there): the
@@ -42,7 +40,7 @@ describe('FlagCell — always-visible checkbox list', () => {
 
   it('labels every checkbox with its flag name', () => {
     render(<FlagCell value={0} meta={flagMeta} editable onCommit={vi.fn()} />);
-    for (const name of flagMeta.enumValues) expect(screen.getByText(name)).toBeInTheDocument();
+    for (const m of flagMeta.enumMembers) expect(screen.getByText(m.value)).toBeInTheDocument();
   });
 
   it('zero renders the full list all-unchecked, not a placeholder', () => {
@@ -115,9 +113,9 @@ describe('FlagCell — editing', () => {
   });
 });
 
-describe('FlagCell — missing enumBitValues guard (V4)', () => {
-  it('renders nothing when isBitmask but enumBitValues is absent', () => {
-    const meta = { ...flagMeta, enumBitValues: undefined };
+describe('FlagCell — bitless member guard (V4)', () => {
+  it('renders nothing when a member carries no bit', () => {
+    const meta = { ...flagMeta, enumMembers: flagMeta.enumMembers.map(({ value }) => ({ value })) };
     const { container } = render(<FlagCell value={3} meta={meta} editable onCommit={vi.fn()} />);
     expect(container).toBeEmptyDOMElement();
   });
@@ -126,8 +124,8 @@ describe('FlagCell — missing enumBitValues guard (V4)', () => {
 describe('FlagCell — high-bit flags (BigInt arithmetic)', () => {
   const highMeta: FieldMetadata = {
     ...flagMeta,
-    enumValues: ['Low', 'LowPriorityPushable'],
-    enumBitValues: ['1', String(2 ** 53)],
+    enumMembers: [{ value: 'Low', bitValue: '1' },
+      { value: 'LowPriorityPushable', bitValue: String(2 ** 53) }],
   };
 
   it('checkbox for LowPriorityPushable is checked when value is 2^53', () => {
@@ -144,8 +142,7 @@ describe('FlagCell — high-bit flags (BigInt arithmetic)', () => {
 
   const bit32Meta: FieldMetadata = {
     ...flagMeta,
-    enumValues: ['Low', 'Bit32'],
-    enumBitValues: ['1', String(2 ** 32)],
+    enumMembers: [{ value: 'Low', bitValue: '1' }, { value: 'Bit32', bitValue: String(2 ** 32) }],
   };
 
   it('bit-32 checkbox is checked when value equals 2^32', () => {
@@ -164,8 +161,7 @@ describe('FlagCell — high-bit flags (BigInt arithmetic)', () => {
 describe('FlagCell — string value contract (TD-008)', () => {
   const highMeta: FieldMetadata = {
     ...flagMeta,
-    enumValues: ['Low', 'High'],
-    enumBitValues: ['1', String(2 ** 53)],
+    enumMembers: [{ value: 'Low', bitValue: '1' }, { value: 'High', bitValue: String(2 ** 53) }],
   };
 
   it('parses a decimal string above 2^53 without losing the low bit', () => {
@@ -201,7 +197,7 @@ describe('FlagCell — sparse bit positions (F1)', () => {
     expect(boxes[1]).toBeChecked();
   });
 
-  it('onCommit uses enumBitValues[i] not 1<<i when toggling Z', () => {
+  it("onCommit uses the member's own bit, not 1<<i, when toggling Z", () => {
     const onCommit = vi.fn();
     render(<FlagCell value={5} meta={sparseFlags} editable onCommit={onCommit} />);
     fireEvent.click(screen.getAllByRole('checkbox')[1]);

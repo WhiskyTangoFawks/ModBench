@@ -130,7 +130,7 @@ export function ScalarCell({
     );
   }
 
-  if (meta.type === 'enum' && meta.enumValues.length > 0) {
+  if (meta.type === 'enum' && meta.enumMembers.length > 0) {
     return (
       <select
         aria-label={ariaLabel}
@@ -140,8 +140,8 @@ export function ScalarCell({
         onBlur={() => { commitIfChanged(draft); setActive(false); }}
         style={inputBase}
       >
-        {meta.enumValues.map(ev =>
-          <option key={ev} value={ev}>{displayValue(ev, meta)}</option>)}
+        {meta.enumMembers.map(m =>
+          <option key={m.value} value={m.value}>{displayValue(m.value, meta)}</option>)}
       </select>
     );
   }

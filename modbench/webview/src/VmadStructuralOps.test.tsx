@@ -20,7 +20,7 @@ import { WEBVIEW_TO_EXTENSION, EXTENSION_TO_WEBVIEW } from './messages';
 // — writing through the exact same EDIT_FIELD write path every other gesture uses, with no
 // webview-side computation of a next value the way an array op needs.
 
-const strMeta: FieldMetadata = { name: 'Name', type: 'string', isArray: false, validFormKeyTypes: [], enumValues: [] };
+const strMeta: FieldMetadata = { name: 'Name', type: 'string', isArray: false, validFormKeyTypes: [], enumMembers: [] };
 
 const vmadEditableCompareResult = {
   conflictAll: 'OnlyOne',

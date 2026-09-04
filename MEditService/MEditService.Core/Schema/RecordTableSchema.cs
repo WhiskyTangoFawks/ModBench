@@ -152,7 +152,7 @@ public sealed record ColumnSpec(
     Func<IMajorRecordGetter, object?> Extract,
     string ApiType,
     IReadOnlyList<string> ValidFormKeyTypes,
-    IReadOnlyList<string> EnumValues,
+    IReadOnlyList<EnumMember> EnumMembers,
     /// <summary>
     /// Writes this column's whole value onto a record, or <c>null</c> when the column is read-only.
     ///
@@ -169,8 +169,6 @@ public sealed record ColumnSpec(
     FieldMetadata? ElementType = null,
     IReadOnlyList<FieldMetadata>? SubFields = null,
     bool AllowsNull = false,
-    bool IsBitmask = false,
-    IReadOnlyList<string>? EnumBitValues = null,
 
     // ── View-generation facts ─────────────────────────────────────────────────
     // Three things the generated json_extract views (ADR-0041) need to know that nothing else
@@ -212,9 +210,13 @@ public sealed record ColumnSpec(
     /// </summary>
     public bool IsViewable => !IsArray && SubFields == null && !IsWidened;
 
+    /// <summary>See <see cref="FieldMetadata.IsBitmask"/> — the same question off the same members,
+    /// so a column and the metadata it projects into cannot answer differently.</summary>
+    public bool IsBitmask => EnumMember.IsBitmask(EnumMembers);
+
     public FieldMetadata ToFieldMetadata() =>
-        new(Name, ApiType, IsArray, ValidFormKeyTypes, EnumValues, ElementType, SubFields,
-            AllowsNull: AllowsNull, IsBitmask: IsBitmask, EnumBitValues: EnumBitValues);
+        new(Name, ApiType, IsArray, ValidFormKeyTypes, EnumMembers, ElementType, SubFields,
+            AllowsNull: AllowsNull);
 }
 
 public sealed class RecordTableSchema

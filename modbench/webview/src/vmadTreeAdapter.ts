@@ -29,13 +29,13 @@ import { sparseArrayByPlugin, aggregateConflictAll } from './recordUtils';
 type ScalarKind = 'bool' | 'int' | 'float' | 'string';
 
 function scalarMeta(kind: ScalarKind): FieldMetadata {
-  return { name: '', type: kind, isArray: false, validFormKeyTypes: [], enumValues: [] };
+  return { name: '', type: kind, isArray: false, validFormKeyTypes: [], enumMembers: [] };
 }
 
 // The synthesized leaf type for VMAD's (FormKey, alias) object property — the
 // composite cell that reads/commits it (VmadObjectEditor) composes the shared FormKeyCell plus
 // an alias input.
-const OBJECT_META: FieldMetadata = { name: '', type: 'vmadObject', isArray: false, validFormKeyTypes: [], enumValues: [] };
+const OBJECT_META: FieldMetadata = { name: '', type: 'vmadObject', isArray: false, validFormKeyTypes: [], enumMembers: [] };
 
 function scalarKindOf(p: VmadPropertyDiff): ScalarKind {
   return opScalarKind(p.types[p.winnerColumn] ?? '') ?? 'string';
@@ -84,7 +84,7 @@ function buildVariable(p: VmadPropertyDiff): Built {
       fieldName: p.name, values, winnerColumn: p.winnerColumn,
       winnerValue: values[p.winnerColumn] ?? null, cellStates: p.cellStates,
       conflictAll: aggregateConflictAll(p.cellStates) },
-    meta: { name: '', type: 'string', isArray: false, validFormKeyTypes: [], enumValues: [], readOnly: true } };
+    meta: { name: '', type: 'string', isArray: false, validFormKeyTypes: [], enumMembers: [], readOnly: true } };
 }
 
 // ── array (ArrayOf Bool/Int/Float/String/Object — scalar/object elements only; ArrayOfStruct is
@@ -115,7 +115,7 @@ function buildArray(p: VmadPropertyDiff): Built {
       cellStates: p.cellStates,
       conflictAll: aggregateConflictAll(p.cellStates, arrayChildren),
       children: arrayChildren },
-    meta: { name: '', type: 'array', isArray: true, validFormKeyTypes: [], enumValues: [], elementType } };
+    meta: { name: '', type: 'array', isArray: true, validFormKeyTypes: [], enumMembers: [], elementType } };
 }
 
 // ── struct / structList — the raw-node exception ────────────────────────────────────────────────
@@ -150,7 +150,7 @@ function buildStruct(p: VmadPropertyDiff): Built {
       cellStates: p.cellStates,
       conflictAll: aggregateConflictAll(p.cellStates, memberDiffs),
       children: memberDiffs },
-    meta: { name: '', type: 'struct', isArray: false, validFormKeyTypes: [], enumValues: [], fields: members.map(m => m.meta) } };
+    meta: { name: '', type: 'struct', isArray: false, validFormKeyTypes: [], enumMembers: [], fields: members.map(m => m.meta) } };
 }
 
 function buildStructList(p: VmadPropertyDiff): Built {
@@ -168,8 +168,8 @@ function buildStructList(p: VmadPropertyDiff): Built {
       conflictAll: aggregateConflictAll(p.cellStates, instanceChildren),
       children: instanceChildren },
     meta: {
-      name: '', type: 'array', isArray: true, validFormKeyTypes: [], enumValues: [],
-      elementType: instanceBuilds[0]?.meta ?? { name: '', type: 'struct', isArray: false, validFormKeyTypes: [], enumValues: [], fields: [] } } };
+      name: '', type: 'array', isArray: true, validFormKeyTypes: [], enumMembers: [],
+      elementType: instanceBuilds[0]?.meta ?? { name: '', type: 'struct', isArray: false, validFormKeyTypes: [], enumMembers: [], fields: [] } } };
 }
 
 function buildProperty(p: VmadPropertyDiff): Built {
@@ -195,7 +195,7 @@ function buildFlagsChild(s: VmadScriptDiff): FieldDiff {
 }
 
 const FLAGS_META: FieldMetadata = {
-  name: 'Flags', type: 'enum', isArray: false, validFormKeyTypes: [], enumValues: [...SCRIPT_FLAGS], readOnly: true };
+  name: 'Flags', type: 'enum', isArray: false, validFormKeyTypes: [], enumMembers: SCRIPT_FLAGS.map(value => ({ value })), readOnly: true };
 
 // One script → one top-level synthesized FieldDiff (a struct-like container row: `{…}` collapsed,
 // no value of its own — script/property structural ops, including this row's own Add
@@ -226,7 +226,7 @@ function buildScript(s: VmadScriptDiff): { diff: FieldDiff; meta: FieldMetadata;
       cellStates: s.cellStates,
       conflictAll: aggregateConflictAll(s.cellStates, children),
       children },
-    meta: { name: s.name, type: 'struct', isArray: false, validFormKeyTypes: [], enumValues: [], fields },
+    meta: { name: s.name, type: 'struct', isArray: false, validFormKeyTypes: [], enumMembers: [], fields },
     propertyMeta };
 }
 
@@ -263,7 +263,7 @@ export function buildVmadRows(vmad: VmadCompare | null | undefined): VmadTreeRow
     conflictAll: aggregateConflictAll({}, scriptDiffs),
     children: scriptDiffs };
   const wrapperMeta: FieldMetadata = {
-    name: WRAPPER_NAME, type: 'struct', isArray: false, validFormKeyTypes: [], enumValues: [],
+    name: WRAPPER_NAME, type: 'struct', isArray: false, validFormKeyTypes: [], enumMembers: [],
     fields: scriptBuilds.map(b => b.meta) };
   const metaMap: Record<string, FieldMetadata> = { [WRAPPER_NAME]: wrapperMeta };
   for (const b of scriptBuilds) Object.assign(metaMap, b.propertyMeta);

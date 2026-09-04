@@ -765,7 +765,7 @@ sibling Use-Global flag this row has no access to; a `{category, …}` tagged un
 second per-plugin metadata branch `DiffRow` would otherwise need. Run On's own target enum is
 likewise a server catalog (`GET /condition-run-on-targets`, `RecordPanelClient
 .conditionRunOnTargets()`), fetched once by `RecordPanel` and threaded through
-`buildConditionRows`/`conditionTreeAdapter.ts` into the field's own `enumValues` — not a hardcoded
+`buildConditionRows`/`conditionTreeAdapter.ts` into the field's own `enumMembers` — not a hardcoded
 frontend list, so a future game's differently-shaped `RunOnType` enum (Skyrim/Starfield both differ
 from FO4's) is never silently offered a name it can't parse or write. The AND/OR gate between
 conditions is `FieldMetadata.readOnly` — unconditionally non-editable regardless of the column's
@@ -978,8 +978,8 @@ VMAD/Condition rows included since they render through this exact code now:
    leaf, applies every member the payload also names that the new leaf declares, and leaves the
    rest at the fresh instance's own defaults — the outgoing leaf's own members are dropped, not
    refused. The user is never shown a Mutagen class name: the reflected metadata labels the row
-   (`FieldMetadata.DisplayLabel`, "Kind") and every value (`EnumLabels`, aligned with
-   `EnumValues`), each leaf named by what distinguishes it from its own base —
+   (`FieldMetadata.DisplayLabel`, "Kind") and every value (each `EnumMember`'s own `Label`),
+   each leaf named by what distinguishes it from its own base —
    `QuestReferenceAlias` under `AQuestAlias` is "Reference". That is a pure function of two type
    names, so it needs no per-game table; a leaf that *is* its base (`NpcLevel` under `ANpcLevel`)
    keeps its own name, spaced. xEdit's own per-field presentation of these choices arrives with

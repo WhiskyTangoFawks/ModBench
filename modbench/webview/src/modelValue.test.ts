@@ -8,29 +8,30 @@ import type { FieldMetadata, FormKeyResolution } from './types';
 // test files), so this suite is the independent source of truth for what each type's string
 // looks like, checked independently of the leaf components' own logic.
 
-const strMeta: FieldMetadata = { name: 'Name', type: 'string', isArray: false, validFormKeyTypes: [], enumValues: [] };
-const intMeta: FieldMetadata = { name: 'Level', type: 'int', isArray: false, validFormKeyTypes: [], enumValues: [] };
-const floatMeta: FieldMetadata = { name: 'Weight', type: 'float', isArray: false, validFormKeyTypes: [], enumValues: [] };
-const boolMeta: FieldMetadata = { name: 'Female', type: 'bool', isArray: false, validFormKeyTypes: [], enumValues: [] };
+const strMeta: FieldMetadata = { name: 'Name', type: 'string', isArray: false, validFormKeyTypes: [], enumMembers: [] };
+const intMeta: FieldMetadata = { name: 'Level', type: 'int', isArray: false, validFormKeyTypes: [], enumMembers: [] };
+const floatMeta: FieldMetadata = { name: 'Weight', type: 'float', isArray: false, validFormKeyTypes: [], enumMembers: [] };
+const boolMeta: FieldMetadata = { name: 'Female', type: 'bool', isArray: false, validFormKeyTypes: [], enumMembers: [] };
 const enumMeta: FieldMetadata = {
   name: 'Gender', type: 'enum', isArray: false, validFormKeyTypes: [],
-  enumValues: ['Male', 'Female', 'None'],
+  enumMembers: [{ value: 'Male' }, { value: 'Female' }, { value: 'None' }],
 };
 const flagMeta: FieldMetadata = {
   name: 'Flags', type: 'enum', isArray: false, validFormKeyTypes: [],
-  enumValues: ['A', 'B', 'C', 'D'], enumBitValues: ['1', '2', '4', '8'], isBitmask: true,
+  enumMembers: [{ value: 'A', bitValue: '1' }, { value: 'B', bitValue: '2' },
+    { value: 'C', bitValue: '4' }, { value: 'D', bitValue: '8' }],
 };
-const fkMeta: FieldMetadata = { name: 'Owner', type: 'formKey', isArray: false, validFormKeyTypes: ['NPC_'], enumValues: [] };
+const fkMeta: FieldMetadata = { name: 'Owner', type: 'formKey', isArray: false, validFormKeyTypes: ['NPC_'], enumMembers: [] };
 const structMeta: FieldMetadata = {
-  name: 'Faction', type: 'struct', isArray: false, validFormKeyTypes: [], enumValues: [],
+  name: 'Faction', type: 'struct', isArray: false, validFormKeyTypes: [], enumMembers: [],
   fields: [
-    { name: 'Faction', type: 'formKey', isArray: false, validFormKeyTypes: ['FACT'], enumValues: [] },
-    { name: 'Rank', type: 'int', isArray: false, validFormKeyTypes: [], enumValues: [] },
+    { name: 'Faction', type: 'formKey', isArray: false, validFormKeyTypes: ['FACT'], enumMembers: [] },
+    { name: 'Rank', type: 'int', isArray: false, validFormKeyTypes: [], enumMembers: [] },
   ],
 };
 const arrayMeta: FieldMetadata = {
-  name: 'Factions', type: 'array', isArray: true, validFormKeyTypes: [], enumValues: [],
-  elementType: { name: 'Factions', type: 'int', isArray: false, validFormKeyTypes: [], enumValues: [] },
+  name: 'Factions', type: 'array', isArray: true, validFormKeyTypes: [], enumMembers: [],
+  elementType: { name: 'Factions', type: 'int', isArray: false, validFormKeyTypes: [], enumMembers: [] },
 };
 
 const resolved: FormKeyResolution = { state: 'ResolvedValidType', recordType: 'NPC_', editorId: 'Dogmeat' };
@@ -79,16 +80,30 @@ describe('modelValue — flags', () => {
   it('a decimal-string bitmask above 2^53 resolves with BigInt precision', () => {
     const highBit: FieldMetadata = {
       name: 'RaceFlags', type: 'enum', isArray: false, validFormKeyTypes: [],
-      enumValues: ['Playable', 'LowPriorityPushable'],
-      enumBitValues: ['1', '9007199254740992'],
-      isBitmask: true,
+      enumMembers: [{ value: 'Playable', bitValue: '1' },
+        { value: 'LowPriorityPushable', bitValue: '9007199254740992' }],
     };
     expect(modelValue('9007199254740993', highBit)).toBe('Playable, LowPriorityPushable');
   });
 
-  it('missing enumBitValues falls back to toStr rather than throwing', () => {
-    const broken: FieldMetadata = { name: 'X', type: 'enum', isArray: false, validFormKeyTypes: [], enumValues: ['A'], isBitmask: true };
+  it('a bitless member falls back to toStr rather than throwing', () => {
+    const broken: FieldMetadata = { name: 'X', type: 'enum', isArray: false, validFormKeyTypes: [], enumMembers: [{ value: 'A' }] };
     expect(() => modelValue(3, broken)).not.toThrow();
+  });
+
+  // "every member carries a bit" is vacuously true of no members at all, so an enum with an empty
+  // domain would render as a (permanently empty) flag list where a plain value belongs.
+  it('an enum with no members at all is not a flag list', () => {
+    const empty: FieldMetadata = { name: 'X', type: 'enum', isArray: false, validFormKeyTypes: [], enumMembers: [] };
+    expect(modelValue('Whatever', empty)).toBe('Whatever');
+  });
+
+  it('a partly-bitless member list is not a flag list', () => {
+    const mixed: FieldMetadata = {
+      name: 'X', type: 'enum', isArray: false, validFormKeyTypes: [],
+      enumMembers: [{ value: 'A', bitValue: '1' }, { value: 'B' }],
+    };
+    expect(modelValue('3', mixed)).toBe('3');
   });
 });
 

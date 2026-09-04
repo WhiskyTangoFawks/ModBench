@@ -1,5 +1,5 @@
 import React from 'react';
-import { modelValue, toBigInt } from './modelValue';
+import { flagBits, modelValue, toBigInt } from './modelValue';
 import type { FieldMetadata } from './types';
 
 interface FlagCellProps {
@@ -27,8 +27,8 @@ interface FlagCellProps {
  * (DiskCell's rule), and Ctrl+C still copies modelValue's flag-name string via DiskCell.
  */
 export function FlagCell({ value, meta, editable, onCommit, collapsed }: FlagCellProps) {
-  if (meta.enumValues.length === 0) return null;
-  if (!meta.enumBitValues) return null;
+  const bits = flagBits(meta);
+  if (bits == null) return null;
 
   if (collapsed) {
     // modelValue collapses null and no-bits-set alike to '' — both render the placeholder.
@@ -47,17 +47,16 @@ export function FlagCell({ value, meta, editable, onCommit, collapsed }: FlagCel
   // BigInt arithmetic avoids ToInt32 truncation for flags at bit 32+ and keeps full precision
   // for high bits. onCommit emits a decimal string so the toggled value round-trips losslessly.
   const num = toBigInt(value);
-  const bits = meta.enumBitValues.map(BigInt);
 
   return (
     <span style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-      {meta.enumValues.map((name, i) => (
+      {bits.map(({ value: name, bit }) => (
         <label key={name} style={{ display: 'inline-flex', alignItems: 'center', gap: 2 }}>
           <input
             type="checkbox"
-            checked={(num & bits[i]) !== 0n}
+            checked={(num & bit) !== 0n}
             disabled={!writable}
-            onChange={writable ? () => onCommit(String(num ^ bits[i])) : undefined}
+            onChange={writable ? () => onCommit(String(num ^ bit)) : undefined}
           />
           {name}
         </label>

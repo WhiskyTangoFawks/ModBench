@@ -81,19 +81,20 @@ function lastIndexByPlugin(conditions: ConditionDiff[]): Record<string, number> 
 }
 
 function scalarMeta(type: 'string' | 'int' | 'float' | 'bool'): FieldMetadata {
-  return { name: '', type, isArray: false, validFormKeyTypes: [], enumValues: [] };
+  return { name: '', type, isArray: false, validFormKeyTypes: [], enumMembers: [] };
 }
-// One shape for any leaf whose enumValues carries its options — 'enum' (Operator, a plain
-// hand-listed set) and 'conditionRunOn' (Run On: enumValues is the server's Run On target
+// One shape for any leaf whose members carry its options — 'enum' (Operator, a plain
+// hand-listed set) and 'conditionRunOn' (Run On: the members are the server's Run On target
 // catalog, GET /condition-run-on-targets, threaded in from buildConditionRows rather than a
 // hardcoded FO4 member list) differ only in which widget DiffRow dispatches to, not in shape.
+// These options are bare words the user reads as-is, so no member carries a label or a bit.
 function enumTypedMeta(type: 'enum' | 'conditionRunOn', values: string[]): FieldMetadata {
-  return { name: '', type, isArray: false, validFormKeyTypes: [], enumValues: values };
+  return { name: '', type, isArray: false, validFormKeyTypes: [], enumMembers: values.map(value => ({ value })) };
 }
-const FUNCTION_META: FieldMetadata = { name: '', type: 'conditionFunction', isArray: false, validFormKeyTypes: [], enumValues: [] };
-const COMPARISON_META: FieldMetadata = { name: '', type: 'conditionComparison', isArray: false, validFormKeyTypes: [], enumValues: [] };
-const PARAM_META: FieldMetadata = { name: '', type: 'conditionParam', isArray: false, validFormKeyTypes: [], enumValues: [] };
-const GATE_META: FieldMetadata = { name: '', type: 'string', isArray: false, validFormKeyTypes: [], enumValues: [], readOnly: true };
+const FUNCTION_META: FieldMetadata = { name: '', type: 'conditionFunction', isArray: false, validFormKeyTypes: [], enumMembers: [] };
+const COMPARISON_META: FieldMetadata = { name: '', type: 'conditionComparison', isArray: false, validFormKeyTypes: [], enumMembers: [] };
+const PARAM_META: FieldMetadata = { name: '', type: 'conditionParam', isArray: false, validFormKeyTypes: [], enumMembers: [] };
+const GATE_META: FieldMetadata = { name: '', type: 'string', isArray: false, validFormKeyTypes: [], enumMembers: [], readOnly: true };
 
 // Per-plugin values for one condition field, skipping a plugin this condition is absent from
 // (matching FieldDiff's own "absent field renders as an empty cell" convention).
@@ -191,7 +192,7 @@ function buildCondition(
       children,
       collapsedSummary,
     },
-    meta: { name: '', type: 'struct', isArray: false, validFormKeyTypes: [], enumValues: [], fields },
+    meta: { name: '', type: 'struct', isArray: false, validFormKeyTypes: [], enumMembers: [], fields },
   };
 }
 
@@ -201,7 +202,7 @@ function buildGroup(group: ConditionGroupDiff, runOnTargets: string[]): { diff: 
   const values = sparseArrayByPlugin(group.conditions.map(c => c.perPlugin));
   const winnerColumn = Object.keys(values)[0] ?? '';
   const elementMeta = conditionBuilds[0]?.meta
-    ?? { name: '', type: 'struct', isArray: false, validFormKeyTypes: [], enumValues: [], fields: [] };
+    ?? { name: '', type: 'struct', isArray: false, validFormKeyTypes: [], enumMembers: [], fields: [] };
   const conditionDiffs = conditionBuilds.map(b => b.diff);
   return {
     diff: {
@@ -217,7 +218,7 @@ function buildGroup(group: ConditionGroupDiff, runOnTargets: string[]): { diff: 
       children: conditionDiffs,
     },
     meta: {
-      name: group.fieldPath, type: 'array', isArray: true, validFormKeyTypes: [], enumValues: [],
+      name: group.fieldPath, type: 'array', isArray: true, validFormKeyTypes: [], enumMembers: [],
       // A fresh condition's wire shape is `ParsedCondition`, not a generic
       // per-display-field-name struct default recordUtils.ts's own defaultAdapterElementValue would
       // otherwise build — defaultCondition() (conditionOps.ts) supplies the "sensible defaults,

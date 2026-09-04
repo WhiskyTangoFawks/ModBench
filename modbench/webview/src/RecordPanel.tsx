@@ -116,7 +116,7 @@ export function computeArrayOpClientSide(
   const index = lastSeg?.kind === 'index' ? lastSeg.index : -1;
   let nextArray: unknown[];
   if (op === 'add') {
-    nextArray = appendArrayElement(currentArray, defaultAdapterElementValue(elementMeta ?? { name: '', type: 'string', isArray: false, validFormKeyTypes: [], enumValues: [] }));
+    nextArray = appendArrayElement(currentArray, defaultAdapterElementValue(elementMeta ?? { name: '', type: 'string', isArray: false, validFormKeyTypes: [], enumMembers: [] }));
   } else if (op === 'remove') {
     nextArray = removeArrayElement(currentArray, index);
   } else {

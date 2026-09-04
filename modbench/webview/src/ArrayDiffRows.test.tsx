@@ -22,13 +22,13 @@ const sortedArrayMeta: FieldMetadata = {
   type: 'array',
   isArray: true,
   validFormKeyTypes: [],
-  enumValues: [],
+  enumMembers: [],
   elementType: {
     name: '',
     type: 'formKey',
     isArray: false,
     validFormKeyTypes: [],
-    enumValues: [],
+    enumMembers: [],
     isSortable: true,
   },
 };
@@ -86,10 +86,10 @@ const structMeta: FieldMetadata = {
   type: 'struct',
   isArray: false,
   validFormKeyTypes: [],
-  enumValues: [],
+  enumMembers: [],
   fields: [
-    { name: 'X1', type: 'int', isArray: false, validFormKeyTypes: [], enumValues: [] },
-    { name: 'X2', type: 'int', isArray: false, validFormKeyTypes: [], enumValues: [] },
+    { name: 'X1', type: 'int', isArray: false, validFormKeyTypes: [], enumMembers: [] },
+    { name: 'X2', type: 'int', isArray: false, validFormKeyTypes: [], enumMembers: [] },
   ],
 };
 
@@ -137,23 +137,23 @@ const nestedStructArrayMeta: FieldMetadata = {
   type: 'struct',
   isArray: false,
   validFormKeyTypes: [],
-  enumValues: [],
+  enumMembers: [],
   fields: [
     {
       name: 'Entries',
       type: 'array',
       isArray: true,
       validFormKeyTypes: [],
-      enumValues: [],
+      enumMembers: [],
       elementType: {
         name: '',
         type: 'struct',
         isArray: false,
         validFormKeyTypes: [],
-        enumValues: [],
+        enumMembers: [],
         fields: [
-          { name: 'Id', type: 'string', isArray: false, validFormKeyTypes: [], enumValues: [] },
-          { name: 'Weight', type: 'int', isArray: false, validFormKeyTypes: [], enumValues: [] },
+          { name: 'Id', type: 'string', isArray: false, validFormKeyTypes: [], enumMembers: [] },
+          { name: 'Weight', type: 'int', isArray: false, validFormKeyTypes: [], enumMembers: [] },
         ],
       },
     },
@@ -351,8 +351,8 @@ describe('RecordPanel — a struct member that is itself an array of structs (is
 // array through the exact same write path (EDIT_FIELD) every other gesture uses.
 describe('RecordPanel — array editing (unsorted, #426)', () => {
   const intArrayMeta: FieldMetadata = {
-    name: 'Values', type: 'array', isArray: true, validFormKeyTypes: [], enumValues: [],
-    elementType: { name: '', type: 'int', isArray: false, validFormKeyTypes: [], enumValues: [] },
+    name: 'Values', type: 'array', isArray: true, validFormKeyTypes: [], enumMembers: [],
+    elementType: { name: '', type: 'int', isArray: false, validFormKeyTypes: [], enumMembers: [] },
   };
 
   const intArrayCompareResult = {
@@ -492,8 +492,8 @@ describe('RecordPanel — array editing (unsorted, #426)', () => {
 // extended-editor describe blocks below — same shapes, different triggers — share fixtures
 // without duplication.
 const editableIntArrayMeta: FieldMetadata = {
-  name: 'Values', type: 'array', isArray: true, validFormKeyTypes: [], enumValues: [],
-  elementType: { name: '', type: 'int', isArray: false, validFormKeyTypes: [], enumValues: [] },
+  name: 'Values', type: 'array', isArray: true, validFormKeyTypes: [], enumMembers: [],
+  elementType: { name: '', type: 'int', isArray: false, validFormKeyTypes: [], enumMembers: [] },
 };
 
 const editableIntArrayResult = {
@@ -519,7 +519,7 @@ const editableIntArrayResult = {
 };
 
 const scalarMeta: FieldMetadata = {
-  name: 'Level', type: 'int', isArray: false, validFormKeyTypes: [], enumValues: [],
+  name: 'Level', type: 'int', isArray: false, validFormKeyTypes: [], enumMembers: [],
 };
 
 const scalarResult = {

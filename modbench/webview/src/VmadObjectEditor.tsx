@@ -12,7 +12,7 @@ const OBJ_RE = /^(.+?)\s*\[(-?\d+)\]\s*$/;
 // identical admission for the ADR-0031 resolution signal: "there's no Papyrus-declared expected
 // record type to compare against"). So there is nothing to filter the picker with — empty, not
 // invented.
-const OBJECT_META: FieldMetadata = { name: '', type: 'formKey', isArray: false, validFormKeyTypes: [], enumValues: [] };
+const OBJECT_META: FieldMetadata = { name: '', type: 'formKey', isArray: false, validFormKeyTypes: [], enumMembers: [] };
 
 export interface VmadObjectEditorProps {
   value: unknown;

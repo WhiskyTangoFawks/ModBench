@@ -117,29 +117,60 @@ public record RecordSummary(
 
 public record PagedResult<T>(IReadOnlyList<T> Items, int Total);
 
+/// <summary>
+/// One member of an enum field's closed value set: the wire value, the bit it stands for when the
+/// field is a bitmask, and what to show instead of the value when the value is not a word the user
+/// should read.
+///
+/// <para><c>BitValue</c> is a decimal string rather than a number so a bit above 2^53 survives JSON
+/// without IEEE 754 loss, and is null for a plain (non-bitmask) enum, which stands for no bit.
+/// <c>Label</c> is null for a member that is already the game's own vocabulary — an abstract
+/// union's discriminator sets it, its values being Mutagen class names the user is never
+/// shown.</para>
+/// </summary>
+public record EnumMember(string Value, string? BitValue = null, string? Label = null)
+{
+    /// <summary>Whether these members are a set of flags rather than a closed choice: every one of
+    /// them stands for a bit. The one definition of that question — a field, a column and the
+    /// webview's own <c>flagBits</c> all answer it the same way. An enum with no members at all
+    /// (Fallout 4's <c>NoneProperty</c>) satisfies "every member" vacuously and is not one.</summary>
+    public static bool IsBitmask(IReadOnlyList<EnumMember> members) =>
+        members.Count > 0 && members.All(m => m.BitValue != null);
+}
+
 public record FieldMetadata(
     string Name,
     string Type,
     bool IsArray,
     IReadOnlyList<string> ValidFormKeyTypes,
-    IReadOnlyList<string> EnumValues,
+    // For 'enum': the field's members, in the order the schema lists them. That order is a
+    // contract, not a rendering detail — a discriminator's first member is the leaf a new array
+    // element is built as (ArrayOpWriter).
+    IReadOnlyList<EnumMember> EnumMembers,
     FieldMetadata? ElementType = null,          // for 'array': element schema
     IReadOnlyList<FieldMetadata>? Fields = null, // for 'struct': sub-field schemas
     bool IsSortable = false,                     // true when element is a pure FormLink
     bool AllowsNull = false,                     // for 'formKey': true when the Mutagen type is IFormLinkNullable<T>
-    bool IsBitmask = false,                      // for 'enum': true when the C# enum has [Flags]
-    IReadOnlyList<string>? EnumBitValues = null, // for 'enum' + IsBitmask: decimal string bit values aligned with EnumValues
 
-    // Both null for an ordinary field, whose row label is its own name and whose enum members are
-    // already the game's own vocabulary; set by the abstract-union discriminator, whose values are
-    // Mutagen class names the user is never shown.
-    IReadOnlyList<string>? EnumLabels = null, // aligned with EnumValues: what to display per value
+    // Null for an ordinary field, whose row label is its own name; set by the abstract-union
+    // discriminator, whose name is a wire name.
     string? DisplayLabel = null,             // what to title the row, when Name is a wire name
 
     // This field names which concrete class its object is, read off the payload before that object
     // exists (SchemaReflector.ResolveListElementType). True for concrete_type and OMOD's
     // value_type, false for every other field.
-    bool IsDiscriminator = false);
+    bool IsDiscriminator = false)
+{
+    /// <summary>Whether this field renders as a set of independent flags rather than one choice.
+    /// Derived, not stored — a member's own <c>BitValue</c> is the only place that fact lives, so
+    /// nothing can claim to be a bitmask over members that name no bit.
+    ///
+    /// <para>Off the wire for the same reason: the members are already there, and the webview asks
+    /// them the same question (<c>flagBits</c>, modelValue.ts). Shipping the answer too would put a
+    /// second copy of it on every field of every record.</para></summary>
+    [JsonIgnore]
+    public bool IsBitmask => EnumMember.IsBitmask(EnumMembers);
+}
 
 // Value contract: a bitmask field (Metadata.IsBitmask) carries its combined flags as a decimal
 // string, not a number — so values above 2^53 survive JSON round-tripping without IEEE 754 loss.

@@ -24,8 +24,8 @@ import type { CompareOverride, FieldDiff, FieldMetadata, FormKeyResolution } fro
 import { columnKey } from './types';
 import { DIMMED_OPACITY } from './gridStyles';
 
-const strMeta: FieldMetadata = { name: 'Name', type: 'string', isArray: false, validFormKeyTypes: [], enumValues: [] };
-const intMeta: FieldMetadata = { name: 'Level', type: 'int', isArray: false, validFormKeyTypes: [], enumValues: [] };
+const strMeta: FieldMetadata = { name: 'Name', type: 'string', isArray: false, validFormKeyTypes: [], enumMembers: [] };
+const intMeta: FieldMetadata = { name: 'Level', type: 'int', isArray: false, validFormKeyTypes: [], enumMembers: [] };
 
 function override(plugin: string, partial: Partial<CompareOverride> = {}): CompareOverride {
   return {
@@ -270,7 +270,7 @@ describe('DiffRow — non-top-level contexts', () => {
 // `overrideMap`) — a dangling sibling in the same struct/array must not hide
 // a live link on the leaf next to it.
 describe('DiffRow — FormKey leaf resolution is independent of the parent field aggregate', () => {
-  const fkMeta: FieldMetadata = { name: '', type: 'formKey', isArray: false, validFormKeyTypes: [], enumValues: [] };
+  const fkMeta: FieldMetadata = { name: '', type: 'formKey', isArray: false, validFormKeyTypes: [], enumMembers: [] };
   const validType: FormKeyResolution = { state: 'ResolvedValidType', recordType: 'kywd', editorId: 'SomeKeyword' };
   const wrongType: FormKeyResolution = { state: 'ResolvedWrongType', recordType: 'npc_', editorId: 'SomeNpc' };
   const unresolved: FormKeyResolution = { state: 'Unresolved', recordType: null, editorId: null };
@@ -286,7 +286,7 @@ describe('DiffRow — FormKey leaf resolution is independent of the parent field
     const parentFieldName = kind === 'array-element' ? 'Keywords' : 'LinkedRef';
     const parentType = kind === 'array-element' ? 'array' : 'struct';
     const master = override('Fallout4.esm', {
-      fields: [{ metadata: { name: parentFieldName, type: parentType, isArray: kind === 'array-element', validFormKeyTypes: [], enumValues: [] }, value: kind === 'array-element' ? [] : {}, checkError: 'aggregate: one sibling is dangling' }],
+      fields: [{ metadata: { name: parentFieldName, type: parentType, isArray: kind === 'array-element', validFormKeyTypes: [], enumMembers: [] }, value: kind === 'array-element' ? [] : {}, checkError: 'aggregate: one sibling is dangling' }],
     });
     const path: PathSegment[] = kind === 'array-element'
       ? [{ kind: 'index', index: 1 }]
@@ -356,7 +356,7 @@ describe('DiffRow — FormKey leaf resolution is independent of the parent field
 describe('DiffRow — flags cell wiring (#426)', () => {
   const flagMeta: FieldMetadata = {
     name: 'Flags', type: 'enum', isArray: false, validFormKeyTypes: [],
-    enumValues: ['A', 'B'], enumBitValues: ['1', '2'], isBitmask: true,
+    enumMembers: [{ value: 'A', bitValue: '1' }, { value: 'B', bitValue: '2' }],
   };
 
   function flagsRow(overrides: Partial<React.ComponentProps<typeof DiffRow>> = {}) {
@@ -419,7 +419,7 @@ describe('DiffRow — flags cell wiring (#426)', () => {
 
 // The formKey branch gets the same editable/onCommit wiring, plus its own picker bridge.
 describe('DiffRow — formKey cell wiring (#426)', () => {
-  const fkMeta: FieldMetadata = { name: 'Race', type: 'formKey', isArray: false, validFormKeyTypes: ['race'], enumValues: [] };
+  const fkMeta: FieldMetadata = { name: 'Race', type: 'formKey', isArray: false, validFormKeyTypes: ['race'], enumMembers: [] };
 
   function fkRow(overrides: Partial<React.ComponentProps<typeof DiffRow>> = {}) {
     return renderRow({
@@ -542,10 +542,10 @@ describe('DiffRow — array parent/element right-click context (#535)', () => {
   }
 
   const intArrayMeta: FieldMetadata = {
-    name: 'Items', type: 'array', isArray: true, validFormKeyTypes: [], enumValues: [],
-    elementType: { name: '', type: 'int', isArray: false, validFormKeyTypes: [], enumValues: [] },
+    name: 'Items', type: 'array', isArray: true, validFormKeyTypes: [], enumMembers: [],
+    elementType: { name: '', type: 'int', isArray: false, validFormKeyTypes: [], enumMembers: [] },
   };
-  const intMetaLeaf: FieldMetadata = { name: '', type: 'int', isArray: false, validFormKeyTypes: [], enumValues: [] };
+  const intMetaLeaf: FieldMetadata = { name: '', type: 'int', isArray: false, validFormKeyTypes: [], enumMembers: [] };
 
   function arrayDiff(partial: Partial<FieldDiff> = {}): FieldDiff {
     return {
@@ -654,12 +654,12 @@ describe('DiffRow — label indentation', () => {
 // declare, an absent struct — has nothing to collapse, so its cell stays empty.
 describe('DiffRow — a collapsed container row, per column', () => {
   const structMeta: FieldMetadata = {
-    name: 'Location', type: 'struct', isArray: false, validFormKeyTypes: [], enumValues: [],
-    fields: [{ name: 'aliasId', type: 'int', isArray: false, validFormKeyTypes: [], enumValues: [] }],
+    name: 'Location', type: 'struct', isArray: false, validFormKeyTypes: [], enumMembers: [],
+    fields: [{ name: 'aliasId', type: 'int', isArray: false, validFormKeyTypes: [], enumMembers: [] }],
   };
   const arrayMeta: FieldMetadata = {
-    name: 'Items', type: 'array', isArray: true, validFormKeyTypes: [], enumValues: [],
-    elementType: { name: '', type: 'int', isArray: false, validFormKeyTypes: [], enumValues: [] },
+    name: 'Items', type: 'array', isArray: true, validFormKeyTypes: [], enumMembers: [],
+    elementType: { name: '', type: 'int', isArray: false, validFormKeyTypes: [], enumMembers: [] },
   };
 
   function renderContainer(values: Record<string, unknown>, meta: FieldMetadata = structMeta) {
@@ -713,8 +713,8 @@ describe('DiffRow — a collapsed container row, per column', () => {
 describe('DiffRow — an enum whose values are wire tokens', () => {
   const kindMeta: FieldMetadata = {
     name: 'concrete_type', type: 'enum', isArray: false, validFormKeyTypes: [],
-    enumValues: ['QuestReferenceAlias', 'QuestLocationAlias'],
-    enumLabels: ['Reference', 'Location'],
+    enumMembers: [{ value: 'QuestReferenceAlias', label: 'Reference' },
+      { value: 'QuestLocationAlias', label: 'Location' }],
     displayLabel: 'Kind',
   };
   const kindDiff = diff({

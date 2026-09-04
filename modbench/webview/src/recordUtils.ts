@@ -410,7 +410,7 @@ export function defaultAdapterElementValue(meta: FieldMetadata): unknown {
     // An adapter element that carries a discriminator (a script property's, once #694 renders one)
     // starts at the same first leaf ArrayOpWriter picks for a reflected element — one rule, stated
     // in docs/specs/medit-record-editor.md, and this arm is where the adapter path obeys it.
-    case 'enum': return meta.enumValues[0] ?? '';
+    case 'enum': return meta.enumMembers[0]?.value ?? '';
     case 'struct': return Object.fromEntries((meta.fields ?? []).map(f => [f.name, defaultAdapterElementValue(f)]));
     case 'array': return [];
     // A VMAD ArrayOfObject's default element.

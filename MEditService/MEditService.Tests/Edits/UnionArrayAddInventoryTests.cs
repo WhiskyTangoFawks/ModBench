@@ -59,7 +59,7 @@ public class UnionArrayAddInventoryTests
         // The one member the default names, and the leaf it names.
         var discriminator = col.ElementType!.Fields!.Single(f => f.IsDiscriminator);
         Assert.Equal(
-            discriminator.EnumValues[0],
+            discriminator.EnumMembers[0].Value,
             written[0].GetProperty(discriminator.Name).GetString());
     }
 

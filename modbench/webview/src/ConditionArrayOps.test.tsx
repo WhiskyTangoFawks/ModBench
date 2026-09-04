@@ -150,14 +150,14 @@ describe('computeArrayOpClientSide — backs the surviving Condition and VMAD Ar
   });
 
   it('add: appends a default element built from the given element meta', () => {
-    const intMeta: FieldMetadata = { name: '', type: 'int', isArray: false, validFormKeyTypes: [], enumValues: [] };
+    const intMeta: FieldMetadata = { name: '', type: 'int', isArray: false, validFormKeyTypes: [], enumMembers: [] };
     const next = computeArrayOpClientSide(rootValue, [], 'add', intMeta);
     expect(next).toEqual([1, 2, 3, 0]);
   });
 
   // The VMAD ArrayOfObject-specific case: `defaultAdapterElementValue`'s own 'vmadObject' arm.
   it("add: builds a VMAD ArrayOfObject property's own default element ({formKey: '', alias: -1})", () => {
-    const vmadObjectMeta: FieldMetadata = { name: '', type: 'vmadObject', isArray: false, validFormKeyTypes: [], enumValues: [] };
+    const vmadObjectMeta: FieldMetadata = { name: '', type: 'vmadObject', isArray: false, validFormKeyTypes: [], enumMembers: [] };
     const next = computeArrayOpClientSide([], [], 'add', vmadObjectMeta);
     expect(next).toEqual([{ formKey: '', alias: -1 }]);
   });
