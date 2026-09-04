@@ -239,6 +239,37 @@ public sealed class AbstractUnionEditTests : IDisposable
         }
     }
 
+    /// <summary>
+    /// #710: the <c>array_add</c> envelope (<c>ArrayOpWriter</c>) against an abstract-union array.
+    /// The base is abstract, so an empty object names no class that could be constructed — the
+    /// default element carries the union's discriminator, and nothing else, and starts as the first
+    /// leaf the schema lists (<c>concrete_type</c>'s own <c>EnumValues[0]</c>, the default any
+    /// closed choice takes here). Every other member is left absent so the freshly-constructed
+    /// instance's own defaults stand.
+    ///
+    /// <para>The envelope is spelled here exactly as the rendered panel posts it — the same literal
+    /// <c>modbench/webview/src/UnionArrayAdd.test.tsx</c> asserts for the same gesture, which is the
+    /// joint between the two harnesses.</para>
+    /// </summary>
+    [Fact]
+    public void Aliases_ArrayAdd_AppendsOneElementOfTheUnionsFirstLeaf()
+    {
+        var result = _fixture.Service().EditField(
+            _fixture.Plugin, _fixture.Quest.ToString(), "aliases",
+            Json("""{"op": "array_add", "path": []}"""));
+
+        Assert.Equal(RecordEditRefusal.None, result.Refusal);
+        Assert.True(result.Applied, result.Message);
+
+        var written = Written(_fixture.QuestBody());
+        Assert.Equal(2, written.Count);
+        // The element that was already there is untouched.
+        Assert.Equal("OriginalLoc", written[0].GetProperty("Name").GetString());
+        Assert.Equal(
+            SharedSchemaReflector.FirstArrayElementLeaf("qust", "aliases", "concrete_type"),
+            written[1].GetProperty("MutagenObjectType").GetString());
+    }
+
     private static List<JsonElement> Written(string body) =>
         [.. JsonDocument.Parse(body).RootElement.GetProperty("Aliases").EnumerateArray()];
 
@@ -251,6 +282,7 @@ public sealed class AbstractUnionEditTests : IDisposable
             _fixture.Plugin, _fixture.Quest.ToString(), "aliases",
             Json("""[{"concrete_type": "NotARealAliasKind", "name": "X"}]"""));
 
+        Assert.Equal(RecordEditRefusal.ListElementTypeUnresolved, result.Refusal);
         Assert.False(result.Applied);
         Assert.Equal(before, _fixture.QuestBody());
     }

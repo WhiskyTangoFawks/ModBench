@@ -219,7 +219,7 @@ function buildGroup(group: ConditionGroupDiff, runOnTargets: string[]): { diff: 
     meta: {
       name: group.fieldPath, type: 'array', isArray: true, validFormKeyTypes: [], enumValues: [],
       // A fresh condition's wire shape is `ParsedCondition`, not a generic
-      // per-display-field-name struct default recordUtils.ts's own defaultElementValue would
+      // per-display-field-name struct default recordUtils.ts's own defaultAdapterElementValue would
       // otherwise build — defaultCondition() (conditionOps.ts) supplies the "sensible defaults,
       // immediately editable" shape.
       elementType: { ...elementMeta, defaultValue: defaultCondition() },

@@ -908,7 +908,10 @@ public sealed partial class SchemaReflector
         // Presentation facts for the editor, both null for an ordinary sub-field — see
         // FieldMetadata's own doc comments. Set only by BuildAbstractUnionDiscriminatorField.
         IReadOnlyList<string>? EnumLabels = null,
-        string? DisplayLabel = null)
+        string? DisplayLabel = null,
+        // Set by the two discriminator fields the TargetingRefuses comment above already names —
+        // see FieldMetadata's own doc comment for what it means.
+        bool IsDiscriminator = false)
     {
         // Mirrors ColumnSpec.IsArray's own derivation (ReflectColumns: `info.ApiType ==
         // "array"`) rather than adding a redundant constructor flag that could disagree with ApiType.
@@ -920,7 +923,8 @@ public sealed partial class SchemaReflector
                 IsBitmask: IsBitmask,
                 EnumBitValues: EnumBitValues,
                 EnumLabels: EnumLabels,
-                DisplayLabel: DisplayLabel);
+                DisplayLabel: DisplayLabel,
+                IsDiscriminator: IsDiscriminator);
     }
 
     // ── Type-detection helpers ────────────────────────────────────────────────
@@ -1437,7 +1441,8 @@ public sealed partial class SchemaReflector
 
         return new(ObjectModValueTypeDiscriminator, "string", Empty,
             [.. leaves.Select(l => l.ValueTypeName)], Extract,
-            Apply: LeafWrite.ReadOnly<object>(DiscriminatorReason), AllowsNull: true);
+            Apply: LeafWrite.ReadOnly<object>(DiscriminatorReason), AllowsNull: true,
+            IsDiscriminator: true);
     }
 
     private static SubFieldSpec BuildTypedLeafUnionField(
@@ -1809,7 +1814,7 @@ public sealed partial class SchemaReflector
             [.. leaves.Select(l => l.ClassName)], Extract,
             Apply: LeafWrite.ReadOnly<object>(DiscriminatorReason), AllowsNull: true,
             EnumLabels: [.. leaves.Select(l => LeafLabel.For(union.SetterType.Name, l.ClassName))],
-            DisplayLabel: AbstractUnionTypeDiscriminatorLabel);
+            DisplayLabel: AbstractUnionTypeDiscriminatorLabel, IsDiscriminator: true);
     }
 
     private const string AbstractUnionTypeDiscriminatorLabel = "Kind";
