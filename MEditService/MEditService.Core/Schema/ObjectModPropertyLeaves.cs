@@ -10,9 +10,9 @@ namespace MEditService.Core.Schema;
 /// <see cref="LoquiUnions"/> discovers its leaves by reflection.</summary>
 internal static class ObjectModPropertyLeaves
 {
-    // Seven names hardcoded: IAObjectModPropertyGetter<T> is the only base whose payload lives on
-    // sibling leaves, so nothing general is built. Each is paired with Mutagen's ValueType member
-    // name, as a bare string so the table stays game-generic.
+    // Hardcoded: IAObjectModPropertyGetter<T> is the only base whose payload lives on sibling leaves.
+    // ValueType names are bare strings to stay game-generic, ordered by the getter list, not the
+    // enum's ordinals.
     private static readonly (string InterfaceName, string ValueTypeName)[] LeafInterfaces =
     [
         ("IObjectModIntPropertyGetter`1", "Int"),

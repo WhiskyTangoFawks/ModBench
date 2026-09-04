@@ -10,7 +10,6 @@ namespace MEditService.Core.Schema;
 /// while the latter fails the struct/array write.</summary>
 public enum ApplyOutcome
 {
-    /// <summary>The value was converted and written onto the target.</summary>
     Applied,
 
     /// <summary>No property of this name on the target's runtime type: a real refusal for a column
@@ -35,7 +34,7 @@ public enum ApplyOutcome
 }
 
 /// <summary>A leaf's write capability: a writer, or a named reason for being read-only, never
-/// neither. With a nullable delegate an accidental omission looked like a decision; here it is
+/// neither. A nullable delegate would let an accidental omission pass as a decision; here it is
 /// unrepresentable.</summary>
 public sealed record LeafWrite<TTarget>
 {

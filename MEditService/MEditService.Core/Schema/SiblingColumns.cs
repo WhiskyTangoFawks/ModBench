@@ -8,8 +8,7 @@ namespace MEditService.Core.Schema;
 /// disagreeing in scalar type, read-only text.</summary>
 internal static class SiblingColumns
 {
-    // A column's ApiType that means "not a single scalar value" — reflection produces these two
-    // (ListLeaves.BuildListColumn / StructLeaves.BuildStructColumn); everything else ColumnReflection.GetColumnInfo can return is scalar.
+    // The ApiTypes that mean "not a single scalar value"; every other reflected ApiType is scalar.
     private static readonly HashSet<string> NonScalarApiTypes = new(StringComparer.Ordinal) { "array", "struct" };
 
     // Two enum leaves are compatible except in bit-ness: a union of a bitmask domain with a plain

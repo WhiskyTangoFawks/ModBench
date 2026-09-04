@@ -75,9 +75,7 @@ internal static class ColumnReflection
         };
     }
 
-    // Projects a shared LeafSpec into a top-level column, routed through the same
-    // LeafWriters.RouteWriter its sub-field sibling uses, so every reflected leaf shape has the
-    // same write path at both levels.
+    // Routed through the same writer as a sub-field, so every leaf shape has one write path.
     private static ColumnInfoResult ProjectColumn(PropertyInfo prop, Type core, bool nullable, LeafSpec leaf, ILogger logger)
     {
         // A column's ApplyOutcome is the routed writer's own, carried straight through, and the

@@ -16,9 +16,6 @@ internal static class SchemaRefusals
     // loud in a real run.
     internal const string UnclassifiedAnomalyPrefix = "SchemaReflector: unclassified";
 
-    // Shared constants rather than repeated literals, so the symmetry audit can enumerate the
-    // legitimate reasons and reject anything else.
-
     /// <summary>A discriminator is consumed off the raw JSON to choose a concrete type, before the
     /// object it would apply to exists, so naming it stays a silent skip.</summary>
     internal const string DiscriminatorReason =

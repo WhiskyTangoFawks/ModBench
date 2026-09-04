@@ -11,7 +11,7 @@ internal static class VectorStructLeaves
 {
     private static readonly string[] VectorComponentNames = ["X", "Y", "Z"];
 
-    // A fixed name list, not a property walk: every vector type has a self-referencing Point property
+    // A fixed name list, not a property walk: several vector types carry a self-referencing Point property
     // that would recurse forever. A P2 type simply has no Z, so no count-specific branch is needed.
     internal static List<SubFieldSpec> BuildVectorComponentSubFields(
         Type vectorType, GameReflection game, int depth, ILogger logger)

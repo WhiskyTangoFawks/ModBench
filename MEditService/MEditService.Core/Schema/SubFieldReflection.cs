@@ -132,8 +132,7 @@ internal static class SubFieldReflection
         };
     }
 
-    // Projects a shared LeafSpec into a sub-field, routed through the same LeafWriters.RouteWriter
-    // ColumnReflection.ProjectColumn uses for a top-level column.
+    // Routed through the same writer as a top-level column, so every leaf shape has one write path.
     private static SubFieldSpec ProjectSubField(
         PropertyInfo prop, string colName, Type core, bool nullable, LeafSpec leaf,
         GameReflection game, ILogger logger)

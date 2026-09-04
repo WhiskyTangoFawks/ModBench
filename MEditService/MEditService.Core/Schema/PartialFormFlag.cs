@@ -4,8 +4,8 @@ using Mutagen.Bethesda.Plugins.Records;
 namespace MEditService.Core.Schema;
 
 /// <summary>Record-header flag bit 14, "Partial Form": an override that exists only to carry
-/// children. Gated on the type being a container record, as xEdit's <c>CanBePartial</c> is; the
-/// bit is reused for other meanings.</summary>
+/// children. Gated on the type being a container record because the bit is reused elsewhere;
+/// xEdit gates on the record definition declaring it.</summary>
 public static class PartialFormFlag
 {
     /// <summary>Internal so the write-surface guard in Edits can compare the bit without redeclaring it.</summary>

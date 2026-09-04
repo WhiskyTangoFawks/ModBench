@@ -19,7 +19,7 @@ internal sealed record SchemaAnnotations(
     // Getter interfaces the walk may re-enter and stop at silently because the game's format cannot
     // nest them (a Fallout 4 Papyrus struct member is never itself a struct). Any other re-entry is fatal.
     HashSet<string> CycleTruncations,
-    // Sub-schemas known to come out empty, each reasoned in SchemaReflectorLeafCoverageCompletenessTests.KnownGaps.
+    // Sub-schemas known to come out empty.
     HashSet<string> EmptySubSchemaTypes,
     // See FieldMetadata.SiblingsInUse. The inner map must name every enum value, since an unnamed one
     // would silently idle every member the row governs; validated in all four directions.
@@ -87,7 +87,7 @@ internal sealed record SchemaAnnotations(
             ExcludedUnions:
             [
                 // A concrete base with two leaves, one of whose binary-overlay Type getter is an
-                // unimplemented throw upstream; the full scheme is on KnownGaps' ISceneActionGetter.Type.
+                // unimplemented throw upstream.
                 "ASceneActionType",
             ],
             CycleTruncations: ["IScriptStructPropertyGetter", "IScriptStructListPropertyGetter"],

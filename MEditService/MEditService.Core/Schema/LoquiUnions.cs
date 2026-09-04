@@ -11,6 +11,9 @@ namespace MEditService.Core.Schema;
 /// discriminator's first member stable.</summary>
 internal static class LoquiUnions
 {
+    // Kept separate from ObjectModPropertyLeaves' hand-picked table: two different discovery
+    // mechanisms, not one abstraction.
+
     // Every concrete class under a base, filed under its whole base chain so a two-level chain is
     // found like a one-level one. The assembly is scanned once per schema build.
     private static readonly ConcurrentDictionary<Assembly, ILookup<Type, (Type GetterType, string ClassName)>> LeavesByBase = new();
