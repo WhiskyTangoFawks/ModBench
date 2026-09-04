@@ -9,11 +9,9 @@ public interface ILoadOrder : IDisposable
 {
     string DataFolderPath { get; }
 
-    /// <summary>ADR-0001: the MO2 instance root this load order belongs to — the working
-    /// directory holding <c>ModOrganizer.ini</c>, <c>mods/</c> and <c>profiles/</c>. It is what the
-    /// index file is keyed on (<see cref="Records.IndexFile"/>), because <c>origin</c> is a mod
-    /// folder name and so is only unique within one instance. Null for a load order with no instance
-    /// to key a file by, which asks for an in-memory index.</summary>
+    /// <summary>ADR-0001: the MO2 instance root the index file is keyed on, because <c>origin</c>
+    /// is a mod folder name and so is unique only within one instance. Null asks for an in-memory
+    /// index.</summary>
     string? InstanceRoot { get; }
 
     GameRelease GameRelease { get; }

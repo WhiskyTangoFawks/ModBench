@@ -5,15 +5,11 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Core.Plugins;
 
-// Builds a game-typed ILinkCache<TMod, TModGetter> from the load order's load-order getters.
-//
-// The load order itself uses an untyped ImmutableLoadOrderLinkCache (ToUntypedImmutableLinkCache), which
-// exposes only resolution. Pulling a record into a plugin as an override (GetOrAddAsOverride) is
-// defined only on the *typed* cache, so the placed-record write paths (create/copy/delete) need this.
-//
-// Game-agnostic via reflection over the game's mod types (mirrors SchemaReflector) so the all-games
-// invariant holds: the caller stores the result as the non-generic ILinkCache and PluginWriter reaches
-// the typed methods reflectively.
+// GetOrAddAsOverride is defined only on the typed ILinkCache<TMod, TModGetter>, and the load order
+// itself holds an untyped one that exposes only resolution, so the placed-record write paths need
+// this.
+
+// Reflection over the game's mod types, not a named game, so the all-games invariant holds.
 internal static class TypedLinkCacheFactory
 {
     public static ILinkCache Create(IReadOnlyList<IModGetter> mods, GameRelease release)
