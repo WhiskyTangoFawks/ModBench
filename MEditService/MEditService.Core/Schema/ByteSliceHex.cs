@@ -4,10 +4,9 @@ using Noggog;
 
 namespace MEditService.Core.Schema;
 
-/// <summary>A byte blob, rendered and read back as hex text (#690). The text form is Mutagen's own
-/// (<c>NewtonsoftJsonSerializationWriterKernel.WriteBytes</c>): "0x" + uppercase hex, "[]" empty,
-/// "" absent — reading and writing that exact grammar is what makes Extract and the generated
-/// json_extract view answer the same string for the same record.</summary>
+/// <summary>A byte blob as hex text in Mutagen's own grammar (<c>WriteBytes</c>): "0x" plus uppercase
+/// hex, "[]" empty, "" absent — so Extract and the generated json_extract view answer the same
+/// string.</summary>
 internal static class ByteSliceHex
 {
     internal const string HexApiType = "hex";
@@ -17,9 +16,8 @@ internal static class ByteSliceHex
         && core.GetGenericTypeDefinition() == typeof(ReadOnlyMemorySlice<>)
         && core.GetGenericArguments()[0] == typeof(byte);
 
-    // Both slice types, because which one arrives depends on which side of the record is in hand: a
-    // getter overlay's list yields ReadOnlyMemorySlice, while a mutable record's SliceList<byte>
-    // yields MemorySlice — and ArrayOpWriter reads a column's current value off the mutable record.
+    // Both slice types: a getter overlay yields ReadOnlyMemorySlice, a mutable record's SliceList<byte>
+    // yields MemorySlice, and a column's current value is read off the mutable record.
     internal static string? HexText(object? raw) => raw switch
     {
         ReadOnlyMemorySlice<byte> s => HexText(s.Span),
@@ -51,16 +49,12 @@ internal static class ByteSliceHex
         }
     }
 
-    /// <summary>Absent, in Mutagen's own byte-text grammar and in JSON: both spell "there is no
-    /// slice here".</summary>
+    // Null and "" both spell "no slice" in Mutagen's byte-text grammar.
     private static bool IsAbsentSlice(JsonElement val) =>
         val.ValueKind == JsonValueKind.Null || (val.ValueKind == JsonValueKind.String && val.GetString()!.Length == 0);
 
-    /// <summary>Whether writing <paramref name="newLength"/> bytes over <paramref name="existing"/>
-    /// would resize the slice. Nothing here can read a blob's internal structure, so nothing here
-    /// can know which bytes a resize would move. An absent or empty slice has no established size
-    /// and accepts any; a property this applier cannot read a slice out of at all refuses rather
-    /// than skipping the question.</summary>
+    // Nothing here can know which bytes a resize would move, so a size change is refused; an absent or
+    // empty slice has no established size and accepts any.
     private static bool ResizeRefused(object? existing, int newLength) => existing switch
     {
         null => false,

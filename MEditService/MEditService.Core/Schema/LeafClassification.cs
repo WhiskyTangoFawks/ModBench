@@ -6,9 +6,8 @@ using Mutagen.Bethesda.Strings;
 
 namespace MEditService.Core.Schema;
 
-/// <summary>What kind of leaf a reflected property is, and the neutral facts that leaf carries —
-/// the one classification both a top-level column and a struct/array sub-field ask, so the two can
-/// never disagree about a property's api type, its enum domain or its converter.</summary>
+/// <summary>What kind of leaf a reflected property is — the one classification a column and a
+/// sub-field both ask, so the two never disagree about api type, enum domain or converter.</summary>
 internal static class LeafClassification
 {
     internal static string[] GetFormLinkValidTypes(
@@ -74,8 +73,7 @@ internal static class LeafClassification
         return atomic.Count > 0 ? atomic.ToArray() : [.. allNames.Select(n => new EnumMember(n))];
     }
 
-    // Bitmask flag values travel as decimal strings (to survive JSON above 2^53) but legacy
-    // callers may still send numbers. Accept either JSON token kind.
+    // Bitmask values travel as decimal strings to survive JSON above 2^53; a bare number is accepted too.
     private static long ReadBitmaskLong(JsonElement v) =>
         v.ValueKind == JsonValueKind.String
             ? long.Parse(v.GetString()!, System.Globalization.CultureInfo.InvariantCulture)
@@ -88,10 +86,8 @@ internal static class LeafClassification
     {
         if (TryMapPrimitive(core, out var duckDb, out var apiType, out var conv))
         {
-            // A value-type primitive is omitted from the document exactly when it equals its
-            // CLR default, so a view has to put that default back or the column reads NULL where the
-            // wide table held 0/false. A string has no such default — null is the honest answer, and
-            // the wide column stored NULL for it too.
+            // A value-type primitive is omitted from the document when it equals its CLR default, so a
+            // view puts the default back; a string has no such default and null is honest.
             string? defaultLiteral;
             if (core == typeof(string)) defaultLiteral = null;
             else if (core == typeof(bool)) defaultLiteral = "false";
@@ -135,17 +131,12 @@ internal static class LeafClassification
         var g = ReflectedTypes.SubGetter(prop);
         var members = GetEnumMembers(core);
 
-        // Whether the serializer writes this enum as an array of member names, which is a
-        // question about the CLR type's [Flags] attribute and nothing else. Whether every member
-        // carries a bit answers a different, narrower question (does it have power-of-two members)
-        // and gets it wrong for this purpose — a [Flags] enum with no such members still
-        // serializes as an array.
+        // Whether the serializer writes this enum as a name array is a question about the Flags
+        // attribute alone, since a flags enum with no power-of-two members still serializes as an array.
         var isFlags = core.GetCustomAttribute<FlagsAttribute>() != null;
 
-        // The default a view falls back to when the serializer omitted the field. A flags enum's
-        // rendering is a joined name list, so its default is the empty string — the same thing an
-        // empty array renders as, which is what makes absent and "no flags set" indistinguishable
-        // by design. A plain enum falls back to whichever member is zero, when one is defined.
+        // A flags enum renders as a joined name list, so its default is the empty string, the same as
+        // an empty array; a plain enum falls back to its zero member, when defined.
         string? defaultLiteral;
         if (isFlags) defaultLiteral = "''";
         else if (Enum.IsDefined(core, Enum.ToObject(core, 0))) defaultLiteral = $"'{Enum.GetName(core, Enum.ToObject(core, 0))}'";

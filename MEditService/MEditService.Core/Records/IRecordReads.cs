@@ -2,13 +2,9 @@ using MEditService.Core.Queries;
 
 namespace MEditService.Core.Records;
 
-/// <summary>
-/// Every read the record index answers, at whichever <see cref="RecordRef"/> the caller is
-/// positioned on (<see cref="IRecordIndex.At"/>) — the default surface of <see cref="IRecordIndex"/>
-/// itself answers at <see cref="RecordRef.Effective"/>. No <c>tableName</c> dispatch parameter
-/// crosses this seam — VMAD/condition reconstitution lives in <c>Queries/</c>, built from
-/// <see cref="RecordDocument.Body"/> plus the existing codecs.
-/// </summary>
+/// <summary>Every read the index answers, at whichever <see cref="RecordRef"/> the caller is
+/// positioned on. No table-name dispatch crosses this seam; VMAD/condition reconstitution lives in
+/// <c>Queries/</c>, built from the document body.</summary>
 public interface IRecordReads
 {
     /// <summary>The winning override of <paramref name="formKey"/>, across every participating
@@ -19,10 +15,8 @@ public interface IRecordReads
     /// that plugin never indexed this FormKey.</summary>
     RecordDocument? GetDocument(string formKey, PluginKey plugin);
 
-    /// <summary>Every document <paramref name="plugin"/>'s copy holds, in one bulk read — the batch
-    /// counterpart of <see cref="GetDocument(string, PluginKey)"/>, for consumers that scan a
-    /// whole plugin (compile's diagnostics pass) and would otherwise pay two point queries per
-    /// record. The header is naturally absent: it has no document.</summary>
+    /// <summary>Every document <paramref name="plugin"/> holds, in one bulk read, for consumers that
+    /// scan a whole plugin and would otherwise pay two point queries per record.</summary>
     IReadOnlyList<RecordDocument> GetDocuments(PluginKey plugin);
 
     /// <summary>Every plugin's copy of <paramref name="formKey"/>, in load order. Null if the
@@ -41,27 +35,18 @@ public interface IRecordReads
 
     IReadOnlyList<ReferenceResult> GetReferencedBy(string targetFormKey);
 
-    /// <summary>Every distinct plugin name at least one indexed record's <c>form_key</c> or
-    /// <c>_filter</c> row currently matches, restricted to <paramref name="tableNames"/> — powers
-    /// the Plugins tree's filtered chevron (ADR-0035 amending ADR-0018). Empty when no filter is
-    /// active: with nothing narrowing the listing, every plugin already has matches.</summary>
+    /// <summary>Every plugin name at least one filtered record matches, restricted to
+    /// <paramref name="tableNames"/> (ADR-0035). Empty when no filter is active: every plugin
+    /// already has matches.</summary>
     IReadOnlySet<string> GetPluginsWithMatchingRecords(IEnumerable<string> tableNames);
 
     /// <summary>FormKeys native to <paramref name="plugin"/> (the FormKey's own ModKey is this
     /// plugin) — ESL-eligibility validation.</summary>
     IReadOnlyList<string> GetNativeFormKeys(PluginKey plugin);
 
-    /// <summary>
-    /// The distinct master plugins <paramref name="plugin"/>'s content actually requires at this
-    /// ref — <b>derived</b>, never the plugin's own declared header list (ADR-0038's "effective
-    /// masters": committed masters unioned with the origin plugins everything the plugin's
-    /// content, committed and uncommitted alike, actually references). A master a plugin
-    /// declares but nothing in it references or overrides is not effective and is excluded.
-    /// Computed as the union of (a) the owning plugin of every FormKey this plugin's records
-    /// reference outward (<c>form_references</c>) and (b) the owning plugin of every FormKey this
-    /// plugin carries that isn't native to it (an override forces that master) — in deterministic
-    /// load-order order, excluding the plugin itself.
-    /// </summary>
+    /// <summary>The masters <paramref name="plugin"/>'s content actually requires at this ref —
+    /// derived, never the declared header list (ADR-0038): owners of every outward reference and of
+    /// every non-native FormKey it carries, in load order.</summary>
     IReadOnlyList<string> GetEffectiveMasters(PluginKey plugin);
 
     // Worldspace tree reads (ADR-0023) (from the placement / cell_location side tables).
@@ -73,37 +58,17 @@ public interface IRecordReads
     /// when not placed.</summary>
     PlacementRow? GetPlacement(string formKey, PluginKey plugin);
 
-    /// <summary>
-    /// One cell's own structural parentage — worldspace/block/sub/grid, or interior — the raw row
-    /// <see cref="GetWorldspaceCells"/>/<see cref="GetInteriorCells"/> group into a UI-shaped tree.
-    /// Null when <paramref name="cellFormKey"/> isn't a cell this plugin indexed. Ref-invariant the
-    /// same way <see cref="GetPlacement"/> is, for the same reason (no gesture moves a cell).
-    /// </summary>
+    /// <summary>One cell's own structural parentage, or null when it isn't a cell this plugin
+    /// indexed. Ref-invariant like <see cref="GetPlacement"/>: no gesture moves a cell.</summary>
     CellLocationRow? GetCellLocation(PluginKey plugin, string cellFormKey);
 
-    /// <summary>
-    /// <paramref name="parentFormKey"/>'s children among the <see cref="Source.ContainerChildFields"/>
-    /// relationships <see cref="GetPlacement"/>/<see cref="GetWorldspaceCells"/> don't already carry
-    /// (see <see cref="ContainerChildRow"/> for the set) — in original slot order. Empty when
-    /// <paramref name="parentFormKey"/> has none (including when it isn't one of those container
-    /// types at all).
-    ///
-    /// <para><b>Ref-invariant by construction, not by omission</b> — see <see cref="ContainerChildRow"/>'s
-    /// own doc comment for the invariant this leans on and what a future container-mutating gesture
-    /// would have to change about it.</para>
-    /// </summary>
+    /// <summary><paramref name="parentFormKey"/>'s children among the relationships the placement
+    /// reads don't carry (see <see cref="ContainerChildRow"/>), in slot order; empty when it has
+    /// none. Ref-invariant by construction.</summary>
     IReadOnlyList<ContainerChildRow> GetContainerChildren(PluginKey plugin, string parentFormKey);
 
-    /// <summary>
-    /// The inverse of <see cref="GetContainerChildren"/>: the one parent slot
-    /// <paramref name="childFormKey"/> sits in, or null when it sits in none.
-    /// Record→source-unit resolution needs the child→parent direction, because an embedded child has
-    /// no file of its own and the only route to its bytes is through whichever container's document
-    /// carries it inline.
-    ///
-    /// <para>Scoped to the same relationships <see cref="GetContainerChildren"/> is, so a placed
-    /// reference answers null here and through <see cref="GetPlacement"/> instead — the two tables
-    /// stay additive rather than becoming two competing copies of one relationship.</para>
-    /// </summary>
+    /// <summary>The one parent slot <paramref name="childFormKey"/> sits in, or null. Needed because
+    /// an embedded child has no file of its own; a placed reference answers null here and through
+    /// <see cref="GetPlacement"/> instead.</summary>
     ContainerChildRow? GetContainerParent(PluginKey plugin, string childFormKey);
 }

@@ -4,23 +4,14 @@ using Microsoft.Extensions.Logging;
 
 namespace MEditService.Core.Schema;
 
-/// <summary>The recursive walk one level below a record column: every member of a Loqui getter
-/// interface, dispatched to whichever leaf kind it is. Holds the walk's two limiters — the visited-type
-/// path, whose re-entry is a fatal cycle unless the game's annotations name it a truncation point, and
-/// the depth cap, which bounds struct nesting only and deliberately resets across a list hop.</summary>
+/// <summary>The walk below a record column, limited by the visited-type path, whose re-entry is
+/// fatal unless annotated as a truncation point, and the depth cap, which bounds struct nesting
+/// and resets across a list hop.</summary>
 internal static class SubFieldReflection
 {
-    // This walks only the properties declared on getterInterface and the interfaces it
-    // implements/inherits — never a more-derived sibling interface. OMOD's Properties element
-    // type, IAObjectModPropertyGetter<T>, declares only Property/Step; the real per-element data
-    // lives on 7 separate leaf getter interfaces (IObjectModIntPropertyGetter<T>,
-    // IObjectModFloatPropertyGetter<T>, ...), each implementing IAObjectModPropertyGetter<T>
-    // rather than the other way around, so none of their own members are ever reached by this
-    // walk alone. ObjectModPropertyLeaves.BuildObjectModPropertyLeafFields closes that gap for OMOD specifically, and
-    // the same shape is generalized for every other Mutagen "A<Name>" abstract Loqui union
-    // (ANpcLevel, AQuestAlias, ...) — see LoquiUnions.BuildUnionLeafFields for why OMOD's own leaves
-    // still need their own hand-picked table (a generic base type with no reflectively-discoverable
-    // ClassType of its own) while everything else can be discovered by reflection alone.
+    // Walks only what getterInterface declares or inherits, never a more-derived sibling interface, so
+    // a union's leaf members are unreachable from the base alone; ObjectModPropertyLeaves and
+    // LoquiUnions close that gap below.
     internal static List<SubFieldSpec> BuildSubSchema(
         Type getterInterface,
         GameReflection game,
@@ -56,12 +47,9 @@ internal static class SubFieldReflection
 
     internal static readonly Type[] RootPath = [];
 
-    // The getter interfaces whose members the walk is inside, root first. Re-entering one is a
-    // type cycle, fatal — except through a truncation point, a type the game's annotations say
-    // its data format cannot nest past: inside any truncation point none is entered again (null),
-    // and a lap that runs through one is let through, since it ends there. Depth is deliberately
-    // not this: the depth cap bounds struct nesting and resets across a list hop, so a cycle
-    // through a list is invisible to it.
+    // Re-entering a type on the path is a fatal cycle, except through a truncation point the game's
+    // format cannot nest past. The depth cap resets across a list hop, so a list cycle is invisible
+    // to it.
     internal static Type[]? Enter(Type[] path, Type getterInterface, GameReflection game)
     {
         var insideTruncation = path.Any(game.Annotations.IsCycleTruncation);
@@ -93,13 +81,9 @@ internal static class SubFieldReflection
         if (ReflectedTypes.IsLoquiInterface(core))
             return StructElementMeta(BuildSubSchema(core, game, logger, path), core);
 
-        // A list of vector-struct elements (e.g. IslandData.Vertices, a list of P3Float,
-        // or LocationCoordinate.Coordinates, a list of P2Int16). Without this arm, the element
-        // metadata falls through to null (none of these types match the scalar cases in the switch), which
-        // makes ListLeaves.BuildListColumn drop the whole field
-        // — and, worse, ListLeaves.BuildListItems's own scalar-element fallback
-        // (`result.Add(item)`) would hand a raw boxed vector struct straight to JsonSerializer, which
-        // would recurse forever over several of these types' own self-referencing `Point` property.
+        // Without this arm a vector-element list falls through to null and is dropped, and worse,
+        // BuildListItems' scalar fallback would hand a raw vector struct to JsonSerializer, which
+        // recurses forever over its self-referencing Point property.
         if (ReflectedTypes.IsVectorStructType(core))
             return StructElementMeta(VectorStructLeaves.BuildVectorComponentSubFields(core, game, 0, logger), core);
 
@@ -148,8 +132,7 @@ internal static class SubFieldReflection
         };
     }
 
-    // Projects a shared LeafSpec into a sub-field, routed through the same LeafWriters.RouteWriter
-    // ColumnReflection.ProjectColumn uses for a top-level column.
+    // Routed through the same writer as a top-level column, so every leaf shape has one write path.
     private static SubFieldSpec ProjectSubField(
         PropertyInfo prop, string colName, Type core, bool nullable, LeafSpec leaf,
         GameReflection game, ILogger logger)

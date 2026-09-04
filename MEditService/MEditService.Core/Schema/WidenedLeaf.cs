@@ -3,20 +3,14 @@ using Microsoft.Extensions.Logging;
 
 namespace MEditService.Core.Schema;
 
-/// <summary>A leaf whose concrete siblings disagree about its CLR type, so it is presented as text:
-/// one rendering for reads, and one applier that resolves the target property's real type off the
-/// receiver before converting. No single JSON path has consistent semantics for one of these, which
-/// is why a widened column stays out of the generated views.</summary>
+/// <summary>A leaf whose siblings disagree about its CLR type, presented as text, with an applier
+/// that resolves the real type off the receiver. No JSON path has consistent semantics, so it stays
+/// out of the generated views.</summary>
 internal static class WidenedLeaf
 {
-    // A widened scalar column hands CoerceToColumnType a raw boxed *numeric* value, and that path's
-    // VARCHAR branch is a bare value.ToString() with no culture — so on any non-en-US host a widened
-    // float/int would round-trip through the current culture's separators (e.g. "3,5" under de-DE)
-    // instead of the actual value. Format explicitly with InvariantCulture here, for every
-    // IFormattable scalar, the same way every other numeric formatting in the reflected schema does
-    // (see e.g. LeafClassification.GetEnumMembers' bit values). bool doesn't implement IFormattable
-    // and keeps its own case: lowercase "true"/"false" (JS-idiomatic) rather than C#'s
-    // "True"/"False". Anything neither (e.g. an already-string value) passes through unchanged.
+    // CoerceToColumnType's VARCHAR branch is a culture-bound ToString, so a widened number must be
+    // formatted with InvariantCulture here or "3,5" leaks through under de-DE. bool keeps the
+    // JS-idiomatic lowercase spelling.
     internal static object? FormatWidenedValue(object? value) => value switch
     {
         bool b => b ? "true" : "false",
@@ -24,23 +18,9 @@ internal static class WidenedLeaf
         _ => value,
     };
 
-    /// <summary>
-    /// Applies one of the widened OMOD leaf union fields (<c>value</c>, <c>value2</c>,
-    /// <c>function_type</c>) onto whichever concrete leaf <c>ListLeaves.ApplyListJson</c> already resolved.
-    ///
-    /// <para><see cref="ApplyOutcome.PropertyNotFound"/> when the target object's runtime type
-    /// doesn't declare the property at all — an expected, silent outcome one layer up in
-    /// <c>SubFieldValues.ApplySubFields</c> (same convention as <c>LeafWriters.MakeApplier</c>): a leaf that lacks this member
-    /// is exactly what this shape is for. A JSON <c>null</c> is likewise Applied-as-a-no-op — it
-    /// means "this leaf's own Extract had nothing to read back for this member", not a value to
-    /// reject.</para>
-    ///
-    /// <para><see cref="ApplyOutcome.ValueRejected"/> — never a silent no-op — when the
-    /// property *does* exist but the incoming JSON can't be converted into whatever type it actually
-    /// is: <c>SubFieldValues.ApplySubFields</c> folds that into a refusal of the whole element/struct write
-    /// rather than constructing the right concrete type and then silently dropping a value onto
-    /// it.</para>
-    /// </summary>
+    /// <summary>Applies a widened OMOD leaf-union field onto an already-resolved concrete leaf.
+    /// <see cref="ApplyOutcome.PropertyNotFound"/> and a JSON null are expected no-ops; a value the
+    /// declared type cannot take is rejected, never silently dropped.</summary>
     internal static Func<object, JsonElement, ApplyOutcome> MakeWidenedApplier(string pName, ILogger logger)
     {
         var resolve = LeafWriters.ResolveProperty(pName);
@@ -56,14 +36,8 @@ internal static class WidenedLeaf
         };
     }
 
-    // The inverse of FormatWidenedValue: a bool leaf's own text is "true"/"false" (that method's
-    // own lowercase, JS-idiomatic spelling), an enum leaf's is one of its member names, and every
-    // other leaf's is an InvariantCulture-formatted number — so parsing back is exactly as
-    // straightforward as formatting was, no heuristics needed, because the property's actual
-    // declared type is already known by the time this runs (unlike the read side, nothing
-    // here is guessing which leaf it might be — ListLeaves.ApplyListJson resolved that before constructing the
-    // object this is now applying onto). A freshly-added element with no prior GET to round-trip
-    // may instead send a raw JSON number/bool rather than pre-formatted text; both are accepted.
+    // The inverse of FormatWidenedValue, with no guessing: the property's declared type is known by
+    // now. A freshly added element may send a raw JSON number or bool instead of text; both are accepted.
     private static object? ConvertWidenedJson(JsonElement val, Type targetType, string pName, ILogger logger)
     {
         if (targetType == typeof(bool))
