@@ -5,94 +5,35 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Core.Source;
 
-/// <summary>A flat record's identity as recovered from its own source path — the inverse of
-/// <see cref="SourceRecordPath.For"/>. No <c>FormKey</c> field: the whole-mod door's own
-/// file name embeds EditorID ahead of the FormKey (<c>"&lt;EditorID&gt; - &lt;hex6&gt;_&lt;ModKeyFileName&gt;.json"</c>),
-/// and an EditorID can itself legally contain <c>" - "</c>, which makes recovering a FormKey by
-/// splitting the filename alone ambiguous in the general case. Every caller either already holds the
-/// record's bytes (<c>PluginCompileService</c>, which never needed a path-derived FormKey — the
-/// deserialized record's own <c>FormKey</c> is authoritative) or reads them right after a successful
-/// parse (<c>SourceIngest.ReconcileHead</c>) — identity comes from the document, not the path,
-/// matching the rest of this codebase's own posture (<c>IRecordIndex.GetDocument</c> et al.).</summary>
+/// <summary>A flat record's identity as recovered from its own path. No FormKey: an EditorID can
+/// legally contain <c>" - "</c>, so splitting the file name is ambiguous. Identity comes from the
+/// document, not the path.</summary>
 internal sealed record SourceRecordIdentity(string PluginFileName, string RecordType);
 
-/// <summary>
-/// The source's own file layout policy for <b>flat</b> (single-file) records — one record, one file,
-/// under the whole-mod door's own group-folder naming — the source tree took over the whole-mod
-/// door's own file-per-record convention wholesale (ADR-0041 amendment).
-/// Relative to the mod folder:
-/// <c>source/&lt;pluginFileName&gt;/&lt;GroupFolder&gt;/[&lt;EditorID&gt; - ]&lt;hex6&gt;_&lt;originModKey&gt;.json</c>.
-///
-/// <para><b>One root <c>source/</c> folder per mod, not a per-plugin sibling tree</b> (ADR-0041
-/// amendment): every plugin's tree nests inside one plain root folder
-/// (<see cref="RootFor"/>). That lets the deployer/conflict-index exclusion collapse to two dumb,
-/// name-only rules (any dot-prefixed entry, at any depth; a root-level directory literally named
-/// <c>source</c>) — neither needs a sibling-plugin check to stay correct, where a per-plugin
-/// suffix guard orphans a tree the moment its plugin is renamed or deleted
-/// outside Modbench. <see cref="RootFor"/> is the one place
-/// that builds a plugin's own root — every reader/writer goes through it or through <see cref="For"/>,
-/// never hand-rolls the segment.</para>
-///
-/// <para><b>Only flat records.</b> Cell, Worldspace and Quest (see
-/// <see cref="RecordTypeDispatch.FolderNameFor"/>'s own doc comment for why exactly these three) get
-/// their own directory (<c>&lt;GroupFolder&gt;/&lt;name&gt;/RecordData.json</c>, with block/sub-block or
-/// XY nesting ahead of it for Cell/Worldspace) instead of a flat file — reading and writing that
-/// structure is <see cref="SourceUnitResolver"/>'s job, not this helper's.
-/// <see cref="For"/> refuses (a named exception, never a silently wrong flat path) for any record type
-/// that resolves to one of those three or to no top-level group at all; <see cref="TryParse"/> answers
-/// false for any container path (deeper than the flat shape) — the one path shallower than it, the
-/// root <c>RecordData.json</c>, is the header's own source unit (#661) and <see cref="TryParse"/>
-/// recognises it on purpose rather than folding it into this refusal.</para>
-///
-/// <para><b>The folder segment is the whole-mod door's own group-property name</b> (<c>"Npcs"</c>,
-/// <c>"Weapons"</c>) — traced to <c>FolderPerRecordGroupFieldGenerator</c>/<c>GroupParallelHelper</c>
-/// in <c>references/mutagen-serialization</c>, not invented — via <see cref="RecordTypeDispatch"/>'s
-/// reflection, the same source <see cref="RecordTextCodec"/>'s own discriminator policy reads. The
-/// file name segment mirrors <c>Mutagen.Bethesda.Core</c>'s own <c>FormKey.ToFilesafeString()</c>
-/// (<c>"{hex6}_{ModKeyFileName}"</c>) with an optional <c>"{EditorID} - "</c> prefix — exactly
-/// <c>SerializationHelper.RecordFileNameProvider</c>'s own scheme, verified against
-/// <c>references/mutagen-serialization</c> and <c>references/Mutagen</c>, not
-/// reconstructed from memory.</para>
-///
-/// <para><b>No ordering prefix, and no order in the name at all</b> (ADR-0042 decision 4, as amended
-/// by #566). A folder-split sibling's position is carried by its parent's own ordered child list
-/// (<see cref="SourceChildOrder"/>), not by its file name, so this builds a name from identity alone
-/// and a caller needs to know nothing about where the record sits among its siblings. That is what
-/// makes a mid-list insert or delete one file plus one line in one document, instead of a rename
-/// cascade through every later sibling. <see cref="TryParse"/> was always blind to position — it
-/// decomposes nothing but path <i>shape</i> — so it is unchanged by the amendment.</para>
-///
-/// <para>The <c>&lt;originModKey&gt;</c> segment (the record's <i>origin</i> plugin — <c>FormKey.ModKey</c>
-/// — never the plugin the record is written into, which is <c>pluginFileName</c> and can
-/// legitimately differ, e.g. an override edited through a patch plugin) is exactly
-/// <see cref="FormKey.ToFilesafeString"/>'s own <c>ModKey.FileName</c>, so two records from different
-/// masters sharing a local ID never collide on one path.</para>
-/// </summary>
+/// <summary>The file layout for flat (single-file) records — the whole-mod door's own file-per-record
+/// convention, taken over wholesale (ADR-0041 amendment). Cell, Worldspace and Quest get a
+/// directory instead; <see cref="SourceUnitResolver"/> owns those.</summary>
 internal static class SourceRecordPath
 {
-    /// <summary>The one root folder every plugin's source tree nests inside — plain, not
-    /// dot-prefixed: the plugin's source is first-class, not hidden metadata. Root-anchored deployer
-    /// exclusion (Mod Management's <c>fileConflictIndex.ts</c>) matches this literal name at the mod
-    /// folder's own root only; a nested directory that happens to share the name (Papyrus ships
-    /// <c>Scripts/Source/…</c>) is never this folder and always deploys.</summary>
+    /// <summary>Plain, not dot-prefixed: the plugin's source is first-class, not hidden metadata. The
+    /// deployer exclusion matches this literal name at the mod folder root only, so a nested
+    /// <c>Scripts/Source/</c> always deploys.</summary>
     internal const string RootFolderName = "source";
 
     private const string JsonSuffix = ".json";
 
-    // The whole-mod door's own header/group-level files (SerializationHelper.RecordDataFileNameWithoutExtension
-    // / TypicalGroupFileName in references/mutagen-serialization) — never a flat record's own file, so
-    // TryParse must reject one rather than mistake it for a record whose folder happens to match a
-    // known group name.
+    // The whole-mod door's own header/group-level file names — never a flat record's file, so TryParse
+    // must reject them rather than mistake one for a record.
     private const string RecordDataFileName = "RecordData.json";
     private const string GroupRecordDataFileName = "GroupRecordData.json";
 
-    /// <summary>The plugin's own root under the mod's one <see cref="RootFolderName"/> folder —
-    /// <c>source/&lt;pluginFileName&gt;</c>. The single way any reader/writer finds a plugin's tree;
-    /// nothing else in this codebase concatenates a plugin name with anything to build it.</summary>
+    /// <summary><c>source/&lt;pluginFileName&gt;</c> — the single way any reader or writer finds a plugin's
+    /// tree; nothing else concatenates a plugin name to build it.</summary>
     internal static string RootFor(string pluginFileName) => Path.Combine(RootFolderName, pluginFileName);
 
-    /// <summary>The flat record's path under the source layout — see this class's own doc comment
-    /// for the full shape.</summary>
+    /// <summary><c>source/&lt;plugin&gt;/&lt;GroupFolder&gt;/[&lt;EditorID&gt; - ]&lt;hex6&gt;_&lt;originModKey&gt;.json</c>;
+    /// the origin ModKey (never the plugin written into) keeps two masters' records from colliding on
+    /// one path.</summary>
     internal static string For(
         string pluginFileName, string recordType, string formKeyString, string? editorId, GameRelease gameRelease)
     {
@@ -112,20 +53,9 @@ internal static class SourceRecordPath
 
     private static string FilesafeFormKey(FormKey formKey) => $"{formKey.ID:X6}_{formKey.ModKey.FileName}";
 
-    /// <summary>Recovers a flat record's plugin/type identity straight from its own path text — no
-    /// JSON parse, no git read, matching <see cref="For"/>'s own flat shape exactly (four segments:
-    /// <c>source/&lt;plugin&gt;/&lt;GroupFolder&gt;/&lt;file&gt;.json</c>). Fails closed (returns
-    /// <see langword="false"/>) on anything not shaped like a path a flat record or the header could
-    /// produce — every container path (<c>Cells/&lt;b&gt;/&lt;sb&gt;/&lt;name&gt;/RecordData.json</c>,
-    /// <c>Quests/&lt;name&gt;/RecordData.json</c>) included — so a caller walking the whole tree never
-    /// silently misreads one of those as a flat record.
-    ///
-    /// <para><b>The root <c>RecordData.json</c> is the header's own source unit</b> (#661) — one
-    /// segment shallower than a flat record's own shape (<c>source/&lt;plugin&gt;/RecordData.json</c>,
-    /// no group folder, because the header sits above every group), so it is recognised before the
-    /// four-segment check below ever runs rather than being folded into it.
-    /// <see cref="HeaderIndexer.RecordType"/> is the identity's <c>record_type</c>, matching what
-    /// <see cref="HeaderIndexer.Index"/> already stamps on the header's <c>records</c> row.</para></summary>
+    /// <summary>Fails closed on anything not shaped like a flat record's path or the header's root
+    /// <c>RecordData.json</c> (one segment shallower), so a tree walk never misreads a container path
+    /// as a flat record.</summary>
     internal static bool TryParse(string relativePath, GameRelease gameRelease, out SourceRecordIdentity identity)
     {
         identity = null!;

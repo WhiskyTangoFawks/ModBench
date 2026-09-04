@@ -3,24 +3,14 @@ using Serilog;
 
 namespace MEditService.Core.Source;
 
-/// <summary>
-/// Thin process wrapper over the real git CLI — the source's one execution boundary (ADR-0041).
-/// No interface, no fake implementation: there is exactly one way to run git, and every call states
-/// its own gitdir/worktree explicitly (via <c>GIT_DIR</c>/<c>GIT_WORK_TREE</c>), which is the whole
-/// seam tests need — pointing at scratch directories, never a mocked git. Internal: callers go
-/// through <see cref="SourceRepository"/>, which owns the git operation vocabulary the source
-/// actually needs; tests reach this directly (via <c>InternalsVisibleTo</c>) to assert on the real
-/// repo the same vocabulary produced.
-/// </summary>
+/// <summary>Thin process wrapper over the real git CLI, the source's one execution boundary (ADR-0041).
+/// No interface, no fake: every call states its own gitdir/worktree, the seam tests need —
+/// scratch directories, never a mocked git.</summary>
 internal static class GitCli
 {
-    // Checked once, early, by every entry point about to run git for the first time in a call
-    // (SourceRepository.Track) — a missing git-on-PATH must surface as one named, actionable
-    // failure, never as a raw exception cascade (ADR-0026). `Process.Start` throws
-    // Win32Exception ("No such file or directory") when the executable can't be found on PATH; that
-    // is the one expected failure mode this wraps — anything else (git present but broken) still
-    // surfaces here rather than at a random later `Run` call, since the check runs before any of
-    // those.
+    // A missing git on PATH must surface as one named failure, never a raw exception cascade (ADR-0026).
+    // Process.Start throws Win32Exception for a missing executable; anything else still surfaces here,
+    // not at a random later Run.
     internal static void EnsureOnPath()
     {
         try
@@ -52,14 +42,8 @@ internal static class GitCli
         return exitCode == 0;
     }
 
-    /// <summary>
-    /// <see cref="Run"/> against a scratch index file instead of the repo's own <c>$GIT_DIR/index</c>
-    /// — <c>SourceRepository.CommitPristineToMain</c> needs to build a tree object (<c>add</c>,
-    /// <c>write-tree</c>) without disturbing whatever the edit branch's real index currently holds
-    /// (which may itself carry the user's own staged dirt). <paramref name="workTree"/> is a scratch
-    /// directory too in that caller, never the mod folder — plumbing that touches neither the mod
-    /// folder's working tree nor its index is the whole point of "without checking main out".
-    /// </summary>
+    /// <summary>Against a scratch index instead of <c>$GIT_DIR/index</c>: building a tree object must not
+    /// disturb the edit branch's real index, which may carry the user's own staged dirt.</summary>
     internal static string RunWithIndex(string gitDir, string workTree, string indexFile, params string[] args)
     {
         var (exitCode, stdout, stderr) = Execute(gitDir, workTree, indexFile, args);
@@ -67,16 +51,8 @@ internal static class GitCli
         return stdout;
     }
 
-    /// <summary>
-    /// The thrown message names only the subcommand (<c>args[0]</c>), exit code and stderr —
-    /// never the full argument vector, which can carry absolute scratch/spill paths (e.g. a
-    /// commit message or a hash-object target) straight onto the wire via the endpoint convention's
-    /// <c>Results.Problem(ex.Message)</c>. The full vector is not lost, only moved: it goes to the
-    /// log via Serilog's ambient <see cref="Log"/> gateway (the same one <c>Program.cs</c> already
-    /// configures for the whole process) rather than an injected <c>ILogger</c> — this static class
-    /// has none to take, and this is one diagnostic line at one throw site, not a reason for Core to
-    /// start reaching for the ambient gateway generally.
-    /// </summary>
+    // Only the subcommand is named: the full argument vector can carry scratch paths onto the wire via
+    // Results.Problem(ex.Message), so it goes to the log instead.
     private static InvalidOperationException Failed(string[] args, int exitCode, string stderr)
     {
         Log.Warning("git {Args} failed ({ExitCode}): {Stderr}", args, exitCode, stderr);
@@ -96,11 +72,8 @@ internal static class GitCli
         psi.Environment["GIT_WORK_TREE"] = workTree;
         if (indexFile != null) psi.Environment["GIT_INDEX_FILE"] = indexFile;
 
-        // Read both streams concurrently, not sequentially: reading stdout to completion before
-        // touching stderr (or vice versa) is the classic .NET Process deadlock — a child that fills
-        // one OS pipe buffer (~64 KB) while the parent blocks fully draining the other wedges both
-        // sides. Unlikely at this class's typical payloads (a single-record JSON diff, a short `git
-        // log`) but not bounded by construction, so not safe to leave sequential.
+        // Both streams read concurrently: draining one to completion before the other is the classic .NET
+        // Process deadlock once a child fills a ~64 KB pipe buffer, and payloads here are not bounded.
         using var process = Process.Start(psi) ?? throw new InvalidOperationException("Failed to start the git process.");
         var stdoutTask = process.StandardOutput.ReadToEndAsync();
         var stderrTask = process.StandardError.ReadToEndAsync();
@@ -110,17 +83,14 @@ internal static class GitCli
     }
 }
 
-/// <summary>Thrown by <see cref="GitCli.EnsureOnPath"/> when git cannot be run at all — named and
-/// actionable (the message names the product requirement, ADR-0041: "git on PATH is a stated
-/// product requirement") rather than surfacing as whatever raw exception the OS gave for a missing
-/// executable.</summary>
+/// <summary>Thrown when git cannot be run at all — named and actionable, since git on PATH is a
+/// stated product requirement (ADR-0041).</summary>
 public sealed class GitUnavailableException : Exception
 {
     private const string DefaultMessage = "git was not found on PATH. Modbench's tracking features require git to be installed and on PATH.";
 
-    // RCS1194: the three standard exception constructors, for well-behaved rethrow/serialization
-    // callers generally — not how GitCli.EnsureOnPath itself throws this (the Exception?-taking
-    // constructor below), which pins the one actionable message every caller should see.
+    // RCS1194: the three standard exception constructors; EnsureOnPath throws through the
+    // Exception?-taking one below, which pins the one actionable message.
     public GitUnavailableException() : base(DefaultMessage)
     {
     }

@@ -4,43 +4,28 @@ using System.Text;
 
 namespace MEditService.Core.Source;
 
-/// <summary>
-/// Mutagen-free byte-level walker over a plugin's own record/GRUP/subrecord structure — record
-/// header, GRUP header, subrecord header (including <c>XXXX</c>-extended length), and
-/// zlib-compressed record payloads. The shared engine <c>docs/specs/medit-repair.md</c> names for
-/// both Track's subrecord-inventory tripwire and the Repair surface — one walker for both. That is
-/// also why it references no Mutagen
-/// type — a repair/diagnosis engine built on Mutagen's own object model couldn't see the exact
-/// class of defect this exists to catch, since that model is where the data went missing
-/// in the first place (ADR-0043's own "Mutagen-free engine" requirement).
-/// </summary>
+/// <summary>Mutagen-free byte-level walker over a plugin's record/GRUP/subrecord structure, shared by
+/// Track's tripwire and the Repair surface. Mutagen-free by requirement (ADR-0043): its model is
+/// where the data goes missing.</summary>
 public static class PluginBinaryWalk
 {
     private const uint CompressedFlag = 0x00040000;
 
-    /// <summary>One top-level record or GRUP header, as found by <see cref="WalkRecords"/>. For a
-    /// GRUP, only <see cref="Start"/>/<see cref="DataStart"/> are meaningful (its own header carries
-    /// no FormID); for a record, <see cref="DataStart"/>/<see cref="DataLen"/> bound its subrecord
-    /// stream, the span <see cref="WalkSubrecords"/> and <see cref="DroppedSignatures"/> operate on.</summary>
+    /// <summary>One top-level record or GRUP header. For a GRUP only <c>Start</c>/<c>DataStart</c> are
+    /// meaningful (its header carries no FormID); for a record the data span bounds its subrecord stream.</summary>
     public readonly record struct RecordSpan(string Type, uint FormId, uint Flags, int Start, int DataStart, int DataLen, bool IsGrup);
 
-    /// <summary>One subrecord, as found by <see cref="WalkSubrecords"/>. <see cref="Start"/>/<see cref="Len"/>
-    /// are relative to the record-data buffer passed in, and <see cref="Len"/> already accounts for an
-    /// <c>XXXX</c> marker preceding it (the marker itself is not returned as its own entry).</summary>
+    /// <summary>One subrecord, relative to the record-data buffer. <c>Len</c> already accounts for an
+    /// <c>XXXX</c> marker preceding it, which is not returned as its own entry.</summary>
     public readonly record struct SubrecordSpan(string Sig, int Start, int Len);
 
-    /// <summary>A record whose rewrite has fewer occurrences of one or more subrecord signatures than
-    /// the original — <see cref="FindFirstSubrecordLoss"/>'s result. <see cref="FormId"/> is the raw
-    /// stored FormID exactly as the binary carries it (relative to that plugin's own master list, no
-    /// resolution) — this walker has no link cache to resolve one, and none is needed: this ticket's
-    /// callers name the record the same way the plugin's own bytes do. <see cref="Signatures"/> is the
-    /// same list <see cref="DroppedSignatures"/> would return for this one record.</summary>
+    /// <summary>A record whose rewrite has fewer occurrences of some subrecord signatures than the
+    /// original. <c>FormId</c> is the raw stored FormID, unresolved — this walker has no link cache and
+    /// callers name records the way the bytes do.</summary>
     public readonly record struct SubrecordLoss(string RecordType, uint FormId, IReadOnlyList<string> Signatures);
 
-    /// <summary>Flat, document-order walk of every top-level record and GRUP header in <paramref name="data"/>
-    /// (a whole plugin's bytes). A GRUP's own children follow immediately after its 24-byte header — the
-    /// format nests by mere adjacency, not by a length prefix pointing past them — so this walk descends
-    /// into every GRUP by construction rather than by recursion.</summary>
+    /// <summary>Flat, document-order walk. A GRUP's children follow immediately after its 24-byte header —
+    /// the format nests by adjacency, not by a length prefix — so the walk descends by construction.</summary>
     public static List<RecordSpan> WalkRecords(byte[] data)
     {
         var list = new List<RecordSpan>();
@@ -63,11 +48,9 @@ public static class PluginBinaryWalk
         return list;
     }
 
-    /// <summary>Walk of a single record's own subrecord stream (its <see cref="RecordSpan.DataStart"/>/
-    /// <see cref="RecordSpan.DataLen"/> span, already decompressed by the caller if the record carries
-    /// <see cref="CompressedFlag"/>). An <c>XXXX</c> marker's own 4-byte payload replaces the following
-    /// subrecord's 2-byte declared length — the extended-length escape every other subrecord type can
-    /// use once its natural length exceeds a <c>ushort</c>.</summary>
+    /// <summary>A single record's subrecord stream, already decompressed by the caller. An <c>XXXX</c>
+    /// marker's 4-byte payload replaces the following subrecord's 2-byte length — the escape for a
+    /// length past <c>ushort</c>.</summary>
     public static List<SubrecordSpan> WalkSubrecords(byte[] data)
     {
         var list = new List<SubrecordSpan>();
@@ -101,18 +84,9 @@ public static class PluginBinaryWalk
         return output.ToArray();
     }
 
-    /// <summary>
-    /// The subrecord-loss tripwire: every subrecord signature <paramref name="originalData"/> holds more
-    /// occurrences of than <paramref name="rewrittenData"/> does — a signature the rewrite silently
-    /// dropped one or more instances of. Subrecord <b>order</b> and <b>content</b> are deliberately not
-    /// this check's concern (that is model identity's job — <c>ModelIdentity.FindFirst</c>
-    /// — and encoding-class differences' — a same-multiset reorder or a byte-for-byte content change to
-    /// an unchanged-count signature reports nothing here. A signature the rewrite has <i>more</i> of — a
-    /// canonical marker insertion (<c>FURN FNAM/MNAM</c>, <c>WRLD ONAM/DATA</c>, <c>INNR KSIZ</c>,
-    /// observed harmless in the round-trip survey) — reports nothing either: only a decrease is loss.
-    /// </summary>
-    /// <returns>Dropped signatures in first-seen order within <paramref name="originalData"/>, for a
-    /// stable, reproducible message; empty when nothing was dropped.</returns>
+    /// <summary>Signatures the rewrite has fewer of than the original, in first-seen order. Order and
+    /// content are model identity's concern; a signature the rewrite has more of (a canonical marker
+    /// insertion) is not loss.</summary>
     public static List<string> DroppedSignatures(byte[] originalData, byte[] rewrittenData)
     {
         var originalSubrecords = WalkSubrecords(originalData);
@@ -131,25 +105,9 @@ public static class PluginBinaryWalk
             .GroupBy(sub => sub.Sig, StringComparer.Ordinal)
             .ToDictionary(g => g.Key, g => g.Count(), StringComparer.Ordinal);
 
-    /// <summary>
-    /// Walks <paramref name="originalPluginBytes"/> and <paramref name="rewrittenPluginBytes"/> in
-    /// parallel (mirroring <c>RoundTripSurvey.Classify</c>'s own positional walk) and returns the first
-    /// record — in the original's own GRUP order — whose subrecord inventory shows a genuine drop.
-    /// <c>TES4</c>'s own <c>MAST</c>/<c>DATA</c> pair is the one exemption: every write in this
-    /// codebase re-derives the header's master list from live content, unconditionally — ADR-0038,
-    /// Mutagen's default <c>MastersListContentOption.Iterate</c> (see <c>PluginWriter</c>'s own comment
-    /// on that same default). <c>WithLoadOrderFromHeaderMasters</c> only fixes the *order* masters are
-    /// written in, not whether an unreferenced one survives — it does not keep the header's master
-    /// list identical to the original by construction. A
-    /// MAST/DATA count decrease on the header record is therefore that sanctioned pruning, not a
-    /// parse-time loss, and is excluded from this check's verdict. Nothing else about TES4 is exempted:
-    /// a genuine drop of any other header subrecord still reports.
-    ///
-    /// <para>Returns <see langword="null"/> both when nothing was dropped and when the two plugins'
-    /// records structurally diverge (different type/FormID at the same position, or a compression-flag
-    /// mismatch) — that divergence is a different failure than this check exists to name, left to the
-    /// model-identity gate that already reports it.</para>
-    /// </summary>
+    /// <summary>The first record whose subrecord inventory shows a drop, or null (also when the records
+    /// diverge). TES4's MAST/DATA are exempt: every write re-derives the master list (ADR-0038), so that
+    /// decrease is sanctioned pruning.</summary>
     public static SubrecordLoss? FindFirstSubrecordLoss(byte[] originalPluginBytes, byte[] rewrittenPluginBytes)
     {
         var originalRecords = WalkRecords(originalPluginBytes).Where(r => !r.IsGrup).ToList();

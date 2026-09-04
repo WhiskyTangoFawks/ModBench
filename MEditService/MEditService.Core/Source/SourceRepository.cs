@@ -2,14 +2,9 @@ using System.Text.Json.Serialization;
 
 namespace MEditService.Core.Source;
 
-/// <summary>
-/// ADR-0041's repo-layer verb surface over a mod folder's own git repository. Stateless by
-/// construction: tracked *is* the presence of a <c>.git</c> directory inside the mod folder — no
-/// registry, nothing cached, nothing to reconcile. Every verb tolerates the folder (or its
-/// <c>.git</c>) having changed or vanished since it was last observed — never-assume-exclusive-
-/// ownership (root CLAUDE.md): MO2's Replace install shell-deletes a whole mod folder, and nothing
-/// here is notified when that happens.
-/// </summary>
+/// <summary>ADR-0041's verb surface over a mod folder's git repository. Stateless: tracked is the
+/// presence of .git, and every verb tolerates the folder having vanished since last observed —
+/// MO2's Replace install shell-deletes mod folders.</summary>
 public static class SourceRepository
 {
     /// <summary>True exactly when <paramref name="modFolder"/> contains a <c>.git</c> directory —
@@ -17,36 +12,15 @@ public static class SourceRepository
     /// tracked) and nothing narrower (no registry lookup, no cached answer).</summary>
     public static bool IsTracked(string modFolder) => Directory.Exists(Path.Combine(modFolder, ".git"));
 
-    /// <summary>
-    /// The Track gesture's git mechanics: init a repo in <paramref name="modFolder"/>, write the
-    /// preset's <c>.gitignore</c>, write and commit every <paramref name="pristineFiles"/> entry to
-    /// <c>main</c> with <paramref name="trailers"/> as commit trailers, park
-    /// <c>refs/medit/last-compile/&lt;plugin&gt;</c> at that same commit for every plugin
-    /// <paramref name="trailers"/> names, then create and check out the edit branch. One
-    /// transaction from the caller's view — a failure anywhere in this sequence leaves no
-    /// half-repo <b>and no orphaned files</b>: the catch block removes <c>.git</c>, the
-    /// <c>.gitignore</c> written directly into <paramref name="modFolder"/>, and the
-    /// <c>pristineFiles</c> tree already written under the one root <c>source/</c> folder, since
-    /// all three land in <paramref name="modFolder"/> before the commit that is meant to make them
-    /// real.
-    /// <see cref="SourceRecordPath"/>/<see cref="Serialization.RecordTextCodec"/> already
-    /// did the serialization this method just commits, so it never invents record content, and it
-    /// never invents provenance content either — <paramref name="trailers"/> is
-    /// an input, not computed here.
-    ///
-    /// Uniform by construction (ADR-0041 amendment): always serializes, always
-    /// commits to <c>main</c>, always creates and checks out the edit branch. There is no
-    /// Authored/Modified parameter — that distinction is a workflow the user chooses after Track,
-    /// never a Track-time mode.
-    /// </summary>
+    /// <summary>Track's git mechanics: init, .gitignore, commit the baseline to main with trailers, park
+    /// every plugin's last-compile ref there, check out the edit branch. One transaction: a failure
+    /// removes .git, the .gitignore and the source tree.</summary>
     public static void Track(string modFolder, SourcePreset preset, IReadOnlyList<PristineFile> pristineFiles, TrackProvenance trailers)
     {
         GitCli.EnsureOnPath();
 
-        // Refused before touching git at all — not merely "git init happens to fail harmlessly".
-        // Reaching the try/cleanup block below against a *real*, already-tracked repo would delete
-        // it on the very first failure (checkout -b on an existing branch name, for one), mistaking
-        // someone else's repo for this call's own half-init.
+        // Refused before touching git: the cleanup below would delete a real, already-tracked repo on its
+        // first failure.
         if (IsTracked(modFolder))
             throw new SourceAlreadyTrackedException($"'{modFolder}' is already tracked.");
 
@@ -56,13 +30,9 @@ public static class SourceRepository
             GitCli.Run(gitDir, modFolder, "init", "-q", "-b", "main");
             GitCli.Run(gitDir, modFolder, "config", "core.autocrlf", "false");
             GitCli.Run(gitDir, modFolder, "config", "commit.gpgsign", "false");
-            // The source tree's flat layout has file names that routinely carry a space
-            // ("<EditorID> - <hex6>_<ModKeyFileName>.json") — git's default quotePath=true C-quotes any
-            // path with a space (or non-ASCII byte) in porcelain output.
-            // Every porcelain reader in this codebase (WorkingTreeStatus's own -z NUL-separated parse,
-            // and every caller of plain `git status --porcelain`) expects the raw path back, not a
-            // quoted-and-escaped one — set once, repo-local, at the one place every tracked repo is
-            // born, rather than taught to every reader.
+            // Flat file names routinely carry a space; git's default quotePath=true C-quotes such paths in
+            // porcelain output, and every porcelain reader here expects the raw path. Set once where every
+            // repo is born.
             GitCli.Run(gitDir, modFolder, "config", "core.quotePath", "false");
             EnsureCommitIdentity(gitDir, modFolder);
 
@@ -80,14 +50,8 @@ public static class SourceRepository
         }
         catch
         {
-            // One transaction from the caller's view: a failure anywhere above
-            // must not leave a half-initialized repo behind for IsTracked to wrongly report as
-            // tracked, or for a later Track retry to collide with. Cleaning up `.git` alone would
-            // orphan the `.gitignore` written above and any of
-            // `pristineFiles`' tree already written under the one root `source/` folder — both land
-            // directly in modFolder *before* the commit that is supposed to make them real. Uniform
-            // by construction: one catch block covers every step above (init through checkout), so
-            // this cleanup runs the same way no matter which line threw.
+            // Cleaning up .git alone would orphan the .gitignore and the source tree, both written before the
+            // commit that makes them real.
             if (Directory.Exists(gitDir)) Directory.Delete(gitDir, recursive: true);
             var gitignorePath = Path.Combine(modFolder, ".gitignore");
             if (File.Exists(gitignorePath)) File.Delete(gitignorePath);
@@ -97,22 +61,9 @@ public static class SourceRepository
         }
     }
 
-    /// <summary>
-    /// The git object names of <paramref name="relativePaths"/> <b>as <c>HEAD</c> has them</b> —
-    /// <c>git ls-tree</c>, one process for the whole batch. Null when the folder isn't tracked (a
-    /// typed answer, never a throw: a repo can be destroyed between one read and the next). A path
-    /// absent from the result simply isn't in the commit.
-    ///
-    /// <para><b>This is not working-tree status.</b> It asks what the last commit holds; what the
-    /// working tree holds against the index is <c>WorkingTreeStatus</c>'s question,
-    /// along with <c>CommitPristineToMain</c> and the rebase verbs. The distinction is load-bearing,
-    /// not naming hygiene: the two answers diverge after exactly the events this verb exists for — an
-    /// external commit, rebase or amend moves <c>HEAD</c> without touching a single file.</para>
-    ///
-    /// <para>The values are directly comparable to <c>records.content_hash</c> with no conversion:
-    /// both are git blob object names (<see cref="GitBlobHash"/>), which is the entire reason that
-    /// column stores git's own hash rather than one of our own choosing.</para>
-    /// </summary>
+    /// <summary>Object names as <c>HEAD</c> has them (<c>git ls-tree</c>, one process per batch) — not
+    /// working-tree status, which diverges after the external commits this exists for. Directly
+    /// comparable to records.content_hash. Null when untracked.</summary>
     internal static IReadOnlyDictionary<string, string>? CommittedSourceHashes(
         string modFolder, IReadOnlyList<string> relativePaths)
     {
@@ -139,23 +90,9 @@ public static class SourceRepository
         return hashes;
     }
 
-    /// <summary>One source file's text as <c>HEAD</c> has it — the content behind a hash
-    /// <see cref="CommittedSourceHashes"/> reported. Null when the folder isn't tracked or the path
-    /// isn't in the commit (a record created since, or one never committed).
-    ///
-    /// <para><b><c>cat-file -p</c>, deliberately not <c>git show</c>.</b> <c>git show
-    /// &lt;rev&gt;:&lt;path&gt;</c> treats a <b>missing</b> path as a pathspec and applies glob magic to
-    /// it — verified empirically against git 2.43: for a path containing <c>[</c>/<c>]</c> that does
-    /// not exist at
-    /// <paramref name="modFolder"/>'s <c>HEAD</c>, <c>git show</c> exits <b>0</b> with <b>empty</b>
-    /// output instead of failing — a silent "found nothing" masquerading as "found an empty file",
-    /// which fed straight into <see cref="Records.DuckDbRecordIndex.SetCommittedBaseline"/> as a
-    /// real (empty) baseline body and crashed there on the malformed-JSON insert. <c>git cat-file -p
-    /// &lt;rev&gt;:&lt;path&gt;</c> resolves the same object syntax but never applies pathspec
-    /// glob-matching to the path half, so a missing glob-shaped path fails loudly (exit 128) exactly
-    /// like a missing unbracketed one always did — restoring the null this method's own contract
-    /// promises instead of a lying empty string.</para>
-    /// </summary>
+    /// <summary>One file's text as HEAD has it, or null. cat-file -p, not git show: for a missing
+    /// glob-shaped path, show applies pathspec magic and exits 0 with empty output — a lying empty
+    /// string, not null.</summary>
     internal static string? ReadCommittedSourceText(string modFolder, string relativePath)
     {
         if (!IsTracked(modFolder)) return null;
@@ -166,16 +103,9 @@ public static class SourceRepository
             : null;
     }
 
-    /// <summary>
-    /// Every source record's text under <c>source/&lt;pluginName&gt;/**</c> as <paramref name="gitRef"/>
-    /// has it — no checkout, so a compile at <c>main</c> (<see cref="Edits.CompileSource.AtRef"/>)
-    /// never touches the edit branch's own working tree or index, exactly like
-    /// <see cref="ReadCommittedSourceText"/>'s no-checkout read but for a whole plugin's tree at any
-    /// ref rather than one path at <c>HEAD</c>. Empty (not null) when the folder isn't tracked, the
-    /// ref doesn't resolve, or the plugin has no source tree at that ref — an "AtRef" compile target
-    /// with nothing to compile is a real, empty answer here, not a failure to report; the caller
-    /// decides what an empty source means for a plugin that is supposed to be tracked.
-    /// </summary>
+    /// <summary>The plugin's tree as <paramref name="gitRef"/> has it, with no checkout, so a compile at
+    /// main never touches the edit branch's working tree. Empty, not null, when there is nothing at
+    /// that ref.</summary>
     internal static IReadOnlyList<(string RelativePath, byte[] Bytes)> EnumerateSourceAtRef(
         string modFolder, string pluginName, string gitRef)
     {
@@ -195,35 +125,16 @@ public static class SourceRepository
             if (fields.Length < 3 || fields[1] != "blob") continue;
             var relativePath = entry[(tab + 1)..];
 
-            // cat-file -p, not show — see ReadCommittedSourceText's own doc comment (this path
-            // came from ls-tree so it always exists, but there is no reason to keep the one git
-            // subcommand that mishandles a glob-shaped path when a safe one is right there).
+            // cat-file -p, not show — see ReadCommittedSourceText.
             if (!GitCli.TryRun(gitDir, modFolder, out var text, "cat-file", "-p", $"{gitRef}:{relativePath}")) continue;
             results.Add((relativePath, System.Text.Encoding.UTF8.GetBytes(text)));
         }
         return results;
     }
 
-    /// <summary>
-    /// Re-parks <c>refs/medit/last-compile/&lt;plugin&gt;</c> at a floating snapshot of the tree
-    /// the caller just compiled from — no HEAD, branch, or index movement (the
-    /// <c>git stash create</c> idiom, ADR-0041's 2026-08-19 amendment), message carrying a
-    /// <c>Binary-SHA256</c> trailer for the binary the caller just finished writing. Track already
-    /// initializes this ref to the pristine baseline; every compile after that re-points it
-    /// here, and only after the caller confirms the binary write landed — this method never runs
-    /// before that, by construction of who calls it (<c>Edits.PluginCompileService</c>).
-    ///
-    /// <para>The snapshotted tree depends on <paramref name="atRef"/> (deliberately the same two
-    /// primitives the compile source itself boils down to, rather than a dependency on
-    /// <c>Edits.CompileSource</c> — the repo layer stays the lower one of the two, never the other
-    /// way around): null (the normal, working-tree compile) snapshots the actual working directory as
-    /// compile read it (<c>git stash create</c>'s own snapshot, degrading to <c>HEAD</c>'s tree when
-    /// the working tree is byte-identical to the index — <c>git stash create</c> answers empty then,
-    /// and there is nothing dirtier to snapshot); a ref name (compile at that ref, no checkout)
-    /// snapshots that ref's own tree directly — no working directory was involved in that compile at
-    /// all, so there is nothing to stash. Both land through the same <c>git commit-tree</c> call,
-    /// which is what keeps the two cases one code path instead of two.</para>
-    /// </summary>
+    /// <summary>Re-parks the last-compile ref at the tree just compiled from, without moving HEAD, branch
+    /// or index (ADR-0041). Null <paramref name="atRef"/> snapshots the working tree; a ref name
+    /// snapshots that ref's tree.</summary>
     internal static void ParkCompileSnapshot(
         string modFolder, string plugin, string? atRef, string binarySha256)
     {
@@ -234,18 +145,15 @@ public static class SourceRepository
             ? WorkingTreeSnapshotTree(gitDir, modFolder, headSha)
             : GitCli.Run(gitDir, modFolder, "rev-parse", $"{atRef}^{{tree}}").Trim();
 
-        // commit-tree is plumbing: it takes a literal message, not --trailer (that's porcelain's own
-        // commit command) — the trailer is git's own "Key: Value" line at the message tail, blank-
-        // line-separated, written by hand here for the one caller that needs a trailer on a commit
-        // object nothing else in this class builds through `git commit`.
+        // commit-tree is plumbing with no --trailer flag, so the trailer line is hand-written at the message
+        // tail.
         var message = $"Save & Compile: {plugin}\n\nBinary-SHA256: {binarySha256}";
         var snapshotSha = GitCli.Run(gitDir, modFolder, "commit-tree", tree, "-p", headSha, "-m", message).Trim();
         GitCli.Run(gitDir, modFolder, "update-ref", LastCompileRef(plugin), snapshotSha);
     }
 
-    // git stash create answers empty (not an error) when the working tree has nothing to stash —
-    // byte-identical to the index, which itself matches HEAD absent any porcelain staging this repo
-    // never does. There is nothing dirtier to snapshot than HEAD's own tree in that case.
+    // git stash create answers empty, not an error, when the working tree matches the index; HEAD's own
+    // tree is then the snapshot.
     private static string WorkingTreeSnapshotTree(string gitDir, string workTree, string headSha)
     {
         if (!GitCli.TryRun(gitDir, workTree, out var stashSha, "stash", "create") || string.IsNullOrWhiteSpace(stashSha))
@@ -254,17 +162,9 @@ public static class SourceRepository
         return GitCli.Run(gitDir, workTree, "rev-parse", $"{stashSha.Trim()}^{{tree}}").Trim();
     }
 
-    /// <summary>
-    /// Absorb Upstream Update's git mechanics: commits <paramref name="pristineFiles"/> onto <c>main</c> as a
-    /// new baseline — by plumbing, exactly like <see cref="Track"/>'s own baseline commit, but with
-    /// <b>no checkout at all</b>: the edit branch stays checked out throughout, its working tree, its
-    /// index and its <c>HEAD</c> all untouched. Fresh <paramref name="trailers"/> replace whatever
-    /// main's previous tip carried — <see cref="LatestBaselineTrailers"/> only ever reads the tip, so
-    /// nothing needs merging with the old ones. Every parked ref <paramref name="trailers"/> names is
-    /// advanced to the new commit too, the same "the parked ref is the detection reference" contract
-    /// <see cref="ParkCompileSnapshot"/> established, extended to cover a baseline that arrived with
-    /// no compile at all.
-    /// </summary>
+    /// <summary>Absorb's git mechanics: commits the baseline to main by plumbing with no checkout, so the
+    /// edit branch's working tree, index and HEAD stay untouched. Every parked ref named is advanced
+    /// too.</summary>
     public static void CommitPristineToMain(
         string modFolder, IReadOnlyList<PristineFile> pristineFiles, TrackProvenance trailers)
     {
@@ -272,10 +172,8 @@ public static class SourceRepository
         var gitDir = Path.Combine(modFolder, ".git");
         var parentSha = GitCli.Run(gitDir, modFolder, "rev-parse", "refs/heads/main").Trim();
 
-        // A scratch working tree and a scratch index — never the mod folder's own, never its real
-        // index — is what "no checkout" actually buys: `add`/`write-tree` need *some* work tree and
-        // index to operate against, and the edit branch's real ones may themselves hold the user's
-        // own staged dirt that this call must never disturb.
+        // A scratch work tree and index: add/write-tree need some, and the edit branch's real ones may hold
+        // the user's own staged dirt.
         var scratchDir = Directory.CreateTempSubdirectory("medit-absorb-").FullName;
         var scratchIndex = Path.Combine(Path.GetTempPath(), $"medit-absorb-index-{Guid.NewGuid():N}");
         try
@@ -313,23 +211,9 @@ public static class SourceRepository
         return string.Join('\n', lines);
     }
 
-    /// <summary>
-    /// The offered rebase — the edit branch replayed onto <c>main</c>'s new tip, offered as a
-    /// separate, non-modal step after Absorb Upstream Update lands a baseline, and re-runnable later
-    /// via <c>Modbench: Rebase onto Updated Baseline</c>. Refuses over any working-tree dirt (git's
-    /// own refusal posture, ADR-0041 amendment: "refuse, and the user fixes it") before ever touching
-    /// the branch — commit, stash or discard is the user's own gesture, never automated here.
-    ///
-    /// <para><b>Resumption-aware</b>: the one command re-running this after a conflict must also be
-    /// how the user continues it (there is no separate "continue" gesture surfaced to them — the
-    /// native merge editor they resolved conflicts in doesn't know this rebase exists, since it was
-    /// never driven through <c>vscode.git</c>'s own porcelain). If git already has a rebase in
-    /// progress here (<c>.git/rebase-merge</c> or <c>.git/rebase-apply</c>), the resolved-but-staged
-    /// files are not dirt to refuse over — they're the answer — so this delegates straight to
-    /// <see cref="ContinueRebase"/> instead of the dirt guard and a fresh <c>rebase</c> invocation,
-    /// which would either wrongly refuse (dirt guard) or fail outright (git refuses a second
-    /// concurrent rebase).</para>
-    /// </summary>
+    /// <summary>The edit branch replayed onto main's new tip. Refuses over working-tree dirt (ADR-0041).
+    /// Mid-rebase, the staged resolutions are the answer, not dirt, so this delegates to
+    /// <see cref="ContinueRebase"/>.</summary>
     public static RebaseResult RebaseEditBranch(string modFolder)
     {
         var gitDir = Path.Combine(modFolder, ".git");
@@ -355,12 +239,8 @@ public static class SourceRepository
     private static bool RebaseInProgress(string gitDir) =>
         Directory.Exists(Path.Combine(gitDir, "rebase-merge")) || Directory.Exists(Path.Combine(gitDir, "rebase-apply"));
 
-    /// <summary>
-    /// Continues a rebase left mid-flight by <see cref="RebaseEditBranch"/>'s own conflict outcome,
-    /// after the user has hand-resolved the conflicted source file(s) in the native merge editor —
-    /// stages whatever the working tree now holds (this repo's tree is source-JSON-only, so a blanket
-    /// <c>add -A</c> is exactly "the resolution the user just wrote", nothing more) and continues.
-    /// </summary>
+    /// <summary>Stages whatever the working tree now holds and continues: this repo's tree is
+    /// source-JSON-only, so a blanket <c>add -A</c> is exactly the resolution the user just wrote.</summary>
     public static RebaseResult ContinueRebase(string modFolder)
     {
         var gitDir = Path.Combine(modFolder, ".git");
@@ -377,14 +257,9 @@ public static class SourceRepository
             ? stdout.Split('\n', StringSplitOptions.RemoveEmptyEntries).ToList()
             : [];
 
-    /// <summary>
-    /// Every relative path <c>git status</c> considers dirty in <paramref name="modFolder"/>'s
-    /// working tree — staged or not, matching the file, not the index alone (the refuse-over-dirt
-    /// checks: rebase-over-dirt and Keep-as-My-Edit's same-record collision both need "does the
-    /// user have any uncommitted change here", which a bare index compare would miss for a plain
-    /// unstaged edit). Empty when the folder isn't tracked or nothing is dirty — never a failure;
-    /// callers treat both the same way, "nothing to refuse over".
-    /// </summary>
+    /// <summary>Every path git status considers dirty, staged or not: the refuse-over-dirt checks need
+    /// "any uncommitted change here", which an index-only compare would miss. Empty when untracked
+    /// or clean.</summary>
     internal static IReadOnlyList<string> WorkingTreeStatus(string modFolder)
     {
         if (!IsTracked(modFolder)) return [];
@@ -409,25 +284,9 @@ public static class SourceRepository
         return paths;
     }
 
-    /// <summary>
-    /// The <c>Binary-SHA256</c> trailer off <c>refs/medit/last-compile/&lt;plugin&gt;</c>'s own
-    /// commit message — "the binary as Modbench last wrote it" (the self-echo tell: a freshly
-    /// observed binary whose hash matches this one is Save &amp; Compile's own write, not an
-    /// external change). Null when the folder isn't tracked, the ref doesn't exist, or the ref's
-    /// commit carries no such trailer — a missing or orphaned ref degrades to asking the dialog's
-    /// question, never a throw.
-    ///
-    /// <para><b>Two trailer shapes share this key, and this method reads both.</b> Before any
-    /// compile has ever run, Track already parked this exact ref straight at the shared baseline
-    /// commit, whose message carries one <c>Binary-SHA256: &lt;plugin&gt;=&lt;hash&gt;</c>
-    /// line <i>per plugin the mod folder holds</i> (<see cref="CommitWithTrailers"/>'s multi-plugin
-    /// format). Every compile after that re-parks the ref at its own floating snapshot instead
-    /// (<see cref="ParkCompileSnapshot"/>), whose message carries a bare
-    /// <c>Binary-SHA256: &lt;hash&gt;</c> — no plugin prefix, because that ref already names one
-    /// plugin. Reading only the bare shape would misread every freshly tracked, never-yet-compiled
-    /// plugin's own hash as absent and misclassify its own untouched binary as an external change.
-    /// </para>
-    /// </summary>
+    /// <summary>The Binary-SHA256 trailer off the plugin's last-compile ref. Two shapes: the shared
+    /// baseline's per-plugin plugin=hash lines, and a compile snapshot's bare hash. Null degrades to
+    /// asking the dialog.</summary>
     internal static string? ParkedCompileBinarySha256(string modFolder, string plugin)
     {
         if (!IsTracked(modFolder)) return null;
@@ -452,15 +311,9 @@ public static class SourceRepository
         return values.FirstOrDefault(value => !value.Contains('=', StringComparison.Ordinal));
     }
 
-    /// <summary>
-    /// The provenance trailers off <c>main</c>'s own tip commit (<see cref="CommitWithTrailers"/>'s
-    /// own format) — <b>explicitly <c>refs/heads/main</c></b>, never bare <c>HEAD</c>: the edit
-    /// branch is checked out in normal use, and <c>main</c> is never checked out (ADR-0041), so
-    /// reading "the branch git happens to have checked out" would silently answer for the wrong ref
-    /// the moment this is called against a real load order. <see cref="TrackProvenance.BinarySha256ByPlugin"/>
-    /// is per-plugin on one shared commit (a mod folder can hold more than one plugin); everything
-    /// else is folder-wide. Null when the folder isn't tracked or <c>main</c> has no commit yet.
-    /// </summary>
+    /// <summary>The trailers off main's tip — explicitly refs/heads/main, never HEAD, since the edit
+    /// branch is what is checked out (ADR-0041). Per-plugin for the binary hash; folder-wide otherwise.
+    /// Null when untracked.</summary>
     internal static BaselineTrailers? LatestBaselineTrailers(string modFolder, string plugin)
     {
         if (!IsTracked(modFolder)) return null;
@@ -481,9 +334,7 @@ public static class SourceRepository
         return new BaselineTrailers(ReadTrailer(body, "Upstream-Version"), ReadTrailer(body, "Meta-SHA256"), binarySha256);
     }
 
-    // Git's own trailer shape: "Key: Value" lines at the message tail, one per line. Returns the
-    // last matching line's value (a commit carries at most one in every writer this class has, but
-    // "last wins" is the same rule git itself uses for a repeated trailer key).
+    // Last matching line wins — git's own rule for a repeated trailer key.
     private static string? ReadTrailer(string body, string key)
     {
         var prefix = $"{key}: ";
@@ -497,40 +348,22 @@ public static class SourceRepository
     // its paths with Path.Combine.
     private static string ToGitPath(string relativePath) => relativePath.Replace('\\', '/');
 
-    /// <summary>
-    /// The one place <c>refs/medit/last-compile/&lt;plugin&gt;</c> is built — every call site
-    /// that reads or writes this ref family goes through here, never a second inline interpolation of
-    /// the raw filename. Almost every real Fallout 4 plugin name is ref-unsafe by git's own rules
-    /// (spaces, <c>[</c>/<c>]</c>, and more are forbidden — <c>git check-ref-format</c>), so
-    /// <see cref="EncodeRefComponent"/> percent-encodes the plugin filename before it ever reaches
-    /// git.
-    ///
-    /// <para><b>The encoding is stable and injective, deliberately not
-    /// reversible</b>: two distinct plugin filenames must never collapse onto the same ref, but nothing in
-    /// this codebase enumerates <c>refs/medit/last-compile/*</c> (no <c>for-each-ref</c>/<c>show-ref</c>
-    /// caller exists) — every site starts from a known plugin name and encodes forward. A future
-    /// caller that needs to go the other way must not assume this ref suffix decodes back to a literal
-    /// filename.</para>
-    /// </summary>
+    /// <summary>The one place <c>refs/medit/last-compile/&lt;plugin&gt;</c> is built. Almost every real
+    /// plugin name is ref-unsafe, so the filename is percent-encoded: injective, but deliberately not
+    /// reversible — nothing enumerates these refs.</summary>
     internal static string LastCompileRef(string plugin)
     {
-        // A caller passing an empty plugin name is a bug upstream, not a name to accommodate — left
-        // unguarded, EncodeRefComponent's identity behavior on an empty string produces
-        // "refs/medit/last-compile/" (a ref ending in "/", which git also rejects), and no placeholder
-        // string could be substituted without risking a collision with some real plugin name.
+        // An empty name is an upstream bug: encoding it would yield a ref ending in "/", which git rejects
+        // too.
         if (string.IsNullOrEmpty(plugin))
             throw new ArgumentException("Plugin filename must not be empty.", nameof(plugin));
 
         return $"refs/medit/last-compile/{EncodeRefComponent(plugin)}";
     }
 
-    // Percent-encodes (UTF-8, byte-wise) every byte that isn't ASCII alnum/-/_, plus '.' whenever
-    // leaving it literal would produce a ref component git itself rejects for reasons beyond the
-    // issue's named character list: a leading dot, a trailing dot, a ".." run, or (git's own lock-file
-    // convention) a trailing ".lock". '%' itself is always escaped (to "%25"), which is what keeps
-    // this injective — the encoded output can never be ambiguous about where an escape sequence
-    // starts. Already-safe names (the common case: plain alnum/dot/dash/underscore filenames, and not
-    // ending in ".lock") pass through unchanged.
+    // Percent-encodes every byte outside ASCII alnum/-/_, plus '.' where a literal one would make a
+    // component git rejects (leading, trailing, "..", trailing ".lock"). '%' is always escaped, which
+    // keeps this injective.
     private static string EncodeRefComponent(string plugin)
     {
         var bytes = System.Text.Encoding.UTF8.GetBytes(plugin);
@@ -553,16 +386,8 @@ public static class SourceRepository
         return sb.ToString();
     }
 
-    /// <summary>
-    /// Commits whatever is currently staged, with <paramref name="trailers"/> rendered as commit
-    /// trailers via <c>git commit --trailer</c> (porcelain) — the one place that trailer *formatting*
-    /// lives for a real checkout-and-commit. <see cref="CommitPristineToMain"/> needs a
-    /// checkout-free, plumbing-only <c>commit-tree</c>, which has no <c>--trailer</c> flag of its
-    /// own, so it hand-writes the identical "Key: Value" shape itself (<c>FormatTrailers</c>) rather
-    /// than reusing this method. An internal implementation detail (no public surface without a
-    /// caller) — <see cref="Track"/> is this method's only
-    /// caller.
-    /// </summary>
+    // Trailer formatting for a real checkout-and-commit; CommitPristineToMain hand-writes the same shape
+    // because commit-tree has no --trailer.
     private static void CommitWithTrailers(string gitDir, string workTree, string message, TrackProvenance trailers)
     {
         var commitArgs = new List<string> { "commit", "-q", "-m", message };
@@ -575,15 +400,11 @@ public static class SourceRepository
         GitCli.Run(gitDir, workTree, [.. commitArgs]);
     }
 
-    /// <summary>The checked-out branch a tracked Downloaded mod's edits live on (CONTEXT.md's
-    /// "Edit branch") — one fixed name, not derived from the mod or plugin, since Track operates on
-    /// the whole mod folder and a folder can hold more than one plugin.</summary>
+    /// <summary>The checked-out branch edits live on (CONTEXT.md's "Edit branch") — one fixed name, since
+    /// a mod folder can hold more than one plugin.</summary>
     internal const string EditBranchName = "edit";
 
-    /// <summary>Probes the effective (global/system) git identity once, the same way a fresh
-    /// `git commit` would; if either half is unset, pins a repo-local fallback so the baseline
-    /// commit never fails for lack of identity — never overwrites a real global identity, and never
-    /// touches it, only ever writes into this repo's own local config.</summary>
+    // Pins a repo-local identity only when the global one is unset; never overwrites a real identity.
     private static void EnsureCommitIdentity(string gitDir, string workTree)
     {
         if (!GitCli.TryRun(gitDir, workTree, out _, "config", "--get", "user.name"))
@@ -592,19 +413,11 @@ public static class SourceRepository
             GitCli.Run(gitDir, workTree, "config", "user.email", "modbench@localhost");
     }
 
-    // Every source path lives under one root "source/" folder
-    // (SourceRecordPath.RootFolderName); the Edits preset ignores
-    // everything except that one folder, Everything additionally un-ignores assets. meta.ini is
-    // excluded in both — it is never tracked content (ADR-0041 amendment: "never track a file that
-    // changes for non-content reasons") — and plugin binaries (the compiled artifact, never written
-    // by this module) are ignored in both.
+    // meta.ini is never tracked content (ADR-0041 amendment) and plugin binaries are the compiled
+    // artifact; both are ignored in every preset.
     private static string GitignoreContent(SourcePreset preset) => preset switch
     {
-        // Root-anchored (leading "/"), deliberately, not bare "source/": a bare pattern ignores any
-        // path *segment* named "source" at any depth, and a mod's own Papyrus assets legitimately
-        // nest a directory of that name below the root (Scripts/Source/*.psc) — an unanchored
-        // pattern would swallow those too. The root folder only ever lives at the mod folder's own
-        // root (SourceRecordPath.RootFor), so anchoring loses nothing real.
+        // Root-anchored: a bare "source/" would also swallow a mod's own Scripts/Source/*.psc.
         SourcePreset.Edits =>
             "# Generated by Track (Edits preset) — mEdit never rewrites this file after Track.\n" +
             "*\n" +
@@ -612,9 +425,7 @@ public static class SourceRepository
             $"!/{SourceRecordPath.RootFolderName}/**\n" +
             "!.gitignore\n" +
             "meta.ini\n",
-        // Root-anchored (leading "/"), deliberately, not bare "*.esp": a bare pattern ignores any
-        // path *segment* ending ".esp" at any depth. Plugin binaries only ever live at the mod
-        // folder root, so anchoring loses nothing.
+        // Root-anchored: plugin binaries only ever live at the mod folder root.
         SourcePreset.Everything =>
             "# Generated by Track (Everything preset) — mEdit never rewrites this file after Track.\n" +
             "/*.esp\n" +
@@ -625,14 +436,12 @@ public static class SourceRepository
     };
 }
 
-/// <summary>The provenance <c>main</c>'s tip commit carries right now — <see cref="SourceRepository.LatestBaselineTrailers"/>'s
-/// read counterpart to <see cref="TrackProvenance"/>, the write side. All optional, same as
-/// <see cref="TrackProvenance"/> (authored/manually-installed mods may have none).</summary>
+/// <summary>The provenance main's tip carries right now, the read counterpart of
+/// <see cref="TrackProvenance"/>. All optional.</summary>
 public sealed record BaselineTrailers(string? UpstreamVersion, string? MetaSha256, string? BinarySha256);
 
-/// <summary><see cref="SourceRepository.RebaseEditBranch"/>/<see cref="SourceRepository.ContinueRebase"/>'s
-/// outcome. <see cref="ConflictedPaths"/> is the extension's cue to open each path in VS Code's native
-/// merge editor; <see cref="RefusalReason"/> is set only for <see cref="RebaseOutcome.Refused"/>.</summary>
+/// <summary>A rebase attempt's outcome. <see cref="ConflictedPaths"/> is the extension's cue to open
+/// each path in the native merge editor; the refusal reason is set only when refused.</summary>
 public sealed record RebaseResult(RebaseOutcome Outcome, string? RefusalReason, IReadOnlyList<string> ConflictedPaths)
 {
     public static RebaseResult Clean() => new(RebaseOutcome.Clean, null, []);
@@ -653,15 +462,13 @@ public enum RebaseOutcome
     /// <summary>Refused before touching the branch — uncommitted dirt in the working tree.</summary>
     Refused,
 
-    /// <summary>Left mid-rebase with conflict markers in <see cref="RebaseResult.ConflictedPaths"/>;
-    /// <see cref="SourceRepository.ContinueRebase"/> is how the user resumes after resolving them.</summary>
+    /// <summary>Left mid-rebase with conflict markers in the conflicted paths; continuing is how the user
+    /// resumes after resolving them.</summary>
     Conflicted,
 }
 
-/// <summary>Thrown by <see cref="SourceRepository.Track"/> when the mod folder already has a
-/// <c>.git</c> — named and actionable (never a bare <see cref="InvalidOperationException"/> a
-/// caller would have to string-match to tell apart from any other one) so the endpoint layer can
-/// map it to a real HTTP conflict, distinct from every other failure this call can raise.</summary>
+/// <summary>Thrown by Track when the mod folder already has a <c>.git</c> — named so the endpoint
+/// layer maps it to a real HTTP conflict.</summary>
 public sealed class SourceAlreadyTrackedException : Exception
 {
     public SourceAlreadyTrackedException() : base("This mod folder is already tracked.")

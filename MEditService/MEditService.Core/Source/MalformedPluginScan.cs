@@ -2,44 +2,26 @@ using System.Text;
 
 namespace MEditService.Core.Source;
 
-/// <summary>
-/// The Kind B per-class detectors (#569, ADR-0043): byte-level scans that name a Malformed
-/// plugin's defect class — subrecords the Creation Kit would never have written that way — from
-/// the plugin's <b>original bytes alone</b>. No Mutagen (the model is where the data goes missing;
-/// ADR-0043's Mutagen-free requirement) and no recompiled counterpart (unlike
-/// <see cref="PluginBinaryWalk.FindFirstSubrecordLoss"/>'s two-sided inventory diff), which is what
-/// lets the session-load surface (#570) run this over every plugin without a Track.
-///
-/// <para>Each detector is a row in a per-game data table of proven defect classes
-/// (<c>docs/specs/medit-repair.md</c>); the tables here are Fallout 4's, each row proven by a real
-/// defective plugin committed as a fixture and — for the canonical-form claims ("the CK always
-/// writes…") — by the <c>MEDIT_SMOKE</c>-gated vanilla scan, which asserts the shipped game trips
-/// none of them. Expected values come from the vanilla binaries, not from a reference's comments:
-/// xEdit's own PERK table annotates fn 14 as <c>EPFT=2</c> where vanilla plugins carry
-/// <c>EPFT=8</c>.</para>
-/// </summary>
+/// <summary>Kind B detectors (ADR-0043): byte-level scans naming a defect class from the plugin's
+/// original bytes alone, with no Mutagen. Expected values come from vanilla binaries, not a
+/// reference's comments.</summary>
 public static class MalformedPluginScan
 {
     private const uint CompressedFlag = 0x00040000;
 
-    /// <summary>(record type, subrecord) → the payload size the CK always writes. A shorter
-    /// payload is repairable by zero-padding to size — lossless.</summary>
+    // (record type, subrecord) → the payload size the CK always writes; a shorter one is zero-padded, losslessly.
     private static readonly Dictionary<(string RecordType, string Sig), int> FixedSizeTable = new()
     {
         [("REGN", "RDAT")] = 8, // Type u32, Override u8, Priority u8, unused ×2
     };
 
-    /// <summary>(record type, subrecord) → the occurrence count the CK always writes when it
-    /// writes any. Zero occurrences stays clean — absence of the whole list is not the defect
-    /// this row proves (Lunar-UniqueCreatures.esp's RACEs carry 31 and 30 of 32).</summary>
+    // (record type, subrecord) → the count the CK writes when it writes any; zero occurrences stays clean.
     private static readonly Dictionary<(string RecordType, string Sig), int> FixedCountTable = new()
     {
         [("RACE", "NAME")] = 32, // Biped Object Names — one per FO4 biped slot
     };
 
-    /// <summary>(record type, counter subrecord) → the entry subrecord the counter's own u32
-    /// counts. Entries follow their counter contiguously; a disagreement is repairable by
-    /// rewriting the counter to the real count — lossless.</summary>
+    // (record type, counter) → the entry subrecord its u32 counts; entries follow contiguously.
     private static readonly Dictionary<(string RecordType, string Counter), string> CounterTable = new()
     {
         [("REFR", "XWPG")] = "XWPN", // power-grid connections
@@ -47,13 +29,9 @@ public static class MalformedPluginScan
 
     private const string Lossless = "repairable (lossless)";
 
-    /// <summary>PERK entry-point function → the EPFT the CK writes for it, proven empirically
-    /// over every entry-point effect in the shipped game and DLC (823 of them) — not taken from
-    /// a reference's annotations (xEdit's comment table says fn 14 → EPFT 2; vanilla carries 8).
-    /// Functions vanilla never exercises (4, 7, 8, 11, 15) have no provable canonical shape and
-    /// are deliberately absent — the scan makes no claim about them. fn 6 is the inverse row:
-    /// vanilla writes no parameter block at all. fn 9 additionally always carries EPF3 (EPF2 is
-    /// NOT required — three vanilla entries omit it).</summary>
+    // PERK entry-point function → the EPFT vanilla writes, proven over all 823 shipped entry-point
+    // effects. Functions vanilla never exercises are absent; fn 6 writes no parameter block; fn 9 always
+    // carries EPF3.
     private static readonly Dictionary<byte, byte> EpftByPerkFunction = new()
     {
         [1] = 1,
@@ -171,14 +149,8 @@ public static class MalformedPluginScan
         }
     }
 
-    /// <summary>R1: within the WEAP object template (<c>OBTE … STOP</c>), the CK's grammar —
-    /// proven by every vanilla template (1,031/1,031, <c>docs/specs/medit-repair.md</c>) — is an
-    /// optional leading bare <c>OBTS</c> (the default combination, GaussRifle's own shape) followed
-    /// by combinations each written <c>OBTF, FULL, OBTS</c>: every <c>OBTF</c>/<c>FULL</c> is
-    /// eventually closed by an <c>OBTS</c>. The defective plugin (Lunar Arsenal's
-    /// <c>GaussRevolver.esp</c>: <c>OBTS OBTF FULL STOP</c>) instead trails <c>OBTF</c>/<c>FULL</c>
-    /// with no closing <c>OBTS</c> — that combination's <c>OBTS</c> came before it. The named
-    /// combination index is the count of properly closed <c>OBTF</c>-led groups.</summary>
+    // R1: every vanilla WEAP template (1,031/1,031) writes combinations as OBTF, FULL, OBTS after an
+    // optional bare leading OBTS; a trailing OBTF/FULL with no closing OBTS is the defect.
     private static void DetectTemplateOrder(
         PluginBinaryWalk.RecordSpan record, List<PluginBinaryWalk.SubrecordSpan> subrecords,
         string anchor, List<PluginDiagnosis> diagnoses)
@@ -200,8 +172,7 @@ public static class MalformedPluginScan
         }
     }
 
-    /// <summary>How many OBTF-led combinations were properly closed by a following OBTS — the
-    /// index the dangling one would have taken.</summary>
+    // The index the dangling combination would have taken.
     private static int CountClosedGroups(List<string> template)
     {
         var closed = 0;
@@ -214,11 +185,8 @@ public static class MalformedPluginScan
         return closed;
     }
 
-    /// <summary>R5-R7: each PERK entry-point effect (a <c>PRKE</c> whose type byte is 2) carries
-    /// its function in the following <c>DATA</c>'s second byte; the parameter block until
-    /// <c>PRKF</c> must match <see cref="EpftByPerkFunction"/>'s vanilla-proven shape. Repairing a
-    /// parameter block a function never takes removes bytes, so that one row's tail carries the
-    /// byte cost; the other two shapes repair without removing anything.</summary>
+    // R5-R7: a PRKE with type byte 2 carries its function in the next DATA's second byte; the parameter
+    // block until PRKF must match the vanilla-proven shape.
     private static void DetectEntryPointShape(
         PluginBinaryWalk.RecordSpan record, byte[] data, List<PluginBinaryWalk.SubrecordSpan> subrecords,
         string anchor, List<PluginDiagnosis> diagnoses)

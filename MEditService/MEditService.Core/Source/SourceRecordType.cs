@@ -3,13 +3,9 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Core.Source;
 
-/// <summary>
-/// A record's source record-type folder name — the same resolution
-/// <c>DuckDbRecordIndex.ResolveRecordType</c> uses (schema table name by type match, else the CLR
-/// type name lowercased). Shared by every caller that deep-parses a plugin binary straight to
-/// pristine source text: <see cref="TrackService"/> (Track) and Absorb Upstream Update, which is
-/// exactly the same operation — a fresh baseline serialized from a binary — for a different reason.
-/// </summary>
+/// <summary>A record's source record-type folder name, resolved the same way
+/// <c>DuckDbRecordIndex.ResolveRecordType</c> does: schema table name by type match, else the CLR
+/// type name lowercased.</summary>
 internal static class SourceRecordType
 {
     internal static string Resolve(IMajorRecordGetter record, IReadOnlyDictionary<string, RecordTableSchema> schemas)

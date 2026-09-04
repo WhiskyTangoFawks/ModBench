@@ -5,97 +5,22 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Core.Source;
 
-/// <summary>
-/// Which file holds a record, when that file is not the record's own.
-/// </summary>
-/// <param name="FullPath">The file to read and write. For a container or an embedded child this is a
-/// file that was <i>found</i> on disk, because there is no path to compute for one. For a flat record
-/// it is <see cref="SourceRecordPath.For"/>'s computed path, which may not exist — the caller's
-/// existing never-assume-exclusive-ownership fallback (edit from the indexed body, rewrite the file)
-/// is the right answer there and is deliberately left intact.</param>
-/// <param name="RelativePath">The same file relative to the mod folder, for logging and for the
-/// git-facing vocabulary the Source Control panel speaks.</param>
-/// <param name="OwnerFormKey">The record whose document <paramref name="FullPath"/> <i>is</i> — the
-/// requested record itself for a flat or directory-per-record type, or the container it is embedded
-/// in.</param>
-/// <param name="OwnerRecordType">The owner's <c>record_type</c>, which is what the codec needs to
-/// read the file back.</param>
-/// <param name="IsEmbedded">True when <paramref name="OwnerFormKey"/> is not the requested record —
-/// i.e. the caller must reach into the owner's object graph to find what it asked for.</param>
+/// <summary>The file holding a record. For a container or embedded child it was found on disk, since
+/// none is computable; for a flat record it is the computed path, which may not exist.</summary>
 internal readonly record struct SourceUnit(
     string FullPath, string RelativePath, string OwnerFormKey, string OwnerRecordType, bool IsEmbedded)
 {
-    /// <summary>
-    /// True when <see cref="FullPath"/> is a directory-per-record container's own field file (a
-    /// Cell/Worldspace/Quest, or a nested folder-split child such as a Quest's DialogTopic) rather
-    /// than a flat record's single file. One definition here rather than each call site
-    /// (<c>RecordEditService.RenameSourceUnit</c>, <c>DeleteRecord</c>,
-    /// <c>WriteTargetRewrite</c>) retyping the test — alongside <see cref="IsEmbedded"/>,
-    /// which <see cref="SourceUnit"/> already carries the same way.
-    ///
-    /// <para><b>The header's own root <c>RecordData.json</c> (#661) is excluded explicitly, not by
-    /// the filename test alone.</b> The whole-mod door's group-level file name
-    /// (<see cref="SourceUnitResolver.RecordDataFileName"/>) is shared between two shapes: a
-    /// container's field file, sitting one level <i>under</i> the plugin's own source root, and the
-    /// header's document, sitting <i>at</i> it — the filename test alone cannot tell them apart, and
-    /// answering true for the header is not a theoretical risk: it was a real, reviewer-caught defect
-    /// (a header <c>DeleteRecord</c> deleting the plugin's own source root as "one record's" delete).
-    /// <see cref="OwnerRecordType"/> is what actually distinguishes them — a container's is its own
-    /// concrete type, the header's is always <c>HeaderIndexer.RecordType</c> — so this checks that
-    /// rather than trusting the filename in isolation. Every one of the three call sites this
-    /// property's own doc names is expected to answer correctly for the header now, not just the ones
-    /// a caller happened to guard separately.</para>
-    /// </summary>
+    /// <summary>A container's own field file, not a flat file. The header's root RecordData.json shares
+    /// the filename, so <see cref="OwnerRecordType"/> distinguishes them, or a header delete would
+    /// remove the whole source root.</summary>
     internal bool IsDirectoryPerRecord =>
         OwnerRecordType != HeaderIndexer.RecordType
         && Path.GetFileName(FullPath).Equals(SourceUnitResolver.RecordDataFileName, StringComparison.Ordinal);
 }
 
-/// <summary>
-/// The record→source-unit question, answered for <b>every</b> record shape the source layout has
-/// (ADR-0041 amendment: one source unit is one file). <see cref="SourceRecordPath"/>
-/// answers it for flat records by computing a path; this answers it for the rest — containers, whose
-/// directory nesting is not derivable from the index, embedded children, which have no file at all,
-/// and the header (#661), whose one fixed path (the root <c>RecordData.json</c>) needs no derivation
-/// at all.
-///
-/// <para><b>Why the disk and not a path map.</b> A path map built at
-/// ingest would presume ingest's extraction already walks this structure. It does not:
-/// <see cref="SourceIngest.Ingest"/> hands the whole tree to the generated deserializer and the
-/// resulting <c>IModGetter</c> to <see cref="IRecordIndex.Index"/>, so every extractor downstream
-/// (<c>EnumerateMajorRecords</c>, <see cref="PlacementWalker"/>, <see cref="ContainerChildFields"/>)
-/// walks an in-memory object graph with no path information in it. There is no walk to share, and
-/// therefore no second walk to drift from it. The alternative — computing container paths from the
-/// index — would need block/sub-block coordinates the index does not carry (<see cref="PlacementWalker"/>
-/// passes <c>default</c> coords for interior cells) <i>and</i> a second copy of the serializer's own
-/// directory-naming policy. Reading the disk needs neither: <b>it is the one source that cannot drift
-/// from the serializer, because it is the serializer's own output</b> — which is also the
-/// never-assume-exclusive-ownership answer, since anything may have moved a file since Modbench last
-/// looked.</para>
-///
-/// <para><b>What it costs, measured.</b> A full-tree scan of a
-/// 20 MB mega-plugin's tree (18,880 files / 31,145 directories) is <b>0.39 s warm</b> — a visible stall on
-/// an interactive gesture. So the scan is narrowed twice. Flat records never scan at all
-/// (<see cref="SourceRecordPath.For"/> computes their path, and it is tried first). A placed
-/// reference never scans either — the index knows its cell outright. Everything else scans one
-/// group subtree (<see cref="RecordTypeDispatch.GroupFolderNameFor"/>): measured <b>0.02 s</b> for
-/// <c>Cells</c> and <b>0.06 s</b> for <c>Worldspaces</c>. The unnarrowed walk survives as the
-/// fallback for a type nothing here can place, which is slow and correct rather than fast and
-/// wrong.</para>
-///
-/// <para>Alongside the question, this class owns a source-tree directory-level invariant that is not
-/// about <i>finding</i> anything: <see cref="InMintedDirectory"/> keeps a failed write from leaving
-/// an empty directory behind. It lives here rather than in <c>Edits</c> because <c>Source</c> needs
-/// it too and does not depend on <c>Edits</c>. Sibling <i>ordering</i> used to be the other such
-/// invariant; since #566 order is carried in the parent's own document
-/// (<see cref="SourceChildOrder"/>) rather than in sibling file names, so there is no longer a
-/// group-folder-wide contiguity property for a structural write to restore.</para>
-///
-/// <para><b>Failure is loud in both directions.</b> No match returns null, which every caller turns
-/// into a typed refusal — never a computed path that might be wrong. More than one match throws
-/// <see cref="AmbiguousSourceUnitException"/>: a FormKey is unique within a mod, so two files
-/// claiming one is a corrupt tree, and picking either would be a guess.</para>
-/// </summary>
+/// <summary>The record→source-unit question for every record shape (ADR-0041 amendment). Disk, not a
+/// path map: the tree is the serializer's own output and cannot drift from it. Scans are narrowed
+/// to one group subtree.</summary>
 internal static class SourceUnitResolver
 {
     /// <summary>The whole-mod door's own name for a directory-per-record container's field file
@@ -103,42 +28,21 @@ internal static class SourceUnitResolver
     /// extension).</summary>
     internal const string RecordDataFileName = "RecordData.json";
 
-    /// <summary>The whole-mod door's own name for a group or block level's own metadata file
-    /// (<c>SerializationHelper.TypicalGroupFileName</c>). Also the carrier for those levels' ordered
-    /// child lists (<see cref="SourceChildOrder"/>), which is why it is shared rather than private.</summary>
+    /// <summary>The whole-mod door's own name for a group or block level's metadata file. Also the
+    /// carrier for those levels' ordered child lists (<see cref="SourceChildOrder"/>), hence shared.</summary>
     internal const string GroupRecordDataFileName = "GroupRecordData.json";
 
     private const string JsonSuffix = ".json";
 
-    /// <summary>
-    /// <paramref name="formKey"/>'s source unit, or null when nothing on disk holds it and the index
-    /// knows of no container that would.
-    /// </summary>
-    /// <param name="reads">The index, for the containment facts an embedded child's file cannot
-    /// carry (<see cref="IRecordReads.GetPlacement"/>, <see cref="IRecordReads.GetContainerParent"/>,
-    /// <see cref="IRecordReads.GetCellLocation"/>).</param>
-    /// <param name="plugin">The plugin whose copy of the record is wanted.</param>
-    /// <param name="modFolder">The tracked mod folder the source tree sits in.</param>
-    /// <param name="formKey">The record to locate.</param>
-    /// <param name="recordType">Its <c>record_type</c>, as the index has it.</param>
-    /// <param name="editorId">Its EditorID, used only to compute a flat path — the scan matches on
-    /// the FormKey suffix alone, so a stale EditorID can never send it to the wrong file.</param>
-    /// <param name="release">The game release, for the folder-name reflection.</param>
-    /// <param name="cache">Optional memo of scans already done, shared across one gesture's
-    /// resolutions.</param>
+    /// <summary><paramref name="formKey"/>'s source unit, or null when nothing holds it and the index
+    /// knows no container that would. The scan matches on FormKey alone, so a stale
+    /// <paramref name="editorId"/> cannot mislead it.</summary>
     internal static SourceUnit? Resolve(
         IRecordReads reads, PluginKey plugin, string modFolder,
         string formKey, string recordType, string? editorId, GameRelease release,
         SourceUnitResolutionCache? cache = null)
     {
-        // The header's own source unit: the root RecordData.json, one level above every group
-        // folder (#661). It needs none of the machinery below — no order index or EditorID to
-        // compute a flat path from (the file name never varies), never a placement or an embedded
-        // child, and no group folder to scan if the computed path is stale, because there is
-        // nothing to compute: the path is fixed. This is also why every branch below always
-        // answered null for it before this ticket, traced at plan time: FlatSourcePath throws
-        // (SourceRecordPath.For has no folder for a synthetic type), GetPlacement is null, and
-        // FindOwnUnit's own FormKey-suffix scan can never match a file with no FormKey in its name.
+        // The header's unit is the fixed root RecordData.json (#661): nothing to compute, scan or embed.
         if (recordType == HeaderIndexer.RecordType)
         {
             var headerPath = Path.Combine(modFolder, SourceRecordPath.RootFor(plugin.Name), RecordDataFileName);
@@ -159,10 +63,8 @@ internal static class SourceUnitResolver
             // Not flat — a container, or a child with no top-level group of its own. Fall through.
         }
 
-        // A placed reference is embedded in its cell by definition (Persistent/Temporary are two of
-        // the five slots Spriggit embeds), and the index knows which cell outright — so this case
-        // resolves with no scan at all, which matters because it is the most common container-shaped
-        // edit there is.
+        // A placed reference is embedded in its cell by definition and the index knows the cell outright —
+        // no scan for the most common container-shaped edit.
         if (reads.GetPlacement(formKey, plugin) is { } placement)
             return ResolveOwner(reads, plugin, modFolder, placement.ParentCell, release, cache);
 
@@ -184,39 +86,9 @@ internal static class SourceUnitResolver
         return parent == null ? null : ResolveOwner(reads, plugin, modFolder, parent, release, cache);
     }
 
-    /// <summary>
-    /// Where a <b>flat</b> record's file actually is: <see cref="SourceRecordPath.For"/>'s computed
-    /// path when that file exists, otherwise whichever file in the same group folder carries this
-    /// FormKey, and failing both the computed path anyway.
-    ///
-    /// <para><b>The filename's EditorID and the document's EditorID are not guaranteed to agree, and
-    /// resolution must not assume they do.</b> A tracked plugin's indexed EditorID comes
-    /// from the file's <i>content</i>; the file <i>name</i> carries whatever EditorID it had when it
-    /// was last written. Nothing keeps those in step. Two ordinary things pull them apart: a
-    /// user or another tool editing <c>EditorID</c> inside a source file with their own editor — the
-    /// standing never-assume-exclusive-ownership case, and the likelier of the two — and a crash
-    /// between <c>RecordEditService</c>'s rename and the content write that follows it.</para>
-    ///
-    /// <para>Computing the path from the indexed EditorID and stopping there turns either of those
-    /// into a <i>false deletion</i>: the file is not where the name says, so <c>File.Exists</c> is
-    /// false, and both this class's caller and <see cref="SourceFreshness"/> would read "absent" as
-    /// "the user deleted this record" and mark a live record gone at Effective. Resolution therefore
-    /// leans on the FormKey, which is the stable half of the name — the FormKey in the suffix keeps
-    /// resolution stable mid-rename.</para>
-    ///
-    /// <para><b>It costs nothing when nothing is wrong.</b> The fallback runs only when the computed
-    /// path is absent, and it lists <i>one</i> group directory non-recursively — never the tree walk
-    /// the container path takes. A record that is genuinely gone still resolves to its computed path,
-    /// so the caller's existing "edit from the indexed body and rewrite the file" recovery is
-    /// untouched.</para>
-    ///
-    /// <para><b>The computed guess is exact again since #566.</b> A file name carries identity and
-    /// nothing else now that order lives in the parent's own document, so
-    /// <see cref="SourceRecordPath.For"/> reproduces it outright from the FormKey and EditorID this
-    /// method is handed — the scan below is reached only when the record's EditorID on disk disagrees
-    /// with the index's copy of it (exactly the mid-rename disagreement this class exists to survive),
-    /// not, as before, for every sibling that merely sat at a position other than the first.</para>
-    /// </summary>
+    /// <summary>The computed path when it exists, else whichever file in the group folder carries this
+    /// FormKey. Name and document EditorIDs can disagree, and trusting the name alone would read a live
+    /// record as deleted.</summary>
     internal static string FlatSourcePath(
         string modFolder, string pluginFileName, string recordType, string formKey, string? editorId,
         GameRelease release)
@@ -249,17 +121,8 @@ internal static class SourceUnitResolver
         };
     }
 
-    /// <summary>
-    /// The owner's own source unit, re-entered through <see cref="Resolve"/> so a container nested in
-    /// another container needs no special case — and re-flagged as embedded, because whatever the
-    /// owner's own shape turns out to be, the record the caller asked for is inside it rather than
-    /// being it.
-    ///
-    /// <para>Not recursive without bound: the owner is looked up in the index, so a cycle would need
-    /// the index to claim a record contains itself transitively, which no walk that produced those
-    /// rows can express (<see cref="PlacementWalker"/> and <see cref="ContainerChildFields"/> both
-    /// descend a tree). A missing owner row returns null and refuses, rather than spinning.</para>
-    /// </summary>
+    // Re-entered through Resolve so a nested container needs no special case; bounded because the index
+    // cannot claim a record contains itself.
     private static SourceUnit? ResolveOwner(
         IRecordReads reads, PluginKey plugin, string modFolder, string ownerFormKey, GameRelease release,
         SourceUnitResolutionCache? cache)
@@ -277,32 +140,9 @@ internal static class SourceUnitResolver
         return resolved;
     }
 
-    /// <summary>
-    /// Which of <paramref name="formKeys"/> more than one source unit in the tree claims — the
-    /// FormKey-collision refusal, which compile cannot ask the deserialized mod because by then the
-    /// answer is already gone.
-    ///
-    /// <para><b>Why this cannot be a duplicate scan over the compiled mod.</b> The whole-mod reader
-    /// ends every group with <c>group.RecordCache.SetTo(x =&gt; x.FormKey, records)</c>
-    /// (<c>GroupParallelHelper.ReadFilePerRecord</c> in <c>references/mutagen-serialization</c>), a
-    /// FormKey-keyed cache: two files in <i>one</i> group folder claiming one FormKey collapse to the
-    /// last one read, silently, before compile ever sees the mod. That is data loss in the user's
-    /// binary — a record they can see in their tree and cannot find in the plugin — so the question has
-    /// to be asked of the <i>tree</i>. Two files in <i>different</i> group folders survive as two
-    /// records and would be catchable either way; this covers both with one mechanism.</para>
-    ///
-    /// <para>Reachable, not theoretical: a half-completed rename, another tool duplicating a file, a
-    /// partially restored backup, or a user copying a record
-    /// file to experiment (root CLAUDE.md's never-assume-exclusive-ownership rule).
-    /// <see cref="Resolve"/>'s own <see cref="AmbiguousSourceUnitException"/> exists for exactly this
-    /// state on the write path.</para>
-    ///
-    /// <para><b>One tree walk, not one per record.</b> <see cref="NameCarries"/> answers "does this leaf
-    /// carry this FormKey" for a leaf/FormKey pair; asking it for every record against every leaf is
-    /// quadratic on a tree with thousands of both. <see cref="TailsCarriedBy"/> inverts it — enumerating
-    /// the tails a leaf carries, by exactly <see cref="NameCarries"/>' own two rules — so the walk builds
-    /// a count per tail once and each record becomes a dictionary lookup.</para>
-    /// </summary>
+    /// <summary>Which FormKeys more than one source unit claims. Asked of the tree, not the compiled mod:
+    /// the reader's FormKey-keyed RecordCache silently collapses two files in one group folder to the
+    /// last read.</summary>
     internal static IReadOnlyList<string> FormKeysWithMoreThanOneSourceUnit(
         string sourceRoot, IEnumerable<FormKey> formKeys)
     {
@@ -317,10 +157,8 @@ internal static class SourceUnitResolver
             }
         }
 
-        // A directory-per-record container is named for its record; a flat record is a .json file named
-        // for its record. The group-level files (RecordData.json, GroupRecordData.json) and the
-        // block/sub-block directories ("0", "3, -4") carry no FormKey, so they simply never match a tail
-        // below and need no exclusion of their own.
+        // Group-level files and block directories carry no FormKey, so they never match a tail and need no
+        // exclusion.
         foreach (var directory in Directory.EnumerateDirectories(sourceRoot, "*", SearchOption.AllDirectories))
             Count(Path.GetFileName(directory));
         foreach (var file in Directory.EnumerateFiles(sourceRoot, $"*{JsonSuffix}", SearchOption.AllDirectories))
@@ -337,12 +175,8 @@ internal static class SourceUnitResolver
         return colliding;
     }
 
-    /// <summary>The tails <paramref name="leaf"/> carries under <see cref="NameCarries"/> — the whole
-    /// name, plus whatever follows each <c>" - "</c> in it. More than one
-    /// candidate arises only when an EditorID itself contains <c>" - "</c>, which is legal and is
-    /// precisely why a file name cannot be split into EditorID and FormKey unambiguously (see
-    /// <see cref="SourceRecordIdentity"/>'s own doc comment); counting every candidate costs nothing,
-    /// because a candidate that is not a real filesafe FormKey is never looked up.</summary>
+    // More than one candidate arises only when an EditorID itself contains " - "; a non-FormKey
+    // candidate is simply never looked up.
     private static IEnumerable<string> TailsCarriedBy(string leaf)
     {
         yield return leaf;
@@ -356,12 +190,7 @@ internal static class SourceUnitResolver
         }
     }
 
-    /// <summary>
-    /// The record's own file, found by its FormKey suffix under the narrowest subtree that can hold
-    /// it. Matching is on the FormKey alone — never the EditorID, which the index's copy of may be
-    /// stale relative to the tree, and which is exactly the disagreement an EditorID edit creates
-    /// mid-rename.
-    /// </summary>
+    // Matches the FormKey alone, never the EditorID, which the index's copy may hold stale mid-rename.
     private static string? FindOwnUnit(
         IRecordReads reads, PluginKey plugin, string sourceRoot, string formKey, string recordType, GameRelease release,
         SourceUnitResolutionCache? cache)
@@ -370,9 +199,8 @@ internal static class SourceUnitResolver
         if (!Directory.Exists(scanRoot)) return null;
 
         var suffix = FilesafeFormKey(formKey);
-        // With a cache the subtree is listed once for the whole operation and the wildcard's
-        // "leaf contains the FormKey" pre-filter runs in memory; AsSourceUnitFile is the real test
-        // either way, so the two paths cannot disagree on what is a source unit.
+        // With a cache the subtree is listed once and the pre-filter runs in memory; AsSourceUnitFile is the
+        // real test either way.
         var candidates = cache == null
             ? Directory.EnumerateFileSystemEntries(scanRoot, $"*{suffix}*", SearchOption.AllDirectories)
             : cache.EntriesUnder(scanRoot).Where(e => Path.GetFileName(e).Contains(suffix, StringComparison.OrdinalIgnoreCase));
@@ -392,10 +220,8 @@ internal static class SourceUnitResolver
         };
     }
 
-    /// <summary>The file <paramref name="entry"/> is the source unit of, or null when it is not a
-    /// source unit at all. A directory whose name carries the FormKey holds its record's fields in
-    /// <c>RecordData.json</c>; a file whose name carries it is the record. Anything else the wildcard
-    /// swept up — a group file, a stray temp file from an interrupted write — is not one.</summary>
+    // A directory whose name carries the FormKey holds RecordData.json; a file whose name carries it is
+    // the record.
     private static string? AsSourceUnitFile(string entry, string filesafeFormKey)
     {
         var leaf = Path.GetFileName(entry);
@@ -410,62 +236,33 @@ internal static class SourceUnitResolver
         return NameCarries(leaf, filesafeFormKey + JsonSuffix) ? entry : null;
     }
 
-    // The whole-mod door's own two name shapes (SerializationHelper.RecordFileNameProvider): the
-    // filesafe FormKey alone when the record has no EditorID, or "<EditorID> - " ahead of it when it
-    // does. Anchored at both ends rather than a bare Contains, so a name that merely happens to
-    // embed the text cannot match. A name carries no position at all since #566 moved order into the
-    // parent's document, so there is nothing to strip before matching.
-    /// <summary>Whether <paramref name="leaf"/> is the file or directory name of the record with
-    /// <paramref name="formKey"/> — the same question <see cref="NameCarries"/> answers, asked in the
-    /// one direction that is unambiguous (given a FormKey, does this name carry it) rather than the
-    /// inverse of splitting a name into EditorID and FormKey, which an EditorID containing
-    /// <c>" - "</c> makes undecidable. Shared so the naming rule has one owner: a second
-    /// reconstruction of <c>{hex6}_{ModKey}</c> elsewhere is exactly the drift this class exists to
-    /// prevent.</summary>
+    /// <summary>Whether <paramref name="leaf"/> names the record with <paramref name="formKey"/> — asked
+    /// in the one unambiguous direction, since an EditorID containing <c>" - "</c> makes splitting a
+    /// name undecidable.</summary>
     internal static bool NameCarriesFormKey(string leaf, string formKey)
     {
         var filesafe = FilesafeFormKey(formKey);
         return NameCarries(leaf, filesafe) || NameCarries(leaf, filesafe + JsonSuffix);
     }
 
+    // The whole-mod door's two name shapes: the filesafe FormKey alone, or "<EditorID> - " ahead of it.
+    // Anchored at both ends so a name that merely embeds the text cannot match.
     private static bool NameCarries(string leaf, string tail) =>
         leaf.Equals(tail, StringComparison.Ordinal)
         || (leaf.EndsWith(tail, StringComparison.Ordinal)
             && leaf.EndsWith($" - {tail}", StringComparison.Ordinal));
 
-    /// <summary>Renames a source-tree entry whichever shape it is — a container's directory or a flat
-    /// record's file. One place that knows the distinction, so every caller and
-    /// <see cref="SourceWriteTransaction.Move"/> (which undoes what it recorded) cannot disagree
-    /// about it.</summary>
+    /// <summary>One place that knows a container is a directory and a flat record a file, so callers and
+    /// the rollback cannot disagree.</summary>
     internal static void MoveEntry(string from, string to)
     {
         if (Directory.Exists(from)) Directory.Move(from, to);
         else File.Move(from, to);
     }
 
-    /// <summary>
-    /// <paramref name="write"/>, run with <paramref name="directory"/> in place — created here rather
-    /// than anywhere earlier, and taken back out again when either that creation or the write itself
-    /// throws, so a gesture that dies part-way leaves no empty directory behind (#675).
-    ///
-    /// <para><b>An empty directory is not harmless debris.</b> Git tracks files, not directories, so a
-    /// record directory with no <c>RecordData.json</c> in it never appears in the Source Control panel
-    /// at all: the author can neither see it nor discard it. Nor is it inert: the whole-mod reader
-    /// opens <c>RecordData.json</c> inside <i>every</i> directory of a
-    /// directory-per-record group folder (<c>FolderPerRecordGroupParallelHelper.ReadFilePerRecord</c>
-    /// in <c>references/mutagen-serialization</c>, unconditionally — no existence check), so one empty
-    /// directory there fails the next ingest of the whole plugin.</para>
-    ///
-    /// <para><b>Only what this call minted, and only while it is still empty.</b> The missing ancestors
-    /// are listed <i>before</i> the create, so a directory that already existed — the group folder
-    /// nearly every flat create writes into, above all — is never a candidate for removal. Nor is one
-    /// something else has written into since: <see cref="Directory.Delete(string)"/> without recursion
-    /// refuses a non-empty directory, and that refusal <i>is</i> the emptiness check rather than a racy
-    /// enumeration ahead of it (root CLAUDE.md's never-assume-exclusive-ownership rule). The first
-    /// survivor stops the walk, because every ancestor above a non-empty directory is non-empty too.
-    /// A level that was never reached (the create failed at an ancestor of it) is skipped, not
-    /// treated as a survivor, so the levels this call really did mint are still taken back out.</para>
-    /// </summary>
+    /// <summary>Removes the directories this call minted when <paramref name="write"/> throws (#675): an
+    /// empty record directory is invisible to git and fails the next ingest, since the reader opens
+    /// every one unconditionally.</summary>
     internal static T InMintedDirectory<T>(string directory, Func<T> write)
     {
         var minted = new List<string>();
@@ -483,9 +280,8 @@ internal static class SourceUnitResolver
             // time it is reached, and needs no second pass.
             foreach (var stray in minted)
             {
-                // Never reached at all — the create died at an ancestor of this level, or on this
-                // level's own name. Skip it rather than stopping, so the levels that did land are
-                // still taken back out.
+                // Never reached (the create died at an ancestor): skip, so the levels that did land are still
+                // removed.
                 if (!Directory.Exists(stray)) continue;
 
                 try { Directory.Delete(stray); }
@@ -501,33 +297,22 @@ internal static class SourceUnitResolver
     internal static void InMintedDirectory(string directory, Action write) =>
         InMintedDirectory(directory, () => { write(); return true; });
 
-    /// <summary>
-    /// The subtree to search, relative to the source root — the narrowing that keeps a point write off
-    /// the 0.39 s full-tree walk (see this class's own doc comment for the measurements).
-    ///
-    /// <para>A Cell is the one type whose subtree is not a property of its type: an interior cell is
-    /// under <c>Cells</c> and an exterior one under its worldspace, so the index's own
-    /// <c>cell_location</c> row picks between them. Null means "no idea" — a type with no top-level
-    /// group whose parent the index cannot name either — and falls back to the whole tree.</para>
-    /// </summary>
+    // The narrowing that keeps a point write off the full-tree walk. A Cell's subtree is not a property
+    // of its type: interior under Cells, exterior under its worldspace, per the index's cell_location row.
     private static string? ScanSubtree(
         IRecordReads reads, PluginKey plugin, string formKey, string recordType, GameRelease release)
     {
         var dispatch = RecordTypeDispatch.For(release);
         if (dispatch.GroupFolderNameFor(recordType) is not { } folder)
         {
-            // No group of its own (a landscape, a navmesh, a dialog topic, a scene). It will be found
-            // under whatever holds its parent, so borrow the parent's subtree — and if the index has
-            // no parent either, the caller's next step is the embedded branch anyway.
+            // No group of its own: found under whatever holds its parent, so borrow the parent's subtree.
             var parent = reads.GetContainerParent(plugin, formKey);
             return parent == null
                 ? null
                 : ScanSubtree(reads, plugin, parent.Value.ParentFormKey, parent.Value.ParentRecordType, release);
         }
 
-        // A cell lives under Cells or under its worldspace, never both. `parent_worldspace` is the
-        // index's own answer, and an absent row (a cell this plugin did not index) leaves the choice
-        // open rather than guessing one.
+        // A cell lives under Cells or under its worldspace, never both; an absent row leaves the choice open.
         if (dispatch.ConcreteFor(recordType)?.Name == "Cell")
         {
             if (reads.GetCellLocation(plugin, formKey) is not { } location) return null;
@@ -539,14 +324,8 @@ internal static class SourceUnitResolver
         return folder;
     }
 
-    /// <summary>
-    /// The name a source unit's own file or directory carries — the whole-mod door's
-    /// <c>SerializationHelper.RecordNameProvider</c>/<c>RecordFileNameProvider</c> scheme:
-    /// <c>[&lt;EditorID&gt; - ]&lt;hex6&gt;_&lt;originModKey&gt;</c>, with <c>.json</c> for a flat
-    /// record's file and without for a container's directory. Shared with
-    /// <see cref="SourceRecordPath"/>'s own flat construction by construction of the same two parts,
-    /// and the reason an EditorID edit is a rename at all.
-    /// </summary>
+    /// <summary><c>[&lt;EditorID&gt; - ]&lt;hex6&gt;_&lt;originModKey&gt;</c>, with <c>.json</c> for a flat
+    /// file and without for a container's directory — the reason an EditorID edit is a rename.</summary>
     internal static string LeafNameFor(FormKey formKey, string? editorId, bool isDirectory)
     {
         var extension = isDirectory ? string.Empty : JsonSuffix;
@@ -562,14 +341,9 @@ internal static class SourceUnitResolver
     }
 }
 
-/// <summary>Thrown when two source units under one plugin's tree carry the same FormKey — a FormKey is
-/// unique within a mod, so this is corruption to resolve by hand, not a transient condition to retry.
-///
-/// <para>Derives from <see cref="InvalidOperationException"/> rather than <see cref="Exception"/> so
-/// that the read path already degrades on it: <see cref="SourceFreshness.Validate"/>'s catch list
-/// names that type, and a corrupt tree must not turn a record <i>read</i> into a thrown error — it
-/// serves what the index has, logs, and leaves the write path to refuse. Still its own named type
-/// because the message is specific and actionable in a way a bare invalid-operation is not.</para></summary>
+/// <summary>Two source units under one plugin's tree carry the same FormKey: corruption, not a
+/// transient condition. An <see cref="InvalidOperationException"/> so the read path degrades on it;
+/// only the write path refuses.</summary>
 public sealed class AmbiguousSourceUnitException : InvalidOperationException
 {
     public AmbiguousSourceUnitException() : base("More than one source unit claims one FormKey.")

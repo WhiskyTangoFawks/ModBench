@@ -4,52 +4,14 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Core.Source;
 
-/// <summary>
-/// Where a record goes in the source tree, and which ordered child list names it there — answered
-/// once, together, because they are one fact.
-///
-/// <para><b>Why one type rather than two helpers.</b> A structural write needs both halves and they
-/// are not independent: the carrier that names a record is always the document above wherever the
-/// record was placed, so a caller that derives the path from one rule and the key from another can
-/// place a record in a directory whose list it never joins — which, under ADR-0042 decision 4's
-/// asymmetric drift rule, is not a cosmetic mismatch but a tree the next read refuses outright.
-/// Deriving them in one step makes the pair correct by construction instead of by everyone
-/// remembering.</para>
-///
-/// <para>The writer that consumes a placement is <c>RecordEditService.WritePlaced</c>, which is also
-/// where the write order lives: the file, then the list, and the file taken back if the list write
-/// fails.</para>
-///
-/// <para>They were previously four helpers that had to agree without anything making them:
-/// <see cref="SourceRecordPath.For"/> for flat records, two private path builders in
-/// <c>RecordEditService</c> for containers, and a private key-chooser whose <c>isFlat</c> cascade
-/// carried a stringly-typed <c>"cell"</c> override. Every call site picked its own pair, and the Cell
-/// case picked differently from all the others.</para>
-/// </summary>
-/// <param name="RelativePath">The record's own file, relative to the mod folder — a flat record's
-/// <c>.json</c>, or a container's <c>RecordData.json</c> inside its own directory.</param>
-/// <param name="CarrierRelativePath">The document holding the ordered child list that must name this
-/// record, relative to the mod folder.</param>
-/// <param name="Key">The member name that list is carried under.</param>
+/// <summary>A record's place and the ordered child list naming it, derived together: derived apart, a
+/// record can land in a directory whose list never names it, which the next read refuses
+/// (ADR-0042 decision 4).</summary>
 internal readonly record struct SourcePlacement(string RelativePath, string CarrierRelativePath, string Key)
 {
-    /// <summary>
-    /// The placement for a record about to be written.
-    ///
-    /// <para>Three of the four shapes — the ones with a group folder of their own. A <b>flat</b> record
-    /// is a file directly in its group folder, listed under the group's own name. A <b>top-level
-    /// container</b> (Quest, Worldspace) is a directory in its group folder with its fields in
-    /// <c>RecordData.json</c>, listed the same way. An <b>interior Cell</b> is the exception among
-    /// them: its directory nests under a block/sub-block pair, so the list naming it is the
-    /// sub-block's own — which is why <paramref name="blockPath"/> exists and why nothing else needs
-    /// it. The fourth shape, a folder-split child with no group folder at all, is
-    /// <see cref="ForSlotChild"/>'s.</para>
-    ///
-    /// <para><paramref name="blockPath"/> is the block and sub-block directory names an interior Cell
-    /// nests under, in order. Required for a Cell and meaningless for anything else — a Cell's
-    /// placement genuinely cannot be computed without knowing which bucket it lands in, and that
-    /// choice belongs to the caller that already reuses or mints one.</para>
-    /// </summary>
+    /// <summary>The three shapes with a group folder: flat file, container directory, and an interior
+    /// Cell nested under block/sub-block — the only reason <paramref name="blockPath"/> exists. A
+    /// folder-split child is <see cref="ForSlotChild"/>'s.</summary>
     internal static SourcePlacement For(
         string pluginFileName,
         string recordType,
@@ -87,17 +49,9 @@ internal readonly record struct SourcePlacement(string RelativePath, string Carr
             blockPath is { Count: > 0 } ? RecordTypeDispatch.SubBlockChildMember : groupFolder);
     }
 
-    /// <summary>
-    /// The placement for a folder-split child — the shape <see cref="For"/> refuses, because it has
-    /// no group folder of its own: a DialogTopic sits in a slot under its Quest's directory, a
-    /// Response in a slot under its DialogTopic's. The list naming it is therefore the parent
-    /// record's own document, keyed by the slot, and the child is a directory (a container with
-    /// children of its own) or a file (a leaf) in that slot.
-    ///
-    /// <para><paramref name="parentDirectory"/> is absolute and resolved by the caller, because a
-    /// parent that is not there yet is minted by the caller first; both returned paths are relative
-    /// to <paramref name="modFolder"/>.</para>
-    /// </summary>
+    /// <summary>No group folder: the child sits in a slot under its parent's directory, named by the
+    /// parent's own document. <paramref name="parentDirectory"/> is absolute because a missing parent is
+    /// minted by the caller first.</summary>
     internal static SourcePlacement ForSlotChild(
         string modFolder, string parentDirectory, string slotName, string formKeyString, string? editorId, bool isDirectory)
     {
