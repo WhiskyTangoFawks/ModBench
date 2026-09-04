@@ -22,7 +22,9 @@ public readonly record struct CellLocationRow(
 /// <summary>
 /// <para>
 /// Walks the worldspace/cell GRUP hierarchy of a mod and yields the structural parentage that
-/// <see cref="EnumerateMajorRecords"/> flattens away (which cell a placed ref is in, persistent vs
+/// <see
+/// cref="Mutagen.Bethesda.Plugins.Records.IMajorRecordGetterEnumerable.EnumerateMajorRecords()"/>
+/// flattens away (which cell a placed ref is in, persistent vs
 /// temporary, which worldspace a cell is in, block/sub-block, grid).
 /// </para>
 /// <para>

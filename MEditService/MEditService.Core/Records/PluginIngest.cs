@@ -25,10 +25,11 @@ namespace MEditService.Core.Records;
 /// apart. Internal, private to the <c>Records</c> module — not part of any public seam.
 ///
 /// <para><b>Does not own registration or the transaction/commit boundary.</b>
-/// <see cref="DuckDbRecordIndex.Index"/> owns the whole-reindex transaction and the
+/// <see cref="DuckDbRecordIndex.Index(IModGetter, Registration, PluginKey, string)"/> owns the
+/// whole-reindex transaction and the
 /// <c>records</c>-table appender's lifetime (so its disposal keeps the required ordering relative
 /// to <c>tx.Commit()</c>), calling <see cref="IndexPlugin"/> for everything in
-/// between. <see cref="DuckDbRecordIndex.Unindex"/> likewise owns the transaction, calling
+/// between. <see cref="DuckDbRecordIndex.Unindex(PluginKey)"/> likewise owns the transaction, calling
 /// <see cref="DeleteAllRowsFor"/> for the ingest-owned half and handling the file stamp
 /// (<see cref="IndexStore"/>) and the registration row itself.</para>
 /// </summary>
@@ -49,7 +50,9 @@ internal sealed class PluginIngest
         _placementWalker = placementWalker;
     }
 
-    /// <summary>The per-plugin phase timings <see cref="DuckDbRecordIndex.Index"/> logs.</summary>
+    /// <summary>The per-plugin phase timings
+    /// <see cref="DuckDbRecordIndex.Index(IModGetter, Registration, PluginKey, string)"/>
+    /// logs.</summary>
     internal readonly record struct IndexTiming(long DocumentsMs, long PrepareMs, long AppendMs, long ExtractedMs);
 
     // Cell.Persistent/Temporary and Worldspace.TopCell/SubCells are already fully covered

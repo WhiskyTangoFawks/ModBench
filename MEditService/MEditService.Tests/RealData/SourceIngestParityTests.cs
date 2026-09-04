@@ -310,7 +310,8 @@ public sealed class SourceIngestParityTests : IDisposable
     /// so this is the check that the derivation ran identically, not just that the documents matched.
     ///
     /// <para><b>No array-ordinal allowlist.</b> With <c>Overall.EnforceRecordOrder</c> on
-    /// (<see cref="Serialization.RecordTextCodecCustomization"/>) every folder-split sibling's file
+    /// (<see cref="MEditService.Core.Serialization.RecordTextCodecCustomization"/>) every
+    /// folder-split sibling's file
     /// name carries its real GRUP position — without it, <c>DialogTopic.Responses</c> and kin have no
     /// on-disk order carrier and their <c>FieldPath</c> array ordinals (the <c>[N]</c> inside
     /// <c>Responses[3]</c>) reflect filesystem order, not GRUP order. The two ingests' ordinals agree

@@ -28,7 +28,7 @@ namespace MEditService.Api.Endpoints;
 /// the handlers that build a <see cref="PluginKey"/> entirely from body fields (already-decoded
 /// JSON strings: <c>EditField</c>, <c>DeleteRecord</c>, <c>RenumberRecord</c>,
 /// <c>CopyRecordAsOverride</c>, <c>CopyRecordAsNewRecord</c>) must never pass them through
-/// <see cref="Uri.UnescapeDataString"/> — a plugin name containing a literal <c>%</c> would be
+/// <see cref="Uri.UnescapeDataString(string)"/> — a plugin name containing a literal <c>%</c> would be
 /// double-unescaped. Those call sites keep their plain
 /// <c>new PluginKey(request.Plugin, request.Origin)</c>. <see cref="PluginKeyOf"/> exists for the
 /// handlers whose plugin name is route-bound and therefore URL-encoded (<c>CreateRecord</c>,
@@ -136,13 +136,14 @@ internal static class WriteEndpointMapping
     /// <see cref="PluginKey"/> from plain strings, which cannot throw <see cref="ArgumentException"/>,
     /// so leaving it <c>null</c> there reproduces letting that exception type propagate unhandled,
     /// exactly as those three sites do today.</para>
+    ///
+    /// <para><paramref name="gate"/> (#673) is taken around <paramref name="execute"/> and nothing
+    /// else. Validation and the reception log run before it, so a malformed request is answered
+    /// without ever queueing; <paramref name="onApplied"/> and every error mapper run after it, so a
+    /// response is shaped while the next write is already free to start. Taking it here rather than
+    /// inside each service is what makes "one write at a time" a property of the write <i>path</i>
+    /// rather than of six handlers independently remembering to.</para>
     /// </summary>
-    /// <param name="gate">#673: taken around <paramref name="execute"/> and nothing else. Validation
-    /// and the reception log run before it, so a malformed request is answered without ever
-    /// queueing; <paramref name="onApplied"/> and every error mapper run after it, so a response is
-    /// shaped while the next write is already free to start. Taking it here rather than inside each
-    /// service is what makes "one write at a time" a property of the write <i>path</i> rather than
-    /// of six handlers independently remembering to.</param>
     internal static IResult Execute(
         IndexWriteGate gate,
         Action? logReceived,

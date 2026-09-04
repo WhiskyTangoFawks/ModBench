@@ -104,7 +104,8 @@ public enum RecordEditRefusal
     /// <para>Field edits, delete and renumber do not refuse for this reason — they resolve through
     /// <c>SourceUnitResolver</c>'s record→source-unit lookup, which makes a container's own
     /// delete/renumber and an embedded child's mechanical. The one gesture still refused is
-    /// <see cref="CreateRecord"/>: a brand-new record has no containment until someone chooses
+    /// <see cref="RecordEditService.CreateRecord"/>: a brand-new record has no containment until
+    /// someone chooses
     /// interior-vs-worldspace and block coordinates, which no gesture asks yet — a UX decision, not
     /// a mechanical one.</para>
     /// </summary>

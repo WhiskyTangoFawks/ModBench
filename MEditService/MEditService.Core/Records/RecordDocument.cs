@@ -63,10 +63,10 @@ public record RecordOverrides(string FormKey, string RecordType, IReadOnlyList<O
 /// <summary>
 /// A closed set of listing options — filters and paging only, no projection/ordering axis (a
 /// listing is always "form_key, plugin, load_order_idx, is_winner, editor_id, origin", ordered by
-/// EditorID). <see cref="RecordTypes"/> null/empty means every type.
+/// EditorID). <see cref="RecordTypes"/> null/empty means every type. <see cref="Plugin"/> is a
+/// filter, not an identity field — see <see cref="PluginKey"/>'s own null-<c>Origin</c> semantics
+/// for the filter case this is.
 /// </summary>
-/// <param name="Plugin">A filter, not an identity field — see <see cref="PluginKey"/>'s own
-/// null-<c>Origin</c> semantics for the filter case this is.</param>
 public sealed record RecordQuery(
     IReadOnlyList<string>? RecordTypes = null,
     PluginKey? Plugin = null,

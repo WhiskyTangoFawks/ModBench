@@ -15,7 +15,8 @@ namespace MEditService.Core.Records;
 ///
 /// <para><b>Why this exists at all.</b> ADR-0041 names the root <c>RecordData.json</c> as part of a
 /// plugin's source ("Source is complete… including the mod header (root <c>RecordData.json</c>)"), so
-/// the header's body is that file's own bytes and nothing else. A <see cref="ModHeader"/> is not an
+/// the header's body is that file's own bytes and nothing else. A
+/// <see cref="Mutagen.Bethesda.Plugins.Records.IModHeaderCommon"/> is not an
 /// <see cref="IMajorRecordGetter"/>, so <see cref="Serialization.RecordTextCodec"/> — which is
 /// per-record and stays per-record — structurally cannot produce or consume it. This is the header's
 /// half of the same one-document-shape promise, and it is deliberately written in terms of the *same*
@@ -33,7 +34,7 @@ namespace MEditService.Core.Records;
 /// <i>readers</i> (deep parse behind the tree, binary overlay) present the same header.</para>
 ///
 /// <para><b>This is a designated door</b> for the generated whole-mod mixin — only the designated
-/// doors may call it; <see cref="Serialization.RecordTextCodecGeneratorSeedTests"/> enforces the
+/// doors may call it; <c>RecordTextCodecGeneratorSeedTests</c> enforces the
 /// whitelist.</para>
 /// </summary>
 internal static class HeaderDocument

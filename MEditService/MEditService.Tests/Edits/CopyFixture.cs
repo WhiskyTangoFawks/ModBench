@@ -15,7 +15,7 @@ namespace MEditService.Tests.Edits;
 /// unaskable of a single-plugin fixture. <see cref="SourcePlugin"/> defaults untracked, matching the
 /// primary scenario: copying out of a Data-directory master (Fallout4.esm-shaped here),
 /// which has no working tree of its own — the indexed document body is the only representation that
-/// exists for it. <paramref name="trackSource"/> lets a test opt into a tracked source instead, for
+/// exists for it. <c>trackSource</c> lets a test opt into a tracked source instead, for
 /// the "reads its current file, not a stale index snapshot" half of the read posture.
 /// </summary>
 public sealed class CopyFixture : IDisposable

@@ -7,7 +7,7 @@ namespace MEditService.Core.Source;
 
 /// <summary>
 /// The "Absorb Upstream Update" exit path, end to end: deep-parses the externally-changed binary
-/// now sitting at <paramref name="pluginPath"/> — the same technique <see cref="TrackService"/> uses
+/// now sitting at <c>pluginPath</c> — the same technique <see cref="TrackService"/> uses
 /// at Track time, because this is exactly that operation again (a fresh baseline serialized from a
 /// binary) for a different trigger — then commits the result onto <c>main</c> as a new baseline via
 /// <see cref="SourceRepository.CommitPristineToMain"/> (no checkout, the edit branch untouched).

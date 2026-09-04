@@ -23,7 +23,7 @@ namespace MEditService.Core.Source;
 /// read as opaque bytes, never interpreted.
 ///
 /// <para><b>This is a designated door</b> for the generated whole-mod mixin —
-/// only the designated doors may call it; <see cref="Serialization.RecordTextCodecGeneratorSeedTests"/>
+/// only the designated doors may call it; <c>RecordTextCodecGeneratorSeedTests</c>
 /// enforces the whitelist.</para>
 /// </summary>
 public sealed class TrackService(ILogger<TrackService> logger)
@@ -177,7 +177,7 @@ public sealed class TrackService(ILogger<TrackService> logger)
     /// alone is never itself refused.
     ///
     /// <para><b>Reparse, not the pre-write object.</b> The model-identity comparison below runs
-    /// against a fresh parse of <paramref name="recompiledPath"/>'s own written bytes
+    /// against a fresh parse of the scratch binary's own written bytes
     /// (<c>recompiledFromBinary</c>), not the in-memory <c>recompiled</c> object handed to
     /// <c>BeginWrite</c>. <c>recompiled</c> is deserialized straight from the lossless tree
     /// (decision 3), so it is definitionally equal to <paramref name="original"/> on every field the

@@ -156,7 +156,8 @@ public sealed class PluginDiagnosisTests
     /// <summary>The write seam: the exact nested shape observed live against
     /// <c>SpaDia_AMR.esp</c> (<c>AggregateException(AggregateException(RecordException(UnmappableFormIDException)))</c>,
     /// from Mutagen's own <c>WriteGroupParallel</c>/<c>WriteQuestsParallel</c>) — the anchor comes from
-    /// the <see cref="RecordException"/> exactly as <see cref="FromParseException"/>'s own walk finds
+    /// the <see cref="RecordException"/> exactly as
+    /// <see cref="MEditService.Core.Source.PluginDiagnosis.FromParseException"/>'s own walk finds
     /// it, and the master name comes from the deeper, differently-typed
     /// <see cref="UnmappableFormIDException"/> nobody else's factory looks for.</summary>
     [Fact]

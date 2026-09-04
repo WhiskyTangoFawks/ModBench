@@ -178,7 +178,8 @@ public sealed class CompileRoundTripGateTests(CompileRoundTripGateFixture fixtur
     /// <summary>
     /// ADR-0042 decision 3 ("nothing is omitted from the files, ever"), on the one clause a real
     /// Track of the committed fixture can actually move: <c>.OmitTimestampData()</c> in
-    /// <see cref="Serialization.RecordTextCodecCustomization"/> would suppress exactly these two
+    /// <see cref="MEditService.Core.Serialization.RecordTextCodecCustomization"/> would suppress
+    /// exactly these two
     /// <c>Cell</c> properties, leaving a cell document with no
     /// <c>PersistentTimestamp</c>/<c>TemporaryTimestamp</c> key at all. Checked on the known interior
     /// cell <c>03C0F0:Fallout4.esm</c> ("CroupManor01"), whose <c>Persistent</c>/<c>TemporaryTimestamp</c>
@@ -283,7 +284,7 @@ public sealed class CompileRoundTripGateTests(CompileRoundTripGateFixture fixtur
     /// <i>parent's</i> file, which is a different (and weaker) assertion.</para>
     ///
     /// <para>Mutates, so it runs against its own <see cref="MutationScope"/> copy of the
-    /// fixture's already-Tracked template rather than the shared, read-only <see cref="fixture"/>
+    /// fixture's already-Tracked template rather than the shared, read-only <c>fixture</c>
     /// tree.</para>
     /// </summary>
     [Fact]

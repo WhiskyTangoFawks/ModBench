@@ -9,7 +9,8 @@ namespace MEditService.Tests;
 /// hands out — needed because #639 moved every read off <see cref="IRecordIndex"/> itself, so a
 /// double that used to override one <see cref="IRecordReads"/> member directly on
 /// <see cref="IRecordIndex"/> (<c>DelegatingRecordIndex</c>'s own member, before this ticket) now has
-/// to intercept it here instead, on whatever <see cref="IRecordReads"/> <see cref="At"/> returns.
+/// to intercept it here instead, on whatever <see cref="IRecordReads"/>
+/// <see cref="IRecordIndex.At"/> returns.
 /// Forwards every member to a real one, exactly like <see cref="DelegatingRecordIndex"/> does for the
 /// wider index — a double that reimplements the whole read surface is both a maintenance burden and
 /// a lie.

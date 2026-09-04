@@ -11,7 +11,7 @@ namespace MEditService.Core.Source;
 /// </summary>
 public sealed record CrashRepairOffer(string Plugin, string Origin, CrashRepairReason Reason);
 
-/// <summary>The two ways <see cref="ExternalChangeLoadOrderHook"/> can reach a repair offer — both
+/// <summary>The two ways <c>ExternalChangeLoadOrderHook</c> can reach a repair offer — both
 /// detected only at reconcile, never by the
 /// live watcher, because neither condition can newly arise while this same Modbench process keeps
 /// running: the journal only moves during a compile <see cref="Edits.PluginCompileService"/> itself

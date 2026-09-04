@@ -47,7 +47,7 @@ namespace MEditService.Core.Source;
 /// <c>InnerExceptions[0]</c> — realistic for any plugin with more than one corrupt record, and a
 /// second corrupt record whose own exception happens to land elsewhere in that list would otherwise
 /// never be visited at any depth. Both factories therefore recurse into every branch
-/// (<see cref="FindDeepest{T}"/>) and keep the deepest match found anywhere in the tree, not merely
+/// (<see cref="FindDeepest{T}(Exception)"/>) and keep the deepest match found anywhere in the tree, not merely
 /// the first one a linear walk would have reached.</para>
 /// </summary>
 public sealed record PluginDiagnosis(string? Anchor, string DefectClass, string? Tail, string Message)
@@ -113,7 +113,7 @@ public sealed record PluginDiagnosis(string? Anchor, string DefectClass, string?
     /// separately walks for the deepest <see cref="UnmappableFormIDException"/> — a different type,
     /// nested one level inside that <see cref="RecordException"/> — to name the master the write
     /// could not map. Naming the master is the reason this needs its own factory rather than reusing
-    /// <see cref="FromParseException"/> as-is: <see cref="RecordException.Message"/> here is only ever
+    /// <see cref="FromParseException"/> as-is: <see cref="Exception.Message"/> here is only ever
     /// Mutagen's generic "Could not map FormKey to a master index", which never says which master, so
     /// the message this composes states only what the exception genuinely proves — the record and the
     /// pruned master — and leaves any causal claim to the hedged upstream-issue tail above, never

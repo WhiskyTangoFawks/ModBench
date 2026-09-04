@@ -16,7 +16,9 @@ namespace MEditService.Tests.Source;
 /// <summary>
 /// The Track orchestration seam end to end: a real loaded load order, a real (small) plugin with
 /// real records, tracked through <see cref="TrackService"/>. Track serializes through the whole-mod
-/// door (<see cref="Serialization.RecordTextCodecGeneratorSeed.SerializeWholeMod"/>), so these
+/// door
+/// (<see cref="MEditService.Core.Serialization.RecordTextCodecGeneratorSeed.SerializeWholeMod"/>),
+/// so these
 /// assertions check the source layout — group folders, root <c>RecordData.json</c>. Deliberately a
 /// small synthetic fixture, not the mega-plugin — mega-scale timing is a measured, reported number,
 /// not a suite-gating assertion.

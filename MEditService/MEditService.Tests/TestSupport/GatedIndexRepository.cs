@@ -8,9 +8,11 @@ namespace MEditService.Tests;
 /// Parks a load just before a named plugin is indexed, and holds it there until the test releases
 /// it. This is what makes progressive loading testable without sleeps: the test drives the load
 /// to a known point, asserts what is observable *at that instant*, then lets it finish.
+///
+/// <para><paramref name="poisonPlugin"/> is optional: a plugin whose indexing throws, so a test can
+/// assert that a per-plugin failure is observable at a point where the load is still
+/// running.</para>
 /// </summary>
-/// <param name="poisonPlugin">Optional: a plugin whose indexing throws, so a test can assert that a
-/// per-plugin failure is observable at a point where the load is still running.</param>
 internal sealed class GatedIndexRepositoryFactory(IRecordIndexFactory inner, string gateBefore, string? poisonPlugin = null)
     : IRecordIndexFactory, IDisposable
 {

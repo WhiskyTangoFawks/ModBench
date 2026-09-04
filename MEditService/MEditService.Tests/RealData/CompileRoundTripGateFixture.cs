@@ -11,7 +11,8 @@ namespace MEditService.Tests.RealData;
 /// <summary>
 /// The once-per-class half of <see cref="CompileRoundTripGateTests"/>' setup. xUnit
 /// constructs exactly one of these per test class run (via <c>IClassFixture&lt;T&gt;</c>), so the
-/// ~36s <see cref="TrackService.TrackAsync"/> call — copy the fixture plugin, load a load order,
+/// ~36s <see cref="TrackService.TrackAsync(ILoadOrder, string, SourcePreset, CancellationToken)"/>
+/// call — copy the fixture plugin, load a load order,
 /// Track it — runs once instead of once per <c>[Fact]</c>. A per-test Track
 /// was 6 of the backend suite's 9 minutes on its own.
 ///

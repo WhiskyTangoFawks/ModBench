@@ -149,7 +149,8 @@ public sealed class ModelIdentityTests
         Assert.Null(divergence);
     }
 
-    /// <summary>The header counterpart to <see cref="FindFirst"/>'s per-record check. Every
+    /// <summary>The header counterpart to
+    /// <see cref="MEditService.Core.Source.ModelIdentity.FindFirst"/>'s per-record check. Every
     /// <see cref="ModelIdentity.OpaqueHeaderFields"/> member set to a distinguishable, matching value
     /// on both sides — the accept case a real Track that only recompiles (never edits) a plugin's
     /// header must hit. <c>TransientTypes</c> is also set (matching, on both sides) despite not being
@@ -369,7 +370,7 @@ public sealed class ModelIdentityTests
     }
 
     /// <summary>Mirrors <c>RoundTripSurvey</c>'s own write options — the shape
-    /// <see cref="TrackService.VerifyRoundTrip"/> uses to reproduce a plugin's own bytes.</summary>
+    /// <c>TrackService.VerifyRoundTrip</c> uses to reproduce a plugin's own bytes.</summary>
     /// <summary>
     /// #669's cost accounting for the codec decider, at the scale this environment has (the
     /// committed real fixture; the LitR mega-plugin measurement needs a real instance and is the

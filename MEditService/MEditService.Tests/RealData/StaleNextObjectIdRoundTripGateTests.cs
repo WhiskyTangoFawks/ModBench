@@ -40,7 +40,7 @@ namespace MEditService.Tests.RealData;
 /// identity would refuse — a zlib-compressed NPC_ Mutagen re-deflates at its own level, and REFR
 /// rotations of <c>-0.0</c> Mutagen writes as <c>+0.0</c> — but ADR-0042 decision 2 makes the
 /// round-trip verdict model identity: neither difference changes any record's own content, so both
-/// fixtures Track and Compile successfully, and <see cref="Compile_OfARealPluginWithAStaleHeader_ReproducesTheSourceBytes"/>
+/// fixtures Track and Compile successfully, and <c>Compile_OfARealPluginWithAStaleHeader_ReproducesTheSourceBytes</c>
 /// asserts model identity between the original and compiled binaries rather than raw byte identity —
 /// the compiled bytes are not expected to match the original's exactly for these two, only its
 /// content.</para>

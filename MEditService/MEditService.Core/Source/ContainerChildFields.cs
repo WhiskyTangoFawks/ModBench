@@ -36,12 +36,12 @@ namespace MEditService.Core.Source;
 /// <see cref="MEditService.Core.Serialization.CellEmbedCustomization"/>). One is about
 /// containment, the other about file layout; they are not the same list and must not be merged.</para>
 ///
-/// <para><see cref="MEditService.Tests.Source.ContainerChildFieldsCompletenessTests"/> runs the rule
+/// <para><c>ContainerChildFieldsCompletenessTests</c> runs the rule
 /// by enumeration over every schema-registered major record type — swept, not merely
 /// inspected — and is the standing defence against the next gap (a future Mutagen
 /// bump or game module adding a child-major field nobody hand-adds here). Quest.Scenes was once a
 /// real, undetected gap, which is why the hand-maintained table ships backed by that sweep rather
-/// than by inspection alone.
+/// than by inspection alone.</para>
 ///
 /// <para>That sweep is the <i>only</i> line of defence, deliberately. Compile places
 /// nothing: the deserializer reads a record from
@@ -66,7 +66,7 @@ internal static class ContainerChildFields
 
     /// <summary>The exact child-major field-name list <paramref name="recordType"/> has, or null if
     /// it isn't one of the known container shapes — the read-only accessor
-    /// <see cref="MEditService.Tests.Source.ContainerChildFieldsCompletenessTests"/> diffs its own
+    /// <c>ContainerChildFieldsCompletenessTests</c> diffs its own
     /// swept set against, so the table itself never needs a second public surface.</summary>
     internal static IReadOnlyList<string>? EnumerateChildFieldsFor(Type recordType) =>
         ByTypeName.TryGetValue(NormalizedTypeName(recordType), out var fields) ? fields : null;
@@ -84,15 +84,6 @@ internal static class ContainerChildFields
         return name.EndsWith(OverlaySuffix, StringComparison.Ordinal) ? name[..^OverlaySuffix.Length] : name;
     }
 
-    /// <summary>
-    /// <paramref name="record"/>'s child major records, read non-destructively off a getter, so
-    /// ingest can capture parentage (the <c>container_child</c> side table) in the same pass
-    /// that writes the parent's own document. Yields nothing for a non-container type.
-    ///
-    /// <para><c>SlotIndex</c> is the child's position within its own field (always 0 for a
-    /// single-reference field like <c>Landscape</c>) — preserved so a compile can reproduce a list's
-    /// original order rather than an ingest-arbitrary one.</para>
-    /// </summary>
     /// <summary>One child located inside a parent's live object graph — the slot it sits in, and the
     /// child itself as a <i>settable</i> record. <see cref="Child"/> is the real object hanging off
     /// the parent, not a copy, which is the whole point: mutating it and reserializing the parent is
@@ -154,7 +145,7 @@ internal static class ContainerChildFields
     }
 
     /// <summary>One child located inside a parent's live object graph, plus the <i>direct</i> parent it
-    /// sits in — which is <paramref name="parent"/> itself for a top-level slot, but a nested embedded
+    /// sits in — which is <c>parent</c> itself for a top-level slot, but a nested embedded
     /// record (e.g. a Worldspace's TopCell) when the match is found two levels down. Carrying the direct
     /// parent alongside the slot is what lets <see cref="RemoveEmbeddedChild"/> mutate the right object
     /// without re-deriving it.</summary>
@@ -293,7 +284,7 @@ internal static class ContainerChildFields
     /// <see cref="EnumerateChildren"/> reads them that way: one path that cannot drift from the table
     /// above as new container shapes are added to it. <c>dynamic</c> resolves <c>RemoveAt</c> against
     /// the slot's own runtime list type (<c>ExtendedList&lt;IPlaced&gt;</c>, etc.) — the same DLR
-    /// dispatch <see cref="RecordFieldWriter"/>'s own complex-field appliers already rely on
+    /// dispatch <see cref="Edits.RecordFieldWriter"/>'s own complex-field appliers already rely on
     /// elsewhere in this codebase.</summary>
     private static void RemoveFromSlot(IMajorRecordGetter parent, string slotName, int slotIndex)
     {
@@ -332,6 +323,15 @@ internal static class ContainerChildFields
         ("Worldspace", "TopCell"),
     ];
 
+    /// <summary>
+    /// <paramref name="record"/>'s child major records, read non-destructively off a getter, so
+    /// ingest can capture parentage (the <c>container_child</c> side table) in the same pass
+    /// that writes the parent's own document. Yields nothing for a non-container type.
+    ///
+    /// <para><c>SlotIndex</c> is the child's position within its own field (always 0 for a
+    /// single-reference field like <c>Landscape</c>) — preserved so a compile can reproduce a list's
+    /// original order rather than an ingest-arbitrary one.</para>
+    /// </summary>
     internal static IEnumerable<(string SlotName, int SlotIndex, IMajorRecordGetter Child)> EnumerateChildren(
         IMajorRecordGetter record)
     {

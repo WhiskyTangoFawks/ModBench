@@ -19,7 +19,7 @@ namespace MEditService.Tests.Edits;
 /// <c>placement</c>/<c>cell_location</c>/<c>container_child</c> track Effective through a
 /// structural write (delete, renumber, create) the same way <c>form_lookup</c>/<c>form_references</c>
 /// do. Runs against <see cref="ContainerModFixture"/> (the same shared fixture
-/// <see cref="EmbeddedChildEditTests"/> and <see cref="GroupOrderRenormalizationTests"/> use),
+/// <see cref="EmbeddedChildEditTests"/> and <c>GroupOrderRenormalizationTests</c> use),
 /// asking the read side (<see cref="IRecordReads"/>) directly rather than through a compile — exactly
 /// the live-load order reads that otherwise go stale before a reload.
 /// </summary>

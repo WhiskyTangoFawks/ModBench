@@ -741,7 +741,7 @@ internal static class SourceChildOrder
     /// <para>A bare <c>WriteAllText</c> truncates its target before the first new byte lands, so an
     /// interruption leaves a half-written document. That is worse here than for an ordinary file,
     /// because a carrier is usually a <i>record's</i> own <c>RecordData.json</c> — losing the window
-    /// loses the record's fields, not just its children's order. <see cref="RecordTextCodec"/>'s own
+    /// loses the record's fields, not just its children's order. <see cref="Serialization.RecordTextCodec"/>'s own
     /// write goes to the same trouble for the same reason, and <see cref="CarryOrderInto"/> exists so
     /// that a record write stays one atomic act; it would be incoherent for the order writes not to.
     /// Root CLAUDE.md's never-assume-exclusive-ownership rule, with Modbench as the corrupting
