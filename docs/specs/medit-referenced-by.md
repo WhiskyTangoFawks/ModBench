@@ -137,6 +137,29 @@ Code surface. Zero referrers renders the tree's own empty state instead.
 - Reference data comes from the backend (`GET /records/{formKey}/references`) through the
   generated `ApiClient`, never raw `fetch()`; this surface renders it and does not derive it.
 
+### A condition's references
+
+A condition's FormKey-bearing members — a Form-category parameter, the Run On target, a Use-Global
+comparison value, `GetEventData`'s own parameter — reach this panel through the one reflected
+form-reference walk, because a condition list is an ordinary reflected array field. There is no
+condition-specific collector.
+
+**Only the members a condition actually uses are references.** Mutagen reads one four-byte slot into
+both `ParameterOneNumber` and `ParameterOneRecord`, so every numeric parameter also reads as a
+FormID; and `Reference` is populated whatever the Run On value says. Filing either as a reference
+would invent a referrer. `FormRefPathBuilder` therefore skips a member the record's own governing
+value says is idle, driven by `FieldMetadata.SiblingsInUse` (ADR-0032) — a quest-stage index is not
+a reference to whatever record happens to hold that FormID, and a Run On of Subject does not point
+at whatever target the condition last carried.
+
+**Coverage is wider than the field paths suggest.** The walk reaches every condition list at every
+depth (`stages[].log_entries[].conditions`, `scenes[].phases[].completion_conditions`,
+`actions[].start_scenes[].conditions`, and the rest), and a container's embedded child records are
+walked as part of the container's own document — so a quest and the dialogue topic embedded in it
+both report the same condition parameter, exactly as they already both report every other embedded
+field. Condition-derived rows are a large share of the table: 5,392 of 25,265 in the committed
+cut-down fixture.
+
 ## Actionable-menu decision
 
 xEdit's own right-click menu on this surface (`pmuRefBy`) is fully mutating: Compare Selected,

@@ -834,6 +834,18 @@ a reference, a Run On of Subject does not keep a stale target alive, and an idle
 flagged as a dangling one. What the editor does with the map — hiding an idle row, clearing it on a
 change — is #693's.
 
+Skyrim and Starfield are not built or tested in this repo (#706 owns them). Their
+`Condition.xml` declares the same abstract `Condition` with a `ConditionFloat` carrying a `Float`
+`ComparisonValue` and a `ConditionGlobal` carrying a `FormLink` to `Global`, so the per-shape split
+above is game-agnostic and needs no code for them. Their `ConditionData` is not Fallout 4's one
+generic class: Skyrim has 426 per-function subclasses and Starfield about 610 plus an
+`IConditionParameters` whose `Parameter1` is a bare `object`. Two things follow that #706 has to
+settle rather than inherit: a bare `object` has no closed domain and lands in `SchemaRefusals`, and
+`LoquiUnions.BuildUnionShapeField` takes its metadata from the first declaring leaf alone — so
+same-named parameters closed over *different* record types would share one shape key, not split, and
+would silently advertise the first leaf's `ValidFormKeyTypes`. Fallout 4 never meets that: its
+parameters close over `IFallout4MajorRecordGetter`, which names no type at all.
+
 `GetEventData`, the second `ConditionData` leaf, is modelled but unreadable in the pinned Mutagen
 (0.53.1): `GetEventDataBinaryOverlay` inherits `FunctionConditionData`'s member offsets, so reading
 `Unknown3` off one runs past the end of the subrecord and no plugin holding one can be indexed at
