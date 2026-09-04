@@ -18,23 +18,50 @@ public class UnionArrayAddInventoryTests
 {
     private static readonly ModKey Key = ModKey.FromFileName("UnionArrayAdd710.esp");
 
-    /// <summary>The inventory itself, asserted rather than discovered at run time: a fifth
-    /// discriminator-bearing array (#701 expands script properties into one) must arrive here as a
-    /// deliberate edit, with an owning record to add to, not slip in unexercised.</summary>
+    /// <summary>The inventory itself, asserted rather than discovered at run time: a sixth
+    /// union-array shape must arrive here as a deliberate edit, with an owning record to add to,
+    /// not slip in unexercised.
+    ///
+    /// <para>Identified by the leaf set the element's discriminator offers rather than by the
+    /// owning column, because that is what the default element is built from — #692's condition
+    /// lists are one shape carried by twenty columns (every condition-bearing record type), and
+    /// twenty owning records would prove the same one thing twenty times.</para></summary>
     [Fact]
-    public void EveryDiscriminatorBearingArrayColumn_IsOneThisTestExercises()
+    public void EveryDiscriminatorBearingArrayShape_IsOneThisTestExercises()
     {
-        var found = SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4)
-            .SelectMany(s => s.Value.RecordColumns.Select(c => (Table: s.Key, Column: c)))
-            .Where(x => x.Column.ElementType?.Fields?.Any(f => f.IsDiscriminator) == true)
-            .Select(x => $"{x.Table}.{x.Column.Name}")
+        var found = SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4).Values
+            .SelectMany(s => s.RecordColumns)
+            .Where(c => c.ElementType?.Fields?.Any(f => f.IsDiscriminator) == true)
+            .Select(c => string.Join("|", c.ElementType!.Fields!.Single(f => f.IsDiscriminator)
+                .EnumMembers.Select(m => m.Value)))
+            .Distinct(StringComparer.Ordinal)
             .OrderBy(n => n, StringComparer.Ordinal);
 
-        Assert.Equal(["aech.effects", "omod.properties", "perk.effects", "qust.aliases"], found);
+        Assert.Equal(ExercisedShapes, found);
     }
+
+    /// <summary>The five leaf sets <see cref="UnionArrays"/> covers, in ordinal order, each written
+    /// out so a Mutagen change to any one of them is a visible edit here.</summary>
+    private static readonly string[] ExercisedShapes =
+    [
+        // cobj.conditions and every other condition-bearing column
+        "ConditionFloat|ConditionGlobal",
+        // omod.properties
+        "Int|Float|Bool|String|Enum|FormIdInt|FormIdFloat",
+        // perk.effects
+        "PerkEntryPointModifyActorValue|PerkEntryPointModifyValue|PerkQuestEffect|PerkAbilityEffect|" +
+        "PerkEntryPointAddRangeToValue|PerkEntryPointAbsoluteValue|PerkEntryPointAddLeveledItem|" +
+        "PerkEntryPointAddActivateChoice|PerkEntryPointSelectSpell|PerkEntryPointSelectText|" +
+        "PerkEntryPointSetText|PerkEntryPointModifyValues",
+        // qust.aliases
+        "QuestReferenceAlias|QuestLocationAlias|QuestCollectionAlias",
+        // aech.effects
+        "StateVariableFilterAudioEffect|OverdriveAudioEffect|DelayAudioEffect",
+    ];
 
     public static TheoryData<string, string> UnionArrays() => new()
     {
+        { "cobj", "conditions" },
         { "qust", "aliases" },
         { "perk", "effects" },
         { "aech", "effects" },
@@ -65,6 +92,7 @@ public class UnionArrayAddInventoryTests
 
     private static IMajorRecord NewRecord(Fallout4Mod mod, string table) => table switch
     {
+        "cobj" => new ConstructibleObject(mod.GetNextFormKey(), Fallout4Release.Fallout4),
         "qust" => new Quest(mod.GetNextFormKey(), Fallout4Release.Fallout4),
         "perk" => new Perk(mod.GetNextFormKey(), Fallout4Release.Fallout4),
         "aech" => new AudioEffectChain(mod.GetNextFormKey(), Fallout4Release.Fallout4),

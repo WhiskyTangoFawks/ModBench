@@ -1,16 +1,6 @@
 import { createApiClient } from '../../src/medit/ApiClient';
 import type { ColumnKey, CompareResult } from './types';
 import { columnKey } from './types';
-import { vscode } from './vscode';
-import { WEBVIEW_TO_EXTENSION, type LogLevel } from './messages';
-
-
-// Mirrors RecordPanel's own logAction — this module has no component instance to hang a callback
-// off of, but the bridge is the same one-line postMessage either way.
-function log(level: LogLevel, message: string) {
-  vscode.postMessage({ type: WEBVIEW_TO_EXTENSION.LOG, level, message });
-}
-
 // The composite view for a single record. `load` fires compare + changes + plugins
 // in parallel; a compare failure fails the whole load (the panel has nothing to show), while a
 // changes/plugins failure comes back as `null` so the panel leaves that slice of state
@@ -57,12 +47,6 @@ export type LoadResult =
 // round-tripping through this webview.
 export interface RecordPanelClient {
   load(formKey: string): Promise<LoadResult>;
-  // The Run On target dropdown's catalog — feeds ConditionRunOnCell's own inline
-  // `<select>` rendered in this webview (not a native QuickPick), so this webview needs the list
-  // itself, the same way it already reads `/plugins` directly rather than round-tripping through
-  // the extension host. Load-order-wide, not per-record, so RecordPanel fetches it once rather than
-  // on every load().
-  conditionRunOnTargets(): Promise<string[]>;
 }
 
 export function createRecordPanelClient(port: number): RecordPanelClient {
@@ -86,7 +70,7 @@ export function createRecordPanelClient(port: number): RecordPanelClient {
         ok: true,
         // Still a cast, but a different kind of one. This is a *narrowing* to the webview's own
         // refinement of the wire — `FieldMetadata.type` and `VmadPropertyDiff.kind` are unions
-        // here and `string` on the wire, because the VMAD/Condition tree adapters synthesize
+        // here and `string` on the wire, because the VMAD tree adapter synthesizes
         // members the backend never sends (see types.ts). Wire -> webview is a downcast by
         // construction, so no amount of schema honesty removes it; what changed is that it now
         // asserts a documented refinement rather than distrust of the generated types.
@@ -106,25 +90,6 @@ export function createRecordPanelClient(port: number): RecordPanelClient {
         // as "not computed" (see LoadResult's own doc comment on this field).
         conflictsComputed: status.response.ok && status.data?.conflictsComputed === true,
       };
-    },
-
-    // Mirrors PluginRepository.getConditionFunctions()'s own contract —
-    // never rejects, logs on both failure paths (a non-ok response and a thrown network error)
-    // rather than swallowing either silently, then degrades to [] (the Run On dropdown simply
-    // has no options to show, the same "background/recoverable" severity a tree-fetch blip gets,
-    // not a blocking notification — ADR-0026).
-    async conditionRunOnTargets() {
-      try {
-        const { data, response } = await client.GET('/condition-run-on-targets', {});
-        if (!response.ok) {
-          log('warn', `conditionRunOnTargets failed (${response.status})`);
-          return [];
-        }
-        return data ?? [];
-      } catch (e) {
-        log('warn', `conditionRunOnTargets failed: ${e instanceof Error ? e.message : String(e)}`);
-        return [];
-      }
     },
   };
 }

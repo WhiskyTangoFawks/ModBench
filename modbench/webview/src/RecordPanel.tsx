@@ -10,7 +10,6 @@ import type { PathSegment } from './recordUtils';
 import { mono, fg, headerCell, getConflictBg, DIMMED_OPACITY } from './gridStyles';
 import { buildVmadRows } from './vmadTreeAdapter';
 import { AddPropertyDialog } from './VmadPropertyOps';
-import { buildConditionRows } from './conditionTreeAdapter';
 import type { ColumnKey, CompareOverride, CompareResult, ConflictThis, FieldDiff, FieldMetadata } from './types';
 import { columnKey } from './types';
 import { vscode } from './vscode';
@@ -26,14 +25,14 @@ const mEditWindow = window as Window & typeof globalThis & {
 const getHeaderBg = (c: ConflictThis | undefined): string | undefined => getConflictBg(c, 0.35);
 
 // A synthesized row can write independently of its own parent rather than
-// extending it — a VMAD property under its script container, or a Condition field under its
-// condition element, each write their own field path rather than folding into the
+// extending it — a VMAD property under its script container writes its own field path rather
+// than folding into the
 // whole subtree their parent writes (a complex field is always written as one atomic unit,
 // CONTEXT.md). `FieldDiff.wirePath` is the
 // signal: when a child carries one, it starts a fresh subtree right there (its own path resets to
 // `[]`, rootField becomes its own wirePath, rootDiff becomes itself) instead of inheriting the
-// parent's. An ordinary reflected field's children never carry `wirePath` (only the VMAD/
-// Condition tree adapters set it), so this is a no-op for every ordinary case.
+// parent's. An ordinary reflected field's children never carry `wirePath` (only the VMAD tree
+// adapter sets it), so this is a no-op for every ordinary case.
 // Module-scope (not a RecordPanel-
 // local closure like buildRows/buildArrayElementRows below) since it closes over nothing.
 function subtreeFor(
@@ -89,21 +88,16 @@ function vmadElementOpValue(op: ArrayOpKind, path: PathSegment[]): unknown {
   return { op: opName, index: lastSeg?.kind === 'index' ? lastSeg.index : undefined };
 }
 
-// The shared computation behind both of handleArrayOp's carve-outs below — a VMAD scalar-array
-// property's own arity op, and a Condition-owning field's — each deliberately out of #630's scope
-// (VmadCodec and Fallout4ConditionCodec each own their own vocabulary/wire shape, neither is
-// ArrayOpWriter's ColumnSpec-backed one; RecordFieldWriter's own VMAD-path dispatch refuses an
-// array-op envelope arriving under a VMAD path, and Fallout4ConditionCodec.ApplyListValue requires
-// a JSON array and refuses an envelope object the same way), so both still compute the next array
-// client-side and commit it whole, exactly as every arity op did before #630 — this function is
-// that computation, identical for either caller (it never knows or cares which). Module-scope
+// The shared computation behind handleArrayOp's VMAD carve-outs below — a VMAD scalar-array
+// property's own arity op, deliberately out of #630's scope (VmadCodec owns its own vocabulary and
+// wire shape, not ArrayOpWriter's ColumnSpec-backed one, and RecordFieldWriter's own VMAD-path
+// dispatch refuses an array-op envelope arriving under a VMAD path), so it still computes the next
+// array client-side and commits it whole, exactly as every arity op did before #630. Module-scope
 // (like subtreeFor above): closes over nothing, everything it needs arrives as an argument.
 // Exported (unlike subtreeFor) purely so RecordPanel.test.tsx can pin its own boundary/happy-path
-// behaviour directly for the VMAD case, alongside the tree-walk that resolves a VMAD property's
-// own root (#660, findFieldDiffDeep below) — the two are pinned separately so either can fail on
-// its own terms. The Condition case's own root is always a top-level entry in conditionTree.diffs
-// (conditionTreeAdapter.ts's own buildConditionRows builds one flat array per condition-owning
-// field, nested game-data condition lists included), pinned end-to-end in ConditionArrayOps.test.tsx.
+// behaviour directly, alongside the tree-walk that resolves a VMAD property's own root
+// (#660, findFieldDiffDeep below) — the two are pinned separately so either can fail on its own
+// terms.
 export function computeArrayOpClientSide(
   rootValue: unknown, path: PathSegment[], op: ArrayOpKind, elementMeta?: FieldMetadata,
 ): unknown {
@@ -132,10 +126,7 @@ export function computeArrayOpClientSide(
 // VMAD: `vmadTree.diffs` is a single-element wrapper array (buildVmadRows), so a property's own
 // FieldDiff sits two hops below it (wrapper → script → property) — a flat `.find` over
 // `vmadTree.diffs` therefore never matches anything at all, not even a script's own diff, let alone
-// a property's. Condition's own tree has no such gap (a Condition group's own FieldDiff *is*
-// already a top-level entry in conditionTree.diffs, see computeArrayOpClientSide's own doc comment
-// above) so its call sites keep the plain flat `.find` unchanged — this only widens where the
-// defect actually is. Module-scope (like subtreeFor/computeArrayOpClientSide above): closes over
+// a property's. Module-scope (like subtreeFor/computeArrayOpClientSide above): closes over
 // nothing, everything it needs arrives as an argument.
 function findFieldDiffDeep(diffs: FieldDiff[], target: string): FieldDiff | undefined {
   for (const d of diffs) {
@@ -153,15 +144,6 @@ function findFieldDiffDeep(diffs: FieldDiff[], target: string): FieldDiff | unde
 export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>) {
   const [formKey, setFormKey] = useState<string>(mEditWindow.mEditFormKey ?? '');
   const [result, setResult] = useState<CompareResult | null>(null);
-  // The Run On target dropdown's catalog (GET /condition-run-on-targets) — a
-  // load-order-wide list, not per-record, so it's fetched once on mount rather than on every
-  // refresh()/load(fk). Starts empty (the Run On cell simply has nothing to show until this
-  // resolves) rather than falling back to any hardcoded list. No `.catch` needed here:
-  // client.conditionRunOnTargets() never rejects — it logs and degrades to [] on both a non-ok
-  // response and a thrown network error itself (RecordPanelClient.ts), the same contract
-  // PluginRepository.getConditionFunctions() gives its own callers.
-  const [runOnTargets, setRunOnTargets] = useState<string[]>([]);
-  useEffect(() => { void client.conditionRunOnTargets().then(setRunOnTargets); }, [client]);
   const [immutableSet, setImmutableSet] = useState<Set<ColumnKey>>(new Set());
   // ADR-0035: mirrors immutableSet's own state shape — a copy the load order doesn't name
   // (distinct from "is immutable"; see recordUtils.ts's readOnlyReason) drives PluginHeader's
@@ -288,25 +270,20 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
     });
   }
 
-  // The header record (synthetic FormKey "000000:<plugin>") carries neither VMAD
-  // nor Conditions — computed here (ahead of every hook that needs it, including
-  // fieldMetaMap's masters-readOnly stamp below) since hooks can't follow the early-return guards
-  // that precede where the rest of the render logic would naturally compute this.
+  // The header record (synthetic FormKey "000000:<plugin>") carries no VMAD — computed here,
+  // ahead of every hook that needs it (including fieldMetaMap's masters-readOnly stamp below),
+  // since hooks can't follow the early-return guards that precede where the rest of the render
+  // logic would naturally compute this.
   const isHeaderRecord = formKey.startsWith('000000:');
 
-  // VMAD and Conditions map into the same node shape (FieldDiff + FieldMetadata) the
-  // ordinary reflected fields already use — vmadTreeAdapter.ts/conditionTreeAdapter.ts are pure
-  // functions with no rendering of their own, so their rows flow through the exact same
-  // buildRows/DiffRow path below as any other field, with no separate section renderer.
+  // VMAD maps into the same node shape (FieldDiff + FieldMetadata) the ordinary reflected fields
+  // already use — vmadTreeAdapter.ts is a pure function with no rendering of its own, so its rows
+  // flow through the exact same buildRows/DiffRow path below as any other field, with no separate
+  // section renderer.
   const vmadTree = useMemo(
     () => (isHeaderRecord || !result?.hasVmad) ? { diffs: [], metaMap: {} } : buildVmadRows(result.vmad),
     [result, isHeaderRecord],
   );
-  const conditionTree = useMemo(
-    () => isHeaderRecord ? { diffs: [], metaMap: {} } : buildConditionRows(result?.conditions, runOnTargets),
-    [result, isHeaderRecord, runOnTargets],
-  );
-
   // #630: the four array-arity/order ops (Add/Remove/Move Up/Move Down) — one generic handler for
   // every unsorted array in the tree. For an ordinary reflected field, this posts an op envelope
   // (`{op, path}`) straight through handleEditCell/EDIT_FIELD under `rootField`; RecordFieldWriter/
@@ -314,24 +291,15 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
   // no webview-side computation at all, the same shape VMAD's own structural ops
   // (VMAD_STRUCTURAL_OP) already use.
   //
-  // Three carve-outs, kept as separate branches rather than one merged lookup, each preserving the
-  // pre-#630 computation bit-for-bit (computeArrayOpClientSide above): a VMAD ArrayOfObject
-  // property's own arity ops and a VMAD ArrayOfStruct (structList) property's own — both separate
-  // synthetic shapes, out of #658's scope, neither matched by VMAD_SCALAR_ELEMENT_TYPES above — and
-  // a Condition-owning field's (Fallout4ConditionCodec.ApplyListValue requires a JSON array and
-  // refuses an op-envelope object outright — RecordFieldWriter routes a Condition-list fieldPath
-  // there before ArrayOpWriter's own detection ever runs, so posting an envelope under one is a
-  // guaranteed refusal, not merely an unsupported shape). Kept as separate branches rather than
-  // merged into one lookup for that same refusal-shape reason, not a lookup-capability one (#660):
-  // gating on the same flat top-level lookup Conditions safely uses (a Condition group's own
-  // FieldDiff *is* always a top-level entry in conditionTree.diffs — conditionTreeAdapter.ts's own
-  // buildConditionRows builds one flat array, nested game-data condition lists included) would start
-  // posting an op envelope for VMAD ArrayOfObject/ArrayOfStruct too, which VmadCodec's own element
-  // ops refuse outright (NotFound — VMAD_SCALAR_ELEMENT_TYPES is that refusal boundary, mirrored
-  // client-side) — a new network round trip and a new refusal shape neither existed before. The VMAD
-  // branch resolves its own root through the tree instead (findFieldDiffDeep above, #660) precisely
-  // because vmadTree.diffs's own top level can never hold a property's FieldDiff (see that
-  // function's own doc comment).
+  // Two carve-outs, each preserving the pre-#630 computation bit-for-bit
+  // (computeArrayOpClientSide above): a VMAD ArrayOfObject property's own arity ops and a VMAD
+  // ArrayOfStruct (structList) property's own — both separate synthetic shapes, out of #658's
+  // scope, neither matched by VMAD_SCALAR_ELEMENT_TYPES above. Posting an op envelope for either
+  // would reach VmadCodec's own element ops, which refuse it outright (NotFound —
+  // VMAD_SCALAR_ELEMENT_TYPES is that refusal boundary, mirrored client-side). The VMAD branch
+  // resolves its own root through the tree (findFieldDiffDeep above, #660) precisely because
+  // vmadTree.diffs's own top level can never hold a property's FieldDiff (see that function's own
+  // doc comment).
   //
   // #658: a VMAD *scalar-array* property's own arity ops are no longer part of that carve-out — they
   // post a VMAD structural-op envelope (VMAD_ELEMENT_OP_NAMES) under the property's own wirePath,
@@ -357,15 +325,8 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
       return;
     }
 
-    const conditionRootDiff = conditionTree.diffs.find(d => (d.wirePath ?? d.fieldName) === rootField);
-    if (conditionRootDiff) {
-      const nextValue = computeArrayOpClientSide(conditionRootDiff.values[plugin], path, op, elementMeta);
-      if (nextValue !== undefined) handleEditCell(plugin, rootField, nextValue);
-      return;
-    }
-
     handleEditCell(plugin, rootField, { op: ARRAY_OP_NAMES[op], path });
-  }, [vmadTree, conditionTree, handleEditCell]);
+  }, [vmadTree, handleEditCell]);
 
   // One *value* edit, committed the way the arity ops above already commit an arity change —
   // the whole complex field, reconstructed. CONTEXT.md: a complex field is "always edited as one
@@ -377,8 +338,8 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
   // already holds this row's own subtree root, and that by-name search over top-level diffs cannot
   // find a VMAD property's diff at all (those are children of a script row, not top-level entries).
   //
-  // `path.length === 0` is not an optimization — it is the whole VMAD/Condition story. A subtree
-  // root (an ordinary top-level field, a VMAD property, a Condition field) *is* the value it writes,
+  // `path.length === 0` is not an optimization — it is the whole VMAD story. A subtree
+  // root (an ordinary top-level field, a VMAD property) *is* the value it writes,
   // so its commit stays the bare value.
   const handleCellCommit = useCallback((
     plugin: ColumnKey, path: PathSegment[], rootField: string, rootDiff: FieldDiff, value: unknown,
@@ -398,10 +359,9 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
   // (stringValueContext, recordUtils.ts) through FIELD_OPEN_EXTENDED_EDITOR, so a string leaf
   // nested inside a struct/array reconstructs the whole subtree exactly the way an inline edit on
   // the same cell does, instead of sending the saved text alone under the subtree's root
-  // path. `rootDiff` is resolved by name: a plain top-level `.find` for an ordinary field or a
-  // Condition (both always have their own root at the top of `result.diffs`/`conditionTree.diffs`
-  // respectively — see computeArrayOpClientSide's own doc comment for why Condition's is safe to
-  // search flat), falling back to findFieldDiffDeep (#660) for a VMAD property, whose own root
+  // path. `rootDiff` is resolved by name: a plain top-level `.find` for an ordinary field (always
+  // has its own root at the top of `result.diffs`), falling back to findFieldDiffDeep (#660) for a
+  // VMAD property, whose own root
   // never sits at vmadTree.diffs's own top level (see that function's own doc comment).
   const handleOpenExtended = useCallback((
     plugin: ColumnKey, fieldPath: string, path: PathSegment[], rootField: string, value: string, readOnly: boolean,
@@ -421,14 +381,14 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
     // `.find` above always wins first, but that safety is an unwritten invariant on a field named
     // `diffs`, not a structural guarantee. Gating makes the collision impossible outright rather than
     // incidentally avoided.
-    const rootDiff = [...(result?.diffs ?? []), ...conditionTree.diffs]
+    const rootDiff = (result?.diffs ?? [])
       .find(d => (d.wirePath ?? d.fieldName) === rootField)
       ?? (rootField.startsWith('VMAD\\') ? findFieldDiffDeep(vmadTree.diffs, rootField) : undefined);
     openExtendedFieldEditor(
       { value, recordLabel, fieldName: fieldPath, plugin: override.plugin, origin: override.origin, readOnly },
       (v: string) => { if (rootDiff) handleCellCommit(plugin, path, rootField, rootDiff, v); },
     );
-  }, [result, vmadTree, conditionTree, formKey, handleCellCommit]);
+  }, [result, vmadTree, formKey, handleCellCommit]);
 
   const fieldMetaMap = useMemo((): Record<string, FieldMetadata> => {
     const map: Record<string, FieldMetadata> = {};
@@ -437,10 +397,10 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
         if (!map[fv.metadata.name]) map[fv.metadata.name] = fv.metadata;
       }
     }
-    Object.assign(map, vmadTree.metaMap, conditionTree.metaMap);
+    Object.assign(map, vmadTree.metaMap);
     // ADR-0038: the header record's masters field displays but is never directly editable —
-    // stamped readOnly here (the same per-row override DiffRow already honors for the Condition
-    // AND/OR gate and VMAD's synthesized Flags row) rather than gated a second way, so every
+    // stamped readOnly here (the same per-row override DiffRow already honors for VMAD's
+    // synthesized Flags row) rather than gated a second way, so every
     // consumer of this map — the array-parent "Add" affordance and each element's own Remove/Move
     // Up/Move Down, both otherwise wired generically for any array field — sees exactly one
     // answer. Stamped on the element type too: array-op availability for an *element* row is
@@ -453,7 +413,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
       };
     }
     return map;
-  }, [result, vmadTree, conditionTree, isHeaderRecord]);
+  }, [result, vmadTree, isHeaderRecord]);
 
   // Listen for loadRecord messages from the extension (panel reuse), the load order's own
   // conflicts-computed signal, and the array-op right-click commands — the
@@ -494,8 +454,8 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
         // stale/background panel showing a different record ignores it.
         if (msg.formKey !== prevFormKeyRef.current) return;
         const plugin = columnKey(msg.plugin, msg.origin);
-        // `elementMeta` only matters for handleArrayOp's own VMAD/Condition carve-outs ('add' on
-        // either needs a default element built client-side); for an ordinary reflected field it's posted straight
+        // `elementMeta` only matters for handleArrayOp's own VMAD carve-outs ('add' needs a
+        // default element built client-side); for an ordinary reflected field it's posted straight
         // through as an op envelope and ignored here — RecordFieldWriter/ArrayOpWriter resolve the
         // array's own element type server-side instead of relying on this one, the same reason
         // `metaAtPath` (not `fieldMetaMap[msg.rootField]?.elementType` directly) is still
@@ -756,9 +716,9 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
             </tr>
           </thead>
           <tbody>
-            {/* VMAD/Condition rows are woven into the same flatMap as every ordinary
+            {/* VMAD rows are woven into the same flatMap as every ordinary
                 field — one row list, one recursive builder, no separate section/renderer. */}
-            {[...diffs, ...vmadTree.diffs, ...conditionTree.diffs].flatMap(
+            {[...diffs, ...vmadTree.diffs].flatMap(
               diff => buildRows(diff, fieldMetaMap[diff.fieldName], [], diff.wirePath ?? diff.fieldName, diff, diff.fieldName),
             )}
           </tbody>

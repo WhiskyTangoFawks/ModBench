@@ -131,7 +131,7 @@ public sealed class TopLevelFormLinkColumnEditTests : IDisposable
     /// rather than <see cref="RecordEditRefusal.PluginNotTracked"/> (<c>UntrackedReadOnlyTests</c>'
     /// own <c>DataDirectoryFixture</c>, duplicated here per this file's established
     /// self-contained-fixture pattern rather than shared, matching
-    /// <c>GenericFieldWriteDispatchTests.ConditionOwnerFixture</c>).</summary>
+    /// <c>ConditionEditTests.ConditionFixture</c>).</summary>
     private sealed class DataDirectoryFixture : IDisposable
     {
         private const string Name = "Vanilla.esm";

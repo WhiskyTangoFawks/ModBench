@@ -54,6 +54,11 @@
   "PerPluginTypes": {
     "Base.esm": [
       {
+        "Count": 1,
+        "DisplayName": "Constructible Object",
+        "Type": "cobj"
+      },
+      {
         "Count": 2,
         "DisplayName": "Non-Player Character",
         "Type": "npc_"
@@ -79,6 +84,11 @@
     "Top.esp": [
       {
         "Count": 1,
+        "DisplayName": "Constructible Object",
+        "Type": "cobj"
+      },
+      {
+        "Count": 1,
         "DisplayName": "Non-Player Character",
         "Type": "npc_"
       }
@@ -97,7 +107,7 @@
       "Name": "Base.esm",
       "Origin": "Data",
       "Participates": true,
-      "RecordCount": 3
+      "RecordCount": 4
     },
     {
       "HasMatchingRecords": true,
@@ -129,7 +139,7 @@
       "Name": "Top.esp",
       "Origin": "Data",
       "Participates": true,
-      "RecordCount": 1
+      "RecordCount": 2
     }
   ],
   "RecordTypes": 132,
@@ -183,6 +193,14 @@
       "Origin": "Data",
       "Plugin": "Base.esm",
       "RecordType": "npc_"
+    },
+    "000803:Base.esm": {
+      "EditorId": "ConflictedRecipe",
+      "IsWinner": true,
+      "LoadOrderIndex": 2,
+      "Origin": "Data",
+      "Plugin": "Top.esp",
+      "RecordType": "cobj"
     }
   }
 }

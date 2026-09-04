@@ -17,7 +17,7 @@ interface ScalarCellProps {
   // field grid's focus model.
   isFocused?: boolean;
   // Where an edited value goes. Absent is the ordinary state for every caller outside the
-  // field grid (the Condition section's cells, for one) — there is nowhere to write, so the cell
+  // field grid — there is nowhere to write, so the cell
   // renders as text, which is what those callers already had.
   onCommit?: (v: unknown) => void;
   // An accessible name for the resting cell, so tests (and screen readers) can

@@ -107,8 +107,6 @@ public sealed class ProblemDetailsApiTests(LoadedApiFixture<TestPluginFixture> l
 
     [Theory]
     [InlineData("createPlugin", 503)]
-    [InlineData("conditionFunctions", 503)]
-    [InlineData("conditionRunOnTargets", 503)]
     [InlineData("getFilter", 503)]
     [InlineData("track", 503)]
     // Each route's own "no load order" guard: the request body's validation passes (real values
@@ -125,8 +123,6 @@ public sealed class ProblemDetailsApiTests(LoadedApiFixture<TestPluginFixture> l
         {
             "createPlugin" => await client.PostAsJsonAsync(
                 "/plugins/create", new { name = "New.esp", path = Path.Combine(_fixture.DataFolder, "NoLoadOrderMod"), origin = "NoLoadOrderMod" }),
-            "conditionFunctions" => await client.GetAsync("/condition-functions"),
-            "conditionRunOnTargets" => await client.GetAsync("/condition-run-on-targets"),
             "getFilter" => await client.GetAsync("/load-order/filter"),
             "track" => await client.PostAsJsonAsync("/plugins/track", new { origin = "NoLoadOrderMod", preset = "Edits" }),
             _ => throw new ArgumentOutOfRangeException(nameof(op), op, "Unknown operation"),

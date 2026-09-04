@@ -18,11 +18,10 @@ internal static class StructLeaves
     //
     // The unwritable residue keeps #642's refusal instead of a delegate that could never succeed:
     // a getter type with no resolvable Setter class at all, and an abstract Setter whose own
-    // sub-schema exposes no concrete_type discriminator (today exactly ConditionData — excluded
-    // from union-leaf expansion by SchemaAnnotations.ExcludedUnions, so no payload can ever carry the
-    // discriminator ApplyStructJson would need; refusing up front as not-editable names the real
-    // problem, where a ValueRejected from the missing discriminator would claim the value's shape
-    // was wrong).
+    // sub-schema exposes no concrete_type discriminator — a union SchemaAnnotations.ExcludedUnions
+    // names, so no payload can ever carry the discriminator ApplyStructJson would need. Refusing up
+    // front as not-editable names the real problem, where a ValueRejected from the missing
+    // discriminator would claim the value's shape was wrong.
     internal static SubFieldSpec? BuildStructSubField(
         PropertyInfo prop, Type core, string colName,
         GameReflection game, Type[] path, int depth, ILogger logger)

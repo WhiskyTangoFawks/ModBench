@@ -8,13 +8,13 @@ interface FormKeyCellProps {
   value: unknown;
   meta: FieldMetadata;
   // Optional, defaulting to non-editable — matches ScalarCell/FlagCell's contract
-  // (presence of somewhere to write is the editability signal). Condition/VMAD composite leaves
-  // that compose this cell but don't have their own write path simply omit it.
+  // (presence of somewhere to write is the editability signal). A VMAD composite leaf that
+  // composes this cell but has no write path of its own simply omits it.
   editable?: boolean;
   // ADR-0034: see ScalarCell's identical prop for the full rationale — gates the
   // mutable branch's plain-click open of the QuickPick. Unused by the immutable branch,
   // which opens nothing regardless of focus. Optional, defaulting to `true`:
-  // ConditionSection renders this cell directly (its Object-typed parameter/Run-On/comparison
+  // VmadObjectEditor renders this cell directly (its Object-typed property
   // FormKey cells), outside the field grid's focus model, and doesn't pass it — same reasoning
   // as ScalarCell's identical default.
   isFocused?: boolean;

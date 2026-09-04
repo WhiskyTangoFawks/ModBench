@@ -474,7 +474,6 @@ interface FakeOpts {
   // override it.
   conflictsComputed?: boolean;
   load?: RecordPanelClient['load'];
-  conditionRunOnTargets?: RecordPanelClient['conditionRunOnTargets'];
 }
 
 // A fake record-load order client. `load` returns the composite view built from the
@@ -497,11 +496,7 @@ function fakeClient(compare: unknown, opts: FakeOpts = {}): RecordPanelClient {
     trackedSet: new Set(pl.filter(p => p.isTracked === true).map(p => columnKey(p.name, p.origin ?? null))),
     conflictsComputed: opts.conflictsComputed ?? true,
   } as unknown as LoadResult;
-  return {
-    load: opts.load ?? vi.fn().mockResolvedValue(okLoad),
-    // The Run On target dropdown's catalog — load-order-wide, fetched once on mount.
-    conditionRunOnTargets: opts.conditionRunOnTargets ?? vi.fn().mockResolvedValue([]),
-  };
+  return { load: opts.load ?? vi.fn().mockResolvedValue(okLoad) };
 }
 
 function renderPanel(compare: unknown, opts: FakeOpts = {}) {

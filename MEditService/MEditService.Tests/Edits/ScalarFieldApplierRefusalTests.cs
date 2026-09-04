@@ -307,7 +307,7 @@ public sealed class ScalarFieldApplierRefusalTests : IDisposable
     /// <summary>An OMOD carrying one <c>ObjectModIntProperty</c> — same shape
     /// <c>ComplexFieldElementEditTests.OmodFixture</c> uses, duplicated per this codebase's
     /// established self-contained-fixture-per-file convention
-    /// (<c>GenericFieldWriteDispatchTests.ConditionOwnerFixture</c>'s own stated reasoning).</summary>
+    /// (<c>ConditionEditTests.ConditionFixture</c>'s own stated reasoning).</summary>
     private sealed class OmodFixture : IDisposable
     {
         private const string PluginName = "Omod532.esp";

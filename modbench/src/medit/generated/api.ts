@@ -298,38 +298,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/condition-functions": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["GetConditionFunctions"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/condition-run-on-targets": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["GetConditionRunOnTargets"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/records": {
         parameters: {
             query?: never;
@@ -613,7 +581,6 @@ export interface components {
             conflictAll: components["schemas"]["ConflictAll"];
             hasVmad: boolean;
             vmad?: components["schemas"]["VmadCompare"] | null;
-            conditions?: components["schemas"]["ConditionCompare"] | null;
         };
         CompileDiagnostic: {
             formKey: string;
@@ -631,38 +598,6 @@ export interface components {
             masters: string[];
             eslContradiction: boolean;
         };
-        ConditionCompare: {
-            groups: components["schemas"]["ConditionGroupDiff"][];
-        };
-        ConditionDiff: {
-            /** Format: int32 */
-            index: number;
-            perPlugin: {
-                [key: string]: components["schemas"]["ParsedCondition"] | null;
-            };
-            winnerColumn: string;
-            cellStates: {
-                [key: string]: components["schemas"]["ConflictThis"];
-            };
-            fieldCellStates: {
-                [key: string]: {
-                    [key: string]: components["schemas"]["ConflictThis"];
-                };
-            };
-            fieldResolutions?: {
-                [key: string]: {
-                    [key: string]: components["schemas"]["FormKeyResolution"];
-                };
-            } | null;
-        };
-        ConditionGroupDiff: {
-            fieldPath: string;
-            conditions: components["schemas"]["ConditionDiff"][];
-        };
-        /** @enum {string} */
-        ConditionOperator: "EqualTo" | "NotEqualTo" | "GreaterThan" | "GreaterThanOrEqualTo" | "LessThan" | "LessThanOrEqualTo";
-        /** @enum {string} */
-        ConditionParamCategory: "Number" | "Form" | "Text";
         /** @enum {string} */
         ConflictAll: "OnlyOne" | "NoConflict" | "Override" | "Conflict" | "ConflictCritical";
         /** @enum {string} */
@@ -731,6 +666,9 @@ export interface components {
             allowsNull: boolean;
             displayLabel?: string | null;
             isDiscriminator: boolean;
+            siblingsInUse?: {
+                [key: string]: string[];
+            } | null;
         };
         FieldValue: {
             metadata: components["schemas"]["FieldMetadata"];
@@ -792,27 +730,6 @@ export interface components {
         MasterIssueKind: "DirectlyMissing" | "Unloadable";
         NextFreeFormKeyResponse: {
             formKey: string;
-        };
-        ParsedCondition: {
-            function: string;
-            operator: components["schemas"]["ConditionOperator"];
-            or: boolean;
-            runOnTarget: string;
-            runOnReference?: string | null;
-            useGlobal: boolean;
-            /** Format: float */
-            comparisonFloat?: number | null;
-            comparisonGlobal?: string | null;
-            parameters: components["schemas"]["ParsedConditionParam"][];
-        };
-        ParsedConditionParam: {
-            category: components["schemas"]["ConditionParamCategory"];
-            typeName: string;
-            /** Format: int32 */
-            number?: number | null;
-            formKey?: string | null;
-            text?: string | null;
-            decodedValue?: string | null;
         };
         PlacedSummary: {
             formKey: string;
@@ -1887,64 +1804,6 @@ export interface operations {
                 };
                 content: {
                     "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Service Unavailable */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-        };
-    };
-    GetConditionFunctions: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": string[];
-                };
-            };
-            /** @description Service Unavailable */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-        };
-    };
-    GetConditionRunOnTargets: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": string[];
                 };
             };
             /** @description Service Unavailable */

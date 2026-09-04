@@ -33,7 +33,7 @@ internal sealed class IndexStore
 
     // The version the rows in this file were written under (IndexVersion), resolved once at
     // Initialize once the game release is known — same "one game for its whole lifetime" reasoning
-    // DuckDbRecordIndex itself already applies to _release/_conditionCodec.
+    // DuckDbRecordIndex itself already applies to _release.
     private string? _indexVersion;
 
     public DuckDBConnection Connection { get; private set; }

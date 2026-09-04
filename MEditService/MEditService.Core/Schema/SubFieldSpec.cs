@@ -34,7 +34,10 @@ internal sealed record SubFieldSpec(
     string? DisplayLabel = null,
     // Set by the two discriminator fields the TargetingRefuses comment above already names —
     // see FieldMetadata's own doc comment for what it means.
-    bool IsDiscriminator = false)
+    bool IsDiscriminator = false,
+    // See FieldMetadata.SiblingsInUse. Set from the game's annotation table by
+    // SubFieldReflection.ProjectSubField, for the enum leaf the table names.
+    IReadOnlyDictionary<string, IReadOnlyList<string>>? SiblingsInUse = null)
 {
     // Mirrors ColumnSpec.IsArray's own derivation (ColumnReflection.ReflectColumns: `info.ApiType ==
     // "array"`) rather than adding a redundant constructor flag that could disagree with ApiType.
@@ -44,5 +47,6 @@ internal sealed record SubFieldSpec(
             SubFields?.Select(s => s.ToFieldMetadata()).ToList(),
             AllowsNull: AllowsNull,
             DisplayLabel: DisplayLabel,
-            IsDiscriminator: IsDiscriminator);
+            IsDiscriminator: IsDiscriminator,
+            SiblingsInUse: SiblingsInUse);
 }

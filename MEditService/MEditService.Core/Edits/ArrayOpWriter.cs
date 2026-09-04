@@ -10,7 +10,7 @@ namespace MEditService.Core.Edits;
 /// #630: the four array arity/order op envelopes — <c>array_remove</c>/<c>array_move_up</c>/
 /// <c>array_move_down</c>/<c>array_add</c> — computed here instead of round-tripped as a
 /// client-computed whole array through the webview. Scope is ordinary reflected fields only
-/// (<see cref="ColumnSpec"/>-backed columns). Two exclusions, both deliberate, each with its own
+/// (<see cref="ColumnSpec"/>-backed columns). One exclusion, deliberate, with its own
 /// codec and wire vocabulary this class does not reach into:
 /// <list type="bullet">
 /// <item>A VMAD property's own array is <c>VmadCodec</c>'s surface, with its own structural-op
@@ -21,16 +21,6 @@ namespace MEditService.Core.Edits;
 /// before it ever reaches the schema/column lookup that leads here, so a VMAD fieldPath never
 /// makes it as far as this class's own op-envelope detection to be excluded from in the first
 /// place.</item>
-/// <item>A Condition-owning field (<c>Conditions</c>, and nested condition lists) carries the same
-/// generic <c>{type: "array"}</c> wire shape an ordinary array does, which is exactly why this
-/// exclusion needs saying explicitly rather than left to be inferred from "not VMAD": Condition
-/// list fields are dispatched to <c>Fallout4ConditionCodec.ApplyListValue</c> earlier in
-/// <see cref="RecordFieldWriter.TryApply"/>, before this class's own op-envelope detection ever
-/// runs — <c>ApplyListValue</c> requires its whole-value argument to be a JSON array and refuses
-/// (<c>NotFound</c>) anything else, an op-envelope object included — found in review, where an op
-/// envelope reaching a Condition path refused exactly this way. The client's own carve-out,
-/// <c>RecordPanel.tsx</c>'s <c>computeArrayOpClientSide</c>, still computes the next array
-/// client-side for Conditions the same way it does for VMAD.</item>
 /// </list>
 ///
 /// <para>Each op reads the column's own <i>current</i> value (<see cref="ColumnSpec.Extract"/>),
@@ -244,7 +234,7 @@ internal static class ArrayOpWriter
     // already correct for either.
     //
     // No 'defaultValue' override and no 'vmadObject' case: both are adapter-only concepts the
-    // VMAD/Condition tree adapters synthesize client-side (webview/src/types.ts's own doc comment),
+    // VMAD tree adapter synthesizes client-side (webview/src/types.ts's own doc comment),
     // never present on a real reflected column's wire FieldMetadata, which is the only kind this
     // class ever sees.
     private static JsonNode? DefaultElementValue(FieldMetadata? meta) => meta?.Type switch

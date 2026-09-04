@@ -141,7 +141,7 @@ internal static class SubFieldReflection
 
         return LeafClassification.ClassifyLeaf(prop, core, game) switch
         {
-            { } leaf => ProjectSubField(prop, colName, core, nullable, leaf, logger),
+            { } leaf => ProjectSubField(prop, colName, core, nullable, leaf, game, logger),
             null when ReflectedTypes.IsAtomicValueType(core) => AtomicValueLeaves.BuildAtomicValueSubField(prop, core, colName, game, logger),
             null when ReflectedTypes.IsVectorStructType(core) => VectorStructLeaves.BuildVectorSubField(prop, core, colName, game, depth, logger),
             null when ReflectedTypes.IsListType(core, out var elementType) =>
@@ -154,11 +154,13 @@ internal static class SubFieldReflection
     // Projects a shared LeafSpec into a sub-field, routed through the same LeafWriters.RouteWriter
     // ColumnReflection.ProjectColumn uses for a top-level column.
     private static SubFieldSpec ProjectSubField(
-        PropertyInfo prop, string colName, Type core, bool nullable, LeafSpec leaf, ILogger logger)
+        PropertyInfo prop, string colName, Type core, bool nullable, LeafSpec leaf,
+        GameReflection game, ILogger logger)
     {
         var apply = LeafWriters.RouteWriter<object>(leaf, core, prop.Name, nullable, logger);
         return new(colName, leaf.ApiType, leaf.ValidFormKeyTypes, leaf.EnumMembers,
             leaf.Get, apply,
-            AllowsNull: leaf.AllowsNull);
+            AllowsNull: leaf.AllowsNull,
+            SiblingsInUse: game.Annotations.SiblingsInUseFor(prop));
     }
 }

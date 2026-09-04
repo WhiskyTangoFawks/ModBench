@@ -77,8 +77,8 @@ internal enum FieldApplyOutcome
 /// <summary>
 /// Applies one field value to one live Mutagen record — the single dispatch point every write path
 /// goes through. Only the dispatch lives here: the field semantics live in the codecs it dispatches
-/// *to* (<see cref="ColumnSpec.Apply"/>, <see cref="VmadCodec"/>, <see cref="IConditionCodec"/>,
-/// <see cref="VmadPath"/>, <see cref="ConditionPath"/>), not in a second implementation.
+/// *to* (<see cref="ColumnSpec.Apply"/>, <see cref="VmadCodec"/>, <see cref="VmadPath"/>), not in a
+/// second implementation.
 ///
 /// <para>Complex fields (CONTEXT.md: array or struct) are applied as one atomic value, never
 /// per-element — <see cref="ColumnSpec.Apply"/> takes the whole field's JSON, which is exactly the
@@ -93,8 +93,7 @@ internal static class RecordFieldWriter
         string recordType,
         string fieldPath,
         JsonElement value,
-        IReadOnlyDictionary<string, RecordTableSchema> schemas,
-        GameRelease release)
+        IReadOnlyDictionary<string, RecordTableSchema> schemas)
     {
         if (fieldPath.Equals(EditorIdFieldPath, StringComparison.Ordinal))
             return ApplyEditorId(record, value);
@@ -105,26 +104,6 @@ internal static class RecordFieldWriter
         if (VmadPath.IsVmadPath(fieldPath))
             return ApplyVmadField(record, fieldPath, value);
 
-        if (ConditionPath.IsConditionPath(fieldPath))
-            return ApplyConditionField(record, fieldPath, value, release);
-
-        // Dispatches on whichever of the record's actual condition-owning fields this is (not
-        // just "Conditions") — an instance is in hand here, so the check reflects off record.GetType()
-        // directly rather than going through the record-type string.
-        var codec = ConditionCodecRegistry.For(release.ToCategory());
-        if (codec != null && codec.IsConditionListField(record.GetType(), fieldPath))
-            return ApplyConditionListField(record, fieldPath, value, release);
-
-        // A nested list's own whole-list write, where the composed path names an
-        // enclosing array and index before the condition field, routes the same way once it resolves
-        // against this concrete record's element type. ApplyListValue itself walks the path at
-        // whatever depth it composes, so this only decides whether to route there at all.
-        if (codec != null && fieldPath.Contains('[', StringComparison.Ordinal)
-            && codec.IsNestedConditionListField(record.GetType(), fieldPath))
-        {
-            return ApplyConditionListField(record, fieldPath, value, release);
-        }
-
         if (!schemas.TryGetValue(recordType, out var schema))
             return FieldApplyOutcome.NotFound;
         var col = schema.RecordColumns.FirstOrDefault(c => c.Name == fieldPath);
@@ -134,7 +113,7 @@ internal static class RecordFieldWriter
         // #630: an array arity/order op envelope — same shape-based detection as VmadField's own
         // op envelopes just above (a JSON object carrying an "op" string member), checked here
         // rather than earlier since it only ever targets an ordinary reflected column, never a
-        // VMAD/condition path (both already dispatched above this line).
+        // VMAD path (already dispatched above this line).
         if (TryGetOpName(value, out var arrayOpName) && ArrayOpWriter.IsArrayOp(arrayOpName))
             return ArrayOpWriter.Apply(record, col, arrayOpName, value);
 
@@ -304,31 +283,4 @@ internal static class RecordFieldWriter
         VmadApplyResult.NoOp => FieldApplyOutcome.NoOp,
         _ => FieldApplyOutcome.NotFound,
     };
-
-    private static FieldApplyOutcome ApplyConditionField(
-        IMajorRecord record, string fieldPath, JsonElement value, GameRelease release)
-    {
-        if (ConditionCodecRegistry.For(release.ToCategory()) is not { } codec)
-            return FieldApplyOutcome.NotFound;
-        if (!ConditionPath.TryParse(fieldPath, out var ownerPath, out var index, out var subField))
-            return FieldApplyOutcome.NotFound;
-
-        return codec.ApplyFieldValue(record, ownerPath, index, subField, value) == ConditionApplyResult.Applied
-            ? FieldApplyOutcome.Applied
-            : FieldApplyOutcome.NotFound;
-    }
-
-    // Whole-list write: fieldPath is the bare owning field name (e.g. "Conditions") and the
-    // value is the full ParsedCondition-shaped JSON array — the atomic complex-field write again,
-    // one level in.
-    private static FieldApplyOutcome ApplyConditionListField(
-        IMajorRecord record, string fieldPath, JsonElement value, GameRelease release)
-    {
-        if (ConditionCodecRegistry.For(release.ToCategory()) is not { } codec)
-            return FieldApplyOutcome.NotFound;
-
-        return codec.ApplyListValue(record, fieldPath, value) == ConditionApplyResult.Applied
-            ? FieldApplyOutcome.Applied
-            : FieldApplyOutcome.NotFound;
-    }
 }

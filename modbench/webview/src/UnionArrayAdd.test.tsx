@@ -80,7 +80,6 @@ describe('RecordPanel — Add on an abstract-union array (#710)', () => {
         trackedSet: new Set([columnKey('MyMod.esp', null)]),
         conflictsComputed: true,
       } as unknown as LoadResult)),
-      conditionRunOnTargets: vi.fn().mockResolvedValue([]),
     };
     return render(<RecordPanel client={client} />);
   }

@@ -1,6 +1,7 @@
 using MEditService.Core.Schema;
 using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
+using Mutagen.Bethesda.Fallout4;
 
 namespace MEditService.Tests.Indexing;
 
@@ -57,6 +58,85 @@ public sealed class SchemaAnnotationTests
     {
         var reflector = VmadReflectedSchemaReflector.Fallout4With(a => a with { EmptySubSchemaTypes = [.. a.EmptySubSchemaTypes, "INoSuchGetter"] });
         AssertFailsNaming(reflector, "INoSuchGetter");
+    }
+
+    // #692: a SiblingsInUse row is three claims about the assembly at once — the governing member
+    // exists, its own domain has the values the map is keyed by, and the members it names are real.
+    // Each is validated, because a row wrong in any of the three would silently govern nothing.
+
+    [Theory]
+    [InlineData("IFunctionConditionDataGetter", "NoSuchMember")]
+    [InlineData("INoSuchGetter", "Function")]
+    public void SiblingsInUse_GoverningMemberReflectionDidNotFind_FailsSchemaGenerationNamingTheEntry(string type, string member)
+    {
+        var reflector = VmadReflectedSchemaReflector.Fallout4With(a => a with
+        {
+            SiblingsInUse = new(a.SiblingsInUse) { [(type, member)] = new Dictionary<string, IReadOnlyList<string>>() },
+        });
+        AssertFailsNaming(reflector, $"{type}.{member}");
+    }
+
+    [Fact]
+    public void SiblingsInUse_GoverningFromANonEnumMember_FailsSchemaGenerationNamingTheEntry()
+    {
+        var reflector = VmadReflectedSchemaReflector.Fallout4With(a => a with
+        {
+            SiblingsInUse = new(a.SiblingsInUse)
+            {
+                [("IFunctionConditionDataGetter", "ParameterOneString")] = new Dictionary<string, IReadOnlyList<string>>(),
+            },
+        });
+        AssertFailsNaming(reflector, "IFunctionConditionDataGetter.ParameterOneString governs from a non-enum member (String)");
+    }
+
+    [Fact]
+    public void SiblingsInUse_NamingAValueTheDomainDoesNotHave_FailsSchemaGenerationNamingTheEntry()
+    {
+        var reflector = VmadReflectedSchemaReflector.Fallout4With(a => a with
+        {
+            SiblingsInUse = new(a.SiblingsInUse)
+            {
+                [("IConditionDataGetter", "RunOnType")] =
+                    Fallout4ConditionAnnotations.RunOnReference
+                        .Append(new KeyValuePair<string, IReadOnlyList<string>>("NoSuchRunOn", []))
+                        .ToDictionary(kv => kv.Key, kv => kv.Value),
+            },
+        });
+        AssertFailsNaming(reflector, "IConditionDataGetter.RunOnType names value NoSuchRunOn, which RunOnType does not have");
+    }
+
+    /// <summary>The direction that fails quietly rather than loudly: a value the row does not name
+    /// reads as "nothing in use", which idles every member the row governs, so the reference walk
+    /// would silently stop seeing them.</summary>
+    [Fact]
+    public void SiblingsInUse_OmittingAValueTheDomainHas_FailsSchemaGenerationNamingTheEntry()
+    {
+        var reflector = VmadReflectedSchemaReflector.Fallout4With(a => a with
+        {
+            SiblingsInUse = new(a.SiblingsInUse)
+            {
+                [("IConditionDataGetter", "RunOnType")] =
+                    Fallout4ConditionAnnotations.RunOnReference
+                        .Where(kv => kv.Key != nameof(Condition.RunOnType.MyKiller))
+                        .ToDictionary(kv => kv.Key, kv => kv.Value),
+            },
+        });
+        AssertFailsNaming(reflector, "IConditionDataGetter.RunOnType does not name value MyKiller, which RunOnType has");
+    }
+
+    [Fact]
+    public void SiblingsInUse_NamingASiblingTheTypeDoesNotDeclare_FailsSchemaGenerationNamingTheEntry()
+    {
+        var reflector = VmadReflectedSchemaReflector.Fallout4With(a => a with
+        {
+            SiblingsInUse = new(a.SiblingsInUse)
+            {
+                [("IConditionDataGetter", "RunOnType")] =
+                    Fallout4ConditionAnnotations.RunOnReference
+                        .ToDictionary(kv => kv.Key, kv => kv.Key == "Reference" ? (IReadOnlyList<string>)["no_such_sibling"] : kv.Value),
+            },
+        });
+        AssertFailsNaming(reflector, "IConditionDataGetter.RunOnType names sibling no_such_sibling, which IConditionDataGetter does not declare");
     }
 
     [Fact]

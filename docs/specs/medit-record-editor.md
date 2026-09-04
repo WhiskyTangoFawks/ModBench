@@ -28,8 +28,8 @@ buttons. There is no read-only value
 surface: an immutable cell opens nothing on plain click, second click, `F2`, or double click —
 **a `string` cell included** (ADR-0039) — with Ctrl+C on the focused cell as every
 immutable cell's copy path regardless, and the right-click menu's **Open in Editor…** entry (see
-*Editing* below) as a long immutable value's own read path, read-only. VMAD and Conditions render as ordinary rows in this same
-tree and inherit its focus model in full (see *VMAD and Conditions are ordinary rows in the
+*Editing* below) as a long immutable value's own read path, read-only. VMAD renders as ordinary
+rows in this same tree and inherits its focus model in full (see *VMAD is ordinary rows in the
 one tree* below for the handful of still-open, explicitly scoped gaps).
 
 Editing context — operates on **records**, **FormKeys**, and **plugins**;
@@ -123,7 +123,7 @@ in [medit-version-control.md](medit-version-control.md).
 
 ### Interaction model
 
-**xEdit's model, ported** — the one compare grid, whose rows include VMAD and Condition data as
+**xEdit's model, ported** — the one compare grid, whose rows include VMAD data as
 ordinary rows (see below)
 ([ADR-0034](../adr/0034-xedit-is-the-ux-reference-for-the-record-editor.md); the behaviour being matched is catalogued in
 [the xEdit UX audit](../research/xedit-ux-audit.md)). Every user of this panel arrives fluent in
@@ -400,7 +400,7 @@ already empty: matching xEdit's own guard (`Element.EditValue` must be non-empty
   `ListElementTypeUnresolved`. A default element therefore carries its discriminator, set to the
   first leaf the schema lists, and the user changes it with the same `Kind` dropdown any other
   element uses. The webview computes no element of its own for a reflected column; the field-by-field
-  default in `recordUtils.ts` belongs to the VMAD/Condition tree adapters, whose element shapes have
+  default in `recordUtils.ts` belongs to the VMAD tree adapter, whose element shapes have
   no constructor to fall back on.
 
   **Read/write symmetry is structural, not conventional** (#649). A leaf carries either a writer or
@@ -429,8 +429,9 @@ already empty: matching xEdit's own guard (`Element.EditValue` must be non-empty
   type, and is not reflectable from Mutagen, so it is a transcribed allowlist in the same idiom as
   the vector-struct list. Editing a Color leaf preserves any existing alpha byte it does not name.
   **Naming a sub-field that genuinely has no write path is itself a refusal**
-  (`RecordEditRefusal.NestedFieldReadOnly`, #642). Since #643 and #699 that is the unwritable
-  residue only: nested condition data, whose discriminator can never appear in a payload. Naming it
+  (`RecordEditRefusal.NestedFieldReadOnly`, #642). Since #643 and #699 the residue is a nested
+  struct with no usable write door — a getter type with no resolvable Loqui setter class, or an
+  excluded union whose discriminator can never appear in a payload. Naming one
   refuses the whole write, and the message says the sub-field is not editable rather than implying
   the value was invalid.
   Three cases stay distinct and must not be collapsed: a sub-field **absent** from the payload is
@@ -483,9 +484,8 @@ already empty: matching xEdit's own guard (`Element.EditValue` must be non-empty
     debounce — there is no second left-click target to disambiguate against.
   - **Scope**: every plugin column (`ScalarCell`/`DiffRow`). A plain `string`-typed row reaches the
     extended editor regardless of whether it's an ordinary field or a VMAD property (both fold
-    onto the same `ScalarCell`). A composite leaf's own inner string widget (a condition
-    parameter's Text category, `conditionParam`) doesn't yet — its outer `FieldMetadata.type` isn't
-    `'string'`, which is what this menu entry keys on (a noted gap). A `string` cell that
+    onto the same `ScalarCell`). A composite leaf's own inner string widget doesn't — its outer
+    `FieldMetadata.type` isn't `'string'`, which is what this menu entry keys on (a noted gap). A `string` cell that
     doesn't reach it keeps its inline editor on every left-click gesture, unchanged.
 - **Unsorted array fields have arity and order operations** — **Move Up** / **Move Down** (swap
   with the neighbour) and **Remove** on an element row, and **Add** on the parent array row,
@@ -511,12 +511,11 @@ already empty: matching xEdit's own guard (`Element.EditValue` must be non-empty
   resolves its default element from the nested array's own element type via `metaAtPath` — a
   bare element index would truncate both. There is no free
   drag-reorder and no auto-sort.
-  **Three surfaces are carved out of the generic envelope path and still compute client-side**:
-  a **Condition** list, and VMAD's two non-scalar array shapes — **`ArrayOfObject`** and
-  **`ArrayOfStruct`**. All are reached by the same generic `{ type: 'array' }` metadata and the
-  same gestures, but none goes through the reflected-schema column the envelope path applies to —
-  a condition-owning field is dispatched to `Fallout4ConditionCodec.ApplyListValue`, which
-  requires a JSON array and refuses an envelope object.
+  **Two surfaces are carved out of the generic envelope path and still compute client-side**:
+  VMAD's two non-scalar array shapes, **`ArrayOfObject`** and **`ArrayOfStruct`**. Both are reached
+  by the same generic `{ type: 'array' }` metadata and the same gestures, but neither goes through
+  the reflected-schema column the envelope path applies to. A condition list is not among them: it
+  is an ordinary reflected array column and takes the generic envelope path.
   **A VMAD array-of-*scalars* property is no longer carved out** (#658): its arity ops became
   VMAD structural ops in `VmadCodec`'s own vocabulary — `add_element`, `remove_element`,
   `move_element_up`, `move_element_down` — computed server-side alongside `add_script` and
@@ -527,18 +526,14 @@ already empty: matching xEdit's own guard (`Element.EditValue` must be non-empty
   *closed*. The reverse (excluding known shapes) shipped briefly and broke `ArrayOfStruct`, which
   fell through to a `NotFound` refusal on a gesture that had worked. The client's allowlist and
   `VmadCodec`'s matched set have no runtime tie and must be changed together.
-  The Condition and VMAD branches stay deliberately **separate, not one merged gate**: a
-  Condition group's own `FieldDiff` is always a top-level entry, whereas a VMAD property's is
-  nested under its script row, so a single top-level-keyed gate would misroute VMAD.
   **VMAD arity ops work as of
   #660**, which fixed the lookup: a property's `FieldDiff` sits two levels down
   (`wrapper → script → property`), so the old flat top-level search matched *nothing* under a
   VMAD path — every VMAD op through this handler was an unconditional silent no-op, before and
-  after #630. The lookup now descends the VMAD subtree only; the Condition and ordinary-field
-  lookups stay flat and untouched, because widening those would let a `rootField` resolve to a
-  deeper node than intended and turn a silent no-op into a silent wrong write.
-  VMAD's struct/structList element ops and
-  Conditions' own add/remove/reorder are described under *VMAD and Conditions are ordinary rows
+  after #630. The lookup now descends the VMAD subtree only; the ordinary-field lookup stays flat
+  and untouched, because widening it would let a `rootField` resolve to a deeper node than intended
+  and turn a silent no-op into a silent wrong write.
+  VMAD's struct/structList element ops are described under *VMAD is ordinary rows
   in the one tree* below.
 - **Editing writes working-tree source text directly** (ADR-0041) — there is no staged
   intermediate state. A single field's value can be **dragged between plugin columns** to copy
@@ -708,74 +703,54 @@ gesture — Sim Settlements 2 is a real-world example on Fallout 4.
   from creation) and a lightbulb offering it on an identical-to-master container (separate
   follow-up work).
 
-### VMAD and Conditions are ordinary rows in the one tree
+### VMAD is ordinary rows in the one tree
 
-VMAD (Papyrus script data) and Conditions (CTDA) are not a separate section, table body, row
-renderer, or cell renderer — they are ordinary rows in the same compare tree every other field
-uses. Two pure frontend adapters, `vmadTreeAdapter.ts`/`conditionTreeAdapter.ts`, map the
-compare response's `vmad`/`conditions` payloads into the identical node shape ordinary reflected
-fields already carry (`FieldDiff`/`FieldMetadata`); RecordPanel merges the adapters' rows straight
-into its own `diffs`/`fieldMetaMap` before handing the whole thing to the same recursive builder
-described under *The panel* below. Nothing downstream of that merge point knows or cares which of
-the three sources — reflection, VMAD, Conditions — a row came from: conflict coloring, expand/
-collapse, focus, `F2`, the clipboard, and drag all come
-from `DiffRow`/`RecordPanel` unchanged, not re-derived per surface. This is a rendering merge, not
-a behaviour change: existing VMAD and Condition editing and conflict behaviour are
-preserved end to end (verified by porting their prior test suites onto the unified tree), with the
-handful of deliberate, called-out differences below.
+VMAD (Papyrus script data) is not a separate section, table body, row renderer, or cell renderer —
+it is ordinary rows in the same compare tree every other field uses. One pure frontend adapter,
+`vmadTreeAdapter.ts`, maps the compare response's `vmad` payload into the identical node shape
+ordinary reflected fields already carry (`FieldDiff`/`FieldMetadata`); RecordPanel merges the
+adapter's rows straight into its own `diffs`/`fieldMetaMap` before handing the whole thing to the
+same recursive builder described under *The panel* below. Nothing downstream of that merge point
+knows or cares which of the two sources — reflection or VMAD — a row came from: conflict coloring,
+expand/collapse, focus, `F2`, the clipboard, and drag all come from `DiffRow`/`RecordPanel`
+unchanged, not re-derived per surface.
 
-**Each subrecord reaches the tree from exactly one of those three sources.** Schema reflection
-excludes both condition-shaped properties and the virtual-machine-adapter property
-from a record type's reflected columns, because the `conditions`/`vmad` payloads already carry
-them in decoded form — reflecting them again would put the same subrecord in the grid twice, once
-decoded and once as an opaque blob. Both exclusions are keyed on the game's own types rather than
-on property names, so a game whose assembly has no condition codec or no VMAD interface excludes
-nothing.
+**Each subrecord reaches the tree from exactly one of those two sources.** Schema reflection
+excludes the virtual-machine-adapter property from a record type's reflected columns, because the
+`vmad` payload already carries it in decoded form — reflecting it again would put the same
+subrecord in the grid twice, once decoded and once as an opaque blob. The exclusion is keyed on the
+game's own types rather than on a property name, so a game whose assembly has no VMAD interface
+excludes nothing. **Conditions are not one of those sources**: a condition list is an ordinary
+reflected array-of-struct field, reflected like every other list of Loqui structs (see
+*Conditions* below).
 
 **Two frictions the adapters exist to paper over**, both additive extensions to the shared node
 shape rather than a second shape:
 
 - **Wire paths differ from display labels.** An ordinary field's `fieldName` and the path it
   writes under are the same string; a VMAD property's isn't (`"Health"` displays, but writes at
-  `VMAD\ScriptName\Health`), and neither is a condition field's (`"Function"` displays, but writes
-  at `CTDA\Conditions\0\Function`). `FieldDiff.wirePath`, when present, is what a row and its whole
+  `VMAD\ScriptName\Health`). `FieldDiff.wirePath`, when present, is what a row and its whole
   subtree actually write under — `RecordPanel`'s row-builder starts a **fresh** write root the
   moment it meets a child carrying one (rather than folding into whatever its parent writes),
-  which is what lets a VMAD property or a condition field commit independently of the script/
-  condition list containing it, exactly as it always has.
+  which is what lets a VMAD property commit independently of the script containing it.
 - **A written value's own shape can differ from the shared model's**, needed only for VMAD's
   Struct/ArrayOfStruct properties: their wire format is the backend's own raw node tree
   (`VmadStructEntry[]`/`VmadStructInstance[]` — `{name, type, boolValue, …, members}`), unchanged
   by this work (no backend/API change anywhere in it). `FieldDiff.commitOverride`, present only on
   those two property kinds, is the one escape hatch `RecordPanel`'s generic commit path consults
-  instead of its default plain-object/array `setAtPath` — every ordinary field, every Condition
-  field, and VMAD's own scalar/object/array-of-scalar properties never set it, so this is invisible
-  to everything that doesn't need it.
+  instead of its default plain-object/array `setAtPath` — every ordinary field and VMAD's own
+  scalar/object/array-of-scalar properties never set it, so this is invisible to everything that
+  doesn't need it.
 
-**Synthesized metadata, the pattern the Condition section already proved applied more
-broadly:** five leaf types exist only in synthesized `FieldMetadata` (`vmadObject`,
-`conditionFunction`, `conditionRunOn`, `conditionComparison`, `conditionParam`) — the backend never
-emits them. Each is a genuine exception to the plain type→widget mapping, the same way `formKey`
-already is: a VMAD object property is a `(FormKey, alias)` pair (composes the shared `FormKeyCell`
-plus an alias input — `VmadObjectEditor`); a condition's Function opens a
-QuickPick over the function catalogue, never a text/dropdown editor; Run On, Comparison, and a
-parameter each pick their own widget from their own current value's shape (a `{target,
-reference}` pair; a plain number vs. a GLOB FormKey string, distinguished by JS type rather than a
-sibling Use-Global flag this row has no access to; a `{category, …}` tagged union) rather than a
-second per-plugin metadata branch `DiffRow` would otherwise need. Run On's own target enum is
-likewise a server catalog (`GET /condition-run-on-targets`, `RecordPanelClient
-.conditionRunOnTargets()`), fetched once by `RecordPanel` and threaded through
-`buildConditionRows`/`conditionTreeAdapter.ts` into the field's own `enumMembers` — not a hardcoded
-frontend list, so a future game's differently-shaped `RunOnType` enum (Skyrim/Starfield both differ
-from FO4's) is never silently offered a name it can't parse or write. The AND/OR gate between
-conditions is `FieldMetadata.readOnly` — unconditionally non-editable regardless of the column's
-own mutability, the one per-row override on top of the immutableSet-driven per-column rule
-everything else still uses unchanged.
+**Synthesized metadata:** one leaf type exists only in synthesized `FieldMetadata`
+(`vmadObject`) — the backend never emits it. It is a genuine exception to the plain type→widget
+mapping, the same way `formKey` already is: a VMAD object property is a `(FormKey, alias)` pair
+(composes the shared `FormKeyCell` plus an alias input — `VmadObjectEditor`).
 
 **VMAD's shape**: one always-present top-level row, **"Scripts (VMAD)"** (a struct-like
 container — `{…}` collapsed, no editable value of its own), whenever the record type is
 VMAD-capable (`hasVmad`), even with zero scripts — the stable home "Add Script" needs, since
-unlike a condition-owning field a scriptless record's `vmad` payload can be entirely absent, not
+unlike an ordinary array column a scriptless record's `vmad` payload can be entirely absent, not
 merely an empty list. Each **script** is its own struct row beneath it: a read-only **Flags**
 child (editing moves to the right-click menu, see below) followed by its **properties**, each
 carrying its own `wirePath`. A property's own kind decides its row: scalar/object kinds are plain
@@ -800,40 +775,6 @@ as array elements the same way (Remove/Move reuse the generic array machinery un
 **Add** is the one case still awaiting a follow-up, noted below). A **variable**-kind property is
 `readOnly` — it has never been editable.
 
-**Conditions' shape**: one **`type: 'array'`** row per condition-owning field (not a struct
-container the way VMAD's script list is) — a condition list's add/remove/move already wrote
-the whole list at one field path before this work, the identical shape an ordinary unsorted array
-writes in, so it reuses the **same** array-op gestures Conditions' AC asks for
-("consistent with array operations") with **zero new commands**. As of #630 it is a **carve-out
-at the handler**, not shared machinery: a condition-owning field is dispatched server-side to
-`Fallout4ConditionCodec.ApplyListValue`, which requires a JSON array and refuses an op envelope,
-so condition lists keep computing the whole array client-side. Review caught this as a live
-regression when the envelope path first shipped without the carve-out — Remove on any Condition
-row refused as "field not found". Conditions align across plugins
-positionally by canonical index (the glossary's Unsorted array rule, ADR-0019, the same alignment
-`VmadConflictClassifier` already gives VMAD arrays) — a plugin missing one condition leaves a hole
-at that position rather than compacting the row list, so a condition's row stays aligned with its
-own siblings across every plugin column; the array's own `commitOverride` strips those holes back
-out immediately before any add/remove/move writes, since the wire list has no concept of "absent
-here" the way a hole does. Each condition is a **struct** row, and its collapsed label is the one
-deliberate exception to every other struct row's generic `{…}`: it shows xEdit's own one-line
-prose summary (`wbConditionToStr`, `references/TES5Edit/Core/wbDefinitionsCommon.pas` —
-`RunOn.Function(param1, param2) Op Comparison[ AND/OR]`, the trailing conjunction omitted on the
-plugin's own last condition in the list), reformatted from the condition's own already-synthesized
-fields (`conditionTreeAdapter.ts`'s `collapsedSummary`, consulted by `DiffRow` in place of the
-placeholder). Ctrl+C/drag on the collapsed row are unaffected — they still copy the whole
-condition as JSON (`modelValue.ts`'s struct branch, untouched), matching every other compound
-field's "copy the real value" rule; only the *displayed* label diverges. Expanding one reveals its
-typed fields — **Function**, each **Parameter**, **Run On**,
-**Operator**, **Use Global**, **Comparison**, and the read-only **Type** (AND/OR) gate — each of
-the first six carrying its own `wirePath` (`CTDA\FieldPath\Index\SubField`, `conditionPath.ts`),
-so a field commits independently of its condition and of every sibling field, unchanged from
-before. A parameter's input type (FormKey / number / string) is still resolved per-function from
-Mutagen's typed getters, and switching a condition's Function still reshapes its parameter
-storage at write time (`Fallout4ConditionCodec.ApplyFieldValue`) so no stale-shape value can
-silently persist. The function picker is still the native QuickPick described previously,
-listing `GET /condition-functions`'s server-filtered catalogue.
-
 **Structural ops are right-click-menu commands**, consistent with every other structural op in
 this grid (ADR-0034's no-second-route rule) — **Add Script**, **Remove Script**, **Add Property**,
 **Remove Property**, **Set Script Flags**, and **Set Property Flags** are native `webview/context`
@@ -848,68 +789,60 @@ every context object sharing a row into one space-separated `webviewSection` tok
 (`arrayParent`/`arrayElement`) and a VMAD structural-op target (`vmadProperty`), offers both
 menus from the same cell, not whichever context happened to be built last. Set Script Flags seeds
 its QuickPick with the script's own current flags (moved to front of the choice list, no
-`activeItem` — the same "no default selection" convention the condition-function picker already
-uses); Set Property Flags has none, matching property flags' set-only behaviour (a
+`activeItem` — the same "no default selection" convention the FormKey picker already uses); Set Property Flags has none, matching property flags' set-only behaviour (a
 property's current flags are never surfaced for reading, only ever defaulted to `'Edited'` by Add
 Property). Add Script's own name collection is the native input box
 (`vscode.window.showInputBox`, called directly by the command);
 Add Property is the one deliberate webview-rendered dialog
 (`ModalShell`/`AddPropertyDialog` — a deliberate exception: three fields at once, a multi-step
 QuickPick chain would be worse UX) — the command only tells the webview which script/plugin to
-open it for. Condition add/remove/reorder need no new commands at all (above). Each
-condition-owning field is still keyed and written independently by its own field path
-(`ConditionOwner.FieldPath`/`ConditionGroupDiff.FieldPath`, `Fallout4ConditionCodec.Extract`
-reflecting over every top-level property shaped like a condition list), and a
-condition-owning field still renders **only** as a condition row, never also as a raw generic
-field (`SchemaReflector` excludes it from the generic reflection pass).
+open it for.
 
 **Known, deliberately scoped gaps** (not silently dropped — each is a bounded follow-up, not a
 design dead end): **Set Type** has no right-click entry yet (still reachable only by removing and
 re-adding); a **structList instance's own Add** has no right-click entry yet — its `elementType`
-has no `defaultValue` override the way a condition's does, and the raw node format
+has no `defaultValue` override, and the raw node format
 `defaultAdapterElementValue`'s own generic struct default would produce doesn't match it, so Add is
 withheld outright there rather than writing a wrong-shaped instance (Remove/Move are unaffected —
 neither needs a default, and both go through `commitOverride`'s own whole-array passthrough
 correctly); a **not-yet-compiled** `add_script`/`add_property` structural op has no synthetic-row
 visibility in the grid until it lands as real data (it's still fully valid to write and revert
-through the native Source Control panel in the meantime); and the extended editor (right-click,
+through the native Source Control panel in the meantime); and and the extended editor (right-click,
 Open in Editor…, ADR-0039) reaches every plain `string`-typed row (including VMAD's own plain
-String properties) but not yet a composite-typed leaf's own inner string widget (a condition
-parameter's Text category) — its outer `FieldMetadata.type` isn't `'string'`, which is what that
-menu entry keys on.
+String properties) but not a composite-typed leaf's own inner string widget — its outer
+`FieldMetadata.type` isn't `'string'`, which is what that menu entry keys on.
 
-Condition lists nested one array level below the record (e.g. a magic Effect's own
-`Effects[i].Conditions` on Ingestible/Ingredient/Spell/ObjectEffect, a Message's
-`MenuButtons[i].Conditions`) are discovered by the same shape test applied to each array element,
-keyed by an indexed field path composing the enclosing array's own name and index with the nested
-list's own name (e.g. `Effects[2].Conditions`) — the existing `CTDA\<field path>\<index>\<subField>`
-wire path treats that whole composed string as one opaque field path, so no DDL or wire-shape
-change was needed. A path through a **Child record** (a record type Mutagen enumerates as
-its own top-level row, e.g. Quest's `Scenes`/`DialogTopics`) is excluded, since that record already
-surfaces its own conditions through its own top-level field. Nested groups align across plugins
-positionally by the enclosing array's index and sort by that index numerically, not
-lexicographically. Every condition-owning field's row is
-an ordinary array row and defaults collapsed uniformly (rule 3 above), nested and flat alike —
-one rule, no bespoke per-group default. Read-only for
-now, on both ends: the frontend renders a nested group's rows display-only (no
-function/parameter/operator inputs, no add/move/remove controls), and `PluginWriter.IsReadOnly`
-rejects a nested (indexed) condition path at edit time as a second, independent gate. Editing at a
-nested path stays rejected until scalar editing lands there; add/remove/reorder inside
-a nested list, and two levels of nesting (a Perk effect's own conditions, a Quest
-alias's/stage's own conditions), are further follow-ups.
+### Conditions
 
-Codec support is FO4-only today, reflecting Mutagen's four structurally different per-game
-condition data shapes (no shared cross-game interface, unlike VMAD's `IHaveVirtualMachineAdapter`)
-— a per-game `IConditionCodec` strategy resolved by `GameCategory` (ADR-0032); other games are
-tracked separately. FormKey-typed condition parameters, the Run On reference, and a
-Use-Global comparison target each resolve through the same backend signal VMAD uses — link
-label and affordance follow the real resolution, not a raw FormKey — and each is fed into
-`form_references`, so a record referenced only by a condition now surfaces in Referenced By.
+A condition list is an **ordinary reflected array-of-struct field**, at whatever depth it sits
+(`Perk.Effects[i].Conditions[j].Conditions`, `Message.MenuButtons[i].Conditions`), with no section,
+adapter, codec, wire path, or command of its own. `Condition` and `ConditionData` are each Loqui
+unions, so each condition element carries a `concrete_type` discriminator over its concrete classes
+and the sparse union of their members; `ComparisonValue`, a float on one leaf and a GLOB link on the
+other, is one field per shape (`comparison_value_float`/`comparison_value_form_key`), which is what
+makes "Use Global" an ordinary discriminator switch that keeps every member the two leaves agree on.
+Every gesture — cell edit, discriminator switch, add/remove/move — is the gesture that field kind
+already had.
+
+Two facts about a Fallout 4 condition cannot be read off a property, and enter as `SiblingsInUse`
+annotation rows (ADR-0032) rather than as code: which parameter members a function actually uses
+(read from Mutagen's own `Condition.GetParameterTypes`, the same table its writer switches on), and
+that the Run On reference target is live only under the `Reference` Run On value. Both are
+load-bearing on the backend: the form-reference and check-error walks skip a member the current
+value says is idle, so a numeric parameter sharing its four bytes with a record link is not filed as
+a reference, a Run On of Subject does not keep a stale target alive, and an idle reference is not
+flagged as a dangling one. What the editor does with the map — hiding an idle row, clearing it on a
+change — is #693's.
+
+`GetEventData`, the second `ConditionData` leaf, is modelled but unreadable in the pinned Mutagen
+(0.53.1): `GetEventDataBinaryOverlay` inherits `FunctionConditionData`'s member offsets, so reading
+`Unknown3` off one runs past the end of the subrecord and no plugin holding one can be indexed at
+all. That is upstream and predates conditions reaching the schema.
 
 ### Field type rendering rules
 
 These apply everywhere a field value is rendered — the one compare grid and any future surface,
-VMAD/Condition rows included since they render through this exact code now:
+VMAD rows included since they render through this exact code:
 
 1. **Never display raw integers for enums or flags** — always resolve to name(s).
 2. **FormKeys render as links**, labelled `EditorID [FormKey]` when the reference resolves and the
@@ -952,8 +885,8 @@ VMAD/Condition rows included since they render through this exact code now:
    move-up / move-down, swap-based, on non-immutable columns) and **absent** for sorted
    (`wbArrayS`) arrays, whose order is sort-key-derived — these ops use the same
    whole-array reconstruction. A VMAD array-of-scalars property reuses this exact machinery;
-   VMAD's own struct/structList element ops are described under *VMAD and Conditions
-   are ordinary rows in the one tree* above. A list whose element's concrete type is
+   VMAD's own struct/structList element ops are described under *VMAD is ordinary rows in the one
+   tree* above. A list whose element's concrete type is
    polymorphic (OMOD `properties`' `AObjectModProperty<T>`, seven concrete leaves) resolves
    each element's own type from a `value_type` discriminator sub-field at write time; an
    element whose discriminator is missing or unrecognized refuses naming the field, rather
@@ -983,7 +916,7 @@ VMAD/Condition rows included since they render through this exact code now:
    `QuestReferenceAlias` under `AQuestAlias` is "Reference". That is a pure function of two type
    names, so it needs no per-game table; a leaf that *is* its base (`NpcLevel` under `ANpcLevel`)
    keeps its own name, spaced. xEdit's own per-field presentation of these choices arrives with
-   the condition and script-property surfaces.
+   the script-property surface.
    `Npc.Level` (a single struct field, xEdit's `ACBS\Level`/`Level Mult`) and `Quest.Aliases`
    (a list field, xEdit's `ALST`/`ALLS`/`ALCS`) are the two mandatory record editor fields this
    closes; the mechanism also covers, as a byproduct, `Book.Teaches`, `ColorRecord.Data`,
@@ -1025,12 +958,12 @@ VMAD/Condition rows included since they render through this exact code now:
    other value collapsing into `SceneActionTypicalType`, whose binary-overlay `Type` getter is
    an unimplemented `throw` upstream — wiring it would crash the first read of a real scene.
    The full scheme is recorded on the `KnownGaps` entry.
-   `Condition`/`ConditionData` and `AVirtualMachineAdapter` (VMAD) are *also* genuinely `abstract`,
-   structurally identical to `ANpcLevel` — deliberately excluded by name
-   (`SchemaAnnotations.ExcludedUnions`) rather than covered, because they are
-   permanently outside the reflected schema by design (VMAD/condition reconstitution stays in
+   `AVirtualMachineAdapter` (VMAD) is *also* genuinely `abstract`, structurally identical to
+   `ANpcLevel` — deliberately excluded by name (`SchemaAnnotations.ExcludedUnions`) rather than
+   covered, because it is outside the reflected schema by design (VMAD reconstitution stays in
    `Queries/RecordDocumentCodecs`, operating on the document body — `MEditService/CLAUDE.md`); this
-   mechanism could technically model them, and must not.
+   mechanism could technically model it, and must not. `Condition`/`ConditionData` were once
+   excluded the same way and are now modelled by it (see *Conditions* above).
 4. **A cell always renders Effective state** — committed text with any uncommitted working-tree
    change already overlaid; there is no separate dirty visual treatment on this
    panel. Revert is a git gesture in the native Source Control panel, not a cell-level control
@@ -1065,7 +998,7 @@ channel's native level filter controls volume. The webview has no channel of its
 `LOG` message over the existing webview→extension-host bridge and the router dispatches it to the
 channel at the carried level.
 
-- **DEBUG** — the field-edit family: a committed disk-cell edit (VMAD/Condition leaves included,
+- **DEBUG** — the field-edit family: a committed disk-cell edit (VMAD leaves included,
   the same `handleEdit`/`handleVmadStructOp` call sites, not a separate log site per
   surface), a successful drag-copy between plugin columns, and array/VMAD-structural-op add /
   remove / move-up / move-down. These are high-frequency and fine-grained.

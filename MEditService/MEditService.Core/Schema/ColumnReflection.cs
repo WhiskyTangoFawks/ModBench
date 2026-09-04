@@ -21,27 +21,19 @@ internal static class ColumnReflection
         nameof(IMajorRecordGetter.VersionControl), nameof(IMajorRecordGetter.MajorRecordFlagsRaw),
     };
 
-    // Condition-shaped properties (e.g. Perk.Conditions, Quest.DialogConditions/
-    // UnusedConditions) are already surfaced by the game's IConditionCodec into the record
-    // editor's dedicated Conditions section — reflecting them again here would duplicate
-    // them as plain array columns. Game-generic: the shape test lives behind the codec
-    // (IsConditionListField), not a hardcoded field-name list, so a game with no registered
-    // codec (conditionCodec == null) simply skips no extra fields here.
-    //
-    // Same rule for the virtual-machine-adapter property — it's already surfaced by the
+    // The virtual-machine-adapter property — it's already surfaced by the
     // dedicated Scripts (VMAD) section (HasVmad, set in SchemaReflector.BuildSchema, and
     // RecordQueryService.GetVmad), so reflecting it again here would duplicate it as an opaque
     // struct column. The gate is the same annotation that keeps the walk from modelling the
     // adapter's leaves (SchemaAnnotations.ExcludedUnions): a struct column whose Loqui class is, or
     // derives from, an excluded union is not a column. One annotation, one concept.
     internal static List<ColumnSpec> ReflectColumns(
-        Type getterType, IConditionCodec? conditionCodec, GameReflection game, ILogger logger)
+        Type getterType, GameReflection game, ILogger logger)
     {
         var grouped = ReflectedTypes.GetAllInterfaceProperties(getterType)
             .Where(p => !MajorRecordHeaderMembers.Contains(p.Name))
             .Where(p => !game.Annotations.IsExcludedColumn(p))
             .Where(p => !game.Annotations.IsExcludedMember(p))
-            .Where(p => conditionCodec == null || !conditionCodec.IsConditionListField(getterType, p.Name))
             .Where(p => !SchemaRefusals.IsExcludedUnionColumn(p, game))
             .GroupBy(p => ReflectedTypes.ToSnakeCase(p.Name), StringComparer.OrdinalIgnoreCase);
 

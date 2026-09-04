@@ -183,7 +183,7 @@ describe('buildVmadRows — array of scalars (ArrayOfInt)', () => {
 // union's — otherwise a Remove/Move on the shorter plugin's row restages an array still carrying
 // those trailing nulls (VmadCodec.RebuildList's `el.GetInt32()`/`GetBoolean()`/`GetSingle()` throw
 // on a JSON null element at save time for Bool/Int/Float arrays). Mirrors the same trailing-null
-// shape conditionTreeAdapter's own conditionsSparseByPlugin already handles correctly.
+// shape sparseArrayByPlugin handles correctly.
 describe('buildVmadRows — array of scalars, plugins with different real lengths (issue #168)', () => {
   const arrProp: VmadPropertyDiff = {
     name: 'Levels', kind: 'array',

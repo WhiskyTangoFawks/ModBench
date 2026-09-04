@@ -137,12 +137,12 @@ public sealed class SchemaReflectorLeafCoverageCompletenessTests
         // Condition/ConditionData and AVirtualMachineAdapter (VMAD) are
         // ALSO genuinely `abstract`, structurally identical to ANpcLevel/AQuestAlias — the
         // mechanism would cover them the same way. It doesn't:
-        // SchemaAnnotations.ExcludedUnions names both explicitly, because they are
-        // permanently outside the reflected schema by documented architectural boundary
-        // (MEditService/CLAUDE.md:232-235), not because the mechanism can't model them. Not this
-        // file's own exclusion list either — nothing here would ever surface a Condition/VMAD field
-        // as a gap to begin with (BaseSkip/IsConditionListField/IsExcludedUnionColumn already keep them
-        // off the depth-0 walk this file does), so there is nothing to name in KnownGaps for them.
+        // SchemaAnnotations.ExcludedUnions names it explicitly, because it is
+        // permanently outside the reflected schema by documented architectural boundary,
+        // not because the mechanism can't model it. Not this
+        // file's own exclusion list either — nothing here would ever surface a VMAD field
+        // as a gap to begin with (BaseSkip/IsExcludedUnionColumn already keep it
+        // off the depth-0 walk this file does), so there is nothing to name in KnownGaps for it.
         ("ISceneActionGetter", "Type"),            // ASceneActionType — deliberately not abstract; see above
 
         // ── Category 3: not a reflector gap at all — a false positive of this test's own simplistic
@@ -264,8 +264,6 @@ public sealed class SchemaReflectorLeafCoverageCompletenessTests
     public void EveryDirectRecordProperty_IsRepresentedInItsSchemaOrExplicitlyExcluded()
     {
         var schemas = SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4);
-        var conditionCodec = ConditionCodecRegistry.For(Category);
-
         var gaps = new List<string>();
         foreach (var schema in schemas.Values)
         {
@@ -279,9 +277,6 @@ public sealed class SchemaReflectorLeafCoverageCompletenessTests
                 if (prop.Name == "VirtualMachineAdapter"
                     && typeof(IHaveVirtualMachineAdapterGetter).IsAssignableFrom(schema.RecordType))
                     continue;
-                if (conditionCodec != null && conditionCodec.IsConditionListField(schema.RecordType, prop.Name))
-                    continue;
-
                 if (schema.RecordColumns.Any(c => c.PropertyName == prop.Name)) continue;
                 gaps.Add($"{schema.RecordType.Name}.{prop.Name} (missing from '{schema.TableName}' entirely)");
             }

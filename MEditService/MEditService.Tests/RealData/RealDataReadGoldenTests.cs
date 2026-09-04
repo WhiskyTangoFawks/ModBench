@@ -10,7 +10,7 @@ namespace MEditService.Tests.RealData;
 /// <summary>
 /// The golden safety net over authentic
 /// Bethesda records (the committed cut-down plugin: real translated strings, real flags bitmasks,
-/// real struct/array columns, real GLOB multi-subclass columns, real VMAD, real conditions, a real
+/// real struct/array columns, real GLOB multi-subclass columns, real VMAD, real condition lists, a real
 /// worldspace/cell/placement tree).
 ///
 /// The
@@ -34,18 +34,12 @@ public sealed class RealDataReadGoldenTests(CutDownPluginFixture fixture) : ICla
     private static readonly IReadOnlyDictionary<string, RecordTableSchema> Schemas =
         SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4);
 
-    // GetVmad/GetConditions are rejected from IRecordReads/IRecordIndex — reconstitution
+    // GetVmad is rejected from IRecordReads/IRecordIndex — reconstitution
     // lives in Queries/RecordDocumentCodecs, operating on RecordDocument.Body.
     private VmadData? GetVmad(string formKey)
     {
         var document = _repo.At(RecordRef.Effective).GetDocument(formKey, new PluginKey(TestPluginName, Origin));
         return document == null ? null : RecordDocumentCodecs.GetVmad(document, GameRelease.Fallout4, NullLogger.Instance);
-    }
-
-    private IReadOnlyList<ConditionOwner> GetConditions(string formKey)
-    {
-        var document = _repo.At(RecordRef.Effective).GetDocument(formKey, new PluginKey(TestPluginName, Origin));
-        return document == null ? [] : RecordDocumentCodecs.GetConditions(document, GameRelease.Fallout4, ConditionCodecRegistry.For(GameRelease.Fallout4.ToCategory()));
     }
 
     /// <summary>Record types the cut-down plugin actually carries, in a fixed order.</summary>
@@ -112,19 +106,6 @@ public sealed class RealDataReadGoldenTests(CutDownPluginFixture fixture) : ICla
 
         Assert.NotEmpty(captured); // the fixture must actually exercise VMAD, or this golden is vacuous
         Golden.Verify("realdata-vmad", captured);
-    }
-
-    [Fact]
-    public void Conditions_ForEveryRecordType_MatchesGolden()
-    {
-        var captured = Types
-            .SelectMany(type => FormKeysOf(type).Select(fk => (Type: type, FormKey: fk)))
-            .Select(r => (r.Type, r.FormKey, Owners: GetConditions(r.FormKey)))
-            .Where(r => r.Owners.Count > 0)
-            .ToDictionary(r => $"{r.Type}/{r.FormKey}", r => r.Owners);
-
-        Assert.NotEmpty(captured); // ditto: a fixture with no conditions would pin nothing
-        Golden.Verify("realdata-conditions", captured);
     }
 
     [Fact]

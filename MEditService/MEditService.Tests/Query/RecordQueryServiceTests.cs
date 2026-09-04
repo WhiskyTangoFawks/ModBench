@@ -108,40 +108,6 @@ public sealed class RecordQueryServiceTests : IDisposable
         Assert.Empty(plugins[0].MasterIssues);
     }
 
-    // --- GET /condition-functions ---
-
-    [Fact]
-    public void GetConditionFunctions_Fallout4LoadOrder_ReturnsMutagenResolvedFunctionNames()
-    {
-        // Filtered to what Mutagen actually resolves for the loaded load order's game — not a
-        // hardcoded list. GetIsID and GetDistance are ordinary FO4 condition functions; a name from
-        // a different game's Function enum (e.g. Skyrim-only) must not appear.
-        var functions = _svc.GetConditionFunctions();
-
-        Assert.Contains("GetIsID", functions);
-        Assert.Contains("GetDistance", functions);
-        Assert.True(functions.Count > 400);
-    }
-
-    // --- GET /condition-run-on-targets ---
-
-    [Fact]
-    public void GetConditionRunOnTargets_Fallout4LoadOrder_ReturnsMutagenResolvedRunOnTypeNames()
-    {
-        // Filtered to what Mutagen actually resolves for the loaded load order's game — not a
-        // hardcoded frontend array. PlayerShip is a Starfield-only RunOnType member; it must not
-        // appear for an FO4 load order, proving this isn't a hand-maintained cross-game list.
-        var targets = _svc.GetConditionRunOnTargets();
-
-        Assert.Contains("Subject", targets);
-        Assert.Contains("Reference", targets);
-        Assert.Contains("CombatTarget", targets);
-        Assert.DoesNotContain("PlayerShip", targets);
-        Assert.Equal(11, targets.Count);
-    }
-
-    // --- GET /records ---
-
     [Fact]
     public void GetRecords_ByType_ReturnsPaginatedResults()
     {
@@ -597,8 +563,11 @@ public sealed class RecordQueryServiceTests : IDisposable
             });
     }
 
+    // #692: a condition list is an ordinary reflected array column, so it reaches the compare grid
+    // through the one ConflictClassifier — one FieldDiff per condition, its members as that diff's
+    // own children, no second classifier and no section of its own.
     [Fact]
-    public void GetCompare_RecordHasConditions_PopulatesConditionCompareShape()
+    public void GetCompare_RecordHasConditions_ClassifiesThemAsFieldDiffChildren()
     {
         FormKey cobjKey = default;
         var data = new PluginFixtureBuilder("rqs-conditions")
@@ -620,19 +589,18 @@ public sealed class RecordQueryServiceTests : IDisposable
                 var compare = svc.GetCompare(cobjKey.ToString());
 
                 Assert.NotNull(compare);
-                Assert.NotNull(compare!.Conditions);
-                var group = Assert.Single(compare.Conditions!.Groups);
-                Assert.Equal("Conditions", group.FieldPath);
-                var diff = Assert.Single(group.Conditions);
-                Assert.Equal("GetIsID", diff.PerPlugin["Base.esp"]!.Function);
-                Assert.Equal("Base.esp", diff.WinnerColumn);
+                var conditions = Assert.Single(compare!.Diffs, d => d.FieldName == "conditions");
+                var condition = Assert.Single(conditions.Children!);
+                var data0 = Assert.Single(condition.Children!, c => c.FieldName == "data");
+                var function = Assert.Single(data0.Children!, c => c.FieldName == "function");
+                Assert.Equal("GetIsID", function.Values["Base.esp"]?.ToString());
+                Assert.Equal("Base.esp", conditions.WinnerColumn);
             });
     }
 
-    // GetCompare's memoized resolveFormKey (ADR-0031) must also be threaded into the condition
-    // path — this proves the wiring at the actual call
-    // site, not just that the classifier accepts a resolver (ConditionConflictClassifierTests
-    // already covers the classifier's own behavior in isolation).
+    // GetCompare's memoized resolveFormKey (ADR-0031) reaches a condition's Form parameter through
+    // the same nested-leaf path every other reflected formKey leaf uses — this proves the wiring at
+    // the actual call site.
     [Fact]
     public void GetCompare_ConditionFormParameter_ResolvesEditorId()
     {
@@ -659,9 +627,12 @@ public sealed class RecordQueryServiceTests : IDisposable
             {
                 var compare = svc.GetCompare(cobjKey.ToString());
 
-                var diff = Assert.Single(Assert.Single(compare!.Conditions!.Groups).Conditions);
-                Assert.NotNull(diff.FieldResolutions);
-                var paramResolution = diff.FieldResolutions!["param:0"]["Base.esp"];
+                var conditions = Assert.Single(compare!.Diffs, d => d.FieldName == "conditions");
+                var condition = Assert.Single(conditions.Children!);
+                var data0 = Assert.Single(condition.Children!, c => c.FieldName == "data");
+                var param = Assert.Single(data0.Children!, c => c.FieldName == "parameter_one_record");
+                Assert.NotNull(param.Resolutions);
+                var paramResolution = param.Resolutions!["Base.esp"];
                 Assert.Equal(FormKeyResolutionState.ResolvedValidType, paramResolution.State);
                 Assert.Equal("SomeQuest", paramResolution.EditorId);
             });

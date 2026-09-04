@@ -3,7 +3,6 @@ import { FlagCell } from './FlagCell';
 import { ScalarCell } from './ScalarCell';
 import { FormKeyCell } from './FormKeyCell';
 import { VmadObjectCell } from './VmadObjectCell';
-import { ConditionFunctionCell, ConditionRunOnCell, ConditionComparisonCell, ConditionParamCell } from './ConditionCells';
 import { CheckErrorIcon } from './CheckErrorIcon';
 import { DiskCell } from './DiskCell';
 import { displayValue, flagBits, modelValue } from './modelValue';
@@ -32,10 +31,6 @@ const getRowBg = (c: ConflictAll | undefined): string | undefined => (c ? ROW_BG
 interface RenderCellExtras {
   checkError?: string | null;
   resolution?: FormKeyResolution;
-  // This plugin's own xEdit-style prose summary
-  // (`diff.collapsedSummary`) for a struct row's collapsed label — set only for a Condition row;
-  // undefined for every other struct row, which fall back to the generic "{…}" below.
-  summaryLabel?: string;
   // Where an edited value goes. Absent means this cell has nowhere to write — an immutable
   // or untracked column, or a caller outside the field grid — and the leaf renders read-only.
   onCommit?: (v: unknown) => void;
@@ -55,7 +50,7 @@ function renderCell(
   meta: FieldMetadata,
   isFocused: boolean,
   onOpen: (fk: string) => void,
-  { checkError, resolution, summaryLabel, onCommit, rowCollapsed, absent }: RenderCellExtras = {},
+  { checkError, resolution, onCommit, rowCollapsed, absent }: RenderCellExtras = {},
 ): React.ReactNode {
   // "[3]"/"{…}" say a container is present and merely unexpanded. Nothing stands in for a
   // container this column's plugin doesn't have. Containers only: an absent scalar keeps
@@ -85,7 +80,7 @@ function renderCell(
   if (meta.type === 'struct') {
     return (
       <span style={{ opacity: 0.5, display: 'inline-flex', alignItems: 'center' }}>
-        {summaryLabel ?? '{…}'}<CheckErrorIcon checkError={checkError} />
+        {'{…}'}<CheckErrorIcon checkError={checkError} />
       </span>
     );
   }
@@ -102,41 +97,13 @@ function renderCell(
       />
     );
   }
-  // VMAD/Condition's synthesized composite leaf types — each picks its own widget
-  // from its own value's shape, dispatched here alongside 'formKey'. Same editable
-  // rule as every other branch above — presence of somewhere to write, ORed with the per-row
-  // readOnly veto (load-bearing for Conditions' own AND/OR gate, unconditionally read-only).
+  // VMAD's synthesized composite leaf type picks its own widget from its own value's shape,
+  // dispatched here alongside 'formKey'. Same editable rule as every other branch above —
+  // presence of somewhere to write, ORed with the per-row readOnly veto.
   if (meta.type === 'vmadObject') {
     return (
       <VmadObjectCell
         value={value} onOpen={onOpen} resolution={resolution}
-        editable={onCommit != null && !meta.readOnly} onCommit={onCommit}
-      />
-    );
-  }
-  if (meta.type === 'conditionFunction') {
-    return <ConditionFunctionCell value={value} isFocused={isFocused} editable={onCommit != null && !meta.readOnly} onCommit={onCommit} />;
-  }
-  if (meta.type === 'conditionRunOn') {
-    return (
-      <ConditionRunOnCell
-        value={value} meta={meta} isFocused={isFocused} onOpen={onOpen} resolution={resolution}
-        editable={onCommit != null && !meta.readOnly} onCommit={onCommit}
-      />
-    );
-  }
-  if (meta.type === 'conditionComparison') {
-    return (
-      <ConditionComparisonCell
-        value={value} isFocused={isFocused} onOpen={onOpen} resolution={resolution}
-        editable={onCommit != null && !meta.readOnly} onCommit={onCommit}
-      />
-    );
-  }
-  if (meta.type === 'conditionParam') {
-    return (
-      <ConditionParamCell
-        value={value} isFocused={isFocused} onOpen={onOpen} resolution={resolution}
         editable={onCommit != null && !meta.readOnly} onCommit={onCommit}
       />
     );
@@ -161,15 +128,15 @@ function renderCell(
 // generic implementation every depth shares) down to this row's own value — `[]` at the root.
 // `overrideMeta` is this row's own metadata, present at every depth except the root (which reads
 // from `fieldMetaMap` instead, keyed by the diff tree's own top-level field name). `rootField` is
-// the wire path staged as one atomic change for every row in this subtree — constant
-// across the whole chain, equal to `diff.fieldName` for an ordinary field, and a
-// VMAD/Condition row's own synthesized wire path when the two differ from its display label.
+// the wire path staged as one atomic change for every row in this subtree — constant across the
+// whole chain, equal to `diff.fieldName` for an ordinary field, and a VMAD row's own synthesized
+// wire path where the two differ from its display label.
 export interface RowContext {
   path: PathSegment[];
   overrideMeta?: FieldMetadata;
   rootField: string;
   // True ancestor-hop count, independent of `path` — `path` resets to `[]` whenever a row starts
-  // a fresh write subtree (subtreeFor, RecordPanel.tsx), but a VMAD property or Condition field
+  // a fresh write subtree (subtreeFor, RecordPanel.tsx), but a VMAD property
   // still visually nests under its script/element row and must indent accordingly.
   depth: number;
 }
@@ -262,7 +229,7 @@ export function DiffRow({
   // Prefer the caller's own `context.overrideMeta` whenever it's supplied — RecordPanel
   // always passes one (its recursive builder resolves every row's metadata itself, including
   // the true top-level one), including for a row whose own `path` has just reset to `[]` because
-  // it's a synthesized subtree root (a VMAD property, a Condition field) rather than a genuine
+  // it's a synthesized subtree root (a VMAD property) rather than a genuine
   // top-level `diffs` entry — `path.length === 0` alone can no longer distinguish the two. Falling
   // back to `fieldMetaMap` only when `overrideMeta` is genuinely absent keeps every caller that
   // still relies on that lookup (DiffRow.test.tsx's own top-level fixtures) working unchanged.
@@ -341,7 +308,7 @@ export function DiffRow({
           // start a selection, and there is no in-cell surface to ever own a
           // selection either. Adding it would tell the next reader selection works here.
           // ADR-0036: every lookup below into a per-column wire dictionary (cellStates,
-          // values, resolutions, collapsedSummary) or panel state (collapsedColumns, immutableSet,
+          // values, resolutions) or panel state (collapsedColumns, immutableSet,
           // overrideMap, focusedCell) is keyed by `key` (this column's ColumnKey), not `o.plugin`
           // — the backend keys its own per-column dictionaries the same way (ColumnKey.Of), so
           // `[o.plugin]` would be wrong the moment a non-Data-origin column exists, not merely
@@ -359,8 +326,8 @@ export function DiffRow({
           const checkError = showActions
             ? overrideMap[key]?.fields.find(f => f.metadata.name === rootField)?.checkError
             : undefined;
-          // A synthesized row (e.g. the Condition section's AND/OR gate) can mark
-          // itself unconditionally read-only regardless of column mutability — `meta.readOnly` is
+          // A synthesized row can mark itself unconditionally read-only regardless of column
+          // mutability — `meta.readOnly` is
           // the one per-row override on top of immutableSet's per-column rule.
           const isFocused = isCellFocused(focusedCell, rowKey, key);
           // ADR-0034: the string Ctrl+C copies for this cell — the same value used
@@ -442,10 +409,7 @@ export function DiffRow({
             const len = meta.type === 'array' && Array.isArray(diff.values[key])
               ? (diff.values[key] as unknown[]).length
               : '…';
-            // A Condition row's own xEdit-style prose summary
-            // (`diff.collapsedSummary`, conditionTreeAdapter.ts) replaces the generic "{…}"
-            // placeholder when present — every other struct row (VMAD included) has none.
-            const collapsedLabel = meta.type === 'array' ? `[${len}]` : (diff.collapsedSummary?.[key] ?? '{…}');
+            const collapsedLabel = meta.type === 'array' ? `[${len}]` : '{…}';
             return (
               <DiskCell
                 key={`disk:${key}`}
@@ -476,7 +440,6 @@ export function DiffRow({
             >
               {renderCell(diff.values[key], meta, isFocused, onOpen, {
                 checkError, resolution: diff.resolutions?.[key],
-                summaryLabel: diff.collapsedSummary?.[key],
                 onCommit: cellEditable ? (v: unknown) => onEditCell(key, v) : undefined,
                 rowCollapsed: isFlagsRow && !rowExpanded,
                 absent: !hasElement,

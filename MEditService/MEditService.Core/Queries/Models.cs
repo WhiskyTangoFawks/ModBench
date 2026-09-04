@@ -159,7 +159,22 @@ public record FieldMetadata(
     // This field names which concrete class its object is, read off the payload before that object
     // exists (ListLeaves.ResolveListElementType). True for concrete_type and OMOD's
     // value_type, false for every other field.
-    bool IsDiscriminator = false)
+    bool IsDiscriminator = false,
+
+    // For an enum field whose value decides which of its own sibling fields carry data: each of
+    // this field's values mapped to the sibling field names that are in use under it. Null for the
+    // overwhelming majority of fields, whose siblings are all always in use.
+    //
+    // A sibling some value names and the current one does not holds no data under the current
+    // value: the form-reference and check walks skip it (Records.FormRefPathBuilder), so an unused
+    // slot is neither a reference nor a dangling one. #693 owns what the editor does with it.
+    // Keyed by value rather than carried as a list positionally aligned with EnumMembers, so a
+    // reordering of the domain can never silently re-point a row (#709).
+    //
+    // Per-game knowledge, so it reaches the schema only as a validated annotation table
+    // (Schema.SchemaAnnotations.SiblingsInUse) — Fallout 4's condition function is the first
+    // member with one, from Mutagen's own Condition.GetParameterTypes.
+    IReadOnlyDictionary<string, IReadOnlyList<string>>? SiblingsInUse = null)
 {
     /// <summary>Whether this field renders as a set of independent flags rather than one choice.
     /// Derived, not stored — a member's own <c>BitValue</c> is the only place that fact lives, so
@@ -280,33 +295,6 @@ public record VmadScriptDiff(
 
 public record VmadCompare(IReadOnlyList<VmadScriptDiff> Scripts);
 
-// Conditions (CTDA) aligned across plugins — one ConditionDiff per condition row, per owning field.
-// PerPlugin holds the neutral parsed condition (null = that plugin lacks the row); the frontend
-// renders the summary and expands to typed fields from it. Two-axis coloring like ordinary fields.
-public record ConditionDiff(
-    int Index,
-    [property: ColumnKeyed] Dictionary<string, Schema.ParsedCondition?> PerPlugin,
-    string WinnerColumn,
-    [property: ColumnKeyed] IReadOnlyDictionary<string, ConflictThis> CellStates,
-    // Per-field two-axis states for the expanded view, keyed by field id ("function", "operator",
-    // "gate", "runOn", "comparison", "param:{i}"), so only fields that actually differ are colored.
-    // The outer key is a field id, not a column — [ColumnKeyed] here means "the
-    // *inner* dictionary's keys are columns" (CompareResultColumnKeyIntegrityTests detects this
-    // nesting structurally); the outer field-id keys are never checked against ColumnKey.Of.
-    [property: ColumnKeyed] IReadOnlyDictionary<string, IReadOnlyDictionary<string, ConflictThis>> FieldCellStates,
-    // FormKey→EditorID resolution (ADR-0031) for a condition's three FormKey-bearing slots —
-    // keyed the same way as FieldCellStates ("runOn", "comparison", "param:{i}"; never "function" /
-    // "operator" / "gate", which carry no FormKey), then by plugin. Unlike VmadPropertyDiff's single
-    // per-leaf Resolutions, a condition has up to three independent FormKey slots live at once, so
-    // one shared per-leaf dictionary would collide them — this mirrors FieldCellStates' shape
-    // instead. Null (not just empty) when no resolver was passed, matching VmadPropertyDiff's own
-    // resolver-absent convention.
-    [property: ColumnKeyed] IReadOnlyDictionary<string, IReadOnlyDictionary<string, FormKeyResolution>>? FieldResolutions = null);
-
-public record ConditionGroupDiff(string FieldPath, IReadOnlyList<ConditionDiff> Conditions);
-
-public record ConditionCompare(IReadOnlyList<ConditionGroupDiff> Groups);
-
 // HasVmad: the record type's schema-level capability to carry a VMAD subrecord at
 // all (Schema.RecordTableSchema.HasVmad, reflected from Mutagen's IHaveVirtualMachineAdapterGetter)
 // — distinct from Vmad above, which is per-record *data* (null whenever no plugin happens to have
@@ -317,8 +305,7 @@ public record CompareResult(
     IReadOnlyList<FieldDiff> Diffs,
     ConflictAll ConflictAll,
     bool HasVmad,
-    VmadCompare? Vmad = null,
-    ConditionCompare? Conditions = null);
+    VmadCompare? Vmad = null);
 
 public record PluginRecordTypeCount(string Type, int Count, string DisplayName);
 

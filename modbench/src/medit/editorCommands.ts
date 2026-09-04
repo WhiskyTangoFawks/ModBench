@@ -77,7 +77,7 @@ export const VMAD_PROP_FLAGS = ['Edited', 'Removed'] as const;
 // native input box (pickScriptNameViaInputBox — no round trip through the webview) since there is
 // no existing row to right-click for a script that doesn't exist yet. Set Script/Property Flags
 // run their own native QuickPick here, seeded (script only — no per-property read model carries a
-// current flag) the same way the condition-function picker sorts its own seed to the front.
+// current flag) the same way the FormKey picker sorts its own seed to the front.
 export function registerVmadPromptCommands(recordPanels: Set<vscode.WebviewPanel>): vscode.Disposable[] {
   return [
     vscode.commands.registerCommand('modbench.vmad.addScript', async (ctx?: VmadScriptsContext) => {
@@ -92,7 +92,7 @@ export function registerVmadPromptCommands(recordPanels: Set<vscode.WebviewPanel
     // "Seeded with the current value" means the script's own current flag is
     // sorted to the front of the QuickPick's item array — showQuickPick has no activeItem option
     // the way createQuickPick does, so array order is the only way to pre-highlight an item, the
-    // same convention pickConditionFunctionViaQuickPick already uses.
+    // same convention pickFormKeyViaQuickPick already uses.
     vscode.commands.registerCommand('modbench.vmad.setScriptFlags', async (ctx?: VmadScriptContext) => {
       if (!ctx) return;
       const items = ctx.currentFlags && (VMAD_SCRIPT_FLAGS as readonly string[]).includes(ctx.currentFlags)
@@ -144,9 +144,8 @@ export function registerRecordViewCommands(deps: EditorCommandDeps): vscode.Disp
       () => { deps.refreshMatchingPlugins(); },
       (plugin) => deps.refreshSourceControlFor(plugin),
     ),
-    // Placeholders — the onDidReceiveMessage wiring below overrides all three per panel every call.
+    // Placeholders — the onDidReceiveMessage wiring below overrides both per panel every call.
     formKeyPicker: undefined,
-    conditionFunctionPicker: undefined,
     extendedFieldEditor: undefined,
   };
   return [
@@ -728,15 +727,14 @@ export function openRecordPanel(
 
   panel.webview.onDidReceiveMessage((msg: unknown) => {
     // Every reply below must reach the one panel that
-    // asked, never a broadcast (see messages.ts' FORM_KEY_PICKED/CONDITION_FUNCTION_PICKED/
-    // OPEN_EXTENDED_EDITOR doc comments) — routerDeps itself is shared across every panel (built
+    // asked, never a broadcast (see messages.ts' FORM_KEY_PICKED/OPEN_EXTENDED_EDITOR
+    // doc comments) — routerDeps itself is shared across every panel (built
     // once in registerRecordViewCommands), so these are the per-panel fields, rebuilt fresh on
     // every message with the panel this closure already holds.
     const reply = (m: ExtensionToWebview) => { void panel.webview.postMessage(m); };
     void routeRecordPanelMessage(msg, {
       ...routerDeps,
       formKeyPicker: { repository: routerDeps.repository, reply },
-      conditionFunctionPicker: { repository: routerDeps.repository, reply },
       // tempRoot/log/reporter are load order-static (the same values every panel would
       // get); only `reply` genuinely varies per panel — bundled here anyway, matching
       // formKeyPicker's own reconstruction on this object.

@@ -18,8 +18,8 @@ namespace MEditService.Core.Records;
 /// <see cref="IRecordIndex.Unindex"/> do to a plugin's own rows across every ingest-owned table
 /// (<c>records</c>/<c>records_committed</c>/<c>form_lookup</c>/<c>form_references</c>/
 /// <c>placement</c>/<c>cell_location</c>/<c>container_child</c>), plus the record-level collectors
-/// (<see cref="CollectFormRefs"/>/<see cref="CollectVmadRefsForRecord"/>/
-/// <see cref="CollectConditionRefsForRecord"/>) and append primitives <see cref="WorkingTreeOverlay"/>
+/// (<see cref="CollectFormRefs"/>/<see cref="CollectVmadRefsForRecord"/>) and append primitives
+/// <see cref="WorkingTreeOverlay"/>
 /// reuses for per-record rederivation — that reuse is deliberate: an edit's derived rows
 /// must come from the identical code a fresh ingest would produce them with, or the two could drift
 /// apart. Internal, private to the <c>Records</c> module — not part of any public seam.
@@ -38,17 +38,15 @@ internal sealed class PluginIngest
     private readonly ILogger _logger;
     private readonly RecordTextCodec _codec;
     private readonly PlacementWalker _placementWalker;
-    private readonly IConditionCodec? _conditionCodec;
 
     public PluginIngest(
         DuckDBConnection connection, ILogger logger, RecordTextCodec codec,
-        PlacementWalker placementWalker, IConditionCodec? conditionCodec)
+        PlacementWalker placementWalker)
     {
         _connection = connection;
         _logger = logger;
         _codec = codec;
         _placementWalker = placementWalker;
-        _conditionCodec = conditionCodec;
     }
 
     /// <summary>The per-plugin phase timings <see cref="DuckDbRecordIndex.Index"/> logs.</summary>
@@ -69,15 +67,14 @@ internal sealed class PluginIngest
 
     /// <summary>Everything about one record that the index derives from the record itself, computed
     /// off the appender thread: the document bytes and their git-blob hash, the extracted
-    /// form/VMAD/condition refs, and the container-child slots. Only writing it is sequential.</summary>
+    /// form/VMAD refs, and the container-child slots. Only writing it is sequential.</summary>
     private sealed record PreparedRecord(
         IMajorRecordGetter Record, byte[] Body, string ContentHash, List<FormRef> Refs,
-        List<ContainerChildRow> ChildRows, bool HasVmad, bool HasConditions);
+        List<ContainerChildRow> ChildRows, bool HasVmad);
 
     private sealed class RefCounters
     {
         public int Vmad;
-        public int Conditions;
         public long PrepareMs;
         public long AppendMs;
     }
@@ -124,12 +121,6 @@ internal sealed class PluginIngest
         var lookupRows = new List<(string FormKey, string RecordType, string? EditorId)>();
         var containerChildRows = new List<ContainerChildRow>();
 
-        if (_conditionCodec == null)
-        {
-            _logger.LogWarning("No condition codec for {Game}; skipping condition refs for {Plugin}",
-                pluginMod.GameRelease, plugin);
-        }
-
         var phaseTimer = Stopwatch.StartNew();
         var counters = new RefCounters();
         foreach (var (tableName, schema) in schemas)
@@ -150,16 +141,15 @@ internal sealed class PluginIngest
         if (_logger.IsEnabled(LogLevel.Debug))
         {
             _logger.LogDebug("Indexed VMAD for {Count} records in {Plugin}", counters.Vmad, plugin);
-            _logger.LogDebug("Indexed conditions for {Count} records in {Plugin}", counters.Conditions, plugin);
         }
 
-        // VMAD and condition refs are collected inside IndexRecordTable's one pass, walking the live
+        // VMAD refs are collected inside IndexRecordTable's one pass, walking the live
         // object rather than round-tripping through the document that pass just wrote, so both the
         // generic and the VMAD Object refs land in the shared list before the single form_references
-        // flush below, while GetVmad and GetConditions read the document on demand. What that pass
+        // flush below, while GetVmad reads the document on demand. What that pass
         // does not see is exactly what has no schema (SchemaReflector.ExcludedTables — the placed
         // projectile types): those records have no document and no row, and contribute no
-        // VMAD/condition refs either.
+        // VMAD refs either.
 
         phaseTimer.Restart();
         IndexPlacement(pluginMod, plugin, origin);
@@ -223,7 +213,7 @@ internal sealed class PluginIngest
     {
         // Every record row is in `records`, the plugin header's included (#631 — no per-type table
         // survives). Deleting this plugin's `records` rows also removes the one thing
-        // GetVmad/GetConditions read.
+        // GetVmad reads.
         DeleteExistingForOrigin("records", plugin, origin);
         // "Removes every trace of key" has to include the Head side. A leftover snapshot would
         // keep answering at Head for a plugin the load order no longer holds — the exact opposite of
@@ -276,8 +266,6 @@ internal sealed class PluginIngest
                     record.FormKey);
             }
         }
-        var hasConditions = CollectConditionRefsForRecord(record, recordType, refs);
-
         // Every record is serialized straight from the getter ingest already holds, container or
         // not: a container's document carries its embedded children, because that is what its
         // source file holds — the whole point of one document shape (ADR-0041). A tracked plugin
@@ -289,7 +277,7 @@ internal sealed class PluginIngest
         // Hashed from the codec's own bytes rather than from a string: identical for the valid
         // UTF-8 the codec emits, but this keeps the hash defined by what the source file would
         // contain, not by a round trip through .NET's string encoder.
-        return new PreparedRecord(record, body, GitBlobHash.Of(body), refs, childRows, hasVmad, hasConditions);
+        return new PreparedRecord(record, body, GitBlobHash.Of(body), refs, childRows, hasVmad);
     }
 
     private static void AppendPrepared(
@@ -342,7 +330,7 @@ internal sealed class PluginIngest
         // per-type enumeration survives only because it is how a record's type is known.
         //
         // The per-record work is CPU-bound and independent record to record — serialize,
-        // hash, the form-ref walk, container children, VMAD and condition refs — measured at 98% of
+        // hash, the form-ref walk, container children and VMAD refs — measured at 98% of
         // a full load order's load on one core of eight. It runs in parallel here; only the appender
         // writes stay sequential, in enumeration order (AsOrdered), so a re-index lands rows in the
         // same order it always did. The codec and the collectors hold no per-call mutable state
@@ -393,7 +381,6 @@ internal sealed class PluginIngest
                 containerChildRows.AddRange(p.ChildRows);
                 lookupRows.Add((record.FormKey.ToString(), tableName, record.EditorID));
                 if (p.HasVmad) counters.Vmad++;
-                if (p.HasConditions) counters.Conditions++;
                 if (_logger.IsEnabled(LogLevel.Trace))
                 {
                     // RecordIndexingLoggingTests pins these per-record trace texts.
@@ -402,11 +389,6 @@ internal sealed class PluginIngest
                     if (p.HasVmad)
                     {
                         _logger.LogTrace("Indexed VMAD for {FormKey} ({RecordType}) in {Plugin}",
-                            record.FormKey, tableName, plugin);
-                    }
-                    if (p.HasConditions)
-                    {
-                        _logger.LogTrace("Indexed conditions for {FormKey} ({RecordType}) in {Plugin}",
                             record.FormKey, tableName, plugin);
                     }
                 }
@@ -452,54 +434,6 @@ internal sealed class PluginIngest
             cell => AppendCellLocationRow(cellAppender, cell, plugin, origin),
             placed => AppendPlacementRow(placeAppender, placed, plugin, origin));
     }
-
-    // One record's condition refs — the body of the loop above, extracted so per-record
-    // re-derivation walks conditions through the identical code rather than a second copy of it.
-    // Returns whether this record owns any conditions at all, which is what the caller's own
-    // "indexed conditions for N records" count has always meant. Internal: WorkingTreeOverlay's own
-    // per-record rederivation calls this through its PluginIngest reference (Overlay depends on
-    // Ingest, never the reverse).
-    internal bool CollectConditionRefsForRecord(IMajorRecordGetter record, string recordType, List<FormRef> refs)
-    {
-        if (_conditionCodec == null) return false;
-
-        var owners = _conditionCodec.Extract(record);
-        if (!owners.Any()) return false;
-
-        var formKey = record.FormKey.ToString();
-        foreach (var owner in owners)
-        {
-            for (var ci = 0; ci < owner.Conditions.Count; ci++)
-                CollectConditionRefsForOne(formKey, recordType, owner.FieldPath, ci, owner.Conditions[ci], refs);
-        }
-
-        return true;
-    }
-
-    // A condition's three FormKey-bearing
-    // slots (a Form-category parameter, the Run-On reference, the Use-Global comparison target).
-    // FieldPath format matches Edits/ConditionPath.Build/BuildParameter exactly — reproduced rather
-    // than imported because Records/ doesn't reference Edits/.
-    private static void CollectConditionRefsForOne(
-        string formKey, string recordType, string fieldPath, int index, ParsedCondition c, List<FormRef> refs)
-    {
-        if (c.RunOnTarget == "Reference" && c.RunOnReference is { Length: > 0 } runOnRef)
-            refs.Add(new FormRef(formKey, runOnRef, ConditionSubFieldPath(fieldPath, index, "RunOn"), recordType, null));
-
-        if (c.UseGlobal && c.ComparisonGlobal is { Length: > 0 } comparisonGlobal)
-            refs.Add(new FormRef(formKey, comparisonGlobal, ConditionSubFieldPath(fieldPath, index, "Comparison"), recordType, null));
-
-        for (var pi = 0; pi < c.Parameters.Count; pi++)
-        {
-            var param = c.Parameters[pi];
-            if (param.Category == ConditionParamCategory.Form && param.FormKey is { Length: > 0 } paramFormKey)
-                refs.Add(new FormRef(
-                    formKey, paramFormKey, ConditionSubFieldPath(fieldPath, index, $@"Parameter\{pi}"), recordType, null));
-        }
-    }
-
-    private static string ConditionSubFieldPath(string fieldPath, int index, string subField) =>
-        $@"CTDA\{fieldPath}\{index}\{subField}";
 
     // Internal: WorkingTreeOverlay's own per-record rederivation calls this through its PluginIngest
     // reference (Overlay depends on Ingest, never the reverse).

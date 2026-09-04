@@ -58,12 +58,11 @@ internal static class LoquiUnions
         leaves.Count > (setterType.IsAbstract ? 0 : 1);
 
     // getterInterface qualifies when its own Setter type (ReflectedTypes.GetSetterType) is a union base
-    // (IsUnionBase) outside SchemaAnnotations.ExcludedUnions (Condition/ConditionData and
-    // AVirtualMachineAdapter — structurally identical to ANpcLevel/AQuestAlias, but owned by their
-    // dedicated sections: IsConditionListField and SchemaRefusals.IsExcludedUnionColumn only gate a *named
-    // top-level property* in ColumnReflection.ReflectColumns, and SubFieldReflection.BuildSubSchema's recursive walk reaches these
-    // types with no memory of which field led to it; and ASceneActionType, whose one leaf cannot
-    // be read). OMOD's own IAObjectModPropertyGetter<T> is excluded by SubFieldReflection.BuildSubSchema's own caller order
+    // (IsUnionBase) outside SchemaAnnotations.ExcludedUnions (AVirtualMachineAdapter — structurally
+    // identical to ANpcLevel/AQuestAlias, but owned by its dedicated section: SchemaRefusals.IsExcludedUnionColumn
+    // only gates a *named top-level property* in ColumnReflection.ReflectColumns, and
+    // SubFieldReflection.BuildSubSchema's recursive walk reaches the type with no memory of which
+    // field led to it; and ASceneActionType, whose one leaf cannot be read). OMOD's own IAObjectModPropertyGetter<T> is excluded by SubFieldReflection.BuildSubSchema's own caller order
     // (ObjectModPropertyLeaves.IsObjectModPropertyBase checked first), not by anything here — its Setter type
     // (AObjectModProperty<T>) is abstract too, but this method is simply never reached for it.
     internal static LoquiUnion? TryGetUnion(Type getterInterface, GameReflection game)

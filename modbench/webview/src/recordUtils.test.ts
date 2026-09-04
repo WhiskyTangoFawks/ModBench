@@ -191,7 +191,7 @@ describe('getAtPath', () => {
 });
 
 // Mirrors MEditService.Core/Queries/ConflictRules.cs's Reduce, used by
-// vmadTreeAdapter.ts/conditionTreeAdapter.ts to compute their own synthesized FieldDiff nodes'
+// vmadTreeAdapter.ts to compute its own synthesized FieldDiff nodes'
 // bottom-up conflictAll.
 describe('reduceConflictAll', () => {
   it('returns NoConflict for no cell states', () => {
@@ -301,7 +301,7 @@ describe('appendArrayElement', () => {
 });
 
 // #710: the adapter path's half of one rule. A reflected column's element is defaulted by
-// ArrayOpWriter, never here — but a Condition or script-property element (#692/#694) carries the
+// ArrayOpWriter, never here — but a script-property element (#694) carries the
 // same `concrete_type` discriminator, and must start at the same leaf the backend would choose:
 // the first the schema lists. Its agreeing backend half is
 // MEditService.Tests.Edits.UnionArrayAddInventoryTests.ArrayAdd_BuildsAnElementTheWritePathAccepts.

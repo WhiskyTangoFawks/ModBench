@@ -1,14 +1,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
-// conditionRunOnTargets() logs failures via the same vscode.postMessage
-// bridge RecordPanel's own logAction uses (vscode.ts's acquireVsCodeApi() at module load) —
-// stubbed here the same way RecordPanel.test.tsx already does, since most tests below don't care
-// about logging itself (see the dedicated describe block further down for that).
+// The webview's vscode bridge is acquired at module load (vscode.ts's acquireVsCodeApi()) —
+// stubbed here the same way RecordPanel.test.tsx already does.
 vi.mock('./vscode', () => ({ vscode: { postMessage: vi.fn() } }));
 
 import { createRecordPanelClient } from './RecordPanelClient';
 import { columnKey } from './types';
-import { vscode } from './vscode';
 
 // The client is the record panel's single backend seam. `fetch` is the genuine external
 // boundary here, so these tests stub it — everything above the client injects a fake client
@@ -184,39 +181,5 @@ describe('RecordPanelClient.load', () => {
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     expect(r.conflictsComputed).toBe(false);
-  });
-});
-
-describe('RecordPanelClient.conditionRunOnTargets', () => {
-  let fetchMock: ReturnType<typeof vi.fn>;
-  beforeEach(() => {
-    fetchMock = vi.fn(() => Promise.resolve(jsonResponse(['Subject', 'Reference'])));
-    vi.stubGlobal('fetch', fetchMock);
-    vi.mocked(vscode.postMessage).mockClear();
-  });
-  afterEach(() => vi.unstubAllGlobals());
-
-  it('GETs the Run On target catalog', async () => {
-    const targets = await createRecordPanelClient(5172).conditionRunOnTargets();
-    const url = typeof fetchMock.mock.calls[0][0] === 'string' ? fetchMock.mock.calls[0][0] : fetchMock.mock.calls[0][0].url;
-    expect(url).toContain('/condition-run-on-targets');
-    expect(targets).toEqual(['Subject', 'Reference']);
-  });
-
-  // A non-ok response degrades to [] (never rejects — the Run On dropdown
-  // simply has nothing to show, not a blocking error) but must log, mirroring
-  // PluginRepository.getConditionFunctions()'s own contract rather than swallowing silently.
-  it('returns [] and logs a warning when the response is not ok', async () => {
-    fetchMock.mockResolvedValue(jsonResponse({}, 500));
-    const targets = await createRecordPanelClient(5172).conditionRunOnTargets();
-    expect(targets).toEqual([]);
-    expect(vscode.postMessage).toHaveBeenCalledWith(expect.objectContaining({ level: 'warn' }));
-  });
-
-  it('returns [] and logs a warning when the fetch itself throws', async () => {
-    fetchMock.mockRejectedValue(new Error('network down'));
-    const targets = await createRecordPanelClient(5172).conditionRunOnTargets();
-    expect(targets).toEqual([]);
-    expect(vscode.postMessage).toHaveBeenCalledWith(expect.objectContaining({ level: 'warn' }));
   });
 });

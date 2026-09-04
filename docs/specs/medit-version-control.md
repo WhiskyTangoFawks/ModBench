@@ -223,10 +223,9 @@ using git.
 - Every edit lands as working-tree source text — the single write path. A scalar inline
   gesture in the grid and `POST /records/{formKey}/field` (scripts and agents) both land
   the same way.
-- The full editor gesture inventory rides that one path: FormKey and condition-function
-  pickers (native QuickPick), flag multi-select, the extended-field editor, VMAD
-  structural ops via the op-envelope through `EditField`, and array add/remove/move
-  (withheld on sorted arrays).
+- The full editor gesture inventory rides that one path: the FormKey picker (native QuickPick),
+  flag multi-select, the extended-field editor, VMAD structural ops via the op-envelope through
+  `EditField`, and array add/remove/move (withheld on sorted arrays).
 - **Lifecycle gestures** live on the Plugins-tree context menus with xEdit's own captions
   (Add / Remove / Change FormID…): create allocates the next-free FormID collision-safe
   against both refs and lands as a working-tree source file (absent at Head; rediscovered
