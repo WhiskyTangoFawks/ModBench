@@ -95,5 +95,5 @@ not a reason to build one.
 ## Scope honestly stated
 
 Fallout 4 is the only game built and tested in this repo. Skyrim and Starfield are reasoned about
-from their Mutagen definitions and are not verified; #706 owns them. FO4-concrete paths in tests are
-a fixture choice, not a platform lock.
+from their Mutagen definitions and are not verified; multi-game verification was descoped from
+#686 and has no ticket. FO4-concrete paths in tests are a fixture choice, not a platform lock.
