@@ -72,7 +72,7 @@ internal static class SubFieldReflection
         {
             // Array elements are commonly sparse (a "Null" slot is a tolerated placeholder, not a
             // data error) — getter interfaces can't statically distinguish this from a non-nullable
-            // scalar anyway (see ReflectedTypes.IsNullableFormLink), so default permissive here regardless.
+            // scalar anyway, so default permissive here regardless.
             return new FieldMetadata("", "formKey", false,
                 LeafClassification.GetFormLinkValidTypes(core, game), LeafSpec.NoEnumMembers,
                 IsSortable: true, AllowsNull: true);

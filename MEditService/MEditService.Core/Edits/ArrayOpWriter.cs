@@ -84,7 +84,7 @@ internal static class ArrayOpWriter
     }
 
     // ── path segments ("member"/"index"/"key" — a pure-FormLink array offers no array op at all,
-    // so no "sortKey" hop reaches here; see recordUtils.ts's own PathSegment doc comment) ─────────
+    // so no "sortKey" hop reaches here) ─────────────────────────────────────────
 
     // A key no element carries resolves to -1, which every mutation reads as "nothing to do", the
     // same as an out-of-range index.

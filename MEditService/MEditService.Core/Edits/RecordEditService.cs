@@ -118,7 +118,7 @@ public sealed class RecordEditService(
         }
 
         // The file name carries the EditorID, so an EditorID edit is a rename too. Done before the
-        // write: see RenameSourceUnit.
+        // write.
         var sourcePath = RenameSourceUnit(unit, target, document);
 
         // The atomic write matters here: the file is inside a live git working tree the SCM panel may
@@ -329,7 +329,7 @@ public sealed class RecordEditService(
 
     // Index-derived, not object-graph-derived: the per-record codec never populates a folder-split
     // child onto the parent it reads; only the whole-mod door does. Answers empty for a childless
-    // FormKey, so DeleteRecord calls it unconditionally.
+    // FormKey.
     private static IEnumerable<string> EnumerateDescendantFormKeys(IRecordReads reads, PluginKey plugin, string formKey)
     {
         var refs = reads.GetCellReferences(plugin, formKey);
@@ -1260,7 +1260,7 @@ public sealed class RecordEditService(
             ((IFormLinkContainer)owner).RemapLinks(mapping);
 
             // Guarded before the new FormKey is stamped on, so a refusal names the record the user
-            // asked about; the self-link is remapped here and nowhere else.
+            // asked about.
             if (RefuseIfRemapIncomplete(owner, ownerDocument.RecordType, oldFormKey, plugin, release) is { } ownerIncomplete)
                 return ownerIncomplete;
             if (RefuseIfRemapIncomplete(found.Child, document.RecordType, oldFormKey, plugin, release) is { } childIncomplete)
@@ -1458,8 +1458,7 @@ public sealed class RecordEditService(
             : plugin.Name.EndsWith(".esl", StringComparison.OrdinalIgnoreCase);
 
     // Unions Effective (committed plus uncompiled creates) and Head (natives the working tree
-    // deleted, whose IDs must not be reused before compile). Null means exhausted, a typed refusal
-    // at both call sites.
+    // deleted, whose IDs must not be reused before compile). Null means exhausted.
     private static string? NextFreeNativeFormId(IRecordIndex index, PluginKey plugin, IModGetter? mod, bool isLight)
     {
         var floor = mod?.GetDefaultInitialNextFormID() ?? 0x800u;

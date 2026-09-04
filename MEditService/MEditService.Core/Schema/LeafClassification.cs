@@ -22,7 +22,7 @@ internal static class LeafClassification
     {
         [typeof(bool)] = ("BOOLEAN", "bool", v => (object)v.GetBoolean()),
         // checked, so a value the width cannot hold throws rather than wrapping into a different
-        // number the caller never typed — see LeafWriters.IsDecliningConverterException for what that becomes.
+        // number the caller never typed.
         [typeof(byte)] = ("INTEGER", "int", v => (object)checked((byte)v.GetInt32())),
         [typeof(sbyte)] = ("INTEGER", "int", v => (object)checked((sbyte)v.GetInt32())),
         [typeof(short)] = ("INTEGER", "int", v => (object)checked((short)v.GetInt32())),

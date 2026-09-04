@@ -78,8 +78,7 @@ internal static class ColumnReflection
     // Routed through the same writer as a sub-field, so every leaf shape has one write path.
     private static ColumnInfoResult ProjectColumn(PropertyInfo prop, Type core, bool nullable, LeafSpec leaf, ILogger logger)
     {
-        // A column's ApplyOutcome is the routed writer's own, carried straight through, and the
-        // edit path turns it into a refusal naming the field (see RecordFieldWriter).
+        // A column's ApplyOutcome is the routed writer's own, carried straight through.
         var apply = LeafWriters.RouteWriter<IMajorRecord>(leaf, core, prop.Name, nullable, logger);
         return new(leaf.DuckDbType, r => leaf.Get(r), leaf.ApiType, leaf.ValidFormKeyTypes, leaf.EnumMembers,
             apply,

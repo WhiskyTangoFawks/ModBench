@@ -388,14 +388,13 @@ internal sealed class WorkingTreeOverlay
                     break;
                 case "TopCell":
                     // No block/sub and never interior, by construction — a worldspace's top cell is
-                    // not part of any exterior grid (PlacementWalker.WalkWorldspace's own ingest walk
-                    // uses these same three constants for the identical reason).
+                    // not part of any exterior grid.
                     topCellRow = _placementWalker.EmitCellLocationRow(
                         child, formKey, blockX: null, blockY: null, subX: null, subY: null, isInterior: false);
                     topCellRecord = child;
                     break;
                     // "SubCells": never yielded here — its items are WorldspaceBlock, which is not
-                    // IMajorRecordGetter (ContainerChildFields.EnumerateChildren's own doc comment).
+                    // IMajorRecordGetter.
             }
         }
 
