@@ -246,15 +246,18 @@ is displayed and copied. The editor still holds, and a payload still carries, th
 **Struct and array summary rows are the one exception to "the same string the editor shows"** —
 they have no editor to match, since a compound field is edited through its child rows, not as a
 unit. Their model value is a **JSON serialization of the field's current value**, not an xEdit-style
-`Element.Summary` human-readable string, even though xEdit's own model has one. A faithful
-`Element.Summary` equivalent needs per-record-type domain knowledge this codebase doesn't have
-anywhere yet — how to render a REFR's position, a condition's function call, an arbitrary nested
-struct — and would be its own open-ended design effort, not a sub-decision inside a copy-command
-ticket. JSON needs no per-type knowledge, is honest about what a struct/array actually is
-rather than a lossy gloss of it, and is genuinely round-trippable (`JSON.parse` recovers the same
-value) — a prose summary is neither. This is a deliberate, bounded divergence from xEdit's exact
-behavior for a content-generation question a UX-parity ticket shouldn't have to answer, not "an
-alternative that seems nicer" for a gesture ADR-0034 would otherwise forbid diverging on.
+`Element.Summary` human-readable string. That is the value the row copies and stages, so it is the
+one that has to be honest about what a struct/array is and to round-trip (`JSON.parse` recovers the
+same value); prose does neither.
+
+**A collapsed array element may still *read* as prose**, through the **presentation table**
+(`webview/src/presentation.ts`): a table keyed by the schema's own leaf type names, whose entries are
+pure functions of an element's metadata, its value, and the FormKey resolutions the diff already
+carries. An element whose leaf has an entry renders that string in place of `{…}` while collapsed;
+every other row is unchanged, and no entry affects the edit value or the copy value. The table is
+the **only** place in the webview where a game's own reading conventions live — a game-shaped rule
+anywhere else in `webview/` is in the wrong file. Its first entries are Fallout 4's two `Condition`
+leaves (*Conditions* below).
 
 #### Ctrl+X only actually clears some types
 
@@ -831,8 +834,26 @@ that the Run On reference target is live only under the `Reference` Run On value
 load-bearing on the backend: the form-reference and check-error walks skip a member the current
 value says is idle, so a numeric parameter sharing its four bytes with a record link is not filed as
 a reference, a Run On of Subject does not keep a stale target alive, and an idle reference is not
-flagged as a dangling one. What the editor does with the map — hiding an idle row, clearing it on a
-change — is #693's.
+flagged as a dangling one.
+
+The editor reads the same map, for the same two halves, over metadata alone — it names no game:
+
+- **An idle member has no row.** A member the map governs and no column's current value puts in use
+  is filtered out of the struct's child rows, so a condition shows one parameter row per slot the
+  function actually uses and never the alias twin reading the same four bytes as the other type. A
+  member *any* column puts in use is kept, so a losing override's own data is never hidden; a member
+  no value ever names (`Unknown3`, xEdit's Parameter #3, written whatever the function is) is not
+  governed at all and always shows. Filtering only ever removes a row the diff already has.
+- **A change to a governing member clears what it idles.** The cascade applies where the element is
+  assembled for commit, so the posted edit carries the cleared siblings. This is not cosmetic:
+  `ConditionBinaryWriteTranslation.CustomStringExports` writes a CIS1/CIS2 subrecord for any
+  non-null `ParameterOneString`/`ParameterTwoString` without consulting the function, so a string
+  left behind by a function change reaches the plugin.
+
+**The function picker is the schema's own enum.** On Fallout 4 that is the `function` member's
+479-member enum, rendered by the ordinary enum cell; on a shape whose `ConditionData` is one class
+per function it is the `concrete_type` discriminator dropdown (#688), rendered by the same cell. No
+picker command, and no catalog endpoint, exists on either shape.
 
 Skyrim and Starfield are not built or tested in this repo (#706 owns them). Their
 `Condition.xml` declares the same abstract `Condition` with a `ConditionFloat` carrying a `Float`

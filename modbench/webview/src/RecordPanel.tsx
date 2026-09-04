@@ -9,6 +9,8 @@ import {
 import type { PathSegment } from './recordUtils';
 import { mono, fg, headerCell, getConflictBg, DIMMED_OPACITY } from './gridStyles';
 import { buildVmadRows } from './vmadTreeAdapter';
+import { collapsedSummaries } from './presentation';
+import { clearIdleSiblings, idleMembers } from './siblingsInUse';
 import { AddPropertyDialog } from './VmadPropertyOps';
 import type { ColumnKey, CompareOverride, CompareResult, ConflictThis, FieldDiff, FieldMetadata } from './types';
 import { columnKey } from './types';
@@ -341,12 +343,23 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
   // `path.length === 0` is not an optimization — it is the whole VMAD story. A subtree
   // root (an ordinary top-level field, a VMAD property) *is* the value it writes,
   // so its commit stays the bare value.
+  //
+  // `meta` is the edited leaf's own schema, and is consulted for one thing: a member that declares
+  // which of its siblings its value keeps in use (FieldMetadata.siblingsInUse) carries a cascade,
+  // and this is where the element is assembled, so this is where the cascade applies. Without it a
+  // Fallout 4 condition keeps the parameter slots its old function used — and Condition's own
+  // string exports write a CIS1/CIS2 subrecord for any non-null parameter string whatever the
+  // function is, so the stale slot reaches the plugin.
   const handleCellCommit = useCallback((
     plugin: ColumnKey, path: PathSegment[], rootField: string, rootDiff: FieldDiff, value: unknown,
+    meta?: FieldMetadata,
   ) => {
-    handleEditCell(
-      plugin, rootField,
-      path.length === 0 ? value : setAtPath(rootDiff.values[plugin], path, value));
+    let next = path.length === 0 ? value : setAtPath(rootDiff.values[plugin], path, value);
+    if (meta?.siblingsInUse && path.length > 0) {
+      const owner = path.slice(0, -1);
+      next = setAtPath(next, owner, clearIdleSiblings(meta, getAtPath(next, owner)));
+    }
+    handleEditCell(plugin, rootField, next);
   }, [handleEditCell]);
 
   // ADR-0039: a string cell's value, opened in a real editor tab.
@@ -574,6 +587,16 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
     const isExpanded = expandedStructs.has(rowKey);
     // This row is itself a mutable, unsorted array's own row (Add applies).
     const isUnsortedArrayParent = meta?.type === 'array' && !!meta.elementType && !meta.elementType.isSortable;
+    // Only an array element can read as a summary — the presentation table's own unit is one
+    // element of a list, and "is this the last one" is a question about the list it sits in, which
+    // this builder can answer per column and the row itself cannot.
+    const elementSeg = path.at(-1);
+    const collapsedSummary = meta && elementSeg?.kind === 'index'
+      ? collapsedSummaries(diff, meta, column => {
+          const list = getAtPath(rootDiff.values[column], path.slice(0, -1));
+          return !Array.isArray(list) || elementSeg.index === list.length - 1;
+        })
+      : undefined;
 
     const rows: React.ReactNode[] = [
       <DiffRow
@@ -584,7 +607,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
         fieldMetaMap={fieldMetaMap}
         notInLoadOrderSet={notInLoadOrderSet}
         editableColumns={editableColumns}
-        onEditCell={(plugin: ColumnKey, value: unknown) => handleCellCommit(plugin, path, rootField, rootDiff, value)}
+        onEditCell={(plugin: ColumnKey, value: unknown) => handleCellCommit(plugin, path, rootField, rootDiff, value, meta)}
         onArrayAdd={isUnsortedArrayParent ? (plugin: ColumnKey) => handleArrayOp(plugin, path, rootField, 'add', meta?.elementType ?? undefined) : undefined}
         onArrayRemove={isUnsortedArrayElement ? (plugin: ColumnKey) => handleArrayOp(plugin, path, rootField, 'remove', meta) : undefined}
         onArrayMoveUp={isUnsortedArrayElement ? (plugin: ColumnKey) => handleArrayOp(plugin, path, rootField, 'moveUp', meta) : undefined}
@@ -597,6 +620,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
         onFocusCell={handleFocusCell}
         hasChildren={hasChildren}
         isExpanded={isExpanded}
+        collapsedSummary={collapsedSummary}
         onToggle={() => setExpandedStructs(prev => {
           const next = new Set(prev);
           if (next.has(rowKey)) next.delete(rowKey); else next.add(rowKey);
@@ -607,7 +631,14 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
 
     if (!hasChildren || !isExpanded || !meta) return rows;
 
+    // A member the schema says holds no data under any column's current value has no row —
+    // Mutagen aliases a condition's parameter slots onto the same bytes, so the idle twin of a
+    // live slot would render the same four bytes a second time as a different type. Filtering
+    // only ever removes a row the diff already has; nothing here synthesizes one.
+    const idle = meta.type === 'struct' ? idleMembers(meta, columns.map(c => diff.values[c.key])) : undefined;
+
     for (const child of diff.children ?? []) {
+      if (idle?.has(child.fieldName)) continue;
       const childRowKey = `${rowKey}.${child.fieldName}`;
       if (meta.type === 'array' && meta.elementType) {
         rows.push(...buildArrayElementRows(child, meta.elementType, path, rootField, rootDiff, childRowKey, depth));
