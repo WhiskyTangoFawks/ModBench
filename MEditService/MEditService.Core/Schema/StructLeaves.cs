@@ -5,23 +5,14 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Core.Schema;
 
-/// <summary>A Loqui sub-record, as one struct column or one nested struct member. Written as a single
-/// atomic value: the whole object is built and every member applied before anything attaches to the
-/// record, so a rejected member leaves nothing written. One applier serves both levels, at any depth
-/// the walk builds.</summary>
+/// <summary>A Loqui sub-record as one struct column or one nested member, written as a single atomic
+/// value: every member is applied before anything attaches to the record, so a rejected member leaves
+/// nothing written.</summary>
 internal static class StructLeaves
 {
-    // #643: a nested Loqui struct writes through the same one struct-object applier the top-level
-    // struct column uses (ApplyStructJson — #548's own semantics, abstract-union discriminator
-    // resolution and same-concrete-type object reuse included), at any depth SubFieldReflection.BuildSubSchema itself
-    // builds, since each level's own BuildStructSubField wires the same applier again.
-    //
-    // The unwritable residue keeps #642's refusal instead of a delegate that could never succeed:
-    // a getter type with no resolvable Setter class at all, and an abstract Setter whose own
-    // sub-schema exposes no concrete_type discriminator — a union SchemaAnnotations.ExcludedUnions
-    // names, so no payload can ever carry the discriminator ApplyStructJson would need. Refusing up
-    // front as not-editable names the real problem, where a ValueRejected from the missing
-    // discriminator would claim the value's shape was wrong.
+    // Refused up front: a getter type with no resolvable setter, or an abstract setter whose sub-schema
+    // exposes no discriminator (an excluded union), can never be written, and ValueRejected would
+    // blame the value's shape instead.
     internal static SubFieldSpec? BuildStructSubField(
         PropertyInfo prop, Type core, string colName,
         GameReflection game, Type[] path, int depth, ILogger logger)
@@ -41,44 +32,14 @@ internal static class StructLeaves
                     "excluded union whose discriminator can never appear in a payload"),
             SubFields: sub,
             LeafTypeName: ReflectedTypes.LeafTypeName(core),
-            // #642: a payload that names an unwritable sub-field must refuse the whole write rather
-            // than silently drop it while the caller reports success (SubFieldSpec's own doc comment
-            // has the full "a read-only leaf is not one thing" reasoning).
+            // A payload naming an unwritable sub-field must refuse the whole write rather than report
+            // success and drop it.
             TargetingRefuses: !writable);
     }
 
-    /// <summary>
-    /// The one struct-object write, shared by the top-level struct column
-    /// (<see cref="BuildStructColumn"/>, operating on the record itself) and every nested struct
-    /// sub-field (<see cref="BuildStructSubField"/>, operating on whichever enclosing struct/array
-    /// element object <see cref="SubFieldValues.ApplySubFields"/> hands it) — #643 extends #548's generalization
-    /// down through nesting by reusing this exact body rather than duplicating it.
-    ///
-    /// <para>The struct half of <see cref="ListLeaves.ApplyListJson"/>'s own shape guard — a struct field is
-    /// written as one atomic value, so a bare member value is refused rather than silently dropped
-    /// while the write path reports success.</para>
-    ///
-    /// <para>The same refusal also covers a well-formed object whose own member value was declined
-    /// (<see cref="SubFieldValues.ApplySubFields"/>' <c>ValueRejected</c> fold), or that names a still-unwritable
-    /// nested sub-field (#642's <c>SubFieldReadOnly</c> fold) — <c>SetValue</c> is skipped in both
-    /// cases too, so a struct write with one bad or unwritable member never attaches its
-    /// partially-built value to the target, matching <see cref="ListLeaves.ApplyListJson"/>'s own "before
-    /// <c>newList</c> is attached" guarantee at every nesting level this method is wired at.</para>
-    ///
-    /// <para><paramref name="setterType"/> is a union base for an abstract Loqui union (ANpcLevel,
-    /// ALocationTarget, ...) or a concrete one whose sub-schema carries a discriminator
-    /// (<see cref="IsUnionWritten"/>) — the concrete type is resolved off the incoming JSON's own
-    /// discriminator first, refusing (<c>ValueRejected</c>) rather than constructing the wrong
-    /// class (or, for an abstract base, crashing) when it can't be. Only reused when the target's existing value is already that same
-    /// concrete type — switching concrete leaf (NpcLevel to PcLevelMult, WorldspaceNavmeshParent to
-    /// CellNavmeshParent) cannot reuse the old object, so it constructs fresh instead.</para>
-    ///
-    /// <para><c>PropertyNotFound</c> when the target's runtime type doesn't declare the property —
-    /// impossible for a top-level column (reflection found the property on that very type), but a
-    /// nested sub-field can be an abstract-union shared member applied against a sibling leaf that
-    /// lacks it, where the silent-no-op convention (<see cref="LeafWriters.MakeApplier"/>'s own) is exactly
-    /// right.</para>
-    /// </summary>
+    // A union base resolves its concrete type off the payload's discriminator, refusing when it
+    // can't. The existing object is reused only when it is that type; switching leaf constructs
+    // fresh. Nothing attaches unless every member applied.
     private static ApplyOutcome ApplyStructJson(
         object target, JsonElement json, string pName, Type setterType, IReadOnlyList<SubFieldSpec> subFields)
     {
@@ -105,13 +66,9 @@ internal static class StructLeaves
         return ApplyOutcome.Applied;
     }
 
-    /// <summary>A struct the payload gives as <c>null</c> is the absence of one, which is exactly
-    /// what this field's own <c>Extract</c> answers for a subrecord the record does not carry (a
-    /// scene adapter's <c>on_begin</c> fragment, say) — so resending a record's own read value has
-    /// to mean "still none". Accepted only when the target genuinely holds none, and nothing is
-    /// written either way: a null over a struct that <i>is</i> there would be a delete gesture,
-    /// which no caller asks for and which a Loqui member the record format requires could not
-    /// survive.</summary>
+    // A null payload means "still absent", what Extract answers for a subrecord the record does not
+    // carry. Accepted only when the target holds none; a null over a present struct would be a
+    // delete gesture no caller asks for.
     private static ApplyOutcome ApplyAbsentStruct(object target, string pName)
     {
         var rp = target.GetType().GetProperty(pName, BindingFlags.Public | BindingFlags.Instance);
@@ -119,9 +76,9 @@ internal static class StructLeaves
         return ReflectedTypes.ReadOrNull(target, rp) == null ? ApplyOutcome.Applied : ApplyOutcome.ValueRejected;
     }
 
-    // A union base is written by the leaf the payload names: abstract, so nothing else could be
-    // constructed, or concrete with a discriminator in its own sub-schema (ScriptProperty), where
-    // building the base regardless would silently discard the leaf the payload asked for.
+    // A union base is written by the leaf the payload names: abstract, so nothing else could be built,
+    // or concrete with a discriminator (ScriptProperty), where building the base would discard the
+    // leaf asked for.
     internal static bool IsUnionWritten(Type setterType, IReadOnlyList<SubFieldSpec>? subFields) =>
         setterType.IsAbstract || HasDiscriminator(subFields);
 
@@ -149,9 +106,7 @@ internal static class StructLeaves
             "struct column with no resolvable Loqui setter class, so nothing can be constructed to write onto");
         if (setterType != null)
         {
-            // ApplyStructJson carries the whole contract (shape guard, discriminator resolution,
-            // refuse-before-attach) — shared with every nested struct sub-field since #643, so the
-            // column and sub-field write paths cannot drift apart.
+            // Shared with every nested struct sub-field, so the two write paths cannot drift apart.
             apply = LeafWrite.Writable<IMajorRecord>(
                 (record, json) => ApplyStructJson(record, json, pName, setterType, subFields));
         }

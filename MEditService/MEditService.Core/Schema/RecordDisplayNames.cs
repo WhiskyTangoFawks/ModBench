@@ -1,14 +1,8 @@
 namespace MEditService.Core.Schema;
 
-// xEdit shows a human-readable name per record type (the second argument of each
-// `wbRecord(<SIG>, '<Display Name>', ...)` / `wbRefRecord(<SIG>, '<Display Name>', ...)` call in
-// references/TES5Edit/Core/wbDefinitionsFO4.pas). This table is a one-time hand-transcription of
-// that reference (grep-only, never modified) — not a runtime parser, since the mapping is static
-// and the reference isn't shipped.
-// "npc_" and "header" aren't `wbRecord` matches by signature text (NPC_ / TES4) so are called out
-// separately below. Every table SchemaReflector currently discovers has an entry here (see
-// SchemaReflectorTests.GetSchemas_EveryDiscoveredTable_HasANonEmptyDisplayName); a lookup miss falls back to
-// the raw signature rather than throwing, so a newly-discovered Mutagen type never breaks startup.
+// xEdit's display name per record type, hand-transcribed from the wbRecord calls in
+// wbDefinitionsFO4.pas since the reference isn't shipped. A miss falls back to the raw signature so
+// a newly discovered Mutagen type never breaks startup.
 internal static class RecordDisplayNames
 {
     private static readonly Dictionary<string, string> Names = new(StringComparer.OrdinalIgnoreCase)
@@ -155,12 +149,8 @@ internal static class RecordDisplayNames
 
 public static class RecordTableSchemaLookupExtensions
 {
-    /// <summary>
-    /// The xEdit-parity display name for <paramref name="tableName"/>, read off the reflected
-    /// schema when known. Falls back to <paramref name="tableName"/> itself (the raw signature)
-    /// when the type isn't a known schema — e.g. a record whose RecordType predates a schema
-    /// change. Single home for this fallback rule (RecordQueryService).
-    /// </summary>
+    /// <summary>Falls back to the raw signature when the type has no schema, e.g. a record whose
+    /// RecordType predates a schema change. The single home for this fallback rule.</summary>
     public static string DisplayNameFor(
         this IReadOnlyDictionary<string, RecordTableSchema> schemas, string tableName) =>
         schemas.TryGetValue(tableName, out var schema) ? schema.DisplayName : tableName;

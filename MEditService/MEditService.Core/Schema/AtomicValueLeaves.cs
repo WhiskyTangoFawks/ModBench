@@ -5,28 +5,13 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Core.Schema;
 
-/// <summary>A CLR value type Loqui does not model and that falls through every structural test —
-/// presented as the named scalar components a table entry says it decomposes into, rather than as a
-/// new handler branch per type. Exactly one entry today: System.Drawing.Color. A write stages the
-/// components on a mutable box and rebuilds the whole immutable value once.</summary>
+/// <summary>A CLR value type Loqui does not model, presented as the scalar components a table entry
+/// names. One entry: System.Drawing.Color. A write stages onto a mutable box and rebuilds the
+/// immutable value once.</summary>
 internal static class AtomicValueLeaves
 {
-    // #649: a CLR value type that Loqui does not model, so it has no sub-schema of its own and
-    // falls through every structural test LeafClassification.ClassifyLeaf and ReflectedTypes make
-    // (not a primitive, not an enum, not a form link, not
-    // a Loqui interface, not a list, not a Noggog vector). Rather than a new handler branch per
-    // type, each one is a row in this table saying which named scalar components it decomposes
-    // into — the "not Loqui-modelled ⇒ value" rule, applied by lookup.
-    //
-    // Exactly one entry today: System.Drawing.Color. Every other unmodelled value type reachable in
-    // the walk is a named exclusion instead (AtomicValueExclusions) — a table entry is a rendered
-    // presentation, and only Color's has been decided.
-    //
-    // Components are named the way xEdit names them (Red/Green/Blue/Alpha -> red/green/blue/alpha),
-    // not the way the CLR type does (R/G/B/A), because the wire name is what reaches the grid and
-    // ADR-0034 makes xEdit the vocabulary for anything a user reads. The CLR name is kept alongside
-    // it: it is what both the Extract (reads off the real Color) and the Apply (writes onto the
-    // mutable staging box below) resolve by reflection, so neither has to know about the rename.
+    // Components carry xEdit's names (red/green/blue/alpha), since ADR-0034 makes xEdit the vocabulary
+    // for anything a user reads, alongside the CLR name both Extract and Apply resolve by reflection.
     private sealed record AtomicValueComponent(string WireName, string ClrName);
 
     private static readonly AtomicValueComponent[] ColorRgbComponents =
@@ -44,12 +29,8 @@ internal static class AtomicValueLeaves
     private static AtomicValueComponent[] AtomicValueComponentsFor(GameReflection game, PropertyInfo prop) =>
         game.Annotations.HasAlphaLeaf(prop) ? ColorRgbaComponents : ColorRgbComponents;
 
-    // The mutable staging target an atomic value's Apply writes onto before the immutable value is
-    // rebuilt from it. System.Drawing.Color's own R/G/B/A are get-only, so the vector-struct trick
-    // of mutating a boxed value in place is structurally unavailable here — but with a box whose
-    // property *names* match the CLR type's, every component still gets an ordinary LeafWriters.MakeApplier and
-    // the whole write folds through the same SubFieldValues.ApplySubFields every other struct uses. No bespoke
-    // per-component write path, and no read-only component anywhere in the shape.
+    // System.Drawing.Color's R/G/B/A are get-only, so the write stages onto this box, whose property
+    // names match the CLR type's, and every component gets an ordinary LeafWriters.MakeApplier.
     private sealed class ColorComponentBox
     {
         public byte R { get; set; }
@@ -58,11 +39,8 @@ internal static class AtomicValueLeaves
         public byte A { get; set; }
     }
 
-    // One component's own sub-field. Read and write deliberately target different runtime types:
-    // Extract reads off the real immutable value (a System.Drawing.Color), while Apply resolves the
-    // same CLR name on the mutable ColorComponentBox the enclosing Apply stages into. Both are
-    // ordinary name-keyed reflection — ReflectedTypes.SubGetter and LeafWriters.MakeApplier, unchanged — so a component behaves
-    // exactly like any other byte leaf, ApplyOutcome folding included.
+    // Extract reads the real immutable value; Apply resolves the same CLR name on the ColorComponentBox
+    // the enclosing Apply stages into.
     private static List<SubFieldSpec> BuildAtomicValueComponentSubFields(
         Type core, AtomicValueComponent[] components, ILogger logger)
     {
@@ -82,11 +60,8 @@ internal static class AtomicValueLeaves
         return result;
     }
 
-    // Rebuilds the immutable value from the staged box. Alpha rides through whether or not this
-    // field renders an alpha leaf: a field on the 3-leaf shape simply never has "alpha" in its
-    // payload, so SubFieldValues.ApplySubFields leaves box.A at whatever the current value already carried — which
-    // is what makes a colour edit on one of the 40 wbByteColors fields preserve its existing fourth
-    // byte instead of silently zeroing it.
+    // Alpha rides through unchanged: a 3-leaf field never names "alpha", so box.A keeps whatever the
+    // record carried instead of being zeroed.
     private static System.Drawing.Color RebuildAtomicValue(ColorComponentBox box) =>
         System.Drawing.Color.FromArgb(box.A, box.R, box.G, box.B);
 
@@ -97,9 +72,7 @@ internal static class AtomicValueLeaves
             // xEdit's own wbByteColors defaults (aDefaultR/G/B = 0, the fourth byte wbUnused).
             : new ColorComponentBox();
 
-    // The shared write body for an atomic value, operating on `object` so the top-level column and
-    // the nested sub-field share one implementation — the same posture StructLeaves.ApplyStructJson takes for
-    // Loqui structs since #643.
+    // Operates on object so the column and the nested sub-field share one write body.
     private static ApplyOutcome ApplyAtomicValueJson(
         object obj, JsonElement val, string pName, IReadOnlyList<SubFieldSpec> components)
     {
