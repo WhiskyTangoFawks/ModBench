@@ -153,6 +153,18 @@ public sealed class PrimitiveListEditTests : IDisposable
         Assert.Equal(before, _fixture.MiscItemBody());
     }
 
+    /// <summary>The caller did send the whole array; the refusal must say an element was declined,
+    /// not that a whole array was wanted.</summary>
+    [Fact]
+    public void TopLevelIntListColumn_OutOfRangeElement_MessageNamesTheElementNotTheShape()
+    {
+        var result = _fixture.Service().EditField(
+            _fixture.Plugin, _fixture.MiscItem.ToString(), "component_display_indices", Json("[3, 4096]"));
+
+        Assert.Contains("element", result.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("not a single element", result.Message, StringComparison.Ordinal);
+    }
+
     /// <summary>A value that is not a number at all still refuses the whole write.</summary>
     [Fact]
     public void TopLevelIntListColumn_NonNumericElement_RefusesTheWholeWrite()
