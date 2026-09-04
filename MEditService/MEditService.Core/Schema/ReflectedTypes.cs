@@ -93,6 +93,20 @@ internal static partial class ReflectedTypes
             ?.GetValue(null) as Type;
     }
 
+    /// <summary>The class a struct-shaped leaf <i>is</i>: the concrete Loqui Setter class behind a
+    /// getter interface (IScriptEntryGetter -> ScriptEntry), or the type itself where Loqui does not
+    /// model it (Noggog's P3Float, System.Drawing.Color). The same vocabulary an abstract union's
+    /// discriminator values are drawn from, so a union leaf and a plain struct name themselves
+    /// alike.</summary>
+    internal static string LeafTypeName(Type type)
+    {
+        var name = (GetSetterType(type) ?? type).Name;
+        // A closed generic's CLR name carries its arity (OMOD's own `AObjectModProperty`1`), which
+        // is spelling, not identity.
+        var arity = name.IndexOf('`', StringComparison.Ordinal);
+        return arity < 0 ? name : name[..arity];
+    }
+
     // The type and its bases within its own assembly — a Loqui base is never outside it.
     internal static IEnumerable<Type> BaseChain(Type type)
     {

@@ -112,14 +112,19 @@ const PRESENTATION_TABLE: Record<string, Summarizer> = {
 
 // ── The lookup the grid uses ─────────────────────────────────────────────────
 
-/** The concrete leaf an object is, read off whichever member the schema itself marks as the
- *  discriminator — `concrete_type` for a Loqui union, `value_type` for OMOD's, never a name
- *  written here. Undefined for an element that is not a union at all, which has no entry. */
-function leafOf(meta: FieldMetadata | undefined, value: unknown): string | undefined {
+/** The leaf type this object is, which is what the table is keyed by: the value of whichever member
+ *  the schema itself marks as the discriminator — `concrete_type` for a Loqui union, `value_type`
+ *  for OMOD's, never a name written here — or the type name the schema declares, for a struct that
+ *  is not a union and so has no discriminator. A leaf with a discriminator is answered by it alone:
+ *  it says which class the value turned out to be, where the declared name says only which class
+ *  the schema promised, and a union is exactly where the two disagree. */
+function leafOf(meta: FieldMetadata | undefined, value: unknown): string | null | undefined {
   const discriminator = meta?.fields?.find(f => f.isDiscriminator)?.name;
-  const leaf = discriminator == null ? undefined : (value as Record<string, unknown> | null)?.[discriminator];
-  // Always a string on the wire (the discriminator is an enum of leaf type names); anything else
-  // is a shape this table has no entry for either way.
+  if (discriminator == null) return meta?.leafTypeName;
+  const leaf = (value as Record<string, unknown> | null)?.[discriminator];
+  // A union whose own value names no leaf has none, rather than the base class the schema declares:
+  // a concrete base is one of its own leaves (#701), so falling back there would hand an object of
+  // unknown leaf the base leaf's own reading.
   return typeof leaf === 'string' ? leaf : undefined;
 }
 
