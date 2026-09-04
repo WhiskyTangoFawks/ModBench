@@ -2,7 +2,8 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { PluginHeader } from './PluginHeader';
 import { DiffRow, type FocusedCell } from './DiffRow';
 import {
-  buildColumns, parseElementIndex, keyedElementIndex, collidingFilenames,
+  buildColumns, keyedElementIndex, elementSegment, collidingFilenames,
+  isArrayElementHop, isMovableElementHop, offersArrayAdd,
   getAtPath, setAtPath, metaAtPath,
   headerCellContext, combineVscodeContexts,
 } from './recordUtils';
@@ -369,18 +370,17 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
   // `meta` is this node's own resolved FieldMetadata (undefined only for a malformed diff tree —
   // DiffRow's own `context.overrideMeta`-driven null-return handles that at render time, exactly
   // as it always has); `rootDiff` is the top of this subtree (its `values` are what handleArrayOp
-  // reads the current array from). `isUnsortedArrayElement` is supplied by the *parent* call
-  // (buildArrayElementRows) when this row is itself an unsorted array's element — never computed
-  // by a row for itself, since only the parent knows which array it just descended into.
+  // reads the current array from).
   function buildRows(
     diff: FieldDiff, meta: FieldMetadata | undefined, path: PathSegment[],
-    rootField: string, rootDiff: FieldDiff, rowKey: string, isUnsortedArrayElement = false, depth = 0,
+    rootField: string, rootDiff: FieldDiff, rowKey: string, depth = 0,
     collapsedSummary?: Record<string, string>,
   ): React.ReactNode[] {
     const hasChildren = (diff.children?.length ?? 0) > 0;
     const isExpanded = expandedStructs.has(rowKey);
-    // This row is itself a mutable, unsorted array's own row (Add applies).
-    const isUnsortedArrayParent = meta?.type === 'array' && !!meta.elementType && !meta.elementType.isSortable;
+    // A row's own last hop says what it is and which gestures it offers — the same question
+    // DiffRow's own cell menu and the native one both ask, of the same path (recordUtils.ts).
+    const elementHop = path[path.length - 1];
 
     const rows: React.ReactNode[] = [
       <DiffRow
@@ -392,10 +392,10 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
         notInLoadOrderSet={notInLoadOrderSet}
         editableColumns={editableColumns}
         onEditCell={(plugin: ColumnKey, value: unknown) => handleCellCommit(plugin, path, rootField, rootDiff, value)}
-        onArrayAdd={isUnsortedArrayParent ? (plugin: ColumnKey) => handleArrayOp(plugin, path, rootField, 'add') : undefined}
-        onArrayRemove={isUnsortedArrayElement ? (plugin: ColumnKey) => handleArrayOp(plugin, path, rootField, 'remove') : undefined}
-        onArrayMoveUp={isUnsortedArrayElement ? (plugin: ColumnKey) => handleArrayOp(plugin, path, rootField, 'moveUp') : undefined}
-        onArrayMoveDown={isUnsortedArrayElement ? (plugin: ColumnKey) => handleArrayOp(plugin, path, rootField, 'moveDown') : undefined}
+        onArrayAdd={offersArrayAdd(meta) ? (plugin: ColumnKey) => handleArrayOp(plugin, path, rootField, 'add') : undefined}
+        onArrayRemove={isArrayElementHop(elementHop) ? (plugin: ColumnKey) => handleArrayOp(plugin, path, rootField, 'remove') : undefined}
+        onArrayMoveUp={isMovableElementHop(elementHop) ? (plugin: ColumnKey) => handleArrayOp(plugin, path, rootField, 'moveUp') : undefined}
+        onArrayMoveDown={isMovableElementHop(elementHop) ? (plugin: ColumnKey) => handleArrayOp(plugin, path, rootField, 'moveDown') : undefined}
         collapsedColumns={collapsedColumns}
         onOpen={handleOpen}
         context={{ path, overrideMeta: meta, rootField, depth }}
@@ -426,35 +426,25 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
       const childRowKey = `${rowKey}.${child.fieldName}`;
       if (meta.type === 'array' && meta.elementType) {
         rows.push(...buildArrayElementRows(
-          child, meta, path, rootField, rootDiff, childRowKey, depth, diff.values));
+          child, meta, meta.elementType, path, rootField, rootDiff, childRowKey, depth, diff.values));
       } else if (meta.type === 'struct') {
         const memberMeta = meta.fields?.find(f => f.name === child.fieldName);
         rows.push(...buildRows(
           child, memberMeta, [...path, { kind: 'member', name: child.fieldName }],
-          rootField, rootDiff, childRowKey, false, depth + 1));
+          rootField, rootDiff, childRowKey, depth + 1));
       }
     }
     return rows;
   }
 
-  // How the backend labelled this child is what says how to address it, since both answers come
-  // from the same array metadata: a keyed array's children are named by key (ConflictClassifier's
-  // BuildKeyed), a pure-FormLink array's by the element value, and every other array's by "[N]".
-  function elementSegment(arrayMeta: FieldMetadata, fieldName: string): PathSegment {
-    if (arrayMeta.keyMembers) return { kind: 'key', key: fieldName, members: arrayMeta.keyMembers };
-    if (arrayMeta.elementType?.isSortable) return { kind: 'sortKey', key: fieldName };
-    return { kind: 'index', index: parseElementIndex(fieldName) };
-  }
-
   function buildArrayElementRows(
-    child: FieldDiff, arrayMeta: FieldMetadata, arrayPath: PathSegment[], rootField: string, rootDiff: FieldDiff,
-    childRowKey: string, depth: number, listValues: Record<string, unknown>,
+    child: FieldDiff, arrayMeta: FieldMetadata, elementMeta: FieldMetadata, arrayPath: PathSegment[],
+    rootField: string, rootDiff: FieldDiff, childRowKey: string, depth: number,
+    listValues: Record<string, unknown>,
   ): React.ReactNode[] {
-    const elementMeta = arrayMeta.elementType!;
     const seg = elementSegment(arrayMeta, child.fieldName);
     // The presentation table's unit is one element of a list, and "is this the last one" is a
     // question about the list — which only this frame, the one that descended into it, can answer.
-    // Same rule `isUnsortedArrayElement` already follows: a row is never told by itself.
     const collapsedSummary = collapsedSummaries(child, elementMeta, column => {
       const list = listValues[column];
       if (!Array.isArray(list)) return true;
@@ -466,7 +456,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
     });
     return buildRows(
       child, elementMeta, [...arrayPath, seg], rootField, rootDiff, childRowKey,
-      seg.kind !== 'sortKey', depth + 1, collapsedSummary);
+      depth + 1, collapsedSummary);
   }
 
   return (

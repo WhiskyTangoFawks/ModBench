@@ -163,14 +163,9 @@ export interface ColumnHeaderContext {
 // wrong way. The webview re-exports this (webview/src/messages.ts, webview/src/types.ts) rather
 // than the reverse.
 //
-// `key` addresses a keyed array's element (FieldMetadata.keyMembers) the way `sortKey` addresses a
-// sorted one's: by what the element *is*, never by where it sits. One path is shared by every
-// column of a row, and the same element sits at a different position in each — a plugin missing
-// the first script holds the second at index 0 — so a keyed element has no position a path could
-// carry. `members` travels with the key because the segment is resolved in three places that hold
-// no schema between them (getAtPath/setAtPath, the extension host forwarding an array op, and
-// ArrayOpWriter's own path grammar); carrying it makes the hop self-describing, exactly as
-// `sortKey` is.
+// A keyed element has no position a path could carry: one path is shared by every column of a row,
+// and the same key sits at a different place in each. `members` travels with the key so the webview
+// can resolve the hop with no schema in scope; the backend reads its own (ArrayOpWriter).
 export type PathSegment =
   | { kind: 'member'; name: string }
   | { kind: 'index'; index: number }

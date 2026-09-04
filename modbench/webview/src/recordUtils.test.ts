@@ -7,6 +7,9 @@ import {
   parseElementIndex,
   elementKeyText,
   keyedElementIndex,
+  elementSegment,
+  isArrayElementHop,
+  isMovableElementHop,
   getAtPath,
   setAtPath,
   arrayElementContext,
@@ -171,6 +174,55 @@ describe('elementKeyText', () => {
   });
 });
 
+// How the backend labelled a child is what says how to address it — both answers come from the
+// same array metadata.
+describe('elementSegment', () => {
+  const element = (extra: Partial<FieldMetadata> = {}): FieldMetadata =>
+    ({ name: '', type: 'struct', isArray: false, validFormKeyTypes: [], enumMembers: [], ...extra });
+  const array = (extra: Partial<FieldMetadata>): FieldMetadata =>
+    ({ name: 'A', type: 'array', isArray: true, validFormKeyTypes: [], enumMembers: [], ...extra });
+
+  it('addresses a keyed array\'s child by the key it is labelled with', () => {
+    expect(elementSegment(array({ keyMembers: ['name'], elementType: element() }), 'Ambush'))
+      .toEqual({ kind: 'key', key: 'Ambush', members: ['name'] });
+  });
+
+  it('addresses a pure-FormLink array\'s child by the element value', () => {
+    expect(elementSegment(array({ elementType: element({ type: 'formKey', isSortable: true }) }), 'KwdA'))
+      .toEqual({ kind: 'sortKey', key: 'KwdA' });
+  });
+
+  it('addresses every other array\'s child by position', () => {
+    expect(elementSegment(array({ elementType: element() }), '[2]')).toEqual({ kind: 'index', index: 2 });
+  });
+});
+
+// Which array gestures a row's last hop confers — asked by RecordPanel's handler wiring, DiffRow's
+// cell menu and the native context menu alike, so it is one rule rather than four.
+describe('isArrayElementHop / isMovableElementHop', () => {
+  it('a positional element offers Remove and both Moves', () => {
+    const seg: PathSegment = { kind: 'index', index: 0 };
+    expect(isArrayElementHop(seg)).toBe(true);
+    expect(isMovableElementHop(seg)).toBe(true);
+  });
+
+  // A keyed array is stored in key order on every write (Edits/KeyedArrays.cs), so no Move there
+  // could change the file.
+  it('a keyed element offers Remove but no Move', () => {
+    const seg: PathSegment = { kind: 'key', key: 'Guard', members: ['name'] };
+    expect(isArrayElementHop(seg)).toBe(true);
+    expect(isMovableElementHop(seg)).toBe(false);
+  });
+
+  it('a sorted element and a struct member offer neither', () => {
+    for (const seg of [{ kind: 'sortKey', key: 'KwdA' }, { kind: 'member', name: 'X' }] as PathSegment[]) {
+      expect(isArrayElementHop(seg)).toBe(false);
+      expect(isMovableElementHop(seg)).toBe(false);
+    }
+    expect(isArrayElementHop(undefined)).toBe(false);
+  });
+});
+
 describe('keyedElementIndex', () => {
   const seg: PathSegment & { kind: 'key' } = { kind: 'key', key: 'Guard', members: ['name'] };
 
@@ -208,6 +260,12 @@ describe('getAtPath', () => {
   it('reads a sorted-array element (the segment key is the value itself)', () => {
     const path: PathSegment[] = [{ kind: 'sortKey', key: 'KwdB' }];
     expect(getAtPath(['KwdA', 'KwdB'], path)).toBe('KwdB');
+  });
+
+  // One path serves every column, and a column that does not carry this keyword has nothing here —
+  // answering the key regardless would read as if it did.
+  it('reads nothing for a sorted-array element this column does not carry', () => {
+    expect(getAtPath(['KwdA'], [{ kind: 'sortKey', key: 'KwdB' }])).toBeUndefined();
   });
 
   it('reads a keyed-array element against whichever column\'s array it is given', () => {
@@ -458,20 +516,21 @@ describe('setAtPath', () => {
       .toEqual([{ name: 'Guard', flags: 'X' }]);
   });
 
-  // The corrupting case: "10 / 0" reads as a valid index 0 — the fragment at stage 5 — so a wrong
-  // answer here is a silent write to a different element rather than a visibly dropped edit.
+  // The corrupting case: "10 / 3" slices to "0 / " and reads as a perfectly valid index 0 — the
+  // fragment at stage 5 — so a wrong answer here is a silent write to a different element rather
+  // than a visibly dropped edit. Any key whose second character is a digit behaves this way.
   it('sets the element a composite key names, not the one that key parses to as an index', () => {
     const fragments = [
       { stage: 5, stage_index: 1, script_name: 'Five' },
-      { stage: 10, stage_index: 0, script_name: 'Ten' },
+      { stage: 10, stage_index: 3, script_name: 'Ten' },
     ];
     const path: PathSegment[] = [
-      { kind: 'key', key: '10 / 0', members: ['stage', 'stage_index'] },
+      { kind: 'key', key: '10 / 3', members: ['stage', 'stage_index'] },
       { kind: 'member', name: 'script_name' },
     ];
     expect(setAtPath(fragments, path, 'Renamed')).toEqual([
       { stage: 5, stage_index: 1, script_name: 'Five' },
-      { stage: 10, stage_index: 0, script_name: 'Renamed' },
+      { stage: 10, stage_index: 3, script_name: 'Renamed' },
     ]);
   });
 

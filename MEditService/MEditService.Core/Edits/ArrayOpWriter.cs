@@ -62,22 +62,26 @@ internal static class ArrayOpWriter
         var currentJson = col.Extract(record) as string;
         JsonNode root;
         if (currentJson != null) root = JsonNode.Parse(currentJson)!;
-        else if (arrayPath.Count > 0 && arrayPath[0].Kind == "member") root = new JsonObject();
+        else if (arrayPath.Count > 0 && arrayPath[0] is MemberSegment) root = new JsonObject();
         else root = new JsonArray();
 
-        if (ResolveOrCreate(root, arrayPath) is not { } array)
-            return FieldApplyOutcome.ValueShapeMismatch;
+        // The walk carries the schema alongside the value, so a hop's meaning comes from the
+        // record's own metadata rather than from the envelope: a key hop's key members are the
+        // array's declared ones, and a key hop into an array the schema does not key is refused.
+        var (array, arrayMeta) = ResolveOrCreate(root, arrayPath, col.ToFieldMetadata());
+        if (array == null) return FieldApplyOutcome.ValueShapeMismatch;
 
         // The element hop is resolved against the array it was just walked to, never before it: a
         // key names an element, and where that element sits is a fact about this record's own array.
-        var index = isAdd ? -1 : ElementIndex(array, path[^1]);
+        var index = isAdd ? 0 : path[^1].IndexIn(array, arrayMeta);
+        if (index == null) return FieldApplyOutcome.ValueShapeMismatch;
 
         var changed = opName switch
         {
-            "array_remove" => TryRemove(array, index),
-            "array_move_up" => TryMove(array, index, -1),
-            "array_move_down" => TryMove(array, index, 1),
-            "array_add" => TryAppend(array, ResolveElementMeta(col, arrayPath)),
+            "array_remove" => TryRemove(array, index.Value),
+            "array_move_up" => TryMove(array, index.Value, -1),
+            "array_move_down" => TryMove(array, index.Value, 1),
+            "array_add" => TryAppend(array, arrayMeta?.ElementType),
             _ => false,
         };
         if (!changed) return FieldApplyOutcome.NoOp;
@@ -103,121 +107,126 @@ internal static class ArrayOpWriter
     // ── path segments ("member"/"index"/"key" — a pure-FormLink array offers no array op at all,
     // so no "sortKey" hop reaches here; see recordUtils.ts's own PathSegment doc comment) ─────────
 
-    private sealed record PathSegment(string Kind, string? Name, int? Index, string? Key, IReadOnlyList<string>? Members);
-
-    private static List<PathSegment>? ParsePath(JsonElement pathEl)
+    /// <summary>Where this hop's element sits in the array it is resolved against, or null when the
+    /// hop names no element there at all: a member hop, or a key hop into an array the schema does
+    /// not key. A key no element in that array carries answers -1, which every mutation below reads
+    /// as "nothing to do" the same way an out-of-range index does.</summary>
+    private interface IPathSegment
     {
-        var result = new List<PathSegment>();
+        int? IndexIn(JsonArray array, FieldMetadata? arrayMeta);
+    }
+
+    private sealed record MemberSegment(string Name) : IPathSegment
+    {
+        public int? IndexIn(JsonArray array, FieldMetadata? arrayMeta) => null;
+    }
+
+    private sealed record IndexSegment(int Index) : IPathSegment
+    {
+        public int? IndexIn(JsonArray array, FieldMetadata? arrayMeta) => Index;
+    }
+
+    /// <summary>A keyed array's element, named by its key. The key members that key is read against
+    /// are the array's own declared ones, never the envelope's — the envelope carries them for the
+    /// webview's sake (recordUtils.ts resolves the same hop with no schema in scope) and this side
+    /// reads its own schema.</summary>
+    private sealed record KeySegment(string Key) : IPathSegment
+    {
+        public int? IndexIn(JsonArray array, FieldMetadata? arrayMeta) =>
+            arrayMeta?.KeyMembers is { } members ? IndexOf(array, members) : null;
+
+        private int IndexOf(JsonArray array, IReadOnlyList<string> members)
+        {
+            for (var i = 0; i < array.Count; i++)
+            {
+                if (string.Equals(ElementKey.Of(array[i], members).Text, Key, StringComparison.Ordinal)) return i;
+            }
+            return -1;
+        }
+    }
+
+    private static List<IPathSegment>? ParsePath(JsonElement pathEl)
+    {
+        var result = new List<IPathSegment>();
         foreach (var seg in pathEl.EnumerateArray())
         {
             if (!seg.TryGetProperty("kind", out var kindEl) || kindEl.ValueKind != JsonValueKind.String)
                 return null;
             var kind = kindEl.GetString()!;
             if (kind == "member" && seg.TryGetProperty("name", out var nameEl) && nameEl.ValueKind == JsonValueKind.String)
-                result.Add(new PathSegment("member", nameEl.GetString(), null, null, null));
+                result.Add(new MemberSegment(nameEl.GetString()!));
             else if (kind == "index" && seg.TryGetProperty("index", out var idxEl) && idxEl.ValueKind == JsonValueKind.Number)
-                result.Add(new PathSegment("index", null, idxEl.GetInt32(), null, null));
-            else if (kind == "key" && ParseKeyMembers(seg) is { } members
-                     && seg.TryGetProperty("key", out var keyEl) && keyEl.ValueKind == JsonValueKind.String)
-                result.Add(new PathSegment("key", null, null, keyEl.GetString(), members));
+                result.Add(new IndexSegment(idxEl.GetInt32()));
+            else if (kind == "key" && seg.TryGetProperty("key", out var keyEl) && keyEl.ValueKind == JsonValueKind.String)
+                result.Add(new KeySegment(keyEl.GetString()!));
             else
                 return null;
         }
         return result;
     }
 
-    private static List<string>? ParseKeyMembers(JsonElement seg)
+    // Walks `path` from `node` down to the target array and its schema together, treating an absent
+    // (or explicitly null) hop at any depth as "nothing here yet" rather than a shape mismatch: a
+    // struct member, or a struct-nested array, that was never populated defaults to an empty
+    // container the same way an unset top-level array column does, so remove/move correctly answer
+    // NoOp against it (nothing to remove/move from a freshly-built empty array either) and add
+    // correctly starts a fresh list. Every synthesized container is attached back onto its own
+    // parent as it's created — a value built but never attached would vanish the moment `root` is
+    // re-serialized, which a node returned in isolation (e.g. `new JsonArray()`, unattached) cannot
+    // guarantee. `root` itself is never null (the caller seeds it to match the first hop before
+    // calling this), so there is always somewhere real to attach into. A hop that *is* present but
+    // of the wrong shape (an element hop into an object, a member hop into an array, or a final
+    // value that is neither an array nor an absence) is a genuine mismatch and answers a null array.
+    //
+    // The schema travels alongside the value rather than in a pass of its own, because the key hop
+    // needs both at the same depth: which element a key names is read off the value, and which
+    // members that key is are read off the schema.
+    private static (JsonArray? Array, FieldMetadata? Meta) ResolveOrCreate(
+        JsonNode root, IReadOnlyList<IPathSegment> path, FieldMetadata? rootMeta)
     {
-        if (!seg.TryGetProperty("members", out var membersEl) || membersEl.ValueKind != JsonValueKind.Array) return null;
-        var members = new List<string>();
-        foreach (var member in membersEl.EnumerateArray())
-        {
-            if (member.ValueKind != JsonValueKind.String) return null;
-            members.Add(member.GetString()!);
-        }
-        return members.Count > 0 ? members : null;
-    }
-
-    // Where the final hop's element sits in the array it was resolved against — its own position for
-    // an "index" hop, and for a "key" hop wherever this array holds the element that key names.
-    // A key no element here carries answers -1, which every mutation below already reads as
-    // "nothing to do" the same way an out-of-range index does.
-    private static int ElementIndex(JsonArray array, PathSegment seg) => seg switch
-    {
-        { Kind: "index", Index: { } i } => i,
-        { Kind: "key", Key: { } key, Members: { } members } => IndexOfKey(array, key, members),
-        _ => -1,
-    };
-
-    private static int IndexOfKey(JsonArray array, string key, IReadOnlyList<string> members)
-    {
-        for (var i = 0; i < array.Count; i++)
-        {
-            if (string.Equals(ElementKey.Of(array[i], members).Text, key, StringComparison.Ordinal)) return i;
-        }
-        return -1;
-    }
-
-    // Walks `path` from `node` down to the target array, treating an absent (or explicitly null)
-    // hop at any depth as "nothing here yet" rather than a shape mismatch: a struct member, or a
-    // struct-nested array, that was never populated defaults to an empty container the same way an
-    // unset top-level array column does, so remove/move correctly answer NoOp against it (nothing to
-    // remove/move from a freshly-built empty array either) and add correctly starts a fresh list.
-    // Every synthesized container is attached back onto its own parent as it's created — a value
-    // built but never attached would vanish the moment `root` is re-serialized, which a node
-    // returned in isolation (e.g. `new JsonArray()`, unattached) cannot guarantee. `root` itself is
-    // never null (the caller seeds it to match the first hop before calling this), so there is
-    // always somewhere real to attach into. A hop that *is* present but of the wrong shape (an index
-    // hop into an object, a member hop into an array, or a final value that is neither an array nor
-    // an absence) is a genuine mismatch and returns null.
-    private static JsonArray? ResolveOrCreate(JsonNode root, IReadOnlyList<PathSegment> path)
-    {
-        JsonNode current = root;
+        JsonNode? current = root;
+        var meta = rootMeta;
         for (var i = 0; i < path.Count; i++)
         {
-            var seg = path[i];
             // What the *next* hop (or the final array target, if this is the last one) needs this
             // position to be — an object if the next hop reads a member off it, an array otherwise.
             JsonNode NextContainer() =>
-                i + 1 < path.Count && path[i + 1].Kind == "member" ? new JsonObject() : new JsonArray();
+                i + 1 < path.Count && path[i + 1] is MemberSegment ? new JsonObject() : new JsonArray();
 
-            if (seg.Kind == "member")
-            {
-                if (current is not JsonObject obj) return null;
-                var child = obj.TryGetPropertyValue(seg.Name!, out var v) ? v : null;
-                if (child == null) { child = NextContainer(); obj[seg.Name!] = child; }
-                current = child;
-            }
-            else if (seg.Kind != "member" && current is JsonArray arr && ElementIndex(arr, seg) is var idx
-                     && idx >= 0 && idx < arr.Count)
-            {
-                var child = arr[idx];
-                if (child == null) { child = NextContainer(); arr[idx] = child; }
-                current = child;
-            }
-            else
-            {
-                return null; // hop doesn't match the shape actually there, or names an index (or a
-                             // key) no element there answers to (an absent array *element* is never
-                             // synthesized — only a struct member or a nested array/struct value is)
-            }
+            current = StepInto(current, path[i], meta, NextContainer);
+            if (current == null) return (null, null);
+            meta = path[i] is MemberSegment member
+                ? meta?.Fields?.FirstOrDefault(f => f.Name == member.Name)
+                : meta?.ElementType;
         }
-        return current as JsonArray;
+        return (current as JsonArray, meta);
     }
 
-    // The array's own FieldMetadata (for 'array_add's default element) — walked the same two hops
-    // (member -> .Fields, index -> .ElementType) recordUtils.ts's own metaAtPath always used,
-    // starting from the column's own reflected metadata rather than the array's current *value*
-    // (an empty array has no element to inspect, but still has an element schema).
-    private static FieldMetadata? ResolveElementMeta(ColumnSpec col, IReadOnlyList<PathSegment> arrayPath)
+    // One hop of the walk above: the child this segment names, synthesized and attached when the hop
+    // is a struct member nothing has populated yet. Null where the hop names a shape that isn't
+    // there — an element hop into an object, a member hop into an array, or an element no array here
+    // answers to (an absent array *element* is never synthesized, only a struct member or a nested
+    // array/struct value is).
+    private static JsonNode? StepInto(
+        JsonNode? current, IPathSegment seg, FieldMetadata? meta, Func<JsonNode> nextContainer)
     {
-        FieldMetadata? cur = col.ToFieldMetadata();
-        foreach (var seg in arrayPath)
+        if (seg is MemberSegment member)
         {
-            if (cur == null) return null;
-            cur = seg.Kind == "member" ? cur.Fields?.FirstOrDefault(f => f.Name == seg.Name) : cur.ElementType;
+            if (current is not JsonObject obj) return null;
+            var child = obj.TryGetPropertyValue(member.Name, out var v) ? v : null;
+            if (child == null) { child = nextContainer(); obj[member.Name] = child; }
+            return child;
         }
-        return cur?.ElementType;
+
+        if (current is not JsonArray array || seg.IndexIn(array, meta) is not { } index
+            || index < 0 || index >= array.Count)
+        {
+            return null;
+        }
+
+        var element = array[index];
+        if (element == null) { element = nextContainer(); array[index] = element; }
+        return element;
     }
 
     // ── mutation ─────────────────────────────────────────────────────────────

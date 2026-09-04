@@ -549,6 +549,52 @@ public sealed class VmadEditTests : IDisposable
         Assert.Equal(before, _fixture.Body(_fixture.Npc));
     }
 
+    /// <summary>A move names its element by key like every other op, and the grammar resolves it —
+    /// but a keyed array is stored in key order on every write (<c>Edits.KeyedArrays</c>), so the
+    /// order the file ends up in is its key order regardless. Which is why the record editor offers
+    /// no Move on a keyed array's element at all (<c>recordUtils.ts</c>'s own
+    /// <c>arrayElementContext</c>).</summary>
+    [Fact]
+    public void MovingAKeyedElement_IsResolvedAndLeavesTheArrayInKeyOrder()
+    {
+        _fixture.Normalize(_fixture.Npc);
+        var before = _fixture.Body(_fixture.Npc);
+
+        var result = Edit(_fixture.Npc, new JsonObject
+        {
+            ["op"] = "array_move_down",
+            ["path"] = new JsonArray(MemberHop("scripts"), KeyHop("Alpha", "name")),
+        });
+
+        Assert.True(result.Applied, result.Message);
+        Assert.Equal(["Alpha", "Beta"], WrittenScriptNames(_fixture.Body(_fixture.Npc)));
+        Assert.Equal(before, _fixture.Body(_fixture.Npc));
+    }
+
+    /// <summary>Which members a key is read against comes from the record's own schema, never from
+    /// the envelope: a key hop naming an array the schema does not key means nothing here, and is
+    /// refused rather than resolved against whatever the payload claimed. A script's own
+    /// <c>data_string_array</c> is a plain positional list of strings.</summary>
+    [Fact]
+    public void AKeyHopIntoAnArrayTheSchemaDoesNotKey_IsRefusedAndWritesNothing()
+    {
+        _fixture.Normalize(_fixture.Npc);
+        var before = _fixture.Body(_fixture.Npc);
+
+        var result = Edit(_fixture.Npc, new JsonObject
+        {
+            ["op"] = "array_remove",
+            ["path"] = new JsonArray(
+                MemberHop("scripts"), KeyHop("Alpha", "name"),
+                MemberHop("properties"), KeyHop("Tags", "name"),
+                MemberHop("data_string_array"), KeyHop("b", "name")),
+        });
+
+        Assert.False(result.Applied);
+        Assert.Equal(RecordEditRefusal.FieldValueShapeMismatch, result.Refusal);
+        Assert.Equal(before, _fixture.Body(_fixture.Npc));
+    }
+
     /// <summary>A key nothing in this array carries is nothing to remove — the same no-op answer an
     /// out-of-range index already gets (<c>ArrayOpEditTests</c>), and never a write aimed somewhere
     /// else.</summary>

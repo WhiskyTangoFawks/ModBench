@@ -8,8 +8,8 @@ import { displayValue, flagBits, modelValue } from './modelValue';
 import { copyToClipboard } from './nativeBridge';
 import { baseCell, toggleBtnStyle, getCellStyle, focusedRowStyle, DIMMED_OPACITY } from './gridStyles';
 import {
-  arrayElementContext, arrayParentContext, combineVscodeContexts,
-  stringValueContext, type Column, type PathSegment,
+  arrayElementContext, arrayParentContext, combineVscodeContexts, isArrayElementHop,
+  isMovableElementHop, offersArrayAdd, stringValueContext, type Column, type PathSegment,
 } from './recordUtils';
 import type { ColumnKey, CompareOverride, ConflictAll, FieldDiff, FieldMetadata, FormKeyResolution } from './types';
 
@@ -233,15 +233,13 @@ export function DiffRow({
   // (path.length === 0 is vacuously true; a single array-index or sortKey hop, or
   // one anywhere in a longer chain, turns it off).
   const showActions = context.path.every(seg => seg.kind === 'member');
-  // This row is itself a mutable array's own row (Add applies) or one of its element rows
-  // (Remove applies) — a pure-FormLink (wbArrayS) array offers neither, per the spec's own
-  // "absent, not disabled" rule for them.
-  const isUnsortedArrayParentRow = meta.type === 'array' && !!meta.elementType && !meta.elementType.isSortable;
+  // Which array gestures this row offers — its own array's row (Add) or one of its element rows
+  // (Remove, and Move where the element's position is the user's to choose). One rule, named in
+  // recordUtils.ts, that RecordPanel's own handler wiring reads too.
+  const isArrayParentRow = offersArrayAdd(meta);
   const lastPathSegment = context.path[context.path.length - 1];
-  const isArrayElementRow = lastPathSegment?.kind === 'index' || lastPathSegment?.kind === 'key';
-  // Move Up/Move Down apply to a positional element only: a keyed array is stored in key order on
-  // every write (Edits/KeyedArrays.cs), so a move there could not change the file.
-  const isMovableElementRow = lastPathSegment?.kind === 'index';
+  const isArrayElementRow = isArrayElementHop(lastPathSegment);
+  const isMovableElementRow = isMovableElementHop(lastPathSegment);
   const isRowFocused = focusedCell?.rowKey === rowKey;
   // This row paints its own node's bottom-up conflict state, not a record-wide value
   // smeared onto every row. A struct/array row with children defers to its own children's tints
@@ -328,9 +326,9 @@ export function DiffRow({
           // real length the way canMoveUp already does via `index > 0`; the underlying op still
           // safely no-ops at the true boundary (ArrayOpWriter answers a move past either end
           // as a NoOp that commits nothing).
-          const arrayEditable = !!onEditCell && editableColumns.has(key) && (isUnsortedArrayParentRow || isArrayElementRow);
+          const arrayEditable = !!onEditCell && editableColumns.has(key) && (isArrayParentRow || isArrayElementRow);
           const arrayOps = arrayEditable ? {
-            add: isUnsortedArrayParentRow ? () => onArrayAdd?.(key) : undefined,
+            add: isArrayParentRow ? () => onArrayAdd?.(key) : undefined,
             remove: isArrayElementRow ? () => onArrayRemove?.(key) : undefined,
             moveUp: isMovableElementRow ? () => onArrayMoveUp?.(key) : undefined,
             moveDown: isMovableElementRow ? () => onArrayMoveDown?.(key) : undefined,
@@ -348,7 +346,7 @@ export function DiffRow({
           const vscodeContext = (arrayEditable || meta.type === 'string') ? combineVscodeContexts(
             // `context.path` addresses the array itself here (this row *is* the array) —
             // `[]` for a top-level array.
-            isUnsortedArrayParentRow
+            isArrayParentRow
               ? arrayParentContext(col.override.formKey, col.override.plugin, col.override.origin, rootField, context.path)
               : undefined,
             // `context.path` addresses this row's own element (ends in the `index`/`key` hop that

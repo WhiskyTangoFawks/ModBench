@@ -82,12 +82,9 @@ export function parseElementIndex(fieldName: string): number {
 
 // One keyed element's key, read the way the backend reads it (Queries/ElementKey.cs): each member
 // named by the annotation — a dotted name is a walk into the element's own sub-struct — rendered as
-// text and joined with " / ". An absent or null member reads as the empty string, and a key that is
-// empty throughout is a real key: it is exactly what a freshly added element carries until the user
-// names it (#710).
-//
-// Both sides must render one element to the same text, since the backend's own key text is what
-// labels the row this key comes from. The shapes a key member can hold are string, number and bool.
+// text and joined with " / ". The backend's text is what labels the row a key comes from, so the two
+// renderings are one contract, asserted case-for-case on both sides (ElementKeyTextTests.cs and this
+// module's own tests share one table).
 export function elementKeyText(element: unknown, members: readonly string[]): string {
   return members.map(member => memberKeyText(element, member)).join(' / ');
 }
@@ -111,6 +108,35 @@ export function keyedElementIndex(list: readonly unknown[], seg: KeySegment): nu
 }
 
 type KeySegment = Extract<PathSegment, { kind: 'key' }>;
+
+// Which array gestures a row's last hop confers, named once here because four surfaces ask it —
+// RecordPanel wiring the handlers, DiffRow gating the cell's own menu, arrayElementContext gating
+// the native one, and buildRows deciding what a row even is.
+//
+// A keyed array is stored in key order on every write (Edits/KeyedArrays.cs), so no Move there could
+// change the file; a pure-FormLink array's order is its sort key, so it offers nothing at all.
+export function isArrayElementHop(seg: PathSegment | undefined): boolean {
+  return seg?.kind === 'index' || seg?.kind === 'key';
+}
+
+export function isMovableElementHop(seg: PathSegment | undefined): boolean {
+  return seg?.kind === 'index';
+}
+
+// The counterpart for the array's own row: Add applies to any array whose elements are not
+// themselves the value (a keyed array included — a new element starts with the empty key, #710).
+export function offersArrayAdd(meta: FieldMetadata | undefined): boolean {
+  return meta?.type === 'array' && !!meta.elementType && !meta.elementType.isSortable;
+}
+
+// How the backend labelled an array's child is what says how to address it, since both answers come
+// from the same array metadata: a keyed array's children are named by key (ConflictClassifier's
+// BuildKeyed), a pure-FormLink array's by the element value, and every other array's by "[N]".
+export function elementSegment(arrayMeta: FieldMetadata, fieldName: string): PathSegment {
+  if (arrayMeta.keyMembers) return { kind: 'key', key: fieldName, members: arrayMeta.keyMembers };
+  if (arrayMeta.elementType?.isSortable) return { kind: 'sortKey', key: fieldName };
+  return { kind: 'index', index: parseElementIndex(fieldName) };
+}
 
 // The one definition of "does this plugin's own array actually have an element at this index" — a
 // row's index comes from the union-aligned tree across every plugin's column (an array with
@@ -157,17 +183,14 @@ export function arrayElementContext(
 ): ArrayElementContext {
   const lastSeg = path[path.length - 1];
   const index = lastSeg?.kind === 'index' ? lastSeg.index : -1;
-  // A keyed array's order is its key order, restored on every write (Edits/KeyedArrays.cs), so a
-  // Move there could not change the file whatever it targeted — the element's position is not the
-  // user's to choose. Remove still applies, which is why the row carries this context at all.
-  const positional = lastSeg?.kind === 'index';
+  const movable = isMovableElementHop(lastSeg);
   return {
     webviewSection: 'arrayElement', formKey, plugin, origin, rootField, path,
     // `canMoveUp` must also check hasElementAt (this plugin's own real length), or
     // the menu offers Move Up on a row this plugin doesn't have an element in at all — canMoveDown
     // doesn't need the same explicit check since index < arrayLength - 1 already implies it.
-    canMoveUp: positional && index > 0 && hasElementAt(arrayLength, index),
-    canMoveDown: positional && index < arrayLength - 1,
+    canMoveUp: movable && index > 0 && hasElementAt(arrayLength, index),
+    canMoveDown: movable && index < arrayLength - 1,
     preventDefaultContextMenuItems: true,
   };
 }
@@ -248,7 +271,8 @@ export function getAtPath(root: unknown, path: readonly PathSegment[]): unknown 
     if (seg.kind === 'member') cur = (cur as Record<string, unknown> | undefined)?.[seg.name];
     else if (seg.kind === 'index') cur = Array.isArray(cur) ? (cur as unknown[])[seg.index] : undefined;
     else if (seg.kind === 'key') cur = Array.isArray(cur) ? cur[keyedElementIndex(cur, seg)] : undefined;
-    else cur = seg.key;
+    // sortKey: the element is its own value, so the key is what is there — where the array holds it.
+    else cur = Array.isArray(cur) && cur.includes(seg.key) ? seg.key : undefined;
   }
   return cur;
 }
