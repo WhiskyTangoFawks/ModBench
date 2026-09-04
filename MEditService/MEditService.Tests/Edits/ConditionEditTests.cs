@@ -117,6 +117,54 @@ public sealed class ConditionEditTests : IDisposable
             DocumentDiff(before, _fixture.Body(_fixture.Cobj)));
     }
 
+    // ── the function cascade the editor posts (#693) ─────────────────────────
+
+    /// <summary>
+    /// The exact payload the editor posts when the function changes: the new function, and every
+    /// parameter slot the new function does not use emptied. The clear is not cosmetic —
+    /// <c>ConditionBinaryWriteTranslation.CustomStringExports</c> writes a CIS1/CIS2 subrecord for
+    /// any non-null <c>ParameterOneString</c>/<c>ParameterTwoString</c> without consulting the
+    /// function, so a string left behind by a function change reaches the plugin.
+    ///
+    /// <para>"Emptied" is per member type, and that is the whole reason this test exists on this
+    /// side: a nullable member takes null, but <c>ParameterOneNumber</c>/<c>ParameterTwoNumber</c>
+    /// are plain <c>Int32</c>, and a JSON null into a non-nullable column is rejected — which fails
+    /// the <em>whole</em> array write, so a payload that nulled them would land nothing at all and
+    /// the stale string would survive. The webview builds this same envelope
+    /// (ConditionPresentation.test.tsx asserts its shape); this is the half that proves it
+    /// applies.</para>
+    /// </summary>
+    [Fact]
+    public void ChangingTheFunction_ClearsTheSlotsTheNewFunctionDoesNotUse()
+    {
+        var seed = _fixture.Field(_fixture.Cobj, "conditions");
+        seed[0]!["data"]!["parameter_one_string"] = "bAllowRotation";
+        var seeded = _fixture.Service().EditField(
+            _fixture.Plugin, _fixture.Cobj.ToString(), "conditions", Json(seed.ToJsonString()));
+        Assert.True(seeded.Applied, seeded.Message);
+        Assert.Equal(
+            "bAllowRotation",
+            JsonNode.Parse(_fixture.Body(_fixture.Cobj))!["Conditions"]![0]!["Data"]!["ParameterOneString"]!.GetValue<string>());
+
+        var value = _fixture.Field(_fixture.Cobj, "conditions");
+        var data = value[0]!["data"]!;
+        // HasKeyword uses parameter_one_record alone, so every other slot is idled by the change.
+        data["function"] = nameof(Condition.Function.HasKeyword);
+        data["parameter_one_number"] = 0;
+        data["parameter_one_string"] = null;
+        data["parameter_two_record"] = null;
+        data["parameter_two_number"] = 0;
+        data["parameter_two_string"] = null;
+
+        var result = _fixture.Service().EditField(
+            _fixture.Plugin, _fixture.Cobj.ToString(), "conditions", Json(value.ToJsonString()));
+
+        Assert.True(result.Applied, result.Message);
+        var after = JsonNode.Parse(_fixture.Body(_fixture.Cobj))!["Conditions"]![0]!["Data"]!;
+        Assert.Null(after["ParameterOneString"]);
+        Assert.Equal(nameof(Condition.Function.HasKeyword), after["Function"]!.GetValue<string>());
+    }
+
     // ── array arity and order ────────────────────────────────────────────────
 
     /// <summary>#710: a new element carries its discriminator, set to the first leaf the schema

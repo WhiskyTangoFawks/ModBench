@@ -219,9 +219,9 @@ interface DiffRowProps {
   onArrayMoveDown?: (plugin: ColumnKey) => void;
   // #693: what each column's cell reads while this row is collapsed, when the presentation table
   // (presentation.ts) has an entry for this row's own schema leaf — a condition reads as the xEdit
-  // prose a modder already knows instead of "{…}". Absent for every row the table says nothing
-  // about, which is all of them but one leaf family. RecordPanel computes it, since only its row
-  // builder holds the subtree root this row's own list length comes from.
+  // prose a modder already knows instead of "{…}". Absent for a row that is not an array element,
+  // and empty for an element whose leaf the table says nothing about. Supplied by the frame that
+  // descended into this row's own list, which is the only one that knows it.
   collapsedSummary?: Record<string, string>;
 }
 

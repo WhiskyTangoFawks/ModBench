@@ -311,6 +311,31 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
   // ArrayOfStruct's 'struct' — the fourth shape nobody enumerates next stays safe on the client-side
   // carve-out by construction, not by remembering to add it to an exclusion list). `index` alone (no
   // path) is enough because a Papyrus scalar array cannot nest.
+  const fieldMetaMap = useMemo((): Record<string, FieldMetadata> => {
+    const map: Record<string, FieldMetadata> = {};
+    for (const o of result?.overrides ?? []) {
+      for (const fv of o.fields) {
+        if (!map[fv.metadata.name]) map[fv.metadata.name] = fv.metadata;
+      }
+    }
+    Object.assign(map, vmadTree.metaMap);
+    // ADR-0038: the header record's masters field displays but is never directly editable —
+    // stamped readOnly here (the same per-row override DiffRow already honors for VMAD's
+    // synthesized Flags row) rather than gated a second way, so every
+    // consumer of this map — the array-parent "Add" affordance and each element's own Remove/Move
+    // Up/Move Down, both otherwise wired generically for any array field — sees exactly one
+    // answer. Stamped on the element type too: array-op availability for an *element* row is
+    // computed from that row's own meta (the element schema), not the parent's.
+    const mastersMeta = map.masters;
+    if (isHeaderRecord && mastersMeta) {
+      map.masters = {
+        ...mastersMeta, readOnly: true,
+        elementType: mastersMeta.elementType ? { ...mastersMeta.elementType, readOnly: true } : mastersMeta.elementType,
+      };
+    }
+    return map;
+  }, [result, vmadTree, isHeaderRecord]);
+
   const handleArrayOp = useCallback((
     plugin: ColumnKey, path: PathSegment[], rootField: string,
     op: ArrayOpKind, elementMeta?: FieldMetadata,
@@ -344,23 +369,22 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
   // root (an ordinary top-level field, a VMAD property) *is* the value it writes,
   // so its commit stays the bare value.
   //
-  // `meta` is the edited leaf's own schema, and is consulted for one thing: a member that declares
-  // which of its siblings its value keeps in use (FieldMetadata.siblingsInUse) carries a cascade,
-  // and this is where the element is assembled, so this is where the cascade applies. Without it a
-  // Fallout 4 condition keeps the parameter slots its old function used — and Condition's own
-  // string exports write a CIS1/CIS2 subrecord for any non-null parameter string whatever the
-  // function is, so the stale slot reaches the plugin.
+  // A member that declares which of its siblings its value keeps in use
+  // (FieldMetadata.siblingsInUse) carries a cascade, and this is where the element is assembled, so
+  // this is where the cascade applies — for every write path, the inline editor and the extended
+  // one alike, since both come through here. The edited member's own schema is derived from the
+  // path rather than passed in, so no caller can forget to.
   const handleCellCommit = useCallback((
     plugin: ColumnKey, path: PathSegment[], rootField: string, rootDiff: FieldDiff, value: unknown,
-    meta?: FieldMetadata,
   ) => {
-    let next = path.length === 0 ? value : setAtPath(rootDiff.values[plugin], path, value);
-    if (meta?.siblingsInUse && path.length > 0) {
-      const owner = path.slice(0, -1);
-      next = setAtPath(next, owner, clearIdleSiblings(meta, getAtPath(next, owner)));
-    }
-    handleEditCell(plugin, rootField, next);
-  }, [handleEditCell]);
+    const next = path.length === 0 ? value : setAtPath(rootDiff.values[plugin], path, value);
+    const meta = metaAtPath(fieldMetaMap[rootField], path);
+    const owner = path.slice(0, -1);
+    const ownerMeta = metaAtPath(fieldMetaMap[rootField], owner);
+    handleEditCell(plugin, rootField, meta?.siblingsInUse && path.length > 0
+      ? setAtPath(next, owner, clearIdleSiblings(meta, ownerMeta?.fields ?? [], getAtPath(next, owner)))
+      : next);
+  }, [handleEditCell, fieldMetaMap]);
 
   // ADR-0039: a string cell's value, opened in a real editor tab.
   // Reached only from the cell's right-click menu (FIELD_OPEN_EXTENDED_EDITOR's own listener
@@ -402,31 +426,6 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
       (v: string) => { if (rootDiff) handleCellCommit(plugin, path, rootField, rootDiff, v); },
     );
   }, [result, vmadTree, formKey, handleCellCommit]);
-
-  const fieldMetaMap = useMemo((): Record<string, FieldMetadata> => {
-    const map: Record<string, FieldMetadata> = {};
-    for (const o of result?.overrides ?? []) {
-      for (const fv of o.fields) {
-        if (!map[fv.metadata.name]) map[fv.metadata.name] = fv.metadata;
-      }
-    }
-    Object.assign(map, vmadTree.metaMap);
-    // ADR-0038: the header record's masters field displays but is never directly editable —
-    // stamped readOnly here (the same per-row override DiffRow already honors for VMAD's
-    // synthesized Flags row) rather than gated a second way, so every
-    // consumer of this map — the array-parent "Add" affordance and each element's own Remove/Move
-    // Up/Move Down, both otherwise wired generically for any array field — sees exactly one
-    // answer. Stamped on the element type too: array-op availability for an *element* row is
-    // computed from that row's own meta (the element schema), not the parent's.
-    const mastersMeta = map.masters;
-    if (isHeaderRecord && mastersMeta) {
-      map.masters = {
-        ...mastersMeta, readOnly: true,
-        elementType: mastersMeta.elementType ? { ...mastersMeta.elementType, readOnly: true } : mastersMeta.elementType,
-      };
-    }
-    return map;
-  }, [result, vmadTree, isHeaderRecord]);
 
   // Listen for loadRecord messages from the extension (panel reuse), the load order's own
   // conflicts-computed signal, and the array-op right-click commands — the
@@ -582,21 +581,12 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
   function buildRows(
     diff: FieldDiff, meta: FieldMetadata | undefined, path: PathSegment[],
     rootField: string, rootDiff: FieldDiff, rowKey: string, isUnsortedArrayElement = false, depth = 0,
+    collapsedSummary?: Record<string, string>,
   ): React.ReactNode[] {
     const hasChildren = (diff.children?.length ?? 0) > 0;
     const isExpanded = expandedStructs.has(rowKey);
     // This row is itself a mutable, unsorted array's own row (Add applies).
     const isUnsortedArrayParent = meta?.type === 'array' && !!meta.elementType && !meta.elementType.isSortable;
-    // Only an array element can read as a summary — the presentation table's own unit is one
-    // element of a list, and "is this the last one" is a question about the list it sits in, which
-    // this builder can answer per column and the row itself cannot.
-    const elementSeg = path.at(-1);
-    const collapsedSummary = meta && elementSeg?.kind === 'index'
-      ? collapsedSummaries(diff, meta, column => {
-          const list = getAtPath(rootDiff.values[column], path.slice(0, -1));
-          return !Array.isArray(list) || elementSeg.index === list.length - 1;
-        })
-      : undefined;
 
     const rows: React.ReactNode[] = [
       <DiffRow
@@ -607,7 +597,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
         fieldMetaMap={fieldMetaMap}
         notInLoadOrderSet={notInLoadOrderSet}
         editableColumns={editableColumns}
-        onEditCell={(plugin: ColumnKey, value: unknown) => handleCellCommit(plugin, path, rootField, rootDiff, value, meta)}
+        onEditCell={(plugin: ColumnKey, value: unknown) => handleCellCommit(plugin, path, rootField, rootDiff, value)}
         onArrayAdd={isUnsortedArrayParent ? (plugin: ColumnKey) => handleArrayOp(plugin, path, rootField, 'add', meta?.elementType ?? undefined) : undefined}
         onArrayRemove={isUnsortedArrayElement ? (plugin: ColumnKey) => handleArrayOp(plugin, path, rootField, 'remove', meta) : undefined}
         onArrayMoveUp={isUnsortedArrayElement ? (plugin: ColumnKey) => handleArrayOp(plugin, path, rootField, 'moveUp', meta) : undefined}
@@ -641,7 +631,8 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
       if (idle?.has(child.fieldName)) continue;
       const childRowKey = `${rowKey}.${child.fieldName}`;
       if (meta.type === 'array' && meta.elementType) {
-        rows.push(...buildArrayElementRows(child, meta.elementType, path, rootField, rootDiff, childRowKey, depth));
+        rows.push(...buildArrayElementRows(
+          child, meta.elementType, path, rootField, rootDiff, childRowKey, depth, diff.values));
       } else if (meta.type === 'struct') {
         const memberMeta = meta.fields?.find(f => f.name === child.fieldName);
         const sub = subtreeFor(child, { kind: 'member', name: child.fieldName }, path, rootField, rootDiff);
@@ -653,12 +644,21 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
 
   function buildArrayElementRows(
     child: FieldDiff, elementMeta: FieldMetadata, arrayPath: PathSegment[], rootField: string, rootDiff: FieldDiff,
-    childRowKey: string, depth: number,
+    childRowKey: string, depth: number, listValues: Record<string, unknown>,
   ): React.ReactNode[] {
     const seg: PathSegment = elementMeta.isSortable
       ? { kind: 'sortKey', key: child.fieldName }
       : { kind: 'index', index: parseElementIndex(child.fieldName) };
-    return buildRows(child, elementMeta, [...arrayPath, seg], rootField, rootDiff, childRowKey, !elementMeta.isSortable, depth + 1);
+    // The presentation table's unit is one element of a list, and "is this the last one" is a
+    // question about the list — which only this frame, the one that descended into it, can answer.
+    // Same rule `isUnsortedArrayElement` already follows: a row is never told by itself.
+    const collapsedSummary = collapsedSummaries(child, elementMeta, column => {
+      const list = listValues[column];
+      return !Array.isArray(list) || seg.kind !== 'index' || seg.index === list.length - 1;
+    });
+    return buildRows(
+      child, elementMeta, [...arrayPath, seg], rootField, rootDiff, childRowKey,
+      !elementMeta.isSortable, depth + 1, collapsedSummary);
   }
 
   return (

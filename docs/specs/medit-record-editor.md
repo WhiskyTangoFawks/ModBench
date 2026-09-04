@@ -844,11 +844,21 @@ The editor reads the same map, for the same two halves, over metadata alone — 
   member *any* column puts in use is kept, so a losing override's own data is never hidden; a member
   no value ever names (`Unknown3`, xEdit's Parameter #3, written whatever the function is) is not
   governed at all and always shows. Filtering only ever removes a row the diff already has.
-- **A change to a governing member clears what it idles.** The cascade applies where the element is
-  assembled for commit, so the posted edit carries the cleared siblings. This is not cosmetic:
+- **A change to a governing member empties what it idles.** The cascade applies where the element
+  is assembled for commit, so the posted edit carries the emptied siblings. This is not cosmetic:
   `ConditionBinaryWriteTranslation.CustomStringExports` writes a CIS1/CIS2 subrecord for any
   non-null `ParameterOneString`/`ParameterTwoString` without consulting the function, so a string
-  left behind by a function change reaches the plugin.
+  left behind by a function change reaches the plugin. "Emptied" is **per member type** — null for a
+  nullable member, the type's own zero for one the format always writes — because a JSON null into
+  a non-nullable column is rejected, and one rejected member fails the whole array write, so a
+  payload that nulled a numeric slot would land nothing at all.
+
+  A member the schema does not govern is never emptied by a cascade, and a stale value in one is
+  still the author's to see and edit. A governed member that *is* idle has no row while it is idle:
+  its value is either an alias of a live slot (the same four bytes read as the other type — showing
+  it would be showing the same value twice, wrongly) or data no reader consults. The one divergence
+  from xEdit is that xEdit renders CIS1/CIS2 as their own always-present rows, so a stale parameter
+  string it would show is not shown here until the cascade clears it.
 
 **The function picker is the schema's own enum.** On Fallout 4 that is the `function` member's
 479-member enum, rendered by the ordinary enum cell; on a shape whose `ConditionData` is one class
