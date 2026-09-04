@@ -22,7 +22,7 @@ namespace MEditService.Tests.Edits;
 /// refusal instead of wiring a delegate that could never succeed.
 ///
 /// <para>The seam is genuinely reachable, not just theoretical: the enclosing <c>Condition</c>
-/// element is itself abstract, but <c>ResolveAbstractUnionConcreteType</c> resolves any
+/// element is itself abstract, but <c>ResolveUnionConcreteType</c> resolves any
 /// <c>concrete_type</c> the <i>payload</i> names regardless of what the read schema exposes, so an
 /// element sent as <c>ConditionFloat</c> constructs fine and its own <c>data</c> member is what
 /// refuses. CTDA condition data is among the most commonly edited things in an xEdit workflow — a

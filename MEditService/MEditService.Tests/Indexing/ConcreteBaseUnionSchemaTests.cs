@@ -1,6 +1,10 @@
+using System.Text.Json;
 using MEditService.Core.Queries;
 using MEditService.Core.Schema;
 using Mutagen.Bethesda;
+using Mutagen.Bethesda.Fallout4;
+using Mutagen.Bethesda.Plugins;
+using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Tests.Indexing;
 
@@ -86,9 +90,14 @@ public sealed class ConcreteBaseUnionSchemaTests
             .ToDictionary(f => f.Name, f => f.IsArray ? f.ElementType!.Type + "[]" : f.Type);
         Assert.Equal(new Dictionary<string, string>
         {
-            ["data_int"] = "int", ["data_float"] = "float", ["data_bool"] = "bool", ["data_string"] = "string",
-            ["data_int_array"] = "int[]", ["data_float_array"] = "float[]",
-            ["data_bool_array"] = "bool[]", ["data_string_array"] = "string[]",
+            ["data_int"] = "int",
+            ["data_float"] = "float",
+            ["data_bool"] = "bool",
+            ["data_string"] = "string",
+            ["data_int_array"] = "int[]",
+            ["data_float_array"] = "float[]",
+            ["data_bool_array"] = "bool[]",
+            ["data_string_array"] = "string[]",
         }, data);
     }
 
@@ -104,5 +113,31 @@ public sealed class ConcreteBaseUnionSchemaTests
         var member = byName["members"].ElementType!.Fields!.ToDictionary(f => f.Name);
         Assert.Equal("string", member["name"].Type);
         Assert.True(member["properties"].IsArray);
+    }
+
+    /// <summary>
+    /// The one concrete-base union the shipped schema reaches: Landscape.Layers, BaseLayer with
+    /// AlphaLayer under it. An AlphaLayer is a BaseLayer too, so the base must not claim it.
+    /// </summary>
+    [Fact]
+    public void LandscapeLayers_AnAlphaLayerElement_ReadsAsAlphaLayerNotAsItsBase()
+    {
+        var mod = new Fallout4Mod(ModKey.FromFileName("Layers701.esp"), Fallout4Release.Fallout4);
+        var cell = new Cell(mod.GetNextFormKey("Cell701"), Fallout4Release.Fallout4)
+        {
+            Landscape = new Landscape(mod.GetNextFormKey("Land701"), Fallout4Release.Fallout4)
+            {
+                Layers = [new BaseLayer(), new AlphaLayer { AlphaLayerData = new byte[] { 1, 2 } }],
+            },
+        };
+
+        var column = SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4)["cell"]
+            .RecordColumns.Single(c => c.Name == "landscape");
+        var layers = JsonDocument.Parse((string)column.Extract((IMajorRecordGetter)cell)!)
+            .RootElement.GetProperty("layers");
+
+        Assert.Equal("BaseLayer", layers[0].GetProperty("concrete_type").GetString());
+        Assert.Equal("AlphaLayer", layers[1].GetProperty("concrete_type").GetString());
+        Assert.Equal("0x0102", layers[1].GetProperty("alpha_layer_data").GetString());
     }
 }

@@ -891,7 +891,7 @@ public sealed partial class SchemaReflector
         // discriminator) or let #642's own bug back in.
         //
         // The two discriminator fields (BuildObjectModValueTypeField's value_type,
-        // BuildAbstractUnionDiscriminatorField's concrete_type) are null deliberately — consumed off
+        // BuildUnionDiscriminatorField's concrete_type) are null deliberately — consumed off
         // the raw JSON before the object they'd apply to even exists, and every abstract-union/
         // OMOD-properties payload names one on every write, so ApplySubFields must keep skipping them
         // silently regardless of this flag's default. Since #643 wired nested Loqui structs into the
@@ -901,7 +901,7 @@ public sealed partial class SchemaReflector
         // false so any future null-Apply producer stays a silent skip unless it deliberately opts in.
         bool TargetingRefuses = false,
         // Presentation facts for the editor, both null for an ordinary sub-field — see
-        // FieldMetadata's own doc comments. Set only by BuildAbstractUnionDiscriminatorField.
+        // FieldMetadata's own doc comments. Set only by BuildUnionDiscriminatorField.
         IReadOnlyList<string>? EnumLabels = null,
         string? DisplayLabel = null)
     {
@@ -1278,7 +1278,7 @@ public sealed partial class SchemaReflector
     // rather than the other way around, so none of their own members are ever reached by this
     // walk alone. BuildObjectModPropertyLeafFields closes that gap for OMOD specifically, and
     // the same shape is generalized for every other Mutagen "A<Name>" abstract Loqui union
-    // (ANpcLevel, AQuestAlias, ...) — see BuildAbstractUnionLeafFields for why OMOD's own leaves
+    // (ANpcLevel, AQuestAlias, ...) — see BuildUnionLeafFields for why OMOD's own leaves
     // still need their own hand-picked table (a generic base type with no reflectively-discoverable
     // ClassType of its own) while everything else can be discovered by reflection alone.
     private static List<SubFieldSpec> BuildSubSchema(
@@ -1307,8 +1307,8 @@ public sealed partial class SchemaReflector
 
         if (IsObjectModPropertyBase(getterInterface))
             result.AddRange(BuildObjectModPropertyLeafFields(getterInterface, game, logger));
-        else if (TryGetAbstractUnion(getterInterface, game) is { } union)
-            result.AddRange(BuildAbstractUnionLeafFields(
+        else if (TryGetUnion(getterInterface, game) is { } union)
+            result.AddRange(BuildUnionLeafFields(
                 getterInterface, union, game, path, depth + 1, logger));
 
         return result;
@@ -1602,12 +1602,13 @@ public sealed partial class SchemaReflector
         }
     }
 
-    // ── General abstract Loqui union ("A<Name>") leaves ────────────────────────────────────────
-    // Mutagen's "A<Name>" convention: an abstract base (e.g. ANpcLevel, AQuestAlias) whose real
-    // per-subclass data lives entirely on concrete classes that inherit *from* it (NpcLevel/
-    // PcLevelMult; QuestReferenceAlias/QuestLocationAlias/QuestCollectionAlias) — the same "a plain
-    // interface walk from the base alone never reaches it" shape solved narrowly above for OMOD's
-    // Properties element. Unlike OMOD's own leaves (generic-closed sibling interfaces reachable
+    // ── General Loqui union leaves ─────────────────────────────────────────────────────────────
+    // A base whose real per-subclass data lives entirely on concrete classes that inherit *from*
+    // it — Mutagen's abstract "A<Name>" convention (ANpcLevel: NpcLevel/PcLevelMult; AQuestAlias:
+    // QuestReferenceAlias/QuestLocationAlias/QuestCollectionAlias), and equally a concrete base
+    // with subclasses (ScriptProperty and its fourteen leaves, itself one more leaf) — the same "a
+    // plain interface walk from the base alone never reaches it" shape solved narrowly above for
+    // OMOD's Properties element. Unlike OMOD's own leaves (generic-closed sibling interfaces reachable
     // only via a hand-picked table, because IAObjectModPropertyGetter<T> has no reflectively
     // enumerable closed ClassType of its own — see IsObjectModPropertyBase's own comment), every
     // other abstract union in the FO4 assembly backs its base getter interface with an ordinary
@@ -1624,10 +1625,9 @@ public sealed partial class SchemaReflector
     // ClassifyLeaf set OMOD's own leaves needed (OMOD's 7 leaves are all scalar/enum/formlink/
     // string; AQuestAlias's own leaves are not — QuestReferenceAlias's "Fill Type" is itself
     // several nested Loqui structs, and two of AQuestAlias's three leaves share a list-typed
-    // Conditions member). A member whose declaring leaves disagree on shape is omitted — logged,
-    // not guessed or crashed on — the same "expose nothing rather than something wrong" rule the
-    // DamageType/DamageTypeIndexed merge already follows for a differently-shaped same-named
-    // column (ADR-0026: a confident wrong value is worse than an absent one).
+    // Conditions member). A member whose declaring leaves disagree on shape becomes one field per
+    // shape (BuildUnionMemberFields) — the same one-column-per-shape rule the DamageType/
+    // DamageTypeIndexed merge already follows for a differently-shaped same-named column.
 
     // Mirrors GetSetterType: reads GetterType off a *concrete* Loqui class's own StaticRegistration,
     // rather than SetterType off a getter interface's.
@@ -1642,21 +1642,24 @@ public sealed partial class SchemaReflector
 
     // Every non-abstract class in the same assembly assignable to abstractSetterType, paired with
     // its own getter interface and its own class Name (the discriminator value — see
-    // BuildAbstractUnionDiscriminatorField). IsAssignableFrom is transitive, so a two-level chain
+    // BuildUnionDiscriminatorField). IsAssignableFrom is transitive, so a two-level chain
     // (APerkEffect -> APerkEntryPointEffect -> PerkEntryPointModifyValue) is found the same way a
     // one-level one (ANpcLevel -> NpcLevel) is, with no depth-specific handling needed.
-    private static List<(Type GetterType, string ClassName)> FindAbstractUnionLeaves(Type setterType) =>
+    private static List<(Type GetterType, string ClassName)> FindUnionLeaves(Type setterType) =>
         [.. LeavesByBase.GetOrAdd(setterType.Assembly, IndexLeavesByBase)[setterType]];
 
     // Every base is asked once per schema build for every Loqui struct the walk reaches, so the
-    // assembly is scanned once and each concrete class filed under its whole base chain.
+    // assembly is scanned once and each concrete class filed under its whole base chain. Leaves are
+    // ordered most-derived first: a leaf is recognised by IsInstanceOfType, and a concrete base
+    // would otherwise claim every object of its subclasses.
     private static readonly ConcurrentDictionary<Assembly, ILookup<Type, (Type GetterType, string ClassName)>> LeavesByBase = new();
 
     private static ILookup<Type, (Type GetterType, string ClassName)> IndexLeavesByBase(Assembly assembly) =>
         assembly.GetTypes()
             .Where(t => !t.IsAbstract && !t.IsInterface && !t.ContainsGenericParameters)
-            .Select(t => (Leaf: t, Getter: GetOwnGetterType(t)))
+            .Select(t => (Leaf: t, Getter: GetOwnGetterType(t), Depth: BaseChain(t).Count()))
             .Where(l => l.Getter != null)
+            .OrderByDescending(l => l.Depth)
             .SelectMany(l => BaseChain(l.Leaf).Select(b => (Base: b, Leaf: (l.Getter!, l.Leaf.Name))))
             .ToLookup(e => e.Base, e => e.Leaf);
 
@@ -1671,40 +1674,41 @@ public sealed partial class SchemaReflector
     private static bool IsUnionBase(Type setterType, List<(Type GetterType, string ClassName)> leaves) =>
         leaves.Count > (setterType.IsAbstract ? 0 : 1);
 
-    // getterInterface qualifies when its own Setter type (GetSetterType) is an abstract class,
-    // outside SchemaAnnotations.ExcludedUnions (Condition/ConditionData and
+    // getterInterface qualifies when its own Setter type (GetSetterType) is a union base
+    // (IsUnionBase) outside SchemaAnnotations.ExcludedUnions (Condition/ConditionData and
     // AVirtualMachineAdapter — structurally identical to ANpcLevel/AQuestAlias, but owned by their
-    // dedicated sections: IsConditionListField and the vmadInterfaceType check only gate a *named
+    // dedicated sections: IsConditionListField and IsExcludedUnionColumn only gate a *named
     // top-level property* in ReflectColumns, and BuildSubSchema's recursive walk reaches these
-    // abstract types with no memory of which field led to it), with at least one discoverable
-    // concrete leaf. OMOD's own IAObjectModPropertyGetter<T> is excluded by BuildSubSchema's own caller order
+    // types with no memory of which field led to it; and ASceneActionType, whose one leaf cannot
+    // be read). OMOD's own IAObjectModPropertyGetter<T> is excluded by BuildSubSchema's own caller order
     // (IsObjectModPropertyBase checked first), not by anything here — its Setter type
     // (AObjectModProperty<T>) is abstract too, but this method is simply never reached for it.
-    private static AbstractUnion? TryGetAbstractUnion(Type getterInterface, GameReflection game)
+    private static LoquiUnion? TryGetUnion(Type getterInterface, GameReflection game)
     {
         if (GetSetterType(getterInterface) is not { } setterType) return null;
         if (game.Annotations.IsExcludedUnion(setterType)) return null;
-        var leaves = FindAbstractUnionLeaves(setterType);
-        return IsUnionBase(setterType, leaves) ? new AbstractUnion(setterType, leaves) : null;
+        var leaves = FindUnionLeaves(setterType);
+        return IsUnionBase(setterType, leaves) ? new LoquiUnion(setterType, leaves) : null;
     }
 
-    /// <summary>An abstract Loqui base and the concrete classes that close it. The base travels
+    /// <summary>A Loqui base and the concrete classes under it, itself among them when it is
+    /// concrete. The base travels
     /// with the leaves because the discriminator's own labels are the leaf names read
     /// <i>relative to</i> it (<see cref="LeafLabel"/>).</summary>
-    private sealed record AbstractUnion(Type SetterType, List<(Type GetterType, string ClassName)> Leaves);
+    private sealed record LoquiUnion(Type SetterType, List<(Type GetterType, string ClassName)> Leaves);
 
     // Builds the sparse union of every leaf's own members, grouped by snake_case name across
     // leaves. A name only one leaf declares (AQuestAlias's own "location"/"external"/"collection",
     // ...) becomes that leaf's own field, gated to read null off any other leaf. A name several
     // leaves declare (AQuestAlias's own "closest_to_alias"/"conditions" are declared by two of its
     // three leaves) becomes one shared field when every declaring leaf's own GetSubFieldInfo shape
-    // agrees, or one field per shape when it doesn't (BuildAbstractUnionMemberFields). getterInterface's own
+    // agrees, or one field per shape when it doesn't (BuildUnionMemberFields). getterInterface's own
     // already-declared members (APerkEffect's own Rank/Priority/Conditions/... — non-zero, unlike
     // ANpcLevel/AQuestAlias) are excluded here: BuildSubSchema's ordinary walk, immediately above
     // this method's own call site, already reaches those directly off the abstract base itself.
-    private static List<SubFieldSpec> BuildAbstractUnionLeafFields(
+    private static List<SubFieldSpec> BuildUnionLeafFields(
         Type getterInterface,
-        AbstractUnion union,
+        LoquiUnion union,
         GameReflection game,
         Type[] path,
         int depth,
@@ -1745,7 +1749,7 @@ public sealed partial class SchemaReflector
                 .Select(l => ((l.GetterType, l.ClassName), l.Path!, Prop: l.Members[name]))
                 .ToList();
 
-            result.AddRange(BuildAbstractUnionMemberFields(name, declaring, game, depth, logger));
+            result.AddRange(BuildUnionMemberFields(name, declaring, game, depth, logger));
         }
 
         // Defensive, not live — no Mutagen leaf across any game assembly
@@ -1754,15 +1758,15 @@ public sealed partial class SchemaReflector
         // a last-write-wins Dictionary<string, object?> downstream (ExtractSubObject) — a future
         // leaf that did collide would have its own real data silently replaced by the discriminator,
         // no warning, ADR-0026's failure class. Same "log and omit" rule
-        // BuildAbstractUnionMemberFields' own ambiguous-split branch already uses, not a new one.
-        var discriminator = BuildAbstractUnionDiscriminatorField(
-            new AbstractUnion(union.SetterType, [.. leaves.Select(l => (l.GetterType, l.ClassName))]));
+        // BuildUnionMemberFields' own ambiguous-split branch already uses, not a new one.
+        var discriminator = BuildUnionDiscriminatorField(
+            new LoquiUnion(union.SetterType, [.. leaves.Select(l => (l.GetterType, l.ClassName))]));
         if (result.Any(f => f.Name == discriminator.Name))
         {
             logger.LogWarning(
                 "Abstract union {Base}'s own {Discriminator} field name collides with a real leaf " +
                 "member; omitting the discriminator rather than silently shadowing that member's data",
-                getterInterface.Name, AbstractUnionTypeDiscriminator);
+                getterInterface.Name, UnionTypeDiscriminator);
         }
         else
         {
@@ -1778,7 +1782,7 @@ public sealed partial class SchemaReflector
     // ApiType plus element type plus sub-field count — enough to tell a struct from a scalar, an
     // int list from a float list, or two structs with different member sets apart, without
     // re-deriving GetSubFieldInfo's own dispatch.
-    private static List<SubFieldSpec> BuildAbstractUnionMemberFields(
+    private static List<SubFieldSpec> BuildUnionMemberFields(
         string colName,
         List<((Type GetterType, string ClassName) Leaf, Type[] Path, PropertyInfo Prop)> declaring,
         GameReflection game,
@@ -1790,10 +1794,10 @@ public sealed partial class SchemaReflector
             .Where(d => d.Spec != null)
             .GroupBy(d => ShapeKey(d.Spec!))
             .ToList();
-        if (byShape.Count == 1) return [BuildAbstractUnionShapeField(colName, byShape[0].ToList(), logger)];
+        if (byShape.Count == 1) return [BuildUnionShapeField(colName, byShape[0].ToList(), logger)];
 
         var fields = byShape
-            .Select(g => BuildAbstractUnionShapeField($"{colName}_{ShapeSuffix(g.First().Spec!)}", g.ToList(), logger))
+            .Select(g => BuildUnionShapeField($"{colName}_{ShapeSuffix(g.First().Spec!)}", g.ToList(), logger))
             .ToList();
         var ambiguous = fields.GroupBy(f => f.Name).Where(g => g.Count() > 1).Select(g => g.Key).ToList();
         if (ambiguous.Count > 0)
@@ -1818,7 +1822,7 @@ public sealed partial class SchemaReflector
     // is; written only onto one of them, any other leaf answering PropertyNotFound. That is what
     // lets a resend after a leaf switch, #688, drop the outgoing leaf's own member instead of
     // refusing on it, even where the incoming leaf has a same-named member of another shape.
-    private static SubFieldSpec BuildAbstractUnionShapeField(
+    private static SubFieldSpec BuildUnionShapeField(
         string name,
         List<((Type GetterType, string ClassName) Leaf, PropertyInfo Prop, SubFieldSpec? Spec)> declaring,
         ILogger logger)
@@ -1864,16 +1868,16 @@ public sealed partial class SchemaReflector
         return rep with { Name = name, Extract = Extract, Apply = apply, AllowsNull = true };
     }
 
-    private const string AbstractUnionTypeDiscriminator = "concrete_type";
+    private const string UnionTypeDiscriminator = "concrete_type";
 
     /// <summary>Which leaf of the union this object is, as a closed choice among the union's
     /// concrete class names — an <c>enum</c>, so the editor's generic enum-leaf rule renders the
     /// choice with no case of its own, and the names stay wire tokens the user never sees
     /// (<see cref="LeafLabel"/> supplies what is shown). Changing it is an ordinary edit of
-    /// the enclosing object, resolved by <see cref="ResolveAbstractUnionConcreteType"/>; its own
+    /// the enclosing object, resolved by <see cref="ResolveUnionConcreteType"/>; its own
     /// <c>Apply</c> stays a declared no-write for the reason <see cref="DiscriminatorReason"/>
     /// gives. See docs/specs/medit-record-editor.md, the abstract-union section.</summary>
-    private static SubFieldSpec BuildAbstractUnionDiscriminatorField(AbstractUnion union)
+    private static SubFieldSpec BuildUnionDiscriminatorField(LoquiUnion union)
     {
         var leaves = union.Leaves;
 
@@ -1884,14 +1888,14 @@ public sealed partial class SchemaReflector
             return null;
         }
 
-        return new(AbstractUnionTypeDiscriminator, "enum", Empty,
+        return new(UnionTypeDiscriminator, "enum", Empty,
             [.. leaves.Select(l => l.ClassName)], Extract,
             Apply: LeafWrite.ReadOnly<object>(DiscriminatorReason), AllowsNull: true,
             EnumLabels: [.. leaves.Select(l => LeafLabel.For(union.SetterType.Name, l.ClassName))],
-            DisplayLabel: AbstractUnionTypeDiscriminatorLabel);
+            DisplayLabel: UnionTypeDiscriminatorLabel);
     }
 
-    private const string AbstractUnionTypeDiscriminatorLabel = "Kind";
+    private const string UnionTypeDiscriminatorLabel = "Kind";
 
     // Write side: resolves the concrete Setter class named by an incoming JSON object's own
     // concrete_type discriminator. Null for any reason (non-object JSON, a missing/unrecognized
@@ -1899,7 +1903,7 @@ public sealed partial class SchemaReflector
     // refuse rather than guess — the same contract ResolveObjectModPropertyConcreteType already
     // gives ApplyListJson, extended to BuildStructColumn's own single-object case too.
     //
-    // Deliberately not a FindAbstractUnionLeaves-style full assembly.GetTypes() scan (12,914 types
+    // Deliberately not a FindUnionLeaves-style full assembly.GetTypes() scan (12,914 types
     // for Mutagen.Bethesda.Fallout4.dll) —
     // fine on the read side, where that runs once per abstract type behind GetSchemas' own cache, but
     // this is the write path, called once per array element (ApplyListJson/ApplyListSubFieldJson)
@@ -1908,10 +1912,10 @@ public sealed partial class SchemaReflector
     // already leans on for OMOD), so the discriminator string names an O(1) lookup directly —
     // IsAssignableFrom still gates it, so a name that resolves to some unrelated same-namespace type
     // is refused exactly the same as an unrecognized one, never silently accepted.
-    private static Type? ResolveAbstractUnionConcreteType(Type abstractSetterType, JsonElement json)
+    private static Type? ResolveUnionConcreteType(Type abstractSetterType, JsonElement json)
     {
         if (json.ValueKind != JsonValueKind.Object) return null;
-        if (!json.TryGetProperty(AbstractUnionTypeDiscriminator, out var dt) || dt.ValueKind != JsonValueKind.String)
+        if (!json.TryGetProperty(UnionTypeDiscriminator, out var dt) || dt.ValueKind != JsonValueKind.String)
             return null;
 
         var name = dt.GetString();
@@ -2410,7 +2414,7 @@ public sealed partial class SchemaReflector
         var pName = prop.Name;
         var setterType = GetSetterType(core);
         var writable = setterType != null
-            && (!setterType.IsAbstract || sub.Any(f => f.Name == AbstractUnionTypeDiscriminator));
+            && (!setterType.IsAbstract || sub.Any(f => f.Name == UnionTypeDiscriminator));
         return new(colName, "struct", Empty, Empty,
             obj => { var v = g(obj); return v == null ? null : ExtractSubObject(v, sub); },
             Apply: writable
@@ -2892,14 +2896,14 @@ public sealed partial class SchemaReflector
     // discoverable off their own generic base the way every other abstract union's are).
     //
     // Every other abstract list-element type (AQuestAlias, ...) resolves generally, off the
-    // same concrete_type discriminator BuildAbstractUnionDiscriminatorField exposes on read. Either
+    // same concrete_type discriminator BuildUnionDiscriminatorField exposes on read. Either
     // way, an abstract-element field with no scheme that resolves — a missing/unrecognized
     // discriminator, or a genuinely unknown shape — falls straight through to null, which
     // ApplyListJson/ApplyListSubFieldJson turn into a refusal rather than a guess or a throw.
     private static Type? ResolveAbstractListElementType(Type elemConcreteType, JsonElement elem) =>
         elemConcreteType.IsGenericType && elemConcreteType.GetGenericTypeDefinition().Name == "AObjectModProperty`1"
             ? ResolveObjectModPropertyConcreteType(elemConcreteType, elem)
-            : ResolveAbstractUnionConcreteType(elemConcreteType, elem);
+            : ResolveUnionConcreteType(elemConcreteType, elem);
 
     // Reads the `value_type` discriminator BuildObjectModValueTypeField exposes on read and maps it
     // back to the one leaf getter interface that owns it (ObjectModPropertyLeaves — the exact same
@@ -3110,7 +3114,7 @@ public sealed partial class SchemaReflector
         var concreteType = setterType;
         if (IsUnionWritten(setterType, subFields))
         {
-            if (ResolveAbstractUnionConcreteType(setterType, json) is not { } resolved)
+            if (ResolveUnionConcreteType(setterType, json) is not { } resolved)
                 return ApplyOutcome.ValueRejected;
             concreteType = resolved;
         }
@@ -3118,7 +3122,9 @@ public sealed partial class SchemaReflector
         var rp = target.GetType().GetProperty(pName, BindingFlags.Public | BindingFlags.Instance);
         if (rp == null) return ApplyOutcome.PropertyNotFound;
         var existing = rp.GetValue(target);
-        var obj = concreteType.IsInstanceOfType(existing) ? existing! : Activator.CreateInstance(concreteType)!;
+        // Exactly the named leaf, not merely assignable to it: an AlphaLayer is a BaseLayer, and
+        // switching to the base must build a bare one rather than keep the subclass.
+        var obj = existing?.GetType() == concreteType ? existing : Activator.CreateInstance(concreteType)!;
         var subOutcome = ApplySubFields(obj, json, subFields);
         if (subOutcome != ApplyOutcome.Applied) return subOutcome;
         if (rp.CanWrite) rp.SetValue(target, obj);
@@ -3129,7 +3135,7 @@ public sealed partial class SchemaReflector
     // constructed, or concrete with a discriminator in its own sub-schema (ScriptProperty), where
     // building the base regardless would silently discard the leaf the payload asked for.
     private static bool IsUnionWritten(Type setterType, IReadOnlyList<SubFieldSpec>? subFields) =>
-        setterType.IsAbstract || (subFields?.Any(f => f.Name == AbstractUnionTypeDiscriminator) ?? false);
+        setterType.IsAbstract || (subFields?.Any(f => f.Name == UnionTypeDiscriminator) ?? false);
 
     private static ColumnInfoResult? BuildStructColumn(
         PropertyInfo prop, Type core, GameReflection game, ILogger logger)

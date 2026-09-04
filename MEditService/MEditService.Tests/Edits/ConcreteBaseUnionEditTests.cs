@@ -64,6 +64,19 @@ public sealed class ConcreteBaseUnionEditTests : IDisposable
         Assert.Equal(before[1].GetRawText(), after[1].GetRawText());
     }
 
+    /// <summary>The base is a leaf of its own: a property of type None is a bare ScriptProperty.</summary>
+    [Fact]
+    public void SwitchingToTheBaseLeaf_BuildsABareScriptProperty()
+    {
+        var result = _fixture.Service().EditField(
+            _fixture.Plugin, _fixture.Npc.ToString(), "virtual_machine_adapter", Adapter("ScriptProperty"));
+
+        Assert.True(result.Applied, result.Message);
+        var written = WrittenProperties(_fixture.NpcBody())[0];
+        Assert.Equal("ScriptProperty", written.GetProperty("MutagenObjectType").GetString());
+        Assert.Equal("Switched", written.GetProperty("Name").GetString());
+    }
+
     [Fact]
     public void ScriptPropertyWithoutDiscriminator_IsRefusedAndWritesNothing()
     {
