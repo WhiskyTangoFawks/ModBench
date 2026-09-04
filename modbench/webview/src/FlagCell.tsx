@@ -28,7 +28,7 @@ interface FlagCellProps {
  */
 export function FlagCell({ value, meta, editable, onCommit, collapsed }: FlagCellProps) {
   const bits = flagBits(meta);
-  if (bits == null || bits.length === 0) return null;
+  if (bits == null) return null;
 
   if (collapsed) {
     // modelValue collapses null and no-bits-set alike to '' — both render the placeholder.

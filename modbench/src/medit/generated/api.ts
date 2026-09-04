@@ -729,9 +729,9 @@ export interface components {
             fields?: components["schemas"]["FieldMetadata"][] | null;
             isSortable: boolean;
             allowsNull: boolean;
-            isBitmask: boolean;
             displayLabel?: string | null;
             isDiscriminator: boolean;
+            readonly isBitmask?: boolean;
         };
         FieldValue: {
             metadata: components["schemas"]["FieldMetadata"];

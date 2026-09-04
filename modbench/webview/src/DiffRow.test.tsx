@@ -356,7 +356,7 @@ describe('DiffRow — FormKey leaf resolution is independent of the parent field
 describe('DiffRow — flags cell wiring (#426)', () => {
   const flagMeta: FieldMetadata = {
     name: 'Flags', type: 'enum', isArray: false, validFormKeyTypes: [],
-    enumMembers: [{ value: 'A', bitValue: '1' }, { value: 'B', bitValue: '2' }], isBitmask: true,
+    enumMembers: [{ value: 'A', bitValue: '1' }, { value: 'B', bitValue: '2' }],
   };
 
   function flagsRow(overrides: Partial<React.ComponentProps<typeof DiffRow>> = {}) {

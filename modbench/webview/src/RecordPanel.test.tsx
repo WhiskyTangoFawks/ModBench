@@ -231,7 +231,7 @@ const partialFormCompareResult = {
 // contract; value '3' (0b11) sets both A and B so the resting label reads "A, B".
 const flagsFieldMeta: FieldMetadata = {
   name: 'Flags', type: 'enum', isArray: false, validFormKeyTypes: [],
-  enumMembers: [{ value: 'A', bitValue: '1' }, { value: 'B', bitValue: '2' }], isBitmask: true,
+  enumMembers: [{ value: 'A', bitValue: '1' }, { value: 'B', bitValue: '2' }],
 };
 
 const flagsCompareResult = {

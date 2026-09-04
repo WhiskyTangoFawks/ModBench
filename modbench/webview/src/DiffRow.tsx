@@ -6,7 +6,7 @@ import { VmadObjectCell } from './VmadObjectCell';
 import { ConditionFunctionCell, ConditionRunOnCell, ConditionComparisonCell, ConditionParamCell } from './ConditionCells';
 import { CheckErrorIcon } from './CheckErrorIcon';
 import { DiskCell } from './DiskCell';
-import { displayValue, modelValue } from './modelValue';
+import { displayValue, flagBits, modelValue } from './modelValue';
 import { copyToClipboard } from './nativeBridge';
 import { baseCell, toggleBtnStyle, getCellStyle, focusedRowStyle, DIMMED_OPACITY } from './gridStyles';
 import {
@@ -89,7 +89,7 @@ function renderCell(
       </span>
     );
   }
-  if (meta.type === 'enum' && meta.isBitmask) {
+  if (meta.type === 'enum' && flagBits(meta) != null) {
     return (
       <FlagCell
         value={value}
@@ -306,7 +306,7 @@ export function DiffRow({
   // checkbox lines inside the cell, not sub-rows. It starts collapsed ("we start with the
   // clean view"), so it shares struct rows' default exactly: expanded only when the toggle
   // put the row in expandedStructs.
-  const isFlagsRow = meta.type === 'enum' && !!meta.isBitmask;
+  const isFlagsRow = meta.type === 'enum' && flagBits(meta) != null;
   const rowExpanded = !!isExpanded;
   // A row no column carries a value for holds nothing but its children (vmadTreeAdapter.ts's
   // always-present "Scripts (VMAD)" wrapper is one), so it is present in every column — nothing

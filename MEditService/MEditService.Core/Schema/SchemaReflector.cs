@@ -270,12 +270,11 @@ public sealed partial class SchemaReflector
             // whole view fails to bind ("Conversion Error: Failed to cast value to numerical" —
             // observed, not hypothetical). The typed read is unaffected either way: it goes through
             // HeaderColumnExtract and IsBitmask, never this flag.
-            var displayNames = flagsLeaf.EnumMembers
+            var displayMembers = flagsLeaf.EnumMembers
                 .Select(m => m with { Value = MapToXEditFlagName(m.Value) }).ToArray();
             columns.Add(new ColumnSpec("flags", HeaderDocumentPath(modHeaderProp, flagsProp), flagsLeaf.DuckDbType, _ => null,
-                flagsLeaf.ApiType, flagsLeaf.ValidFormKeyTypes, displayNames,
+                flagsLeaf.ApiType, flagsLeaf.ValidFormKeyTypes, displayMembers,
                 Apply: LeafWrite.ReadOnly<IMajorRecord>(HeaderNoWritePathReason),
-                IsBitmask: flagsLeaf.IsBitmask,
                 IsFlagsEnum: flagsLeaf.IsFlagsEnum, ViewDefaultLiteral: flagsLeaf.ViewDefaultLiteral));
             extracts.Add(HeaderPropertyExtract(modHeaderProp, flagsLeaf.Get));
         }
@@ -434,7 +433,6 @@ public sealed partial class SchemaReflector
                 ElementType: info.ElementMeta,
                 SubFields: info.SubFieldMetas,
                 AllowsNull: info.AllowsNull,
-                IsBitmask: info.IsBitmask,
                 IsFlagsEnum: info.IsFlagsEnum,
                 ViewDefaultLiteral: info.ViewDefaultLiteral));
         }
@@ -626,7 +624,6 @@ public sealed partial class SchemaReflector
             SubFields = null,
             EnumMembers = NoMembers,
             ValidFormKeyTypes = Empty,
-            IsBitmask = false,
             AllowsNull = true,
         };
     }
@@ -703,6 +700,8 @@ public sealed partial class SchemaReflector
     private static FieldMetadata UnionEnumDomains(FieldMetadata a, FieldMetadata b)
     {
         if (a.Type == "enum")
+            // Deduped by value, not by whole member: two siblings naming the same value must yield
+            // one dropdown entry, and the first occurrence's own bit and label are the ones kept.
             return a with { EnumMembers = [.. a.EnumMembers.Concat(b.EnumMembers).DistinctBy(m => m.Value, StringComparer.Ordinal)] };
         if (a.Fields != null && b.Fields != null)
             return a with { Fields = a.Fields.Select(fa => UnionEnumDomains(fa, b.Fields.First(fb => fb.Name == fa.Name))).ToList() };
@@ -862,7 +861,6 @@ public sealed partial class SchemaReflector
         FieldMetadata? ElementMeta = null,
         IReadOnlyList<FieldMetadata>? SubFieldMetas = null,
         bool AllowsNull = false,
-        bool IsBitmask = false,
         bool IsFlagsEnum = false,
         string? ViewDefaultLiteral = null);
 
@@ -878,7 +876,6 @@ public sealed partial class SchemaReflector
         IReadOnlyList<SubFieldSpec>? SubFields = null,
         SubFieldSpec? ElementSpec = null,
         bool AllowsNull = false,
-        bool IsBitmask = false,
         // #642: distinguishes "Apply is null because this genuinely has no write support" (not
         // writable — opts in here) from "Apply is null by design and always will be" (a
         // discriminator — stays on this record's default). ApplySubFields refuses the former when
@@ -910,7 +907,6 @@ public sealed partial class SchemaReflector
                 ElementSpec?.ToFieldMetadata(),
                 SubFields?.Select(s => s.ToFieldMetadata()).ToList(),
                 AllowsNull: AllowsNull,
-                IsBitmask: IsBitmask,
                 DisplayLabel: DisplayLabel,
                 IsDiscriminator: IsDiscriminator);
     }
@@ -1501,7 +1497,7 @@ public sealed partial class SchemaReflector
 
         return new(colName, rep.ApiType, rep.ValidFormKeyTypes, rep.EnumMembers, Extract,
             apply,
-            AllowsNull: true, IsBitmask: rep.IsBitmask);
+            AllowsNull: true);
     }
 
     private static SubFieldSpec BuildWidenedLeafUnionField(
@@ -2013,12 +2009,11 @@ public sealed partial class SchemaReflector
 
     // A CLR enum's members. Bitmask ([Flags] with power-of-two members) keeps only the atomic
     // members and carries each one's bit; anything else keeps every member and carries no bit.
-    private static (EnumMember[] Members, bool IsBitmask) GetEnumMembers(Type enumType)
+    private static EnumMember[] GetEnumMembers(Type enumType)
     {
         var allNames = Enum.GetNames(enumType);
-        EnumMember[] plain = [.. allNames.Select(n => new EnumMember(n))];
         if (enumType.GetCustomAttribute<FlagsAttribute>() == null)
-            return (plain, false);
+            return [.. allNames.Select(n => new EnumMember(n))];
 
         var allValues = Enum.GetValues(enumType);
         var atomic = new List<EnumMember>();
@@ -2028,7 +2023,9 @@ public sealed partial class SchemaReflector
             if (v > 0 && (v & (v - 1)) == 0)   // atomic power-of-two only; excludes None=0 and composite values
                 atomic.Add(new EnumMember(allNames[i], v.ToString(System.Globalization.CultureInfo.InvariantCulture)));
         }
-        return atomic.Count > 0 ? (atomic.ToArray(), true) : (plain, false);
+        // Every member carrying a bit is what makes the field a bitmask (FieldMetadata.IsBitmask),
+        // so an enum with no atomic member is a plain one and keeps every name it declares.
+        return atomic.Count > 0 ? atomic.ToArray() : [.. allNames.Select(n => new EnumMember(n))];
     }
 
     // Bitmask flag values travel as decimal strings (to survive JSON above 2^53) but legacy
@@ -2051,7 +2048,6 @@ public sealed partial class SchemaReflector
         Func<object, object?> Get,
         Func<JsonElement, object?>? Convert,
         bool AllowsNull = false,
-        bool IsBitmask = false,
         bool IsFlagsEnum = false,
         string? ViewDefaultLiteral = null);
 
@@ -2107,12 +2103,13 @@ public sealed partial class SchemaReflector
     private static LeafSpec ClassifyEnumLeaf(PropertyInfo prop, Type core)
     {
         var g = SubGetter(prop);
-        var (members, isBitmask) = GetEnumMembers(core);
+        var members = GetEnumMembers(core);
 
         // Whether the serializer writes this enum as an array of member names, which is a
-        // question about the CLR type's [Flags] attribute and nothing else. IsBitmask below answers
-        // a different, narrower question (does it have power-of-two members) and gets it wrong for
-        // this purpose — a [Flags] enum with no such members still serializes as an array.
+        // question about the CLR type's [Flags] attribute and nothing else. Whether every member
+        // carries a bit answers a different, narrower question (does it have power-of-two members)
+        // and gets it wrong for this purpose — a [Flags] enum with no such members still
+        // serializes as an array.
         var isFlags = core.GetCustomAttribute<FlagsAttribute>() != null;
 
         // The default a view falls back to when the serializer omitted the field. A flags enum's
@@ -2124,11 +2121,13 @@ public sealed partial class SchemaReflector
         else if (Enum.IsDefined(core, Enum.ToObject(core, 0))) defaultLiteral = $"'{Enum.GetName(core, Enum.ToObject(core, 0))}'";
         else defaultLiteral = null;
 
-        return isBitmask
+        // Count-guarded exactly like FieldMetadata.IsBitmask: an enum with no members at all
+        // (AObjectModification.NoneProperty) vacuously satisfies "every member carries a bit" and
+        // would otherwise store as BIGINT, which its own values are not.
+        return members.Length > 0 && members.All(m => m.BitValue != null)
             ? new("enum", "BIGINT", Empty, members,
                 obj => g(obj) is { } v ? (object?)Convert.ToInt64(v, System.Globalization.CultureInfo.InvariantCulture) : null,
                 v => Enum.ToObject(core, ReadBitmaskLong(v)),
-                IsBitmask: true,
                 IsFlagsEnum: isFlags, ViewDefaultLiteral: defaultLiteral)
             : new("enum", "VARCHAR", Empty, members,
             obj => g(obj)?.ToString(),
@@ -2259,7 +2258,7 @@ public sealed partial class SchemaReflector
         };
         return new(colName, leaf.ApiType, leaf.ValidFormKeyTypes, leaf.EnumMembers,
             leaf.Get, apply,
-            AllowsNull: leaf.AllowsNull, IsBitmask: leaf.IsBitmask);
+            AllowsNull: leaf.AllowsNull);
     }
 
     private static Func<object, object?> SubGetter(PropertyInfo prop) =>
@@ -2742,7 +2741,7 @@ public sealed partial class SchemaReflector
         };
         return new(leaf.DuckDbType, r => leaf.Get(r), leaf.ApiType, leaf.ValidFormKeyTypes, leaf.EnumMembers,
             apply,
-            AllowsNull: leaf.AllowsNull, IsBitmask: leaf.IsBitmask,
+            AllowsNull: leaf.AllowsNull,
             IsFlagsEnum: leaf.IsFlagsEnum,
             // A nullable property genuinely can be absent-meaning-null, so it keeps NULL rather than
             // being coalesced to a default it never had.

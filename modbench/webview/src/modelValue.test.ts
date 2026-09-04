@@ -19,7 +19,7 @@ const enumMeta: FieldMetadata = {
 const flagMeta: FieldMetadata = {
   name: 'Flags', type: 'enum', isArray: false, validFormKeyTypes: [],
   enumMembers: [{ value: 'A', bitValue: '1' }, { value: 'B', bitValue: '2' },
-    { value: 'C', bitValue: '4' }, { value: 'D', bitValue: '8' }], isBitmask: true,
+    { value: 'C', bitValue: '4' }, { value: 'D', bitValue: '8' }],
 };
 const fkMeta: FieldMetadata = { name: 'Owner', type: 'formKey', isArray: false, validFormKeyTypes: ['NPC_'], enumMembers: [] };
 const structMeta: FieldMetadata = {
@@ -82,13 +82,12 @@ describe('modelValue — flags', () => {
       name: 'RaceFlags', type: 'enum', isArray: false, validFormKeyTypes: [],
       enumMembers: [{ value: 'Playable', bitValue: '1' },
         { value: 'LowPriorityPushable', bitValue: '9007199254740992' }],
-      isBitmask: true,
     };
     expect(modelValue('9007199254740993', highBit)).toBe('Playable, LowPriorityPushable');
   });
 
   it('a bitless member falls back to toStr rather than throwing', () => {
-    const broken: FieldMetadata = { name: 'X', type: 'enum', isArray: false, validFormKeyTypes: [], enumMembers: [{ value: 'A' }], isBitmask: true };
+    const broken: FieldMetadata = { name: 'X', type: 'enum', isArray: false, validFormKeyTypes: [], enumMembers: [{ value: 'A' }] };
     expect(() => modelValue(3, broken)).not.toThrow();
   });
 });

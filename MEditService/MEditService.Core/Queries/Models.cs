@@ -122,11 +122,11 @@ public record PagedResult<T>(IReadOnlyList<T> Items, int Total);
 /// field is a bitmask, and what to show instead of the value when the value is not a word the user
 /// should read.
 ///
-/// <para><paramref name="BitValue"/> is a decimal string rather than a number so a bit above 2^53
-/// survives JSON without IEEE 754 loss, and is null for a plain (non-bitmask) enum, which stands
-/// for no bit. <paramref name="Label"/> is null for a member that is already the game's own
-/// vocabulary — an abstract union's discriminator sets it, its values being Mutagen class names the
-/// user is never shown.</para>
+/// <para><c>BitValue</c> is a decimal string rather than a number so a bit above 2^53 survives JSON
+/// without IEEE 754 loss, and is null for a plain (non-bitmask) enum, which stands for no bit.
+/// <c>Label</c> is null for a member that is already the game's own vocabulary — an abstract
+/// union's discriminator sets it, its values being Mutagen class names the user is never
+/// shown.</para>
 /// </summary>
 public record EnumMember(string Value, string? BitValue = null, string? Label = null);
 
@@ -143,7 +143,6 @@ public record FieldMetadata(
     IReadOnlyList<FieldMetadata>? Fields = null, // for 'struct': sub-field schemas
     bool IsSortable = false,                     // true when element is a pure FormLink
     bool AllowsNull = false,                     // for 'formKey': true when the Mutagen type is IFormLinkNullable<T>
-    bool IsBitmask = false,                      // for 'enum': true when the C# enum has [Flags]
 
     // Null for an ordinary field, whose row label is its own name; set by the abstract-union
     // discriminator, whose name is a wire name.
@@ -152,7 +151,14 @@ public record FieldMetadata(
     // This field names which concrete class its object is, read off the payload before that object
     // exists (SchemaReflector.ResolveListElementType). True for concrete_type and OMOD's
     // value_type, false for every other field.
-    bool IsDiscriminator = false);
+    bool IsDiscriminator = false)
+{
+    /// <summary>Whether this field renders as a set of independent flags rather than one choice:
+    /// every member stands for a bit. Derived, not stored — a member's own <c>BitValue</c> is the
+    /// only place that fact lives, so nothing can claim to be a bitmask over members that name no
+    /// bit.</summary>
+    public bool IsBitmask => EnumMembers.Count > 0 && EnumMembers.All(m => m.BitValue != null);
+}
 
 // Value contract: a bitmask field (Metadata.IsBitmask) carries its combined flags as a decimal
 // string, not a number — so values above 2^53 survive JSON round-tripping without IEEE 754 loss.

@@ -12,8 +12,8 @@ type Schemas = components['schemas'];
 export type FormKeyResolutionState = Schemas['FormKeyResolutionState'];
 export type FormKeyResolution = Schemas['FormKeyResolution'];
 export type ConflictAll = Schemas['ConflictAll'];
-export type EnumMember = Schemas['EnumMember'];
 export type ConflictThis = Schemas['ConflictThis'];
+export type EnumMember = Schemas['EnumMember'];
 export type ConditionOperator = Schemas['ConditionOperator'];
 export type ConditionParamCategory = Schemas['ConditionParamCategory'];
 export type ParsedConditionParam = Schemas['ParsedConditionParam'];
@@ -41,6 +41,9 @@ export type FieldType =
 export type FieldMetadata =
   // `isDiscriminator` is dropped rather than narrowed: it says which concrete class an object is,
   // which is the write path's decision alone (ArrayOpWriter) — the webview reads no such field.
+  // `isBitmask` is dropped for the same reason: it restates "every member carries a bit", which
+  // `flagBits` (modelValue.ts) reads off the members themselves, for wire and adapter metadata
+  // alike.
   Omit<Schemas['FieldMetadata'],
     'type' | 'elementType' | 'fields' | 'isSortable' | 'allowsNull' | 'isBitmask' | 'isDiscriminator'> & {
     type: FieldType;
@@ -57,7 +60,6 @@ export type FieldMetadata =
     // stays optional for the same reason `type` stays narrowed.
     isSortable?: boolean;   // on elementType: true for pure FormLink arrays
     allowsNull?: boolean;   // for 'formKey': true when the Mutagen type is IFormLinkNullable<T>
-    isBitmask?: boolean;    // true when the C# enum has [Flags]
   };
 
 export type FieldValue = Omit<Schemas['FieldValue'], 'metadata'> & { metadata: FieldMetadata };

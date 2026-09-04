@@ -13,7 +13,6 @@ const flagMeta: FieldMetadata = {
   validFormKeyTypes: [],
   enumMembers: [{ value: 'A', bitValue: '1' }, { value: 'B', bitValue: '2' },
     { value: 'C', bitValue: '4' }, { value: 'D', bitValue: '8' }],
-  isBitmask: true,
 };
 
 const sparseFlags: FieldMetadata = {
@@ -23,7 +22,6 @@ const sparseFlags: FieldMetadata = {
   validFormKeyTypes: [],
   // non-sequential: Z is bit 4, not bit 1
   enumMembers: [{ value: 'X', bitValue: '1' }, { value: 'Z', bitValue: '4' }],
-  isBitmask: true,
 };
 
 // Maintainer ruling 2026-09-01 (deliberate ADR-0034 divergence, recorded there): the
