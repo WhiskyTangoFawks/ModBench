@@ -257,7 +257,6 @@ internal sealed class RecordCopy(ILoadOrderMirror mirror, SchemaReflector schema
     private static string SlotNameFor(PlacementRow placement) =>
         placement.PlacementGroup.Equals("persistent", StringComparison.Ordinal) ? "Persistent" : "Temporary";
 
-    // schemaKey is the schema table name ("cell", "wrld").
     private IMajorRecord BarePartialFormAncestor(string formKey, string schemaKey, GameRelease release)
     {
         var schema = schemaReflector.GetSchemas(release)[schemaKey];

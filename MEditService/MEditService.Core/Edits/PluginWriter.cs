@@ -127,9 +127,9 @@ public sealed class PluginWriter(ILogger<PluginWriter> logger)
         return prep.BackupPath;
     }
 
-    // Sub-second timestamps: one user gesture can write a plugin twice in a second, and at one-second
-    // resolution the second backup collided and threw. Not File.Copy(overwrite: true), which would
-    // silently mask a genuine collision.
+    // Sub-second timestamps: one gesture can write a plugin twice in a second and the second backup
+    // collided. Not a uniquifying retry, which would mask a genuine collision, nor overwrite, which
+    // destroys the earlier backup.
     internal static string CreateBackup(string pluginPath, string? timestamp = null)
     {
         var dir = Path.GetDirectoryName(pluginPath)!;

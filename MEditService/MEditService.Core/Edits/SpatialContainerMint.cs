@@ -9,13 +9,11 @@ using Noggog.WorkEngine;
 
 namespace MEditService.Core.Edits;
 
-/// <summary>Mints a WRLD/CELL directory at the source's block/sub-block without computing a path
-/// (ADR-0041 declined a path grammar for containers): a synthetic one-subtree mod goes through the
-/// whole-mod serializer Track uses.</summary>
+/// <summary>Mints a WRLD/CELL directory without a path grammar (ADR-0041 declined one): a synthetic
+/// one-subtree mod goes through the whole-mod serializer Track uses, and is FO4-typed because that
+/// door is.</summary>
 internal static class SpatialContainerMint
 {
-    // FO4-typed throughout: the whole-mod door itself only exists for FO4, so this inherits that boundary.
-
     /// <summary>Only wires the block/sub-block nesting between two already-constructed records, copying
     /// coordinates from <paramref name="cellLocation"/> rather than deriving them.</summary>
     internal static Fallout4Mod BuildSyntheticWorldspaceMod(

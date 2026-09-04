@@ -89,9 +89,9 @@ public sealed class PluginCompileService(
             .Select(p => p.Name)
             .ToList();
 
-        // From here a crash mid-flight is what the journal marker is for: compileOne is not wrapped
-        // in try/catch, so a throw leaves the marker crash-shaped. PluginWriter never touches the
-        // plugin file until Commit(), so refusing is safe.
+        // A crash mid-flight is what the journal marker is for: only the unmappable-FormID shape is
+        // caught, so any other throw leaves it crash-shaped. PluginWriter never touches the plugin
+        // until Commit(), so refusing is safe.
         var atRef = source is CompileSource.AtRef atRefSource ? atRefSource.Ref : null;
         string? writeRefusal = null;
         CompileJournal.RunBatch(modFolder, [plugin.Name], _ =>
@@ -208,6 +208,9 @@ public sealed class PluginCompileService(
     // ADR-0042: the generated deserializer skips an unrecognized property and defaults a missing one
     // without throwing, so a successful parse proves nothing. With no independent original here, the
     // check is self-consistency: regenerate and byte-compare.
+
+    // No live subrecord-inventory gate here, deliberately: that loss class arises only when Track
+    // parses an external binary, never from Compile.
     private static string? RefuseIfSourceDoesNotRoundTrip(IMod mod, string pluginName, string resolverRoot)
     {
         var regeneratedFiles = TrackService.SerializeToPristineFiles(mod, pluginName).GetAwaiter().GetResult();

@@ -150,9 +150,9 @@ public sealed class RecordEditService(
         return RecordEditResult.Success();
     }
 
-    // Reflection makes a container's child slots and Cell.Grid/placed Position ordinary writable
-    // columns; writing one would silently desynchronize the cell_location/container_child/placement
-    // side tables, which nothing on this path re-derives. Containment is the path (ADR-0041).
+    // Reflection makes child slots, Cell.Grid and placed Position ordinary writable columns; writing
+    // one would desynchronize the side tables, which nothing here re-derives. Refusing is why no
+    // SetPlacement-style write-back exists; containment is the path (ADR-0041).
     private static RecordEditResult? RefuseIfContainmentField(
         string recordType, string fieldPath, IReadOnlyDictionary<string, RecordTableSchema> schemas, GameRelease release)
     {
@@ -827,8 +827,7 @@ public sealed class RecordEditService(
             "Pick a destination that loads after the origin.");
     }
 
-    // The one statement of which container types Copy as New Record supports (xEdit's DIAL/INFO/QUST
-    // allowance).
+    // The container types Copy as New Record supports are xEdit's DIAL/INFO/QUST allowance.
     private static string? CopyAsNewContainerFamilyName(string recordType, GameRelease release)
     {
         var name = RecordTypeDispatch.For(release).ConcreteFor(recordType)?.Name;
@@ -1688,6 +1687,8 @@ public sealed class RecordEditService(
         if (column == null)
             return RefuseFieldOutcome(FieldApplyOutcome.NotFound, fieldPath, HeaderIndexer.RecordType, schemas);
 
+        // A loud failure rather than a refusal, so a column gaining a delegate cannot quietly keep
+        // reading as read-only.
         if (column.Apply.Writer != null)
         {
             throw new NotSupportedException(
@@ -1878,7 +1879,7 @@ public sealed class RecordEditService(
         return Encoding.UTF8.GetString(stripped);
     }
 
-    /// <summary>Falls back to the indexed body only when the file is missing (never-assume-exclusive-
+    /// <summary>Falls back to the indexed body only when the file is missing (never assume exclusive
     /// ownership): refusing would strand the user with no way to put the record back.</summary>
     internal static IMajorRecord ReadRecordFromSource(
         RecordTextCodec codec, ILogger logger, string sourcePath, RecordDocument document, GameRelease release)
@@ -1893,9 +1894,9 @@ public sealed class RecordEditService(
             .GetAwaiter().GetResult();
     }
 
-    /// <summary>Writes the file, then names it in the ordered child list (ADR-0042 decision 4), deleting
-    /// the file if that fails: an unnamed file refuses the plugin at the next read. A minted
-    /// directory is removed too.</summary>
+    /// <summary>Writes the file, then names it in the ordered child list (ADR-0042). Not a transaction
+    /// (ADR-0045 is the cascade's tool): one tree need only fail on the tolerated side of the drift
+    /// rule.</summary>
     internal static string WritePlaced(string modFolder, SourcePlacement placement, string identity, Func<string, string> write) =>
         WritePlaced(
             Path.Combine(modFolder, placement.RelativePath),

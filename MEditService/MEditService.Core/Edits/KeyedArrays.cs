@@ -21,6 +21,7 @@ internal static class KeyedArrays
         return duplicateKey == null ? JsonSerializer.SerializeToElement(root) : value;
     }
 
+    // Asked before the payload is reparsed, so an ordinary field pays nothing for a concept it does not use.
     private static bool Carries(FieldMetadata meta) =>
         meta.KeyMembers != null
         || (meta.ElementType != null && Carries(meta.ElementType))

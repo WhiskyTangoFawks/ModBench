@@ -140,11 +140,8 @@ internal static class ArrayOpWriter
         return result;
     }
 
-    // An absent or null hop is "nothing yet", never a shape mismatch: remove/move answer NoOp, add
-    // starts a fresh list. Synthesized containers attach to their parent as created, or they vanish
-    // when root is re-serialized.
-
-    // The schema travels with the value because a key hop needs both at the same depth.
+    // An absent or null hop is "nothing yet", never a mismatch, so remove/move answer NoOp and add
+    // starts a list; the schema rides along because a key hop needs both at one depth.
     private static (JsonArray? Array, FieldMetadata? Meta) ResolveOrCreate(
         JsonNode root, IReadOnlyList<IPathSegment> path, FieldMetadata? rootMeta)
     {
@@ -215,13 +212,9 @@ internal static class ArrayOpWriter
         return true; // never a no-op
     }
 
-    // 'formKey' defaults to "Null", Mutagen's wire sentinel for an unset FormLink, rather than "":
-    // FormKey.TryFactory has no case for the empty string, so a bare-FormLink-array Add sending it
-    // would silently add nothing.
-
-    // "struct" names only the discriminator: BuildListElement constructs a fresh instance, so an
-    // unnamed member keeps its CLR default, and naming a read-only nested struct or an enum whose
-    // wire shape FieldMetadata cannot predict would refuse the write.
+    // 'formKey' defaults to "Null", Mutagen's sentinel for an unset FormLink, because "" is not a
+    // parseable FormKey and would add nothing; "struct" names only the discriminator so a read-only
+    // nested struct is never named.
     private static JsonNode? DefaultElementValue(FieldMetadata? meta) => meta?.Type switch
     {
         "string" => "",
@@ -250,11 +243,9 @@ internal static class ArrayOpWriter
         return element;
     }
 
-    // A read-only nested struct member round-trips as an explicit JSON null, and a named member is
-    // targeting regardless of value, so un-stripped every array op on such an array would refuse.
-
-    // Safe only because this tree is the field's own current value, never a caller-supplied payload:
-    // nothing here ever wrote a null, so there is no edit to lose.
+    // A read-only nested struct member round-trips as an explicit JSON null, which counts as
+    // targeting it, so un-stripped every op would refuse; safe because this tree is the field's
+    // current value, not a caller payload.
     private static void StripNulls(JsonNode? node)
     {
         switch (node)
