@@ -9,7 +9,7 @@ import sys
 
 MAX_LINES = 3
 TEST_FILE = re.compile(r"(Tests\.cs|\.test\.tsx?)$")
-CS_METHOD = re.compile(r"^\s*(?:\[.*\]\s*)?(?:public|private|internal|protected|static|async|override|virtual|\s)*[\w<>\[\],.?]+\s+\w+\s*(?:<[^>]*>)?\s*\(")
+CS_METHOD = re.compile(r"^\s*(?:public|private|internal|protected|static|async|override|virtual)\b[\w<>\[\],.?\s]*\s\w+\s*(?:<[^>]*>)?\s*\(")
 TS_TEST_METHOD = re.compile(r"^\s*(?:(?:it|test|describe)(?:\.\w+)?\s*\(|(?:export\s+)?(?:async\s+)?function\s+\w+|(?:public|private|protected|static|async|\s)*\w+\s*\([^)]*\)\s*(?::\s*[^{]+)?\{)")
 TS_TOP_LEVEL_DECL = re.compile(r"^(?:async\s+)?(?:function|const|let|class|interface|type|enum|abstract class)\s")
 CREF = re.compile(r"cref=|\{@link\s")
@@ -29,14 +29,19 @@ def doc_blocks(lines, is_cs):
             start = i
             while i < len(lines) and "*/" not in lines[i]:
                 i += 1
-            yield start, min(i, len(lines) - 1)
+            if i < len(lines):
+                yield start, i
         i += 1
 
 
 def next_code_line(lines, after):
+    in_attribute = False
     for j in range(after + 1, len(lines)):
         s = lines[j].strip()
-        if not s or s.startswith("//") or s.startswith("*") or (s.startswith("[") and s.endswith("]")):
+        if in_attribute or s.startswith("["):
+            in_attribute = not s.endswith("]")
+            continue
+        if not s or s.startswith("//") or s.startswith("*"):
             continue
         return lines[j]
     return ""
@@ -77,11 +82,8 @@ def main(argv):
         hits = check(argv[1], sys.stdin.read())
     else:
         for path in argv:
-            try:
-                with open(path, encoding="utf-8", errors="replace") as f:
-                    hits.extend(check(path, f.read()))
-            except FileNotFoundError:
-                continue
+            with open(path, encoding="utf-8", errors="replace") as f:
+                hits.extend(check(path, f.read()))
     for h in hits:
         print(h)
     return 1 if hits else 0
