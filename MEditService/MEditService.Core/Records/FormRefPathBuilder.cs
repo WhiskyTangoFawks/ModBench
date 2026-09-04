@@ -44,29 +44,32 @@ internal static class FormRefPathBuilder
         Action<string, string?, bool, IReadOnlyList<string>> onFormKeyLeaf)
     {
         if (meta.Type == "formKey")
+        {
             onFormKeyLeaf(path, ExtractString(value), meta.AllowsNull, meta.ValidFormKeyTypes);
-        else if (meta.Type == "struct")
-            WalkStruct(meta, value, path, onFormKeyLeaf);
-        else if (meta.Type == "array")
-            WalkArray(meta, value, path, onFormKeyLeaf);
+            return;
+        }
+
+        if (meta.Type is not ("struct" or "array")) return;
+
+        // A struct or array *column*'s own Extract answers the serialized VARCHAR the document
+        // stores; one nested inside it answers the parsed JsonElement. Coerced once, here, so
+        // neither shape reaches the two walks below and every level of the tree sees the same one.
+        if (value is string text)
+        {
+            using var doc = JsonDocument.Parse(text);
+            Walk(meta, doc.RootElement, path, onFormKeyLeaf);
+            return;
+        }
+
+        if (meta.Type == "struct") WalkStruct(meta, value, path, onFormKeyLeaf);
+        else WalkArray(meta, value, path, onFormKeyLeaf);
     }
 
-    // A struct column's own Extract answers the serialized VARCHAR the document stores, while a
-    // struct *sub-field*'s answers a parsed JsonElement — the same two shapes ForEachElement already
-    // accepts for an array, and for the same reason: this walk is asked of both levels.
     private static void WalkStruct(
         FieldMetadata meta, object? value, string path,
         Action<string, string?, bool, IReadOnlyList<string>> onFormKeyLeaf)
     {
-        if (meta.Fields == null) return;
-        if (value is string text)
-        {
-            using var doc = JsonDocument.Parse(text);
-            WalkStruct(meta, doc.RootElement, path, onFormKeyLeaf);
-            return;
-        }
-
-        if (value is not JsonElement { ValueKind: JsonValueKind.Object } obj) return;
+        if (meta.Fields == null || value is not JsonElement { ValueKind: JsonValueKind.Object } obj) return;
         var idle = IdleMembers(meta.Fields, obj);
         foreach (var field in meta.Fields)
         {
@@ -120,22 +123,11 @@ internal static class FormRefPathBuilder
         _ => null
     };
 
-    internal static void ForEachElement(object? value, Action<int, JsonElement> callback)
+    private static void ForEachElement(object? value, Action<int, JsonElement> callback)
     {
-        if (value is string s)
-        {
-            using var doc = JsonDocument.Parse(s);
-            Enumerate(doc.RootElement);
-            return;
-        }
-        if (value is JsonElement { ValueKind: JsonValueKind.Array } je)
-            Enumerate(je);
-
-        void Enumerate(JsonElement arr)
-        {
-            var idx = 0;
-            foreach (var elem in arr.EnumerateArray())
-                callback(idx++, elem);
-        }
+        if (value is not JsonElement { ValueKind: JsonValueKind.Array } array) return;
+        var idx = 0;
+        foreach (var elem in array.EnumerateArray())
+            callback(idx++, elem);
     }
 }

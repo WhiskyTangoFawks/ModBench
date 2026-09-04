@@ -81,6 +81,7 @@ internal static class StructLeaves
     private static ApplyOutcome ApplyStructJson(
         object target, JsonElement json, string pName, Type setterType, IReadOnlyList<SubFieldSpec> subFields)
     {
+        if (json.ValueKind == JsonValueKind.Null) return ClearStruct(target, pName);
         if (json.ValueKind != JsonValueKind.Object) return ApplyOutcome.ValueRejected;
 
         var concreteType = setterType;
@@ -100,6 +101,20 @@ internal static class StructLeaves
         var subOutcome = SubFieldValues.ApplySubFields(obj, json, subFields);
         if (subOutcome != ApplyOutcome.Applied) return subOutcome;
         if (rp.CanWrite) rp.SetValue(target, obj);
+        return ApplyOutcome.Applied;
+    }
+
+    /// <summary>A struct member the payload gives as <c>null</c> is the absence of a struct, not a
+    /// malformed one: that is exactly what this field's own <c>Extract</c> answers for a subrecord
+    /// the record does not carry (a scene adapter's <c>on_begin</c> fragment, say), so resending a
+    /// record's own read value has to mean "still none" rather than being refused. Clearing it is
+    /// also the honest reading of a user who empties the member deliberately — the same value, the
+    /// same result.</summary>
+    private static ApplyOutcome ClearStruct(object target, string pName)
+    {
+        var rp = target.GetType().GetProperty(pName, BindingFlags.Public | BindingFlags.Instance);
+        if (rp == null) return ApplyOutcome.PropertyNotFound;
+        if (rp.CanWrite) rp.SetValue(target, null);
         return ApplyOutcome.Applied;
     }
 

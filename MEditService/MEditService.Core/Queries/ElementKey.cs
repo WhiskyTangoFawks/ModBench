@@ -16,10 +16,6 @@ namespace MEditService.Core.Queries;
 /// defect: a script with no name is representable, and it is exactly what a freshly added element
 /// carries until the user names it (#710 — a new element names its discriminator and nothing else).
 /// A second unnamed element added to the same array is then what the duplicate refusal catches.</para>
-///
-/// <para>Read from either JSON representation because the two sides of the concept hold different
-/// ones — the compare grid aligns <see cref="JsonElement"/>s it never mutates, the write path sorts
-/// a mutable <see cref="JsonNode"/> tree — while what a key <i>is</i> stays defined once, here.</para>
 /// </summary>
 internal readonly record struct ElementKey(IReadOnlyList<(double? Number, string Text)> Segments)
 {
@@ -28,8 +24,14 @@ internal readonly record struct ElementKey(IReadOnlyList<(double? Number, string
     internal static ElementKey Of(JsonElement element, IReadOnlyList<string> keyMembers) =>
         new([.. keyMembers.Select(path => ReadElement(element, path))]);
 
+    /// <summary>The write path holds a mutable <see cref="JsonNode"/> tree rather than the
+    /// <see cref="JsonElement"/> the compare grid aligns; it reaches the same reader through one
+    /// re-serialize rather than a second copy of what a key reads as.</summary>
     internal static ElementKey Of(JsonNode? node, IReadOnlyList<string> keyMembers) =>
-        new([.. keyMembers.Select(path => ReadNode(node, path))]);
+        Of(JsonSerializer.SerializeToElement(node), keyMembers);
+
+    /// <summary>An element that is its own key — a pure-FormLink array's.</summary>
+    internal static ElementKey OfValue(string value) => new([(null, value)]);
 
     internal int CompareTo(ElementKey other)
     {
@@ -60,20 +62,6 @@ internal readonly record struct ElementKey(IReadOnlyList<(double? Number, string
             JsonValueKind.True or JsonValueKind.False => (null, current.GetRawText()),
             _ => Absent,
         };
-    }
-
-    private static (double?, string) ReadNode(JsonNode? node, string keyPath)
-    {
-        var current = node;
-        foreach (var hop in keyPath.Split('.'))
-        {
-            if (current is not JsonObject obj || !obj.TryGetPropertyValue(hop, out current)) return Absent;
-        }
-
-        if (current is not JsonValue value) return Absent;
-        return value.GetValueKind() == JsonValueKind.Number
-            ? (value.GetValue<double>(), value.GetValue<double>().ToString(CultureInfo.InvariantCulture))
-            : (null, value.ToString());
     }
 
     private static (double?, string) Absent => (null, "");

@@ -156,18 +156,17 @@ public sealed class RecordEditService(
             && PartialFormFlag.IsPartialFormable(target.GetType());
         var bit14Before = checkBit14Leak ? target.MajorRecordFlagsRaw & PartialFormFlag.Bit : 0;
 
-        var outcome = RecordFieldWriter.TryApply(
-            target, document.RecordType, fieldPath, value, schemas, out var duplicateKey);
+        var applied = RecordFieldWriter.TryApply(target, document.RecordType, fieldPath, value, schemas);
         // #630: a boundary array op (remove past the end, move the first element up / the last
         // down) — already fully "satisfied" with nothing to commit. Returned before the bit-14 leak
         // check and every write below (rename, re-serialize, ApplyWorkingTreeChanges, ReapplyFilter)
         // so a boundary no-op leaves the working tree exactly as it was: no dirty file, no spurious
         // history entry, matching this class's own "nothing written before/unless applied" contract
         // for every genuine refusal.
-        if (outcome == FieldApplyOutcome.NoOp)
+        if (applied.Outcome == FieldApplyOutcome.NoOp)
             return RecordEditResult.Success();
-        if (outcome != FieldApplyOutcome.Applied)
-            return RefuseFieldOutcome(outcome, fieldPath, document.RecordType, schemas, duplicateKey);
+        if (applied.Outcome != FieldApplyOutcome.Applied)
+            return RefuseFieldOutcome(applied, fieldPath, document.RecordType, schemas);
 
         if (checkBit14Leak && (target.MajorRecordFlagsRaw & PartialFormFlag.Bit) != bit14Before)
         {
@@ -1579,8 +1578,18 @@ public sealed class RecordEditService(
         IMajorRecordGetter record, string recordType, string oldFormKey, PluginKey plugin, GameRelease release)
     {
         var refs = new List<FormRef>();
-        if (schemaReflector.GetSchemas(release).TryGetValue(recordType, out var schema))
-            PluginIngest.CollectFormRefs(refs, record, recordType, schema);
+        if (!schemaReflector.GetSchemas(release).TryGetValue(recordType, out var schema))
+        {
+            // A record the cascade reached came from a document the index produced, so its type
+            // always has a schema. Refusing rather than passing keeps this guard's own
+            // conservative direction: a guard that cannot run has not cleared anything.
+            return RecordEditResult.Refused(
+                RecordEditRefusal.ReferenceRemapIncomplete,
+                $"'{recordType}' has no reflected schema, so the remap-completeness check for " +
+                $"{record.FormKey} in {plugin.Name} could not run. Nothing was written.");
+        }
+
+        PluginIngest.CollectFormRefs(refs, record, recordType, schema);
         if (refs.FirstOrDefault(r => r.TargetFormKey == oldFormKey) is { TargetFormKey: not null } stale)
         {
             return RecordEditResult.Refused(
@@ -2326,19 +2335,19 @@ public sealed class RecordEditService(
     }
 
     private static RecordEditResult RefuseFieldOutcome(
-        FieldApplyOutcome outcome, string fieldPath, string recordType,
-        IReadOnlyDictionary<string, RecordTableSchema> schemas, string? duplicateKey = null)
+        FieldApplyResult applied, string fieldPath, string recordType,
+        IReadOnlyDictionary<string, RecordTableSchema> schemas)
     {
+        var outcome = applied.Outcome;
         // The key identifies the element, so the refusal names it — a caller told only that
         // something collided would have to diff the array itself to find out what.
         if (outcome == FieldApplyOutcome.DuplicateKeyInKeyedArray)
         {
             return RecordEditResult.Refused(
                 RecordEditRefusal.DuplicateKeyInKeyedArray,
-                $"'{fieldPath}' has two entries keyed '{duplicateKey}'. Entries there are identified " +
-                "by that key rather than by position, so rename or remove one of the two.");
+                $"'{fieldPath}' has two entries keyed '{applied.DuplicateKey}'. Entries there are " +
+                "identified by that key rather than by position, so rename or remove one of the two.");
         }
-
 
         if (outcome == FieldApplyOutcome.ReadOnly)
             return RecordEditResult.Refused(RecordEditRefusal.FieldReadOnly, $"'{fieldPath}' is read-only.");

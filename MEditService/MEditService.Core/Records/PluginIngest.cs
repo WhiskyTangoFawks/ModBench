@@ -139,8 +139,7 @@ internal sealed class PluginIngest
         // than round-tripping through the document that pass just wrote, so they land in the
         // shared list before the single form_references flush below. What that pass
         // does not see is exactly what has no schema (SchemaReflector.ExcludedTables — the placed
-        // projectile types): those records have no document and no row, and contribute no
-        // VMAD refs either.
+        // projectile types): those records have no document, no row and no refs.
 
         phaseTimer.Restart();
         IndexPlacement(pluginMod, plugin, origin);
@@ -203,8 +202,7 @@ internal sealed class PluginIngest
     public void DeleteAllRowsFor(string plugin, string origin)
     {
         // Every record row is in `records`, the plugin header's included (#631 — no per-type table
-        // survives). Deleting this plugin's `records` rows also removes the one thing
-        // GetVmad reads.
+        // survives).
         DeleteExistingForOrigin("records", plugin, origin);
         // "Removes every trace of key" has to include the Head side. A leftover snapshot would
         // keep answering at Head for a plugin the load order no longer holds — the exact opposite of
@@ -419,12 +417,6 @@ internal sealed class PluginIngest
                 refs.Add(new FormRef(sourceFormKey, fk, path, tableName, sourceEditorId)));
         }
     }
-
-    // One record's VMAD Object-property refs — the body of the loop above, extracted so
-    // per-record re-derivation walks VMAD through the identical code rather than a second copy of it.
-    // The parameter is IMajorRecordGetter rather than the VMAD aspect interface because the
-    // re-derivation path holds a record reconstituted from its document, and would otherwise have to
-    // repeat the aspect test at its own call site. A record with no VMAD contributes nothing.
 
     // One form_references row, appended the same way whether it came from a whole-plugin ingest
     // or from a single record's working-tree change — extracted so the two paths cannot append

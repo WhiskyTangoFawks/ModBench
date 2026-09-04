@@ -153,7 +153,7 @@ export interface ColumnHeaderContext {
 }
 
 // The chain from a row's own restage root
-// (a plain reflected field, or a wirePath-bearing subtree) down to a given row's
+// (the reflected field it stages under) down to a given row's
 // own value — a struct hop addressed by member name, an unsorted-array hop by position, a sorted
 // (pure FormLink) array hop by the element's own value (nothing addresses *beneath* a sortKey
 // hop). Lives here, not in a webview module, because StringValueContext/

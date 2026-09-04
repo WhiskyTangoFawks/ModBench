@@ -323,7 +323,8 @@ export function DiffRow({
           // threaded down to this row, so canMoveDown reads
           // permissive (true) rather than gating the menu item's presence on this plugin's own
           // real length the way canMoveUp already does via `index > 0`; the underlying op still
-          // safely no-ops at the true boundary (moveArrayElement's own bounds check).
+          // safely no-ops at the true boundary (ArrayOpWriter answers a move past either end
+          // as a NoOp that commits nothing).
           const arrayEditable = !!onEditCell && editableColumns.has(key) && (isUnsortedArrayParentRow || isUnsortedArrayElementRow);
           const arrayOps = arrayEditable ? {
             add: isUnsortedArrayParentRow ? () => onArrayAdd?.(key) : undefined,

@@ -231,10 +231,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
   // (stringValueContext, recordUtils.ts) through FIELD_OPEN_EXTENDED_EDITOR, so a string leaf
   // nested inside a struct/array reconstructs the whole subtree exactly the way an inline edit on
   // the same cell does, instead of sending the saved text alone under the subtree's root
-  // path. `rootDiff` is resolved by name: a plain top-level `.find` for an ordinary field (always
-  // has its own root at the top of `result.diffs`), falling back to findFieldDiffDeep (#660) for a
-  // VMAD property, whose own root
-  // never sits at vmadTree.diffs's own top level (see that function's own doc comment).
+  // path. `rootDiff` is resolved by name off `result.diffs`, where every field's own root sits.
   const handleOpenExtended = useCallback((
     plugin: ColumnKey, fieldPath: string, path: PathSegment[], rootField: string, value: string, readOnly: boolean,
   ) => {

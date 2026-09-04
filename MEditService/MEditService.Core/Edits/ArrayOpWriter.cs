@@ -10,8 +10,8 @@ namespace MEditService.Core.Edits;
 /// #630: the four array arity/order op envelopes — <c>array_remove</c>/<c>array_move_up</c>/
 /// <c>array_move_down</c>/<c>array_add</c> — computed here instead of round-tripped as a
 /// client-computed whole array through the webview. Scope is ordinary reflected fields only
-/// (<see cref="ColumnSpec"/>-backed columns) — which, since the virtual-machine-adapter column
-/// became one, includes a script's properties and a Papyrus scalar-array property's elements.
+/// (<see cref="ColumnSpec"/>-backed columns), which includes a script's properties and a Papyrus
+/// scalar-array property's elements.
 ///
 /// <para>Each op reads the column's own <i>current</i> value (<see cref="ColumnSpec.Extract"/>),
 /// walks the envelope's own <c>path</c> to the target array — an ordinary reflected field's wire
@@ -29,10 +29,9 @@ internal static class ArrayOpWriter
 
     internal static bool IsArrayOp(string opName) => OpNames.Contains(opName);
 
-    internal static FieldApplyOutcome Apply(
-        IMajorRecord record, ColumnSpec col, string opName, JsonElement envelope, out string? duplicateKey)
+    internal static FieldApplyResult Apply(
+        IMajorRecord record, ColumnSpec col, string opName, JsonElement envelope)
     {
-        duplicateKey = null;
         if (col.Apply.Writer is not { } apply) return FieldApplyOutcome.ReadOnly;
         if (!envelope.TryGetProperty("path", out var pathEl) || pathEl.ValueKind != JsonValueKind.Array)
             return FieldApplyOutcome.ValueShapeMismatch;
@@ -85,8 +84,8 @@ internal static class ArrayOpWriter
         // payload does (RecordFieldWriter.TryApply): an element appended to a keyed array lands in
         // key order, and a second element added before the first one was given a key collides with it.
         var newValue = KeyedArrays.Normalize(
-            JsonSerializer.SerializeToElement(root), col.ToFieldMetadata(), out duplicateKey);
-        if (duplicateKey != null) return FieldApplyOutcome.DuplicateKeyInKeyedArray;
+            JsonSerializer.SerializeToElement(root), col.ToFieldMetadata(), out var duplicateKey);
+        if (duplicateKey != null) return new(FieldApplyOutcome.DuplicateKeyInKeyedArray, duplicateKey);
 
         return apply(record, newValue) switch
         {

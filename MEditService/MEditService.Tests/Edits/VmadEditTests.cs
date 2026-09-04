@@ -56,6 +56,7 @@ public sealed class VmadEditTests : IDisposable
     [Fact]
     public void AddingAScript_StoresEveryScriptInKeyOrder_AndTouchesNothingElse()
     {
+        _fixture.Normalize(_fixture.Npc);
         var before = _fixture.Body(_fixture.Npc);
         var adapter = _fixture.Adapter(_fixture.Npc);
         Scripts(adapter).Add(new JsonObject { ["name"] = "Aardvark", ["flags"] = "Local", ["properties"] = new JsonArray() });
@@ -65,7 +66,10 @@ public sealed class VmadEditTests : IDisposable
         Assert.True(result.Applied, result.Message);
         var after = _fixture.Body(_fixture.Npc);
         Assert.Equal(["Aardvark", "Alpha", "Beta"], WrittenScriptNames(after));
-        // The two scripts the fixture wrote out of key order move; nothing else in the record does.
+        // The two scripts the fixture wrote out of key order move, and carry exactly what they
+        // carried; the new one is the only content the record gained.
+        Assert.Equal(WrittenScripts(before)["Alpha"], WrittenScripts(after)["Alpha"]);
+        Assert.Equal(WrittenScripts(before)["Beta"], WrittenScripts(after)["Beta"]);
         Assert.All(
             ConditionEditTests.DocumentDiff(before, after),
             d => Assert.StartsWith("VirtualMachineAdapter.Scripts", d, StringComparison.Ordinal));
@@ -85,22 +89,32 @@ public sealed class VmadEditTests : IDisposable
         Assert.True(result.Applied, result.Message);
         var after = _fixture.Body(_fixture.Npc);
         Assert.Equal(["Alpha"], WrittenScriptNames(after));
+        // Alpha is byte-identical; every difference is Beta's own removal.
+        Assert.Equal(WrittenScripts(before)["Alpha"], WrittenScripts(after)["Alpha"]);
         Assert.All(
             ConditionEditTests.DocumentDiff(before, after),
             d => Assert.StartsWith("VirtualMachineAdapter.Scripts[1]", d, StringComparison.Ordinal));
     }
 
     [Fact]
-    public void RenamingAScript_MovesItToItsNewKeysPlace()
+    public void RenamingAScript_MovesItToItsNewKeysPlace_CarryingEverythingElseWithIt()
     {
         _fixture.Normalize(_fixture.Npc);
+        var before = _fixture.Body(_fixture.Npc);
         var adapter = _fixture.Adapter(_fixture.Npc);
         ScriptNamed(adapter, "Alpha")["name"] = "Zulu";
 
         var result = Edit(_fixture.Npc, adapter);
 
         Assert.True(result.Applied, result.Message);
-        Assert.Equal(["Beta", "Zulu"], WrittenScriptNames(_fixture.Body(_fixture.Npc)));
+        var after = _fixture.Body(_fixture.Npc);
+        Assert.Equal(["Beta", "Zulu"], WrittenScriptNames(after));
+        // The renamed script swaps places with Beta and its own name changes. Nothing else does:
+        // its properties travel with it verbatim, and Beta's own text is untouched.
+        Assert.Equal(
+            WrittenScripts(before)["Alpha"].Replace("\"Alpha\"", "\"Zulu\"", StringComparison.Ordinal),
+            WrittenScripts(after)["Zulu"]);
+        Assert.Equal(WrittenScripts(before)["Beta"], WrittenScripts(after)["Beta"]);
     }
 
     // ── properties ───────────────────────────────────────────────────────────
@@ -185,12 +199,11 @@ public sealed class VmadEditTests : IDisposable
         var result = Edit(_fixture.Npc, new JsonObject { ["op"] = op, ["path"] = path });
 
         Assert.True(result.Applied, result.Message);
-        var tags = JsonNode.Parse(_fixture.Body(_fixture.Npc))!["VirtualMachineAdapter"]!["Scripts"]![0]!["Properties"]![3]!;
-        Assert.Equal("Tags", tags["Name"]!.GetValue<string>());
+        var tags = WrittenProperty(_fixture.Body(_fixture.Npc), "Alpha", "Tags");
         Assert.Equal(expected, tags["Data"]!.AsArray().Select(e => e!.GetValue<string>()));
         Assert.All(
             ConditionEditTests.DocumentDiff(before, _fixture.Body(_fixture.Npc)),
-            d => Assert.StartsWith("VirtualMachineAdapter.Scripts[0].Properties[3].Data", d, StringComparison.Ordinal));
+            d => Assert.StartsWith("VirtualMachineAdapter.Scripts[0].Properties[3].Data[", d, StringComparison.Ordinal));
     }
 
     // ── struct members and array-of-struct instances ─────────────────────────
@@ -233,9 +246,12 @@ public sealed class VmadEditTests : IDisposable
         var result = Edit(_fixture.Npc, adapter);
 
         Assert.True(result.Applied, result.Message);
-        Assert.All(
-            ConditionEditTests.DocumentDiff(before, _fixture.Body(_fixture.Npc)),
-            d => Assert.StartsWith("VirtualMachineAdapter.Scripts[0].Properties[2].Structs[1]", d, StringComparison.Ordinal));
+        // One difference, and it is the whole new instance: nothing else in the record moved.
+        var added = Assert.Single(ConditionEditTests.DocumentDiff(before, _fixture.Body(_fixture.Npc)));
+        Assert.StartsWith(
+            "VirtualMachineAdapter.Scripts[0].Properties[2].Structs[1]: <absent> -> ",
+            added, StringComparison.Ordinal);
+        Assert.Contains("\"Weight\"", added, StringComparison.Ordinal);
     }
 
     // ── a quest's alias scripts and fragments ────────────────────────────────
@@ -270,10 +286,53 @@ public sealed class VmadEditTests : IDisposable
         // The fixture wrote stage 10 before stage 5; the key is (Stage, StageIndex), so the write
         // stores them the other way round.
         Assert.Equal([5, 10], written.Select(f => f!["Stage"]!.GetValue<int>()));
-        Assert.Equal("Renamed", written[1]!["ScriptName"]!.GetValue<string>());
+        Assert.Equal("Renamed", written.Single(f => f!["Stage"]!.GetValue<int>() == 10)!["ScriptName"]!.GetValue<string>());
         Assert.All(
             ConditionEditTests.DocumentDiff(before, _fixture.Body(_fixture.Quest)),
-            d => Assert.StartsWith("VirtualMachineAdapter.Fragments", d, StringComparison.Ordinal));
+            d => Assert.StartsWith("VirtualMachineAdapter.Fragments[", d, StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void EditingAPerkFragment_KeepsTheFragmentsInIndexOrder()
+    {
+        var before = _fixture.Body(_fixture.Perk);
+        var adapter = _fixture.Adapter(_fixture.Perk);
+        adapter["script_fragments"]!["fragments"]!.AsArray()
+            .First(f => f!["index"]!.GetValue<int>() == 2)!["script_name"] = "Renamed";
+
+        var result = Edit(_fixture.Perk, adapter);
+
+        Assert.True(result.Applied, result.Message);
+        var written = JsonNode.Parse(_fixture.Body(_fixture.Perk))!["VirtualMachineAdapter"]!
+            ["ScriptFragments"]!["Fragments"]!.AsArray();
+        // The fixture wrote index 2 before index 1; a single-member key sorts them by value.
+        Assert.Equal([1, 2], written.Select(f => f!["Index"]!.GetValue<int>()));
+        Assert.Equal("Renamed", written.Single(f => f!["Index"]!.GetValue<int>() == 2)!["ScriptName"]!.GetValue<string>());
+        Assert.All(
+            ConditionEditTests.DocumentDiff(before, _fixture.Body(_fixture.Perk)),
+            d => Assert.StartsWith("VirtualMachineAdapter.ScriptFragments.Fragments[", d, StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void EditingAScenePhaseFragment_OrdersByIndexThenFlag_NotByIndexAlone()
+    {
+        var before = _fixture.Body(_fixture.Scene);
+        var adapter = _fixture.Adapter(_fixture.Scene);
+        adapter["script_fragments"]!["phase_fragments"]!.AsArray()
+            .First(f => f!["script_name"]!.GetValue<string>() == "OneStart")!["fragment_name"] = "Renamed";
+
+        var result = Edit(_fixture.Scene, adapter);
+
+        Assert.True(result.Applied, result.Message);
+        var written = JsonNode.Parse(_fixture.Body(_fixture.Scene))!["VirtualMachineAdapter"]!
+            ["ScriptFragments"]!["PhaseFragments"]!.AsArray();
+        // Two fragments share index 1; the flag is what separates them, so all three survive and
+        // the pair sorts among itself by flag value (OnStart = 1 before OnCompletion = 2). A key of
+        // the index alone would have refused this record's own data as a duplicate.
+        Assert.Equal(["ZeroEnd", "OneStart", "OneEnd"], written.Select(f => f!["ScriptName"]!.GetValue<string>()));
+        Assert.All(
+            ConditionEditTests.DocumentDiff(before, _fixture.Body(_fixture.Scene)),
+            d => Assert.StartsWith("VirtualMachineAdapter.ScriptFragments.PhaseFragments[", d, StringComparison.Ordinal));
     }
 
     // ── the duplicate key ────────────────────────────────────────────────────
@@ -315,6 +374,17 @@ public sealed class VmadEditTests : IDisposable
         Assert.Contains("10 / 0", result.Message, StringComparison.Ordinal);
     }
 
+    /// <summary>Each written script's own text, by name — what a gesture that was not about a
+    /// script has to leave byte-identical, wherever the sort moved it to.</summary>
+    private static Dictionary<string, string> WrittenScripts(string body) =>
+        JsonNode.Parse(body)!["VirtualMachineAdapter"]!["Scripts"]!.AsArray()
+            .ToDictionary(s => s!["Name"]!.GetValue<string>(), s => s!.ToJsonString(), StringComparer.Ordinal);
+
+    private static JsonNode WrittenProperty(string body, string script, string property) =>
+        JsonNode.Parse(body)!["VirtualMachineAdapter"]!["Scripts"]!.AsArray()
+            .First(s => s!["Name"]!.GetValue<string>() == script)!["Properties"]!.AsArray()
+            .First(p => p!["Name"]!.GetValue<string>() == property)!;
+
     private static List<string> WrittenPropertyNames(string body, string script) =>
         [.. JsonNode.Parse(body)!["VirtualMachineAdapter"]!["Scripts"]!.AsArray()
             .First(s => s!["Name"]!.GetValue<string>() == script)!["Properties"]!.AsArray()
@@ -332,6 +402,8 @@ public sealed class VmadEditTests : IDisposable
         public PluginKey Plugin { get; } = new(PluginName, Origin);
         public FormKey Npc { get; }
         public FormKey Quest { get; }
+        public FormKey Perk { get; }
+        public FormKey Scene { get; }
 
         public VmadFixture()
         {
@@ -360,6 +432,35 @@ public sealed class VmadEditTests : IDisposable
             questAdapter.Aliases.Add(alias);
             quest.VirtualMachineAdapter = questAdapter;
             Quest = quest.FormKey;
+
+            // A PERK fragment array keys on a single member (its index) rather than QUST's pair,
+            // and is written out of key order like everything else here.
+            var perk = mod.Perks.AddNew("Vmad694Perk");
+            var perkAdapter = new PerkAdapter { Version = 6, ObjectFormat = 2 };
+            var perkFragments = new PerkScriptFragments();
+            perkFragments.Fragments.Add(new PerkScriptFragment { Index = 2, ScriptName = "Two", FragmentName = "Frag2" });
+            perkFragments.Fragments.Add(new PerkScriptFragment { Index = 1, ScriptName = "One", FragmentName = "Frag1" });
+            perkAdapter.ScriptFragments = perkFragments;
+            perk.VirtualMachineAdapter = perkAdapter;
+            Perk = perk.FormKey;
+
+            // A scene phase fragment's key is its phase index and its phase flag, in that order —
+            // xEdit's own wbStructSK([1, 0]) — so two fragments can share an index and be told
+            // apart by the flag. Also the one adapter here whose own on_begin/on_end fragments are
+            // unset, so a resend of it carries a null nested struct member.
+            var scene = new Scene(mod.GetNextFormKey("Vmad694Scene"), Fallout4Release.Fallout4) { EditorID = "Vmad694Scene" };
+            quest.Scenes.Add(scene);
+            var sceneAdapter = new SceneAdapter { Version = 6, ObjectFormat = 2 };
+            var sceneFragments = new SceneScriptFragments();
+            sceneFragments.PhaseFragments.Add(new ScenePhaseFragment
+            { Index = 1, Flags = ScenePhaseFragment.Flag.OnStart, ScriptName = "OneStart", FragmentName = "F1S" });
+            sceneFragments.PhaseFragments.Add(new ScenePhaseFragment
+            { Index = 0, Flags = ScenePhaseFragment.Flag.OnCompletion, ScriptName = "ZeroEnd", FragmentName = "F0E" });
+            sceneFragments.PhaseFragments.Add(new ScenePhaseFragment
+            { Index = 1, Flags = ScenePhaseFragment.Flag.OnCompletion, ScriptName = "OneEnd", FragmentName = "F1E" });
+            sceneAdapter.ScriptFragments = sceneFragments;
+            scene.VirtualMachineAdapter = sceneAdapter;
+            Scene = scene.FormKey;
 
             mod.WriteToBinary(pluginPath);
 

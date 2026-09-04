@@ -31,7 +31,7 @@ namespace MEditService.Tests.Query;
 // The set of "which dictionaries are column-keyed" is derived by reflecting over the
 // [ColumnKeyed] attribute on the DTOs themselves (Queries/Models.cs), not hand-typed here — a
 // hand-typed allowlist is exactly the mechanism that let a column-keyed dictionary
-// (VmadPropertyDiff.Raw) go unchecked, plus one dead entry (ClassifyResult.PluginStates, never itself serialized) linger.
+// go unchecked, plus one dead entry (ClassifyResult.PluginStates, never itself serialized) linger.
 // See ColumnKeyedAttribute's own doc comment (Queries/ColumnKey.cs).
 public sealed class CompareResultColumnKeyIntegrityTests
 {
@@ -183,12 +183,10 @@ public sealed class CompareResultColumnKeyIntegrityTests
     [Fact]
     public void GetCompare_SameFilenameTwoOrigins_EveryDictionaryKeyIsARealColumnKey()
     {
-        // Perk (not Npc): a Fallout4 record type carrying both VMAD *and* a top-level Conditions
-        // field at once, so a single record reaches every column-keyed dictionary this test guards
-        // as well as the nested condition subtree. VmadPropertyDiff.Raw is populated only for
-        // struct/structList VMAD properties — the one the old hand-typed allowlist missed
-        // entirely, and one an Npc-based fixture (whose single VMAD property was a plain scalar
-        // bool) never reached.
+        // Perk (not Npc): a Fallout4 record type carrying both a script adapter *and* a top-level
+        // Conditions field at once, so a single record reaches every column-keyed dictionary this
+        // test guards as well as the nested condition subtree, several levels down inside a struct
+        // property and an array-of-struct property both.
         var mod = new Fallout4Mod(ModKey.FromFileName("Shared.esp"), Fallout4Release.Fallout4);
         var perk = mod.Perks.AddNew("SharedPerk");
 
@@ -196,9 +194,6 @@ public sealed class CompareResultColumnKeyIntegrityTests
         var script = new ScriptEntry { Name = "S", Flags = ScriptEntry.Flag.Local };
         script.Properties.Add(new ScriptBoolProperty { Name = "IsActive", Data = true });
 
-        // Struct property (kind "struct") — VmadPropertyDiff.Raw is populated only for struct/
-        // structList, the exact gap the old allowlist ("raw" absent from ColumnDictProperties) left
-        // unchecked.
         var structProp = new ScriptStructProperty { Name = "Config" };
         var structMember = new ScriptEntry { Name = "SubScript" };
         structMember.Properties.Add(new ScriptFloatProperty { Name = "Factor", Data = 1.5f });

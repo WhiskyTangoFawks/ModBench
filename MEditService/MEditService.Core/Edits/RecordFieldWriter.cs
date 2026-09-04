@@ -88,6 +88,16 @@ internal enum FieldApplyOutcome
     DuplicateKeyInKeyedArray,
 }
 
+/// <summary>What applying one field value came to, and — for the one outcome that has something to
+/// say beyond its own name — the key it is talking about. A record struct rather than a bare
+/// <see cref="FieldApplyOutcome"/> so the outcome and its detail are one value: a caller cannot
+/// hold the refusal without the key it has to name. Implicitly convertible from the outcome, since
+/// every other outcome carries nothing.</summary>
+internal readonly record struct FieldApplyResult(FieldApplyOutcome Outcome, string? DuplicateKey = null)
+{
+    public static implicit operator FieldApplyResult(FieldApplyOutcome outcome) => new(outcome);
+}
+
 /// <summary>
 /// Applies one field value to one live Mutagen record — the single dispatch point every write path
 /// goes through. Only the dispatch lives here: the field semantics live in the codecs it dispatches
@@ -101,15 +111,13 @@ internal enum FieldApplyOutcome
 /// </summary>
 internal static class RecordFieldWriter
 {
-    internal static FieldApplyOutcome TryApply(
+    internal static FieldApplyResult TryApply(
         IMajorRecord record,
         string recordType,
         string fieldPath,
         JsonElement value,
-        IReadOnlyDictionary<string, RecordTableSchema> schemas,
-        out string? duplicateKey)
+        IReadOnlyDictionary<string, RecordTableSchema> schemas)
     {
-        duplicateKey = null;
         if (fieldPath.Equals(EditorIdFieldPath, StringComparison.Ordinal))
             return ApplyEditorId(record, value);
 
@@ -126,15 +134,15 @@ internal static class RecordFieldWriter
         // detected by shape rather than by path, since it only ever targets an ordinary reflected
         // column.
         if (TryGetOpName(value, out var arrayOpName) && ArrayOpWriter.IsArrayOp(arrayOpName))
-            return ArrayOpWriter.Apply(record, col, arrayOpName, value, out duplicateKey);
+            return ArrayOpWriter.Apply(record, col, arrayOpName, value);
 
         if (col.Apply.Writer is not { } apply)
             return FieldApplyOutcome.ReadOnly;
 
         // A keyed array is written back in key order, whatever order the payload arrived in, and
         // two elements sharing a key are refused before anything is written (KeyedArrays).
-        value = KeyedArrays.Normalize(value, col.ToFieldMetadata(), out duplicateKey);
-        if (duplicateKey != null) return FieldApplyOutcome.DuplicateKeyInKeyedArray;
+        value = KeyedArrays.Normalize(value, col.ToFieldMetadata(), out var duplicateKey);
+        if (duplicateKey != null) return new(FieldApplyOutcome.DuplicateKeyInKeyedArray, duplicateKey);
 
         // The applier's own answer, not an assumption — each of these is a different
         // reason with a different fix (see FieldApplyOutcome's own docs), so each translates to its
