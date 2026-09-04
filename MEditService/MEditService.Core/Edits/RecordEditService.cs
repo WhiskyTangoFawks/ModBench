@@ -166,7 +166,7 @@ public sealed class RecordEditService(
         if (applied.Outcome == FieldApplyOutcome.NoOp)
             return RecordEditResult.Success();
         if (applied.Outcome != FieldApplyOutcome.Applied)
-            return RefuseFieldOutcome(applied, fieldPath, document.RecordType, schemas);
+            return RefuseFieldOutcome(applied, fieldPath, document.RecordType, schemas, value.ValueKind);
 
         if (checkBit14Leak && (target.MajorRecordFlagsRaw & PartialFormFlag.Bit) != bit14Before)
         {
@@ -2338,7 +2338,7 @@ public sealed class RecordEditService(
 
     private static RecordEditResult RefuseFieldOutcome(
         FieldApplyResult applied, string fieldPath, string recordType,
-        IReadOnlyDictionary<string, RecordTableSchema> schemas)
+        IReadOnlyDictionary<string, RecordTableSchema> schemas, JsonValueKind sentKind = default)
     {
         var outcome = applied.Outcome;
         // The key identifies the element, so the refusal names it — a caller told only that
@@ -2374,7 +2374,7 @@ public sealed class RecordEditService(
                 : null;
 
             return RecordEditResult.Refused(
-                RecordEditRefusal.FieldValueShapeMismatch, ComplexFieldShapeMessage(fieldPath, apiType));
+                RecordEditRefusal.FieldValueShapeMismatch, ComplexFieldShapeMessage(fieldPath, apiType, sentKind));
         }
 
         // #642: the payload named a sub-field inside this struct/array column that has no write
@@ -2394,19 +2394,23 @@ public sealed class RecordEditService(
     }
 
     /// <summary>
-    /// Names the field and the JSON shape it takes. A complex field is written as one atomic
-    /// value (CONTEXT.md), so the way out of this refusal is always the same — send the whole array or
-    /// the whole struct with the one element/member changed, which is what the record editor now does
-    /// for a per-element edit exactly as it always did for add/remove/move.
+    /// Names the field and what was wrong with the value. A complex field is written as one atomic
+    /// value (CONTEXT.md): a caller who sent the right shape is told which part was declined, and a
+    /// caller who sent a bare element or member is told to send the whole array or struct instead.
     /// </summary>
-    private static string ComplexFieldShapeMessage(string fieldPath, string? apiType) => apiType switch
-    {
-        "array" => $"'{fieldPath}' is an array field: it takes the whole array as one value " +
-                   "(a JSON array), not a single element.",
-        "struct" => $"'{fieldPath}' is a struct field: it takes the whole struct as one value " +
-                    "(a JSON object), not a single member.",
-        _ => $"'{fieldPath}' did not accept a value of this JSON shape.",
-    };
+    private static string ComplexFieldShapeMessage(string fieldPath, string? apiType, JsonValueKind sentKind) =>
+        (apiType, sentKind) switch
+        {
+            ("array", JsonValueKind.Array) => $"'{fieldPath}' has an element that was not accepted; " +
+                                              "every element must be a value the array's element type takes.",
+            ("array", _) => $"'{fieldPath}' is an array field: it takes the whole array as one value " +
+                            "(a JSON array), not a single element.",
+            ("struct", JsonValueKind.Object) => $"'{fieldPath}' has a member that was not accepted; " +
+                                                "every member must be a value that member's type takes.",
+            ("struct", _) => $"'{fieldPath}' is a struct field: it takes the whole struct as one value " +
+                             "(a JSON object), not a single member.",
+            _ => $"'{fieldPath}' did not accept a value of this JSON shape.",
+        };
 
     /// <summary>
     /// The record has no flat source path, so <see cref="CreateRecord"/> — the one remaining
