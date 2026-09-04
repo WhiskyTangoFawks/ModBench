@@ -3,7 +3,8 @@ using MEditService.Core.Plugins;
 namespace MEditService.Core.Queries;
 
 // ADR-0036: the compound identity compare-grid columns are keyed by. `|` is illegal in a Windows
-// filename and an MO2 mod-folder name, so neither half can contain it.
+// filename and an MO2 mod-folder name; `:` was rejected as already load-bearing in the
+// "000000:<plugin>" and "param:{i}" paths.
 public static class ColumnKey
 {
     private const char Delimiter = '|';

@@ -19,7 +19,6 @@ internal readonly record struct ElementKey(IReadOnlyList<(double? Number, string
     internal static ElementKey Of(JsonNode? node, IReadOnlyList<string> keyMembers) =>
         Of(JsonSerializer.SerializeToElement(node), keyMembers);
 
-    /// <summary>An element that is its own key — a pure-FormLink array's.</summary>
     internal static ElementKey OfValue(string value) => new([(null, value)]);
 
     internal int CompareTo(ElementKey other)

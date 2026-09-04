@@ -27,9 +27,9 @@ public sealed class RecordQueryService(
     public IReadOnlyList<PluginResponse> GetPlugins()
     {
         var s = RequireLoadOrder();
-        // ADR-0037: one whole-load-order classification per call, and only once the load is
-        // complete: a partial load order cannot tell a master not yet opened from one genuinely
-        // absent, and the wrong answer is the alarming one.
+        // ADR-0037: classified once per call, and only once the load is complete: a partial load
+        // order cannot tell a master not yet opened from one genuinely absent. Loading reports no
+        // issues rather than inventing a third state.
         IReadOnlyDictionary<string, IReadOnlyList<MasterIssue>> masterIssues =
             _mirror.Status.State == LoadOrderState.Ready
                 ? MasterResolution.Classify(s.Plugins, s.LoadFailures)
