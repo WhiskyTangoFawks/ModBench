@@ -77,8 +77,7 @@ internal sealed class RecordTypeDispatch
     /// every Bethesda game spells it the same.</summary>
     internal static string SubBlockChildMember => "Cells";
 
-    /// <summary>The member a cell <i>block</i>'s own sub-blocks are carried under — the level above
-    /// <see cref="SubBlockChildMember"/>, and static for the same reason.</summary>
+    /// <summary>Static for the same reason as <see cref="SubBlockChildMember"/>.</summary>
     internal static string BlockChildMember => "SubBlocks";
 
     /// <summary>Null when the folder maps to more than one concrete type (an ambiguous group such as

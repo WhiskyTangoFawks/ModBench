@@ -12,9 +12,9 @@ using Noggog.IO;
 
 namespace MEditService.Core.Serialization;
 
-/// <summary>ADR-0041's per-record codec: one record to one file, never a whole plugin. Dispatch
-/// is by reflection over the generated &lt;Type&gt;_Serialization class name; a type with none
-/// throws <see cref="RecordTypeSerializationUnsupportedException"/>.</summary>
+/// <summary>ADR-0041's per-record codec: one record to one file, never a whole plugin. Takes
+/// IMajorRecordGetter rather than the generated serializer's narrower interface, because
+/// reflection needs only runtime assignability.</summary>
 public sealed class RecordTextCodec(ILogger<RecordTextCodec> logger)
 {
     private static readonly MutagenSerializationWriterKernel<NewtonsoftJsonSerializationWriterKernel, JsonWritingUnit> WriterKernel = new();
@@ -41,8 +41,7 @@ public sealed class RecordTextCodec(ILogger<RecordTextCodec> logger)
 
     public async Task SerializeAsync(IMajorRecordGetter record, string filePath, GameRelease gameRelease, CancellationToken cancel = default)
     {
-        // No Directory.CreateDirectory here, deliberately: this codec's file-writing caller decides
-        // directory-creation policy with its own test.
+        // No Directory.CreateDirectory here, deliberately: directory-creation policy is the caller's.
         var directory = Path.GetDirectoryName(filePath);
         var bytes = await SerializeCoreAsync(record, gameRelease, directory ?? string.Empty, cancel).ConfigureAwait(false);
 
@@ -286,9 +285,7 @@ public sealed class RecordTextCodec(ILogger<RecordTextCodec> logger)
 /// a bare NullReferenceException from a failed reflection lookup.</summary>
 public sealed class RecordTypeSerializationUnsupportedException : Exception
 {
-    // RCS1194: the three standard exception constructors, for well-behaved rethrow/serialization
-    // callers generally — not how RecordTextCodec itself throws this (see the Type-based
-    // constructor below), which builds a specific, actionable message from the failed lookup.
+    // RCS1194: the three standard exception constructors, for well-behaved rethrow and serialization.
     public RecordTypeSerializationUnsupportedException()
     {
     }

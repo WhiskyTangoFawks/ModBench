@@ -22,8 +22,9 @@ internal static class RecordTextCodecGeneratorSeed
     // `cancel`) as the meta type and emits a broken CancellationToken_Serializations class. Passing
     // a non-null extraMeta anywhere emits a colliding overload (CS0111).
 
-    /// <summary>fileSystem lets a caller that must not touch disk say so; streamCreator is where the
-    /// root RecordData.json's bytes go too, which is what lets HeaderDocument capture it in memory.</summary>
+    /// <summary>Under FilePerRecord the root document's stream also comes from streamCreator, so a
+    /// caller can capture the mod header without writing a tree. workDropoff is sequential: the
+    /// parallel list helpers have a real upstream race.</summary>
     internal static Task SerializeWholeMod(
         IFallout4ModGetter mod, string folder, Noggog.WorkEngine.IWorkDropoff workDropoff, CancellationToken cancel,
         IFileSystem? fileSystem = null, ICreateStream? streamCreator = null)
