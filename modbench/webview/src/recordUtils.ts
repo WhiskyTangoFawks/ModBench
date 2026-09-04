@@ -73,8 +73,69 @@ export function collidingFilenames(overrides: CompareOverride[]): Set<string> {
 
 // ── Array child helpers ───────────────────────────────────────────────────────
 
+// An unsorted array's child is labelled "[N]" by the backend (ConflictClassifier's own
+// BuildPositional); a keyed array's child is labelled by its key instead, and reaches
+// `keyedElementIndex` below rather than here.
 export function parseElementIndex(fieldName: string): number {
   return Number.parseInt(fieldName.slice(1, -1), 10);
+}
+
+// One keyed element's key, read the way the backend reads it (Queries/ElementKey.cs): each member
+// named by the annotation — a dotted name is a walk into the element's own sub-struct — rendered as
+// text and joined with " / ". The backend's text is what labels the row a key comes from, so the two
+// renderings are one contract, asserted case-for-case on both sides (ElementKeyTextTests.cs and this
+// module's own tests share one table).
+export function elementKeyText(element: unknown, members: readonly string[]): string {
+  return members.map(member => memberKeyText(element, member)).join(' / ');
+}
+
+function memberKeyText(element: unknown, member: string): string {
+  let cur = element;
+  for (const hop of member.split('.')) {
+    if (cur == null || typeof cur !== 'object' || Array.isArray(cur)) return '';
+    cur = (cur as Record<string, unknown>)[hop];
+  }
+  if (typeof cur === 'string') return cur;
+  if (typeof cur === 'number' || typeof cur === 'boolean') return String(cur);
+  return '';
+}
+
+// Where this *column's own* array holds the element the segment names, or -1. Per column by
+// construction: the same key is a different position in every plugin that carries it, and the
+// caller always passes the array it is about to read or write.
+export function keyedElementIndex(list: readonly unknown[], seg: KeySegment): number {
+  return list.findIndex(element => elementKeyText(element, seg.members) === seg.key);
+}
+
+type KeySegment = Extract<PathSegment, { kind: 'key' }>;
+
+// Which array gestures a row's last hop confers, named once here because four surfaces ask it —
+// RecordPanel wiring the handlers, DiffRow gating the cell's own menu, arrayElementContext gating
+// the native one, and buildRows deciding what a row even is.
+//
+// A keyed array is stored in key order on every write (Edits/KeyedArrays.cs), so no Move there could
+// change the file; a pure-FormLink array's order is its sort key, so it offers nothing at all.
+export function isArrayElementHop(seg: PathSegment | undefined): boolean {
+  return seg?.kind === 'index' || seg?.kind === 'key';
+}
+
+export function isMovableElementHop(seg: PathSegment | undefined): boolean {
+  return seg?.kind === 'index';
+}
+
+// The counterpart for the array's own row: Add applies to any array whose elements are not
+// themselves the value (a keyed array included — a new element starts with the empty key, #710).
+export function offersArrayAdd(meta: FieldMetadata | undefined): boolean {
+  return meta?.type === 'array' && !!meta.elementType && !meta.elementType.isSortable;
+}
+
+// How the backend labelled an array's child is what says how to address it, since both answers come
+// from the same array metadata: a keyed array's children are named by key (ConflictClassifier's
+// BuildKeyed), a pure-FormLink array's by the element value, and every other array's by "[N]".
+export function elementSegment(arrayMeta: FieldMetadata, fieldName: string): PathSegment {
+  if (arrayMeta.keyMembers) return { kind: 'key', key: fieldName, members: arrayMeta.keyMembers };
+  if (arrayMeta.elementType?.isSortable) return { kind: 'sortKey', key: fieldName };
+  return { kind: 'index', index: parseElementIndex(fieldName) };
 }
 
 // The one definition of "does this plugin's own array actually have an element at this index" — a
@@ -122,12 +183,14 @@ export function arrayElementContext(
 ): ArrayElementContext {
   const lastSeg = path[path.length - 1];
   const index = lastSeg?.kind === 'index' ? lastSeg.index : -1;
+  const movable = isMovableElementHop(lastSeg);
   return {
     webviewSection: 'arrayElement', formKey, plugin, origin, rootField, path,
     // `canMoveUp` must also check hasElementAt (this plugin's own real length), or
     // the menu offers Move Up on a row this plugin doesn't have an element in at all — canMoveDown
     // doesn't need the same explicit check since index < arrayLength - 1 already implies it.
-    canMoveUp: index > 0 && hasElementAt(arrayLength, index), canMoveDown: index < arrayLength - 1,
+    canMoveUp: movable && index > 0 && hasElementAt(arrayLength, index),
+    canMoveDown: movable && index < arrayLength - 1,
     preventDefaultContextMenuItems: true,
   };
 }
@@ -196,7 +259,9 @@ export function combineVscodeContexts(...contexts: (object | undefined)[]): stri
 // types.ts, which re-exports it here) is the chain from that root down to a given row — a struct
 // hop addressed by member name, an unsorted-array hop by position, a sorted (pure FormLink) array
 // hop by the element's own value (there is nothing to address *beneath* a sortKey hop: a sorted
-// array's elements are themselves the value, never a struct/array). getAtPath/setAtPath are the one
+// array's elements are themselves the value, never a struct/array), and a keyed array's hop by the
+// key its element carries — resolved against whichever column's array is being read or written,
+// since one key sits at a different position in each. getAtPath/setAtPath are the one
 // generic implementation every nesting depth shares.
 export type { PathSegment };
 
@@ -205,7 +270,9 @@ export function getAtPath(root: unknown, path: readonly PathSegment[]): unknown 
   for (const seg of path) {
     if (seg.kind === 'member') cur = (cur as Record<string, unknown> | undefined)?.[seg.name];
     else if (seg.kind === 'index') cur = Array.isArray(cur) ? (cur as unknown[])[seg.index] : undefined;
-    else cur = seg.key;
+    else if (seg.kind === 'key') cur = Array.isArray(cur) ? cur[keyedElementIndex(cur, seg)] : undefined;
+    // sortKey: the element is its own value, so the key is what is there — where the array holds it.
+    else cur = Array.isArray(cur) && cur.includes(seg.key) ? seg.key : undefined;
   }
   return cur;
 }
@@ -225,6 +292,16 @@ export function setAtPath(root: unknown, path: readonly PathSegment[], value: un
   if (seg.kind === 'index') {
     const arr = Array.isArray(root) ? [...(root as unknown[])] : [];
     arr[seg.index] = setAtPath(arr[seg.index], rest, value);
+    return arr;
+  }
+  if (seg.kind === 'key') {
+    // Resolved against *this* array, so the same path writes a different position in each column.
+    // A column that carries no element under this key is left exactly as it is — there is no
+    // element there to write, and inventing one at a position would be the very mistake the key
+    // hop exists to prevent.
+    const arr = Array.isArray(root) ? [...(root as unknown[])] : [];
+    const at = keyedElementIndex(arr, seg);
+    if (at >= 0) arr[at] = setAtPath(arr[at], rest, value);
     return arr;
   }
   // sortKey: always the final segment (see the module doc comment) — replace the element whose
