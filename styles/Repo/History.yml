@@ -1,0 +1,14 @@
+extends: existence
+message: "History narration: '%s'. Comments describe current behavior only."
+level: error
+ignorecase: true
+scope:
+  - comment
+  - text
+tokens:
+  - previously
+  - used to
+  - no longer
+  - originally
+  - pre-fix
+  - formerly

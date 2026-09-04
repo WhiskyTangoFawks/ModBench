@@ -1,0 +1,6 @@
+extends: occurrence
+message: "Comment is %d words; the cap is 40 (three lines). Keep the why, delete the rest."
+level: error
+scope: comment
+max: 40
+token: '\b\w+\b'

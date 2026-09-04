@@ -24,7 +24,10 @@ Classify changed files → run matching gate (never review non-compiling code):
 | `MEditService/**/*.cs` | `bash .claude/skills/validate/run-gates.sh --backend --api-drift` |
 | `modbench/**` | `… --frontend` |
 | both | `… --backend --frontend --api-drift` |
-| config/docs only | skip |
+| config/docs only | `… ` with no flag — Gate 1 alone |
+
+Gate 1 (comment discipline) runs on every invocation: Vale (`.vale.ini`, pinned binary via
+`install-vale.sh`) and `.claude/hooks/comment-shape.py` over the files changed against `main`.
 
 `--api-drift` boots a fresh backend and fails if `modbench/src/medit/generated/api.ts`
 has drifted from the live OpenAPI spec — any endpoint/DTO annotation change can

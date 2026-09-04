@@ -16,6 +16,18 @@ done
 
 ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
 
+# Gate 1 runs on every invocation: comments are checked on the files changed against main.
+echo "=== Gate 1: Comment discipline ==="
+COMMENT_FILES=$(cd "$ROOT" && git diff --name-only --diff-filter=AM main -- '*.cs' '*.ts' '*.tsx' '*.md' \
+  | grep -Ev '^(references/|modbench/src/medit/generated/|tools/)|/(node_modules|bin|obj|dist|out)/' \
+  | while read -r f; do [[ -f "$f" ]] && echo "$f"; done)
+if [[ -n "$COMMENT_FILES" ]]; then
+  VALE="$(bash "$ROOT/.claude/skills/validate/install-vale.sh")" && \
+  (cd "$ROOT" && echo "$COMMENT_FILES" | xargs "$VALE" --config=.vale.ini) && \
+  (cd "$ROOT" && echo "$COMMENT_FILES" | grep -Ev '\.md$' | xargs -r python3 .claude/hooks/comment-shape.py) \
+  || { echo "--- COMMENT GATE FAILED ---"; FAILED=true; }
+fi
+
 if $BACKEND; then
   echo "=== Gate 2: Backend format ==="
   (cd "$ROOT/MEditService" && dotnet format --verify-no-changes) && \
