@@ -9,11 +9,9 @@ namespace MEditService.Core.Schema;
 /// <see cref="ColumnSpec"/>.</summary>
 internal static class ColumnReflection
 {
-    // The record header's own members, declared by Mutagen.Bethesda.Core's IMajorRecordGetter for
-    // every game: identity and header metadata, not record data, so never a column. A structural
-    // fact of the base interface rather than a per-game annotation — nameof keeps it bound to the
-    // real members at compile time. Per-game header-adjacent members (the GRUP timestamps a record
-    // carries for the group that contains it) are SchemaAnnotations.ExcludedColumns instead.
+    // Declared by Mutagen.Bethesda.Core's IMajorRecordGetter for every game: identity and header
+    // metadata, never a column. Per-game header-adjacent members (GRUP timestamps) are
+    // SchemaAnnotations.ExcludedColumns instead.
     private static readonly HashSet<string> MajorRecordHeaderMembers = new(StringComparer.OrdinalIgnoreCase)
     {
         nameof(IMajorRecordGetter.FormKey), nameof(IMajorRecordGetter.EditorID),

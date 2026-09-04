@@ -3,10 +3,8 @@ using MEditService.Core.Queries;
 
 namespace MEditService.Core.Schema;
 
-// The neutral facts a leaf field carries, independent of whether it becomes a top-level
-// column or a struct/array sub-field. Get reads the raw value from any instance; Convert
-// turns a JSON token into the value to write — null means "no generic applier" (a form-link
-// instead gets LeafWriters.ApplyFormLinkJson, identically for a top-level column and a sub-field).
+// The facts a leaf carries whether it becomes a column or a sub-field. Convert is null when
+// there is no generic applier: a form link gets LeafWriters.ApplyFormLinkJson at either level.
 internal sealed record LeafSpec(
     string ApiType,
     string DuckDbType,

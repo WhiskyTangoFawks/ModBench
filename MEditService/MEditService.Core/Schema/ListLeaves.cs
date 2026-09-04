@@ -8,19 +8,11 @@ using Noggog;
 
 namespace MEditService.Core.Schema;
 
-/// <summary>An <c>IReadOnlyList&lt;T&gt;</c> field, as one array column or one nested array member.
-/// Written whole, never per element: the replacement list is built and every element converted before
-/// it reaches the record. An element belonging to a union has its concrete leaf resolved from that
-/// element's own payload, and an element type that resolves to nothing is its own refusal.</summary>
+/// <summary>An <c>IReadOnlyList</c> field as one array column or a nested member, written whole:
+/// every element is converted before anything attaches. A union element's concrete leaf comes from
+/// its payload; unresolvable is a refusal.</summary>
 internal static class ListLeaves
 {
-    // A list nested one level inside a struct (e.g. Destructible.Resistances/Stages) — ColumnReflection.GetColumnInfo
-    // handles this shape at the top level (BuildListColumn); this is
-    // its SubFieldReflection.GetSubFieldInfo-side twin. Reuses BuildListColumn's own
-    // element-type dispatch (form-link / Loqui-struct / vector) and ApplyListJson for writing, and
-    // BuildListItems (not SerializeListItems — see that method's own doc comment for why a sub-field's
-    // Extract must stay unserialized) for extraction, so a struct's own list member behaves
-    // identically to a top-level array column of the same shape.
     private static List<SubFieldSpec>? BuildListElementSubFields(
         Type elementType, bool isLoqui, bool isVector,
         GameReflection game, Type[] path, ILogger logger)
@@ -61,11 +53,8 @@ internal static class ListLeaves
 
         var elemSubFields = BuildListElementSubFields(elementType, isLoqui, isVector, game, path, logger);
 
-        // Mirrors SubFieldReflection.BuildElementMeta's own branches, but building a SubFieldSpec directly rather than
-        // a FieldMetadata — this method's caller (SubFieldReflection.GetSubFieldInfo) needs the reflection-time shape
-        // (ElementSpec.ToFieldMetadata() below is what turns it into wire metadata), and elemSubFields
-        // above has already done the Loqui/vector element work, so there is nothing to gain from routing
-        // through SubFieldReflection.BuildElementMeta's own FieldMetadata output and converting it back.
+        // Builds a SubFieldSpec directly rather than converting BuildElementMeta's FieldMetadata back,
+        // since the caller needs the reflection-time shape.
         var elementSpec = BuildListElementSpec(elementType, isFl, elemSubFields, game);
         if (elementSpec == null)
             return SchemaRefusals.ReportUnclassified<SubFieldSpec>(game, logger, prop, elementType, "nested list element");
@@ -113,21 +102,9 @@ internal static class ListLeaves
         return ApplyOutcome.Applied;
     }
 
-    // The raw object graph for a list's elements — FormLink elements become their FormKey string,
-    // struct/vector elements become the same Dictionary<string, object?> SubFieldValues.ExtractSubObject builds for any
-    // other struct, everything else passes through as-is. Deliberately not itself serialized: a
-    // top-level array *column* (BuildListColumn) is the one caller that needs a VARCHAR string, and
-    // does its own JsonSerializer.Serialize on top of this (SerializeListItems, below). A struct
-    // *sub-field* (BuildListSubField) is not that caller — its own Extract composes under the
-    // enclosing struct's single JsonSerializer.Serialize (SubFieldValues.ExtractSubObject's own dictionary), the
-    // same way a struct or vector sub-field's Extract already returns a raw Dictionary rather than a
-    // pre-serialized string. If BuildListSubField returned a pre-serialized string, the enclosing
-    // struct's own serialize pass would re-encode it as an
-    // escaped JSON *string* value instead of a nested array — a round-trip break (ApplyListSubFieldJson
-    // requires JsonValueKind.Array, so submitting back exactly what Extract just served would be
-    // refused) and a silent compare-grid diff failure (ConflictClassifier.BuildArrayChildren no-ops
-    // on a non-Array JsonElement.Kind) for every struct-nested list
-    // (e.g. Destructible.Resistances/Stages, ActivateParents.Parents).
+    // Not serialized: a column needs a VARCHAR and serializes on top, but a struct sub-field composes
+    // under the enclosing struct's serialize pass; a pre-serialized string would re-encode as an
+    // escaped JSON string.
     private static List<object?> BuildListItems(
         IEnumerable items, Type elementType, IReadOnlyList<SubFieldSpec>? subFields)
     {
@@ -155,10 +132,7 @@ internal static class ListLeaves
     {
         var isFl = ReflectedTypes.IsFormLink(elementType);
         var isLoqui = !isFl && ReflectedTypes.IsLoquiInterface(elementType);
-        // A list of vector-struct elements (IslandData.Vertices, a list of P3Float, or
-        // LocationCoordinate.Coordinates, a list of P2Int16) — same three-cases-share-one-shape
-        // pattern as ColumnReflection.GetColumnInfo, SubFieldReflection.GetSubFieldInfo and
-        // SubFieldReflection.BuildElementMeta.
+        // A list of vector-struct elements (IslandData.Vertices, LocationCoordinate.Coordinates).
         var isVector = !isFl && !isLoqui && ReflectedTypes.IsVectorStructType(elementType);
 
         var elemSubFields = BuildListElementSubFields(elementType, isLoqui, isVector, game, SubFieldReflection.RootPath, logger);
@@ -178,10 +152,8 @@ internal static class ListLeaves
         }
 
         var pName = prop.Name;
-        // BuildListElementSpec answers for exactly the element shapes BuildListElement can build, so
-        // it is the writability question too. A column has to ask it because it got here on the
-        // wider classification SubFieldReflection.BuildElementMeta performs; BuildListSubField does not, because
-        // its own null-guard on this same call already answered it.
+        // BuildListElementSpec answers for exactly the element shapes BuildListElement can build, so it
+        // is the writability question too; a column got here on BuildElementMeta's wider classification.
         var apply = BuildListElementSpec(elementType, isFl, elemSubFields, game) != null
             ? LeafWrite.Writable<IMajorRecord>(
                 (record, json) => ApplyListJson(record, json, pName, isFl, elementType, elemSubFields))
@@ -191,49 +163,9 @@ internal static class ListLeaves
             ElementMeta: elemMeta, KeyMembers: game.Annotations.KeyMembersFor(prop));
     }
 
-    /// <summary>
-    /// Replaces an array field's whole value. Answers <see cref="ApplyOutcome.ValueRejected"/>
-    /// for anything that is not array-shaped — typically the bare value of a single element.
-    /// An array field is written as one
-    /// atomic value (CONTEXT.md), so there is no sensible merge to perform here and no way to guess
-    /// where a lone element belongs; the caller refuses instead, which is the difference between
-    /// "your edit was rejected" and "your edit reported success and vanished".
-    ///
-    /// <para>The same refusal-not-silent-drop rule extends one level in, to an individual
-    /// element, when the list's own element type is abstract (OMOD's <c>AObjectModProperty&lt;T&gt;</c>
-    /// today — <see cref="ReflectedTypes.IsListType"/>'s Getter-side element type is never abstract itself, only the
-    /// mutable Setter list's own generic argument can be). Which concrete leaf an element is depends
-    /// on that element's own data, so it is resolved per element from the payload
-    /// (<see cref="ResolveListElementType"/>) rather than assumed once for the whole field.
-    /// Unresolvable — no known discriminator scheme for this abstract type, or a discriminator value
-    /// this scheme doesn't recognise — answers <see cref="ApplyOutcome.ListElementTypeUnresolved"/>
-    /// immediately, before <c>newList</c> is ever attached to <paramref name="record"/>, so a
-    /// partially-abstract array can never leave one element applied and the rest silently missing.
-    /// Its own outcome value rather than <c>ValueRejected</c> because the fix is different (name a
-    /// discriminator, not resend a differently-shaped value) and because the two are not
-    /// reliably tellable apart from the value's shape alone — see the next paragraph.</para>
-    ///
-    /// <para>The same "before <c>newList</c> is ever attached" guarantee also covers a
-    /// well-formed element whose own sub-field value was declined (<see cref="SubFieldValues.ApplySubFields"/>'s
-    /// <c>ValueRejected</c> fold, as opposed to a sub-field simply not applying to this element's own
-    /// concrete leaf, which stays silent) — a struct-array write with one bad member refuses the whole
-    /// array rather than landing every other element and dropping the bad one. This is exactly why
-    /// <see cref="ApplyOutcome.ListElementTypeUnresolved"/> is its own outcome rather than
-    /// inferred from "a rejection, and the value happens to be a genuine JSON array":
-    /// since a well-typed element can
-    /// also fail this way, that inference would misclassify a declined sub-field value as an
-    /// unresolved element type.</para>
-    ///
-    /// <para>#642: an element that names a sub-field with no write door (since #643 and #699, the
-    /// unwritable residue only — condition data; nested Loqui
-    /// structs like <c>QuestReferenceAlias.Location</c> write through the shared
-    /// <c>StructLeaves.ApplyStructJson</c> instead) answers <see cref="ApplyOutcome.SubFieldReadOnly"/>,
-    /// propagated here from <see cref="BuildListElement"/>'s own outcome rather than folded into
-    /// <see cref="ApplyOutcome.ValueRejected"/> — <c>RecordFieldWriter.TryApply</c> gives it the
-    /// honest not-editable message <see cref="ApplyOutcome.SubFieldReadOnly"/> gets everywhere
-    /// else, instead of the generic shape-mismatch text that would be false here (the payload
-    /// <i>was</i> the whole array).</para>
-    /// </summary>
+    // Anything not array-shaped is refused: an array is written as one atomic value. A union
+    // element's concrete leaf is resolved per element, and nothing attaches until every element
+    // built, so no partial array is ever left.
     private static ApplyOutcome ApplyListJson(
         IMajorRecord record, JsonElement json, string pName,
         bool isFl, Type elemCore, IReadOnlyList<SubFieldSpec>? subFields)
@@ -246,11 +178,8 @@ internal static class ListLeaves
         var newList = Activator.CreateInstance(listType)!;
         var addMethod = listType.GetMethod("Add")!;
 
-        // Derive the concrete element type from the mutable list's own generic argument, not from
-        // ReflectedTypes.GetSetterType — which returns the setter *interface* (e.g. IRankPlacement), not the
-        // instantiable concrete class (RankPlacement). A FormLink list's own generic argument here
-        // is never used (BuildListElement's isFl branch works from elemCore instead), so it is safe
-        // to compute unconditionally.
+        // The concrete element type comes from the mutable list's own generic argument, not
+        // GetSetterType, which returns the setter interface rather than the instantiable class.
         var elemConcreteType = listType.GetGenericArguments()[0];
 
         foreach (var elem in json.EnumerateArray())
@@ -267,17 +196,9 @@ internal static class ListLeaves
         return ApplyOutcome.Applied;
     }
 
-    // OMOD's own Properties element has its own discriminator scheme
-    // (ObjectModPropertyLeaves.ResolveObjectModPropertyConcreteType, off AObjectModProperty<T>'s generic-closed shape) —
-    // checked first and kept as its own case, the same posture ObjectModPropertyLeaves.IsObjectModPropertyBase
-    // takes, rather than folded into the general lookup below (OMOD's leaves are not reflectively
-    // discoverable off their own generic base the way every other abstract union's are).
-    //
-    // Every other abstract list-element type (AQuestAlias, ...) resolves generally, off the
-    // same concrete_type discriminator LoquiUnions.BuildUnionDiscriminatorField exposes on read. Either
-    // way, an abstract-element field with no scheme that resolves — a missing/unrecognized
-    // discriminator, or a genuinely unknown shape — falls straight through to null, which
-    // ApplyListJson/ApplyListSubFieldJson turn into a refusal rather than a guess or a throw.
+    // OMOD's Properties element has its own discriminator scheme; every other union resolves off the
+    // general concrete_type discriminator. No resolving scheme falls through to null, which the
+    // callers turn into a refusal rather than a guess.
     private static Type? ResolveListElementType(
         bool isFl, Type elemConcreteType, IReadOnlyList<SubFieldSpec>? subFields, JsonElement elem)
     {
@@ -287,17 +208,9 @@ internal static class ListLeaves
             : LoquiUnions.ResolveUnionConcreteType(elemConcreteType, elem);
     }
 
-    /// <summary>One bare-scalar list element, built from its own JSON token — the same
-    /// <see cref="LeafClassification.PrimitiveMap"/> converter and the same hex grammar a scalar leaf of that type
-    /// already writes, so a list of strings and a string column agree about what a string is. Null
-    /// means the token could not be converted, which the caller turns into a refusal of the whole
-    /// array rather than an element silently missing from it.
-    ///
-    /// <para>A byte-slice element is built as the <c>MemorySlice&lt;byte&gt;</c> Mutagen's own
-    /// <c>SliceList&lt;byte&gt;.Add</c> takes, not the read side's <c>ReadOnlyMemorySlice</c>. It
-    /// carries no length gate, unlike <see cref="ByteSliceHex.MakeHexApplier"/>: replacing the whole list gives
-    /// an element no predecessor at its own position whose size it could have established.</para>
-    /// </summary>
+    // The converter and hex grammar a scalar leaf writes, so list and column agree. A byte-slice
+    // element has no length gate, unlike a hex column: replacing the whole list gives it no
+    // predecessor whose size to keep.
     private static object? BuildScalarListElement(JsonElement elem, Type elemCore)
     {
         if (ByteSliceHex.IsByteSlice(elemCore))
@@ -341,11 +254,8 @@ internal static class ListLeaves
         }
 
         var elemObj = Activator.CreateInstance(elemConcreteType)!;
-        // #642: propagated as the full ApplyOutcome, not folded to a bool — an element's own
-        // unwritable sub-field named by the payload answers ApplyOutcome.SubFieldReadOnly
-        // distinctly from an ordinary declined value (ValueRejected), so the caller can refuse the
-        // whole array write with the honest not-editable message rather than the generic
-        // shape-mismatch text every other declined element member still uses.
+        // Propagated as the full ApplyOutcome, not a bool, so an unwritable sub-field named by the
+        // payload gets the honest not-editable message rather than the shape-mismatch text.
         outcome = SubFieldValues.ApplySubFields(elemObj, elem, subFields!);
         return elemObj;
     }

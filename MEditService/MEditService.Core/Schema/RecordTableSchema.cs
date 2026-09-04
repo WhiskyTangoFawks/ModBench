@@ -5,112 +5,42 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Core.Schema;
 
-/// <summary>
-/// What one write attempt against a single leaf property came to — shared by
-/// <see cref="ColumnSpec.Apply"/> (record-level) and <c>SubFieldReflection</c>'s own sub-field appliers
-/// (a struct member or array element, one level down from a column).
-///
-/// <para><see cref="PropertyNotFound"/>
-/// and <see cref="ValueRejected"/> answer "no" for two different reasons with two different fixes — a
-/// caller needs to tell them apart rather than collapsing both into one undifferentiated
-/// <c>false</c>, the same reasoning behind <c>RecordEditRefusal.ListElementTypeUnresolved</c>
-/// a level up. The two are not merely a top-level-column distinction, either: one level down,
-/// inside a sub-field shared by several concrete sibling leaf types that don't all declare it (OMOD's
-/// own sparse leaf-union — <c>ObjectModPropertyLeaves.BuildObjectModPropertyLeafFields</c>), <see cref="PropertyNotFound"/>
-/// is an <i>expected, silent</i> outcome (see <c>SubFieldValues.ApplySubFields</c>), while
-/// <see cref="ValueRejected"/> there still fails the whole struct/array write — the same distinction,
-/// with different consequences depending on which layer answers it.</para>
-/// </summary>
+/// <summary>What one write against a single leaf came to. <c>PropertyNotFound</c> and
+/// <see cref="ValueRejected"/> answer "no" with different fixes; nested, the former is a no-op
+/// while the latter fails the struct/array write.</summary>
 public enum ApplyOutcome
 {
     /// <summary>The value was converted and written onto the target.</summary>
     Applied,
 
-    /// <summary>No property of this name exists on the target's own runtime type.
-    ///
-    /// <para>Reached directly against a top-level column (<c>RecordFieldWriter.TryApply</c>, in
-    /// <c>MEditService.Core.Edits</c> — not referenced from here so this stays a leaf schema type),
-    /// this is a real refusal: the record's runtime type genuinely has no such field (e.g. GLOB's
-    /// <c>output_char</c> column, declared only on <c>GlobalFloat</c> among the four GLOB
-    /// subclasses — real per <c>GetSchemas_Glob_OutputCharColumn_ExclusiveToGlobalFloat_NullOnOtherSubclasses</c>,
-    /// not a hypothetical). One level down, inside a sub-field shared across several concrete sibling
-    /// leaf types that don't all declare it (OMOD's sparse leaf-union — <c>value</c>, <c>value2</c>,
-    /// <c>record</c>, <c>enum_int_value</c>, <c>function_type</c>), the identical outcome is an
-    /// expected, silent no-op: the property simply does not apply to <i>this</i> element's concrete
-    /// leaf, by design, not a defect — <c>SubFieldValues.ApplySubFields</c> is what tells the two
-    /// apart, since only it knows which layer it is answering for.</para>
-    /// </summary>
+    /// <summary>No property of this name on the target's runtime type: a real refusal for a column
+    /// (GLOB's <c>output_char</c> exists only on GlobalFloat), an expected silent no-op inside a
+    /// sparse sibling-leaf union.</summary>
     PropertyNotFound,
 
-    /// <summary>The property exists, but the value could not be turned into what it needs — a
-    /// converter that threw or declined (an unrecognised enum member, a non-numeric string, an
-    /// unparseable or wrongly-shaped FormKey), a JSON <c>null</c> into a non-nullable column, or (one
-    /// level up, for a struct/array column) the whole value not being the JSON shape the field takes
-    /// at all. Always a refusal, at every level: a struct/array column with a rejected member never
-    /// attaches its partially-built value to the record — the same "nothing written before
-    /// <c>SetValue</c>" invariant the outer shape guards hold.</summary>
+    /// <summary>The property exists but the value was declined: a converter that threw, a JSON null
+    /// into a non-nullable column, or the wrong shape for a struct/array. Always a refusal; nothing
+    /// partial is attached.</summary>
     ValueRejected,
 
-    /// <summary>
-    /// The array <i>is</i> the JSON shape the field takes, but at least one element belongs to a
-    /// union (OMOD <c>properties</c>' <c>AObjectModProperty&lt;T&gt;</c>, <c>qust.aliases</c>, a
-    /// landscape layer) and its concrete leaf could not be determined from that element's own payload
-    /// (<c>ListLeaves.ResolveListElementType</c>). Its own value, distinct from
-    /// <see cref="ValueRejected"/>: inferring it from "a rejection whose value is a genuine JSON
-    /// array" is ambiguous — a well-typed element whose own <i>sub-field</i> value is declined
-    /// (<c>SubFieldValues.ApplySubFields</c>' fold, still <see cref="ValueRejected"/>) matches that description
-    /// too, and the two need different messages (name a discriminator vs. send a value this field
-    /// accepts). Answering the outcome directly, rather than reconstructing it from the value's
-    /// shape, is what keeps the two unambiguous.
-    /// </summary>
+    /// <summary>The array is the right shape, but a union element has no resolvable leaf. Its own
+    /// value rather than <see cref="ValueRejected"/> because the fix differs (name a discriminator)
+    /// and a declined sub-field value looks the same.</summary>
     ListElementTypeUnresolved,
 
-    /// <summary>
-    /// #642: the payload names a sub-field the schema knows about (<c>SubFieldSpec</c>)
-    /// but that carries no write delegate for a reason that is not a discriminator no-op. Since
-    /// #643 wired nested Loqui structs into the shared <c>StructLeaves.ApplyStructJson</c> and #699 wired
-    /// scalar-element lists into the shared <c>ListLeaves.ApplyListSubFieldJson</c>, the opted-in set is the
-    /// genuinely unwritable residue: a nested struct with no usable write door — no resolvable
-    /// setter, or nested condition data whose discriminator can never appear in a payload
-    /// (<c>SubFieldSpec.TargetingRefuses</c> is where that set is decided).
-    /// Distinct from <see cref="PropertyNotFound"/>'s sibling-merge no-op and from the two
-    /// deliberate discriminator fields (<c>value_type</c>/<c>concrete_type</c>, consumed before the
-    /// object exists and never meant to be applied to it) — those two stay a silent skip via
-    /// <c>SubFieldSpec.TargetingRefuses</c> staying <c>false</c>. Only reached when the payload
-    /// actually names the sub-field — one absent from the payload never reaches this outcome, the same
-    /// "absence is not targeting" rule <c>SubFieldValues.ApplySubFields</c> already applies to every
-    /// other member.
-    /// </summary>
+    /// <summary>The payload names a known sub-field that carries no writer for a reason other than
+    /// being a discriminator (<c>SubFieldSpec.TargetingRefuses</c> decides which). Reached only when
+    /// the payload names it; absence is never targeting.</summary>
     SubFieldReadOnly,
 }
 
-/// <summary>
-/// #649 commitment 3: a leaf's write capability, as a closed two-case choice — it either carries a
-/// writer, or it carries a named reason for being read-only. There is no third state, and no way to
-/// spell one.
-///
-/// <para><b>Why a type and not a nullable delegate plus a comment.</b> The previous shape was
-/// <c>Func&lt;…&gt;? Apply</c>, where <c>null</c> meant four different things depending on where you
-/// stood: a discriminator consumed before its object exists, a genuinely unwritable residue, a
-/// widened column nobody decided to make editable, and — the one that shipped as #642 — an accidental
-/// omission. Nothing distinguished the fourth from the first three, so the accident was invisible at
-/// every call site and in every review. With this type the accident is not <i>detected</i>, it is
-/// <i>unrepresentable</i>: a leaf cannot be constructed without choosing, and choosing read-only costs
-/// a sentence saying why. A detected-only guard is one deleted assertion away from silence, which is
-/// the failure mode this ticket exists to close.</para>
-///
-/// <para>Constructed only through <see
-/// cref="LeafWrite.Writable{TTarget}(Func{TTarget, JsonElement, ApplyOutcome})"/> and
-/// <see cref="LeafWrite.ReadOnly{TTarget}(string)"/>. Both properties are get-only, so a
-/// <c>with</c> expression cannot reopen the choice from outside either.</para>
-/// </summary>
-/// <typeparam name="TTarget">What the writer writes onto — <c>IMajorRecord</c> for a top-level
-/// column, <c>object</c> for a struct member or array element one or more levels down.</typeparam>
+/// <summary>A leaf's write capability: a writer, or a named reason for being read-only, never
+/// neither. With a nullable delegate an accidental omission looked like a decision; here it is
+/// unrepresentable.</summary>
 public sealed record LeafWrite<TTarget>
 {
-    /// <summary>Internal rather than private so the non-generic <see cref="LeafWrite"/> factories can
-    /// reach it (CA1000 forbids static factories on the generic type itself). It validates the choice
-    /// anyway, so even in-assembly callers cannot spell the invalid states.</summary>
+    /// <summary>Internal so the non-generic <see cref="LeafWrite"/> factories can reach it (CA1000);
+    /// it validates the choice anyway.</summary>
     internal LeafWrite(Func<TTarget, JsonElement, ApplyOutcome>? writer, string? readOnlyReason)
     {
         if (writer is null == (readOnlyReason is null))
@@ -147,46 +77,9 @@ public static class LeafWrite
             : new(null, reason);
 }
 
-/// <summary>
-/// One column of a record type's wide table: how to read it off a record, how to write it back, and
-/// what a generated view may do with it.
-///
-/// <para><see cref="Apply"/> writes this column's whole value onto a record, or is read-only with a
-/// named reason. A complex field (CONTEXT.md: array or struct) is written as one atomic value, so
-/// an applier handed something that is not array-/object-shaped has nothing it could sensibly write
-/// and answers a non-Applied outcome, which <see cref="Edits.RecordFieldWriter.TryApply"/> turns
-/// into a refusal naming the field. Returning an outcome rather than being a fire-and-forget
-/// <c>Action</c> is what makes a silently lost edit unrepresentable: a guard cannot no-op its way
-/// into "applied". See <see cref="ApplyOutcome"/> for why the failure outcomes are distinct.</para>
-///
-/// <para><b>View-generation facts.</b> <see cref="IsWidened"/>, <see cref="IsFlagsEnum"/> and
-/// <see cref="ViewDefaultLiteral"/> are three things the generated <c>json_extract</c> views
-/// (ADR-0041) need to know that nothing else does. All set mechanically at reflection time from the
-/// CLR type — never from a curated list of field names, which is the property the rule turns
-/// on.</para>
-///
-/// <para><see cref="IsWidened"/> means this column is a scalar widen: several concrete subclasses
-/// share one GRUP signature and disagree about the field's type, so it became a read-only text
-/// column whose <see cref="Extract"/> dispatches on the record's runtime type. It has no single
-/// JSON path with consistent semantics — the document holds a number for one sibling and a string
-/// for another — so views omit it entirely rather than emit a column that means different things
-/// per row. Exactly two in Fallout 4: gmst.data and glob.data.</para>
-///
-/// <para><see cref="IsFlagsEnum"/> means the underlying CLR enum carries
-/// <see cref="FlagsAttribute"/>, so the serializer writes it as a JSON <i>array of member names</i>
-/// rather than a scalar. Deliberately NOT <c>IsBitmask</c>, which means something narrower ("has
-/// power-of-two members") and disagrees on real data: misc.major_flags is not a bitmask by that
-/// test yet still serializes as <c>["0x800"]</c>. Views join the names with ", ".</para>
-///
-/// <para><see cref="ViewDefaultLiteral"/> is the SQL literal a view COALESCEs this column to when
-/// the document omits the property, or null when NULL is the honest answer. Mutagen's serializer
-/// omits any field equal to its default, so without this a non-nullable field would read NULL
-/// through a view where the wide table held the default value.</para>
-///
-/// <para><see cref="KeyMembers"/> names, for a keyed array, the element members whose values
-/// identify an element; null for every other column. <see cref="LeafTypeName"/> is this column's
-/// <see cref="Queries.FieldMetadata.LeafTypeName"/>.</para>
-/// </summary>
+/// <summary>One column of a record table: how to read it, write it back, and what a generated view
+/// (ADR-0041) may do with it. <see cref="Apply"/> answers an outcome, so a silently lost edit is
+/// unrepresentable.</summary>
 public sealed record ColumnSpec(
     string Name,
     string PropertyName,
@@ -200,18 +93,21 @@ public sealed record ColumnSpec(
     FieldMetadata? ElementType = null,
     IReadOnlyList<FieldMetadata>? SubFields = null,
     bool AllowsNull = false,
+    // A scalar widen: sibling subclasses disagree on this field's type, so it is read-only text with
+    // no single JSON path, and views omit it. Exactly two in Fallout 4: gmst.data and glob.data.
     bool IsWidened = false,
+    // Whether the CLR enum carries [Flags], so the serializer writes a name array views join with ", ".
+    // Deliberately not IsBitmask, which is narrower and disagrees on real data (misc.major_flags).
     bool IsFlagsEnum = false,
+    // The SQL literal a view COALESCEs to when the serializer omitted a default-valued field, or null
+    // when NULL is the honest answer.
     string? ViewDefaultLiteral = null,
+    // For a keyed array, the element members whose values identify an element.
     IReadOnlyList<string>? KeyMembers = null,
     string? LeafTypeName = null)
 {
-    /// <summary>
-    /// Whether a generated view can carry this column at all: scalar leaves only.
-    /// Arrays and structs are omitted because the document's nested shape has no faithful scalar
-    /// rendering, and the widened columns because they have no consistent path — in both cases "no
-    /// column" beats "a column with broken semantics".
-    /// </summary>
+    /// <summary>Scalar leaves only: arrays and structs have no faithful scalar rendering, and a widened
+    /// column no consistent path. "No column" beats "a column with broken semantics".</summary>
     public bool IsViewable => !IsArray && SubFields == null && !IsWidened;
 
     /// <summary>See <see cref="FieldMetadata.IsBitmask"/> — the same question off the same members,
@@ -229,33 +125,12 @@ public sealed class RecordTableSchema
     public required Type RecordType { get; init; }
     public required IReadOnlyList<ColumnSpec> RecordColumns { get; init; }
 
-    /// <summary>
-    /// The xEdit display name for this record type (e.g. "Activator" for <c>acti</c>), sourced
-    /// from <see cref="RecordDisplayNames"/>. Additive display-layer field — <see cref="TableName"/>
-    /// (the 4-char signature) remains the key used everywhere else (table keys, filtering, API
-    /// payloads). Defaults to <see cref="TableName"/> if the table isn't in the lookup.
-    /// </summary>
+    /// <summary>The xEdit display name ("Activator" for <c>acti</c>); <see cref="TableName"/> stays
+    /// the key everywhere else.</summary>
     public required string DisplayName { get; init; }
 
-    /// <summary>
-    /// Per-mod column extractors for the synthetic "header" record type only (null for every
-    /// other schema). A mod header is never an <see cref="IMajorRecordGetter"/>, so
-    /// <see cref="ColumnSpec.Extract"/> is structurally unusable for it — this is the real
-    /// extraction path, positionally aligned with <see cref="RecordColumns"/>, invoked against a mod
-    /// rather than a record.
-    ///
-    /// <para>Non-null <b>is</b> how the read path recognises the header schema
-    /// (<c>DuckDbRecordIndex.DocumentFromBody</c>) and how the two schema-completeness sweeps skip it
-    /// (<c>SchemaReflectorLeafCoverageCompletenessTests</c>): it is the one structural fact
-    /// distinguishing a schema whose columns hang off an <see cref="IModGetter"/> from every schema
-    /// whose columns hang off an <see cref="IMajorRecordGetter"/>. Prefer it to comparing a table
-    /// name — that is a value, this is the actual difference.</para>
-    ///
-    /// <para>#631: the mod these run against is no longer the live plugin at index time. The header's
-    /// document (the whole-mod door's root <c>RecordData.json</c>) is stored in <c>records.body</c>
-    /// like every other row's, and these delegates run against the mod that document reads back into
-    /// — so a header field is produced by the same delegate whether it came from a plugin binary or
-    /// from its own source text, exactly as <see cref="ColumnSpec.Extract"/> is for a record.</para>
-    /// </summary>
+    /// <summary>The header schema's read path, aligned with <see cref="RecordColumns"/>, since a mod
+    /// header is never an IMajorRecordGetter; null for every other schema. Non-null is how readers
+    /// recognise the header schema, not a table name.</summary>
     public IReadOnlyList<Func<IModGetter, object?>>? HeaderColumnExtract { get; init; }
 }

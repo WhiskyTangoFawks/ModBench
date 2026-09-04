@@ -8,10 +8,9 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Core.Schema;
 
-/// <summary>The reflected record schema for one game: every record type a Mutagen game assembly
-/// declares, presented as a table of columns, built once per game category and cached. The front
-/// door to this folder — the modules alongside it decide what one reflected property becomes, and
-/// nothing outside calls them directly.</summary>
+/// <summary>The reflected record schema for one game, built once per category and cached. The front
+/// door to this folder: the modules alongside decide what one property becomes, and nothing outside
+/// calls them directly.</summary>
 public sealed class SchemaReflector
 {
     private readonly ILogger _logger;
@@ -27,10 +26,8 @@ public sealed class SchemaReflector
         _logger = logger ?? NullLogger<SchemaReflector>.Instance;
     }
 
-    // Deliberate product filter: not standard editable refs (placed refr/achr are
-    // indexed as normal records so the worldspace tree, record editor, and agent queries are
-    // uniform DuckDB reads; their cell parentage lives in the `placement` side table — land/
-    // navm/navi don't get that treatment).
+    // Placed refr/achr are indexed as normal records, with cell parentage in the placement side
+    // table; land/navm/navi get no such treatment.
     private static readonly HashSet<string> NonEditableRefTypes = new(StringComparer.OrdinalIgnoreCase)
     {
         "land", "navm", "navi",
@@ -52,9 +49,8 @@ public sealed class SchemaReflector
 
     private readonly ConcurrentDictionary<GameCategory, GameSchemaCache> _cache = new();
 
-    // Keyed by category (not release) because the assembly is category-wide — a `null` entry
-    // means that category's assembly was probed once and found unreferenced, cached so a repeated
-    // ask never re-attempts the load or re-logs the warning below.
+    // Keyed by category because the assembly is category-wide; a null entry means the assembly was
+    // probed once and found unreferenced, so a repeated ask never re-logs.
     private readonly ConcurrentDictionary<GameCategory, Assembly?> _assemblyByCategory = new();
 
     public IReadOnlyDictionary<string, RecordTableSchema> GetSchemas(GameRelease release)
@@ -65,19 +61,14 @@ public sealed class SchemaReflector
         return GetCache(category, assembly).Schemas;
     }
 
-    /// <summary>
-    /// Reports whether <paramref name="release"/>'s backing Mutagen record-type assembly is
-    /// referenced by this build — never throws. Discovery walking multiple installs should
-    /// call this before <see cref="GetSchemas"/> to decide whether a release is offered at all.
-    /// </summary>
+    /// <summary>Never throws. Discovery walking several installs asks this before
+    /// <see cref="GetSchemas"/> to decide whether a release is offered at all.</summary>
     public bool IsSupported(GameRelease release) => ResolveAssembly(release, release.ToCategory()) is not null;
 
     private static string AssemblyNameFor(GameCategory category) => $"Mutagen.Bethesda.{category}";
 
-    // The one place that probes whether a category's Mutagen assembly is loadable. Never throws:
-    // a `FileNotFoundException` from `Assembly.Load` means "not referenced in this build", which is
-    // reported (cached `null`, one warning) rather than propagated — GetSchemas is what turns an
-    // unsupported category into a typed refusal for a caller that actually needs one.
+    // Never throws: FileNotFoundException from Assembly.Load means "not referenced in this build" and
+    // is cached as null with one warning; GetSchemas turns that into a typed refusal.
     private Assembly? ResolveAssembly(GameRelease release, GameCategory category) =>
         _assemblyByCategory.GetOrAdd(category, c => ProbeAssembly(release, c, _logger));
 
@@ -112,15 +103,9 @@ public sealed class SchemaReflector
         var majorRecordGetterType =
             assembly.GetType($"Mutagen.Bethesda.{category}.I{category}MajorRecordGetter")!;
 
-        // A GRUP signature can be backed by several concrete Mutagen subclasses sharing one
-        // abstract base — GameSettingInt/Float/String/Bool/UInt are all GMST, GlobalInt/Float/
-        // Short/Bool are all GLOB, DamageType/DamageTypeIndexed are both DMGT — because the type
-        // discriminant lives on the record itself (an EditorID prefix, a subrecord, ...), never on
-        // the table. `discovered`/`seenTables` still record one winner per table (RecordType stays
-        // bound to it, deliberately — see BuildSchema), but `siblingsByTable`
-        // keeps every concrete type sharing a signature so BuildSchema can union their columns —
-        // silently dropping the loser's shape would make a GameSetting's Data column only ever
-        // work for whichever subclass reflection happened to enumerate first.
+        // One GRUP signature can be backed by several concrete subclasses (GMST, GLOB, DMGT) because
+        // the discriminant lives on the record, not the table. One winner per table keeps RecordType
+        // bound; siblingsByTable keeps every subclass so BuildSchema can union their columns.
         var seenTables = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var discovered = new List<(string tableName, Type getterType)>();
         var siblingsByTable = new Dictionary<string, List<Type>>(StringComparer.OrdinalIgnoreCase);
@@ -149,10 +134,8 @@ public sealed class SchemaReflector
             discovered.Add((tableName, getterInterface));
         }
 
-        // Every sibling getter type resolves to its table, not just the winner — otherwise a
-        // FormLink<IGameSettingFloatGetter> anywhere in the schema fails to resolve
-        // ValidFormKeyTypes to ["gmst"] whenever Float isn't that run's winner
-        // (LeafClassification.GetFormLinkValidTypes looks types up in this same dictionary).
+        // Every sibling resolves to its table, not just the winner, or a FormLink to a non-winning
+        // sibling would fail to resolve its ValidFormKeyTypes.
         var game = new GameReflection(
             siblingsByTable
                 .SelectMany(kv => kv.Value.Select(t => (Type: t, Table: kv.Key)))
@@ -171,25 +154,17 @@ public sealed class SchemaReflector
         return new GameSchemaCache(schemas, game);
     }
 
-    // RecordType (used for enumeration in DuckDbRecordIndex.IndexRecordTable) stays bound to
-    // the discovery winner, deliberately, even though RecordColumns below is unioned across every
-    // sibling. Enumeration already returns every sibling's records no matter which one's getter
-    // interface is named — Mutagen's own EnumerateMajorRecords falls back through
-    // InheritingInterfaceMapping to the abstract group base (e.g. IGameSettingGetter) and the group
-    // enumerator returns every element once the requested type is assignable to it. So RecordType
-    // has nothing to gain from pointing at the abstract base.
+    // RecordType stays bound to the discovery winner even though the columns are unioned: Mutagen's
+    // EnumerateMajorRecords falls back to the abstract group base and returns every sibling's records
+    // anyway, so pointing at the base would gain nothing.
     private static RecordTableSchema BuildSchema(
         string tableName, Type getterType, List<Type> siblingGetterTypes,
         GameReflection game, ILogger logger)
     {
         var columns = ColumnReflection.ReflectColumns(getterType, game, logger);
 
-        // Union in every other concrete subclass sharing this signature (siblingGetterTypes
-        // is just [getterType] for the overwhelming majority of tables, so this loop is a no-op
-        // there). The rule is expressed purely in terms of a column's *shape*, never a table or
-        // signature name, so a hypothetical third subclass of an existing signature — or a
-        // brand-new game's own multi-subclass signature — is handled the same way with no code
-        // change here. See SiblingColumns.MergeSiblingColumn for the shape rule itself.
+        // The rule is expressed purely in terms of a column's shape, never a table or signature name,
+        // so a third subclass or another game's own multi-subclass signature needs no change here.
         if (siblingGetterTypes.Count > 1)
         {
             var widenedDispatch = new Dictionary<string, List<(Type Type, Func<IMajorRecordGetter, object?> Extract)>>();
@@ -212,22 +187,12 @@ public sealed class SchemaReflector
         };
     }
 
-    /// <summary>One leaf's write capability, flattened for the read/write symmetry audit (#649
-    /// commitment 3 / AC #2). Facts only — where the leaf is, the Loqui getter type it decomposes,
-    /// and the reason it declared if it is read-only. Deliberately silent on whether the leaf
-    /// <i>ought</i> to be writable: the audit re-derives that independently from Mutagen, so this
-    /// cannot hand the audit the answer it is checking.</summary>
+    /// <summary>Facts only, for the read/write symmetry audit — deliberately silent on whether the
+    /// leaf ought to be writable, which the audit re-derives from Mutagen itself.</summary>
     internal sealed record LeafWriteFact(string Path, Type? StructGetterType, string? ReadOnlyReason);
 
-    /// <summary>
-    /// Every top-level column, plus every nested Loqui-struct member one level in, with the write
-    /// capability each actually declared. Re-invokes the real production builders
-    /// (<see cref="SubFieldReflection.GetSubFieldInfo"/>) rather than re-deriving anything, so reverting a write path
-    /// changes what this reports — which is what makes the audit that reads it non-vacuous.
-    ///
-    /// <para>Answers two facts about a leaf rather than handing back the <see cref="SubFieldSpec"/>
-    /// itself: the audit needs the facts, not the leaf.</para>
-    /// </summary>
+    /// <summary>Re-invokes the real production builders rather than re-deriving anything, so
+    /// reverting a write path changes what this reports and the audit stays non-vacuous.</summary>
     internal IReadOnlyList<LeafWriteFact> EnumerateWriteCapability(GameRelease release)
     {
         var category = release.ToCategory();
@@ -271,14 +236,9 @@ public sealed class SchemaReflector
 
 }
 
-/// <summary>
-/// Thrown by <see cref="SchemaReflector.GetSchemas"/> when a game release's backing Mutagen
-/// record-type assembly is not referenced by this build — e.g. requesting Skyrim while
-/// <c>Mutagen.Bethesda.Skyrim</c> isn't referenced. Distinguishes "this release isn't compiled in" from
-/// Mutagen's own <see cref="FileNotFoundException"/>, which is not an actionable message for a
-/// caller. <see cref="SchemaReflector.IsSupported"/> is the non-throwing check discovery should
-/// use instead of catching this.
-/// </summary>
+/// <summary>A game release whose Mutagen record-type assembly is not referenced by this build. Its
+/// own type because Mutagen's <see cref="FileNotFoundException"/> is not an actionable message for
+/// a caller.</summary>
 public sealed class UnsupportedGameReleaseException : Exception
 {
     // RCS1194: the three standard exception constructors, for well-behaved rethrow/serialization

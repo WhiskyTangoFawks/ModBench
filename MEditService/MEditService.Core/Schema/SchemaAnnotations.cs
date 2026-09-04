@@ -3,66 +3,35 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Core.Schema;
 
-/// <summary>
-/// Hand-written per-game facts the reflector overlays on what it reflects from a game's Mutagen
-/// assembly — one table per concern, one instance per game, keyed by Mutagen type name and member
-/// name, never by a game conditional in the reflector. <see cref="Validate"/> runs before the
-/// game's schema is built: an entry naming a type or member reflection does not find fails schema
-/// generation and names the entry, so a Mutagen rename can never leave a row silently doing nothing.
-/// </summary>
-/// <param name="ExcludedColumns">Top-level record properties that are not record data — the GRUP
-/// timestamps Mutagen keeps on the record whose group carries them. The serializer still writes
-/// them (ADR-0042 decision 3): a reflected column and a source-document field are different
-/// promises. Column-scoped: the same property embedded one level down (Worldspace.TopCell's own
-/// timestamps) is still walked.</param>
-/// <param name="ExcludedMembers">Properties skipped at every depth: Mutagen/Loqui plumbing that is
-/// not editor surface, and reserved padding Mutagen names but xEdit never renders. Skipped rather
-/// than excluded-with-a-reason, because an exclusion says "real data we chose not to present".
-/// Keyed on the declaring type because some of these names are real data elsewhere (<c>Type</c> is
-/// a genuine enum on Keyword and others).</param>
-/// <param name="ExcludedUnions">Loqui base classes the union-leaf expansion must not model —
-/// their concept is presented by a dedicated section rather than the reflected schema, or their
-/// leaves cannot be read safely. A struct column whose class is or derives from one is not a
-/// column either.</param>
-/// <param name="CycleTruncations">Getter interfaces the walk may re-enter on its own path and
-/// stop at silently, because the game's data format cannot nest them (a Fallout 4 Papyrus struct
-/// member is never itself a struct or a struct array), so the shape is already complete. Any other
-/// re-entry is a true type cycle and fails schema generation naming the chain.</param>
-/// <param name="EmptySubSchemaTypes">Getter interfaces whose sub-schema is known to come out empty,
-/// each with a reasoned entry in <c>SchemaReflectorLeafCoverageCompletenessTests.KnownGaps</c>; the
-/// walk reports them as excluded rather than unclassified.</param>
-/// <param name="SiblingsInUse">Members whose own value decides which of their sibling members carry
-/// data — see <see cref="Queries.FieldMetadata.SiblingsInUse"/> for what the map means. Keyed by the
-/// governing member; the inner map is keyed by that member's own enum values — every one of them,
-/// since an unnamed value would silently idle every member the row governs — and every name it
-/// lists must be a member of the same declaring type. Validated in all four directions, so a
-/// Mutagen rename or addition on either side of the relationship fails schema generation.</param>
-/// <param name="KeyedArrays">List members whose elements are identified by a key read off the
-/// element itself rather than by position — xEdit's <c>wbArrayS</c>. Keyed by the declaring type and
-/// the list member; the value is the element member(s) the key is made of, in key order, as
-/// wire (snake_case) names, dotted to reach one nested struct member down. A keyed array is aligned
-/// across plugins by key in the compare grid and written back in key order, and two elements sharing
-/// a key are refused. Validated against the element type, so a Mutagen rename on either side fails
-/// schema generation.</param>
-/// <param name="PermittedNullFormLinks">FormLink members Mutagen types as non-nullable that the
-/// game's own format leaves unset as a matter of course, so an unset one is a value rather than a
-/// dangling reference (<see cref="Queries.CheckErrorBuilder"/>) and a resend of the record's own
-/// read value is not refused. The CLR type cannot answer this: Mutagen only marks a link nullable
-/// when its generated model happens to use <c>IFormLinkNullable</c>.</param>
-/// <param name="AlphaBearingColorFields">The Color fields xEdit renders with an Alpha leaf
-/// (<c>wbByteRGBA</c>); every other Color field takes the 3-leaf <c>wbByteColors</c> shape. A
-/// property of the field, not the type — Mutagen selects <c>ColorBinaryType</c> inside generated
-/// call sites, unreachable from a property walk — and every row is one Mutagen also writes the
-/// alpha byte for, so an alpha edit is never silently discarded at compile.</param>
+/// <summary>Hand-written per-game facts overlaid on what reflection finds, keyed by Mutagen type and
+/// member name. <see cref="Validate"/> fails schema generation naming any entry reflection cannot
+/// find, so a rename never idles a row.</summary>
 internal sealed record SchemaAnnotations(
+    // Top-level properties that are not record data: GRUP timestamps. The serializer still writes
+    // them (ADR-0042); a reflected column and a source-document field are different promises.
     HashSet<(string TypeName, string MemberName)> ExcludedColumns,
+    // Skipped at every depth: Loqui plumbing and reserved padding. Keyed on the declaring type
+    // because some names are real data elsewhere (Type is a genuine enum on Keyword).
     HashSet<(string TypeName, string MemberName)> ExcludedMembers,
+    // Loqui bases the union-leaf expansion must not model: presented by a dedicated section instead,
+    // or their leaves cannot be read safely. A struct column deriving from one is not a column either.
     HashSet<string> ExcludedUnions,
+    // Getter interfaces the walk may re-enter and stop at silently because the game's format cannot
+    // nest them (a Fallout 4 Papyrus struct member is never itself a struct). Any other re-entry is fatal.
     HashSet<string> CycleTruncations,
+    // Sub-schemas known to come out empty, each reasoned in SchemaReflectorLeafCoverageCompletenessTests.KnownGaps.
     HashSet<string> EmptySubSchemaTypes,
+    // See FieldMetadata.SiblingsInUse. The inner map must name every enum value, since an unnamed one
+    // would silently idle every member the row governs; validated in all four directions.
     Dictionary<(string TypeName, string MemberName), IReadOnlyDictionary<string, IReadOnlyList<string>>> SiblingsInUse,
+    // xEdit's wbArrayS: elements identified by key members (wire names, dotted one struct down), not
+    // by position. Aligned by key in the compare grid, written back in key order, duplicates refused.
     Dictionary<(string TypeName, string MemberName), IReadOnlyList<string>> KeyedArrays,
+    // FormLinks Mutagen types non-nullable that the game's format leaves unset as a matter of course,
+    // so an unset one is a value, not a dangling reference. The CLR type cannot answer this.
     HashSet<(string TypeName, string MemberName)> PermittedNullFormLinks,
+    // The Color fields xEdit renders with an Alpha leaf (wbByteRGBA). A property of the field, not
+    // the type, and every row is one Mutagen also writes the alpha byte for, so no alpha edit is lost.
     HashSet<(string TypeName, string MemberName)> AlphaBearingColorFields)
 {
     // Rows every game shares are named once here; a row true of only some games is written inline
@@ -87,19 +56,14 @@ internal sealed record SchemaAnnotations(
     private static readonly string[] EmptySubSchemaTypesInEveryGame =
     [
         "IPlacedGetter",                     // abstract placed-record base, no members of its own
-        // A whole script, and a fragment's own script binding, hung off a fragment struct. Both are
-        // reflected in full wherever the walk still has breadth for them (a PERK/PACK/SCEN adapter's
-        // own script_fragments.script); this names the deeper positions — an adapter reached through
-        // a list element, so already several hops in — where the sub-schema comes out empty and the
-        // struct would otherwise be an unclassified anomaly.
+        // A script and a fragment's script binding, several hops in through a list element, where the
+        // sub-schema comes out empty; shallower positions reflect both in full.
         "IScriptFragmentGetter",
         "IScriptEntryGetter",
     ];
 
-    // wbByteRGBA in Fallout 4 (wbDefinitionsFO4.pas:7028 KYWD, :7040 LCRT, :7051 AACT, :8256 LCTN),
-    // Skyrim (wbDefinitionsTES5.pas:5321, :5326, :5331, :6511) and Starfield (wbDefinitionsSF1.pas:13697,
-    // :13759, :9519, :13963); ColorBinaryType.Alpha on the Mutagen side (Keyword_Generated.cs:1875, LocationReferenceType_Generated.cs:1510,
-    // ActionRecord_Generated.cs:1766, Location_Generated.cs:5435).
+    // wbByteRGBA at KYWD, LCRT, AACT and LCTN in wbDefinitionsFO4.pas, likewise in Skyrim and
+    // Starfield, and ColorBinaryType.Alpha on the Mutagen side.
     private static readonly (string, string)[] RgbaColorFields =
     [
         ("IKeywordGetter", "Color"),
@@ -200,12 +164,8 @@ internal sealed record SchemaAnnotations(
 
     private static (string, string) Key(PropertyInfo prop) => (prop.DeclaringType!.Name, prop.Name);
 
-    /// <summary>Everything about a <see cref="SiblingsInUse"/> row that reflection has to agree
-    /// with: it governs from an enum, the inner map's keys are exactly that enum's own members, and
-    /// every sibling it names is a member of the same declaring type under the schema's own
-    /// snake_case naming. A row that named a value or a sibling the assembly does not have would
-    /// silently govern nothing; one that omitted a value would silently idle everything under
-    /// it.</summary>
+    // A row naming a value or sibling the assembly lacks would silently govern nothing; one omitting
+    // a value would silently idle everything under it.
     private IEnumerable<string> UnresolvedSiblingRelations(ILookup<string, Type> typesByName)
     {
         foreach (var (entry, byValue) in SiblingsInUse)
@@ -239,11 +199,8 @@ internal sealed record SchemaAnnotations(
         }
     }
 
-    /// <summary>Everything about a <see cref="KeyedArrays"/> row reflection has to agree with: the
-    /// member is a list, and each key path resolves member by member off the element type under the
-    /// schema's own snake_case naming. A row naming a key the element does not have would key every
-    /// element alike, silently collapsing the array to one row in the compare grid and refusing
-    /// every second element as a duplicate on write.</summary>
+    // A row naming a key the element lacks would key every element alike, collapsing the array to
+    // one row in the compare grid and refusing every second element as a duplicate.
     private IEnumerable<string> UnresolvedKeyMembers(ILookup<string, Type> typesByName)
     {
         foreach (var (entry, keyMembers) in KeyedArrays)
@@ -288,11 +245,8 @@ internal sealed record SchemaAnnotations(
         return null;
     }
 
-    /// <summary>
-    /// Resolves every entry against the game assembly's own types and every interface they
-    /// implement (which is where Loqui's and Mutagen.Bethesda.Core's plumbing interfaces come from).
-    /// Throws naming each entry that did not resolve.
-    /// </summary>
+    /// <summary>Resolves every entry against the assembly's types and every interface they implement,
+    /// which is where Loqui's plumbing interfaces come from. Throws naming each unresolved entry.</summary>
     public void Validate(Assembly gameAssembly)
     {
         var typesByName = gameAssembly.GetTypes()
