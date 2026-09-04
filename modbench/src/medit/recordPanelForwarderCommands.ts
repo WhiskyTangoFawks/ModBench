@@ -10,12 +10,7 @@ import { broadcastToRecordPanels } from './onRecordEdited';
  *  record's current values — so each of these only reads the `data-vscode-context` ctx VS Code
  *  parses and hands it, and broadcasts the one matching {@link ExtensionToWebview} message; every
  *  open panel self-filters on `formKey` and applies it (RecordPanel.tsx). One table + one
- *  generic registrar in place of three near-identical hand-written registrars
- *  (`registerFieldOpCommands`/`registerArrayOpCommands`).
- *
- *  name), `setScriptFlags`/`setPropertyFlags` (need a native QuickPick) and the array/VMAD
- *  gestures that need no message at all all resolve something host-side first, so they stay
- *  hand-written in `extension.ts` alongside this table's own registrar. */
+ *  generic registrar in place of three near-identical hand-written registrars. */
 interface ForwarderCommand {
   command: string;
   build: (ctx: never) => ExtensionToWebview;

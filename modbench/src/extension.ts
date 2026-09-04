@@ -585,8 +585,8 @@ function registerTrackCommand(
 /** ADR-0041: New Plugin's destination QuickPick — the composition root joining both
  *  bounded contexts in one gesture (precedent: `makeEnterEditing`). `overwrite/` is listed first
  *  so it is the QuickPick's pre-highlighted default (`showQuickPick` has no `activeItem` option;
- *  array order is the only way to pre-highlight, same convention `modbench.vmad.setScriptFlags`
- *  already uses) — Enter alone accepts it, preserving the xEdit-under-MO2 reflex. "New mod…"
+ *  array order is the only way to pre-highlight) — Enter alone accepts it, preserving the
+ *  xEdit-under-MO2 reflex. "New mod…"
  *  creates the mod folder itself via `installMod` with an empty source dir before returning, so it
  *  registers in `modlist.txt` and the Mods tree the same way any other install does — free, not
  *  reinvented. Returns undefined if the user cancels any prompt. */
