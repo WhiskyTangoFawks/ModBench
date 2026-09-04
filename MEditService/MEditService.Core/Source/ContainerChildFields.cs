@@ -2,140 +2,50 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Core.Source;
 
-/// <summary>
-/// Which fields of a container record hold <b>child major records</b> — a Cell's placed refs,
-/// landscape and navmeshes, a Worldspace's top cell, a Quest's dialog topics/branches/scenes, a
-/// DialogTopic's responses. One table, read by the thing that still needs to know a parent-child
-/// relationship exists: the index's <c>container_child</c> rows, which
-/// <see cref="SourceUnitResolver"/> in turn reads to place an embedded child in its owner's file.
-/// Compile does not read it at all — the tree's own directory nesting <i>is</i> the containment.
-///
-/// <para><b>Nothing is stripped</b> (ADR-0041 amendment): a container's document carries its
-/// embedded children, and its children are index rows extracted from it rather than a reason to
-/// hollow it out. A shallow-strip posture would only guard a defect specific to driving the
-/// un-customized per-record serializer over a container (children spilled into sibling folders keyed
-/// by field name, which two containers sharing a directory silently cross-contaminated on read); the
-/// whole-mod folder-split door does not have it, by construction — the answer is Spriggit's embed
-/// customization, not a strip.</para>
-///
-/// <para><b>Hand-maintained table, not generic reflection — re-verified
-/// by mechanical enumeration.</b> The rule is "a property is child-major
-/// if its type is (or is a collection of) another major record type with no top-level group of its
-/// own" — it correctly finds Cell's four fields (Persistent/Temporary/NavigationMeshes are
-/// <c>ExtendedList&lt;IPlaced&gt;</c>/<c>ExtendedList&lt;NavigationMesh&gt;</c>, Landscape is a bare
-/// <c>Landscape</c>) and Quest's/DialogTopic's fields the same way. It does <b>not</b> find
-/// <c>Worldspace.SubCells</c>: reflection confirms its type is
-/// <c>ExtendedList&lt;WorldspaceBlock&gt;</c>, and <c>WorldspaceBlock</c> is an intermediate
-/// grouping container with no FormKey of its own — it does not implement
-/// <see cref="IMajorRecordGetter"/> at all, so the rule correctly excludes it (Worldspace's own
-/// nesting is placement/cell_location's job, never this table's).</para>
-///
-/// <para>Note that this table is deliberately <i>wider</i> than the set Spriggit embeds: it names
-/// every parent-child relationship, while only <c>Cell.{Persistent,Temporary,Landscape,
-/// NavigationMeshes}</c> and <c>Worldspace.TopCell</c> serialize inline (see
-/// <see cref="MEditService.Core.Serialization.CellEmbedCustomization"/>). One is about
-/// containment, the other about file layout; they are not the same list and must not be merged.</para>
-///
-/// <para><c>ContainerChildFieldsCompletenessTests</c> runs the rule
-/// by enumeration over every schema-registered major record type — swept, not merely
-/// inspected — and is the standing defence against the next gap (a future Mutagen
-/// bump or game module adding a child-major field nobody hand-adds here). Quest.Scenes was once a
-/// real, undetected gap, which is why the hand-maintained table ships backed by that sweep rather
-/// than by inspection alone.</para>
-///
-/// <para>That sweep is the <i>only</i> line of defence, deliberately. Compile places
-/// nothing: the deserializer reads a record from
-/// wherever the tree already puts it, so "unplaceable" is not a state it can reach. A gap in this
-/// table costs an index row (<c>container_child</c>), never a record missing from the compiled
-/// binary.</para>
-/// </summary>
+/// <summary>Which fields of a container hold child major records — the index's <c>container_child</c>
+/// rows. Nothing is stripped (ADR-0041 amendment). Hand-maintained; a gap here costs an index
+/// row, never a record in the compiled binary.</summary>
 internal static class ContainerChildFields
 {
     private static readonly Dictionary<string, string[]> ByTypeName = new(StringComparer.Ordinal)
     {
         ["Cell"] = ["Persistent", "Temporary", "NavigationMeshes", "Landscape"],
         ["Worldspace"] = ["TopCell", "SubCells"],
-        // Quest.Scenes is exactly the same child-major shape as DialogBranches/
-        // DialogTopics — Scene is IMajorRecordGetter, has no top-level group, and EnumerateMajorRecords
-        // already flattens it into its own top-level "scen" row. It was once omitted from this
-        // table — a Scene had no recorded parent slot anywhere — the gap the completeness sweep now
-        // exists to catch.
+        // Scenes: Scene is a major record with no top-level group of its own.
         ["Quest"] = ["DialogBranches", "DialogTopics", "Scenes"],
         ["DialogTopic"] = ["Responses"],
     };
 
-    /// <summary>The exact child-major field-name list <paramref name="recordType"/> has, or null if
-    /// it isn't one of the known container shapes — the read-only accessor
-    /// <c>ContainerChildFieldsCompletenessTests</c> diffs its own
-    /// swept set against, so the table itself never needs a second public surface.</summary>
+    /// <summary>The child-major field names for <paramref name="recordType"/>, or null when it is not a
+    /// known container shape.</summary>
     internal static IReadOnlyList<string>? EnumerateChildFieldsFor(Type recordType) =>
         ByTypeName.TryGetValue(NormalizedTypeName(recordType), out var fields) ? fields : null;
 
     private const string OverlaySuffix = "BinaryOverlay";
 
-    /// <summary>A binary overlay's runtime type is <c>"&lt;ConcreteName&gt;BinaryOverlay"</c> — the
-    /// same Mutagen naming convention <c>RecordTextCodec</c>'s own dispatch relies on. Normalizing
-    /// this once means every caller here (and <see cref="MEditService.Core.Records.DuckDbRecordIndex"/>'s
-    /// container_child skip-list) keys off the same name whether handed an overlay getter
-    /// (ingest) or an already-deep-parsed setter (Track).</summary>
+    /// <summary>A binary overlay's runtime type is <c>"&lt;Name&gt;BinaryOverlay"</c>; normalized once so
+    /// every caller keys off the same name whether handed an overlay (ingest) or a deep-parsed setter
+    /// (Track).</summary>
     internal static string NormalizedTypeName(Type recordType)
     {
         var name = recordType.Name;
         return name.EndsWith(OverlaySuffix, StringComparison.Ordinal) ? name[..^OverlaySuffix.Length] : name;
     }
 
-    /// <summary>One child located inside a parent's live object graph — the slot it sits in, and the
-    /// child itself as a <i>settable</i> record. <see cref="Child"/> is the real object hanging off
-    /// the parent, not a copy, which is the whole point: mutating it and reserializing the parent is
-    /// how the edit path writes an embedded child without a JSON path
-    /// (<c>Edits.RecordEditService.EditField</c>).</summary>
+    /// <summary><see cref="Child"/> is the real object hanging off the parent, not a copy: mutating it and
+    /// reserializing the parent is how an embedded child is written without a JSON path.</summary>
     internal readonly record struct EmbeddedChild(string SlotName, int SlotIndex, IMajorRecord Child);
 
-    /// <summary>
-    /// <paramref name="formKey"/>'s child record inside <paramref name="parent"/>, or null when
-    /// <paramref name="parent"/> does not carry it. This is the answer to "at which
-    /// JSON path inside the file", given through Mutagen's own object model instead of a JSON
-    /// pointer: the child is a real record in the parent's graph, so every existing write mechanism —
-    /// <c>RecordFieldWriter</c>, the codecs it dispatches to, the refusal set around it — applies to
-    /// it completely unchanged, and there is no second copy of the document's structure to keep in
-    /// step with the serializer.
-    ///
-    /// <para><b>Descends through embedded slots, which reach more than one level deep</b> —
-    /// "anything deeper is its own
-    /// source unit with its own file" is false for exactly one real shape. A worldspace's
-    /// <c>RecordData.json</c> embeds its <c>TopCell</c>, and that cell embeds its own placed
-    /// references: such a reference is <b>two</b> levels down inside one file, with no file of its own
-    /// anywhere. Stopping at one level would refuse it — citing an external change that had
-    /// not happened.</para>
-    ///
-    /// <para><b>Descent is bounded to <see cref="EmbeddedSlots"/>, and that bound is
-    /// correctness rather than thrift.</b> A Quest's dialog topics and scenes are children in this
-    /// class's table too, but they are folder-split — each is its own source unit with its own file.
-    /// Descending into one and editing it here would write the change into the <i>quest's</i> document
-    /// while the child's own file, which is what compile and ingest actually read, kept the old value:
-    /// a silently lost edit. So the walk follows containment only as far as the document itself
-    /// does.</para>
-    /// </summary>
+    /// <summary>The child through Mutagen's own object model, not a JSON pointer, so existing writers
+    /// apply unchanged. Descends only through <see cref="EmbeddedSlots"/>: a folder-split child edited
+    /// here would silently miss its own file.</summary>
     internal static EmbeddedChild? FindEmbeddedChild(IMajorRecordGetter parent, string formKey) =>
         FindEmbeddedChildSlot(parent, formKey) is { } slot
             ? new EmbeddedChild(slot.SlotName, slot.SlotIndex, slot.Child)
             : null;
 
-    /// <summary>
-    /// <paramref name="formKey"/>'s removal from wherever <see cref="FindEmbeddedChild"/> would
-    /// have found it — the same <see cref="FindEmbeddedChildSlot"/> traversal, but acting on the match
-    /// instead of only reporting it, so a Cell/Worldspace deleted through
-    /// <c>Edits.RecordEditService.DeleteRecord</c> comes back with its embedded child genuinely gone
-    /// from the object graph that gets reserialized. Returns <see langword="false"/> when nothing
-    /// matched (the same "indexed but not actually there" state <see cref="FindEmbeddedChild"/>'s own
-    /// callers already have to handle), never throws.
-    ///
-    /// <para>A list slot (<c>Persistent</c>/<c>Temporary</c>/<c>NavigationMeshes</c>) is spliced by
-    /// <see cref="EmbeddedChildSlot.SlotIndex"/>; a single-value slot (<c>Cell.Landscape</c>,
-    /// <c>Worldspace.TopCell</c>) is set to <see langword="null"/> outright —
-    /// <see cref="EnumerateChildren"/>'s own two cases, mirrored here for the write instead of the
-    /// read.</para>
-    /// </summary>
+    /// <summary>Removes the child from wherever <see cref="FindEmbeddedChild"/> would find it: a list slot
+    /// is spliced by index, a single-value slot set to null. False when nothing matched, never a throw.</summary>
     internal static bool RemoveEmbeddedChild(IMajorRecordGetter parent, string formKey)
     {
         if (FindEmbeddedChildSlot(parent, formKey) is not { } slot) return false;
@@ -144,40 +54,13 @@ internal static class ContainerChildFields
         return true;
     }
 
-    /// <summary>One child located inside a parent's live object graph, plus the <i>direct</i> parent it
-    /// sits in — which is <c>parent</c> itself for a top-level slot, but a nested embedded
-    /// record (e.g. a Worldspace's TopCell) when the match is found two levels down. Carrying the direct
-    /// parent alongside the slot is what lets <see cref="RemoveEmbeddedChild"/> mutate the right object
-    /// without re-deriving it.</summary>
+    // Carries the direct parent (a nested TopCell, not the top-level record) so a remove mutates the
+    // right object.
     private readonly record struct EmbeddedChildSlot(IMajorRecordGetter Parent, string SlotName, int SlotIndex, IMajorRecord Child);
 
-    /// <summary>
-    /// <paramref name="formKey"/>'s slot inside <paramref name="parent"/>'s object graph, or null when
-    /// <paramref name="parent"/> does not carry it. This is the one recursive descent
-    /// <see cref="FindEmbeddedChild"/> and <see cref="RemoveEmbeddedChild"/> both share — a single
-    /// traversal, where each caller states only what it does with the slot found.
-    /// The child is located through Mutagen's own object model instead of a JSON
-    /// pointer: it is a real record in the parent's
-    /// graph, so every existing write mechanism — <c>RecordFieldWriter</c>, the codecs it dispatches to,
-    /// the refusal set around it — applies to it completely unchanged, and there is no second copy of
-    /// the document's structure to keep in step with the serializer.
-    ///
-    /// <para><b>Descends through embedded slots, which reach more than one level deep</b> —
-    /// "anything deeper is its own
-    /// source unit with its own file" is false for exactly one real shape. A worldspace's
-    /// <c>RecordData.json</c> embeds its <c>TopCell</c>, and that cell embeds its own placed
-    /// references: such a reference is <b>two</b> levels down inside one file, with no file of its own
-    /// anywhere. Stopping at one level would refuse it — citing an external change that had
-    /// not happened.</para>
-    ///
-    /// <para><b>Descent is bounded to <see cref="EmbeddedSlots"/>, and that bound is
-    /// correctness rather than thrift.</b> A Quest's dialog topics and scenes are children in this
-    /// class's table too, but they are folder-split — each is its own source unit with its own file.
-    /// Descending into one and acting on it here would apply the change into the <i>quest's</i>
-    /// document while the child's own file, which is what compile and ingest actually read, kept the
-    /// old value: a silently lost edit. So the walk follows containment only as far as the document
-    /// itself does.</para>
-    /// </summary>
+    // Descends through embedded slots more than one level: a worldspace's RecordData.json embeds its
+    // TopCell, which embeds its own placed references. Bounded to EmbeddedSlots — a folder-split child
+    // has its own file.
     private static EmbeddedChildSlot? FindEmbeddedChildSlot(IMajorRecordGetter parent, string formKey)
     {
         var parentType = NormalizedTypeName(parent.GetType());
@@ -186,9 +69,7 @@ internal static class ContainerChildFields
         {
             if (child.FormKey.ToString().Equals(formKey, StringComparison.Ordinal))
             {
-                // A deserialized parent's children are settable records, so this cast holds for every
-                // caller on the write path. Guarded rather than assumed so a read-only graph (a binary
-                // overlay, which no write-path caller holds) declines instead of throwing.
+                // Guarded rather than cast so a read-only graph (a binary overlay) declines instead of throwing.
                 return child is IMajorRecord settable ? new EmbeddedChildSlot(parent, slotName, slotIndex, settable) : null;
             }
 
@@ -199,18 +80,9 @@ internal static class ContainerChildFields
         return null;
     }
 
-    /// <summary>
-    /// Clears every child-major slot <paramref name="record"/>'s object graph actually carries a
-    /// value in — the plain "own fields only" half of a shallow Copy as Override on a container:
-    /// xEdit's own Copy as Override always lands own-fields-only for every record type, containers
-    /// included — only "Deep copy as override" keeps children. Built over
-    /// <see cref="EnumerateChildren"/>'s own yield rather than <see cref="ByTypeName"/>'s raw field
-    /// list, deliberately: that already excludes <c>Worldspace.SubCells</c> (its items are
-    /// <c>WorldspaceBlock</c>, not <see cref="IMajorRecordGetter"/>) and, for a Quest or DialogTopic
-    /// deserialized from its own <c>RecordData.json</c> alone, yields nothing at all — those folder-
-    /// split fields are never inlined into the body to begin with (the codec's own child-folder
-    /// suppression), so this is a true no-op for them rather than one that happens to look like it.
-    /// </summary>
+    /// <summary>The own-fields-only half of Copy as Override: xEdit's lands own-fields-only, containers
+    /// included. Built over <see cref="EnumerateChildren"/>, so a folder-split child never inlined in
+    /// the body is a no-op.</summary>
     internal static void ClearAllChildSlots(IMajorRecordGetter record)
     {
         var slotNames = EnumerateChildren(record).Select(c => c.SlotName).Distinct(StringComparer.Ordinal).ToList();
@@ -226,13 +98,8 @@ internal static class ContainerChildFields
         }
     }
 
-    /// <summary>
-    /// Appends <paramref name="child"/> onto the end of <paramref name="parent"/>'s
-    /// <paramref name="slotName"/> list — the write-side counterpart to <see cref="RemoveFromSlot"/>,
-    /// for a copy landing a new child into an existing container override. Only ever a list slot
-    /// in practice for this method's one caller (Persistent/Temporary, the placement-tracked embedded
-    /// lists) — a single-value slot (Landscape, TopCell) has no "append" to make sense of.
-    /// </summary>
+    /// <summary>Only ever a list slot (Persistent/Temporary): a single-value slot has no "append" to
+    /// make sense of.</summary>
     internal static void AddChildToSlot(IMajorRecordGetter parent, string slotName, IMajorRecord child)
     {
         var property = parent.GetType().GetProperty(slotName)
@@ -242,14 +109,9 @@ internal static class ContainerChildFields
         ((dynamic)property.GetValue(parent)!).Add((dynamic)child);
     }
 
-    /// <summary>
-    /// Moves every child-major slot's contents from <paramref name="from"/> onto
-    /// <paramref name="to"/> — the own-fields-replace half of #550 AC7's overwrite: the replacing
-    /// record arrives child-stripped (<see cref="ClearAllChildSlots"/>) and the destination's own
-    /// embedded children (a Cell's placed refs, navmeshes, landscape) are re-attached so an
-    /// own-fields copy can never silently delete them. Same reflection-over-the-table posture as
-    /// every other mutator here.
-    /// </summary>
+    /// <summary>The own-fields-replace half of #550 AC7: the replacing record arrives child-stripped, and
+    /// the destination's embedded children are re-attached so an own-fields copy can never silently
+    /// delete them.</summary>
     internal static void TransplantChildSlots(IMajorRecordGetter from, IMajorRecordGetter to)
     {
         foreach (var (slotName, _, child) in EnumerateChildren(from).ToList())
@@ -265,9 +127,8 @@ internal static class ContainerChildFields
         }
     }
 
-    /// <summary>In-place swap of one slot occupant — #550 AC7's placed-reference replace, which must
-    /// keep the child's exact position among its siblings (an append-after-remove would move it to
-    /// the end, silently reordering the cell's GRUP).</summary>
+    /// <summary>In-place swap (#550 AC7): the child must keep its exact position — an append-after-remove
+    /// would silently reorder the cell's GRUP.</summary>
     internal static void ReplaceInSlot(IMajorRecordGetter parent, string slotName, int slotIndex, IMajorRecord child)
     {
         var property = parent.GetType().GetProperty(slotName)
@@ -279,13 +140,8 @@ internal static class ContainerChildFields
         else ((dynamic)value!)[slotIndex] = (dynamic)child;
     }
 
-    /// <summary>The mutation half of <see cref="RemoveEmbeddedChild"/> — reflection rather than a
-    /// hand-written switch over each of the four/two concrete slot shapes, for the same reason
-    /// <see cref="EnumerateChildren"/> reads them that way: one path that cannot drift from the table
-    /// above as new container shapes are added to it. <c>dynamic</c> resolves <c>RemoveAt</c> against
-    /// the slot's own runtime list type (<c>ExtendedList&lt;IPlaced&gt;</c>, etc.) — the same DLR
-    /// dispatch <see cref="Edits.RecordFieldWriter"/>'s own complex-field appliers already rely on
-    /// elsewhere in this codebase.</summary>
+    // Reflection plus dynamic so one path cannot drift from the table; RemoveAt resolves against the
+    // slot's runtime list type.
     private static void RemoveFromSlot(IMajorRecordGetter parent, string slotName, int slotIndex)
     {
         var property = parent.GetType().GetProperty(slotName)
@@ -302,36 +158,18 @@ internal static class ContainerChildFields
         ((dynamic)value!).RemoveAt(slotIndex);
     }
 
-    /// <summary>
-    /// The child slots that serialize <b>inline into their parent's own document</b> rather than to a
-    /// file of their own — exactly the set
-    /// <see cref="MEditService.Core.Serialization.CellEmbedCustomization"/> and
-    /// <see cref="MEditService.Core.Serialization.WorldspaceEmbedCustomization"/> configure,
-    /// restated here as data because <c>EmbedRecordsInSameFile</c> is a generation-time call with
-    /// nothing readable at runtime.
-    ///
-    /// <para><b>A strict subset of <see cref="ByTypeName"/>, and the distinction is the point</b> —
-    /// that table names every parent-child relationship, this one names only the relationships that
-    /// share a file. <c>Quest.{DialogBranches,DialogTopics,Scenes}</c> and <c>DialogTopic.Responses</c>
-    /// are children but stay folder-split, so their absence here is deliberate. Keep this in step with
-    /// the two customization classes: they are the source of truth and this is their runtime shadow.
-    /// </para>
-    /// </summary>
+    // The slots that serialize inline into the parent's document — the runtime shadow of
+    // CellEmbedCustomization and WorldspaceEmbedCustomization. A strict subset of ByTypeName: Quest and
+    // DialogTopic children stay folder-split. Keep in step with the two customizations.
     private static readonly HashSet<(string ParentType, string Slot)> EmbeddedSlots =
     [
         ("Cell", "Persistent"), ("Cell", "Temporary"), ("Cell", "Landscape"), ("Cell", "NavigationMeshes"),
         ("Worldspace", "TopCell"),
     ];
 
-    /// <summary>
-    /// <paramref name="record"/>'s child major records, read non-destructively off a getter, so
-    /// ingest can capture parentage (the <c>container_child</c> side table) in the same pass
-    /// that writes the parent's own document. Yields nothing for a non-container type.
-    ///
-    /// <para><c>SlotIndex</c> is the child's position within its own field (always 0 for a
-    /// single-reference field like <c>Landscape</c>) — preserved so a compile can reproduce a list's
-    /// original order rather than an ingest-arbitrary one.</para>
-    /// </summary>
+    /// <summary>Child major records read non-destructively off a getter, so ingest captures parentage in
+    /// the same pass that writes the parent. <c>SlotIndex</c> is preserved so compile reproduces the
+    /// original list order.</summary>
     internal static IEnumerable<(string SlotName, int SlotIndex, IMajorRecordGetter Child)> EnumerateChildren(
         IMajorRecordGetter record)
     {

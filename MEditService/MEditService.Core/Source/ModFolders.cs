@@ -3,26 +3,14 @@ using MEditService.Core.Records;
 
 namespace MEditService.Core.Source;
 
-/// <summary>
-/// Where a plugin's source would live — the one place the "which folder is this plugin's mod folder"
-/// rule is written down, shared by the edit path and by read-time freshness so the two can never
-/// disagree about whether a given plugin is editable.
-///
-/// Nothing is cached. Tracked *is* the presence of <c>.git</c> (ADR-0041), and a mod folder can be
-/// created, destroyed or replaced outside Modbench between any two calls — MO2's Replace install
-/// shell-deletes the whole folder — so the answer is re-derived every time it is asked.
-///
-/// Public (not internal): the load-time hash check runs from <c>MEditService.Api</c>'s
-/// reconcile handlers, which cannot see Core's internals.
-/// </summary>
+/// <summary>The one place the mod-folder rule for a plugin lives. Nothing is cached: tracked is the
+/// presence of <c>.git</c> (ADR-0041), re-derived every call because MO2 can replace the folder at
+/// any time.</summary>
 public static class ModFolders
 {
-    /// <summary>
-    /// The folder holding <paramref name="plugin"/>'s physical file, or null when the plugin has no
-    /// mod folder at all: a vanilla or DLC master resolved from the game's own Data directory, where
-    /// Track does not apply and the blessed path is a patch plugin instead. Also null when the
-    /// load order does not know this plugin.
-    /// </summary>
+    /// <summary>The folder holding the plugin's file, or null for a vanilla/DLC master resolved from the
+    /// game's own Data directory (Track does not apply there) or a plugin the load order does not
+    /// know.</summary>
     public static string? Of(ILoadOrder? loadOrder, PluginKey plugin)
     {
         var metadata = loadOrder?.Plugins.FirstOrDefault(p =>
@@ -32,8 +20,7 @@ public static class ModFolders
         return metadata is null ? null : Of(metadata.Origin, metadata.Path);
     }
 
-    /// <summary>The same rule stated over the two facts it actually needs, for callers that already
-    /// hold a plugin's own metadata and have no reason to look it up again by name.</summary>
+    /// <summary>The same rule for callers already holding a plugin's metadata.</summary>
     public static string? Of(string origin, string pluginPath)
     {
         if (string.Equals(origin, PluginOrigin.DataDirectory, StringComparison.OrdinalIgnoreCase))
@@ -42,14 +29,12 @@ public static class ModFolders
         return Path.GetDirectoryName(pluginPath);
     }
 
-    /// <summary>Whether this plugin's records can be edited at all: it has a mod folder, and that
-    /// folder is tracked. The single fact the editing surfaces gate on — "editing requires
-    /// tracking; viewing never does" (ADR-0041).</summary>
+    /// <summary>"Editing requires tracking; viewing never does" (ADR-0041).</summary>
     public static bool IsEditable(string origin, string pluginPath) =>
         Of(origin, pluginPath) is { } modFolder && SourceRepository.IsTracked(modFolder);
 
-    /// <summary>The mod folder only when it is actually tracked — the single condition under which a
-    /// plugin has source text to read or write at all.</summary>
+    /// <summary>The mod folder only when it is tracked — the single condition under which a plugin has
+    /// source text at all.</summary>
     public static string? TrackedOf(ILoadOrder? loadOrder, PluginKey plugin) =>
         Of(loadOrder, plugin) is { } modFolder && SourceRepository.IsTracked(modFolder) ? modFolder : null;
 }

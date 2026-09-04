@@ -1,23 +1,12 @@
 namespace MEditService.Core.Source;
 
-/// <summary>
-/// Folds every file under <c>sourceDir</c> into <c>destinationDir</c> at its own relative path
-/// — the counterpart <see cref="Edits.SpatialContainerMint"/> needs to land a synthetic whole-mod
-/// door's scratch output into a destination plugin's already-existing working tree without disturbing
-/// anything already there. Deliberately additive rather than a wholesale directory replace: the
-/// destination tree can (and, for every real caller here, does) already hold other records this
-/// operation must not touch — a naive "clear the target then copy" would delete every one of them.
-/// </summary>
+/// <summary>Folds every file under a source directory into a destination tree at its own relative
+/// path. Additive, never a wholesale replace: the destination already holds other records this
+/// operation must not touch.</summary>
 internal static class SourceTreeMerge
 {
-    /// <summary>
-    /// Copies every file under <paramref name="sourceDir"/> to its same-relative-path location under
-    /// <paramref name="destinationDir"/>, creating whatever intermediate directories are missing.
-    /// Byte-identical collisions are a no-op (the same convergence rule <c>IRecordIndex.ApplyWorkingTreeChanges</c>'s
-    /// own doc comment states — a retried mint landing the exact bytes it already landed is not a
-    /// conflict); a collision with <b>different</b> bytes throws rather than silently overwriting
-    /// (never assume exclusive ownership of a file on disk — root CLAUDE.md).
-    /// </summary>
+    /// <summary>Byte-identical collisions are a no-op (a retried mint landing the same bytes is not a
+    /// conflict); a collision with different bytes throws rather than silently overwriting.</summary>
     internal static void MergeAdditively(string sourceDir, string destinationDir)
     {
         foreach (var sourceFile in Directory.EnumerateFiles(sourceDir, "*", SearchOption.AllDirectories))
@@ -33,11 +22,8 @@ internal static class SourceTreeMerge
                     "refusing to overwrite it.");
             }
 
-            // Per file, and unminted on failure: a copy that throws must not leave the block/sub-block/
-            // cell directories it just needed standing empty in the destination tree
-            // (#675 — SourceUnitResolver.InMintedDirectory's own doc comment for why an empty one is
-            // not inert). Not a transaction: earlier files that did land keep their directories, which
-            // is correct — those directories hold content, and this merge is additive by design.
+            // Per file and unminted on failure: a copy that throws must not leave the directories it just
+            // needed standing empty (#675). Earlier files keep theirs — this merge is additive.
             SourceUnitResolver.InMintedDirectory(
                 Path.GetDirectoryName(destinationFile)!, () => File.Copy(sourceFile, destinationFile));
         }
