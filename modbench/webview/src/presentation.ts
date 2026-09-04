@@ -20,22 +20,27 @@ export interface Member {
   value: unknown;
   /** The member's schema, for a rule that reads metadata rather than a value. */
   meta?: FieldMetadata;
-  /** What this member's own cell reads out: an enum's label, a number, a plain string. */
+  /** What this member's own cell reads out: an enum's label, a number, a plain string, a FormKey's
+   *  "EditorID [FormKey]". */
   label: string;
-  /** A FormKey member's EditorID, falling back to the bare FormKey — the short form of the
-   *  "EditorID [FormKey]" its own cell shows (FormKeyLink.formKeyLabel). */
+  /** A FormKey member's EditorID alone, where `label` is the whole "EditorID [FormKey]" its own
+   *  cell shows (FormKeyLink.formKeyLabel). */
   shortName: string;
 }
 
 export interface SummaryRow {
   member: (...path: string[]) => Member;
-  /** How the elements of an array member each read, in this column's own order. xEdit's summary
-   *  passthrough: a container reads as its children do. Only elements this column actually holds
-   *  are named, and only those whose own leaf the table has an entry for. */
+  /** How the elements of an array member each read, in this column's own order — one entry per
+   *  element this column holds. xEdit's summary passthrough: a container reads as its children do.
+   *  An element whose own leaf has no reading contributes the same placeholder its own row shows. */
   elements: (...path: string[]) => string[];
-  /** The leaf this element turned out to be, which is the key the table found this formatter
-   *  under — or the leaf whose base it was found under (see `summarizerFor`). */
+  /** The leaf this element turned out to be — the value of its schema's discriminator, or the type
+   *  name its schema declares. */
   leaf: string;
+  /** The schema's own word for that leaf, from the discriminator member's own label. Absent where
+   *  the element's schema declares no discriminator, which is where it is not a union's member at
+   *  all but a value standing on its own. */
+  kind?: string;
   /** This element is the last of its own list in this column. */
   isLast: boolean;
 }
@@ -144,21 +149,24 @@ const PROPERTY_VALUE_MEMBERS: Record<string, string | undefined> = {
   ScriptStringProperty: 'data_string',
 };
 
-/** `name: Kind = value`, the reading every leaf of the script-property union shares. The kind is
- *  the discriminator's own label, so the words come from the schema rather than from here. */
-function scriptProperty(row: SummaryRow, value: string): string {
-  const discriminator = discriminatorOf(row.member().meta);
-  const kind = discriminator == null ? '' : row.member(discriminator).label;
-  return `${row.member('name').label}: ${kind}${value === '' ? '' : ` = ${value}`}`;
+/** What a value wears when it is read as a member of the script-property union: its name, the kind
+ *  the schema calls its leaf, and itself. Read anywhere else, a value is just itself — which is how
+ *  one class serves both as a property and as an element of a list of bindings. */
+function asProperty(row: SummaryRow, value: string | undefined): string {
+  if (row.kind == null) return value ?? '';
+  return `${row.member('name').label}: ${row.kind}${value == null ? '' : ` = ${value}`}`;
 }
 
-function scriptPropertyValue(row: SummaryRow): string {
+function scriptPropertyValue(row: SummaryRow): string | undefined {
   const member = PROPERTY_VALUE_MEMBERS[row.leaf];
-  return member == null ? '' : row.member(member).label;
+  return member == null ? undefined : row.member(member).label;
 }
 
 /** `ScriptName(<each property>)` — xEdit passes the properties list straight through rather than
- *  counting it, and joins its elements the way it joins any summary list. */
+ *  counting it, and joins its elements the way it joins any summary list. Its own length caps
+ *  (`SetSummaryPassthroughMaxLength`, 80 here and 100 on the scripts list) are xEdit's answer to a
+ *  fixed-width tree column; the cell this lands in already ellipsizes at its own width, so the
+ *  summary carries every property and lets the grid decide how much of it fits. */
 function scriptEntry(row: SummaryRow): string {
   return `${row.member('name').label}(${row.elements('properties').join(', ')})`;
 }
@@ -168,12 +176,10 @@ const PRESENTATION_TABLE: Record<string, Summarizer | undefined> = {
   ConditionGlobal: row => conditionSummary(row, globalComparison),
   ScriptEntry: scriptEntry,
   // Reached by every leaf of the script-property union that has no reading of its own.
-  ScriptProperty: row => scriptProperty(row, scriptPropertyValue(row)),
-  // The one class that is both: a leaf of that union, and the element type of a list of bindings.
-  // As a property it takes the property's own shape with the binding as its value; on its own it
-  // is the binding.
-  ScriptObjectProperty: row =>
-    (discriminatorOf(row.member().meta) == null ? scriptObject(row) : scriptProperty(row, scriptObject(row))),
+  ScriptProperty: row => asProperty(row, scriptPropertyValue(row)),
+  // The one class the schema reaches both ways: a leaf of that union, and the element type of a
+  // list of bindings. `asProperty` is what tells the two apart.
+  ScriptObjectProperty: row => asProperty(row, scriptObject(row)),
 };
 
 // ── The lookup the grid uses ─────────────────────────────────────────────────
@@ -199,10 +205,11 @@ function leafOf(meta: FieldMetadata | undefined, value: unknown): string | null 
 }
 
 /** The formatter this element reads by, and the leaf it was found for. A leaf the table has no
- *  entry of its own for reads by its base's entry, since a union's leaves mostly share one reading
- *  and differ only in which member holds the value — fifteen script-property leaves, one entry.
- *  The base is consulted only once the value has named a leaf: an object whose leaf is unknown
- *  still reads as nothing at all. */
+ *  entry of its own for reads by its declared base's entry, since a union's leaves mostly share one
+ *  reading and differ only in which member holds the value — fifteen script-property leaves, one
+ *  entry. The base is reached only once the value has named a leaf: an object whose value names no
+ *  leaf reads as nothing at all, because a concrete base is one of its own leaves (#701) and that
+ *  is a different claim from "one of the leaves, and the table knows only the family's reading". */
 function summarizerFor(
   meta: FieldMetadata | undefined, value: unknown,
 ): { summarize: Summarizer; leaf: string } | undefined {
@@ -212,6 +219,9 @@ function summarizerFor(
     ?? (meta?.leafTypeName == null ? undefined : PRESENTATION_TABLE[meta.leafTypeName]);
   return summarize == null ? undefined : { summarize, leaf };
 }
+
+/** What a container with no reading of its own shows, here and on its own row (DiffRow). */
+const COLLAPSED_PLACEHOLDER = '{…}';
 
 const memberPath = (path: readonly string[]): PathSegment[] =>
   path.map(name => ({ kind: 'member', name }));
@@ -247,26 +257,29 @@ function summaryIn(
   const found = summarizerFor(meta, value);
   if (!found) return undefined;
 
+  const discriminator = discriminatorOf(meta);
+  const member = (...path: string[]): Member => {
+    const memberMeta = metaAtPath(meta, memberPath(path));
+    const memberValue = getAtPath(value, memberPath(path));
+    const resolution = diffAt(diff, path)?.resolutions?.[column];
+    return {
+      value: memberValue,
+      meta: memberMeta,
+      label: memberMeta ? displayValue(memberValue, memberMeta, resolution) : toStr(memberValue),
+      shortName: resolution?.editorId ?? toStr(memberValue),
+    };
+  };
+
   return found.summarize({
     isLast,
+    member,
     leaf: found.leaf,
-    member: (...path) => {
-      const memberMeta = metaAtPath(meta, memberPath(path));
-      const memberValue = getAtPath(value, memberPath(path));
-      const resolution = diffAt(diff, path)?.resolutions?.[column];
-      return {
-        value: memberValue,
-        meta: memberMeta,
-        label: memberMeta ? displayValue(memberValue, memberMeta, resolution) : toStr(memberValue),
-        shortName: resolution?.editorId ?? toStr(memberValue),
-      };
-    },
+    kind: discriminator == null ? undefined : member(discriminator).label,
     elements: (...path) => {
       const listMeta = metaAtPath(meta, memberPath(path))?.elementType ?? undefined;
       const present = (diffAt(diff, path)?.children ?? []).filter(c => c.values[column] != null);
-      return present
-        .map((child, i) => summaryIn(child, listMeta, column, i === present.length - 1))
-        .filter((s): s is string => s != null);
+      return present.map((child, i) =>
+        summaryIn(child, listMeta, column, i === present.length - 1) ?? COLLAPSED_PLACEHOLDER);
     },
   });
 }

@@ -34,6 +34,7 @@ const PROPERTY_LEAVES: Record<string, string> = {
   ScriptProperty: 'Script Property',
   ScriptStringListProperty: 'String List',
   ScriptStringProperty: 'String',
+  ScriptVariableProperty: 'Variable',
 };
 
 const objectBindingMeta = (name: string, extra: Partial<FieldMetadata> = {}): FieldMetadata => ({
@@ -78,6 +79,19 @@ const scriptsMeta: FieldMetadata = {
   },
 };
 
+/** The quest adapter's alias bindings — Fallout4VmadAnnotations keys them by `property.alias`, a
+ *  dotted member, where a script is keyed by the plain `name`. The webview receives either as one
+ *  opaque key string, so this is the same claim about identity stated over the general key. */
+const aliasesMeta: FieldMetadata = {
+  name: 'aliases', type: 'array', isArray: true, validFormKeyTypes: [], enumMembers: [],
+  keyMembers: ['property.alias'],
+  elementType: {
+    name: '', type: 'struct', isArray: false, validFormKeyTypes: [], enumMembers: [],
+    leafTypeName: 'QuestFragmentAlias',
+    fields: [objectBindingMeta('property'), scriptsMeta],
+  },
+};
+
 type Obj = Record<string, unknown>;
 
 /** A property of one leaf: the discriminator, the name, and whichever member that leaf keeps its
@@ -100,9 +114,13 @@ const PLUGIN = 'MyMod.esp';
 // like. Keyed array children are named by their key text (ElementKey.Text), positional ones by
 // "[N]"; the two together are what "keyed row identity" is a claim about.
 
-/** ElementKey.Text: the element's key members, joined the way the backend joins them. */
+/** ElementKey.Text: the element's key members, joined the way the backend joins them. A key member
+ *  may be dotted (a quest alias binding is keyed by `property.alias`), so each one is a path. */
 const keyTextOf = (keyMembers: string[], element: unknown): string =>
-  keyMembers.map(m => String((element as Obj)[m] ?? '')).join(' / ');
+  keyMembers
+    .map(m => m.split('.').reduce<unknown>((v, name) => (v as Obj | null)?.[name], element))
+    .map(v => String(v ?? ''))
+    .join(' / ');
 
 function keysOf(meta: FieldMetadata, values: Record<string, unknown>): string[] {
   const lists = Object.values(values).map(v => (Array.isArray(v) ? v : []));
@@ -307,6 +325,39 @@ describe('#695 — a collapsed script reads as xEdit prose', () => {
     expect(summaryOf('Guard')).toBe('Guard(Names: String List)');
   });
 
+  it('a leaf the table has no reading of its own for reads by its declared base’s', async () => {
+    // The rule that keeps fifteen leaves to one entry. ScriptVariableProperty has no entry and no
+    // value member; it still reads as a property, because ScriptProperty is what it is.
+    currentCompare = oneColumn([script('Guard', [property('V', 'ScriptVariableProperty')])]);
+    renderPanel();
+    await expandScripts();
+    await waitFor(() => screen.getByText('Guard'));
+
+    expect(summaryOf('Guard')).toBe('Guard(V: Variable)');
+  });
+
+  it('an element of a passed-through list whose leaf has no reading at all still occupies its place', async () => {
+    // Nothing may vanish from a passthrough: a dropped element would make a script with two
+    // properties read exactly like a script with one.
+    const unknownBase: FieldMetadata = {
+      ...scriptsMeta,
+      elementType: {
+        ...scriptsMeta.elementType!,
+        fields: scriptsMeta.elementType!.fields!.map(f => (f.name !== 'properties' ? f : {
+          ...f, elementType: { ...propertyMeta, leafTypeName: 'SomethingElse', fields: propertyMeta.fields!.filter(m => !m.isDiscriminator) },
+        })),
+      },
+    };
+    const unnamed = property('Radius', 'ScriptIntProperty', { data_int: 10 });
+    delete unnamed.concrete_type;
+    currentCompare = oneColumn([script('Guard', [unnamed, { ...unnamed, name: 'Speed' }])], {}, unknownBase);
+    renderPanel();
+    await expandScripts();
+    await waitFor(() => screen.getByText('Guard'));
+
+    expect(summaryOf('Guard')).toBe('Guard({…}, {…})');
+  });
+
   it('the concrete base is a leaf like any other and reads with no value', async () => {
     currentCompare = oneColumn([script('Guard', [property('Nothing', 'ScriptProperty')])]);
     renderPanel();
@@ -361,6 +412,25 @@ describe('#695 — a row of a keyed array is identified by its key', () => {
 
     expect(screen.getByText('properties')).toBeInTheDocument();
     expect(summaryOf('Radius')).toBe('Radius: Int = 20');
+  });
+
+  it('a dotted key identifies its row the same way a plain one does', async () => {
+    const alias = (index: number, scriptName: string): Obj =>
+      ({ property: { object: null, alias: index }, scripts: [script(scriptName)] });
+    currentCompare = oneColumn([alias(0, 'First'), alias(1, 'Second')], {}, aliasesMeta);
+    renderPanel();
+    await waitFor(() => screen.getByText('aliases'));
+    fireEvent.click(screen.getAllByText('▶')[0]);
+    await waitFor(() => screen.getByText('1'));
+    expandRow('1');
+    await waitFor(() => screen.getByText('scripts'));
+    expandRow('scripts');
+    await waitFor(() => screen.getByText('Second'));
+
+    reloadWith(oneColumn([alias(1, 'Second')], {}, aliasesMeta));
+    await waitFor(() => expect(screen.queryByText('0')).not.toBeInTheDocument());
+
+    expect(summaryOf('Second')).toBe('Second()');
   });
 
   it('two scripts sharing a property name keep their own rows apart', async () => {
