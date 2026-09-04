@@ -10,32 +10,22 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Core.Plugins;
 
-/// <summary>
-/// One plugin copy as the snapshot resolves it on this side of the boundary: the copy's identity
-/// and path, whether the game forces it on regardless of <c>plugins.txt</c> (a vanilla master, a
-/// Creation Club plugin — always from the game directory, always <see cref="PluginOrigin.DataDirectory"/>),
-/// and the <see cref="Registration"/> it will hold. Built by <see cref="LoadOrder.Resolve"/>, which
-/// is where forced plugins are prepended and every snapshot slot is offset past them.
-/// </summary>
+/// <summary>One plugin copy as the snapshot resolves it on this side of the boundary. Built by
+/// <see cref="LoadOrder.Resolve"/>, which is where forced plugins are prepended and every snapshot
+/// slot is offset past them.</summary>
 public sealed record ResolvedPlugin(string Name, string Path, string Origin, bool IsForced, Registration Registration)
 {
     public PluginKey Key => new(Name, Origin);
 }
 
-/// <summary>
-/// The plugin copies Editing holds (ADR-0044): each one's opened binary overlay (for metadata and
-/// the write path's link cache), its <see cref="PluginMetadata"/>, and the failures of the copies
-/// that could not be opened. Mutated in place by <see cref="LoadOrderMirror.Reconcile"/> — a copy
-/// arrives (<see cref="Open"/>), leaves (<see cref="Remove"/>), or has its registration moved
-/// (<see cref="Update"/>) — and never torn down as a whole for a change in what it holds.
-/// </summary>
+/// <summary>The plugin copies Editing holds (ADR-0044). Mutated in place by reconcile — a copy
+/// arrives, leaves, or has its registration moved — and never torn down as a whole for a change in
+/// what it holds.</summary>
 public sealed class LoadOrder : ILoadOrder
 {
-    // ADR-0036: keyed by the compound (origin, filename) identity, not the filename alone —
-    // two physical copies of one filename are ordinarily held at once (ADR-0044), and a
-    // filename-keyed dictionary would silently drop one. The key is a joined string rather than
-    // a tuple purely so one OrdinalIgnoreCase comparer covers both halves; NUL can't occur in
-    // either, so the join is unambiguous.
+    // ADR-0036: keyed by the compound (origin, filename) identity — two copies of one filename are
+    // ordinarily held at once, and a filename-keyed dictionary would silently drop one. Joined into
+    // one string so a single OrdinalIgnoreCase comparer covers both halves.
     private readonly Dictionary<string, IModDisposeGetter> _modsByKey = new(StringComparer.OrdinalIgnoreCase);
     private readonly List<PluginMetadata> _plugins = [];
     private readonly Dictionary<string, PluginLoadFailure> _loadFailures = new(StringComparer.OrdinalIgnoreCase);
@@ -44,12 +34,9 @@ public sealed class LoadOrder : ILoadOrder
     private static string KeyOf(string origin, string name) => $"{origin}\0{name}";
     private static string KeyOf(PluginKey key) => KeyOf(key.Origin!, key.Name);
 
-    // The load order is read while it is being reconciled, so everything a reader touches is
-    // published as an immutable snapshot rather than as the live collection. Copy-on-write, not
-    // copy-on-read: opening a plugin happens a few hundred times per cold reconcile, while
-    // GetPlugins, PluginOriginResolver and BuildTypedLinkCache walk these lists on
-    // essentially every request. Without this, a read that merely coincided with a plugin landing
-    // threw "Collection was modified" — a load-order-sized race, not a rare one.
+    // The load order is read while it is being reconciled, so readers see an immutable snapshot.
+    // Copy-on-write, not copy-on-read: opens are a few hundred per cold reconcile, while reads walk
+    // these lists on every request.
     private readonly Lock _mutation = new();
     private PluginMetadata[] _pluginsSnapshot = [];
     private PluginLoadFailure[] _loadFailuresSnapshot = [];
@@ -69,15 +56,9 @@ public sealed class LoadOrder : ILoadOrder
         GameRelease = gameRelease;
     }
 
-    /// <summary>
-    /// Resolves a snapshot to the copies this side will hold: the game's implicit masters and its
-    /// Creation Club catalog first (forced on, from <paramref name="gameDirectory"/>, never a mod),
-    /// then every snapshot entry whose name is not forced, in snapshot order, with its slot offset
-    /// past the forced block so a forced master always sorts before everything <c>plugins.txt</c>
-    /// lists. Both forced sources dedupe the same way: a name either of them claims is forced on
-    /// regardless of what the snapshot says about it — a CC plugin Mod Management also sent
-    /// as an ordinary line is held exactly once, from the game directory.
-    /// </summary>
+    /// <summary>The implicit masters and Creation Club catalog come first, forced on, and every
+    /// snapshot slot is offset past them so a forced master always sorts first. A name either
+    /// forced source claims is held exactly once.</summary>
     public static IReadOnlyList<ResolvedPlugin> Resolve(
         string gameDirectory, GameRelease gameRelease, IReadOnlyList<LoadOrderEntry> entries)
     {
@@ -110,19 +91,9 @@ public sealed class LoadOrder : ILoadOrder
             .Where(name => File.Exists(Path.Combine(folder, name)))
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-    /// <summary>
-    /// Names cataloged in the game's own <c>[Category].ccc</c> — Creation Club content the
-    /// game loads independent of <c>plugins.txt</c>'s `*` toggles, the same way DLC `.esm`s always
-    /// load. Mutagen's own reader already filters to entries whose file exists in
-    /// <paramref name="folder"/>, so a stale or hand-edited catalog entry naming a file that isn't
-    /// there contributes nothing — no re-check needed here. <see cref="CreationClubListings.GetListingsPath"/>
-    /// is per-<see cref="GameCategory"/>, not this game specifically, so a category with no CC
-    /// concept (or an install with no catalog file) yields empty rather than throwing:
-    /// <c>LoadOrderListingsFromPath</c>'s own <c>Get()</c> throws if the file it's given doesn't
-    /// exist, which is exactly why existence is checked first rather than left to it. Order is the
-    /// catalog's own file order — not alphabetized, not re-sorted — because catalog order is what
-    /// the caller places the block in relative to <c>plugins.txt</c>.
-    /// </summary>
+    // Mutagen's reader already filters to entries whose file exists, so a stale catalog entry
+    // contributes nothing. Existence is checked first because LoadOrderListingsFromPath throws on a
+    // missing file. Order is the catalog's own, never re-sorted.
     private static List<string> ResolveCreationClubNames(string folder, GameRelease gameRelease)
     {
         var cccPath = CreationClubListings.GetListingsPath(gameRelease.ToCategory(), folder);
@@ -141,21 +112,14 @@ public sealed class LoadOrder : ILoadOrder
             return _modsByKey.TryGetValue(KeyOf(origin, pluginName), out var mod) ? mod : null;
     }
 
-    /// <summary>The held copy <paramref name="key"/> names, or null when this load order does not
-    /// hold it (never opened, failed to open, or removed).</summary>
     public PluginMetadata? Find(PluginKey key) =>
         Plugins.FirstOrDefault(p =>
             p.Name.Equals(key.Name, StringComparison.OrdinalIgnoreCase)
             && p.Origin.Equals(key.Origin, StringComparison.OrdinalIgnoreCase));
 
-    /// <summary>
-    /// Opens one resolved copy's binary overlay and holds it. Opening is not free —
-    /// <see cref="BuildPluginMetadata"/> counts the plugin's records — which is why the reconcile
-    /// interleaves it with indexing rather than opening everything first (ADR-0035).
-    /// A copy that cannot be opened or parsed (an unparseable record, a missing file) must not abort
-    /// the whole reconcile: it is recorded in <see cref="LoadFailures"/> and null is returned, and
-    /// nothing is held for it. A success clears any earlier failure for the same copy.
-    /// </summary>
+    /// <summary>A copy that cannot be opened or parsed must not abort the whole reconcile: it is
+    /// recorded in <see cref="LoadFailures"/> and nothing is held for it. A success clears any
+    /// earlier failure for the same copy.</summary>
     public PluginMetadata? Open(ResolvedPlugin plugin)
     {
         if (!File.Exists(plugin.Path))
@@ -212,10 +176,9 @@ public sealed class LoadOrder : ILoadOrder
         }
     }
 
-    /// <summary>Holds an opened plugin and republishes the snapshot readers see, so a copy is never
-    /// half-held from a reader's point of view. Replaces any copy already held under the same key
-    /// rather than appending beside it — two PluginMetadata under one (origin, filename) makes every
-    /// ColumnKey-keyed lookup ambiguous.</summary>
+    // Republishes the snapshot readers see, so a copy is never half-held from a reader's point of
+    // view. Replaces any copy already held under the same key: two PluginMetadata under one
+    // (origin, filename) would make every keyed lookup ambiguous.
     private void Hold(IModDisposeGetter mod, PluginMetadata metadata)
     {
         lock (_mutation)
@@ -234,9 +197,8 @@ public sealed class LoadOrder : ILoadOrder
         }
     }
 
-    /// <summary>Drops a held copy — its overlay disposed, its metadata gone — the load order's half
-    /// of a copy leaving the snapshot. The index side is <c>IRecordIndex.Unregister</c>: the rows
-    /// stay for the next snapshot that wants them. Returns false when nothing was held.</summary>
+    /// <summary>The load order's half of a copy leaving the snapshot. The index side is
+    /// <c>IRecordIndex.Unregister</c>: the rows stay for the next snapshot that wants them.</summary>
     public bool Remove(PluginKey key)
     {
         lock (_mutation)
@@ -254,12 +216,9 @@ public sealed class LoadOrder : ILoadOrder
         }
     }
 
-    /// <summary>
-    /// Moves a held copy's registration in place — the load order's half of a reconcile that
-    /// changed a slot or a flag (a reorder, an enable, a change of which copy wins). Nothing here
-    /// opens or re-reads the plugin file: none of the three facts is a property of the file's
-    /// content, and re-deriving anything else here would let a reconcile silently re-read.
-    /// </summary>
+    /// <summary>Nothing here opens or re-reads the file: none of the three registration facts is a
+    /// property of its content, and re-deriving anything else would let a reconcile silently
+    /// re-read.</summary>
     public PluginMetadata Update(PluginMetadata previous, Registration registration)
     {
         var metadata = previous with
@@ -289,15 +248,9 @@ public sealed class LoadOrder : ILoadOrder
         return metadata;
     }
 
-    /// <summary>
-    /// ADR-0041: the New Plugin gesture — opens a freshly written file whose destination is a
-    /// mod folder (or MO2's overwrite/) that Mod Management resolved. A created plugin is a genuine
-    /// load-order member from the moment it is held (winning, enabled, at the slot one past the
-    /// highest in use) even though <c>plugins.txt</c> has not been appended yet: that append is the
-    /// caller's job, and the next snapshot corrects the slot to the real line. One past the highest
-    /// slot, not <c>Plugins.Count</c>: a removal can shrink the list, and a reused slot would
-    /// give two participating plugins the same load_order_idx — an ambiguous stack.
-    /// </summary>
+    /// <summary>ADR-0041: a created plugin is a genuine load-order member at once, though
+    /// plugins.txt has not been appended yet. One past the highest slot, not the count: a reused
+    /// slot would give two participants one index.</summary>
     public PluginMetadata AddCreatedPlugin(string filePath, string origin)
     {
         var nextIndex = _plugins.Count == 0 ? 0 : _plugins.Max(p => p.LoadOrderIndex ?? 0) + 1;
@@ -342,10 +295,8 @@ public sealed class LoadOrder : ILoadOrder
             Winning: plugin.Registration.Winning);
     }
 
-    /// <summary>
-    /// Idempotent: a cancelled reconcile and the mirror's own teardown can both reach here for one
-    /// load order. Disposing a Mutagen overlay twice is not benign.
-    /// </summary>
+    /// <summary>Idempotent: a cancelled reconcile and the mirror's own teardown can both reach here
+    /// for one load order, and disposing a Mutagen overlay twice is not benign.</summary>
     public void Dispose()
     {
         lock (_mutation)

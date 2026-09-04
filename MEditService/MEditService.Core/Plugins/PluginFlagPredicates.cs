@@ -2,30 +2,18 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Core.Plugins;
 
-/// <summary>
-/// Engine-authoritative light/master predicate, shared by every call site that needs to know
-/// whether a plugin is light or a master. The
-/// overwhelmingly common light plugin in the wild is a header-flagged <c>.esp</c>, not a distinct
-/// extension, and an ESM-flagged <c>.esp</c> is a legal, common master; a filename-only check
-/// misses both. Matches Mutagen's own <c>IModFlagsGetter</c> semantics
-/// (<c>references/Mutagen/Mutagen.Bethesda.Core/Plugins/Records/ModFlags.cs</c>) — the header flag
-/// is authoritative, the extension is a secondary path for a flag-less plugin still named
-/// <c>.esl</c>/<c>.esm</c>.
-///
-/// <para>Plain static methods, not extension methods: an extension method named <c>IsMaster</c> on
-/// <see cref="IModFlagsGetter"/> would collide with that interface's own <c>IsMaster</c> property at
-/// every call site — member lookup finds the property first and the extension is never
-/// considered.</para>
-/// </summary>
+/// <summary>The header flag is authoritative and the extension only a secondary path, as in
+/// Mutagen's own <c>IModFlagsGetter</c>: the common light plugin is a header-flagged esp, and an
+/// ESM-flagged esp is a legal master.</summary>
 public static class PluginFlagPredicates
 {
-    /// <summary>The highest local FormID a light (ESL-addressable) plugin can carry — Mutagen's own
-    /// <see cref="Mutagen.Bethesda.Plugins.FormID.SmallIdMask"/>, restated once here so every call
-    /// site reads one name (#290's no-hand-written-literals rule). The range's game-dependent
-    /// <i>lower</i> bound is <c>RecordCompactionCompatibilityDetection.GetSmallMasterRange</c>'s to
-    /// answer, where a whole mod is in hand.</summary>
+    /// <summary>Mutagen's own <see cref="Mutagen.Bethesda.Plugins.FormID.SmallIdMask"/>, restated
+    /// once here so every call site reads one name. The range's game-dependent <i>lower</i> bound is
+    /// <c>RecordCompactionCompatibilityDetection.GetSmallMasterRange</c>'s to answer.</summary>
     public const uint LightLocalFormIdCap = Mutagen.Bethesda.Plugins.FormID.SmallIdMask;
 
+    // Plain statics, not extension methods: an extension named IsMaster on IModFlagsGetter is never
+    // considered, because member lookup finds that interface's own IsMaster property first.
     public static bool IsLight(IModFlagsGetter mod, string fileName) =>
         mod.IsSmallMaster || fileName.EndsWith(".esl", StringComparison.OrdinalIgnoreCase);
 
