@@ -1647,17 +1647,14 @@ public sealed partial class SchemaReflector
     // under the whole base chain, so a two-level chain (APerkEffect -> APerkEntryPointEffect ->
     // PerkEntryPointModifyValue) is found the same way a one-level one (ANpcLevel -> NpcLevel) is.
     // Every base is asked once per schema build for every Loqui struct the walk reaches, so the
-    // assembly is scanned once and each concrete class filed under its whole base chain. Leaves are
-    // ordered most-derived first: a leaf is recognised by IsInstanceOfType, and a concrete base
-    // would otherwise claim every object of its subclasses.
+    // assembly is scanned once and each concrete class filed under its whole base chain.
     private static readonly ConcurrentDictionary<Assembly, ILookup<Type, (Type GetterType, string ClassName)>> LeavesByBase = new();
 
     private static ILookup<Type, (Type GetterType, string ClassName)> IndexLeavesByBase(Assembly assembly) =>
         assembly.GetTypes()
             .Where(t => !t.IsAbstract && !t.IsInterface && !t.ContainsGenericParameters)
-            .Select(t => (Leaf: t, Getter: GetOwnGetterType(t), Depth: BaseChain(t).Count()))
+            .Select(t => (Leaf: t, Getter: GetOwnGetterType(t)))
             .Where(l => l.Getter != null)
-            .OrderByDescending(l => l.Depth)
             .SelectMany(l => BaseChain(l.Leaf).Select(b => (Base: b, Leaf: (l.Getter!, l.Leaf.Name))))
             .ToLookup(e => e.Base, e => e.Leaf);
 
@@ -1686,14 +1683,16 @@ public sealed partial class SchemaReflector
     {
         if (GetSetterType(getterInterface) is not { } setterType) return null;
         if (game.Annotations.IsExcludedUnion(setterType)) return null;
-        var leaves = LeavesByBase.GetOrAdd(setterType.Assembly, IndexLeavesByBase)[setterType].ToList();
+        // A concrete base is its own last leaf: a leaf is recognised by IsInstanceOfType, first
+        // match wins, and the base would otherwise claim every object of its subclasses.
+        var leaves = LeavesByBase.GetOrAdd(setterType.Assembly, IndexLeavesByBase)[setterType]
+            .OrderBy(l => l.GetterType == getterInterface)
+            .ToList();
         return IsUnionBase(setterType, leaves) ? new LoquiUnion(setterType, leaves) : null;
     }
 
-    /// <summary>A Loqui base and the concrete classes under it, itself among them when it is
-    /// concrete, most-derived first: a leaf is recognised by <c>IsInstanceOfType</c>, first match
-    /// wins, and a concrete base would otherwise claim every object of its subclasses (the order
-    /// <see cref="IndexLeavesByBase"/> files them in). The base travels
+    /// <summary>A Loqui base and the concrete classes under it, itself last among them when it is
+    /// concrete (see <see cref="TryGetUnion"/>). The base travels
     /// with the leaves because the discriminator's own labels are the leaf names read
     /// <i>relative to</i> it (<see cref="LeafLabel"/>).</summary>
     private sealed record LoquiUnion(Type SetterType, List<(Type GetterType, string ClassName)> Leaves);
