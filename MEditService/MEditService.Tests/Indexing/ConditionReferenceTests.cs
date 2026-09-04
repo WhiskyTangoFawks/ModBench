@@ -9,17 +9,8 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Tests.Indexing;
 
-/// <summary>
-/// #692: a condition's FormKey-bearing members reach Referenced By through the one reflected
-/// form-ref walk — and only the ones the condition actually uses do.
-///
-/// <para>Mutagen aliases a condition's <c>ParameterOneNumber</c> and <c>ParameterOneRecord</c> onto
-/// the same four bytes and reads both off every condition, so an unfiltered walk would file a quest
-/// stage index as a reference to whatever record happens to hold that FormID, and a Run On of
-/// Subject would still point at whatever reference the condition last carried. What the function
-/// and the Run On value say is in use is the filter — <c>FieldMetadata.SiblingsInUse</c>, read by
-/// <c>FormRefPathBuilder</c>.</para>
-/// </summary>
+/// <summary>Mutagen aliases <c>ParameterOneNumber</c> and <c>ParameterOneRecord</c> onto the same four
+/// bytes, so an unfiltered walk would file a quest stage index as a reference.</summary>
 public class ConditionReferenceTests
 {
     private static readonly SchemaReflector Reflector = SharedSchemaReflector.Instance;
@@ -43,9 +34,6 @@ public class ConditionReferenceTests
         return paths;
     }
 
-    /// <summary>The two slots <c>GetStageDone</c> uses are a quest link and a stage number. Only the
-    /// first is a reference; the second is a number that shares its bytes with a link Mutagen will
-    /// happily read as one.</summary>
     [Fact]
     public void AFormParameterIsAReference_AndANumberParameterSharingItsBytesIsNot()
     {
@@ -73,9 +61,6 @@ public class ConditionReferenceTests
             ConditionRefPaths(fixture, cobj, "CondRefs.esp"));
     }
 
-    /// <summary>The same idle-member rule read from the other side: a check error is a claim that a
-    /// link is broken, and an idle slot has no link to break. Real Fallout 4 quest data flagged
-    /// every condition whose Run On is not Reference before this rule existed.</summary>
     [Fact]
     public void AnIdleMemberIsNotFlaggedAsABrokenLink()
     {

@@ -8,16 +8,8 @@ using Mutagen.Bethesda.Installs;
 
 namespace MEditService.Tests.RealData;
 
-/// <summary>
-/// End-to-end smoke test against whatever real Bethesda game(s) are installed on this machine.
-/// Installs are discovered (no hardcoded paths) so this also generalizes to other games as
-/// multi-game support lands — add a <see cref="GameRelease"/> to <see cref="CandidateGames"/>.
-///
-/// Environment-dependent and slow (loads full vanilla masters), so it is gated behind
-/// <c>MEDIT_SMOKE=1</c>: it never runs in normal <c>dotnet test</c> or under mutation (where it
-/// would otherwise re-load hundreds of MB per mutant). Run it deliberately:
-///   MEDIT_SMOKE=1 dotnet test --filter FullyQualifiedName~RealInstallSmokeTests
-/// </summary>
+/// <summary>Against whatever real game is installed, discovered rather than hardcoded. Gated behind
+/// <c>MEDIT_SMOKE=1</c>: loads full vanilla masters, so never in a normal run or under mutation.</summary>
 public sealed class RealInstallSmokeTests
 {
     private static readonly GameRelease[] CandidateGames =
@@ -27,16 +19,11 @@ public sealed class RealInstallSmokeTests
         GameRelease.Starfield,
     ];
 
-    // Which of the candidates above are actually usable is decided here, never by editing
-    // this list — a release whose Mutagen record-type assembly isn't referenced (true for every
-    // entry above except Fallout4 in this build) is not offered, not loaded, and not counted
-    // towards `tested` below. SchemaReflector.IsSupported logs the skip warning itself.
+    // Which candidates are usable is decided here, never by editing the list: a release whose Mutagen
+    // assembly is not referenced is not offered, not loaded and not counted.
     private static readonly SchemaReflector SchemaReflector = new SchemaReflector();
 
-    /// <summary>
-    /// Marks the smoke test skipped (not passed) unless <c>MEDIT_SMOKE=1</c>, so normal and
-    /// mutation runs report an honest "skipped" rather than a green no-op.
-    /// </summary>
+    // Skipped, not passed, without MEDIT_SMOKE=1, so runs report honestly rather than a green no-op.
     private sealed class SmokeFactAttribute : FactAttribute
     {
         public SmokeFactAttribute()
@@ -62,10 +49,9 @@ public sealed class RealInstallSmokeTests
             if (!locator.TryGetDataDirectory(release, out var dataDir))
                 continue;
 
-            // LoadOrder loads the implicit base masters present in the game directory, so an
-            // empty explicit list is enough to exercise a real vanilla load without guessing load
-            // order. The index needs an instance to live in — a temp one, since a real
-            // install is not an MO2 instance and this test must not write into one.
+            // LoadOrder loads the implicit base masters present in the game directory, so an empty explicit
+            // list exercises a real vanilla load without guessing order. The instance is a temp one: a real
+            // install is not an MO2 instance.
             var instanceRoot = Path.Combine(Path.GetTempPath(), $"medit-smoke-{Guid.NewGuid():N}");
             Directory.CreateDirectory(instanceRoot);
             try

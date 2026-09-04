@@ -13,24 +13,9 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Tests.Edits;
 
-/// <summary>
-/// Delete and Renumber resolve containers through <see cref="SourceUnitResolver"/> — the same
-/// record→source-unit resolution <see cref="RecordEditService.EditField"/> uses, not a blanket
-/// <see cref="RecordEditRefusal.ContainerRecordNotYetSupported"/> refusal. Two shapes:
-///
-/// <list type="bullet">
-/// <item><description>A container's own record (Cell/Worldspace/Quest, or a nested folder-split child
-/// like a Quest's own DialogTopic) — delete removes its directory whole and cascades every embedded
-/// or nested descendant's index row; renumber moves the directory to a new leaf name at the same
-/// parent.</description></item>
-/// <item><description>An embedded child (a placed ref, navmesh, landscape, a Worldspace's TopCell) —
-/// delete splices it out of its owner's inline slot and rewrites the owner; renumber changes its
-/// FormKey in place inside the owner's object graph, no file move.</description></item>
-/// </list>
-///
-/// <see cref="Source.ContainerRecordRegressionTests"/> carries the read-path and
-/// EditorID-rename coverage this suite is a sibling of.
-/// </summary>
+/// <summary>Delete and Renumber resolve containers through <see cref="SourceUnitResolver"/>, as
+/// EditField does. A container's own record moves or removes its directory whole; an embedded
+/// child is spliced or renumbered inside its owner's document, no file move.</summary>
 public sealed class RecordEditServiceContainerDeleteRenumberTests : IDisposable
 {
     private readonly ContainerModFixture _fixture = new();
@@ -78,25 +63,6 @@ public sealed class RecordEditServiceContainerDeleteRenumberTests : IDisposable
         Assert.Null(Index.At(RecordRef.Effective).GetDocument(_fixture.TopCellRef.ToString(), _fixture.Plugin));
     }
 
-    /// <summary>
-    /// <c>EnumerateDescendantFormKeys</c> must not pick the worldspace's TopCell via
-    /// <c>FirstOrDefault(c => c.BlockX == null)</c> — the same blind spot
-    /// <see cref="MEditService.Core.Queries.WorldspaceQueryService.GetWorldspaceBlocks"/> guards
-    /// against: a
-    /// second block-less cell-location row (anomalous, but the data can't rule it out — see that
-    /// method's own doc comment on why it only warns rather than refuses) never reaches the cascade
-    /// at all. Real Mutagen can't produce this shape itself (<c>Worldspace.TopCell</c> is a single-valued
-    /// slot), so the second row is injected at the <see cref="IRecordReads"/> seam —
-    /// appended <b>after</b> the real TopCell row, so a <c>FirstOrDefault</c> implementation
-    /// still finds the real TopCell (proving the existing single-row
-    /// case is untouched) and the injected row's own descendants are exactly what the bug drops.
-    /// <see cref="ContainerModFixture.EmbedCell"/> stands in for the injected row's FormKey because it
-    /// already carries real indexed descendants of its own (<see cref="ContainerModFixture.TemporaryRef"/>,
-    /// <see cref="ContainerModFixture.PersistentRef"/>) that
-    /// <see cref="DeletingAContainersOwnRecord_RemovesItsDirectory_AndCascadesEveryEmbeddedDescendantsIndexRow"/>
-    /// already proves <c>EnumerateDescendantFormKeys</c> reaches when called on it directly — so a
-    /// failure here can only be the two-row enumeration itself, not some other gap in the recursion.
-    /// </summary>
     [Fact]
     public void DeletingAWorldspace_WithTwoBlocklessCellRows_CascadesIntoBothCellsDescendants()
     {
@@ -124,13 +90,8 @@ public sealed class RecordEditServiceContainerDeleteRenumberTests : IDisposable
         Assert.Null(Index.At(RecordRef.Effective).GetDocument(_fixture.PersistentRef.ToString(), _fixture.Plugin));
     }
 
-    /// <summary>Intercepts only <see cref="IRecordReads.GetWorldspaceCells"/> — everything else
-    /// stays the real DuckDB-backed behavior, per <see cref="DelegatingRecordIndex"/>'s own posture of
-    /// "one seam intercepted, not a fake database". #639 moved every read off <see cref="IRecordIndex"/>
-    /// itself onto whatever <see cref="IRecordIndex.At"/> hands out, so the interception moves with
-    /// it — <see cref="WorldspaceCellInjectingIndex"/> overrides <c>At</c> to return a
-    /// <see cref="DelegatingReads"/> that intercepts just this one member, rather than overriding the
-    /// member directly (no longer possible: <see cref="IRecordIndex"/> no longer declares it).</summary>
+    // Overrides At to hand out a DelegatingReads intercepting one member; IRecordIndex itself declares
+    // no reads to override.
     private sealed class WorldspaceCellInjectingIndex(
         IRecordIndex inner, string worldspaceFormKey, IReadOnlyList<CellLocationSummary> rows)
         : DelegatingRecordIndex(inner)
@@ -175,19 +136,6 @@ public sealed class RecordEditServiceContainerDeleteRenumberTests : IDisposable
             StringComparison.Ordinal);
     }
 
-    /// <summary>
-    /// The single-value-slot half of the same mechanism — <c>Worldspace.TopCell</c> is not a list,
-    /// so removal is "set the property to null", a distinct branch from the list splice above with
-    /// zero coverage otherwise.
-    ///
-    /// <para><c>Cell.Landscape</c>/<c>NavigationMeshes</c> cannot stand in for this: per
-    /// <see cref="ContainerModFixture"/>'s own doc comment, <c>land</c>/<c>navm</c> have no published
-    /// schema at all, so <c>index.GetDocument</c> already answers null for them before
-    /// <see cref="RecordEditService.DeleteRecord"/> gets anywhere near the embedded-slot machinery —
-    /// the same reason no test can <c>EditField</c> them either. <c>Worldspace.TopCell</c> is a Cell,
-    /// which is fully reflected, so this is the one single-value embedded slot actually reachable
-    /// through the public gesture.</para>
-    /// </summary>
     [Fact]
     public void DeletingASingleValueEmbeddedSlot_NullsTheSlot_AndCascadesItsOwnDescendant()
     {
@@ -257,10 +205,9 @@ public sealed class RecordEditServiceContainerDeleteRenumberTests : IDisposable
     [Fact]
     public void RenumberingARecordReferencedByAContainer_RewritesTheContainersOwnFileCleanly()
     {
-        // A self-contained mod rather than the shared fixture: none of ContainerModFixture's own
-        // embedded refs point anywhere, and giving one a real Base here — the one relationship this
-        // test needs — is a bigger, riskier change to a fixture 4+ other suites depend on than a
-        // small local one.
+        // A self-contained mod rather than the shared fixture: none of ContainerModFixture's embedded refs
+        // point anywhere, and giving one a real Base is a riskier change to a fixture four other suites
+        // depend on than a small local one.
         const string pluginName = "ContainerReferencer.esp";
         const string origin = "ContainerReferencerMod";
         var modFolder = Directory.CreateTempSubdirectory("medit-container-referencer-mod-").FullName;
@@ -324,27 +271,6 @@ public sealed class RecordEditServiceContainerDeleteRenumberTests : IDisposable
 
     // ---- order preservation ----
 
-    /// <summary>
-    /// "Delete/create a mid-list embedded child ... assert surviving GRUP order", on a
-    /// container-nested folder-split list (<c>Quest.DialogTopics</c>) rather than a flat top-level one.
-    /// Renumber <i>is</i> "delete the old file, create the new one" for the same child,
-    /// so renumbering the middle of three DialogTopics exercises exactly "delete then
-    /// create a mid-list embedded child" in one gesture.
-    ///
-    /// <para><b>A renumber keeps the record where it was.</b> Order lives in the parent's own ordered
-    /// child list (ADR-0042 decision 4), keyed by FormKey — so a renumber repoints that one entry in
-    /// place rather than moving the record to the end of the list, which is what the superseded
-    /// numbering scheme did by treating a renumber as delete-then-append. For
-    /// <c>DialogTopic.Responses</c> that difference is gameplay, not cosmetics. This asserts both
-    /// halves: the parent's list directly, and that a compile of the result reproduces the same order
-    /// in the binary (which the list alone does not prove).</para>
-    /// </summary>
-    /// <summary>
-    /// Deleting the last child of a folder-split slot must leave the parent's document exactly as the
-    /// whole-mod door would write it for a childless parent — no member at all — because the compile
-    /// gate compares the two byte-for-byte. An empty list left behind is a refusal the author did
-    /// nothing to earn.
-    /// </summary>
     [Fact]
     public void DeletingEveryTopicOfAQuest_LeavesNoEmptyListBehind_AndCompiles()
     {
@@ -381,9 +307,8 @@ public sealed class RecordEditServiceContainerDeleteRenumberTests : IDisposable
             SourceChildOrder.CarrierFor(questDirectory, parentIsRecord: true), "DialogTopics");
 
         Assert.Equal(3, order.Count);
-        // Every sibling stays exactly where it was: the two untouched ones are not renamed, not
-        // renumbered, and not moved in the list, and the renumbered record holds its own middle slot
-        // under its new FormKey rather than being appended past its siblings.
+        // Every sibling stays where it was, and the renumbered record holds its own middle slot under its
+        // new FormKey rather than being appended past its siblings.
         Assert.Equal(_fixture.DialogTopic.ToString(), order[0]);
         Assert.Equal(result.NewFormKey, order[1]);
         Assert.Equal(_fixture.DialogTopic3.ToString(), order[2]);

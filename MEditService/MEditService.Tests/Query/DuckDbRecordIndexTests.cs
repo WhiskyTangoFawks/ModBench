@@ -671,12 +671,9 @@ public class DuckDbRecordIndexTests(TestPluginFixture fixture)
         Assert.Null(patchKw.CheckError);
     }
 
-    // editor_id alone is not a unique ordering — several NPCs below share "Dup", two more
-    // share a blank EditorID (real plugin data: blank/duplicate EditorIDs are ordinary), so an
-    // ORDER BY editor_id with no tiebreak leaves DuckDB free to place tied rows on either side of a
-    // LIMIT/OFFSET boundary differently across calls. Paging the full set two records at a time and
-    // concatenating the pages must reconstruct exactly the single unpaged read's order — no row
-    // skipped, none repeated — and doing the same walk again must reproduce the identical sequence.
+    // editor_id alone is not a unique ordering: several NPCs share "Dup" and two share a blank
+    // EditorID, ordinary in real plugin data, so an ORDER BY with no tiebreak lets DuckDB place tied
+    // rows either side of a LIMIT boundary.
     [Fact]
     public void Search_PagesRecordsWithSharedAndBlankEditorId_ReturnsEveryRowExactlyOnceAndStably()
     {

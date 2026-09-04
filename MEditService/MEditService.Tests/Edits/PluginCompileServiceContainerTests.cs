@@ -12,33 +12,9 @@ using Noggog;
 
 namespace MEditService.Tests.Edits;
 
-/// <summary>
-/// The three container shapes the folder-split spike probed, as <b>compile-path</b> tests.
-///
-/// <para>The spike (<c>docs/research/spike-444-folder-split-containers.md</c>) proved that the two
-/// per-record container defects — child folders keyed by field name alone, so two cells sharing a directory
-/// merge their children; and <c>Worldspace_Serialization</c> never touching <c>SubCells</c>, dropping
-/// the whole exterior hierarchy — are artifacts of driving the generated serializers <i>per record</i>,
-/// and that the whole-mod folder-split path has neither. It proved that for a serialize/deserialize
-/// round trip. This suite proves it for the thing that actually ships: Track the shape, compile it back
-/// to a binary, and re-import that binary.</para>
-///
-/// <para><b>Why a local fixture and not <see cref="TrackedModFixture"/>.</b> That one holds
-/// Npc/Race/Keyword and no containers at all, so it structurally cannot exercise any of this — the
-/// same reason <see cref="Source.ContainerRecordRegressionTests"/> and
-/// <see cref="Source.SourceIngestContainerTests"/> each carry their own. The real fixture covers
-/// the same ground at scale in <c>RealData/CompileRoundTripGateTests</c>; this is the fast, readable
-/// statement of each specific property, with the two-of-a-kind arrangement (two cells in one
-/// sub-block, two quests) that a curated real fixture does not guarantee.</para>
-///
-/// <para><b>Nothing here asserts child <i>ordering</i> — deliberately narrow, not because there is
-/// none to assert.</b> <c>Overall.EnforceRecordOrder</c> is on project-wide, so a real
-/// compile round trip does preserve GRUP order (<c>RealData/CompileRoundTripGateTests</c>,
-/// <c>RealData/DialogueOrderDamageTests</c> assert exactly that, on the real fixture). This
-/// suite's own two-cells/two-quests fixture only ever needed the child <i>set</i>,
-/// and stays that way — the assertions below compare EditorID sets via <c>.Order()</c>
-/// on purpose, not as a gap.</para>
-/// </summary>
+/// <summary>The folder-split spike's three container shapes, compiled and re-imported. Nothing
+/// here asserts child ordering, on purpose: the real-fixture gates cover it, and this fixture only
+/// ever needed the child set.</summary>
 public sealed class PluginCompileServiceContainerTests : IDisposable
 {
     private const string PluginName = "ContainerCompile.esp";
@@ -73,15 +49,15 @@ public sealed class PluginCompileServiceContainerTests : IDisposable
         mod.ModHeader.Author = HeaderAuthor;
         mod.ModHeader.Description = HeaderDescription;
 
-        // ── Defect shape 1: two cells in ONE sub-block, each with its own children. Under the
-        //    per-record path both cells' children landed in one field-name-keyed directory and each
-        //    cell read back the union. Two is the minimum that can show it.
+        // ── Defect shape 1: two cells in ONE sub-block, each with children. Under the per-record path
+        //
+        // both cells' children landed in one field-name-keyed directory and each cell read back the
+        // union.
         var cellA = new Cell(mod) { EditorID = "CellA", WaterHeight = 1f };
         cellA.Persistent.Add(new PlacedObject(mod) { EditorID = "A_Persist", Position = new P3Float(1f, 1f, 1f) });
         var cellATemporaryRef = new PlacedObject(mod) { EditorID = "A_Temp", Position = new P3Float(2f, 2f, 2f) };
         // A deliberately dangling Base, inside this plugin's own FormID space so it needs no master:
-        // semantic breakage that compiles with a diagnostic rather than refusing, carried by a
-        // record that has no source file of its own. That is the diagnostic-path case below.
+        // semantic breakage that compiles with a diagnostic rather than refusing.
         cellATemporaryRef.Base.SetTo(FormKey.Factory($"FFFFFF:{PluginName}"));
         cellA.Temporary.Add(cellATemporaryRef);
         var cellB = new Cell(mod) { EditorID = "CellB", WaterHeight = 2f };
@@ -168,8 +144,6 @@ public sealed class PluginCompileServiceContainerTests : IDisposable
     private PluginCompileService CompileService() =>
         new(_mirror, new PluginWriter(NullLogger<PluginWriter>.Instance), NullLogger<PluginCompileService>.Instance);
 
-    /// <summary>Compiles, asserts success, and hands back the binary that landed — every test here is
-    /// "compile, then read what was written", never "compile and trust the result object".</summary>
     private IFallout4ModGetter CompileAndReimport(out IDisposable handle)
     {
         var result = CompileService().Compile(_plugin, new CompileSource.WorkingTree());
@@ -250,20 +224,6 @@ public sealed class PluginCompileServiceContainerTests : IDisposable
         }
     }
 
-    /// <summary>
-    /// A diagnostic names the source unit the record actually lives in.
-    ///
-    /// <para>Compile does not read files one at a time, so there is no per-file map; the answer comes
-    /// from <c>SourceUnitResolver</c>, which is the one place in this codebase that knows where
-    /// a record's bytes are. That is what keeps the Problems-panel URI the extension builds
-    /// (<c>publishCompileDiagnostics</c>) pointing at a file that exists.</para>
-    ///
-    /// <para>An <b>embedded</b> child is the sharpest case and is deliberately the one asserted: a placed
-    /// reference has no file of its own — its bytes are inline in its cell's document — so a per-file
-    /// map would have no entry for it at all and it could not be reported. Its diagnostic names the
-    /// cell's own <c>RecordData.json</c>, which is where a user opening it would in fact find the
-    /// record.</para>
-    /// </summary>
     [Fact]
     public void Compile_ForAnEmbeddedChildWithASemanticError_NamesTheContainersOwnSourceFile()
     {
@@ -279,11 +239,6 @@ public sealed class PluginCompileServiceContainerTests : IDisposable
         Assert.Contains("\"CellA\"", File.ReadAllText(full), StringComparison.Ordinal);
     }
 
-    /// <summary>
-    /// The mod header is a source file (the root <c>RecordData.json</c>, ADR-0041), so compile emits
-    /// the header the tree holds. Building the mod via <c>ModFactory.Activator</c> and skipping the
-    /// root document would silently drop author, description and version on every compile.
-    /// </summary>
     [Fact]
     public void Compile_CarriesTheModHeaderFromTheTree_RatherThanEmittingAFreshOne()
     {

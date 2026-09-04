@@ -25,10 +25,9 @@ public class CompoundPluginIdentityTests
         return repo;
     }
 
-    // Both mods share ModKey "Shared.esp" and each adds exactly one NPC as their first record —
-    // deterministic FormID assignment (see PluginParticipationTests) means the two NPCs land on the
-    // identical FormKey, so this exercises the collision at its sharpest: same
-    // form_key, same plugin filename, differing only in origin.
+    // Both mods share ModKey "Shared.esp" and each adds one NPC first, so deterministic FormID
+    // assignment lands them on the identical FormKey: the collision at its sharpest, differing only
+    // in origin.
     private static (Fallout4Mod ModA, Fallout4Mod ModB, FormKey NpcKey) BuildSharedFilenameFixture()
     {
         var modA = new Fallout4Mod(ModKey.FromFileName("Shared.esp"), Fallout4Release.Fallout4);
@@ -56,10 +55,6 @@ public class CompoundPluginIdentityTests
     }
 
     // ADR-0036: GetRecord's plugin filter must pick one origin's copy over the other's.
-    // origin is required (not defaulted) here: every real caller
-    // (GetRecordForPlugin, GetPluginRecordTypes) already has plugin in
-    // hand as a concrete, non-optional value, so this mirrors GetVmad/GetConditions/GetPlacement,
-    // not GetRecords' nullable filter — the compiler must enumerate every call site.
     [Fact]
     public void TwoOrigins_SameFilenameSameFormKey_GetRecord_ScopesToRequestedOrigin()
     {
@@ -76,10 +71,7 @@ public class CompoundPluginIdentityTests
         Assert.Equal("ModA", record.Plugin.Origin);
     }
 
-    // ADR-0036: without origin scoping,
-    // two same-filename origins' counts silently sum into one. origin is required here
-    // (not defaulted) for the same reason as GetRecord's — plugin is never optional at this call
-    // site (GetPluginRecordTypes always has a concrete plugin).
+    // ADR-0036: without origin scoping, two same-filename origins' counts silently sum into one.
     [Fact]
     public void TwoOrigins_SameFilenameSameFormKey_CountRecordsForPlugin_CountsRequestedOriginOnly()
     {
@@ -95,12 +87,9 @@ public class CompoundPluginIdentityTests
             .FirstOrDefault(c => string.Equals(c.Type, "npc_", StringComparison.OrdinalIgnoreCase))?.Count ?? 0);
     }
 
-    // ADR-0036: GetNativeFormKeys must not filter by plugin filename alone. Unlike
-    // the fixtures above, this needs the two origins to hold genuinely *different* native FormKey
-    // sets (BuildSharedFilenameFixture's single first-slot NPC lands both origins on the identical
-    // FormKey, which can't distinguish a filter bug from a working one) — ModA gets one NPC, ModB
-    // gets that same first NPC plus a second, so an origin-scoped read must see fewer FormKeys than
-    // an unscoped one.
+    // ADR-0036: GetNativeFormKeys must not filter by plugin filename alone. The origins need genuinely
+    // different FormKey sets, or a filter bug looks like a working one, so ModB carries a second NPC
+    // and an origin-scoped read sees fewer keys.
     [Fact]
     public void TwoOrigins_SameFilenameDifferentNativeFormKeys_GetNativeFormKeys_ScopesToRequestedOrigin()
     {
@@ -123,11 +112,7 @@ public class CompoundPluginIdentityTests
         Assert.Contains(secondKey.ToString(), modBKeys);
     }
 
-    // ADR-0036: a listing scoped to one filename must not silently merge both origins'
-    // rows — RecordSummary surfaces Origin so they can be told apart.
-    // origin is a nullable *filter* here (unlike the worldspace tree's required origin) because
-    // plugin itself is optional on GetRecords — browsing every plugin's records is a legitimate
-    // call with no origin to supply.
+    // ADR-0036: a listing scoped to one filename must not silently merge both origins' rows.
     [Fact]
     public void TwoOrigins_SameFilenameSameFormKey_GetRecords_FiltersToRequestedOriginAndSurfacesIt()
     {
@@ -151,9 +136,9 @@ public class CompoundPluginIdentityTests
         var (modA, modB, npcKey) = BuildSharedFilenameFixture();
 
         using var repo = OpenRepo();
-        // ModB sits later in its own load order and would incorrectly compute as winner if
-        // UpdateWinners' join matched plugins by filename alone — ModA's participation is a
-        // different origin's row entirely and must never leak into ModB's winner eligibility.
+        // ModB sits later in its own load order and would compute as winner if UpdateWinners' join
+        // matched by filename alone: ModA's participation is a different origin's row and must not
+        // leak.
         repo.Index(modA, Registration.Participating(1), new PluginKey(modA.ModKey.FileName.ToString(), "ModA"));
         repo.Index(modB, Registration.Disabled(5), new PluginKey(modB.ModKey.FileName.ToString(), "ModB"));
         repo.UpdateWinners();
@@ -166,11 +151,9 @@ public class CompoundPluginIdentityTests
         Assert.False(fromB.IsWinner);
     }
 
-    // Same structurally-identical-build-sequence trick as BuildSharedFilenameFixture, extended to
-    // the re-keyed side tables: a worldspace/cell/placed-object chain (placement, cell_location)
-    // and a scalar FormKey field (form_references), built in identical order for both mods so the
-    // corresponding records land on identical FormKeys — the same collision, on the
-    // three tables the earlier two tests above don't reach.
+    // The same identical-build-sequence trick, extended to the re-keyed side tables, so the
+    // corresponding records land on identical FormKeys: the same collision, on the three tables the
+    // two tests above do not reach.
     private static (Fallout4Mod Mod, FormKey CellKey, FormKey PlacedKey, FormKey NpcKey) BuildStructuralMod(string suffix)
     {
         var mod = new Fallout4Mod(ModKey.FromFileName("Shared.esp"), Fallout4Release.Fallout4);
@@ -217,10 +200,8 @@ public class CompoundPluginIdentityTests
         Assert.Equal(2L, (long)refCmd.ExecuteScalar()!);
     }
 
-    // ADR-0036: GetReferences never filters by plugin, so its result rows must carry Origin —
-    // otherwise two same-filename sources referencing the same target (the exact scenario
-    // TwoOrigins_SameFilenameSameFormKeys_PlacementCellLocationAndFormReferencesBothPersist proves
-    // exists, at the form_references table) cannot be told apart by any caller of GetReferences.
+    // ADR-0036: GetReferences never filters by plugin, so its rows must carry Origin, or two
+    // same-filename sources referencing one target cannot be told apart by any caller.
     [Fact]
     public void TwoOrigins_SameFilenameSameFormKeys_GetReferences_SurfacesOriginPerRow()
     {

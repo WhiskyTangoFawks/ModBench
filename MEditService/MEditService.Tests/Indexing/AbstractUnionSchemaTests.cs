@@ -7,18 +7,9 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Tests.Indexing;
 
-/// <summary>
-/// Mutagen's "A&lt;Name&gt;" abstract Loqui-union convention, generalized beyond the original
-/// OMOD-only precedent (<c>LoquiUnions.BuildUnionLeafFields</c>) — a base getter interface
-/// with no reflectable ClassType siblings of its own; the real per-subclass data lives on concrete
-/// classes that inherit *from* the abstract base rather than the other way OMOD's own leaves do.
-///
-/// <para><c>Npc.Level</c> (<c>ANpcLevel</c>: <c>NpcLevel</c>/<c>PcLevelMult</c>) and
-/// <c>Quest.Aliases</c> (<c>AQuestAlias</c>: <c>QuestReferenceAlias</c>/<c>QuestLocationAlias</c>/
-/// <c>QuestCollectionAlias</c>) are the two representative types.
-/// <see cref="SchemaReflectorLeafCoverageCompletenessTests"/>'s own <c>KnownGaps</c> asserts the rest
-/// of the inventory this mechanism also covers as a byproduct.</para>
-/// </summary>
+/// <summary>Mutagen's "A&lt;Name&gt;" convention: a base getter interface with no reflectable
+/// ClassType siblings; the per-subclass data lives on concrete classes inheriting from the base,
+/// the reverse of OMOD's own leaves.</summary>
 public class AbstractUnionSchemaTests
 {
     private readonly SchemaReflector _reflector = SharedSchemaReflector.Instance;

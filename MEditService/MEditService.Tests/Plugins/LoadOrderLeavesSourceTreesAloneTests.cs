@@ -7,14 +7,9 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Tests.Plugins;
 
-/// <summary>
-/// ADR-0041: loading a load order touches nothing in a mod folder. Tracking is a deliberate user
-/// gesture, and the project's never-assume-exclusive-ownership rule applies: text a user (or
-/// Track) put in a mod folder is not Modbench's to remove because a binary went missing.
-///
-/// The positive control is the load itself — the load order must really have loaded and indexed the
-/// plugin that *is* present, or "nothing was deleted" would be true of a load that did nothing.
-/// </summary>
+/// <summary>Text a user or Track put in a mod folder is not Modbench's to remove because a binary
+/// went missing (ADR-0041, never assume exclusive ownership). The load itself is the positive
+/// control.</summary>
 public sealed class ReconcileLeavesSourceTreesAloneTests
 {
     [Fact]
@@ -31,8 +26,8 @@ public sealed class ReconcileLeavesSourceTreesAloneTests
             mod.Npcs.AddNew("StillHereNpc");
             mod.WriteToBinary(stillHerePath);
 
-            // Per-record text for a plugin that is no longer on disk beside it — an "orphan":
-            // under the root "source/" layout, a plugin folder inside it with no plugin file left.
+            // Per-record text for a plugin absent from disk beside it, an "orphan": under the root "source/"
+            // layout, a plugin folder inside it with no plugin file left.
             var orphanTree = Path.Combine(originFolder, "source", "Removed.esp");
             var orphanFile = Path.Combine(orphanTree, "records", "Removed.esp", "000800.json");
             Directory.CreateDirectory(Path.GetDirectoryName(orphanFile)!);

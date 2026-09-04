@@ -13,21 +13,9 @@ using Noggog.WorkEngine;
 
 namespace MEditService.Tests.Edits;
 
-/// <summary>
-/// The Compile-side counterpart to <c>RealData/MasterPruningRoundTripGateTests</c>' Track
-/// coverage: <see cref="PluginCompileService"/>'s own <c>writer.SaveFromModAsync</c> call hits the
-/// identical <c>UnmappableFormIDException</c> shape (same <c>PluginWriter</c>/ADR-0038 write
-/// defaults <c>TrackService.VerifyRoundTrip</c>'s scratch write uses), so it needs its own catch —
-/// defense in depth for a mod folder tracked before the Track gate existed, or one whose source
-/// tree was hand-placed rather than produced by <c>TrackService.TrackAsync</c>.
-///
-/// <para><b>Why this bypasses <c>TrackService.TrackAsync</c>.</b> That gate refuses
-/// <c>SpaDia_AMR.esp</c> outright (the fixture in <c>MasterPruningRoundTripGateTests</c>), so a
-/// normal Track cannot produce a tracked mod folder to compile from. This fixture instead
-/// calls the same two primitives <c>TrackAsync</c> itself calls — <c>TrackService.SerializeToPristineFiles</c>
-/// and <c>SourceRepository.Track</c> — directly, skipping only <c>VerifyRoundTrip</c>'s own gate,
-/// which is exactly the shape of a plugin tracked before the gate existed (or by hand).</para>
-/// </summary>
+/// <summary>Bypasses <c>TrackAsync</c>, whose gate refuses the fixture outright: calls the same two
+/// primitives it calls, skipping only <c>VerifyRoundTrip</c>, which is exactly the shape of a plugin
+/// tracked before the gate existed or by hand.</summary>
 public sealed class PluginCompileServiceMasterPruningTests : IDisposable
 {
     private const string FixtureFileName = "SpaDia_AMR.esp";
@@ -72,9 +60,6 @@ public sealed class PluginCompileServiceMasterPruningTests : IDisposable
         SourceRepository.Track(_modFolder, SourcePreset.Edits, pristineFiles, new TrackProvenance(null, null, new Dictionary<string, string>()));
     }
 
-    /// <summary>A tracked source tree carrying this defect refuses at
-    /// Compile too, naming the same record/master/Mutagen #688 — never an unhandled
-    /// <c>UnmappableFormIDException</c> escaping to a 500.</summary>
     [Fact]
     public void Compile_OfTheRealSpaDiaAMRFixtureTrackedBeforeTheFix_RefusesNamingTheQuestAndThePrunedMaster()
     {
@@ -89,17 +74,6 @@ public sealed class PluginCompileServiceMasterPruningTests : IDisposable
         Assert.Contains("Mutagen #688", result.RefusalReason);
     }
 
-    /// <summary>A refused Compile must not leave <c>.medit_tmp_&lt;random&gt;/</c>
-    /// sitting beside the plugin — <c>PreparedPluginSave.Dispose()</c> is what normally
-    /// deletes it, but <c>PluginWriter.PrepareFromModAsync</c> throws before it ever hands one back,
-    /// so the caller's <c>using</c> has nothing to bind and cleanup never runs. This is a
-    /// *routine* refusal for a whole class of tracked plugin rather than a rare crash, so every
-    /// retry against this exact fixture would otherwise mint another orphaned directory, forever
-    /// (the plugin can never successfully compile until Mutagen's own bug is fixed). The <c>.bak</c>
-    /// <i>does</i> survive, deliberately (ADR-0008 does not say a
-    /// backup taken for a write that never happened is safe to delete, so this leaves it) —
-    /// asserted here too, so a future change that also swept the <c>.bak</c> away is a visible,
-    /// deliberate decision rather than a silent side effect of touching this test.</summary>
     [Fact]
     public void Compile_OfTheRealSpaDiaAMRFixtureTrackedBeforeTheFix_LeavesNoOrphanedTempDirectory()
     {

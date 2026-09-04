@@ -6,15 +6,8 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Tests.Api;
 
-/// <summary>
-/// A script or agent editing through the HTTP API lands a working-tree change on the edit
-/// branch exactly as the UI does — same service, same single write path, no second door — and an
-/// edit against an untracked plugin gets a typed refusal mirroring the UI's.
-///
-/// "Typed" is the load-bearing word: an agent has to be able to branch on <i>which</i> refusal it
-/// got without matching on prose, so the refusal travels as a ProblemDetails extension, not only as
-/// a message (ADR-0026).
-/// </summary>
+/// <summary>"Typed" is the load-bearing word: an agent must branch on which refusal it got without
+/// matching on prose, so the refusal travels as a ProblemDetails extension (ADR-0026).</summary>
 public sealed class EditFieldApiTests(LoadedApiFixture<TestPluginFixture> loaded)
     : IClassFixture<LoadedApiFixture<TestPluginFixture>>
 {
@@ -130,10 +123,8 @@ public sealed class EditFieldApiTests(LoadedApiFixture<TestPluginFixture> loaded
         (await _client.PostAsJsonAsync("/plugins/track", new { origin = Origin, preset = "Edits" })).EnsureSuccessStatusCode();
         var formKey = await FirstNpcFormKey();
 
-        // Never-assume-exclusive-ownership (root CLAUDE.md), made concrete: something outside
-        // Modbench replaced this record's source file with a directory. Any I/O failure would do —
-        // a lock, a permissions change, a vanished mount — but this one needs no privileges and is
-        // deterministic, so it is the one the suite can actually run.
+        // Something outside Modbench replaced this record's source file with a directory. Any I/O
+        // failure would do; this one needs no privileges and is deterministic.
         var records = await _client.GetFromJsonAsync<JsonElement>($"/records?plugin={Plugin}&type=npc_");
         // Routed through the production path helper (Spriggit-flat layout) rather than
         // hand-reconstructed — "ApiNpc" is BuildOneModOnePlugin's own literal EditorID above.
@@ -148,9 +139,8 @@ public sealed class EditFieldApiTests(LoadedApiFixture<TestPluginFixture> loaded
 
         var response = await PostEdit(formKey, "height_max", 0.75);
 
-        // A shaped ProblemDetails, the way every sibling write endpoint answers an I/O failure —
-        // not an unhandled exception escaping into an empty 500, which is what a client with no
-        // body to read cannot tell apart from the backend having died.
+        // A shaped ProblemDetails, not an empty 500: a client with no body to read cannot tell
+        // that apart from the backend having died.
         Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
         var problem = await response.Content.ReadFromJsonAsync<JsonElement>();
         Assert.False(string.IsNullOrWhiteSpace(problem.GetProperty("detail").GetString()));
@@ -170,17 +160,6 @@ public sealed class EditFieldApiTests(LoadedApiFixture<TestPluginFixture> loaded
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
-    /// <summary>
-    /// The write path above is the <i>only</i> one: <c>/records/{formKey}</c> itself serves a read
-    /// and nothing else, so an agent cannot mutate a record by PUTting the route it read from.
-    ///
-    /// <para>Asserted against the served OpenAPI document — the exact artifact
-    /// <c>modbench/src/medit/generated/api.ts</c> is generated from, so "absent here" is what makes
-    /// the frontend unable to call it at all. The positive control matters as much as the absence:
-    /// an emptiness assertion alone passes just as happily against a typo'd JSON pointer or a host
-    /// that mapped no endpoint, so the surviving read verb is asserted through the identical
-    /// lookup.</para>
-    /// </summary>
     [Fact]
     public async Task OpenApiDocument_RecordRoute_OffersNoMutatingVerb()
     {

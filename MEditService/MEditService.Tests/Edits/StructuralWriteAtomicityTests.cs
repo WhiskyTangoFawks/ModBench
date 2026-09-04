@@ -5,23 +5,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 namespace MEditService.Tests.Edits;
 
-/// <summary>
-/// A structural write never leaves a file that no ordered child list names. Order is parent data
-/// (ADR-0042 decision 4), so a create is two writes in one plugin's tree — the record's file and the
-/// parent's list — and the drift rule is deliberately asymmetric: a listed child with no file is
-/// honoured as a deletion, but a file no list names is refused outright and re-Track is the only
-/// recovery. A create that writes the file and then fails to write the list does not leave a
-/// cosmetic inconsistency; it leaves the plugin unreadable.
-///
-/// <para>No transaction is involved — that is the renumber cascade's tool, for the one gesture that
-/// writes into more than one plugin's tree (ADR-0045). A single-plugin write only has to fail on the
-/// tolerated side: the create takes its own file back when the list write fails, and the delete
-/// removes the file before touching the list.</para>
-///
-/// <para>The failure is injected by making the carrier path unwritable in the one way that needs no
-/// permissions and works identically on every platform: a <i>directory</i> sits where the document
-/// belongs, so writing it throws.</para>
-/// </summary>
+/// <summary>No transaction here; that is the renumber cascade's tool (ADR-0045).</summary>
 public sealed class StructuralWriteAtomicityTests : IDisposable
 {
     private readonly TrackedModFixture _mod = TrackedModFixture.Tracked();
@@ -52,10 +36,6 @@ public sealed class StructuralWriteAtomicityTests : IDisposable
         Assert.DoesNotContain(RecordFiles(), name => name.Contains("Doomed", StringComparison.Ordinal));
     }
 
-    /// <summary>The delete path's own half of the same guarantee — and the reason it needs no
-    /// transaction: it removes the file before touching the list, so an interruption between them
-    /// leaves a listed child with no file, which reads honour as the deletion the author asked
-    /// for.</summary>
     [Fact]
     public void DeleteRecord_InterruptedAfterTheFileGoes_LeavesTheToleratedDirection_NotTheRefusedOne()
     {

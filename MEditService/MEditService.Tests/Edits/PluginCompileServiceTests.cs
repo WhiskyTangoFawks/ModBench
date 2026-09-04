@@ -9,15 +9,8 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Tests.Edits;
 
-/// <summary>
-/// Save &amp; Compile's core promise — editing a plain (non-container) record's field and
-/// compiling writes a binary that re-parses with the edit landed, and every untouched record
-/// unchanged. <see cref="TrackedModFixture"/>'s three records (Npc/Race/Keyword/OtherNpc) are all
-/// top-level, non-container types, so this exercises the flat half of the tree only — containers
-/// (cells, worldspaces, quests, dialogue) are <see cref="PluginCompileServiceContainerTests"/>' job on
-/// a small readable fixture, and <c>RealData/CompileRoundTripGateTests</c>' at scale against the real
-/// fixture.
-/// </summary>
+/// <summary>The flat half only: <see cref="TrackedModFixture"/>'s records are all non-container
+/// types; containers are <c>PluginCompileServiceContainerTests</c>' job.</summary>
 public sealed class PluginCompileServiceTests : IDisposable
 {
     private readonly TrackedModFixture _mod = TrackedModFixture.Tracked();
@@ -66,11 +59,9 @@ public sealed class PluginCompileServiceTests : IDisposable
         Assert.Contains(overlay.Keywords, k => k.FormKey == _mod.Keyword);
     }
 
-    // Semantic breakage compiles *successfully*, with diagnostics — never a refusal.
-    // TrackedModFixture's Race carries genuinely unset FormLink fields (severable/explodable
-    // explosion+debris, never edited or configured by this fixture), which CheckErrorBuilder already
-    // flags for the editor (DuckDbRecordIndex.GetDocument) — compile surfaces the same diagnostics
-    // rather than re-deriving a second definition of "broken", and still writes the binary.
+    // Semantic breakage compiles successfully with diagnostics, never a refusal. The fixture's Race
+    // carries genuinely unset FormLink fields, which CheckErrorBuilder already flags for the editor;
+    // compile surfaces the same diagnostics rather than re-deriving a second definition of "broken".
     [Fact]
     public void Compile_WithASemanticallyBrokenRecord_SucceedsWithDiagnostics()
     {

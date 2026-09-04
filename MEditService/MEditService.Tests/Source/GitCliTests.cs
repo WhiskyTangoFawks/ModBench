@@ -2,10 +2,6 @@ using MEditService.Core.Source;
 
 namespace MEditService.Tests.Source;
 
-/// <summary>
-/// Direct coverage of <see cref="GitCli"/> (ADR-0041's keep-list) at its own seam. Real git against
-/// a scratch directory — the only way this class is ever exercised, by its own design note.
-/// </summary>
 public sealed class GitCliTests
 {
     [Fact]
@@ -46,15 +42,6 @@ public sealed class GitCliTests
         }
     }
 
-    /// <summary>
-    /// A failing git invocation must not put the absolute paths its own <c>args</c> carried
-    /// (e.g. a scratch-spill path passed via <c>-m</c>) onto the exception message, since that
-    /// message reaches the wire verbatim via the endpoint convention's <c>Results.Problem(ex.Message)</c>.
-    /// <c>commit-tree</c> against a made-up tree-ish isolates this from the separate, out-of-scope
-    /// question of what git's own stderr says: the failure here is "not a valid object name
-    /// &lt;bogus-sha&gt;" — a reason wholly independent of the <c>-m</c> value — so stderr never
-    /// echoes the path back; only the interpolated args vector could leak it.
-    /// </summary>
     [Fact]
     public void Run_FailureWhoseArgsCarryAnAbsolutePath_OmitsThatPathButKeepsSubcommandAndStderr()
     {

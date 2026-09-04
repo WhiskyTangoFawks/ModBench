@@ -11,19 +11,9 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Tests.Edits;
 
-/// <summary>
-/// #630: the four array arity/order op envelopes (<c>array_remove</c>/<c>array_move_up</c>/
-/// <c>array_move_down</c>/<c>array_add</c>), computed server-side from the record's own current
-/// value and schema rather than round-tripped as a client-computed whole array. Each op arrives
-/// through the exact same <c>EditField</c> door every other edit does — the envelope is <c>value</c>
-/// itself, distinguished from an ordinary whole-array write by shape (a JSON object carrying an
-/// <c>"op"</c> string member)
-/// (<c>RecordFieldWriter.TryGetOpName</c>).
-///
-/// <para>Same fixture/posture as <see cref="ComplexFieldElementEditTests"/> — a real tracked mod
-/// folder, the write landing as a real git working-tree change, verified against the source
-/// document's own text.</para>
-/// </summary>
+/// <summary>An array op is computed server-side from the record's current value, never
+/// round-tripped as a client-computed whole array; the envelope is <c>value</c> itself, told apart
+/// by shape.</summary>
 public sealed class ArrayOpEditTests : IDisposable
 {
     private readonly TrackedModFixture _mod = TrackedModFixture.Tracked();
@@ -37,9 +27,6 @@ public sealed class ArrayOpEditTests : IDisposable
 
     private string NpcBody() => _mod.Mirror.Index!.At(RecordRef.Effective).GetDocument(_mod.Npc.ToString(), _mod.Plugin)!.Body!;
 
-    /// <summary>A second, distinct Keyword FormKey — <see cref="TrackedModFixture.Keyword"/> alone
-    /// isn't enough to prove "removed the named element, kept the others" against a one-element
-    /// array.</summary>
     private string SecondKeyword()
     {
         var result = Service().CreateRecord(_mod.Plugin, "kywd", "SecondKeyword");
@@ -64,18 +51,6 @@ public sealed class ArrayOpEditTests : IDisposable
         Assert.Contains(second, body, StringComparison.Ordinal);
     }
 
-    /// <summary>
-    /// The boundary case: an index past the array's own end (here, any index at all — the fixture
-    /// NPC's own <c>keywords</c> starts empty) has nothing to remove. Answering "no-op" cheaply means
-    /// committing nothing — no rename, no re-serialize, no working-tree write — which is what
-    /// <see cref="TrackedModFixture.GitStatus"/> (a real <c>git status --porcelain</c>) is the one
-    /// honest way to check: a rival that lets this fall through to an ordinary write (even one that
-    /// reconstructs byte-identical array content) still re-serializes the whole source document, and
-    /// that reserialization is not guaranteed byte-stable, so it would show up here as real
-    /// git-visible dirt for an op that changed nothing. The tracked fixture's own working tree is
-    /// clean immediately after <c>Track</c> (every other <c>RecordEditServiceTests</c> fact relies on
-    /// the same baseline), so no seed edit is needed to make this assertion meaningful.
-    /// </summary>
     [Fact]
     public void ArrayRemove_IndexPastTheEnd_IsANoOpThatCommitsNothing()
     {
@@ -86,13 +61,6 @@ public sealed class ArrayOpEditTests : IDisposable
         Assert.Empty(_mod.GitStatus());
     }
 
-    /// <summary>
-    /// The same boundary case against a <i>non-empty</i> array, naming a second rival the first
-    /// fact above can't rule out on its own: an implementation that "helpfully" clamps an
-    /// out-of-range index to the nearest valid one and removes <i>that</i> element instead of
-    /// answering no-op. Against an empty array both rivals agree (there is no valid index to clamp
-    /// to either) — this needs a real element in the way to tell them apart.
-    /// </summary>
     [Fact]
     public void ArrayRemove_IndexPastTheEndOfANonEmptyArray_IsANoOpThatKeepsEveryElement()
     {
@@ -188,17 +156,6 @@ public sealed class ArrayOpEditTests : IDisposable
 
     // ── array_add ────────────────────────────────────────────────────────────
 
-    /// <summary>
-    /// A struct-element array (<c>Container.destructible.stages</c>, <c>DestructionStage[]</c>) —
-    /// deliberately not <c>keywords</c> (a bare FormLink array): a bare-FormLink list element with an
-    /// unresolvable FormKey string is silently dropped rather than refused
-    /// (<c>ListLeaves.BuildListElement</c>'s own <c>isFl</c> branch returns <c>null</c>, and its
-    /// caller only adds non-null items) — a genuine, pre-existing gap in that one shape, unrelated to
-    /// this ticket and not something a "default" value can route around. Every
-    /// <c>DestructionStage</c> member is a plain scalar, so its own default always applies cleanly —
-    /// the same reason the deleted client-side test this one replaces
-    /// (<c>ArrayDiffRows.test.tsx</c>'s "Insert…appends a default element (0)") used a plain int array.
-    /// </summary>
     [Fact]
     public void ArrayAdd_StructElementArray_AppendsADefaultElement()
     {
@@ -212,18 +169,12 @@ public sealed class ArrayOpEditTests : IDisposable
 
         Assert.True(result.Applied, result.Message);
         var stages = fixture.ExtractStages();
-        // stages[1]'s own HealthPercent is at its CLR default (0) — Mutagen's serializer omits any
-        // field equal to its default (ColumnSpec.ViewDefaultLiteral's own doc comment), so the new
-        // element's own HealthPercent key is genuinely absent rather than present-and-zero; only the
-        // untouched survivor's non-default value is asserted directly.
+        // stages[1]'s HealthPercent is at its CLR default and Mutagen's serializer omits any field equal
+        // to its default, so the new element's key is genuinely absent rather than present-and-zero.
         Assert.Equal(2, stages.GetArrayLength());
         Assert.Equal(50, stages[0].GetProperty("HealthPercent").GetByte());
     }
 
-    /// <summary>The boundary-agnostic op ('array_add' is never a no-op) landing at a real nested
-    /// path — a struct field's own array member, not a bare top-level array — proves
-    /// <see cref="ArrayOpWriter"/>'s path walk reaches one hop in, the same shape #630's own scope
-    /// note ("the record's current value and the schema") describes.</summary>
     [Fact]
     public void ArrayAdd_NestedArrayInAStruct_LandsAtTheArraysOwnPath()
     {
@@ -236,9 +187,6 @@ public sealed class ArrayOpEditTests : IDisposable
         Assert.Equal(1, fixture.ExtractStages().GetArrayLength());
     }
 
-    /// <summary>The same nested path, for <c>array_remove</c> — proves the path walk generalizes
-    /// across ops, not just the one 'array_add' happens to already need for its own boundary-free
-    /// case.</summary>
     [Fact]
     public void ArrayRemove_NestedArrayElement_RemovesAtTheRealPath()
     {
@@ -256,14 +204,6 @@ public sealed class ArrayOpEditTests : IDisposable
         Assert.Equal(20, stages[0].GetProperty("HealthPercent").GetByte());
     }
 
-    /// <summary>
-    /// The same nested path, for <c>array_move_down</c> — closes a real coverage gap review
-    /// found: the deleted client-side tests (<c>ArrayDiffRows.test.tsx</c>'s own #535 block)
-    /// included a nested move case, and nothing server-side replaced it — every <c>ArrayMove*</c>
-    /// fact above targets a top-level array only. The shared path walk is already exercised by the
-    /// nested remove/add facts above; this one proves the *move* mutation itself lands at the same
-    /// real (non-top-level) path rather than assuming it does by extension.
-    /// </summary>
     [Fact]
     public void ArrayMoveDown_NestedArrayElement_MovesAtTheRealPath()
     {
@@ -285,13 +225,6 @@ public sealed class ArrayOpEditTests : IDisposable
     // ── #642/#643 interaction: an array op reuses ColumnSpec.Apply unchanged, so it inherits
     // the nested write path exactly as any other whole-value write does ────────────────────────
 
-    /// <summary>
-    /// An array op that never touches the element carrying a nested Loqui struct
-    /// (<c>QuestReferenceAlias.Location</c>) still succeeds when that member is unset —
-    /// <see cref="ArrayOpWriter"/>'s own null-stripping restores "absence is not targeting" for the
-    /// common case, the same guarantee <see cref="ComplexFieldElementEditTests"/>'s ordinary edits
-    /// already rely on.
-    /// </summary>
     [Fact]
     public void ArrayMoveDown_ArrayContainsElementWithUnsetReadOnlyNestedField_StillApplies()
     {
@@ -308,18 +241,6 @@ public sealed class ArrayOpEditTests : IDisposable
         Assert.True(refIdx < locIdx, $"QuestReferenceAlias should now precede QuestLocationAlias in:\n{body}");
     }
 
-    /// <summary>
-    /// The other half of the same guarantee, flipped by #643: when that nested member genuinely
-    /// carries a value, the op's whole-value round trip now *preserves* it — the op is a thin
-    /// wrapper around the same <c>ColumnSpec.Apply</c>, so it inherited #642's refusal while the
-    /// member had no write door and inherits the write path now that
-    /// <c>StructLeaves.BuildStructSubField</c> wires one
-    /// (<see cref="AbstractUnionEditTests.Aliases_WholeArrayWrite_QuestReferenceAliasElement_LocationNamedInPayload_RoundTrips"/>
-    /// is the ordinary-edit half). Asserting the nested value itself survives the move — not just
-    /// <c>Applied == true</c> — is what makes this strictly stronger than the refusal it replaces:
-    /// an op that reported success while discarding <c>Location</c> (the pre-#642 behaviour) fails
-    /// here on the missing <c>AliasID</c>.
-    /// </summary>
     [Fact]
     public void ArrayMoveDown_ArrayContainsElementWithSetNestedStructField_AppliesAndPreservesIt()
     {
@@ -337,9 +258,6 @@ public sealed class ArrayOpEditTests : IDisposable
         Assert.Contains("\"AliasID\": 9", body, StringComparison.Ordinal);
     }
 
-    /// <summary>A real mod folder holding one <c>Quest</c> with two aliases — same
-    /// self-contained-fixture-per-file convention as <see cref="AbstractUnionEditTests"/>'s own
-    /// <c>AbstractUnionFixture</c>.</summary>
     private sealed class QuestFixture : IDisposable
     {
         private const string PluginName = "Quest630.esp";
@@ -402,8 +320,6 @@ public sealed class ArrayOpEditTests : IDisposable
         }
     }
 
-    /// <summary>A real mod folder holding one <c>Container</c> — same self-contained-fixture-per-file
-    /// convention as <see cref="ComplexFieldElementEditTests.OmodFixture"/>.</summary>
     private sealed class ContainerFixture : IDisposable
     {
         private const string PluginName = "Container630.esp";

@@ -9,15 +9,8 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Tests.Records;
 
-/// <summary>
-/// ADR-0001: winning is a function of the registered load order, so it lives in a
-/// load order-owned derived table — <c>winners</c>, one row per (ref, FormKey) naming the plugin
-/// whose copy wins — and never as a column on a data row. These tests read that table directly,
-/// because "where the answer is stored" is the whole point here: the behavioural half
-/// (a promotion after a delete, a reorder flipping the stack) is already pinned by
-/// <see cref="WorkingTreeDeletionTests"/>, <see cref="LoadOrderViaRegistrationTests"/> and
-/// <see cref="RegistrationScopingTests"/>, and those keep passing through the new shape.
-/// </summary>
+/// <summary>Reads the <c>winners</c> table directly because where the answer is stored is the point
+/// (ADR-0001: winning is a function of the registered load order, never a column on a data row).</summary>
 public sealed class WinnersDerivedTableTests : IDisposable
 {
     private static readonly SchemaReflector Reflector = SharedSchemaReflector.Instance;
@@ -63,8 +56,6 @@ public sealed class WinnersDerivedTableTests : IDisposable
             Fallout4Mod.CreateFromBinaryOverlay(path, Fallout4Release.Fallout4), Registration.Participating(loadOrderIndex), new PluginKey(name, "Data"));
     }
 
-    /// <summary>The (plugin, origin) named as winning <paramref name="formKey"/> at
-    /// <paramref name="recordRef"/>, or null when nothing wins it there.</summary>
     private static (string Plugin, string Origin)? WinnerOf(DuckDbRecordIndex index, RecordRef recordRef, string formKey)
     {
         using var cmd = index.Connection.CreateCommand();
@@ -92,15 +83,13 @@ public sealed class WinnersDerivedTableTests : IDisposable
         Assert.Equal(Expected(OverKey), WinnerOf(index, RecordRef.Effective, _npc));
         Assert.Equal(Expected(OverKey), WinnerOf(index, RecordRef.Head, _npc));
 
-        // The table is a function, not a set of flags: (record_ref, form_key) is its key, so a
-        // reader can LEFT JOIN it without risking a duplicated record row. Two plugins share this
-        // FormKey and exactly one row per ref names a winner for it.
+        // The table is a function, not a set of flags: (record_ref, form_key) is its key, so a reader can
+        // LEFT JOIN it without risking a duplicated record row.
         Assert.Equal(2, Scalar(index, $"SELECT COUNT(*) FROM winners WHERE form_key = '{_npc}'"));
 
-        // Every plugin header wins its own FormKey. It is swept by construction rather than by a
-        // branch of its own since #631 — it is an ordinary `records` row, and the sweep reads that
-        // one relation. Still asserted, because "no winner" reads as "no header exists" through Open
-        // Header's winner-only lookup, and that is a real failure mode however the row gets there.
+        // Every plugin header wins its own FormKey, swept by construction as an ordinary `records` row.
+        // Still asserted, because "no winner" reads as "no header exists" through Open Header's
+        // winner-only lookup.
         foreach (var plugin in new[] { BaseKey, OverKey })
         {
             var headerFk = HeaderIndexer.FormKeyFor(ModKey.FromFileName(plugin.Name));
@@ -149,13 +138,6 @@ public sealed class WinnersDerivedTableTests : IDisposable
         Assert.Equal(Expected(BaseKey), WinnerOf(index, RecordRef.Effective, _npc));
     }
 
-    /// <summary>
-    /// Head's winners are swept, not derived per read, so every writer that moves a row into or out
-    /// of the Head relation has to resweep. <c>SeedCommittedOnly</c> is the "adds one" case: a
-    /// record HEAD holds and the working tree deleted exists at Head and nowhere else, and without
-    /// the resweep it would have no winner at all — which reads as "the record does not exist" through
-    /// every winner-only lookup at that ref.
-    /// </summary>
     [Fact]
     public void SeedCommittedOnly_GivesTheRecordItAddsAtHead_AWinnerThere()
     {
@@ -171,9 +153,7 @@ public sealed class WinnersDerivedTableTests : IDisposable
         Assert.Null(WinnerOf(index, RecordRef.Effective, _npc));
         Assert.Null(index.At(RecordRef.Head).GetDocument(_npc));
 
-        // ...and then a reconciliation pass finds Base.esm's copy in HEAD's tree after all. It is
-        // deliberately not the plugin that was winning before: a stale winners table still naming
-        // Over.esp would leave the row this call adds losing to a plugin that holds nothing at Head.
+        // ...and then a reconciliation pass finds Base.esm's copy in HEAD's tree after all.
         index.SeedCommittedOnly(BaseKey, [(_npc, "npc_", baseBody)]);
 
         Assert.Equal(Expected(BaseKey), WinnerOf(index, RecordRef.Head, _npc));
@@ -181,11 +161,6 @@ public sealed class WinnersDerivedTableTests : IDisposable
         Assert.Null(WinnerOf(index, RecordRef.Effective, _npc));
     }
 
-    /// <summary>
-    /// The mirror: <c>MarkWorkingTreeOnly</c> is the "removes one" case. Taking the winning plugin's
-    /// copy out of Head has to promote the next plugin down <i>at that ref</i>, exactly as a
-    /// working-tree deletion promotes at Effective.
-    /// </summary>
     [Fact]
     public void MarkWorkingTreeOnly_PromotesTheNextPluginDown_AtHead()
     {

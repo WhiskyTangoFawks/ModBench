@@ -2,8 +2,6 @@ using MEditService.Core.Source;
 
 namespace MEditService.Tests.Source;
 
-/// <summary><see cref="SourceTreeMerge.MergeAdditively"/> — folds a scratch tree into an
-/// existing destination tree without disturbing anything already there.</summary>
 public sealed class SourceTreeMergeTests : IDisposable
 {
     private readonly string _root = Directory.CreateTempSubdirectory("medit-merge-test-").FullName;
@@ -43,8 +41,8 @@ public sealed class SourceTreeMergeTests : IDisposable
     }
 
     // The rival this guards against: an implementation that clears the destination tree before
-    // copying (fast, and looks correct for the one-mint-into-empty-tree case) — this is the assertion
-    // that catches it, since a wipe-then-copy would have deleted the unrelated Quest above.
+    // copying, which looks correct for the mint-into-empty case but would have deleted the Quest
+    // above.
     [Fact]
     public void MergeAdditively_NeverDeletesAnythingInTheDestination()
     {

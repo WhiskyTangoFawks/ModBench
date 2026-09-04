@@ -15,20 +15,9 @@ using Noggog;
 
 namespace MEditService.Tests.Source;
 
-/// <summary>
-/// <see cref="SourceRecordPath.For"/> throws <see cref="NotSupportedException"/> for a container
-/// record (Cell/Worldspace/Quest — no flat path), and before this suite existed nothing caught it on
-/// the read path (<see cref="SourceFreshness"/>) or the point-write path
-/// (<see cref="RecordEditService"/>) — a real regression the shared <c>TrackedModFixture</c>
-/// (Npc/Race/Keyword only) could never surface, hence the shared <see cref="ContainerModFixture"/>.
-///
-/// <para><b>What a user sees editing a cell in a tracked plugin</b> (verified by the tests below):
-/// reading it (record editor, compare grid) works — the container is served from the indexed
-/// document, degraded, logged, never a crash. Field edits, EditorID renames, delete and renumber
-/// work; create refuses with <see cref="RecordEditRefusal.ContainerRecordNotYetSupported"/>, naming
-/// that the gesture isn't built yet — the same shape of refusal every other blocked gesture on this
-/// write path already returns, not an unhandled exception or a 500.</para>
-/// </summary>
+/// <summary>Reading a container in a tracked plugin is served from the indexed document, degraded
+/// and logged, never a crash; create refuses with a typed
+/// <see cref="RecordEditRefusal.ContainerRecordNotYetSupported"/> rather than a 500.</summary>
 public sealed class ContainerRecordRegressionTests : IDisposable
 {
     private readonly ContainerModFixture _fixture = new();
@@ -74,11 +63,8 @@ public sealed class ContainerRecordRegressionTests : IDisposable
         var result = EditService().EditField(_fixture.Plugin, _fixture.Cell.ToString(), "water_height", Json("250.0"));
 
         Assert.True(result.Applied, result.Message);
-        // Strongest form: the whole file is byte-identical outside the one field's own
-        // text. Not a diff-line count — every untouched byte is compared, which is what makes
-        // "only that field's line(s) diff" a measurement rather than an assertion. Field-qualified
-        // rather than a bare "100.0" so the substitution stays pinned to this one field as the
-        // document grows and other numbers appear beside it.
+        // Every untouched byte is compared, which makes "only that field's lines diff" a measurement
+        // rather than an assertion.
         Assert.Equal(
             before.Replace("\"WaterHeight\": 100.0", "\"WaterHeight\": 250.0", StringComparison.Ordinal),
             File.ReadAllText(file));
@@ -90,10 +76,8 @@ public sealed class ContainerRecordRegressionTests : IDisposable
     [Fact]
     public async Task ACellsSourceFile_RoundTripsThroughThePerRecordCodecByteIdentically()
     {
-        // The property the test above rests on: a container's file read and rewritten with no edit at all comes
-        // back byte for byte, so any difference the test above sees is the edit and nothing else.
-        // DocumentShapeParityTests pins the *serialize* half against the whole-mod door; this pins
-        // the deserialize→serialize round trip on a file that door actually wrote.
+        // A container's file read and rewritten with no edit comes back byte for byte, so any difference
+        // the test above sees is the edit and nothing else.
         var file = CellSourceFile;
         var before = File.ReadAllBytes(file);
         var codec = new RecordTextCodec(NullLogger<RecordTextCodec>.Instance);
@@ -104,11 +88,6 @@ public sealed class ContainerRecordRegressionTests : IDisposable
         Assert.Equal(before, reserialized);
     }
 
-    /// <summary>A container's EditorID is carried by its <i>directory</i> name, not a file name, so
-    /// the rename is a directory move — which also carries whatever folder-split children live inside
-    /// it (a Quest's dialog topics) rather than orphaning them. See
-    /// <c>RecordEditServiceTests.EditingEditorId_ShowsAsARenameOnceStaged_NotADeleteAndAdd</c>
-    /// for why the staged form is what the rename can be asserted against at all.</summary>
     [Fact]
     public void EditingACellsEditorId_MovesItsSourceDirectory_AndStagesAsARename()
     {
@@ -119,9 +98,8 @@ public sealed class ContainerRecordRegressionTests : IDisposable
 
         Assert.True(result.Applied, result.Message);
         Assert.False(Directory.Exists(oldDirectory));
-        // The new directory is named by identity alone: a rename carries no position with it, because
-        // since #566 the name never carried one (the cell's slot lives in its sub-block's own ordered
-        // child list, keyed by FormKey, which this rename does not touch).
+        // The new directory is named by identity alone: a rename carries no position, because the cell's
+        // slot lives in its sub-block's ordered child list keyed by FormKey, which a rename does not touch.
         var newDirectory = Path.Combine(
             Path.GetDirectoryName(oldDirectory)!, "RenamedCell - " + FilesafeCellKey);
         Assert.True(Directory.Exists(newDirectory));
@@ -147,9 +125,6 @@ public sealed class ContainerRecordRegressionTests : IDisposable
     private static System.Text.Json.JsonElement Json(string raw) =>
         System.Text.Json.JsonDocument.Parse(raw).RootElement;
 
-    /// <summary>Delete resolves a Cell's own directory through <see cref="SourceUnitResolver"/>
-    /// instead of refusing outright — see <c>RecordEditServiceContainerDeleteRenumberTests</c> for
-    /// the full cascade/embedded-child coverage.</summary>
     [Fact]
     public void DeletingACell_Succeeds_NoLongerRefusesWithTheContainerRefusal()
     {
@@ -168,10 +143,6 @@ public sealed class ContainerRecordRegressionTests : IDisposable
         Assert.Equal(RecordEditRefusal.ContainerRecordNotYetSupported, result.Refusal);
     }
 
-    /// <summary>The refusal's own message must stop naming delete and renumber as unsupported now
-    /// that they no longer refuse container records — a stale message beside a Create call that in
-    /// fact still refuses would send a user down a dead end that has since opened. The one limitation
-    /// that remains true (create-from-scratch) must still be stated.</summary>
     [Fact]
     public void CreatingANewCell_RefusalMessage_NoLongerNamesDeleteOrRenumberAsUnsupported()
     {
@@ -183,8 +154,6 @@ public sealed class ContainerRecordRegressionTests : IDisposable
         Assert.Contains("creating one from scratch does not yet", result.Message, StringComparison.Ordinal);
     }
 
-    /// <summary>Renumber resolves a Cell's own directory the same way delete does — see
-    /// <c>RecordEditServiceContainerDeleteRenumberTests</c> for the full coverage.</summary>
     [Fact]
     public void RenumberingACell_Succeeds_NoLongerRefusesWithTheContainerRefusal()
     {
@@ -208,11 +177,6 @@ public sealed class ContainerRecordRegressionTests : IDisposable
 
     // ---- External-change exits ----
 
-    /// <summary>
-    /// Absorb on a plugin holding a Cell/Worldspace/Quest — i.e. most real plugins — must succeed:
-    /// it shares Track's own whole-mod serialization rather than rebuilding the tree one record at a
-    /// time (which had no flat path for a container), and the baseline it writes is complete.
-    /// </summary>
     [Fact]
     public void AbsorbingAnExternalChange_OnAPluginWithACell_Succeeds_AndWritesACompleteBaseline()
     {
@@ -234,15 +198,6 @@ public sealed class ContainerRecordRegressionTests : IDisposable
         Assert.Contains(tree, f => f.StartsWith($"{root}/Cells/", StringComparison.Ordinal));
     }
 
-    /// <summary>
-    /// The Cell does not land here, but not because containers are <i>unconditionally</i> skipped —
-    /// <c>Keep</c> resolves a container's existing source unit (<see cref="SourceUnitResolver"/>)
-    /// rather than refusing on sight. The reason that actually governs it: the binary is
-    /// byte-for-byte what Track already committed, so <c>incoming == baseline</c> and there is
-    /// nothing to land — the same "unchanged, so skip" rule a flat record gets.
-    /// <see cref="KeepingAnExternalChange_OnAModifiedCell_LandsItOnItsExistingRecordDataJson"/>
-    /// is the positive control this one needs beside it.
-    /// </summary>
     [Fact]
     public void KeepingAnExternalChange_OnAnUnchangedCell_LandsNothing()
     {
@@ -256,12 +211,6 @@ public sealed class ContainerRecordRegressionTests : IDisposable
         Assert.DoesNotContain(_fixture.Cell.ToString(), result.LandedFormKeys);
     }
 
-    /// <summary>
-    /// A container already tracked in the source tree lands as working-tree dirt on its
-    /// <b>existing</b> file, exactly like a flat record — the resolver
-    /// (<see cref="SourceUnitResolver"/>) finds the Cell's own <c>RecordData.json</c>, so there is a
-    /// file to land on and no reason to refuse.
-    /// </summary>
     [Fact]
     public void KeepingAnExternalChange_OnAModifiedCell_LandsItOnItsExistingRecordDataJson()
     {
@@ -283,15 +232,6 @@ public sealed class ContainerRecordRegressionTests : IDisposable
         Assert.Contains("\"WaterHeight\": 250.0", File.ReadAllText(file), StringComparison.Ordinal);
     }
 
-    /// <summary>
-    /// An embedded child's external change (here, a placed ref's own position, inside a Cell
-    /// carrying all four embeddable slots at once) lands correctly even though it has no file of its
-    /// own — it is inlined in its owner's document, and the owner's own pass through the same
-    /// <c>EnumerateMajorRecords</c> walk captures the aggregate text, so only the owner's own
-    /// FormKey is reported landed (see this method's own second assertion — a deliberate, low-stakes
-    /// design choice: <c>LandedFormKeys</c> is test-observability only, <c>ExternalChangeActionResponse</c>
-    /// never carries it over the wire).
-    /// </summary>
     [Fact]
     public void KeepingAnExternalChangeOnAnEmbeddedChild_LandsViaTheOwningCellsDocument()
     {
@@ -317,10 +257,6 @@ public sealed class ContainerRecordRegressionTests : IDisposable
         Assert.Contains("\"Position\": \"999, 22, 33\"", File.ReadAllText(file), StringComparison.Ordinal);
     }
 
-    /// <summary>
-    /// A collision on an existing container refuses the whole gesture, exactly as it already does
-    /// for a flat record — the same shared collision computation, unmodified.
-    /// </summary>
     [Fact]
     public void KeepingAnExternalChange_CollidingWithACellsOwnWorkingTreeEdit_RefusesTheWholeGesture()
     {
@@ -343,12 +279,6 @@ public sealed class ContainerRecordRegressionTests : IDisposable
         Assert.Equal(myOwnEditText, File.ReadAllText(CellSourceFile));
     }
 
-    /// <summary>
-    /// A container with no existing source unit anywhere in the tree — genuinely new, never tracked
-    /// — is skipped and logged, not landed and not a hard failure. Landing a brand-new container
-    /// needs the layout grammar that places it, which this method deliberately does not have; the
-    /// follow-up is tracked separately.
-    /// </summary>
     [Fact]
     public void KeepingAnExternalChange_OnABrandNewNeverTrackedCell_SkipsItWithoutFailing()
     {
@@ -375,9 +305,8 @@ public sealed class ContainerRecordRegressionTests : IDisposable
         Assert.Contains(entries, e => e.Message.Contains(brandNewCellKey.ToString(), StringComparison.Ordinal));
     }
 
-    // Loads the plugin mutably (the same technique the whole-mod door itself uses to read a binary),
-    // applies the mutation to the live object graph, then writes it back over the same path — the same
-    // shape an external tool's own save would take, not a from-scratch reconstruction of the fixture.
+    // Loads the plugin mutably, applies the mutation to the live object graph, then writes it back over
+    // the same path: the shape an external tool's own save takes, not a from-scratch reconstruction.
     private static void MutateExternalBinary(string pluginPath, Action<Fallout4Mod> mutate)
     {
         var mod = (Fallout4Mod)ModFactory.ImportSetter(

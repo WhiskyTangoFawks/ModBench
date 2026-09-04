@@ -2,12 +2,8 @@ using MEditService.Core.Source;
 
 namespace MEditService.Tests.Source;
 
-/// <summary>
-/// ADR-0041: tracked *is* the presence of `.git` in the mod folder — stateless by
-/// construction, no registry. <see cref="SourceRepository.IsTracked"/> is the one place that
-/// claim gets checked, so it has to check exactly that and nothing broader (a folder that merely
-/// exists is not tracked).
-/// </summary>
+/// <summary>Tracked is the presence of <c>.git</c> in the mod folder and nothing broader
+/// (ADR-0041): a folder that merely exists is not tracked.</summary>
 public sealed class SourceRepositoryIsTrackedTests
 {
     [Fact]

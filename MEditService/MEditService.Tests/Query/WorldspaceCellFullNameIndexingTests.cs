@@ -10,16 +10,9 @@ using Noggog;
 
 namespace MEditService.Tests.Query;
 
-/// <summary>
-/// An exterior cell's FULL name has exactly one real-world source of truth — the record's
-/// own <c>Name</c> subrecord as Mutagen actually serializes it (<c>ICellGetter.Name?.String</c>,
-/// backed by the <c>FULL</c> subrecord) — so this indexes a real <see cref="Cell"/> through the
-/// real <see cref="DuckDbRecordIndex"/> pipeline (binary round trip included) rather than stubbing
-/// the DTO layer the way <see cref="WorldspaceQueryServiceTests"/> does. The JSON-path guess
-/// (<c>$.Name.Value</c>) driving the read-time <c>json_extract_string</c> in
-/// <c>DuckDbRecordIndex.GetWorldspaceCells</c> is unproven until it runs against a document that
-/// really was serialized by the codec, not asserted from reading the golden fixture alone.
-/// </summary>
+/// <summary>Indexes a real Cell through the real <see cref="DuckDbRecordIndex"/> pipeline rather
+/// than stubbing the DTO layer: the JSON-path guess driving <c>json_extract_string</c> is unproven
+/// until it runs against a document the codec really serialized.</summary>
 public sealed class WorldspaceCellFullNameIndexingTests : IDisposable
 {
     private const string PluginName = "CellFullName.esp";

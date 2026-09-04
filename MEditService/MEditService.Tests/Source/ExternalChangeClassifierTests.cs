@@ -6,11 +6,6 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 namespace MEditService.Tests.Source;
 
-/// <summary>
-/// <see cref="ExternalChangeClassifier"/> — self-echo suppression, crash-marker
-/// suppression, and the meta tell, against real tracked-mod fixtures (never a mocked git or a
-/// mocked compile).
-/// </summary>
 public sealed class ExternalChangeClassifierTests
 {
     private static string NewModFolder() => Directory.CreateTempSubdirectory("medit-classify-").FullName;
@@ -83,14 +78,6 @@ public sealed class ExternalChangeClassifierTests
         }
     }
 
-    /// <summary>
-    /// The discriminating case for check <i>order</i>: an unlanded marker in the same repo (for any
-    /// plugin — the marker is per-repo, not per-plugin, per <see cref="CompileJournal"/>'s own doc
-    /// comment) alongside a binary whose hash *does* match the parked ref (a genuine self-echo
-    /// condition on its own). Marker wins regardless: the two prompts
-    /// must never both fire for one event, and an interrupted batch is the more urgent, more certain
-    /// signal even when the surviving hash happens to still agree with the parked ref.
-    /// </summary>
     [Fact]
     public void Classify_ReportsCrashRecovery_EvenWhenTheHashAlsoMatchesTheParkedRef()
     {

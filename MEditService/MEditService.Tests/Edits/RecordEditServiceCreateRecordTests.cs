@@ -14,12 +14,6 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Tests.Edits;
 
-/// <summary>
-/// Create-record, the entry point over <see cref="IRecordIndex.CreateWorkingTreeRecord"/>
-/// (mechanism-tested at the index layer in <c>WorkingTreeCreationTests</c>). This suite is about the
-/// entry point's own contract — FormKey allocation collision-safe across both refs, the source file
-/// it writes, record-type validation, and the two refusals every gesture on this write path inherits.
-/// </summary>
 public sealed class RecordEditServiceCreateRecordTests
 {
     private static RecordEditService ServiceFor(ILoadOrderMirror mirror) =>
@@ -27,14 +21,6 @@ public sealed class RecordEditServiceCreateRecordTests
 
     private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
 
-    /// <summary>
-    /// <see cref="RecordEditService.EditField"/>
-    /// funnels through the <c>DuckDbRecordIndex.ApplyOneWorkingTreeChange</c> guard —
-    /// a record that never reached Head (still working-tree-only, straight
-    /// off <see cref="RecordEditService.CreateRecord"/>) is silently dropped by a delta-application
-    /// guard that only ever checks Head, so an edit here would report <c>Applied: true</c> while the
-    /// body underneath never actually changed. This is the one test that catches that.
-    /// </summary>
     [Fact]
     public void EditField_OnANeverCommittedRecord_ActuallyLandsInTheIndex()
     {
@@ -71,12 +57,6 @@ public sealed class RecordEditServiceCreateRecordTests
         Assert.Equal("BrandNewNpc", doc!.EditorId);
     }
 
-    /// <summary>
-    /// Delete-then-create in the same group folder: <see cref="RecordEditService.DeleteRecord"/>
-    /// renormalizes its own group folder to contiguous <c>[0..k]</c> as its own last file-system act,
-    /// so by the time <c>CreateRecord</c> runs here there is no gap left to land past at all — the
-    /// surviving sibling has already renumbered down to <c>[0]</c>, and count and max+1 coincide.
-    /// </summary>
     [Fact]
     public void CreateRecord_AfterAnEarlierSiblingWasDeleted_LandsContiguously_NoGapSurvivesToLandPast()
     {
@@ -97,9 +77,8 @@ public sealed class RecordEditServiceCreateRecordTests
             .Order(StringComparer.Ordinal)
             .ToList();
 
-        // Two record files, neither renamed by the other's arrival or departure — the delete left the
-        // survivor's name alone, and the create did not have to renumber past a gap, because there are
-        // no numbers in these names to leave a gap in.
+        // Neither file is renamed by the other's arrival or departure, and the create did not renumber
+        // past a gap, because there are no numbers in these names to leave a gap in.
         Assert.Equal(2, names.Count);
         Assert.Contains(names, n => n.StartsWith("UntouchedNpc", StringComparison.Ordinal));
         Assert.Contains(names, n => n.StartsWith("AfterTheGap", StringComparison.Ordinal));
@@ -127,11 +106,9 @@ public sealed class RecordEditServiceCreateRecordTests
         using var mod = TrackedModFixture.Tracked();
         var index = mod.Mirror.Index!;
 
-        // Seed a native record that exists ONLY at Head — created directly at the index layer with a
-        // deliberately high local ID, "committed" via SetCommittedBaseline (this test's own stand-in
-        // for the real git commit a compile would eventually make), then deleted in the working tree.
-        // Gone at Effective, still answering at Head — exactly the shape a compiled-then-deleted
-        // native record has, and the case an allocator that only scanned Effective would miss.
+        // A native record that exists only at Head: created at the index layer with a high local ID,
+        // committed via SetCommittedBaseline, then deleted in the working tree. That is the shape an
+        // allocator scanning only Effective would miss.
         const string headOnlyFormKey = "F00000:Fixture.esp";
         var seedBody = NpcBody(headOnlyFormKey, "HeadOnlySeed");
         index.CreateWorkingTreeRecord(mod.Plugin, headOnlyFormKey, "npc_", seedBody);
@@ -242,14 +219,13 @@ public sealed class RecordEditServiceCreateRecordTests
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.FormKeySpaceExhausted, result.Refusal);
-        // #290: this plugin isn't light at all — un-flagging ESL is not a way out of a full
-        // 0xFFFFFF native space, so the marker must never claim it is.
+        // This plugin is not light at all, so un-flagging ESL is not a way out of a full 0xFFFFFF native
+        // space and the marker must never claim it is.
         Assert.False(result.EslContradiction);
     }
 
-    // An ESL-flagged plugin's local FormID range is 0x000-0xFFF (12 bits) — the game engine
-    // cannot address a higher local ID from a light plugin's load-order slot, so the auto-allocator
-    // must refuse there rather than continuing on into the full 0xFFFFFF native range.
+    // An ESL-flagged plugin's local FormID range is 12 bits: the game engine cannot address a higher
+    // local ID from a light plugin's slot, so the allocator must refuse rather than continue.
     [Fact]
     public void CreateRecord_OnALightEspPlugin_Refuses_WhenTheEslRangeIsExhausted()
     {
@@ -264,10 +240,8 @@ public sealed class RecordEditServiceCreateRecordTests
         Assert.Equal(RecordEditRefusal.FormKeySpaceExhausted, result.Refusal);
     }
 
-    // #290: the same exhaustion above, but the plugin's light-ness is the removable header flag
-    // (TrackedLight's own .esp fixture) and native space above 0xFFF is still free — the create-time
-    // twin of compile's own eslContradiction marker, so the frontend can offer the same
-    // remove-the-flag-and-retry prompt instead of a dead end.
+    // The same exhaustion, but light-ness is the removable header flag and native space above 0xFFF is
+    // free, so the frontend can offer remove-the-flag-and-retry instead of a dead end.
     [Fact]
     public void CreateRecord_OnALightEspPlugin_WhenEslRangeExhausted_MarksEslContradiction()
     {
@@ -325,9 +299,9 @@ public sealed class RecordEditServiceCreateRecordTests
         Assert.Equal("000FFF:Fixture.esl", result.NewFormKey);
     }
 
-    // The typed-FormID path (xEdit's own "type a FormID" gesture) must refuse the same range a
-    // light plugin's auto-allocator does — the record would exist in perfectly ordinary FormKey space,
-    // so this is its own refusal (LightPluginFormIdOutOfRange), not FormKeySpaceExhausted.
+    // The typed-FormID path must refuse the same range a light plugin's auto-allocator does. The
+    // record would exist in ordinary FormKey space, so this is its own refusal, not
+    // FormKeySpaceExhausted.
     [Fact]
     public void CreateRecord_TypedTarget_OnALightPlugin_Refuses_AboveTheEslCap()
     {
@@ -363,9 +337,8 @@ public sealed class RecordEditServiceCreateRecordTests
         Assert.Equal(requested, result.NewFormKey);
     }
 
-    // _filter is a one-shot snapshot of whatever matched when SetFilter ran — a brand-new row
-    // was never evaluated against that SQL at all, so it stays hidden from a broad "every NPC" filter
-    // until the create path re-materializes it.
+    // _filter is a one-shot snapshot of whatever matched when SetFilter ran, and a brand-new row was
+    // never evaluated against that SQL, so it stays hidden until the create path re-materializes it.
     [Fact]
     public void CreateRecord_MakesTheNewRecordAppearInAnActiveFilteredListing()
     {

@@ -7,19 +7,8 @@ using Mutagen.Bethesda.Strings;
 
 namespace MEditService.Tests.Changes;
 
-/// <summary>
-/// A Localized plugin's own <c>.STRINGS</c>/<c>.DLSTRINGS</c>/<c>.ILSTRINGS</c> files get the
-/// same temp-write-then-rename discipline <see cref="PreparedPluginSave"/> already gives the
-/// <c>.esp</c>/<c>.esm</c> itself (<c>PluginCompileServiceLocalizedTests</c> pins that
-/// <c>Commit()</c> lands the strings at all, not that it does so atomically). The fixture only registers content on two sources
-/// (<c>Book.Name</c> → Normal/.STRINGS, <c>Book.Description</c> → DL/.DLSTRINGS — FO4's only
-/// IL-sourced field, <c>DialogResponse.Text</c>, lives on a nested DialogTopic/DialogResponses group
-/// not worth building here), but Mutagen's own <c>StringsWriter.Dispose</c> writes a zero-entry
-/// <c>.ILSTRINGS</c> stub for every registered language regardless of source, so a third file rides
-/// along for free — all three extensions are exercised by the same untouched-before-Commit and
-/// moved-through-Commit assertions below, even though only two carry content that can meaningfully
-/// differ.
-/// </summary>
+/// <summary>Only Normal and DL sources carry content here, but <c>StringsWriter.Dispose</c> writes a zero-
+/// entry <c>.ILSTRINGS</c> stub regardless, so all three extensions ride the same assertions.</summary>
 public sealed class PluginWriterStringsAtomicityTests : IDisposable
 {
     private const string PluginName = "StringsFixture.esp";
@@ -95,12 +84,9 @@ public sealed class PluginWriterStringsAtomicityTests : IDisposable
         var afterCommit = ReadStringsFiles();
         Assert.Equal(originalFiles.Keys.OrderBy(k => k), afterCommit.Keys.OrderBy(k => k));
 
-        // Only the sources this fixture actually populates (Normal via Name, DL via Description) are
-        // expected to differ. StringsWriter also emits a zero-entry .ILSTRINGS stub for every
-        // registered language regardless of source (Dispose's own `languages` union), so that file's
-        // bytes are identical on both saves by construction — its presence above (same file set,
-        // moved through the same temp dir with no leftover) is what proves it went through Commit()
-        // too, not a content diff that can never fire for an always-empty file.
+        // StringsWriter emits a zero-entry .ILSTRINGS stub for every registered language, so its
+        // bytes are identical on both saves: its presence in the file set above, not a content
+        // diff, is what proves it went through Commit().
         foreach (var (name, bytes) in originalFiles.Where(f => !f.Key.EndsWith(".ILSTRINGS", StringComparison.OrdinalIgnoreCase)))
             Assert.False(bytes.AsSpan().SequenceEqual(afterCommit[name]), $"{name} should differ after Commit() rewrote it");
 

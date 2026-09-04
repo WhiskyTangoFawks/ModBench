@@ -10,15 +10,8 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Tests.Records;
 
-/// <summary>
-/// <see cref="RecordSummary.WorkingTreeState"/> is the Plugins-tree listing's own
-/// working-tree fact — <see cref="IRecordReads.Search"/> is the only real producer of a non-None
-/// value (every other construction site defaults it). None/Modified/Added read off the same
-/// <c>"ref"</c> plus <c>records_committed</c>-presence facts <see cref="WorkingTreeChangeTests"/> and
-/// <see cref="WorkingTreeCreationTests"/> already pin at the document/override-stack seam; this file
-/// pins them at the listing seam instead, since <c>Search</c> — not <c>GetOverrideStack</c> — is what
-/// the Plugins tree actually calls (<c>PluginTreeProvider.fetchRecords</c> → <c>GET /records</c>).
-/// </summary>
+/// <summary>Pinned at the listing seam: <c>Search</c>, not <c>GetOverrideStack</c>, is what the
+/// Plugins tree calls, and it is the only real producer of a non-None value.</summary>
 public sealed class RecordSummaryWorkingTreeStateTests : IDisposable
 {
     private static readonly SchemaReflector Reflector = SharedSchemaReflector.Instance;
@@ -95,10 +88,9 @@ public sealed class RecordSummaryWorkingTreeStateTests : IDisposable
         Assert.Equal(WorkingTreeState.Added, SummaryFor(page, created).WorkingTreeState);
     }
 
-    // A ref-scoped Search that forwards the same SQL/reader logic without HeadRelation's
-    // own "ref" column being uniformly 'committed' would leak Effective's Modified/Added values into
-    // the Head answer — Head never has dirt (Search() is Effective-only,
-    // but the Head-scoped surface still exists and must not lie about it).
+    // A ref-scoped Search forwarding the same reader logic without HeadRelation's "ref" column being
+    // uniformly 'committed' would leak Effective's Modified/Added values into the Head answer, which
+    // never has dirt.
     [Fact]
     public void Search_AtHead_AlwaysReportsNone_EvenForARecordDirtyAtEffective()
     {

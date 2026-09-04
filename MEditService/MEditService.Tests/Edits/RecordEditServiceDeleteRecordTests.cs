@@ -8,28 +8,11 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Tests.Edits;
 
-/// <summary>
-/// Delete-record, the user-facing gesture over the null-Body mechanism
-/// tested at the index layer (<c>WorkingTreeDeletionTests</c>). This suite is about the entry point's
-/// own contract — the source file, and the two refusals every gesture on this write path must
-/// inherit — not about winner/reference derivation, which is already
-/// covered where the mechanism itself lives.
-/// </summary>
 public sealed class RecordEditServiceDeleteRecordTests
 {
     private static RecordEditService ServiceFor(ILoadOrderMirror mirror) =>
         new(mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
 
-    /// <summary>
-    /// #661 regression: <c>SourceUnitResolver</c> now resolves the header's own root
-    /// <c>RecordData.json</c> — but <c>SourceUnit.IsDirectoryPerRecord</c> tells "container's own file"
-    /// from "flat record" by filename alone (<c>RecordData.json</c>), and cannot tell the header's copy
-    /// of that name, which sits <i>at</i> the plugin's own source root, from a container's, which sits
-    /// one level <i>under</i> it. Left unguarded, <see cref="RecordEditService.DeleteRecord"/> answered
-    /// true for the header and deleted the plugin's <i>entire</i> tracked source tree as "one record's"
-    /// delete — found in review, reproduced, and this is the regression test: a sibling record's file
-    /// surviving is exactly the assertion that would have caught it.
-    /// </summary>
     [Fact]
     public void DeleteRecord_OnTheHeader_RefusesWithoutTouchingTheSourceTree()
     {
@@ -60,14 +43,6 @@ public sealed class RecordEditServiceDeleteRecordTests
         Assert.NotNull(mod.Mirror.Index!.At(RecordRef.Head).GetDocument(mod.Npc.ToString(), mod.Plugin));
     }
 
-    /// <summary>
-    /// <see cref="RecordEditService.DeleteRecord"/> shares the
-    /// <c>DuckDbRecordIndex.ApplyOneWorkingTreeChange</c> guard —
-    /// a record that never reached Head (still working-tree-only, straight off
-    /// <see cref="RecordEditService.CreateRecord"/>) is silently kept at Effective by a guard that
-    /// only ever checks Head for "does any ref know this record"; the guard must check
-    /// Effective too. This is the regression test for that.
-    /// </summary>
     [Fact]
     public void DeleteRecord_OnANeverCommittedRecord_ActuallyRemovesItFromTheIndex()
     {

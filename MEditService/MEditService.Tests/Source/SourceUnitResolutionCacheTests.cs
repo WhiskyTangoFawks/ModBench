@@ -2,11 +2,8 @@ using MEditService.Core.Source;
 
 namespace MEditService.Tests.Source;
 
-// Compile's diagnostics pass resolves thousands of records against one unchanging tree, and
-// without a memo each folder-split child re-enumerated its whole subtree (2,198 dialog responses ×
-// ~2,600 files on the real fixture — 25 of Compile's 42 seconds). The cache is a snapshot for the
-// life of one operation, deliberately: a listing taken once is what makes the pass O(tree) instead
-// of O(records × tree), and the tree is not expected to move under a single compile.
+// Without a memo each folder-split child re-enumerated its whole subtree, 25 of Compile's 42 seconds
+// on the real fixture.
 public class SourceUnitResolutionCacheTests
 {
     [Fact]

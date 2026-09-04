@@ -4,17 +4,8 @@ using MEditService.Core.Source;
 
 namespace MEditService.Tests.Source;
 
-/// <summary>
-/// The Kind B per-class detectors (#569): byte-level scans over a plugin's own structure that name
-/// a malformed record's defect class from the original bytes alone — no Mutagen, no recompiled
-/// counterpart, which is what lets #570 run them at session load. Hand-built bytes pin each
-/// detector's contract and each surveyed defect's exact diagnosis: the per-row fixtures are
-/// synthetic reproductions — same record type, FormID, EditorID and defect shape as the real
-/// plugin the survey observed (named per test), but none of the mod author's payload bytes; the
-/// repo commits no third-party plugin content (MEditService/CLAUDE.md's fixture rule). The two
-/// whole-plugin fixtures that predate that rule (<c>LitR - TrueStorms.esp</c>,
-/// <c>SKI_PlasmaAutocannon.esp</c>) still exercise the scan against real, full plugin structure.
-/// </summary>
+/// <summary>Per-row fixtures are synthetic reproductions of the surveyed defects, never the mod
+/// author's payload bytes: the repo commits no third-party plugin content (MEditService/CLAUDE.md).</summary>
 public sealed class MalformedPluginScanTests
 {
     // ── R2: fixed-size subrecord short — real fixture (LitR - TrueStorms.esp) ────────────────
@@ -37,10 +28,8 @@ public sealed class MalformedPluginScanTests
     [Fact]
     public void GaussRevolver_TemplateRotation_IsDiagnosedByExactClassAndText()
     {
-        // The shape observed in Lunar Arsenal's GaussRevolver.esp WEAP 03000860 (OBTE=1:
-        // OBTS OBTF FULL STOP) — the combination's OBTS precedes its OBTF/FULL, leaving them
-        // unclosed. ("The Charger Pistol" ships a clean plugin under the same filename —
-        // ADR-0044's every-physical-copy story in the wild.)
+        // The shape observed in Lunar Arsenal's GaussRevolver.esp WEAP 03000860 (OBTE=1: OBTS OBTF FULL
+        // STOP): the combination's OBTS precedes its OBTF/FULL, leaving them unclosed.
         var diagnoses = MalformedPluginScan.Scan(Record("WEAP", 0x03000860,
             Sub("EDID", "GaussRevolver\0"u8.ToArray()),
             Sub("OBTE", Le(1)),
@@ -262,9 +251,9 @@ public sealed class MalformedPluginScanTests
     [Fact]
     public void CkOrder_ALeadingBareObtsFollowedByClosedCombinations_ReportsNothing()
     {
-        // Vanilla GaussRifle's own shape (OBTE=5: OBTS, then OBTF FULL OBTS ×4) — the leading
-        // bare OBTS is the default combination and canonical CK output, proven by the
-        // MEDIT_SMOKE vanilla scan; an earlier draft flagged it and tripped 14 vanilla WEAPs.
+        // Vanilla GaussRifle's own shape (OBTE=5: OBTS, then OBTF FULL OBTS x4): the leading bare
+        // OBTS is the default combination and canonical CK output, proven by the MEDIT_SMOKE vanilla
+        // scan.
         var record = Record("WEAP", 0x00000007,
             Sub("OBTE", Le(2)),
             Sub("OBTS", new byte[8]),

@@ -8,11 +8,8 @@ using Mutagen.Bethesda.Fallout4;
 
 namespace MEditService.Tests.Plugins;
 
-/// <summary>
-/// ADR-0035: the load order answers while it is still loading. Each test drives a load to a
-/// known point with <see cref="GatedIndexRepositoryFactory"/>, asserts what is observable at that
-/// instant, then releases it — no sleeps, no timing assumptions.
-/// </summary>
+/// <summary>Each test drives a load to a known point with <see cref="GatedIndexRepositoryFactory"/>
+/// and asserts at that instant: no sleeps, no timing assumptions (ADR-0035).</summary>
 public sealed class LoadOrderMirrorProgressiveLoadTests
 {
     private static (LoadOrderMirror Manager, GatedIndexRepositoryFactory Gate) MakeGatedManager(string gateBefore)
@@ -24,8 +21,6 @@ public sealed class LoadOrderMirrorProgressiveLoadTests
         return (manager, gate);
     }
 
-    /// <summary>Three plugins with one NPC each, so a plugin's record count is a known literal
-    /// rather than something the assertion recomputes from the mod it is checking.</summary>
     private static ScatteredFixtureData ThreePlugins(string prefix) =>
         new PluginFixtureBuilder(prefix)
             .WithPlugin("Fallout4.esm")
@@ -113,9 +108,8 @@ public sealed class LoadOrderMirrorProgressiveLoadTests
         var load = Task.Run(() => manager.Reconcile(fx.GameDirectory, fx.Plugins, GameRelease.Fallout4));
         await gate.WaitUntilParkedAsync();
 
-        // A.esp failed one step ago and C.esp has not been reached: the failure is reported at the
-        // moment it happens, not banked until the load returns. ADR-0026 — a user watching a
-        // ninety-second load should not learn at second ninety that something broke at second five.
+        // A.esp failed one step ago and C.esp has not been reached: the failure is reported when it
+        // happens, not banked until the load returns.
         var status = manager.Status;
         Assert.Equal(LoadOrderState.Reconciling, status.State);
         var failure = Assert.Single(status.Failures);
@@ -150,10 +144,8 @@ public sealed class LoadOrderMirrorProgressiveLoadTests
     [Fact]
     public async Task MidLoad_EnumeratingThePluginList_SurvivesTheLoadAppendingToIt()
     {
-        // Four plugins, gated on the third: a plugin is appended to the list when it is *opened*,
-        // one step before it is indexed, so parking before B's index leaves C.esp — and only C.esp —
-        // still to be appended. Gating on the last plugin instead would leave nothing mutating the
-        // list after the park, and the test would exercise nothing.
+        // A plugin is appended when it is opened, one step before it is indexed, so parking before
+        // B's index leaves only C.esp still to be appended.
         using var fx = new PluginFixtureBuilder("sm-progressive-enumeration")
             .WithPlugin("Fallout4.esm")
             .WithPlugin("A.esp", mod => mod.Npcs.AddNew("FromA"))
@@ -167,10 +159,8 @@ public sealed class LoadOrderMirrorProgressiveLoadTests
         var load = Task.Run(() => manager.Reconcile(fx.GameDirectory, fx.Plugins, GameRelease.Fallout4));
         await gate.WaitUntilParkedAsync();
 
-        // GetPlugins, PluginOriginResolver and BuildTypedLinkCache all walk this list while the
-        // load appends to it. Interleaved exactly rather than
-        // raced: begin an enumeration, let the load open one more plugin, then keep enumerating —
-        // which is the shape that throws on a plain List<T>, deterministically.
+        // Interleaved exactly rather than raced: begin an enumeration, let the load open one more plugin,
+        // then keep enumerating, which is the shape that throws on a plain List<T>, deterministically.
         var plugins = manager.LoadOrder!.Plugins;
         using var enumerator = plugins.GetEnumerator();
         Assert.True(enumerator.MoveNext());
@@ -183,7 +173,6 @@ public sealed class LoadOrderMirrorProgressiveLoadTests
         Assert.True(rest >= 1);
     }
 
-    /// <summary>Four plugins, so gating on the third leaves one the load has not reached.</summary>
     private static ScatteredFixtureData FourPlugins(string prefix) =>
         new PluginFixtureBuilder(prefix)
             .WithPlugin("Fallout4.esm")
@@ -203,9 +192,9 @@ public sealed class LoadOrderMirrorProgressiveLoadTests
         var load = Task.Run(() => manager.Reconcile(fx.GameDirectory, fx.Plugins, GameRelease.Fallout4));
         await gate.WaitUntilParkedAsync();
 
-        // Unload has to wait for the load to stop touching the repository before disposing it —
-        // disposing a DuckDB connection out from under an in-flight index is a native crash, not an
-        // exception, and it would take the whole backend down with the user's loaded load order.
+        // Unload must wait for the load to stop touching the repository before disposing it: disposing a
+        // DuckDB connection under an in-flight index is a native crash, not an exception, and it takes the
+        // whole backend down with it.
         var unload = Task.Run(manager.Close);
         var premature = await Task.WhenAny(unload, Task.Delay(TimeSpan.FromMilliseconds(500)));
         Assert.NotSame(unload, premature); // disposed while the load was still running
@@ -243,9 +232,8 @@ public sealed class LoadOrderMirrorProgressiveLoadTests
         await Assert.ThrowsAsync<OperationCanceledException>(() => first);
         await second;
 
-        // ADR-0044: the same instance is reconciled in place — one index, not a second one that
-        // replaces the first. What the superseded reconcile had landed stays; its successor picks
-        // up where it stopped and finishes the set, so nothing is indexed twice.
+        // ADR-0044: the same instance is reconciled in place, one index rather than a second replacing the
+        // first. What the superseded reconcile landed stays, and its successor finishes the set.
         var index = Assert.Single(gate.Created);
         Assert.False(index.Disposed);
         Assert.Equal(LoadOrderState.Ready, manager.Status.State);
@@ -267,9 +255,8 @@ public sealed class LoadOrderMirrorProgressiveLoadTests
         var load = Task.Run(() => manager.Reconcile(fx.GameDirectory, fx.Plugins, GameRelease.Fallout4));
         await gate.WaitUntilParkedAsync();
 
-        // The regression this pins: the load used to hold the load order lock end to end, so this read
-        // did not return wrong data — it returned nothing at all until the whole load order had been
-        // indexed and swept. A timeout is the only way to tell "answered" from "eventually answered".
+        // A load holding the load order lock end to end returns nothing at all until the whole load order
+        // is indexed and swept. A timeout is the only way to tell "answered" from "eventually answered".
         var read = Task.Run(() =>
         {
             var repo = manager.Reads;

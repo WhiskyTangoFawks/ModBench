@@ -9,18 +9,9 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Tests.Records;
 
-// ADR-0001: the index is one persistent file per MO2 instance, and it validates itself
-// against the disk every time it is opened — by content, never by clock. Everything here is proved
-// at the index seam alone: an index is built, disposed, and opened again on the same file, and what
-// survives is asserted through the seam's own reads. Persistence itself is never asserted by
-// inspecting the file on disk — no existence check, no size, no bytes — only by a second index
-// object finding what the first left.
-//
-// Two assertions do reach past the seam, through `Connection`, and both are the sanctioned white-box
-// door RegistrationScopingTests already established (MEditService/CLAUDE.md, invariant 8): counting
-// `mirror.records` rows, because "the rows are physically present and answer nothing" is not expressible
-// through a seam whose whole job is to hide unregistered rows; and ageing `mirror.files`'
-// version, because there is no other way to write rows under a version this build cannot produce.
+// ADR-0001: one persistent file per MO2 instance, validating itself against the disk by content,
+// never by clock. Two assertions reach past the seam through `Connection`: unregistered rows and a
+// version this build cannot produce have no other witness.
 public class PersistentIndexTests : IDisposable
 {
     private static readonly SchemaReflector Reflector = SharedSchemaReflector.Instance;
@@ -81,9 +72,8 @@ public class PersistentIndexTests : IDisposable
         return Convert.ToInt64(cmd.ExecuteScalar(), System.Globalization.CultureInfo.InvariantCulture);
     }
 
-    // The whole point: rows the previous process indexed are still there, and the plugin
-    // answers reads again on nothing more than a Register — no Index call in this test's second half
-    // at all, which is what "nothing re-indexed" means at this seam.
+    // Rows the previous process indexed are still there and the plugin answers reads again on nothing
+    // more than a Register: there is no Index call in this test's second half at all.
     [Fact]
     public void ReopeningTheSameFile_KeepsTheRows_AndRegisterAloneMakesThemAnswer()
     {
@@ -105,9 +95,9 @@ public class PersistentIndexTests : IDisposable
     [Fact]
     public void ReopeningTheSameFile_KeepsTheLastRegistrations_UntilTheSnapshotCorrectsThem()
     {
-        // ADR-0001 point 4 as amended by ADR-0044: the registrations a file carries are the last
-        // known load order, kept on open so a restart followed by an identical snapshot costs
-        // nothing; the first reconcile is what corrects them (here, an Unregister).
+        // ADR-0001 point 4 as amended by ADR-0044: the registrations a file carries are the last known load
+        // order, kept on open so a restart with an identical snapshot costs nothing; the first reconcile
+        // corrects them.
         var alpha = WritePlugin("Alpha.esp", "NpcAlpha");
         using (var first = OpenIndex()) IndexFileAt(first, alpha, 0);
 
@@ -226,16 +216,8 @@ public class PersistentIndexTests : IDisposable
         Assert.NotNull(second.IndexedContentHash(KeyOf("Alpha.esp")));
     }
 
-    // ADR-0001 point 6: a second Modbench window on the same game contends for one file, and DuckDB
-    // refuses the second open. That refusal must never be answered by rebuilding — deleting a file
-    // another process holds open succeeds on POSIX and destroys that window's live index, which is
-    // the silent divergence the decision exists to rule out.
-    //
-    // The real contention is between processes and is not reachable from here: DuckDB's .NET binding
-    // shares one database instance per path within a process, so a second index over the same file
-    // simply joins the first. That is asserted below for what it is worth (nothing was rebuilt), and
-    // the classification the guard actually turns on is pinned separately against DuckDB's own
-    // wordings — the honest split, rather than a test whose name promises a lock it never takes.
+    // ADR-0001 point 6: DuckDB refuses a second open, and that refusal must never be answered by
+    // rebuilding, since deleting a file another process holds open succeeds on POSIX.
     [Fact]
     public void ASecondIndexOverTheSameFile_LeavesTheFirstOnesRowsIntact()
     {
@@ -250,9 +232,7 @@ public class PersistentIndexTests : IDisposable
     }
 
     // The two failures arrive as the same exception type, so the message is all there is to tell
-    // them apart, and getting it wrong is destructive in one direction only: a corrupt file wrongly
-    // read as a lock costs a failed load, a lock wrongly read as corruption costs another window its
-    // index. These are DuckDB's own wordings on each platform.
+    // them apart, and a lock wrongly read as corruption costs another window its index.
     [Theory]
     [InlineData("IO Error: Could not set lock on file \"/x/Fallout4-ab.duckdb\": Conflicting lock is held in /usr/bin/dotnet (PID 4242)", true)]
     [InlineData("IO Error: Could not set lock on file \"C:\\x\\Fallout4-ab.duckdb\": The process cannot access the file because another process has locked a portion of the file.", true)]

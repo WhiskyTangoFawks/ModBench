@@ -10,24 +10,15 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Tests.Query;
 
-/// <summary>
-/// Golden capture of conflict classification and the compare
-/// grid over a load order that actually conflicts.
-///
-/// <see cref="RealData.RealDataReadGoldenTests"/> pins per-record *values* against authentic
-/// Bethesda data; this pins what the classifier makes of several plugins disagreeing about the same
-/// record — <c>ConflictAll</c>, per-column <c>ConflictThis</c>, the winner column, and the aligned
-/// per-field diff tree, including the two cases that are easy to get subtly wrong:
-/// an override that changes nothing (identical to its master, so <b>not</b> a conflict) and an
-/// override that is out-competed by a later one.
-/// </summary>
+/// <summary>Pins what the classifier makes of several plugins disagreeing, including the two easy
+/// to get wrong: an override identical to its master (not a conflict) and one out-competed by a
+/// later override.</summary>
 public sealed class CompareGoldenTests : IDisposable
 {
     private readonly PluginFixtureData _fixture;
     private readonly LoadOrderMirror _manager;
     private readonly RecordQueryService _service;
-    // #632: kept so WinnerAndListings_MatchGolden can inline the record-type count
-    // RecordQueryService.GetRecordTypes() used to answer, now that method is deleted.
+    // Kept so WinnerAndListings_MatchGolden can inline the record-type count against the reflector.
     private readonly SchemaReflector _reflector;
 
     private static readonly FormKey ConflictedNpc = MakeKey("Base.esm", 0x800);
@@ -55,10 +46,9 @@ public sealed class CompareGoldenTests : IDisposable
                 var lonely = mod.Npcs.AddNew("SoleNPC");
                 lonely.CalculatedHealth = 7;
 
-                // #692: a condition list is an ordinary reflected array column, so a record
-                // carrying one belongs in this golden like any other conflicting field — the
-                // classifier that produces its diff tree is the one classifier, with no section,
-                // DTO or codec of its own to pin separately.
+                // A condition list is an ordinary reflected array column, so a record carrying one belongs in this
+                // golden like any other conflicting field: the classifier producing its diff tree is the one
+                // classifier, with no section of its own.
                 var recipe = mod.ConstructibleObjects.AddNew("ConflictedRecipe");
                 recipe.Conditions.Add(new ConditionFloat
                 {
@@ -178,15 +168,9 @@ public sealed class CompareGoldenTests : IDisposable
                 p.InLoadOrder,
                 p.HasMatchingRecords,
             }).ToList(),
-            // #632: RecordQueryService.GetRecordTypes() was deleted (zero callers) — inlined
-            // here against the reflector directly. GameRelease.Fallout4 is hardcoded rather than
-            // derived from the reconciled load order the way GetRecordTypes() (via RequireSchemas)
-            // did; that's a basis change, accepted because it's the same constant this fixture
-            // already reconciles with two lines above and root CLAUDE.md's game-generalization
-            // rule permits an FO4-concrete *test fixture*. The header exclusion names
-            // HeaderIndexer.RecordType directly — #631 folded away the private
-            // RecordQueryService.HeaderTableName this used to have to duplicate as a literal, so a
-            // change to the value can no longer leave this count silently including one extra type.
+            // GameRelease.Fallout4 is hardcoded rather than derived from the reconciled load order: the same
+            // constant this fixture reconciles with two lines above, and the game-generalization rule permits
+            // an FO4-concrete test fixture.
             RecordTypes = _reflector.GetSchemas(GameRelease.Fallout4).Keys.Count(t => t != HeaderIndexer.RecordType),
             PerPluginTypes = new[] { "Base.esm", "Mid.esp", "Top.esp" }
                 .ToDictionary(p => p, p => _service.GetPluginRecordTypes(p)),

@@ -2,13 +2,8 @@ using MEditService.Core.Source;
 
 namespace MEditService.Tests.Source;
 
-/// <summary>
-/// ADR-0041 amendment: Track initializes
-/// <c>refs/medit/last-compile/&lt;plugin&gt;</c> to the pristine snapshot for every plugin the
-/// trailers name — the ref Save &amp; Compile re-parks after every compile, and the
-/// reference external-change detection reads. The ref points at the baseline commit's
-/// own SHA (no second commit object) since the tree is literally the same content at Track time.
-/// </summary>
+/// <summary>The parked ref points at the baseline commit's own SHA (no second commit object) since
+/// the tree is literally the same content at Track time (ADR-0041).</summary>
 public sealed class SourceRepositoryTrackParkedRefTests
 {
     private static string NewModFolder() => Directory.CreateTempSubdirectory("medit-track-parkedref-").FullName;

@@ -9,15 +9,9 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Tests.Api;
 
-/// <summary>
-/// The load-time hash check. A binary changed while no watcher was ever running
-/// (the "Modbench was closed" case) is still caught the moment a load order reconciles, through the
-/// same <see cref="MEditService.Core.Source.ExternalChangeClassifier"/> the live watcher itself calls.
-///
-/// <para>Also the same pass's crash-repair offers — an interrupted compile (an unanswered
-/// <see cref="CompileJournal"/> marker) and a binary that cannot be read at all — both routed away
-/// from the external-change dialog's own queue (<see cref="ExternalChangeWatcher.Unanswered"/>).</para>
-/// </summary>
+/// <summary>A binary changed while no watcher was running (Modbench closed) is caught when a load
+/// order reconciles, through the same classifier the live watcher calls; crash-repair offers are
+/// routed away from the external-change dialog's queue.</summary>
 public sealed class ExternalChangeLoadOrderHookTests : IDisposable
 {
     private readonly TrackedModFixture _mod = TrackedModFixture.Tracked();
@@ -29,8 +23,7 @@ public sealed class ExternalChangeLoadOrderHookTests : IDisposable
     {
         var pluginPath = Path.Combine(_mod.ModFolder, TrackedModFixture.PluginName);
 
-        // Never watched before this call — exactly "closed" means: no FileSystemWatcher instance
-        // has ever seen this write happen.
+        // "Closed" means no FileSystemWatcher instance ever sees this write happen.
         var externalMod = new Fallout4Mod(ModKey.FromFileName(TrackedModFixture.PluginName), Fallout4Release.Fallout4);
         var race = externalMod.Races.AddNew("FixtureRace");
         externalMod.Keywords.AddNew("FixtureKeyword");
@@ -59,11 +52,8 @@ public sealed class ExternalChangeLoadOrderHookTests : IDisposable
         Assert.Empty(offers); // clean state produces no repair activity either.
     }
 
-    // A crash between the journal's marker write and its clear (simulated the same way
-    // PluginCompileServiceJournalTests does — a real CompileJournal.RunBatch that throws partway)
-    // is detected as an interrupted compile at the next load, offered for repair, and never routed
-    // into the external-change dialog's own queue (the two prompts must never both fire for one
-    // event).
+    // A crash between the journal's marker write and its clear is offered for repair and never
+    // routed into the external-change queue: the two prompts must never both fire for one event.
     [Fact]
     public void RunAfterReconcile_OffersRepair_AndQueuesNoExternalChangeQuestion_WhenAJournalMarkerIsUnanswered()
     {
@@ -101,9 +91,8 @@ public sealed class ExternalChangeLoadOrderHookTests : IDisposable
         Assert.Empty(watcher.Unanswered());
     }
 
-    // An untracked plugin is never probed at all, even in the exact repair-worthy state
-    // (a missing binary) that offers repair for a tracked one — TrackedOf's own early-continue is
-    // what this guards, and it is what makes the rest of this hook's body unreachable for it.
+    // TrackedOf's early-continue makes the rest of the hook's body unreachable for an untracked
+    // plugin, even in the repair-worthy state that offers repair for a tracked one.
     [Fact]
     public void RunAfterReconcile_OffersNothing_ForAnUntrackedPlugin_EvenWithAMissingBinary()
     {

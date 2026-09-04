@@ -48,9 +48,8 @@ public class FormLookupTests
         cmd.CommandText = "SELECT COUNT(*) FROM form_lookup WHERE plugin = 'Lookup.esp'";
         var count = (long)cmd.ExecuteScalar()!;
 
-        // Two records and the plugin header (#631) — ADR-0031 keeps exactly one lookup row per
-        // `records` row, and the header is one of those rows now. Written as the sum rather than as
-        // "3" so the reason for each row stays visible.
+        // Two records and the plugin header: ADR-0031 keeps exactly one lookup row per `records` row, and
+        // the header is one of those rows. Written as the sum so the reason for each row stays visible.
         Assert.Equal(2 + 1, count);
 
         // ...and the header's is a real, resolvable row rather than filler that makes the count add

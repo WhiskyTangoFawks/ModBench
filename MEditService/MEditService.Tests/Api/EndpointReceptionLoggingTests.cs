@@ -10,20 +10,9 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Tests.Api;
 
-// Every Map*Endpoints handler logs an Info-level "command received" line before doing any
-// work — every handler has this line as its literal first statement (verified by inspection, not
-// by these tests, which don't assert ordering directly). These tests call a representative handler
-// per endpoints file directly (bypassing HTTP/Serilog: UseSerilog(writeToProviders: false) makes
-// host-level log capture unreliable) and assert: (a) the
-// Info-level entry is present and carries the raw (pre-decode) request parameter, and (b) for
-// LoadOrderEndpoints.PutLoadOrder specifically, the entry still fires when the request fails
-// validation and returns early — proving the line isn't gated behind a success path. The remaining
-// handlers get the identical one-line addition without a dedicated test.
-//
-// PluginEndpoints is exempt: its "Received ..." lines were redundant with the per-request Serilog
-// summary line (UseSerilogRequestLogging) and were deleted rather than kept. The pattern (and
-// this file's remaining tests) still stands for LoadOrderEndpoints, WorldspaceEndpoints and
-// RecordEndpoints.
+// Handlers are called directly rather than over HTTP, because UseSerilog(writeToProviders: false)
+// makes host-level log capture unreliable. PluginEndpoints is exempt: the per-request
+// UseSerilogRequestLogging summary already carries its line.
 public sealed class EndpointReceptionLoggingTests
 {
     private static (ILoggerFactory factory, List<LogEntry> entries) CapturingLoggerFactory()

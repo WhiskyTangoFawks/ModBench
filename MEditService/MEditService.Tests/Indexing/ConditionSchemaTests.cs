@@ -5,13 +5,8 @@ using Mutagen.Bethesda.Fallout4;
 
 namespace MEditService.Tests.Indexing;
 
-/// <summary>
-/// #692: the shape a condition reaches the editor as, now that the Condition/ConditionData union
-/// exclusions are lifted — an ordinary array-of-struct column, its two unions expanded by the same
-/// mechanism every other Loqui union goes through, plus the two per-game facts reflection cannot
-/// read off a property: which parameter members each function actually uses, and that Run On's
-/// Reference target is only live under one Run On value.
-/// </summary>
+/// <summary>Two per-game facts reflection cannot read off a property: which parameter members each
+/// function uses, and that Run On's Reference target is live under only one Run On value.</summary>
 public sealed class ConditionSchemaTests
 {
     private static readonly IReadOnlyDictionary<string, RecordTableSchema> Schemas =
@@ -47,12 +42,6 @@ public sealed class ConditionSchemaTests
             discriminator.EnumMembers.Select(m => m.Value));
     }
 
-    /// <summary>
-    /// <c>ComparisonValue</c> is a float on one leaf and a GLOB link on the other, which is the
-    /// per-shape split (#701): one field per shape, each gated to the leaves that declare it, so a
-    /// resend after switching leaf drops the outgoing member by name instead of failing to convert
-    /// it. There is no second mechanism for a per-leaf type difference — this is it.
-    /// </summary>
     [Fact]
     public void ComparisonValue_IsOneFieldPerShape_FloatAndGlobalLink()
     {
@@ -61,21 +50,14 @@ public sealed class ConditionSchemaTests
         Assert.Equal("float", Member(element, "comparison_value_float").Type);
         var link = Member(element, "comparison_value_form_key");
         Assert.Equal("formKey", link.Type);
-        // Empty, meaning "any record type": the link closes over the abstract IGlobalGetter, and
-        // GLOB's schema table is keyed by its four concrete sibling getters, so the base resolves to
-        // no table. Every other IFormLink<IGlobalGetter> in the schema reads the same way.
+        // Empty, meaning "any record type": the link closes over the abstract IGlobalGetter, and GLOB's
+        // schema table is keyed by its four concrete sibling getters, so the base resolves to no table.
         Assert.Empty(link.ValidFormKeyTypes);
         Assert.DoesNotContain(element.Fields!, f => f.Name == "comparison_value");
     }
 
     // ── the two per-game facts ───────────────────────────────────────────────
 
-    /// <summary>
-    /// Mutagen models each parameter slot as three members and picks one by the function's own
-    /// parameter category, so a function change moves which member carries the value. The map says
-    /// which, per function, and is read from <c>Condition.GetParameterTypes</c> — the same table
-    /// Mutagen's own writer switches on — so it cannot drift from what actually goes to the wire.
-    /// </summary>
     [Theory]
     [InlineData("IsSneaking")]                                                              // no slot
     [InlineData("HasKeyword", "parameter_one_record")]                                      // Form
@@ -101,9 +83,6 @@ public sealed class ConditionSchemaTests
             function.SiblingsInUse!.Keys.Order(StringComparer.Ordinal));
     }
 
-    /// <summary>Run On's reference target is read only under the one Run On value that names one —
-    /// under every other, the member holds no data, and leaving a stale target behind would keep a
-    /// master alive for a link the game never reads (masters are content-derived, ADR-0038).</summary>
     [Fact]
     public void RunOnType_NamesTheReferenceMemberUnderExactlyTheReferenceValue()
     {
@@ -119,9 +98,6 @@ public sealed class ConditionSchemaTests
             kv => Assert.Empty(kv.Value));
     }
 
-    /// <summary>The overwhelming majority of enum fields govern nothing, and say so by carrying no
-    /// map at all rather than an empty one — otherwise every enum on the wire would pay for a
-    /// concept two members use.</summary>
     [Fact]
     public void AnEnumThatGovernsNothing_CarriesNoMap()
     {
@@ -129,8 +105,6 @@ public sealed class ConditionSchemaTests
         Assert.Null(Schemas["npc_"].RecordColumns.Single(c => c.Name == "aggression").ToFieldMetadata().SiblingsInUse);
     }
 
-    /// <summary>Every nesting a condition list reaches in Fallout 4, each named so a walk that
-    /// stopped short of one fails here rather than in the editor.</summary>
     [Theory]
     [InlineData("cobj", "conditions")]
     [InlineData("qust", "dialog_conditions")]

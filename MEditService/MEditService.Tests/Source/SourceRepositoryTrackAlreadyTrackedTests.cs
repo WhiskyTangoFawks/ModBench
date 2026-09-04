@@ -2,14 +2,8 @@ using MEditService.Core.Source;
 
 namespace MEditService.Tests.Source;
 
-/// <summary>
-/// Track refuses outright on an already-tracked mod folder, checked <b>before</b> touching
-/// git at all — not merely "git init happens to fail non-destructively". A second Track hitting the
-/// try/cleanup block unguarded would `git init` (a no-op on an existing repo), then fail later at
-/// `checkout -b edit` (the branch already exists) and delete the *real*, already-tracked
-/// <c>.git</c> as if it were this call's own half-init — a genuine data-loss bug, not a hypothetical
-/// one (found while designing the endpoint's error modes).
-/// </summary>
+/// <summary>Checked before touching git at all: an unguarded second Track would <c>git init</c> (a no- op),
+/// fail at <c>checkout -b edit</c>, then delete the real <c>.git</c> as its own half-init.</summary>
 public sealed class SourceRepositoryTrackAlreadyTrackedTests
 {
     [Fact]

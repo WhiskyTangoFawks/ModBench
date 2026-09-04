@@ -12,20 +12,8 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Tests.Edits;
 
-/// <summary>
-/// #692: every condition gesture, through the ordinary reflected-field door. A condition list is an
-/// array of Loqui structs like any other since the Condition/ConditionData union exclusions were
-/// lifted, so there is no condition write path to test — there is the one write path, asked to carry
-/// conditions.
-///
-/// <para>Each gesture is measured, not asserted: the record's own source document is captured
-/// before and after and diffed member by member (<see cref="DocumentDiff"/>), so a gesture that
-/// quietly rewrote a member it was not asked to touch fails naming that member. "Round-trips
-/// losslessly" is the claim, and a document comparison is the only thing that can make it.</para>
-///
-/// <para>Same posture as <see cref="AbstractUnionEditTests"/>: a real mod folder, a real tracked
-/// load order, no mocks, the edit landing as a real Mutagen binary round trip.</para>
-/// </summary>
+/// <summary>Each gesture is diffed member by member (<see cref="DocumentDiff"/>): a document
+/// comparison is the only thing that can make the "round-trips losslessly" claim.</summary>
 public sealed class ConditionEditTests : IDisposable
 {
     private readonly ConditionFixture _fixture = new();
@@ -52,9 +40,6 @@ public sealed class ConditionEditTests : IDisposable
             DocumentDiff(before, _fixture.Body(_fixture.Cobj)));
     }
 
-    /// <summary>Parameter #3 is <c>ConditionData.Unknown3</c>, written unconditionally by Mutagen
-    /// whatever the function is — an edit of it is an ordinary member edit, and the flags byte
-    /// beside it is untouched.</summary>
     [Fact]
     public void EditingParameterThree_ChangesThatMemberAndNothingElse()
     {
@@ -89,14 +74,6 @@ public sealed class ConditionEditTests : IDisposable
 
     // ── Use Global, through the discriminator ────────────────────────────────
 
-    /// <summary>
-    /// "Use Global" is not a member of its own in Mutagen's model: it is the choice between the two
-    /// concrete Condition classes, and the flag byte is derived from that choice at write time
-    /// (<c>ConditionBinaryWriteTranslation.WriteBinaryFlagsCustom</c>). So the gesture is a
-    /// discriminator switch, and every member the two leaves agree on has to survive it — which is
-    /// exactly what the per-shape split of <c>ComparisonValue</c> buys: the outgoing leaf's own
-    /// <c>comparison_value_float</c> is dropped by name rather than failing to convert to a link.
-    /// </summary>
     [Fact]
     public void SwitchingToUseGlobal_KeepsEveryAgreeingMemberAndReplacesTheComparisonValue()
     {
@@ -119,21 +96,6 @@ public sealed class ConditionEditTests : IDisposable
 
     // ── the function cascade the editor posts (#693) ─────────────────────────
 
-    /// <summary>
-    /// The exact payload the editor posts when the function changes: the new function, and every
-    /// parameter slot the new function does not use emptied. The clear is not cosmetic —
-    /// <c>ConditionBinaryWriteTranslation.CustomStringExports</c> writes a CIS1/CIS2 subrecord for
-    /// any non-null <c>ParameterOneString</c>/<c>ParameterTwoString</c> without consulting the
-    /// function, so a string left behind by a function change reaches the plugin.
-    ///
-    /// <para>"Emptied" is per member type, and that is the whole reason this test exists on this
-    /// side: a nullable member takes null, but <c>ParameterOneNumber</c>/<c>ParameterTwoNumber</c>
-    /// are plain <c>Int32</c>, and a JSON null into a non-nullable column is rejected — which fails
-    /// the <em>whole</em> array write, so a payload that nulled them would land nothing at all and
-    /// the stale string would survive. The webview builds this same envelope
-    /// (ConditionPresentation.test.tsx asserts its shape); this is the half that proves it
-    /// applies.</para>
-    /// </summary>
     [Fact]
     public void ChangingTheFunction_ClearsTheSlotsTheNewFunctionDoesNotUse()
     {
@@ -167,9 +129,6 @@ public sealed class ConditionEditTests : IDisposable
 
     // ── array arity and order ────────────────────────────────────────────────
 
-    /// <summary>#710: a new element carries its discriminator, set to the first leaf the schema
-    /// lists, and no other member — the backend builds it, so the leaf name is read off the schema
-    /// here rather than written as a literal.</summary>
     [Fact]
     public void ArrayAdd_AppendsOneDefaultConditionAndLeavesTheExistingOnesAlone()
     {
@@ -224,12 +183,6 @@ public sealed class ConditionEditTests : IDisposable
 
     // ── nested conditions ────────────────────────────────────────────────────
 
-    /// <summary>
-    /// A perk's conditions are two list hops down (<c>Effects[].Conditions[].Conditions[]</c>) and
-    /// were the standing refusal until the exclusions were lifted. The whole <c>effects</c> column
-    /// is the write target — a complex field is written as one atomic value at whatever depth its
-    /// members sit (ADR-0019).
-    /// </summary>
     [Fact]
     public void EditingAConditionNestedInsideAPerkEffect_ChangesThatMemberAndNothingElse()
     {
@@ -264,10 +217,6 @@ public sealed class ConditionEditTests : IDisposable
 
     // ── document comparison ──────────────────────────────────────────────────
 
-    /// <summary>Every member the two documents disagree on, as
-    /// <c>Path: before -> after</c>, in path order. An empty result is a byte-for-byte identical
-    /// document. A member present on one side only reads <c>&lt;absent&gt;</c>, so a gesture that
-    /// added or dropped one is named rather than folded into a value change.</summary>
     internal static List<string> DocumentDiff(string before, string after)
     {
         var diffs = new List<string>();
@@ -327,15 +276,9 @@ public sealed class ConditionEditTests : IDisposable
             var quest = mod.Quests.AddNew("Cond692Quest");
             Quest = quest.FormKey;
 
-            // Both leaves of the Condition union — a ConditionFloat over a function that takes a
-            // Form parameter, and a ConditionGlobal — so a whole-list resend has to carry both
-            // shapes of ComparisonValue at once.
-            //
-            // Deliberately not a GetEventData: Mutagen 0.53.1's GetEventDataBinaryOverlay inherits
-            // ConditionDataBinaryOverlay's FunctionConditionData offsets, so reading Unknown3 off
-            // one runs past the end of the subrecord and no plugin holding one can be indexed at
-            // all. That is upstream and predates conditions reaching the schema — restoring the
-            // Condition/ConditionData union exclusions leaves this fixture failing identically.
+            // Both leaves of the Condition union, so a whole-list resend carries both shapes of
+            // ComparisonValue. Deliberately not a GetEventData: Mutagen 0.53.1's GetEventDataBinaryOverlay
+            // inherits FunctionConditionData offsets, so reading Unknown3 off one runs past the subrecord.
             var functionData = new FunctionConditionData { Function = Condition.Function.GetStageDone };
             functionData.ParameterOneRecord.SetTo(quest.FormKey);
             var secondFunctionData = new FunctionConditionData { Function = Condition.Function.GetIsSex };
@@ -396,9 +339,6 @@ public sealed class ConditionEditTests : IDisposable
         public string Body(FormKey formKey) =>
             _mirror.Index!.At(RecordRef.Effective).GetDocument(formKey.ToString(), Plugin)!.Body!;
 
-        /// <summary>The field exactly as the record editor reads it — the value a resend puts
-        /// back, so a gesture's payload is the read value with one member changed and nothing
-        /// else, the way the webview builds it.</summary>
         public JsonArray Field(FormKey formKey, string name)
         {
             var document = _mirror.Index!.At(RecordRef.Effective).GetDocument(formKey.ToString(), Plugin)!;

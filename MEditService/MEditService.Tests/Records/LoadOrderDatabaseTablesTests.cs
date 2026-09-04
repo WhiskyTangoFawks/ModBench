@@ -6,19 +6,8 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace MEditService.Tests.Records;
 
-/// <summary>
-/// ADR-0041: what a loaded load order's database actually holds. The reflected per-type wide
-/// tables, the VMAD tables and the condition tables are all gone — each type's name belongs to
-/// a <c>json_extract</c> view over <c>records</c>, which is what keeps user filter SQL working
-/// unchanged.
-///
-/// Asserted against a real backend host (<see cref="LoadedApiFixture{TPlugin}"/>) rather than a
-/// hand-built LoadOrderMirror, so the shape under test is the one the production DI graph builds.
-///
-/// Every absence assertion carries a positive control drawn from the same catalog listing: a
-/// surviving relation must be found by the identical query. Without it, an empty result, a wrong
-/// connection or a typo'd catalog name would satisfy "X is absent" just as well as a real deletion.
-/// </summary>
+/// <summary>Every absence assertion carries a positive control from the same catalog listing,
+/// or an empty result would satisfy "X is absent" as well as a real deletion.</summary>
 public sealed class LoadOrderDatabaseTablesTests(LoadedApiFixture<TestPluginFixture> loaded)
     : IClassFixture<LoadedApiFixture<TestPluginFixture>>
 {
@@ -46,16 +35,6 @@ public sealed class LoadOrderDatabaseTablesTests(LoadedApiFixture<TestPluginFixt
     private DuckDBConnection Connection() =>
         ((DuckDbRecordIndex)loaded.Services.GetRequiredService<ILoadOrderMirror>().Index!).Connection;
 
-    /// <summary>
-    /// The reflected per-type wide tables are gone, and each type's name belongs to
-    /// a generated view over <c>records</c> — which is what keeps user filter SQL working.
-    ///
-    /// Stated as a pair, because "npc_ is not a base table" alone would be satisfied by npc_ not
-    /// existing at all: the same name must be absent from the base tables AND present in the views,
-    /// both read through the identical catalog query. The surviving index tables are the second
-    /// control — they prove the base-table listing is populated and being read correctly, so the
-    /// absence is a real deletion rather than an empty result.
-    /// </summary>
     [Fact]
     public void AHeldLoadOrder_HasNoPerTypeWideTables_OnlyViewsOverRecords()
     {
@@ -67,9 +46,8 @@ public sealed class LoadOrderDatabaseTablesTests(LoadedApiFixture<TestPluginFixt
         Assert.Contains("records", baseTables);
         Assert.Contains("form_lookup", baseTables);
         Assert.Contains("placement", baseTables);
-        // #631 retired the last per-type wide table, the plugin header's — so "header" belongs in
-        // the loop below with every other type rather than being called out as the exception it used
-        // to be. Listed first in the loop for emphasis: this is the assertion the ticket exists for.
+        // No per-type wide table survives for the plugin header, so "header" belongs in the loop below
+        // with every other type. Listed first for emphasis.
         foreach (var type in (string[])["header", "npc_", "weap", "armo", "cell", "glob"])
         {
             Assert.DoesNotContain(type, baseTables);   // the wide table is gone
@@ -77,12 +55,6 @@ public sealed class LoadOrderDatabaseTablesTests(LoadedApiFixture<TestPluginFixt
         }
     }
 
-    /// <summary>
-    /// VMAD's three side tables are gone — <c>GetVmad</c> reconstitutes from the record's own
-    /// document instead. <c>form_references</c> is the positive control, same reasoning as the two
-    /// tests above: it is still fed (VMAD-borne refs are collected at ingest off the live
-    /// object), so its presence proves the listing is real rather than empty.
-    /// </summary>
     [Fact]
     public void AHeldLoadOrder_HasNoVmadTables()
     {
@@ -95,11 +67,6 @@ public sealed class LoadOrderDatabaseTablesTests(LoadedApiFixture<TestPluginFixt
         Assert.DoesNotContain("vmad_property_list_items", tables);
     }
 
-    /// <summary>
-    /// Conditions have no side tables — a condition list is an ordinary reflected array column,
-    /// read from the record's own document like every other field. Same positive control as
-    /// <see cref="AHeldLoadOrder_HasNoVmadTables"/>, for the same reason.
-    /// </summary>
     [Fact]
     public void AHeldLoadOrder_HasNoConditionTables()
     {

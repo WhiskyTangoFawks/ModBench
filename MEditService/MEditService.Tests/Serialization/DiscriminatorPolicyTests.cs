@@ -7,20 +7,8 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Tests.Serialization;
 
-/// <summary>
-/// ADR-0041: the codec adopts the whole-mod path's <b>discriminator
-/// policy</b> — a top-level <c>MutagenObjectType</c> is written only when the record's group element
-/// type is abstract, so the path alone cannot say which concrete type the document holds (GLOB splits
-/// into GlobalFloat/GlobalBool/…). Everything else dispatches its concrete
-/// <c>&lt;Type&gt;_Serialization.Serialize</c> and carries no discriminator, exactly as the whole-mod
-/// folder-split file for that record does.
-///
-/// <para>The type identity a non-self-describing document needs on the way back in is the index's
-/// own <c>record_type</c> column. Note what that column actually holds: the schema table name (a
-/// 4-char GRUP signature, <c>"weap"</c>) for a schema-known type, and the lowercased CLR type name
-/// (<c>"landscape"</c>) for the handful <c>SchemaReflector</c> excludes — both are resolved here, and
-/// <see cref="RecordTypeDispatchTests"/> sweeps that claim across the whole schema.</para>
-/// </summary>
+/// <summary>A discriminator is written only when the group element type is abstract (ADR-0041); otherwise
+/// the type identity is the index's <c>record_type</c>.</summary>
 public sealed class DiscriminatorPolicyTests
 {
     private static readonly Fallout4Mod Mod = new(ModKey.FromFileName("Discriminator.esp"), Fallout4Release.Fallout4);
@@ -35,10 +23,6 @@ public sealed class DiscriminatorPolicyTests
     private static GlobalFloat MakeGlobalFloat() =>
         new(Mod) { EditorID = "PolicyGlobal", Data = 2.5f };
 
-    /// <summary>
-    /// WEAP's group element type is the concrete <c>Weapon</c>, so the path is unambiguous and the
-    /// whole-mod door writes no discriminator. The codec matches it.
-    /// </summary>
     [Fact]
     public async Task SerializeToBytesAsync_ForAWeapon_WritesNoTopLevelDiscriminator()
     {
@@ -49,7 +33,6 @@ public sealed class DiscriminatorPolicyTests
             $"A concrete-element type must not self-describe:\n{System.Text.Encoding.UTF8.GetString(bytes)}");
     }
 
-    /// <summary>The other half: the document does not name its type, so <c>record_type</c> does.</summary>
     [Fact]
     public async Task DeserializeFromBytesAsync_ForAWeaponDocument_ReconstitutesFromRecordType()
     {
@@ -63,12 +46,6 @@ public sealed class DiscriminatorPolicyTests
         Assert.Equal(7u, weapon.BaseDamage);
     }
 
-    /// <summary>
-    /// The GLOB-as-GlobalFloat guarantee, preserved <i>because</i> ambiguous types are exactly the
-    /// ones that keep the discriminator. Without it the schema's discovery winner decides, and a real
-    /// GlobalFloat read as a GlobalBool throws on the cast (measured: "Unable to cast object of type
-    /// 'System.Double' to type 'System.Boolean'").
-    /// </summary>
     [Fact]
     public async Task SerializeToBytesAsync_ForAGlobalFloat_KeepsTheDiscriminator()
     {
@@ -78,12 +55,6 @@ public sealed class DiscriminatorPolicyTests
         Assert.Equal("GlobalFloat", doc.RootElement.GetProperty(Discriminator).GetString());
     }
 
-    /// <summary>
-    /// Both spellings <c>record_type</c> can carry for an ambiguous type route to the discriminated
-    /// path: the signature ingest stores (<c>"glob"</c>) and the lowercased CLR name Track's source
-    /// path carries (<c>"globalfloat"</c>). Neither may be taken as permission to dispatch a concrete
-    /// deserializer at a document that self-describes.
-    /// </summary>
     [Theory]
     [InlineData("glob")]
     [InlineData("globalfloat")]
@@ -99,13 +70,6 @@ public sealed class DiscriminatorPolicyTests
         Assert.Equal(2.5f, global.Data);
     }
 
-    /// <summary>
-    /// Embedded children keep their discriminators, and get them from the kernel's own
-    /// abstract-element rule rather than from anything this codec does: <c>Cell.Persistent</c> is an
-    /// <c>ExtendedList&lt;IPlaced&gt;</c> and <c>IPlaced</c> is abstract. This is the property a
-    /// "policy" implemented as post-hoc text surgery on the serialized bytes would destroy — the
-    /// child lines look exactly like the top-level one.
-    /// </summary>
     [Fact]
     public async Task SerializeToBytesAsync_ForACellWithChildren_KeepsTheChildrensDiscriminators()
     {

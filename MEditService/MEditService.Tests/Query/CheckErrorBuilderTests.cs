@@ -106,9 +106,9 @@ public class CheckErrorBuilderTests
         Assert.Equal("[0].inner.target: Found a NULL reference, expected: kywd", err);
     }
 
-    // The Player and friends (00000007 and below the high-range boundary, in the game's
-    // implicitly-always-loaded master) never carry a CheckError — a lookup miss on them can't mean
-    // a broken link, since form_lookup was never going to contain them (see FormKeyResolution.From).
+    // The Player and friends, in the game's implicitly-always-loaded master, never carry a
+    // CheckError: a lookup miss cannot mean a broken link, since form_lookup was never going to
+    // contain them.
     [Fact]
     public void Build_HardcodedFormKeyMissingFromLookup_ReturnsNull()
     {

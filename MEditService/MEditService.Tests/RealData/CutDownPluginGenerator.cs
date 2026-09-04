@@ -10,20 +10,9 @@ using Noggog;
 
 namespace MEditService.Tests.RealData;
 
-/// <summary>
-/// One-time tool that regenerates the committed cut-down plugin
-/// (<see cref="CutDownPluginFixture.PluginFileName"/>) from a locally-installed Fallout 4.
-///
-/// It extracts a tiny, bounded slice of real game data — a worldspace (TopCell + one
-/// block/sub-block of exterior cells with their placed refs), some interior cells, a handful of
-/// VMAD-scripted records, and a breadth of common major-record types — so the test plugin is
-/// authentic Bethesda structure at ≈0.01% of the 316 MB master.
-///
-/// Excluded from normal runs (and therefore from mutation): it only acts when
-/// <c>MEDIT_REGEN_TESTDATA=1</c> and a game install is found; otherwise it skips. Regenerate with:
-///   MEDIT_REGEN_TESTDATA=1 dotnet test --filter FullyQualifiedName~CutDownPluginGenerator
-/// then review and commit the updated TestData/mEditTestSubset.esm.
-/// </summary>
+/// <summary>Regenerates the committed cut-down plugin from a locally installed Fallout 4. Acts only
+/// when <c>MEDIT_REGEN_TESTDATA=1</c> and a game install is found, otherwise skips; review and
+/// commit the updated <c>TestData/mEditTestSubset.esm</c>.</summary>
 public sealed class CutDownPluginGenerator
 {
     private const int RecordsPerType = 4;

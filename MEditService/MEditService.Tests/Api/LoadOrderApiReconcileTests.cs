@@ -44,10 +44,8 @@ public sealed class LoadOrderApiReconcileTests(LoadedApiFixture<TestPluginFixtur
         Assert.True(byName["Dormant.esp"].GetProperty("inLoadOrder").GetBoolean());
     }
 
-    // A bool that silently defaults to false would make every copy non-participating, so nothing
-    // would win a FormKey and the whole conflict picture would be empty but well-formed — the
-    // silent-wrong-state class ADR-0026 exists to stop, and the same reason Origin is rejected
-    // rather than defaulted.
+    // A bool defaulting to false would leave the conflict picture empty but well-formed: the
+    // silent-wrong-state class ADR-0026 exists to stop.
     [Theory]
     [InlineData("enabled")]
     [InlineData("winning")]

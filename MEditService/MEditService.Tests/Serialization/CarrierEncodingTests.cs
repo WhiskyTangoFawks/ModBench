@@ -8,23 +8,8 @@ using Noggog.WorkEngine;
 
 namespace MEditService.Tests.Serialization;
 
-/// <summary>
-/// A document that gains an ordered child list must not be re-encoded by gaining it.
-///
-/// <para><b>The defect this exists for is silent and total.</b> The whole-mod door writes through
-/// Newtonsoft; <see cref="SourceChildOrder"/> re-emits carrier documents through
-/// <c>System.Text.Json</c>, whose <i>default</i> encoder escapes <c>'</c>, <c>&amp;</c>, <c>&lt;</c>,
-/// <c>&gt;</c>, <c>+</c> and every non-ASCII character where Newtonsoft leaves them alone. Left at
-/// that default, every Quest, Worldspace and DialogTopic in the tree would be re-encoded the moment
-/// it gained a child list — two encodings in one tree, the two-door byte parity ADR-0042 pins broken,
-/// and a one-record edit showing as a whole-file diff for any EditorID containing an apostrophe,
-/// which is most FO4 dialogue data.</para>
-///
-/// <para>It is invisible to every other test in the suite, because both sides of the round-trip and
-/// parity comparisons go through the same re-encoding. Only text that the two writers disagree about
-/// can expose it, so this fixture's EditorIDs are chosen to contain exactly that: an apostrophe, an
-/// ampersand, angle brackets, and non-ASCII.</para>
-/// </summary>
+/// <summary><c>System.Text.Json</c>'s encoder escapes quotes, ampersands and non-ASCII where Newtonsoft
+/// does not, so only text the two writers disagree about can expose it.</summary>
 public sealed class CarrierEncodingTests
 {
     // Every character class System.Text.Json's default encoder escapes and Newtonsoft does not.
@@ -73,8 +58,6 @@ public sealed class CarrierEncodingTests
         }
     }
 
-    /// <summary>The document's own fields, with the spliced member and its formatting removed — so the
-    /// comparison is "did anything but the added member change", not "did anything change".</summary>
     private static string WithoutOrderMember(string json)
     {
         var at = json.IndexOf($"\"{SourceChildOrder.OrderMember}\"", StringComparison.Ordinal);

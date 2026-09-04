@@ -12,25 +12,13 @@ using Mutagen.Bethesda.Strings;
 
 namespace MEditService.Tests.Edits;
 
-/// <summary>
-/// #676: the renumber cascade computes every affected record's new content before it writes
-/// anything. These are the cases that distinguish that shape from the write-one-referencer-at-a-time
-/// one it replaced — a computation failure arriving as a typed refusal with the tree untouched, the
-/// typed remap's precision where the old whole-body text substitution over-matched, and the one
-/// place the typed remap is not precise enough (upstream-mutagen-issue.md).
-/// </summary>
+/// <summary>The renumber cascade computes every affected record's new content before it writes
+/// anything (#676); a computation failure is a typed refusal with the tree untouched.</summary>
 public sealed class RecordEditServiceRenumberCascadeTests
 {
     private static RecordEditService ServiceFor(ILoadOrderMirror mirror) =>
         new(mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
 
-    /// <summary>
-    /// The referencer's only link to the target lives in a VMAD <c>ArrayOfStruct</c> script
-    /// property, which Mutagen's generated <c>ScriptStructListProperty.RemapLinks</c> does not walk
-    /// (base-only — see <c>upstream-mutagen-issue.md</c>). mEdit's own reference index <i>does</i>
-    /// walk it, so the record is in the cascade's list, gets loaded, and is caught by the
-    /// post-serialise check rather than written with the link left pointing at the old FormKey.
-    /// </summary>
     [Fact]
     public void RenumberRecord_Refuses_WhenAReferencersOnlyLinkIsAStructListScriptProperty_NamingIt()
     {
@@ -51,12 +39,6 @@ public sealed class RecordEditServiceRenumberCascadeTests
             .GetDocument(fixture.Target.ToString(), fixture.Plugin));
     }
 
-    /// <summary>
-    /// The same struct-list gap, on the renumbered record's own self-link. The referencer pass
-    /// deliberately excludes the target — its content is computed by the target pass instead — so
-    /// the guard has to live on both paths or this one writes a dangling self-link and reports
-    /// success. Review finding on the first cut of #676, which guarded only the referencer pass.
-    /// </summary>
     [Fact]
     public void RenumberRecord_Refuses_WhenTheTargetsOwnSelfLinkIsAStructListScriptProperty()
     {
@@ -72,12 +54,6 @@ public sealed class RecordEditServiceRenumberCascadeTests
         Assert.Equal(before, File.ReadAllText(targetFile));
     }
 
-    /// <summary>
-    /// The old cascade rewrote every textual occurrence of the FormKey in the referencer's file.
-    /// The renumbered record's own file went through that same substitution whenever it referenced
-    /// itself, so a FormKey spelled incidentally in one of its string fields was rewritten along
-    /// with the link. The typed remap moves links and only links.
-    /// </summary>
     [Fact]
     public void RenumberRecord_LeavesAnIncidentalFormKeyInAStringField_Alone()
     {
@@ -100,12 +76,6 @@ public sealed class RecordEditServiceRenumberCascadeTests
         Assert.Empty(fixture.Mirror.Index!.At(RecordRef.Effective).GetReferencedBy(oldFormKey));
     }
 
-    /// <summary>
-    /// A referencer the index lists but whose source unit has gone from the tree (the
-    /// never-assume-exclusive-ownership case — another tool moved or removed it since the last
-    /// reconcile). A computation failure, so it lands as a typed refusal with nothing written,
-    /// rather than as an exception thrown after earlier referencers had already been rewritten.
-    /// </summary>
     [Fact]
     public void RenumberRecord_Refuses_WhenAReferencersSourceUnitHasGoneFromTheTree_AndWritesNothing()
     {
@@ -114,10 +84,9 @@ public sealed class RecordEditServiceRenumberCascadeTests
         var survivingFile = fixture.SourceFileOf(fixture.Referencer, "acti", "FirstActivator");
         var survivingBefore = File.ReadAllText(survivingFile);
 
-        // A Worldspace is a directory-per-record container with no containment parent of its own, so
-        // removing its directory is the one shape that genuinely leaves SourceUnitResolver with
-        // nothing to answer — a flat record always resolves to its computed path, present or not.
-        // The index still lists it as referencing the target.
+        // A Worldspace is a directory-per-record container with no containment parent, so removing its
+        // directory is the one shape that leaves SourceUnitResolver nothing to answer: a flat record
+        // always resolves to its computed path, present or not.
         Directory.Delete(fixture.DirectoryOf(fixture.SecondReferencer), recursive: true);
 
         var result = ServiceFor(fixture.Mirror).RenumberRecord(fixture.Plugin, fixture.Target.ToString());
@@ -133,12 +102,7 @@ public sealed class RecordEditServiceRenumberCascadeTests
         Assert.True(File.Exists(targetFile));
     }
 
-    /// <summary>
-    /// One tracked plugin holding a Race (the renumber target) plus whichever referencing records
-    /// the case under test needs. Single-plugin deliberately: the cross-repo question is
-    /// <see cref="RecordEditServiceRenumberRecordTests"/>'s, and these cases are about what the
-    /// cascade computes, which is the same either way.
-    /// </summary>
+    // Single plugin deliberately: the cross-repo question belongs to RecordEditServiceRenumberRecordTests.
     private sealed class CascadeFixture : IDisposable
     {
         private const string PluginName = "Cascade.esp";
@@ -173,8 +137,6 @@ public sealed class RecordEditServiceRenumberCascadeTests
                 .TrackAsync(Mirror.LoadOrder!, Origin, SourcePreset.Edits).GetAwaiter().GetResult();
         }
 
-        /// <summary>An Npc whose only link to the Race is a VMAD <c>ArrayOfStruct</c> member —
-        /// the shape Mutagen's generated remap does not walk.</summary>
         public static CascadeFixture WithStructListReferencer() => new((mod, self) =>
         {
             var race = mod.Races.AddNew("CascadeTargetRace");
@@ -197,8 +159,6 @@ public sealed class RecordEditServiceRenumberCascadeTests
             npc.VirtualMachineAdapter = vmad;
         });
 
-        /// <summary>An Npc whose only link is to <i>itself</i>, through a VMAD
-        /// <c>ArrayOfStruct</c> member — the struct-list gap on the target's own path.</summary>
         public static CascadeFixture WithStructListSelfReferencingTarget() => new((mod, self) =>
         {
             var npc = mod.Npcs.AddNew("SelfStructListNpc");
@@ -219,8 +179,6 @@ public sealed class RecordEditServiceRenumberCascadeTests
             npc.VirtualMachineAdapter = vmad;
         });
 
-        /// <summary>A Race that references itself through its own <c>MorphRace</c> FormLink, and
-        /// spells its own FormKey incidentally in a string field that is not a link.</summary>
         public static CascadeFixture WithSelfReferencingTarget() => new((mod, self) =>
         {
             var race = mod.Races.AddNew("SelfReferencingRace");
@@ -230,10 +188,6 @@ public sealed class RecordEditServiceRenumberCascadeTests
             race.Name = new TranslatedString(Language.English, race.FormKey.ToString());
         });
 
-        /// <summary>A Water referenced twice: once by a flat Activator's <c>WaterType</c>, once by a
-        /// Worldspace's <c>Water</c>. The Worldspace is the interesting half — a directory-per-record
-        /// container with no containment parent, so its directory going missing is the one shape that
-        /// leaves <c>SourceUnitResolver.Resolve</c> with no answer at all.</summary>
         public static CascadeFixture WithFlatAndWorldspaceReferencers() => new((mod, self) =>
         {
             var water = mod.Waters.AddNew("CascadeTargetWater");
@@ -253,9 +207,6 @@ public sealed class RecordEditServiceRenumberCascadeTests
             SourceUnitResolver.FlatSourcePath(
                 ModFolder, PluginName, recordType, formKey.ToString(), editorId, GameRelease.Fallout4);
 
-        /// <summary>The directory a container record's own <c>RecordData.json</c> sits in, found by
-        /// the FormKey in its leaf name rather than computed — the order index is the tree's to
-        /// choose.</summary>
         public string DirectoryOf(FormKey formKey) =>
             Directory.EnumerateDirectories(
                 ModFolder, $"*{formKey.ID:X6}_{formKey.ModKey.FileName}", SearchOption.AllDirectories).Single();

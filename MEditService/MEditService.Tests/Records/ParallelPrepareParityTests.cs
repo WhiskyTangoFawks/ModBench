@@ -10,10 +10,9 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Tests.Records;
 
-// Index() prepares records in parallel (serialize, hash, refs) and appends sequentially. The
-// document the index stores for a record must be the codec's own sequential output, byte for
-// byte — this is the committed form of the "verified byte-identical" check the parallel path
-// leans on, so a future change to the parallel section cannot silently drift from the codec.
+// Index() prepares records in parallel and appends sequentially, so the stored document must be the
+// codec's own sequential output byte for byte: the committed form of the byte-identical check the
+// parallel path leans on.
 public class ParallelPrepareParityTests
 {
     private static readonly SchemaReflector Reflector = SharedSchemaReflector.Instance;
@@ -37,10 +36,9 @@ public class ParallelPrepareParityTests
 
         var codec = new RecordTextCodec(NullLogger<RecordTextCodec>.Instance);
         var all = repo.At(RecordRef.Effective).GetDocuments(key);
-        // The plugin header is a document too since #631, but not one this codec can produce: a
-        // ModHeader is not an IMajorRecordGetter, so it is neither in EnumerateMajorRecords below nor
-        // reachable through SerializeToBytesAsync. Split out and counted rather than filtered
-        // silently, so "one document per record, plus the header" stays an assertion.
+        // The plugin header is a document this codec cannot produce: a ModHeader is not an
+        // IMajorRecordGetter, so it is neither enumerated nor reachable through SerializeToBytesAsync.
+        // Counted rather than filtered silently, so "one per record, plus the header" stays an assertion.
         var header = Assert.Single(all, d => d.RecordType == HeaderIndexer.RecordType);
         Assert.NotNull(header.Body);
         var stored = all.Where(d => d != header).ToDictionary(d => d.FormKey, d => d.Body!);

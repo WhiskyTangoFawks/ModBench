@@ -7,22 +7,8 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Tests.RealData;
 
-/// <summary>
-/// The golden safety net over authentic
-/// Bethesda records (the committed cut-down plugin: real translated strings, real flags bitmasks,
-/// real struct/array columns, real GLOB multi-subclass columns, real VMAD, real condition lists, a real
-/// worldspace/cell/placement tree).
-///
-/// The
-/// documents read model reconstitutes each record from its own source JSON and runs the <i>same</i>
-/// <c>ColumnSpec.Extract</c> delegates the wide tables were filled from, so every value below must
-/// match the captured golden — and where one does not, this test names the field rather than
-/// leaving it to be discovered in the compare grid.
-///
-/// Field <i>values</i> only, deliberately, not <c>FieldMetadata</c>: metadata is schema-derived
-/// (identical by construction, since both sides read the same reflected
-/// ColumnSpecs) and would bury the values under thousands of lines of enum domains.
-/// </summary>
+/// <summary>Field values only, not <c>FieldMetadata</c>: metadata is schema-derived, identical by
+/// construction, and would bury the values under thousands of lines of enum domains.</summary>
 public sealed class RealDataReadGoldenTests(CutDownPluginFixture fixture) : IClassFixture<CutDownPluginFixture>
 {
     private readonly DuckDbRecordIndex _repo = fixture.Repo;
@@ -34,7 +20,6 @@ public sealed class RealDataReadGoldenTests(CutDownPluginFixture fixture) : ICla
     private static readonly IReadOnlyDictionary<string, RecordTableSchema> Schemas =
         SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4);
 
-    /// <summary>Record types the cut-down plugin actually carries, in a fixed order.</summary>
     private static readonly string[] Types =
         ["achr", "acti", "armo", "cell", "dial", "dlbr", "fact", "glob", "info", "kywd", "misc", "npc_", "qust", "race", "refr", "scen", "weap", "wrld"];
 
@@ -51,18 +36,15 @@ public sealed class RealDataReadGoldenTests(CutDownPluginFixture fixture) : ICla
         CheckErrors = d.Fields.Where(f => f.CheckError != null).ToDictionary(f => f.Metadata.Name, f => f.CheckError),
     };
 
-    // Whole-type listing, then sort, then take — never a small LIMIT and take. Listing order is
-    // ORDER BY editor_id, and real placed refs and cells have no EditorID at all, so which rows a
-    // 12-row page returns is up to the engine's tie-breaking: sampling from it would make this
-    // golden's very *subject* non-deterministic, and the resulting flake would read as a swap
-    // regression.
+    // Listing order is ORDER BY editor_id and real placed refs and cells have none, so which rows a
+    // small page returns is up to the engine's tie-breaking: sampling would make this golden's own
+    // subject non-deterministic.
     private IReadOnlyList<string> FormKeysOf(string type) =>
         [.. _repo.At(RecordRef.Effective).Search(new RecordQuery(RecordTypes: [type], Limit: WholeType, Offset: 0)).Items
             .Select(r => r.FormKey).Order(StringComparer.Ordinal).Take(PerType)];
 
-    // Total (exact) plus the first rows of the sorted whole listing — the same count-plus-sample
-    // shape the reference golden uses, and for the same reason: `info` alone has 2,873 rows, and a
-    // golden that is 90% repetition is a golden nobody re-reads when it fails.
+    // Total plus the first rows of the sorted listing: `info` alone has 2,873 rows, and a golden that
+    // is 90% repetition is one nobody re-reads when it fails.
     private object WholeListing(string type)
     {
         var page = _repo.At(RecordRef.Effective).Search(new RecordQuery(RecordTypes: [type], Plugin: new PluginKey(TestPluginName, Origin), Limit: WholeType, Offset: 0));
@@ -136,18 +118,15 @@ public sealed class RealDataReadGoldenTests(CutDownPluginFixture fixture) : ICla
     [Fact]
     public void ReferencesAndResolution_MatchGolden()
     {
-        // Targets are drawn from every captured record and then narrowed to the ones something
-        // actually points at, rather than from a guessed record type — a curated slice can easily
-        // contain keywords nothing in it references, which would pin an all-empty golden that
-        // passes just as well after the reference index stops being populated at all.
+        // Targets are drawn from every captured record and then narrowed to what something points at: a
+        // curated slice can contain keywords nothing references, pinning an all-empty golden that passes
+        // after the reference index stops being populated.
         var allFormKeys = Types.SelectMany(FormKeysOf).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToList();
         var captured = new
         {
-            // Count plus a deterministic sample, not the whole list: one keyword in this slice is
-            // referenced 1,248 times by dialogue, which would bury the golden in near-identical
-            // rows. The count catches a reference index that stopped being populated or changed
-            // fan-out; the sample catches a row whose shape or values changed. GetReferences has
-            // no ORDER BY of its own, so the sort here is what makes the sample stable at all.
+            // One keyword here is referenced 1,248 times, which would bury the golden. The count
+            // catches a reference index that stopped being populated; the sample catches a changed
+            // row.
             ReferencedBy = allFormKeys
                 .Select(fk => (FormKey: fk, Refs: _repo.At(RecordRef.Effective).GetReferencedBy(fk)))
                 .Where(r => r.Refs.Count > 0)

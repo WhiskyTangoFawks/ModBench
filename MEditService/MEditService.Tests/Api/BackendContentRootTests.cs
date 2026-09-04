@@ -4,19 +4,9 @@ using System.Net.Sockets;
 
 namespace MEditService.Tests.Api;
 
-/// <summary>
-/// The extension spawns the backend without setting a working directory
-/// (<c>modbench/src/extension.ts</c>'s <c>cp.spawn</c>), so an unanchored content root would be
-/// whatever directory launched the process rather than the directory the binary itself lives in —
-/// meaning the committed <c>appsettings.json</c> next to the binary, and the
-/// <c>Microsoft.AspNetCore: Warning</c> override in it, would never load. These tests spawn the real,
-/// already-built <c>MEditService.Api.dll</c> through the <c>dotnet</c> muxer, as an actual child
-/// process launched from an unrelated working directory (the extension itself launches the
-/// published native executable directly, but <see cref="AppContext.BaseDirectory"/> — what the
-/// fix anchors to — resolves identically either way), rather than going through
-/// <see cref="Microsoft.AspNetCore.Mvc.Testing.WebApplicationFactory{TEntryPoint}"/>, which resolves
-/// its own content root by walking up from the test assembly and so never reproduces this bug.
-/// </summary>
+/// <summary>The extension spawns the backend with no working directory, so an unanchored content
+/// root would never load the committed <c>appsettings.json</c>. A real child process from an
+/// unrelated directory, since <c>WebApplicationFactory</c> never reproduces this.</summary>
 public sealed class BackendContentRootTests
 {
     private static readonly string ApiDirectory = Path.GetDirectoryName(typeof(Program).Assembly.Location)!;
@@ -26,10 +16,8 @@ public sealed class BackendContentRootTests
     {
         var workingDirectory = Directory.CreateTempSubdirectory("medit-contentroot-").FullName;
         var lines = new List<string>();
-        // A fixed port (e.g. the committed appsettings.json one) collides with a
-        // developer's own running backend — an ephemeral port (127.0.0.1:0; Kestrel refuses dynamic
-        // binding on the bare "localhost" host name) can't collide with anything, and the content
-        // root — not the port — is what this test witnesses.
+        // An ephemeral port (Kestrel refuses dynamic binding on the bare "localhost" host name)
+        // cannot collide with a developer's own running backend.
         using var process = Spawn(["--urls", "http://127.0.0.1:0"], workingDirectory, lines);
         try
         {
@@ -56,8 +44,7 @@ public sealed class BackendContentRootTests
     public async Task SpawnedFromArbitraryCwd_WithExtensionArgv_SuppressesRequestPipelineLogsButKeepsAppInfo()
     {
         // The extension's argv, at Debug — the harder case: Default=Debug must not resurrect the
-        // Microsoft.AspNetCore override, since it's a different config key. An arbitrary free port
-        // (not the committed 5172) so a concurrent run or leftover listener can't collide.
+        // Microsoft.AspNetCore override, since it's a different config key.
         var port = GetFreeTcpPort();
         var workingDirectory = Directory.CreateTempSubdirectory("medit-contentroot-").FullName;
         var lines = new List<string>();

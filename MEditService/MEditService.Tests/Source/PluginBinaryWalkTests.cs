@@ -5,14 +5,6 @@ using MEditService.Core.Source;
 
 namespace MEditService.Tests.Source;
 
-/// <summary>
-/// The Mutagen-free byte walker (<see cref="PluginBinaryWalk"/>) and its own
-/// tripwire (<see cref="PluginBinaryWalk.DroppedSignatures"/>/<see cref="PluginBinaryWalk.FindFirstSubrecordLoss"/>),
-/// tested directly against hand-built bytes — no Mutagen, no load order, no Track. The real-fixture,
-/// end-to-end case (<c>LitR - TrueStorms.esp</c> refused by name through <see cref="MEditService.Core.Source.TrackService"/>)
-/// lives in <c>MEditService.Tests.RealData.SubrecordInventoryRoundTripGateTests</c> instead — this
-/// file is the comparator's own unit contract.
-/// </summary>
 public sealed class PluginBinaryWalkTests
 {
     [Fact]
@@ -61,12 +53,6 @@ public sealed class PluginBinaryWalkTests
         Assert.Equal(["RDAT", "RDMP"], dropped);
     }
 
-    /// <summary>
-    /// Guard test: a plausible wrong implementation compares the two *sets* of signatures present
-    /// (symmetric difference) rather than counts, which would misreport a subrecord the rewrite has
-    /// *more* of as "dropped" too — both canonical FNAM/MNAM marker insertions flagged as a loss.
-    /// The count-based implementation (this test asserts) reports nothing for an increase.
-    /// </summary>
     [Fact]
     public void DroppedSignatures_ASignatureWithMoreOccurrencesInTheRewrite_IsNotReported()
     {
@@ -78,11 +64,6 @@ public sealed class PluginBinaryWalkTests
         Assert.Empty(dropped);
     }
 
-    /// <summary>
-    /// Guard test: a plausible wrong implementation compares raw bytes (order and content) rather than
-    /// per-signature counts, which would misreport a pure reorder — or a same-count content change — as
-    /// a loss. The count-based implementation (this test asserts) reports nothing for either.
-    /// </summary>
     [Fact]
     public void DroppedSignatures_AReorderOrASameCountContentChange_IsNotReported()
     {
@@ -141,11 +122,6 @@ public sealed class PluginBinaryWalkTests
         Assert.Equal(["RDMP"], loss!.Value.Signatures);
     }
 
-    /// <summary>A different record type or FormID at the same position is a different plugin
-    /// structurally, not a subrecord loss — that divergence belongs to the model-identity gate this
-    /// check runs beside, not this one. Also covers the sibling case (a compression-flag mismatch at
-    /// the same position) via the second assertion, since both share the same "return null, don't
-    /// misdiagnose" outcome in <see cref="PluginBinaryWalk.FindFirstSubrecordLoss"/>.</summary>
     [Fact]
     public void FindFirstSubrecordLoss_AStructuralDivergence_ReturnsNullRatherThanMisdiagnosing()
     {
@@ -164,13 +140,6 @@ public sealed class PluginBinaryWalkTests
         Assert.Null(PluginBinaryWalk.FindFirstSubrecordLoss(Concat(uncompressed), Concat(compressedSamePayloadMinusRdmp)));
     }
 
-    /// <summary>A compressed record whose declared payload isn't actually a valid zlib stream — real
-    /// corruption, or a compression-flag set on data that was never deflated — is not this check's job
-    /// to diagnose; <see cref="PluginBinaryWalk.FindFirstSubrecordLoss"/> skips the record rather than
-    /// letting <see cref="System.IO.InvalidDataException"/> propagate out of a diagnostic that is
-    /// supposed to be side-effect-free even when it can't answer. Without the production
-    /// <c>catch (InvalidDataException)</c>, <see cref="PluginBinaryWalk.Inflate"/> throws uncaught;
-    /// the shipped implementation (this test asserts) returns <see langword="null"/> instead.</summary>
     [Fact]
     public void FindFirstSubrecordLoss_AnUnreadableCompressedRecord_IsSkippedRatherThanThrowing()
     {
@@ -183,12 +152,6 @@ public sealed class PluginBinaryWalkTests
         Assert.Null(loss);
     }
 
-    /// <summary>A TES4 MAST/DATA decrease is ADR-0038's sanctioned master-list pruning (every
-    /// write in this codebase re-derives the header's masters from live content, unconditionally),
-    /// not a parse-time loss — must not trip this check. Without the <c>original.Type == "TES4"</c>
-    /// filter in <see cref="PluginBinaryWalk.FindFirstSubrecordLoss"/> this reports a TES4
-    /// <c>SubrecordLoss</c> — a false positive; the shipped implementation (this test asserts)
-    /// reports nothing for a TES4-only MAST/DATA drop.</summary>
     [Fact]
     public void FindFirstSubrecordLoss_ATes4MastAndDataDropOnly_IsNotReported()
     {
@@ -202,10 +165,6 @@ public sealed class PluginBinaryWalkTests
         Assert.Null(loss);
     }
 
-    /// <summary>Guard test: a plausible over-broad exemption skips the whole TES4 record rather
-    /// than only its MAST/DATA pair, which would hide a genuine drop of anything else the header
-    /// carries — MAST/DATA and SNAM alike. The shipped, signature-scoped implementation (this test
-    /// asserts) still reports a non-master drop.</summary>
     [Fact]
     public void FindFirstSubrecordLoss_ATes4NonMasterSubrecordDrop_IsStillReported()
     {
@@ -259,8 +218,6 @@ public sealed class PluginBinaryWalkTests
         return b;
     }
 
-    /// <summary>A compressed record's own data shape: little-endian uint32 decompressed length, then a
-    /// zlib stream — the inverse of <see cref="PluginBinaryWalk.Inflate"/>.</summary>
     private static byte[] CompressedData(byte[] decompressed)
     {
         using var output = new MemoryStream();

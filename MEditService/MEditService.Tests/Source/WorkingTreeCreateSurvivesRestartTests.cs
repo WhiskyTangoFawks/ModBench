@@ -8,18 +8,9 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Tests.Source;
 
-/// <summary>
-/// A working-tree-only create must survive a backend restart before the record is ever compiled: it
-/// answers at Effective, and at Head it answers nothing at all, because no commit holds it yet.
-///
-/// <para>These two assertions are exactly what tells "ingest-from-source produces this state on its
-/// own" apart from "the state stopped being produced"; the second of them (Head answers nothing)
-/// goes red the moment ingest seeds both refs from one whole-tree read, and is what
-/// <c>IRecordIndex.MarkWorkingTreeOnly</c> exists to put right.</para>
-///
-/// <para>Reloads the same mod folder in a brand-new <see cref="LoadOrderMirror"/> — the honest way to
-/// prove "survives a restart" rather than asserting anything about the first load order's own state.</para>
-/// </summary>
+/// <summary>Head answering nothing is what tells "ingest-from-source produces this state" apart from "the
+/// state stopped being produced"; it goes red the moment ingest seeds both refs from one whole- tree
+/// read.</summary>
 public sealed class WorkingTreeCreateSurvivesRestartTests
 {
     [Fact]
@@ -37,12 +28,9 @@ public sealed class WorkingTreeCreateSurvivesRestartTests
             [new LoadOrderEntry(TrackedModFixture.PluginName, Path.Combine(mod.ModFolder, TrackedModFixture.PluginName), TrackedModFixture.ModFolderOrigin, Slot: 0, Enabled: true, Winning: true)],
             GameRelease.Fallout4);
 
-        // Regression guard: a silently-failed source ingest degrades to the binary (which never
-        // held this uncompiled create), so the assertions below would pass for the wrong reason —
-        // "the record isn't found" reads identically whether ingest never ran or genuinely excluded
-        // it. This caught a real one: git show HEAD:<path> glob-matches a missing bracketed "[N] "
-        // path instead of failing, so a fresh, never-committed record's own Head lookup silently came
-        // back "" instead of null (SourceRepository.ReadCommittedSourceText's own doc comment).
+        // A silently-failed source ingest degrades to the binary, which never held this uncompiled create,
+        // so "the record is not found" reads identically whether ingest never ran or genuinely excluded
+        // it.
         Assert.Empty(((ILoadOrderMirror)reloaded).LoadOrder!.LoadFailures);
         var reread = reloaded.Index!.At(RecordRef.Effective).GetDocument(created.NewFormKey!, mod.Plugin);
         Assert.NotNull(reread);

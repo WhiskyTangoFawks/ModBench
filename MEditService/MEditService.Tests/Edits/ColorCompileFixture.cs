@@ -10,26 +10,9 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Tests.Edits;
 
-/// <summary>
-/// One real mod folder, tracked once, holding one record per Color-carrying shape #649 needs to
-/// prove — the same "one shared small mod, many facts" shape <see cref="AbstractUnionCompileFixture"/>
-/// established, and for the same reason: the expensive part is the
-/// <see cref="LoadOrderMirror"/>/<see cref="TrackService"/> setup, not the records.
-///
-/// <para>The six records cover the three cases that behave differently on the wire:
-/// <list type="bullet">
-/// <item><b>Light</b> — <c>ColorBinaryType.Alpha</c>, but rendered by xEdit's <c>wbByteColors</c>
-/// (3 leaves). Its alpha byte exists on disk and must survive a red/green/blue-only edit untouched.
-/// Seeded with a non-255 alpha precisely so "preserved" is distinguishable from "defaulted".</item>
-/// <item><b>Keyword / LocationReferenceType / ActionRecord / Location</b> — the whole
-/// <c>SchemaAnnotations.AlphaBearingColorFields</c> allowlist, xEdit's <c>wbByteRGBA</c> (4 leaves).
-/// One record each so every row of a hand-transcribed table gets its own compile proof rather than
-/// one representative standing in for four.</item>
-/// <item><b>MaterialObject</b> — <c>ColorBinaryType.NoAlphaFloat</c>, the float-encoded storage
-/// whose byte&lt;-&gt;float quantization <see cref="ColorQuantizationTests"/> analyses in the
-/// abstract. This is that analysis against a real compile.</item>
-/// </list></para>
-/// </summary>
+/// <summary>One record per Color shape: Light (<c>wbByteColors</c>, an alpha on disk that must
+/// survive a 3-leaf edit), the four <c>wbByteRGBA</c> allowlist records, and MaterialObject
+/// (float storage, <see cref="ColorQuantizationTests"/> against a real compile).</summary>
 public sealed class ColorCompileFixture : IDisposable
 {
     public const string PluginName = "Color649.esp";
@@ -43,8 +26,7 @@ public sealed class ColorCompileFixture : IDisposable
     public string ModFolder => _modFolder;
     public PluginKey Plugin { get; } = new(PluginName, Origin);
 
-    /// <summary>The alpha Light.Color is seeded with — deliberately neither 0 nor 255, so a test
-    /// asserting it survived a 3-leaf edit cannot pass by coincidence against either default.</summary>
+    // Neither 0 nor 255, so surviving a 3-leaf edit cannot pass by coincidence against a default.
     public const byte SeededLightAlpha = 137;
 
     public FormKey Light { get; }

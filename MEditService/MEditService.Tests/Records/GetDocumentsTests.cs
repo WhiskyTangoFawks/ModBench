@@ -7,11 +7,8 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Tests.Records;
 
-// Point-reading one document per record costs two DuckDB round trips
-// each (~7,880 queries and ~40s of a 41s Compile on the real 3,940-record fixture), so the seam
-// carries a bulk read: every document one plugin's copy holds, in one query. These tests pin the
-// bulk read against the point read — the two run independent SQL, so agreement is evidence,
-// not tautology.
+// Point-reading one document per record costs two DuckDB round trips each, so the seam carries a
+// bulk read: every document one plugin's copy holds, in one query.
 public class GetDocumentsTests
 {
     private static readonly SchemaReflector Reflector = SharedSchemaReflector.Instance;
@@ -24,9 +21,8 @@ public class GetDocumentsTests
         return repo;
     }
 
-    // One resolvable FormLink (Npc.Race → a Race this same mod carries) and one dangling one
-    // (a FormKey naming a plugin nothing indexed), so the parity check below covers CheckError
-    // both ways — null and populated — through the same shared-resolution path the bulk read uses.
+    // One resolvable FormLink and one dangling one, so the parity check below covers CheckError both
+    // ways through the same shared-resolution path the bulk read uses.
     private static Fallout4Mod BuildMod()
     {
         var mod = new Fallout4Mod(ModKey.FromFileName("Bulk.esp"), Fallout4Release.Fallout4);
@@ -52,10 +48,9 @@ public class GetDocumentsTests
 
         var documents = repo.At(RecordRef.Effective).GetDocuments(key);
 
-        // Every major record, plus the plugin header's own document (#631) — which
-        // EnumerateMajorRecords structurally cannot count, a ModHeader not being one. Asserted as its
-        // own presence rather than folded into a "+1", so this still fails if the extra row is
-        // something else entirely.
+        // Every major record, plus the plugin header's document, which EnumerateMajorRecords structurally
+        // cannot count. Asserted as its own presence rather than folded into a "+1", so this still fails
+        // if the extra row is something else entirely.
         Assert.Equal(mod.EnumerateMajorRecords().Count() + 1, documents.Count);
         Assert.Single(documents, d => d.RecordType == HeaderIndexer.RecordType);
         // ...and the point-read parity below covers the header on the same terms as every record,
@@ -71,9 +66,8 @@ public class GetDocumentsTests
                 pointRead.Fields.Select(f => (f.Metadata.Name, f.CheckError)),
                 doc.Fields.Select(f => (f.Metadata.Name, f.CheckError)));
         });
-        // The fixture's premise, asserted so a fixture edit can't quietly hollow out the CheckError
-        // half of the parity above: the dangling race flags, the resolvable one doesn't. Scoped to
-        // the race field — a bare AddNew NPC carries other required-but-unset links that flag too.
+        // The fixture's premise, asserted so a fixture edit cannot hollow out the CheckError half of the
+        // parity above. Scoped to the race field: a bare AddNew NPC carries other unset links that flag.
         string? RaceError(string editorId) => documents
             .Single(d => d.EditorId == editorId).Fields
             .Single(f => f.Metadata.Name.Equals("race", StringComparison.OrdinalIgnoreCase))

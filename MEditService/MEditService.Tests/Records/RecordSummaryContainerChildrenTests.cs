@@ -9,14 +9,8 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Tests.Records;
 
-/// <summary>
-/// <see cref="RecordSummary.HasContainerChildren"/> is the Plugins-tree listing's own presence
-/// fact (#560) — whether a row has at least one <c>container_child</c> child, computed inside
-/// <see cref="IRecordReads.Search"/> itself (a second correlated EXISTS alongside the existing
-/// <c>has_committed_snapshot</c> one; see <c>DuckDbRecordIndex.RelationReads.Search</c>), never a
-/// per-row follow-up call. The Plugins tree's <c>RecordNode</c> collapsible state reads this flag
-/// directly, so a Quest/DialogTopic row only shows an expand chevron when it actually has children.
-/// </summary>
+/// <summary>Computed inside <see cref="IRecordReads.Search"/> as a correlated EXISTS, never a
+/// per-row follow-up call; the Plugins tree's collapsible state reads this flag directly.</summary>
 public sealed class RecordSummaryContainerChildrenTests
 {
     private static readonly SchemaReflector Reflector = SharedSchemaReflector.Instance;

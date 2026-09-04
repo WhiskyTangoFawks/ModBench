@@ -12,15 +12,8 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Tests.Edits;
 
-/// <summary>
-/// #701, the write half: a script property is a union over a concrete base, so switching its
-/// leaf is the same ordinary edit of the enclosing array #688 made it for an abstract one —
-/// members the incoming leaf shares are kept, its own members start at defaults, the outgoing
-/// leaf's own members are dropped. The edit lands through <c>RecordEditService</c> as a real
-/// Mutagen binary write and re-parse, and is read back off the written document's own text — by
-/// property name, since a script's properties are a keyed array stored in name order rather than
-/// in the order the payload listed them.
-/// </summary>
+/// <summary>Read back by property name, not position: a script's properties are a keyed array
+/// stored in name order rather than payload order.</summary>
 public sealed class ConcreteBaseUnionEditTests : IDisposable
 {
     private readonly ScriptedNpcFixture _fixture = new();
@@ -66,7 +59,6 @@ public sealed class ConcreteBaseUnionEditTests : IDisposable
         Assert.Equal(before["Sibling"].GetRawText(), after["Sibling"].GetRawText());
     }
 
-    /// <summary>The base is a leaf of its own: a property of type None is a bare ScriptProperty.</summary>
     [Fact]
     public void SwitchingToTheBaseLeaf_BuildsABareScriptProperty()
     {

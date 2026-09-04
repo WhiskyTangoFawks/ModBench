@@ -11,18 +11,9 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Tests.Edits;
 
-/// <summary>
-/// Proving tests for <see cref="RecordEditService.EditField"/>'s generic write mechanisms. A passing
-/// assertion alone proves nothing (standing rule: a guard test is vacuous until watched fail), so
-/// each mechanism's rival implementation was applied and the failure observed.
-///
-/// <para>Whole-array write and struct/array-nested FormKey write are both exercised by
-/// <c>FormLinkValidationTests.PointingAFormLinkAtARecordOfTheRightType_IsAccepted</c>, which
-/// sets the NPC's <c>keywords</c> array (a FormLink array — array-write and nested-FormKey-write are
-/// literally the same field there) through this exact door and asserts it lands as working-tree
-/// dirt. That test is not duplicated here. This file covers the one mechanism it never
-/// exercised: a top-level bitmask enum column.</para>
-/// </summary>
+/// <summary>Whole-array and nested-FormKey writes are already exercised by
+/// <c>FormLinkValidationTests</c> through this same door; this file covers the one mechanism it
+/// never reached, a top-level bitmask enum column.</summary>
 public sealed class GenericFieldWriteDispatchTests : IDisposable
 {
     private readonly TrackedModFixture _mod = TrackedModFixture.Tracked();

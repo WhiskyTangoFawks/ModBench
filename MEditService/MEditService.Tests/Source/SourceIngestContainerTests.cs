@@ -7,18 +7,9 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Tests.Source;
 
-/// <summary>
-/// Ingest-from-source at the container seam: a Cell's <b>embedded</b> children — the placed
-/// references written inline into the parent document rather than as files of their own — are still
-/// their own queryable records after a tracked plugin is ingested from its source tree, at both refs.
-///
-/// <para>Runs against the shared <see cref="ContainerModFixture"/> rather than a local Cell
-/// fixture of its own — the shared <c>TrackedModFixture</c> holds Npc/Race/Keyword and no containers
-/// at all, so it structurally cannot exercise any of this, which is exactly how a container
-/// regression once shipped with no test able to see it.
-/// (<c>SourceIngestParityTests</c> covers the same ground across 2,577 real records; this suite is the
-/// fast, readable statement of the specific property.)</para>
-/// </summary>
+/// <summary>Runs against <see cref="ContainerModFixture"/>: the flat fixture holds no containers,
+/// which is how a container regression once shipped unseen. <c>SourceIngestParityTests</c> covers
+/// the same ground at scale.</summary>
 public sealed class SourceIngestContainerTests : IDisposable
 {
     private readonly ContainerModFixture _fixture = new();
@@ -88,19 +79,6 @@ public sealed class SourceIngestContainerTests : IDisposable
 
     // ---- Container Head reconciliation ----
 
-    /// <summary>
-    /// A container edited in the working tree is read correctly at Effective and also reconciles at
-    /// <b>Head</b>.
-    ///
-    /// <para><c>SourceIngest.ReconcileHead</c> identifies a dirty source unit through
-    /// <see cref="SourceRecordPath.TryParse"/>, which fails closed for every container path by
-    /// design — recovering a record type from <c>Cells/&lt;b&gt;/&lt;sb&gt;/&lt;name&gt;/RecordData.json</c>
-    /// needs a structure-aware reader, and ADR-0041's 2026-08-23 amendment rules that reader out
-    /// permanently. On that parse failure a dirty path under the plugin's own tree falls through to
-    /// <c>SourceIngest.ReconcileHeadStructurally</c>, which deserializes <c>HEAD</c> the same
-    /// whole-mod way Effective already was and diffs the two mod objects by FormKey — no path
-    /// grammar involved.</para>
-    /// </summary>
     [Fact]
     public void AnExternallyEditedContainer_ReconcilesItsHeadState_ThroughStructuralDiff()
     {
@@ -121,9 +99,6 @@ public sealed class SourceIngestContainerTests : IDisposable
             reloaded.Index!.At(RecordRef.Head).GetDocument(_fixture.EmbedCell.ToString(), _fixture.Plugin)!.EditorId);
     }
 
-    /// <summary>The positive control for the test above: a <i>flat</i> record edited in the same tree
-    /// also reconciles, so this mechanism is uniform across flat and container records rather than the
-    /// container being a special case.</summary>
     [Fact]
     public void AFlatRecordEditedBesideTheContainer_DoesReconcileItsHead()
     {
@@ -144,11 +119,6 @@ public sealed class SourceIngestContainerTests : IDisposable
             reloaded.Index!.At(RecordRef.Head).GetDocument(_fixture.Npc.ToString(), _fixture.Plugin)!.EditorId);
     }
 
-    /// <summary>Not the container itself, but one of its
-    /// <b>embedded children</b> — <see cref="ContainerModFixture.TemporaryRef"/> has no file of its own
-    /// (it lives inline in <see cref="ContainerModFixture.EmbedCell"/>'s document), so this exercises
-    /// the structural diff finding a divergent FormKey <i>inside</i> a container's body, not just the
-    /// container's own top-level fields.</summary>
     [Fact]
     public void AnEmbeddedChildEditedInPlace_ReconcilesItsOwnHeadState()
     {
@@ -170,10 +140,6 @@ public sealed class SourceIngestContainerTests : IDisposable
             reloaded.Index!.At(RecordRef.Head).GetDocument(_fixture.TemporaryRef.ToString(), _fixture.Plugin)!.EditorId);
     }
 
-    /// <summary>A structural <b>creation</b>: a brand-new embedded child added to the working tree,
-    /// never committed. Exercises <c>ReconcileHeadStructurally</c>'s "present in Effective, absent from
-    /// HEAD" branch (<see cref="IRecordIndex.MarkWorkingTreeOnly"/>) — the record must answer at
-    /// Effective and be absent at Head, the mirror image of the deletion test below.</summary>
     [Fact]
     public void AnEmbeddedChildAddedInTheWorkingTree_AnswersOnlyAtEffective()
     {
@@ -223,12 +189,6 @@ public sealed class SourceIngestContainerTests : IDisposable
         Assert.Null(reloaded.Index!.At(RecordRef.Head).GetDocument(newFormKey, _fixture.Plugin));
     }
 
-    /// <summary>A structural <b>deletion</b>: an embedded child removed from the working tree without
-    /// being committed. Exercises <c>ReconcileHeadStructurally</c>'s "present in HEAD, absent from
-    /// Effective" branch (<see cref="IRecordIndex.SeedCommittedOnly"/>), including the record-type
-    /// round trip that branch alone needs (<c>SourceRecordType.Resolve</c>, since a deletion has no
-    /// working-tree file left to read a type off) — Head must answer with the record intact, not throw
-    /// and not answer with the wrong shape.</summary>
     [Fact]
     public void AnEmbeddedChildDeletedInTheWorkingTree_AnswersOnlyAtHead()
     {

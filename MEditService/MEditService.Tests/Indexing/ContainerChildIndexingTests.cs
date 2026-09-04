@@ -9,13 +9,8 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Tests.Indexing;
 
-/// <summary>
-/// The five <c>ContainerChildFields</c> relationships <c>placement</c>/<c>cell_location</c>
-/// don't already carry — Cell.NavigationMeshes/Landscape, Quest.DialogBranches/DialogTopics,
-/// DialogTopic.Responses — land in <c>container_child</c> at ingest, in original slot order, and
-/// Cell.Persistent/Temporary/Worldspace.TopCell/SubCells (already covered by placement/cell_location)
-/// do NOT get a second, competing copy there.
-/// </summary>
+/// <summary>Slots already covered by <c>placement</c>/<c>cell_location</c> must not get a second,
+/// competing copy in <c>container_child</c>.</summary>
 public sealed class ContainerChildIndexingTests
 {
     private static readonly SchemaReflector Reflector = SharedSchemaReflector.Instance;

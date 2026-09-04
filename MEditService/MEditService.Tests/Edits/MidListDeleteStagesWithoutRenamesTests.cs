@@ -6,19 +6,9 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 namespace MEditService.Tests.Edits;
 
-/// <summary>
-/// #566's own acceptance criterion, asserted where the maintainer saw the defect: the Source Control
-/// panel. Deleting one child of an ordered folder-split container is <b>one file deletion plus one
-/// changed parent document</b>, and no renames at all.
-///
-/// <para><b>Why this asserts on real <c>git status</c> rather than on the tree.</b> The original
-/// report was not "the files are wrong" — the files were right under the numbering scheme too. It was
-/// that a single-record delete showed up as 25 changed entries, because renaming every later sibling
-/// to keep <c>[N]</c> prefixes contiguous is a content-identical rename that unstaged
-/// <c>git status</c> cannot pair up and collapse (verified then, and not fixable by git config).
-/// Asserting the porcelain is asserting the thing that was actually broken; a tree-shape assertion
-/// would have passed before the change as happily as after it.</para>
-/// </summary>
+/// <summary>Asserts on real <c>git status</c>: the defect was a delete showing as 25 entries, since
+/// unstaged porcelain cannot collapse content-identical renames. A tree-shape assertion would pass
+/// either way.</summary>
 public sealed class MidListDeleteStagesWithoutRenamesTests : IClassFixture<ContainerModFixture>, IDisposable
 {
     private readonly ContainerModFixture _fixture;

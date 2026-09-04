@@ -9,13 +9,8 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Tests.Edits;
 
-/// <summary>
-/// #290 — the ESL flag's one sanctioned write door: the synthetic <c>is_light</c> header field,
-/// the same pattern <c>is_partial_form</c> already uses for record-flag bit 14. The header's raw
-/// <c>flags</c> column stays read-only (full flags-array editing is a follow-up); this boolean is
-/// what the flag lifecycle needs — creation defaults it on, the compile coherence prompt turns it
-/// off, and a user can do either by hand from the header editor.
-/// </summary>
+/// <summary>The ESL flag's one sanctioned write door is the synthetic <c>is_light</c> header field;
+/// the raw <c>flags</c> column stays read-only.</summary>
 public sealed class HeaderFlagEditTests : IDisposable
 {
     private readonly TrackedModFixture _fixture = TrackedModFixture.Tracked();
@@ -80,10 +75,9 @@ public sealed class HeaderFlagEditTests : IDisposable
         Assert.Contains("0xFFF", result.Message, StringComparison.Ordinal);
     }
 
-    // #290's compile-time coherence gate: an ESL-flagged plugin whose content no longer fits the
-    // light range refuses to compile, with the typed EslContradiction marker the frontend turns
-    // into the remove-the-flag prompt. Accepting that prompt is an ordinary is_light edit + a
-    // second compile — which then succeeds.
+    // #290's compile-time coherence gate: an ESL-flagged plugin whose content overflows the light
+    // range refuses to compile, with the typed EslContradiction marker the frontend turns into the
+    // remove-the-flag prompt.
     [Fact]
     public void Compile_WithTheEslFlagAndAnOutOfRangeRecord_RefusesWithTheContradictionMarker()
     {

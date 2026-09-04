@@ -4,17 +4,8 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Tests.Plugins;
 
-// ADR-0036: PluginOriginResolver answers "which origin does this bare filename mean?" for
-// every call site that only has a filename to work with, and
-// the read routes that resolve origin server-side. Once a load order can hold two copies of one
-// filename, that question has two candidate answers and only one correct one: the copy the game
-// actually loads.
-//
-// The rule is scoping, not ordering. `FirstOrDefault(p => p.Name == plugin)` happens to return the
-// right plugin today purely because unlisted copies are appended after the load order is built —
-// an accident of list order, not an invariant, and one that any future change to how Plugins is
-// assembled or sorted would silently break. These tests state the rule directly by putting the
-// shadowed copy first.
+// ADR-0036: once a load order can hold two copies of one filename, "which origin does this bare
+// filename mean?" has two candidates and one right answer.
 public sealed class PluginOriginResolverTests
 {
     private static ILoadOrder LoadOrderWith(params PluginMetadata[] plugins) => new StubLoadOrder(plugins);
@@ -36,9 +27,9 @@ public sealed class PluginOriginResolverTests
     [Fact]
     public void Resolve_OnlyCopyIsOutsideTheLoadOrder_FallsBackRatherThanNamingIt()
     {
-        // A write target that is not in the load order is not a legitimate target at all, so
-        // resolving to its origin would attribute a read to a file the game never loads.
-        // The reserved fallback keeps that impossible; the caller's own guards reject the edit.
+        // A write target absent from the load order is not a legitimate target, so resolving to its origin
+        // would attribute a read to a file the game never loads. The reserved fallback keeps that
+        // impossible.
         var loadOrder = LoadOrderWith(Plugin("Orphan.esp", "SomeMod", inLoadOrder: false));
 
         Assert.Equal(PluginOrigin.DataDirectory, PluginOriginResolver.Resolve(loadOrder, "Orphan.esp"));
@@ -55,10 +46,9 @@ public sealed class PluginOriginResolverTests
         Assert.Equal("SomeMod", PluginOriginResolver.Resolve(loadOrder, "Disabled.esp"));
     }
 
-    // LoadOrderPlugin is Resolve's own building block, exposed directly for the six write-path
-    // guards that need the metadata itself (IsImmutable), not just the origin string. Same scoping,
-    // same reason: a plain first-match happens to return the right plugin today only because
-    // unlisted copies are appended after the load order is built, never because of any invariant.
+    // LoadOrderPlugin is Resolve's own building block, exposed for the write-path guards that need the
+    // metadata itself rather than the origin string. Same scoping, same reason: a plain first match is
+    // an accident of list order.
     [Fact]
     public void LoadOrderPlugin_ShadowedCopyListedFirst_StillReturnsTheLoadOrderCopy()
     {

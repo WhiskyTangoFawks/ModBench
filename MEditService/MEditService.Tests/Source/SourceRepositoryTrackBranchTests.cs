@@ -2,13 +2,8 @@ using MEditService.Core.Source;
 
 namespace MEditService.Tests.Source;
 
-/// <summary>
-/// ADR-0041: Track creates and checks out the edit branch after committing the pristine
-/// baseline to <c>main</c> — "Modified vs Authored is repo topology": `git diff main &lt;branch&gt;`
-/// is "everything I changed", and it must be genuinely empty right after Track, not empty because
-/// no distinct branch exists at all (that would make the diff command fail outright, not pass
-/// trivially — see the rival case).
-/// </summary>
+/// <summary><c>git diff main &lt;branch&gt;</c> must be genuinely empty right after Track, not
+/// empty because no distinct branch exists (ADR-0041: Modified vs Authored is repo topology).</summary>
 public sealed class SourceRepositoryTrackBranchTests
 {
     private static string NewModFolder() => Directory.CreateTempSubdirectory("medit-track-branch-").FullName;
@@ -28,10 +23,8 @@ public sealed class SourceRepositoryTrackBranchTests
             Assert.NotEqual("main", currentBranch);
             Assert.Equal(SourceRepository.EditBranchName, currentBranch);
 
-            // The diff-empty claim only means something once the branch is proven to be a real,
-            // separate ref: `git diff main <branch>` on a branch that was never created would fail
-            // with "unknown revision", not silently return empty output — so a broken Track that
-            // skips branch creation could never pass this half by accident.
+            // The diff-empty claim only means something once the branch is a real, separate ref: `git diff` on
+            // a branch never created fails with "unknown revision" rather than returning empty.
             var diff = GitCli.Run(gitDir, modFolder, "diff", "main", currentBranch);
             Assert.Equal(string.Empty, diff);
         }

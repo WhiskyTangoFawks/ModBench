@@ -8,19 +8,8 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Tests.Edits;
 
-/// <summary>
-/// Git-mediated source changes are
-/// caught at <b>read time</b> by comparing what the file holds against what the index stored — no
-/// watcher, because Modbench owns the <c>.git</c> folder and cannot be told when git moves under it.
-///
-/// <para>Every case here changes the working tree the way a <i>user</i> would — <c>git restore</c>,
-/// a hand edit, <c>git commit</c> from a terminal — and then simply reads again. Nothing is told
-/// that anything happened, which is the whole point: the read has to notice.</para>
-///
-/// <para>Both refs are re-derived, not just the working-tree side. After an external commit
-/// "committed" itself has moved, so a freshness pass that only refreshed Effective would leave Head
-/// serving bytes no ref holds any more.</para>
-/// </summary>
+/// <summary>No watcher: Modbench owns the <c>.git</c> folder and cannot be told when git moves
+/// under it, so every case changes the tree as a user would and reads again.</summary>
 public sealed class ReadTimeFreshnessTests : IDisposable
 {
     private readonly TrackedModFixture _mod = TrackedModFixture.Tracked();
@@ -51,27 +40,6 @@ public sealed class ReadTimeFreshnessTests : IDisposable
         Reads().GetCompare(_mod.Npc.ToString())!.Overrides.Single()
             .Fields.Single(f => f.Metadata.Name == "height_max").Value;
 
-    /// <summary>
-    /// <b>Reading a tracked plugin's header must not destroy it.</b> #631 gave the header a real
-    /// <c>body</c>, which put it inside this pass's reach for the first time — and the pass resolves
-    /// a record's file through <c>SourceUnitResolver</c>, which cannot locate the root
-    /// <c>RecordData.json</c> (no group folder, not a placement, and no FormKey in its filename for
-    /// the fallback scan). An unguarded pass therefore reads "no file on disk holds this record",
-    /// concludes the user deleted it, and folds a working-tree <i>deletion</i> of the header into the
-    /// index — on an ordinary read, with nothing edited.
-    ///
-    /// <para>Read twice deliberately: the first read is what would do the damage, the second is what
-    /// observes it. A single read would pass even against the broken behaviour, because
-    /// <c>GetRecord</c> returns the document it fetched before the pass rewrote anything.</para>
-    ///
-    /// <para><b>Reads with the header genuinely dirty</b> (#661): a hand edit outside Modbench, made
-    /// before either read below, so the guard is proven under the same condition that found the
-    /// original defect — giving the header a body put it in this pass's reach for the first time, and
-    /// an unguarded pass read "no file resolves" as "the user deleted this record" on exactly this
-    /// kind of read. The resolver now genuinely finds the file (#661 made the header a source unit),
-    /// so this is no longer a skip hiding that it cannot — it is the same read-time self-heal every
-    /// other record already gets.</para>
-    /// </summary>
     [Fact]
     public void ReadingATrackedPluginsHeader_DoesNotFoldADeletionIntoTheIndex()
     {
@@ -97,23 +65,14 @@ public sealed class ReadTimeFreshnessTests : IDisposable
         Assert.NotNull(_mod.Mirror.Index!.At(RecordRef.Head).GetDocument(headerFormKey, _mod.Plugin));
         Assert.NotEmpty(_mod.GitStatus());
 
-        // ...and it reads as genuinely dirty, not merely as present. Inverted deliberately from 631a's
-        // own version of this assertion (HasWorkingTreeChange == false, Effective.Body == Head.Body),
-        // which was the pinned statement of a deliberate limit: giving the header a ref dimension made
-        // a dirty/diverged indicator *representable*, but nothing in that change could actually
-        // produce one — SourceFreshness skipped it, EditField refused it at the gate, and the
-        // structural Head reconcile diffed through EnumerateMajorRecords, which a ModHeader is not in.
-        // #661 removed all three. This is the assertion that had to flip, not vanish.
+        // ...and it reads as genuinely dirty, not merely as present. A dirty header became representable
+        // only once SourceFreshness stopped skipping it, EditField stopped refusing it at the gate, and
+        // the structural Head reconcile stopped diffing through EnumerateMajorRecords (#661).
         var entry = Assert.Single(_mod.Mirror.Index!.At(RecordRef.Effective).GetOverrideStack(headerFormKey)!.Entries);
         Assert.True(entry.HasWorkingTreeChange);
         Assert.NotEqual(entry.Effective.Body, entry.Head.Body);
     }
 
-    /// <summary>The header's own version of the hand-edit pattern every other record already has
-    /// (<see cref="AHandEditToASourceFileOutsideModbench_IsPickedUpAtTheNextRead"/>) — an external edit
-    /// to the root <c>RecordData.json</c>, made through no path Modbench knows about, must be visible
-    /// at the very next read. Complementary to the dirty-flag proof above: this one proves the actual
-    /// content lands, not just that the row is marked dirty.</summary>
     [Fact]
     public void AHandEditToTheHeaderFileOutsideModbench_IsPickedUpAtTheNextRead()
     {
@@ -126,24 +85,6 @@ public sealed class ReadTimeFreshnessTests : IDisposable
         Assert.Equal("RenamedByHand", author);
     }
 
-    /// <summary>
-    /// <b>Where the header's read-only-ness actually comes from</b> — recorded because it is easy to
-    /// believe otherwise, and this is the assertion 631a's own version of this test (then named
-    /// <c>EditingAHeaderField_IsRefusedAtTheGate_NotByTheColumnsMissingWriteDelegate</c>) predicted
-    /// would flip once the header became a source unit (#661). It has: the gate that used to refuse
-    /// both fields identically at <c>SourceUnitNotFound</c>, before any column was consulted, is gone.
-    ///
-    /// <para>What replaces it is <b>not</b> a masters-specific guard. #335/ADR-0038 keeps
-    /// <c>masters</c> unwritable, and the header schema's <c>masters</c> column duly carries
-    /// <c>Apply: null</c> (<c>HeaderIndexingTests.HeaderSchema_MastersColumn_CarriesNoWriteDelegate</c>)
-    /// — but so does every other header column today (<c>author</c>, <c>flags</c>): no header field
-    /// has a write delegate yet (that is #290's work, not this ticket's), so <c>masters</c> refuses
-    /// for the exact same reason its writable-*looking* sibling <c>author</c> does. There is no
-    /// separate mechanism that specifically protects <c>masters</c> — the schema's <c>Apply: null</c>,
-    /// identical across all three columns, is the whole of the enforcement. Both refuse
-    /// <c>FieldReadOnly</c> now, the ordinary "this column has no write delegate" refusal every other
-    /// read-only column in the schema gives — the header is no longer special-cased at all.</para>
-    /// </summary>
     [Fact]
     public void EditingAHeaderField_IsRefusedByTheColumnsMissingWriteDelegate_NowThatTheGateDoesNotBlockIt()
     {
@@ -206,16 +147,6 @@ public sealed class ReadTimeFreshnessTests : IDisposable
         Assert.Equal("RenamedByHand", Reads().GetRecord(_mod.Npc.ToString())!.EditorId);
     }
 
-    /// <summary>
-    /// A source file rewritten with a leading UTF-8 BOM — content otherwise byte-for-byte
-    /// identical, the way some external editors write UTF-8 by default (root CLAUDE.md's
-    /// never-assume-exclusive-ownership rule) — must not read as a working-tree change. The
-    /// flat case reads through <c>File.ReadAllText</c>, which strips a BOM via
-    /// <c>StreamReader</c>'s own byte-order-mark detection; the general resolver's own read has to
-    /// strip it the same way, or a BOM-carrying file mismatches the codec's own BOM-free body on
-    /// <i>every</i> read — a self-heal that writes the BOM'd text in as Effective, which still
-    /// mismatches Head, forever, rather than a one-time convergence.
-    /// </summary>
     [Fact]
     public void ASourceFileRewrittenWithAUtf8Bom_DoesNotReadAsPerpetualDirt()
     {
@@ -230,19 +161,6 @@ public sealed class ReadTimeFreshnessTests : IDisposable
         Assert.Equal(entry.Head.Body, entry.Effective.Body);
     }
 
-    /// <summary>
-    /// The path a user actually walks: the hand edit above, then <b>read again</b>.
-    ///
-    /// <para>The first read folds the new EditorID in from the file's content, so the index now says
-    /// "RenamedByHand" while the file on disk is still named after "FixtureNpc" — nothing renames a
-    /// file when its content is edited by a text editor. A second read that computed the source path
-    /// from the <i>indexed</i> EditorID would find nothing at that name, conclude the file had been
-    /// deleted, and mark a live record gone at Effective. One hand edit,
-    /// two reads, and the record vanishes.</para>
-    ///
-    /// <para>Resolution leans on the FormKey suffix instead, which the rename never touches, so
-    /// "genuinely absent" stays distinguishable from "present under a different name".</para>
-    /// </summary>
     [Fact]
     public void AHandEditToEditorId_SurvivesASecondRead_RatherThanReadingAsDeleted()
     {
@@ -263,19 +181,11 @@ public sealed class ReadTimeFreshnessTests : IDisposable
         Assert.NotNull(_mod.Mirror.Index!.At(RecordRef.Effective).Resolve(_mod.Npc.ToString()));
     }
 
-    /// <summary>
-    /// The same divergence reached the other way — a file renamed on disk with its content left alone,
-    /// which is what an interrupted <c>RecordEditService</c> rename leaves behind (it moves the file
-    /// before writing the new bytes, deliberately). The record must still be found and editable, not
-    /// read as deleted and not duplicated by a second file written at the stale path.
-    /// </summary>
     [Fact]
     public void AFileRenamedOnDiskWithItsContentUnchanged_IsStillFoundAndEditable()
     {
-        // NpcSourceFile resolves the record's real *current* file (SourceUnitResolver, live
-        // off disk) rather than a fixed computed path, so it must be captured before the hand-rename
-        // below — otherwise every later read of it would just re-find the file at its new location and
-        // this test would stop testing anything.
+        // NpcSourceFile resolves the record's real current file live off disk, so it must be captured
+        // before the hand-rename below, or every later read would just re-find the file at its new spot.
         var originalPath = _mod.NpcSourceFile;
         var renamed = Path.Combine(
             Path.GetDirectoryName(originalPath)!,
@@ -293,10 +203,8 @@ public sealed class ReadTimeFreshnessTests : IDisposable
         Assert.NotNull(_mod.Mirror.Index!.At(RecordRef.Effective).GetDocument(_mod.Npc.ToString(), _mod.Plugin));
     }
 
-    // The self-heal above folds an externally-changed source file into the read model as a
-    // side effect of a *read* — still a mutation as far as _filter's one-shot snapshot is concerned,
-    // so a record that only now matches an active filter must not stay hidden just because nothing
-    // went through the explicit edit path.
+    // The self-heal folds an externally-changed source file into the read model as a side effect of a
+    // read, which is still a mutation as far as _filter's one-shot snapshot is concerned.
     [Fact]
     public void AHandEditToASourceFileOutsideModbench_MakesTheRecordNewlyMatchAnActiveFilter_FilteredListingIncludesIt()
     {

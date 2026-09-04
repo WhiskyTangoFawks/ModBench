@@ -8,14 +8,9 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Tests.Records;
 
-/// <summary>
-/// ADR-0035: a plugin becomes readable at the instant it is indexed, and never before it is
-/// whole. Progressive loading is what makes this observable — reads arrive *during* indexing.
-///
-/// An in-between count is the failure this guards: a plugin that reads as "412 records" while its
-/// remaining 1,588 are still being written is worse than one that reads as absent, because nothing
-/// distinguishes it from a plugin that genuinely holds 412.
-/// </summary>
+/// <summary>An in-between count is the failure (ADR-0035): a plugin reading as "412 records" while
+/// 1,588 are still being written is worse than absent, since nothing distinguishes it from one that
+/// genuinely holds 412.</summary>
 public sealed class IndexVisibilityTests
 {
     private const int NpcCount = 2000;
@@ -60,16 +55,13 @@ public sealed class IndexVisibilityTests
             await indexing.CancelAsync();
             await Task.WhenAll(readers);
 
-            // Guards this test against going hollow: if a future change makes reads block behind the
-            // indexer's transaction, the sample count collapses and the assertion below would start
-            // passing for the wrong reason — it would be verifying nothing rather than verifying
-            // isolation. It also *is* the "reads are served throughout the load" property, measured
-            // at the level where it originates.
+            // If reads ever block behind the indexer's transaction the sample count collapses and the assertion
+            // below starts passing for the wrong reason. It also is the "reads are served throughout the load"
+            // property, measured where it originates.
             Assert.True(observed.Count > 50, $"only {observed.Count} reads completed during indexing — reads are being blocked by it");
 
-            // Sound in one direction only: an intermediate count can be missed, but one that is
-            // seen is always a real defect. That asymmetry is the point — this can fail to catch a
-            // regression, it cannot report one that is not there.
+            // Sound in one direction only: an intermediate count can be missed, but one that is seen is always
+            // a real defect. This can fail to catch a regression; it cannot report one that is not there.
             Assert.All(observed, count => Assert.True(
                 count is 0 or NpcCount,
                 $"a read observed {count} of {NpcCount} records — a partially-indexed plugin was visible"));

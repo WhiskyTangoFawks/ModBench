@@ -5,22 +5,9 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 namespace MEditService.Tests.Edits;
 
-/// <summary>
-/// The diagnosis floor at Compile's own <c>DeserializeSource</c> seam, forged — the same
-/// convention <c>RealData/BinaryRoundTripGateTests</c> establishes for this class of defect
-/// (a hand-corrupted fixture, not a real-world one), because no real tracked-source corruption
-/// naturally exists to lift into <c>TestData</c> the way Track's own seam had: deserializing a
-/// source tree is a JSON operation that never touches Mutagen's binary parser at all.
-///
-/// <para><b>Different exception vocabulary than Track's own seam, confirmed live.</b>
-/// A corrupt <c>FormKey</c> string in a tracked NPC's source JSON does not throw
-/// Mutagen's <c>RecordException</c> — it throws
-/// <c>Mutagen.Bethesda.Serialization.Exceptions.FilePathedException</c> wrapping a plain
-/// <see cref="ArgumentException"/>, whose only identity is the source file path. That shape is
-/// pinned at the unit level in <c>Source/PluginDiagnosisTests.FromSourceReadException_AnchorsOnTheFilePathRelativeToTheTree</c>;
-/// this test is the end-to-end proof that <see cref="PluginCompileService"/> actually surfaces it
-/// through a real tracked mod's own Compile call, not just the extracted diagnosis logic.</para>
-/// </summary>
+/// <summary>Forged corruption, as in <c>BinaryRoundTripGateTests</c>: no real tracked-source
+/// corruption exists to lift into TestData. A corrupt FormKey in source JSON throws
+/// <c>FilePathedException</c> wrapping <see cref="ArgumentException"/>, not <c>RecordException</c>.</summary>
 public sealed class PluginCompileServiceDiagnosisTests : IDisposable
 {
     private readonly TrackedModFixture _mod = TrackedModFixture.Tracked();

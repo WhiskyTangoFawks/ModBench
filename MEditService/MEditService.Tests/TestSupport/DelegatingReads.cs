@@ -3,18 +3,8 @@ using MEditService.Core.Records;
 
 namespace MEditService.Tests;
 
-/// <summary>
-/// #639: <see cref="DelegatingRecordIndex"/>'s own posture ("one seam intercepted, not a fake
-/// database"), applied one level down at the read surface an <see cref="IRecordIndex.At"/> call
-/// hands out — needed because #639 moved every read off <see cref="IRecordIndex"/> itself, so a
-/// double that used to override one <see cref="IRecordReads"/> member directly on
-/// <see cref="IRecordIndex"/> (<c>DelegatingRecordIndex</c>'s own member, before this ticket) now has
-/// to intercept it here instead, on whatever <see cref="IRecordReads"/>
-/// <see cref="IRecordIndex.At"/> returns.
-/// Forwards every member to a real one, exactly like <see cref="DelegatingRecordIndex"/> does for the
-/// wider index — a double that reimplements the whole read surface is both a maintenance burden and
-/// a lie.
-/// </summary>
+/// <summary>Forwards every <see cref="IRecordReads"/> member to a real one, so a double intercepts
+/// one read on whatever <c>IRecordIndex.At</c> hands out rather than reimplementing the surface.</summary>
 internal abstract class DelegatingReads(IRecordReads inner) : IRecordReads
 {
     protected IRecordReads Inner { get; } = inner;

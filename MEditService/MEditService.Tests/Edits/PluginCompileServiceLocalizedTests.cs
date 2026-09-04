@@ -12,13 +12,8 @@ using Mutagen.Bethesda.Strings;
 
 namespace MEditService.Tests.Edits;
 
-/// <summary>
-/// A tracked Localized plugin compiles with its strings written back beside it — the
-/// compile half of the fixture <see cref="Source.TrackServiceTests"/> tracks on the read side.
-/// Deliberately its own small fixture rather than <see cref="TrackedModFixture"/>: none of that
-/// fixture's records carry a translated string, and widening it would cost every other test in this
-/// folder a field they never asked for.
-/// </summary>
+/// <summary>Its own small fixture rather than <see cref="TrackedModFixture"/>: none of that
+/// fixture's records carry a translated string.</summary>
 public sealed class PluginCompileServiceLocalizedTests : IDisposable
 {
     private const string PluginName = "Fixture.esp";
@@ -54,19 +49,9 @@ public sealed class PluginCompileServiceLocalizedTests : IDisposable
         Directory.Delete(_gameDir, recursive: true);
     }
 
-    // Rival observed by hand (not committed): with PluginWriter.PrepareFromModAsync's
-    // WithStringsWriter call removed, Compile still reports success (Mutagen's own
-    // PluginUtilityTranslation.SetStringsWriter auto-attaches a writer of its own when none is
-    // supplied) — but that auto writer is rooted at the *temp* write path
-    // (.medit_tmp_<random>/Strings/), which PreparedPluginSave.Commit never moves and
-    // PreparedPluginSave.Dispose's non-recursive Directory.Delete(tmpDir) throws IOException on
-    // (silently caught) trying to remove — so the destination Strings/ files are never actually
-    // rewritten by compile at all. A byte-compare against files compile never touched would pass
-    // vacuously (confirmed: running this test against the reverted fix *without* the delete below
-    // passes even though compile wrote nothing — the untouched originals just happen to already be
-    // byte-identical to themselves), which is exactly why the destination files are deleted first:
-    // with the fix reverted, they never come back and this test fails on the File.Exists check below,
-    // not the byte-compare.
+    // The destination Strings files are deleted first because Mutagen auto-attaches a StringsWriter
+    // rooted at the temp write path when none is supplied, which Commit never moves: a byte-compare
+    // against files compile never touched would otherwise pass vacuously.
     [Fact]
     public void Compile_ALocalizedPlugin_WritesStringsBesideItByteIdenticalToTheInput()
     {
@@ -96,9 +81,9 @@ public sealed class PluginCompileServiceLocalizedTests : IDisposable
             LocalizedStrings.ForRead(_modFolder, _gameDir));
         Assert.True(((IFallout4ModGetter)overlayDisposable).UsingLocalization);
 
-        // Every strings file compile just (re)wrote is byte-identical to what Track originally
-        // captured — a real change (StringsWriter re-assigns sequential keys in registration order)
-        // would show up here even though the .esp's own bytes already round-trip.
+        // Every strings file compile rewrote is byte-identical to what Track captured. A real change
+        // (StringsWriter re-assigns sequential keys in registration order) would show up here even though
+        // the .esp's own bytes already round-trip.
         foreach (var (fileName, originalBytes) in originalStringsFiles)
         {
             var recompiledPath = Path.Combine(stringsDir, fileName);

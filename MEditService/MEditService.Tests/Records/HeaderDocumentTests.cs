@@ -8,16 +8,8 @@ using Mutagen.Bethesda.Serialization.Newtonsoft;
 
 namespace MEditService.Tests.Records;
 
-/// <summary>
-/// The plugin header's document producer/reader (#631), held to the two facts everything else
-/// assumes about it.
-///
-/// <para><b>This is Tests-side deliberately</b>, in the same way <c>DocumentShapeParityTests</c> is:
-/// the check compares <c>HeaderDocument</c>'s output against the generated whole-mod mixin used
-/// directly, and that mixin is exactly what <c>RecordTextCodecGeneratorSeedTests</c>' whitelist keeps
-/// out of <c>MEditService.Core</c>. Comparing against the door from a test is how the two are meant
-/// to be checked against each other.</para>
-/// </summary>
+/// <summary>Tests-side deliberately: the check compares against the generated whole-mod mixin,
+/// which <c>RecordTextCodecGeneratorSeedTests</c>' whitelist keeps out of Core.</summary>
 public sealed class HeaderDocumentTests
 {
     private static Fallout4Mod PopulatedMod()
@@ -46,16 +38,6 @@ public sealed class HeaderDocumentTests
         return mod;
     }
 
-    /// <summary>
-    /// <b>The licence for the header-only clone.</b> <c>HeaderDocument.Write</c> does not serialize
-    /// the mod it is given — it deep-copies the header onto an empty mod and serializes that, because
-    /// walking a real mod costs 1,510 ms cold / 239 ms warm per plugin against 1 ms for the clone
-    /// (measured on the 3,940-record cut-down fixture). That shortcut is only sound while the root
-    /// document is a function of the header alone and <c>DeepCopyIn</c> copies all of it. This is the
-    /// standing check on both halves at once: a Mutagen/Serialization bump that moved anything into
-    /// the root document, or left a header field out of the deep copy, fails here rather than
-    /// shipping a header that silently lost a field.
-    /// </summary>
     [Fact]
     public async Task Write_ProducesTheSameBytesAsAFullWholeModWrite_ForAModWithRealGroups()
     {
@@ -86,12 +68,6 @@ public sealed class HeaderDocumentTests
         }
     }
 
-    /// <summary>
-    /// The canonical form the whole tree is committed in, and the one <c>content_hash</c> is defined
-    /// against: bare <c>\n</c>, nothing after the closing brace, no BOM. Stated as its own assertion
-    /// rather than left implicit in the byte compare above, because that compare would still pass if
-    /// <i>both</i> sides grew a trailing newline together.
-    /// </summary>
     [Fact]
     public void Write_ProducesCanonicalBytes_NoCarriageReturnNoTrailingNewlineNoBom()
     {
@@ -103,12 +79,6 @@ public sealed class HeaderDocumentTests
             "the document must carry no UTF-8 BOM.");
     }
 
-    /// <summary>
-    /// The read side is the inverse of the write side, through the same door — so a header that went
-    /// out comes back with every field intact and re-serializes to the identical bytes. Round-trip
-    /// identity is what lets the read path extract a header's fields from its stored body instead of
-    /// from a wide table.
-    /// </summary>
     [Fact]
     public void Read_RoundTripsEveryHeaderField_AndReSerializesToTheSameBytes()
     {
@@ -130,11 +100,6 @@ public sealed class HeaderDocumentTests
         Assert.Equal(body, HeaderDocument.Write(readBack));
     }
 
-    /// <summary>
-    /// The document describes the header and nothing else: reading it back yields a mod with no
-    /// records, rather than one that quietly picked up whatever happened to be on disk near the
-    /// synthetic folder path the reader names.
-    /// </summary>
     [Fact]
     public void Read_YieldsAModWithNoRecords()
     {
@@ -143,9 +108,6 @@ public sealed class HeaderDocumentTests
         Assert.Empty(readBack.EnumerateMajorRecords());
     }
 
-    /// <summary>Neither direction may touch the filesystem — the write side is on the indexing path
-    /// (once per plugin) and the read side on the record editor's, and a temp file per call on either
-    /// would be both slower and a new never-assume-exclusive-ownership hazard.</summary>
     [Fact]
     public void WriteAndRead_CreateNothingOnDisk()
     {

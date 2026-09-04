@@ -30,11 +30,8 @@ public class LoadOrderMirrorTests(TestPluginFixture fixture)
             modImporter: modImporter);
     }
 
-    // An explicit request for a release this build doesn't carry the Mutagen assembly for
-    // (SkyrimSE, genuinely unreferenced here — see SchemaReflectorAvailabilityTests) must refuse
-    // with a typed, actionable exception rather than a raw FileNotFoundException surfacing from
-    // deep inside DuckDbRecordIndex.Initialize. The FO4 fixture's data is irrelevant: the throw
-    // happens in IndexAndStore before any plugin is opened.
+    // An explicit request for a release this build has no Mutagen assembly for must refuse with a
+    // typed, actionable exception rather than a FileNotFoundException from inside Initialize.
     [Fact]
     public void Load_ForUnsupportedGameRelease_ThrowsUnsupportedGameReleaseException()
     {
@@ -46,12 +43,9 @@ public class LoadOrderMirrorTests(TestPluginFixture fixture)
         Assert.Contains("SkyrimSE", ex.Message);
     }
 
-    // Distinct from Load_ForUnsupportedGameRelease above, which fails *before* IndexAndStore
-    // publishes. Faulting UpdateWinners fails *after* publish, inside IndexAndStore's own catch
-    // (DisposeCurrent) — and with nothing after this call touching state (no follow-up
-    // Load/Unload), the assertions below observe that catch's own cleanup rather than a later call's
-    // masking it, which is exactly what the existing gated tests (UnloadMidLoad_..., ASecondLoadMidLoad_...)
-    // could not isolate.
+    // Faulting UpdateWinners fails after IndexAndStore publishes, inside its own catch, and nothing
+    // after this call touches state, so the assertions observe that catch's cleanup rather than a later
+    // call masking it.
     [Fact]
     public void Reconcile_WhenUpdateWinnersFaults_LeavesWhatLandedHeldAndUnsettled()
     {
@@ -170,10 +164,8 @@ public class LoadOrderMirrorTests(TestPluginFixture fixture)
 
     // --- CreatePlugin ---
     //
-    // ADR-0041: the destination is a caller-resolved (path, origin) — a mod folder or
-    // overwrite/, never implicitly the game's Data folder — and CreatePlugin never touches
-    // plugins.txt (that append is the caller's job: the extension's Mod Management
-    // writer, or a script/agent's own per ADR-0024).
+    // ADR-0041: the destination is a caller-resolved (path, origin), a mod folder or overwrite/, never
+    // implicitly Data, and CreatePlugin never touches plugins.txt: that append is the caller's job.
 
     [Fact]
     public void CreatePlugin_UpdatesHeldState()
@@ -198,9 +190,8 @@ public class LoadOrderMirrorTests(TestPluginFixture fixture)
         }
     }
 
-    // #290: a newly created plugin defaults to an ESL-flagged ESP, silently — no creation prompt;
-    // the flag is an ordinary editable header field afterward. Asserted at the binary, where the
-    // game reads it.
+    // A newly created plugin defaults to an ESL-flagged ESP silently, the flag being an ordinary
+    // editable header field afterward. Asserted at the binary, where the game reads it.
     [Fact]
     public void CreatePlugin_DefaultsToAnEslFlaggedEsp()
     {
@@ -224,10 +215,8 @@ public class LoadOrderMirrorTests(TestPluginFixture fixture)
         }
     }
 
-    // plugins.txt is Mod Management's file (CONTEXT-MAP.md); appending the load-order line is the
-    // caller's job, done only once the whole create (and any Track it triggers) has succeeded.
-    // This side never reads a plugins.txt either, so the assertion is that no such file is brought
-    // into existence at all.
+    // plugins.txt is Mod Management's file, and appending the load-order line is the caller's job,
+    // done only once the whole create has succeeded.
     [Fact]
     public void CreatePlugin_NeverWritesPluginsTxt()
     {
@@ -283,9 +272,8 @@ public class LoadOrderMirrorTests(TestPluginFixture fixture)
 
     // --- Filter re-materialization ---
     //
-    // _filter is a one-shot snapshot (SetFilter's CREATE OR REPLACE TABLE) of whatever matched the
-    // filter SQL at the moment it ran. Nothing else keeps it in step, so every mutation path that can
-    // change which records match has to re-run it — these pin the LoadOrderMirror-side call sites.
+    // _filter is a one-shot snapshot of whatever matched the filter SQL when it ran, so every mutation
+    // path that can change which records match has to re-run it.
 
     [Fact]
     public async Task ReindexPlugin_AfterBinaryChangeMakesARecordNewlyMatchTheFilter_FilteredListingIncludesIt()
@@ -419,10 +407,9 @@ public class LoadOrderMirrorTests(TestPluginFixture fixture)
         }
     }
 
-    // DuckDBException itself (DuckDB.NET.Data) is the real type SetFilter's SQL execution actually
-    // throws, but every one of its constructors is internal to that assembly — this is the smallest
-    // concrete DbException the catch clause can be proven against from outside it. The catch is typed
-    // on the DbException base, so which concrete subtype arrives is not the thing under test here.
+    // DuckDBException is the type SetFilter's SQL execution really throws, but its constructors are
+    // internal to that assembly, so this is the smallest concrete DbException provable from outside.
+    // The catch is typed on the DbException base.
     private sealed class FakeDbFault(string message) : System.Data.Common.DbException(message);
 
     // UpdateWinners runs once, after IndexProgressively's per-plugin loop — faulting it fails

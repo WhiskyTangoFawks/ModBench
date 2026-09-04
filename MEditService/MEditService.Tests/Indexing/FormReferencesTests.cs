@@ -285,11 +285,9 @@ public class FormReferencesTests
         while (reader.Read())
             rows.Add((reader.GetString(0), reader.GetString(1)));
 
-        // The walk stops at the re-entry, by SchemaAnnotations.CycleTruncations' own ruling: a
-        // Fallout 4 Papyrus struct member is never itself a struct, so the shape built above is
-        // unreachable from real data and the schema does not model it. One level shallower — a
-        // struct member's own Object property — is walked, which
-        // Index_VmadStructWithObjectMember_IsIndexedInFormReferences pins.
+        // The walk stops at the re-entry, by SchemaAnnotations.CycleTruncations' ruling: a Fallout 4
+        // Papyrus struct member is never itself a struct, so the shape built above is unreachable from
+        // real data and the schema does not model it.
         Assert.Empty(rows);
     }
 
@@ -402,14 +400,10 @@ public class FormReferencesTests
         Assert.Contains(rows, r => r.FieldPath == "virtual_machine_adapter.scripts[0].properties[0].structs[1].members[0].object" && r.Target == target1Fk.ToString());
     }
 
-    // ── #671: scripts reachable only through an adapter sub-structure ───────────────────────────
+    // ── #671: scripts reachable only through an adapter sub-structure ──
     //
-    // Each test below indexes a plugin whose *only* mention of `targetFormKey` is the adapter route
-    // named in the test, then asserts the full set of form_references rows aimed at that target —
-    // not just "contains one". That total-set assertion is what makes these non-vacuous: if the
-    // reflected schema walk or the condition walk could also see the same FormKey, the row count
-    // would exceed one and the assertion would fail. Before the adapter walk existed every one of
-    // these saw zero rows, which is the same proof from the other side.
+    // Each test asserts the full set of form_references rows aimed at the target, not just "contains
+    // one": another walk seeing that FormKey would push the count past one and fail.
 
     private static List<(string Source, string Target, string FieldPath, string RecordType)> ReferencesTo(
         DuckDbRecordIndex repo, FormKey target)
@@ -628,9 +622,8 @@ public class FormReferencesTests
     }
 
     // AC4: an adapter-reachable script's properties are walked to the same depth top-level scripts
-    // already are — nested struct members and struct-list members included. One test covers both
-    // shapes on one alias script, so a partial walk (struct but not struct-list, or one level of
-    // nesting only) fails here rather than passing three-quarters of a suite.
+    // are. One test covers both shapes on one alias script, so a partial walk fails here rather than
+    // passing three-quarters of a suite.
     [Fact]
     public void Index_QuestAliasScriptNestedStructMembers_AreWalkedToFullDepth()
     {

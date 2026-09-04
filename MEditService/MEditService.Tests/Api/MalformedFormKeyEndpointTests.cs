@@ -7,21 +7,9 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 namespace MEditService.Tests.Api;
 
-/// <summary>
-/// A malformed caller-typed FormKey (xEdit's own typed-FormID path) on any of the three
-/// gestures that route it through <c>RecordEditService.RefuseIfNotNativeTarget</c> —
-/// <see cref="RecordEditService.CreateRecord"/>, <see cref="RecordEditService.RenumberRecord"/> and
-/// <see cref="RecordEditService.CopyRecordAsNewRecord"/> — must come back as a graceful 400
-/// <c>ProblemDetails</c>, the same shape <c>PluginEndpoints.CreatePlugin</c> already uses for its own
-/// <see cref="ArgumentException"/>, not an unhandled exception escaping the endpoint.
-///
-/// <c>Mutagen.Bethesda.Plugins.FormKey.Factory(string)</c> throws <see cref="ArgumentException"/> on
-/// malformed input (wrong shape, non-hex, missing <c>:</c>) with no <c>TryFactory</c>/try-catch guard
-/// at that call site (<c>RecordEditService.RefuseIfNotNativeTarget</c>) — these tests are at the
-/// endpoint layer, not the service layer, because the fix is the endpoint's own catch, not a new
-/// <c>RecordEditRefusal</c> case (the malformed-syntax/well-formed-but-refused distinction 400 vs 422
-/// already draws elsewhere on this write path).
-/// </summary>
+/// <summary>At the endpoint layer, not the service: <c>FormKey.Factory</c> throws
+/// <see cref="ArgumentException"/> on malformed input, and the fix is the endpoint's own catch
+/// (400), not a new <c>RecordEditRefusal</c> case (422).</summary>
 public sealed class MalformedFormKeyEndpointTests
 {
     private const string MalformedFormKey = "not-a-formkey";

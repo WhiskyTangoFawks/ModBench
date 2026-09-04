@@ -50,9 +50,8 @@ public class ColumnSpecTests
     }
 
     [Theory]
-    // A member with no bit is not a checkbox, so a field is a bitmask only when every one of its
-    // members carries one. "Every" over no members at all is vacuously true and would make an
-    // empty-domain enum (Fallout 4's NoneProperty) a bitmask, which is why the count is guarded.
+    // A field is a bitmask only when every member carries a bit. "Every" is vacuously true over no
+    // members, which would make an empty-domain enum a bitmask, so the count is guarded.
     [InlineData("no member carries a bit")]
     [InlineData("only some members carry a bit")]
     [InlineData("there are no members at all")]

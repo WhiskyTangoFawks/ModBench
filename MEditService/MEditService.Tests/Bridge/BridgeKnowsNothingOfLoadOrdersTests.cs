@@ -1,20 +1,7 @@
 namespace MEditService.Tests.Bridge;
 
-/// <summary>
-/// <c>MEditService.Bridge</c> exists so "knowing nothing of mirror or the DB" (ADR-0041)
-/// is a fact this test can catch, not a discipline a reviewer has to remember. Every mechanic the
-/// bridge needs (classification, plumbing commit, rebase, the deferral marker) lives in
-/// <c>MEditService.Core.Source</c> instead — already load order/DB-free by the same construction as
-/// <c>SourceRepository</c>/<c>CompileJournal</c>/<c>SourceFreshness</c> — so the bridge project
-/// itself should never need to reference <c>MEditService.Core.Plugins</c> or
-/// <c>MEditService.Core.Records</c> at all.
-///
-/// This scans real source text on disk rather than reflecting over the compiled assembly: a
-/// reflection-based check only sees types the bridge actually *uses*, so a forbidden reference
-/// that gets optimized away, or one sitting in a method nobody calls yet, would pass silently. A
-/// literal grep over "using MEditService.Core.Plugins"/"using MEditService.Core.Records" catches
-/// the reference the moment someone types it, which is the whole point of the guard.
-/// </summary>
+/// <summary>Scans source text rather than the assembly: reflection sees only types the bridge uses, so a
+/// reference optimized away or in an uncalled method would pass silently (ADR-0041).</summary>
 public sealed class BridgeKnowsNothingOfLoadOrdersTests
 {
     private static readonly string[] ForbiddenNamespaces =
@@ -32,10 +19,6 @@ public sealed class BridgeKnowsNothingOfLoadOrdersTests
             $"Bridge source file(s) reference a forbidden namespace: {string.Join(", ", offenders)}");
     }
 
-    /// <summary>Exposed so the rival can be applied and removed without ever touching git state
-    /// (root CLAUDE.md: restore rivals from a file copy, never `git checkout`/`git restore`) — the
-    /// rival writes a throwaway file into the real Bridge source tree, runs this same scan, then
-    /// deletes the file itself.</summary>
     internal static List<string> ScanBridgeSources(string bridgeSourceDirectory)
     {
         var offenders = new List<string>();

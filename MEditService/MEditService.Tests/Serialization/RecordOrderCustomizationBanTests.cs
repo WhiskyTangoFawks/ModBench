@@ -1,23 +1,7 @@
 namespace MEditService.Tests.Serialization;
 
-/// <summary>
-/// <c>.EnforceRecordOrder()</c> must never come back (ADR-0042 decision 4, as amended by #566). Order
-/// is carried in the parent's own ordered child list; turning the serialization library's filename
-/// numbering back on would put a second, contradicting carrier in the tree — and the two would
-/// disagree silently, because a numbered name still deserializes fine.
-///
-/// <para><b>Why a source-text ban rather than trusting one deleted line.</b> The flag is set per
-/// generator compilation, and one compilation can seed exactly one game, because record type names
-/// collide across games. A second game therefore needs a second customization class to set it in, and
-/// a third a third — so "we deleted it, in the one place it was" is a fact about today's assembly
-/// count rather than an invariant. The author of a new game's seed will copy an existing one; this is
-/// what tells them immediately that the copied line is not wanted, and it costs a grep per test
-/// run.</para>
-///
-/// <para><b>Production sources only, deliberately.</b> Test files legitimately name the flag in prose
-/// while explaining the numbering they used to assert, and a ban that caught comments would fire on
-/// those instead of on the thing that matters.</para>
-/// </summary>
+/// <summary>A source-text ban rather than one deleted line: each game needs its own seed class,
+/// and the author of the next one will copy an existing one. Production sources only.</summary>
 public sealed class RecordOrderCustomizationBanTests
 {
     [Fact]
@@ -37,8 +21,6 @@ public sealed class RecordOrderCustomizationBanTests
             $"names. Remove the .EnforceRecordOrder() call in: {string.Join(", ", offenders)}");
     }
 
-    /// <summary>Guards the guard: a scan that silently matched nothing — a wrong root, a changed
-    /// layout — would pass the ban forever while checking nothing at all.</summary>
     [Fact]
     public void TheScan_ActuallyReachesTheCustomizationItGuards()
     {
@@ -60,8 +42,6 @@ public sealed class RecordOrderCustomizationBanTests
             && !segments.Any(s => s.EndsWith(".Tests", StringComparison.Ordinal));
     }
 
-    /// <summary>The <c>MEditService/</c> solution directory, walked up from the test assembly rather
-    /// than hardcoded, so this keeps working from any build output layout.</summary>
     private static string RepositoryRoot()
     {
         for (var directory = new DirectoryInfo(AppContext.BaseDirectory); directory != null; directory = directory.Parent)

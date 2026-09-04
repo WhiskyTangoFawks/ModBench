@@ -2,15 +2,8 @@ using MEditService.Core.Records;
 
 namespace MEditService.Tests.Edits;
 
-/// <summary>
-/// <see cref="IRecordIndex.CreateCellLocation"/> — the copy-in write for a
-/// cell's own <c>cell_location</c> row. Every other writer of this table
-/// (<c>DuckDbRecordIndex.RederiveContainmentForRecord</c>) only ever re-derives a
-/// <c>Worldspace.TopCell</c>'s row from its parent's freshly-reserialized document; a genuine
-/// exterior cell reached through <c>SubCells</c> is never that document's embedded child, so nothing
-/// before this method could ever produce its row. Exercised against <see cref="ContainerModFixture"/>'s
-/// real DuckDB-backed index, the same direct-index-seam posture <c>ContainmentRederivationTests</c> uses.
-/// </summary>
+/// <summary>Every other writer of <c>cell_location</c> re-derives a TopCell's row from its parent's
+/// document; an exterior cell reached through SubCells is never an embedded child.</summary>
 public sealed class CellLocationWriteTests : IDisposable
 {
     private readonly ContainerModFixture _fixture = new();
@@ -33,10 +26,9 @@ public sealed class CellLocationWriteTests : IDisposable
         Assert.Equal(row, index.At(RecordRef.Effective).GetCellLocation(_fixture.Plugin, SyntheticCellFormKey));
     }
 
-    // The rival this guards against: an implementation that appends without first deleting any prior
-    // row for the same cell — passes the test above (empty table) but silently duplicates on a
-    // second call (a retried or re-applied copy), which corrupts every COUNT/JOIN reader of this
-    // table (GetWorldspaceCells) rather than merely returning a stale value.
+    // The rival: an implementation appending without first deleting any prior row for the same cell
+    // passes the empty-table test above but duplicates on a second call, corrupting every reader of
+    // this table.
     [Fact]
     public void CreateCellLocation_CalledTwiceForTheSameCell_ReplacesRatherThanDuplicates()
     {

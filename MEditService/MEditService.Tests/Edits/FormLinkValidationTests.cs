@@ -4,16 +4,9 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 namespace MEditService.Tests.Edits;
 
-/// <summary>
-/// Creating a Dangling or Type-Mismatched FormLink (CONTEXT.md — both always data errors)
-/// is still blocked at edit time, and the check reads <b>effective</b> state. ADR-0041: the check
-/// runs at the working-tree write, and existence and type are
-/// still checked before anything is persisted.
-///
-/// The effective-state half is the one worth being careful about. A record the working tree has
-/// deleted still exists at Head, so a check that resolved against the committed state would happily
-/// let the user point a link at something that will not be there when this compiles.
-/// </summary>
+/// <summary>The FormLink check reads effective state: a record the working tree has deleted still
+/// exists at Head, so a check against committed state would let a link point at something that
+/// will not be there when this compiles.</summary>
 public sealed class FormLinkValidationTests : IDisposable
 {
     private readonly TrackedModFixture _mod = TrackedModFixture.Tracked();
@@ -25,11 +18,9 @@ public sealed class FormLinkValidationTests : IDisposable
 
     private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
 
-    // `keywords` rather than a bare FormLink column, because an array of FormLinks is also the
-    // atomic complex-field write CONTEXT.md describes: the whole field, never one element. A
-    // top-level scalar FormLink column (e.g. an NPC's Race) carries its own end-to-end
-    // coverage in TopLevelFormLinkColumnEditTests — both shapes write through ApplyFormLinkJson
-    // (SchemaReflector), so neither stands in for the other's proof.
+    // `keywords` rather than a bare FormLink column, because an array of FormLinks is also the atomic
+    // complex-field write: the whole field, never one element. A top-level scalar FormLink column has
+    // its own coverage.
     private RecordEditResult SetKeywords(params string[] formKeys) =>
         Service().EditField(_mod.Plugin, _mod.Npc.ToString(), "keywords", Json(JsonSerializer.Serialize(formKeys)));
 
@@ -69,9 +60,8 @@ public sealed class FormLinkValidationTests : IDisposable
     [Fact]
     public void ARecordDeletedInTheWorkingTree_IsAlreadyGoneForValidationPurposes()
     {
-        // The record still exists at Head — it is in the last commit, and `git show` would print it.
-        // What it no longer is, is somewhere a link can point: exactly the divergence
-        // "checks read effective state" means.
+        // The record still exists at Head — `git show` would print it. What it is not is somewhere a link
+        // can point: exactly the divergence "checks read effective state" means.
         File.Delete(_mod.SourceFileFor(_mod.Keyword, "kywd", TrackedModFixture.KeywordEditorId));
         _mod.Mirror.Index!.ApplyWorkingTreeChanges(_mod.Plugin, [(_mod.Keyword.ToString(), null)]);
 

@@ -12,29 +12,7 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Tests.Edits;
 
-/// <summary>
-/// #678 (ADR-0045): a renumber that fails part-way leaves the author's working trees as they were.
-///
-/// <para><b>The fault is a failing index write, and it is realistic.</b> The cascade's phase two is a
-/// sequence of (write the file, tell the index what landed) pairs, and the index half is DuckDB — it
-/// can fail on a full or failing device the same as any other write. Injecting there rather than at
-/// the file write is also the <i>harder</i> case for the rollback, not the easier one: the file write
-/// at that position has already succeeded and durably landed, so every position in the sweep leaves
-/// real bytes on disk that have to be taken back off again. A fault at the file write would leave the
-/// last position with nothing to undo.</para>
-///
-/// <para><b>Two oracles, deliberately.</b> Every "unchanged" assertion compares a direct filesystem
-/// snapshot (<see cref="TreeSnapshot"/>: path set, content hash, and the directory list including
-/// empty directories) <i>and</i> the repository's own <c>git status</c>. They are not redundant:
-/// <see cref="TheDirectFilesystemOracleSeesAnEmptyDirectory_WhichGitStatusCallsClean"/> demonstrates
-/// the disagreement in the direction that matters — git reports clean over debris the filesystem
-/// snapshot catches, which is precisely the class of damage #675 was about.</para>
-///
-/// <para><b>The seam is <see cref="IRecordIndex"/>, not something added for the test.</b> It is the
-/// interface the service already writes through, substituted through the existing
-/// <see cref="DelegatingRecordIndex"/>/<see cref="IndexOverridingMirror"/> pair. Nothing in production
-/// knows this test exists.</para>
-/// </summary>
+/// <summary>A renumber that fails part-way leaves the working trees as they were (ADR-0045).</summary>
 public sealed class RenumberRollbackTests
 {
     private static RecordEditService ServiceFor(ILoadOrderMirror mirror) =>
@@ -42,21 +20,6 @@ public sealed class RenumberRollbackTests
 
     // ---- the sweep ----
 
-    /// <summary>
-    /// The centrepiece: fail the cascade at each of its writes in turn and assert every affected
-    /// source tree is byte-identical to its pre-action state every time. The number of positions is
-    /// counted off one clean run rather than written down here, so a cascade that grows a write grows
-    /// the sweep with it instead of quietly escaping it.
-    ///
-    /// <para><b>A position here is one cascade <i>write step</i></b> — one rewritten referencing file,
-    /// or the renumbered record's own delete+create — not one filesystem act. A step is a pair (put
-    /// the bytes on disk, tell the index what landed) and the fault lands on the second half, so the
-    /// step's file work has completed when it fires. The acts <i>within</i> the target's step (the
-    /// container's move, the new leaf, the old leaf's delete, the ordering renames) are swept
-    /// individually by <see cref="Source.SourceWriteTransactionTests"/>, over the same act sequence in
-    /// a scratch tree — sweeping them from here would need a fault hook inside the write itself, which
-    /// is machinery in the production seam for a test's sake.</para>
-    /// </summary>
     [Fact]
     public void FailingTheCascadeAtEachWriteInTurn_LeavesEverySourceTreeUnchanged()
     {
@@ -95,13 +58,6 @@ public sealed class RenumberRollbackTests
         }
     }
 
-    /// <summary>
-    /// The same guarantee when the <i>file</i> write is what throws, rather than the index write after
-    /// it. The obstruction is real and needs no seam at all: another tool has put a directory where
-    /// one referencer's source file stood, so the cascade computes that record from the indexed body
-    /// (<c>ReadRecordFromSource</c>'s documented missing-file fallback) and then cannot rename onto
-    /// the path. Whichever writes landed before it come back off.
-    /// </summary>
     [Fact]
     public void ACascadeWhoseFileWriteThrows_StillLeavesEverySourceTreeUnchanged()
     {
@@ -121,14 +77,6 @@ public sealed class RenumberRollbackTests
 
     // ---- the conditional half of the guarantee ----
 
-    /// <summary>
-    /// A third party overwrites one of the files the cascade already wrote, before the failure. Its
-    /// bytes are kept, every other file is restored, and the error names that file and only that
-    /// file — by its path relative to the mod folder, never an absolute one.
-    ///
-    /// <para>The write is genuinely made to the real file by this process; the index seam is only what
-    /// schedules it between the cascade's write and its rollback.</para>
-    /// </summary>
     [Fact]
     public void AFileAThirdPartyOverwroteAfterTheWrite_KeepsTheirBytes_AndIsTheOnlyOneNamed()
     {
@@ -161,8 +109,6 @@ public sealed class RenumberRollbackTests
         Assert.DoesNotContain(fixture.ModFolderOf(fixture.FirstPlugin), thrown.Message, StringComparison.Ordinal);
     }
 
-    /// <summary>A third party deletes a file the cascade wrote. It is not resurrected, and it is
-    /// named.</summary>
     [Fact]
     public void AFileAThirdPartyDeletedAfterTheWrite_IsNotResurrected_AndIsNamed()
     {
@@ -185,16 +131,6 @@ public sealed class RenumberRollbackTests
 
     // ---- ordering, containers, and the index ----
 
-    /// <summary>
-    /// A renumber repoints the record's entry in its parent's ordered child list, in place, as its own
-    /// last act (ADR-0042 decision 4). That document is a file this pass changed, so it is part of
-    /// what a failure has to put back — restored with everything else, byte for byte.
-    ///
-    /// <para>This began as the same assertion over <c>"[N] "</c> filename prefixes, which the renumber
-    /// used to renormalize across the whole group folder. #566 replaced that with a one-line edit to
-    /// one document; the rollback obligation is unchanged, which is why the test is kept rather than
-    /// deleted — only the file it watches moved.</para>
-    /// </summary>
     [Fact]
     public void TheParentsOrderedChildList_ReturnsToItsPreActionValue()
     {
@@ -222,10 +158,6 @@ public sealed class RenumberRollbackTests
             Directory.GetFileSystemEntries(racesFolder).Select(Path.GetFileName).Order(StringComparer.Ordinal).ToList());
     }
 
-    /// <summary>
-    /// A container renumber moves the record's whole directory — its folder-split children with it —
-    /// before writing its fields. A failure after that has the subtree put back, children and all.
-    /// </summary>
     [Fact]
     public void AContainerRenumberFailingAfterRelocatingItsSubtree_PutsTheSubtreeBack()
     {
@@ -245,12 +177,6 @@ public sealed class RenumberRollbackTests
         Assert.Equal(statusBefore, fixture.GitStatus());
     }
 
-    /// <summary>
-    /// After a rolled-back renumber the index answers the old identity and nothing at the new one —
-    /// containment and cell location included. The index is not unwound row by row: the affected
-    /// plugins are re-derived from their restored source trees (#672), which is the only reading of
-    /// "put it back" that cannot drift from what the files actually say.
-    /// </summary>
     [Fact]
     public void AfterARolledBackRenumber_TheIndexAnswersTheOldIdentityAndNothingAtTheNewOne()
     {
@@ -271,13 +197,6 @@ public sealed class RenumberRollbackTests
         Assert.Equal(fixture.Worldspace.ToString(), reads.GetCellLocation(fixture.Plugin, cell)?.ParentWorldspace);
     }
 
-    /// <summary>
-    /// A rolled-back <i>cascade</i> leaves the reference graph naming the old FormKey, not the new
-    /// one — the half that is not free. The referencing files were rewritten and their index rows
-    /// updated before the failure; only re-deriving those plugins from their restored trees puts the
-    /// graph back. Drop the re-ingest from <c>RollBackFailedRenumber</c> and this is the assertion
-    /// that goes red.
-    /// </summary>
     [Fact]
     public void AfterARolledBackCascade_TheReferenceGraphStillNamesTheOldFormKey()
     {
@@ -298,9 +217,6 @@ public sealed class RenumberRollbackTests
         Assert.Empty(reads.GetReferencedBy(newFormKey));
     }
 
-    /// <summary>"Renumbering &lt;old&gt; to &lt;new&gt; failed." — the message states the identity the
-    /// action was reaching for, which is the only place a test can learn it once the action has been
-    /// undone.</summary>
     private static string ExtractNewFormKey(string message, string oldFormKey)
     {
         var after = message[(message.IndexOf($"{oldFormKey} to ", StringComparison.Ordinal) + oldFormKey.Length + 4)..];
@@ -309,14 +225,6 @@ public sealed class RenumberRollbackTests
 
     // ---- the two oracles ----
 
-    /// <summary>
-    /// Why <see cref="TreeSnapshot"/> stands beside <c>git status</c> rather than being replaced by
-    /// it. Git tracks files, not directories, so an empty record directory left behind in a source
-    /// tree is invisible to the repository's own status — and that is exactly the debris #675 exists
-    /// to prevent, since it occupies an ordering slot and fails the next whole-plugin ingest. The two
-    /// oracles disagree here, in the direction that matters: the direct comparison catches what git
-    /// calls clean.
-    /// </summary>
     [Fact]
     public void TheDirectFilesystemOracleSeesAnEmptyDirectory_WhichGitStatusCallsClean()
     {
@@ -332,8 +240,8 @@ public sealed class RenumberRollbackTests
 
     // ---- doubles ----
 
-    /// <summary>Counts the index writes the cascade makes — one per rewritten referencing file, one
-    /// for the renumbered record itself — so the sweep's position count comes off a real run.</summary>
+    // One index write per rewritten referencing file plus one for the record itself, so the sweep's
+    // position count comes off a real run.
     private sealed class CountingIndex(IRecordIndex inner) : DelegatingRecordIndex(inner)
     {
         public int Writes { get; private set; }
@@ -351,17 +259,14 @@ public sealed class RenumberRollbackTests
         }
     }
 
-    /// <summary>The same count, throwing at one chosen position instead of passing it through — the
-    /// device-level failure a DuckDB write can genuinely take, arriving after that position's source
-    /// file has already landed on disk.</summary>
+    // Throws after that position's source file has already landed on disk.
     private sealed class FailingIndex(IRecordIndex inner, int failAt) : DelegatingRecordIndex(inner)
     {
         private int _seen;
 
         public bool Fired { get; private set; }
 
-        /// <summary>Run in the failing call, before it throws — the window in which a third party's
-        /// own write to an already-written file is genuinely concurrent with this action.</summary>
+        // Runs in the failing call before it throws: the window in which a third party's write is concurrent.
         public Action? BeforeThrowing { get; init; }
 
         public override void ApplyWorkingTreeChanges(PluginKey key, IReadOnlyList<(string FormKey, string? Body)> deltas)
@@ -387,13 +292,8 @@ public sealed class RenumberRollbackTests
 
     // ---- the fixture ----
 
-    /// <summary>
-    /// Three tracked mods, each its own folder and its own repository, one referencing record apiece
-    /// pointing at a Race in the first — the shape AC1 is about, since a cascade that spans one mod
-    /// folder cannot show that a failure leaves <i>several</i> working trees as they were. The
-    /// referencing records are of a different type from the target, so each write lands in its own
-    /// group folder and a failure at one position is visibly distinct from a failure at another.
-    /// </summary>
+    // Three mods, each its own repository: a cascade spanning one folder cannot show several working
+    // trees restored.
     private sealed class CascadeRollbackFixture : IDisposable
     {
         public const string RaceEditorId = "RollbackRace";
@@ -466,13 +366,9 @@ public sealed class RenumberRollbackTests
             SourceUnitResolver.FlatSourcePath(
                 ModFolderOf(plugin), plugin.Name, recordType, formKey.ToString(), editorId, GameRelease.Fallout4);
 
-        /// <summary>Every tracked tree, by mod folder — the direct oracle, which sees empty
-        /// directories.</summary>
         public IReadOnlyDictionary<string, IReadOnlyList<string>> Snapshots() =>
             AllPlugins.ToDictionary(p => p.Name, p => TreeSnapshot.Of(ModFolderOf(p)));
 
-        /// <summary>The same trees through each repository's own porcelain status — the independent
-        /// oracle, which does not.</summary>
         public IReadOnlyDictionary<string, IReadOnlyList<string>> GitStatuses() =>
             AllPlugins.ToDictionary(
                 p => p.Name,

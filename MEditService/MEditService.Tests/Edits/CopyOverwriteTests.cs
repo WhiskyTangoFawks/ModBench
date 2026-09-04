@@ -5,13 +5,8 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 namespace MEditService.Tests.Edits;
 
-/// <summary>
-/// #550 AC7 — the always-overwrite rule, scoped exactly per the Q3 resolution: a Copy as Override
-/// whose destination already overrides the <b>explicitly-selected</b> record replaces it without
-/// refusal — for the container-copy family only, matching xEdit's own copy-into behavior. A flat
-/// record keeps #436's <c>FormKeyCollision</c> refusal, and records incidentally touched by the
-/// parent-chain machinery are never overwritten (their own tests live with the parent-chain rules).
-/// </summary>
+/// <summary>The always-overwrite rule is scoped to the container-copy family (xEdit's copy-into
+/// behavior); a flat record keeps the <c>FormKeyCollision</c> refusal.</summary>
 public sealed class CopyOverwriteTests : IDisposable
 {
     private readonly ContainerCopyFixture _fixture = ContainerCopyFixture.Create();
@@ -38,7 +33,7 @@ public sealed class CopyOverwriteTests : IDisposable
         Assert.True(result.Applied, result.Message);
         var cellFile = _fixture.DestinationSourceFileContaining(ContainerCopyFixture.InteriorCellEditorId);
         var cellText = File.ReadAllText(cellFile);
-        // Own fields re-copied, and the previously copied-in child still embedded.
+        // Own fields re-copied, and the copied-in child still embedded.
         Assert.Contains(ContainerCopyFixture.PersistentRefEditorId, cellText, StringComparison.Ordinal);
         var reads = _fixture.Mirror.Index!.At(RecordRef.Effective);
         Assert.NotNull(reads.GetDocument(_fixture.PersistentRef.ToString(), _fixture.DestinationPlugin));

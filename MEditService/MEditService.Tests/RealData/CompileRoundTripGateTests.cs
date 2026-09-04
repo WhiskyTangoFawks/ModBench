@@ -15,63 +15,18 @@ using Noggog.WorkEngine;
 
 namespace MEditService.Tests.RealData;
 
-/// <summary>
-/// The permanent gate on the compiled output — "the round-trip
-/// stability gate covers the compiled output" — run against the real, curated fixture
-/// (<see cref="CutDownPluginFixture"/>: 3,940 authentic records, populated worldspace/cell/placement,
-/// four VMAD-scripted quests carrying 860 dialogue topics and 2,873 responses between them,
-/// navigation meshes, landscapes).
-///
-/// <b>What "round trip" means for compile, and why it isn't <see cref="BinaryRoundTripGateTests"/>'s
-/// original-vs-write1 shape</b>: compile's whole premise (ADR-0041) is that it builds a binary from
-/// source text alone, never from an existing binary's own structure — there is no "original binary"
-/// in that flow to byte-match, and container grouping details a game engine doesn't read (which
-/// bucket an interior cell's GRUP sits in) have no canonical "correct" value to reproduce, only a
-/// stable one. What compile promises instead, and what these tests measure:
-/// <list type="bullet">
-/// <item><b>Content fidelity</b>: every record's source text, deep-parsed back out of the compiled
-/// binary through the exact same codec Track uses, is byte-identical to the source text Track itself
-/// wrote before compile ever ran. A record's *content* survived the round trip even where its
-/// container's internal bucketing did not.</item>
-/// <item><b>Determinism</b> (<see cref="BinaryRoundTripGateTests"/>'s write1==write2 shape, applied
-/// to this path): compiling the same source tree twice produces byte-identical binaries.</item>
-/// </list>
-///
-/// <para><b>One Track, not ten.</b> Every read-only fact below shares the single Track that
-/// <see cref="CompileRoundTripGateFixture"/> performs once per class (<c>IClassFixture&lt;T&gt;</c>).
-/// The two mutating facts (<c>RecordEditService.EditField</c> writes its record's source file back to
-/// disk) instead <c>cp -r</c> the fixture's already-Tracked template into a private scratch copy —
-/// see <see cref="MutationScope"/> — so they get the same untouched-tree guarantee the old
-/// per-test-constructor shape gave every test, without paying for a second Track. Which of the two
-/// paths a given fact uses is a static, per-method choice (call <c>fixture.*</c>, or open a
-/// <see cref="MutationScope"/>) — nothing here decides it at runtime.</para>
-/// </summary>
+/// <summary>Compile builds from source text, so there is no original to byte-match: what it
+/// promises is content fidelity and determinism.</summary>
 public sealed class CompileRoundTripGateTests(CompileRoundTripGateFixture fixture)
     : IClassFixture<CompileRoundTripGateFixture>
 {
-    /// <summary>
-    /// The source tree <paramref name="pluginPath"/> would produce — assembled here, from the
-    /// serializer and the splice as two separate steps, rather than by calling the production door
-    /// that composes them.
-    ///
-    /// <para><b>The independence is the point, and it was briefly lost.</b> This once called only the
-    /// whole-mod serializer, which stopped being the whole story when the door began splicing ordered
-    /// child lists (ADR-0042 decision 4) — so it silently derived trees missing every carrier.
-    /// The obvious repair was to delegate to <c>TrackService.SerializeToPristineFiles</c>, and that is
-    /// wrong in a way worth recording: it puts identical production code on both sides of a byte
-    /// comparison whose entire job is to detect the tree being wrong, so any defect in the splice
-    /// would agree with itself and pass. Composing the two steps here keeps the comparison able to
-    /// fail — a change to <i>what the door composes</i> shows up as a diff rather than cancelling
-    /// out.</para>
-    /// </summary>
     private static Dictionary<string, byte[]> DeriveSourceTreeFromBinary(string pluginPath, GameRelease release)
     {
         var pluginFileName = Path.GetFileName(pluginPath);
 
-        // ImportSetter, not ImportGetter — a binary overlay reports some derived fields differently
-        // from a fully-materialized parse (Cell.Lighting.Versioning's break flags, observed), so
-        // deriving through an overlay would compare the tracked tree against a *differently parsed*
-        // mod and call the difference a compile failure.
+        // ImportSetter, not ImportGetter: a binary overlay reports some derived fields differently from a
+        // fully materialized parse, so deriving through one would compare the tracked tree against a
+        // differently parsed mod and call the difference a compile failure.
         var mod = ModFactory.ImportSetter(new ModPath(ModKey.FromFileName(pluginFileName), pluginPath), release);
 
         var scratch = Directory.CreateTempSubdirectory("medit-compile-derived-").FullName;
@@ -97,12 +52,9 @@ public sealed class CompileRoundTripGateTests(CompileRoundTripGateFixture fixtur
     // against the tracked one on equal terms rather than differing by line endings on Windows.
     private static byte[] StripCarriageReturns(byte[] bytes) => [.. bytes.Where(b => b != (byte)'\r')];
 
-    // The container layout — Cells/<block>/<subblock>/... and Worldspaces/<ws>/<X, Y>/<X, Y>/...
-    // nesting — after a real Track. This class's fixture is the one fixture with real populated
-    // cells/worldspaces (mEditTestSubset.esm) this suite has; TrackServiceTests' own fixture is
-    // flat-only (two NPCs) and structurally cannot exercise this. Key paths only, via pattern
-    // match rather than a hardcoded block/sub-block number this test has no independent way to
-    // verify without reading the fixture's own binary data by hand.
+    // This class's fixture is the only one with real populated cells and worldspaces; the flat two-NPC
+    // fixture structurally cannot exercise this. Key paths by pattern rather than a hardcoded block
+    // number this test cannot verify independently.
     [Fact]
     public void Track_OfTheRealFixture_WritesTheSourceContainerLayout()
     {
@@ -111,10 +63,9 @@ public sealed class CompileRoundTripGateTests(CompileRoundTripGateFixture fixtur
             .ToList();
         Assert.NotEmpty(allFiles);
 
-        // Block/sub-block GRUP directories are folder-split too (SerializationHelper's own
-        // AddBlocksToWork/AddXYBlocksToWork take the same withNumbering the flat/nested lists do), so
-        // each numeric segment carries an optional "[N] " prefix ahead of the block/sub-block
-        // number itself — that prefix is what this pattern allows for, not a coordinate.
+        // Block and sub-block GRUP directories are folder-split too, so each numeric segment carries an
+        // optional "[N] " prefix ahead of the block number. That prefix is what the pattern allows for,
+        // not a coordinate.
         Assert.Contains(allFiles, f => System.Text.RegularExpressions.Regex.IsMatch(
             f, @"^Cells/(\[\d+\] )?-?\d+/(\[\d+\] )?-?\d+/[^/]+/RecordData\.json$"));
 
@@ -122,19 +73,6 @@ public sealed class CompileRoundTripGateTests(CompileRoundTripGateFixture fixtur
             f, @"^Worldspaces/[^/]+/(\[\d+\] )?-?\d+, -?\d+/(\[\d+\] )?-?\d+, -?\d+/[^/]+/RecordData\.json$"));
     }
 
-    /// <summary>
-    /// <c>DialogTopic.Responses</c> is the one folder-split relationship this fixture measurably
-    /// damages without an order carrier: 96 of 283 multi-response topics permute when nothing records
-    /// the order (measured). Since #566 the carrier is the topic's own document, so every
-    /// multi-response topic Track writes must name each of its response files exactly once in its
-    /// <c>Responses</c> list — no file unnamed, no name without a file. Proven against what Track put
-    /// on disk, not against a proxy.
-    ///
-    /// <para>The <i>order</i> that list records is asserted end-to-end by
-    /// <c>DialogueOrderDamageTests</c>, which reads the tree back and compares against the original
-    /// binary's own GRUP order; this is the structural half — that the carrier is present and complete
-    /// for every topic, which is what a build that forgot to splice would break.</para>
-    /// </summary>
     [Fact]
     public void Track_OfTheRealFixture_NamesEveryDialogTopicResponseInItsTopicsOrderedChildList()
     {
@@ -154,8 +92,7 @@ public sealed class CompileRoundTripGateTests(CompileRoundTripGateFixture fixtur
                 .Select(name => name!)
                 .ToList();
 
-            // A file name is identity alone now — the position it used to carry lives in the topic's
-            // own document, one directory up.
+            // A file name is identity alone: position lives in the topic's own document, one directory up.
             Assert.All(files, name => Assert.DoesNotContain("[", name, StringComparison.Ordinal));
 
             var topicDirectory = Path.GetDirectoryName(dir)!;
@@ -175,17 +112,6 @@ public sealed class CompileRoundTripGateTests(CompileRoundTripGateFixture fixtur
         }
     }
 
-    /// <summary>
-    /// ADR-0042 decision 3 ("nothing is omitted from the files, ever"), on the one clause a real
-    /// Track of the committed fixture can actually move: <c>.OmitTimestampData()</c> in
-    /// <see cref="MEditService.Core.Serialization.RecordTextCodecCustomization"/> would suppress
-    /// exactly these two
-    /// <c>Cell</c> properties, leaving a cell document with no
-    /// <c>PersistentTimestamp</c>/<c>TemporaryTimestamp</c> key at all. Checked on the known interior
-    /// cell <c>03C0F0:Fallout4.esm</c> ("CroupManor01"), whose <c>Persistent</c>/<c>TemporaryTimestamp</c>
-    /// deep-copied from real Fallout4.esm data (<c>CutDownPluginGenerator.TrimCell</c>) are non-default
-    /// (138972) — not a coincidental zero that would pass whether or not the field were written.
-    /// </summary>
     [Fact]
     public void Track_OfTheRealFixture_WritesCellTimestampData()
     {
@@ -197,17 +123,6 @@ public sealed class CompileRoundTripGateTests(CompileRoundTripGateFixture fixtur
         Assert.Contains("\"TemporaryTimestamp\": 138972", cellText, StringComparison.Ordinal);
     }
 
-    /// <summary>
-    /// The other two "nothing is omitted" clauses — condition <c>Unknown1</c> and the mod header's
-    /// own stats (<c>NumRecords</c>/<c>NextFormID</c>) — asserted on the committed fixture,
-    /// unconditionally, no exception clause: nothing in <c>Serialization/</c> or <c>Source/</c> may
-    /// suppress either.
-    ///
-    /// <para>The known record is the DialogTopic response <c>01AACD:Fallout4.esm</c>, whose first
-    /// condition's <c>Unknown1</c> is a real, non-default 3-byte pad copied from Fallout4.esm
-    /// (<c>0x1D9D68</c>) — not a zero/empty value a missing-field bug could produce by
-    /// coincidence.</para>
-    /// </summary>
     [Fact]
     public void Track_OfTheRealFixture_WritesConditionUnknown1AndHeaderStats()
     {
@@ -221,12 +136,6 @@ public sealed class CompileRoundTripGateTests(CompileRoundTripGateFixture fixtur
         Assert.Contains("\"NextFormID\": 2049", rootText, StringComparison.Ordinal);
     }
 
-    /// <summary>
-    /// Also the bare-compile gate: a compile failure surfaces here with its <c>RefusalReason</c>
-    /// (the <c>Assert.True(result.Succeeded, ...)</c> before the stronger content check). There is
-    /// deliberately no separate compile-succeeds fact — <c>Compile()</c> costs ~40s on this
-    /// fixture, and it would add zero coverage.
-    /// </summary>
     [Fact]
     public void Compile_OfTheRealFixture_PreservesEveryRecordsSourceContent()
     {
@@ -266,27 +175,6 @@ public sealed class CompileRoundTripGateTests(CompileRoundTripGateFixture fixtur
             $"Compile is not byte-stable across repeated runs: write1 {write1.Length:N0} B vs write2 {write2.Length:N0} B.");
     }
 
-    /// <summary>
-    /// A byte-level statement over the whole tree: Track → edit one field → Save &amp;
-    /// Compile, and the tree re-derived from the compiled binary differs from the pre-edit tree in
-    /// <b>exactly one file</b> — the edited record's own.
-    ///
-    /// <para>This is the text-stability criterion promoted to a compile gate, and it is deliberately
-    /// stated as a set equality rather than as "the edited file changed". "The edit landed" is already
-    /// covered (<c>PluginCompileServiceTests</c>); what only this can catch is the edit landing
-    /// <i>and</i> something else moving with it — a container's children reordered, a header rewritten,
-    /// a record dropped — across all ~2,600 files of the real fixture. Every one of those would be
-    /// a silent content change in the user's plugin, and every one of them shows up here as a second
-    /// entry in <c>changed</c>.</para>
-    ///
-    /// <para>A flat NPC is the subject on purpose: its source unit is one file, so "exactly one file"
-    /// has an unambiguous expected value. An embedded child's edit would legitimately change its
-    /// <i>parent's</i> file, which is a different (and weaker) assertion.</para>
-    ///
-    /// <para>Mutates, so it runs against its own <see cref="MutationScope"/> copy of the
-    /// fixture's already-Tracked template rather than the shared, read-only <c>fixture</c>
-    /// tree.</para>
-    /// </summary>
     [Fact]
     public void Compile_AfterOneFieldEdit_ChangesExactlyThatRecordsFileInTheReserializedTree()
     {
@@ -323,17 +211,6 @@ public sealed class CompileRoundTripGateTests(CompileRoundTripGateFixture fixtur
         Assert.Equal([expectedPath], changed);
     }
 
-    /// <summary>
-    /// Renaming a <c>DialogTopic.Responses</c> child's EditorID —
-    /// already a live capability (<see cref="RecordEditService.EditField"/> never refuses it;
-    /// <see cref="RecordEditRefusal.ContainerRecordNotYetSupported"/> only gates create/delete/renumber)
-    /// — must not perturb its siblings' GRUP order. Deliberately renames the <b>middle</b> response of
-    /// a 3-or-more-response topic, so a renumbering-on-rename bug (shifting later siblings) would show
-    /// up as a moved FormKey rather than being masked by renaming an edge slot.
-    ///
-    /// <para>Mutates, so it runs against its own <see cref="MutationScope"/> copy — see that
-    /// class's own doc comment.</para>
-    /// </summary>
     [Fact]
     public void Compile_AfterRenamingAResponsesEditorId_PreservesTheDialogTopicsInfoOrder()
     {
@@ -368,18 +245,8 @@ public sealed class CompileRoundTripGateTests(CompileRoundTripGateFixture fixtur
         Assert.Equal(expectedOrder, compiledTopic.Responses.Select(r => r.FormKey).ToList());
     }
 
-    /// <summary>
-    /// The per-test half of the split — a fresh, disposable scratch copy for the 2 mutating
-    /// facts above, so a field edit's write-back to disk can never be seen by anything else. Built by
-    /// <c>cp -r</c>'ing <see cref="CompileRoundTripGateFixture.TrackedTemplateFolder"/> (the fixture's
-    /// pristine, post-Track, pre-any-Compile snapshot) into a new temp folder, then a fresh
-    /// <see cref="LoadOrderMirror"/> <c>Reconcile</c>'d against that copy's plugin — the same two
-    /// steps the old per-test constructor did, minus the ~36s <c>TrackService.TrackAsync</c> call the
-    /// copy makes unnecessary. <see cref="CompileRoundTripGateFixture.GameDirectory"/> is shared,
-    /// read-only across every scope (and the fixture itself) rather than rebuilt per copy: nothing on
-    /// this path ever writes to it, only <c>Reconcile</c> reads master stubs from it, and there are
-    /// none for this fixture's plugin to read.
-    /// </summary>
+    // A cp -r of the pristine post-Track template, so a field edit's write-back is never seen by
+    // another fact.
     private sealed class MutationScope : IDisposable
     {
         public string ModFolder { get; } = Directory.CreateTempSubdirectory("medit-compile-roundtrip-mutate-").FullName;

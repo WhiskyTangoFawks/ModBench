@@ -4,17 +4,8 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Tests.Indexing;
 
-/// <summary>
-/// The discriminator an abstract union exposes (<c>concrete_type</c>) is an editable choice among
-/// the union's leaves, so its metadata has to carry everything the editor needs to *present* that
-/// choice: a closed value set (an enum, not free text) and a label for the row and for every value.
-///
-/// <para>The user is never shown a Mutagen class name (#686's own ruling), so the labels are the
-/// wire contract, not something the webview derives — a frontend humanizer would be exactly the
-/// value inference PRD corollary 5 forbids, and it has no way to know the union's base type. The
-/// labels here are a pure function of the schema: strip the base type's own words off the leaf's,
-/// which is generic across games and needs no per-game table.</para>
-/// </summary>
+/// <summary>The user is never shown a Mutagen class name, so labels are the wire contract: a
+/// frontend humanizer cannot know the union's base type.</summary>
 public class AbstractUnionDiscriminatorMetadataTests
 {
     private static FieldMetadata Discriminator(string table, params string[] path)
@@ -48,12 +39,6 @@ public class AbstractUnionDiscriminatorMetadataTests
         Assert.Equal(["Reference", "Location", "Collection"], kind.EnumMembers.Select(m => m.Label));
     }
 
-    /// <summary>
-    /// The one shape the humanizer cannot reduce: <c>NpcLevel</c> *is* its own base's name
-    /// (<c>ANpcLevel</c>), so stripping the base leaves nothing. Falling back to the leaf's own
-    /// words spaced out beats an empty label — the ticket's own rival, a humanizer that degenerates
-    /// silently, is exactly this case answering "" or a bare class name.
-    /// </summary>
     [Fact]
     public void NpcLevelDiscriminator_FallsBackToTheLeafsOwnWordsWhenStrippingTheBaseLeavesNothing()
     {
@@ -63,11 +48,6 @@ public class AbstractUnionDiscriminatorMetadataTests
         Assert.Equal(["Npc Level", "Pc Level Mult"], kind.EnumMembers.Select(m => m.Label));
     }
 
-    /// <summary>
-    /// Every abstract union in the game, not the two demoed: a label per value, none empty, none
-    /// colliding with a sibling (two leaves reducing to one label would make the dropdown
-    /// unusable and the choice ambiguous).
-    /// </summary>
     [Fact]
     public void EveryDiscriminatorInTheGame_CarriesOneDistinctNonEmptyLabelPerLeaf()
     {

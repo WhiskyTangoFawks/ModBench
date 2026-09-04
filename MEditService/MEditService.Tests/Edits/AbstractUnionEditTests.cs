@@ -11,18 +11,8 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Tests.Edits;
 
-/// <summary>
-/// The write half of the general abstract Loqui union mechanism
-/// (<c>LoquiUnions.ResolveUnionConcreteType</c>) for its two mandatory types —
-/// <c>Npc.Level</c> (<c>BuildStructColumn</c>'s own single-object discriminator resolution) and
-/// <c>Quest.Aliases</c> (<c>ApplyListJson</c>'s <c>ResolveListElementType</c>, generalized
-/// beyond the OMOD-only case). Same posture as <see cref="ComplexFieldElementEditTests"/>'s own
-/// <c>OmodFixture</c> — a real mod folder, a real tracked load order, no mocks; the edit lands as a
-/// real Mutagen binary write/re-parse round trip through <c>RecordEditService</c>. Verified against the
-/// written source document's own text (same idiom <c>ComplexFieldElementEditTests</c> already uses for
-/// OMOD's own leaf-union), since the document's own serializer shape has no per-column correspondence
-/// to the reflected schema's json_extract shape (MEditService/CLAUDE.md).
-/// </summary>
+/// <summary>Verified against the written document's own text, since the document's serializer
+/// shape has no per-column correspondence to the reflected schema's json_extract shape.</summary>
 public sealed class AbstractUnionEditTests : IDisposable
 {
     private readonly AbstractUnionFixture _fixture = new();
@@ -88,16 +78,6 @@ public sealed class AbstractUnionEditTests : IDisposable
 
     // ── Quest.Aliases ────────────────────────────────────────────────────────
 
-    /// <summary>
-    /// The writable-siblings-only shape: no nested struct named at all. This fact previously
-    /// included a <c>location</c> payload and asserted only <c>Applied == true</c> plus two
-    /// unrelated substrings, so it never actually checked <c>name</c>/<c>closest_to_alias</c>
-    /// landed — it was passing while <c>ApplySubFields</c> silently discarded <c>location</c> the
-    /// whole time (#642's own defect hiding inside a test named "RoundTrips" that never completed
-    /// its round trip). This version proves the round trip its name promises;
-    /// <see cref="Aliases_WholeArrayWrite_QuestReferenceAliasElement_LocationNamedInPayload_RoundTrips"/>
-    /// is the <c>location</c> half, made writable by #643.
-    /// </summary>
     [Fact]
     public void Aliases_WholeArrayWrite_QuestReferenceAliasElement_RoundTrips()
     {
@@ -112,19 +92,6 @@ public sealed class AbstractUnionEditTests : IDisposable
         Assert.Contains("\"ClosestToAlias\": 4", body, StringComparison.Ordinal);
     }
 
-    /// <summary>
-    /// #643: the third instance of #642's own defect (beyond the two named in that ticket) —
-    /// <c>QuestReferenceAlias.Location</c> is a Loqui struct nested one level inside an
-    /// <c>AQuestAlias</c> array element, not a top-level struct column, so it is reached through
-    /// <c>ApplyListJson</c>/<c>BuildListElement</c> rather than <c>BuildStructColumn</c> directly.
-    /// #642 pinned an honest refusal here while nothing wrote nested structs; this replaces that pin
-    /// with the round trip #643 makes real — and asserts the nested value itself landed in the
-    /// written document, not just <c>Applied == true</c>, precisely because the original
-    /// "RoundTrips" fact sat green for months while <c>ApplySubFields</c> discarded
-    /// <c>location</c> (read coverage of the same field was already correct —
-    /// <c>AbstractUnionSchemaTests</c> asserts <c>location.alias_id</c> round-trips on read — the
-    /// #360 divergence this ticket closes).
-    /// </summary>
     [Fact]
     public void Aliases_WholeArrayWrite_QuestReferenceAliasElement_LocationNamedInPayload_RoundTrips()
     {
@@ -155,16 +122,6 @@ public sealed class AbstractUnionEditTests : IDisposable
         Assert.DoesNotContain("OriginalLoc", body, StringComparison.Ordinal);
     }
 
-    /// <summary>
-    /// #643's fold repair: a nested list member whose own element type can't be resolved
-    /// (<c>conditions</c> — element type <c>Condition</c>, which exposes no <c>concrete_type</c>
-    /// by documented exclusion, so no payload can ever resolve it) must refuse the whole write.
-    /// Before the repair, <c>ApplySubFields</c>' fold recognized only
-    /// <c>SubFieldReadOnly</c>/<c>ValueRejected</c> and silently swallowed
-    /// <c>ListElementTypeUnresolved</c> from a nested list's own apply — this exact payload
-    /// reported success while the new alias element landed with its <c>conditions</c> silently
-    /// empty, the same silent-discard class #642 closed for nested structs, one shape over.
-    /// </summary>
     [Fact]
     public void Aliases_ElementWithUnresolvableNestedConditionElement_IsRefusedAndWritesNothing()
     {
@@ -182,18 +139,6 @@ public sealed class AbstractUnionEditTests : IDisposable
         Assert.Equal(before, _fixture.QuestBody());
     }
 
-    /// <summary>
-    /// #688: the discriminator is an editable field, so switching a leaf is an ordinary edit of the
-    /// enclosing array — the editor re-sends the element it already had with one member changed,
-    /// leaf-only members of the outgoing leaf still in it. What must come out the other side: every
-    /// member the incoming leaf shares kept, its own members left at the fresh instance's defaults,
-    /// the outgoing leaf's own members gone rather than refusing the write for naming them, and
-    /// nothing else in the document touched.
-    ///
-    /// <para>"Otherwise byte-identical" is asserted against the written document's own raw text
-    /// slices (<c>GetRawText</c>), never a re-serialisation of both sides, which would normalise
-    /// away exactly the differences this is looking for.</para>
-    /// </summary>
     [Fact]
     public void Aliases_SwitchingElementLeaf_KeepsSharedMembers_DefaultsLeafOnlyOnes_AndLeavesTheRestOfTheDocumentAlone()
     {
@@ -239,18 +184,6 @@ public sealed class AbstractUnionEditTests : IDisposable
         }
     }
 
-    /// <summary>
-    /// #710: the <c>array_add</c> envelope (<c>ArrayOpWriter</c>) against an abstract-union array.
-    /// The base is abstract, so an empty object names no class that could be constructed — the
-    /// default element carries the union's discriminator, and nothing else, and starts as the first
-    /// leaf the schema lists (<c>concrete_type</c>'s own <c>EnumMembers[0]</c>, the default any
-    /// closed choice takes here). Every other member is left absent so the freshly-constructed
-    /// instance's own defaults stand.
-    ///
-    /// <para>The envelope is spelled here exactly as the rendered panel posts it — the same literal
-    /// <c>modbench/webview/src/UnionArrayAdd.test.tsx</c> asserts for the same gesture, which is the
-    /// joint between the two harnesses.</para>
-    /// </summary>
     [Fact]
     public void Aliases_ArrayAdd_AppendsOneElementOfTheUnionsFirstLeaf()
     {

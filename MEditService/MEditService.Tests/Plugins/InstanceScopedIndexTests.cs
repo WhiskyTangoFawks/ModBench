@@ -7,15 +7,7 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Tests.Plugins;
 
-// ADR-0001: the index is one file per MO2 instance. `origin` is a mod folder name (ADR-0036)
-// and every mirror table is keyed (plugin, origin), so a mirror shared any wider than the instance
-// hands one instance the other's rows the moment two instances name a mod folder alike — which is
-// the ordinary case, not a contrived one: everyone's Unofficial Patch folder is called the same
-// thing.
-//
-// The two instances here deliberately share one game directory, because that is the shape the bug
-// lives in: keyed by the game's Data install both instances get one file;
-// keyed by the instance they never meet.
+// ADR-0001: one index file per MO2 instance.
 public sealed class InstanceScopedIndexTests : IDisposable
 {
     private const string Origin = "Unofficial Patch";
@@ -37,8 +29,6 @@ public sealed class InstanceScopedIndexTests : IDisposable
         return new LoadOrderMirror(new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector)));
     }
 
-    /// <summary>An MO2 instance holding one mod folder — the same folder name in every instance,
-    /// with its own build of the plugin inside. Returns the instance root.</summary>
     private string AnInstance(string name, string editorId)
     {
         var instanceRoot = Path.Combine(_root, name);
@@ -52,17 +42,15 @@ public sealed class InstanceScopedIndexTests : IDisposable
     private static IReadOnlyList<LoadOrderEntry> OrderIn(string instanceRoot) =>
         [new(Plugin, Path.Combine(instanceRoot, "mods", Origin, Plugin), Origin, Slot: 0, Enabled: true, Winning: true)];
 
-    // Records only: the plugin header is a document too since #631, and its EditorID is null by
-    // definition — including it would put a meaningless null in front of every expectation here
-    // without saying anything more about instance isolation, which is what this file is about.
+    // Records only: the plugin header is a document too, and its EditorID is null by definition, so
+    // including it would put a meaningless null in front of every expectation here.
     private static IReadOnlyList<string?> EditorIdsIn(LoadOrderMirror manager) =>
         [.. manager.Index!.At(RecordRef.Effective).GetDocuments(Key)
             .Where(d => d.RecordType != HeaderIndexer.RecordType)
             .Select(d => d.EditorId)];
 
-    // Two instances, one game, the same mod folder name, different plugin bytes: neither ever
-    // reads the other's records. Warm on both sides — the second load of each instance is the one
-    // that would "register" the other's file_path if the mirror were shared.
+    // Warm on both sides: the second load of each instance is the one that would register the other's
+    // file_path if the mirror were shared.
     [Fact]
     public void TwoInstancesWithSameNamedModFolders_NeverSeeEachOthersRows()
     {

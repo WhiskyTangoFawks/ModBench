@@ -10,14 +10,8 @@ using Noggog;
 
 namespace MEditService.Tests.Indexing;
 
-/// <summary>
-/// #690: a byte slice is an ordinary reflected leaf rendered as hex, read and written, so a
-/// whole-list write carries it. The document's own hex form is Mutagen's
-/// (<c>NewtonsoftJsonSerializationWriterKernel.WriteBytes</c>: <c>"0x" + uppercase hex</c>,
-/// <c>"[]"</c> for empty, <c>""</c> for absent), and this leaf reads and writes exactly that, so the
-/// generated <c>json_extract</c> view and <see cref="ColumnSpec.Extract"/> answer the same string
-/// for the same record rather than two spellings of it.
-/// </summary>
+/// <summary>The hex form is Mutagen's own, so the generated <c>json_extract</c> view and <see
+/// cref="ColumnSpec.Extract"/> answer the same string rather than two spellings.</summary>
 public sealed class SchemaReflectorHexLeafTests
 {
     private static ColumnSpec Column(string table, string column) =>
@@ -26,8 +20,6 @@ public sealed class SchemaReflectorHexLeafTests
 
     private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
 
-    /// <summary>AC #1. Every byte slice the walk reaches is classified, so none is reported as
-    /// excluded or unclassified any more.</summary>
     [Fact]
     public void NoByteSliceMemberIsExcludedOrUnclassified()
     {
@@ -100,12 +92,6 @@ public sealed class SchemaReflectorHexLeafTests
         Assert.Null(worldspace.OffsetData);
     }
 
-    /// <summary>
-    /// The exclusion that still names <c>ReadOnlyMemorySlice&lt;&gt;</c> covers its non-byte
-    /// elements only. Were it to match on the open generic alone, a byte slice reaching a dispatch
-    /// site nobody taught would be dropped silently under a reason that is false of it — the
-    /// total-classification invariant reporting an anomaly is what must happen instead.
-    /// </summary>
     [Fact]
     public void TheRemainingSliceExclusion_DoesNotCoverAByteSlice()
     {
@@ -113,8 +99,6 @@ public sealed class SchemaReflectorHexLeafTests
         Assert.NotNull(SchemaRefusals.ExcludedShapeReason(typeof(ReadOnlyMemorySlice<float>)));
     }
 
-    /// <summary>Mutagen writes an absent slice as the empty string, so reading its own document
-    /// back must clear the slice rather than write it zero bytes.</summary>
     [Fact]
     public void Write_MutagensAbsentMarker_ClearsANullableSlice()
     {
@@ -144,8 +128,6 @@ public sealed class SchemaReflectorHexLeafTests
         Assert.Equal(new byte[] { 0xAA, 0xBB, 0xCC }, grass.Unknown3.ToArray());
     }
 
-    /// <summary>What <see cref="ColumnSpec.Extract"/> just served is always writable again — the
-    /// property every array op depends on, since an op re-applies the column's own extracted value.</summary>
     [Fact]
     public void Write_TheValueExtractJustServed_IsApplied()
     {
@@ -166,13 +148,6 @@ public sealed class SchemaReflectorHexLeafTests
         Assert.Equal(new byte[] { 0x01, 0x02, 0x03 }, grass.Unknown3.ToArray());
     }
 
-    /// <summary>
-    /// Odd-length hex is refused by the <i>parse</i>, not incidentally by the length gate. Onto a
-    /// slice with no established size there is no gate to catch it, so a parser that silently
-    /// dropped the trailing half-byte would write a value the user never typed — and every other
-    /// odd-length case in this file would still pass, because a truncated value happens to be the
-    /// wrong length too.
-    /// </summary>
     [Theory]
     [InlineData("\"0xABC\"")]
     [InlineData("\"0xAABBCCD\"")]
@@ -199,14 +174,10 @@ public sealed class SchemaReflectorHexLeafTests
         Assert.Equal(new byte[] { 0x01, 0x02, 0x03 }, grass.Unknown3.ToArray());
     }
 
-    // ── The same refusals, one level down (#690 AC #3) ────────────────────────
-    // A sub-field applier is a different closure from a column applier, so a length gate wired only
-    // at the top level would leave every nested blob writable to any length.
+    // ── The same refusals, one level down (#690 AC #3) ──
     //
-    // A whole-list write builds each element fresh, so the size the nested gate reads is that
-    // element's own constructor default, never a pre-write element at the same index — index
-    // correspondence does not survive a whole-list write, and gating on it would refuse an ordinary
-    // reorder past a different-length sibling (ByteSliceArrayOpEditTests.TwoModels).
+    // A sub-field applier is a different closure from a column applier, so a length gate wired only at
+    // the top level leaves every nested blob writable to any length.
 
     private static ApplyOutcome WriteMarkerParameters(Furniture furniture, string unknownHex) =>
         Column("furn", "marker_parameters").Apply.Writer!(
@@ -241,8 +212,6 @@ public sealed class SchemaReflectorHexLeafTests
         Column("debr", "models").Apply.Writer!(
             debris, Json($$"""[{"percentage": 50, "model_filename": "A.nif", "texture_file_hashes": {{hashesHex}}}]"""));
 
-    /// <summary>The gate's other half: a blob the element constructor leaves absent has no
-    /// established size, so a whole-list write may give it a length the record did not hold.</summary>
     [Fact]
     public void WriteNested_OntoAVariableLengthBlob_AcceptsALengthTheRecordDidNotAlreadyHold()
     {
@@ -255,14 +224,6 @@ public sealed class SchemaReflectorHexLeafTests
         Assert.Equal(new byte[] { 0x11, 0x22 }, debris.Models![0].TextureFileHashes!.Value.ToArray());
     }
 
-    /// <summary>
-    /// The hex applier resolves its property off the receiver's runtime type, so its own
-    /// <c>SetValue</c> is an open-world call — a same-named property of another shape must decline
-    /// the value rather than throw out of the write path. Pinned through the shared write
-    /// (<c>LeafWriters.SetOrDecline</c>) at the one place Fallout 4 supplies a mismatched pair:
-    /// <c>weap.unknown</c> is a Single, <c>Grass.Unknown</c> a Byte. No byte-slice column has such a
-    /// twin today, which is exactly why the containment cannot be pinned on one directly.
-    /// </summary>
     [Fact]
     public void Write_OntoARecordWhoseSameNamedPropertyIsAnotherShape_Declines()
     {
@@ -272,8 +233,6 @@ public sealed class SchemaReflectorHexLeafTests
             Column("weap", "unknown").Apply.Writer!(grass, Json("1.5")));
     }
 
-    /// <summary>A non-nullable slice has no null to be set to, so JSON <c>null</c> is refused the
-    /// same way every other non-nullable leaf refuses it.</summary>
     [Fact]
     public void Write_NullOntoANonNullableSlice_IsRejected()
     {

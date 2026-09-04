@@ -7,11 +7,9 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Tests.Records;
 
-// The production wiring end to end — DuckDbRecordIndex.Initialize's GameRelease has to
-// actually reach FormKeyResolution.From through BuildFields and
-// CheckErrorBuilder.Build for the exemption to take effect on a real read, not just at the unit-level
-// seams (FormKeyResolutionTests, CheckErrorBuilderTests) that construct their own GameRelease by
-// hand. Mirrors GetDocumentsTests' BuildMod/OpenRepo shape.
+// The production wiring end to end: Initialize's GameRelease has to reach FormKeyResolution.From
+// through BuildFields and CheckErrorBuilder.Build for the exemption to take effect on a real read,
+// not just at the unit seams that construct their own GameRelease.
 public class HardcodedFormKeyResolutionTests
 {
     private static readonly SchemaReflector Reflector = SharedSchemaReflector.Instance;

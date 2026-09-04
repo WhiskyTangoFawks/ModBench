@@ -15,15 +15,8 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Tests.Api;
 
-/// <summary>
-/// Characterization tests for the write handlers' error-mapping shapes (the shared
-/// <c>PluginKeyOf</c> binder, the refusal/exception→ProblemDetails mappers,
-/// <c>ResolveAnyPhysicalCopy</c>) — pinning status code and body shape for exactly the paths
-/// <see cref="EditFieldApiTests"/>, <see cref="RenumberApiTests"/>,
-/// <see cref="MalformedFormKeyEndpointTests"/> and <see cref="ExternalChangeEndpointsTests"/> do not
-/// reach, including the <see cref="IOException"/>/<see cref="UnauthorizedAccessException"/> → 500
-/// mapping every write handler carries.
-/// </summary>
+/// <summary>Status code and body shape for the write handlers' error-mapping paths the endpoint
+/// suites do not reach, including the IO/UnauthorizedAccess to 500 mapping.</summary>
 public sealed class WriteEndpointMappingCharacterizationTests(LoadedApiFixture<TestPluginFixture> loaded)
     : IClassFixture<LoadedApiFixture<TestPluginFixture>>
 {
@@ -69,14 +62,9 @@ public sealed class WriteEndpointMappingCharacterizationTests(LoadedApiFixture<T
     private static string ModFolderOf(ScatteredFixtureData fx, string origin) =>
         Path.GetDirectoryName(fx.Plugins.Single(p => p.Origin == origin).Path)!;
 
-    // Process-shelled rather than File.Set/GetUnixFileMode — same reasoning as
-    // PluginCompileServiceJournalTests.Chmod/RecordEditServiceRenumberRecordTests.Chmod (this
-    // project's runtime is Linux-only per root CLAUDE.md, but that .NET API is flagged
-    // platform-unsafe (CA1416) regardless, and suppressing an analyzer warning is not this test's
-    // call to make on its own). Recursive, matching RecordEditServiceRenumberRecordTests' own
-    // reasoning: several of these handlers create a brand-new source file in a subdirectory Track
-    // already created and left writable, several directories under the mod folder's own root, so a
-    // non-recursive chmod on the root alone would not block the write.
+    // Process-shelled because File.SetUnixFileMode is flagged platform-unsafe (CA1416) even on a
+    // Linux-only runtime. Recursive: handlers write into subdirectories Track left writable, so a
+    // chmod on the root alone would not block the write.
     private static void Chmod(string path, string mode)
     {
         using var process = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(
@@ -442,18 +430,9 @@ public sealed class WriteEndpointMappingCharacterizationTests(LoadedApiFixture<T
     }
 }
 
-/// <summary>
-/// The same characterization purpose as <see cref="WriteEndpointMappingCharacterizationTests"/>,
-/// for <c>AbsorbExternalChange</c>/<c>KeepExternalChange</c>'s own 500 path — untested by
-/// <see cref="ExternalChangeEndpointsTests"/>, whose own tests exercise the 503/200 paths only.
-/// Direct handler calls, matching that file's own established pattern (both are named static methods,
-/// unlike <c>PeekNextFreeFormKey</c>, which is still an inline lambda and is characterized at the
-/// wire instead). Sabotages the plugin *binary* rather than the mod folder's write permission: both
-/// handlers open it for a fresh deep-parse before anything reaches git, and git failures surface as
-/// <see cref="GitUnavailableException"/> — a type the 500 mapper does not and must not
-/// catch — so a mod-folder-wide write block risks tripping the wrong exception type instead of the
-/// one under test.
-/// </summary>
+/// <summary>Sabotages the plugin binary rather than the mod folder's write permission: both handlers
+/// deep-parse it before anything reaches git, and a git failure would surface as
+/// <see cref="GitUnavailableException"/>, which the 500 mapper must not catch.</summary>
 public sealed class ExternalChangeEndpointMappingCharacterizationTests : IDisposable
 {
     private readonly TrackedModFixture _mod = TrackedModFixture.Tracked();
@@ -484,20 +463,12 @@ public sealed class ExternalChangeEndpointMappingCharacterizationTests : IDispos
             throw new InvalidOperationException($"chmod {mode} {path} failed: {process.StandardError.ReadToEnd()}");
     }
 
-    // No characterization test covers AbsorbExternalChange's own IOException/
-    // UnauthorizedAccessException catch — not because it's unreachable, but because reproducing the
-    // race in-process isn't practical. It IS reachable: ExternalChangeAbsorber.Absorb does an
-    // unwrapped File.ReadAllBytes(pluginPath) for its SHA256 provenance hash *after* the Mutagen
-    // deep-parse — a real TOCTOU window (MO2, xEdit or the user can delete/re-permission the file
-    // between the two reads, root CLAUDE.md's never-assume-exclusive-ownership rule made concrete).
-    // Reproducing it would need the deep-parse to succeed and the second read to then fail, on the
-    // same file, with no window to sabotage it in between. The catch guards a real race and must not
-    // be deleted as dead code.
+    // AbsorbExternalChange's IOException catch is uncovered because the race is impractical to
+    // reproduce in-process, not because it is unreachable: Absorb re-reads the plugin for its SHA256
+    // after the deep-parse, a real TOCTOU window.
 
-    // Leaves the plugin binary untouched (so the Mutagen deep-parse both Keep and the binary-wrap
-    // problem above depend on still succeeds) and instead sabotages the *record* write —
-    // ExternalChangeEditLander.Keep's own raw File.WriteAllText onto the touched record's flat source
-    // path, unlike Absorb's wholesale re-serialize, is MEditService's own I/O and not Mutagen-wrapped.
+    // Sabotages the record write rather than the binary, so the Mutagen deep-parse still succeeds:
+    // Keep's raw File.WriteAllText is MEditService's own I/O and not Mutagen-wrapped.
     private void WriteExternalBinaryChange(float newHeightMax)
     {
         var mod = new Fallout4Mod(ModKey.FromFileName(TrackedModFixture.PluginName), Fallout4Release.Fallout4);

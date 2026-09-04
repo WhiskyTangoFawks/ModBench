@@ -11,27 +11,8 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Tests.RealData;
 
-/// <summary>
-/// The strongest parity claim: <b>a tracked and an untracked copy of the same
-/// plugin produce identical extracted rows.</b>
-///
-/// <para><b>The seam that makes it true is that both paths call the same
-/// <see cref="IRecordIndex.Index"/> over the same <c>IModGetter</c> shape</b> — ingest-from-source
-/// deserializes the whole tree back into a mod and hands it to the identical method the binary path
-/// uses, so there is no second extraction implementation that could drift. This suite checks the
-/// construction actually holds rather than trusting the argument, and checks it on
-/// <see cref="CutDownPluginFixture"/>: 3,940 authentic records with a populated worldspace, interior
-/// and exterior cells, placements, navigation meshes, landscapes, and four VMAD-scripted quests
-/// carrying 860 dialogue topics and 2,873 responses. <c>TrackedModFixture</c> — Npc/Race/Keyword only
-/// — structurally cannot exercise any of that, which is exactly how a container
-/// regression once shipped with no test able to see it.</para>
-///
-/// <para><b>This is also where the round-trip byte-stability premise gets pinned.</b> ADR-0041
-/// asserts the whole-mod door "round trips byte-stable"; the document/hash comparison below
-/// is what turns that into a checked fact, since <c>records.content_hash</c> is the hash of the
-/// codec's canonical serialization and the whole design of <c>SourceIngest.ReconcileHead</c> depends
-/// on parse-then-reserialize being an identity.</para>
-/// </summary>
+/// <summary>Both ingest paths call the same <see cref="IRecordIndex.Index"/> over the same mod shape, so
+/// there is no second extraction to drift; this checks it on 3,940 authentic records.</summary>
 public sealed class SourceIngestParityTests : IDisposable
 {
     private const string Origin = "FixtureMod";
@@ -86,9 +67,6 @@ public sealed class SourceIngestParityTests : IDisposable
         catch (UnauthorizedAccessException) { /* scratch, best-effort */ }
     }
 
-    /// <summary>The load really did read the source tree, not quietly fall back to the binary. Without
-    /// this, every parity assertion below would be comparing the binary path against itself and would
-    /// pass no matter what ingest-from-source did.</summary>
     [Fact]
     public void TheTrackedPluginReallyIngestedFromSource_NotViaTheBinaryFallback()
     {
@@ -110,13 +88,6 @@ public sealed class SourceIngestParityTests : IDisposable
         Assert.Empty(source.Except(binary, StringComparer.Ordinal));
     }
 
-    /// <summary>
-    /// The embedded-child requirement, stated as a property of the whole corpus rather than sampled:
-    /// every placed reference, navmesh, landscape and <c>Worldspace.TopCell</c> the binary path
-    /// extracts as its own record is extracted as its own record from the source tree too — even
-    /// though in the source those live <i>inline</i> in their parent's document and have no file of
-    /// their own.
-    /// </summary>
     [Fact]
     public void EveryEmbeddedChildRecord_IsItsOwnQueryableRecord_OnBothPaths()
     {
@@ -136,48 +107,12 @@ public sealed class SourceIngestParityTests : IDisposable
         Assert.True(CountOf(_fromBinary, "cell") > 0, "fixture holds no cells");
     }
 
-    /// <summary>
-    /// Every FormKey the plugin holds.
-    ///
-    /// <para>Deliberately not <c>GetNativeFormKeys</c>: that filters to records whose own ModKey is
-    /// this plugin, which for a cut-down slice of real game data (almost all of it overrides of
-    /// Fallout4.esm) is a single row — an enumeration that would make every comparison here vacuous.</para>
-    ///
-    /// <para>And deliberately one unpaged query rather than a paging loop: <c>Search</c> orders by
-    /// <c>editor_id</c>, which is not unique and is NULL for every placed reference, so successive
-    /// LIMIT/OFFSET pages are not a stable partition and a loop over them silently skips and repeats
-    /// rows. Caught here by two runs of this same test disagreeing about the binary side's own count.</para>
-    /// </summary>
     private List<string> AllFormKeys(LoadOrderMirror mirror) =>
         [.. mirror.Index!.At(RecordRef.Effective).Search(new RecordQuery(Plugin: _plugin, Limit: int.MaxValue)).Items.Select(i => i.FormKey)];
 
     private int CountOf(LoadOrderMirror mirror, string recordType) =>
         mirror.Index!.At(RecordRef.Effective).GetRecordTypeCounts(_plugin).FirstOrDefault(c => c.Type == recordType)?.Count ?? 0;
 
-    /// <summary>
-    /// The document itself, byte for byte, for every record — the strongest assertion here, and also the
-    /// check that <b>parse-then-reserialize is an identity</b> for the whole-mod door. That premise
-    /// holds: 2,576 of 2,577 documents are byte-identical, so <c>records.content_hash</c> and the git
-    /// blob hash of the same record's source file do not diverge.
-    ///
-    /// <para><b>Allowlisted divergence: exactly one.</b> A single Cell
-    /// differs on <c>Lighting.Versioning</c> — the binary <i>overlay</i> reader yields
-    /// <c>["Break0","Break1","Break2"]</c> where the <i>deep parser</i> yields <c>["Break0"]</c>. The
-    /// Track-written file on disk
-    /// already holds only <c>Break0</c> (no file in the whole tree contains <c>Break2</c>), and the
-    /// <i>per-record</i> codec run over a deep parse also yields <c>["Break0"]</c> — identical to the
-    /// whole-mod door. So both doors agree, document-shape parity is intact, and what is left is
-    /// exactly the known decompile-vs-parse structural mismatch landing on a Mutagen binary-layout
-    /// versioning field.</para>
-    ///
-    /// <para>It cannot occur in production for a tracked plugin: ingest-from-source does exactly one
-    /// parse (ADR-0041). This suite is the one place
-    /// it can still show, because it deliberately compares an overlay ingest against a deep-parse one.</para>
-    ///
-    /// <para><b>The divergence is asserted present, not merely tolerated</b>:
-    /// if an upstream fix ever makes the two readers agree, this goes red and we find out rather than
-    /// carrying a stale exemption. Same for the count and the field.</para>
-    /// </summary>
     [Fact]
     public void EveryRecordsDocument_IsByteIdentical_ExceptTheOneKnown369OverlayVsDeepParseCell()
     {
@@ -210,28 +145,6 @@ public sealed class SourceIngestParityTests : IDisposable
             StripVersioningBlock(sourceBody));
     }
 
-    /// <summary>
-    /// <b>The plugin header's own row, byte for byte</b> (#631) — the proof that the two ingest paths
-    /// produce one dialect for the header exactly as the sweep above proves it for every record.
-    ///
-    /// <para><b>What is actually being compared, and why it is not circular.</b> Both paths reach the
-    /// same producer (<c>HeaderDocument.Write</c>) — that is deliberate, and it is the design: the
-    /// header is not two producers to be reconciled, it is one producer over two <i>readers</i>. So
-    /// the question this answers is the one that remains open: does the mod behind a tracked ingest
-    /// (deserialized from the source tree, itself written from a deep parse) present the same header
-    /// as the mod behind an untracked one (a binary overlay)? That is genuinely open —
-    /// <c>GitBlobHash</c>'s own doc comment records overlay-vs-deep-parse divergence on real record
-    /// data, and the sweep above allowlists exactly one instance of it.</para>
-    ///
-    /// <para><b>Three arms, deliberately.</b> The document bodies (what the read model serves), the
-    /// stored <c>content_hash</c> (what the freshness machinery compares — not implied by body
-    /// equality, since a producer could hash something else), and the raw bytes of the tracked
-    /// plugin's own <c>source/&lt;plugin&gt;/RecordData.json</c> on disk. Only the third can see a
-    /// BOM, a trailing newline or a CRLF difference: <c>records.body</c> is a DuckDB VARCHAR, so by
-    /// the time the first two compare, both sides have already been decoded to a .NET string. It is
-    /// also the arm that makes <c>content_hash</c> provably the git object name of the file, which is
-    /// the entire reason the header now carries one.</para>
-    /// </summary>
     [Fact]
     public void TheHeaderRow_IsByteIdentical_TrackedAndUntracked()
     {
@@ -261,8 +174,6 @@ public sealed class SourceIngestParityTests : IDisposable
         Assert.Equal(File.ReadAllBytes(headerFile), Encoding.UTF8.GetBytes(source.Body!));
     }
 
-    /// <summary>The <c>content_hash</c> the index actually stored for this row — read straight out of
-    /// <c>records</c>, because no read-model type surfaces it.</summary>
     private static string ContentHashOf(LoadOrderMirror mirror, string formKey)
     {
         using var cmd = ((DuckDbRecordIndex)mirror.Index!).Connection.CreateCommand();
@@ -271,15 +182,10 @@ public sealed class SourceIngestParityTests : IDisposable
         return Assert.IsType<string>(cmd.ExecuteScalar());
     }
 
-    /// <summary>Everything except the <c>Versioning</c> array, so the rest of the one allowlisted Cell's
-    /// document is still held to byte equality.</summary>
     private static string StripVersioningBlock(string body) =>
         System.Text.RegularExpressions.Regex.Replace(
             body, "\"Versioning\": \\[[^\\]]*\\]", "\"Versioning\": []");
 
-    /// <summary>The extracted spatial tables — the ones derived from a container's <i>structure</i>
-    /// rather than from a record's own fields, and therefore the ones most likely to differ if the
-    /// source tree reconstituted containment differently from the binary.</summary>
     [Fact]
     public void PlacementAndCellLocationRows_AreIdentical_TrackedAndUntracked()
     {
@@ -304,19 +210,6 @@ public sealed class SourceIngestParityTests : IDisposable
         Assert.True(located > 0, "fixture produced no cell_location rows");
     }
 
-    /// <summary>
-    /// <c>form_lookup</c> and <c>form_references</c>, through the two reads that answer from them —
-    /// FormKey resolution and the reference graph. Both are pure derivations of the documents above,
-    /// so this is the check that the derivation ran identically, not just that the documents matched.
-    ///
-    /// <para><b>No array-ordinal allowlist.</b> With <c>Overall.EnforceRecordOrder</c> on
-    /// (<see cref="MEditService.Core.Serialization.RecordTextCodecCustomization"/>) every
-    /// folder-split sibling's file
-    /// name carries its real GRUP position — without it, <c>DialogTopic.Responses</c> and kin have no
-    /// on-disk order carrier and their <c>FieldPath</c> array ordinals (the <c>[N]</c> inside
-    /// <c>Responses[3]</c>) reflect filesystem order, not GRUP order. The two ingests' ordinals agree
-    /// exactly — asserted here as plain equality, no deindexing, no allowlist.</para>
-    /// </summary>
     [Fact]
     public void FormLookupAndReferenceRows_AreIdentical_TrackedAndUntracked()
     {
@@ -340,15 +233,6 @@ public sealed class SourceIngestParityTests : IDisposable
         Assert.True(referenced > 0, "fixture produced no form_references rows");
     }
 
-    /// <summary>
-    /// <c>container_child</c>, the slot table for the containment relationships placement
-    /// and cell_location do not already carry — Quest's dialogue branches and topics, and DialogTopic's
-    /// responses, which stay folder-split in the source tree rather than embedded.
-    ///
-    /// <para><b>No allowlisted slot-order divergence.</b> <c>Overall.EnforceRecordOrder</c> puts
-    /// every folder-split sibling's real GRUP position in its file name, so a tracked plugin's
-    /// <c>container_child</c> rows agree with the binary's exactly, slot order included.</para>
-    /// </summary>
     [Fact]
     public void ContainerChildRows_AreIdentical_TrackedAndUntracked()
     {

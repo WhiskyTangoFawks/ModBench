@@ -15,24 +15,8 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Tests.Query;
 
-// ADR-0036: a "every dictionary key contains the delimiter" shape assertion is not a valid
-// safety net — ColumnKey.Of elides the Data-directory
-// origin, so a bare filename is a *legitimate* key; "contains '|'" would false-fail on every
-// ordinary single-origin fixture and, worse, would not catch a key that's silently missing its
-// origin (indistinguishable in shape from a legitimate Data-origin key). This asserts by content
-// instead: every dictionary key anywhere in a serialized CompareResult must equal
-// ColumnKey.Of(o.Plugin, o.Origin) for some override o actually present in that same result.
-//
-// Exercises RecordQueryService.GetCompare directly (not the classifiers in isolation) because the
-// regressions this test caught on arrival lived one layer above the classifiers, in GetCompare's
-// own annotation step (see the two Asserts at the bottom of the test) — a classifier-only test
-// would not have caught either.
-//
-// The set of "which dictionaries are column-keyed" is derived by reflecting over the
-// [ColumnKeyed] attribute on the DTOs themselves (Queries/Models.cs), not hand-typed here — a
-// hand-typed allowlist is exactly the mechanism that let a column-keyed dictionary
-// go unchecked, plus one dead entry (ClassifyResult.PluginStates, never itself serialized) linger.
-// See ColumnKeyedAttribute's own doc comment (Queries/ColumnKey.cs).
+// ADR-0036: a "every key contains the delimiter" assertion is not a valid safety net, since
+// ColumnKey.Of elides the Data-directory origin.
 public sealed class CompareResultColumnKeyIntegrityTests
 {
     private static readonly JsonSerializerOptions WireOptions = new(JsonSerializerDefaults.Web)
@@ -40,15 +24,9 @@ public sealed class CompareResultColumnKeyIntegrityTests
         Converters = { new JsonStringEnumConverter() },
     };
 
-    // Reflection-derived, not hand-typed — walked once from CompareResult's own DTO graph
-    // (Queries/Models.cs), the same graph GetCompare actually serializes. "Direct" = the
-    // dictionary's own JSON keys are columns (Values/CellStates/Types/Flags/PerPlugin/
-    // Resolutions/Raw). "Nested" = the dictionary's own keys are something else (a field id, e.g.
-    // FieldCellStates/FieldResolutions), but each of *its* values is itself a column-keyed
-    // dictionary — detected structurally (is the [ColumnKeyed] property's value type itself a
-    // string-keyed dictionary?), not via a second attribute flavor.
-    // A single field (not a static constructor — SonarS3963) whose initializer runs the reflection
-    // walk once.
+    // Reflection-derived from CompareResult's own DTO graph, the graph GetCompare serializes, so a
+    // hand-typed allowlist cannot let a column-keyed dictionary go unchecked. "Nested" is detected
+    // structurally rather than through a second attribute flavour.
     private static readonly (HashSet<string> Direct, HashSet<string> Nested) ColumnDictProperties = BuildColumnDictProperties();
 
     // ---- reflection: derive ColumnDictProperties.Direct / .Nested ----
@@ -140,13 +118,8 @@ public sealed class CompareResultColumnKeyIntegrityTests
 
     // ---- minimal ILoadOrderMirror/ILoadOrder fakes ----
     //
-    // The repository is hand-indexed twice directly, matching the established pattern in
-    // DuckDbRecordIndexTests/PlacementIndexingTests. load order.Plugins gets
-    // exactly one entry, which is all this test needs: it asserts the *shape* of the response's
-    // column keys, not classification. pluginMasters/pluginParticipates are
-    // ColumnKey-keyed, so that lone entry resolves masters/participation only for its own origin and
-    // the other column falls back to the fail-open defaults — neither of which this test reads.
-    // A real two-copy load order is exercised end-to-end in DuplicateFilenameLoadOrderApiTests.
+    // One Plugins entry is all this needs: it asserts the shape of the response's column keys, not
+    // classification, and the other column falls back to fail-open defaults it never reads.
     private sealed class FakeLoadOrder(IReadOnlyList<PluginMetadata> plugins) : ILoadOrder
     {
         public string DataFolderPath => throw new NotSupportedException();
@@ -183,10 +156,9 @@ public sealed class CompareResultColumnKeyIntegrityTests
     [Fact]
     public void GetCompare_SameFilenameTwoOrigins_EveryDictionaryKeyIsARealColumnKey()
     {
-        // Perk (not Npc): a Fallout4 record type carrying both a script adapter *and* a top-level
-        // Conditions field at once, so a single record reaches every column-keyed dictionary this
-        // test guards as well as the nested condition subtree, several levels down inside a struct
-        // property and an array-of-struct property both.
+        // Perk, not Npc: a record type carrying both a script adapter and a top-level Conditions field, so
+        // one record reaches every column-keyed dictionary this guards as well as the nested condition
+        // subtree.
         var mod = new Fallout4Mod(ModKey.FromFileName("Shared.esp"), Fallout4Release.Fallout4);
         var perk = mod.Perks.AddNew("SharedPerk");
 
@@ -211,10 +183,8 @@ public sealed class CompareResultColumnKeyIntegrityTests
         vmad.Scripts.Add(script);
         perk.VirtualMachineAdapter = vmad;
 
-        // A condition with a Run-On target of Reference (pointing at the Perk's own FormKey, which
-        // is resolvable since the Perk itself is indexed) — gives the nested condition FieldDiff
-        // subtree a resolvable formKey leaf, so the walk reaches real per-column content rather
-        // than a vacuously empty subtree.
+        // A condition with a Run-On target of Reference gives the nested condition subtree a resolvable
+        // formKey leaf, so the walk reaches real per-column content rather than an empty subtree.
         var runOnData = new FunctionConditionData
         {
             Function = Condition.Function.GetIsID,
@@ -248,10 +218,8 @@ public sealed class CompareResultColumnKeyIntegrityTests
         // itself isn't carrying its own real Origin through GetCompare's annotation step.
         Assert.Equal(2, validKeys.Count);
 
-        // Sanity: the walk below is only meaningful if it actually reaches non-empty struct/
-        // structList Raw and non-empty condition subtrees — assert that directly first, so a
-        // future fixture regression that accidentally stops exercising these paths fails loudly
-        // here rather than the JSON walk silently passing over empty objects.
+        // The walk below is only meaningful if it reaches non-empty struct/structList Raw and condition
+        // subtrees, so a fixture regression fails loudly here rather than passing over empty objects.
         var properties = Assert.Single(compare.Diffs, d => d.FieldName == "virtual_machine_adapter")
             .Children!.Single(c => c.FieldName == "scripts")
             .Children!.Single()
@@ -260,8 +228,8 @@ public sealed class CompareResultColumnKeyIntegrityTests
         Assert.NotEmpty(properties.Single(p => p.FieldName == "Config").Children!.Single(c => c.FieldName == "members").Children!);
         Assert.NotEmpty(properties.Single(p => p.FieldName == "Items").Children!.Single(c => c.FieldName == "structs").Children!);
 
-        // #692: conditions reach the grid as an ordinary reflected array column, so the walk's
-        // condition coverage is a nested FieldDiff subtree with per-column Values/CellStates.
+        // Conditions reach the grid as an ordinary reflected array column, so the walk's condition coverage
+        // is a nested FieldDiff subtree with per-column Values/CellStates.
         var conditions = Assert.Single(compare.Diffs, d => d.FieldName == "conditions");
         var conditionRow = Assert.Single(conditions.Children!);
         Assert.NotEmpty(conditionRow.CellStates);
@@ -272,14 +240,8 @@ public sealed class CompareResultColumnKeyIntegrityTests
         var json = JsonSerializer.SerializeToElement(compare, WireOptions);
         AssertEveryColumnDictKeyIsValid(json, validKeys);
 
-        // The regression this test caught on arrival (RecordQueryService.GetCompare): with
-        // two identical, non-Data-origin columns, ModA (load order 0) is the master and ModB
-        // (load order 1, identical fields) is IdenticalToMaster —
-        // classification.PluginStates.GetValueOrDefault(o.Plugin, OnlyOne) missed both compound
-        // keys (PluginStates is keyed by ColumnKey.Of) and silently defaulted both
-        // overrides to OnlyOne instead. Not a two-origin-only bug: elision only spares Data-origin
-        // plugins, and almost no plugin in a real MO2 load order is Data-origin, so this was
-        // live for essentially every conflicted record.
+        // PluginStates is keyed by ColumnKey.Of, so a lookup by plugin name alone misses both
+        // compound keys and silently defaults every override to OnlyOne.
         var modA = compare.Overrides.Single(o => o.Origin == "ModA");
         var modB = compare.Overrides.Single(o => o.Origin == "ModB");
         Assert.Equal(ConflictThis.Master, modA.ConflictThis);

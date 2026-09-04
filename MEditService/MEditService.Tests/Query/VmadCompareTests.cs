@@ -10,17 +10,8 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Tests.Query;
 
-/// <summary>
-/// #694: the compare grid over scripted records. The virtual-machine adapter is an ordinary
-/// reflected struct column, so this pins what the one classifier makes of it — with one thing that
-/// is not ordinary: scripts, properties and alias scripts are keyed arrays, aligned across plugins
-/// by the key each element carries rather than by position.
-///
-/// <para>Alignment by key is what makes a plugin that carries fewer scripts than its master read as
-/// an absence at those keys instead of shifting every row after it. The fixture is built for
-/// exactly that shape: the master carries scripts Ambush and Guard, the override carries only
-/// Guard, and their one disagreement is inside a quest alias script.</para>
-/// </summary>
+/// <summary>Scripts, properties and alias scripts are keyed arrays aligned by key, so a plugin
+/// carrying fewer scripts reads as absences at those keys rather than shifting rows.</summary>
 public sealed class VmadCompareTests : IDisposable
 {
     private readonly PluginFixtureData _fixture;
@@ -105,9 +96,8 @@ public sealed class VmadCompareTests : IDisposable
     {
         var scripts = Child(Adapter(ScriptedNpc), "scripts");
 
-        // Both keys are rows, in key order; the shared one holds the same value in both columns and
-        // the master's own holds nothing on the override's side. A positional reading would instead
-        // line the master's Ambush up against the override's Guard.
+        // Both keys are rows, in key order, and the master's own holds nothing on the override's side. A
+        // positional reading would line the master's Ambush up against the override's Guard.
         Assert.Equal(["Ambush", "Guard"], scripts.Children!.Select(c => c.FieldName));
         var ambush = Child(scripts, "Ambush");
         Assert.NotNull(ambush.Values["Base.esm"]);

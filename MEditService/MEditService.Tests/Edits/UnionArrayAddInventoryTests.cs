@@ -8,24 +8,12 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Tests.Edits;
 
-/// <summary>
-/// #710: <c>array_add</c> against every abstract-element array Fallout 4 has, not only the two
-/// with an end-to-end fixture. <see cref="ArrayOpWriter"/> is called directly on an in-memory
-/// record — no plugin on disk — because what is under test is whether the default element it builds
-/// names a leaf the write path can actually construct, which is settled before anything is written.
-/// </summary>
+/// <summary><see cref="ArrayOpWriter"/> is called on an in-memory record, no plugin on disk: whether
+/// the default element names a constructible leaf is settled before anything is written.</summary>
 public class UnionArrayAddInventoryTests
 {
     private static readonly ModKey Key = ModKey.FromFileName("UnionArrayAdd710.esp");
 
-    /// <summary>The inventory itself, asserted rather than discovered at run time: a sixth
-    /// union-array shape must arrive here as a deliberate edit, with an owning record to add to,
-    /// not slip in unexercised.
-    ///
-    /// <para>Identified by the leaf set the element's discriminator offers rather than by the
-    /// owning column, because that is what the default element is built from — #692's condition
-    /// lists are one shape carried by twenty columns (every condition-bearing record type), and
-    /// twenty owning records would prove the same one thing twenty times.</para></summary>
     [Fact]
     public void EveryDiscriminatorBearingArrayShape_IsOneThisTestExercises()
     {
@@ -40,8 +28,7 @@ public class UnionArrayAddInventoryTests
         Assert.Equal(ExercisedShapes, found);
     }
 
-    /// <summary>The five leaf sets <see cref="UnionArrays"/> covers, in ordinal order, each written
-    /// out so a Mutagen change to any one of them is a visible edit here.</summary>
+    // Written out so a Mutagen change to any leaf set is a visible edit here.
     private static readonly string[] ExercisedShapes =
     [
         // cobj.conditions and every other condition-bearing column

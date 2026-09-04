@@ -7,19 +7,9 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Tests.RealData;
 
-/// <summary>
-/// Indexing assertions against the committed cut-down real-data plugin. These verify the
-/// pipeline survives authentic Bethesda records (real VMAD shapes, real worldspace/cell trees,
-/// real placements) — hermetic, with no 316 MB master, and fast enough to stay in the mutation
-/// suite.
-///
-/// Assertions are existence/count based on purpose: the curated slice is regenerable, so pinning
-/// exact FormKeys would make it brittle. Per-field correctness lives in the synthetic
-/// <c>PlacementIndexingTests</c> / <c>GetVmadTests</c>. <c>Index_RealScripts_ReconstitutesVmadFromDocument</c>
-/// is the deliberate exception: a bare "returns without throwing" check
-/// would be vacuous, so it pins one known real record
-/// instead — same regeneration risk RealDataReadGoldenTests' goldens already accept.
-/// </summary>
+/// <summary>Existence/count assertions on purpose: the curated slice is regenerable, so pinning
+/// exact FormKeys would make it brittle. <c>Index_RealScripts_ReconstitutesVmadFromDocument</c> is
+/// the exception, since "returns without throwing" would be vacuous.</summary>
 public sealed class CutDownPluginIndexTests(CutDownPluginFixture fixture) : IClassFixture<CutDownPluginFixture>
 {
     private readonly CutDownPluginFixture _fixture = fixture;
@@ -45,11 +35,8 @@ public sealed class CutDownPluginIndexTests(CutDownPluginFixture fixture) : ICla
             "Expected the cut-down plugin to contain placed references (REFR/ACHR).");
     }
 
-    // The adapter is an ordinary reflected column, so its value arrives on the record's own
-    // document like every other field's. Deliberately concrete rather than a bare "the field is
-    // there" check: FormKey 2499C4:Fallout4.esm is a real NPC in the curated slice known to carry
-    // two scripts, one named RadroachLegendaryScript — a weakened assertion would pass even if the
-    // read silently dropped every script but one.
+    // Deliberately concrete rather than a bare "the field is there": this NPC is known to carry two
+    // scripts, so a weakened assertion would pass even if the read dropped every script but one.
     [Fact]
     public void Index_RealScripts_ReadTheAdapterOffTheDocument()
     {

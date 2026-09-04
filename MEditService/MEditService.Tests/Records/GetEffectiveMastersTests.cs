@@ -9,18 +9,9 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Tests.Records;
 
-/// <summary>
-/// <see cref="IRecordReads.GetEffectiveMasters"/> is
-/// DERIVED from content — the union of (a) the owning plugin of every FormKey this plugin's
-/// records reference outward (<c>form_references</c>) and (b) the owning plugin of every FormKey
-/// this plugin carries that isn't native to it (an override forces that master) — never the
-/// plugin's own declared header master list (ADR-0038's read-time derivation is retired, but the
-/// "effective, not declared" property survives here).
-///
-/// The fixture is the discriminating case: Patch.esp's header declares
-/// three masters, but only two are actually required by its content. Header-declared semantics
-/// would wrongly include the third (Unused.esm) — that is the built-in rival.
-/// </summary>
+/// <summary>Effective masters are derived from content, never the declared header list. The fixture
+/// discriminates: Patch.esp declares three masters but its content requires two, so header-declared
+/// semantics would wrongly include Unused.esm.</summary>
 public sealed class GetEffectiveMastersTests : IDisposable
 {
     private static readonly SchemaReflector Reflector = SharedSchemaReflector.Instance;
@@ -54,11 +45,9 @@ public sealed class GetEffectiveMastersTests : IDisposable
                 // Unused.esm: declared as a master, but nothing here references or overrides it —
                 // must be excluded from the derived result.
             },
-            // Mutagen's own writer recomputes the header's masters from live content by default
-            // (MastersListContentOption.Iterate) — the same "derived, not declared" rule under
-            // test, which would silently prune the deliberately-unused Unused.esm
-            // reference above before it ever reached disk. NoCheck keeps exactly what was set,
-            // which is the only way to get a genuinely over-declared header onto disk for this test.
+            // Mutagen's writer recomputes the header's masters from live content by default, which
+            // is the derived-not-declared rule under test and would prune the deliberately-unused
+            // reference above.
             writeParams: new BinaryWriteParameters { MastersListContent = MastersListContentOption.NoCheck })
             .Build();
     }

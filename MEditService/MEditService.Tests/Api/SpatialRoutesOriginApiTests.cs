@@ -8,28 +8,15 @@ using Noggog;
 
 namespace MEditService.Tests.Api;
 
-// ADR-0036: the wire-level guard rail for the four spatial routes
-// (GetWorldspaces/GetWorldspaceBlocks/GetCellReferences/GetInteriorCells), mirroring
-// DuplicateFilenameLoadOrderApiTests' real two-copy load path — a load order that actually holds two
-// physical files of one filename, rather than a hand-built pair below LoadOrder.
-// WorldspaceQueryServiceTests covers the origin-threading logic in isolation; this proves it
-// survives the route binding too.
-//
-// Both copies carry real mod-folder origins (never the reserved PluginOrigin.DataDirectory) —
-// ColumnKey.Of elides that reserved value, so a fixture where either copy defaulted to it would
-// pass whether or not the routes honoured the `origin` parameter.
+// ADR-0036 for the spatial routes, over a load order really holding two files of one filename.
 public sealed class SpatialRoutesOriginApiTests(LoadedApiFixture<TestPluginFixture> loaded)
     : IClassFixture<LoadedApiFixture<TestPluginFixture>>
 {
     private readonly HttpClient _client = loaded.Client;
 
-    // Each copy gets its own worldspace (one exterior cell, one placed ref) and one interior cell,
-    // all EditorID-tagged with the origin that built them so a route answering with the wrong
-    // copy's data is visible in the assertion, not just in the row count. Both copies construct
-    // their content in the same order from a fresh Fallout4Mod against the same ModKey, so they
-    // land on identical FormKeys — same trick DuplicateFilenameLoadOrderApiTests' shared-FormKey NPC
-    // pair uses — which is what lets one captured FormKey address both copies' /worldspaces/{fk}
-    // and /cells/{fk} routes, distinguished only by the `origin` query param under test.
+    // Both copies build in the same order from a fresh Fallout4Mod against the same ModKey, so
+    // they land on identical FormKeys: one captured FormKey addresses both copies' routes,
+    // distinguished only by `origin`.
     private static (string WorldspaceFk, string CellFk) ConfigureCopy(Fallout4Mod mod, string tag)
     {
         var wrld = mod.Worldspaces.AddNew($"World{tag}");
@@ -71,9 +58,8 @@ public sealed class SpatialRoutesOriginApiTests(LoadedApiFixture<TestPluginFixtu
 
     private async Task PutBothCopies(ScatteredFixtureData fx)
     {
-        // ADR-0044: both copies travel in the one snapshot — ModA as the copy the Mod override
-        // order resolves the name to, ModB as the losing copy at the same slot — and both are
-        // registered; only the winning, enabled, listed one ever participates.
+        // ADR-0044: both copies travel in the one snapshot, ModB as the losing copy at the same
+        // slot; only the winning, enabled, listed one participates.
         var winner = fx.Plugins.Single(p => p.Origin == "ModA");
         var plugins = fx.Plugins.Select(p => p.Origin == "ModB"
             ? p with { Slot = winner.Slot, Winning = false }

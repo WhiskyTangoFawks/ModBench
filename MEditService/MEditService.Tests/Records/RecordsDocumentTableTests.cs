@@ -12,21 +12,8 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Tests.Records;
 
-/// <summary>
-/// Ingest writes one <c>records</c> document per major record — the table that replaces the
-/// reflected per-type wide tables (ADR-0041).
-///
-/// Asserted <b>through the SQL door</b> (plain <c>SELECT</c> against the connection), not through
-/// <c>IRecordReads</c>, deliberately: the published relational schema is a contract in its own right
-/// for user filter SQL and <c>medit.query</c> scripts (invariant 8), and the typed C# surface is
-/// explicitly *not* that contract. A test that could only see this table through a repository method
-/// would pass just as happily if the table were shaped wrong but the method compensated.
-///
-/// The body is asserted against <see cref="RecordTextCodec"/>'s own bytes rather than against a
-/// literal: ADR-0041's claim is not "some JSON is stored" but "the same bytes as the source file",
-/// which is precisely what makes <c>content_hash</c> comparable to a git object and what a byte
-/// compare will later stand on.
-/// </summary>
+/// <summary>Through the SQL door, not <c>IRecordReads</c>: the relational schema is the contract for user
+/// filter SQL, and a repository-only test would pass if the method compensated.</summary>
 public sealed class RecordsDocumentTableTests(CutDownPluginFixture fixture) : IClassFixture<CutDownPluginFixture>
 {
     private readonly CutDownPluginFixture _fixture = fixture;
@@ -44,19 +31,13 @@ public sealed class RecordsDocumentTableTests(CutDownPluginFixture fixture) : IC
         return cmd.ExecuteScalar();
     }
 
-    /// <summary>
-    /// One document per record of every <i>indexed</i> type. The expected count is built by walking
-    /// the reflected schemas against the same file rather than pinned as a literal, so regenerating
-    /// the curated plugin cannot quietly turn this into an assertion about a stale corpus.
-    /// </summary>
     [Fact]
     public void Index_WritesOneDocumentPerRecordOfEveryIndexedType()
     {
         using var overlay = OpenPlugin();
-        // The header is excluded from the enumeration (a ModHeader is not an IMajorRecordGetter, so
-        // EnumerateMajorRecords cannot reach it) and added back as the one row it contributes — since
-        // #631 it is an ordinary `records` row, so leaving it out would under-count by exactly one
-        // per plugin.
+        // The header is excluded from the enumeration, a ModHeader not being an IMajorRecordGetter, and
+        // added back as the one ordinary `records` row it contributes, so leaving it out would under-count
+        // by exactly one per plugin.
         var expected = SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4)
             .Where(kv => kv.Key != HeaderIndexer.RecordType)
             .Sum(kv => overlay.EnumerateMajorRecords(kv.Value.RecordType, throwIfUnknown: false).Count())
@@ -68,18 +49,6 @@ public sealed class RecordsDocumentTableTests(CutDownPluginFixture fixture) : IC
         Assert.Equal(expected, actual);
     }
 
-    /// <summary>
-    /// The document set is scoped to the types the schema reflects, exactly as the per-type wide
-    /// tables were — a deliberate product filter, not an accident of enumeration. LAND/NAVM/NAVI are
-    /// not editable refs (<c>SchemaReflector.NonEditableRefTypes</c>), no read surface has ever
-    /// exposed them, and no generated view will; serializing them would spend real ingest time and
-    /// real memory (navmeshes are large) on documents with no consumer.
-    ///
-    /// Stated as a *paired* assertion rather than a bare absence: the plugin genuinely contains
-    /// records of these types (the positive control — otherwise "none were stored" is vacuously true
-    /// of a corpus that had none to store), and the same query that finds none of them finds plenty
-    /// of an indexed type through the identical path.
-    /// </summary>
     [Fact]
     public void Index_ExcludesTheNonEditableRefTypesTheSchemaAlsoExcludes()
     {
@@ -102,11 +71,6 @@ public sealed class RecordsDocumentTableTests(CutDownPluginFixture fixture) : IC
         Assert.True(indexed > 0, "Positive control: the same query path must find documents of an indexed type.");
     }
 
-    /// <summary>
-    /// The body is the codec's source text, byte for byte. A non-container record here on purpose:
-    /// containers need the ingest-side child strip, which has its own
-    /// test — pinning a Cell here would conflate the two.
-    /// </summary>
     [Fact]
     public async Task Index_DocumentBody_IsTheCodecsSourceText()
     {
@@ -121,11 +85,6 @@ public sealed class RecordsDocumentTableTests(CutDownPluginFixture fixture) : IC
         Assert.Equal(System.Text.Encoding.UTF8.GetString(expected), body);
     }
 
-    /// <summary>
-    /// content_hash is the git blob hash of the body that sits beside it — the two columns must
-    /// agree row-by-row, or the aggregate that reads them ("every plugin says the same thing about
-    /// this record") is reading a hash of something other than what it is about to show.
-    /// </summary>
     [Fact]
     public void Index_ContentHash_IsTheGitBlobHashOfTheStoredBody()
     {
@@ -148,11 +107,6 @@ public sealed class RecordsDocumentTableTests(CutDownPluginFixture fixture) : IC
         Assert.Empty(mismatches);
     }
 
-    /// <summary>
-    /// The identity columns the read model is rebuilt on. `ref` is here with its one committed
-    /// value and no machinery behind it — ADR-0041 spells it into the published table shape; the
-    /// second value belongs to the edit path.
-    /// </summary>
     [Fact]
     public void Index_Document_CarriesItsIdentityColumns()
     {

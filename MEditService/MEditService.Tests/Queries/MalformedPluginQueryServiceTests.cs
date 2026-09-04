@@ -3,11 +3,8 @@ using MEditService.Core.Queries;
 
 namespace MEditService.Tests.Queries;
 
-/// <summary>
-/// The session-load half of the Kind B detectors (#570): every held, mutable plugin's binary is
-/// scanned from its original bytes, worded exactly as the Track refusal would word it (the same
-/// <c>PluginDiagnosis.Describe()</c>, #569 — no separate vocabulary).
-/// </summary>
+/// <summary>Session-load scans are worded exactly as the Track refusal would word them (the same
+/// <c>PluginDiagnosis.Describe()</c>, no separate vocabulary).</summary>
 public sealed class MalformedPluginQueryServiceTests
 {
     private static string Fixture(string name) => Path.Combine(AppContext.BaseDirectory, "TestData", name);

@@ -8,15 +8,12 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Tests.Plugins;
 
-// ADR-0044: PUT /load-order's one verb, at the mirror seam. Every loadout gesture — reorder,
-// enable, disable, reprioritise, uninstall, profile switch — is the same reconcile, and the index
-// tells the difference between a cheap one (SQL-only) and a cold one (an index) through the
-// counting factory below.
+// ADR-0044: PUT /load-order's one verb, at the mirror seam. Every loadout gesture is the same
+// reconcile, and the counting factory below tells a cheap SQL-only one from a cold indexing one.
 public sealed class LoadOrderMirrorReconcileTests
 {
-    // Counts the two verbs whose cost the acceptance criteria are about: Index (a re-read plus a
-    // re-index) and UpdateWinners (the whole-set sweep). Register is deliberately not counted —
-    // it is the SQL-only move every cheap reconcile is allowed to make.
+    // Counts the two verbs whose cost the acceptance criteria are about: Index (a re-read plus a re-
+    // index) and UpdateWinners (the whole-set sweep).
     private sealed class CountingFactory(IRecordIndexFactory inner) : IRecordIndexFactory
     {
         public int Indexed { get; set; }

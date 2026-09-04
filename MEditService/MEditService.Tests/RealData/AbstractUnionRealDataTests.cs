@@ -7,32 +7,8 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Tests.RealData;
 
-/// <summary>
-/// "A real fixture... matching xEdit's display", against the committed
-/// cut-down Fallout 4 plugin rather than an in-memory-constructed record
-/// (<see cref="MEditService.Tests.Indexing.AbstractUnionSchemaTests"/> already covers that half).
-/// Read through <see cref="ModFactory.ImportGetter"/> the same way <see cref="CutDownPluginFixture"/>
-/// itself does — a real binary-overlay read, not a fully-materialized in-memory object — because that
-/// lazy overlay path is where a per-property custom binary translation (Mutagen's own
-/// <c>binary="NoGeneration"</c> on <c>PcLevelMult.LevelMult</c>, confirmed against the real generated
-/// source) could plausibly diverge from the eager, hand-constructed shape the other test file proves.
-/// It does not, empirically: <c>Npc.Level</c> is materialized as a concrete <c>NpcLevel</c>/
-/// <c>PcLevelMult</c> object at NPC-parse time regardless of overlay mode (Mutagen's own custom
-/// <c>NpcBinaryCreateTranslation</c> constructs it directly off the ACBS flag bit), so its own
-/// <c>LevelMult</c> read never reaches <c>PcLevelMultBinaryOverlay</c>'s unimplemented stub. Quest
-/// alias elements, by contrast, do stay lazy <c>...BinaryOverlay</c> instances until touched — this
-/// file's own <see cref="Aliases_DialogueConcordArea_HasBothReferenceAndLocationAliasKinds"/> is the
-/// proof that still works, because <c>BuildUnionShapeField</c>'s own <c>IsInstanceOfType</c>
-/// checks are against each leaf's *getter interface*, which an overlay class implements the same as
-/// its eager counterpart.
-///
-/// <para>The committed fixture (<c>CutDownPluginGenerator</c>'s "first 4 VMAD-bearing records"
-/// curation) has no <c>PcLevelMult</c> NPC among its four, and no <c>QuestCollectionAlias</c> among
-/// its four quests' aliases — both verified empirically, not assumed, by enumerating every NPC/Quest
-/// in the fixture. Regenerating to guarantee one of each would mean changing
-/// <c>CutDownPluginGenerator</c>'s own selection criteria, a committed-test-data change reported to
-/// the orchestrator rather than made silently.</para>
-/// </summary>
+/// <summary>Read through the lazy binary overlay, where a per-property custom translation could diverge
+/// from the eager shape.</summary>
 public sealed class AbstractUnionRealDataTests
 {
     private static readonly IReadOnlyDictionary<string, RecordTableSchema> Schemas =

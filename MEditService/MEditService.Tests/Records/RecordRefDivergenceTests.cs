@@ -11,17 +11,9 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Tests.Records;
 
-/// <summary>
-/// <see cref="IRecordIndex.At"/>(<see cref="RecordRef.Head"/>) is a genuinely different
-/// relation, not the same instance — so identical answers on unchanged records are a property to
-/// prove, not a given.
-///
-/// <para>The first two cases use records with <b>no</b> working-tree change, where the two relations
-/// hold the same row by construction and identical answers are still the correct ones — a broken
-/// <c>At(Head)</c> that dropped the active filter or recomputed winner status differently fails here
-/// exactly as it would have before. The divergence itself is <see cref="WorkingTreeChangeTests"/>'s
-/// subject; the last case here pins only that it stays scoped to the record actually edited.</para>
-/// </summary>
+/// <summary><c>At(Head)</c> is a different relation, not the same instance, so identical answers on
+/// unchanged records are a property to prove: a broken Head that dropped the active filter fails
+/// here.</summary>
 public sealed class RecordRefDivergenceTests : IDisposable
 {
     private static readonly SchemaReflector Reflector = SharedSchemaReflector.Instance;
@@ -73,11 +65,8 @@ public sealed class RecordRefDivergenceTests : IDisposable
         return repo;
     }
 
-    // The same "KeepMe" override deleted in the working tree, reused by every one of the five
-    // extracted/aggregate reads below — one crafted divergence, five distinct At(Head) observers, the
-    // same shape RecordRefDivergenceTests already uses for GetOverrideStack/Search above. Deletion is
-    // structural, so ApplyWorkingTreeChanges' own UpdateWinners() resweep already covers it — no
-    // second call needed here.
+    // One crafted divergence, five distinct At(Head) observers. Deletion is structural, so
+    // ApplyWorkingTreeChanges' own UpdateWinners() resweep already covers it.
     private DuckDbRecordIndex RepositoryWithWinnerOverrideDeleted()
     {
         var repo = LoadedRepository();
@@ -85,9 +74,8 @@ public sealed class RecordRefDivergenceTests : IDisposable
         return repo;
     }
 
-    // A real codec-produced body, the same shape CreateRecord writes in production (mirrors
-    // WorkingTreeCreationTests' own helper) — a hand-crafted JSON literal would only prove this test's
-    // guess at the codec's shape, not that a genuinely new record round-trips.
+    // A real codec-produced body, the shape CreateRecord writes in production: a hand-crafted JSON
+    // literal would prove only this test's guess at the codec's shape.
     private static readonly RecordTextCodec Codec = new(NullLogger<RecordTextCodec>.Instance);
 
     private static string NewNpcBody(string formKey, string editorId)
@@ -101,10 +89,8 @@ public sealed class RecordRefDivergenceTests : IDisposable
     public void AtHead_Search_MatchesEffective_WithAnActiveFilterNarrowingTheListing()
     {
         using var repo = LoadedRepository();
-        // Narrows the listing to just "KeepMe"'s two override rows (Base.esm + Winner.esp) out of
-        // the fixture's three (DropMe's lone Base.esm row is excluded) — a broken At(Head) that
-        // dropped the active filter (SetFilter is seam-wide state, easy to forget wiring into a
-        // second entry point) would return all three instead, diverging from Effective here.
+        // Narrows the listing to KeepMe's two override rows out of the fixture's three. A broken At(Head)
+        // that dropped the active filter would return all three and diverge from Effective here.
         repo.SetFilter($"SELECT '{_keptNpcFormKey}' AS form_key");
 
         var query = new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0);
@@ -173,12 +159,9 @@ public sealed class RecordRefDivergenceTests : IDisposable
             repo.At(RecordRef.Head).GetDocument(untouched, basePlugin)!.Body);
     }
 
-    // Only these tests exercise the At(RecordRef.Head) path of the 7 relation-parameterized twins
-    // (GetRecordTypeCounts, GetPluginsWithMatchingRecords, GetNativeFormKeys,
-    // GetEffectiveMasters, GetWorldspaceCells, GetInteriorCells, GetCellReferences) — everything
-    // else in the suite exercises them at Effective only. Four are covered below and three
-    // cell/placement-table ones in RecordRefDivergenceCellReadsTests, so a relation plumbed wrong
-    // has something to fail against instead of passing by construction.
+    // Only these tests exercise the At(RecordRef.Head) path of the seven relation-parameterized twins;
+    // everything else in the suite exercises them at Effective only, so a relation plumbed wrong would
+    // otherwise pass by construction.
 
     [Fact]
     public void AtHead_GetPluginsWithMatchingRecords_StillNamesThePluginWithAnEffectivelyDeletedOverride()
@@ -202,8 +185,8 @@ public sealed class RecordRefDivergenceTests : IDisposable
     {
         using var repo = RepositoryWithWinnerOverrideDeleted();
 
-        // Winner.esp's only record was its now-deleted override of KeepMe, so nothing in its
-        // Effective rows still forces Base.esm as a master. Head's committed row still does.
+        // Winner.esp's only record was its deleted override of KeepMe, so nothing in its Effective rows
+        // still forces Base.esm as a master. Head's committed row does.
         Assert.DoesNotContain("Base.esm", repo.At(RecordRef.Effective).GetEffectiveMasters(WinnerKey));
         Assert.Contains("Base.esm", repo.At(RecordRef.Head).GetEffectiveMasters(WinnerKey));
     }

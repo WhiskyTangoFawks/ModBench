@@ -2,11 +2,6 @@ using MEditService.Core.Source;
 
 namespace MEditService.Tests.Source;
 
-/// <summary>
-/// <see cref="SourceRepository.LatestBaselineTrailers"/> — reads back exactly what
-/// <see cref="SourceRepository.Track"/> (and, later, Absorb Upstream Update's plumbing commit)
-/// wrote onto <c>main</c>'s tip, the meta-tell classifier's other data source.
-/// </summary>
 public sealed class SourceRepositoryLatestBaselineTrailersTests
 {
     private static string NewModFolder() => Directory.CreateTempSubdirectory("medit-baseline-trailers-").FullName;

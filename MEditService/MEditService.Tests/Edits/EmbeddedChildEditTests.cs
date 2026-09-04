@@ -7,25 +7,9 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 namespace MEditService.Tests.Edits;
 
-/// <summary>
-/// A field edit on a record that has <b>no source file of its own</b> — one of the five
-/// slots Spriggit embeds inline in its parent's document
-/// (<c>Cell.{Persistent,Temporary,Landscape,NavigationMeshes}</c>, <c>Worldspace.TopCell</c>). The edit
-/// reads the parent's file, applies the field to the child inside the parent's own object graph, and
-/// writes the parent back — so the child's bytes move without the parent's own fields being touched.
-///
-/// <para>Runs against the shared <see cref="ContainerModFixture"/>, which carries every one of
-/// the five embedded slots at once plus the Worldspace/TopCell and Quest/DialogTopic shapes this suite
-/// exercises — so a resolver that handles placed references and quietly fails on a worldspace's top
-/// cell cannot pass.</para>
-///
-/// <para><b>Only three of the five slots can be exercised through a field edit</b>, and the tests say
-/// which and why rather than quietly covering less than the fixture holds:
-/// <c>Cell.Landscape</c>/<c>Cell.NavigationMeshes</c> hold Landscape/NavigationMesh records, for which
-/// <c>SchemaReflector</c> publishes no schema at all (they are not record types mEdit surfaces), so
-/// neither has a field to write. They are still in the fixture, because the guard tests below read
-/// their parentage to prove the container's child set survives an edit intact.</para>
-/// </summary>
+/// <summary>Only three of the five embedded slots can be exercised through a field edit:
+/// <c>SchemaReflector</c> publishes no schema for Landscape or NavigationMesh, so neither has a field to
+/// write.</summary>
 public sealed class EmbeddedChildEditTests : IDisposable
 {
     private readonly ContainerModFixture _fixture = new();
@@ -44,19 +28,17 @@ public sealed class EmbeddedChildEditTests : IDisposable
     {
         var file = _fixture.SourceFileContaining(ContainerModFixture.EmbedCellEditorId);
         var before = File.ReadAllText(file);
-        // Positive control for every Assert.Empty(_fixture.GitStatus()) in the refusal tests below:
-        // Track has just committed the pristine tree, so the status is empty now and must not be after
-        // an edit that actually lands. Without this the emptiness assertions could pass for the wrong
-        // reason.
+        // Positive control for every Assert.Empty(GitStatus()) in the refusal tests below: Track has just
+        // committed the pristine tree, so without this those emptiness assertions could pass for the
+        // wrong reason.
         Assert.Empty(_fixture.GitStatus());
 
         var result = EditService().EditField(_fixture.Plugin, _fixture.TemporaryRef.ToString(), "scale", Json("2.5"));
 
         Assert.True(result.Applied, result.Message);
         Assert.NotEmpty(_fixture.GitStatus());
-        // The strongest form: every byte outside the edited field's own text is identical.
-        // The two placed refs carry distinct scales in the fixture precisely so this substitution
-        // is unique — a shared value would make the assertion pass for an edit that hit both.
+        // The two placed refs carry distinct scales in the fixture precisely so this substitution is
+        // unique: a shared value would make the assertion pass for an edit that hit both.
         Assert.Equal(before.Replace("\"Scale\": 1.0", "\"Scale\": 2.5", StringComparison.Ordinal), File.ReadAllText(file));
     }
 
@@ -67,9 +49,8 @@ public sealed class EmbeddedChildEditTests : IDisposable
 
         Assert.True(EditService().EditField(_fixture.Plugin, _fixture.TemporaryRef.ToString(), "scale", Json("7.0")).Applied);
 
-        // The cell's own WaterHeight — a field of the parent, not of the child — is untouched, and so
-        // is its EditorID. A read-modify-write that reserialized the parent from anything other than
-        // its own text would be free to move these.
+        // The cell's own WaterHeight is a field of the parent, not of the child. A read-modify-write that
+        // reserialized the parent from anything other than its own text would be free to move it.
         var after = File.ReadAllText(file);
         Assert.Contains("\"WaterHeight\": 10.0", after, StringComparison.Ordinal);
         Assert.Contains($"\"EditorID\": \"{ContainerModFixture.EmbedCellEditorId}\"", after, StringComparison.Ordinal);
@@ -98,9 +79,8 @@ public sealed class EmbeddedChildEditTests : IDisposable
 
         Assert.True(EditService().EditField(_fixture.Plugin, _fixture.TemporaryRef.ToString(), "scale", Json("4.5")).Applied);
 
-        // The parent is the source unit, so the parent is what went dirty — Effective has moved and
-        // Head still holds what was committed. That is what makes the edit visible as a
-        // working-tree change on the record the file actually belongs to.
+        // The parent is the source unit, so the parent is what went dirty, which is what makes the edit
+        // visible as a working-tree change on the record the file actually belongs to.
         var effective = index.At(RecordRef.Effective).GetDocument(_fixture.EmbedCell.ToString(), _fixture.Plugin)!.Body;
         var head = index.At(RecordRef.Head).GetDocument(_fixture.EmbedCell.ToString(), _fixture.Plugin)!.Body;
         Assert.NotEqual(effective, head);
@@ -113,11 +93,9 @@ public sealed class EmbeddedChildEditTests : IDisposable
     [Fact]
     public void APlacedRefsPosition_IsRefused_SoItsPlacementRowCannotGoStale()
     {
-        // The reflector's general P3Int16/P3Float mapping (needed for ObjectBounds and several other
-        // fields with no side-table mirror) makes `position` an ordinary writable column on every
-        // IPlacedGetter type, so RefuseIfContainmentField refuses it by name, the same way Grid is
-        // refused for cell_location: Position is mirrored into `placement` (PlacementWalker), and
-        // nothing on this write path re-derives that row.
+        // The reflector's general P3Int16/P3Float mapping makes `position` an ordinary writable column on
+        // every IPlacedGetter, so RefuseIfContainmentField refuses it by name: Position is mirrored into
+        // `placement` and nothing on this write path re-derives that row.
         var index = _fixture.Mirror.Index!;
         Assert.Equal(11f, index.At(RecordRef.Effective).GetPlacement(_fixture.TemporaryRef.ToString(), _fixture.Plugin)!.Value.PosX);
 
@@ -135,9 +113,8 @@ public sealed class EmbeddedChildEditTests : IDisposable
     [Fact]
     public void ACellsChildSlots_AreRefused_SoContainerChildCannotGoStale()
     {
-        // Reflection makes these ordinary writable columns on a Cell reachable through EditField.
         // Writing one would swap a container's child set through a JSON blob, leaving the replaced
-        // children with rows and parentage but no parent — silent index corruption, not an edit.
+        // children with rows and parentage but no parent: silent index corruption, not an edit.
         var service = EditService();
 
         var navmeshes = service.EditField(_fixture.Plugin, _fixture.EmbedCell.ToString(), "navigation_meshes", Json("[]"));
@@ -186,12 +163,9 @@ public sealed class EmbeddedChildEditTests : IDisposable
     [Fact]
     public void EveryEditableEmbeddedSlot_ResolvesToItsOwningContainersFile()
     {
-        // Three of the five embedded slots, which is all of them that a field edit can reach:
-        // Cell.Landscape and Cell.NavigationMeshes hold Landscape/NavigationMesh records, and
-        // SchemaReflector deliberately publishes no schema for `land`/`navm` at all (they are not
-        // record types mEdit surfaces), so there is no field on either to write. The resolver still
-        // resolves them — ACellsChildSlots_AreRefused above reads their parentage — but nothing can
-        // exercise that through EditField, so this test does not pretend to.
+        // Three of the five embedded slots, which is all a field edit can reach: Cell.Landscape and
+        // Cell.NavigationMeshes hold record types SchemaReflector publishes no schema for, so there is no
+        // field on either to write.
         var service = EditService();
 
         Assert.True(service.EditField(_fixture.Plugin, _fixture.PersistentRef.ToString(), "scale", Json("2.0")).Applied);
@@ -237,10 +211,9 @@ public sealed class EmbeddedChildEditTests : IDisposable
     [Fact]
     public void AQuestsDialogTopic_IsNotReachedThroughTheQuestsDocument()
     {
-        // The bound on the descent, from the other side: a dialog topic is a child of the quest but is
-        // folder-split, with its own RecordData.json. Editing it must land in *its* file, never in the
-        // quest's — a search that descended into every child slot would write the change into the
-        // quest's document and lose it, because compile and ingest read the topic's own file.
+        // A dialog topic is a child of the quest but folder-split, with its own RecordData.json, so
+        // a search descending into every child slot would write the change into the quest's document
+        // and lose it.
         var questFile = _fixture.SourceFileContaining(ContainerModFixture.QuestEditorId);
         var topicFile = _fixture.SourceFileContaining(ContainerModFixture.DialogTopicEditorId);
         Assert.NotEqual(questFile, topicFile);
@@ -326,9 +299,8 @@ public sealed class EmbeddedChildEditTests : IDisposable
     [Fact]
     public void EditingAQuestsEditorId_MovesItsDirectory_AndItsFolderSplitChildrenTravelWithIt()
     {
-        // The property the rename's doc comment claims and only a Quest can demonstrate: moving the
-        // directory carries the folder-split children inside it, rather than orphaning them under a
-        // directory that no longer exists.
+        // Only a Quest can demonstrate it: moving the directory carries the folder-split children inside
+        // it, rather than orphaning them under a directory that has gone.
         var oldDirectory = Path.GetDirectoryName(_fixture.SourceFileContaining(ContainerModFixture.QuestEditorId))!;
         Assert.StartsWith(oldDirectory, _fixture.SourceFileContaining(ContainerModFixture.DialogTopicEditorId), StringComparison.Ordinal);
 

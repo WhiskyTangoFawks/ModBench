@@ -4,12 +4,8 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 namespace MEditService.Tests.Edits;
 
-/// <summary>
-/// Every compile — including this single-plugin Save &amp; Compile — runs through
-/// <see cref="CompileJournal"/>, batch of one, through the real <see cref="PluginCompileService.Compile"/>
-/// door rather than only through <c>CompileJournal.RunBatch</c> directly (that door's own tests,
-/// <c>CompileJournalTests</c>, cover the primitive in isolation; this covers it wired in).
-/// </summary>
+/// <summary>The journal wired in through the real <see cref="PluginCompileService.Compile"/> door;
+/// <c>CompileJournalTests</c> covers the primitive in isolation.</summary>
 public sealed class PluginCompileServiceJournalTests : IDisposable
 {
     private readonly TrackedModFixture _mod = TrackedModFixture.Tracked();
@@ -28,12 +24,9 @@ public sealed class PluginCompileServiceJournalTests : IDisposable
         Assert.Null(CompileJournal.UnfinishedBatch(_mod.ModFolder));
     }
 
-    // Not RunBatch driven by hand: the crash is injected at the real door a production caller
-    // actually uses, so this is honest about what PluginCompileService.Compile itself leaves behind
-    // on disk, not just what the journal primitive can be made to do in isolation. The mod folder
-    // itself (not .git, which keeps its own, separate permissions) is made unwritable so
-    // PluginWriter's backup-then-write sequence throws partway through — the same observable state a
-    // genuine crash between the journal's marker write and its clear would leave.
+    // The crash is injected at the real door a production caller uses. The mod folder (not .git, which
+    // keeps separate permissions) is made unwritable so PluginWriter's backup-then-write sequence
+    // throws partway through.
     [Fact]
     public void Compile_CrashedDuringTheWrite_LeavesAMarkerUnfinishedBatchReads_NamingWhatDidNotLand()
     {
@@ -53,9 +46,8 @@ public sealed class PluginCompileServiceJournalTests : IDisposable
         Assert.Empty(recovery.Landed);
     }
 
-    // Process-shelled rather than File.Set/GetUnixFileMode: this project's runtime is Linux-only
-    // (root CLAUDE.md), but that .NET API is flagged platform-unsafe (CA1416) regardless, and
-    // suppressing an analyzer warning is not this test's call to make on its own.
+    // Process-shelled because File.SetUnixFileMode is flagged platform-unsafe (CA1416) even on a
+    // Linux-only runtime, and suppressing an analyzer warning is not this test's call to make.
     private static void Chmod(string path, string mode)
     {
         using var process = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(

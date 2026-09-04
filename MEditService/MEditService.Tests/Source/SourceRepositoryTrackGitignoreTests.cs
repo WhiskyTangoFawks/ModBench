@@ -2,15 +2,8 @@ using MEditService.Core.Source;
 
 namespace MEditService.Tests.Source;
 
-/// <summary>
-/// ADR-0041: Track generates <c>.gitignore</c> from the chosen preset. Edits (default for
-/// downloaded mods) ignores everything except the source; Everything additionally tracks assets.
-/// Plugin binaries are ignored in both presets — they are
-/// compiled artifacts, never written by this module. <c>meta.ini</c> is excluded in both, too
-/// (ADR-0041 amendment: "never track a file that changes for non-content reasons") — asserted
-/// against the committed tree itself, not just the generated text, with a sibling source file as
-/// the positive control through the identical query path.
-/// </summary>
+/// <summary>Plugin binaries are ignored in both presets (compiled artifacts); <c>meta.ini</c> too
+/// (ADR-0041: never track a file that changes for non-content reasons).</summary>
 public sealed class SourceRepositoryTrackGitignoreTests
 {
     private static string NewModFolder() => Directory.CreateTempSubdirectory("medit-track-gitignore-").FullName;
@@ -103,13 +96,9 @@ public sealed class SourceRepositoryTrackGitignoreTests
         }
     }
 
-    // The Edits preset repo tracks exactly .gitignore + source/**. Every test above
-    // only probes a couple of paths with Contains/DoesNotContain — that style would pass even if
-    // one unexpected extra file leaked into the commit alongside a correctly-included/-excluded
-    // probe pair. This asserts the whole committed set, exactly, for a fixture that mixes every
-    // kind of thing the Edits preset must reject (meta.ini, a plugin binary, an ordinary asset, a
-    // top-level folder that merely ends with "source") alongside two real plugins' source trees,
-    // so "exactly" is checked against a representative mix, not a single-file happy path.
+    // The whole committed set, exactly: the probing style above would pass even if an extra file leaked
+    // in beside a correct probe pair. The fixture mixes every kind of thing the Edits preset rejects,
+    // so "exactly" is a representative check.
     [Fact]
     public void Track_EditsPreset_TracksExactlyGitignorePlusTheWholeSourceTree_NothingElse()
     {

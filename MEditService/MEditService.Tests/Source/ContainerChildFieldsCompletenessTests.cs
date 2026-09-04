@@ -6,22 +6,8 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Tests.Source;
 
-/// <summary>
-/// The mechanical sweep <see cref="ContainerChildFields"/>' own doc comment claims —
-/// which <c>Quest.Scenes</c> once proved wasn't exhaustive. Verified here by
-/// enumeration rather than trusted by assertion: every schema-registered major record type's own
-/// direct properties are walked for a reference (single or list) to another major record type that
-/// has no top-level group of its own (the generic "child-major" rule the original investigation used
-/// but evidently didn't apply completely) — every one found must be in
-/// <see cref="ContainerChildFields"/>' table, or this test names the gap.
-///
-/// <para>Permanent, not a one-off probe: this is the standing defence against the <i>next</i> Scenes
-/// — a future Mutagen bump or new game module introducing a child-major field nobody added to the
-/// hand-maintained table. It is also the <i>only</i> standing defence: compile
-/// places nothing — the deserializer reads a record from wherever the tree already puts it,
-/// so "unplaceable" is not a reachable state. A gap here costs an index row, not a record missing
-/// from a compiled binary, which makes this red-at-review-time test the whole of the defence.</para>
-/// </summary>
+/// <summary>The standing defence against the next <c>Quest.Scenes</c>: a Mutagen bump adding a child- major
+/// field nobody put in the hand-maintained table.</summary>
 public sealed class ContainerChildFieldsCompletenessTests
 {
     [Fact]
@@ -96,12 +82,9 @@ public sealed class ContainerChildFieldsCompletenessTests
     {
         if (childMajorTypes.Contains(propertyType)) return propertyType;
 
-        // A FormLink/FormLinkNullable (getter or setter shape) is a 4-byte reference, never embedded
-        // content — Faction.ExteriorJailMarker points *at* a PlacedObject that lives in its own cell,
-        // it does not carry one. Containment is ExtendedList<Scene>/a bare Scene; a reference is
-        // FormLink<Scene>. Excluded before walking generic arguments, or every reference field in the
-        // whole schema reads as a false "contains" (measured: 19 of them, none real, on this sweep's
-        // first run over the real Fallout4 schema).
+        // A FormLink is a 4-byte reference, never embedded content: containment is ExtendedList<Scene> or
+        // a bare Scene. Excluded before walking generic arguments, or every reference field reads as a
+        // false "contains" (19 of them, none real).
         if (propertyType.IsGenericType
             && propertyType.GetGenericTypeDefinition().Name.Contains("FormLink", StringComparison.Ordinal))
             return null;
