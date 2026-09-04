@@ -372,7 +372,7 @@ already empty: matching xEdit's own guard (`Element.EditValue` must be non-empty
   correct round-tripping, not a defect.
   **Nested Loqui struct sub-fields write through the same one path** (#643) — a struct member one
   or more levels inside another struct column, or inside an array element, applies with the exact
-  semantics the top-level struct column has (one shared applier): abstract unions resolve their
+  semantics the top-level struct column has (one shared applier): unions resolve their
   concrete leaf from the payload's own `concrete_type`, refusing when it can't be resolved; the
   existing value object is reused only when it is already the same concrete type; and a write with
   one bad member anywhere in the nested tree refuses the whole write before anything is written,

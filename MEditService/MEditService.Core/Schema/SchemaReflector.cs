@@ -896,7 +896,7 @@ public sealed partial class SchemaReflector
         // silently regardless of this flag's default. Since #643 wired nested Loqui structs into the
         // shared ApplyStructJson and #699 nested lists into the shared ApplyListSubFieldJson, one
         // producer sets this true: BuildStructSubField, for a nested struct with no resolvable
-        // setter or an excluded abstract union with no discriminator (ConditionData). Defaults
+        // setter or an excluded union with no discriminator (ConditionData). Defaults
         // false so any future null-Apply producer stays a silent skip unless it deliberately opts in.
         bool TargetingRefuses = false,
         // Presentation facts for the editor, both null for an ordinary sub-field — see
@@ -1613,8 +1613,8 @@ public sealed partial class SchemaReflector
     // OMOD's Properties element. Unlike OMOD's own leaves (generic-closed sibling interfaces reachable
     // only via a hand-picked table, because IAObjectModPropertyGetter<T> has no reflectively
     // enumerable closed ClassType of its own — see IsObjectModPropertyBase's own comment), every
-    // other abstract union in the FO4 assembly backs its base getter interface with an ordinary
-    // non-generic abstract *class* (ANpcLevel_Registration.ClassType, FieldCount == 0), so its
+    // other union in the FO4 assembly backs its base getter interface with an ordinary
+    // non-generic *class* (ANpcLevel_Registration.ClassType, FieldCount == 0), so its
     // concrete leaves are discoverable the same way BuildForCategory's own top-level loop already
     // discovers every schema type: scanning assembly.GetTypes() for what is, and is not, abstract.
     // No per-type interface-name table — reflection discovery is preferred over a second
@@ -2414,7 +2414,7 @@ public sealed partial class SchemaReflector
                 ? LeafWrite.Writable<object>((obj, val) => ApplyStructJson(obj, val, pName, setterType!, sub))
                 : LeafWrite.ReadOnly<object>(
                     "nested struct with no usable write door: no resolvable Loqui setter class, or an " +
-                    "excluded abstract union whose discriminator can never appear in a payload"),
+                    "excluded union whose discriminator can never appear in a payload"),
             SubFields: sub,
             // #642: a payload that names an unwritable sub-field must refuse the whole write rather
             // than silently drop it while the caller reports success (SubFieldSpec's own doc comment
