@@ -120,7 +120,7 @@ const globalComparison = (row: SummaryRow): string => row.member('comparison_val
 // ── Fallout 4 scripts ────────────────────────────────────────────────────────
 //
 // xEdit's own wbScriptEntry / wbScriptProperty / wbScriptPropertyObject summaries
-// (TES5Edit Core/wbDefinitionsFO4.pas:3823, :3883, :3948). Each of those is a `wbStructSK` whose
+// (TES5Edit Core/wbDefinitionsFO4.pas:3956, :3883, :3823). Each of those is a `wbStructSK` whose
 // sort-key member leads the summary unless the definition sets `dfSummaryNoSortKey` — which is why
 // a script reads under its own name and an object binding, whose sort key is already in its summary
 // key, does not.
