@@ -245,7 +245,7 @@ public sealed partial class SchemaReflector
             // ClassifyLeaf already answers null here — absent means "no author", and NULL is the
             // honest rendering, exactly what the retired wide column stored.
             columns.Add(new ColumnSpec("author", HeaderDocumentPath(modHeaderProp, authorProp), authorLeaf.DuckDbType, _ => null,
-                authorLeaf.ApiType, authorLeaf.ValidFormKeyTypes, authorLeaf.EnumValues,
+                authorLeaf.ApiType, authorLeaf.ValidFormKeyTypes, authorLeaf.EnumMembers,
                 Apply: LeafWrite.ReadOnly<IMajorRecord>(HeaderNoWritePathReason),
                 ViewDefaultLiteral: authorLeaf.ViewDefaultLiteral));
             extracts.Add(HeaderPropertyExtract(modHeaderProp, authorLeaf.Get));
@@ -262,7 +262,7 @@ public sealed partial class SchemaReflector
 
             // Only the header's flags column gets xEdit's display names — every other
             // bitmask enum in the schema (npc_, race, ...) keeps its raw Mutagen member names, so
-            // this maps flagsLeaf.EnumValues here rather than inside ClassifyEnumLeaf.
+            // this renames flagsLeaf's members here rather than inside ClassifyEnumLeaf.
             // IsFlagsEnum/ViewDefaultLiteral threaded through like ProjectColumn does for every other
             // column (#631, now that the header has a generated view). Both are load-bearing rather
             // than tidy: the serializer writes a [Flags] enum as an array of member names, so without
@@ -270,11 +270,12 @@ public sealed partial class SchemaReflector
             // whole view fails to bind ("Conversion Error: Failed to cast value to numerical" —
             // observed, not hypothetical). The typed read is unaffected either way: it goes through
             // HeaderColumnExtract and IsBitmask, never this flag.
-            var displayNames = flagsLeaf.EnumValues.Select(MapToXEditFlagName).ToArray();
+            var displayNames = flagsLeaf.EnumMembers
+                .Select(m => m with { Value = MapToXEditFlagName(m.Value) }).ToArray();
             columns.Add(new ColumnSpec("flags", HeaderDocumentPath(modHeaderProp, flagsProp), flagsLeaf.DuckDbType, _ => null,
                 flagsLeaf.ApiType, flagsLeaf.ValidFormKeyTypes, displayNames,
                 Apply: LeafWrite.ReadOnly<IMajorRecord>(HeaderNoWritePathReason),
-                IsBitmask: flagsLeaf.IsBitmask, EnumBitValues: flagsLeaf.EnumBitValues,
+                IsBitmask: flagsLeaf.IsBitmask,
                 IsFlagsEnum: flagsLeaf.IsFlagsEnum, ViewDefaultLiteral: flagsLeaf.ViewDefaultLiteral));
             extracts.Add(HeaderPropertyExtract(modHeaderProp, flagsLeaf.Get));
         }
@@ -289,9 +290,9 @@ public sealed partial class SchemaReflector
         // reaches this column (EditField no longer refuses the header at the source-unit gate) and is
         // refused FieldReadOnly here — the same refusal every other header column with no Apply
         // delegate gives, not a masters-specific mechanism (see HeaderIndexer.MastersFieldName).
-        var mastersElement = new FieldMetadata("", "string", false, Empty, Empty);
+        var mastersElement = new FieldMetadata("", "string", false, Empty, NoMembers);
         columns.Add(new ColumnSpec(HeaderIndexer.MastersFieldName, $"{modHeaderProp.Name}.MasterReferences", "VARCHAR", _ => null, "array",
-            Empty, Empty,
+            Empty, NoMembers,
             Apply: LeafWrite.ReadOnly<IMajorRecord>(
                 "masters are wholly content-derived at compile time (#335/ADR-0038)"),
             IsArray: true, ElementType: mastersElement));
@@ -428,13 +429,12 @@ public sealed partial class SchemaReflector
 
             columns.Add(new ColumnSpec(
                 colName, prop.Name, info.DuckDbType, info.Extractor, info.ApiType,
-                info.ValidFormKeyTypes, info.EnumValues, info.Apply,
+                info.ValidFormKeyTypes, info.EnumMembers, info.Apply,
                 IsArray: info.ApiType == "array",
                 ElementType: info.ElementMeta,
                 SubFields: info.SubFieldMetas,
                 AllowsNull: info.AllowsNull,
                 IsBitmask: info.IsBitmask,
-                EnumBitValues: info.EnumBitValues,
                 IsFlagsEnum: info.IsFlagsEnum,
                 ViewDefaultLiteral: info.ViewDefaultLiteral));
         }
@@ -624,10 +624,9 @@ public sealed partial class SchemaReflector
             IsArray = false,
             ElementType = null,
             SubFields = null,
-            EnumValues = Empty,
+            EnumMembers = NoMembers,
             ValidFormKeyTypes = Empty,
             IsBitmask = false,
-            EnumBitValues = null,
             AllowsNull = true,
         };
     }
@@ -669,7 +668,7 @@ public sealed partial class SchemaReflector
 
         // The winner's own metadata (element/sub-field shape) is kept as-is — IsSameShapeExceptEnumDomain
         // already confirmed it matches every sibling field-for-field — except any enum leaf's
-        // EnumValues, which becomes the union of every sibling's own domain (OMOD's `property`
+        // members, which become the union of every sibling's own domain (OMOD's `property`
         // sub-field: Armor.Property ∪ Npc.Property ∪ Weapon.Property ∪ NoneProperty's empty set).
         var mergedElementType = existing.ElementType != null && siblingSpec.ElementType != null
             ? UnionEnumDomains(existing.ElementType, siblingSpec.ElementType)
@@ -684,11 +683,11 @@ public sealed partial class SchemaReflector
             Extract = MergedExtract,
             ElementType = mergedElementType,
             SubFields = mergedSubFields,
-            // existing.EnumValues is left untouched here (never unioned): this function is only
+            // existing.EnumMembers is left untouched here (never unioned): this function is only
             // reached once IsSameColumnShapeExceptEnumDomain has confirmed existing.ApiType ==
             // siblingSpec.ApiType, and both of this function's callers are themselves gated behind
             // NonScalarApiTypes.Contains(existing.ApiType) — array or struct only, never "enum" — so
-            // the top-level column's own EnumValues has nothing to union here. The real per-leaf
+            // the top-level column's own EnumMembers has nothing to union here. The real per-leaf
             // enum-domain union (OMOD's `property` sub-field) happens above, inside UnionEnumDomains.
             // Same reason WidenedExtract's own column sets this above: becoming dispatch-guarded
             // means every row of a non-matching sibling now legitimately reads null through this
@@ -697,14 +696,14 @@ public sealed partial class SchemaReflector
         };
     }
 
-    // Recursively unions an enum leaf's EnumValues across two structurally-identical-except-domain
+    // Recursively unions an enum leaf's members across two structurally-identical-except-domain
     // shapes (IsSameShapeExceptEnumDomain's own counterpart) — every non-enum leaf, and every
     // struct/array's own shape, is already identical, so this only ever changes an enum's member
     // names, never any other field.
     private static FieldMetadata UnionEnumDomains(FieldMetadata a, FieldMetadata b)
     {
         if (a.Type == "enum")
-            return a with { EnumValues = a.EnumValues.Concat(b.EnumValues).Distinct().ToList() };
+            return a with { EnumMembers = [.. a.EnumMembers.Concat(b.EnumMembers).DistinctBy(m => m.Value, StringComparer.Ordinal)] };
         if (a.Fields != null && b.Fields != null)
             return a with { Fields = a.Fields.Select(fa => UnionEnumDomains(fa, b.Fields.First(fb => fb.Name == fa.Name))).ToList() };
         if (a.ElementType != null && b.ElementType != null)
@@ -839,7 +838,7 @@ public sealed partial class SchemaReflector
     // actual value. Format explicitly with InvariantCulture here, for every IFormattable scalar
     // (int, float, uint, ... — not just the bool case below), so the column's text is culture-
     // stable the same way every other numeric formatting in this file already is (see e.g.
-    // GetEnumMeta's bit values). bool doesn't implement IFormattable, so it keeps its own case:
+    // GetEnumMembers' bit values). bool doesn't implement IFormattable, so it keeps its own case:
     // lowercase "true"/"false" (JS-idiomatic) rather than C#'s "True"/"False" — cosmetic, and
     // shape- not signature-scoped. Anything neither (e.g. an already-string value) passes through
     // unchanged. Affects only columns that previously read null for these siblings, so it
@@ -858,13 +857,12 @@ public sealed partial class SchemaReflector
         Func<IMajorRecordGetter, object?> Extractor,
         string ApiType,
         string[] ValidFormKeyTypes,
-        string[] EnumValues,
+        IReadOnlyList<EnumMember> EnumMembers,
         LeafWrite<IMajorRecord> Apply,
         FieldMetadata? ElementMeta = null,
         IReadOnlyList<FieldMetadata>? SubFieldMetas = null,
         bool AllowsNull = false,
         bool IsBitmask = false,
-        string[]? EnumBitValues = null,
         bool IsFlagsEnum = false,
         string? ViewDefaultLiteral = null);
 
@@ -874,14 +872,13 @@ public sealed partial class SchemaReflector
         string Name,
         string ApiType,
         string[] ValidFormKeyTypes,
-        string[] EnumValues,
+        IReadOnlyList<EnumMember> EnumMembers,
         Func<object, object?> Extract,
         LeafWrite<object> Apply,
         IReadOnlyList<SubFieldSpec>? SubFields = null,
         SubFieldSpec? ElementSpec = null,
         bool AllowsNull = false,
         bool IsBitmask = false,
-        string[]? EnumBitValues = null,
         // #642: distinguishes "Apply is null because this genuinely has no write support" (not
         // writable — opts in here) from "Apply is null by design and always will be" (a
         // discriminator — stays on this record's default). ApplySubFields refuses the former when
@@ -899,9 +896,8 @@ public sealed partial class SchemaReflector
         // setter or an excluded union with no discriminator (ConditionData). Defaults
         // false so any future null-Apply producer stays a silent skip unless it deliberately opts in.
         bool TargetingRefuses = false,
-        // Presentation facts for the editor, both null for an ordinary sub-field — see
-        // FieldMetadata's own doc comments. Set only by BuildUnionDiscriminatorField.
-        IReadOnlyList<string>? EnumLabels = null,
+        // The row's title when Name is a wire name — null for an ordinary sub-field, see
+        // FieldMetadata's own doc comment. Set only by BuildUnionDiscriminatorField.
         string? DisplayLabel = null,
         // Set by the two discriminator fields the TargetingRefuses comment above already names —
         // see FieldMetadata's own doc comment for what it means.
@@ -910,13 +906,11 @@ public sealed partial class SchemaReflector
         // Mirrors ColumnSpec.IsArray's own derivation (ReflectColumns: `info.ApiType ==
         // "array"`) rather than adding a redundant constructor flag that could disagree with ApiType.
         public FieldMetadata ToFieldMetadata() =>
-            new(Name, ApiType, ApiType == "array", ValidFormKeyTypes, EnumValues,
+            new(Name, ApiType, ApiType == "array", ValidFormKeyTypes, EnumMembers,
                 ElementSpec?.ToFieldMetadata(),
                 SubFields?.Select(s => s.ToFieldMetadata()).ToList(),
                 AllowsNull: AllowsNull,
                 IsBitmask: IsBitmask,
-                EnumBitValues: EnumBitValues,
-                EnumLabels: EnumLabels,
                 DisplayLabel: DisplayLabel,
                 IsDiscriminator: IsDiscriminator);
     }
@@ -924,6 +918,8 @@ public sealed partial class SchemaReflector
     // ── Type-detection helpers ────────────────────────────────────────────────
 
     private static readonly string[] Empty = [];
+
+    private static readonly EnumMember[] NoMembers = [];
 
     private static IEnumerable<PropertyInfo> GetAllInterfaceProperties(Type type) =>
         type.GetInterfaces()
@@ -1464,7 +1460,7 @@ public sealed partial class SchemaReflector
         }
 
         return new(ObjectModValueTypeDiscriminator, "string", Empty,
-            [.. leaves.Select(l => l.ValueTypeName)], Extract,
+            [.. leaves.Select(l => new EnumMember(l.ValueTypeName))], Extract,
             Apply: LeafWrite.ReadOnly<object>(DiscriminatorReason), AllowsNull: true,
             IsDiscriminator: true);
     }
@@ -1503,9 +1499,9 @@ public sealed partial class SchemaReflector
             _ => LeafWrite.ReadOnly<object>(NoConverterReason),
         };
 
-        return new(colName, rep.ApiType, rep.ValidFormKeyTypes, rep.EnumValues, Extract,
+        return new(colName, rep.ApiType, rep.ValidFormKeyTypes, rep.EnumMembers, Extract,
             apply,
-            AllowsNull: true, IsBitmask: rep.IsBitmask, EnumBitValues: rep.EnumBitValues);
+            AllowsNull: true, IsBitmask: rep.IsBitmask);
     }
 
     private static SubFieldSpec BuildWidenedLeafUnionField(
@@ -1526,7 +1522,7 @@ public sealed partial class SchemaReflector
         // therefore cannot share one converter the way MakeApplier's callers normally do; instead
         // it resolves the target property's own declared type at write time, off whichever
         // concrete leaf ApplyListJson already constructed, and converts into *that*.
-        return new(colName, "string", Empty, Empty, Extract, Apply: LeafWrite.Writable(MakeWidenedApplier(pName, logger)), AllowsNull: true);
+        return new(colName, "string", Empty, NoMembers, Extract, Apply: LeafWrite.Writable(MakeWidenedApplier(pName, logger)), AllowsNull: true);
     }
 
     /// <summary>
@@ -1883,9 +1879,10 @@ public sealed partial class SchemaReflector
         }
 
         return new(UnionTypeDiscriminator, "enum", Empty,
-            [.. leaves.Select(l => l.ClassName)], Extract,
+            [.. leaves.Select(l => new EnumMember(
+                l.ClassName, Label: LeafLabel.For(union.SetterType.Name, l.ClassName)))],
+            Extract,
             Apply: LeafWrite.ReadOnly<object>(DiscriminatorReason), AllowsNull: true,
-            EnumLabels: [.. leaves.Select(l => LeafLabel.For(union.SetterType.Name, l.ClassName))],
             DisplayLabel: UnionTypeDiscriminatorLabel, IsDiscriminator: true);
     }
 
@@ -1933,7 +1930,7 @@ public sealed partial class SchemaReflector
             // data error) — getter interfaces can't statically distinguish this from a non-nullable
             // scalar anyway (see IsNullableFormLink), so default permissive here regardless.
             return new FieldMetadata("", "formKey", false,
-                GetFormLinkValidTypes(core, game), Empty,
+                GetFormLinkValidTypes(core, game), NoMembers,
                 IsSortable: true, AllowsNull: true);
         }
 
@@ -1942,7 +1939,7 @@ public sealed partial class SchemaReflector
             var sub = BuildSubSchema(core, game, logger, path);
             return sub.Count == 0
                 ? null
-                : new FieldMetadata("", "struct", false, Empty, Empty,
+                : new FieldMetadata("", "struct", false, Empty, NoMembers,
                 Fields: [.. sub.Select(s => s.ToFieldMetadata())]);
         }
 
@@ -1958,16 +1955,16 @@ public sealed partial class SchemaReflector
             var sub = BuildVectorComponentSubFields(core, game, 0, logger);
             return sub.Count == 0
                 ? null
-                : new FieldMetadata("", "struct", false, Empty, Empty,
+                : new FieldMetadata("", "struct", false, Empty, NoMembers,
                 Fields: [.. sub.Select(s => s.ToFieldMetadata())]);
         }
 
         return core switch
         {
-            _ when core == typeof(float) => new("", "float", false, Empty, Empty),
-            _ when core == typeof(string) || IsTranslatedString(core) => new("", "string", false, Empty, Empty),
-            _ when IntegerTypes.Contains(core) => new("", "int", false, Empty, Empty),
-            _ when IsByteSlice(core) => new("", HexApiType, false, Empty, Empty),
+            _ when core == typeof(float) => new("", "float", false, Empty, NoMembers),
+            _ when core == typeof(string) || IsTranslatedString(core) => new("", "string", false, Empty, NoMembers),
+            _ when IntegerTypes.Contains(core) => new("", "int", false, Empty, NoMembers),
+            _ when IsByteSlice(core) => new("", HexApiType, false, Empty, NoMembers),
             _ => null,
         };
     }
@@ -2014,25 +2011,24 @@ public sealed partial class SchemaReflector
         return false;
     }
 
-    private static (string[] Names, string[]? BitValues) GetEnumMeta(Type enumType)
+    // A CLR enum's members. Bitmask ([Flags] with power-of-two members) keeps only the atomic
+    // members and carries each one's bit; anything else keeps every member and carries no bit.
+    private static (EnumMember[] Members, bool IsBitmask) GetEnumMembers(Type enumType)
     {
         var allNames = Enum.GetNames(enumType);
+        EnumMember[] plain = [.. allNames.Select(n => new EnumMember(n))];
         if (enumType.GetCustomAttribute<FlagsAttribute>() == null)
-            return (allNames, null);
+            return (plain, false);
 
         var allValues = Enum.GetValues(enumType);
-        var names = new List<string>();
-        var bits = new List<string>();
+        var atomic = new List<EnumMember>();
         for (int i = 0; i < allValues.Length; i++)
         {
             long v = Convert.ToInt64(allValues.GetValue(i), System.Globalization.CultureInfo.InvariantCulture);
             if (v > 0 && (v & (v - 1)) == 0)   // atomic power-of-two only; excludes None=0 and composite values
-            {
-                names.Add(allNames[i]);
-                bits.Add(v.ToString(System.Globalization.CultureInfo.InvariantCulture));
-            }
+                atomic.Add(new EnumMember(allNames[i], v.ToString(System.Globalization.CultureInfo.InvariantCulture)));
         }
-        return bits.Count > 0 ? (names.ToArray(), bits.ToArray()) : (allNames, null);
+        return atomic.Count > 0 ? (atomic.ToArray(), true) : (plain, false);
     }
 
     // Bitmask flag values travel as decimal strings (to survive JSON above 2^53) but legacy
@@ -2051,12 +2047,11 @@ public sealed partial class SchemaReflector
         string ApiType,
         string DuckDbType,
         string[] ValidFormKeyTypes,
-        string[] EnumValues,
+        IReadOnlyList<EnumMember> EnumMembers,
         Func<object, object?> Get,
         Func<JsonElement, object?>? Convert,
         bool AllowsNull = false,
         bool IsBitmask = false,
-        string[]? EnumBitValues = null,
         bool IsFlagsEnum = false,
         string? ViewDefaultLiteral = null);
 
@@ -2075,13 +2070,13 @@ public sealed partial class SchemaReflector
             if (core == typeof(string)) defaultLiteral = null;
             else if (core == typeof(bool)) defaultLiteral = "false";
             else defaultLiteral = "0";
-            return new(apiType, duckDb, Empty, Empty, SubGetter(prop), conv, ViewDefaultLiteral: defaultLiteral);
+            return new(apiType, duckDb, Empty, NoMembers, SubGetter(prop), conv, ViewDefaultLiteral: defaultLiteral);
         }
 
         if (IsTranslatedString(core))
         {
             var g = SubGetter(prop);
-            return new("string", "VARCHAR", Empty, Empty,
+            return new("string", "VARCHAR", Empty, NoMembers,
                 obj => { try { return (g(obj) as ITranslatedStringGetter)?.String; } catch { return null; } }, // Stryker disable once Block: silent accessor lambda — lookup-backed strings throw when game strings files are absent (see MEditService CLAUDE.md)
                 v => new TranslatedString(Language.English, v.GetString()));
         }
@@ -2089,7 +2084,7 @@ public sealed partial class SchemaReflector
         if (IsByteSlice(core))
         {
             var g = SubGetter(prop);
-            return new(HexApiType, "VARCHAR", Empty, Empty, obj => HexText(g(obj)), Convert: null);
+            return new(HexApiType, "VARCHAR", Empty, NoMembers, obj => HexText(g(obj)), Convert: null);
         }
 
         if (core.IsEnum)
@@ -2098,7 +2093,7 @@ public sealed partial class SchemaReflector
         if (IsFormLink(core))
         {
             var g = SubGetter(prop);
-            return new("formKey", "VARCHAR", GetFormLinkValidTypes(core, game), Empty,
+            return new("formKey", "VARCHAR", GetFormLinkValidTypes(core, game), NoMembers,
                 obj => (g(obj) as IFormLinkGetter)?.FormKeyNullable?.ToString(),
                 Convert: null,
                 AllowsNull: IsNullableFormLink(core));
@@ -2112,7 +2107,7 @@ public sealed partial class SchemaReflector
     private static LeafSpec ClassifyEnumLeaf(PropertyInfo prop, Type core)
     {
         var g = SubGetter(prop);
-        var (names, bits) = GetEnumMeta(core);
+        var (members, isBitmask) = GetEnumMembers(core);
 
         // Whether the serializer writes this enum as an array of member names, which is a
         // question about the CLR type's [Flags] attribute and nothing else. IsBitmask below answers
@@ -2129,13 +2124,13 @@ public sealed partial class SchemaReflector
         else if (Enum.IsDefined(core, Enum.ToObject(core, 0))) defaultLiteral = $"'{Enum.GetName(core, Enum.ToObject(core, 0))}'";
         else defaultLiteral = null;
 
-        return bits != null
-            ? new("enum", "BIGINT", Empty, names,
+        return isBitmask
+            ? new("enum", "BIGINT", Empty, members,
                 obj => g(obj) is { } v ? (object?)Convert.ToInt64(v, System.Globalization.CultureInfo.InvariantCulture) : null,
                 v => Enum.ToObject(core, ReadBitmaskLong(v)),
-                IsBitmask: true, EnumBitValues: bits,
+                IsBitmask: true,
                 IsFlagsEnum: isFlags, ViewDefaultLiteral: defaultLiteral)
-            : new("enum", "VARCHAR", Empty, names,
+            : new("enum", "VARCHAR", Empty, members,
             obj => g(obj)?.ToString(),
             v => Enum.Parse(core, v.GetString()!, ignoreCase: true),
             IsFlagsEnum: isFlags, ViewDefaultLiteral: defaultLiteral);
@@ -2262,9 +2257,9 @@ public sealed partial class SchemaReflector
             null when IsByteSlice(core) => LeafWrite.Writable(MakeHexApplier(pName, nullable, logger)),
             _ => LeafWrite.ReadOnly<object>(NoConverterReason),
         };
-        return new(colName, leaf.ApiType, leaf.ValidFormKeyTypes, leaf.EnumValues,
+        return new(colName, leaf.ApiType, leaf.ValidFormKeyTypes, leaf.EnumMembers,
             leaf.Get, apply,
-            AllowsNull: leaf.AllowsNull, IsBitmask: leaf.IsBitmask, EnumBitValues: leaf.EnumBitValues);
+            AllowsNull: leaf.AllowsNull, IsBitmask: leaf.IsBitmask);
     }
 
     private static Func<object, object?> SubGetter(PropertyInfo prop) =>
@@ -2408,7 +2403,7 @@ public sealed partial class SchemaReflector
         var pName = prop.Name;
         var setterType = GetSetterType(core);
         var writable = setterType != null && (!setterType.IsAbstract || HasDiscriminator(sub));
-        return new(colName, "struct", Empty, Empty,
+        return new(colName, "struct", Empty, NoMembers,
             obj => { var v = g(obj); return v == null ? null : ExtractSubObject(v, sub); },
             Apply: writable
                 ? LeafWrite.Writable<object>((obj, val) => ApplyStructJson(obj, val, pName, setterType!, sub))
@@ -2471,7 +2466,7 @@ public sealed partial class SchemaReflector
                     $"Atomic value type {core.Name} declares no '{component.ClrName}' component. " +
                     "The presentation table and the CLR type have diverged.");
 
-            result.Add(new(component.WireName, apiType, Empty, Empty,
+            result.Add(new(component.WireName, apiType, Empty, NoMembers,
                 SubGetter(componentProp),
                 LeafWrite.Writable(MakeApplier(component.ClrName, nullable: false, converter, logger))));
         }
@@ -2516,7 +2511,7 @@ public sealed partial class SchemaReflector
         var components = BuildAtomicValueComponentSubFields(core, AtomicValueComponentsFor(game, prop), logger);
         var g = SubGetter(prop);
         var pName = prop.Name;
-        return new(colName, "struct", Empty, Empty,
+        return new(colName, "struct", Empty, NoMembers,
             obj => { var v = g(obj); return v == null ? null : ExtractSubObject(v, components); },
             Apply: LeafWrite.Writable<object>((obj, val) => ApplyAtomicValueJson(obj, val, pName, components)),
             SubFields: components);
@@ -2528,7 +2523,7 @@ public sealed partial class SchemaReflector
         var pName = prop.Name;
         return new("VARCHAR",
             r => TryGet(r, prop) is { } v ? JsonSerializer.Serialize(ExtractSubObject(v, components)) : null,
-            "struct", Empty, Empty,
+            "struct", Empty, NoMembers,
             Apply: LeafWrite.Writable<IMajorRecord>((record, val) => ApplyAtomicValueJson(record, val, pName, components)),
             SubFieldMetas: components.ConvertAll(c => c.ToFieldMetadata()));
     }
@@ -2549,7 +2544,7 @@ public sealed partial class SchemaReflector
         if (components.Count == 0) return null;
         var g = SubGetter(prop);
         var pName = prop.Name;
-        return new(colName, "struct", Empty, Empty,
+        return new(colName, "struct", Empty, NoMembers,
             obj => { var v = g(obj); return v == null ? null : ExtractSubObject(v, components); },
             Apply: LeafWrite.Writable<object>((obj, val) =>
             {
@@ -2586,18 +2581,18 @@ public sealed partial class SchemaReflector
         GameReflection game)
     {
         if (elemSubFields != null)
-            return new("", "struct", Empty, Empty, _ => null,
+            return new("", "struct", Empty, NoMembers, _ => null,
                 Apply: LeafWrite.ReadOnly<object>(ElementTemplateReason), SubFields: elemSubFields);
         if (isFl)
         {
-            return new("", "formKey", GetFormLinkValidTypes(elementType, game), Empty,
+            return new("", "formKey", GetFormLinkValidTypes(elementType, game), NoMembers,
                 _ => null, Apply: LeafWrite.ReadOnly<object>(ElementTemplateReason), AllowsNull: true);
         }
 
         if (IsByteSlice(elementType))
-            return new("", HexApiType, Empty, Empty, _ => null, Apply: LeafWrite.ReadOnly<object>(ElementTemplateReason));
+            return new("", HexApiType, Empty, NoMembers, _ => null, Apply: LeafWrite.ReadOnly<object>(ElementTemplateReason));
         return TryMapPrimitive(elementType, out _, out var elemApiType, out _)
-            ? new("", elemApiType, Empty, Empty, _ => null, Apply: LeafWrite.ReadOnly<object>(ElementTemplateReason))
+            ? new("", elemApiType, Empty, NoMembers, _ => null, Apply: LeafWrite.ReadOnly<object>(ElementTemplateReason))
             : null;
     }
 
@@ -2625,7 +2620,7 @@ public sealed partial class SchemaReflector
         // Unconditionally writable: BuildListElementSpec above returns non-null for exactly the
         // element shapes BuildListElement can build, so past its guard there is no unwritable case
         // left to spell. TargetingRefuses therefore keeps its false default.
-        return new(colName, "array", Empty, Empty,
+        return new(colName, "array", Empty, NoMembers,
             obj => g(obj) is IEnumerable list ? BuildListItems(list, elementType, elemSubFields) : null,
             LeafWrite.Writable<object>(
                 (obj, json) => ApplyListSubFieldJson(obj, json, pName, isFl, elementType, elemSubFields)),
@@ -2745,9 +2740,9 @@ public sealed partial class SchemaReflector
             null when IsByteSlice(core) => LeafWrite.Writable<IMajorRecord>(MakeHexApplier(pName, nullable, logger)),
             _ => LeafWrite.ReadOnly<IMajorRecord>(NoConverterReason),
         };
-        return new(leaf.DuckDbType, r => leaf.Get(r), leaf.ApiType, leaf.ValidFormKeyTypes, leaf.EnumValues,
+        return new(leaf.DuckDbType, r => leaf.Get(r), leaf.ApiType, leaf.ValidFormKeyTypes, leaf.EnumMembers,
             apply,
-            AllowsNull: leaf.AllowsNull, IsBitmask: leaf.IsBitmask, EnumBitValues: leaf.EnumBitValues,
+            AllowsNull: leaf.AllowsNull, IsBitmask: leaf.IsBitmask,
             IsFlagsEnum: leaf.IsFlagsEnum,
             // A nullable property genuinely can be absent-meaning-null, so it keeps NULL rather than
             // being coalesced to a default it never had.
@@ -2792,7 +2787,7 @@ public sealed partial class SchemaReflector
                 (record, json) => ApplyListJson(record, json, pName, isFl, elementType, elemSubFields))
             : LeafWrite.ReadOnly<IMajorRecord>(UnconvertibleElementListReason);
 
-        return new("VARCHAR", Extractor, "array", Empty, Empty, apply,
+        return new("VARCHAR", Extractor, "array", Empty, NoMembers, apply,
             ElementMeta: elemMeta);
     }
 
@@ -3155,7 +3150,7 @@ public sealed partial class SchemaReflector
                 (record, json) => ApplyStructJson(record, json, pName, setterType, subFields));
         }
 
-        return new("VARCHAR", Extractor, "struct", Empty, Empty, apply,
+        return new("VARCHAR", Extractor, "struct", Empty, NoMembers, apply,
             SubFieldMetas: subFieldMetas);
     }
 
@@ -3186,7 +3181,7 @@ public sealed partial class SchemaReflector
         }
 
         var pName = prop.Name;
-        return new("VARCHAR", Extractor, "struct", Empty, Empty,
+        return new("VARCHAR", Extractor, "struct", Empty, NoMembers,
             LeafWrite.Writable<IMajorRecord>((record, json) =>
             {
                 if (json.ValueKind != JsonValueKind.Object) return ApplyOutcome.ValueRejected;

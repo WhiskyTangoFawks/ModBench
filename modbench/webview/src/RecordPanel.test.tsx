@@ -16,7 +16,7 @@ import type { LoadResult, RecordPanelClient } from './RecordPanelClient';
 
 // ── shared metadata fixtures ──────────────────────────────────────────────────
 
-const strMeta: FieldMetadata = { name: 'Name', type: 'string', isArray: false, validFormKeyTypes: [], enumValues: [] };
+const strMeta: FieldMetadata = { name: 'Name', type: 'string', isArray: false, validFormKeyTypes: [], enumMembers: [] };
 
 // ── RecordPanel ───────────────────────────────────────────────────────────────
 
@@ -85,9 +85,9 @@ const immutableWinnerCompareResult = {
 
 // ── fixtures for the read-path suites ─────────────────────────────────────────
 
-const intMeta: FieldMetadata = { name: 'Level', type: 'int', isArray: false, validFormKeyTypes: [], enumValues: [] };
+const intMeta: FieldMetadata = { name: 'Level', type: 'int', isArray: false, validFormKeyTypes: [], enumMembers: [] };
 const fkMeta: FieldMetadata = {
-  name: 'Race', type: 'formKey', isArray: false, validFormKeyTypes: ['race'], enumValues: [],
+  name: 'Race', type: 'formKey', isArray: false, validFormKeyTypes: ['race'], enumMembers: [],
 };
 
 const fkCompareResult = {
@@ -227,11 +227,11 @@ const partialFormCompareResult = {
 
 // #622: a bitmask 'enum' field alongside an ordinary scalar field on the same tracked,
 // editable column — the exact contrast the issue reports (scalar/FormKey edits worked in the
-// same session, flags did not). enumBitValues aligned with enumValues per FlagCell's own
+// same session, flags did not). Each member carries its own bit per FlagCell's own
 // contract; value '3' (0b11) sets both A and B so the resting label reads "A, B".
 const flagsFieldMeta: FieldMetadata = {
   name: 'Flags', type: 'enum', isArray: false, validFormKeyTypes: [],
-  enumValues: ['A', 'B'], enumBitValues: ['1', '2'], isBitmask: true,
+  enumMembers: [{ value: 'A', bitValue: '1' }, { value: 'B', bitValue: '2' }], isBitmask: true,
 };
 
 const flagsCompareResult = {
@@ -285,10 +285,10 @@ const structFieldMeta: FieldMetadata = {
   type: 'struct',
   isArray: false,
   validFormKeyTypes: [],
-  enumValues: [],
+  enumMembers: [],
   fields: [
-    { name: 'X', type: 'int', isArray: false, validFormKeyTypes: [], enumValues: [] },
-    { name: 'Y', type: 'int', isArray: false, validFormKeyTypes: [], enumValues: [] },
+    { name: 'X', type: 'int', isArray: false, validFormKeyTypes: [], enumMembers: [] },
+    { name: 'Y', type: 'int', isArray: false, validFormKeyTypes: [], enumMembers: [] },
   ],
 };
 
@@ -342,8 +342,8 @@ const structCompareResult = {
 };
 
 const mastersMeta: FieldMetadata = {
-  name: 'masters', type: 'array', isArray: true, validFormKeyTypes: [], enumValues: [],
-  elementType: { name: '', type: 'string', isArray: false, validFormKeyTypes: [], enumValues: [] },
+  name: 'masters', type: 'array', isArray: true, validFormKeyTypes: [], enumMembers: [],
+  elementType: { name: '', type: 'string', isArray: false, validFormKeyTypes: [], enumMembers: [] },
 };
 
 const headerCompareResult = {
@@ -1230,20 +1230,20 @@ describe('RecordPanel — column collapse (issue #3)', () => {
 // declare different members. Two plugins can disagree on which leaf an element is, so the element's
 // rows are the union of both leaves' members, each rendered only in the columns that have it.
 const intSubMeta = (name: string): FieldMetadata =>
-  ({ name, type: 'int', isArray: false, validFormKeyTypes: [], enumValues: [] });
+  ({ name, type: 'int', isArray: false, validFormKeyTypes: [], enumMembers: [] });
 
 const aliasesMeta: FieldMetadata = {
-  name: 'aliases', type: 'array', isArray: true, validFormKeyTypes: [], enumValues: [],
+  name: 'aliases', type: 'array', isArray: true, validFormKeyTypes: [], enumMembers: [],
   elementType: {
-    name: '', type: 'struct', isArray: false, validFormKeyTypes: [], enumValues: [],
+    name: '', type: 'struct', isArray: false, validFormKeyTypes: [], enumMembers: [],
     fields: [
-      { name: 'name', type: 'string', isArray: false, validFormKeyTypes: [], enumValues: [] },
+      { name: 'name', type: 'string', isArray: false, validFormKeyTypes: [], enumMembers: [] },
       {
-        name: 'location', type: 'struct', isArray: false, validFormKeyTypes: [], enumValues: [],
+        name: 'location', type: 'struct', isArray: false, validFormKeyTypes: [], enumMembers: [],
         fields: [intSubMeta('alias_id')],
       },
       {
-        name: 'external', type: 'struct', isArray: false, validFormKeyTypes: [], enumValues: [],
+        name: 'external', type: 'struct', isArray: false, validFormKeyTypes: [], enumMembers: [],
         fields: [intSubMeta('alias_id')],
       },
     ],
@@ -1395,20 +1395,20 @@ describe('RecordPanel — union element rows', () => {
 });
 
 // #688: an abstract union's own leaf is an ordinary editable field. The reflector labels the row
-// and every leaf (FieldMetadata.displayLabel/enumLabels), because a Mutagen class name is a wire
+// and every leaf (FieldMetadata.displayLabel / a member's own label), because a Mutagen class name is a wire
 // token the user is never shown — so the panel must display the labels and post the values.
 const unionFieldMeta: FieldMetadata = {
   name: 'Level',
   type: 'struct',
   isArray: false,
   validFormKeyTypes: [],
-  enumValues: [],
+  enumMembers: [],
   fields: [
-    { name: 'level', type: 'int', isArray: false, validFormKeyTypes: [], enumValues: [] },
+    { name: 'level', type: 'int', isArray: false, validFormKeyTypes: [], enumMembers: [] },
     {
       name: 'concrete_type', type: 'enum', isArray: false, validFormKeyTypes: [],
-      enumValues: ['NpcLevel', 'PcLevelMult'],
-      enumLabels: ['Npc Level', 'Pc Level Mult'],
+      enumMembers: [{ value: 'NpcLevel', label: 'Npc Level' },
+        { value: 'PcLevelMult', label: 'Pc Level Mult' }],
       displayLabel: 'Kind',
     },
   ],

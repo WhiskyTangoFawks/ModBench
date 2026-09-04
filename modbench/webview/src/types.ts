@@ -12,6 +12,7 @@ type Schemas = components['schemas'];
 export type FormKeyResolutionState = Schemas['FormKeyResolutionState'];
 export type FormKeyResolution = Schemas['FormKeyResolution'];
 export type ConflictAll = Schemas['ConflictAll'];
+export type EnumMember = Schemas['EnumMember'];
 export type ConflictThis = Schemas['ConflictThis'];
 export type ConditionOperator = Schemas['ConditionOperator'];
 export type ConditionParamCategory = Schemas['ConditionParamCategory'];

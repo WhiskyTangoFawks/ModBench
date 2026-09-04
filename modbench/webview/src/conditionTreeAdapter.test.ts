@@ -133,16 +133,16 @@ describe('buildConditionRows — condition fields', () => {
 
   // buildConditionRows' own `runOnTargets` param is the only source of Run On's
   // dropdown options — no hardcoded FO4 member list in this adapter either.
-  it('threads the runOnTargets argument into the Run On field\'s own enumValues, defaulting to empty', () => {
+  it('threads the runOnTargets argument into the Run On field\'s own members, defaulting to empty', () => {
     const { metaMap: withCatalog } = buildConditionRows(
       { groups: [{ fieldPath: 'Conditions', conditions: [diff] }] }, ['Foo', 'Bar'],
     );
     const runOnMeta = withCatalog.Conditions.elementType!.fields?.find(f => f.name === 'Run On');
-    expect(runOnMeta?.enumValues).toEqual(['Foo', 'Bar']);
+    expect(runOnMeta?.enumMembers).toEqual([{ value: 'Foo' }, { value: 'Bar' }]);
 
     const { metaMap: withoutCatalog } = buildConditionRows({ groups: [{ fieldPath: 'Conditions', conditions: [diff] }] });
     const runOnMetaDefault = withoutCatalog.Conditions.elementType!.fields?.find(f => f.name === 'Run On');
-    expect(runOnMetaDefault?.enumValues).toEqual([]);
+    expect(runOnMetaDefault?.enumMembers).toEqual([]);
   });
 
   it('a field\'s cellStates come from the condition\'s own fieldCellStates, keyed per field', () => {

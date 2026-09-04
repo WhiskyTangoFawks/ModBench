@@ -15,5 +15,5 @@ public static class SharedSchemaReflector
         Instance.GetSchemas(GameRelease.Fallout4)[table]
             .RecordColumns.Single(c => c.Name == column)
             .ElementType!.Fields!.Single(f => f.Name == discriminator)
-            .EnumValues[0];
+            .EnumMembers[0].Value;
 }

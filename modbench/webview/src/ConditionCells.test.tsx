@@ -13,11 +13,11 @@ vi.mock('./nativeBridge', () => ({
 import { ConditionFunctionCell, ConditionRunOnCell, ConditionComparisonCell, ConditionParamCell } from './ConditionCells';
 import type { FieldMetadata, FormKeyResolution } from './types';
 
-// ConditionRunOnCell's dropdown options come from `meta.enumValues` (the server's Run
+// ConditionRunOnCell's dropdown options come from `meta.enumMembers` (the server's Run
 // On target catalog) rather than a hardcoded FO4 member list — this fixture stands in for whatever
 // GET /condition-run-on-targets resolved to.
-function runOnMeta(enumValues: string[]): FieldMetadata {
-  return { name: '', type: 'conditionRunOn', isArray: false, validFormKeyTypes: [], enumValues };
+function runOnMeta(values: string[]): FieldMetadata {
+  return { name: '', type: 'conditionRunOn', isArray: false, validFormKeyTypes: [], enumMembers: values.map(value => ({ value })) };
 }
 const FO4_RUN_ON_TARGETS = [
   'Subject', 'Target', 'Reference', 'CombatTarget', 'LinkedReference', 'QuestAlias',
@@ -93,11 +93,11 @@ describe('ConditionRunOnCell', () => {
     expect(onCommit).toHaveBeenCalledWith({ target: 'Reference', reference: null });
   });
 
-  // The actual regression test — the dropdown's options are whatever `meta.enumValues`
+  // The actual regression test — the dropdown's options are whatever `meta.enumMembers`
   // says, not a hardcoded FO4 member list. A list with names foreign to FO4's RunOnType (and
   // missing several real FO4 members) still renders exactly as given, proving there's no fallback
   // list baked into this component.
-  it('renders exactly the options meta.enumValues provides, not a hardcoded FO4 list', () => {
+  it('renders exactly the options meta.enumMembers provides, not a hardcoded FO4 list', () => {
     render(<ConditionRunOnCell value={{ target: 'Foo', reference: null }} meta={runOnMeta(['Foo', 'Bar'])} editable onCommit={vi.fn()} onOpen={vi.fn()} />);
     fireEvent.click(screen.getByText('Foo'));
     const select = screen.getByDisplayValue<HTMLSelectElement>('Foo');

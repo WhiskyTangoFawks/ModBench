@@ -76,7 +76,7 @@ describe('buildVmadRows — the "Scripts (VMAD)" wrapper and script shape', () =
     const { meta } = scriptRowFor([script()]);
     const flagsMeta = meta?.fields?.find(f => f.name === 'Flags');
     expect(flagsMeta?.readOnly).toBe(true);
-    expect(flagsMeta?.enumValues).toContain('Local');
+    expect(flagsMeta?.enumMembers.map(m => m.value)).toContain('Local');
   });
 
   it('two scripts each get their own row under the same wrapper', () => {

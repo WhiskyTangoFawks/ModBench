@@ -12,7 +12,7 @@ import type { FieldMetadata } from './types';
  * nothing opens that has nowhere to write.
  */
 const meta = (over: Partial<FieldMetadata> = {}): FieldMetadata => ({
-  name: 'value', type: 'string', isArray: false, validFormKeyTypes: [], enumValues: [], ...over,
+  name: 'value', type: 'string', isArray: false, validFormKeyTypes: [], enumMembers: [], ...over,
 });
 
 describe('ScalarCell — the xEdit open gesture (#415)', () => {
@@ -187,13 +187,13 @@ describe('ScalarCell — a hex row (#690)', () => {
 });
 
 // #688: some enums carry values that are wire tokens, not words — an abstract union's
-// `concrete_type` holds Mutagen class names. The schema names each one (enumLabels, positional
-// against enumValues); the cell shows those and commits the value behind them.
+// `concrete_type` holds Mutagen class names. The schema labels each member; the cell shows the
+// label and commits the value behind it.
 describe('ScalarCell — an enum whose values are wire tokens (#688)', () => {
   const kind = meta({
     name: 'concrete_type', type: 'enum',
-    enumValues: ['NpcLevel', 'PcLevelMult'],
-    enumLabels: ['Npc Level', 'Pc Level Mult'],
+    enumMembers: [{ value: 'NpcLevel', label: 'Npc Level' },
+      { value: 'PcLevelMult', label: 'Pc Level Mult' }],
   });
 
   it('shows the label at rest, never the value behind it', () => {
@@ -216,7 +216,7 @@ describe('ScalarCell — an enum whose values are wire tokens (#688)', () => {
   });
 
   it('falls back to the values themselves for an ordinary enum, which has no labels', () => {
-    const plain = meta({ type: 'enum', enumValues: ['Alpha', 'Beta'] });
+    const plain = meta({ type: 'enum', enumMembers: [{ value: 'Alpha' }, { value: 'Beta' }] });
     render(<ScalarCell value="Alpha" meta={plain} editable onCommit={vi.fn()} />);
 
     expect(screen.getByText('Alpha')).toBeInTheDocument();

@@ -307,13 +307,14 @@ describe('appendArrayElement', () => {
 // MEditService.Tests.Edits.UnionArrayAddInventoryTests.ArrayAdd_BuildsAnElementTheWritePathAccepts.
 describe('defaultAdapterElementValue — a struct element carrying a discriminator', () => {
   const unionElement: FieldMetadata = {
-    name: '', type: 'struct', isArray: false, validFormKeyTypes: [], enumValues: [],
+    name: '', type: 'struct', isArray: false, validFormKeyTypes: [], enumMembers: [],
     fields: [
       {
         name: 'concrete_type', type: 'enum', isArray: false, validFormKeyTypes: [],
-        enumValues: ['QuestReferenceAlias', 'QuestLocationAlias', 'QuestCollectionAlias'],
+        enumMembers: [{ value: 'QuestReferenceAlias' }, { value: 'QuestLocationAlias' },
+          { value: 'QuestCollectionAlias' }],
       },
-      { name: 'name', type: 'string', isArray: false, validFormKeyTypes: [], enumValues: [] },
+      { name: 'name', type: 'string', isArray: false, validFormKeyTypes: [], enumMembers: [] },
     ],
   };
 
@@ -583,16 +584,16 @@ describe('setAtPath', () => {
 // *nested* array's own element type — reading `fieldMetaMap[rootField].elementType` directly
 // only works when the array itself is the subtree root.
 describe('metaAtPath', () => {
-  const idMeta: FieldMetadata = { name: 'Id', type: 'string', isArray: false, validFormKeyTypes: [], enumValues: [] };
-  const weightMeta: FieldMetadata = { name: 'Weight', type: 'int', isArray: false, validFormKeyTypes: [], enumValues: [] };
+  const idMeta: FieldMetadata = { name: 'Id', type: 'string', isArray: false, validFormKeyTypes: [], enumMembers: [] };
+  const weightMeta: FieldMetadata = { name: 'Weight', type: 'int', isArray: false, validFormKeyTypes: [], enumMembers: [] };
   const entryMeta: FieldMetadata = {
-    name: '', type: 'struct', isArray: false, validFormKeyTypes: [], enumValues: [], fields: [idMeta, weightMeta],
+    name: '', type: 'struct', isArray: false, validFormKeyTypes: [], enumMembers: [], fields: [idMeta, weightMeta],
   };
   const entriesMeta: FieldMetadata = {
-    name: 'Entries', type: 'array', isArray: true, validFormKeyTypes: [], enumValues: [], elementType: entryMeta,
+    name: 'Entries', type: 'array', isArray: true, validFormKeyTypes: [], enumMembers: [], elementType: entryMeta,
   };
   const containerMeta: FieldMetadata = {
-    name: 'Container', type: 'struct', isArray: false, validFormKeyTypes: [], enumValues: [], fields: [entriesMeta],
+    name: 'Container', type: 'struct', isArray: false, validFormKeyTypes: [], enumMembers: [], fields: [entriesMeta],
   };
 
   it('returns the root meta itself for an empty path', () => {

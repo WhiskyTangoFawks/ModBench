@@ -36,7 +36,7 @@ public class AbstractUnionDiscriminatorMetadataTests
         Assert.Equal("enum", kind.Type);
         Assert.Equal(
             ["QuestReferenceAlias", "QuestLocationAlias", "QuestCollectionAlias"],
-            kind.EnumValues);
+            kind.EnumMembers.Select(m => m.Value));
     }
 
     [Fact]
@@ -45,7 +45,7 @@ public class AbstractUnionDiscriminatorMetadataTests
         var kind = Discriminator("qust", "aliases", "[]", "concrete_type");
 
         Assert.Equal("Kind", kind.DisplayLabel);
-        Assert.Equal(["Reference", "Location", "Collection"], kind.EnumLabels);
+        Assert.Equal(["Reference", "Location", "Collection"], kind.EnumMembers.Select(m => m.Label));
     }
 
     /// <summary>
@@ -59,8 +59,8 @@ public class AbstractUnionDiscriminatorMetadataTests
     {
         var kind = Discriminator("npc_", "level", "concrete_type");
 
-        Assert.Equal(["NpcLevel", "PcLevelMult"], kind.EnumValues);
-        Assert.Equal(["Npc Level", "Pc Level Mult"], kind.EnumLabels);
+        Assert.Equal(["NpcLevel", "PcLevelMult"], kind.EnumMembers.Select(m => m.Value));
+        Assert.Equal(["Npc Level", "Pc Level Mult"], kind.EnumMembers.Select(m => m.Label));
     }
 
     /// <summary>
@@ -75,13 +75,12 @@ public class AbstractUnionDiscriminatorMetadataTests
         foreach (var (table, path, meta) in AllFields())
         {
             if (meta.Name != "concrete_type") continue;
-            var labels = meta.EnumLabels;
-            if (labels == null || labels.Count != meta.EnumValues.Count
-                || labels.Any(string.IsNullOrWhiteSpace)
+            var labels = meta.EnumMembers.Select(m => m.Label).ToList();
+            if (labels.Any(string.IsNullOrWhiteSpace)
                 || labels.Distinct(StringComparer.Ordinal).Count() != labels.Count
                 || meta.DisplayLabel != "Kind")
             {
-                offenders.Add($"{table}.{path}: [{string.Join(", ", labels ?? [])}]");
+                offenders.Add($"{table}.{path}: [{string.Join(", ", labels)}]");
             }
         }
 

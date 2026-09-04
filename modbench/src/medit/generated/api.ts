@@ -691,6 +691,11 @@ export interface components {
             path: string;
             origin: string;
         };
+        EnumMember: {
+            value: string;
+            bitValue?: string | null;
+            label?: string | null;
+        };
         ExternalChangeActionRequest: {
             origin: string;
         };
@@ -719,14 +724,12 @@ export interface components {
             type: string;
             isArray: boolean;
             validFormKeyTypes: string[];
-            enumValues: string[];
+            enumMembers: components["schemas"]["EnumMember"][];
             elementType?: components["schemas"]["FieldMetadata"] | null;
             fields?: components["schemas"]["FieldMetadata"][] | null;
             isSortable: boolean;
             allowsNull: boolean;
             isBitmask: boolean;
-            enumBitValues?: string[] | null;
-            enumLabels?: string[] | null;
             displayLabel?: string | null;
             isDiscriminator: boolean;
         };

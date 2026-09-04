@@ -49,7 +49,7 @@ public sealed class ConcreteBaseUnionSchemaTests
                 "ScriptProperty", "ScriptStringListProperty", "ScriptStringProperty", "ScriptStructListProperty",
                 "ScriptStructProperty", "ScriptVariableListProperty", "ScriptVariableProperty",
             ],
-            discriminator.EnumValues.Order(StringComparer.Ordinal));
+            discriminator.EnumMembers.Select(m => m.Value).Order(StringComparer.Ordinal));
     }
 
     /// <summary>
@@ -122,7 +122,8 @@ public sealed class ConcreteBaseUnionSchemaTests
         var nestedElement = element.Fields!.Single(f => f.Name == structLeafList).ElementType!;
         var nestedProperty = nestedElement.Fields!.Single(f => f.Name == (structLeafList == "members" ? "properties" : "members")).ElementType!;
 
-        var kinds = nestedProperty.Fields!.Single(f => f.Name == "concrete_type").EnumValues;
+        var kinds = nestedProperty.Fields!.Single(f => f.Name == "concrete_type")
+            .EnumMembers.Select(m => m.Value).ToList();
         Assert.Equal(13, kinds.Count);
         Assert.DoesNotContain("ScriptStructProperty", kinds);
         Assert.DoesNotContain("ScriptStructListProperty", kinds);

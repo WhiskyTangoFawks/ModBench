@@ -3,7 +3,7 @@ import { ScalarCell } from './ScalarCell';
 import { FormKeyCell } from './FormKeyCell';
 import { pickConditionFunction } from './nativeBridge';
 import { mono, fg } from './gridStyles';
-import type { FieldMetadata, FormKeyResolution, ParsedConditionParam } from './types';
+import type { EnumMember, FieldMetadata, FormKeyResolution, ParsedConditionParam } from './types';
 
 // The four `renderCell` dispatch targets for Condition's composite leaf types —
 // `conditionFunction` opens a QuickPick over the function catalogue (never a text/dropdown
@@ -13,14 +13,14 @@ import type { FieldMetadata, FormKeyResolution, ParsedConditionParam } from './t
 // click-to-open on `editable && isFocused`, matching FormKeyCell's identical gate, and carry
 // `data-open-trigger` so F2 (DiskCell) reaches them the same way it reaches every other leaf.
 
-function enumMeta(enumValues: string[]): FieldMetadata {
-  return { name: '', type: 'enum', isArray: false, validFormKeyTypes: [], enumValues };
+function enumMeta(enumMembers: EnumMember[]): FieldMetadata {
+  return { name: '', type: 'enum', isArray: false, validFormKeyTypes: [], enumMembers };
 }
 function scalarMeta(type: 'string' | 'int' | 'float' | 'bool'): FieldMetadata {
-  return { name: '', type, isArray: false, validFormKeyTypes: [], enumValues: [] };
+  return { name: '', type, isArray: false, validFormKeyTypes: [], enumMembers: [] };
 }
 function formKeyMeta(validFormKeyTypes: string[] = []): FieldMetadata {
-  return { name: '', type: 'formKey', isArray: false, validFormKeyTypes, enumValues: [] };
+  return { name: '', type: 'formKey', isArray: false, validFormKeyTypes, enumMembers: [] };
 }
 
 const functionButtonStyle: React.CSSProperties = {
@@ -59,7 +59,7 @@ export function ConditionFunctionCell({ value, editable, isFocused = true, onCom
 
 interface RunOnValue { target: string; reference: string | null }
 
-// `meta.enumValues` is the server's Run On target catalog (GET
+// `meta.enumMembers` is the server's Run On target catalog (GET
 // /condition-run-on-targets, threaded in by conditionTreeAdapter's `runOnMeta`) — no hardcoded
 // FO4 member list here, so a future game's differently-shaped RunOnType enum offers
 // exactly what it resolves, never a name it can't parse or write.
@@ -72,7 +72,7 @@ export function ConditionRunOnCell({ value, meta, editable, isFocused, onCommit,
   return (
     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
       <ScalarCell
-        value={v.target} meta={enumMeta(meta.enumValues)} editable={editable} isFocused={isFocused}
+        value={v.target} meta={enumMeta(meta.enumMembers)} editable={editable} isFocused={isFocused}
         onCommit={onCommit && (target => onCommit({ target, reference: target === 'Reference' ? v.reference : null }))}
       />
       {v.target === 'Reference' && (

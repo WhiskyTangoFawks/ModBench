@@ -23,13 +23,14 @@ export function modelValue(value: unknown, meta: FieldMetadata, resolution?: For
   switch (meta.type) {
     case 'formKey':
       return typeof value === 'string' && value ? formKeyLabel(value, resolution) : '';
-    case 'enum':
-      if (meta.isBitmask && meta.enumBitValues) {
+    case 'enum': {
+      const flags = meta.isBitmask ? flagBits(meta) : null;
+      if (flags) {
         const num = toBigInt(value);
-        const bits = meta.enumBitValues.map(BigInt);
-        return meta.enumValues.filter((_, i) => (num & bits[i]) !== 0n).join(', ');
+        return flags.filter(f => (num & f.bit) !== 0n).map(f => f.value).join(', ');
       }
       return toStr(value);
+    }
     case 'struct':
     case 'array':
       return JSON.stringify(value);
@@ -40,10 +41,18 @@ export function modelValue(value: unknown, meta: FieldMetadata, resolution?: For
 
 // What the cell reads out. Identical to the edit value except for an enum whose own values are wire
 // tokens rather than words (an abstract union's `concrete_type` carries Mutagen class names), where
-// the schema labels each value — positionally, the same alignment enumBitValues already uses.
+// the member carries the label to show in its place.
 export function displayValue(value: unknown, meta: FieldMetadata, resolution?: FormKeyResolution): string {
   if (meta.type !== 'enum' || meta.isBitmask) return modelValue(value, meta, resolution);
-  return meta.enumLabels?.[meta.enumValues.indexOf(String(value))] ?? modelValue(value, meta);
+  return meta.enumMembers.find(m => m.value === String(value))?.label ?? modelValue(value, meta);
+}
+
+// The bit each member of a bitmask field stands for, or null when any member has none: a member
+// without a bit has no checkbox to be, and rendering the rest would silently drop a flag. Shared by
+// modelValue's own flags branch and FlagCell's checkbox state, so both read one answer.
+export function flagBits(meta: FieldMetadata): { value: string; bit: bigint }[] | null {
+  if (meta.enumMembers.some(m => m.bitValue == null)) return null;
+  return meta.enumMembers.map(m => ({ value: m.value, bit: BigInt(m.bitValue!) }));
 }
 
 // Shared by modelValue's own flags branch and FlagCell's checkbox-state

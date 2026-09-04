@@ -13,7 +13,7 @@ import { FormKeyCell } from './FormKeyCell';
 import type { FieldMetadata, FormKeyResolution } from './types';
 
 const fkMeta: FieldMetadata = {
-  name: 'Race', type: 'formKey', isArray: false, validFormKeyTypes: ['race'], enumValues: [],
+  name: 'Race', type: 'formKey', isArray: false, validFormKeyTypes: ['race'], enumMembers: [],
 };
 
 // Navigation requires the leaf's own resolution to say the reference is

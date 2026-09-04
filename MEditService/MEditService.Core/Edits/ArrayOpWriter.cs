@@ -254,7 +254,7 @@ internal static class ArrayOpWriter
         "int" or "float" => 0,
         "bool" => false,
         "enum" when meta.IsBitmask => new JsonArray(),
-        "enum" => meta.EnumValues.Count > 0 ? meta.EnumValues[0] : "",
+        "enum" => meta.EnumMembers.Count > 0 ? meta.EnumMembers[0].Value : "",
         "struct" => DefaultStructElement(meta),
         "array" => new JsonArray(),
         // Mutagen's own empty-slice token, which is what a byte-slice element's Extract emits for
@@ -269,12 +269,12 @@ internal static class ArrayOpWriter
     private static JsonObject DefaultStructElement(FieldMetadata meta)
     {
         var element = new JsonObject();
-        // A discriminator's EnumValues are its union's leaves, and a union with no leaf is not
+        // A discriminator's members are its union's leaves, and a union with no leaf is not
         // reflected as one at all (SchemaReflector.TryGetAbstractUnion requires at least one, and
         // OMOD's leaf table is a literal) — so the count guard is what keeps the indexer total,
         // not a case that can arrive.
         foreach (var field in meta.Fields ?? [])
-            if (field.IsDiscriminator && field.EnumValues.Count > 0) element[field.Name] = field.EnumValues[0];
+            if (field.IsDiscriminator && field.EnumMembers.Count > 0) element[field.Name] = field.EnumMembers[0].Value;
         return element;
     }
 

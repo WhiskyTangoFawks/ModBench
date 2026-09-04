@@ -24,17 +24,19 @@ import { WEBVIEW_TO_EXTENSION } from './messages';
 // the only place that can name a leaf the write path will accept.
 
 const aliasesMeta: FieldMetadata = {
-  name: 'aliases', type: 'array', isArray: true, validFormKeyTypes: [], enumValues: [],
+  name: 'aliases', type: 'array', isArray: true, validFormKeyTypes: [], enumMembers: [],
   elementType: {
-    name: '', type: 'struct', isArray: false, validFormKeyTypes: [], enumValues: [],
+    name: '', type: 'struct', isArray: false, validFormKeyTypes: [], enumMembers: [],
     fields: [
       {
         name: 'concrete_type', type: 'enum', isArray: false, validFormKeyTypes: [],
-        enumValues: ['QuestReferenceAlias', 'QuestLocationAlias', 'QuestCollectionAlias'],
-        enumLabels: ['Reference', 'Location', 'Collection'],
+        enumMembers: [
+          { value: 'QuestReferenceAlias', label: 'Reference' },
+          { value: 'QuestLocationAlias', label: 'Location' },
+          { value: 'QuestCollectionAlias', label: 'Collection' }],
         displayLabel: 'Kind',
       },
-      { name: 'name', type: 'string', isArray: false, validFormKeyTypes: [], enumValues: [] },
+      { name: 'name', type: 'string', isArray: false, validFormKeyTypes: [], enumMembers: [] },
     ],
   },
 };
