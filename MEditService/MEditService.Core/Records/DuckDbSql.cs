@@ -2,13 +2,9 @@ using DuckDB.NET.Data;
 
 namespace MEditService.Core.Records;
 
-/// <summary>
-/// Parameterized-command plumbing shared by two or more of
-/// <see cref="DuckDbRecordIndex"/> and its collaborators (<see cref="IndexStore"/>,
-/// <see cref="WorkingTreeOverlay"/>) — the connection is an explicit first parameter, matching the
-/// <see cref="DuckDbAppend"/> convention in this same directory. Not a general-purpose
-/// home: a member with exactly one consumer belongs on that consumer instead.
-/// </summary>
+/// <summary>Parameterized-command plumbing shared by two or more index collaborators; the
+/// connection is an explicit first parameter. A member with exactly one consumer belongs on that
+/// consumer instead.</summary>
 internal static class DuckDbSql
 {
     public static string? ScalarString(DuckDBConnection connection, string sql, params string[] values)

@@ -8,23 +8,11 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Core.Records;
 
-/// <summary>
-/// The connection/DDL/validate/rebuild collaborator of
-/// <see cref="DuckDbRecordIndex"/> — opening the file (or an in-memory database), the
-/// <c>mirror.files</c>/<see cref="IndexVersion"/> machinery that decides whether a file must be
-/// rebuilt from scratch, and the by-content validation against disk. Internal, private to the
-/// <c>Records</c> module — not part of any public seam.
-///
-/// <para><b>Validate is a pure question, not an action</b>: this
-/// class never removes a plugin's rows itself. <see cref="ValidateAgainstDisk"/> returns the stale
-/// set; the caller (<see cref="DuckDbRecordIndex.Initialize"/>) is the one that already owns
-/// <c>Unindex</c> as an orchestrating verb spanning registration and every ingest-owned table, so
-/// acting on the stale set stays there rather than this class calling back into its own caller.</para>
-/// </summary>
+/// <summary>The connection/DDL/validate/rebuild collaborator of <see cref="DuckDbRecordIndex"/>.
+/// Validate is a pure question: this class returns the stale set and never removes rows itself,
+/// since <c>Unindex</c> is the caller's orchestrating verb.</summary>
 internal sealed class IndexStore
 {
-    /// <summary>The file-mirror table, named once so the writes, the open-time validation
-    /// and the version check cannot drift onto different spellings of it.</summary>
     private const string FilesRelation = "mirror.files";
 
     private readonly TableDdlBuilder _ddlBuilder;
@@ -46,12 +34,8 @@ internal sealed class IndexStore
         Connection = Open();
     }
 
-    /// <summary>
-    /// Opens the index, rebuilding it from scratch if the file cannot be opened at all — a DuckDB
-    /// storage-format change on upgrade, or a truncated/corrupt file (ADR-0001 point 6). The index
-    /// is derived state and losing it costs one cold load, which is what a load costs today anyway,
-    /// so a rebuild is strictly better than refusing to start.
-    /// </summary>
+    // Rebuilds from scratch if the file cannot be opened at all (ADR-0001 point 6): the index is
+    // derived state and losing it costs one cold load, so a rebuild beats refusing to start.
     private DuckDBConnection Open()
     {
         if (_databasePath == null)
@@ -72,29 +56,17 @@ internal sealed class IndexStore
         }
         catch (Exception ex)
         {
-            // Deliberately every other exception rather than DuckDBException alone: what a file
-            // DuckDB cannot make sense of throws is its own business and has changed between
-            // versions, and the answer here — throw the file away and start again — is the same for
-            // all of them. The index is derived state; losing it costs one cold load.
+            // Every other exception, not DuckDBException alone: what an unreadable file throws has
+            // changed between DuckDB versions, and the answer is the same for all of them.
             _logger.LogWarning(ex, "Could not open the index at {Path}; rebuilding it from scratch", _databasePath);
             File.Delete(_databasePath);
             return OpenFile();
         }
     }
 
-    /// <summary>
-    /// Whether this open failed because <b>another process already holds the file</b> — a second
-    /// Modbench window on the same game (ADR-0001 point 6), which is a different failure from a
-    /// corrupt one and must never be answered by rebuilding: deleting a file another process has
-    /// open succeeds on POSIX and destroys that window's live index, which is precisely the "silent
-    /// divergence" the decision rejects. Such an open throws <see cref="IndexHeldElsewhereException"/>
-    /// naming the file instead, which <c>PUT /load-order</c> answers 423 Locked.
-    ///
-    /// <para>Matched on DuckDB's own message because that is the only thing it offers — the lock
-    /// conflict and a corrupt file arrive as the same exception type. Both platforms' wordings share
-    /// DuckDB's own prefix, and an unrecognised wording degrades to the rebuild branch, so this is a
-    /// guard against the known case rather than a claim to have enumerated every one.</para>
-    /// </summary>
+    /// <summary>Whether the open failed because another process holds the file, which must never be
+    /// answered by rebuilding: deleting an open file succeeds on POSIX and destroys a live index.
+    /// Matched on DuckDB's message, all it offers.</summary>
     internal static bool IsAnotherWriter(Exception ex) =>
         ex.Message.Contains("lock on file", StringComparison.OrdinalIgnoreCase)
         || ex.Message.Contains("Conflicting lock", StringComparison.OrdinalIgnoreCase);
@@ -106,11 +78,8 @@ internal sealed class IndexStore
         return connection;
     }
 
-    /// <summary>
-    /// The DDL/version half of <see cref="DuckDbRecordIndex.Initialize"/>: discard a file written
-    /// under another <see cref="IndexVersion"/> (whole-file rebuild, never partial), then create the
-    /// fixed tables for <paramref name="release"/>.
-    /// </summary>
+    /// <summary>Discards a file written under another <see cref="IndexVersion"/> (whole-file rebuild,
+    /// never partial), then creates the fixed tables.</summary>
     public void Initialize(GameRelease release, string indexVersion)
     {
         _indexVersion = indexVersion;
@@ -118,13 +87,8 @@ internal sealed class IndexStore
         _ddlBuilder.CreateTables(Connection, release);
     }
 
-    /// <summary>
-    /// ADR-0001: a codec or schema version change invalidates the <b>whole</b> file. There is
-    /// no partial answer — the stored documents are the codec's output and the generated views are
-    /// the reflector's, so a file written under another version describes a read model this process
-    /// does not have — and no in-place migration either, which is what "rebuilt from scratch" means:
-    /// the file is deleted and reopened empty, costing exactly one cold load.
-    /// </summary>
+    // ADR-0001: a codec or schema version change invalidates the whole file, and there is no
+    // in-place migration: the file is deleted and reopened empty, costing one cold load.
     private void DiscardFileWrittenUnderAnotherVersion()
     {
         if (_databasePath == null) return;
@@ -132,11 +96,8 @@ internal sealed class IndexStore
         List<string> versions;
         try
         {
-            // Asked of the catalog first, so that "this file has never been written to" — the
-            // ordinary first open, where the table simply does not exist yet — is an answer rather
-            // than an exception. That separation is what lets the catch below mean something: past
-            // this point, a file that cannot answer is a file this process cannot reason about, and
-            // the safe reading of an unreadable mirror is that it is stale.
+            // Asked of the catalog first so a never-written file (the ordinary first open) is an
+            // answer, not an exception; past this point a file that cannot answer is stale.
             if (!IndexedFilesTableExists()) return;
 
             versions = [];
@@ -172,9 +133,8 @@ internal sealed class IndexStore
         return Convert.ToInt64(cmd.ExecuteScalar(), CultureInfo.InvariantCulture) > 0;
     }
 
-    /// <summary>Throws the file away and opens an empty one in its place. Only reachable once the
-    /// file has already been opened successfully, so it can never race the second-writer case
-    /// <see cref="IsAnotherWriter"/> guards.</summary>
+    // Only reachable once the file has already been opened, so it can never race the second-writer
+    // case IsAnotherWriter guards.
     private void RebuildFile()
     {
         Connection.Dispose();
@@ -182,19 +142,9 @@ internal sealed class IndexStore
         Connection = OpenFile();
     }
 
-    /// <summary>
-    /// ADR-0001: validity is by content, never by clock. Every plugin the file holds rows for
-    /// is checked against the file those rows were built from and the stale ones — gone, or moved to
-    /// different bytes — are returned for the caller to <c>Unindex</c>, so the next load re-indexes
-    /// them in place and no read can ever answer from rows the disk no longer backs. A hash, never an
-    /// <c>mtime</c>: MO2, xEdit, Steam and the user all write these files and a preserved timestamp
-    /// is free.
-    ///
-    /// <para>Registrations are <i>not</i> cleared (ADR-0001 point 4, amended by ADR-0044): the
-    /// <c>registrations</c> rows are the last known load order, and the first reconcile corrects
-    /// them — which is what lets a restart followed by an identical snapshot cost nothing. This
-    /// method only ever reads and reports; it never removes a registration itself.</para>
-    /// </summary>
+    /// <summary>ADR-0001: validity is by content, never by clock: a hash, not mtime, since MO2, xEdit
+    /// and the user all write these files. Registrations are not cleared (ADR-0044); the first
+    /// reconcile corrects them.</summary>
     public List<PluginKey> ValidateAgainstDisk()
     {
         var stale = new List<PluginKey>();
@@ -249,12 +199,9 @@ internal sealed class IndexStore
         return rows;
     }
 
-    /// <summary>The content hash of one plugin file, or <see langword="null"/> when it cannot be
-    /// read at all — a file another process is mid-write on, or one whose permissions changed. Null
-    /// counts as a mismatch at <see cref="ValidateAgainstDisk"/>: an unreadable file is not evidence
-    /// that the rows built from it are still true. Shared with the runtime mirror
-    /// (<see cref="PluginBinaryHash"/>), which has to produce the identical string for the identical
-    /// bytes or a real change would read as a touch.</summary>
+    // Null when the file cannot be read (mid-write, permissions) counts as a mismatch: an unreadable
+    // file is no evidence its rows are still true. Shared with PluginBinaryHash so identical bytes
+    // hash identically.
     private string? FileContentHash(string filePath)
     {
         var hash = PluginBinaryHash.OfFile(filePath);
@@ -271,13 +218,9 @@ internal sealed class IndexStore
             $"SELECT content_hash FROM {FilesRelation} WHERE plugin = $1 AND origin = $2",
             key.Name, key.Origin!);
 
-    // ADR-0001: the file half of an Index() call — what was on disk, and what shape its rows
-    // were written in. Called inside Index()'s own transaction (owned by DuckDbRecordIndex), so a
-    // re-index that throws partway leaves neither the rows nor the claim about them behind. A caller
-    // that names no file (an in-memory mod, which is every fixture in the suite and the New Plugin
-    // gesture's freshly written one before it has a stamp worth taking) writes no row: the index then
-    // holds those rows without claiming any disk file backs them, which is exactly true, and the next
-    // load re-indexes.
+    // ADR-0001: the file half of an Index() call, inside its transaction. A caller naming no file
+    // (an in-memory mod) writes no row, so nothing vouches for those rows and the next load
+    // re-indexes.
     public void StampIndexedFile(string plugin, string origin, string? filePath)
     {
         DeleteIndexedFile(plugin, origin);

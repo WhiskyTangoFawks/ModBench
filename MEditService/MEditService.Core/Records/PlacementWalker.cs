@@ -6,34 +6,18 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Core.Records;
 
-/// <summary>
-/// A placed reference's row in the <c>placement</c> side table.
-/// </summary>
+/// <summary>A placed reference's row in the <c>placement</c> side table.</summary>
 public readonly record struct PlacementRow(
     string FormKey, string ParentCell, string PlacementGroup, float? PosX, float? PosY, float? PosZ);
 
-/// <summary>
-/// A cell's row in the <c>cell_location</c> side table.
-/// </summary>
+/// <summary>A cell's row in the <c>cell_location</c> side table.</summary>
 public readonly record struct CellLocationRow(
     string CellFormKey, string? ParentWorldspace,
     int? BlockX, int? BlockY, int? SubX, int? SubY, int? GridX, int? GridY, bool IsInterior);
 
-/// <summary>
-/// <para>
-/// Walks the worldspace/cell GRUP hierarchy of a mod and yields the structural parentage that
-/// <see
-/// cref="Mutagen.Bethesda.Plugins.Records.IMajorRecordGetterEnumerable.EnumerateMajorRecords()"/>
-/// flattens away (which cell a placed ref is in, persistent vs
-/// temporary, which worldspace a cell is in, block/sub-block, grid).
-/// </para>
-/// <para>
-/// Game-agnostic by design: Mutagen generates the same property names across every game
-/// (<c>Worldspaces</c>, <c>SubCells</c>, <c>Persistent</c>, <c>Grid</c>, ...), so this reflects on
-/// those names rather than depending on a game-specific interface — consistent with the
-/// reflection-driven <c>SchemaReflector</c> and the "support all games without code changes" invariant.
-/// </para>
-/// </summary>
+/// <summary>Walks the worldspace/cell GRUP hierarchy and yields the structural parentage
+/// <c>EnumerateMajorRecords</c> flattens away. Reflects on Mutagen's property names, which are the
+/// same across every game, rather than a game-specific interface.</summary>
 public sealed class PlacementWalker
 {
     private readonly ConcurrentDictionary<(Type, string), MemberInfo?> _members = new();
@@ -102,15 +86,9 @@ public sealed class PlacementWalker
         }
     }
 
-    /// <summary>
-    /// The per-item half of <see cref="EmitCell"/>'s own cell_location row, factored out so a
-    /// single already-in-hand cell (found through <see cref="Source.ContainerChildFields.EnumerateChildren"/>
-    /// rather than a whole-mod walk — <c>DuckDbRecordIndex</c>'s working-tree re-derivation) can be
-    /// answered without re-deriving the block/sub/worldspace facts a lone document cannot carry: those
-    /// are supplied by the caller, which is always in one of two positions to know them — either
-    /// unchanged from what a prior ingest already established, or (a <c>Worldspace.TopCell</c>) fixed
-    /// by construction (no block/sub, not interior).
-    /// </summary>
+    /// <summary>The single-cell half of <see cref="EmitCell"/>, for the working-tree re-derivation of
+    /// one already-in-hand cell. The block/sub/worldspace facts a lone document cannot carry are
+    /// supplied by the caller.</summary>
     internal CellLocationRow EmitCellLocationRow(
         IMajorRecordGetter cell, string? parentWorldspace, int? blockX, int? blockY, int? subX, int? subY,
         bool isInterior)
@@ -123,9 +101,8 @@ public sealed class PlacementWalker
         return new CellLocationRow(cellFk, parentWorldspace, blockX, blockY, subX, subY, gx, gy, isInterior);
     }
 
-    /// <summary>The per-item half of <see cref="EmitPlaced"/>'s own placement row — see
-    /// <see cref="EmitCellLocationRow"/>'s doc comment for why a single-item variant exists
-    /// alongside the whole-mod walk.</summary>
+    /// <summary>The single-item half of <see cref="EmitPlaced"/>, for the same reason as the cell
+    /// variant.</summary>
     internal PlacementRow EmitPlacementRow(IMajorRecordGetter placed, string parentCellFormKey, string group)
     {
         var pos = Get(placed, "Position");
@@ -161,16 +138,14 @@ public sealed class PlacementWalker
     private IEnumerable<object> List(object? obj, string name) =>
         Get(obj, name) is IEnumerable e ? e.Cast<object>() : [];
 
-    // Top-level groups expose their records differently across getter shapes: the in-memory
-    // Fallout4Group<T> surfaces a "Records" member, while the binary-overlay group wrapper has no
-    // such member but is itself IEnumerable<T>. Both are directly enumerable, so iterate the group
-    // object itself rather than reflecting on a member name (which only existed on the in-memory shape).
+    // Top-level groups differ by getter shape: the in-memory group has a "Records" member, the
+    // binary-overlay wrapper is itself IEnumerable<T>. Both are enumerable, so iterate the group
+    // itself rather than reflecting on a member name.
     private static IEnumerable<object> Enumerate(object? group) =>
         group is IEnumerable e ? e.Cast<object>() : [];
 
-    // Callers only invoke these with values that are structurally present (block/sub-block
-    // numbers are non-nullable; grid/position are read only after a not-null guard), so no
-    // null branch is needed here — absence is handled at the call site.
+    // Only called with values that are structurally present (block/sub-block numbers are
+    // non-nullable; grid/position are read after a not-null guard), so no null branch is needed.
     private static int Int(object? v) => Convert.ToInt32(v, CultureInfo.InvariantCulture);
     private static float Float(object? v) => Convert.ToSingle(v, CultureInfo.InvariantCulture);
 }
