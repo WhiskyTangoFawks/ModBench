@@ -10,23 +10,17 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Tests.Query;
 
-/// <summary>
-/// Master issues are derived from the whole loaded set, so mid-load they are not merely
-/// incomplete — they are wrong. A plugin whose master is real, present on disk and simply not opened
-/// yet classifies as <c>DirectlyMissing</c> against a partial load order, which would put a red "missing
-/// master" decoration on a healthy plugin for as long as the load takes.
-///
-/// The same class of error as an absent conflict badge reading as "no conflict" (which is the case
-/// ADR-0035 names).
-/// </summary>
+/// <summary>Master issues derive from the whole loaded set, so mid-load they are wrong, not merely
+/// incomplete: a healthy plugin whose master is not yet opened would read as missing (the same
+/// class of error ADR-0035 names).</summary>
 public sealed class MasterIssuesDuringLoadTests
 {
     [Fact]
     public async Task GetPlugins_MidLoad_DoesNotFlagAMasterThatSimplyHasNotBeenOpenedYet()
     {
-        // ADR-0038: a genuine FormKey reference is what makes Mutagen record a master for real.
-        // Later.esm is sequenced after the plugin that depends on it, which is exactly the transient
-        // state every ordinary load passes through — here it is merely held still by the gate.
+        // ADR-0038: a genuine FormKey reference is what makes Mutagen record a master. Later.esm is
+        // sequenced after the plugin depending on it, the transient state every ordinary load passes
+        // through, held still here by the gate.
         using var fx = new PluginFixtureBuilder("mi-midload")
             .WithPlugin("Fallout4.esm")
             .WithPlugin("A.esp", mod => mod.Npcs.AddNew("NeedsLater").Race.SetTo(

@@ -12,11 +12,8 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Tests.Api;
 
-/// <summary>
-/// The HTTP door over the Source/Bridge machinery those layers already test exhaustively —
-/// thin, mapping-only assertions (resolve target, call through, shape the response), not a
-/// re-derivation of every Source-level scenario.
-/// </summary>
+/// <summary>Thin, mapping-only assertions over Source/Bridge machinery those layers already test;
+/// not a re-derivation of every Source-level scenario.</summary>
 public sealed class ExternalChangeEndpointsTests : IDisposable
 {
     private readonly TrackedModFixture _mod = TrackedModFixture.Tracked();

@@ -8,29 +8,11 @@ using Mutagen.Bethesda.Serialization.Exceptions;
 
 namespace MEditService.Tests.Source;
 
-/// <summary>
-/// Unit-level pins for <see cref="PluginDiagnosis"/>'s own three factories, complementing the real,
-/// end-to-end fixtures in <c>RealData/PluginDiagnosisRoundTripGateTests.cs</c>,
-/// <c>RealData/MasterPruningRoundTripGateTests.cs</c> and
-/// <c>Edits/PluginCompileServiceDiagnosisTests.cs</c>/<c>Edits/PluginCompileServiceMasterPruningTests.cs</c>.
-/// This file's own job is the shapes those real fixtures can't reach cheaply — chiefly the
-/// nested-<see cref="AggregateException"/> chain-walk — built from real defects' own
-/// captured messages (<c>SouthOfTheSea.esm</c> REFR <c>431EDC</c>; <c>SpaDia_AMR.esp</c> Quest
-/// <c>DiaQ_LLInjector_SpadeyAMR</c>; both found live) rather than committing every fixture this
-/// repo needs a shape from.
-/// </summary>
+/// <summary>The shapes the real fixtures cannot reach cheaply, chiefly the nested
+/// <see cref="AggregateException"/> chain walk, built from real defects' captured messages rather
+/// than committing every fixture this needs a shape from.</summary>
 public sealed class PluginDiagnosisTests
 {
-    /// <summary>
-    /// Proven at the unit level: Mutagen enriches identity onto the exception nearest
-    /// where a record was actually being parsed and rethrows outward through however many
-    /// <see cref="AggregateException"/>s its own parallel record-block parsing used — live against
-    /// <c>SouthOfTheSea.esm</c>'s real REFR <c>XWPG</c>/<c>XWPN</c> defect, the exception
-    /// <c>Fallout4Mod.CreateFromBinary</c> actually threw was a bare <see cref="RecordException"/>
-    /// with no identity at all (only <c>EnrichAndThrow(ex, modKey)</c> ran), three levels above the
-    /// <see cref="SubrecordException"/> that carried the real identity — reproduced verbatim here.
-    /// A caller that reads only the caught exception's own properties would anchor on nothing.
-    /// </summary>
     [Fact]
     public void FromParseException_WalksNestedAggregateExceptionsForTheInnermostRecordException()
     {
@@ -55,17 +37,6 @@ public sealed class PluginDiagnosisTests
         Assert.Null(diagnosis.Tail);
     }
 
-    /// <summary>
-    /// The multi-exception half: Mutagen's own parallel record-block parsing
-    /// (<c>ListBinaryTranslation.ParseParallel</c>, a real <c>Parallel.ForEach</c>) can produce an
-    /// <see cref="AggregateException"/> holding more than one failure when concurrent iterations fail
-    /// simultaneously — realistic for any plugin with more than one corrupt record.
-    /// <see cref="Exception.InnerException"/> on a multi-exception <see cref="AggregateException"/>
-    /// only ever forwards to <see cref="AggregateException.InnerExceptions"/>'s first element, so a
-    /// walk that follows only <c>.InnerException</c> would see the unrelated first branch, never visit
-    /// the second branch at all, and silently anchor on nothing — exactly the failure mode this test
-    /// exists to catch. The identity-bearing exception is deliberately placed second, not first.
-    /// </summary>
     [Fact]
     public void FromParseException_WalksEveryBranchOfAMultiExceptionAggregateNotJustTheFirst()
     {
@@ -86,8 +57,6 @@ public sealed class PluginDiagnosisTests
         Assert.Contains("SecondBranchRef", diagnosis.Anchor);
     }
 
-    /// <summary>Nothing in the chain is a <see cref="RecordException"/>
-    /// at all, so the diagnosis anchors on nothing — never a guessed identity.</summary>
     [Fact]
     public void FromParseException_WhenNoRecordExceptionIsAnywhereInTheChain_AnchorsOnNothing()
     {
@@ -98,9 +67,6 @@ public sealed class PluginDiagnosisTests
         Assert.Equal(PluginDiagnosis.UnknownClass, diagnosis.DefectClass);
     }
 
-    /// <summary>The one Kind A entry with a real, reproducible fixture — <c>Clipboards to the
-    /// BOS.esp</c>'s exact message, reproduced verbatim (not paraphrased) since the table matches on
-    /// substring.</summary>
     [Fact]
     public void FromParseException_RecognizesTheRealClipboardsMessageAsKindA()
     {
@@ -113,9 +79,6 @@ public sealed class PluginDiagnosisTests
         Assert.Equal("blocked upstream: Mutagen #687", diagnosis.Tail);
     }
 
-    /// <summary>Compile's own seam: a <see cref="FilePathedException"/> anchors on the source file
-    /// itself, made relative to the tree root — the same identity unit
-    /// <c>PluginCompileService.RefuseIfSourceDoesNotRoundTrip</c> already names.</summary>
     [Fact]
     public void FromSourceReadException_AnchorsOnTheFilePathRelativeToTheTree()
     {
@@ -153,13 +116,6 @@ public sealed class PluginDiagnosisTests
             diagnosis.Describe());
     }
 
-    /// <summary>The write seam: the exact nested shape observed live against
-    /// <c>SpaDia_AMR.esp</c> (<c>AggregateException(AggregateException(RecordException(UnmappableFormIDException)))</c>,
-    /// from Mutagen's own <c>WriteGroupParallel</c>/<c>WriteQuestsParallel</c>) — the anchor comes from
-    /// the <see cref="RecordException"/> exactly as
-    /// <see cref="MEditService.Core.Source.PluginDiagnosis.FromParseException"/>'s own walk finds
-    /// it, and the master name comes from the deeper, differently-typed
-    /// <see cref="UnmappableFormIDException"/> nobody else's factory looks for.</summary>
     [Fact]
     public void FromWriteException_NamesTheRecordAndThePrunedMasterFromTwoDifferentExceptionTypes()
     {
@@ -189,10 +145,6 @@ public sealed class PluginDiagnosisTests
         Assert.Contains("Mutagen #688", diagnosis.Describe());
     }
 
-    /// <summary>The catch-filter test both write call sites (<c>TrackService.VerifyRoundTrip</c>,
-    /// <c>PluginCompileService.Compile</c>) share: an exception tree that never carries
-    /// <see cref="UnmappableFormIDException"/> must not be diverted into this Kind A row — every other
-    /// write failure keeps propagating unchanged (a deliberate decision, out of scope to widen).</summary>
     [Fact]
     public void HasUnmappableFormID_WhenNoUnmappableFormIDExceptionIsAnywhereInTheChain_IsFalse()
     {
@@ -211,9 +163,7 @@ public sealed class PluginDiagnosisTests
         Assert.True(PluginDiagnosis.HasUnmappableFormID(aggregate));
     }
 
-    /// <summary>A minimal stub — <see cref="UnmappableFormIDException"/>'s constructor requires an
-    /// <see cref="IReadOnlySeparatedMasterPackage"/>, but nothing under test here ever reads it (only
-    /// <see cref="UnmappableFormIDException.UnmappableFormKey"/> is), so every member throws.</summary>
+    // Nothing under test reads the package, only UnmappableFormKey, so every member throws.
     private sealed class StubMasterPackage : IReadOnlySeparatedMasterPackage
     {
         public ModKey CurrentMod => throw new NotSupportedException();

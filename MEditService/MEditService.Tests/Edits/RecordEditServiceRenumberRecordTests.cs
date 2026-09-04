@@ -11,25 +11,13 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Tests.Edits;
 
-/// <summary>
-/// Renumber, the delete+create pair plus cross-plugin reference cascade. Two-mod fixture
-/// because the interesting question — does a renumber rewrite a FormLink living in a <i>different</i>
-/// mod folder's own repo — cannot be asked of one.
-/// </summary>
+/// <summary>Two-mod fixture because the interesting question, does a renumber rewrite a FormLink in
+/// a different mod folder's own repo, cannot be asked of one.</summary>
 public sealed class RecordEditServiceRenumberRecordTests
 {
     private static RecordEditService ServiceFor(ILoadOrderMirror mirror) =>
         new(mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
 
-    /// <summary>
-    /// #661 regression: <c>RecordEditService.ResolveEditTarget</c> is the shared gate every
-    /// verb touching an existing record passes through, and only <c>EditField</c> was guarded against
-    /// the header when the source-unit gate that used to block it (<c>SourceUnitNotFound</c>) came
-    /// down. Traced, not run against production before the fix: renumber's own target rewrite would
-    /// have deserialized the header's own file through the per-record codec —
-    /// <c>codec.DeserializeAsync(path, release, "header")</c> — the exact generic path a
-    /// <c>ModHeader</c> cannot flow through, an untyped throw rather than a typed refusal.
-    /// </summary>
     [Fact]
     public void RenumberRecord_OnTheHeader_RefusesWithoutTouchingTheSourceTree()
     {
@@ -59,15 +47,6 @@ public sealed class RecordEditServiceRenumberRecordTests
         Assert.Null(index.At(RecordRef.Head).GetDocument(result.NewFormKey!, mod.Plugin));
     }
 
-    /// <summary>
-    /// A record that never reached Head — straight off <see cref="RecordEditService.CreateRecord"/>,
-    /// still working-tree-only (<c>Added</c>) — is exactly the shape the original bug report renumbered
-    /// (<c>workingTreeState: "Added"</c> on both old and new FormKeys). <see cref="TrackedModFixture"/>'s
-    /// own <c>Npc</c> is committed/Head-backed, so a regression built on it alone would pass unmodified —
-    /// this reaches the actual gap. Asserted at the same <see cref="IRecordReads"/> seam
-    /// <c>RecordQueryService.GetRecord</c>/<c>GetRecords</c> sit on (point-read and listing), not just
-    /// <see cref="IRecordIndex"/>, so this exercises what the HTTP layer actually answers.
-    /// </summary>
     [Fact]
     public void RenumberRecord_OnANeverCommittedAddedRecord_DropsOldFormKeyAtTheQueryLayer()
     {
@@ -114,9 +93,8 @@ public sealed class RecordEditServiceRenumberRecordTests
         Assert.Equal(RecordEditRefusal.LightPluginFormIdOutOfRange, result.Refusal);
     }
 
-    // The renumbered record's editor_id is unchanged, but it lands under a brand-new FormKey
-    // that _filter's snapshot never evaluated — the old FormKey (which did match) is gone, so without
-    // re-materializing, the record vanishes from a filtered listing across the renumber entirely.
+    // The renumbered record lands under a brand-new FormKey that _filter's snapshot never evaluated,
+    // and the old one is gone, so without re-materializing it vanishes from a filtered listing.
     [Fact]
     public void RenumberRecord_MakesTheRecordUnderItsNewFormKeyAppearInAnActiveFilteredListing()
     {
@@ -189,17 +167,8 @@ public sealed class RecordEditServiceRenumberRecordTests
         Assert.Contains(index.At(RecordRef.Effective).GetReferencedBy(result.NewFormKey!), r => r.FormKey == two.ReferencerNpc.ToString());
     }
 
-    // #678 (ADR-0045) overrules what this used to pin. The referencer's rewrite no longer outlives
-    // the target's own write failing: it is rolled back with everything else, so the filter — still
-    // re-applied on the failure path, not only on success — has to show the *restored* tree rather
-    // than the mid-cascade one. Asserting zero is the whole point: before #678 this same filter
-    // answered one, because the referencer's rewrite had landed durably and stayed there.
-    //
-    // Chmod-mid-cascade technique from PluginCompileServiceJournalTests: the target mod folder is
-    // made unwritable *after* fixture setup (so tracking itself succeeds), so the target's own write
-    // is what fails — a genuine I/O failure, arriving at a position the referencer's rewrite has
-    // already been written past. The referencer's own mod folder stays writable, which is what lets
-    // the rollback put its file back.
+    // ADR-0045: the referencer's rewrite is rolled back with everything else, so the filter, still
+    // re-applied on the failure path, shows the restored tree.
     [Fact]
     public void RenumberRecord_WhenTheTargetsOwnWriteFails_TheFilterReflectsTheRestoredTree()
     {
@@ -222,10 +191,8 @@ public sealed class RecordEditServiceRenumberRecordTests
             Assert.Contains("back as it was", ex.Message, StringComparison.Ordinal);
             Assert.DoesNotContain(TwoModFixture.ReferencerPluginName, ex.Message, StringComparison.Ordinal);
 
-            // #678's path rule, asked of the one fault here that is a genuine OS error: the
-            // underlying message names the path it failed on, and no absolute path reaches the
-            // author. The relative remainder does, which is the point — it is still the file the
-            // author would look for.
+            // ADR-0045's path rule, asked of the one fault here that is a genuine OS error: the message names
+            // the path it failed on, and no absolute path reaches the author. The relative remainder does.
             Assert.DoesNotContain(two.TargetModFolder, ex.Message, StringComparison.Ordinal);
             Assert.Contains(SourceRecordPath.RootFor(TwoModFixture.TargetPluginName), ex.Message, StringComparison.Ordinal);
         }
@@ -245,11 +212,8 @@ public sealed class RecordEditServiceRenumberRecordTests
         Assert.DoesNotContain(requestedTarget, referencer.Body, StringComparison.Ordinal);
     }
 
-    // Process-shelled rather than File.Set/GetUnixFileMode — same reasoning as
-    // PluginCompileServiceJournalTests.Chmod (this project's runtime is Linux-only per root
-    // CLAUDE.md, but that .NET API is flagged platform-unsafe regardless). Recursive: the write this
-    // needs to block lands several directories under the mod folder's own root, in a subdirectory
-    // Track already created and left writable.
+    // Process-shelled because File.SetUnixFileMode is flagged platform-unsafe even on a Linux-only
+    // runtime. Recursive: the write this blocks lands several directories under the mod folder root.
     private static void Chmod(string path, string mode)
     {
         using var process = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(
@@ -344,12 +308,6 @@ public sealed class RecordEditServiceRenumberRecordTests
         Assert.Equal(RecordEditRefusal.FormKeySpaceExhausted, result.Refusal);
     }
 
-    /// <summary>
-    /// Base.esm holds a native Race (the renumber target) and Winner.esp both overrides an unrelated
-    /// Npc (giving the override-refusal test something to point at) and holds its own native Npc
-    /// referencing Base.esm's Race — the cross-repo referencer <see cref="TwoModFixture.Mirror"/>
-    /// loads both plugins into.
-    /// </summary>
     private sealed class TwoModFixture : IDisposable
     {
         public const string ReferencerPluginName = "Winner.esp";

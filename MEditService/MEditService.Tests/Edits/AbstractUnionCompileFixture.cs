@@ -9,20 +9,8 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Tests.Edits;
 
-/// <summary>
-/// One real mod folder, tracked once, holding one record of every #611 owning type plus a small
-/// supporting cast of FormLink targets — the same "one shared small mod, many facts" shape
-/// <see cref="TrackedModFixture"/> already established, extended to nine subject records instead of
-/// three because every one of #611's byproduct types needs its own from-scratch construction (none
-/// has a reusable fixture — verified by search before this file was written) and building nine
-/// separate <see cref="LoadOrderMirror"/>/<see cref="TrackService"/> setups would be the expensive
-/// thing, not the records themselves.
-///
-/// <para>Every FormLink a leaf carries points at a real, correctly typed record in this same mod —
-/// ADR-0041's Dangling/Type-Mismatched refusal (<c>RecordEditService.ValidateFormLinks</c>) would
-/// otherwise refuse an edit for a reason unrelated to what a given fact is testing, the same
-/// precaution <c>ComplexFieldElementEditTests.FactionsStructArray...</c> already takes.</para>
-/// </summary>
+/// <summary>One mod tracked once, holding one record of every owning type: the expensive part is the <see
+/// cref="TrackService"/> setup, not the records.</summary>
 public sealed class AbstractUnionCompileFixture : IDisposable
 {
     public const string PluginName = "AbstractUnion611.esp";
@@ -53,10 +41,8 @@ public sealed class AbstractUnionCompileFixture : IDisposable
     public FormKey MagicEffect { get; }
     public FormKey AudioEffectChain { get; }
 
-    // ── #643's two nested abstract unions (ALocationTarget / ANavmeshParent) — reached one level
-    // inside an ordinary struct column rather than as a column of their own, which is why the
-    // original nine above didn't include them (this file's own test-class doc comment used to name
-    // them as the not-yet-writable gap; #643 closes it) ─
+    // ── #643's two nested abstract unions (ALocationTarget / ANavmeshParent), reached one
+    // level inside an ordinary struct column rather than as a column of their own ─
     public FormKey Faction { get; }
     public FormKey Static { get; }
 

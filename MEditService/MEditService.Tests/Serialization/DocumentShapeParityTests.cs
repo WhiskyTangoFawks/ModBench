@@ -7,41 +7,15 @@ using Mutagen.Bethesda.Serialization.Newtonsoft;
 
 namespace MEditService.Tests.Serialization;
 
-/// <summary>
-/// <b>One document shape everywhere</b>, at the byte level. ADR-0041
-/// rests on the claim that the per-record codec's bytes for a record and the whole-mod folder-split
-/// path's file for that same record are the same bytes: untracked ingest (per-record, from binary),
-/// tracked ingest (from files) and point writes all produce and consume one shape, so nothing
-/// downstream ever has to know which door a document came through. Measurement found
-/// exactly two possible deltas, both this codec's own choices (a discriminator on every
-/// document, and a self-added trailing newline); both are gone, and this is the standing
-/// gate that keeps them gone. <b>Zero normalization</b> is the whole point.
-///
-/// <para><b>This is Tests-side deliberately.</b> The generated whole-mod mixin is what
-/// <c>RecordTextCodecGeneratorSeed</c>'s whole-mod guard keeps out of <c>MEditService.Core</c>; that guard
-/// scans Core's own sources, so comparing against the whole-mod door from a test is exactly how the
-/// two are meant to be checked against each other.</para>
-///
-/// <para><b>Platform caveat, named rather than assumed.</b> The equality below is verified on Linux,
-/// where the kernel's own indentation newline is <c>\n</c> and the codec's <c>\r</c>-strip is a
-/// no-op. On Windows the whole-mod door's <c>Environment.NewLine</c> would make its file
-/// <c>\r\n</c>-delimited while the codec still emits bare <c>\n</c> — the canonical form. That
-/// difference is the open Windows question (ADR-0041: "Windows behavior of the whole-mod door to
-/// be verified at implementation"), currently unaddressed by any automated check; it
-/// belongs to the whole-mod door's own configuration, not to this codec, whose canonical output is
-/// defined as bare <c>\n</c> with no trailing newline on every platform.</para>
-/// </summary>
+/// <summary>Zero normalization: codec bytes and the whole-mod door's file are the same bytes
+/// (ADR-0041). Linux only — that door indents with <c>Environment.NewLine</c>. Tests-side because
+/// Core's guard keeps the mixin out.</summary>
 public sealed class DocumentShapeParityTests
 {
     private static RecordTextCodec Codec() => new(NullLogger<RecordTextCodec>.Instance);
 
     private static Fallout4Mod NewMod() => new(ModKey.FromFileName("Parity.esp"), Fallout4Release.Fallout4);
 
-    /// <summary>
-    /// A populated interior cell — the embedded case, and the one the spike pinned. Under Spriggit's
-    /// embed customization the cell's whole content is a single <c>RecordData.json</c> inside its own
-    /// directory, so "the whole-mod path's file for this cell" is unambiguous.
-    /// </summary>
     [Fact]
     public async Task PerRecordCodecBytes_ForAnEmbeddedCell_EqualTheWholeModPathsFileForIt()
     {
@@ -61,13 +35,6 @@ public sealed class DocumentShapeParityTests
         await AssertBothDoorsAgree(mod, cell, "ParityCell");
     }
 
-    /// <summary>
-    /// A populated quest — the container Spriggit does <b>not</b> embed. Its dialog topics and their
-    /// responses stay folder-split on both doors, which is why <see cref="RecordTextCodec"/> keeps
-    /// its child-stream and child-folder suppressions instead of retiring them with the shallow-strip
-    /// machinery. Byte parity here is what makes "keeping them costs nothing at the byte level" a
-    /// checked fact rather than a claim in a comment.
-    /// </summary>
     [Fact]
     public async Task PerRecordCodecBytes_ForANonEmbeddedContainer_EqualTheWholeModPathsFileForIt()
     {
@@ -78,14 +45,6 @@ public sealed class DocumentShapeParityTests
         await AssertBothDoorsAgree(mod, quest, "ParityQuest");
     }
 
-    /// <summary>
-    /// The other half of the same guard, which byte parity cannot see: the whole-mod door writes a
-    /// quest's dialog topics into real child directories, and the per-record codec must not — it
-    /// serializes one record to one caller-given file, and its callers hand it no directory to spill
-    /// into. Measured before those suppressions existed: one real quest created 1,057 directories in
-    /// the process's working directory, one per dialogue topic, and a load-order-wide index would do
-    /// that for every container it read.
-    /// </summary>
     [Fact]
     public async Task SerializeAsync_ForANonEmbeddedContainer_WritesExactlyOneFileAndNoChildFolders()
     {
@@ -113,30 +72,6 @@ public sealed class DocumentShapeParityTests
         return quest;
     }
 
-    /// <summary>
-    /// Two more "nothing is omitted" clauses, on record shapes the committed real fixture cannot exercise:
-    /// its <c>ModHeader.OverriddenForms</c> is genuinely null (the fixture's header is built fresh by
-    /// <c>CutDownPluginGenerator</c>, never copied from the real Fallout4.esm header it slices), and
-    /// every <c>Fallout4Group</c>/<c>Worldspace</c> in it is likewise constructed fresh with only
-    /// <c>BlockNumber</c>/<c>EditorID</c> copied — so <c>LastModified</c>/<c>SubCellsTimestamp</c> stay
-    /// at their CLR default (0) there regardless of whether anything omits them. Neither gap is caused
-    /// by any Omit customization; both need a hand-built mod instead, the same reason
-    /// <see cref="RecordTextCodecTests.MakeWeapon"/> exists for the per-record codec's own fixtures.
-    /// This uses the whole-mod door directly (as <see cref="AssertBothDoorsAgree"/> above already does)
-    /// because none of <c>ModHeader</c>, <c>Fallout4ListGroup&lt;T&gt;</c>, or a group's own
-    /// <c>LastModified</c> is reachable through <see cref="RecordTextCodec"/>, which only ever takes a
-    /// single <see cref="Mutagen.Bethesda.Plugins.Records.IMajorRecordGetter"/>.
-    ///
-    /// <para><b><c>OverriddenForms</c>:</b> nothing in <c>Serialization/</c> or <c>Source/</c> may
-    /// suppress it — a per-type Omit customization would leave the root document with no
-    /// <c>"OverriddenForms"</c> key at all.</para>
-    ///
-    /// <para><b><c>LastModified</c>/<c>SubCellsTimestamp</c>:</b>
-    /// with <c>.OmitLastModifiedData()</c> in
-    /// <see cref="MEditService.Core.Serialization.RecordTextCodecCustomization"/>,
-    /// this test fails with "Assert.Contains() Failure: Sub-string not found" against a
-    /// <c>Cells/0/GroupRecordData.json</c> that is empty (<c>{}</c>).</para>
-    /// </summary>
     [Fact]
     public async Task Serialize_OfASyntheticModWithNonDefaultGroupAndHeaderFields_WritesThemUnomitted()
     {

@@ -4,10 +4,8 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Tests.Api;
 
-/// <summary>
-/// Creates a data folder containing Fallout4.esm (implicit / immutable) and a user plugin.
-/// Plugins.txt lists only the user plugin so Fallout4.esm is loaded as an implicit listing.
-/// </summary>
+/// <summary>Plugins.txt lists only the user plugin, so Fallout4.esm is loaded as an implicit
+/// listing.</summary>
 public sealed class ImmutablePluginFixture : IApiPluginFixture<ImmutablePluginFixture>
 {
     public string DataFolder => _data.DataFolder;

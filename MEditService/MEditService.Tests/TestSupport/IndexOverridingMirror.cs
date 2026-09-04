@@ -5,11 +5,9 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Tests;
 
-/// <summary>Forwards every <see cref="ILoadOrderMirror"/> member to a real load order except
-/// <see cref="Index"/>, which <c>RecordEditService</c> reads its <see cref="IRecordIndex"/>
-/// from — the only way to hand it an intercepted index, since <see cref="LoadOrderMirror"/>'s
-/// own <c>Index</c> getter has no setter a test can reach. Paired with
-/// <see cref="DelegatingRecordIndex"/>, which is what the interception is normally built on.</summary>
+/// <summary>Forwards every member except <see cref="Index"/>: the only way to hand
+/// <c>RecordEditService</c> an intercepted index, since <c>LoadOrderMirror</c>'s getter has no
+/// setter a test can reach.</summary>
 internal sealed class IndexOverridingMirror(ILoadOrderMirror inner, IRecordIndex overrideIndex) : ILoadOrderMirror
 {
     public ILoadOrder? LoadOrder => inner.LoadOrder;

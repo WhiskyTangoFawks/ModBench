@@ -2,12 +2,6 @@ using MEditService.Core.Source;
 
 namespace MEditService.Tests.Source;
 
-/// <summary>
-/// <see cref="SourceRepository.WorkingTreeStatus"/> — "does the working tree have any
-/// uncommitted change at all", the primitive every refuse-over-dirt check (rebase-over-dirt,
-/// Keep-as-My-Edit's same-record collision) is built on. Real git repo, real git CLI — same house
-/// pattern as every other <see cref="SourceRepository"/> test.
-/// </summary>
 public sealed class SourceRepositoryWorkingTreeStatusTests
 {
     private static string NewModFolder() => Directory.CreateTempSubdirectory("medit-wts-").FullName;

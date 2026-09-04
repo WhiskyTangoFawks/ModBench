@@ -4,23 +4,16 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Tests;
 
-/// <summary>
-/// Parks a load just before a named plugin is indexed, and holds it there until the test releases
-/// it. This is what makes progressive loading testable without sleeps: the test drives the load
-/// to a known point, asserts what is observable *at that instant*, then lets it finish.
-///
-/// <para><paramref name="poisonPlugin"/> is optional: a plugin whose indexing throws, so a test can
-/// assert that a per-plugin failure is observable at a point where the load is still
-/// running.</para>
-/// </summary>
+/// <summary>Parks a load just before a named plugin is indexed until the test releases it, which is
+/// what makes progressive loading testable without sleeps. <paramref name="poisonPlugin"/> makes
+/// that plugin's indexing throw.</summary>
 internal sealed class GatedIndexRepositoryFactory(IRecordIndexFactory inner, string gateBefore, string? poisonPlugin = null)
     : IRecordIndexFactory, IDisposable
 {
     private readonly SemaphoreSlim _released = new(0, 1);
     private readonly SemaphoreSlim _arrived = new(0, 1);
 
-    /// <summary>Every repository this factory has created — one per load, so a test that supersedes
-    /// a load can assert on the abandoned one as well as the survivor.</summary>
+    // One per load, so a test that supersedes a load can assert on the abandoned one too.
     public List<GatedIndexRepository> Created { get; } = [];
 
     public IRecordIndex Create(GameRelease gameRelease, string? instanceRoot = null)
@@ -34,15 +27,12 @@ internal sealed class GatedIndexRepositoryFactory(IRecordIndexFactory inner, str
         return repository;
     }
 
-    /// <summary>Blocks until the load reaches the gated plugin. Fails rather than hangs if the load
-    /// never gets there.</summary>
     public async Task WaitUntilParkedAsync()
     {
         var arrived = await _arrived.WaitAsync(TimeSpan.FromSeconds(30));
         Assert.True(arrived, $"the load never reached {gateBefore}");
     }
 
-    /// <summary>Lets the parked load continue.</summary>
     public void Release() => _released.Release();
 
     public void Dispose()
@@ -56,7 +46,6 @@ internal sealed class GatedIndexRepository(
     IRecordIndex inner, string? gateBefore, string? poisonPlugin, SemaphoreSlim arrived, SemaphoreSlim released)
     : DelegatingRecordIndex(inner)
 {
-    /// <summary>Names of the plugins whose indexing actually completed, in order.</summary>
     public List<string> Indexed { get; } = [];
     public bool WinnersComputed { get; private set; }
     public bool Disposed { get; private set; }

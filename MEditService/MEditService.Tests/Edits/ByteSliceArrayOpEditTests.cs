@@ -5,12 +5,8 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 namespace MEditService.Tests.Edits;
 
-/// <summary>
-/// #690 AC #2. An array op reconstructs the whole list from the column's own extracted value
-/// (<c>ArrayOpWriter</c>), so any member the schema does not carry is silently dropped from every
-/// element the op rewrites. A byte-slice member is carried, so removing one element leaves its
-/// siblings' blobs byte-identical rather than reset to nothing.
-/// </summary>
+/// <summary>An array op reconstructs the whole list from the column's own extracted value, so any
+/// member the schema does not carry is silently dropped from every element the op rewrites.</summary>
 public sealed class ByteSliceArrayOpEditTests : IDisposable
 {
     private readonly TrackedModFixture _mod = TrackedModFixture.Tracked();
@@ -26,7 +22,7 @@ public sealed class ByteSliceArrayOpEditTests : IDisposable
 
     // The two blobs are deliberately different lengths: a nested length gate reading the pre-write
     // element at its own index would refuse the reorder below, since an array op rewrites the whole
-    // list and index i afterwards holds a different element than it did before.
+    // list.
     private static readonly string[] TwoModels =
     [
         """{"percentage": 50, "model_filename": "First.nif", "texture_file_hashes": "0x1122"}""",

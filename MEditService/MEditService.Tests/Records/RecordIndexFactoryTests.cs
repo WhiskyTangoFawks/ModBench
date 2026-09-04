@@ -22,9 +22,6 @@ public class RecordIndexFactoryTests : IDisposable
     private static IRecordIndexFactory MakeFactory() =>
         new DuckDbRecordIndexFactory(Reflector, new TableDdlBuilder(Reflector));
 
-    /// <summary>A directory to hold a mod folder. An <i>instance</i> only when a Create call keys
-    /// on it — which is the distinction <see cref="Create_WithNoInstanceRoot_KeepsNothingBetweenIndexes"/>
-    /// turns on, so the two cases share this and differ only in what they hand the factory.</summary>
     private string Folder(string name)
     {
         var path = Path.Combine(_root, name);

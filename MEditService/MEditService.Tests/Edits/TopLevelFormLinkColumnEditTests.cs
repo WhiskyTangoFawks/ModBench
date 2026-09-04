@@ -11,25 +11,8 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Tests.Edits;
 
-/// <summary>
-/// A top-level scalar FormLink <b>column</b> (e.g. an NPC's Race) gets a write path through
-/// the same single door as every other FormLink shape (ADR-0034 — xEdit edits any FormID field in
-/// place). A <c>SchemaReflector</c> that gave a bare FormLink column a null <c>Apply</c>
-/// ("read-only as a column, <c>ApplyFormLinkJson</c> as a sub-field") made <c>RecordFieldWriter</c>
-/// answer <see cref="RecordEditRefusal.FieldReadOnly"/> for it regardless of the value's validity.
-///
-/// <para><b>Five of these six pass independently of the Apply delegate, by design.</b> <c>RecordEditService.EditField</c>
-/// validates a FormLink column's incoming value (<c>ValidateFormLinks</c> → <c>CheckErrorBuilder</c>)
-/// <i>before</i> it ever reaches <c>RecordFieldWriter.TryApply</c>'s null-<c>Apply</c> check, and that
-/// validation reads the column's schema metadata (<c>ApiType</c>/<c>ValidFormKeyTypes</c>), which is
-/// populated for a FormLink column independent of whether <c>Apply</c> is null. The untracked,
-/// no-mod-folder and external-change-deferral refusals are checked earlier still, in
-/// <c>RefuseIfBlocked</c>, ahead of any column lookup at all. They are kept here anyway
-/// because this exact column class should carry its own end-to-end proof, not a citation to
-/// generic coverage that happens to use a different field. Only
-/// <see cref="EditField_TopLevelFormLinkColumn_AcceptsAValidTarget_LandsAsWorkingTreeChange"/>
-/// exercises the write delegate itself.</para>
-/// </summary>
+/// <summary>Five of these six pass independently of the Apply delegate: FormLink validation and
+/// <c>RefuseIfBlocked</c> run before <c>TryApply</c> checks for a null Apply.</summary>
 public sealed class TopLevelFormLinkColumnEditTests : IDisposable
 {
     private readonly TrackedModFixture _mod = TrackedModFixture.Tracked();
@@ -41,9 +24,8 @@ public sealed class TopLevelFormLinkColumnEditTests : IDisposable
 
     private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
 
-    // The write delegate itself: OtherNpc's own "race" field is the CLR
-    // default (never set by TrackedModFixture), so pointing it at _mod.Race is a real value change,
-    // not a same-value no-op that could pass by producing byte-identical output.
+    // OtherNpc's own "race" field is at the CLR default, so pointing it at _mod.Race is a real value
+    // change, not a same-value no-op that could pass by producing byte-identical output.
     [Fact]
     public void EditField_TopLevelFormLinkColumn_AcceptsAValidTarget_LandsAsWorkingTreeChange()
     {
@@ -126,12 +108,8 @@ public sealed class TopLevelFormLinkColumnEditTests : IDisposable
         Assert.Equal(RecordEditRefusal.PluginHasNoModFolder, result.Refusal);
     }
 
-    /// <summary>A vanilla/DLC master resolved straight from the game's Data directory — no mod
-    /// folder, so <c>RefuseIfBlocked</c> answers <see cref="RecordEditRefusal.PluginHasNoModFolder"/>
-    /// rather than <see cref="RecordEditRefusal.PluginNotTracked"/> (<c>UntrackedReadOnlyTests</c>'
-    /// own <c>DataDirectoryFixture</c>, duplicated here per this file's established
-    /// self-contained-fixture pattern rather than shared, matching
-    /// <c>ConditionEditTests.ConditionFixture</c>).</summary>
+    // A Data-directory master has no mod folder, so RefuseIfBlocked answers PluginHasNoModFolder
+    // rather than PluginNotTracked.
     private sealed class DataDirectoryFixture : IDisposable
     {
         private const string Name = "Vanilla.esm";

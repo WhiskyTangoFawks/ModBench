@@ -4,18 +4,8 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Tests.Source;
 
-/// <summary>
-/// <c>ContainerChildFields.FindEmbeddedChild</c> at the unit level — how far the search into a
-/// container's object graph goes, and where it stops.
-///
-/// <para><b>Why this exists as well as the integration tests.</b> <c>EmbeddedChildEditTests</c> drives
-/// the same code through <c>RecordEditService</c>, which is the right level for "the edit lands in the
-/// right file". But the search's <i>upper</i> bound is invisible from there: a Quest's dialog topic has
-/// a source file of its own, so <c>SourceUnitResolver</c> resolves it directly and
-/// <c>FindEmbeddedChild</c> is never called for one at all. Removing the bound entirely leaves the
-/// whole integration suite green — measured, by doing exactly that. The bound is real and worth
-/// keeping, so it is asserted where it can actually be observed.</para>
-/// </summary>
+/// <summary>The search's upper bound is invisible from the integration suite: a dialog topic has its own
+/// file, so <c>FindEmbeddedChild</c> is never called for one.</summary>
 public sealed class EmbeddedChildSearchTests
 {
     private static Fallout4Mod NewMod() =>
@@ -58,10 +48,7 @@ public sealed class EmbeddedChildSearchTests
     [Fact]
     public void DoesNotDescendIntoFolderSplitChildren()
     {
-        // A quest's dialog topic is a child, but a folder-split one with its own source file — and its
-        // responses live in files below that. Reaching either through the quest's own graph would let
-        // an edit be written into the quest's document, while compile and ingest keep reading the
-        // child's own file: a silently lost edit. The search must decline both.
+        // A quest's dialog topic is a folder-split child with its own source file.
         var mod = NewMod();
         var quest = new Quest(mod) { EditorID = "Quest" };
         var topic = new DialogTopic(mod) { EditorID = "Topic" };

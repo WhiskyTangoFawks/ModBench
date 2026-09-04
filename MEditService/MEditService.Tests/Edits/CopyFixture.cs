@@ -9,15 +9,9 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Tests.Edits;
 
-/// <summary>
-/// Two real mod folders and one shared load order — the shape both Copy gestures need, since the
-/// interesting question (does a copy read from one plugin's tree and write into a different one's) is
-/// unaskable of a single-plugin fixture. <see cref="SourcePlugin"/> defaults untracked, matching the
-/// primary scenario: copying out of a Data-directory master (Fallout4.esm-shaped here),
-/// which has no working tree of its own — the indexed document body is the only representation that
-/// exists for it. <c>trackSource</c> lets a test opt into a tracked source instead, for
-/// the "reads its current file, not a stale index snapshot" half of the read posture.
-/// </summary>
+/// <summary>Two mod folders and one load order, since a copy across plugins is unaskable of one.
+/// <see cref="SourcePlugin"/> defaults untracked: the primary scenario copies out of a
+/// Data-directory master, whose indexed body is its only representation.</summary>
 public sealed class CopyFixture : IDisposable
 {
     public const string SourcePluginName = "Source.esm";
@@ -35,9 +29,8 @@ public sealed class CopyFixture : IDisposable
     public const string SourceNpcEditorId = "SourceNpc";
     public FormKey SourceNpc { get; }
 
-    /// <summary>A Faction related to itself (<c>Relations[0].Target == SelfLinkingFaction</c>) — Copy
-    /// as New Record's own self-reference-follows-the-duplicate proof needs a record whose FormLink
-    /// can validly target its own record type.</summary>
+    // Related to itself: the self-reference-follows-the-duplicate proof needs a FormLink that can
+    // validly target its own record type.
     public const string SelfLinkingFactionEditorId = "SelfLinkingFaction";
     public FormKey SelfLinkingFaction { get; }
 

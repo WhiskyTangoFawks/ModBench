@@ -5,12 +5,8 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Tests;
 
-/// <summary>
-/// Forwards every <see cref="IRecordIndex"/> member to a real one, so a test double only has to
-/// state the member it actually cares about. The interface is wide (indexing plus every read path),
-/// and a double that reimplements it is both a maintenance burden and a lie — these tests want real
-/// DuckDB behaviour with one seam intercepted, not a fake database.
-/// </summary>
+/// <summary>Forwards every member to a real index so a double states only the member it cares
+/// about: these tests want real DuckDB behaviour with one seam intercepted, not a fake database.</summary>
 internal abstract class DelegatingRecordIndex(IRecordIndex inner) : IRecordIndex
 {
     protected IRecordIndex Inner { get; } = inner;

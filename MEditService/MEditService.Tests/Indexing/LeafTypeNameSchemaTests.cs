@@ -4,10 +4,8 @@ using Mutagen.Bethesda.Fallout4;
 
 namespace MEditService.Tests.Indexing;
 
-/// <summary>#717: every struct the schema describes names the Loqui/CLR class it is, out of the same
-/// vocabulary a union's discriminator values come from — an element of
-/// <c>ScriptObjectListProperty.Objects</c> reads <c>ScriptObjectProperty</c>, which is also that
-/// class's own discriminator value as a leaf of <c>ScriptProperty</c>'s union.</summary>
+/// <summary>Every struct names the Loqui/CLR class it is, out of the same vocabulary a union's
+/// discriminator values come from (#717).</summary>
 public class LeafTypeNameSchemaTests
 {
     private static readonly IReadOnlyDictionary<string, Core.Schema.RecordTableSchema> Schemas =
@@ -71,8 +69,8 @@ public class LeafTypeNameSchemaTests
         Assert.Empty(PathsWhere(m => m.Type != "struct" && m.LeafTypeName != null));
 
     // What is named is the class, never the getter interface the walk reached it through: a leaf's
-    // name has to be drawn from the same vocabulary a union's discriminator values are, or the two
-    // key the presentation table differently for the same class.
+    // name must be drawn from the same vocabulary a union's discriminator values are, or the two key
+    // the presentation table differently.
     [Fact]
     public void NoStructIsNamedByItsGetterInterface() =>
         Assert.Empty(PathsWhere(m => m.LeafTypeName?.EndsWith("Getter", StringComparison.Ordinal) == true));

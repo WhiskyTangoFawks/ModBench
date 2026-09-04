@@ -11,17 +11,8 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Tests.Edits;
 
-/// <summary>
-/// An untracked plugin is <b>hard</b> read-only, and the
-/// refusal names the way out. The friction is deliberate (ADR-0041 — in-place editing of someone
-/// else's plugin is the community's own anti-pattern), which is exactly why it must never be silent:
-/// a refusal that does not say what to do next is dead UI.
-///
-/// <para>Two different refusals, because there are two different ways out. A plugin in a mod folder
-/// is one Track away from editable. A vanilla or DLC master resolved from the game's own Data
-/// directory has no mod folder to track at all, so its answer is the blessed path instead: author a
-/// patch plugin.</para>
-/// </summary>
+/// <summary>The friction is deliberate (ADR-0041), which is why the refusal must name the way
+/// out.</summary>
 public sealed class UntrackedReadOnlyTests
 {
     private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
@@ -39,18 +30,14 @@ public sealed class UntrackedReadOnlyTests
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.PluginNotTracked, result.Refusal);
-        // The exact palette entry, not merely "contains Track": package.json contributes the title
-        // "Track…" under category "Modbench", and a signpost naming a command that does not exist
-        // verbatim is the dead end this refusal exists to prevent. Asserted against the literal here rather
-        // than against RecordEditService's own constant, so this test disagrees with a bad rename
+        // The exact palette entry: a signpost naming a command that does not exist verbatim is the dead
+        // end this refusal prevents. Asserted against the literal so the test disagrees with a bad rename
         // instead of moving with it.
         Assert.Contains("Modbench: Track\u2026", result.Message, StringComparison.Ordinal);
     }
 
-    // #607: ResolveEditTarget's own step order \u2014 the write-path gate (RefuseIfBlocked) must fire
-    // before the "does this plugin even hold the record" existence check, not after. An untracked
-    // plugin is refused for *that* reason regardless of whether the named FormKey exists at all;
-    // reporting RecordNotFound instead would send the user chasing a FormKey typo when the real
+    // ResolveEditTarget's step order: the write-path gate must fire before the existence check, or an
+    // untracked plugin reports RecordNotFound and sends the user chasing a FormKey typo when the real
     // problem is that the whole plugin is read-only.
     [Fact]
     public void EditingANonexistentFormKey_OnAnUntrackedPlugin_StillRefusesAsUntracked_NotAsRecordNotFound()
@@ -100,9 +87,9 @@ public sealed class UntrackedReadOnlyTests
         var notTrackable = ServiceFor(vanilla.Mirror)
             .EditField(vanilla.Plugin, vanilla.Npc.ToString(), "height_max", Json("0.75"));
 
-        // Collapsing these into one "read-only" refusal would leave half the users following advice
-        // that cannot work for them — Track does not apply to a Data-directory master, and authoring
-        // a patch is not the answer for a mod folder that merely has not been tracked yet.
+        // Collapsing these into one refusal would leave half the users following advice that cannot work:
+        // Track does not apply to a Data-directory master, and authoring a patch is not the answer for an
+        // untracked mod folder.
         Assert.NotEqual(trackable.Refusal, notTrackable.Refusal);
         Assert.DoesNotContain("patch", trackable.Message, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("Track", notTrackable.Message, StringComparison.Ordinal);
@@ -122,12 +109,8 @@ public sealed class UntrackedReadOnlyTests
         Assert.Equal(RecordEditRefusal.None, result.Refusal);
     }
 
-    /// <summary>
-    /// A plugin resolved straight from the game's Data directory — vanilla, DLC or Creation Club
-    /// (<see cref="PluginOrigin.DataDirectory"/>). Its folder is the game's own, which is never a
-    /// repo and must never become one, so this is a distinct state from "a mod folder nobody has
-    /// tracked", not a special case of it.
-    /// </summary>
+    // The game's own Data folder is never a repo and must never become one: a distinct state from
+    // "untracked mod folder", not a special case of it.
     private sealed class DataDirectoryFixture : IDisposable
     {
         private const string Name = "Vanilla.esm";

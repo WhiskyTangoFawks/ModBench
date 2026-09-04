@@ -9,12 +9,8 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Tests.Query;
 
-/// <summary>
-/// ADR-0041: the read path answers from the index alone. A record list reports exactly the records
-/// its plugin declares, a compare's override values are the committed ones, and a reference list is
-/// what the plugin declares and nothing else — no surface reconstructs a second answer on the way
-/// out.
-/// </summary>
+/// <summary>The read path answers from the index alone (ADR-0041): no surface reconstructs a second
+/// answer on the way out.</summary>
 [Collection(TestPluginFixtureCollection.Name)]
 public sealed class CommittedOnlyReadPathTests : IDisposable
 {
@@ -72,12 +68,8 @@ public sealed class CommittedOnlyReadPathTests : IDisposable
     }
 }
 
-/// <summary>
-/// ADR-0041: the references read is committed-only. Split from the class above because it
-/// needs a fixture that actually declares a reference — <see cref="ReferencePluginFixture"/>, the
-/// same one the API-level reference tests use — where the class above deliberately loads a plugin
-/// whose records reference nothing.
-/// </summary>
+/// <summary>Split from the class above because it needs a fixture that declares a reference; the
+/// class above deliberately loads a plugin whose records reference nothing.</summary>
 public sealed class CommittedOnlyReferencesTests : IDisposable
 {
     private readonly LoadOrderMirror _manager;
@@ -102,10 +94,8 @@ public sealed class CommittedOnlyReferencesTests : IDisposable
     [Fact]
     public void GetReferences_ReturnsWhatThePluginDeclares_AndNothingElse()
     {
-        // Positive control first, through the identical call path: a reference the indexed plugin
-        // really declares must come back. Without it the absence half below would pass just as
-        // happily against a broken query, a wrong connection or an empty index — exactly the shape
-        // a staged-reference union could hide behind.
+        // Positive control first, through the identical call path: without it the absence half below would
+        // pass just as happily against a broken query, a wrong connection or an empty index.
         var referenced = _svc.GetReferences(_fixture.KeywordFormKey.ToString());
 
         var hit = Assert.Single(referenced);

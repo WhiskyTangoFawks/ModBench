@@ -5,14 +5,8 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Tests.Source;
 
-/// <summary>
-/// <see cref="SourceRecordPath"/> speaks the source tree's flat layout —
-/// <c>source/&lt;plugin&gt;/&lt;GroupFolder&gt;/[&lt;EditorID&gt; - ]&lt;hex6&gt;_&lt;originModKey&gt;.json</c>
-/// (one root <c>source/</c> folder per mod, not a per-plugin <c>&lt;plugin&gt;.source/</c> sibling
-/// tree), group-folder names resolved via <see cref="RecordTypeDispatch"/> rather than hardcoded here,
-/// so these tests do not silently drift from whatever the reflection walk actually decides.
-/// <see cref="SourceRecordIdentity"/> carries no FormKey (see its own doc comment for why).
-/// </summary>
+/// <summary>Group-folder names come from <see cref="RecordTypeDispatch"/> rather than literals, so
+/// these tests cannot drift from whatever the reflection walk decides.</summary>
 public sealed class SourceRecordPathTests
 {
     private static readonly GameRelease Release = GameRelease.Fallout4;
@@ -39,9 +33,9 @@ public sealed class SourceRecordPathTests
     {
         var path = SourceRecordPath.For(pluginFileName, recordType, formKeyString, editorId, Release);
 
-        // Everything nests under one root "source/" folder, the plugin its own child directory —
-        // not a "<plugin>.source/" sibling tree. Asserted here, not just implied by TryParse round-
-        // tripping: a broken root that still happened to be 4 segments deep would round-trip too.
+        // Everything nests under one root "source/" folder, the plugin its own child directory, not a
+        // "<plugin>.source/" sibling tree. Asserted rather than implied by TryParse round-tripping: a
+        // broken root four segments deep would round-trip too.
         var segments = path.Split(Path.DirectorySeparatorChar);
         Assert.Equal(SourceRecordPath.RootFolderName, segments[0]);
         Assert.Equal(pluginFileName, segments[1]);
@@ -50,19 +44,14 @@ public sealed class SourceRecordPathTests
 
         Assert.True(ok, $"expected TryParse to succeed for a path For() itself produced: '{path}'");
         Assert.Equal(pluginFileName, identity.PluginFileName);
-        // TryParse answers RecordTypeDispatch's own schema-table-name spelling (DuckDbRecordIndex's
-        // own dictionary is keyed by that spelling only); For() accepts either spelling
-        // (RecordTypeDispatch.ConcreteFor's dual keying). The two need not match textually, only
-        // resolve to the same concrete type, which this equality (via the same lookup) checks for real
-        // rather than assuming a spelling.
+        // TryParse answers RecordTypeDispatch's schema-table-name spelling; For() accepts either. The two
+        // need not match textually, only resolve to the same concrete type, which this equality checks for
+        // real rather than assuming a spelling.
         var expectedConcrete = RecordTypeDispatch.For(Release).ConcreteFor(recordType);
         Assert.NotNull(expectedConcrete);
         Assert.Equal(expectedConcrete, RecordTypeDispatch.For(Release).ConcreteFor(identity.RecordType));
     }
 
-    /// <summary>A file name is identity and nothing else (#566): no position, no ordering prefix —
-    /// the <c>SerializationHelper.RecordFileNameProvider</c> shape alone. This is what makes a
-    /// mid-list insert or delete leave every sibling's name untouched.</summary>
     [Theory]
     [InlineData("SomeNpc", "SomeNpc - 000800_Vendor.esp.json")]
     [InlineData(null, "000800_Vendor.esp.json")]
@@ -88,9 +77,9 @@ public sealed class SourceRecordPathTests
     [Fact]
     public void For_ForATypeWithNoTopLevelGroup_ThrowsNamedException()
     {
-        // A placed reference lives inside a cell's own document, never under a top-level group of its
-        // own (RecordTypeDispatch.FolderNameFor's own doc comment) — the same "ask SourceUnitResolver"
-        // refusal as a directory-per-record type, for a structurally different reason.
+        // A placed reference lives inside a cell's own document, never under a top-level group of
+        // its own: the same "ask SourceUnitResolver" refusal as a directory-per-record type, for
+        // another reason.
         Assert.Throws<NotSupportedException>(
             () => SourceRecordPath.For("Vendor.esp", "placedobject", "000800:Vendor.esp", "SomeRef", Release));
     }
@@ -116,11 +105,9 @@ public sealed class SourceRecordPathTests
     [InlineData("source/Vendor.esp/NotRecordData.json")]
     public void TryParse_MalformedOrUnmappedPaths_FailsCleanly(string relativePath)
     {
-        // Malformed input must fail outright, not return a *wrong* parse — a
-        // silent mis-parse would mislabel a user's change, which is worse than dropping it. Every OS
-        // uses '/' as its own DirectorySeparatorChar equally happily as a path separator here
-        // (Path.Combine on Windows would have written '\\', but these theories construct the string
-        // directly rather than through For(), so '/' is deliberate and portable).
+        // Malformed input must fail outright rather than return a wrong parse, which would mislabel a
+        // user's change. '/' is deliberate and portable: these theories build the string directly rather
+        // than through For(), and every OS accepts it here.
         var normalized = relativePath.Replace('/', Path.DirectorySeparatorChar);
 
         var ok = SourceRecordPath.TryParse(normalized, Release, out var identity);
@@ -129,10 +116,9 @@ public sealed class SourceRecordPathTests
         Assert.Null(identity);
     }
 
-    // A folder whose group element is abstract (several concrete types share it — e.g. Globals holds
-    // GlobalFloat/GlobalBool/GlobalInt/GlobalShort) reads as ambiguous, same as the whole-mod door's
-    // own discriminator policy: the document is asked to self-describe rather than TryParse guessing
-    // one of several concrete types from the folder name alone.
+    // A folder whose group element is abstract reads as ambiguous, the same as the whole-mod door's
+    // discriminator policy: the document self-describes rather than TryParse guessing one concrete
+    // type from the folder name.
     [Fact]
     public void TryParse_ForAnAmbiguousGroupsFolder_FailsCleanly()
     {
@@ -147,10 +133,6 @@ public sealed class SourceRecordPathTests
         Assert.Null(identity);
     }
 
-    /// <summary>#661: the header is a source unit too — the tree's root <c>RecordData.json</c>
-    /// (three segments: <c>source/&lt;plugin&gt;/RecordData.json</c>, one shallower than a flat
-    /// record's own four) now identifies as <see cref="HeaderIndexer.RecordType"/> rather than
-    /// failing closed.</summary>
     [Fact]
     public void TryParse_ForTheRootRecordDataJson_ResolvesTheHeaderIdentity()
     {

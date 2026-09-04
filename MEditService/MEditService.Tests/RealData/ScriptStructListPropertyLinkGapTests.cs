@@ -7,29 +7,13 @@ using Mutagen.Bethesda.Strings.DI;
 
 namespace MEditService.Tests.RealData;
 
-/// <summary>
-/// The mechanism assertion: Mutagen-Modding/Mutagen#688's own shape, pinned against the
-/// real <c>SpaDia_AMR.esp</c> fixture (Quest <c>DiaQ_LLInjector_SpadeyAMR</c>,
-/// <c>0000DD:SpaDia_AMR.esp</c>) so the day the upstream pin bumps and starts walking
-/// <c>Structs[*].Members</c>, this test goes red and names the row (<c>PluginDiagnosis.KindATable</c>,
-/// <c>MasterPruningRoundTripGateTests</c>' SpaDia_AMR fixture) to retire.
-///
-/// <para><b>Why this asserts more than the bare empty check.</b>
-/// <c>Assert.Empty(structList.EnumerateFormLinks())</c> alone passes today, but for a
-/// reason indistinguishable from a wrong property lookup: a typo'd property name, a bad cast, or a
-/// null-coalesce to nothing would <i>also</i> leave that collection empty, and would keep passing
-/// forever even after Mutagen starts walking struct members, since a lookup that finds nothing still
-/// enumerates nothing. The three assertions before the empty check establish, independently, that
-/// the property genuinely holds real FormLinks Mutagen isn't walking — so the final assertion means
-/// what it claims to mean.</para>
-/// </summary>
+/// <summary>Pins Mutagen-Modding/Mutagen#688 so a pin bump that walks <c>Structs[*].Members</c> names the
+/// Kind A row to retire.</summary>
 public sealed class ScriptStructListPropertyLinkGapTests
 {
     private static readonly string FixturePath =
         Path.Combine(AppContext.BaseDirectory, "TestData", "SpaDia_AMR.esp");
 
-    /// <summary>The quest and property under test, deep-parsed once and shared by every assertion
-    /// below — all reading the same live object, not independently re-derived ones.</summary>
     private static IScriptStructListPropertyGetter LoadLeveledListDataProperty()
     {
         var modKey = ModKey.FromFileName("SpaDia_AMR.esp");
@@ -52,10 +36,9 @@ public sealed class ScriptStructListPropertyLinkGapTests
         // 1. The struct list genuinely has entries to look inside.
         Assert.NotEmpty(structList.Structs);
 
-        // 2. Those structs' own Members hold at least one FormLink-bearing property (ScriptObjectProperty)
-        // whose FormKey is real, not FormKey.Null/default — the exact content Mutagen #688 says Mutagen's
-        // own EnumerateFormLinks skips. Asserted concretely against DLCNukaWorld.esm's own record, the
-        // real master this fixture prunes, not merely "some non-null FormKey".
+        // 2. Those structs' Members hold at least one FormLink-bearing property whose FormKey is real, the
+        // exact content Mutagen #688 says EnumerateFormLinks skips. Asserted concretely against the real
+        // master this fixture prunes.
         var nukaWorldFormKey = FormKey.Factory("03F98D:DLCNukaWorld.esm");
         var memberFormLinks = structList.Structs
             .SelectMany(s => s.Members)
@@ -64,11 +47,9 @@ public sealed class ScriptStructListPropertyLinkGapTests
             .ToList();
         Assert.Contains(nukaWorldFormKey, memberFormLinks);
 
-        // 3. The enumerator the diagnosis machinery and Referenced By both rely on yields
-        // none of them — this is Mutagen#688 itself, not a guess about it. The day this line starts
-        // failing (yielding the link above), Mutagen has been fixed and this whole file, the
-        // PluginDiagnosis.KindATable Mutagen-#688 row, and MasterPruningRoundTripGateTests'
-        // SpaDia_AMR fixture are all ready to retire together.
+        // 3. The enumerator the diagnosis machinery and Referenced By rely on yields none of them: this is
+        // Mutagen #688 itself, not a guess about it. The day this starts failing, Mutagen is fixed and this
+        // file can retire.
         Assert.Empty(structList.EnumerateFormLinks());
     }
 }

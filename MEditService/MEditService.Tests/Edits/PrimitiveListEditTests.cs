@@ -12,13 +12,6 @@ using Noggog;
 
 namespace MEditService.Tests.Edits;
 
-/// <summary>
-/// #699: a list whose elements are bare scalars is written through the same door every other array
-/// takes, at the record's own top level (<c>race.movement_type_names</c>, <c>mato.dnams</c>) and one
-/// level in, inside an array element (<c>race.subgraphs[].animation_paths</c>). The element itself is
-/// built by <c>ListLeaves.BuildListElement</c>'s scalar arm, so the whole-value write, the
-/// array-op envelope and the refuse-before-attach guarantee all apply unchanged.
-/// </summary>
 public sealed class PrimitiveListEditTests : IDisposable
 {
     private readonly Fixture _fixture = new();
@@ -30,13 +23,6 @@ public sealed class PrimitiveListEditTests : IDisposable
     private RecordEditResult EditRace(string field, string value) =>
         _fixture.Service().EditField(_fixture.Plugin, _fixture.Race.ToString(), field, Json(value));
 
-    /// <summary>
-    /// AC 1. The write lands, reads back, and every other byte of the record's own source document
-    /// on disk is unchanged — asserted against the real file's text before and after, with only the
-    /// edited list's own fragment substituted, so a rebuild that re-serialises a sibling subgraph
-    /// differently (a dropped <c>behavior_graph</c>, a lost keyword link, a reordered member) fails
-    /// here rather than hiding behind a re-serialisation of both sides.
-    /// </summary>
     [Fact]
     public void NestedAnimationPaths_Write_AppliesAndLeavesEveryOtherByteIdentical()
     {
@@ -60,12 +46,6 @@ public sealed class PrimitiveListEditTests : IDisposable
             after);
     }
 
-    /// <summary>An array field is written as one whole value (CONTEXT.md's Complex field), so every
-    /// element is rebuilt from a fresh instance and a member the payload omits is left at that
-    /// instance's own default — for a list, empty. "Absence is not targeting" is a rule about the
-    /// members of the object being built, not a promise that the record's previous element survives
-    /// a whole-array replacement. Pinned because the scalar list is now writable and this is what a
-    /// caller who sends a partial element gets.</summary>
     [Fact]
     public void NestedAnimationPaths_WholeArrayWriteOmittingTheList_LeavesItAtTheElementDefault()
     {
@@ -75,8 +55,6 @@ public sealed class PrimitiveListEditTests : IDisposable
         Assert.DoesNotContain("Actors", _fixture.RaceBody(), StringComparison.Ordinal);
     }
 
-    /// <summary>An explicitly empty list clears the list. Written as an empty list, never as an
-    /// absent one — the document has to be able to say "this record has no animation paths".</summary>
     [Fact]
     public void NestedAnimationPaths_EmptyArray_ClearsTheList()
     {
@@ -91,8 +69,6 @@ public sealed class PrimitiveListEditTests : IDisposable
         Assert.Contains("Actors\\\\OneA", _fixture.RaceBody(), StringComparison.Ordinal);
     }
 
-    /// <summary>An element the scalar arm cannot convert refuses the whole write and attaches
-    /// nothing — the same refuse-before-attach rule every other array element already takes.</summary>
     [Fact]
     public void NestedAnimationPaths_ObjectShapedElement_RefusesTheWholeWrite()
     {
@@ -105,8 +81,6 @@ public sealed class PrimitiveListEditTests : IDisposable
         Assert.Equal(before, _fixture.RaceBody());
     }
 
-    /// <summary>AC 2: the top-level primitive-list column takes the same write, through the same
-    /// column applier — no adapter between the two.</summary>
     [Fact]
     public void TopLevelStringListColumn_Write_Applies()
     {
@@ -119,8 +93,6 @@ public sealed class PrimitiveListEditTests : IDisposable
         Assert.DoesNotContain("Walk", body, StringComparison.Ordinal);
     }
 
-    /// <summary>The same door for a numeric element type: the value lands as the list's own CLR
-    /// element type, not widened to whatever a shared converter happened to pick.</summary>
     [Fact]
     public void TopLevelIntListColumn_Write_Applies()
     {
@@ -132,13 +104,6 @@ public sealed class PrimitiveListEditTests : IDisposable
             _fixture.MiscItemBody(), StringComparison.Ordinal);
     }
 
-    /// <summary>
-    /// #707: a value the element type cannot hold refuses the whole write rather than narrowing into
-    /// it — <c>LeafClassification.PrimitiveMap</c>'s converters cast <c>checked</c>, so 4096 into a byte
-    /// element throws <c>OverflowException</c>, which <c>BuildScalarListElement</c> turns into the
-    /// same refusal a non-numeric element already gets. The in-range sibling does not land either:
-    /// the array is one atomic value.
-    /// </summary>
     [Fact]
     public void TopLevelIntListColumn_OutOfRangeElement_RefusesTheWholeWrite()
     {
@@ -153,8 +118,6 @@ public sealed class PrimitiveListEditTests : IDisposable
         Assert.Equal(before, _fixture.MiscItemBody());
     }
 
-    /// <summary>The caller did send the whole array; the refusal must say an element was declined,
-    /// not that a whole array was wanted.</summary>
     [Fact]
     public void TopLevelIntListColumn_OutOfRangeElement_MessageNamesTheElementNotTheShape()
     {
@@ -165,7 +128,6 @@ public sealed class PrimitiveListEditTests : IDisposable
         Assert.DoesNotContain("takes the whole array", result.Message, StringComparison.Ordinal);
     }
 
-    /// <summary>A value that is not a number at all still refuses the whole write.</summary>
     [Fact]
     public void TopLevelIntListColumn_NonNumericElement_RefusesTheWholeWrite()
     {
@@ -179,9 +141,6 @@ public sealed class PrimitiveListEditTests : IDisposable
         Assert.Equal(before, _fixture.MiscItemBody());
     }
 
-    /// <summary>Fallout 4's one list of 64-bit integers takes the same door as every other primitive
-    /// list: <c>scco.xnams</c>, a Scene Collection's packed (X, Y) layout coordinates. The values
-    /// land as they were sent and read back from the record's own source document.</summary>
     [Fact]
     public void TopLevelLongListColumn_Write_AppliesAndReadsBack()
     {
@@ -194,9 +153,6 @@ public sealed class PrimitiveListEditTests : IDisposable
             _fixture.SceneCollectionBody(), StringComparison.Ordinal);
     }
 
-    /// <summary>The same width rule every other integer element takes: a value past
-    /// <c>long</c>'s range refuses the whole array, and the in-range sibling does not land
-    /// either.</summary>
     [Fact]
     public void TopLevelLongListColumn_OutOfRangeElement_RefusesTheWholeWrite()
     {
@@ -212,9 +168,6 @@ public sealed class PrimitiveListEditTests : IDisposable
         Assert.Equal(before, _fixture.SceneCollectionBody());
     }
 
-    /// <summary>#690 made a byte slice a hex leaf that reads and writes; as a <i>list element</i> it
-    /// was still extracted and never written, landing on the same refusal this ticket reverses. It
-    /// writes now, in Mutagen's own <c>0x</c>-prefixed grammar.</summary>
     [Fact]
     public void TopLevelByteSliceListColumn_Write_Applies()
     {
@@ -227,8 +180,6 @@ public sealed class PrimitiveListEditTests : IDisposable
         Assert.DoesNotContain("0102", body, StringComparison.Ordinal);
     }
 
-    /// <summary>Non-hex text is declined rather than truncated to the prefix that happened to
-    /// parse.</summary>
     [Fact]
     public void TopLevelByteSliceListColumn_NonHexElement_RefusesTheWholeWrite()
     {
@@ -241,8 +192,6 @@ public sealed class PrimitiveListEditTests : IDisposable
         Assert.Equal(before, _fixture.MaterialObjectBody());
     }
 
-    /// <summary>An added byte-slice element arrives as <c>ArrayOpWriter.DefaultElementValue</c>'s
-    /// <c>"[]"</c>, Mutagen's own empty-slice token, and is written as an empty slice.</summary>
     [Fact]
     public void ArrayAdd_TopLevelByteSliceListColumn_AppendsAnEmptySlice()
     {
@@ -309,10 +258,8 @@ public sealed class PrimitiveListEditTests : IDisposable
             body);
     }
 
-    /// <summary>One real mod folder holding one RACE (two subgraphs, so "the element I edited
-    /// changed and its sibling did not" is answerable), one MATO (a byte-slice list), one MISC (a
-    /// narrow-integer list) and one SCCO (Fallout 4's only list of <c>long</c>) — the
-    /// self-contained-fixture-per-file convention every other edit-path test file follows.</summary>
+    // Two subgraphs so "the edited element changed and its sibling did not" is answerable; SCCO is
+    // Fallout 4's only list of long.
     private sealed class Fixture : IDisposable
     {
         private const string PluginName = "Primitive699.esp";
@@ -388,8 +335,6 @@ public sealed class PrimitiveListEditTests : IDisposable
 
         public string SceneCollectionBody() => Body(SceneCollection);
 
-        /// <summary>The record's own source document as it sits on disk — the file a git diff shows,
-        /// not a re-serialisation of anything this test built.</summary>
         public string RaceSourceText() =>
             File.ReadAllText(SourceUnitResolver.FlatSourcePath(
                 _modFolder, PluginName, "race", Race.ToString(), RaceEditorId, GameRelease.Fallout4));

@@ -8,11 +8,8 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Tests.Edits;
 
-/// <summary>
-/// Every compile re-parks <c>refs/medit/last-compile/&lt;plugin&gt;</c> — the trailer
-/// naming the compiled binary's own hash — only after the binary write lands, including a compile at
-/// a named ref (<c>AtRef</c>), which touches neither the edit branch's working tree nor its HEAD.
-/// </summary>
+/// <summary>Every compile re-parks the last-compile ref only after the binary write lands,
+/// including a compile at a named ref, which touches neither working tree nor HEAD.</summary>
 public sealed class PluginCompileServiceParkedRefTests : IDisposable
 {
     private readonly TrackedModFixture _mod = TrackedModFixture.Tracked();
@@ -72,26 +69,6 @@ public sealed class PluginCompileServiceParkedRefTests : IDisposable
         Assert.Contains($"Binary-SHA256: {Sha256Of(pluginPath)}", message, StringComparison.Ordinal);
     }
 
-    /// <summary>
-    /// A compile at a ref whose tree cannot be written to disk leaves no scratch directory behind.
-    ///
-    /// <para>An <c>AtRef</c> compile materialises the ref's blobs into a temp directory, because the
-    /// whole-mod reader takes a folder rather than a byte stream. Populating that directory is real
-    /// I/O against paths this process did not choose, so it can fail — disk full, permissions, a name
-    /// the filesystem rejects, or another tool touching the path mid-write (root CLAUDE.md's
-    /// never-assume-exclusive-ownership rule). The scratch must go with it.</para>
-    ///
-    /// <para><b>The window is narrow and easy to get wrong</b>: if the directory is created and
-    /// populated before the owning <see cref="IDisposable"/> exists, a throw during population happens
-    /// before <c>using</c> has anything to bind, so <c>Dispose</c> never runs and the directory leaks
-    /// permanently. Every compile against that ref then leaks another. The fix is to construct the
-    /// owner first and dispose it on the way out of a failed populate; this is the test that says so.</para>
-    ///
-    /// <para>An over-long file name is the trigger because it is reachable through git alone — the ref
-    /// is built with plumbing, never checked out, so git happily stores a path the filesystem will
-    /// refuse. Asserting the throw as well as the cleanup keeps the test honest: on a filesystem that
-    /// accepted the name, it fails loudly rather than passing vacuously.</para>
-    /// </summary>
     [Fact]
     public void Compile_AtARefWhoseTreeCannotBeWritten_LeavesNoScratchDirectoryBehind()
     {
@@ -116,6 +93,8 @@ public sealed class PluginCompileServiceParkedRefTests : IDisposable
             if (File.Exists(scratchIndex)) File.Delete(scratchIndex);
         }
 
+        // The scratch directory's owning IDisposable must exist before the directory is populated: a
+        // throw during populate happens before `using` binds, so Dispose never runs and it leaks.
         var before = Directory.GetDirectories(Path.GetTempPath(), $"{scratchPrefix}*").ToHashSet(StringComparer.Ordinal);
 
         Assert.ThrowsAny<IOException>(

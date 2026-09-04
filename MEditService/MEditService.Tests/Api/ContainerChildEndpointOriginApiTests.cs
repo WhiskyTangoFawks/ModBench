@@ -6,21 +6,16 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Tests.Api;
 
-// ADR-0036: the wire-level guard rail for GetContainerChildren, mirroring
-// SpatialRoutesOriginApiTests' real two-copy load path — a load order that actually holds two
-// physical files of one filename, so a route that resolved a Quest's children load-order-wide (or
-// through the wrong copy) is visible in the assertion, not just in the row count.
+// ADR-0036: a load order holding two physical files of one filename, so a route that resolved a
+// Quest's children through the wrong copy shows in the assertion, not just in the row count.
 public sealed class ContainerChildEndpointOriginApiTests(LoadedApiFixture<TestPluginFixture> loaded)
     : IClassFixture<LoadedApiFixture<TestPluginFixture>>
 {
     private readonly HttpClient _client = loaded.Client;
 
-    // Each copy gets its own Quest with one DialogTopic (holding one Response) and one
-    // DialogBranch, all EditorID-tagged with the origin that built them. Both copies construct
-    // their content in the same order from a fresh Fallout4Mod against the same ModKey, so they
-    // land on identical FormKeys — same trick SpatialRoutesOriginApiTests' shared-FormKey pair
-    // uses — which is what lets one captured FormKey address both copies' children route,
-    // distinguished only by the `origin` query param under test.
+    // Both copies build in the same order from a fresh Fallout4Mod against the same ModKey, so
+    // they land on identical FormKeys: one captured FormKey addresses both copies' children
+    // route, distinguished only by `origin`.
     private static string ConfigureCopy(Fallout4Mod mod, string tag)
     {
         var quest = new Quest(mod) { EditorID = $"Quest{tag}" };
@@ -46,9 +41,8 @@ public sealed class ContainerChildEndpointOriginApiTests(LoadedApiFixture<TestPl
 
     private async Task PutBothCopies(ScatteredFixtureData fx)
     {
-        // ADR-0044: both copies travel in the one snapshot — ModA as the copy the Mod override
-        // order resolves the name to, ModB as the losing copy at the same slot — and both are
-        // registered; only the winning, enabled, listed one ever participates.
+        // ADR-0044: both copies travel in the one snapshot, ModB as the losing copy at the same
+        // slot; only the winning, enabled, listed one participates.
         var winner = fx.Plugins.Single(p => p.Origin == "ModA");
         var plugins = fx.Plugins.Select(p => p.Origin == "ModB"
             ? p with { Slot = winner.Slot, Winning = false }

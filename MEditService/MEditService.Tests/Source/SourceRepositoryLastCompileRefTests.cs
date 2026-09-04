@@ -2,12 +2,8 @@ using MEditService.Core.Source;
 
 namespace MEditService.Tests.Source;
 
-/// <summary>
-/// <see cref="SourceRepository.LastCompileRef"/> — the single source of truth for encoding a
-/// plugin filename into <c>refs/medit/last-compile/&lt;plugin&gt;</c>. The encoding only needs to be
-/// stable and injective (two distinct plugin filenames must never produce the same ref) — it does
-/// not need to be reversible, since nothing enumerates these refs.
-/// </summary>
+/// <summary>The encoding only needs to be stable and injective, not reversible: nothing enumerates
+/// these refs.</summary>
 public sealed class SourceRepositoryLastCompileRefTests
 {
     [Fact]
@@ -29,20 +25,10 @@ public sealed class SourceRepositoryLastCompileRefTests
         Assert.NotEqual(SourceRepository.LastCompileRef("A B.esp"), SourceRepository.LastCompileRef("A_B.esp"));
     }
 
-    /// <summary>Git forbids a ref component ending in the literal sequence
-    /// <c>.lock</c> (its own lock-file convention) — a structural rule beyond any forbidden-character
-    /// list, same family as the leading-dot/trailing-dot/".." rules the encoder already
-    /// handles. Unreachable via a real <c>.esp</c>/<c>.esm</c>/<c>.esl</c> extension, but the encoder
-    /// has no way to know that, so it must not pass a <c>.lock</c>-suffixed name through unescaped.
-    /// </summary>
     [Fact]
     public void LastCompileRef_ProducesAGitCheckRefFormatValidRef_ForANameEndingInDotLock() =>
         AssertRefIsCheckRefFormatValid("SomePlugin.lock");
 
-    /// <summary>An empty plugin name would otherwise produce
-    /// <c>refs/medit/last-compile/</c> — a ref ending in <c>/</c>, which git also rejects. Refused
-    /// loudly (a caller passing an empty plugin name is a bug upstream) rather than silently encoded
-    /// into some placeholder that could collide with a real plugin name.</summary>
     [Fact]
     public void LastCompileRef_Throws_ForAnEmptyPluginName() =>
         Assert.Throws<ArgumentException>(() => SourceRepository.LastCompileRef(""));

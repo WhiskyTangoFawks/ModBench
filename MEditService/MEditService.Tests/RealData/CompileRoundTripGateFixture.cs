@@ -8,28 +8,13 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Tests.RealData;
 
-/// <summary>
-/// The once-per-class half of <see cref="CompileRoundTripGateTests"/>' setup. xUnit
-/// constructs exactly one of these per test class run (via <c>IClassFixture&lt;T&gt;</c>), so the
-/// ~36s <see cref="TrackService.TrackAsync(ILoadOrder, string, SourcePreset, CancellationToken)"/>
-/// call — copy the fixture plugin, load a load order,
-/// Track it — runs once instead of once per <c>[Fact]</c>. A per-test Track
-/// was 6 of the backend suite's 9 minutes on its own.
-///
-/// <para><b>Two folders, not one.</b> <see cref="ModFolder"/> is the "live" tree the 7 read-only
-/// facts in <see cref="CompileRoundTripGateTests"/> share: they only read it, except the two
-/// <c>Compile_OfTheRealFixture_*</c> tests, which also compile into it and so overwrite its plugin
-/// binary with deterministic-but-not-Track's-own-bytes output. <see cref="TrackedTemplateFolder"/> is
-/// a second copy, taken immediately after Track succeeds and before any Compile can run against
-/// <see cref="ModFolder"/>, and is never touched again afterward. The 2 mutating facts
-/// (<c>RecordEditService.EditField</c> writes its record's source file back to disk, so they cannot
-/// share a live tree with anything else) each <c>cp -r</c> this pristine snapshot into their own
-/// scratch copy instead of paying for a second Track — copying ~2,600 small files plus a tiny local
-/// <c>.git</c> is seconds, not the ~36s Track itself costs.</para>
-/// </summary>
+/// <summary>One ~36s Track per class instead of per fact (a per-test Track costs 6 of the suite's 9
+/// minutes).</summary>
 public sealed class CompileRoundTripGateFixture : IDisposable
 {
     public string ModFolder { get; } = Directory.CreateTempSubdirectory("medit-compile-roundtrip-").FullName;
+    // Snapshotted after Track and before any Compile: the two Compile facts overwrite ModFolder's
+    // plugin binary with non-Track bytes, so mutating facts copy this instead of Tracking again.
     public string TrackedTemplateFolder { get; } =
         Directory.CreateTempSubdirectory("medit-compile-roundtrip-template-").FullName;
     public string GameDirectory { get; } = Directory.CreateTempSubdirectory("medit-compile-roundtrip-game-").FullName;
@@ -71,19 +56,14 @@ public sealed class CompileRoundTripGateFixture : IDisposable
     public static string SourceRootFor(string modFolder) =>
         Path.Combine(modFolder, SourceRecordPath.RootFor(CutDownPluginFixture.PluginFileName));
 
-    /// <summary>The tree Track wrote under <paramref name="modFolder"/>, keyed exactly the way
-    /// <c>DeriveSourceTreeFromBinary</c> keys its own, so the two dictionaries are directly
-    /// comparable.</summary>
     public static Dictionary<string, byte[]> ReadSourceTree(string modFolder) =>
         Directory.EnumerateFiles(SourceRootFor(modFolder), "*.json", SearchOption.AllDirectories)
             .ToDictionary(f => Path.GetRelativePath(modFolder, f), File.ReadAllBytes);
 
     public Dictionary<string, byte[]> ReadSourceTree() => ReadSourceTree(ModFolder);
 
-    /// <summary>A full, recursive copy, <c>.git</c> included — <see cref="SourceRepository.Track"/>'s
-    /// repo is a plain, non-bare <c>git init</c> rooted at <paramref name="sourceModFolder"/> itself
-    /// (ADR-0041; a fresh local repo has no absolute-path state baked into it), so copying the
-    /// directory copies a complete, working repo, not just the files it happens to track.</summary>
+    // Track's repo is a plain non-bare git init rooted at the mod folder, so it bakes in no absolute
+    // paths and a recursive copy including .git yields a complete working repo.
     public static void CopyDirectory(string sourceModFolder, string destinationModFolder)
     {
         foreach (var dir in Directory.EnumerateDirectories(sourceModFolder, "*", SearchOption.AllDirectories))

@@ -5,13 +5,9 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Tests.Indexing;
 
-// Game discovery must skip an installed game whose Mutagen game assembly isn't referenced —
-// log and continue, never throw. This build references only Mutagen.Bethesda.Fallout4 (see
-// MEditService.Api.csproj), so GameRelease.SkyrimSE is a real (not mocked) "assembly not
-// referenced" condition here — Mutagen.Bethesda.Skyrim.dll exists nowhere in the build output.
-// If that reference is ever added, these tests' unsupported case moves to whatever remains
-// unreferenced, with zero code changes required here (root generalization rule — no hardcoded
-// game list).
+// Game discovery must skip an installed game whose Mutagen assembly is not referenced: log and
+// continue, never throw. This build references only Fallout4, so SkyrimSE is a real unreferenced
+// condition; adding that reference moves the case with no change here.
 public sealed class SchemaReflectorAvailabilityTests
 {
     private static (ILoggerFactory factory, List<LogEntry> entries) CapturingLoggerFactory()

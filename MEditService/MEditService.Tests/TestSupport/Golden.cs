@@ -5,29 +5,14 @@ using System.Text.Json.Serialization;
 
 namespace MEditService.Tests.TestSupport;
 
-/// <summary>
-/// Golden-file comparison for the read model's observable output.
-///
-/// The goldens were captured from a prior known-good implementation
-/// and reviewed by hand, so they are an independent source of truth rather than
-/// a snapshot of whatever the current code happens to emit. That distinction is the whole point: a
-/// round trip through one mechanism asserted against itself passes even when both directions share
-/// a defect.
-///
-/// Output is canonicalized (object keys sorted, indented, "\n" line endings) so a golden can only
-/// differ when a <i>value</i> differs — never because a dictionary enumerated in a different order.
-/// Regenerate deliberately with <c>MEDIT_GOLDEN_UPDATE=1</c>, then read the diff: an unexplained
-/// change there is a regression, not a rebaseline.
-///
-/// Values speak the wire's dialect: the same global <see cref="JsonStringEnumConverter"/>
-/// Program.cs registers, so an enum lands here as the string the endpoint sends, never a bare
-/// integer the wire cannot produce (#647). Property names stay the C# spelling — casing is a
-/// total, mechanical mapping that cannot hide a per-field value defect the way enum integers did.
-/// </summary>
+/// <summary>Goldens were captured from a known-good implementation and reviewed by hand, so
+/// they are independent of what the code emits. <c>MEDIT_GOLDEN_UPDATE=1</c> regenerates.</summary>
 internal static class Golden
 {
     private const string UpdateVariable = "MEDIT_GOLDEN_UPDATE";
 
+    // The same converter Program.cs registers, so an enum lands in the golden as the string the
+    // endpoint sends rather than a bare integer the wire cannot produce.
     private static readonly JsonSerializerOptions SerializeOptions =
         new() { WriteIndented = false, Converters = { new JsonStringEnumConverter() } };
     private static readonly JsonSerializerOptions WriteOptions = new() { WriteIndented = true };
@@ -52,9 +37,6 @@ internal static class Golden
         Assert.Fail($"Golden '{name}' differs from {path}:\n{FirstDifference(expected, actual)}");
     }
 
-    /// <summary>The golden directory, resolved from this file's own compile-time path — the same
-    /// [CallerFilePath] technique RecordTextCodecGeneratorSeedTests uses to reach source. Read and
-    /// write both go here, so an update lands in git rather than in the build output.</summary>
     private static string GoldenDirectory(string callerFile) =>
         Path.Combine(Path.GetDirectoryName(callerFile)!, "..", "TestData", "goldens");
 

@@ -8,23 +8,16 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Tests.Api;
 
-// ADR-0036: the end-to-end guard rail for compound plugin identity, through the real load path:
-// two physical copies of one filename, in two mod folders, loaded together and read back over the
-// wire. Seam-local tests build their same-filename pairs *below* LoadOrder — `repo.Index(mod,
-// origin: "ModA")` at the repository seam, fake mirror, webview fixtures — so they cannot see bugs
-// at the *joins* between phases, which is where most of the identity-migration bugs actually were.
-// This suite also removes ColumnKey.Of's blind spot by construction: that
-// method elides the reserved DataDirectory origin, so any fixture using the default origin passes
-// whether or not the code is correct, and both copies here carry real mod-folder origins.
+// ADR-0036 through the real load path, so bugs at the joins between phases are reachable. Both
+// copies need real mod-folder origins: ColumnKey.Of elides the reserved DataDirectory one, so a
+// default-origin fixture passes either way.
 public sealed class DuplicateFilenameLoadOrderApiTests(LoadedApiFixture<TestPluginFixture> loaded)
     : IClassFixture<LoadedApiFixture<TestPluginFixture>>
 {
     private readonly HttpClient _client = loaded.Client;
 
-    // Both copies answer to one filename and are distinguishable only by content: each carries a
-    // single NPC whose EditorID names the mod folder it came from. Both NPCs land on the same
-    // FormKey (each copy runs its own NextFormID sequence from the same ModKey), which is what
-    // makes this a delta comparison rather than two unrelated files.
+    // Both NPCs land on the same FormKey (each copy runs its own NextFormID sequence from the
+    // same ModKey), which makes this a delta comparison rather than two unrelated files.
     private static ScatteredFixtureData BuildTwoCopies() =>
         new PluginFixtureBuilder("api-duplicate-filename")
             .WithPlugin("Shared.esp", mod => mod.Npcs.AddNew("FromModA").Name = "NameFromModA", origin: "ModA")
@@ -38,9 +31,8 @@ public sealed class DuplicateFilenameLoadOrderApiTests(LoadedApiFixture<TestPlug
 
     private async Task PutBothCopies(ScatteredFixtureData fx)
     {
-        // ADR-0044: both copies travel in the one snapshot — ModA as the copy the Mod override
-        // order resolves the name to, ModB as the losing copy at the same slot — and both are
-        // registered; only the winning, enabled, listed one ever participates.
+        // ADR-0044: both copies travel in the one snapshot, ModB as the losing copy at the same
+        // slot; only the winning, enabled, listed one participates.
         var winner = fx.Plugins.Single(p => p.Origin == "ModA");
         var plugins = fx.Plugins.Select(p => p.Origin == "ModB"
             ? p with { Slot = winner.Slot, Winning = false }
@@ -78,17 +70,14 @@ public sealed class DuplicateFilenameLoadOrderApiTests(LoadedApiFixture<TestPlug
         await PutBothCopies(fx);
 
         // Deliberately unfiltered by plugin: `?plugin=` resolves origin from the filename
-        // server-side (PluginOriginResolver), so it can only ever answer for one of two
-        // same-filename copies. Giving that route an explicit origin is its own slice; what this
-        // one proves is that the *index* holds each copy's own content.
+        // server-side, so it can only answer for one of two same-filename copies.
         var records = await _client.GetFromJsonAsync<JsonElement>("/records?type=npc_&limit=50");
         var byOrigin = records.GetProperty("items").EnumerateArray()
             .Where(r => r.GetProperty("plugin").GetString() == "Shared.esp")
             .ToDictionary(r => r.GetProperty("origin").GetString()!, r => r.GetProperty("editorId").GetString());
 
-        // Both NPCs share a FormKey and differ only in content, so a load order that keyed its opened
-        // mods by filename alone reports two rows with the right origins and the *same* content —
-        // the failure this pins down is not a missing row.
+        // A load order keyed by filename alone reports two rows with the right origins and the
+        // same content, so the failure being pinned is not a missing row.
         Assert.Equal("FromModA", byOrigin["ModA"]);
         Assert.Equal("FromModB", byOrigin["ModB"]);
     }
@@ -99,8 +88,7 @@ public sealed class DuplicateFilenameLoadOrderApiTests(LoadedApiFixture<TestPlug
         using var fx = BuildTwoCopies();
         await PutBothCopies(fx);
 
-        // The tree row knows which copy it stands for, so it says so rather than leaving the server
-        // to guess from the filename — which is the one thing a filename can no longer answer.
+        // The tree row names the copy it stands for, since a filename alone cannot identify it.
         var records = await _client.GetFromJsonAsync<JsonElement>("/records?plugin=Shared.esp&origin=ModB&type=npc_&limit=10");
         var editorIds = records.GetProperty("items").EnumerateArray()
             .Select(r => r.GetProperty("editorId").GetString())
@@ -122,12 +110,9 @@ public sealed class DuplicateFilenameLoadOrderApiTests(LoadedApiFixture<TestPlug
         var columns = compare.GetProperty("overrides").EnumerateArray()
             .ToDictionary(o => o.GetProperty("origin").GetString()!, o => o);
 
-        // ADR-0036 (amended, #618 follow-up): the grid is xEdit parity — the in-game resolution
-        // stack. The game loads exactly one file named Shared.esp, so the winning copy is the
-        // one column; the discarded file stays indexed and browsable (the sibling tests above)
-        // but never columns. Its Winning flag still travels the wire keyed by compound identity —
-        // this is also the guard that a same-filename pair keeps GetCompare's ColumnKey-keyed
-        // lookups unambiguous rather than a duplicate-key throw.
+        // ADR-0036: the grid is xEdit parity, the in-game resolution stack. The game loads exactly
+        // one file named Shared.esp, so the discarded copy stays indexed and browsable but never
+        // columns.
         var column = Assert.Single(columns);
         Assert.Equal("ModA", column.Key);
         Assert.Equal("FromModA", column.Value.GetProperty("editorId").GetString());
@@ -144,9 +129,8 @@ public sealed class DuplicateFilenameLoadOrderApiTests(LoadedApiFixture<TestPlug
         using var fx = BuildTwoCopies();
         await PutBothCopies(fx);
 
-        // ADR-0044: a copy absent from the snapshot is unregistered. To the user its records are
-        // simply not there — not the row, not the compare column, not a single indexed record —
-        // while the copy that wins is untouched, because a reconcile is not a reload.
+        // ADR-0044: a copy absent from the snapshot is unregistered, while the copy that wins is
+        // untouched, because a reconcile is not a reload.
         var without = await _client.PutAsJsonAsync("/load-order", new
         {
             gameDirectory = fx.GameDirectory,

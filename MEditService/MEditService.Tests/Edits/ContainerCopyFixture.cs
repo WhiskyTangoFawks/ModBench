@@ -10,19 +10,9 @@ using Noggog;
 
 namespace MEditService.Tests.Edits;
 
-/// <summary>
-/// The container-copy counterpart to <see cref="CopyFixture"/> — two real mod folders (a
-/// container-rich, untracked source; a minimal, tracked destination), the shape every container-copy
-/// scenario needs (does a copy read a container from one plugin's tree/index and write it into a
-/// different one's). <see cref="ContainerModFixture"/> is the nearest sibling but holds only one
-/// plugin, which cannot ask the copy-across-plugins question at all.
-///
-/// <para>Source stays untracked by default (<see cref="CopyFixture"/>'s own primary-scenario
-/// posture — copying out of a Data-directory master, the indexed body is the only representation
-/// that exists for it); every read this fixture's own test suites need (placement, cell_location,
-/// container_child) comes from the index, not the tree, so an untracked source answers them exactly
-/// as a tracked one would.</para>
-/// </summary>
+/// <summary>Two mod folders because <see cref="ContainerModFixture"/> holds one and cannot ask
+/// whether a copy crosses plugins; the source stays untracked, since every read here is served
+/// from the index rather than the tree.</summary>
 public sealed class ContainerCopyFixture : IDisposable
 {
     public const string SourcePluginName = "ContainerSource.esm";
@@ -79,10 +69,9 @@ public sealed class ContainerCopyFixture : IDisposable
     public const string LandscapeEditorId = "SourceLandscape";
     public FormKey Landscape { get; }
 
-    // Exterior — the spatial case copy deliberately keeps refusing. TopCell is the simplest real
-    // exterior shape: PlacementWalker.WalkWorldspace emits it with isInterior:false and no
-    // block/sub/grid at all, so it proves the "exterior, ancestor missing" refusal without needing
-    // a genuine SubCells grid position.
+    // TopCell is the simplest real exterior shape: PlacementWalker.WalkWorldspace emits it with no
+    // block/sub/grid at all, so it proves the "exterior, ancestor missing" refusal without a genuine
+    // SubCells grid position.
     public const string WorldspaceEditorId = "SourceWorld";
     public FormKey Worldspace { get; }
 
@@ -92,10 +81,9 @@ public sealed class ContainerCopyFixture : IDisposable
     public const string TopCellRefEditorId = "SourceTopCellRef";
     public FormKey TopCellRef { get; }
 
-    // The genuine spatial-exterior shape TopCell above deliberately isn't — a real
-    // SubCells cell with its own block/sub-block/grid position, distinct in every coordinate (and not
-    // reproducible by a naive floor(grid/N)-style formula) so a wrong implementation that recomputed
-    // rather than copied CellLocationRow's own numbers cannot pass by coincidence.
+    // A real SubCells cell, distinct in every coordinate and not reproducible by a naive
+    // floor(grid/N) formula, so an implementation that recomputed rather than copied
+    // CellLocationRow's numbers cannot pass by coincidence.
     public const int ExteriorBlockX = 3;
     public const int ExteriorBlockY = -2;
     public const int ExteriorSubX = 0;
@@ -272,8 +260,6 @@ public sealed class ContainerCopyFixture : IDisposable
 
     public static ContainerCopyFixture Create() => new(destinationLoadsFirst: false);
 
-    /// <summary>The #550 AC6 underride shape: the destination plugin loads <i>before</i> the source
-    /// records' origin, so any Copy as Override into it would be an underride (#439) — refused.</summary>
     public static ContainerCopyFixture CreateWithDestinationLoadingFirst() => new(destinationLoadsFirst: true);
 
     private static void AddInteriorCell(Fallout4Mod mod, Cell cell, int blockNumber)
@@ -285,12 +271,8 @@ public sealed class ContainerCopyFixture : IDisposable
         mod.Cells.Records.Add(block);
     }
 
-    /// <summary>The tree Track wrote the destination plugin into.</summary>
     public string DestinationSourceRoot => Path.Combine(DestinationModFolder, SourceRecordPath.RootFor(DestinationPluginName));
 
-    /// <summary>The destination source file whose text contains <paramref name="editorId"/> — found
-    /// by content, the same way <see cref="ContainerModFixture.SourceFileContaining"/> does, since a
-    /// container has no flat <see cref="SourceRecordPath.For"/> path to compute.</summary>
     public string DestinationSourceFileContaining(string editorId) =>
         Directory.EnumerateFiles(DestinationSourceRoot, "RecordData.json", SearchOption.AllDirectories)
             .Single(f => File.ReadAllText(f).Contains($"\"{editorId}\"", StringComparison.Ordinal));

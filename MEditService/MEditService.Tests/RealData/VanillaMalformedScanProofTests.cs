@@ -4,16 +4,9 @@ using Mutagen.Bethesda.Installs;
 
 namespace MEditService.Tests.RealData;
 
-/// <summary>
-/// The vanilla proof behind every canonical-form claim in <see cref="MalformedPluginScan"/>'s
-/// tables (#569 R1's "vanilla-proof scan", extended to all five detectors): scanning the shipped
-/// game's own plugins must produce <b>zero</b> diagnoses, because "malformed" is defined as
-/// departing from what the Creation Kit writes (CONTEXT.md) — a vanilla hit is by definition a
-/// false positive, and the fix is tightening the table, never suppressing the record.
-///
-/// <c>MEDIT_SMOKE=1</c>-gated like <see cref="RealInstallSmokeTests"/>: needs a locally installed
-/// game, discovered via <see cref="GameLocator"/>; skipped (not passed) without one.
-/// </summary>
+/// <summary>Scanning the shipped game's plugins must produce zero diagnoses: "malformed" means departing
+/// from what the Creation Kit writes, so a vanilla hit is a false positive and the fix is tightening the
+/// table.</summary>
 public sealed class VanillaMalformedScanProofTests
 {
     private sealed class SmokeFactAttribute : FactAttribute

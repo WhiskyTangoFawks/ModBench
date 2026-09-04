@@ -68,12 +68,9 @@ public sealed class RecordQueryServiceTests : IDisposable
         Assert.Equal(MasterIssueKind.DirectlyMissing, issue.Kind);
     }
 
-    // ADR-0037: pinning, not new behavior — the ADR states this already works
-    // (Mutagen builds FormKeys from a plugin's own header, so reading never requires a master to
-    // exist, and a FormLink into an absent one already resolves to nothing and already falls back
-    // to the raw FormKey). This is the true end-to-end version of that claim: a whole load order
-    // built via LoadOrder/LoadOrderMirror (not a hand-fed DuckDbRecordIndex), where the
-    // referenced master is never part of the load order at all — no plugins.txt line, no file.
+    // ADR-0037 end to end: a whole load order built via LoadOrder/LoadOrderMirror rather than a
+    // hand-fed index, where the referenced master is not part of the load order at all, with no
+    // plugins.txt line and no file.
     [Fact]
     public void GetRecord_ReferenceIntoAbsentMaster_RendersUnresolvedRatherThanErroring()
     {
@@ -287,12 +284,8 @@ public sealed class RecordQueryServiceTests : IDisposable
         }
     }
 
-    // ADR-0035: VMAD's own conflict contribution (folded into ConflictAll alongside the
-    // generic field path) must be participation-aware too. Base and Mid agree on everything
-    // (generic fields + VMAD) so the record-level classification isn't the OnlyOne shortcut — Mid
-    // makes it a real 2-participant NoConflict — and only the disabled, last-in-order plugin
-    // differs on VMAD. An unfiltered VMAD winner/cell-state pass would pick the
-    // disabled plugin as winner and escalate this to Override.
+    // ADR-0035. A third plugin makes this a two-participant NoConflict, not the OnlyOne shortcut;
+    // only the disabled last plugin differs, which an unfiltered winner pass would escalate.
     [Fact]
     public void GetCompare_VmadDiffersOnlyInDisabledPlugin_ReturnsNoConflict()
     {
@@ -464,9 +457,8 @@ public sealed class RecordQueryServiceTests : IDisposable
     [Fact]
     public void GetCompare_ConflictedFieldWithUncontestedVmad_DoesNotDowngradeFromConflict()
     {
-        // Verifies Escalate(Conflict, NoConflict) = Conflict (not NoConflict) — escalation must take
-        // the more severe axis even when the *generic* side is the more severe one and VMAD is milder.
-        // Both Mid and Top disagree on aggression → generic = Conflict. Their VMAD is identical → vmad = NoConflict.
+        // Escalation must take the more severe axis even when the generic side is the severe one and VMAD
+        // is milder: Mid and Top disagree on aggression, and their VMAD is identical.
         FormKey npcKey = default;
         var data = new PluginFixtureBuilder("rqs-escalate-no-downgrade")
             .WithPlugin("Base.esp", mod =>
@@ -533,9 +525,8 @@ public sealed class RecordQueryServiceTests : IDisposable
             });
     }
 
-    // #692: a condition list is an ordinary reflected array column, so it reaches the compare grid
-    // through the one ConflictClassifier — one FieldDiff per condition, its members as that diff's
-    // own children, no second classifier and no section of its own.
+    // A condition list is an ordinary reflected array column, so it reaches the compare grid through
+    // the one ConflictClassifier: one FieldDiff per condition, its members as that diff's children.
     [Fact]
     public void GetCompare_RecordHasConditions_ClassifiesThemAsFieldDiffChildren()
     {
@@ -626,10 +617,6 @@ public sealed class RecordQueryServiceTests : IDisposable
 
     private const string VmadField = "virtual_machine_adapter";
 
-    /// <summary>The <c>Power</c> property of the one script <see cref="ScriptVmad"/> attaches,
-    /// reached through the ordinary reflected diff tree — <c>virtual_machine_adapter</c>, its
-    /// <c>scripts</c> array keyed by script name, that script's <c>properties</c> array keyed by
-    /// property name. Every hop is a keyed array, so the labels are the keys rather than indices.</summary>
     private static FieldDiff PowerPropertyDiff(CompareResult compare) =>
         compare.Diffs.First(d => d.FieldName == VmadField)
             .Children!.First(c => c.FieldName == "scripts")
@@ -684,9 +671,8 @@ public sealed class RecordQueryServiceTests : IDisposable
     [Fact]
     public void GetPluginRecordTypes_ExcludesHeader()
     {
-        // Every plugin indexes exactly one header row, so without the exclusion "header" would
-        // appear as a browsable record-type node (count 1) in the "expand a plugin" tree — the
-        // header is reached only via "Open Header" on the plugin node itself (User Story 7/38).
+        // Every plugin indexes exactly one header row, so without the exclusion "header" would appear as a
+        // browsable record-type node. The header is reached only via "Open Header" on the plugin node.
         var result = _svc.GetPluginRecordTypes(TestPluginFixture.PluginName);
 
         Assert.DoesNotContain(result, r => r.Type == "header");
@@ -845,10 +831,8 @@ public sealed class RecordQueryServiceTests : IDisposable
         finally { _manager.ClearFilter(); }
     }
 
-    // ADR-0035 (amending ADR-0018): a record filter prunes records and record types,
-    // never a plugin row, because this tree is also the load order and hiding a plugin mid-filter
-    // would make it unreorderable. The plugin stays in the list; HasMatchingRecords is the
-    // additive fact a caller (the tree's chevron) reads instead.
+    // ADR-0035: a record filter prunes records and record types, never a plugin row, because this tree
+    // is also the load order and hiding a plugin mid-filter would make it unreorderable.
     [Fact]
     public void GetPlugins_WithFilterMatchingNoRecords_KeepsPluginVisibleButFlagsNoMatch()
     {

@@ -6,11 +6,8 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Tests.Plugins;
 
-// ADR-0001 point 6: a DuckDB file admits one writing process and Modbench runs one service
-// per VS Code window, so a second window on the same instance is told plainly and refused — no
-// read-only mode, no waiting, never a second file. Proved at the mirror seam, with the other window
-// being a genuine second process (ForeignIndexHolder): DuckDB's lock is per process, and a second
-// mirror inside this one would share the database rather than contend for it.
+// ADR-0001 point 6: a DuckDB file admits one writing process and Modbench runs one service per
+// window, so a second window is refused plainly, with no read-only mode and no second file.
 public sealed class SecondWindowRefusedTests
 {
     private static LoadOrderMirror MakeMirror()

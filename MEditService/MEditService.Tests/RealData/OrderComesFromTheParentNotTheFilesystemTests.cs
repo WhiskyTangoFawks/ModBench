@@ -5,24 +5,8 @@ using Noggog.WorkEngine;
 
 namespace MEditService.Tests.RealData;
 
-/// <summary>
-/// The parent's ordered child list is what decides order — not the order the filesystem happens to
-/// hand its children back in.
-///
-/// <para><b>Why this needs its own test, and why it reverses a list rather than shuffling files.</b>
-/// The phase-1 spike named this the real hazard of #566: with identity-only file names, every
-/// reader's enumeration order is undefined, so a folder-split site whose order carrier was never
-/// written still <i>looks</i> correct whenever enumeration happens to agree with the recorded order —
-/// and it will agree, often, because Track writes files in the very order it later reads them back.
-/// A test that only checks "the tree round-trips" therefore passes by luck.</para>
-///
-/// <para>Shuffling the files themselves cannot fix that: enumeration order is the filesystem's to
-/// choose and no test can portably force it. So this inverts the experiment — hold the files still
-/// and <b>reverse the recorded order</b>. If the reader honours the list, the mod comes back
-/// reversed; if it is really just enumerating a directory, it comes back unchanged. That
-/// distinguishes the two outright, on every folder-split site the fixture has, and it fails for a
-/// site whose carrier is missing exactly as it fails for one that is ignored.</para>
-/// </summary>
+/// <summary>Reverses the recorded order rather than shuffling files: enumeration order is the
+/// filesystem's to choose and often agrees with the recorded order by luck.</summary>
 public sealed class OrderComesFromTheParentNotTheFilesystemTests(CompileRoundTripGateFixture fixture)
     : IClassFixture<CompileRoundTripGateFixture>
 {
@@ -64,7 +48,6 @@ public sealed class OrderComesFromTheParentNotTheFilesystemTests(CompileRoundTri
         CompileRoundTripGateFixture.TryDelete(modFolder);
     }
 
-    /// <summary>The FormKeys of one topic's responses, as the whole-mod read door yields them.</summary>
     private static async Task<List<string>> ReadResponses(string sourceRoot, string topicDirectory)
     {
         var mod = await RecordTextCodecGeneratorSeed.DeserializeWholeMod(
@@ -79,8 +62,6 @@ public sealed class OrderComesFromTheParentNotTheFilesystemTests(CompileRoundTri
         return [.. topic.Responses.Select(response => response.FormKey.ToString())];
     }
 
-    /// <summary>Replaces one ordered child list in place, leaving the rest of the document alone —
-    /// the hand edit an external tool or a merge could make.</summary>
     private static void RewriteOrder(string carrierPath, string key, IReadOnlyList<string> order)
     {
         var document = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(carrierPath))!.AsObject();

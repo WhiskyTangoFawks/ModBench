@@ -8,12 +8,8 @@ using Noggog;
 
 namespace MEditService.Tests.Serialization;
 
-/// <summary>
-/// ADR-0041: the codec adopts Spriggit's embed customization verbatim —
-/// <c>Cell.{Temporary,Persistent,Landscape,NavigationMeshes}</c> and <c>Worldspace.TopCell</c>
-/// serialize <b>inline</b>, in the container's own document, rather than into child folders.
-/// See <see cref="CellEmbedCustomization"/>/<see cref="WorldspaceEmbedCustomization"/> for the source it mirrors.
-/// </summary>
+/// <summary>The codec adopts Spriggit's embed customization verbatim (ADR-0041): the five embedded
+/// slots serialize inline in the container's own document.</summary>
 public sealed class RecordTextCodecEmbedTests
 {
     private static readonly Fallout4Mod Mod = new(ModKey.FromFileName("Embed.esp"), Fallout4Release.Fallout4);
@@ -30,11 +26,6 @@ public sealed class RecordTextCodecEmbedTests
         return cell;
     }
 
-    /// <summary>
-    /// The four Cell child slots land in the cell's own document. Without the embed customization,
-    /// the three <i>list</i> slots (Persistent/Temporary/NavigationMeshes) are written to per-child
-    /// streams instead and discarded — absent from these bytes entirely.
-    /// </summary>
     [Fact]
     public async Task SerializeToBytesAsync_ForAPopulatedCell_EmbedsEveryChildSlot()
     {
@@ -55,8 +46,6 @@ public sealed class RecordTextCodecEmbedTests
         Assert.Equal("CellLandscape", root.GetProperty("Landscape").GetProperty("EditorID").GetString());
     }
 
-    /// <summary>An embedded cell round-trips with its children intact — a shallow-strip
-    /// posture returns them empty/null by design.</summary>
     [Fact]
     public async Task RoundTrip_OfAnEmbeddedCell_IsChildFaithful()
     {
@@ -76,10 +65,6 @@ public sealed class RecordTextCodecEmbedTests
         Assert.Equal(new P2Int(1, 2), roundTripped.Grid!.Point);
     }
 
-    /// <summary>
-    /// Embedding is what makes "one source unit = one file" true for a container: the cell's whole
-    /// content is its own file, with no sibling <c>Persistent/</c>/<c>Temporary/</c> folders.
-    /// </summary>
     [Fact]
     public async Task SerializeAsync_ForAPopulatedCell_WritesExactlyOneFile()
     {

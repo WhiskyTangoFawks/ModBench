@@ -6,20 +6,9 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Tests.Api;
 
-/// <summary>
-/// At the actual wire: after renumbering a record, <c>GET /records?plugin=...</c> must
-/// no longer list the old FormKey and <c>GET /records/{oldFormKey}</c> must 404 rather than keep
-/// serving a fully-populated, stale record. <see
-/// cref="Edits.RecordEditServiceRenumberRecordTests"/> pins
-/// the same fact at the <c>IRecordReads</c> layer (the seam <c>RecordQueryService</c> sits on); this
-/// is the one round-trip through the real endpoints, the same <see cref="LoadedApiFixture{TPlugin}"/>
-/// harness <c>EditFieldApiTests</c> already uses.
-///
-/// <para>Renumbers a record fresh off <c>CreateRecord</c> (never committed, still working-tree-only
-/// <c>Added</c>) rather than one of the fixture's own pre-committed NPCs — a
-/// <c>workingTreeState: "Added"</c> old FormKey is the shape that reproduces the stale-record bug;
-/// renumbering an already-committed record wouldn't exercise it at all.</para>
-/// </summary>
+/// <summary>Renumbers a record fresh off <c>CreateRecord</c>, still working-tree-only
+/// <c>Added</c>: that is the shape that reproduces the stale-record bug; an already committed
+/// record would not exercise it.</summary>
 public sealed class RenumberApiTests(LoadedApiFixture<TestPluginFixture> loaded)
     : IClassFixture<LoadedApiFixture<TestPluginFixture>>
 {

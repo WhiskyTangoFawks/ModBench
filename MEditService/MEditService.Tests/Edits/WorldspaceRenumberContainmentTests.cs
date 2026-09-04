@@ -11,19 +11,9 @@ using Noggog;
 
 namespace MEditService.Tests.Edits;
 
-/// <summary>
-/// Native renumber of a container's own FormKey (here, a Worldspace) leaves other records'
-/// stale pointers into it. <see cref="ContainmentRederivationTests"/> covers the
-/// "renumbered record's own children" direction; this is the mirror gap —
-/// <c>cell_location.parent_worldspace</c> for a Worldspace's <i>exterior</i> cells, which
-/// <c>ContainerChildFields.EnumerateChildren</c> can never reach (<c>Worldspace.SubCells</c> holds
-/// <c>WorldspaceBlock</c>, not <see cref="Mutagen.Bethesda.Plugins.Records.IMajorRecordGetter"/>, so
-/// <c>DuckDbRecordIndex.RederiveContainmentForRecord</c> only ever recurses into
-/// <c>TopCell</c>). A self-built inline mod, not the shared <c>ContainerModFixture</c> — the same
-/// choice <see cref="RecordEditServiceContainerDeleteRenumberTests"/>'s own
-/// <c>RenumberingARecordReferencedByAContainer...</c> test makes, for the same reason: widening a
-/// fixture 4+ other suites depend on is a bigger, riskier change than a small local one.
-/// </summary>
+/// <summary>The mirror gap to <see cref="ContainmentRederivationTests"/>: a Worldspace's exterior
+/// cells are unreachable from <c>EnumerateChildren</c> (<c>SubCells</c> holds blocks, not records).
+/// A self-built mod, since widening the shared fixture is the riskier change.</summary>
 public sealed class WorldspaceRenumberContainmentTests : IDisposable
 {
     private const string PluginName = "WorldspaceRenumber.esp";
@@ -107,15 +97,9 @@ public sealed class WorldspaceRenumberContainmentTests : IDisposable
             c => c.FormKey == _extCellFormKey);
     }
 
-    // ---- guard against a duplicate TopCell row ----
-    //
-    // A plausible wrong implementation puts ApplyRenumber's cell_location re-point step *before* its
-    // create step instead of after — applied and run directly against this test: it still passed,
-    // exactly one row either way. The reason is RederiveContainmentForRecord's own TopCell write
-    // deletes-then-inserts keyed by that cell's own unchanging cell_form_key, not by
-    // parent_worldspace, so it unconditionally clears whatever row already exists for TopCell
-    // regardless of order. Kept anyway as a real regression guard on that invariant — see
-    // IRecordIndex.ApplyRenumber's own doc comment.
+    // ---- guard against a duplicate TopCell row ---- RederiveContainmentForRecord's TopCell write
+    // deletes-then-inserts keyed by that cell's unchanging cell_form_key, so it clears any existing
+    // row whatever the step order.
 
     [Fact]
     public void RenumberingAWorldspace_LeavesExactlyOneCellLocationRowForItsTopCell_NoDuplicate()

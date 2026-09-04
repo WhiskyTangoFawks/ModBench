@@ -8,16 +8,9 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Tests.RealData;
 
-/// <summary>
-/// Loads and indexes the committed cut-down Fallout 4 plugin
-/// (<see cref="PluginFileName"/>) — a small slice of real game data used to exercise the
-/// indexing pipeline (worldspace/cell/placement/VMAD) against authentic records without the
-/// 316 MB master. The file is checked in and copied to the output directory, so this fixture is
-/// hermetic and needs no game install.
-///
-/// Regenerate the plugin with <see cref="CutDownPluginGenerator"/> when the schema or curation
-/// changes.
-/// </summary>
+/// <summary>The committed cut-down Fallout 4 plugin: real game data without the 316 MB master, so
+/// the fixture is hermetic. Regenerate with <see cref="CutDownPluginGenerator"/> when the schema or
+/// curation changes.</summary>
 public sealed class CutDownPluginFixture : IDisposable
 {
     public const string PluginFileName = "mEditTestSubset.esm";

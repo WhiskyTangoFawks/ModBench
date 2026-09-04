@@ -10,13 +10,8 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Tests.Records;
 
-/// <summary>
-/// <see cref="IRecordIndex.CreateWorkingTreeRecord"/> materializes a record
-/// <see cref="IRecordIndex.ApplyWorkingTreeChanges"/> deliberately refuses to — one that exists at
-/// neither ref yet. The sharp questions mirror <see cref="WorkingTreeDeletionTests"/>'s own: does the
-/// new row answer everywhere a record is supposed to (Effective, winner, lookup, references) while
-/// staying invisible at Head, since nothing has been committed.
-/// </summary>
+/// <summary>Materializes a record that exists at neither ref yet; the sharp questions mirror
+/// <see cref="WorkingTreeDeletionTests"/>: answers everywhere at Effective, invisible at Head.</summary>
 public sealed class WorkingTreeCreationTests : IDisposable
 {
     private static readonly SchemaReflector Reflector = SharedSchemaReflector.Instance;
@@ -57,9 +52,8 @@ public sealed class WorkingTreeCreationTests : IDisposable
             Fallout4Mod.CreateFromBinaryOverlay(path, Fallout4Release.Fallout4), Registration.Participating(loadOrderIndex), new PluginKey(name, "Data"));
     }
 
-    // A real codec-produced body, the same shape CreateRecord will write in production — a
-    // hand-crafted JSON literal would only prove the test author's guess at the codec's shape, not
-    // that a genuinely new record round-trips through RederiveIndexRowsForRecord's own deserialize.
+    // A real codec-produced body, the shape CreateRecord writes in production: a hand-crafted JSON
+    // literal would prove only the test author's guess at the codec's shape.
     private static readonly RecordTextCodec Codec = new(NullLogger<RecordTextCodec>.Instance);
 
     private static string NewNpcBody(string formKey, string editorId)

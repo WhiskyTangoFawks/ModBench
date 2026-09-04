@@ -10,32 +10,13 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Tests.RealData;
 
-/// <summary>
-/// A real fixture in <see cref="BinaryRoundTripGateTests"/>' shape: a real, unrelated
-/// plugin whose own bytes trip <see cref="PluginBinaryWalk.FindFirstSubrecordLoss"/>, not a forged one.
-///
-/// <c>LitR - TrueStorms.esp</c> (from the LitR modlist's "LitR - General Conflict Resolution Patches",
-/// recovered from the 684-plugin survey) carries a REGN record, FormID <c>001D2AF4</c>, whose Map region-data entry
-/// opens with a malformed 6-byte <c>RDAT</c> (the format's own fixed size is 8 — the 2 missing bytes are
-/// unused pad; catalogued as R2 in <c>docs/specs/medit-repair.md</c>). Parsing that short subrecord
-/// desyncs Mutagen's own reader, which then silently drops every subrecord that follows it in the
-/// record: <c>RDMP</c> (the map's own path name), <c>ANAM</c>, and the entire Sound entry (<c>RDAT</c> +
-/// <c>RDMO</c> + <c>RDSA</c>) — verified directly against this exact file (deep-parse, round-trip write,
-/// hex-diff the record); not a literal second same-type <c>RDAT</c>,
-/// which <c>medit-repair.md</c> itself already retracts. Model
-/// identity cannot see this: both the original parse and the recompiled-from-source parse already lost
-/// the same bytes at parse time, so they agree with each other and disagree with the file on disk — only
-/// a byte-level subrecord count comparison, run against the two *binaries*, can name it.
-/// </summary>
+/// <summary><c>LitR - TrueStorms.esp</c> carries a REGN whose malformed 6-byte <c>RDAT</c> desyncs
+/// Mutagen's reader, which silently drops every following subrecord (R2 in medit-repair.md).</summary>
 public sealed class SubrecordInventoryRoundTripGateTests
 {
     private const string FixtureFileName = "LitR - TrueStorms.esp";
     private static string FixturePath => Path.Combine(AppContext.BaseDirectory, "TestData", FixtureFileName);
 
-    /// <summary>Track refuses this real plugin, naming the record and the dropped signatures —
-    /// not silently accepted the way <see cref="ModelIdentity.FindFirst"/> alone would leave it
-    /// (its own mask comparison sees no difference here, since both sides of it already lost the same
-    /// bytes at parse time; only this byte-level check can name it).</summary>
     [Fact]
     public async Task TrackAsync_OfTheRealTrueStormsFixture_RefusesNamingTheRegionAndItsDroppedSignatures()
     {
@@ -49,8 +30,8 @@ public sealed class SubrecordInventoryRoundTripGateTests
         Assert.Contains("ANAM", ex.Message);
         Assert.Contains("RDMO", ex.Message);
         Assert.Contains("RDSA", ex.Message);
-        // #569: the refusal carries the Kind B diagnosis for the same record — the *cause* of the
-        // drop, class-labelled with its repair tail — not only the generic inventory loss.
+        // The refusal carries the Kind B diagnosis for the same record, the cause of the drop with its
+        // repair tail, not only the generic inventory loss.
         Assert.Contains("fixed-size-subrecord-short", ex.Message);
         Assert.Contains("repairable (lossless)", ex.Message);
         Assert.Contains("RDAT is 6 bytes; a REGN RDAT is always 8", ex.Message);
@@ -58,10 +39,8 @@ public sealed class SubrecordInventoryRoundTripGateTests
         Assert.False(SourceRepository.IsTracked(scratch.ModFolder));
     }
 
-    /// <summary>One real fixture copied into a scratch mod folder and loaded as a load order — the same
-    /// shape <c>StaleNextObjectIdRoundTripGateTests.TrackedScratch</c> builds — with an empty stub for
-    /// each of the fixture's own masters (Track's round-trip write needs those names present in the
-    /// header's own master list, not their content).</summary>
+    // Empty stubs for the fixture's masters: Track's round-trip write needs the names present, not
+    // their content.
     private sealed class TrueStormsScratch : IDisposable
     {
         private readonly string _gameDirectory = Directory.CreateTempSubdirectory("medit-truestorms-game-").FullName;

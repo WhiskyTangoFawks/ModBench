@@ -81,10 +81,9 @@ public class SchemaReflectorTests
         Assert.Equal("Game Setting", schemas["gmst"].DisplayName);
     }
 
-    // ── GMST/GLOB's Data column is backed by several concrete Mutagen subclasses,
-    // discriminated per record (the EditorID's leading i/f/s/b/u), not per table — schema
-    // discovery must not pick one subclass's Data property and silently drop the rest, leaving
-    // every GameSetting of any other type with no value. ────────────────────────────────
+    // ── GMST/GLOB's Data column is backed by several concrete subclasses, discriminated per record
+    // rather than per table, so schema discovery must not pick one subclass's Data property and drop
+    // the rest. ────────────────────────────────
 
     [Fact]
     public void GetSchemas_Gmst_DataColumn_ExtractsCorrectValuePerSubclass()
@@ -113,13 +112,9 @@ public class SchemaReflectorTests
     [Fact]
     public void GetSchemas_Gmst_DataColumn_WidenedFloatFormattingIsCultureInvariant()
     {
-        // Regression: FormatWidenedValue handing a raw boxed float straight through to
-        // CoerceToColumnType's VARCHAR branch, whose value.ToString() carries no culture — the first
-        // VARCHAR column to ever hold a raw numeric rather than an already-formatted string —
-        // round-trips 3.5 as "3,5" under a comma-decimal culture, on any non-en-US host.
-        // Setting CurrentCulture for the assertion is what
-        // makes this fail without the fix regardless of which machine runs it — a test that only
-        // passes on the machine that wrote it is how the original bug got through.
+        // FormatWidenedValue handing a raw boxed float to CoerceToColumnType's VARCHAR branch, whose
+        // value.ToString() carries no culture, round-trips 3.5 as "3,5" under a comma-decimal
+        // culture.
         var original = CultureInfo.CurrentCulture;
         try
         {
@@ -142,11 +137,8 @@ public class SchemaReflectorTests
     [Fact]
     public void GetSchemas_Gmst_DataColumn_WidenedBoolFalse_FormatsAsLowercaseFalse()
     {
-        // Mutation-triage gap: GetSchemas_Gmst_DataColumn_ExtractsCorrectValuePerSubclass above
-        // only ever asserts Data = true for GameSettingBool, so FormatWidenedValue's bool branch is
-        // otherwise never exercised with a false input — a mutant collapsing `b ? "true" : "false"`
-        // to always "true" survives. This closes that gap directly, not through the "one of
-        // each subclass" test above (whose point is per-subclass dispatch, not this specific value).
+        // Mutation-triage gap: the per-subclass test above only asserts Data = true, so FormatWidenedValue's
+        // bool branch is never exercised with a false input and a mutant collapsing it survives.
         var mod = new Fallout4Mod(ModKey.FromFileName("Gmst365BoolFalse.esp"), Fallout4Release.Fallout4);
         var b = new GameSettingBool(mod.GetNextFormKey("bFalseTest"), Fallout4Release.Fallout4) { EditorID = "bFalseTest", Data = false };
 
@@ -159,12 +151,7 @@ public class SchemaReflectorTests
     [Fact]
     public void GetSchemas_Omod_PropertiesColumn_KeepsStructuredArrayShape_NotWidened()
     {
-        // OMOD's Properties is the same per-subclass-typed shape as GMST/GLOB's Data, but on
-        // a list (each of ArmorModification/NpcModification/WeaponModification/.../Unknown declares
-        // its own element type) rather than a scalar. Widening a list/struct column the way a
-        // scalar conflict widens would cost the *working* subclass its structured element metadata
-        // to make the other subclasses less obviously broken — not a fix. The shape-based rule
-        // (MergeSiblingColumn) must leave this column's typed array shape alone.
+        // OMOD's Properties is the same per-subclass-typed shape as GMST/GLOB's Data, but on a list.
         var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
         var properties = schemas["omod"].RecordColumns.Single(c => c.Name == "properties");
 
@@ -175,15 +162,9 @@ public class SchemaReflectorTests
     [Fact]
     public void GetSchemas_Omod_PropertiesColumn_ExtractsCorrectPropertyAndStepForEverySubclass()
     {
-        // Keeping the column's shape (test above) isn't enough on its own — an Extract still
-        // bound to whichever single sibling won schema discovery makes every OTHER
-        // sibling's own Properties list read back null (a foreign PropertyInfo throws, the throw is
-        // swallowed). All five OMOD subclasses share the exact same generic element classes
-        // (ObjectMod{Bool,Enum,Float,FormLinkFloat,FormLinkInt,Int,String}Property<T>) — confirmed
-        // against the real Mutagen.Bethesda.Fallout4 source, not assumed — with T
-        // (the per-subclass "which property" enum) the only thing that varies. One element per
-        // subclass, all five asserted in one test deliberately (same rationale as the GMST/GLOB
-        // tests above): the defect is invisible if only the discovery-winning subclass is checked.
+        // An Extract bound to whichever sibling won schema discovery makes every other sibling's
+        // Properties list read back null: a foreign PropertyInfo throws and the throw is swallowed. All
+        // five subclasses share the same generic element classes, only T varying.
         var mod = new Fallout4Mod(ModKey.FromFileName("Omod339.esp"), Fallout4Release.Fallout4);
 
         // Not added to mod.ObjectModifications (the one shared Fallout4Group<AObjectModification>
@@ -207,18 +188,15 @@ public class SchemaReflectorTests
         var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
         var properties = schemas["omod"].RecordColumns.Single(c => c.Name == "properties");
 
-        // Merging makes this column dispatch-guarded — a record of a *sixth*, non-OMOD subclass
-        // (hypothetically) would read null through it, same as any dispatch-guarded column already
-        // does (see WidenedExtract's own column) — AllowsNull must say so, not still claim false.
+        // Merging makes this column dispatch-guarded: a record of a sixth, non-OMOD subclass would
+        // read null through it, so AllowsNull must say so rather than still claim false.
         Assert.True(properties.AllowsNull);
 
         AssertFirstElement(properties, armor, "BodyPart", 1f);
         AssertFirstElement(properties, npc, "ForcedInventory", 2f);
         AssertFirstElement(properties, weapon, "AmmoCapacity", 3f);
         // AObjectModification.NoneProperty (Object/Unknown's T) is a genuinely empty enum — 0
-        // members — confirmed against the real source (ObjectModification.cs), not assumed. An
-        // enum value with no matching member name stringifies to its raw numeric value, "0" here
-        // (default(T)), not null.
+        // members — confirmed against the real source (ObjectModification.cs), not assumed.
         AssertFirstElement(properties, obj, "0", 4f);
         AssertFirstElement(properties, unknown, "0", 5f);
 
@@ -237,13 +215,8 @@ public class SchemaReflectorTests
     [Fact]
     public void GetSchemas_Omod_PropertiesColumn_PropertySubField_EnumMembersAreUnionOfSiblingEnums()
     {
-        // Design decision: the `property` sub-field's members become the union of every
-        // sibling's own T enum member names — Armor.Property, Npc.Property, Weapon.Property (and
-        // AObjectModification.NoneProperty, which has zero members, contributing nothing). Member
-        // names below are transcribed directly from the real Mutagen source (Armor.cs, Npc.cs,
-        // Weapon.cs in references/Mutagen/Mutagen.Bethesda.Fallout4/Records/Major Records/), not
-        // assumed — trusting a description of a Mutagen shape instead of reading it has shipped
-        // wrong before.
+        // The `property` sub-field's members are the union of every sibling's own T enum member
+        // names.
         var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
         var properties = schemas["omod"].RecordColumns.Single(c => c.Name == "properties");
         var propertyField = properties.ElementType!.Fields!.Single(f => f.Name == "property");
@@ -256,14 +229,10 @@ public class SchemaReflectorTests
         Assert.Equal(values.Count, values.Distinct().Count());
     }
 
-    // ── OMOD's Properties element must surface the property's actual Value ─────────────────────
-    // IAObjectModPropertyGetter<T> (walked above) declares only Property/Step. The real payload —
-    // Value, Value2, Record, FunctionType, EnumIntValue — lives on seven separate leaf getter
-    // interfaces BuildSubSchema has to descend into (IObjectMod{Int,Float,Bool,String,Enum,
-    // FormLinkInt,FormLinkFloat}PropertyGetter<T>), confirmed against the real
-    // ObjectMod*Property_Generated.cs sources, not assumed. Read-only by design: the write path
-    // for this element is a separate known defect (Activator.CreateInstance on the abstract
-    // AObjectModProperty<T> throws for every write), out of scope here.
+    // ── OMOD's Properties element must surface the property's actual Value ──
+    //
+    // IAObjectModPropertyGetter<T> declares only Property/Step; the payload lives on seven leaf getter
+    // interfaces BuildSubSchema descends into. Read-only: the write path is a separate known defect.
 
     [Fact]
     public void GetSchemas_Omod_PropertiesElement_ExposesSevenLeafUnionFields()
@@ -280,10 +249,9 @@ public class SchemaReflectorTests
         var functionType = fields.Single(f => f.Name == "function_type");
         var enumIntValue = fields.Single(f => f.Name == "enum_int_value");
 
-        // value/value2/function_type collide in CLR type across the seven leaves (e.g. value is
-        // uint on Int, float on Float, bool on Bool, string on String) -> the read-only-text
-        // rung. record (FormLink, only FormLinkInt/FormLinkFloat) and enum_int_value (uint, only
-        // Enum) don't collide across the leaves that declare them at all -> stay typed.
+        // value/value2/function_type collide in CLR type across the seven leaves, so they take the
+        // read-only-text rung. record and enum_int_value do not collide across the leaves that declare
+        // them, so they stay typed.
         Assert.Equal("string", value.Type);
         Assert.Equal("string", value2.Type);
         Assert.Equal("string", functionType.Type);
@@ -298,9 +266,8 @@ public class SchemaReflectorTests
         Assert.True(functionType.AllowsNull);
         Assert.True(enumIntValue.AllowsNull);
 
-        // Unused (String/Enum leaves' own reserved padding uint32) is deliberately excluded —
-        // Mutagen's own name for it, and xEdit's own definition (wbUnused(3)/wbUnused(2) in
-        // wbDefinitionsFO4.pas — never rendered as a field at all), both agree it carries no
+        // Unused is deliberately excluded: Mutagen's own name for it, and xEdit's
+        // wbUnused(3)/wbUnused(2), never rendered as a field at all, both agree it carries no
         // product-visible data.
         Assert.DoesNotContain(fields, f => f.Name == "unused");
     }
@@ -495,20 +462,9 @@ public class SchemaReflectorTests
     [Fact]
     public void GetSchemas_Dmgt_SplitsIntoPerShapeColumns_EachDispatchGuardedToOwnSubclass()
     {
-        // DamageType.DamageTypes (ExtendedList<DamageTypeItem>, a struct of two formlinks)
-        // and DamageTypeIndexed.DamageTypes (ExtendedList<uint>?, a bare scalar list) are a genuine,
-        // irreconcilable shape conflict — confirmed against the real Mutagen source
-        // (DamageTypeItem_Generated.cs declares ActorValue/Spell; DamageTypeIndexed_Generated.cs
-        // declares neither, nor anything else under that name) — no field names in common at all,
-        // unlike OMOD's Properties above. xEdit itself never disambiguates this (wbDefinitionsFO4.pas
-        // unions both under one form-version-gated 'Damage Types' field, since the two forms can
-        // never coexist there); Mutagen modelling them as two co-existing classes is what forces a
-        // label here — 'actor_value_indices' borrows xEdit's own element vocabulary for the scalar
-        // shape ('Actor Value Index'), the closest thing to not diverging from xEdit at all
-        // (ADR-0034). Naming must be shape-based, not win-order-based — the existing DMGT round-trip
-        // test's own comment says which subclass wins schema discovery is a reflection-order
-        // artifact that must not be pinned — so this asserts fixed column names and per-column
-        // dispatch-guarded reads regardless of which subclass the schema race actually returns.
+        // DamageType.DamageTypes and DamageTypeIndexed.DamageTypes are a genuine, irreconcilable shape
+        // conflict with no field names in common. 'actor_value_indices' borrows xEdit's own element
+        // vocabulary (ADR-0034); naming is shape-based because the discovery race must not be pinned.
         var mod = new Fallout4Mod(ModKey.FromFileName("DmgtSplit339.esp"), Fallout4Release.Fallout4);
         var structShaped = new DamageType(mod, "PlainDmgt339");
         structShaped.DamageTypes.Add(new DamageTypeItem
@@ -546,12 +502,9 @@ public class SchemaReflectorTests
     [Fact]
     public void GetSchemas_Glob_OutputCharColumn_ExclusiveToGlobalFloat_NullOnOtherSubclasses()
     {
-        // The "not present on every sibling" branch of MergeSiblingColumn (GlobalFloat.OutputChar,
-        // declared only on IGlobalFloatGetter — GlobalInt/Short/Bool have nothing under this name)
-        // is real today, not a hypothetical kept only for a future third subclass — confirmed
-        // against Global.xml. Extracting off a real GlobalBool instance (rather than arguing from
-        // AllowsNull alone) is what actually discharges the nullability requirement for a
-        // sibling-exclusive column.
+        // The "not present on every sibling" branch of MergeSiblingColumn is real today, not a
+        // hypothetical kept for a future third subclass. Extracting off a real GlobalBool instance, rather
+        // than arguing from AllowsNull, is what discharges the nullability requirement.
         var mod = new Fallout4Mod(ModKey.FromFileName("GlobOutputChar263.esp"), Fallout4Release.Fallout4);
         var f = new GlobalFloat(mod.GetNextFormKey("TestGlobFloat"), Fallout4Release.Fallout4) { EditorID = "TestGlobFloat", Data = 1.25f, OutputChar = true };
         var b = new GlobalBool(mod.GetNextFormKey("TestGlobBool"), Fallout4Release.Fallout4) { EditorID = "TestGlobBool", Data = true };
@@ -629,15 +582,6 @@ public class SchemaReflectorTests
         Assert.Contains("race", col.ValidFormKeyTypes);
     }
 
-    /// <summary>
-    /// The mechanism-level proof, independent of <c>RecordEditService.ValidateFormLinks</c>
-    /// (which already refuses most malformed FormKey strings before <c>ColumnSpec.Apply</c> is ever
-    /// reached at the public <c>EditField</c> door — see <c>ScalarFieldApplierRefusalTests</c>'s own
-    /// note on this). Calling <c>Apply</c> directly is what actually exercises
-    /// <c>LeafWriters.ApplyFormLinkJson</c>'s own behaviour: a malformed string must not be a
-    /// silent no-op reported as <c>ApplyOutcome.Applied</c> for a caller that reaches this column
-    /// without going through <c>ValidateFormLinks</c> first.
-    /// </summary>
     [Fact]
     public void GetSchemas_Npc_FormLinkColumn_Apply_MalformedFormKeyString_IsRejected()
     {
@@ -694,9 +638,8 @@ public class SchemaReflectorTests
         var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
         var col = schemas["npc_"].RecordColumns.FirstOrDefault(c => c.Name == "race");
         Assert.NotNull(col);
-        // #649: the delegate, not the LeafWrite wrapper. Asserting the wrapper is unconditionally
-        // true now that Apply is non-nullable, which would leave this fact — whose entire body is
-        // these two lines — proving nothing at all.
+        // The delegate, not the LeafWrite wrapper: asserting the wrapper is unconditionally true now that
+        // Apply is non-nullable, which would leave this fact proving nothing at all.
         Assert.NotNull(col!.Apply.Writer);
     }
 
@@ -906,15 +849,8 @@ public class SchemaReflectorTests
 
         Assert.Equal(2.5f, npc.HeightMin, precision: 3);
 
-        // MakeApplier's JSON-null success branch (`if (nullable) rp.SetValue(obj, null); return;`)
-        // is shared live infrastructure reached by every nullable scalar column via
-        // MakeColumnApplier/ProjectColumn — not header-specific, and (per #633's review) otherwise
-        // unexercised anywhere in the suite. height_min above can't exercise it: Npc.HeightMin is a
-        // non-nullable Single, so `nullable` is false for it and a JSON null there is ValueRejected,
-        // not a clear. facial_morph_intensity's backing property (Npc.FacialMorphIntensity) is
-        // `Single?`, which is exactly what GetColumnInfo's nullable test
-        // (Nullable.GetUnderlyingType(type) != null || !type.IsValueType) requires — a genuinely
-        // nullable scalar column, live on a real record type, to exercise the clear branch on.
+        // MakeApplier's JSON-null success branch is shared live infrastructure reached by every
+        // nullable scalar column, and is otherwise unexercised.
         var nullableCol = schemas["npc_"].RecordColumns.First(c => c.Name == "facial_morph_intensity");
         Assert.NotNull(nullableCol.Apply.Writer); // the delegate, not the always-present wrapper (#649)
         npc.FacialMorphIntensity = 1.0f;
@@ -1131,17 +1067,8 @@ public class SchemaReflectorTests
     }
 
     // ── Primitive type parity: GetColumnInfo and GetSubFieldInfo cover the same types ──
-    // For each primitive api-type, verify that a top-level column of that type exists (GetColumnInfo
-    // handled it) AND a sub-field of that same type exists in a struct/array-element column
-    // (GetSubFieldInfo handled it).  A refactor that drops a type from one chain but not the other
-    // will fail the sub-field assertion.
     //
-    // float: height_min (top) / npc_ weight.thin (sub)
-    // int:   xp_value_offset (top) / npc_ factions[].rank (sub, sbyte -> int)
-    // formKey: race (top) / npc_ factions[].faction (sub)
-    // enum:  aggression (top) / npc_ face_tinting_layers[].data_type (sub)
-    // bool:  aggro_radius_behavior_enabled (top) — no bool sub-field found in npc_ structs; bool
-    //        parity is asserted by confirming the DuckDbType for the top-level column.
+    // A refactor dropping a type from one chain but not the other fails the sub-field assertion.
 
     [Theory]
     [InlineData("height_min", "float", "FLOAT", "weight", false, "thin")]
@@ -1275,9 +1202,8 @@ public class SchemaReflectorTests
     [Fact]
     public void GetSchemas_FlagColumn_EveryMemberCarriesAnAtomicBit()
     {
-        // GetEnumMembers must filter out None=0 and composite values — only atomic power-of-two
-        // bits should appear. The Npc.Flag enum has only clean power-of-two values, so this
-        // test guards against regressions that re-introduce 0 or composite entries.
+        // GetEnumMembers must filter out None=0 and composite values — only atomic power-of-two bits
+        // should appear.
         var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
         var col = schemas["npc_"].RecordColumns.FirstOrDefault(c => c.Name == "flags");
         Assert.NotNull(col);
@@ -1354,9 +1280,8 @@ public class SchemaReflectorTests
     }
 
     // ── Plugin header as a first-class record ─────────────────────────────────
-    // ModHeader isn't a major record in Mutagen (no FormKey/EditorID), so it can't be
-    // discovered by the major-record-getter scan — it gets one hand-assembled schema
-    // entry instead, built via a second small reflection pass.
+    // ModHeader is not a major record in Mutagen (no FormKey or EditorID), so it cannot be discovered
+    // by the major-record-getter scan and gets one hand-assembled schema entry instead.
 
     [Fact]
     public void GetSchemas_ContainsHeaderTable()
@@ -1409,11 +1334,9 @@ public class SchemaReflectorTests
     [InlineData("Localized", "Localized")]
     public void MapToXEditFlagName_KeysOffMutagenMemberName_NotBitPosition(string mutagenName, string expected)
     {
-        // Only Mutagen.Bethesda.Fallout4 is referenced by this project, so a live
-        // second-game schema (e.g. Starfield's "Light" member) isn't reflectable here — this
-        // exercises the mapping directly against every Mutagen member name it must key off of,
-        // proving the mapping is keyed by name, not by bit position, and includes a non-Fallout
-        // member name ("LightMaster").
+        // Only Fallout4 is referenced here, so a live second-game schema is not reflectable: this exercises
+        // the mapping against every Mutagen member name it keys off, proving it is keyed by name rather
+        // than bit position.
         Assert.Equal(expected, ModHeaderSchema.MapToXEditFlagName(mutagenName));
     }
 
@@ -1527,11 +1450,10 @@ public class SchemaReflectorTests
         Assert.False(typeof(Mutagen.Bethesda.Plugins.Records.IMajorRecordGetter).IsAssignableFrom(schema.RecordType));
     }
 
-    // ── Condition lists are ordinary reflected array columns ───────────────────
-    // #692: Perk.Conditions (IReadOnlyList<IConditionGetter>) reaches the record editor through the
-    // same array-of-struct column every other list of Loqui structs does. Perk.Effects
-    // (IReadOnlyList<IAPerkEffectGetter>) is paired here as the neighbouring list-of-struct, so a
-    // regression that dropped one shape would have to drop the other too.
+    // ── Condition lists are ordinary reflected array columns ──
+    //
+    // Perk.Conditions reaches the record editor through the same array-of-struct column every list of
+    // Loqui structs does. Perk.Effects is paired here as the neighbouring list-of-struct.
 
     [Fact]
     public void GetSchemas_Perk_ConditionsProperty_IsAGenericArrayColumn()
@@ -1554,11 +1476,9 @@ public class SchemaReflectorTests
     [Fact]
     public void GetSchemas_Container_HasObjectBoundsColumn_WithFirstSecondXyzSubFields()
     {
-        // ObjectBounds (OBND).First/Second are Noggog.P3Int16 — a ClassifyLeaf mapping
-        // neither makes BuildStructColumn's own subFields.Count == 0 drop the whole column: this
-        // asserts it exists at all, then that xEdit's own display (wbDefinitionsCommon.pas: wbOBND —
-        // six individually-named int16 members, not one opaque value) is what came back: three named
-        // numeric sub-fields per side, not an atomic value.
+        // ObjectBounds.First/Second are Noggog.P3Int16, a mapping neither makes BuildStructColumn drop the
+        // whole column for having no sub-fields. xEdit renders six individually-named int16 members
+        // (wbDefinitionsCommon.pas: wbOBND), not one opaque value.
         var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
         var col = schemas["cont"].RecordColumns.FirstOrDefault(c => c.Name == "object_bounds");
         Assert.NotNull(col);
@@ -1607,11 +1527,9 @@ public class SchemaReflectorTests
     [Fact]
     public void GetSchemas_Container_ObjectBounds_Apply_WritesFirstSecondXyz()
     {
-        // The rival this defeats: a P3Int16 sub-field built like BuildStructSubField's own nested
-        // structs (Apply: null) would make ApplySubFields silently skip "first"/"second" — the whole
-        // object_bounds Apply would still report Applied (nothing in it was rejected, just skipped)
-        // while ObjectBounds itself never changed. Asserting the actual field values, not just the
-        // outcome, is what catches that.
+        // The rival this defeats: a P3Int16 sub-field built with a null Apply makes ApplySubFields
+        // silently skip "first"/"second", so the whole object_bounds Apply still reports Applied
+        // while ObjectBounds never changed.
         var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
         var col = schemas["cont"].RecordColumns.First(c => c.Name == "object_bounds");
         var container = new Container(FormKey.Factory("000001:Test.esp"), Fallout4Release.Fallout4);
@@ -1685,16 +1603,8 @@ public class SchemaReflectorTests
     [Fact]
     public void GetSchemas_Container_Destructible_Extract_StagesNestAsARealArray_NotAnEscapedString()
     {
-        // BuildListSubField's Extract must not reuse SerializeListItems (built
-        // for a top-level array *column*, which ends as a VARCHAR string deserialized exactly once)
-        // for a sub-field's own Extract, whose contract is to return the raw object graph so it
-        // composes under the enclosing struct's single JsonSerializer.Serialize pass. Pre-serializing
-        // inside a sub-field double-encodes: the enclosing struct's own serialize pass re-escapes the
-        // already-JSON string as a JSON *string value* rather than nesting it as an array. Round-trip
-        // consequence: ApplyListSubFieldJson requires JsonValueKind.Array, so submitting back exactly
-        // what a double-encoded Extract just served would itself be refused — and separately,
-        // ConflictClassifier.BuildArrayChildren no-ops on a non-Array JsonElement.Kind, silently
-        // dropping the field from the compare grid too.
+        // BuildListSubField's Extract must return the raw object graph, so it composes under the
+        // enclosing struct's single Serialize pass.
         var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
         var col = schemas["cont"].RecordColumns.First(c => c.Name == "destructible");
         var container = new Container(FormKey.Factory("000001:Test.esp"), Fallout4Release.Fallout4)
@@ -1770,14 +1680,8 @@ public class SchemaReflectorTests
     [Fact]
     public void GetSchemas_Cell_HasGridColumn_WithFlagsAndPointXySubFields()
     {
-        // Cell.Grid.Point is a Noggog.P2Int — a 2-component sibling of P3Int16/P3Float, so a
-        // ClassifyLeaf limited to those two types maps neither. Unlike ObjectBounds
-        // (whose whole column vanished because both its members were unmapped P3Int16), Grid's own
-        // Flags (an enum) already mapped fine on its own, so BuildStructColumn's
-        // subFields.Count == 0 check never dropped the whole column — "grid" existed with
-        // one sub-field, silently missing Point. This asserts that gap
-        // closed: exactly two sub-fields (flags, point), point itself with exactly two —
-        // X/Y, no Z, unlike every P3-shaped case this file already covers above.
+        // Cell.Grid.Point is a Noggog.P2Int, which a ClassifyLeaf limited to P3Int16/P3Float maps
+        // not at all.
         var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
         var col = schemas["cell"].RecordColumns.FirstOrDefault(c => c.Name == "grid");
         Assert.NotNull(col);
@@ -1797,11 +1701,8 @@ public class SchemaReflectorTests
     [Fact]
     public void GetSchemas_Cell_Grid_Extract_ReturnsPointXyValues()
     {
-        // The read side: without Point as a recognized sub-field, Grid's own Extract omits it
-        // from the JSON entirely, because ExtractSubObject only ever walks recognized sub-fields.
-        // (The write-side Grid guard is separate and unaffected: RefuseIfContainmentField gates on
-        // column *existence* by name, not on what's inside it —
-        // EmbeddedChildEditTests.ACellsGrid_IsRefused_SoCellLocationCannotGoStale covers that.)
+        // The read side: without Point as a recognized sub-field, Grid's Extract omits it from the JSON
+        // entirely, because ExtractSubObject only walks recognized sub-fields.
         var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
         var col = schemas["cell"].RecordColumns.First(c => c.Name == "grid");
         var cell = new Cell(FormKey.Factory("000001:Test.esp"), Fallout4Release.Fallout4)
@@ -1819,14 +1720,8 @@ public class SchemaReflectorTests
     [Fact]
     public void GetSchemas_Location_WorldspaceCellsAdded_ElementHasCoordinatesListOfXYSubFields()
     {
-        // LocationCoordinate.Coordinates is IReadOnlyList<Noggog.P2Int16> — a list nested inside a
-        // struct that is itself a list element (Location.WorldspaceCellsAdded is
-        // IReadOnlyList<ILocationCoordinateGetter>), composing the struct-nested-list fix
-        // (GetSubFieldInfo's IsListType arm, proven against Destructible.Resistances/Stages)
-        // with the widened vector-struct set. P2Int16 (2-component, short) is a shape neither
-        // the IslandData.Vertices proof (P3Float, 3-component, list at the top level rather
-        // than nested two deep) nor this file's Cell.Grid.Point proof above (P2Int, not itself
-        // list-shaped) exercises.
+        // LocationCoordinate.Coordinates is a list nested inside a struct that is itself a list
+        // element, composing the struct-nested-list arm with the widened vector-struct set.
         var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
         var col = schemas["lctn"].RecordColumns.FirstOrDefault(c => c.Name == "worldspace_cells_added");
         Assert.NotNull(col);
@@ -1843,11 +1738,9 @@ public class SchemaReflectorTests
     [Fact]
     public void GetSchemas_Location_WorldspaceCellsAdded_Extract_ReturnsCoordinatesXyValues()
     {
-        // The rival this defeats: widening ClassifyLeaf's own top-level/sub-field dispatch alone,
-        // while leaving BuildListColumn's/BuildListElementSubFields' own isVector flag pointed at
-        // the old, narrower set, would leave a list-of-P2Int16 element silently falling through to
-        // the raw/unmapped scalar-element fallback here — a defect this file's Cell.Grid test above
-        // cannot catch, since Grid.Point is a struct sub-field, never a list element.
+        // The rival this defeats: widening ClassifyLeaf's dispatch alone, leaving BuildListColumn's
+        // isVector flag on the narrower set, lets a list-of-P2Int16 element fall through to the
+        // unmapped scalar-element fallback.
         var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
         var col = schemas["lctn"].RecordColumns.First(c => c.Name == "worldspace_cells_added");
         var location = new Location(FormKey.Factory("000001:Test.esp"), Fallout4Release.Fallout4)

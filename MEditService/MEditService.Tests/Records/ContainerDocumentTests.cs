@@ -9,22 +9,8 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Tests.Records;
 
-/// <summary>
-/// ADR-0041: a container record's document holds its
-/// <b>embedded children</b>, because that is what the whole-mod folder-split path — Spriggit's own
-/// output — puts in that record's file. There is no
-/// deep-copy-and-strip step: the parent's file is the child's source unit, and the index's
-/// container_child/placement rows are extracted <i>from</i> the parent rather than replacing it.
-///
-/// The scope of "embedded" is Spriggit's, not ours: <c>Cell.{Persistent,Temporary,Landscape,
-/// NavigationMeshes}</c> and <c>Worldspace.TopCell</c> only. A quest's dialog topics stay
-/// folder-split on both doors, so a quest's document still carries none of them — which is why the
-/// second test below is a quest and reads as "no change" rather than as an oversight.
-///
-/// The subject is found by measurement rather than pinned by FormKey: the curated plugin is
-/// regenerable, so a hardcoded FormKey would silently decay into testing nothing. Every assertion
-/// below is paired with the positive control that such a record actually exists in the corpus.
-/// </summary>
+/// <summary>The scope of "embedded" is Spriggit's, so a quest's document carries none of its
+/// topics. Subjects are measured, since a hardcoded FormKey would decay silently.</summary>
 public sealed class ContainerDocumentTests(CutDownPluginFixture fixture) : IClassFixture<CutDownPluginFixture>
 {
     private readonly CutDownPluginFixture _fixture = fixture;
@@ -39,12 +25,6 @@ public sealed class ContainerDocumentTests(CutDownPluginFixture fixture) : IClas
         return cmd.ExecuteScalar() as string;
     }
 
-    /// <summary>
-    /// A cell whose
-    /// codec bytes carry child records must have exactly those bytes stored against it. Anything that
-    /// introduced a strip — at ingest, or via the child-stream suppression for the
-    /// embedded slots — puts the index out of step with the source file and fails here.
-    /// </summary>
     [Fact]
     public async Task Index_ForACellWithChildren_StoresThemEmbeddedInTheCellsOwnDocument()
     {
@@ -81,12 +61,6 @@ public sealed class ContainerDocumentTests(CutDownPluginFixture fixture) : IClas
         Assert.Empty(missing);
     }
 
-    /// <summary>
-    /// The invariant the whole document shape rests on: what the index stores for a record is
-    /// byte-for-byte what its source file holds. Asserted on a quest — the container Spriggit does
-    /// not embed — so it also pins that dropping the strip did not quietly start inlining the
-    /// folder-split children too.
-    /// </summary>
     [Fact]
     public async Task Index_ForAContainer_StoresTheSameBytesTheSourcePathWould()
     {
@@ -108,10 +82,6 @@ public sealed class ContainerDocumentTests(CutDownPluginFixture fixture) : IClas
         Assert.Equal(System.Text.Encoding.UTF8.GetString(sourceBytes), body);
     }
 
-    /// <summary>
-    /// And the same for the ~95% that are not containers:
-    /// the stored body is the codec's own bytes, with nothing interposed.
-    /// </summary>
     [Fact]
     public async Task Index_ForANonContainer_StoresTheCodecsBytesUnchanged()
     {

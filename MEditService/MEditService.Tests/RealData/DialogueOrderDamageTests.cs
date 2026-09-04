@@ -12,25 +12,9 @@ using Noggog.WorkEngine;
 
 namespace MEditService.Tests.RealData;
 
-/// <summary>
-/// "Order damage", measured against the tree Track <i>actually wrote</i> — not against a
-/// sorted-filename proxy: deserialize the mod from
-/// the tracked source tree exactly the way <see
-/// cref="MEditService.Core.Edits.PluginCompileService"/> does, and compare
-/// each DialogTopic's <c>Responses</c> order there against the original binary's own GRUP order.
-///
-/// <para>Baseline this replaces (measured on this exact fixture): 96 of 283 multi-response DIALs
-/// permuted, 1,540 INFO slots moved, when nothing records the order at all. Expected here: 0 and 0 —
-/// each topic's own document carries its responses' order (ADR-0042 decision 4), and the whole-mod
-/// read door restores it, so writing the tree and reading it back is lossless for order rather than
-/// merely stable.</para>
-///
-/// <para><b>This is the end-to-end assertion that the carrier works, and it is deliberately untouched
-/// by #566 apart from this comment.</b> It never named the mechanism in its assertions — it compares
-/// the written tree against the original binary's own GRUP order — so it went red when the filename
-/// numbering was removed and green again once the parent-document carrier replaced it, without a
-/// single expected value changing.</para>
-/// </summary>
+/// <summary>Order damage measured against the tree Track actually wrote, deserialized the way
+/// <see cref="MEditService.Core.Edits.PluginCompileService"/> does, against the original binary's
+/// own GRUP order. Expected 0 and 0 (ADR-0042 decision 4).</summary>
 public sealed class DialogueOrderDamageTests : IDisposable
 {
     private readonly string _modFolder = Directory.CreateTempSubdirectory("medit-order-damage-").FullName;
@@ -78,9 +62,6 @@ public sealed class DialogueOrderDamageTests : IDisposable
 
     private readonly record struct OrderDamage(int MultiChildParents, int PermutedParents, int MovedSlots);
 
-    /// <summary>The damage metric: two already-obtained child orderings for
-    /// the same set of parents (keyed by <see cref="ParentOrdering.ParentLabel"/>), compared
-    /// slot by slot.</summary>
     private static OrderDamage Measure(
         IReadOnlyDictionary<string, ParentOrdering> expected, IReadOnlyDictionary<string, ParentOrdering> actual)
     {

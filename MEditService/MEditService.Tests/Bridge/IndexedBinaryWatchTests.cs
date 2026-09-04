@@ -3,12 +3,8 @@ using MEditService.Bridge;
 
 namespace MEditService.Tests.Bridge;
 
-/// <summary>
-/// ADR-0001: the runtime mirror. The external-change watcher covers every <i>indexed</i>
-/// binary, the game's own <c>Data/</c> included — not just the tracked ones — and says what actually
-/// happened to it so the index can follow. Real filesystem, real debounce timing, no mocked
-/// <see cref="FileSystemWatcher"/>, matching this file's sibling suite.
-/// </summary>
+/// <summary>The watcher covers every indexed binary, the game's own <c>Data/</c> included, not just
+/// tracked ones (ADR-0001). Real filesystem and debounce timing, no mocked watcher.</summary>
 public sealed class IndexedBinaryWatchTests
 {
     private const string Origin = "Data";
@@ -154,9 +150,8 @@ public sealed class IndexedBinaryWatchTests
         }
     }
 
-    // A change the handler could not apply must not leave the watcher believing the index matches
-    // bytes it never read: the remembered hash goes back, and the next settle reports it again. An
-    // unretried failure would be stale rows nothing on disk backs, silently, until the next load.
+    // The remembered hash goes back on failure, or the watcher believes the index matches bytes it
+    // never read and the stale rows stand silently until the next load.
     [Fact]
     public void AChangeTheHandlerCouldNotApply_IsReportedAgainOnTheNextSettle()
     {
@@ -193,8 +188,8 @@ public sealed class IndexedBinaryWatchTests
         }
     }
 
-    // A watch must not outlive the load order that asked for it, or a plugin the load order no longer
-    // holds would keep re-indexing itself into it.
+    // A watch must not outlive the load order that asked for it, or a plugin the load order has
+    // dropped would keep re-indexing itself into it.
     [Fact]
     public void UnwatchAllIndexed_StopsTheMirror()
     {

@@ -12,11 +12,6 @@ using Noggog.WorkEngine;
 
 namespace MEditService.Tests.Edits;
 
-/// <summary>
-/// <see cref="SpatialContainerMint.BuildSyntheticWorldspaceMod"/> in isolation — no
-/// <see cref="MEditService.Core.Edits.RecordEditService"/> involved, just the builder plus the real
-/// whole-mod serializer it hands its output to.
-/// </summary>
 public sealed class SpatialContainerMintBuilderTests
 {
     private static readonly PluginKey DestinationPlugin = new("Destination.esp", "DestinationMod");

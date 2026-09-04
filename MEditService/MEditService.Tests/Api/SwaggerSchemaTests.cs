@@ -4,11 +4,9 @@ using Microsoft.AspNetCore.Mvc.Testing;
 
 namespace MEditService.Tests.Api;
 
-// OpenAPI 3.0 forbids sibling keywords next to $ref, so Swashbuckle never emits
-// `nullable: true` alongside a bare $ref for a nullable object-typed property. These assert the
-// generated swagger.json directly — the actual contract openapi-typescript/api.ts consumes — via
-// a bare WebApplicationFactory (schema generation needs no loaded load order, matching
-// ProblemDetailsApiTests.Endpoint_NoLoadOrder_ReturnsProblemDetails).
+// OpenAPI 3.0 forbids sibling keywords next to $ref, so Swashbuckle never emits `nullable: true`
+// alongside a bare $ref. The generated swagger.json is asserted directly, since that is the
+// contract openapi-typescript consumes.
 public sealed class SwaggerSchemaTests
 {
     private static async Task<JsonElement> GetSchemaAsync()
@@ -43,11 +41,8 @@ public sealed class SwaggerSchemaTests
             allOf[0].GetProperty("$ref").GetString());
     }
 
-    // No suite-wide declared-vs-thrown ProducesProblem audit exists — this is a route-local
-    // regression guard for CreatePlugin specifically, which has carried an undeclared 503 and,
-    // separately, a second condition that also surfaced as 503 despite meaning something else.
-    // An undeclared status makes Swashbuckle emit `content?: never` for it
-    // (MEditService/CLAUDE.md's endpoint invariant).
+    // An undeclared status makes Swashbuckle emit `content?: never` for it (MEditService's
+    // endpoint invariant). No suite-wide declared-vs-thrown audit exists, so this is route-local.
     [Fact]
     public async Task CreatePluginRoute_DeclaresEveryStatusItsHandlerCanReturn()
     {
@@ -58,11 +53,8 @@ public sealed class SwaggerSchemaTests
         Assert.Equal(new HashSet<string> { "200", "400", "409", "500", "503" }, declared);
     }
 
-    // The same declared-vs-thrown audit CreatePluginRoute's own test above runs, for the two
-    // Copy routes — RecordEndpoints.Refusal only ever emits 409/422/404, and each handler's
-    // own catch blocks add 500/503, so an undeclared status here would mean Swashbuckle silently
-    // emitting `content?: never` for whichever one a client actually hits (MEditService/CLAUDE.md's
-    // endpoint invariant).
+    // RecordEndpoints.Refusal emits 409/422/404 and each handler's catch blocks add 500/503, so
+    // an undeclared status makes Swashbuckle emit `content?: never` for whichever a client hits.
     [Theory]
     [InlineData("/records/{formKey}/copy-as-override")]
     [InlineData("/records/{formKey}/copy-as-new-record")]
@@ -107,16 +99,9 @@ public sealed class SwaggerSchemaTests
         Assert.False(additionalProperties.TryGetProperty("allOf", out _));
     }
 
-    // The discriminating control: `FieldDiff.Resolutions` is
-    // `IReadOnlyDictionary<string, FormKeyResolution>? Resolutions` — the *property* is nullable,
-    // but a dictionary's own schema is inline (not a bare $ref), so OpenAPI 3.0's sibling
-    // restriction never applied to it in the first place: Swashbuckle's own
-    // SupportNonNullableReferenceTypes already puts `nullable: true` directly on it, no allOf
-    // wrap needed or present. The dictionary's *value* type (FormKeyResolution) is not nullable.
-    // An implementation that reads nullability off the property instead of the dictionary's own
-    // second generic type argument would wrap `additionalProperties` here too — and neither test
-    // above would catch it, since one is nullable at both levels and the other at neither. This is
-    // the one case nullable at exactly one of the two levels, and it must land exactly there.
+    // The discriminating control: nullable at exactly one of the two levels. An implementation
+    // reading nullability off the property rather than the dictionary's value type would wrap
+    // `additionalProperties` too, and neither test above is nullable at only one level.
     [Fact]
     public async Task NullablePropertyWithNonNullableDictionaryValue_WrapsOnlyTheProperty()
     {
@@ -137,13 +122,8 @@ public sealed class SwaggerSchemaTests
         Assert.False(additionalProperties.TryGetProperty("allOf", out _));
     }
 
-    // Swashbuckle never reads C#'s nullable-reference-type annotations on its own, so without a
-    // filter no property lands in `required` at all and openapi-typescript types the whole wire
-    // optional-and-nullable — which is what the frontend used to hand-compensate for, field by
-    // field. The rule is exactly one-directional: a non-nullable CLR property is required, a
-    // nullable one is not. Asserted as the *exact* set rather than a containment, so a filter that
-    // over-marks (sweeping a genuinely nullable property in) fails as loudly as one that
-    // under-marks.
+    // Swashbuckle never reads C#'s nullable-reference-type annotations, so without a filter no
+    // property lands in `required` and the whole wire types optional-and-nullable.
     [Theory]
     // PluginResponse: every member is non-nullable except LoadOrderIndex (`int?` — ADR-0044's
     // honest null for a copy no plugins.txt line names), which must stay optional.
@@ -170,11 +150,9 @@ public sealed class SwaggerSchemaTests
             required.EnumerateArray().Select(e => e.GetString()!).ToHashSet());
     }
 
-    // `required` is only half of "non-nullable". A property can be required *and* nullable, which
-    // openapi-typescript renders `name: string | null` — still forcing every consumer to unwrap a
-    // null the C# `string Name` can never actually be. Swashbuckle marks every reference-typed
-    // property nullable unless told otherwise, so this covers the reference types specifically;
-    // value types (`bool`, `int`) were never described as nullable and need no assertion.
+    // A property can be required and nullable, which openapi-typescript renders `string | null`,
+    // forcing consumers to unwrap a null the C# member cannot be. Swashbuckle marks reference
+    // types nullable unless told otherwise; value types are never described that way.
     [Theory]
     [InlineData("PluginResponse", "name")]
     [InlineData("PluginResponse", "origin")]
@@ -209,15 +187,8 @@ public sealed class SwaggerSchemaTests
             $"{schemaName}.{propertyName} is a nullable C# member but the schema does not say so.");
     }
 
-    // Swashbuckle's schema generator only honors a per-enum [JsonConverter] attribute — never the
-    // global ConfigureHttpJsonOptions converter Program.cs registers — so an enum missing that
-    // attribute is *described* as a numeric union while the wire actually carries strings, and a
-    // client is forced to distrust its own generated type. Every enum that reaches the wire is
-    // listed here. expectedMembers is the string-enum member names written out, not read from the
-    // CLR type at runtime, so a renamed member fails rather than silently redefining the contract.
-    //
-    // WireEnumSerializationTests pins the other half: that adding the attribute changes only the
-    // description and never the bytes.
+    // Swashbuckle honors only a per-enum [JsonConverter] attribute, never the global converter, so
+    // an enum missing it is described as numeric while the wire carries strings.
     [Theory]
     [InlineData("WorkingTreeState", new[] { "None", "Modified", "Added" })]
     [InlineData("TrackPhase", new[] { "Idle", "Parsing", "Serializing", "Committing" })]

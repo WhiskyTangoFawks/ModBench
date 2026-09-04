@@ -9,13 +9,8 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Tests.Api;
 
-/// <summary>
-/// ADR-0001: the runtime mirror, wired the way the composition root wires it — a real
-/// load order, the real <see cref="ExternalChangeWatcher"/>, the real
-/// <see cref="ExternalChangeLoadOrderHook"/> deciding which plugins get an index-mirror watch, and
-/// <see cref="IndexMirror"/> turning each disk event into an index verb. What is asserted is what
-/// the load order <i>answers</i> afterwards, while the backend runs, with no reload anywhere in the test.
-/// </summary>
+/// <summary>Wired the way the composition root wires it (ADR-0001); what is asserted is what the
+/// load order answers afterwards, while the backend runs, with no reload anywhere.</summary>
 public sealed class IndexMirrorTests
 {
     private static void WaitUntil(Func<bool> condition, TimeSpan timeout)
@@ -38,8 +33,6 @@ public sealed class IndexMirrorTests
         return watcher;
     }
 
-    /// <summary>Rewrites the fixture's binary with one extra NPC — a genuine content change by some
-    /// other tool, not a touch.</summary>
     private static void RewriteBinaryWithExtraNpc(TrackedModFixture fixture, string editorId)
     {
         var mod = new Fallout4Mod(
@@ -100,8 +93,7 @@ public sealed class IndexMirrorTests
 
         WaitUntil(() => watcher.Unanswered().Count > 0, TimeSpan.FromSeconds(5));
         Assert.NotEmpty(watcher.Unanswered());
-        // Well past the debounce window, so "no mirror event" is a decision rather than a race: a
-        // mirror watch that had been registered would have settled by now too.
+        // Well past the debounce window, so "no mirror event" is a decision rather than a race.
         Thread.Sleep(500);
         lock (mirrored) Assert.Empty(mirrored);
         Assert.DoesNotContain("ChangedByXEdit", EditorIds(fixture, fixture.Plugin));

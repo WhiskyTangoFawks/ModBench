@@ -3,14 +3,8 @@ using System.Runtime.InteropServices;
 
 namespace MEditService.Tests.TestSupport;
 
-/// <summary>
-/// Another <i>process</i> holding an index file — what a second Modbench window is. It has
-/// to be a process: DuckDB's file lock is per process, and DuckDB.NET shares one database instance
-/// per path inside a process, so a second connection from this test host would simply join the
-/// first. The holder is <c>python3</c> calling <c>duckdb_open</c> on the test output's own
-/// <c>libduckdb</c> through <c>ctypes</c> — the same library, no extra project — kept open until
-/// disposed. Tests that need it carry <see cref="ForeignIndexHolderFactAttribute"/>.
-/// </summary>
+/// <summary>Another process holding an index file. It has to be a process: DuckDB's lock is per
+/// process and DuckDB.NET shares one instance per path, so a connection would join.</summary>
 public sealed class ForeignIndexHolder : IDisposable
 {
     private const string Script = """
@@ -30,9 +24,6 @@ public sealed class ForeignIndexHolder : IDisposable
 
     private ForeignIndexHolder(Process process) => _process = process;
 
-    /// <summary>Opens <paramref name="indexPath"/> in a second process and returns once it is held.
-    /// Throws if the other process could not take it — a test that asked for a held file must not
-    /// silently run against an unheld one.</summary>
     public static ForeignIndexHolder Hold(string indexPath)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(indexPath)!);
@@ -61,8 +52,6 @@ public sealed class ForeignIndexHolder : IDisposable
         return new ForeignIndexHolder(process);
     }
 
-    /// <summary>Kills the holder; the OS releases DuckDB's lock with the process. Idempotent, so a
-    /// test can close the other window mid-story and still leave the <c>using</c> in place.</summary>
     public void Dispose()
     {
         if (_disposed) return;

@@ -9,18 +9,9 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Tests.Edits;
 
-/// <summary>
-/// The binary-level guard for exterior-cell copy. A source-tree-shape check alone (assert a file
-/// exists at some computed path) only proves this feature's own writer believes it wrote the right
-/// path — it cannot catch a write/reader naming mismatch, where the folder looks right by string
-/// comparison but the whole-mod door's own reader (the same one <see cref="PluginCompileService"/>
-/// uses to compile) either silently drops the cell (a <c>P2Int16.TryParse</c> failure on the folder
-/// name returns <see langword="default"/>, filtered out by <c>.NotNull()</c> with no error) or parses
-/// it into a different real block/sub-block bucket than the one it was written under. Only decoding
-/// the actual compiled binary and finding the REFR nested under the block/sub-block <i>matching the
-/// source's own numbers</i> — not merely "some" pair, and not merely "compiled without throwing" —
-/// catches both failure modes; a source-tree-shape assertion passes on all of them.
-/// </summary>
+/// <summary>A source-tree-shape check only proves the writer believes its path; only decoding the
+/// compiled binary and finding the REFR under the block/sub-block matching the source's own numbers
+/// catches a writer/reader naming mismatch.</summary>
 public sealed class ExteriorCellCopyCompileTests : IDisposable
 {
     private readonly ContainerCopyFixture _fixture = ContainerCopyFixture.Create();
@@ -69,10 +60,9 @@ public sealed class ExteriorCellCopyCompileTests : IDisposable
         Assert.DoesNotContain(compiledCell.Temporary, r => r.FormKey == _fixture.ExteriorTemporaryRef);
     }
 
-    // #597 shape 1 — the destination already overrides the WRLD (from a prior copy) but neither the
-    // target block nor sub-block. The second copy lands its new block/sub-block *inside* the one
-    // existing worldspace directory (never a sibling dir for the same WRLD), and the compiled binary
-    // carries both cells under their own distinct blocks.
+    // #597 shape 1: the destination overrides the WRLD but neither the target block nor sub-block.
+    // The second copy lands its new block/sub-block inside the one existing worldspace directory,
+    // never a sibling dir for the same WRLD.
     [Fact]
     public void CopyExteriorCell_WhenDestinationAlreadyOverridesTheWorldspaceOnly_LandsInsideTheExistingWorldspaceDirectory()
     {
@@ -111,10 +101,8 @@ public sealed class ExteriorCellCopyCompileTests : IDisposable
             c => c.FormKey == _fixture.ExteriorCell);
     }
 
-    // #597 shape 2 — the destination already overrides the WRLD and the target block; only the
-    // sub-block (and the cell) are new. The compiled block is one block carrying both sub-blocks —
-    // a sibling block directory for the same coordinates would compile into two blocks, or fail
-    // the round-trip gate outright.
+    // #597 shape 2: only the sub-block and the cell are new. The compiled block is one block carrying
+    // both sub-blocks; a sibling block directory would compile into two, or fail the round-trip gate.
     [Fact]
     public void CopyExteriorCell_WhenDestinationAlreadyOverridesTheBlock_CreatesTheSubBlockInsideIt()
     {
@@ -145,9 +133,8 @@ public sealed class ExteriorCellCopyCompileTests : IDisposable
         Assert.Contains(newSub.Items, c => c.FormKey == _fixture.SameBlockCell);
     }
 
-    // #597 shape 3 — WRLD, block and sub-block all exist; the copy adds exactly one new cell
-    // directory inside the existing sub-block and changes nothing else in the tree: every
-    // pre-existing file (the worldspace's own document included) keeps its exact bytes.
+    // #597 shape 3: WRLD, block and sub-block all exist, so the copy adds exactly one cell directory
+    // inside the existing sub-block and every pre-existing file keeps its exact bytes.
     [Fact]
     public void CopyExteriorCell_WhenDestinationAlreadyOverridesTheSubBlock_AddsTheCellAndTouchesNothingElse()
     {
@@ -167,11 +154,9 @@ public sealed class ExteriorCellCopyCompileTests : IDisposable
         var after = Directory
             .EnumerateFiles(_fixture.DestinationSourceRoot, "*", SearchOption.AllDirectories)
             .ToDictionary(f => f, File.ReadAllBytes);
-        // Every existing file is byte-identical except the sub-block's own GroupRecordData.json, which
-        // must change: it carries the ordered child list the new cell has to join (ADR-0042 decision
-        // 4), and a cell directory its parent does not name is drift the next read refuses. That one
-        // document is the whole cost of "touches nothing else" — no sibling cell is rewritten or
-        // renamed, which is the property this test is really about.
+        // The sub-block's GroupRecordData.json must change: it carries the ordered child list the new cell
+        // has to join (ADR-0042 decision 4), and a cell directory its parent does not name is drift the
+        // next read refuses.
         foreach (var (path, bytes) in before)
         {
             Assert.True(after.ContainsKey(path), $"{path} disappeared");
@@ -218,8 +203,6 @@ public sealed class ExteriorCellCopyCompileTests : IDisposable
         Assert.Single(compiledCells);
     }
 
-    /// <summary>Compile the destination and import the resulting binary — every #597 assertion ends
-    /// at the wire, per this class's own doc comment.</summary>
     private IFallout4ModGetter ImportCompiled()
     {
         var compileResult = CompileService().Compile(_fixture.DestinationPlugin, new CompileSource.WorkingTree());

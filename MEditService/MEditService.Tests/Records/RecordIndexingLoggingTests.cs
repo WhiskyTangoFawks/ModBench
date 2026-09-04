@@ -9,11 +9,9 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Tests.Records;
 
-// A per-plugin summary line duplicates the per-plugin progress milestone LoadOrderMirror already
-// logs at Info, so it logs at Debug here; individual record processing during indexing logs at
-// Trace. Indexing *behavior* (rows land correctly) is covered by DuckDbRecordIndexTests, which
-// remains the safety net for this reclassification; this file only asserts on log level and
-// content, which that suite does not.
+// A per-plugin summary line duplicates the progress milestone LoadOrderMirror logs at Info, so it
+// logs at Debug and per-record processing logs at Trace. Only log level and content are asserted
+// here; DuckDbRecordIndexTests covers whether the rows land.
 public sealed class RecordIndexingLoggingTests : IDisposable
 {
     private static readonly SchemaReflector Reflector = SharedSchemaReflector.Instance;

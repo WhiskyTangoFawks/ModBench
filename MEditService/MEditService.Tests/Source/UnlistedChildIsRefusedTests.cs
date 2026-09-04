@@ -6,22 +6,9 @@ using Noggog.WorkEngine;
 
 namespace MEditService.Tests.Source;
 
-/// <summary>
-/// The drift ADR-0042 decision 4 refuses, asserted rather than described: a folder-split child on
-/// disk that its parent's ordered child list does not name.
-///
-/// <para>This is the one genuinely new failure mode #566 introduces, and the refusal has to be worth
-/// having — it fires on every read of the plugin, so it must name the parent and the offending
-/// children precisely enough to act on. "Re-Track" is only useful advice if the author can see what
-/// went wrong.</para>
-///
-/// <para><b>The two directions are deliberately not symmetric, which is the other half of what this
-/// pins.</b> A listed child with no file is honoured as a deletion, because deleting the file is how
-/// a record is deleted by hand under ADR-0041's git-native model. Only the reverse — a file nothing
-/// can place — is refused, because appending it would invent a position, and for
-/// <c>DialogTopic.Responses</c> an invented position is a gameplay change rather than a cosmetic
-/// one.</para>
-/// </summary>
+/// <summary>Deliberately asymmetric (ADR-0042 decision 4): a listed child with no file is a
+/// hand deletion, while a file nothing can place is refused, appending inventing a
+/// position.</summary>
 public sealed class UnlistedChildIsRefusedTests(CompileRoundTripGateFixture fixture)
     : IClassFixture<CompileRoundTripGateFixture>
 {
@@ -57,8 +44,6 @@ public sealed class UnlistedChildIsRefusedTests(CompileRoundTripGateFixture fixt
         }
     }
 
-    /// <summary>The mirror image, and the reason this class asserts both: removing the <i>file</i>
-    /// rather than the list entry is a deletion, not corruption, and must read cleanly.</summary>
     [Fact]
     public async Task AResponseFileRemovedByHand_IsHonouredAsADeletion_NotRefused()
     {

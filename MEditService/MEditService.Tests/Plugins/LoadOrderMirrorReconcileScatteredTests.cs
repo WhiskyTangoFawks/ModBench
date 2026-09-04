@@ -80,10 +80,7 @@ public sealed class LoadOrderMirrorReconcileScatteredTests
         Assert.NotEmpty(firstRepo!.GetRecordTypeCounts(new PluginKey("A.esp", "Data")));
     }
 
-    // A single plugin whose binary data Mutagen can't parse (e.g. a malformed
-    // PerkEntryPointAddActivateChoice missing its EPF3 record) must not abort the whole load
-    // order — mirrors the existing per-plugin isolation around ModFactory.ImportGetter in
-    // LoadOrder, extended to the indexing stage.
+    // A single plugin whose binary data Mutagen can't parse (e.g.
     [Fact]
     public void Reconcile_OnePluginFailsToIndex_OthersStillLoadAndFailureIsReported()
     {

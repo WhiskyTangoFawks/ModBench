@@ -43,15 +43,8 @@ public sealed class ProblemDetailsApiTests(LoadedApiFixture<TestPluginFixture> l
         AssertIsProblemDetails(resp, 400);
     }
 
-    // A syntactically valid GameRelease this build has no Mutagen assembly for (SkyrimSE,
-    // genuinely unreferenced — see SchemaReflectorAvailabilityTests) is a client error, not a
-    // server fault: 400 with the typed, actionable message, not a 500 wrapping an assembly-load
-    // exception. Game directory/instance root are the fixture's real (FO4) paths, never actually read —
-    // LoadOrderMirror.RunLoad's BeginLoad unconditionally tears down whatever load order was
-    // previously loaded before the new load's assembly-support probe even runs, so this uses its
-    // own isolated WebApplicationFactory (same pattern as Endpoint_NoLoadOrder_ReturnsProblemDetails
-    // below) rather than the shared LoadedApiFixture's client — reusing that client here would
-    // silently dispose the fixture's load order out from under every other test in this class.
+    // A GameRelease with no Mutagen assembly is a client error, not a server fault. Its own
+    // factory: BeginLoad tears down the loaded load order before the support probe runs.
     [Fact]
     public async Task PutLoadOrder_UnsupportedGameRelease_ReturnsProblemDetails400WithActionableMessage()
     {
@@ -87,9 +80,9 @@ public sealed class ProblemDetailsApiTests(LoadedApiFixture<TestPluginFixture> l
         AssertIsProblemDetails(resp, expectedStatus);
     }
 
-    // A name that collides with an already-created plugin at the same destination — the
-    // fixture's own already-listed plugin lives in the Data directory, not a mod folder, so this
-    // creates the destination's first plugin, then collides with it.
+    // A name that collides with an already-created plugin at the same destination. The fixture's own
+    // listed plugin lives in the Data directory, so this creates the destination's first plugin,
+    // then collides.
     [Fact]
     public async Task CreatePlugin_DuplicateAtSameDestination_ReturnsProblemDetails409()
     {

@@ -8,17 +8,9 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Tests.Records;
 
-/// <summary>
-/// What a working-tree change does to everything the read model <i>derives</i> from a
-/// document, rather than to the document itself — winner status, FormKey resolution and the
-/// reference graph. A body is not just bytes to serve back: it is the thing every extracted index
-/// table was built from, so an edit that updates one and not the others leaves the read model
-/// disagreeing with itself.
-///
-/// A <see langword="null"/> body is the deletion case (per the pinned seam contract), which is the
-/// sharpest version of every question here: the record has to stop existing at Effective — winner,
-/// lookup, references and all — while still answering at Head.
-/// </summary>
+/// <summary>A body is what every extracted index table was built from, so an edit that updates one
+/// and not the others leaves the read model disagreeing with itself; a null body (deletion) is the
+/// sharpest case.</summary>
 public sealed class WorkingTreeDeletionTests : IDisposable
 {
     private static readonly SchemaReflector Reflector = SharedSchemaReflector.Instance;
@@ -94,9 +86,8 @@ public sealed class WorkingTreeDeletionTests : IDisposable
         using var index = LoadedIndex();
         Assert.Equal("Winner.esp", index.At(RecordRef.Effective).GetDocument(_npc)!.Plugin.Name);
 
-        // Winner.esp's copy of the NPC is deleted in *its* working tree; Base.esm's copy is untouched
-        // and must become the winner — a record's winner is a fact about the stack that survives at
-        // this ref, not a stored flag that goes stale when the stack changes underneath it.
+        // Winner.esp's copy is deleted in its working tree and Base.esm's must become the winner: a
+        // winner is a fact about the stack that survives at this ref, not a stored flag that goes stale.
         index.ApplyWorkingTreeChanges(WinnerKey, [(_npc, null)]);
 
         var effectiveWinner = index.At(RecordRef.Effective).GetDocument(_npc);
@@ -122,12 +113,8 @@ public sealed class WorkingTreeDeletionTests : IDisposable
         index.ApplyWorkingTreeChanges(WinnerKey, [(_npc, null)]);
         Assert.Equal("Base.esm", index.At(RecordRef.Effective).GetDocument(_npc)!.Plugin.Name);
 
-        // ...and then the file comes back, carrying a *different* value than the commit had. This is
-        // the direction a create takes too: a row that does not exist at Effective appears, and its
-        // appearance has to move winner status — the mirror of the deletion case above, and the one
-        // the design named ("a working-tree create adding an override can flip the Effective
-        // winner"). An implementation that re-swept winners only when a row was removed passes the
-        // deletion test and fails this one.
+        // ...and then the file comes back carrying a different value, the direction a create takes
+        // too, so its appearance has to move winner status.
         var edited = winnersCopy.Replace("TestNpc", "RestoredByWorkingTree", StringComparison.Ordinal);
         Assert.NotEqual(winnersCopy, edited);
         index.ApplyWorkingTreeChanges(WinnerKey, [(_npc, edited)]);

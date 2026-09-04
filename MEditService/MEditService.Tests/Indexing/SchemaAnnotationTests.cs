@@ -5,12 +5,8 @@ using Mutagen.Bethesda.Fallout4;
 
 namespace MEditService.Tests.Indexing;
 
-/// <summary>
-/// #698: every hand-written per-game fact the reflector needs is an entry in
-/// <see cref="SchemaAnnotations"/>, validated when the game's schema is built. An entry naming a
-/// type or member reflection did not find fails schema generation and names the entry, so a
-/// Mutagen rename can never leave a stale annotation silently doing nothing.
-/// </summary>
+/// <summary>An annotation naming a type or member reflection did not find fails schema generation,
+/// so a Mutagen rename can never leave a stale annotation silently doing nothing.</summary>
 public sealed class SchemaAnnotationTests
 {
     private static void AssertFailsNaming(SchemaReflector reflector, string entry)
@@ -51,9 +47,9 @@ public sealed class SchemaAnnotationTests
     [InlineData("INoSuchGetter", "Properties", "name", "INoSuchGetter.Properties")]
     // The member resolves but is not a list at all — a key means nothing without elements to key.
     [InlineData("IScriptEntryGetter", "Name", "name", "IScriptEntryGetter.Name is not a list")]
-    // The list resolves; the key names a member its element does not have. This is the one that
-    // fails quietly without validation: every element would share the empty key, collapsing the
-    // array to one compare row and refusing every second element as a duplicate on write.
+    // The key names a member its element does not have. This fails quietly without validation: every
+    // element would share the empty key, collapsing the array to one compare row and refusing every
+    // second element as a duplicate on write.
     [InlineData("IScriptEntryGetter", "Properties", "no_such_key", "names key no_such_key, which IScriptPropertyGetter does not reach at no_such_key")]
     // A key that reaches a list rather than a value — one element, one key.
     [InlineData("IAVirtualMachineAdapterGetter", "Scripts", "properties", "which is itself a list")]
@@ -83,9 +79,9 @@ public sealed class SchemaAnnotationTests
         AssertFailsNaming(reflector, "INoSuchGetter");
     }
 
-    // #692: a SiblingsInUse row is three claims about the assembly at once — the governing member
-    // exists, its own domain has the values the map is keyed by, and the members it names are real.
-    // Each is validated, because a row wrong in any of the three would silently govern nothing.
+    // A SiblingsInUse row is three claims about the assembly at once: the governing member exists, its
+    // domain has the values the map is keyed by, and the members it names are real. One wrong claim
+    // would silently govern nothing.
 
     [Theory]
     [InlineData("IFunctionConditionDataGetter", "NoSuchMember")]
@@ -128,9 +124,6 @@ public sealed class SchemaAnnotationTests
         AssertFailsNaming(reflector, "IConditionDataGetter.RunOnType names value NoSuchRunOn, which RunOnType does not have");
     }
 
-    /// <summary>The direction that fails quietly rather than loudly: a value the row does not name
-    /// reads as "nothing in use", which idles every member the row governs, so the reference walk
-    /// would silently stop seeing them.</summary>
     [Fact]
     public void SiblingsInUse_OmittingAValueTheDomainHas_FailsSchemaGenerationNamingTheEntry()
     {

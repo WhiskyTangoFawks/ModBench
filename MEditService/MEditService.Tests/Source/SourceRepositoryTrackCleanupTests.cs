@@ -2,21 +2,8 @@ using MEditService.Core.Source;
 
 namespace MEditService.Tests.Source;
 
-/// <summary>
-/// ADR-0041: Track is one transaction from the caller's view — a failure
-/// mid-Track leaves no half-repo. Forces a real failure partway through (a pristine file whose
-/// directory collides with an existing file, so <c>Directory.CreateDirectory</c> throws) and
-/// asserts nothing survives. Positive control alongside it: a normal successful Track in the same
-/// file proves the absence check isn't just "Track never leaves .git behind" vacuously.
-///
-/// <para><b>Cleanup scope:</b> deleting only <c>.git</c> would orphan the <c>.gitignore</c>
-/// written directly into the mod folder before the commit, and
-/// the <c>pristineFiles</c> tree under <c>source/</c> for exactly the same reason — both are
-/// written before <c>add</c>/<c>commit</c> ever run. <see cref="Track_FailureMidway_LeavesNoGitDirectoryBehind"/>
-/// covers the former; <see cref="Track_FailureAfterPartialSourceWrite_LeavesNoSourceResidue"/> covers
-/// the latter with a *partial* tree (one file already landed for real before the second one poisons
-/// the write loop), proving cleanup removes what's already on disk, not just an empty folder.</para>
-/// </summary>
+/// <summary>Cleanup removes more than <c>.git</c>: the <c>.gitignore</c> and the pristine tree under
+/// <c>source/</c> are written before <c>add</c>/<c>commit</c> ever run.</summary>
 public sealed class SourceRepositoryTrackCleanupTests
 {
     private static string NewModFolder() => Directory.CreateTempSubdirectory("medit-track-cleanup-").FullName;
@@ -51,10 +38,9 @@ public sealed class SourceRepositoryTrackCleanupTests
         var modFolder = NewModFolder();
         try
         {
-            // "Poison" pristine file: its own relative path names a directory segment that is
-            // already a plain file on disk in modFolder, so Directory.CreateDirectory throws
-            // IOException/DirectoryNotFoundException partway through Track's write loop — after
-            // `git init` has already run, exactly the half-done state the cleanup must undo.
+            // "Poison" pristine file: its relative path names a directory segment already a plain file on
+            // disk, so Directory.CreateDirectory throws partway through Track's write loop, after `git init`
+            // has run: the half-done state cleanup must undo.
             File.WriteAllText(Path.Combine(modFolder, "Poison"), "not a directory");
             var poisonedFile = new PristineFile(Path.Combine("Poison", "record.json"), "{}"u8.ToArray());
 
@@ -76,11 +62,9 @@ public sealed class SourceRepositoryTrackCleanupTests
         var modFolder = NewModFolder();
         try
         {
-            // First entry writes for real (proving something legitimate landed on disk before the
-            // failure) under source/Test.esp/npc_/000001.json. Second entry's own directory segment
-            // ("weap_") is pre-poisoned as a plain file *inside* the source tree itself, so
-            // Directory.CreateDirectory throws mid-loop, after real pristine content already exists
-            // under source/ — exactly the partial-tree residue a failed Track once left on disk.
+            // The first entry writes for real, so something legitimate lands on disk before the
+            // failure; the second entry's directory segment is pre-poisoned as a plain file inside
+            // the source tree.
             Directory.CreateDirectory(Path.Combine(modFolder, "source", "Test.esp"));
             File.WriteAllText(Path.Combine(modFolder, "source", "Test.esp", "weap_"), "not a directory");
 

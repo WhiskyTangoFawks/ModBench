@@ -7,13 +7,8 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Tests.Edits;
 
-/// <summary>
-/// RecordFieldWriter.TryApply's own dispatch guards, exercised directly via
-/// InternalsVisibleTo rather than through RecordEditService.EditField's full load order/tracked-mod
-/// machinery — these are pure dispatch-routing questions with no working-tree side effects to
-/// observe, so the lighter seam is the right one (per /tdd: test at the seam that matches what's
-/// being proven).
-/// </summary>
+/// <summary>Exercised directly via InternalsVisibleTo: these are pure dispatch-routing questions
+/// with no working-tree side effects, so the lighter seam is the right one.</summary>
 public sealed class RecordFieldWriterTests
 {
     private static JsonElement J(string raw) => JsonDocument.Parse(raw).RootElement;
@@ -50,11 +45,8 @@ public sealed class RecordFieldWriterTests
         Assert.Equal(0, cell.MajorRecordFlagsRaw);
     }
 
-    // The rival design gates on Mutagen's own
-    // static IsPartialFormable reflection instead of PartialFormFlag's container-type gate. FO4's
-    // Cell is not wired up for that static property (PartialFormFlag.cs's own doc) — a reflection
-    // gate would wrongly refuse it. Guarded by asserting success on exactly the type the
-    // real-world case names (Sim Settlements 2's Partial Form Cell overrides).
+    // The rival gates on Mutagen's static IsPartialFormable reflection instead of PartialFormFlag's
+    // container-type gate.
     [Fact]
     public void TryApply_IsPartialForm_OnNonPartialFormableType_ReturnsNotFound()
     {

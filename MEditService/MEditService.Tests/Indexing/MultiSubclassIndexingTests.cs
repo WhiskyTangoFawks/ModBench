@@ -10,15 +10,9 @@ using Noggog;
 
 namespace MEditService.Tests.Indexing;
 
-// A GRUP signature backed by several concrete Mutagen subclasses (the type
-// discriminant lives on the record — an EditorID prefix for GameSetting/Global, a subrecord for
-// others — never on the table) must not take its schema from whichever subclass schema discovery
-// happens to enumerate first — that leaves every record of any other subclass indexed with no value.
-//
-// These round-trip the real Index -> query pipeline (SchemaReflectorTests' Extract-only test
-// covers the same defect at the schema seam without a database); this one also exercises DDL
-// (TableDdlBuilder building the widened column) and the read-side coercion (CoerceToColumnType's
-// VARCHAR branch).
+// A GRUP signature backed by several concrete subclasses, discriminated per record rather than per
+// table, must not take its schema from whichever subclass discovery enumerates first: that leaves
+// every record of any other subclass indexed with no value.
 public class MultiSubclassIndexingTests
 {
     private static readonly SchemaReflector Reflector = SharedSchemaReflector.Instance;
@@ -41,16 +35,6 @@ public class MultiSubclassIndexingTests
     }
 
 
-    /// <summary>
-    /// These round trips go through the typed read rather than SQL, because that is where the
-    /// capability lives. The widened column (gmst/glob `data`) and the split/merged
-    /// columns are deliberately absent from the generated views — a widened column's document holds
-    /// a number for one sibling and a string for another, so no single cast could serve them all,
-    /// and the rule is no column rather than a broken one. The typed path has no such problem: it
-    /// reconstitutes the record to its own concrete type (the document names it) and runs the same
-    /// dispatching extractor, so this asserts the same defect at the surface that
-    /// still answers for it — and, in passing, that reconstitution picks the right subclass.
-    /// </summary>
     private static Dictionary<string, object?> FieldByEditorId(DuckDbRecordIndex repo, string table, string field)
     {
         var result = new Dictionary<string, object?>(StringComparer.Ordinal);
@@ -118,11 +102,8 @@ public class MultiSubclassIndexingTests
     [Fact]
     public void Index_Omod_AllSubclasses_PropertiesColumnRoundTripsForEveryType()
     {
-        // SchemaReflectorTests' schema/Extract-seam tests cover the same defect without a
-        // database; this one also exercises DDL (TableDdlBuilder building the merged array column)
-        // and the read-side coercion (CoerceToColumnType's VARCHAR branch) for every one of OMOD's five concrete
-        // subclasses in one real Index -> query round trip, same rationale as GMST/GLOB above:
-        // the defect is invisible if only the discovery-winning subclass is checked.
+        // The same defect for OMOD's five concrete subclasses, in one real Index-to-query round trip. It
+        // is invisible if only the discovery-winning subclass is checked.
         var mod = new Fallout4Mod(ModKey.FromFileName("Omod339.esp"), Fallout4Release.Fallout4);
 
         var armor = new ArmorModification(mod.GetNextFormKey("ArmorMod"), Fallout4Release.Fallout4) { EditorID = "ArmorMod" };
@@ -162,21 +143,8 @@ public class MultiSubclassIndexingTests
     [Fact]
     public void Index_Dmgt_ConflictingListSiblings_DoesNotCrashAndWinnersOwnShapeColumnStaysReadable()
     {
-        // DMGT is a second real example of the *non-scalar* carve-out, not
-        // the clean additive case it looks like at first glance: DamageType's own DamageTypes
-        // (ExtendedList<DamageTypeItem>, a struct list, always non-null) and DamageTypeIndexed's
-        // DamageTypes (ExtendedList<uint>?, a plain scalar list) share a column name but conflict
-        // in element shape. This round-trips both subclasses through the real Index/query pipeline
-        // to prove indexing a plugin containing both siblings does not crash, and that the
-        // discovery winner's own data is still readable.
-        //
-        // Column naming is shape-based (`damage_types` is always the struct shape,
-        // `actor_value_indices` always the scalar shape) precisely so a
-        // Mutagen package bump reordering reflection metadata can never silently rename a
-        // production DuckDB column that the frontend and user-written SQL filters depend on — see
-        // SplitNonScalarByShape's own comment. So there is no single "winner's column" name to
-        // hardcode; the column is looked up by shape (DmgtSplitColumns, the same mechanism
-        // SchemaReflectorTests' split test uses) rather than assumed by name.
+        // DMGT is a second non-scalar carve-out, not the additive case it looks like: the siblings'
+        // DamageTypes share a column name but conflict in element shape.
         var mod = new Fallout4Mod(ModKey.FromFileName("Dmgt263.esp"), Fallout4Release.Fallout4);
         var plain = new DamageType(mod, "TestPlainDmgt");
         mod.DamageTypes.Add(plain);
@@ -205,14 +173,8 @@ public class MultiSubclassIndexingTests
     [Fact]
     public void Index_Dmgt_BothSubclasses_EachRoundTripsThroughItsOwnShapeColumn()
     {
-        // Distinct from the test above, and does not overlap it — that one pins
-        // "the discovery winner's own data stays readable"; this one pins the guarantee
-        // that a DamageType record *and* a DamageTypeIndexed record each land in their own shape
-        // column through the real Index -> DuckDB -> query pipeline (DDL for both split columns,
-        // the appender for both), with the *other* column reading null for that row rather than
-        // throwing. They fail for different reasons: a regression that kept both split columns but
-        // only ever populated the discovery winner's would still pass the test above
-        // (which never looks at the non-winner's column at all) while failing this one.
+        // Distinct from the test above: a regression keeping both split columns but populating only the
+        // discovery winner's would still pass that one, which never looks at the non-winner's column.
         var mod = new Fallout4Mod(ModKey.FromFileName("DmgtSplit339.esp"), Fallout4Release.Fallout4);
         var structShaped = new DamageType(mod, "PlainDmgt339");
         structShaped.DamageTypes.Add(new DamageTypeItem

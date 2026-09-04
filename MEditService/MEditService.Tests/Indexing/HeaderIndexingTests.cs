@@ -13,15 +13,8 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Tests.Indexing;
 
-// #631: the plugin header is an ordinary `records` row at the synthetic FormKey
-// `000000:<plugin>`, whose body is the whole-mod door's root RecordData.json. It still bypasses the
-// major-record indexing loop (a ModHeader is never an IMajorRecordGetter) via HeaderIndexer, but
-// that is now the only thing special about it — it carries record_type/ref/body/content_hash like
-// every other row, and is read back through the ordinary document path.
-//
-// These assertions are deliberately expressed against `records` and the read model rather than
-// against a per-type table's columns, which is the whole point of the change: the shape they used to
-// pin (SELECT author FROM header) no longer exists to be pinned.
+// The plugin header is an ordinary `records` row at the synthetic FormKey `000000:<plugin>`, whose
+// body is the whole-mod door's root RecordData.json.
 public class HeaderIndexingTests
 {
     private static readonly SchemaReflector Reflector = SharedSchemaReflector.Instance;
@@ -83,17 +76,6 @@ public class HeaderIndexingTests
         Assert.Equal(SourceRef.Committed, row["ref"]);
     }
 
-    /// <summary>
-    /// The row's body is the whole-mod door's root document, not some re-rendering of it — and its
-    /// content_hash is the git object name of exactly those bytes, which is what lets a tracked
-    /// plugin's header be compared against its own source file in one ref read.
-    ///
-    /// <para>The hash is checked against <c>GitBlobHash.Of</c> rather than against real
-    /// <c>git hash-object</c>, which would be tautological were that all this rested on — but it is
-    /// not: <c>GitBlobHashTests</c> already pins <c>GitBlobHash.Of</c> against the real git oracle,
-    /// so what this asserts is the claim that is actually open here, that ingest hashes <i>this
-    /// row's own body bytes</i> and not something else.</para>
-    /// </summary>
     [Fact]
     public void Index_Header_BodyIsTheRootDocument_AndContentHashIsItsGitBlobHash()
     {
@@ -117,10 +99,8 @@ public class HeaderIndexingTests
         Assert.Equal(GitBlobHash.Of(Encoding.UTF8.GetBytes(body)), row["content_hash"]);
     }
 
-    // The three fields the record editor renders for a header, read back through the ordinary
-    // document path. These are the same assertions the retired wide table's column tests made — same
-    // values, same types — because the extraction delegates did not change, only the object they run
-    // against (HeaderColumnExtract over the mod the body reads back into).
+    // The three fields the record editor renders for a header, read back through the ordinary document
+    // path: HeaderColumnExtract runs over the mod the body reads back into.
     [Fact]
     public void GetDocument_Header_AuthorField_MatchesModHeaderAuthor()
     {
@@ -170,15 +150,6 @@ public class HeaderIndexingTests
             masters.EnumerateArray().Select(e => e.GetString() ?? "").ToList());
     }
 
-    /// <summary>
-    /// #335/ADR-0038: masters are wholly content-derived at compile time, so the column carries no
-    /// write delegate. Reachable through EditField since #661 (the header is a source unit now, so
-    /// EditField no longer refuses it at SourceUnitNotFound) — a write against masters is refused
-    /// FieldReadOnly, and this pins the leaf guard itself: not because masters gets any special
-    /// treatment (author/flags carry the identical Apply: null, per ReadTimeFreshnessTests'
-    /// EditingAHeaderField_... test), but because this is where the enforcement actually lives —
-    /// see HeaderIndexer.MastersFieldName.
-    /// </summary>
     [Fact]
     public void HeaderSchema_MastersColumn_CarriesNoWriteDelegate()
     {
@@ -203,11 +174,6 @@ public class HeaderIndexingTests
         Assert.Equal(1L, ToLong(rows[0]["c"]));
     }
 
-    /// <summary>
-    /// ADR-0031: exactly one <c>form_lookup</c> row per <c>records</c> row — the header included
-    /// since #631, which is what makes its FormKey resolvable the same way every other one is rather
-    /// than through a lookup of its own.
-    /// </summary>
     [Fact]
     public void Index_Header_GetsItsOwnFormLookupRow_LikeEveryOtherRecord()
     {
@@ -254,8 +220,7 @@ public class HeaderIndexingTests
 
     // ADR-0036: two origins loading the same physical filename — a filename-only delete step would
     // make indexing ModB's copy of a shared-filename plugin silently delete ModA's header row before
-    // inserting ModB's. Mirrors PlacementIndexingTests.GetPlacement_SameFilenameDifferentOrigin_
-    // ScopesToOrigin's origin: "ModA"/"ModB" pattern.
+    // inserting ModB's.
     [Fact]
     public void Index_TwoOrigins_SameFilename_EachGetsOwnHeaderRow_NeitherOverridesTheOther()
     {

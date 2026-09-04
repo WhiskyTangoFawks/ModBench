@@ -6,13 +6,8 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 namespace MEditService.Tests.Edits;
 
-/// <summary>
-/// An unanswered external-change question refuses every gesture on the single
-/// write path (ADR-0041) — checked once, ahead of both doors that path has: the source file
-/// write, and <c>index.ApplyWorkingTreeChanges</c> telling the DB. New edit gestures
-/// through <see cref="RecordEditService"/> must inherit this refusal without adding their
-/// own check.
-/// </summary>
+/// <summary>An unanswered external-change question refuses every gesture on the single write path
+/// (ADR-0041), checked once ahead of both the source write and the index write.</summary>
 public sealed class RecordEditServiceExternalChangeDeferralTests : IDisposable
 {
     private readonly TrackedModFixture _mod = TrackedModFixture.Tracked();
@@ -37,9 +32,6 @@ public sealed class RecordEditServiceExternalChangeDeferralTests : IDisposable
         Assert.Contains("changed outside Modbench", result.Message, StringComparison.Ordinal);
     }
 
-    /// <summary>The write path's <b>first</b> door: refusing must happen before the source file is
-    /// touched at all — the same "no half-applied state" invariant every other refusal in this class
-    /// already holds.</summary>
     [Fact]
     public void EditField_Refuses_BeforeTouchingTheSourceFile()
     {
@@ -52,10 +44,6 @@ public sealed class RecordEditServiceExternalChangeDeferralTests : IDisposable
         Assert.Empty(_mod.GitStatus());
     }
 
-    /// <summary>The write path's <b>second</b> door: refusing must happen before
-    /// <c>index.ApplyWorkingTreeChanges</c> is ever reached, so the DB-backed read model
-    /// (<see cref="RecordRef.Effective"/>) never advances past the last accepted state either — not
-    /// just the file on disk.</summary>
     [Fact]
     public void EditField_Refuses_BeforeTheIndexEverLearnsOfTheAttemptedChange()
     {

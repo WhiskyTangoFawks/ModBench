@@ -12,10 +12,6 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Tests.Source;
 
-/// <summary>
-/// <see cref="SourceRepository.RebaseEditBranch"/>/<see cref="SourceRepository.ContinueRebase"/>
-/// — refuse-over-dirt, a clean replay, and a conflict resolved by hand whose result still compiles.
-/// </summary>
 public sealed class SourceRepositoryRebaseTests : IDisposable
 {
     private readonly TrackedModFixture _mod = TrackedModFixture.Tracked();
@@ -30,16 +26,12 @@ public sealed class SourceRepositoryRebaseTests : IDisposable
 
     private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
 
-    /// <summary>Commits whatever is currently dirty on the edit branch — the ordinary git gesture a
-    /// user takes between edits, giving the branch a real commit to rebase.</summary>
     private void CommitOnEditBranch(string message)
     {
         RunGit("add", "-A");
         RunGit("commit", "-q", "-m", message);
     }
 
-    /// <summary>An upstream update that touches NPC's own HeightMax — the same record the edit
-    /// branch's own commit below also touches, when both tests want a collision.</summary>
     private void AbsorbUpstreamHeightMaxChange(float newHeightMax)
     {
         var externalMod = new Fallout4Mod(ModKey.FromFileName(TrackedModFixture.PluginName), Fallout4Release.Fallout4);
@@ -55,8 +47,6 @@ public sealed class SourceRepositoryRebaseTests : IDisposable
         ExternalChangeAbsorber.Absorb(_mod.ModFolder, TrackedModFixture.PluginName, pluginPath, _mod.Mirror.LoadOrder!);
     }
 
-    /// <summary>An upstream update that adds a brand-new NPC — a path the edit branch's own commit
-    /// never touches, so replaying the two together is conflict-free by construction.</summary>
     private void AbsorbUpstreamNewRecord()
     {
         var externalMod = new Fallout4Mod(ModKey.FromFileName(TrackedModFixture.PluginName), Fallout4Release.Fallout4);
@@ -107,23 +97,6 @@ public sealed class SourceRepositoryRebaseTests : IDisposable
         Assert.Equal(mainSha, RunGit("merge-base", "refs/heads/main", "edit").Trim());
     }
 
-    /// <summary>
-    /// The whole external-change flow through to the next reconcile: absorb an upstream update, take
-    /// the rebase it offers, then reload — and the plugin still ingests <b>from its source tree</b>.
-    ///
-    /// <para><b>This is the test whose absence hid a shipping bug.</b> Nothing in the suite
-    /// reloaded a load order after an Absorb, and Absorb's own tests could not have caught it: Absorb
-    /// commits to <c>main</c> without a checkout, so the edit branch's working tree — the one both
-    /// ingest and compile read — is still Track's own complete tree until a rebase replays onto the new
-    /// baseline. Only then does the incomplete baseline become the working tree, and only then does the
-    /// missing root <c>RecordData.json</c> bite. It bit compile first, in
-    /// <see cref="RebaseEditBranch_Conflicts_OnOverlappingRecordEdits_AndTheResolvedResultCompiles"/>,
-    /// but ingest-from-source calls the same whole-mod door on the same directory, so a load order
-    /// load would have thrown identically the moment a user took the offered rebase.</para>
-    ///
-    /// <para>The conflict-free upstream update on purpose: this is about the tree being <i>complete</i>
-    /// after a replay, not about conflict handling, which its sibling above covers.</para>
-    /// </summary>
     [Fact]
     public void RebaseEditBranch_ThenAReload_StillIngestsThePluginFromItsSourceTree()
     {
@@ -177,13 +150,6 @@ public sealed class SourceRepositoryRebaseTests : IDisposable
         Assert.True(compileResult.Succeeded, compileResult.RefusalReason);
     }
 
-    /// <summary>
-    /// The frontend has exactly one re-runnable command ("Modbench: Rebase onto Updated Baseline")
-    /// for both starting a rebase and resuming one left conflicted — there is no separate "continue"
-    /// gesture the native merge editor offers, since this rebase was never driven through
-    /// <c>vscode.git</c>'s own porcelain. Calling <see cref="SourceRepository.RebaseEditBranch"/>
-    /// again after hand-resolving must resume, not refuse over the resolved-but-staged file.
-    /// </summary>
     [Fact]
     public void RebaseEditBranch_CalledAgainAfterAConflictIsResolved_ResumesRatherThanRefusing()
     {

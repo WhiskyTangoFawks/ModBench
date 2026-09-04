@@ -10,35 +10,8 @@ using Noggog;
 
 namespace MEditService.Tests.Edits;
 
-/// <summary>
-/// The container-record counterpart to <see cref="TrackedModFixture"/> — same posture (a real
-/// mod folder, a real plugin, a real git tree, tracked through the real <see cref="TrackService"/>),
-/// different record content. <see cref="TrackedModFixture"/> holds only Npc/Race/Keyword and
-/// structurally cannot exercise a container at all — a gap that once shipped a container regression
-/// no test could see. One shared instance, carrying the union of shapes its suites need:
-///
-/// <list type="bullet">
-/// <item><description><see cref="Cell"/> — a standalone Cell with no embedded children, so a
-/// point-write's byte-substitution assertions never share text with a child's.</description></item>
-/// <item><description><see cref="EmbedCell"/> — a Cell carrying all four of Cell's embeddable slots
-/// at once (two placed refs, a navmesh, a landscape), so a resolver that handles one slot and quietly
-/// fails on another cannot pass.</description></item>
-/// <item><description><see cref="Worldspace"/>/<see cref="TopCell"/>/<see cref="TopCellRef"/> — a
-/// Worldspace whose TopCell embeds a further placed ref two embed-levels deep in one
-/// file.</description></item>
-/// <item><description><see cref="Quest"/>/<see cref="DialogTopic"/> — a folder-split child (its own
-/// directory, not embedded), so a search that descends into every child slot would lose an edit into
-/// the wrong file.</description></item>
-/// <item><description><see cref="Npc"/> — a plain, unreferenced flat record, for "the container guard
-/// doesn't blanket-refuse the rest of the plugin" and "a flat record beside a container still
-/// reconciles" controls.</description></item>
-/// </list>
-///
-/// <see cref="Core.Schema.SchemaReflector"/> publishes no schema at all for <c>land</c>/<c>navm</c>
-/// (they are not record types mEdit surfaces), so <see cref="Navmesh"/> and <see cref="Landscape"/>
-/// have no field a test can write through <c>EditField</c> regardless of fixture — they exist here so
-/// a test can still assert their parentage survives a sibling edit intact.
-/// </summary>
+/// <summary>The container counterpart to <see cref="TrackedModFixture"/>, which holds only flat records and
+/// cannot exercise a container at all.</summary>
 public sealed class ContainerModFixture : IDisposable
 {
     public const string ModFolderOrigin = "ContainerFixtureMod";
@@ -192,38 +165,20 @@ public sealed class ContainerModFixture : IDisposable
         mod.Cells.Records.Add(block);
     }
 
-    /// <summary>The tree Track wrote everything above into.</summary>
     public string SourceRoot => Path.Combine(ModFolder, SourceRecordPath.RootFor(PluginName));
 
-    /// <summary>The source file whose text contains <paramref name="editorId"/> — found by content
-    /// rather than by <see cref="SourceRecordPath.For"/>, which has no flat path for a container and
-    /// throws by design.</summary>
     public string SourceFileContaining(string editorId) =>
         Directory.EnumerateFiles(SourceRoot, "RecordData.json", SearchOption.AllDirectories)
             .Single(f => File.ReadAllText(f).Contains($"\"{editorId}\"", StringComparison.Ordinal));
 
-    /// <summary>Porcelain status, scoped to the mod folder — what the native Source Control panel
-    /// renders, asked the way a user would ask it.
-    ///
-    /// <para>Unquoted, for the same reason as <see cref="TrackedModFixture"/>'s own <c>GitStatus</c>:
-    /// a container's directory name carries the identical <c>"&lt;EditorID&gt; - &lt;hex6&gt;_&lt;
-    /// ModKeyFileName&gt;"</c> shape as this fixture's flat file names, spaces included, and plain
-    /// (non-<c>-z</c>) porcelain v1 always C-quotes a path containing one — unconditionally, not gated
-    /// by <c>core.quotePath</c>. Every caller here that ever compares against a plain expected string
-    /// needs the unquoted text, the same way <see cref="TrackedModFixture"/>'s callers do.</para>
-    /// </summary>
     public IReadOnlyList<string> GitStatus() =>
         GitCli.Run(Path.Combine(ModFolder, ".git"), ModFolder, "status", "--porcelain")
             .Split('\n', StringSplitOptions.RemoveEmptyEntries)
             .Select(l => UnquotePorcelainLine(l.Trim()))
             .ToList();
 
-    // "XY <path>" — <path> is C-quoted (wrapped in "...", \\ and \" escaped, higher bytes as \NNN
-    // octal when core.quotePath's default applies) exactly when it needs to be; this repo's own Track
-    // sets core.quotePath=false, so the only escapes a filename built from this fixture's own naming
-    // scheme can ever produce are \\ and \" — but is written generally rather than special-cased to
-    // that. Duplicated from TrackedModFixture rather than shared, to keep that fixture (and the
-    // many files depending on it) untouched.
+    // Unavoidable, not defensive: plain porcelain v1 C-quotes any path containing a space
+    // unconditionally — core.quotePath governs only bytes above 0x80 — and these names all have one.
     private static string UnquotePorcelainLine(string line)
     {
         var space = line.IndexOf(' ');

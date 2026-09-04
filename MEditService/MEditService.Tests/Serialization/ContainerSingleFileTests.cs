@@ -8,21 +8,8 @@ using Noggog;
 
 namespace MEditService.Tests.Serialization;
 
-/// <summary>
-/// The layout claim: <b>one source unit, one
-/// file</b>, for every container type, with children <i>populated</i>. It
-/// holds for two different reasons at once — the
-/// slots Spriggit embeds are written inline into the parent's own file, and the ones it does not are
-/// suppressed on their way to the filesystem
-/// (<c>RecordTextCodec.DiscardChildRecordStreams</c>/<c>NoRecordFolders</c>). Either mechanism
-/// breaking spills sibling folders next to the record's file, which is the cross-contamination
-/// hazard this guards.
-///
-/// <para>Populated, not empty, on purpose: a childless container is one file no matter what any of
-/// this does, so an empty fixture here would pass forever without testing anything.
-/// <see cref="DocumentShapeParityTests"/> makes the same check for a quest, tied there to the byte
-/// parity it protects; the breadth across all four container shapes lives here.</para>
-/// </summary>
+/// <summary>Populated, not empty, on purpose: a childless container is one file no matter what,
+/// so an empty fixture would pass forever without testing anything.</summary>
 public class ContainerSingleFileTests
 {
     private static readonly Fallout4Mod Mod = new(ModKey.FromFileName("Test.esp"), Fallout4Release.Fallout4);
@@ -42,10 +29,9 @@ public class ContainerSingleFileTests
             Assert.Equal([filePath], Directory.GetFiles(dir.FullName, "*", SearchOption.AllDirectories));
             Assert.Empty(Directory.GetDirectories(dir.FullName, "*", SearchOption.AllDirectories));
 
-            // Round-trips without throwing — a container whose children the writer tried to spill
-            // into a sibling folder fails here, not merely looks wrong — and comes back as its own
-            // concrete type, reconstituted from the record_type the caller states (none of
-            // these four is path-ambiguous, so none of their documents self-describes).
+            // A container whose children the writer tried to spill into a sibling folder fails here
+            // rather than merely looking wrong, and comes back as its own concrete type from the
+            // stated record_type.
             var roundTripped = await codec.DeserializeAsync(filePath, GameRelease.Fallout4, recordType);
             Assert.IsType(concreteType, roundTripped);
         }

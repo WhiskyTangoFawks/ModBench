@@ -5,40 +5,21 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 namespace MEditService.Tests.Edits;
 
-/// <summary>
-/// #675 — a write that dies part-way leaves no phantom directory behind.
-///
-/// <para><b>Why the assertions here are entry-list assertions and never git ones.</b> Git tracks
-/// files, not directories: an empty directory produces no porcelain line at all, so
-/// <see cref="TrackedModFixture.GitStatus"/> is blind to exactly the debris this suite exists to
-/// forbid — the author cannot see it in the Source Control panel and cannot discard it there either.
-/// <see cref="EntriesUnderSource"/> therefore walks the real tree for directories <i>and</i> files.
-/// <see cref="CreateRecord_WhoseWriteFails_LeavesNoStrayGroupFolder"/> asserts the git-blindness
-/// directly rather than leaving it as a claim in this comment.</para>
-///
-/// <para><b>How a write is made to fail without a mock.</b> An EditorID longer than the filesystem's
-/// per-component limit: the source file name embeds the EditorID
-/// (<see cref="SourceRecordPath.For"/>), so the directory the record needs is creatable and the file
-/// inside it is not. That is a real, reachable user gesture — nothing in the create path bounds an
-/// EditorID's length — and it fails in exactly the window the ticket describes, after the directory
-/// and before the content that would justify it.</para>
-/// </summary>
+/// <summary>Assertions walk the real tree, never git: git tracks files, not directories, so an
+/// empty directory produces no porcelain line. The failing write is an EditorID longer than the
+/// filesystem's per-component limit.</summary>
 public sealed class FailedWriteDirectoryCleanupTests
 {
     private static RecordEditService ServiceFor(TrackedModFixture mod) =>
         new(mod.Mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
 
-    /// <summary>Long enough that "[0] &lt;this&gt; - &lt;hex6&gt;_&lt;plugin&gt;.json" exceeds the
-    /// 255-byte per-component limit on every filesystem this runs on, short enough that the
-    /// containing directory's own path is nowhere near one.</summary>
+    // Exceeds the 255-byte per-component limit on every filesystem this runs on.
     private const string OverLongEditorId =
         "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" +
         "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" +
         "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" +
         "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
 
-    /// <summary>Every entry under the plugin's source tree — directories included, which is the whole
-    /// point — as mod-folder-relative paths in a stable order.</summary>
     private static List<string> EntriesUnderSource(TrackedModFixture mod) =>
         Directory
             .EnumerateFileSystemEntries(
@@ -49,11 +30,6 @@ public sealed class FailedWriteDirectoryCleanupTests
             .Order(StringComparer.Ordinal)
             .ToList();
 
-    /// <summary>
-    /// AC1 and AC4. <c>weap</c> is a record type this fixture's plugin does not hold, so the create
-    /// has to mint <c>Weapons/</c> before it can write into it — and when the write dies, that folder
-    /// is the phantom entry the ticket is named for.
-    /// </summary>
     [Fact]
     public void CreateRecord_WhoseWriteFails_LeavesNoStrayGroupFolder()
     {
@@ -70,11 +46,6 @@ public sealed class FailedWriteDirectoryCleanupTests
         Assert.Empty(mod.GitStatus());
     }
 
-    /// <summary>
-    /// AC3 — the one most likely to pass by accident. <c>npc_</c>'s group folder already exists and
-    /// holds this fixture's two NPCs, so an implementation that removed its write's target directory
-    /// rather than only what it minted would take two live records with it.
-    /// </summary>
     [Fact]
     public void CreateRecord_WhoseWriteFails_LeavesTheGroupFolderThatAlreadyExisted_AndItsRecords_Untouched()
     {
@@ -93,8 +64,6 @@ public sealed class FailedWriteDirectoryCleanupTests
         Assert.Equal(before, EntriesUnderSource(mod));
     }
 
-    /// <summary>A successful create still mints the folder it needs — the negative control, so a
-    /// cleanup that fired unconditionally could not pass this suite.</summary>
     [Fact]
     public void CreateRecord_ThatSucceeds_StillMintsTheGroupFolderItNeeded()
     {
@@ -106,13 +75,8 @@ public sealed class FailedWriteDirectoryCleanupTests
         Assert.Contains(EntriesUnderSource(mod), e => e.EndsWith("Weapons", StringComparison.Ordinal));
     }
 
-    // ---- the mint/unmint contract itself, which the container-ancestor chains share ----
-    //
-    // The copy gestures' ancestor chains (RecordEditService.EnsureContainerAncestorDirectory and the
-    // slot folders under it) mint several levels at once and are covered here rather than end to end:
-    // every EditorID those paths name comes from the record being copied, so there is no way to hand
-    // one of them an over-long name without inventing a fixture for it. What they all funnel through
-    // is SourceUnitResolver.InMintedDirectory, and a multi-level chain is exactly what these exercise.
+    // The copy gestures' ancestor chains are covered here rather than end to end: every EditorID
+    // they name comes from the record being copied, so no path can be handed an over-long name.
 
     private sealed class TempTree : IDisposable
     {
@@ -125,8 +89,6 @@ public sealed class FailedWriteDirectoryCleanupTests
         }
     }
 
-    /// <summary>AC2's chain: three levels minted at once, none of them survives the failure, and the
-    /// pre-existing root above them is not touched.</summary>
     [Fact]
     public void InMintedDirectory_WhenTheWriteThrows_RemovesEveryLevelItMinted_AndNothingAboveThem()
     {
@@ -143,8 +105,6 @@ public sealed class FailedWriteDirectoryCleanupTests
         Assert.True(File.Exists(keeper));
     }
 
-    /// <summary>The create can itself fail part-way down — the deepest level is unreachable while its
-    /// ancestors are already on disk. Those ancestors are still this call's own debris.</summary>
     [Fact]
     public void InMintedDirectory_WhenTheCreateItselfFailsAtTheDeepestLevel_StillRemovesTheAncestorsItMade()
     {
@@ -157,8 +117,6 @@ public sealed class FailedWriteDirectoryCleanupTests
         Assert.True(Directory.Exists(tree.Root));
     }
 
-    /// <summary>AC3 at the unit level: a directory that was already there when the call started is
-    /// never a candidate for removal, however the write ends.</summary>
     [Fact]
     public void InMintedDirectory_WhenTheDirectoryAlreadyExisted_LeavesItAndItsContentsAlone()
     {
@@ -175,9 +133,6 @@ public sealed class FailedWriteDirectoryCleanupTests
         Assert.True(File.Exists(keeper));
     }
 
-    /// <summary>Root CLAUDE.md's never-assume-exclusive-ownership rule: MO2, xEdit or the author can
-    /// write into a directory between its creation and the failure, and cleaning up must not take
-    /// their file with it — nor the ancestors that now hold it.</summary>
     [Fact]
     public void InMintedDirectory_NeverRemovesAMintedDirectoryAnotherWriterHasFilledMeanwhile()
     {
@@ -195,8 +150,6 @@ public sealed class FailedWriteDirectoryCleanupTests
         Assert.True(Directory.Exists(Path.Combine(tree.Root, "Quests")));
     }
 
-    /// <summary>The successful path returns the write's own result and leaves the minted chain in
-    /// place — nothing here is a one-way "always clean up".</summary>
     [Fact]
     public void InMintedDirectory_WhenTheWriteSucceeds_KeepsTheChain_AndReturnsWhatTheWriteReturned()
     {
@@ -213,16 +166,6 @@ public sealed class FailedWriteDirectoryCleanupTests
         Assert.True(File.Exists(Path.Combine(target, "RecordData.json")));
     }
 
-    /// <summary>
-    /// The exterior-cell copy's own ancestor chain (AC2): <see cref="SourceTreeMerge.MergeAdditively"/>
-    /// is what lands a minted <c>Worldspaces/[N] W/[N] block/[N] sub/[N] cell/</c> path into the
-    /// destination tree, one file at a time. A copy that throws leaves none of the directories that
-    /// file needed, and nothing the destination already had.
-    ///
-    /// <para>The failing copy is a dangling symlink in the scratch tree: enumeration lists it (it is
-    /// not a directory), and <see cref="File.Copy(string, string)"/> then throws on a source that does
-    /// not resolve — a real IO failure at exactly the per-file window, needing no mock.</para>
-    /// </summary>
     [Fact]
     public void MergeAdditively_WhenAFileCopyThrows_LeavesNoneOfThatFilesMintedDirectories()
     {

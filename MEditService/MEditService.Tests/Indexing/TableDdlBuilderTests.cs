@@ -47,11 +47,8 @@ public class TableDdlBuilderTests
         _builder.CreateTables(conn, GameRelease.Fallout4);
 
         var cols = GetColumns(conn, "registrations");
-        // ADR-0044: the three facts a registration carries — and no `participates`, which is
-        // derived from them, never stored.
-        // ADR-0001: the load order, and only the load order. Nothing about the file — that
-        // is mirror.files below — and above all no `file_mtime`, the clock-based check the
-        // decision exists to rule out.
+        // ADR-0044: the three facts a registration carries, and no `participates`, which is derived
+        // from them.
         Assert.Equal(["plugin", "origin", "load_order_idx", "enabled", "winning"], cols);
     }
 
@@ -82,17 +79,6 @@ public class TableDdlBuilderTests
         Assert.Contains("editor_id", cols);
     }
 
-    /// <summary>
-    /// Building the schema twice is a no-op, not an error — a general guard on every statement
-    /// <see cref="TableDdlBuilder.CreateTables"/> issues, nothing header-specific. It holds because
-    /// each table is <c>CREATE TABLE IF NOT EXISTS</c>, each index <c>CREATE INDEX IF NOT EXISTS</c>,
-    /// and each view <c>CREATE OR REPLACE VIEW</c>; a future statement missing one of those forms
-    /// fails here rather than on a second reconcile against a warm index.
-    ///
-    /// <para>Re-asserted deliberately after #631: this test previously sat between the two
-    /// header-table tests that ticket retired, and is easy to remove as collateral with them. It is
-    /// not about the header at all.</para>
-    /// </summary>
     [Fact]
     public void CreateTables_IsIdempotent()
     {
@@ -142,10 +128,7 @@ public class TableDdlBuilderTests
         Assert.Contains("load_order_idx", cols);
     }
 
-    // ADR-0001: the same split for `is_winner`. Winning is a fact about the whole registered
-    // stack a FormKey sits in, not about one row's bytes, so no mirror table stores it — it is
-    // derived in the registered view by joining `winners`, the load order-owned table the sweep
-    // rebuilds.
+    // ADR-0001: the same split for `is_winner`.
     [Theory]
     [InlineData("records")]
     [InlineData("records_committed")]
@@ -161,8 +144,8 @@ public class TableDdlBuilderTests
     }
 
     // The three relations whose readers ask for `is_winner` keep answering it. `records_committed` is
-    // not among them: its stored flag was written FALSE and read by nothing — records_head derives
-    // Head's own answer — so it stops existing rather than becoming a derived column nobody selects.
+    // not among them: records_head derives Head's own answer, so it stops existing rather than
+    // becoming a derived column nobody selects.
     [Theory]
     [InlineData("records", true)]
     [InlineData("form_lookup", true)]
@@ -178,10 +161,9 @@ public class TableDdlBuilderTests
         Assert.Equal(exposesWinner, cols.Contains("is_winner"));
     }
 
-    // The load order-winners relation itself: (record_ref, form_key) -> (plugin, origin), carrying the
-    // ref because Effective and Head can name different winners for one FormKey
-    // (TableDdlBuilder.CreateHeadView). Bare in `main`, not the mirror schema — it is
-    // load-order-derived, not a file mirror.
+    // The load order-winners relation itself: (record_ref, form_key) -> (plugin, origin), carrying
+    // the ref because Effective and Head can name different winners for one FormKey
+    // (TableDdlBuilder.CreateHeadView).
     [Fact]
     public void CreateTables_CreatesWinnersTable_MappingARefAndFormKeyToOnePlugin()
     {

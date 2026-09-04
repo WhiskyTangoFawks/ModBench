@@ -2,16 +2,9 @@ using System.Reflection;
 
 namespace MEditService.Tests.TestSupport;
 
-/// <summary>
-/// Walks a Mutagen-generated <c>Mask&lt;bool&gt;</c> object graph (Loqui's
-/// <c>MaskItem&lt;Overall, Specific&gt;</c> wrappers, indexed collections, and plain bool leaves —
-/// the shape <c>IWeaponGetter.GetEqualsMask</c> and its siblings on other record types return) and
-/// returns every leaf as a (dotted field path, value) pair. Test-only — production code never
-/// needs this; Mutagen generates the mask, this just makes a fidelity-check failure legible
-/// ("EditorID" diverged) instead of a bare "objects differ", and makes a walker that silently
-/// visited nothing distinguishable from one that found genuine equality (assert on the leaf count,
-/// not just on the divergent subset being empty).
-/// </summary>
+/// <summary>Flattens a Mutagen <c>Mask&lt;bool&gt;</c> graph to (dotted path, value) leaves, so a
+/// fidelity failure names the field and a walker that visited nothing is distinguishable from
+/// genuine equality (assert on the leaf count).</summary>
 public static class MaskInspector
 {
     public static IEnumerable<(string Path, bool Value)> CountLeaves(object? node, string path = "")

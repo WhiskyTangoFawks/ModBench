@@ -9,20 +9,8 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Tests.Edits;
 
-/// <summary>
-/// Every structural write (<see cref="RecordEditService.DeleteRecord"/>,
-/// <see cref="RecordEditService.RenumberRecord"/>, <see cref="RecordEditService.CreateRecord"/>)
-/// leaves the touched group's ordered child list agreeing with the files beside it, so the plugin's
-/// own next Save &amp; Compile succeeds and the survivors keep their relative order and content.
-///
-/// <para>This suite began as the repro for a numbering gap: a delete used to leave a hole in the
-/// <c>"[N] "</c> filename prefixes, which made every subsequent compile refuse until the user
-/// re-Tracked, for an entirely benign reason and with no container involved. #566 removed the class
-/// of defect rather than the instance — there are no prefixes to leave a hole in, and a delete is one
-/// file plus one line in the parent's document (ADR-0042 decision 4). The suite is kept, pointed at
-/// the property that replaced contiguity: the parent's list and the tree agree, and a compile of the
-/// result is faithful.</para>
-/// </summary>
+/// <summary>Every structural write leaves the touched group's ordered child list agreeing with the
+/// files beside it, so the next Save &amp; Compile succeeds (ADR-0042 decision 4).</summary>
 public sealed class GroupOrderMaintenanceTests : IDisposable
 {
     private readonly TrackedModFixture _mod = TrackedModFixture.Tracked();
@@ -50,8 +38,6 @@ public sealed class GroupOrderMaintenanceTests : IDisposable
     private string NpcsDirectory =>
         Path.Combine(_mod.ModFolder, SourceRecordPath.RootFor(TrackedModFixture.PluginName), "Npcs");
 
-    /// <summary>The record files in the Npcs group folder — its own GroupRecordData.json carries the
-    /// order and is not one of them.</summary>
     private List<string> NpcFiles() =>
         [.. Directory.GetFiles(NpcsDirectory)
             .Select(Path.GetFileName)
@@ -59,7 +45,6 @@ public sealed class GroupOrderMaintenanceTests : IDisposable
             .Select(n => n!)
             .Order(StringComparer.Ordinal)];
 
-    /// <summary>The Npcs group's own ordered child list — where a flat record's position lives now.</summary>
     private IReadOnlyList<string> NpcOrder() =>
         SourceChildOrder.ListAt(SourceChildOrder.CarrierFor(NpcsDirectory, parentIsRecord: false), "Npcs");
 
@@ -152,18 +137,6 @@ public sealed class GroupOrderMaintenanceTests : IDisposable
 
     // ---- CreateRecord's own defensive renormalization ----
 
-    /// <summary>
-    /// A create landing into a group a hand-delete already disturbed — never-assume-exclusive-
-    /// ownership means another tool or the user can remove a sibling file without telling Modbench,
-    /// leaving the parent's list naming a child that is not there.
-    ///
-    /// <para>That direction of drift is honoured as a deletion rather than refused (ADR-0042
-    /// decision 4's asymmetry: the tree says what exists, the parent's list says what order the
-    /// existing ones are in), so the create succeeds and reads back exactly the two records that
-    /// really exist. But the tree is not repaired for the author: the stale entry is theirs to remove
-    /// (the maintainer's ruling on #566), and until they do, the round-trip gate refuses the compile
-    /// naming the one document that no longer matches.</para>
-    /// </summary>
     [Fact]
     public void CreatingARecord_AfterAnExternalHandDelete_Succeeds_AndCompileRefusesNamingTheStaleList()
     {

@@ -7,10 +7,6 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 namespace MEditService.Tests.Bridge;
 
-/// <summary>
-/// <see cref="ExternalChangeWatcher"/> — the live-watch half. Real filesystem, real
-/// debounce timing, no mocked <c>FileSystemWatcher</c>.
-/// </summary>
 public sealed class ExternalChangeWatcherTests
 {
     private static string NewModFolder() => Directory.CreateTempSubdirectory("medit-watch-").FullName;
@@ -62,11 +58,6 @@ public sealed class ExternalChangeWatcherTests
         }
     }
 
-    /// <summary>
-    /// Detection alone (before any dialog answer, before any
-    /// Esc) is what refuses editing — <c>ExternalChangeDeferral.Unanswered</c> must already be set the
-    /// instant a question is queued, not only once the user explicitly dismisses the dialog.
-    /// </summary>
     [Fact]
     public void Watch_SetsTheExternalChangeDeferralMarker_AssoonAsAQuestionIsQueued()
     {
@@ -91,9 +82,6 @@ public sealed class ExternalChangeWatcherTests
         }
     }
 
-    /// <summary>The debounce property itself: a write that just landed must not be classified before
-    /// the debounce window elapses — a naive "classify on every Changed event" implementation would
-    /// already have a unanswered question by the time this assertion runs.</summary>
     [Fact]
     public void Watch_DoesNotQueueAnythingBeforeTheDebounceWindowElapses()
     {
@@ -139,16 +127,6 @@ public sealed class ExternalChangeWatcherTests
         }
     }
 
-    /// <summary>
-    /// End to end: a live watcher, and a
-    /// REAL <see cref="PluginCompileService.Compile"/> (production's own rename-based commit,
-    /// <see cref="PluginWriter.SaveFromModAsync"/>/<c>PreparedPluginSave.Commit</c>), not a hand-written
-    /// byte-identical write standing in for one. Distinct from <see cref="Watch_DoesNotQueueASelfEcho"/>
-    /// above (which proves the classifier-level compare, using a fabricated echo) and from
-    /// <c>ExternalChangeClassifierTests.Classify_ReportsSelfEcho_ForTheBinaryARealCompileJustWrote</c>
-    /// (which proves the same real-compile case but calls the classifier directly, bypassing the
-    /// watcher's own event plumbing entirely).
-    /// </summary>
     [Fact]
     public void Watch_DoesNotQueueTheBinary_ARealCompileJustWrote()
     {

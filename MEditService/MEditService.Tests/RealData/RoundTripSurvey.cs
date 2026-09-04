@@ -8,18 +8,9 @@ using Mutagen.Bethesda.Plugins.Binary.Parameters;
 
 namespace MEditService.Tests.RealData;
 
-/// <summary>
-/// Survey: how far does a real, mixed-tool plugin population sit from
-/// <c>write(parse(plugin)) == plugin</c>, and why? Deep-parses every mod-root plugin under
-/// <c>MEDIT_SURVEY_MODS</c>, writes it back with the header-preserving write options, then walks both
-/// binaries' record structures in parallel (<see cref="PluginBinaryWalk"/> — the one shared
-/// walker, in Core) and classifies each
-/// differing record: <c>header</c> (TES4 subrecord), <c>compressed-only</c> (decompressed
-/// payloads equal), <c>negzero</c> (only -0.0 → +0.0 word changes), <c>grup-size</c> (derived
-/// group sizes), or <c>other:TYPE/SIG</c> — the bucket that answers "what else is out there".
-/// Report: CSV per plugin plus a category tally, at <c>MEDIT_SURVEY_OUT</c>. Gated like
-/// <see cref="RealInstallSmokeTests"/>: never part of a normal run.
-/// </summary>
+/// <summary>Survey: how far a real, mixed-tool plugin population sits from
+/// <c>write(parse(plugin)) == plugin</c>, and why, under <c>MEDIT_SURVEY_MODS</c>. Gated like
+/// <see cref="RealInstallSmokeTests"/>: never part of a normal run.</summary>
 public sealed class RoundTripSurvey
 {
     private sealed class SurveyFactAttribute : FactAttribute
@@ -72,12 +63,9 @@ public sealed class RoundTripSurvey
                         .WriteAsync();
                     var rewritten = await File.ReadAllBytesAsync(outFile);
 
-                    // "Would Track accept" — the same verdict TrackService.VerifyRoundTrip computes in
-                    // production, reusing its own shared checker (MEditService.Core.Source.ModelIdentity)
-                    // rather than this harness's own separate, incomplete bare-Equals-based "model"
-                    // column below (see ModelIdentity's own doc comment on why a single most-derived
-                    // GetEqualsMask misses base-level fields like EditorID), kept only for continuity
-                    // with earlier survey runs.
+                    // The same verdict TrackService.VerifyRoundTrip computes, reusing ModelIdentity rather than this
+                    // harness's bare-Equals "model" column below, which a single most-derived GetEqualsMask leaves
+                    // blind to base-level fields.
                     if (rewritten.AsSpan().SequenceEqual(original))
                     {
                         accept = "accept";
@@ -171,8 +159,6 @@ public sealed class RoundTripSurvey
         if (dump.Length > 0) await File.WriteAllTextAsync(outPath + ".dump.txt", dump.ToString());
     }
 
-    /// <summary>Finds the first record whose classification matches <paramref name="category"/> and prints its differing
-    /// subrecords as hex, original vs rewritten, both walked in parallel by signature.</summary>
     private static void DumpFirst(byte[] a, byte[] b, string category, StringBuilder o)
     {
         var ra = PluginBinaryWalk.WalkRecords(a); var rb = PluginBinaryWalk.WalkRecords(b);
@@ -210,16 +196,6 @@ public sealed class RoundTripSurvey
         }
     }
 
-    /// <summary>Mutagen's generated GetEqualsMask(rhs, Include.OnlyFailures), found by reflection on the record's
-    /// getter interface, printed — names exactly which fields the generated Equals disagrees on.
-    ///
-    /// <para>Dump-only, kept for its human-readable raw mask text (every field, not just
-    /// the failing ones' names) — the "would Track accept" verdict itself does not use this method or
-    /// its single-most-derived-type reflection (incomplete: a <c>Mask&lt;TItem&gt;.Print</c> only
-    /// lists the fields <i>that type itself</i> declares, so this method alone can never see a
-    /// base-level field like <c>EditorID</c> diverge).
-    /// Only <c>ModelIdentity.FindFirst</c>, above, decides <c>accept</c>.</para>
-    /// </summary>
     private static string EqualsMaskFailures(object lhs, object rhs)
     {
         try
@@ -243,11 +219,10 @@ public sealed class RoundTripSurvey
 
     private static string Csv(string s) => "\"" + s.Replace("\"", "\"\"") + "\"";
 
-    // ---- structure walk -------------------------------------------------------------------
-    // The walk itself (record/GRUP/subrecord, XXXX-extended length, zlib inflate) lives in
-    // MEditService.Core.Source.PluginBinaryWalk — exactly one implementation, not two to keep in
-    // sync by hand (docs/specs/medit-repair.md's own Implementation Decisions: "one walker").
-    // What stays here is this survey's own classification on top of it.
+    // ---- structure walk ----
+    //
+    // The walk itself lives in PluginBinaryWalk: exactly one implementation, not two kept in sync by
+    // hand. What stays here is this survey's own classification on top of it.
 
     private const uint CompressedFlag = 0x00040000;
 
@@ -365,8 +340,6 @@ public sealed class RoundTripSurvey
         public int GetHashCode(byte[] obj) => obj.Length;
     }
 
-    /// <summary>True when both payloads hold the same subrecord signatures with the same multiplicity; <paramref name="contentDiff"/>
-    /// is null when the (sig, bytes) multisets are identical too (pure reordering), else names the signatures whose bytes differ.</summary>
     private static bool SameSubrecordsAnyOrder(byte[] a, byte[] b, out string? contentDiff)
     {
         var sa = PluginBinaryWalk.WalkSubrecords(a).Select(t => (t.Sig, Bytes: a.AsSpan(t.Start, t.Len).ToArray())).OrderBy(t => t.Sig, StringComparer.Ordinal).ToList();
@@ -378,7 +351,6 @@ public sealed class RoundTripSurvey
         return true;
     }
 
-    /// <summary>Every differing 4-byte-aligned word is 0x80000000 in <paramref name="a"/> and 0 in <paramref name="b"/>.</summary>
     private static bool OnlyNegZero(byte[] a, byte[] b)
     {
         if (a.Length != b.Length) return false;
@@ -394,8 +366,6 @@ public sealed class RoundTripSurvey
         return true;
     }
 
-    /// <summary>Signatures of subrecords whose bytes differ, walking both payloads in parallel; falls back
-    /// to a positional label if the subrecord streams desynchronise.</summary>
     private static List<string> DifferingSubrecords(byte[] a, byte[] b)
     {
         var sa = PluginBinaryWalk.WalkSubrecords(a); var sb = PluginBinaryWalk.WalkSubrecords(b);

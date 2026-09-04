@@ -2,11 +2,8 @@ using MEditService.Core.Source;
 
 namespace MEditService.Tests.Source;
 
-/// <summary>
-/// <see cref="SourceRepository.CommitPristineToMain"/> — Absorb Upstream Update's plumbing
-/// commit. The load-bearing claim is "no checkout at all": the edit branch's working tree, index and
-/// HEAD must come out byte-identical to how they went in, dirt included.
-/// </summary>
+/// <summary>The load-bearing claim is "no checkout at all": the edit branch's working tree, index
+/// and HEAD come out byte-identical, dirt included.</summary>
 public sealed class SourceRepositoryCommitPristineToMainTests
 {
     private static string NewModFolder() => Directory.CreateTempSubdirectory("medit-absorb-main-").FullName;

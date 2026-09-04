@@ -10,11 +10,9 @@ using Noggog;
 
 namespace MEditService.Tests.Records;
 
-// ADR-0001: registration is visibility. An unregistered plugin's rows stay in the index
-// (physically, in the `mirror` schema) and answer nothing on any path — every IRecordReads member,
-// both refs, and the SQL door (the generated per-type views, `records`, the extracted tables).
-// Re-registering makes the same rows answer again with no re-index. This is the gate test;
-// each read is asserted individually so a regression names the path that leaked.
+// ADR-0001: registration is visibility. An unregistered plugin's rows stay physically in the
+// `mirror` schema and answer nothing anywhere; re-registering makes them answer again with no re-
+// index.
 public class RegistrationScopingTests
 {
     private static readonly SchemaReflector Reflector = SharedSchemaReflector.Instance;
@@ -23,11 +21,9 @@ public class RegistrationScopingTests
     private static readonly PluginKey AlphaKey = new("Alpha.esp", "ModA");
     private static readonly PluginKey BetaKey = new("Beta.esp", "ModB");
 
-    // Every kind of row the index extracts, so every read path has something to (not) answer with:
-    // a Race + an Npc linking it (form_references), a worldspace with one exterior cell holding one
-    // placed ref plus one interior cell (placement / cell_location), and a Quest with a DialogTopic
-    // (container_child). Beta additionally overrides Alpha's Npc, so the override stack and the
-    // contested-FormKey read have a Beta entry to lose.
+    // Every kind of row the index extracts, so every read path has something to not answer with. Beta
+    // additionally overrides Alpha's Npc, so the override stack and the contested-FormKey read have a
+    // Beta entry to lose.
     private sealed record Fixture(
         DuckDbRecordIndex Repo, string SharedNpcFk, string BetaNpcFk, string BetaRaceFk,
         string BetaWorldspaceFk, string BetaCellFk, string BetaPlacedFk, string BetaQuestFk, string BetaTopicFk,
@@ -184,9 +180,8 @@ public class RegistrationScopingTests
         var repo = fx.Repo;
         repo.Unregister(BetaKey);
 
-        // "header" is deliberately absent from this list since #631 — it is no longer a relation of
-        // its own, and its rows are covered twice over: by `records` here and by the generated
-        // "header" view in the sweep below.
+        // "header" is deliberately absent: it is not a relation of its own, and its rows are covered twice
+        // over, by `records` here and by the generated "header" view in the sweep below.
         Assert.All(new[] { "records", "records_head", "form_lookup", "placement", "cell_location", "container_child" },
             relation => Assert.Equal(0, RowsFor(repo, relation, BetaKey)));
         Assert.Equal(0, Scalar(repo, "SELECT COUNT(*) FROM form_references WHERE source_plugin = $1 AND source_origin = $2",

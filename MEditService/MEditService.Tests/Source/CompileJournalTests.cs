@@ -2,11 +2,8 @@ using MEditService.Core.Source;
 
 namespace MEditService.Tests.Source;
 
-/// <summary>
-/// The reduced-form compile journal — multi-plugin compile is atomic under a crash injected
-/// between writes, meaning the marker always tells a reader exactly which plugins landed and which
-/// didn't, never leaving a batch's outcome ambiguous.
-/// </summary>
+/// <summary>Multi-plugin compile is atomic under a crash injected between writes: the marker always
+/// tells a reader which plugins landed.</summary>
 public sealed class CompileJournalTests : IDisposable
 {
     private readonly string _modFolder = Directory.CreateTempSubdirectory("medit-journal-").FullName;
@@ -33,12 +30,9 @@ public sealed class CompileJournalTests : IDisposable
         Assert.Null(CompileJournal.UnfinishedBatch(_modFolder));
     }
 
-    // The crash-injection scenario: a crash between two plugins' writes. Not
-    // literally killing the process — the same observable state a real crash leaves (the marker
-    // written before the batch, updated after the first plugin landed, never reaching the "delete"
-    // step) is reproduced by a compileOne that throws for the second plugin, and the marker file is
-    // asserted directly rather than through RunBatch's own return value, so the assertion is honest
-    // about what a *restarted* process would actually see on disk.
+    // A crash between two plugins' writes, reproduced by a compileOne that throws for the second. The
+    // marker file is asserted directly rather than through RunBatch's return value, so it is honest
+    // about what a restarted process would see.
     [Fact]
     public void RunBatch_CrashBetweenTwoPluginsWrites_LeavesAMarkerNamingExactlyWhatLanded()
     {

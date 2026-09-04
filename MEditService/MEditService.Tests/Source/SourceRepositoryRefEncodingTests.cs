@@ -2,14 +2,8 @@ using MEditService.Core.Source;
 
 namespace MEditService.Tests.Source;
 
-/// <summary>
-/// <c>refs/medit/last-compile/&lt;plugin&gt;</c> is built by interpolating the plugin's raw
-/// filename, and git ref names forbid spaces, <c>[</c>/<c>]</c> and several other characters that
-/// almost every real Fallout 4 plugin filename contains — regression coverage at the layer this is
-/// cheapest to catch: <see cref="SourceRepository"/>'s own unit
-/// tests, against real-world-shaped names, not just the higher-level Track/Compile suites whose
-/// fixtures happened to use ref-safe names.
-/// </summary>
+/// <summary>Git ref names forbid spaces and brackets, which almost every real Fallout 4 plugin
+/// filename contains; the Track/Compile suites' fixtures happen to use ref-safe names.</summary>
 public sealed class SourceRepositoryRefEncodingTests
 {
     private static string NewModFolder() => Directory.CreateTempSubdirectory("medit-refencoding-").FullName;

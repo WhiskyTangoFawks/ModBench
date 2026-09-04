@@ -11,10 +11,8 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Tests.Edits;
 
-/// <summary>
-/// Masters are derived from content (ADR-0038), and written in the load order's *current*
-/// load order — never Mutagen's alphabetical default, and never the plugin's own prior header.
-/// </summary>
+/// <summary>Masters are derived from content (ADR-0038) and written in the current load order,
+/// never Mutagen's alphabetical default or the plugin's own prior header.</summary>
 public sealed class PluginCompileServiceMastersTests : IDisposable
 {
     private const string PluginName = "MastersHost.esp";
@@ -114,10 +112,8 @@ public sealed class PluginCompileServiceMastersTests : IDisposable
         Assert.Equal([CharlieName, BravoName], masterNames);
     }
 
-    // "A cross-plugin reference edit updates the declaring plugin's masters without user action" —
-    // exercised through the real edit door (RecordEditService), not pre-baked into the tracked
-    // baseline. DeltaName is loaded but never referenced at Track time, so it provably isn't a
-    // master before this edit runs.
+    // Exercised through the real edit door rather than pre-baked into the tracked baseline. DeltaName
+    // is loaded but never referenced at Track time, so it provably is not yet a master.
     [Fact]
     public void Compile_AfterAnEditIntroducesAReferenceToAPreviouslyUnreferencedPlugin_AddsItAsAMaster()
     {
@@ -140,9 +136,8 @@ public sealed class PluginCompileServiceMastersTests : IDisposable
 
         var masterNames = overlay.MasterReferences.Select(m => m.Master.FileName.String).ToList();
         Assert.Contains(DeltaName, masterNames);
-        // Load order (Charlie, Bravo, Delta all precede MastersHost in that order), not the order
-        // the edit happened to list FormKeys in — the same ADR-0038 claim, checked
-        // against a master this test's own edit is what makes effective at all.
+        // Load order (Charlie, Bravo, Delta all precede MastersHost), not the order the edit listed
+        // FormKeys in: the same ADR-0038 claim, against a master this edit makes effective.
         Assert.Equal([CharlieName, BravoName, DeltaName], masterNames);
     }
 }

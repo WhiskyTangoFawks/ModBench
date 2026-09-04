@@ -8,11 +8,9 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Tests.Api;
 
-/// <summary>
-/// <c>GET /load-order/status</c> is what the Plugins tree polls alongside the still-in-flight
-/// load, so its no-load order answer matters as much as its loading one — a poller should not
-/// have to read an error to learn that nothing is happening.
-/// </summary>
+/// <summary>The Plugins tree polls this alongside an in-flight load, so the no-load-order answer
+/// matters as much as the loading one: a poller should not read an error to learn nothing is
+/// happening.</summary>
 public sealed class LoadOrderStatusApiTests : IDisposable
 {
     private readonly WebApplicationFactory<Program> _app = new();
@@ -79,10 +77,8 @@ public sealed class LoadOrderStatusApiTests : IDisposable
             gameRelease = "Fallout4",
         });
 
-        // Loading is deliberately not asynchronous on the wire: the POST is still the
-        // completion signal, and /load-order/status reports progress *alongside* it. If this ever
-        // returns before the sweep, every caller that treats a 200 as "the load order is ready" —
-        // including every existing test — silently starts reading unswept winners.
+        // The POST is the completion signal; status reports progress alongside it. Returning
+        // before the sweep would leave every caller reading unswept winners.
         Assert.Equal(HttpStatusCode.OK, load.StatusCode);
         var body = await load.Content.ReadFromJsonAsync<JsonElement>();
         Assert.Equal("reconciled", body.GetProperty("status").GetString());

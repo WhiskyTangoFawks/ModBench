@@ -3,11 +3,8 @@ using MEditService.Core.Queries;
 
 namespace MEditService.Tests.Query;
 
-// ADR-0037: a plugin declaring a master absent from the load order is flagged, distinguishing
-// a directly-missing master (never attempted) from one that is itself unloadable (attempted,
-// recorded in LoadOrder.LoadFailures) — a pure set-difference over data the load order already has,
-// never a Mutagen re-read. No cascade: only a plugin's own Masters list is consulted, never a
-// master's own Masters.
+// ADR-0037: a plugin declaring a master absent from the load order is flagged, distinguishing a
+// directly-missing master from one that is itself unloadable.
 public class MasterResolutionTests
 {
     private static PluginMetadata Plugin(string name, params string[] masters) =>

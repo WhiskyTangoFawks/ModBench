@@ -12,18 +12,13 @@ using Noggog;
 
 namespace MEditService.Tests.Edits;
 
-/// <summary>
-/// The header-write half of the Partial Form work: the one sanctioned write to header
-/// flag bit 14 — clearing it restores full editability, the write touches only that bit,
-/// and no other write surface can flip the same bit as a side effect.
-/// </summary>
+/// <summary>The one sanctioned write to header flag bit 14: clearing it restores full
+/// editability, touches only that bit, and no other write surface can flip it.</summary>
 public sealed class PartialFormHeaderWriteTests : IDisposable
 {
     private const int PartialFormBit = 0x0000_4000;
-    // An extra, unrelated bit riding alongside PartialFormBit on the fixture cell — the rival
-    // (a full-overwrite Set) clobbers this the moment it's exercised, so its presence is what makes
-    // the byte-diff assertion a real test rather than one that would pass by coincidence on a cell
-    // that carried no other flag at all.
+    // An extra, unrelated bit riding alongside PartialFormBit: the rival (a full-overwrite Set)
+    // clobbers it, so its presence is what keeps the byte-diff assertion from passing by coincidence.
     private const int PersistentBit = 0x0000_0400;
     private const string PluginName = "PartialFormHeaderWrite.esp";
     private const string Origin = "PartialFormHeaderWriteMod";
@@ -78,11 +73,9 @@ public sealed class PartialFormHeaderWriteTests : IDisposable
     private RecordEditService Service() =>
         new(_mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
 
-    // Refusal on a body field while flagged, success clearing the flag, success on the
-    // previously-refused field once cleared. xEdit's own SetIsPartialForm
-    // (wbImplementation.pas:14146-14221) re-populates a cleared override from its nearest
-    // non-partial predecessor; mEdit's minimum, stated in CONTEXT.md's own Partial Form entry, is
-    // narrower — the record becomes writable again, which is what this pins.
+    // xEdit's SetIsPartialForm (wbImplementation.pas:14146-14221) re-populates a cleared override from
+    // its nearest non-partial predecessor; mEdit's minimum is narrower, and is that the record becomes
+    // writable again.
     [Fact]
     public void EditField_ClearingPartialForm_RestoresFullEditability()
     {
@@ -122,9 +115,8 @@ public sealed class PartialFormHeaderWriteTests : IDisposable
         Assert.Equal(RecordEditRefusal.FieldNotFound, result.Refusal);
     }
 
-    // The write flips only header-flag bit 14 — a byte-diff over the record's own source file,
-    // not just an in-memory assertion, so a codec-level bug (e.g. reserializing more than the one
-    // changed property) would also be caught.
+    // A byte-diff over the record's own source file rather than an in-memory assertion, so a codec
+    // reserializing more than the one changed property is caught too.
     [Fact]
     public void EditField_ClearingIsPartialForm_ChangesOnlyBit14InSourceFile()
     {
@@ -153,17 +145,6 @@ public sealed class PartialFormHeaderWriteTests : IDisposable
         AssertOnlyBit14Changed(before, after, PersistentBit, PersistentBit | PartialFormBit);
     }
 
-    /// <summary>
-    /// Structured JSON diff between the record's own source text before/after a header-flag edit —
-    /// <c>MajorRecordFlagsRaw</c> must differ by exactly bit 14, and every OTHER property must be
-    /// byte-identical. Two properties are deliberately excluded from that "every other property"
-    /// sweep: <c>Fallout4MajorRecordFlags</c> and <c>MajorFlags</c> are not independently stored —
-    /// Mutagen serializes them as pure re-renderings of the very same <c>MajorRecordFlagsRaw</c> int
-    /// (confirmed by inspection: editing <c>is_partial_form</c> alone changes all three in the source
-    /// file), so their changing in lockstep is the one fact moving, not a second one. Everything else
-    /// on the record — <c>EditorID</c>, <c>WaterHeight</c>, and any other field a wider fixture
-    /// carried — must come back unchanged, which is the substance of "no other field moves".
-    /// </summary>
     private static void AssertOnlyBit14Changed(string beforeJson, string afterJson, int expectedBefore, int expectedAfter)
     {
         Assert.Equal(PartialFormBit, expectedBefore ^ expectedAfter);
@@ -189,13 +170,9 @@ public sealed class PartialFormHeaderWriteTests : IDisposable
         Assert.Equal(beforeOthers, afterOthers);
     }
 
-    // Two reflected columns alias the same MajorRecordFlagsRaw int bit 14 lives in.
-    // is_partial_form is the one sanctioned door — a generic write that would flip bit 14 as a side
-    // effect is refused, and nothing lands on disk. Both exercised starting from an UNFLAGGED
-    // record, deliberately: the PartialFormFieldReadOnly guard already blocks every
-    // non-exempt field (these two columns included) whenever the flag IS currently set, so that
-    // shape reaches that guard, not this one — the second door is live precisely when the record
-    // is unflagged, which is what these fixtures set up.
+    // Two reflected columns alias the int bit 14 lives in, and is_partial_form is the one sanctioned
+    // door. Both start from an unflagged record: while flagged, PartialFormFieldReadOnly already
+    // blocks every non-exempt field, so neither column would reach this guard.
     [Fact]
     public void EditField_MajorFlags_AttemptingToSetBit14OnUnflaggedRecord_IsRefused()
     {
@@ -230,11 +207,8 @@ public sealed class PartialFormHeaderWriteTests : IDisposable
         Assert.Equal(before, File.ReadAllText(path));
     }
 
-    // The guard is bit-14-specific, not a blanket lockout of these two columns — a write through
-    // either that leaves bit 14 untouched still succeeds. Also starts unflagged, for the same reason
-    // as the two tests above: while flagged, the pre-existing PartialFormFieldReadOnly guard refuses
-    // every non-exempt field regardless of which bits it touches, so this column would never reach
-    // this guard's own bit-14 comparison at all — the case worth pinning is the one where it does.
+    // The guard is bit-14-specific, not a blanket lockout: a write through either column that leaves
+    // bit 14 untouched still succeeds. Unflagged for the same reason as the tests above.
     [Fact]
     public void EditField_MajorFlags_NotTouchingBit14_Succeeds()
     {

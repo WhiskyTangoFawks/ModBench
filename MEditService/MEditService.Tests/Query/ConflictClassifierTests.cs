@@ -227,10 +227,9 @@ public class ConflictClassifierTests
         Assert.Empty(result.Diffs);
     }
 
-    // ADR-0044: a losing copy of one filename is registered beside the winning one and
-    // reaches the classifier as a second column with the same name; only the participating
-    // (winning, enabled, listed) copy counts. Keyed by ColumnKey — (plugin|origin) — so the two
-    // copies are distinct entries, and the loser is filtered out before any diff is computed.
+    // ADR-0044: a losing copy of one filename is registered beside the winner and reaches the
+    // classifier as a second column with the same name. Keyed by ColumnKey, so the two are distinct
+    // and the loser is filtered out first.
     [Fact]
     public void Classify_LosingCopyOfTheSameFilename_IsExcluded_NotAConflictWithTheWinner()
     {
@@ -277,10 +276,9 @@ public class ConflictClassifierTests
     [Fact]
     public void Classify_WinnerChangesLevel_OtherChangesName_WinnerGetsOverride()
     {
-        // C (winner) changes only "level". B changes "name" (not in C's changedFields).
-        // B.level=5=C.level → B doesn't contest level. B.name not in C's changedFields.
-        // With && in the contest check: not contested → Override; an || would wrongly read
-        // B.name non-null as contesting.
+        // C changes only "level"; B changes "name", which is not in C's changedFields, and B.level equals
+        // C.level. With && in the contest check this is Override; an || would wrongly read B.name
+        // non-null as contesting.
         var master = MakeOverride("A.esp", 0, false, ("name", "Alice"), ("level", 1));
         var other = MakeOverride("B.esp", 1, false, ("name", "Bob"), ("level", 5));
         var winner = MakeOverride("C.esp", 2, true, ("name", "Alice"), ("level", 5));
@@ -330,10 +328,9 @@ public class ConflictClassifierTests
     }
 
     // --- Per-field WinnerColumn/WinnerValue fallthrough ---
-    // Not Partial Form specific — a dedicated pin for the generalized null-field fallthrough on
-    // any ordinary record: a field the record-wide winner simply never set (a null, same as any
-    // other absent field) must not report that winner's own (null) value instead of falling
-    // through to whichever plugin actually carries the value.
+    //
+    // A field the record-wide winner never set must not report that winner's null value instead of
+    // falling through to whichever plugin actually carries one.
 
     [Fact]
     public void Classify_RecordWideWinnerHasNullField_WinnerColumnFallsThroughToEarlierPlugin()

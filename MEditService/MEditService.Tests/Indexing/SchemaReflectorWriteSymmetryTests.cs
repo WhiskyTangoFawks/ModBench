@@ -4,38 +4,13 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Tests.Indexing;
 
-/// <summary>
-/// #649 AC #2 / commitment 3: read/write symmetry is <b>structural</b>. Every leaf emits its Extract
-/// and its Apply as a pair, or is declared read-only with a named reason.
-///
-/// <para><b>What the type already guarantees, and what this file adds.</b> Since
-/// <see cref="LeafWrite{TTarget}"/> landed, "Apply is accidentally null" is not a state that can be
-/// spelled — a leaf cannot be constructed without choosing, and choosing read-only costs a sentence.
-/// So the interesting assertion is no longer "did anyone forget an Apply"; it is the inverse, and it
-/// is the one a type cannot make:</para>
-///
-/// <para><b>A leaf whose shape is writable must not be <i>declared</i> read-only.</b> That is what
-/// catches a real regression. Reverting #643's nested-struct write path, for instance, no longer even
-/// compiles as a bare <c>Apply: null</c> — whoever reverts it must now write a read-only reason for
-/// 83 writable pairs — and this is what refuses to let them: those pairs have resolvable, non-abstract
-/// Loqui setter classes, so declaring them read-only is a lie the audit catches.</para>
-///
-/// <para>Writability is re-derived here from Mutagen directly (does this getter type resolve to a
-/// concrete, instantiable Loqui setter class?), never from <c>SchemaReflector</c>'s own decision —
-/// the same independence posture <c>SchemaReflectorLeafCoverageCompletenessTests</c> takes. Calling
-/// into the classification would make this a tautology.</para>
-/// </summary>
+/// <summary>Since <see cref="LeafWrite{TTarget}"/>, a null Apply cannot be spelled, so the assertion is the
+/// inverse a type cannot make: a writable shape must not be declared read-only.</summary>
 public class SchemaReflectorWriteSymmetryTests
 {
     private static IReadOnlyList<SchemaReflector.LeafWriteFact> Facts() =>
         SharedSchemaReflector.Instance.EnumerateWriteCapability(GameRelease.Fallout4);
 
-    /// <summary>
-    /// Mirrors <c>ReflectedTypes.GetSetterType</c>: a Loqui getter interface's registration names the
-    /// concrete class that backs it. A non-null, non-abstract one means "there is something a write
-    /// could construct and set" — the definition of writable-shaped, derived from Mutagen rather than
-    /// from the reflector.
-    /// </summary>
     private static bool IsWritableShaped(Type getterInterface)
     {
         var registration = getterInterface
@@ -62,12 +37,6 @@ public class SchemaReflectorWriteSymmetryTests
             "reverted nested-struct write path looks like (#643).\n  " + string.Join("\n  ", lies));
     }
 
-    /// <summary>
-    /// Every read-only reason in the schema comes from the small, named vocabulary
-    /// <c>SchemaReflector</c> declares. A mass re-declaration cannot slip through by inventing prose:
-    /// it either reuses a reason that <see cref="NoWritableShapedNestedStruct_IsDeclaredReadOnly"/>
-    /// then rejects on shape, or it invents one and fails here.
-    /// </summary>
     [Fact]
     public void EveryReadOnlyReason_ComesFromTheDeclaredVocabulary()
     {
@@ -97,12 +66,6 @@ public class SchemaReflectorWriteSymmetryTests
             $"it here too, so the vocabulary stays closed:\n  {string.Join("\n  ", unknown)}");
     }
 
-    /// <summary>
-    /// Every Fallout 4 list has a converter for its element type, so
-    /// <c>SchemaRefusals.UnconvertibleElementListReason</c> describes no live leaf — it keeps the
-    /// classification total (see its own doc for the shapes it covers). A converter table that drops
-    /// an integer width <c>BuildElementMeta</c> still reads has to come here and declare a residue.
-    /// </summary>
     [Fact]
     public void EveryElementList_HasAConverter()
     {
@@ -115,13 +78,11 @@ public class SchemaReflectorWriteSymmetryTests
         Assert.Empty(residue);
     }
 
-    /// <summary>#690 made a byte slice a hex leaf; #699 made it one as a <i>list element</i> too, at
-    /// both levels. Pinned by path because the nested one (<c>PackageBranch.Unknown</c>) needs a
-    /// PACK record no edit-path fixture builds, and its writability is still a fact worth holding.
-    /// </summary>
     [Fact]
     public void EveryByteSliceElementList_IsWritable()
     {
+        // Pinned by path because the nested one needs a PACK record no edit-path fixture builds, and
+        // its writability is still a fact worth holding.
         var byteSliceLists = new[] { "dlvw.tnams", "mato.dnams", "pack.procedure_tree.unknown" };
 
         var declaredReadOnly = Facts()
@@ -133,11 +94,6 @@ public class SchemaReflectorWriteSymmetryTests
         Assert.Equal(byteSliceLists.Length, Facts().Count(f => byteSliceLists.Contains(f.Path, StringComparer.Ordinal)));
     }
 
-    /// <summary>
-    /// The plugin header's three columns (#661 made them reachable) are declared read-only with real
-    /// reasons rather than being anomalies — the live population commitment 3 was written for. Pinned
-    /// because it is the one place a reader might expect a gap and find a decision instead.
-    /// </summary>
     [Fact]
     public void HeaderColumns_AreDeclaredReadOnlyWithReasons()
     {

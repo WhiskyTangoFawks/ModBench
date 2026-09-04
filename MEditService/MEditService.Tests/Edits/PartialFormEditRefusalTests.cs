@@ -11,10 +11,6 @@ using Noggog;
 
 namespace MEditService.Tests.Edits;
 
-/// <summary>
-/// Editing a non-header field of a Partial Form record is refused, typed, before anything is
-/// written (the header-write half is <see cref="PartialFormHeaderWriteTests"/>).
-/// </summary>
 public sealed class PartialFormEditRefusalTests : IDisposable
 {
     private const int PartialFormBit = 0x0000_4000;

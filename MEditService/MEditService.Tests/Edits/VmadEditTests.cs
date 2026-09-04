@@ -12,20 +12,9 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Tests.Edits;
 
-/// <summary>
-/// #694: every script gesture, through the ordinary reflected-field door. The
-/// virtual-machine adapter is a struct column like any other, so there is no script write path to
-/// test — there is the one write path, asked to carry scripts.
-///
-/// <para>Each gesture is measured, not asserted: the record's own source document is captured
-/// before and after and diffed member by member (<see cref="ConditionEditTests.DocumentDiff"/>), so
-/// a gesture that quietly rewrote a member it was not asked to touch fails naming that member.</para>
-///
-/// <para>Scripts, properties, struct members, alias scripts and the PERK/QUST fragment arrays are
-/// keyed arrays (<c>SchemaAnnotations.KeyedArrays</c>), so every write stores them in key order
-/// whatever order the payload listed them in — which is what the fixture, built deliberately out of
-/// key order, lets the first gesture here demonstrate.</para>
-/// </summary>
+/// <summary>Each gesture is diffed member by member before and after, so one that quietly rewrote
+/// another member fails naming it. Scripts and properties are keyed arrays, stored in key order
+/// whatever the payload's order.</summary>
 public sealed class VmadEditTests : IDisposable
 {
     private readonly VmadFixture _fixture = new();
@@ -329,9 +318,8 @@ public sealed class VmadEditTests : IDisposable
         Assert.True(result.Applied, result.Message);
         var written = JsonNode.Parse(_fixture.Body(_fixture.Scene))!["VirtualMachineAdapter"]!
             ["ScriptFragments"]!["PhaseFragments"]!.AsArray();
-        // Two fragments share index 1; the flag is what separates them, so all three survive and
-        // the pair sorts among itself by flag value (OnStart = 1 before OnCompletion = 2). A key of
-        // the index alone would have refused this record's own data as a duplicate.
+        // Two fragments share index 1 and the flag separates them, so all three survive and the pair sorts
+        // by flag value. A key of the index alone would refuse this record's own data as a duplicate.
         Assert.Equal(["ZeroEnd", "OneStart", "OneEnd"], written.Select(f => f!["ScriptName"]!.GetValue<string>()));
         var after = ByName(written, "ScriptName");
         var beforeByName = ByName(
@@ -346,10 +334,6 @@ public sealed class VmadEditTests : IDisposable
 
     // ── an absent nested struct ──────────────────────────────────────────────
 
-    /// <summary>A scene adapter carries no <c>on_begin</c>/<c>on_end</c> fragment unless someone
-    /// authored one, so the record's own read value gives them as null — and a resend of a read
-    /// value must be accepted, not refused. It stays absent afterwards: nothing is written for a
-    /// null either way.</summary>
     [Fact]
     public void ResendingAnAdapterWhoseNestedStructIsAbsent_LeavesItAbsent()
     {
@@ -365,10 +349,6 @@ public sealed class VmadEditTests : IDisposable
         Assert.Equal(before, _fixture.Body(_fixture.Scene));
     }
 
-    /// <summary>The other direction, which is what keeps the rule above from being a delete
-    /// gesture nobody asked for: a null over a struct the record <i>does</i> carry is refused, and
-    /// writes nothing. A Loqui member the record format requires could not survive being cleared,
-    /// and this is what stops a payload doing it by accident.</summary>
     [Fact]
     public void NullingAStructTheRecordCarries_IsRefusedAndWritesNothing()
     {
@@ -423,21 +403,15 @@ public sealed class VmadEditTests : IDisposable
         Assert.Contains("10 / 0", result.Message, StringComparison.Ordinal);
     }
 
-    // ── addressing one keyed element by its key ──────────────────────────────
-    //
-    // #716: a keyed array's rows are labelled by key, not by position, and one path is shared by
-    // every column of the compare grid — so an array op names its element with a "key" hop and the
-    // writer resolves it against the array it actually walked to. Each test here reads the record's
-    // own document back, since a payload that addressed the wrong element still applies cleanly.
+    // A keyed array's rows are labelled by key, not by position, so an array op names its element with
+    // a "key" hop. Each test reads the document back, since a payload addressing the wrong element
+    // still applies cleanly.
 
     private static JsonObject KeyHop(string key, params string[] members) =>
         new() { ["kind"] = "key", ["key"] = key, ["members"] = new JsonArray([.. members.Select(m => (JsonNode)m!)]) };
 
     private static JsonObject MemberHop(string name) => new() { ["kind"] = "member", ["name"] = name };
 
-    /// <summary>The corrupting case. The quest's fragments are keyed on (stage, stage_index), so
-    /// the row for stage 10 is labelled "10 / 0" — text whose <i>second character is a digit</i>,
-    /// which reading it as an index parses to a perfectly valid 0. Element 0 is stage 5.</summary>
     [Fact]
     public void RemovingAQuestFragmentByItsCompositeKey_RemovesThatFragment_NotTheOneAtTheIndexTheKeyParsesTo()
     {
@@ -462,9 +436,6 @@ public sealed class VmadEditTests : IDisposable
         Assert.Equal(beforeByStage["5"], written[0]!.ToJsonString());
     }
 
-    /// <summary>A key hop mid-path, twice over, and a move whose effect is visible: the scalar
-    /// array being reordered is reached through the script's key and the property's key rather than
-    /// through either one's position.</summary>
     [Fact]
     public void MovingAScalarArrayElementReachedThroughTwoKeyHops_ReordersThatArrayAlone()
     {
@@ -491,9 +462,6 @@ public sealed class VmadEditTests : IDisposable
             d => Assert.StartsWith("VirtualMachineAdapter.Scripts[0].Properties[3].Data[", d, StringComparison.Ordinal));
     }
 
-    /// <summary>A dotted key member: a quest alias is keyed on <c>property.alias</c>, so the key is
-    /// the alias number read out of the alias's own object property, and the row is labelled
-    /// "0".</summary>
     [Fact]
     public void RemovingAnAliasScriptsPropertyReachedThroughADottedAliasKey_RemovesThatProperty()
     {
@@ -521,9 +489,6 @@ public sealed class VmadEditTests : IDisposable
             d => Assert.StartsWith("VirtualMachineAdapter.Aliases[0].Scripts[0].Properties", d, StringComparison.Ordinal));
     }
 
-    /// <summary>A freshly added element carries its discriminator and nothing else (#710), so its
-    /// key is the empty one — a real key, and the only handle the user has on the row until they
-    /// name it.</summary>
     [Fact]
     public void AFreshlyAddedScriptIsAddressableByItsEmptyKey()
     {
@@ -549,11 +514,6 @@ public sealed class VmadEditTests : IDisposable
         Assert.Equal(before, _fixture.Body(_fixture.Npc));
     }
 
-    /// <summary>A move names its element by key like every other op, and the grammar resolves it —
-    /// but a keyed array is stored in key order on every write (<c>Edits.KeyedArrays</c>), so the
-    /// order the file ends up in is its key order regardless. Which is why the record editor offers
-    /// no Move on a keyed array's element at all (<c>recordUtils.ts</c>'s own
-    /// <c>arrayElementContext</c>).</summary>
     [Fact]
     public void MovingAKeyedElement_IsResolvedAndLeavesTheArrayInKeyOrder()
     {
@@ -571,10 +531,6 @@ public sealed class VmadEditTests : IDisposable
         Assert.Equal(before, _fixture.Body(_fixture.Npc));
     }
 
-    /// <summary>Which members a key is read against comes from the record's own schema, never from
-    /// the envelope: a key hop naming an array the schema does not key means nothing here, and is
-    /// refused rather than resolved against whatever the payload claimed. A script's own
-    /// <c>data_string_array</c> is a plain positional list of strings.</summary>
     [Fact]
     public void AKeyHopIntoAnArrayTheSchemaDoesNotKey_IsRefusedAndWritesNothing()
     {
@@ -595,9 +551,6 @@ public sealed class VmadEditTests : IDisposable
         Assert.Equal(before, _fixture.Body(_fixture.Npc));
     }
 
-    /// <summary>A key nothing in this array carries is nothing to remove — the same no-op answer an
-    /// out-of-range index already gets (<c>ArrayOpEditTests</c>), and never a write aimed somewhere
-    /// else.</summary>
     [Fact]
     public void RemovingByAKeyNoElementCarries_WritesNothing()
     {
@@ -614,14 +567,10 @@ public sealed class VmadEditTests : IDisposable
         Assert.Equal(before, _fixture.Body(_fixture.Npc));
     }
 
-    /// <summary>Each written script's own text, by name — what a gesture that was not about a
-    /// script has to leave byte-identical, wherever the sort moved it to.</summary>
     private static Dictionary<string, string> WrittenScripts(string body) =>
         JsonNode.Parse(body)!["VirtualMachineAdapter"]!["Scripts"]!.AsArray()
             .ToDictionary(s => s!["Name"]!.GetValue<string>(), s => s!.ToJsonString(), StringComparer.Ordinal);
 
-    /// <summary>Each element's own written text, by whatever names it — what a gesture aimed at
-    /// one element has to leave byte-identical in every other, wherever the sort moved them to.</summary>
     private static Dictionary<string, string> ByName(JsonArray written, string member) =>
         written.ToDictionary(e => e![member]!.ToJsonString(), e => e!.ToJsonString(), StringComparer.Ordinal);
 
@@ -689,10 +638,8 @@ public sealed class VmadEditTests : IDisposable
             perk.VirtualMachineAdapter = perkAdapter;
             Perk = perk.FormKey;
 
-            // A scene phase fragment's key is its phase index and its phase flag, in that order —
-            // xEdit's own wbStructSK([1, 0]) — so two fragments can share an index and be told
-            // apart by the flag. Also the one adapter here whose own on_begin/on_end fragments are
-            // unset, so a resend of it carries a null nested struct member.
+            // A scene phase fragment's key is its phase index then its phase flag (xEdit's
+            // wbStructSK([1, 0])), so two fragments can share an index.
             var scene = new Scene(mod.GetNextFormKey("Vmad694Scene"), Fallout4Release.Fallout4) { EditorID = "Vmad694Scene" };
             quest.Scenes.Add(scene);
             var sceneAdapter = new SceneAdapter { Version = 6, ObjectFormat = 2 };
@@ -754,9 +701,6 @@ public sealed class VmadEditTests : IDisposable
         public string Body(FormKey formKey) =>
             _mirror.Index!.At(RecordRef.Effective).GetDocument(formKey.ToString(), Plugin)!.Body!;
 
-        /// <summary>The adapter exactly as the record editor reads it — the value a resend puts
-        /// back, so a gesture's payload is the read value with one member changed and nothing
-        /// else, the way the webview builds it.</summary>
         public JsonObject Adapter(FormKey formKey)
         {
             var document = _mirror.Index!.At(RecordRef.Effective).GetDocument(formKey.ToString(), Plugin)!;
@@ -764,9 +708,6 @@ public sealed class VmadEditTests : IDisposable
             return JsonNode.Parse(raw!.ToString()!)!.AsObject();
         }
 
-        /// <summary>Resends the adapter unchanged, so the record on disk is in key order before a
-        /// gesture that asserts on positions. The fixture writes it out of order on purpose; a test
-        /// about one member changing should not also be a test about the sort.</summary>
         public void Normalize(FormKey formKey)
         {
             var result = Service().EditField(Plugin, formKey.ToString(), Field, Json(Adapter(formKey)));

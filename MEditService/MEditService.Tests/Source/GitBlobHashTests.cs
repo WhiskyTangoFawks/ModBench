@@ -10,25 +10,10 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Tests.Source;
 
-/// <summary>
-/// <c>documents.content_hash</c> is <b>the git blob hash</b> of the document body —
-/// not "a hash", and not a hash of our own devising. That is the whole point: the same bytes sitting
-/// in a tracked mod folder's source have exactly this hash in git's object database, so a SQL
-/// aggregate over content_hash and a <c>git cat-file</c> are talking about the same object.
-///
-/// Which makes real git the only honest oracle here. Asserting our SHA-1 against a SHA-1 we computed
-/// the same way would be tautological — it would pass just as happily if we had the header format
-/// wrong ("blob &lt;len&gt;\0", byte length not character length, no trailing anything). So every
-/// test below shells out to the actual <c>git hash-object</c> and compares.
-/// </summary>
+/// <summary><c>content_hash</c> is the git blob hash, so real git is the only honest oracle: a SHA-1
+/// computed the same way would pass with the header format wrong.</summary>
 public class GitBlobHashTests
 {
-    /// <summary>
-    /// The oracle: real <c>git hash-object</c> over the same bytes. Run through
-    /// <see cref="GitCli"/> (the assembly's one git execution boundary) against a scratch directory
-    /// — <c>hash-object</c> needs no repository, and is verified here to ignore the junk GIT_DIR it
-    /// is handed rather than being quietly influenced by one.
-    /// </summary>
     private static string GitHashObject(byte[] content)
     {
         var dir = Directory.CreateTempSubdirectory("medit-blobhash-");
@@ -44,10 +29,6 @@ public class GitBlobHashTests
         }
     }
 
-    /// <summary>
-    /// The central case: a real record's real source text, straight out of
-    /// the codec — the exact bytes ingest will store as the document body.
-    /// </summary>
     [Fact]
     public async Task Of_ForARealRecordsSourceText_MatchesGitHashObject()
     {
@@ -62,12 +43,6 @@ public class GitBlobHashTests
         Assert.Equal(GitHashObject(body), GitBlobHash.Of(body));
     }
 
-    /// <summary>
-    /// Byte-exact, not text-exact. Multi-byte UTF-8 is the case that separates the two: a header
-    /// built from <c>string.Length</c> rather than the byte count agrees with git for every
-    /// ASCII-only body and disagrees the moment a record carries a non-ASCII EditorID or name — of
-    /// which real game data has plenty.
-    /// </summary>
     [Theory]
     [InlineData("")]
     [InlineData("{}\n")]
@@ -79,11 +54,6 @@ public class GitBlobHashTests
         Assert.Equal(GitHashObject(content), GitBlobHash.Of(content));
     }
 
-    /// <summary>
-    /// Two different bodies must not collide, and — more usefully for the ITM/agreement aggregate
-    /// that consumes this — two <i>equal</i> bodies must agree. COUNT(DISTINCT content_hash) = 1 is
-    /// the whole read model of "every plugin says the same thing about this record".
-    /// </summary>
     [Fact]
     public void Of_IsStableAcrossCallsAndDistinguishesDifferentBodies()
     {

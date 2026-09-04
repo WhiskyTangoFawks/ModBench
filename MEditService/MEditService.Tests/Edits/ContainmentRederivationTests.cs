@@ -15,14 +15,8 @@ using Noggog;
 
 namespace MEditService.Tests.Edits;
 
-/// <summary>
-/// <c>placement</c>/<c>cell_location</c>/<c>container_child</c> track Effective through a
-/// structural write (delete, renumber, create) the same way <c>form_lookup</c>/<c>form_references</c>
-/// do. Runs against <see cref="ContainerModFixture"/> (the same shared fixture
-/// <see cref="EmbeddedChildEditTests"/> and <c>GroupOrderRenormalizationTests</c> use),
-/// asking the read side (<see cref="IRecordReads"/>) directly rather than through a compile — exactly
-/// the live-load order reads that otherwise go stale before a reload.
-/// </summary>
+/// <summary>Asks <see cref="IRecordReads"/> directly rather than through a compile: these are
+/// exactly the live load order reads that otherwise go stale before a reload.</summary>
 public sealed class ContainmentRederivationTests : IDisposable
 {
     private readonly ContainerModFixture _fixture = new();
@@ -58,15 +52,9 @@ public sealed class ContainmentRederivationTests : IDisposable
 
     // ---- an embedded container_child-covered slot rebuilds on delete ----
 
-    // NavigationMesh/Landscape have no schema at all (SchemaReflector publishes none for
-    // land/navm/navi), so neither has a `records` row of its own and neither can be named directly
-    // through RecordEditService.DeleteRecord/RenumberRecord, which both refuse "does not hold record"
-    // the instant GetDocument comes back null — the same "nothing can exercise this through EditField"
-    // limit EmbeddedChildEditTests documents for the identical reason. These two tests exercise the
-    // index seam directly instead, doing exactly what RecordEditService's own embedded branch does:
-    // read the owner, mutate the child inside its object graph, reserialize, and hand the new owner
-    // body to ApplyWorkingTreeChanges/CreateWorkingTreeRecord — the container_child-covered sibling
-    // of the placed-ref case above.
+    // SchemaReflector publishes no schema for land/navm/navi, so neither record has a `records` row
+    // and neither can be named through DeleteRecord/RenumberRecord: both refuse the instant
+    // GetDocument comes back null.
     private async Task<IMajorRecord> ReadEmbedCellAsync()
     {
         var codec = new RecordTextCodec(NullLogger<RecordTextCodec>.Instance);
@@ -148,12 +136,9 @@ public sealed class ContainmentRederivationTests : IDisposable
         var topCellBefore = index.At(RecordRef.Effective).GetCellLocation(_fixture.Plugin, _fixture.TopCell.ToString());
         Assert.NotNull(topCellBefore);
 
-        // TopCellRef sits inside the *worldspace's* document (Worldspace -> TopCell -> Temporary),
-        // two embed levels down — deleting it reserializes the
-        // worldspace, and only a rebuild that recurses into the found TopCell reaches this ref's own
-        // placement row at all. A rebuild that stops at the worldspace's immediate slots (TopCell
-        // itself, never descending into it) would leave this row exactly as it was: present and
-        // stale, not absent.
+        // TopCellRef sits two embed levels down inside the worldspace's document, so only a rebuild that
+        // recurses into the found TopCell reaches its placement row; one stopping at the worldspace's
+        // immediate slots would leave the row as it was.
         var result = EditService().DeleteRecord(_fixture.Plugin, _fixture.TopCellRef.ToString());
         Assert.True(result.Applied, result.Message);
 
@@ -201,10 +186,8 @@ public sealed class ContainmentRederivationTests : IDisposable
         Assert.True(result.Applied, result.Message);
         Assert.NotEqual(_fixture.DialogTopic.ToString(), result.NewFormKey);
 
-        // The response itself never moved — same FormKey, same file — only its owning DialogTopic's
-        // identity changed. Its container_child row must follow, not simply vanish: DialogTopic's
-        // own children are DialogTopic's own accounting — distinct from the deliberately unhandled
-        // "another record's stale pointer into a renamed container" question.
+        // The response itself never moved, only its owning DialogTopic's identity changed, so its
+        // container_child row must follow rather than vanish: a topic's children are its own accounting.
         var after = index.At(RecordRef.Effective).GetContainerParent(_fixture.Plugin, _fixture.Response.ToString());
         Assert.NotNull(after);
         Assert.Equal(result.NewFormKey, after!.Value.ParentFormKey);
@@ -217,15 +200,6 @@ public sealed class ContainmentRederivationTests : IDisposable
 
     // ---- renumbering a container's own record updates its placed refs' placement rows ----
 
-    /// <summary>
-    /// No other test drives a Cell's own <c>RenumberRecord</c> end to end and
-    /// checks its embedded placed refs' <c>placement.parent_cell</c> afterward (the DialogTopic
-    /// regression above, and the renumber tests in this file, exercise the index seam directly
-    /// instead). <c>Cell.Persistent</c>/<c>Temporary</c> are embedded inline in the Cell's own
-    /// document (<c>ContainerChildFields.EmbeddedSlots</c>), so
-    /// <c>CreateWorkingTreeRecord</c>'s re-derivation rebuilds these rows for the new FormKey —
-    /// removing it fails this test.
-    /// </summary>
     [Fact]
     public void RenumberingAContainersOwnRecord_RepointsItsPlacedRefsPlacementRows_ToTheNewFormKey_SameLoadOrder()
     {
@@ -245,12 +219,6 @@ public sealed class ContainmentRederivationTests : IDisposable
             p => p.FormKey == _fixture.TemporaryRef.ToString());
     }
 
-    /// <summary>
-    /// The Cell/<c>placement</c> half of the reload-parity guard —
-    /// <see cref="AfterDeletingAFolderSplitChild_AFreshReopen_AgreesWithTheLive"/> is the
-    /// <c>container_child</c> half; <see cref="WorldspaceRenumberContainmentTests"/> covers only the
-    /// Worldspace/<c>cell_location</c> scenario.
-    /// </summary>
     [Fact]
     public void AfterRenumberingAContainersOwnRecord_AFreshReopen_AgreesWithTheLivePlacementRow()
     {
@@ -274,11 +242,6 @@ public sealed class ContainmentRederivationTests : IDisposable
 
     // ---- renumbering a Quest updates its DialogTopics' container_child rows ----
 
-    /// <summary>
-    /// The Quest half of the DialogTopic regression above — <c>ApplyRenumber</c>'s
-    /// <c>container_child</c> re-point step is fully FormKey-generic (no type branching), so this
-    /// exercises the exact same mechanism one level up the tree; removing that step fails it.
-    /// </summary>
     [Fact]
     public void RenumberingAQuest_RepointsItsDialogTopicsContainerChildRows_ToTheNewParentFormKey_SameLoadOrder()
     {
@@ -301,11 +264,6 @@ public sealed class ContainmentRederivationTests : IDisposable
             c => c.ChildFormKey == _fixture.DialogTopic.ToString());
     }
 
-    /// <summary>
-    /// The Quest/<c>container_child</c> reload-parity half — see
-    /// <see cref="AfterRenumberingAContainersOwnRecord_AFreshReopen_AgreesWithTheLivePlacementRow"/>'s
-    /// own doc comment for why this exists alongside the same-load order test above.
-    /// </summary>
     [Fact]
     public void AfterRenumberingAQuest_AFreshReopen_AgreesWithTheLiveContainerChildRows()
     {

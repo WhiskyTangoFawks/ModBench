@@ -2,18 +2,16 @@ using MEditService.Core.Records;
 
 namespace MEditService.Tests.Records;
 
-// ADR-0001: one index file per MO2 instance, inside the instance root. `origin` is a mod
-// folder name (ADR-0036), unique only within an instance, and every mirror table is keyed
-// (plugin, origin) — so the instance is the only scope an index can honestly live at.
+// ADR-0001: one index file per MO2 instance, inside the instance root. `origin` is a mod folder
+// name unique only within an instance and every mirror table is keyed (plugin, origin), so the
+// instance is the only honest scope.
 public class IndexFileTests
 {
     private static readonly string Instance = Path.Combine(Path.GetTempPath(), "medit-index-file-tests");
 
-    // The location is pinned: inside the instance root, and — since the
-    // instance root is MO2's own working directory but `mods/`, `overwrite/`, `profiles/` and
-    // `downloads/` are content it manages — in none of those. A mod reinstall, a profile delete or
-    // a download sweep would take an index under any of them with it, and a mod archiver would pick
-    // it up as content.
+    // The instance root is MO2's working directory, but `mods/`, `overwrite/`, `profiles/` and
+    // `downloads/` are content it manages: a reinstall, a profile delete or a download sweep would
+    // take an index under any of them with it.
     [Fact]
     public void For_LivesInTheInstanceRoot_BesideTheContentMO2Manages_NeverInsideIt()
     {

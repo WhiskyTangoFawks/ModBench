@@ -11,31 +11,9 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Tests.Edits;
 
-/// <summary>
-/// The scalar half of the silent-success defect — the *complex* half (array/struct shape guards)
-/// is <c>ComplexFieldElementEditTests</c>' job. What this file pins:
-/// <c>LeafWriters.MakeApplier</c> (missing property,
-/// declined converter, JSON <c>null</c> into a non-nullable column) and
-/// <c>FormLinkColumnApplier</c>/<c>ApplyFormLinkJson</c> (missing property, unparseable/wrongly-shaped
-/// FormKey) both answered success unconditionally, no matter what they actually wrote.
-///
-/// <para><b>Two findings that reshape what's actually reachable here</b> (confirmed by reading, not
-/// assumed): most malformed-FormKey-string writes are already refused before they ever reach
-/// <c>ApplyFormLinkJson</c>, because <c>RecordEditService.ValidateFormLinks</c> →
-/// <c>CheckErrorBuilder</c> walks every FormLink leaf (column, struct sub-field, array element) ahead
-/// of <c>RecordFieldWriter.TryApply</c>, and its resolve is a raw string match — any string that
-/// doesn't resolve, malformed or merely absent, already refuses as <c>InvalidFormLink</c>. What isn't
-/// pre-empted is a JSON value that isn't even a string (e.g. a bare number) sent for a
-/// <i>nullable</i> FormLink column: <c>CheckErrorBuilder</c> treats a non-string as "no reference",
-/// which is allowed when the column is nullable, so it sails through to
-/// <c>ApplyFormLinkJson</c>'s own <c>GetString()</c> call, which throws — previously caught and
-/// silently discarded. Separately, "the converter declined the value" doesn't mean the converter
-/// returned <c>null</c> today — none of them do; they throw (<c>InvalidOperationException</c> for the
-/// wrong JSON token kind, <c>ArgumentException</c> for an unrecognised enum member,
-/// <c>FormatException</c> for a bad bitmask string), so the pre-fix behaviour for most of these is an
-/// uncaught exception out of <c>RecordEditService.EditField</c>, not a graceful "reported applied".
-/// </para>
-/// </summary>
+/// <summary>A non-string JSON value for a nullable FormLink column is the one malformed shape
+/// <c>ValidateFormLinks</c> lets through: <c>CheckErrorBuilder</c> reads a non-string as "no
+/// reference".</summary>
 public sealed class ScalarFieldApplierRefusalTests : IDisposable
 {
     private readonly TrackedModFixture _mod = TrackedModFixture.Tracked();
@@ -51,14 +29,6 @@ public sealed class ScalarFieldApplierRefusalTests : IDisposable
 
     // ── converter-declined scalar values ───────────────────────────────────────
 
-    /// <summary>
-    /// Pre-fix observed result: an uncaught <c>System.InvalidOperationException</c> ("The requested
-    /// operation requires an element of type 'Number', but the target element has type 'String'.")
-    /// propagating straight out of <c>EditField</c> — confirmed by running this test against
-    /// unmodified <c>LeafWriters.MakeApplier</c>, not assumed from reading. Not a graceful
-    /// refusal and not a reported success either — a crash, more severe than a
-    /// silent no-op.
-    /// </summary>
     [Fact]
     public void HeightMaxFloatColumn_NonNumericString_IsRefusedAndWritesNothing()
     {
@@ -72,9 +42,6 @@ public sealed class ScalarFieldApplierRefusalTests : IDisposable
         Assert.Equal(before, NpcBody());
     }
 
-    /// <summary>Breadth pin on the identical fix: a bitmask enum column's own converter
-    /// (<c>ReadBitmaskLong</c>'s <c>long.Parse</c>) throws <c>FormatException</c> for a non-numeric
-    /// string, same as the float case above, just a different converter and exception type.</summary>
     [Fact]
     public void FlagsBitmaskColumn_NonNumericString_IsRefusedAndWritesNothing()
     {
@@ -88,9 +55,6 @@ public sealed class ScalarFieldApplierRefusalTests : IDisposable
         Assert.Equal(before, NpcBody());
     }
 
-    /// <summary>Second breadth pin: a plain (non-bitmask) enum column's <c>Enum.Parse</c> throws
-    /// <c>ArgumentException</c> for a member name that doesn't exist — an unrecognised enum
-    /// name.</summary>
     [Fact]
     public void AggressionEnumColumn_UnrecognisedMemberName_IsRefusedAndWritesNothing()
     {
@@ -104,9 +68,6 @@ public sealed class ScalarFieldApplierRefusalTests : IDisposable
         Assert.Equal(before, NpcBody());
     }
 
-    /// <summary>#707: a value outside the column's own integer width is refused at this door with the
-    /// same typed reason a byte-element list gets for the same value — one <c>PrimitiveMap</c>
-    /// converter, two positions, one answer.</summary>
     [Fact]
     public void EnergyLevelByteColumn_OutOfRangeValue_IsRefusedAndWritesNothing()
     {
@@ -120,9 +81,6 @@ public sealed class ScalarFieldApplierRefusalTests : IDisposable
         Assert.Equal(before, NpcBody());
     }
 
-    /// <summary>Scalar direction: a well-formed value still lands and still reports applied —
-    /// the positive control proving the refusals above are about the value, not about this field
-    /// having gone read-only by accident.</summary>
     [Fact]
     public void HeightMaxFloatColumn_ValidValue_StillReportsApplied()
     {
@@ -134,21 +92,6 @@ public sealed class ScalarFieldApplierRefusalTests : IDisposable
 
     // ── missing property on this record's own runtime type ────────────────────
 
-    /// <summary>
-    /// GLOB's <c>output_char</c> column is real, not hypothetical — declared only on
-    /// <c>IGlobalFloatGetter</c> among the four GLOB subclasses (confirmed by the existing
-    /// <c>GetSchemas_Glob_OutputCharColumn_ExclusiveToGlobalFloat_NullOnOtherSubclasses</c>), and
-    /// reachable on a <c>GlobalShort</c> instance because the sibling-merge unions every
-    /// subclass's own columns into one schema. Pre-fix observed result: <c>Applied = true</c>, the
-    /// source document byte-identical — the cleanest silent no-op of the family
-    /// (no exception involved).
-    ///
-    /// <para><c>GlobalShort</c>, not <c>GlobalBool</c> (the more obvious "doesn't have it" sibling):
-    /// confirmed by a throwaway probe that Mutagen's own <c>GlobalBool</c> binary writer/reader
-    /// round-trip is independently broken (writes its <c>FLTV</c> subrecord as 1 byte, read back
-    /// expecting 4 — <c>Mutagen.Bethesda.Plugins.Exceptions.RecordException</c>), an unrelated
-    /// defect and not something to route around by relaxing this test's own fixture fidelity.</para>
-    /// </summary>
     [Fact]
     public void OutputCharColumn_OnGlobalShortInstance_IsRefusedAsFieldNotFound()
     {
@@ -162,8 +105,6 @@ public sealed class ScalarFieldApplierRefusalTests : IDisposable
         Assert.Equal(before, glob.Body());
     }
 
-    /// <summary>Positive control for the fixture/field itself: the same column, on the
-    /// <c>GlobalFloat</c> instance that actually declares it, still applies.</summary>
     [Fact]
     public void OutputCharColumn_OnGlobalFloatInstance_StillReportsApplied()
     {
@@ -176,14 +117,6 @@ public sealed class ScalarFieldApplierRefusalTests : IDisposable
 
     // ── FormLink column: malformed / wrongly-shaped value ──────────────────────
 
-    /// <summary>
-    /// Exercised at the public <c>EditField</c> door: <c>ValidateFormLinks</c>
-    /// (<c>CheckErrorBuilder</c>'s raw string resolve) refuses any string that doesn't
-    /// resolve, malformed or merely absent, as <c>InvalidFormLink</c> before
-    /// <c>RecordFieldWriter.TryApply</c> — let alone <c>ApplyFormLinkJson</c> — is ever reached. Kept
-    /// here as a documented pin (the same posture <c>TopLevelFormLinkColumnEditTests</c> takes for
-    /// its already-green columns), not claimed as a red-to-green proof.
-    /// </summary>
     [Fact]
     public void RaceFormLinkColumn_MalformedString_IsRefusedAtTheEditFieldDoor()
     {
@@ -193,16 +126,6 @@ public sealed class ScalarFieldApplierRefusalTests : IDisposable
         Assert.Equal(RecordEditRefusal.InvalidFormLink, result.Refusal);
     }
 
-    /// <summary>
-    /// The genuinely-reachable variant: <c>voice</c> is a <i>nullable</i> FormLink column
-    /// (<c>GetSchemas_Npc_Voice_IsNullableFormLink</c>), so <c>CheckErrorBuilder</c>'s
-    /// <c>ExtractString</c> returns <c>null</c> for a non-string JSON value (a bare number), which
-    /// <c>CheckScalar</c> treats as "no reference" — allowed, since the column is nullable — and lets
-    /// straight through <c>ValidateFormLinks</c>. Pre-fix observed result: <c>Applied = true</c>: the
-    /// value silently failed to write (<c>ApplyFormLinkJson</c>'s own <c>val.GetString()</c> throws
-    /// <c>InvalidOperationException</c> for a Number-kind element, caught by its blanket try/catch,
-    /// logged at Trace, and swallowed) while the write path reported success regardless.
-    /// </summary>
     [Fact]
     public void VoiceFormLinkColumn_NonStringJsonValue_IsRefusedAndWritesNothing()
     {
@@ -215,15 +138,6 @@ public sealed class ScalarFieldApplierRefusalTests : IDisposable
 
     // ── An OMOD carrying one property, for the sub-field-decline slice below ──
 
-    /// <summary>
-    /// A struct-element array (OMOD's <c>properties</c>) where one element's own widened
-    /// leaf-union sub-field (<c>value</c>) is present on the concrete leaf but carries a value that
-    /// leaf's own converter (<c>ConvertWidenedJson</c>) declines — distinct from
-    /// <c>ComplexFieldElementEditTests</c>' plain-struct sibling test: this one exercises the
-    /// sparse leaf-union path (<c>MakeWidenedApplier</c>/<c>ApplySubFields</c>), where a
-    /// <i>different</i> reason for "property not found" (a leaf that simply lacks this member) must
-    /// stay silent while this reason (present but unconvertible) must not.
-    /// </summary>
     [Fact]
     public void OmodPropertiesArray_DeclinedWidenedLeafValue_RefusesTheWholeArrayWrite()
     {
@@ -239,9 +153,9 @@ public sealed class ScalarFieldApplierRefusalTests : IDisposable
         Assert.Equal(before, omod.Body());
     }
 
-    /// <summary>An OMOD carrying one <c>GlobalFloat</c>/<c>GlobalShort</c> pair — the sibling-merge
-    /// "column exists on the schema, not on this instance" shape, which
-    /// <see cref="TrackedModFixture"/>'s NPC-only shape has no equivalent of.</summary>
+    // The sibling-merge "column exists on the schema, not on this instance" shape, which
+    // TrackedModFixture's NPC has no equivalent of. GlobalShort rather than GlobalBool: Mutagen's
+    // GlobalBool writes FLTV as one byte and reads back expecting four.
     private sealed class GlobFixture : IDisposable
     {
         private const string PluginName = "Glob532.esp";
@@ -304,10 +218,6 @@ public sealed class ScalarFieldApplierRefusalTests : IDisposable
         }
     }
 
-    /// <summary>An OMOD carrying one <c>ObjectModIntProperty</c> — same shape
-    /// <c>ComplexFieldElementEditTests.OmodFixture</c> uses, duplicated per this codebase's
-    /// established self-contained-fixture-per-file convention
-    /// (<c>ConditionEditTests.ConditionFixture</c>'s own stated reasoning).</summary>
     private sealed class OmodFixture : IDisposable
     {
         private const string PluginName = "Omod532.esp";

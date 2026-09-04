@@ -30,9 +30,8 @@ public class PartialFormFlagTests
         Assert.False(PartialFormFlag.IsSet(cell));
     }
 
-    // Bit 14 is reused for unrelated meanings on a record type that never declares a
-    // 'Partial Form' header flag — a type without static IsPartialFormable => true must not have the
-    // same bit misread as Partial Form. Npc is not partial-formable in Fallout4's definitions.
+    // Bit 14 carries unrelated meanings on a record type that declares no 'Partial Form' header
+    // flag, so a type without IsPartialFormable must not have it misread as one.
     [Fact]
     public void IsSet_NonPartialFormableTypeWithSameBitSet_ReturnsFalse()
     {

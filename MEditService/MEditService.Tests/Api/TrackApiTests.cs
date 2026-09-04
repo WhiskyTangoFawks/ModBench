@@ -6,10 +6,6 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Tests.Api;
 
-/// <summary>
-/// ADR-0041: the wire contract for the Track gesture. Real HTTP host, real load order,
-/// real mod folder on disk.
-/// </summary>
 public sealed class TrackApiTests(LoadedApiFixture<TestPluginFixture> loaded)
     : IClassFixture<LoadedApiFixture<TestPluginFixture>>
 {

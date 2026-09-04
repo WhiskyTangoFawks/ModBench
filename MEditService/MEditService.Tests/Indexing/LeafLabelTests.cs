@@ -2,11 +2,6 @@ using MEditService.Core.Schema;
 
 namespace MEditService.Tests.Indexing;
 
-/// <summary>
-/// The label a union leaf is offered under, as a function of two type names alone — no schema, no
-/// game. <see cref="AbstractUnionDiscriminatorMetadataTests"/> is the counterpart that asserts what
-/// this produces across every abstract union Fallout 4 actually has.
-/// </summary>
 public class LeafLabelTests
 {
     [Theory]
@@ -24,10 +19,6 @@ public class LeafLabelTests
     public void Labels(string abstractBaseName, string leafClassName, string expected) =>
         Assert.Equal(expected, LeafLabel.For(abstractBaseName, leafClassName));
 
-    /// <summary>
-    /// An acronym is a word, not a run of letters to flatten: splitting on the snake_case boundary
-    /// alone would answer "Npcdata" here, which is neither the class name nor English.
-    /// </summary>
     [Fact]
     public void KeepsAnAcronymWhole()
     {

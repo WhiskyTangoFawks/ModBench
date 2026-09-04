@@ -59,12 +59,8 @@ public class ContainerChildQueryServiceTests
         public IRecordIndex? Index => null;
         public IndexWriteGate WriteGate { get; } = new();
         public LoadOrderStatus Status => LoadOrderStatus.None;
-        // This double's own tests only ever exercise the Reads/RequireReads() side — loadOrder
-        // defaults to null in most of them, which would make a real "both null together"
-        // RequireScope() check throw where RequireRepository() never used to. Gating on repo
-        // alone keeps that (repo's presence is what "no load order" means for these tests, same
-        // as the RequireRepository() it replaces), while repo is null (the one test that wants
-        // the throw) still throws regardless of loadOrder.
+        // Gating on repo alone: repo's presence is what "no load order" means for these tests, most of
+        // which leave loadOrder null, so a "both null together" check would throw in all of them.
         public (ILoadOrder LoadOrder, IRecordReads Reads) RequireScope() =>
             repo is { } r ? (loadOrder!, r) : throw new NoLoadOrderException();
         public void Reconcile(string gameDirectory, IReadOnlyList<LoadOrderEntry> plugins, GameRelease gameRelease, string? instanceRoot = null) => throw new NotSupportedException();
@@ -90,11 +86,8 @@ public class ContainerChildQueryServiceTests
         public void Dispose() { }
     }
 
-    // Mixed DialogTopics/DialogBranches/Scenes rows come back Topics, then Branches, then
-    // Scenes (xEdit's own DIAL, DLBR, SCEN order) — never the raw table's alphabetical
-    // "DialogBranches, DialogTopics, Scenes" ORDER BY. A naive pass-through of
-    // IRecordReads.GetContainerChildren's own row order would fail this: it would put the branch
-    // before either topic.
+    // Mixed rows come back Topics, then Branches, then Scenes (xEdit's DIAL, DLBR, SCEN order), never
+    // the raw table's alphabetical ORDER BY, which would put the branch before either topic.
     [Fact]
     public void GetChildren_Quest_OrdersTopicsThenBranchesThenScenes()
     {
@@ -125,12 +118,9 @@ public class ContainerChildQueryServiceTests
         Assert.Equal(["dial", "dial", "dlbr", "scen"], result.Select(r => r.RecordType).ToArray());
     }
 
-    // #560: a returned "dial" child (a Quest's own Dialog Topic) is itself a container the
-    // Plugins tree can expand further — its HasContainerChildren flag must survive the
-    // RecordSummary -> ContainerChildSummary flattening this service does, the same way every other
-    // hydrated field (EditorId, IsWinner, WorkingTreeState...) already does. Rival: a
-    // ContainerChildSummary constructor call that drops the flag on the floor would still pass every
-    // other assertion in this file, since none of them look at it.
+    // A returned "dial" child is itself a container the Plugins tree can expand, so its
+    // HasContainerChildren flag must survive the flattening this service does. A constructor call
+    // dropping it would pass every other assertion here, since none look at it.
     [Fact]
     public void GetChildren_HydratesHasContainerChildren_FromRecordSummary()
     {
@@ -196,12 +186,9 @@ public class ContainerChildQueryServiceTests
         Assert.Equal("ModB", reader.LastGetContainerChildrenOrigin);
     }
 
-    // A container_child row naming a child FormKey Search doesn't return is an index
-    // inconsistency between two tables written from the same ingest pass — never expected in
-    // practice, but GetChildren degrades by omission (skips just that row, keeps the survivors)
-    // rather than throwing, and logs a warning naming every identifying fact. Rival: an
-    // unconditional dictionary index (`byFormKey[row.ChildFormKey]` instead of TryGetValue) would
-    // throw KeyNotFoundException here instead of returning dial1 alone.
+    // A container_child row naming a child Search does not return is an index inconsistency between
+    // two tables written from one ingest pass. GetChildren degrades by omission rather than throwing;
+    // an unconditional dictionary index would throw KeyNotFoundException here.
     [Fact]
     public void GetChildren_ContainerChildRowSearchDidNotReturn_SkipsIt_ReturnsSurvivors_LogsWarning()
     {

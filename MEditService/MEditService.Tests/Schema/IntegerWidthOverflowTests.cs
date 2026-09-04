@@ -7,10 +7,8 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Tests.Schema;
 
-/// <summary>#707: a value the column's own integer width cannot hold refuses the whole write rather
-/// than truncating into it. Held at the <see cref="ColumnSpec.Apply"/> seam, where the one converter
-/// table <c>LeafClassification.PrimitiveMap</c> serves both positions — a scalar column and a
-/// bare-scalar list element — so the two cannot drift apart.</summary>
+/// <summary>Held at the <see cref="ColumnSpec.Apply"/> seam, where one converter table serves both
+/// a scalar column and a bare-scalar list element, so the two cannot drift apart (#707).</summary>
 public class IntegerWidthOverflowTests
 {
     private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
@@ -33,13 +31,6 @@ public class IntegerWidthOverflowTests
         _ => throw new ArgumentOutOfRangeException(nameof(table)),
     };
 
-    /// <summary>One column per integer width the table maps, each given a value one step outside it
-    /// in both directions. The four narrowed widths (byte/sbyte/short/ushort) cast from
-    /// <c>GetInt32</c> and are what <c>checked</c> fixes; int/uint/ulong reach <c>GetInt32</c>/
-    /// <c>GetUInt32</c>/<c>GetUInt64</c>, the JSON reader's own range-checked accessors, and are here
-    /// so the whole table is pinned to one answer rather than three widths being taken on trust.
-    /// <c>long</c> is the one width with no Fallout 4 scalar column to name; it is pinned at the list
-    /// position instead, by <see cref="LongListElement_IsRejectedOnlyOutsideItsWidth"/>.</summary>
     [Theory]
     // byte
     [InlineData("npc_", "energy_level", "256")]
@@ -67,8 +58,6 @@ public class IntegerWidthOverflowTests
         Assert.Equal(ApplyOutcome.ValueRejected, Writer(table, column)(Record(table), Json(value)));
     }
 
-    /// <summary>The positive control: the widest value each width <i>can</i> hold still lands, so the
-    /// refusals above are about the range and not about the column having gone read-only.</summary>
     [Theory]
     [InlineData("npc_", "energy_level", "255")]
     [InlineData("revb", "reverb_amp", "-128")]
@@ -82,11 +71,8 @@ public class IntegerWidthOverflowTests
         Assert.Equal(ApplyOutcome.Applied, Writer(table, column)(Record(table), Json(value)));
     }
 
-    /// <summary>The one width held at the list position instead: Fallout 4 has no <c>long</c> scalar
-    /// column at all — <c>scco.xnams</c>, a list of <c>long</c>, is the whole population — so the same range
-    /// question is asked of the list element the shared converter table serves. <c>GetInt64</c>
-    /// range-checks itself and throws <see cref="FormatException"/>, so the answer matches the
-    /// widths above without a <c>checked</c> cast.</summary>
+    // long is the one width Fallout 4 gives no scalar column, so the list position is the whole
+    // population and the width is pinned there instead.
     [Theory]
     [InlineData("[9223372036854775808]", ApplyOutcome.ValueRejected)]
     [InlineData("[-9223372036854775809]", ApplyOutcome.ValueRejected)]
@@ -97,8 +83,6 @@ public class IntegerWidthOverflowTests
         Assert.Equal(expected, Writer("scco", "xnams")(Record("scco"), Json(value)));
     }
 
-    /// <summary>AC 3, the pair the ticket turns on: 4096 into a byte is the same answer whether it
-    /// arrives as a scalar column's whole value or as one element of a byte-element list.</summary>
     [Fact]
     public void SameOutOfRangeByte_IsRejectedAsAScalarAndAsAListElement()
     {
@@ -108,8 +92,6 @@ public class IntegerWidthOverflowTests
             Writer("misc", "component_display_indices")(Record("misc"), Json("[3, 4096]")));
     }
 
-    /// <summary>The refusal is of the whole array — the in-range sibling element does not land
-    /// either, so no half-written list reaches the record.</summary>
     [Fact]
     public void OutOfRangeListElement_LeavesTheWholeListUntouched()
     {

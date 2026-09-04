@@ -5,15 +5,8 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Tests.Records;
 
-/// <summary>
-/// The generated <c>json_extract</c> views — the SQL door onto the documents table.
-///
-/// These are the contract for user filter SQL and <c>medit.query</c> scripts (invariant 8) and for
-/// nothing else: no C# read path touches them. So they are tested the way a user meets them, by
-/// running SQL against the connection, and their values are checked against the record's own
-/// <c>ColumnSpec.Extract</c> — the same delegate the typed path uses — rather than against literals,
-/// which would only pin whatever the view happens to emit.
-/// </summary>
+/// <summary>The views are the contract for user filter SQL and scripts, so they are tested by running SQL
+/// and checked against <c>ColumnSpec.Extract</c> rather than literals.</summary>
 public sealed class GeneratedViewTests(CutDownPluginFixture fixture) : IClassFixture<CutDownPluginFixture>
 {
     private readonly CutDownPluginFixture _fixture = fixture;
@@ -35,16 +28,11 @@ public sealed class GeneratedViewTests(CutDownPluginFixture fixture) : IClassFix
         return names;
     }
 
-    /// <summary>
-    /// A view exists per record type, under the name its wide table used to have — that name is the
-    /// whole point, since it is what user filter SQL was already written against.
-    /// </summary>
     [Fact]
     public void EveryRecordType_HasAView_NamedAsItsTableWas()
     {
-        // No exclusion since #631: the plugin header has a document, so it has a view like every
-        // other type — which is what keeps a `header` relation at the SQL door now that its wide
-        // table is gone.
+        // The plugin header has a document, so it has a view like every other type — no exclusion:
+        // that view is what keeps a `header` relation at the SQL door (#631).
         var expected = SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4).Keys
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
@@ -58,11 +46,6 @@ public sealed class GeneratedViewTests(CutDownPluginFixture fixture) : IClassFix
         Assert.Empty(expected.Except(actual, StringComparer.OrdinalIgnoreCase));
     }
 
-    /// <summary>
-    /// A scalar reads through the view as the record's own extractor reports it. Checked over every
-    /// npc_ row rather than one, so a projection that happens to work for the first record does not
-    /// pass for the type.
-    /// </summary>
     [Fact]
     public void ScalarColumns_ReadTheSameValuesTheExtractorProduces()
     {
@@ -83,11 +66,6 @@ public sealed class GeneratedViewTests(CutDownPluginFixture fixture) : IClassFix
         Assert.NotNull(col);
     }
 
-    /// <summary>
-    /// The COALESCE-to-default rule, stated where it is observable: a field the serializer
-    /// omitted because it equals its default must read that default, not NULL. Verified through a
-    /// column whose documents genuinely lack the path.
-    /// </summary>
     [Fact]
     public void OmittedDefaults_ReadAsTheDefault_NotNull()
     {
@@ -104,10 +82,6 @@ public sealed class GeneratedViewTests(CutDownPluginFixture fixture) : IClassFix
         Assert.Equal(absent, zeros);
     }
 
-    /// <summary>
-    /// A translated string reads its Value, not the {TargetLanguage, Value} envelope — and the same
-    /// projection still serves a plain string, which is what the $.P.Value → $.P fallback buys.
-    /// </summary>
     [Fact]
     public void TranslatedStrings_ReadTheirValue_NotTheEnvelope()
     {
@@ -117,10 +91,6 @@ public sealed class GeneratedViewTests(CutDownPluginFixture fixture) : IClassFix
         Assert.DoesNotContain("TargetLanguage", name, StringComparison.Ordinal);
     }
 
-    /// <summary>
-    /// A [Flags] enum reads as joined member names, which is what keeps `LIKE '%Flag%'` — the way
-    /// record flags are actually filtered — working.
-    /// </summary>
     [Fact]
     public void FlagsEnums_ReadAsJoinedNames()
     {
@@ -134,11 +104,6 @@ public sealed class GeneratedViewTests(CutDownPluginFixture fixture) : IClassFix
         Assert.True(matching > 0, "A flag name must be matchable with LIKE — that is the capability this rendering exists to keep.");
     }
 
-    /// <summary>
-    /// The ghost-column rule and the omission rule, together: a view carries no array, no struct and
-    /// no widened column, and — the positive control through the identical query path — it does
-    /// carry the scalars.
-    /// </summary>
     [Fact]
     public void Views_OmitArraysStructsAndWidenedColumns_ButKeepScalars()
     {
@@ -160,11 +125,6 @@ public sealed class GeneratedViewTests(CutDownPluginFixture fixture) : IClassFix
         Assert.True(scalarsPresent > 0, "Positive control: viewable scalars must actually be present.");
     }
 
-    /// <summary>
-    /// The GRUP timestamps are gone from the schema itself, so no view can carry them as an
-    /// always-NULL column. Asserted against the schema and the views together — the columns must be
-    /// absent from both, not merely omitted from one.
-    /// </summary>
     [Fact]
     public void GrupTimestamps_AreAbsentFromSchemaAndViewsAlike()
     {

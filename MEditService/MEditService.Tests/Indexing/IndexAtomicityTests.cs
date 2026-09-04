@@ -43,17 +43,9 @@ public class IndexAtomicityTests
 
         using var repo = OpenRepo();
 
-        // Force a deterministic failure during the form_lookup flush phase, which runs after the
-        // main record-table appends have already committed. Without an enclosing transaction the
-        // npc_ rows would survive the throw as a partial snapshot.
-        //
-        // VMAD/conditions have no side tables to drop for this purpose — both
-        // collect straight into the shared refs list, an in-memory step with nothing to fail against
-        // until form_lookup/form_references' own flush later in Index(). form_lookup is
-        // unconditionally appended for any indexed record (unlike form_references, which is skipped
-        // entirely when refs is empty — as it is for this bare-NPC fixture), so it is a reliable,
-        // fixture-agnostic failure point. The physical table is mirror.form_lookup — the bare
-        // name is the registered view over it.
+        // form_lookup, not form_references: it is appended unconditionally for any indexed record,
+        // and its flush runs after the record-table appends, so without an enclosing transaction the
+        // npc_ rows would survive the throw.
         using (var drop = repo.Connection.CreateCommand())
         {
             drop.CommandText = "DROP TABLE mirror.form_lookup";

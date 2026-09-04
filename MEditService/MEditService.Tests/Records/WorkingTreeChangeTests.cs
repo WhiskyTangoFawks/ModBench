@@ -7,14 +7,9 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Tests.Records;
 
-/// <summary>
-/// At the index seam: <see cref="IRecordIndex.ApplyWorkingTreeChanges"/> is what makes
-/// <see cref="RecordRef.Effective"/> and <see cref="RecordRef.Head"/> stop being the same answer.
-///
-/// Bodies here are real codec documents — read back out of the index after a real ingest, then
-/// edited as text — not hand-written JSON: the invariant under test is "Body bytes = the source
-/// file's bytes at that ref", so a fabricated body would test a shape the codec never emits.
-/// </summary>
+/// <summary>Bodies are real codec documents edited as text, not hand-written JSON: the invariant is
+/// "Body bytes = the source file's bytes at that ref", so a fabricated body would test a shape the
+/// codec never emits.</summary>
 public sealed class WorkingTreeChangeTests : IDisposable
 {
     private static readonly SchemaReflector Reflector = SharedSchemaReflector.Instance;
@@ -45,9 +40,8 @@ public sealed class WorkingTreeChangeTests : IDisposable
         return index;
     }
 
-    // EditorID is an identity column, not a reflected field (ColumnReflection.MajorRecordHeaderMembers) — so this
-    // reads the projection of the body that every listing, resolve and tree row is built from,
-    // which is exactly the read-model-visible effect an edit has to produce.
+    // EditorID is an identity column, not a reflected field, so this reads the projection of the
+    // body every listing, resolve and tree row is built from.
     private static string EditorIdOf(RecordDocument document) =>
         document.EditorId ?? throw new InvalidOperationException("The fixture record has no EditorID.");
 

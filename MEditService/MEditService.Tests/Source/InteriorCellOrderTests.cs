@@ -6,16 +6,9 @@ using Noggog.WorkEngine;
 
 namespace MEditService.Tests.Source;
 
-/// <summary>
-/// Interior cells are folder-split three levels deep — <c>Cells/&lt;block&gt;/&lt;sub-block&gt;/&lt;cell&gt;/</c>
-/// — and every one of those levels is an ordered list whose order the parent's document must carry
-/// (ADR-0042 decision 4). The top of that nesting is not an ordinary group: <c>Cells</c> is a
-/// <i>list</i> group of blocks rather than a FormKey-keyed group of records, and a walk that only
-/// recognises the record-keyed shape skips the whole subtree silently — Track writes no order for it,
-/// the read honours none, and the compiled binary's cell order becomes whatever the filesystem
-/// enumerated. Nothing refuses, because there is no list to disagree with. This suite is the one that
-/// notices.
-/// </summary>
+/// <summary><c>Cells</c> is a list group of blocks, not a FormKey-keyed group, so a walk that only knows
+/// the record-keyed shape skips it silently: nothing refuses, because there is no list to disagree
+/// with.</summary>
 public sealed class InteriorCellOrderTests : IDisposable
 {
     private const string PluginName = "Interior.esp";
@@ -28,8 +21,6 @@ public sealed class InteriorCellOrderTests : IDisposable
 
     private string CellsFolder => Path.Combine(_folder, nameof(Fallout4Mod.Cells));
 
-    /// <summary>Three cells in one sub-block, one more in a second block — enough that a reversal
-    /// cannot coincide with the original at either level.</summary>
     private static (Fallout4Mod Mod, List<string> SubBlockCells) BuildMod()
     {
         var mod = new Fallout4Mod(ModKey.FromFileName(PluginName), Fallout4Release.Fallout4);
@@ -79,8 +70,6 @@ public sealed class InteriorCellOrderTests : IDisposable
                 SourceChildOrder.CarrierFor(Path.Combine(CellsFolder, "0", "0"), parentIsRecord: false), nameof(CellSubBlock.Cells)));
     }
 
-    /// <summary>The read honours the sub-block's list rather than the filesystem: reverse the list,
-    /// touch no file, and the cells come back reversed.</summary>
     [Fact]
     public async Task ReversingASubBlocksRecordedOrder_ReversesTheCellsItReadsBack()
     {

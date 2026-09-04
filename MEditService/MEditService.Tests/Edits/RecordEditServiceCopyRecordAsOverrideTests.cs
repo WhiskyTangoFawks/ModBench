@@ -9,14 +9,6 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Tests.Edits;
 
-/// <summary>
-/// ADR-0041 restoration: xEdit's "Copy as Override Into…". This suite is the entry point's own
-/// contract: same-FormKey landing in the destination's own working tree, the
-/// collision/container/untracked
-/// refusals every gesture on this write path either inherits or reuses, and the two read postures
-/// (tracked source's own file, untracked source's indexed body) established for
-/// <see cref="RecordEditService.EditField"/>.
-/// </summary>
 public sealed class RecordEditServiceCopyRecordAsOverrideTests
 {
     private static RecordEditService ServiceFor(ILoadOrderMirror mirror) =>
@@ -57,9 +49,8 @@ public sealed class RecordEditServiceCopyRecordAsOverrideTests
         Assert.Null(mod.Mirror.Index!.At(RecordRef.Head).GetDocument(mod.SourceNpc.ToString(), mod.DestinationPlugin));
     }
 
-    // The read posture: a tracked source reads its current file, not a stale index
-    // snapshot — proven by mutating the file on disk directly (never-assume-exclusive-ownership) after
-    // the load order has already indexed it, then observing the copy carries the mutated bytes forward.
+    // A tracked source reads its current file, not a stale index snapshot, proven by mutating the file
+    // on disk after the load order has indexed it and observing the copy carry the mutated bytes.
     [Fact]
     public void CopyRecordAsOverride_FromATrackedSource_ReadsItsCurrentFileBytes_NotAStaleIndexSnapshot()
     {
@@ -107,11 +98,9 @@ public sealed class RecordEditServiceCopyRecordAsOverrideTests
         Assert.Equal(RecordEditRefusal.FormKeyCollision, result.Refusal);
     }
 
-    // A container's own top-level record (Cell/Worldspace/Quest) is not refused
-    // here — see RecordEditServiceContainerCopyTests. What refuses is a record with no top-level
-    // group of its own at all — a DialogTopic has no independent existence outside its owning Quest
-    // (Fallout4Mod carries no top-level DialogTopics property; ContainerChildFields' own doc comment),
-    // unlike a placed reference (RecordEditServiceContainerCopyTests covers that narrower shape).
+    // What refuses is a record with no top-level group of its own: a DialogTopic has no independent
+    // existence outside its owning Quest, unlike a placed reference or a container's own top-level
+    // record.
     [Fact]
     public void CopyRecordAsOverride_Refuses_WhenTheSourceHasNoContainerOfItsOwnAnywhere()
     {

@@ -2,11 +2,6 @@ using MEditService.Core.Source;
 
 namespace MEditService.Tests.Source;
 
-/// <summary>
-/// <see cref="SourceRepository.ParkedCompileBinarySha256"/> — the read half of
-/// <see cref="SourceRepository.ParkCompileSnapshot"/>'s trailer, and the exact value the self-echo
-/// classifier compares an observed binary's hash against.
-/// </summary>
 public sealed class SourceRepositoryParkedCompileBinarySha256Tests
 {
     private static string NewModFolder() => Directory.CreateTempSubdirectory("medit-parked-sha-").FullName;

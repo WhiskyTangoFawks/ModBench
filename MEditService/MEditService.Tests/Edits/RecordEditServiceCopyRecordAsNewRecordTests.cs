@@ -8,11 +8,6 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Tests.Edits;
 
-/// <summary>
-/// ADR-0041 restoration: xEdit's "Copy as New Record Into…" — a deep copy under a fresh
-/// FormKey via Mutagen's own record-level <c>Duplicate</c>, reusing <see cref="RecordEditService.CreateRecord"/>'s
-/// own target-FormKey resolution rather than re-implementing its collision posture.
-/// </summary>
 public sealed class RecordEditServiceCopyRecordAsNewRecordTests
 {
     private static RecordEditService ServiceFor(ILoadOrderMirror mirror) =>
@@ -154,10 +149,7 @@ public sealed class RecordEditServiceCopyRecordAsNewRecordTests
         Assert.Equal(RecordEditRefusal.CopyAsNewRecordDisallowedForType, result.Refusal);
     }
 
-    // A Quest is not on xEdit's permanent blacklist — DIAL/INFO/QUST copy as new (#550 AC5;
-    // CopyAsNewContainerTests own the family's behavior). This one pins the tracked-source read:
-    // the source quest's own directory document resolves through SourceUnitResolver, never the
-    // flat computed path (which has no answer for a container and used to throw).
+    // A Quest is not on xEdit's permanent blacklist: DIAL/INFO/QUST copy as new.
     [Fact]
     public void CopyRecordAsNewRecord_OnAQuestFromATrackedSource_Succeeds()
     {

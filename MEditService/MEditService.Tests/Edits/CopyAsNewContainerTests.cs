@@ -10,11 +10,8 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Tests.Edits;
 
-/// <summary>
-/// #550 AC5 — Copy as New Record widened to the QUST/DIAL/INFO family (#440's ruling: xEdit allows
-/// exactly these; CELL/WRLD stay on the permanent blacklist). Each assertion ends at the compiled
-/// binary where structure is claimed, per <see cref="ExteriorCellCopyCompileTests"/>'s own argument.
-/// </summary>
+/// <summary>Copy as New Record covers the QUST/DIAL/INFO family (xEdit allows exactly these;
+/// CELL/WRLD stay on the permanent blacklist).</summary>
 public sealed class CopyAsNewContainerTests : IDisposable
 {
     private readonly ContainerCopyFixture _fixture = ContainerCopyFixture.Create();
@@ -44,10 +41,9 @@ public sealed class CopyAsNewContainerTests : IDisposable
         return (IFallout4ModGetter)overlay;
     }
 
-    // AC5's centerpiece: a DIAL with INFOs. The topic and each response draw fresh native FormKeys
-    // (ResolveTargetFormKey per child); the destination gets an auto-created bare Partial Form
-    // override of the parent quest; and Response2's sibling link at Response1 is NOT remapped onto
-    // the copies — it still points at the original (xEdit's own behavior).
+    // The topic and each response draw fresh native FormKeys and the destination gets an auto-created
+    // bare Partial Form override of the parent quest. Response2's sibling link still points at the
+    // original, which is xEdit's own behavior.
     [Fact]
     public void CopyAsNewRecord_OnADialogTopicWithResponses_MintsFreshKeysForEach_WithoutRemappingSiblingLinks()
     {
@@ -94,9 +90,8 @@ public sealed class CopyAsNewContainerTests : IDisposable
         Assert.Equal(_fixture.Response1, copiedResponse2.PreviousDialog.FormKeyNullable);
     }
 
-    // Rule 1 of #550's Q3 resolution: an existing parent override is never touched. With the quest
-    // already overridden for real (Copy as Override, not Partial Form), the new topic lands inside
-    // that quest's existing directory and the quest's own document keeps its exact bytes and flag.
+    // Rule 1 of #550's Q3 resolution: an existing parent override is never touched. The new topic
+    // lands inside the quest's existing directory and the quest's document keeps its bytes and flag.
     [Fact]
     public void CopyAsNewRecord_OnADialogTopic_WhenDestinationAlreadyOverridesTheQuest_ReusesItUntouched()
     {
@@ -111,10 +106,8 @@ public sealed class CopyAsNewContainerTests : IDisposable
 
         Assert.True(result.Applied, result.Message);
 
-        // "Untouched" means the quest's own fields, not its file: the new topic is a child of this
-        // quest, and since #566 a parent's document is where its children's order lives (ADR-0042
-        // decision 4). So exactly one thing may differ — the ordered child list gains one entry —
-        // and every field the quest record itself owns must be byte-identical.
+        // "Untouched" means the quest's own fields, not its file: a parent's document is where its
+        // children's order lives (ADR-0042 decision 4), so exactly one thing may differ.
         var questAfter = JsonDocument.Parse(File.ReadAllText(questFile));
         foreach (var property in questBefore.RootElement.EnumerateObject())
         {

@@ -2,10 +2,6 @@ using MEditService.Core.Records;
 
 namespace MEditService.Tests.Records;
 
-/// <summary>
-/// #673: the process-wide write gate's own three properties, at its own seam. Everything else in
-/// this ticket is a call site that must take it; this file is what "it" does.
-/// </summary>
 public sealed class IndexWriteGateTests
 {
     [Fact]
@@ -36,12 +32,8 @@ public sealed class IndexWriteGateTests
         Assert.True(secondIsIn.IsSet);
     }
 
-    /// <summary>
-    /// Reentrant, and load-bearing rather than incidental: a write endpoint takes the gate and then
-    /// calls through to doors that take it for themselves (<c>ReindexPlugin</c> delegating to
-    /// <c>ReingestPluginFromSource</c> is the shortest such chain), so a non-reentrant gate would
-    /// self-deadlock on the ordinary path rather than on a race.
-    /// </summary>
+    // Reentrancy is load-bearing: a write endpoint takes the gate and calls doors that take it
+    // again, so a non-reentrant gate would self-deadlock on the ordinary path.
     [Fact]
     public void TheSameThread_CanEnterTwice()
     {

@@ -11,13 +11,8 @@ using Noggog;
 
 namespace MEditService.Tests.Indexing;
 
-// The structural indexing pass must populate the `placement` and `cell_location`
-// side tables that back the per-plugin worldspace tree.
-//
-// The fixture deliberately mixes present and absent optional values (a TopCell with no
-// block/grid, a cell with no EditorID/Grid, an interior cell with no EditorID/Grid, a placed
-// ref with a Base and one without) so the reader paths are exercised on both null and
-// non-null columns.
+// The fixture deliberately mixes present and absent optional values, so the reader paths are
+// exercised on both null and non-null columns.
 public class PlacementIndexingTests
 {
     private static readonly SchemaReflector Reflector = SharedSchemaReflector.Instance;
@@ -119,10 +114,9 @@ public class PlacementIndexingTests
         return rows;
     }
 
-    // Regression: production loads plugins as binary overlays, whose group wrapper
-    // exposes records by being IEnumerable rather than via a "Records" member (the in-memory shape).
-    // PlacementWalker must index placement off the overlay too — IndexFixture above only covers the
-    // in-memory mod, so this round-trips through disk to exercise the overlay path.
+    // Production loads plugins as binary overlays, whose group wrapper exposes records by being
+    // IEnumerable rather than via a "Records" member, so this round-trips through disk to exercise
+    // the overlay path the in-memory fixture cannot.
     [Fact]
     public void Index_FromBinaryOverlay_PopulatesPlacementAndCellLocation()
     {
@@ -169,10 +163,9 @@ public class PlacementIndexingTests
         finally { dir.Delete(recursive: true); }
     }
 
-    // Mirrors FormReferencesTests.Index_ReIndexSamePlugin_ReplacesRatherThanDuplicates: IndexPlacement
-    // must clear a plugin's prior placement/cell_location rows before rebuilding, the same way every
-    // other indexed table does — otherwise a re-index (e.g. re-scanning after an external edit)
-    // duplicates rows instead of replacing them.
+    // IndexPlacement must clear a plugin's prior placement/cell_location rows before rebuilding, the
+    // way every other indexed table does; otherwise re-scanning after an external edit duplicates
+    // rows instead of replacing them.
     [Fact]
     public void Index_ReIndexSamePlugin_ReplacesPlacementAndCellLocationRatherThanDuplicating()
     {
@@ -372,10 +365,8 @@ public class PlacementIndexingTests
         Assert.Null(repo.At(RecordRef.Effective).GetPlacement(formKey, new PluginKey("Placed.esp", "ModC")));
     }
 
-    // ADR-0036: same shape as GetPlacement_SameFilenameDifferentOrigin_ScopesToOrigin above —
-    // one mod indexed twice under the same filename at two real (non-Data) origins. A worldspace
-    // tree read whose outer WHERE filters by plugin filename alone answers a query scoped to one
-    // origin with both origins' rows merged together.
+    // ADR-0036: one mod indexed twice under the same filename at two real origins. A worldspace tree
+    // read filtering by plugin filename alone answers an origin-scoped query with both origins merged.
     private sealed record WorldspaceFixture(
         DuckDbRecordIndex Repo, string WorldspaceFk, string ExtCellFk, string PlacedFk, string IntCellFk)
         : IDisposable
@@ -473,12 +464,9 @@ public class PlacementIndexingTests
         Assert.Null(bare.CellY);
     }
 
-    // Same non-unique-ordering shape as Search's — several interior cells below share
-    // "DupCell", two more share a blank EditorID (ordinary in real plugin data), so an
-    // ORDER BY c.editor_id with no tiebreak leaves DuckDB free to place tied rows on either side of
-    // a LIMIT/OFFSET boundary differently across calls. Paging the full set two cells at a time and
-    // concatenating the pages must reconstruct exactly the single unpaged read's order — no cell
-    // skipped, none repeated — and doing the same walk again must reproduce the identical sequence.
+    // Several cells share "DupCell" and two more share a blank EditorID, ordinary in real plugin
+    // data, so an ORDER BY with no tiebreak lets DuckDB place tied rows either side of a LIMIT
+    // boundary.
     private static DuckDbRecordIndex BuildDuplicateEditorIdInteriorCellsFixture(out int total)
     {
         var mod = new Fallout4Mod(ModKey.FromFileName("DupCells.esp"), Fallout4Release.Fallout4);

@@ -7,18 +7,9 @@ using Microsoft.AspNetCore.Http.HttpResults;
 
 namespace MEditService.Tests.Api;
 
-/// <summary>
-/// #673 at the write path's own front door: <c>WriteEndpointMapping.Execute</c> is the shared
-/// skeleton all six write endpoints run through, so it is where an incoming write is ordered against
-/// whatever write is already in flight.
-///
-/// <para>Deliberately at this seam rather than over HTTP. The property under test — the second
-/// request's service call does not start until the first one's has returned — is about the ordering
-/// of the two <c>execute</c> delegates, and driving it through Kestrel would add a scheduler, a
-/// connection pool and a serializer between the assertion and the thing it asserts, none of which
-/// make the race any more real. The delegates here stand in for real edits precisely so the
-/// interleaving can be observed at all.</para>
-/// </summary>
+/// <summary>At the <c>WriteEndpointMapping.Execute</c> seam rather than over HTTP: the property is
+/// the ordering of two delegates, and Kestrel would add a scheduler, a pool and a serializer
+/// between the assertion and the thing it asserts.</summary>
 public sealed class WriteEndpointSerializationTests
 {
     private static IResult Run(IndexWriteGate gate, Func<RecordEditResult> execute) =>
@@ -32,12 +23,6 @@ public sealed class WriteEndpointSerializationTests
             onMalformedFormKey: null,
             onNoLoadOrder: ex => WriteEndpointMapping.NoLoadOrder(ex));
 
-    /// <summary>
-    /// AC1. The second request is not merely observed to "finish later" — it is observed to have
-    /// started its service call only after the first one's had <i>completed</i>, which is the
-    /// difference between serialized and lucky. Without the gate the second delegate runs while the
-    /// first is still inside its 500ms of work and reads <c>firstFinished</c> as false.
-    /// </summary>
     [Fact]
     public async Task ASecondWrite_DoesNotStartUntilTheFirstHasFinished()
     {
@@ -70,11 +55,6 @@ public sealed class WriteEndpointSerializationTests
             "the second write's service call ran while the first was still applying");
     }
 
-    /// <summary>
-    /// AC5. Contention blocks, and a block that outlasts the timeout is a 503 — the backend is busy,
-    /// not broken. Never the 500 <c>onWriteFailure</c> shape: nothing was attempted, so nothing is
-    /// half-applied and there is no source file to report as unwritable.
-    /// </summary>
     [Fact]
     public void AWriteThatWaitsOutTheTimeout_IsServiceUnavailable_NotAWriteFailure()
     {

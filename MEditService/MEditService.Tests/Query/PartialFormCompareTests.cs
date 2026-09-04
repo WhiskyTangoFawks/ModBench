@@ -9,12 +9,8 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Tests.Query;
 
-/// <summary>
-/// A master Cell + a later plugin's Partial Form override of it, carrying one REFR child.
-/// The override's own fields (even ones that genuinely differ from the master, not merely absent
-/// ones — CONTEXT.md's Partial Form entry: "its own fields are ignored... full stop") must not
-/// register as a conflict; the REFR is a separate record and is unaffected.
-/// </summary>
+/// <summary>A Partial Form override's own fields, even ones that genuinely differ from the master,
+/// must not register as a conflict (CONTEXT.md: "its own fields are ignored... full stop").</summary>
 public sealed class PartialFormCompareTests : IDisposable
 {
     private const int PartialFormBit = 0x0000_4000;
@@ -132,9 +128,9 @@ public sealed class PartialFormCompareTests : IDisposable
     [Fact]
     public void GetCompare_CellWithPartialFormOverride_WaterHeightWinnerFallsThroughToMaster()
     {
-        // The record-wide winner (last in load order) is Partial.esp, but its own water_height is
-        // excluded — the field's real effective value is the master's, and WinnerColumn/WinnerValue
-        // must say so rather than pointing at a column whose contribution was just excluded.
+        // The record-wide winner is Partial.esp, but its own water_height is excluded: the field's
+        // effective value is the master's, and WinnerColumn must say so rather than name an excluded
+        // column.
         var compare = _service.GetCompare(CellKey.ToString())!;
         var waterHeight = compare.Diffs.Single(d => d.FieldName == "water_height");
 

@@ -11,10 +11,7 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Tests.Plugins;
 
-// ADR-0001: loading a load order the index has already seen *registers* its plugins rather than
-// indexing them. Every test here loads twice over one persistent index — the second manager stands
-// in for the next launch — and asserts what the second load did through the load order's own status
-// and its existing per-plugin log lines, never by looking inside the index file.
+// ADR-0001: loading a load order the index has seen registers its plugins rather than indexing them.
 public sealed class WarmReconcileTests
 {
     private static LoadOrderMirror MakeManager(ILogger<LoadOrderMirror>? logger = null)
@@ -66,9 +63,8 @@ public sealed class WarmReconcileTests
         Assert.NotEmpty(warm.Index!.At(RecordRef.Effective).GetDocuments(new PluginKey("A.esp", PluginOrigin.DataDirectory)));
     }
 
-    // The "during" half of progress: observed from inside the load loop itself, once per
-    // plugin as it is registered. A load that only published its count at the end would satisfy the
-    // final-state assertion below and still leave a warm launch sitting at zero.
+    // The "during" half of progress, observed from inside the load loop. A load publishing its count
+    // only at the end would satisfy the final-state assertion and still leave a warm launch at zero.
     [Fact]
     public void AWarmLoad_AdvancesProgressAsEachPluginIsRegistered()
     {

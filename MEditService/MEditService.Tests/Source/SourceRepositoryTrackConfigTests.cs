@@ -2,13 +2,9 @@ using MEditService.Core.Source;
 
 namespace MEditService.Tests.Source;
 
-/// <summary>
-/// ADR-0041: repo-local config Track
-/// pins at init. <c>core.autocrlf=false</c> is the byte-equality invariant dirty/ITM detection
-/// depends on; <c>commit.gpgsign=false</c> stops a global signing config from hanging a plumbing
-/// commit on a passphrase prompt; the identity fallback only fires when the effective (global)
-/// identity is unset, and never touches a real global identity.
-/// </summary>
+/// <summary><c>core.autocrlf=false</c> is the byte-equality invariant dirty/ITM detection depends
+/// on; <c>commit.gpgsign=false</c> stops a global signing config hanging a plumbing commit; the
+/// identity fallback never touches a real global identity.</summary>
 public sealed class SourceRepositoryTrackConfigTests
 {
     private static string NewModFolder() => Directory.CreateTempSubdirectory("medit-track-config-").FullName;
