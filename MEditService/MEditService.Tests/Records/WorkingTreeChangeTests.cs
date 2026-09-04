@@ -45,7 +45,7 @@ public sealed class WorkingTreeChangeTests : IDisposable
         return index;
     }
 
-    // EditorID is an identity column, not a reflected field (SchemaReflector.MajorRecordHeaderMembers) — so this
+    // EditorID is an identity column, not a reflected field (ColumnReflection.MajorRecordHeaderMembers) — so this
     // reads the projection of the body that every listing, resolve and tree row is built from,
     // which is exactly the read-model-visible effect an edit has to produce.
     private static string EditorIdOf(RecordDocument document) =>

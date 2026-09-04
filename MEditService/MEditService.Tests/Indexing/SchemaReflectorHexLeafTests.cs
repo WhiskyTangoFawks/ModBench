@@ -109,8 +109,8 @@ public sealed class SchemaReflectorHexLeafTests
     [Fact]
     public void TheRemainingSliceExclusion_DoesNotCoverAByteSlice()
     {
-        Assert.Null(SchemaReflector.ExcludedShapeReason(typeof(ReadOnlyMemorySlice<byte>)));
-        Assert.NotNull(SchemaReflector.ExcludedShapeReason(typeof(ReadOnlyMemorySlice<float>)));
+        Assert.Null(SchemaRefusals.ExcludedShapeReason(typeof(ReadOnlyMemorySlice<byte>)));
+        Assert.NotNull(SchemaRefusals.ExcludedShapeReason(typeof(ReadOnlyMemorySlice<float>)));
     }
 
     /// <summary>Mutagen writes an absent slice as the empty string, so reading its own document
@@ -259,7 +259,7 @@ public sealed class SchemaReflectorHexLeafTests
     /// The hex applier resolves its property off the receiver's runtime type, so its own
     /// <c>SetValue</c> is an open-world call — a same-named property of another shape must decline
     /// the value rather than throw out of the write path. Pinned through the shared write
-    /// (<c>SchemaReflector.SetOrDecline</c>) at the one place Fallout 4 supplies a mismatched pair:
+    /// (<c>LeafWriters.SetOrDecline</c>) at the one place Fallout 4 supplies a mismatched pair:
     /// <c>weap.unknown</c> is a Single, <c>Grass.Unknown</c> a Byte. No byte-slice column has such a
     /// twin today, which is exactly why the containment cannot be pinned on one directly.
     /// </summary>

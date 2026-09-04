@@ -157,7 +157,7 @@ public record FieldMetadata(
     string? DisplayLabel = null,             // what to title the row, when Name is a wire name
 
     // This field names which concrete class its object is, read off the payload before that object
-    // exists (SchemaReflector.ResolveListElementType). True for concrete_type and OMOD's
+    // exists (ListLeaves.ResolveListElementType). True for concrete_type and OMOD's
     // value_type, false for every other field.
     bool IsDiscriminator = false)
 {

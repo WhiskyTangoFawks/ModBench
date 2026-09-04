@@ -228,7 +228,7 @@ internal static class ArrayOpWriter
     // the same token its codec already round-trips, seen verbatim in ColumnSpec.Extract's own
     // output for a field nobody set) rather than "" — "" is not a parseable FormKey
     // (FormKey.TryFactory has no case for the empty string), so a bare-FormLink-array Add sending it
-    // would silently add nothing at all (SchemaReflector.BuildListElement's own isFl branch returns
+    // would silently add nothing at all (ListLeaves.BuildListElement's own isFl branch returns
     // null for an unparseable element, and its caller only adds non-null items).
     //
     // "struct" names nothing but the element's discriminator, if it has one: the write path itself
@@ -270,7 +270,7 @@ internal static class ArrayOpWriter
     {
         var element = new JsonObject();
         // A discriminator's members are its union's leaves, and a union with no leaf is not
-        // reflected as one at all (SchemaReflector.TryGetAbstractUnion requires at least one, and
+        // reflected as one at all (LoquiUnions.TryGetUnion requires at least one, and
         // OMOD's leaf table is a literal) — so the count guard is what keeps the indexer total,
         // not a case that can arrive.
         foreach (var field in meta.Fields ?? [])
@@ -278,8 +278,8 @@ internal static class ArrayOpWriter
         return element;
     }
 
-    // The read-only nested-Loqui-struct member #642 introduced (SchemaReflector.BuildStructSubField's
-    // own Apply: null / TargetingRefuses: true) is still *extracted* for display even though nothing
+    // The read-only nested-Loqui-struct member #642 introduced (StructLeaves.BuildStructSubField's
+    // own read-only Apply with TargetingRefuses: true) is still *extracted* for display even though nothing
     // writes it — so an untouched element's own unset such member round-trips here as an explicit
     // JSON null, and ApplySubFields/ApplyListJson treat a *named* member as targeting it regardless
     // of value (absence is what "not targeting" means, never nullity — see ApplySubFields's own doc

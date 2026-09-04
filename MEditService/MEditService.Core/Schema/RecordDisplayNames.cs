@@ -7,7 +7,7 @@ namespace MEditService.Core.Schema;
 // and the reference isn't shipped.
 // "npc_" and "header" aren't `wbRecord` matches by signature text (NPC_ / TES4) so are called out
 // separately below. Every table SchemaReflector currently discovers has an entry here (see
-// SchemaReflectorTests.GetSchemas_EveryDiscoveredTableHasADisplayName); a lookup miss falls back to
+// SchemaReflectorTests.GetSchemas_EveryDiscoveredTable_HasANonEmptyDisplayName); a lookup miss falls back to
 // the raw signature rather than throwing, so a newly-discovered Mutagen type never breaks startup.
 internal static class RecordDisplayNames
 {

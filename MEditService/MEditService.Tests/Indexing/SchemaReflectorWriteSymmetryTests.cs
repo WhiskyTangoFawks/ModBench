@@ -31,7 +31,7 @@ public class SchemaReflectorWriteSymmetryTests
         SharedSchemaReflector.Instance.EnumerateWriteCapability(GameRelease.Fallout4);
 
     /// <summary>
-    /// Mirrors <c>SchemaReflector.GetSetterType</c>: a Loqui getter interface's registration names the
+    /// Mirrors <c>ReflectedTypes.GetSetterType</c>: a Loqui getter interface's registration names the
     /// concrete class that backs it. A non-null, non-abstract one means "there is something a write
     /// could construct and set" — the definition of writable-shaped, derived from Mutagen rather than
     /// from the reflector.
@@ -73,11 +73,11 @@ public class SchemaReflectorWriteSymmetryTests
     {
         var known = new[]
         {
-            SchemaReflector.DiscriminatorReason,
-            SchemaReflector.ElementTemplateReason,
-            SchemaReflector.UnconvertibleElementListReason,
-            SchemaReflector.NoConverterReason,
-            SchemaReflector.HeaderNoWritePathReason,
+            SchemaRefusals.DiscriminatorReason,
+            SchemaRefusals.ElementTemplateReason,
+            SchemaRefusals.UnconvertibleElementListReason,
+            SchemaRefusals.NoConverterReason,
+            SchemaRefusals.HeaderNoWritePathReason,
         };
 
         var unknown = Facts()
@@ -99,7 +99,7 @@ public class SchemaReflectorWriteSymmetryTests
 
     /// <summary>
     /// Every Fallout 4 list has a converter for its element type, so
-    /// <c>SchemaReflector.UnconvertibleElementListReason</c> describes no live leaf — it keeps the
+    /// <c>SchemaRefusals.UnconvertibleElementListReason</c> describes no live leaf — it keeps the
     /// classification total (see its own doc for the shapes it covers). A converter table that drops
     /// an integer width <c>BuildElementMeta</c> still reads has to come here and declare a residue.
     /// </summary>
@@ -107,7 +107,7 @@ public class SchemaReflectorWriteSymmetryTests
     public void EveryElementList_HasAConverter()
     {
         var residue = Facts()
-            .Where(f => f.ReadOnlyReason == SchemaReflector.UnconvertibleElementListReason)
+            .Where(f => f.ReadOnlyReason == SchemaRefusals.UnconvertibleElementListReason)
             .Select(f => f.Path)
             .Order(StringComparer.Ordinal)
             .ToList();

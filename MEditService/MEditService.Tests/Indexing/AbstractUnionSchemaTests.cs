@@ -9,7 +9,7 @@ namespace MEditService.Tests.Indexing;
 
 /// <summary>
 /// Mutagen's "A&lt;Name&gt;" abstract Loqui-union convention, generalized beyond the original
-/// OMOD-only precedent (<c>SchemaReflector.BuildUnionLeafFields</c>) — a base getter interface
+/// OMOD-only precedent (<c>LoquiUnions.BuildUnionLeafFields</c>) — a base getter interface
 /// with no reflectable ClassType siblings of its own; the real per-subclass data lives on concrete
 /// classes that inherit *from* the abstract base rather than the other way OMOD's own leaves do.
 ///

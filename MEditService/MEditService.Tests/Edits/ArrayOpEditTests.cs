@@ -192,7 +192,7 @@ public sealed class ArrayOpEditTests : IDisposable
     /// A struct-element array (<c>Container.destructible.stages</c>, <c>DestructionStage[]</c>) —
     /// deliberately not <c>keywords</c> (a bare FormLink array): a bare-FormLink list element with an
     /// unresolvable FormKey string is silently dropped rather than refused
-    /// (<c>SchemaReflector.BuildListElement</c>'s own <c>isFl</c> branch returns <c>null</c>, and its
+    /// (<c>ListLeaves.BuildListElement</c>'s own <c>isFl</c> branch returns <c>null</c>, and its
     /// caller only adds non-null items) — a genuine, pre-existing gap in that one shape, unrelated to
     /// this ticket and not something a "default" value can route around. Every
     /// <c>DestructionStage</c> member is a plain scalar, so its own default always applies cleanly —
@@ -313,7 +313,7 @@ public sealed class ArrayOpEditTests : IDisposable
     /// carries a value, the op's whole-value round trip now *preserves* it — the op is a thin
     /// wrapper around the same <c>ColumnSpec.Apply</c>, so it inherited #642's refusal while the
     /// member had no write door and inherits the write path now that
-    /// <c>SchemaReflector.BuildStructSubField</c> wires one
+    /// <c>StructLeaves.BuildStructSubField</c> wires one
     /// (<see cref="AbstractUnionEditTests.Aliases_WholeArrayWrite_QuestReferenceAliasElement_LocationNamedInPayload_RoundTrips"/>
     /// is the ordinary-edit half). Asserting the nested value itself survives the move — not just
     /// <c>Applied == true</c> — is what makes this strictly stronger than the refusal it replaces:

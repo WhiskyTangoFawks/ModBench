@@ -194,8 +194,8 @@ public sealed class Fallout4ConditionCodec : IConditionCodec
 
     // The element type of the first IEnumerable<T> a type implements (declared or inherited) — null
     // for non-generic/non-enumerable types. Works on the concrete runtime property types Extract
-    // walks (e.g. Noggog.ExtendedList<Effect>), not just the *Getter interfaces SchemaReflector's
-    // own IsListType checks.
+    // walks (e.g. Noggog.ExtendedList<Effect>), not just the *Getter interfaces
+    // ReflectedTypes.IsListType checks.
     private static Type? GetEnumerableElementType(Type type) =>
         type.GetInterfaces().Prepend(type)
             .FirstOrDefault(i => i.IsGenericType && i.GetGenericTypeDefinition() == typeof(IEnumerable<>))

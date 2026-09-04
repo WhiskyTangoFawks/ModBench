@@ -994,7 +994,7 @@ VMAD/Condition rows included since they render through this exact code now:
    same bar `Npc.Level`/`Quest.Aliases` themselves only gained there. Two of them,
    `NavmeshGeometry.Parent` and `LocationTargetRadius.Target`, are reached one level *inside* another
    struct column (`Static.NavmeshGeometry`/`Faction.VendorLocation`) rather than as a column of their
-   own — #643 extended the write side down through nesting (`SchemaReflector.BuildStructSubField`
+   own — #643 extended the write side down through nesting (`StructLeaves.BuildStructSubField`
    wires the same shared struct applier `BuildStructColumn` uses, at every depth the read schema
    builds), so a nested struct sub-field writes with identical discriminator-resolution and
    refuse-before-attach semantics to a top-level struct column.
