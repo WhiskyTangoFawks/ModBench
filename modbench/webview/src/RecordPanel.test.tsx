@@ -14,11 +14,7 @@ import type { FieldMetadata } from './types';
 import { columnKey } from './types';
 import type { LoadResult, RecordPanelClient } from './RecordPanelClient';
 
-// ── shared metadata fixtures ──────────────────────────────────────────────────
-
 const strMeta: FieldMetadata = { name: 'Name', type: 'string', isArray: false, validFormKeyTypes: [], enumMembers: [] };
-
-// ── RecordPanel ───────────────────────────────────────────────────────────────
 
 const compareResult = {
   conflictAll: 'Conflict',
@@ -63,10 +59,6 @@ const pluginsResponse = [
   { name: 'MyMod.esp',    isImmutable: false, loadOrderIndex: 1 },
 ];
 
-// #618: an unconflicted record whose sole (and therefore winning) override is itself the
-// immutable vanilla master — the single-column shape several read-only/dimming assertions below
-// need, now that a losing column (compareResult's own Fallout4.esm) is never rendered to click or
-// query against.
 const immutableWinnerCompareResult = {
   conflictAll: 'OnlyOne',
   overrides: [
@@ -82,8 +74,6 @@ const immutableWinnerCompareResult = {
     },
   ],
 };
-
-// ── fixtures for the read-path suites ─────────────────────────────────────────
 
 const intMeta: FieldMetadata = { name: 'Level', type: 'int', isArray: false, validFormKeyTypes: [], enumMembers: [] };
 const fkMeta: FieldMetadata = {
@@ -110,9 +100,8 @@ const fkCompareResult = {
       winnerColumn: 'Fallout4.esm',
       winnerValue: '00013918:Fallout4.esm',
       cellStates: {},
-      // ADR-0031: the backend carries a resolution signal per FormKey value — this fixture
-      // mirrors a resolved reference so the Ctrl-hover affordance/navigation tests below exercise
-      // real product behavior instead of an unresolved default.
+      // ADR-0031: the backend carries a resolution signal per FormKey value; an unresolved
+      // default would exercise no affordance at all.
       resolutions: { 'Fallout4.esm': { state: 'ResolvedValidType', recordType: 'race', editorId: 'HumanRace' } },
     },
   ],
@@ -192,16 +181,13 @@ const notInLoadOrderPluginsResponse = [
   { name: 'Solo.esp', origin: 'ShadowMod', isImmutable: true, loadOrderIndex: 5, inLoadOrder: false },
 ];
 
-// Mirrors pluginsResponse, but MyMod.esp is tracked — the Partial Form toggle is disabled
-// on an untracked column (canWrite), so exercising the real dispatch needs a column that can
-// actually write.
+// The Partial Form toggle is disabled on an untracked column, so the dispatch needs a tracked
+// one.
 const partialFormTrackedPluginsResponse = [
   { name: 'Fallout4.esm', isImmutable: true, loadOrderIndex: 0 },
   { name: 'MyMod.esp', isImmutable: false, loadOrderIndex: 1, isTracked: true },
 ];
 
-// Mirrors compareResult, but MyMod.esp is a Partial Form override of the master rather than
-// an ordinary conflicting one.
 const partialFormCompareResult = {
   conflictAll: 'NoConflict',
   overrides: [
@@ -225,10 +211,7 @@ const partialFormCompareResult = {
   ],
 };
 
-// #622: a bitmask 'enum' field alongside an ordinary scalar field on the same tracked,
-// editable column — the exact contrast the issue reports (scalar/FormKey edits worked in the
-// same session, flags did not). Each member carries its own bit per FlagCell's own
-// contract; value '3' (0b11) sets both A and B so the resting label reads "A, B".
+// Value '3' (0b11) sets both A and B, so the resting label reads "A, B".
 const flagsFieldMeta: FieldMetadata = {
   name: 'Flags', type: 'enum', isArray: false, validFormKeyTypes: [],
   enumMembers: [{ value: 'A', bitValue: '1' }, { value: 'B', bitValue: '2' }],
@@ -272,9 +255,8 @@ const flagsCompareResult = {
   ],
 };
 
-// Mirrors partialFormTrackedPluginsResponse — MyMod.esp must be tracked for editableColumns
-// to include it at all (RecordPanel.tsx's own four-condition gate), the same real computation
-// every other column-editability test in this file already relies on rather than a hand-fed set.
+// MyMod.esp must be tracked for editableColumns to include it at all, so the real gate runs
+// rather than a hand-fed set.
 const flagsTrackedPluginsResponse = [
   { name: 'Fallout4.esm', isImmutable: true, loadOrderIndex: 0 },
   { name: 'MyMod.esp', isImmutable: false, loadOrderIndex: 1, isTracked: true },
@@ -343,30 +325,23 @@ const structCompareResult = {
 
 interface FakeOpts {
   plugins?: unknown[];
-  // ADR-0035: defaults to true (settled, no banner) — the overwhelmingly common fixture
-  // case. The two banner-specific tests below
-  // override it.
+  // ADR-0035: defaults to true — settled, no banner; the banner cases override it.
   conflictsComputed?: boolean;
   load?: RecordPanelClient['load'];
 }
 
-// A fake record-load order client. `load` returns the composite view built from the
-// given compare fixture.
 function fakeClient(compare: unknown, opts: FakeOpts = {}): RecordPanelClient {
   const pl = (opts.plugins ?? pluginsResponse) as { name: string; isImmutable: boolean; origin?: string; inLoadOrder?: boolean; isTracked?: boolean }[];
   const okLoad = {
     ok: true, result: compare, plugins: pl,
-    // ADR-0036: mirrors RecordPanelClient.load()'s own columnKey()-keyed construction —
-    // a fake that built this as a bare-plugin-name Set would silently pass every same-filename
-    // test that exercises immutableSet, since the fake itself wouldn't reproduce the bug.
+    // ADR-0036: a fake keying this by bare plugin name would silently pass every same-filename
+    // case that exercises immutableSet.
     immutableSet: new Set(pl.filter(p => p.isImmutable).map(p => columnKey(p.name, p.origin ?? null))),
-    // ADR-0035: mirrors RecordPanelClient.load()'s own `=== false` filter — a fixture
-    // that never sets inLoadOrder must default every column to
-    // in-load-order, the same defensive default the real client applies.
+    // ADR-0035: a fixture that never sets inLoadOrder must default every column to
+    // in-load-order, the defensive default the real client applies.
     notInLoadOrderSet: new Set(pl.filter(p => p.inLoadOrder === false).map(p => columnKey(p.name, p.origin ?? null))),
-    // ADR-0041: mirrors RecordPanelClient.load()'s own `=== true` filter — a
-    // fixture omitting isTracked defaults every column to untracked exactly as
-    // the real client's own fail-closed default does.
+    // ADR-0041: a fixture omitting isTracked defaults every column to untracked, the real
+    // client's fail-closed default.
     trackedSet: new Set(pl.filter(p => p.isTracked === true).map(p => columnKey(p.name, p.origin ?? null))),
     conflictsComputed: opts.conflictsComputed ?? true,
   } as unknown as LoadResult;
@@ -403,10 +378,7 @@ describe('RecordPanel', () => {
     await waitFor(() => expect(screen.getByText('Name')).toBeInTheDocument());
   });
 
-  // #618: exactly one column — the winning override. The losing override's own value
-  // (Fallout4.esm's "Original Name") never reaches the DOM at all; only the winner's does.
-  // #618 follow-up: the full stack renders — each override's own value in its own column,
-  // master leftmost, winner rightmost (xEdit parity).
+  // Master leftmost, winner rightmost, as in xEdit.
   it('shows each override\'s own field value in its own column', async () => {
     renderPanel(compareResult);
     await waitFor(() => expect(screen.getByText('Override Name')).toBeInTheDocument());
@@ -422,20 +394,16 @@ describe('RecordPanel', () => {
     expect(screen.queryByText('View')).not.toBeInTheDocument();
   });
 
-  // Writing the binary is the separate Save & Compile
-  // gesture, scoped to a whole plugin from the tree/palette, never a per-plugin control on this
-  // panel (ADR-0041, medit-version-control.md).
+  // ADR-0041: writing the binary is the separate Save & Compile gesture, scoped to a whole
+  // plugin, never a per-plugin control on this panel.
   it('offers no per-plugin Save — writing the binary is Save & Compile, not this panel', async () => {
     renderPanel(compareResult);
     await waitFor(() => screen.getByText('MyMod.esp'));
     expect(screen.queryByText('Save')).not.toBeInTheDocument();
   });
 
-  // A cell in an immutable column never activates an *editable* input, however it is
-  // clicked (spec: field-type rendering rule 6). ADR-0034: the cell opens no input
-  // at all — nothing ever reaches a write from here.
-  // #618: compareResult's own immutable column (Fallout4.esm) is the loser and no longer
-  // renders at all — this needs a fixture whose sole, winning column is itself immutable.
+  // ADR-0034: a cell in an immutable column opens no input at all, however it is clicked —
+  // nothing ever reaches a write from here.
   it('a cell in an immutable column opens nothing when clicked', async () => {
     renderPanel(immutableWinnerCompareResult, { plugins: pluginsResponse });
     await waitFor(() => screen.getByText('Original Name'));
@@ -446,23 +414,15 @@ describe('RecordPanel', () => {
 
 });
 
-// ── postMessage wiring ────────────────────────────────────────────────────────
 
-
-// ADR-0036: two columns sharing a filename ('Shared.esp') but differing in origin —
-// display never changes (both columns' own `.plugin` reads "Shared.esp"), so only the compound
-// (plugin, origin) identity can tell them apart. The backend already returns this shape
-// (ColumnKey-keyed dictionaries, per-override
-// Origin) once two rows exist for one FormKey — the sameFilename fixture is that shape, built by
-// hand rather than through a real reconcile.
+// ADR-0036: two columns sharing a filename but differing in origin — display never changes, so
+// only the compound (plugin, origin) identity can tell them apart.
 
 describe('RecordPanel — same-filename, different-origin columns (#272 AC5)', () => {
   afterEach(() => vi.unstubAllGlobals());
 
-  // #618 follow-up: both copies are their own column again, disambiguated by inline origin
-  // (ADR-0036: filename in the header, origin inline only on collision). The display rule is
-  // response-driven — the backend today excludes a file-level loser from the response entirely
-  // (ADR-0036 amended), but whatever same-filename pair does arrive renders unambiguously.
+  // ADR-0036: filename in the header, origin inline only on collision. The rule is
+  // response-driven — whatever same-filename pair arrives must render unambiguously.
   it('renders origin inline in both columns\' headers when two copies share a filename', async () => {
     vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
     renderPanel(sameFilenameCompareResult, { plugins: sameFilenamePluginsResponse });
@@ -473,9 +433,7 @@ describe('RecordPanel — same-filename, different-origin columns (#272 AC5)', (
     expect(screen.queryByText('Shared.esp')).not.toBeInTheDocument();
   });
 
-  // The single-copy control: MyMod.esp is not shared by any other column in this record's
-  // response, so its header must stay the plain filename — origin inline is collision-only, not
-  // "whenever origin isn't Data".
+  // The single-copy control: origin inline is collision-only, not "whenever origin isn't Data".
   it('does not render origin inline for a normal, non-colliding column', async () => {
     vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
     renderPanel(compareResult);
@@ -484,10 +442,6 @@ describe('RecordPanel — same-filename, different-origin columns (#272 AC5)', (
   });
 });
 
-// Copy as Override Into…/Copy as New Record Into… on the column header's
-// own native right-click menu — proves the real end-to-end wiring (RecordPanel → PluginHeader),
-// not just PluginHeader.test.tsx's own component-level pin — the same two-layer treatment the
-// array contexts get (recordUtils.test.ts's builder test plus a panel test here).
 describe('RecordPanel — column header native right-click menu (#494)', () => {
   afterEach(() => vi.unstubAllGlobals());
 
@@ -508,8 +462,7 @@ describe('RecordPanel — column header native right-click menu (#494)', () => {
     const { container } = renderPanel(compare);
     await waitFor(() => expect(screen.getByText('MyMod.esp')).toBeInTheDocument());
 
-    // Same `th > div` query the dimming test above uses — the context lives on
-    // PluginHeader's own root div, nested inside RecordPanel's <th>.
+    // The context lives on PluginHeader's own root div, nested inside RecordPanel's <th>.
     const headerRoot = container.querySelector('th > div');
     expect(JSON.parse(headerRoot!.getAttribute('data-vscode-context')!)).toEqual({
       webviewSection: 'recordHeader', formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'ModA',
@@ -531,16 +484,12 @@ describe('RecordPanel — a copy the load order does not name (#304 / ADR-0035)'
 
     const th = screen.getByText('Solo.esp').closest('th');
     expect(th).toHaveStyle({ opacity: String(DIMMED_OPACITY) });
-    // Dimming must apply exactly once — PluginHeader's own root <div>, nested
-    // directly inside this dimmed <th>, must not carry a second opacity (CSS opacity compounds on
-    // nesting, so two 0.55s would render at ~0.30, not 0.55). Real nesting, not a standalone
-    // PluginHeader render, is what proves this can't silently regress.
+    // CSS opacity compounds on nesting (two 0.55s render at ~0.30), so the PluginHeader root
+    // inside this dimmed <th> must not carry a second opacity.
     const pluginHeaderRoot = th!.querySelector(':scope > div');
     expect((pluginHeaderRoot as HTMLElement).style.opacity).toBe('');
   });
 
-  // #618: compareResult's own vanilla master (Fallout4.esm) is the loser and no longer
-  // renders — needs a fixture whose sole, winning column is itself the vanilla master.
   it('does not dim a vanilla-master column (immutable, still in the load order)', async () => {
     vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
     renderPanel(immutableWinnerCompareResult, { plugins: pluginsResponse });
@@ -566,11 +515,6 @@ describe('RecordPanel — a Partial Form column (#491)', () => {
 
 });
 
-// The column header's own Partial Form checkbox dispatches the sanctioned is_partial_form
-// write — proves the real end-to-end wiring (RecordPanel → PluginHeader → handleEditCell →
-// vscode.postMessage), not just PluginHeader.test.tsx's own component-level pin of
-// onTogglePartialForm, the same two-layer treatment the header right-click menu and the array
-// contexts got.
 describe('RecordPanel — Partial Form header toggle (#539)', () => {
   beforeEach(() => {
     vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
@@ -585,8 +529,7 @@ describe('RecordPanel — Partial Form header toggle (#539)', () => {
 
     fireEvent.click(screen.getByRole('checkbox'));
 
-    // origin deliberately unasserted (objectContaining), same convention as the extended-editor
-    // wiring test above: partialFormCompareResult's own MyMod.esp override omits it.
+    // origin deliberately unasserted: this fixture's MyMod.esp override omits it.
     expect(vscode.postMessage).toHaveBeenCalledWith(expect.objectContaining({
       type: WEBVIEW_TO_EXTENSION.EDIT_FIELD,
       formKey: '000001:Fallout4.esm',
@@ -597,14 +540,8 @@ describe('RecordPanel — Partial Form header toggle (#539)', () => {
   });
 });
 
-// #620 and this ticket's own triage both missed their mark at this exact layer: every prior
-// flags-cell test (FlagCell.test.tsx, DiffRow.test.tsx's "#426" block) hand-feeds
-// editableColumns/onEditCell/the flag metadata rather than deriving them from a real load() response the
-// way editableColumns (RecordPanel.tsx's own four-condition gate) actually is in the running
-// extension. This block is the first test in the suite that drives the gesture through that real
-// computation — for a scalar cell (the issue's own working comparison case) and a flags cell
-// (the reported no-op) side by side on the identical column, so nothing but the field's own type
-// differs between the two.
+// Drives the gesture through the real editableColumns computation rather than a hand-fed set,
+// with a scalar cell and a flags cell on the identical column so only the field type differs.
 describe('RecordPanel — flags cell editing through real message plumbing (#622)', () => {
   beforeEach(() => {
     vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
@@ -612,9 +549,7 @@ describe('RecordPanel — flags cell editing through real message plumbing (#622
 
   afterEach(() => vi.unstubAllGlobals());
 
-  // The control: pins the issue's own claim that scalar edits already work in the same
-  // session, using the identical tracked/editable column the flags assertions below use — so a
-  // regression in either direction (control or flags) is caught by the same fixture.
+  // The control: a scalar edit on the identical tracked, editable column the flags cases use.
   it('control: a scalar cell in a tracked, editable column opens an editable input on double click', async () => {
     renderPanel(flagsCompareResult, { plugins: flagsTrackedPluginsResponse });
     await waitFor(() => expect(screen.getByText('Override Name')).toBeInTheDocument());
@@ -623,10 +558,8 @@ describe('RecordPanel — flags cell editing through real message plumbing (#622
     expect(screen.getByRole('textbox')).toBeInTheDocument();
   });
 
-  // Maintainer rulings 2026-09-01: a flags row starts collapsed to its compact summary —
-  // "we start with the clean view" — and the chevron (expandedStructs' existing toggle,
-  // chevron or double-click on the label) reveals the checkbox list, enabled only in the
-  // tracked/editable column.
+  // A flags row starts collapsed to its compact summary; the chevron reveals the checkbox list,
+  // enabled only in the tracked, editable column.
   it('a flags row starts collapsed; expanding reveals enabled checkboxes and it re-collapses', async () => {
     renderPanel(flagsCompareResult, { plugins: flagsTrackedPluginsResponse });
     // compact summary, value 3, once per column
@@ -634,8 +567,7 @@ describe('RecordPanel — flags cell editing through real message plumbing (#622
     expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: '▶' }));
-    // #618 follow-up: both columns render, so the immutable master column's flags expand too —
-    // its checkboxes disabled, only the tracked/editable column's two enabled.
+    // The immutable master column's flags expand too, its checkboxes disabled.
     const enabled = screen.getAllByRole('checkbox').filter(b => !(b as HTMLInputElement).disabled);
     expect(enabled).toHaveLength(2);
 
@@ -667,9 +599,8 @@ describe('RecordPanel — flags cell editing through real message plumbing (#622
 describe('RecordPanel — conflict color coding', () => {
   afterEach(() => vi.unstubAllGlobals());
 
-  // Each field's own diffs[].conflictAll drives its own row — never the record-wide
-  // CompareResult.conflictAll smeared onto every row — exercised
-  // end-to-end through RecordPanel's merge/recursion pipeline (not just DiffRow's own props).
+  // Each field's own diffs[].conflictAll drives its own row, never the record-wide
+  // CompareResult.conflictAll smeared onto every row.
   it('applies green row background to a field whose own conflictAll is Override', async () => {
     vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
     renderPanel(overrideCompareResult);
@@ -686,9 +617,7 @@ describe('RecordPanel — conflict color coding', () => {
     expect(row.style.backgroundColor).toBe('rgba(255, 152, 0, 0.20)');
   });
 
-  // The regression guard: two sibling fields, only one differs — the agreeing
-  // sibling's row must show no background even though the record as a whole (and the other
-  // field) is Override. A record-wide smear would incorrectly tint both rows the same way.
+  // Two sibling fields, only one differing: a record-wide smear would tint both rows alike.
   it('colors only the field that actually differs — an agreeing sibling row gets no background', async () => {
     vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
     renderPanel(twoSiblingFieldsResult);
@@ -735,8 +664,8 @@ describe('RecordPanel — postMessage wiring', () => {
 
   it('calls vscode.postMessage with type openRecord when a FormKey link is Ctrl+clicked', async () => {
     renderPanel(fkCompareResult, { plugins: fkPlugins });
-    // Resolved per fkCompareResult's diff.resolutions — labeled with the "EditorID [FormKey]" composite, so the
-    // reference is identifiable from the cell alone rather than only by its EditorID.
+    // Labelled with the "EditorID [FormKey]" composite, so the reference is identifiable from
+    // the cell alone rather than only by its EditorID.
     await waitFor(() => screen.getByText('HumanRace [00013918:Fallout4.esm]'));
     fireEvent.click(screen.getByText('HumanRace [00013918:Fallout4.esm]'), { ctrlKey: true });
     expect(vscode.postMessage).toHaveBeenCalledWith({
@@ -758,10 +687,8 @@ describe('RecordPanel — postMessage wiring', () => {
     await waitFor(() => expect(client.load).toHaveBeenCalledWith('000002:Fallout4.esm'));
   });
 
-  // ADR-0039: the string cell's right-click command reaches the extended editor only
-  // through this broadcast — no left-click gesture in the webview calls openExtendedFieldEditor.
-  // Rival this guards against: code with no listener branch for this message
-  // type at all, where nothing would be posted here.
+  // ADR-0039: the string cell's right-click command reaches the extended editor only through
+  // this broadcast; no left-click gesture in the webview calls openExtendedFieldEditor.
   it('opens the extended editor bridge call when fieldOpenExtendedEditor arrives for the open record', async () => {
     renderPanel(compareResult);
     await waitFor(() => screen.getByText('TestNPC [000001:Fallout4.esm]'));
@@ -776,9 +703,8 @@ describe('RecordPanel — postMessage wiring', () => {
       }));
     });
 
-    // origin deliberately unasserted — compareResult's own fixture overrides omit it (undefined,
-    // not the message's `null`), and this test's job is the wiring, not origin's own semantics
-    // (columnKey resolves both the same way, ADR-0036).
+    // origin deliberately unasserted: the fixture overrides omit it, and columnKey resolves
+    // undefined and null the same way (ADR-0036).
     await waitFor(() => expect(vscode.postMessage).toHaveBeenCalledWith(expect.objectContaining({
       type: WEBVIEW_TO_EXTENSION.OPEN_EXTENDED_EDITOR,
       value: 'Override Name',
@@ -789,10 +715,8 @@ describe('RecordPanel — postMessage wiring', () => {
     })));
   });
 
-  // readOnly travels through unchanged (the extension host's own OS-permission-based
-  // enforcement — extendedFieldEditor.ts's chmod 0o444 — is what actually refuses a save on this
-  // path, covered there). This is the webview's own half: the
-  // right-click command must still open the tab read-only for an immutable/untracked column.
+  // The extension host's OS-permission enforcement is what refuses the save; the webview's half
+  // is that the command still opens the tab read-only for an immutable or untracked column.
   it('still opens the extended editor read-only when fieldOpenExtendedEditor arrives with readOnly: true', async () => {
     renderPanel(compareResult);
     await waitFor(() => screen.getByText('TestNPC [000001:Fallout4.esm]'));
@@ -853,8 +777,7 @@ describe('RecordPanel — struct sub-rows', () => {
     expect(screen.getByText('Y')).toBeInTheDocument();
   });
 
-  // #618 follow-up: each column's own sub-field value renders — the master's X: 10 beside
-  // the override's X: 15, the xEdit delta the struct expansion exists to show.
+  // The master's X: 10 beside the override's X: 15 — the delta struct expansion exists to show.
   it('child row for X shows each override\'s own sub-field value', async () => {
     renderPanel(structCompareResult);
     await waitFor(() => screen.getByText('▶'));
@@ -899,10 +822,8 @@ describe('RecordPanel — incomplete-comparison banner (#308 / ADR-0035)', () =>
     expect(screen.queryByText(recordPanelIncompleteMessage(false)!)).not.toBeInTheDocument();
   });
 
-  // A panel already open when the sweep lands must reflect the settled data, not just clear
-  // its own banner over stale content — this asserts both halves land together (the refetch, and
-  // the banner clearing as a consequence of the fresher conflictsComputed it carries), not just
-  // that the message was heard.
+  // A panel already open when the sweep lands must reflect the settled data, not just clear its
+  // banner over stale content.
   it('refetches and reflects settled data when CONFLICTS_COMPUTED arrives (AC4)', async () => {
     const load = vi.fn()
       .mockResolvedValueOnce({
@@ -924,9 +845,7 @@ describe('RecordPanel — incomplete-comparison banner (#308 / ADR-0035)', () =>
     expect(load).toHaveBeenCalledTimes(2);
   });
 
-  // A panel this message reaches before it has ever loaded a record (no formKey) must not throw
-  // or attempt a fetch — refresh() itself already no-ops on an empty formKey; this pins that the
-  // broadcast handler doesn't bypass that guard.
+  // A panel this message reaches before it has loaded any record must not throw or fetch.
   it('does nothing when CONFLICTS_COMPUTED arrives before any record is loaded', () => {
     vi.stubGlobal('mEditFormKey', '');
     const load = vi.fn();
@@ -957,7 +876,6 @@ describe('RecordPanel — LOAD_RECORD state management', () => {
     });
 
     await waitFor(() => expect((client.load as ReturnType<typeof vi.fn>).mock.calls.length).toBeGreaterThan(callsBefore));
-    // Panel should recover from Loading… and show data
     await waitFor(() => screen.getByText(/TestNPC/));
   });
 
@@ -988,9 +906,6 @@ describe('RecordPanel — column collapse (issue #3)', () => {
     vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
   });
 
-  // #618: retargeted to MyMod.esp — compareResult's own winner and now its only column.
-  // Fallout4.esm (the loser) is never rendered, so there is no second column left to assert
-  // stays visible; collapsing hides the sole column's own field value.
   it('clicking a plugin column header chip collapses that column, hiding its field values', async () => {
     renderPanel(compareResult);
     await waitFor(() => screen.getByText('Override Name'));
@@ -1011,8 +926,6 @@ describe('RecordPanel — column collapse (issue #3)', () => {
     expect(screen.getByText('Override Name')).toBeInTheDocument();
   });
 
-  // #618: needs a fixture whose sole, winning column is itself read-only — compareResult's own
-  // read-only column (Fallout4.esm) is the loser and is never rendered.
   it('collapsed column header hides the (read-only) label', async () => {
     renderPanel(immutableWinnerCompareResult, { plugins: pluginsResponse });
     await waitFor(() => screen.getByText('(read-only)'));
@@ -1040,8 +953,7 @@ describe('RecordPanel — column collapse (issue #3)', () => {
   });
 });
 
-// #689: a quest alias is an abstract union — each element is one concrete leaf, and the leaves
-// declare different members. Two plugins can disagree on which leaf an element is, so the element's
+// Two plugins can disagree on which leaf of an abstract union an element is, so the element's
 // rows are the union of both leaves' members, each rendered only in the columns that have it.
 const intSubMeta = (name: string): FieldMetadata =>
   ({ name, type: 'int', isArray: false, validFormKeyTypes: [], enumMembers: [] });
@@ -1115,8 +1027,8 @@ const mixedLeafAliasResult = {
   }],
 };
 
-// Both plugins carry the same leaf, so the backend's own per-column union (ConflictClassifier's
-// BuildStructChildren drops a member null in every column) leaves only that leaf's members.
+// Both plugins carry the same leaf, and the backend drops a member null in every column, so
+// only that leaf's members remain.
 const singleLeafAliasResult = {
   ...mixedLeafAliasResult,
   overrides: mixedLeafAliasResult.overrides.map(o => ({ ...o, fields: [{ metadata: aliasesMeta, value: [masterAlias] }] })),
@@ -1183,9 +1095,8 @@ describe('RecordPanel — union element rows', () => {
     expect(externalCells[2].textContent).toBe('{…}');
   });
 
-  // The rows an element shows are the ones its own plugins carry, never one per schema member: a
-  // single-leaf element's `children` name only that leaf's members (the other leaves' are null in
-  // every column and never reach the webview), so the other leaves' members render no rows at all.
+  // An element's rows are the ones its own plugins carry, never one per schema member: the
+  // other leaves' members are null in every column and never reach the webview.
   it('shows no row for a member no plugin\'s leaf declares', async () => {
     renderPanel(singleLeafAliasResult);
     await waitFor(() => rows().getByText('aliases'));
@@ -1208,9 +1119,8 @@ describe('RecordPanel — union element rows', () => {
   });
 });
 
-// #688: an abstract union's own leaf is an ordinary editable field. The reflector labels the row
-// and every leaf (FieldMetadata.displayLabel / a member's own label), because a Mutagen class name is a wire
-// token the user is never shown — so the panel must display the labels and post the values.
+// A Mutagen class name is a wire token the user is never shown, so the panel displays the
+// reflector's labels and posts the values.
 const unionFieldMeta: FieldMetadata = {
   name: 'Level',
   type: 'struct',

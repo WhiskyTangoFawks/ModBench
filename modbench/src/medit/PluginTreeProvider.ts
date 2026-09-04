@@ -22,10 +22,8 @@ function formId(formKey: string): string {
 }
 
 // This provider deliberately has no plugin-row node — the merged tree's plugin rows are
-// modmanager/PluginListProvider's PluginNode/ImplicitMasterNode (contextValue "plugin" /
-// "pluginImplicit" — see plugins.md). Do not reintroduce one here: reconciling a
-// "pluginImmutable" contextValue with modmanager's read-only-ness story is an open question,
-// not answered by resurrecting such a class.
+// modmanager/PluginListProvider's. Do not reintroduce one: reconciling a "pluginImmutable"
+// contextValue with that side's read-only-ness story is an open question.
 
 export class RecordTypeNode extends vscode.TreeItem {
   readonly kind = 'recordType' as const;
@@ -48,45 +46,32 @@ export class RecordTypeNode extends vscode.TreeItem {
 
 export class RecordNode extends vscode.TreeItem {
   readonly kind = 'record' as const;
-  // A record-scoped command acts on the clicked row's own copy of the record, so the row
-  // carries which copy it is ((plugin via record, origin) — ADR-0036), and a row whose plugin
-  // can't be edited hides Remove via its contextValue, matching the column header's !immutable
-  // `when` gate.
+  // A record-scoped command acts on the clicked row's own copy of the record, so the row carries
+  // which copy it is (plugin via record, origin — ADR-0036); a row whose plugin can't be edited
+  // hides Remove.
   constructor(
     public readonly record: RecordSummary,
     public readonly origin?: string,
     immutable = false,
-    // #674: whether this row's plugin is tracked — `PluginResponse.IsTracked` (ADR-0041: this
-    // copy's origin holds a `.git`), pushed in by `PluginTreeProvider.setTrackedPlugins` off the
-    // reconcile's own plugin list, never probed from here. Defaults false because untracked is the
-    // state that *withholds* a gesture: a caller that has not said gets the narrower row.
+    // Whether this row's plugin is tracked, pushed in by `setTrackedPlugins` and never probed
+    // from here. Defaults false because untracked is the state that withholds a gesture: a caller
+    // that has not said gets the narrower row.
     tracked = false,
-    // Set when this row is a Quest or a Dialog Topic — the two container types whose
-    // children (dialog topics/branches/scenes, responses) this same row type expands into,
-    // rather than forking a dedicated wrapper node the way the worldspace tree's WorldspacesNode/
-    // CellNode do (a container's own row stays an ordinary, fully-affordanced record row).
-    // undefined for every other record type, which stays a leaf.
+    // Set for a Quest or Dialog Topic — this same row type expands into their children rather
+    // than forking a wrapper node the way WorldspacesNode/CellNode do, so a container's own row
+    // stays a fully-affordanced record row.
     public readonly containerChildType?: 'qust' | 'dial',
-    // #560: whether this row actually has at least one container child, from the same bulk
-    // listing response `record` was built from (RecordSummary/ContainerChildSummary.
-    // hasContainerChildren — populated by the backend's container_child EXISTS check, never a
-    // per-row follow-up call here). A qust/dial row shows an expand chevron only when this is
-    // true — a Quest with zero DialogTopics/DialogBranches/Scenes is a leaf like any other record,
-    // matching every other empty-collection row in this tree (e.g. PlacedGroupNode), even though
-    // this one keeps the row visible and simply withholds the chevron rather than omitting the row.
+    // A qust/dial row shows an expand chevron only when this is true — a Quest with zero
+    // children is a leaf. From the same bulk listing `record` came from, never a per-row
+    // follow-up call.
     public readonly hasContainerChildren = false,
   ) {
     const label = record.editorId ? `${record.editorId} [${record.formKey}]` : record.formKey;
     const collapsible = containerChildType && hasContainerChildren;
     super(label, collapsible ? vscode.TreeItemCollapsibleState.Collapsed : vscode.TreeItemCollapsibleState.None);
-    // #572 ruling 1 / #674: Change FormID is offered on exactly one kind of row — a master copy
-    // ('recordTracked'/'recordUntracked', i.e. this row's plugin IS the FormKey's origin) in a
-    // tracked plugin. Both halves are refusals the backend would otherwise reach only after the
-    // whole gesture had been walked (RecordEditRefusal.PluginNotTracked and the non-native-target
-    // check), so the row states them and package.json's when-clause reads them. The other three
-    // values keep every other record action via their own when-clauses.
-    // FormKey shape is Mutagen's own "<hex6>:<ModKey>", so the origin is everything after
-    // the first colon.
+    // FormKey shape is Mutagen's own "<hex6>:<ModKey>", so the origin is everything after the
+    // first colon. The contextValues below state, on the row, refusals the backend would
+    // otherwise reach only after walking the whole gesture.
     const originModKey = record.formKey.slice(record.formKey.indexOf(':') + 1);
     // toLowerCase, not localeCompare: matches the backend's OrdinalIgnoreCase filename semantics
     // without host-locale hazards, and is the comparison renumberConfirm.ts already uses.
@@ -99,18 +84,17 @@ export class RecordNode extends vscode.TreeItem {
       title: 'Open Record',
       arguments: [{ formKey: record.formKey, label }],
     };
-    // RecordDecorationProvider's own keying identity — record.plugin (this row's own copy's
-    // owning plugin, which an override stack row can differ from the RecordTypeNode's plugin) paired
-    // with origin, the same (plugin, origin, formKey) triple every record-scoped command already uses.
+    // RecordDecorationProvider's keying identity — record.plugin (this row's own copy's owning
+    // plugin, which an override stack row can differ from the RecordTypeNode's) paired with origin.
     this.resourceUri = recordResourceUri(record.plugin, origin, record.formKey);
   }
 }
 
 // ── Worldspace / cell / placed-object nodes ─────────────────────────
 
-// ADR-0036: every node in the spatial chain carries the same optional `origin` RecordTypeNode
-// already does — a node built for a specific copy has to keep saying so all the way down to its
-// leaves, since each hop's own repository call needs it too.
+// ADR-0036: every node in the spatial chain carries the same optional `origin` — a node built for
+// a specific copy has to keep saying so down to its leaves, since each hop's own repository call
+// needs it too.
 export class WorldspacesNode extends vscode.TreeItem {
   readonly kind = 'worldspaces' as const;
   constructor(public readonly plugin: string, public readonly origin?: string) {
@@ -147,12 +131,9 @@ export class SubBlockNode extends vscode.TreeItem {
   }
 }
 
-// xEdit's StrRight (wbImplementation.pas) right-justifies each grid coordinate to width 3 with
-// leading spaces before wrapping it in the angle brackets — not a plain decimal string.
-// Takes `undefined` as well as `null` because the wire's cellX/cellY are honestly optional
-// (`int? CellX` — an interior cell has no grid coordinates). Only reached once `cellX != null` has
-// established this is a grid cell; `cellY` is not separately narrowed by that check, so the
-// widening lives here rather than at a call site forced to re-assert what the guard already knows.
+// xEdit's StrRight pads each grid coordinate to width 3 with leading spaces inside the angle
+// brackets — not a plain decimal string. `undefined` as well as `null` because the wire's
+// cellX/cellY are honestly optional.
 function strRight3(n: number | null | undefined): string {
   return String(n).padStart(3, ' ');
 }
@@ -160,27 +141,9 @@ function strRight3(n: number | null | undefined): string {
 export class CellNode extends vscode.TreeItem {
   readonly kind = 'cell' as const;
   constructor(public readonly plugin: string, public readonly cell: CellSummary, public readonly origin?: string) {
-    // xEdit's TwbMainRecord.GetDisplayName CELL branch (wbImplementation.pas), read directly (a
-    // paraphrase of the precedence once got it wrong; do not re-derive it from this comment
-    // either, go back to the source if it's ever in doubt):
-    //
-    //   Result := GetFullName;
-    //   if Result = '' then
-    //     if ... else if (GetSignature = 'CELL') then begin
-    //       if Supports(GetContainer, IwbGroupRecord, GroupRecord) and (GroupRecord.GroupType = 1) then
-    //         Result := '<Persistent Worldspace Cell>'
-    //       else
-    //         if GetGridCell(GridCell) then
-    //           Result := '<' + StrRight(GridCell.X.ToString, 3) + ', ' + StrRight(GridCell.Y.ToString, 3) + '>';
-    //     end else if ...
-    //
-    // GetFullName runs unconditionally, before any signature-specific branch — including CELL's
-    // own persistent-cell (group type 1) check. So FULL name wins even for the worldspace's own
-    // persistent cell; the placeholder and the grid format are both only reached when FULL is
-    // empty. EditorID is never referenced anywhere in this function, for any signature — an
-    // interior cell (no grid coordinates) keeps the EditorID-or-FormKey
-    // fallback below, but that is this file's own choice for the case xEdit's GetDisplayName
-    // resolves through its generic GetSummary fallback instead, not xEdit's own precedence.
+    // xEdit's TwbMainRecord.GetDisplayName (wbImplementation.pas) runs GetFullName
+    // unconditionally, before any signature branch — so FULL wins even for a persistent
+    // worldspace cell, and the placeholder and grid format are reached only when FULL is empty.
     const label = cell.fullName
       ? cell.fullName
       : cell.isPersistentWorldspaceCell
@@ -261,9 +224,9 @@ export type PluginTreeNode =
   | PlacedGroupNode | PlacedNode | InteriorCellsNode | InteriorLoadMoreNode
   | ErrorNode;
 
-// Record types that get their own dedicated node in the worldspace tree, keyed by raw
-// signature — the single source of truth for which spatial type maps to which node (a set
-// membership check and a separate per-type equality check could drift out of sync).
+// Record types that get their own dedicated node in the worldspace tree, keyed by raw signature —
+// one source of truth, since a set membership check and a separate per-type equality check could
+// drift.
 const SPATIAL_NODE_FACTORIES: Record<string, (pluginName: string, origin?: string) => PluginTreeNode> = {
   wrld: (pluginName, origin) => new WorldspacesNode(pluginName, origin),
   cell: (pluginName, origin) => new InteriorCellsNode(pluginName, origin),
@@ -303,11 +266,9 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
   // already hands PluginsTreeComposite.setLoadOrder as readOnlyFiles) — record/placed rows under
   // one hide Remove via their contextValue, matching the column header's !immutable `when` gate.
   private readonly immutablePlugins = new Set<string>();
-  // #674: lowercased filenames of the load order's *tracked* plugins, from the same
-  // `GET /plugins` answer the immutable set above comes from (`PluginResponse.IsTracked`,
-  // ADR-0041) — record rows under one offer Change FormID, rows under any other do not. Never a
-  // filesystem probe from here: tracked-ness is a fact the backend derives on every read, and this
-  // provider only relays what the last reconcile was told.
+  // Lowercased filenames of the load order's *tracked* plugins, from the same `GET /plugins`
+  // answer the immutable set comes from — never a filesystem probe from here: tracked-ness is a
+  // fact the backend derives on every read.
   private readonly trackedPlugins = new Set<string>();
   private readonly log: (msg: string) => void;
 
@@ -321,13 +282,9 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
     this._onDidChangeTreeData.fire(undefined);
   }
 
-  /** #674: the tracked set, replaced wholesale on every reconcile the same way
-   *  {@link setImmutablePlugins} is — and, like it, firing a re-render rather than clearing a
-   *  cache, so tracking or untracking a plugin re-derives every affected row's contextValue with
-   *  no repository call and no reload. A `.git` directory appearing or disappearing under a
-   *  plugin's origin is itself a watched event that drives a reconcile (fsWatcher.ts deliberately
-   *  does not filter that one), so both directions arrive on the reconcile path already — whether
-   *  Modbench's own Track gesture caused it or something outside did. */
+  /** Replaced wholesale on every reconcile, firing a re-render rather than clearing a cache. A
+   *  `.git` appearing or disappearing under a plugin's origin is a watched event that drives a
+   *  reconcile, so both directions arrive on that path. */
   setTrackedPlugins(names: Iterable<string>): void {
     this.trackedPlugins.clear();
     for (const n of names) this.trackedPlugins.add(n.toLowerCase());
@@ -356,12 +313,9 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
     this._onDidChangeTreeData.fire(undefined);
   }
 
-  // A field edit is this product's hottest path, so it gets a
-  // scoped fix rather than refresh()'s wholesale cache-clear-and-refetch — a page cache entry a
-  // field edit's own record already lives in is patched in place, never invalidated, so nothing
-  // this method (or markWorkingTreeState below, which shares this scan) ever triggers a
-  // repository call. Restricted to cache entries under this (plugin, origin) — the same prefix
-  // fetchRecords' own cacheKey uses — never a full-cache scan.
+  // A field edit is the hottest path, so it gets a scoped fix rather than refresh()'s wholesale
+  // cache-clear: a cache entry the record already lives in is patched in place, never
+  // invalidated, so no repository call follows.
   private findCachedRecordLocation(
     plugin: string, origin: string | undefined, formKey: string,
   ): { key: string; index: number } | undefined {
@@ -374,27 +328,16 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
     return undefined;
   }
 
-  /** The record's own cached working-tree state — what {@link RecordDecorationProvider}'s lookup
-   *  callback reads. Undefined when nothing has cached this record yet (never rendered, or a
-   *  since-cleared cache), which the provider reads the same as 'None': nothing to badge. */
+  /** Undefined when nothing has cached this record yet, which the decoration provider reads the
+   *  same as 'None': nothing to badge. */
   workingTreeStateOf(plugin: string, origin: string | undefined, formKey: string): RecordSummary['workingTreeState'] | undefined {
     const loc = this.findCachedRecordLocation(plugin, origin, formKey);
     return loc && this.pageCache.get(loc.key)!.items[loc.index].workingTreeState;
   }
 
-  /** Patches exactly one cached record's working-tree state — called from the edit-field
-   *  wiring (`onRecordEdited`) instead of `refresh()`. Returns whether a cached row existed to
-   *  patch, so the caller knows whether there is anything for a decoration refresh to reflect (a
-   *  record nothing has rendered yet needs neither). Fires `onDidChangeTreeData(undefined)` only
-   *  on an actual change — cheap here specifically because the cache is never cleared, so any
-   *  redraw it causes reads back the same (now-correct) data with no repository call.
-   *
-   *  Never downgrades Added to Modified: a create never seeds a committed
-   *  counterpart no matter how many field edits follow it (`CreateWorkingTreeRecord`'s own doc
-   *  comment — nothing in `records_committed` for a FormKey that never existed at Head), so the
-   *  backend's own discrimination would still answer Added on the next real fetch. Overwriting it
-   *  here would actively misrepresent a committed counterpart existing, not just go briefly stale
-   *  — worse than the staleness this method otherwise accepts. */
+  /** Never downgrades Added to Modified: a create seeds no committed counterpart however many
+   *  field edits follow, so overwriting it would misrepresent one existing rather than merely go
+   *  stale. Returns whether a cached row existed to patch. */
   markWorkingTreeState(
     plugin: string, origin: string | undefined, formKey: string, state: RecordSummary['workingTreeState'],
   ): boolean {
@@ -415,11 +358,9 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
   }
 
   async getChildren(element?: PluginTreeNode): Promise<PluginTreeNode[]> {
-    // `element` is never actually undefined here — PluginsTreeComposite's own
-    // `children` contract (PluginsTreeCompositeDeps) declares getChildren(child: TChild) as
-    // required, and calls this only with a defined element (root rows come from
-    // PluginListProvider instead) or via getPluginChildren(file) directly. The `!element`
-    // case stays only to satisfy vscode.TreeDataProvider<T>'s own optional-parameter contract.
+    // `element` is never actually undefined here — the composite calls this only with a defined
+    // element, and root rows come from PluginListProvider. This case stays only to satisfy
+    // vscode.TreeDataProvider<T>'s own optional-parameter contract.
     if (!element) return [];
     if (element instanceof RecordTypeNode) return this.fetchRecords(element);
     // A Quest/DialogTopic row expanding into its own container children — not spatial
@@ -463,9 +404,9 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
     this._onDidChangeTreeData.fire(parent);
   }
 
-  // The origin is part of every spatial/record cache key, not decoration — two copies
-  // of one filename have their own pages, and serving one copy's page (or interior-cell page, or
-  // cell's placed refs) under the other's node is a "right target, wrong content" failure.
+  // The origin is part of every cache key, not decoration: two copies of one filename have their
+  // own pages, and serving one copy's page under the other's node is a "right target, wrong
+  // content" failure.
   private originKey(plugin: string, origin?: string): string {
     return `${plugin}|${origin ?? ''}`;
   }
@@ -478,9 +419,7 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
     return e instanceof Error ? e.message : String(e);
   }
 
-  /** The one failure frame every child fetcher shares: a failed fetch renders as an error tree
-   *  node in place of the children, never an empty list (ADR-0026 background tier — inline UI,
-   *  logged, no toast). Wrapping the whole build keeps that enforced by construction. */
+  // A failed fetch renders as an ErrorNode in place of the children, never an empty list (ADR-0026).
   private async orErrorNode(op: string, build: () => Promise<PluginTreeNode[]>): Promise<PluginTreeNode[]> {
     try {
       return await build();
@@ -491,8 +430,7 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
     }
   }
 
-  /** Get-or-fetch-and-set against one of the per-surface caches. A failed fetch caches
-   *  nothing, so the next expand retries — same as every hand-written block this replaced. */
+  // A failed fetch caches nothing, so the next expand retries.
   private async getOrFetch<T>(map: Map<string, T>, key: string, fetch: () => Promise<T>): Promise<T> {
     let value = map.get(key);
     if (value === undefined) {
@@ -502,11 +440,9 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
     return value;
   }
 
-  /** A plugin's children — its spatial group nodes and flat record-type nodes — keyed by filename
-   *  rather than by a node this provider built. Public because the merged Plugins tree
-   *  (ADR-0035) is the only caller: `PluginsTreeComposite` expands rows built by
-   *  `PluginListProvider`, and its whole knowledge of this side is a plugin filename. There is
-   *  no standalone root listing — this is the one way into a plugin's children. */
+  /** Keyed by filename rather than by a node this provider built: `PluginsTreeComposite` expands
+   *  rows built by `PluginListProvider`, and its whole knowledge of this side is a plugin
+   *  filename (ADR-0035). */
   async getPluginChildren(pluginName: string, origin?: string): Promise<PluginTreeNode[]> {
     return this.orErrorNode(`getPluginChildren(${pluginName})`, async () => {
       const types = await this.repository.getRecordTypes(pluginName, origin);
@@ -553,11 +489,7 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
     });
   }
 
-  /** A Quest/DialogTopic row's own children, in the backend's already-xEdit-ordered
-   *  response — flat, no intermediate grouping node (xEdit has none either; see
-   *  ContainerChildQueryService's own doc comment). A returned "dial" child (a Quest's own Dialog
-   *  Topic) recurses into the same containerChildType flag its parent has, so it is itself
-   *  expandable to its own Responses; every other returned type (dlbr/scen/info) stays a leaf. */
+  // A returned "dial" child is itself expandable to its Responses; every other type is a leaf.
   private fetchContainerChildren(node: RecordNode): Promise<PluginTreeNode[]> {
     return this.orErrorNode(`fetchContainerChildren(${node.record.formKey})`, async () => {
       const cacheKey = `${this.originKey(node.record.plugin, node.origin)}::${node.record.formKey}`;
@@ -586,17 +518,14 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
 
   private fetchRecords(node: RecordTypeNode): Promise<PluginTreeNode[]> {
     return this.orErrorNode(`fetchRecords(${node.plugin}, ${node.recordType})`, async () => {
-      // Every record of this type, one call, no "Load more…" step — measured no
-      // meaningful cost even at the realistic worst case (Fallout4.esm's own INFO records in a
-      // full FO4 load order, ~78k rows, ~500ms backend query + extension-host materialization
-      // combined; docs/specs/plugins.md). Matches xEdit's own record-type group nodes, which
-      // load unconditionally in full (xeMainForm.pas `vstNavInitChildren`:
-      // `ChildCount := Container.ElementCount`, no LIMIT).
+      // Every record of this type in one call, no "Load more…" step — measured no meaningful cost
+      // even at the realistic worst case (docs/specs/plugins.md). Matches xEdit's own record-type
+      // group nodes, which load unconditionally in full.
       const cached = await this.getOrFetch(this.pageCache, this.cacheKey(node),
         () => this.repository.getRecords(node.plugin, node.recordType, 0, UNLIMITED_RECORDS, node.origin));
-      // qust/dial rows are collapsible here too — a Quest or Dialog Topic reached from its
-      // own flat record-type listing (not just as someone else's child) still expands into its own
-      // container children, the same single mechanism fetchContainerChildren's own recursion uses.
+      // qust/dial rows are collapsible here too — a Quest reached from its flat record-type
+      // listing still expands into its container children, the same mechanism
+      // fetchContainerChildren uses.
       return cached.items.map(r => new RecordNode(
         r, node.origin, this.isImmutable(r.plugin, node.origin), this.isTracked(r.plugin),
         containerChildTypeOf(node.recordType), r.hasContainerChildren));

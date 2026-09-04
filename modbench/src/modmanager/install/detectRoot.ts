@@ -10,13 +10,8 @@ export const DATA_DIRS = new Set([
   'scaleform', 'facegen', 'actors', 'distantlod',
 ]);
 
-/** Resolve which directory's contents become `mods/<name>/`.
- *
- *  - A `fomod/ModuleConfig.xml` marks a scripted installer: `isFomod` is set but
- *    the tree is left as-is (the wizard is a separate sub-project).
- *  - A `Data/` subfolder is the mod's data root.
- *  - A single wrapper folder (`archive/ModName/…`) is peeled and re-evaluated.
- *  - Otherwise the level itself is the root (loose plugins/meshes). */
+/** A `fomod/ModuleConfig.xml` marks a scripted installer: `isFomod` is set but the
+ *  tree is left as-is, because the wizard is a separate sub-project. */
 export async function detectRoot(
   stagingDir: string,
 ): Promise<{ sourceDir: string; isFomod: boolean }> {

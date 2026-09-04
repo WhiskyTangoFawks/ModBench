@@ -1,24 +1,16 @@
 import { headerFormKeyFor } from './formKeyIdentity';
 import type { PluginRepository } from './PluginRepository';
 
-/** The plugin identity `offerEslFlagRemoval` needs — `EditingController`'s `compile` and
- *  `createRecord`/`copyRecordAsNewRecord` all resolve one of these before the gesture that can
- *  hit the coherence refusal, so it takes the shape directly rather than importing
- *  `CompileTarget` from a module named for a different gesture. */
+/** Deliberately not `CompileTarget`: create and copy-as-new reach this refusal too, so the
+ *  shape is not named for one gesture. */
 export interface EslFlagRemovalTarget {
   name: string;
   origin: string;
 }
 
-/** #290's coherence prompt (the maintainer's always-prompt rule for consequential state), shared
- *  by every gesture a removable ESL flag can refuse — compile, create, copy-as-new — the plugin
- *  no longer fits ESL and the typed marker says the flag is removable. Accept = an ordinary
- *  `is_light` header edit (the flag's one sanctioned door), after which the caller retries its
- *  own gesture; decline (or a refused edit) = false, and the caller's loud typed refusal stands,
- *  with the contradiction as the record of what to fix. `verb` names the retried gesture in the
- *  prompt's own words ("Compile", "Create the Record"). `showWarning`/`showError` are VS Code's
- *  own `window.show*Message`, injected so this stays testable with no `vscode` mock at all — the
- *  same DI shape `externalChangeDialog.ts`'s `runExternalChangeDialogs` already uses. */
+/** Accept performs an ordinary `is_light` header edit — the flag's one sanctioned door — and
+ *  the caller retries its gesture; decline, or a refused edit, leaves the typed refusal
+ *  standing. `verb` names that gesture in the prompt's words. */
 export async function offerEslFlagRemoval(
   target: EslFlagRemovalTarget, refusalReason: string, verb: string,
   repository: PluginRepository,

@@ -38,15 +38,11 @@ export interface BackendManagerOptions {
   spawn?: SpawnFn;
   /** Path to the bundled backend executable. */
   executablePath?: string;
-  /** Extra spawn argv (e.g. `['--Serilog:MinimumLevel:Default', 'Debug']`) built
-   *  fresh at each spawn from the Output channel's current level, so a
-   *  crash-restart picks up any level change. Only ever applied on the spawn
-   *  path — an attached backend never sees it. */
+  /** Read fresh at each spawn from the Output channel's current level, so a crash-restart picks
+   *  up a level change. The spawn path only — an attached backend never sees it. */
   serilogLevelArgs?: () => string[];
-  /** How long stop() waits after SIGTERM before escalating to SIGKILL — a backend mid
-   *  a long, non-yielding synchronous request won't notice SIGTERM promptly, and stop() must
-   *  never report "stopped" while the OS process is still demonstrably alive. Defaults to 5s,
-   *  matching .NET's own Generic Host default graceful-shutdown budget (HostOptions.ShutdownTimeout). */
+  /** How long stop() waits after SIGTERM before escalating to SIGKILL. Defaults to 5s, matching
+   *  .NET's Generic Host shutdown budget (HostOptions.ShutdownTimeout). */
   stopGracePeriodMs?: number;
 }
 
@@ -64,12 +60,12 @@ export class BackendManager extends EventEmitter {
 
   private _isHealthy = false;
   private child?: BackendProcess;
-  /** True between start() and stop(); an exit while true is a crash → restart. */
+  // True between start() and stop(); an exit while true is a crash → restart.
   private expectedAlive = false;
-  /** In-flight start(), so concurrent callers share it instead of double-spawning. */
+  // In-flight start(), so concurrent callers share it instead of double-spawning.
   private startPromise?: Promise<void>;
-  /** Bumped by stop(); an in-flight start()/connect() from an older generation
-   *  aborts instead of resurrecting a load order the user already closed. */
+  // Bumped by stop(); an in-flight start()/connect() from an older generation aborts instead of
+  // resurrecting a load order the user already closed.
   private generation = 0;
   private restartAttempts = 0;
   private static readonly MAX_RESTARTS = 3;
@@ -93,9 +89,8 @@ export class BackendManager extends EventEmitter {
 
   get isHealthy(): boolean { return this._isHealthy; }
 
-  /** Ensure the backend is running: attach if one is already healthy (e.g. a
-   *  dev-launched instance), otherwise spawn the bundled binary and wait.
-   *  Idempotent — concurrent calls share one in-flight start (no double-spawn). */
+  /** Attaches to an already-healthy backend (a dev-launched one) rather than spawning.
+   *  Idempotent: concurrent calls share one in-flight start, so no double-spawn. */
   start(): Promise<void> {
     this.expectedAlive = true;
     this.startPromise ??= this.doStart().finally(() => { this.startPromise = undefined; });
@@ -130,10 +125,8 @@ export class BackendManager extends EventEmitter {
     if (this._isHealthy) this.restartAttempts = 0;
   }
 
-  /** Pipe the child's console output line-by-line to `onOutput`. Subscribed
-   *  unconditionally: a piped stream nobody reads fills its OS buffer and then
-   *  blocks the backend's writes, so draining isn't optional. Re-runs per spawn,
-   *  so a crash-restarted child is forwarded too. */
+  // Subscribed unconditionally: a piped stream nobody reads fills its OS buffer and then blocks
+  // the backend's writes, so draining is not optional.
   private forwardOutput(child: BackendProcess): void {
     const streams: [BackendStream, NodeJS.ReadableStream | null | undefined][] =
       [['stdout', child.stdout], ['stderr', child.stderr]];
@@ -143,11 +136,8 @@ export class BackendManager extends EventEmitter {
     }
   }
 
-  /** Deliberate teardown: kill the backend and cancel any in-flight start. `isHealthy` and the
-   *  `child` handle are cleared immediately — a backend we've
-   *  already decided to kill shouldn't keep looking usable to anything that might dispatch new
-   *  work to it. Only the *status* report waits for the OS process to
-   *  actually be gone before claiming so. */
+  /** `isHealthy` and the `child` handle clear immediately, so nothing dispatches new work to a
+   *  backend already condemned; only the *status* report waits for the process to be gone. */
   async stop(): Promise<void> {
     this.expectedAlive = false;
     this.generation++; // cancels an in-flight doStart()/connect()
@@ -159,28 +149,15 @@ export class BackendManager extends EventEmitter {
     if (child) {
       await this.killAndConfirmExit(child);
     }
-    // Emitted rather than written straight to the status bar, so a deliberate stop is
-    // observable — wireBackendRunningContext (extension.ts) subscribes to 'status' to
-    // drive the Plugins view's Launch/Close mEdit toggle and would otherwise keep reading
-    // "running" until something else happened to fire. Deferred until the child (if any) has
-    // actually exited — see killAndConfirmExit — so this never claims "stopped" while the OS
-    // process is still demonstrably alive.
+    // Emitted rather than written straight to the status bar, so the Launch/Close mEdit toggle
+    // sees a deliberate stop. Deferred until the child has actually exited, so this never claims
+    // "stopped" against a live process.
     if (wasRunning) this.emitStatus('stopped');
   }
 
-  /** Send SIGTERM and wait for the child to actually exit. A backend mid a long, non-yielding
-   *  synchronous request won't notice SIGTERM promptly — if it hasn't exited within
-   *  `stopGracePeriodMs`, escalate to SIGKILL, which the OS does not let it ignore, and keep
-   *  waiting for the same real `'exit'` event. Never resolves on a guess.
-   *
-   *  Residual race (accepted): stop() clears `this.child` synchronously before this
-   *  resolves, so a same-instance start() racing in during the wait sees `!this.child` and could
-   *  spawn a second child before this one is confirmed dead. The dangerous leak is the reload
-   *  path, where a *new* BackendManager instance has no reference to the old child at
-   *  all — deactivate() awaiting dispose() (and so this method) before teardown prevents that.
-   *  This narrower case is same-instance and mitigated in practice: emitStatus('stopped') stays
-   *  deferred until this resolves, so the UI's relaunch affordance is disabled for the same
-   *  window. Left as a stated, accepted risk rather than guarded further. */
+  // A backend mid a long, non-yielding synchronous request won't notice SIGTERM promptly, so
+  // this escalates to SIGKILL, which the OS does not let it ignore, and waits for the real
+  // 'exit' either way. Never resolves on a guess.
   private killAndConfirmExit(child: BackendProcess): Promise<void> {
     return new Promise((resolve) => {
       // A container, not a `let`, so it exists (as `undefined`) before onExit is even defined —
@@ -246,10 +223,8 @@ export class BackendManager extends EventEmitter {
     });
   }
 
-  /** Awaits stop()'s confirmed-exit teardown before disposing the status bar — the
-   *  extension's deactivate() delegates to this directly, so a reload cannot proceed (and
-   *  construct a replacement BackendManager with no reference to this instance's child) until
-   *  the old child is actually gone. */
+  /** Awaits the confirmed-exit teardown, so a reload cannot construct a replacement manager —
+   *  which would hold no reference to this child — before the old child is gone. */
   async dispose(): Promise<void> {
     await this.stop();
     this.statusBar.dispose();

@@ -2,12 +2,9 @@ import { describe, it, expect, vi } from 'vitest';
 import { makeReconcileProgressHandler, recordPanelIncompleteMessage } from '../loadOrderProgress';
 import type { LoadOrderProgress } from '../EditingController';
 
-// ADR-0035: the record panel's own statement — an absent conflict badge is
-// indistinguishable from "no conflict", and this surface *does* render conflict colouring today,
-// so the statement has to name both facts: the comparison itself is incomplete, and the colouring
-// it renders is not final because of that. Gated on `conflictsComputed` alone — the sweep is
-// whole-set, so a reconcile that changes anything (ADR-0044) leaves a *Ready* load order with
-// stale winners until it re-runs.
+// ADR-0035: an absent conflict badge is indistinguishable from "no conflict", so the statement
+// names both facts. Gated on `conflictsComputed` alone — the whole-set sweep leaves a Ready
+// load order with stale winners until it re-runs.
 describe('recordPanelIncompleteMessage', () => {
   it('states both that the comparison is incomplete and that colouring is not final while the sweep is outstanding', () => {
     const message = recordPanelIncompleteMessage(false);
@@ -36,11 +33,9 @@ describe('recordPanelIncompleteMessage', () => {
   });
 });
 
-// One poll tick, translated into what the tree should do about it. The guard
-// this pins is not cosmetic: applying a tick re-renders the whole tree, and
-// PluginTreeProvider.getPluginChildren is uncached, so re-applying an unchanged tick every 500ms
-// would re-fetch record types for every expanded row — a request storm on a deep tree, for no
-// visible change.
+// Applying a tick re-renders the whole tree, and PluginTreeProvider.getPluginChildren is
+// uncached, so re-applying an unchanged tick every 500ms would re-fetch record types for every
+// expanded row — a request storm for no visible change.
 describe('makeReconcileProgressHandler', () => {
   const status = (over: Partial<LoadOrderProgress> = {}): LoadOrderProgress =>
     ({ totalPlugins: 3, indexedPlugins: [], conflictsComputed: false, failures: [], ...over });
@@ -68,9 +63,8 @@ describe('makeReconcileProgressHandler', () => {
     expect(applyLoadOrder).toHaveBeenCalledTimes(1);
   });
 
-  // A failure can arrive without the indexed set growing at all — a plugin that failed to
-  // index is never added to it. Counting only plugins would leave that row undecorated until the
-  // next plugin happened to land, or until the load finished.
+  // A failure can arrive without the indexed set growing — a plugin that failed to index is never
+  // added to it, so counting only plugins would leave that row undecorated until the load ended.
   it('applies a tick that landed a failure even though no new plugin was indexed', () => {
     const { applyLoadOrder, onProgress } = handler();
 

@@ -6,10 +6,9 @@ import type { FormKeyResolution } from './types';
 // behaves exactly like a genuinely unresolved reference: raw FormKey label, no affordance.
 const UNRESOLVED: FormKeyResolution = { state: 'Unresolved', recordType: null, editorId: null };
 
-// Whether Ctrl/Cmd is currently held. Window-level because the affordance has to appear on a
-// cell the pointer is already resting over — a cell that will see no fresh mouse event. Every
-// link in the grid reads the same store, so the listeners are registered once for all of them
-// and torn down when the last link unmounts.
+// Window-level because the affordance has to appear on a cell the pointer already rests over — a
+// cell that will see no fresh mouse event. Every link reads this one store, so the listeners are
+// registered once.
 let ctrlHeld = false;
 const subscribers = new Set<() => void>();
 
@@ -52,41 +51,28 @@ function useCtrlHeld(): boolean {
   return useSyncExternalStore(subscribe, getCtrlHeld, getCtrlHeld);
 }
 
-// The text a FormKey reads as — "EditorID [FormKey]" when the reference
-// resolves, the bare FormKey when it doesn't. Exported because FormKeyCell's Ctrl+C copy path
-// must produce exactly what the link displays — a cell must never show one string and hand
-// over another.
+// "EditorID [FormKey]" when the reference resolves, the bare FormKey when it doesn't. Exported so
+// the Ctrl+C copy path produces exactly what the link displays — a cell must never show one
+// string and hand over another.
 export function formKeyLabel(value: string, resolution?: FormKeyResolution): string {
   return resolution?.editorId ? `${resolution.editorId} [${value}]` : value;
 }
 
-// A FormKey rendered as its link affordance, used by FormKeyCell.
-//
-// The click gesture is split here so it stays uniform across every cell in the
-// grid — Ctrl+click follows the reference (xEdit's vstViewClick likewise requires VK_CONTROL),
-// which leaves plain click free to mean "edit this cell". Plain click is the caller's to
-// define: FormKeyCell opens the picker with it on a mutable column; on an immutable column
-// `onPlainClick` is a no-op, so plain click there does nothing.
-//
-// The link *affordance* — underline and pointer — appears only while Ctrl is held and the
-// pointer is over the cell, and only when the reference resolves (ADR-0031: Unresolved withholds
-// it, ResolvedWrongType/ResolvedValidType both grant it, matching xEdit's willingness to follow a
-// reference of the wrong type). This mirrors xEdit's vstViewCheckHotTrack, which gates
-// hot-tracking on `Allow := Assigned(lLinksTo)`: a link you cannot follow must not look like one.
-//
-// The button's label is "EditorID [FormKey]" when the reference resolves, falling
-// back to the bare FormKey string when it doesn't (or when the caller has no resolution to
-// offer). The composite, never the bare EditorID: a
-// FormKey is the identity and the EditorID is decoration, so labelling with the decoration alone
-// would leave the cell unable to hand the user its own value. It is also the format the picker's
-// own items use (`toFormKeyQuickPickItem`), so a reference reads back exactly as it was chosen.
+// Ctrl+click follows the reference (xEdit's vstViewClick likewise requires VK_CONTROL), which
+// leaves plain click free to mean "edit this cell"; plain click is the caller's to define.
+
+// The underline-and-pointer affordance appears only while Ctrl is held over a resolvable
+// reference (ADR-0031), mirroring xEdit's vstViewCheckHotTrack: a link you cannot follow must not
+// look like one.
+
+// The label is the composite, never the bare EditorID: a FormKey is the identity and the EditorID
+// is decoration, and it is the format the picker's own items use, so a reference reads back as it
+// was chosen.
 export function FormKeyLink({ value, onOpen, onPlainClick, onDoubleClick, openTrigger, resolution = UNRESOLVED }: Readonly<{
   value: string;
   onOpen: (fk: string) => void;
   onPlainClick?: () => void;
-  // ADR-0034: both optional, and both used by exactly one caller — FormKeyCell's
-  // mutable branch, which wires them to the same `openPicker` gated the way ScalarCell/FlagCell
-  // gate their own mutable open triggers.
+  // ADR-0034: both optional — a caller with no mutable open gesture omits them.
   onDoubleClick?: () => void;
   openTrigger?: boolean;
   resolution?: FormKeyResolution;
@@ -111,27 +97,21 @@ export function FormKeyLink({ value, onOpen, onPlainClick, onDoubleClick, openTr
         background: 'none',
         border: 'none',
         color: 'var(--vscode-textLink-foreground, #3794ff)',
-        // ADR-0034: no resting
-        // cursor override — the parent DiskCell's `grab` is this cell's resting affordance, since
-        // it is a drag source the whole time. `pointer` is asserted only while the reference is
-        // hot-tracked, where it is the navigation gesture's own affordance, not a mask.
+        // ADR-0034: no resting cursor override — the parent DiskCell's `grab` is this cell's
+        // resting affordance, since it is a drag source the whole time. `pointer` is asserted only
+        // while the reference is hot-tracked.
         cursor: hot ? 'pointer' : undefined,
         fontFamily: mono,
         fontSize: '12px',
         padding: 0,
         textDecoration: hot ? 'underline' : 'none',
         textAlign: 'left',
-        // The composite is long, so the link
-        // truncates itself. gridStyles' baseCell already ellipsises the <td>, but text-overflow
-        // clips at the boundary of an atomic inline box — it never reaches inside a <button>'s
-        // own text — so relying on the cell would hard-clip mid-character instead. Truncating
-        // rather than shortening keeps the full reference in the DOM, so a selection copies the
-        // untruncated text.
-        //
-        // minWidth: 0 is load-bearing, not tidying: FormKeyCell wraps this in a
-        // `display: inline-flex` span, which makes the button a flex item, and a flex item's
-        // default `min-width: auto` refuses to shrink below its content — silently defeating the
-        // overflow/ellipsis above and letting a long composite blow the column out instead.
+        // gridStyles' baseCell already ellipsises the <td>, but text-overflow clips at the
+        // boundary of an atomic inline box and never reaches inside a <button>'s own text, so
+        // relying on the cell alone would hard-clip mid-character.
+
+        // `minWidth: 0` is load-bearing: this button is a flex item, and a flex item's default
+        // `min-width: auto` refuses to shrink below its content, defeating the ellipsis above.
         display: 'inline-block',
         minWidth: 0,
         maxWidth: '100%',

@@ -1,7 +1,5 @@
-// Vanilla/DLC master set for StatusChecker's missing-master check, read from the
-// game's resolved Data folder (the single GameDirectory resolved once at the
-// composition root; see gameDirectory.ts). Tolerates an unresolved/unreachable
-// Data folder, degrading to an empty set rather than failing the whole tree load.
+// An unresolved or unreachable Data folder degrades to an empty set rather than failing the
+// whole tree load.
 
 import { readdir, stat } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -23,20 +21,9 @@ export async function readVanillaMasters(
   }
 }
 
-/** Discovers the game's implicitly-loaded masters — vanilla/DLC
- *  plugins the game loads whether or not any mod declares them, so their
- *  absence from the Plugin List makes every mod plugin declaring one show a
- *  false "missing master". A plugin file in the resolved Data folder that is
- *  NOT a hardlink (`nlink === 1`) is vanilla; a hardlinked file (`nlink >= 2`)
- *  is a deployed mod plugin (MO2 hardlinks mod files into Data), not vanilla —
- *  discovered, never hardcoded. Ordering is derived by topologically sorting
- *  the discovered set on each file's own declared masters (read via the
- *  existing `readMasters` header reader) — never alphabetical, never a
- *  hardcoded per-game table. Degrades to `[]` (logged) on an unresolved/
- *  unreadable Data folder; a per-file stat/readMasters failure excludes only
- *  that file (logged) without blanking the rest; a master-dependency cycle
- *  cannot hang (DFS with `inStack` cycle detection) and falls back to the
- *  pre-sort discovery order (logged) rather than throwing. */
+/** The plugins the game loads whether or not a mod declares them. MO2 hardlinks deployed mod
+ *  files into `Data`, so `nlink === 1` marks a file vanilla — discovered, never a hardcoded
+ *  table. */
 export async function discoverImplicitMasters(
   dataFolder: string | undefined,
   log: (msg: string) => void,
@@ -56,8 +43,7 @@ export async function discoverImplicitMasters(
   return topoSortImplicitMasters(readable, edges, log);
 }
 
-/** Hardlink seam: nlink === 1 → vanilla (not deployed by MO2); nlink >= 2 → a
- *  deployed mod plugin, excluded. A per-file stat failure excludes that file. */
+// A per-file stat failure excludes that file rather than blanking the set.
 async function filterNonHardlinked(
   dataFolder: string,
   candidates: string[],
@@ -75,15 +61,8 @@ async function filterNonHardlinked(
   return vanilla;
 }
 
-/** Reads each vanilla file's own declared masters to build the dependency
- *  graph for the topological sort. A per-file read failure excludes that one
- *  file (logged) rather than blanking the whole discovered set. An edge to a
- *  name outside the discovered set is ignored — e.g. a vanilla file mastering
- *  a mod-provided plugin isn't a discovery-order edge.
- *
- *  `name` and its `masters` are read together and carried as one pair through
- *  `entries` — never split into a name list plus a side-map re-fetched by key,
- *  so there is no lookup that could miss. */
+// An edge to a name outside the discovered set is dropped: a vanilla file mastering a
+// mod-provided plugin is not a discovery-order edge.
 async function buildMasterDependencyGraph(
   dataFolder: string,
   vanilla: string[],
@@ -110,11 +89,8 @@ async function buildMasterDependencyGraph(
   return { readable, edges };
 }
 
-/** DFS-postorder topological sort: masters end up before their dependents.
- *  Cycle-safe by construction — `inStack` catches a revisit-in-progress and
- *  sets `cyclic` without recursing further, so the DFS is always finite. On a
- *  detected cycle, falls back to `candidates` (the pre-sort discovery order)
- *  rather than the partial DFS result — stable and deterministic, never a hang. */
+// On a detected cycle, falls back to the pre-sort discovery order rather than the partial DFS
+// result: deterministic, and never a hang.
 function topoSortImplicitMasters(
   candidates: string[],
   edges: Map<string, string[]>,
@@ -132,9 +108,8 @@ function topoSortImplicitMasters(
       return;
     }
     inStack.add(name);
-    // `?? []` here guards a lookup that is unreachable by construction: every
-    // `dep` comes from `byLower`'s values, which are exactly `edges`'s own key
-    // set (traced, not asserted away with `!`; see buildMasterDependencyGraph).
+    // `?? []` guards a lookup unreachable by construction: every `dep` comes from `byLower`'s
+    // values, which are exactly `edges`'s key set. Traced, not asserted away with `!`.
     for (const dep of edges.get(name) ?? []) {
       visit(dep);
       if (cyclic) break;

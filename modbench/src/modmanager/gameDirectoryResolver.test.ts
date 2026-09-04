@@ -2,7 +2,6 @@ import { describe, it, expect } from 'vitest';
 import { createGameDirectoryResolver, dataFolderFrom, type ConfigChangeEvent, type GameDirectoryResolver } from './gameDirectoryResolver';
 import type { GameDirectory } from './gameDirectory';
 
-/** A minimal stand-in for vscode's WorkspaceConfiguration, same shape gameDirectory.test.ts uses. */
 function fakeConfig(values: Record<string, string>) {
   return { get: (key: string) => values[key] };
 }
@@ -10,8 +9,6 @@ function fakeConfig(values: Record<string, string>) {
 const noDetect = () => Promise.resolve(null);
 const noDetectPrefix = () => Promise.resolve(null);
 
-/** Captures the listener `onConfigChange` was given so a test can fire it directly, the same way
- *  `vscode.workspace.onDidChangeConfiguration`'s single-listener-arg overload would be driven. */
 function fakeOnConfigChange() {
   let listener: ((e: ConfigChangeEvent) => void) | undefined;
   return {
@@ -79,13 +76,7 @@ describe('createGameDirectoryResolver', () => {
   });
 });
 
-/** `dataFolderFrom` degrades a resolver's failure to `undefined` for views — this suite
- *  pins that the fold's log side effect happens once per *resolver generation*, not once
- *  per read, even though `ImplicitMasterDecorationProvider` reads it once per visible file. */
 describe('dataFolderFrom', () => {
-  /** A resolver double whose `resolve()` returns whatever `current` currently points at — set to
-   *  a new rejected promise between calls to simulate the resolver moving to a new generation
-   *  (a config change), and left alone to simulate the resolver still serving its cached one. */
   function fakeResolver(initial: Promise<GameDirectory | null>): GameDirectoryResolver & { setCurrent(p: Promise<GameDirectory | null>): void } {
     let current = initial;
     return {

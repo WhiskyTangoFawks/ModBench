@@ -108,7 +108,6 @@ function makeChild() {
   });
 }
 
-/** http.get returns 200 iff `state.healthy`, else ECONNREFUSED. */
 function makeToggleableHttpGet(state: { healthy: boolean }) {
   vi.mocked(http.get).mockImplementation((_url: any, cb: any) => {
     const req = Object.assign(new EventEmitter(), { destroy: vi.fn() });
@@ -183,12 +182,11 @@ describe('BackendManager.start', () => {
   });
 });
 
-/** Backend output arrives asynchronously (readline); poll until `n` lines land. */
+// Backend output arrives asynchronously through readline, so the count has to be polled.
 async function waitForLines(lines: string[], n: number) {
   for (let i = 0; i < 50 && lines.length < n; i++) await new Promise((r) => setTimeout(r, 2));
 }
 
-/** A started manager whose spawned child's output is collected as `"<line> <source>"`. */
 async function startWithOutput(statusBar: StatusBarAdapter) {
   const state = { healthy: false };
   makeToggleableHttpGet(state);
@@ -445,9 +443,6 @@ describe('BackendManager crash-restart / stop', () => {
     await vi.advanceTimersByTimeAsync(3000); // grace period elapses with no exit
     expect(child.kill).toHaveBeenCalledTimes(2);
     expect(child.kill).toHaveBeenNthCalledWith(2, 'SIGKILL');
-    // Rival: today's dispose() is `this.stop(); this.statusBar.dispose();` — synchronous, with no
-    // grace period or escalation at all, so the status bar would already be disposed here
-    // regardless of a hung child ignoring SIGTERM. It also never sends a second kill().
     expect(statusBar.disposed).toBe(false);
 
     child.emit('exit', null); // the OS finally reaps it after SIGKILL

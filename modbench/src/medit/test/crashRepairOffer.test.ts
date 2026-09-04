@@ -41,10 +41,7 @@ describe('crashRepairOffer.presentCrashRepairOffers', () => {
   });
 
   // Sequential, never Promise.all'd — the second offer's modal must not be requested until the
-  // first has been answered. Rival: fire both show() calls concurrently (Promise.all) instead of
-  // awaiting each in the loop — that rival makes callOrder record show(A) and show(B) back to back
-  // with no onAccept between them, which this assertion (checking onAccept for A landed before
-  // show for B was even requested) catches.
+  // first has been answered, so show(A) and show(B) cannot land back to back.
   it('awaits each modal before requesting the next, rather than racing them', async () => {
     const callOrder: string[] = [];
     const show = vi.fn().mockImplementation((message: string) => {

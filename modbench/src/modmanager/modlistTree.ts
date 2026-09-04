@@ -1,9 +1,6 @@
-// Pure grouping of the flat ModlistEntry[] read-model into the shape the Mod List
-// tree renders: each separator wraps the mods that PRECEDE it in file order, back
-// to the previous separator (modlist.txt is winning-first while MO2's
-// authoring view is losing-at-top, so a separator is written after the mods it
-// heads). Mods after the last separator are ungrouped root items. vscode-free so
-// it stays unit-testable.
+// `modlist.txt` is winning-first while MO2's authoring view is losing-at-top, so a separator is
+// written after the mods it heads, and wraps the entries preceding it. vscode-free, so
+// unit-testable.
 
 import type { Mod, ModlistEntry, Separator } from './model';
 
@@ -13,11 +10,8 @@ export interface ModlistGroup {
 }
 
 export interface ModlistTree {
-  /** Mods after the last separator — rendered as direct root items. */
   ungrouped: Mod[];
-  /** Each separator and the mods that precede it, back to the previous separator. */
   groups: ModlistGroup[];
-  /** Enabled mods. */
   activeCount: number;
   /** Total mods (separators excluded). */
   installedCount: number;

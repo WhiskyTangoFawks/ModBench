@@ -1,7 +1,5 @@
-// MO2 game-name → Nexus Mods slug mapping, shared across surfaces (Loadout's
-// "View on Nexus" and the Downloads tab's "Visit on Nexus"). MO2's game name
-// comes from ModOrganizer.ini (`readGameName`); the slug is the {game} segment
-// of https://www.nexusmods.com/{game}/mods/{modID}.
+// The slug is the {game} segment of https://www.nexusmods.com/{game}/mods/{modID};
+// the keys are MO2's own game names, as ModOrganizer.ini spells them.
 
 const NEXUS_SLUGS: Record<string, string> = {
   'Fallout 4': 'fallout4',

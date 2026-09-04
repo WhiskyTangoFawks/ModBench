@@ -1,9 +1,6 @@
-// Read/write ModOrganizer.ini's active-profile pointer. Writes are surgical
-// (single key) so the rest of the ~20 KB ini survives byte-for-byte.
-//
-// MO2 (Qt QSettings) wraps values containing special characters as
-// `@ByteArray(<value>)`. selected_profile is a plain profile name; we always
-// write it wrapped, matching MO2's own output.
+// Writes touch one key so the rest of the ~20 KB ini survives byte-for-byte.
+// MO2 (Qt QSettings) wraps special-character values as `@ByteArray(<value>)`;
+// a profile name needs no wrapping, but MO2 writes one, so we match it.
 
 import { lineRanges } from './lineScan';
 
@@ -11,7 +8,6 @@ const KEY = 'selected_profile';
 const GAME_KEY = 'gameName';
 const GAME_PATH_KEY = 'gamePath';
 
-/** Span of the value (right of `=`) on the line for `key`, or null. */
 function valueSpan(text: string, key: string): { start: number; end: number } | null {
   for (const { start, contentEnd } of lineRanges(text)) {
     const line = text.slice(start, contentEnd);
@@ -40,7 +36,6 @@ export function readGameName(text: string): string {
   return text.slice(span.start, span.end).trim();
 }
 
-/** The game directory MO2 deploys into and reads vanilla masters from. */
 export function readGamePath(text: string): string {
   const span = valueSpan(text, GAME_PATH_KEY);
   if (!span) throw new Error('ModOrganizer.ini: missing gamePath');

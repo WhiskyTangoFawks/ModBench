@@ -98,9 +98,8 @@ describe('detectGamePaths (Linux)', () => {
   });
 });
 
-/** The Proton prefix root, factored out of `detectLinux` — the same lookup that already
- *  builds `Plugins.txt`'s `pfx/drive_c/...` path, reusable by `gameDirectory.ts`'s Wine
- *  drive-letter translation instead of it re-deriving the library lookup itself. */
+// The Proton prefix root, factored out of `detectLinux` so gameDirectory.ts's Wine drive-letter
+// translation reuses the library lookup instead of re-deriving it.
 describe('detectWinePrefix', () => {
   beforeEach(() => {
     vi.resetAllMocks();

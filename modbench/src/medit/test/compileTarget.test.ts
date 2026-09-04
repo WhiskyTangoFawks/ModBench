@@ -57,12 +57,9 @@ describe('resolveCompileTarget (#416 review)', () => {
     expect(d.pickPlugin).not.toHaveBeenCalled();
   });
 
-  // Before Launch mEdit (or after Close mEdit, since exitToLoadout never resets
-  // ActiveRecordTracker/closes an open record panel — the same reachable path as
-  // this priority tier), getRecordOwner has no backend to ask and rejects rather than answering
-  // 404. Exact parity with the already-tested "cannot be resolved to a plugin" case above: falls
-  // through to the palette fallback rather than letting the rejection propagate as a raw,
-  // uncaught toast.
+  // Before Launch mEdit, or after Close mEdit, getRecordOwner has no backend to ask and rejects
+  // rather than answering 404; it must fall through to the palette fallback rather than let the
+  // rejection propagate as a raw, uncaught toast.
   it('falls back to the QuickPick, not a thrown rejection, when getRecordOwner itself is unreachable', async () => {
     const d = deps({ getRecordOwner: vi.fn().mockRejectedValue(new Error('fetch failed')) });
     const target = await resolveCompileTarget(undefined, 'AABBCC:Active.esp', d);
@@ -71,10 +68,8 @@ describe('resolveCompileTarget (#416 review)', () => {
     expect(d.pickPlugin).toHaveBeenCalledOnce();
   });
 
-  // Unlike tier 2's getRecordOwner rejection above (which still has a fallback tier below
-  // it), tier 3 is the last tier — pickPlugin rejecting (e.g. repository.getPlugins() with no
-  // backend to ask, before Launch mEdit) has nowhere further to fall through to, so it must report
-  // through onError and resolve to no target instead of propagating as a raw, uncaught toast.
+  // Tier 3 is the last tier, so a rejecting pickPlugin has nowhere to fall through to: it must
+  // report through onError and resolve to no target instead of propagating as a raw toast.
   it('reports through onError and resolves to no target when pickPlugin itself is unreachable', async () => {
     const d = deps({ pickPlugin: vi.fn().mockRejectedValue(new Error('fetch failed')) });
     const target = await resolveCompileTarget(undefined, undefined, d);

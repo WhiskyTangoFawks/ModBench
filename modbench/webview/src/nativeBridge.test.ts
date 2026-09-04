@@ -6,10 +6,8 @@ import { vscode } from './vscode';
 import { pickFormKey, openExtendedFieldEditor } from './nativeBridge';
 import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION } from './messages';
 
-// pickFormKey's suite exercises the shared requestReply plumbing (resolve-on-match,
-// ignore-a-mismatched-requestId, ignore-unrelated-message-types) once, as the exemplar for the
-// near-identical bridges. Further native-prompt bridges
-// extend this file rather than re-proving the shared mechanism.
+// pickFormKey exercises the shared requestReply plumbing once, as the exemplar for the
+// near-identical bridges; further bridges extend this file rather than re-prove it.
 
 function postedRequestId(): string {
   const call = (vscode.postMessage as ReturnType<typeof vi.fn>).mock.calls.at(-1)?.[0];
@@ -52,11 +50,8 @@ describe('nativeBridge shared request/reply mechanism (exercised via pickFormKey
   });
 
   it('ignores a reply for the right requestId but the wrong reply type', async () => {
-    // Guards the replyType check inside the shared listener — a requestId collision across two
-    // different bridges should never happen in practice (the counter is global to the module),
-    // but this proves the listener doesn't resolve on requestId alone. Stands in with
-    // RECORD_EDITED as "some other reply type carrying this same requestId shape", since a second
-    // request/reply bridge doesn't exist on this door yet.
+    // The shared listener must not resolve on requestId alone; RECORD_EDITED stands in for
+    // another reply type carrying the same requestId shape.
     const resultPromise = pickFormKey('', []);
     const requestId = postedRequestId();
 

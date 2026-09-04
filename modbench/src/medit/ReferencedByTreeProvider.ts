@@ -4,11 +4,8 @@ import type { components } from './generated/api';
 
 type ReferenceResult = components['schemas']['ReferenceResult'];
 
-/** One referencing record — one or more `ReferenceResult` rows sharing a FormKey, collapsed
- *  into a single group (spec: "one referencer reads as one thing rather than as several").
- *  Label is `{RecordType} / {EditorID ?? FormKey}`; the plugin count is shown only when more
- *  than one plugin holds the reference. Left-click (the node's `command`) opens the record;
- *  right-click (`referencedByGroup` contextValue) offers Open / Open to the Side. */
+/** Rows sharing a FormKey collapse into one node, so one referencer reads as one thing rather
+ *  than as several. */
 export class ReferencedByGroupNode extends vscode.TreeItem {
   constructor(
     readonly formKey: string,
@@ -29,9 +26,7 @@ export class ReferencedByGroupNode extends vscode.TreeItem {
   }
 }
 
-/** A single holding plugin + field path under a group — informational, not a navigation
- *  target (spec: "Expanded child rows show each holding plugin and field path
- *  (informational, not clickable)"). No `command`. */
+/** Informational, not a navigation target — hence no `command`. */
 export class ReferencedByFieldNode extends vscode.TreeItem {
   constructor(result: ReferenceResult) {
     super(`${result.plugin ?? ''} · ${result.fieldPath ?? ''}`, vscode.TreeItemCollapsibleState.None);
@@ -52,9 +47,8 @@ export class ErrorNode extends vscode.TreeItem {
   }
 }
 
-/** Shown whenever no record editor is active — before the first record is opened this load order,
- *  or after the last one closes (the view is always visible, retargeting on the active
- *  record panel rather than requiring an explicit invocation). */
+/** The view is always visible and retargets on the active record panel, so it needs a row for
+ *  having no record at all. */
 export class NoActiveRecordNode extends vscode.TreeItem {
   constructor() {
     super('Open a record to see what references it.', vscode.TreeItemCollapsibleState.None);
@@ -64,23 +58,19 @@ export class NoActiveRecordNode extends vscode.TreeItem {
 export type ReferencedByTreeNode =
   | ReferencedByGroupNode | ReferencedByFieldNode | EmptyStateNode | ErrorNode | NoActiveRecordNode;
 
-/** The `modbench.referencedByTree.copy` command's text — one line per selected
- *  *referrer*, matching its own displayed label exactly. Field rows are detail under a group,
- *  not independently copyable, so a field row in the selection contributes nothing; a selection
- *  containing only field rows copies empty text rather than falling back to them. */
+/** One line per selected *referrer*. A field row is detail under a group, never independently
+ *  copyable, so it contributes nothing — a field-rows-only selection copies empty text. */
 export function referencedByCopyText(nodes: readonly ReferencedByTreeNode[]): string {
   return nodes
     .filter((n): n is ReferencedByGroupNode => n instanceof ReferencedByGroupNode)
-    // ReferencedByGroupNode always constructs `label` as a template-literal string (never
-    // TreeItemLabel), so this cast is safe — unlike a generic TreeItem it never carries highlights.
+    // The constructor always passes a template-literal string, never a TreeItemLabel, so the
+    // cast holds.
     .map(n => n.label as string)
     .join('\n');
 }
 
-/** Backs the "Referenced By" tree — a Panel view that follows the active record editor,
- *  retargeted by `showFor` on every active-record change (`ActiveRecordTracker`) rather than by
- *  an explicit command. Root data comes from `GET /records/{formKey}/references` (the generated
- *  `ApiClient` — no raw `fetch()`), grouped by referencing FormKey. */
+/** A Panel view that follows the active record editor rather than an explicit command, so its
+ *  target is set by `showFor`, never by an invocation. */
 export class ReferencedByTreeProvider implements vscode.TreeDataProvider<ReferencedByTreeNode> {
   private readonly _onDidChangeTreeData = new vscode.EventEmitter<ReferencedByTreeNode | undefined | null>();
   readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
@@ -93,20 +83,15 @@ export class ReferencedByTreeProvider implements vscode.TreeDataProvider<Referen
   constructor(
     private readonly client: ApiClient,
     log?: (msg: string) => void,
-    // The view title's "Referenced By (N)" badge (xEdit's `Referenced By (%d)` caption) —
-    // a callback fired from rootNodes()
-    // whenever it resolves. `undefined` means "no known count" (no active record, or a failed
-    // fetch) so extension.ts never renders a misleading "(0)" for either — only a genuine
-    // zero-referrer result reports 0.
+    // Feeds the view title's "Referenced By (N)" badge (xEdit's `Referenced By (%d)` caption).
+    // `undefined` is "no known count" — no active record, or a failed fetch — so neither
+    // renders a misleading "(0)".
     onCountChanged?: (count: number | undefined) => void,
   ) {
     this.log = log ?? (() => {});
     this.onCountChanged = onCountChanged ?? (() => {});
   }
 
-  /** Retargets the tree at a different record (or `undefined` — no record editor is active) and
-   *  refreshes. Called by the active-record tracker on every active-panel/record change, not by
-   *  an explicit command. */
   showFor(formKey: string | undefined): void {
     this.target = formKey;
     this._onDidChangeTreeData.fire(undefined);

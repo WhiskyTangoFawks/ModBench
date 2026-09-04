@@ -46,11 +46,8 @@ describe('createDebouncedFsWatcher', () => {
     expect(onChange).not.toHaveBeenCalled();
   });
 
-  // A mod's `.git` directory can churn heavily — repeated writes, spread over real time — without
-  // any of the load-order facts this watcher relays (name, origin, slot, enabled, winning —
-  // ADR-0044) ever changing. #621: left unfiltered, that churn turned into several separate
-  // debounced reconcile triggers for what was, from the load order's own perspective, a single
-  // unchanged fact.
+  // A mod's `.git` directory churns heavily without any of the load-order facts this watcher
+  // relays ever changing (ADR-0044).
   it('ignores an event inside a mod\'s .git directory, while a sibling content event still fires', () => {
     const onChange = vi.fn();
     createDebouncedFsWatcher('/instance', 'mods/**', onChange);
@@ -65,11 +62,8 @@ describe('createDebouncedFsWatcher', () => {
     expect(onChange).toHaveBeenCalledTimes(1);
   });
 
-  // The one fact this filter must never hide (#621 review): a mod's `.git` directory entry itself
-  // appearing or disappearing is a load-order-relevant change in its own right — this watcher's
-  // callers still need it, whether Modbench caused it or something else did (root CLAUDE.md:
-  // never assume exclusive ownership of a file on disk) — even though everything *inside* an
-  // existing `.git` is filtered above.
+  // The `.git` directory entry appearing or disappearing is itself a load-order-relevant change
+  // callers need, even though everything inside an existing `.git` is filtered above.
   it('does not ignore the .git directory entry itself appearing or disappearing', () => {
     const onCreate = vi.fn();
     createDebouncedFsWatcher('/instance', 'mods/**', onCreate);
@@ -84,11 +78,8 @@ describe('createDebouncedFsWatcher', () => {
     expect(onDelete).toHaveBeenCalledTimes(1);
   });
 
-  // #621 mechanism 2: a caller with its own downstream coalescing (loadOrderReconcile's
-  // `request()`) can override this watcher's own wait instead of stacking a second, uncoordinated
-  // debounce in front of it. A latency assertion, not a cycle-count one — see this override's own
-  // doc comment on createDebouncedFsWatcher for why removing the stacked wait does not, by itself,
-  // change how many cycles a burst produces (the sync's single debounce already dominates that).
+  // A latency assertion, not a cycle-count one: removing the stacked wait does not by itself
+  // change how many cycles a burst produces.
   it('debounceMs is overridable, so a caller with its own downstream debounce is not made to wait twice', () => {
     const onDefault = vi.fn();
     const onOverridden = vi.fn();

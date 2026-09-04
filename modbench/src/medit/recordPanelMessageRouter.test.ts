@@ -14,10 +14,8 @@ vi.mock('vscode', () => ({
   },
 }));
 
-// openExtendedFieldEditor has its own deep test suite (extendedFieldEditor.test.ts,
-// which exercises the real temp-file/save/close mechanics) — this file only needs to prove the
-// router dispatches OPEN_EXTENDED_EDITOR to it with the right params, so the function itself is
-// mocked here rather than pulling its full vscode surface into this file's own vscode mock too.
+// Mocked rather than real: only the dispatch matters here, and the real one would drag its whole
+// vscode surface into this file's mock.
 const openExtendedFieldEditorMock = vi.fn();
 vi.mock('./extendedFieldEditor', () => ({
   openExtendedFieldEditor: (...args: unknown[]) => openExtendedFieldEditorMock(...args),
@@ -37,11 +35,8 @@ function fakeChannel() {
 }
 const fakeReporter = { report: vi.fn() };
 
-// The edit path's two deps default to "applied, nobody listening"; the edit tests override them
-// explicitly.
-// searchRecords is unused outside the OPEN_FORM_KEY_PICKER tests below (which build their own
-// FormKeyPickerDeps.repository), but the field is required because this router's shared
-// `repository` field covers editField and the picker's own search.
+// searchRecords goes unused by the edit tests, but the field is required: the router's one
+// `repository` covers both editField and the picker's search.
 const fakeRepository = { editRecordField: vi.fn(), searchRecords: vi.fn() };
 const onRecordEdited = vi.fn();
 
@@ -49,8 +44,7 @@ function makeDeps(overrides: Partial<RouteRecordPanelMessageDeps> = {}): RouteRe
   return {
     channel: fakeChannel(), reporter: fakeReporter,
     repository: fakeRepository, onRecordEdited,
-    // Undefined by default, matching every other per-panel bridge bundle — a message that
-    // arrives with no deps wired is a no-op, not a crash.
+    // Undefined by default: a message arriving with no deps wired is a no-op, not a crash.
     formKeyPicker: undefined,
     extendedFieldEditor: undefined,
     ...overrides,
@@ -66,11 +60,8 @@ function makeRecord(i: number, editorId: string | null = `Record${i}`): RecordSu
   };
 }
 
-// A minimal fake of vscode.QuickPick — real VS Code has no test
-// harness here, so this stands in for the event-emitter-driven object pickFormKeyViaQuickPick
-// drives (value/items/activeItems/selectedItems as plain properties, onDidChangeValue/onDidAccept/
-// onDidHide as listener registries the test triggers directly, matching real QuickPick's "calling
-// .hide() also fires onDidHide" behavior).
+// Stands in for vscode.QuickPick with no VS Code host: listener registries the test triggers
+// directly, matching the real object's "calling .hide() also fires onDidHide".
 function makeFakeQuickPick() {
   const changeValueListeners: Array<(v: string) => void> = [];
   const acceptListeners: Array<() => void> = [];
@@ -156,18 +147,9 @@ describe('routeRecordPanelMessage', () => {
   });
 });
 
-// openEditorBeside makes a second, independently-opened panel possible — this is the
-// plumbing behind "Ctrl+C in one panel, Ctrl+V in the other".
-// openRecordPanel wires a fresh onDidReceiveMessage listener per real WebviewPanel, but every one
-// of them dispatches through this same routeRecordPanelMessage with no panel identity anywhere in
-// its signature (RouteRecordPanelMessageDeps' own doc comment) — so "two panels" here is two
-// independently-built deps bundles, exactly what openRecordPanel constructs fresh per panel (see
-// its onDidReceiveMessage closure), not two of anything this file has to special-case.
-// There is no PASTE message type to route: per ADR-0034 and DiskCell/ScalarCell's own doc
-// comments, Ctrl+V lands in a focused cell's plain <input> (native browser paste — there is no
-// bespoke paste bridge), and committing it is the ordinary EDIT_FIELD write already
-// covered above — this test's job is only to prove that commit lands against the panel it was
-// invoked in, using the value copied out of the *other* one, not the panel it was copied from.
+// The router carries no panel identity, so "two panels" is two independently-built deps bundles.
+// No PASTE message exists to route: Ctrl+V lands in a plain <input> (ADR-0034) and committing it
+// is the ordinary EDIT_FIELD write.
 describe('cross-panel copy/paste — two independently-opened panels share this router unmodified (#284)', () => {
   beforeEach(() => {
     writeText.mockReset();
@@ -179,16 +161,14 @@ describe('cross-panel copy/paste — two independently-opened panels share this 
     const panelADeps = makeDeps(); // "panel A", open on Record1
     const panelBDeps = makeDeps(); // "panel B", open on a different record — its own independent deps bundle
 
-    // Ctrl+C in panel A: the webview has already read its own focused cell's model value
-    // (modelValue.ts, ADR-0034) — this is that value on its way to the OS clipboard.
+    // Ctrl+C in panel A: the webview has already read the focused cell's model value (ADR-0034);
+    // this is that value on its way to the OS clipboard.
     await routeRecordPanelMessage(
       { type: WEBVIEW_TO_EXTENSION.COPY_TO_CLIPBOARD, value: 'CopiedNPC [000001:Fallout4.esm]' }, panelADeps);
     expect(writeText).toHaveBeenCalledWith('CopiedNPC [000001:Fallout4.esm]');
 
-    // Ctrl+V in panel B, then commit: the pasted text lands in panel B's own focused input with no
-    // Modbench-side paste plumbing at all (native browser paste), so the only thing left to prove
-    // is that committing it is the ordinary EDIT_FIELD write, addressed to panel B's own record —
-    // not panel A's, and not confused by panel A's own preceding call.
+    // Ctrl+V in panel B: nothing Modbench-side carries the paste, so all that is left to prove is
+    // that the commit is addressed to panel B's record, not panel A's.
     await routeRecordPanelMessage({
       type: WEBVIEW_TO_EXTENSION.EDIT_FIELD,
       formKey: '000800:Mod.esp', plugin: 'Mod.esp', origin: 'SomeMod',
@@ -245,10 +225,8 @@ describe('routeRecordPanelMessage — EDIT_FIELD (#415)', () => {
 
     await routeRecordPanelMessage(editMessage, makeDeps());
 
-    // Relayed verbatim, not re-authored: the backend's message already names the command, and
-    // re-wording it here would put that text in two places with only one of them tested. Asserted
-    // as the whole string rather than a substring so a partial relay (a truncation, a reformat that
-    // drops the command) fails here.
+    // Relayed verbatim: re-wording the backend's message here would put that text in two places
+    // with only one of them tested. Whole string, so a partial relay fails.
     expect(fakeReporter.report).toHaveBeenCalledWith(
       'warning',
       'Mod.esp is not tracked, so it is read-only. Run "Modbench: Track\u2026" on it once to start editing.');
@@ -345,11 +323,8 @@ describe('pickFormKeyViaQuickPick (issue #210)', () => {
     await resultPromise;
   });
 
-  // The seed is the composite the cell displays, not the bare FormKey, so that a
-  // *mutable* FormKey cell can hand over what it shows — the picker's input is native, so Ctrl+A/
-  // Ctrl+C there is the copy path on a column that has no read-only surface. The search half
-  // tolerates this (normalizeFormKeyQuery); pre-selection must normalize too, or comparing the
-  // raw seed against item.formKey would silently stop matching.
+  // The seed is the composite the cell displays, not the bare FormKey. Search already normalizes
+  // it; pre-selection must too, or comparing the raw seed against item.formKey stops matching.
   it('pre-selects the seeded record when the seed is a whole "EditorID [FormKey]" composite', async () => {
     const record = makeRecord(1, 'Seeded');
     const { deps, searchRecords } = fakeDeps(vi.fn().mockResolvedValue({ items: [record], total: 1 }));

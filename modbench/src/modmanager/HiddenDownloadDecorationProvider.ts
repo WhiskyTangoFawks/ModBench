@@ -1,19 +1,8 @@
 import * as vscode from 'vscode';
 import { join } from 'node:path';
 
-/** Dims a hidden download's row in the Downloads tree — colour only, no
- *  badge, reserved exclusively for the hidden axis (`.meta` `removed=true`). It exists only
- *  because Show hidden is additive (hidden rows appear ALONGSIDE visible ones, not in a
- *  separate list): it's the sole cue telling the two apart, since MO2 itself draws none.
- *
- *  Stateless per call, like OverwriteDecorationProvider — no `onDidChangeFileDecorations`
- *  wiring, because every state change that could flip a row's hidden-ness (Hide/Unhide,
- *  the Show-hidden toggle) already goes through DownloadsProvider.invalidate(), and a
- *  TreeDataProvider firing onDidChangeTreeData makes VS Code re-fetch and redraw the
- *  affected items, which re-queries FileDecorationProvider for each redrawn URI — so there's
- *  no state change this provider could miss without its own event. `hiddenNames` is read
- *  lazily on each call rather than captured once, so it always reflects the provider's live
- *  cache. */
+/** Colour only, no badge: Show hidden is additive, so hidden rows sit alongside visible ones
+ *  and this tint is the only cue telling them apart — MO2 itself draws none. */
 export class HiddenDownloadDecorationProvider implements vscode.FileDecorationProvider {
   private readonly downloadsDir: string;
 

@@ -52,18 +52,12 @@ import { onModCheckboxChanged } from './modmanager/modCheckboxHandler';
 import { meditConfig, makeDetectPaths, setMo2InstanceContext } from './workspaceConfig';
 
 
-/** Everything one `activate()` call constructs that a choke point registered elsewhere (a
- *  command, a watcher callback, a checkbox handler) also has to reach — `enterEditing`/
- *  `exitToLoadout`/`switchProfile` and friends. One object built empty in `activate()` and
- *  threaded to whatever registrar needs a field, rather than nine separate module-level
- *  singletons each carrying its own "why module level" paragraph — the reason was always the
- *  same one (a choke point outside `activate()`'s own closure needs it), so it is said once,
- *  here, instead of nine times. `undefined` until `activate()`'s own wiring reaches the field —
- *  every reader already treats "not yet built" and "no live workspace" the same way (`?.`). */
+// Everything one `activate()` call constructs that a choke point registered elsewhere also has to
+// reach. `undefined` until `activate()`'s wiring reaches the field — every reader treats "not yet
+// built" and "no live workspace" the same way.
 interface ExtensionSession {
   backendManager?: BackendManager;
   loadoutHeaderProvider?: LoadoutHeaderProvider;
-  /** The merged Plugins tree. */
   pluginsTree?: PluginsTreeComposite<PluginListNode, PluginTreeNode>;
   /** ADR-0044: the one path by which the Plugin load order reaches Editing. */
   loadOrderSync?: LoadOrderSync;
@@ -73,41 +67,27 @@ interface ExtensionSession {
   /** The same view's name filter — a second, independent narrowing axis from the record filter,
    *  which has to be able to add itself to this view's readout (`say` below). */
   pluginsNameFilter?: NameFilter;
-  /** Plugin filename → the `vscode.git` `Repository` handle opened for that plugin's own mod
-   *  folder — rebuilt wholesale by `registerHeldTrackedRepositories`, same "no stale carryover"
-   *  posture as `loadOrderSync`'s own match map. Kept so a successful field edit can prompt the
-   *  right repository's own `status()` and make the native Source Control panel pick up the
-   *  resulting working-tree change without a manual Refresh click. */
+  /** Plugin filename → the `vscode.git` `Repository` for that plugin's mod folder. Kept so a
+   *  successful field edit can prompt that repository's `status()` and make the Source Control
+   *  panel pick up the working-tree change without a manual Refresh. */
   pluginRepositories?: Map<string, MinimalRepository>;
   /** The record browser behind the merged tree's children — mEdit starting/stopping is what
    *  tells its record rows which plugins are immutable (Remove hidden via `contextValue`). */
   recordBrowserProvider?: PluginTreeProvider;
-  /** The record filter's single writer (the context key its Clear action is gated on, the code
-   *  lens's active SQL, and the readout) — built by `makeSetFilterActive` alongside where this
-   *  is assigned, exactly once. */
+  /** The record filter's single writer: the context key its Clear action is gated on, the code
+   *  lens's active SQL, and the readout. */
   setFilterActive?: ReturnType<typeof makeSetFilterActive>;
-  /** #570: fetch the session-load Kind B scan and publish it (Problems panel + tree
-   *  decoration). Assigned in activate() where the repository, the diagnostic collection and the
-   *  instance root all exist; called by applyLoadOrderToTree after every reconcile's hand-off. */
+  /** Fetch the session-load malformed-plugin scan and publish it — Problems panel and tree
+   *  decoration. */
   refreshDiagnoses?: () => void;
-  /** #570: the same scan's Problems collection, held on the session so the teardown writers
-   *  (loadoutTeardown.ts) can clear it alongside the tree badge. */
+  /** Held on the session so the teardown writers can clear it alongside the tree badge. */
   loadDiagnostics?: vscode.DiagnosticCollection;
 }
 
 
-/** ADR-0035: run `work` with a progress indicator in the **Plugins view's own header**,
- *  addressed by view id. One indicator, in the view whose contents are being loaded, running for
- *  the whole operation — the backend spawn, the indexing, and the winner sweep, which the load
- *  POST only returns after. Not a per-command `ProgressLocation.Notification`: two indicators for
- *  one operation is noise. The header bar carries no text, so the step messages go to `say`
- *  above — one surface, one voice.
- *
- *  The message clears here, on every exit path including `work`'s own early returns and
- *  throws, so no failure can leave the view claiming a load that is not running.
- *
- *  Deliberately not `cancellable`: the header location has no cancel affordance (that is a
- *  Notification-only option), and abandoning a load is Close mEdit's job, not a second control. */
+// ADR-0035: one progress indicator, in the view whose contents are loading — not a per-command
+// `ProgressLocation.Notification`. The message clears on every exit path, so no failure leaves
+// the view claiming a load that is not running.
 function withPluginsViewProgress(session: ExtensionSession, work: () => Promise<void>): Promise<void> {
   return Promise.resolve(vscode.window.withProgress(
     { location: { viewId: 'modbench.pluginListTree' } },
@@ -115,39 +95,20 @@ function withPluginsViewProgress(session: ExtensionSession, work: () => Promise<
   ));
 }
 
-/** Which plugin files Editing's load order actually names — the backend's own
- *  list, not the snapshot we sent it, because the backend prepends the game's implicit masters and
- *  those are rows in the Plugins tree too — plus, of that set, which are read-only for editing
- *  (Editing's "Immutable plugin", `PluginMetadata.isImmutable`) and each plugin's own master
- *  issues (`PluginMetadata.masterIssues`, ADR-0037). Bundled as one fact, not three
- *  separate reads: all three come off the same `getPlugins()` call and are handed to
- *  `PluginsTreeComposite.setLoadOrder` together, so there is never a moment where a caller could
- *  have one without the others.
- *
- *  ADR-0044: `GET /plugins` lists every held copy, losing ones included, and two copies can share
- *  a filename; every map here is keyed by filename, so it reads the `inLoadOrder` copy — the one
- *  plugins.txt names, which is the one a tree row stands for. */
+// Which plugin files Editing's load order names — the backend's own list, not the snapshot we
+// sent, because the backend prepends implicit masters. Keyed by filename, reading the
+// `inLoadOrder` copy: two held copies can share one (ADR-0044).
 interface HeldPluginFiles {
   files: Set<string>;
   readOnly: Set<string>;
   masterIssues: Map<string, MasterIssue[]>;
-  /** ADR-0035 amending ADR-0018: lowercased filename → does this plugin own at least one
-   *  record the *current* record filter matches. Carried in the same hand-off, for the same
-   *  reason as `masterIssues` — this call already asked `GET /plugins` the question, and every
-   *  reconcile reaches it downstream of `EditingController.syncFilterState()`
-   *  (`createReconcileSequencer`'s own sequence, shared by Launch mEdit, the crash-restart handler
-   *  and every snapshot the sync sends), so this is the one hand-off through which the filter
-   *  state the backend actually has — not the one an earlier `setFilter`/`clearFilter` last left
-   *  behind — reaches `loadOrderSync`'s match map. That is what keeps the map from outliving the
-   *  state it describes. */
+  /** Lowercased filename → does this plugin own a record the *current* record filter matches.
+   *  Carried in this hand-off because every reconcile reaches it downstream of `syncFilterState()`,
+   *  so the map never outlives the filter state it describes. */
   matches: Map<string, boolean>;
-  /** #674 / ADR-0041: which of those plugins are tracked (`PluginResponse.isTracked` — their mod
-   *  folder holds a `.git`). In the same bundle for the same reason `readOnly` is: it comes off
-   *  this one `GET /plugins` call, and the record rows' Change FormID gate reads it alongside the
-   *  immutable set. The backend derives it on every read, so this is always as fresh as the
-   *  reconcile that fetched it — and a `.git` appearing or vanishing is itself a `mods/**` watcher
-   *  event (see `wireLoadOrderWatchers`), which is what makes tracking and untracking reach the
-   *  rows without a reload. */
+  /** Which of those plugins are tracked — their mod folder holds a `.git` (ADR-0041). A `.git`
+   *  appearing or vanishing is itself a `mods/**` watcher event, which is what makes tracking
+   *  reach the rows without a reload. */
   tracked: Set<string>;
 }
 
@@ -158,8 +119,7 @@ function heldPluginFilesFrom(repository: ApiPluginRepository): () => Promise<Hel
       files: new Set(plugins.map((p) => p.name)),
       readOnly: new Set(plugins.filter((p) => p.isImmutable).map((p) => p.name)),
       // ADR-0037: `masterIssues` is a required, non-nullable array on the wire, so it is read
-      // straight through — the `?? []` that used to sit here was compensating for a schema that
-      // described every field as optional (#627), not for anything the backend can actually do.
+      // straight through — a `??` default here would compensate for nothing the backend can do.
       masterIssues: new Map(plugins.map((p) => [p.name, p.masterIssues] as const)),
       matches: new Map(plugins.map((p) => [p.name.toLowerCase(), p.hasMatchingRecords] as const)),
       tracked: new Set(plugins.filter((p) => p.isTracked).map((p) => p.name)),
@@ -168,17 +128,9 @@ function heldPluginFilesFrom(repository: ApiPluginRepository): () => Promise<Hel
 }
 
 
-/** Everything that follows the record filter turning on or off: the context key its Clear
- *  action is gated on, the code lens's notion of which SQL is live, and the Plugins
- *  tree's readout — where the record filter is one of two independent narrowing axes and is
- *  named by its *source*, never by its SQL, because a `WHERE` clause is not a readout. `SQL` is
- *  the honest fallback for a filter read back off the backend when it comes up, whose source
- *  this frontend never saw.
- *
- *  The single writer for all three, called with `false` and nothing else by exitToLoadout
- *  to end the record filter's UI state when mEdit closes, the same way EditingController's own
- *  setFilter/clearFilter/syncFilterState call it while it runs. `modbench.filterActive` is written
- *  from exactly this one place. */
+// The single writer for all three surfaces the record filter drives, so `modbench.filterActive`
+// is written from exactly one place. The filter is named by its *source*, never by its SQL,
+// because a `WHERE` clause is not a readout.
 function makeSetFilterActive(session: ExtensionSession, filterProvider: FilterCodeLensProvider) {
   return (active: boolean, sql?: string, label?: string) => {
     void vscode.commands.executeCommand('setContext', 'modbench.filterActive', active);
@@ -188,15 +140,9 @@ function makeSetFilterActive(session: ExtensionSession, filterProvider: FilterCo
 }
 
 
-/** The backend launches with the extension — maintainer ruling 2026-09-01: the DB-file-backed
- *  session made startup cheap enough that lifecycle stopped being a user decision, so the
- *  Launch mEdit / Close mEdit commands are gone. The extension still owns spawn/teardown
- *  (ADR-0022): spawn is here at activation (only in an MO2 instance — enterEditing exists
- *  only when the loadout views registered), teardown is deactivate()/crash handling.
- *  exitToLoadout survives as the failure path, same as the old command's own catch. A launch
- *  that bailed for want of a game directory (enterEditing's 'no-game-directory' teardown)
- *  gets its retry when the user supplies one — with no Launch command left, a config change
- *  is the only gesture that can mean "try again". */
+// The backend launches with the extension: the DB-file-backed session made startup cheap enough
+// that lifecycle stopped being a user decision (ADR-0022). A config change is the only gesture
+// that can mean "try again".
 function wireAutoLaunch(
   session: ExtensionSession, context: vscode.ExtensionContext, outputChannel: vscode.LogOutputChannel,
   enterEditing: (() => Promise<void>) | undefined,
@@ -219,11 +165,8 @@ function wireAutoLaunch(
 }
 
 export function activate(context: vscode.ExtensionContext) {
-  // Everything a choke point registered elsewhere (a command, a watcher, a checkbox handler)
-  // has to reach back into — see ExtensionSession's own doc comment. Built empty and filled in
-  // as this function's own wiring reaches each field.
   const session: ExtensionSession = {};
-  activeSession = session; // deactivate()'s only way to reach it — see activeSession's own comment.
+  activeSession = session; // deactivate()'s only way to reach it
   const port: number = meditConfig().get('backendPort') ?? 5172;
 
   const outputChannel = vscode.window.createOutputChannel('Modbench', { log: true });
@@ -237,8 +180,8 @@ export function activate(context: vscode.ExtensionContext) {
   // current per compile (publishCompileDiagnostics replaces a mod's own entries wholesale each run).
   const compileDiagnostics = vscode.languages.createDiagnosticCollection('modbench-compile');
   context.subscriptions.push(compileDiagnostics);
-  // #570: the session-load Kind B scan's own collection — a sibling of the compile one,
-  // targeting plugin binaries (pre-Track), replaced wholesale per scan (publishLoadDiagnoses).
+  // The session-load scan's own collection — a sibling of the compile one, targeting plugin
+  // binaries, replaced wholesale per scan.
   const loadDiagnostics = vscode.languages.createDiagnosticCollection('modbench-diagnosis');
   context.subscriptions.push(loadDiagnostics);
   session.loadDiagnostics = loadDiagnostics;
@@ -275,17 +218,11 @@ export function activate(context: vscode.ExtensionContext) {
       void registerHeldTrackedRepositories(repository, outputChannel, (repos) => { session.pluginRepositories = repos; });
     },
   });
-  // The "Referenced By" tree — provider + view construction. Lives in the Panel container
-  // (package.json) and retargets on `activeRecordTracker`'s active-record changes rather than an
-  // explicit command — `showFor` is wired here, once, rather than at every command call site. The
-  // onCountChanged callback below closes over `referencedByTreeView` before its own `const` line
-  // runs — safe because VS Code never calls getChildren (and so never invokes the callback) until
-  // createTreeView returns and this whole function has finished, by which point the const is long
-  // since initialized.
+  // Retargets on `activeRecordTracker`'s active-record changes rather than an explicit command.
+  // The onCountChanged callback closes over `referencedByTreeView` before its `const` line runs —
+  // safe because VS Code never calls getChildren until createTreeView returns.
   const referencedByTreeProvider = new ReferencedByTreeProvider(client, log, (count) => {
-    // The declared name is "Plugins - Referenced By" — the sub-functionality
-    // naming convention (ADR-0035) — and the runtime count badge carries the same prefix so the
-    // title keeps it once a count is known.
+    // The runtime count badge keeps the declared "Plugins - Referenced By" prefix (ADR-0035).
     referencedByTreeView.title = count === undefined ? 'Plugins - Referenced By' : `Plugins - Referenced By (${count})`;
   });
   const referencedByTreeView = vscode.window.createTreeView('modbench.referencedByTree', {
@@ -294,15 +231,11 @@ export function activate(context: vscode.ExtensionContext) {
   });
   const activeRecordSubscription = activeRecordTracker.onDidChangeActiveRecord(
     (formKey) => referencedByTreeProvider.showFor(formKey));
-  // Primes the view with whatever activeRecordTracker already knows — a no-op today (this runs
-  // before any openRecordPanel call ever exists to make a panel active), but it's what makes
-  // ActiveRecordTracker.current()'s own "initial state" contract true rather than aspirational,
-  // and guards the construction order above ever changing.
+  // Primes the view with whatever activeRecordTracker already knows — a no-op today, but it makes
+  // ActiveRecordTracker.current()'s "initial state" contract true rather than aspirational.
   referencedByTreeProvider.showFor(activeRecordTracker.current());
-  // Composes the loud crash-repair offer sequence over Save & Compile's existing tail
-  // (`compileAndReport`). Run once per completed reconcile (`makeEnterEditing`'s own call site),
-  // never a poller: see `crashRepairOffer.ts`'s own doc comment for why a reconcile is the only
-  // moment either offer reason can newly arise.
+  // Run once per completed reconcile, never a poller: a reconcile is the only moment either offer
+  // reason can newly arise.
   const showCrashRepairOffers = (offers: CrashRepairOffer[]) => presentCrashRepairOffers(
     offers,
     (message, options, ...buttons) => Promise.resolve(vscode.window.showWarningMessage(message, options, ...buttons)),
@@ -311,9 +244,8 @@ export function activate(context: vscode.ExtensionContext) {
     ),
   );
   const { modListProvider, downloadsProvider, pluginListProvider, modlistSource, instanceRoot, enterEditing } = registerLoadoutSurfaces(session, { context, outputChannel, controller, recordBrowser: treeProvider, heldPluginFiles: heldPluginFilesFrom(repository), showCrashRepairOffers });
-  // #570: ADR-0026 background tier — the scan is advisory, so a blip logs and retries next
-  // reconcile, never toasts. Fire-and-forget: the tree hand-off must not wait on a
-  // whole-load-order file scan.
+  // ADR-0026 background tier — the scan is advisory, so a blip logs and retries next reconcile,
+  // never toasts. Fire-and-forget: the tree hand-off must not wait on a whole-load-order scan.
   let diagnosisScanGeneration = 0;
   session.refreshDiagnoses = () => {
     // No instance root means no MO2 workspace — nothing a diagnosis could point at.
@@ -349,10 +281,8 @@ export function activate(context: vscode.ExtensionContext) {
 
   wireAutoLaunch(session, context, outputChannel, enterEditing);
 
-  // Exposed for integration tests — unused in production. loadOrderSync/backendManager: #650's
-  // matchingPlugins tests need to observe/drive the real singletons directly (the match map has
-  // no other externally observable surface, and a live "backend went unhealthy outside
-  // exitToLoadout" needs the real BackendManager.stop()), same reasoning as every other field here.
+  // Exposed for integration tests — unused in production. The match map has no other externally
+  // observable surface, and a backend going unhealthy needs the real BackendManager.stop().
   return {
     modListProvider, downloadsProvider, pluginListProvider, pluginsTree: session.pluginsTree, pluginListView: session.pluginsTreeView, treeProvider,
     outputChannel, enterEditing, exitToLoadout: () => exitToLoadout(session), loadOrderSync: session.loadOrderSync, backendManager: session.backendManager,
@@ -366,43 +296,26 @@ interface PluginListDeps {
   outputChannel: vscode.LogOutputChannel;
   reporter: Reporter;
   instanceRoot: string;
-  // A getter through the single game-directory resolver, not a Promise settled once —
-  // see ModListProviderOptions/PluginListProviderOptions for why. Folds a resolution failure to
-  // undefined (degrading vanilla-master lookups/badges).
+  // A getter through the single game-directory resolver, not a Promise settled once. Folds a
+  // resolution failure to undefined, degrading vanilla-master lookups and badges.
   dataFolder: () => Promise<string | undefined>;
   /** The record browser that supplies a plugin row's children. Passed as the composite's
    *  child source and never touched directly here. */
   recordBrowser: PluginTreeProvider;
 }
-/** The Plugins tree: a view of plugins.txt, stacked below the Mods tree. A row's checkbox toggles
- *  its enabled state (writing plugins.txt immediately); rows drag-and-drop to reorder (single or
- *  multi-select, writing plugins.txt immediately); a title-bar Refresh forces a re-read.
- *  `instanceRoot` enables the order-aware missing-master badge.
- *
- *  ADR-0035: the view is a `PluginsTreeComposite` over two providers — these rows and
- *  the record browser's children — so that with the backend running each row expands into its
- *  records. The composite is built here, at the composition root, because it is the only place
- *  that may know both; `PluginListProvider` is unchanged and still owns everything about a row. */
+// ADR-0035: the view is a `PluginsTreeComposite` over two providers — these rows and the record
+// browser's children — so each row expands into its records. The composition root is the only
+// place that may know both.
 function registerPluginListView(deps: PluginListDeps): { pluginListProvider: PluginListProvider; disposables: vscode.Disposable[] } {
   const { session, modlistSource, outputChannel, reporter, instanceRoot, dataFolder, recordBrowser } = deps;
-  // `log` is a compat shim (defaults to .info) for modules taking a flat `(msg) => void` —
-  // constructed here, at the boundary, rather than threaded in as its own PluginListDeps field
-  // alongside outputChannel (#628: finishing the reporter migration means the flat shape stops
-  // at the collaborator that still needs it, not one level higher).
+  // `log` is a compat shim (defaults to .info) for modules taking a flat `(msg) => void`.
   const log = (msg: string) => outputChannel.info(msg);
   const pluginListProvider = new PluginListProvider({ source: modlistSource, log, reporter, instanceRoot, dataFolder });
-  // The Plugins tree's own `PluginsTreeComposite` construction. ADR-0035: the view is a
-  // `PluginsTreeComposite` over two providers — these rows and the record browser's children — so
-  // that with the backend running each row expands into its records. Built here, at the
-  // composition root, because it is the only place that may know both; `PluginListProvider` is
-  // unchanged and still owns everything about a row.
   const composite = new PluginsTreeComposite<PluginListNode, PluginTreeNode>({
     rows: pluginListProvider,
-    // A thin positional adapter, not `recordBrowser` passed directly — the composite's own
-    // `getPluginChildren(pluginFile)` contract has no `origin` slot (a root row never has one to
-    // give), while `PluginTreeProvider.getPluginChildren` keeps its `(name, origin?)` shape: that
-    // is how Editing browses a registered losing copy by origin (ADR-0044) — data kept
-    // available while nothing in this view displays it.
+    // A thin positional adapter, not `recordBrowser` directly: the composite's
+    // `getPluginChildren(pluginFile)` has no `origin` slot (a root row never has one to give),
+    // while `PluginTreeProvider` keeps its `(name, origin?)` shape for browsing a losing copy.
     children: {
       getPluginChildren: (file) => recordBrowser.getPluginChildren(file),
       getChildren: (child) => recordBrowser.getChildren(child),
@@ -413,10 +326,8 @@ function registerPluginListView(deps: PluginListDeps): { pluginListProvider: Plu
     // ADR-0037: lets the composite reconcile the order-aware badge with load order state
     // by master name, instead of two decorations that can disagree.
     orderIssueMastersOf,
-    // ADR-0035 amending ADR-0018: the match map is refreshed off the module-level
-    // refreshMatchingPlugins function above, whenever EditingController's setFilter/clearFilter
-    // run. Undefined (never fetched, or the accessor finds nothing for this file) reads as
-    // "matches" — the composite's own fallback for an accessor that has nothing to say.
+    // Undefined — never fetched, or nothing found for this file — reads as "matches", the
+    // composite's own fallback for an accessor that has nothing to say.
     hasMatchingRecords: (file) => session.loadOrderSync?.matches(file.toLowerCase()),
   });
   session.pluginsTree = composite;
@@ -431,14 +342,8 @@ function registerPluginListView(deps: PluginListDeps): { pluginListProvider: Plu
     // is hierarchical — plugin → record type → record.
     showCollapseAll: true,
   });
-  session.pluginsTreeView = pluginListView; // see its declaration — progress and message live here
+  session.pluginsTreeView = pluginListView; // progress and message live here
   session.pluginsNameFilter = registerPluginsNameFilter(pluginListView, pluginListProvider);
-  // `modbench.pluginListTree.revealInExplorer`. Registered here, ahead of the
-  // registerFileDecorationProvider/wireLoadOrderWatchers/onDidChangeCheckboxState calls below (it
-  // used to run after them, as one more element of the same return array) — hoisted out so its
-  // body isn't inline inside that array literal. Its disposal position in that array is
-  // unchanged; only the moment `vscode.commands.registerCommand` itself fires moved slightly
-  // earlier, against independent, unrelated registrations it shares no dependency with.
   const revealReporter = makeReporter(outputChannel, 'pluginListTree.revealInExplorer');
   const revealInExplorerCommand = vscode.commands.registerCommand('modbench.pluginListTree.revealInExplorer', async (node: PluginListNode) => {
     if (node?.kind !== 'plugin') return;
@@ -458,31 +363,24 @@ function registerPluginListView(deps: PluginListDeps): { pluginListProvider: Plu
   return { pluginListProvider, disposables: [
     pluginListView,
     composite,
-    // Grays an implicit master's row the way MO2 grays COL_NAME for a forceLoaded
-    // plugin (ImplicitMasterDecorationProvider's own comment) — keyed off the same
-    // dataFolder this view already resolves, live against PluginListProvider's own
-    // implicitMasterNames() so it never drifts from what the tree actually rendered.
+    // Grays an implicit master's row the way MO2 grays COL_NAME for a forceLoaded plugin — live
+    // against PluginListProvider's own implicitMasterNames() so it never drifts from the tree.
     vscode.window.registerFileDecorationProvider(
       new ImplicitMasterDecorationProvider(dataFolder, () => pluginListProvider.implicitMasterNames()),
     ),
     ...wireLoadOrderWatchers(session.loadOrderSync!, instanceRoot, pluginListProvider),
     pluginListView.onDidChangeCheckboxState((e) => onPluginCheckboxChanged(e, pluginListProvider, outputChannel)),
     revealInExplorerCommand,
-    // ADR-0044: the checkbox gesture's other half — the participation change
-    // `PluginListProvider.setPluginEnabled` just wrote to `plugins.txt` is the next snapshot, sent
-    // through the same coalescing sync every other loadout gesture uses. The plugins.txt watcher
-    // would fire for the same write; asking explicitly as well makes the gesture's own path not
-    // depend on a watcher event, and the sync folds the two into one PUT. The sync itself drops
-    // the request when no backend is receiving — Mod Management works with no backend running,
-    // and that is the ordinary case, not a failure to report.
+    // ADR-0044: the checkbox gesture's other half. The plugins.txt watcher would fire for the same
+    // write; asking explicitly keeps the gesture's path off a watcher event, and the sync folds
+    // the two into one PUT.
     pluginListProvider.onDidChangeParticipation(() => session.loadOrderSync?.request()),
     session.pluginsNameFilter,
   ] };
 }
 
-/** Every plugin-row command (Track, Save & Compile, compile-at-ref, Rebase, the record
- *  lifecycle and copy gestures) — one shared concern, the Plugins-tree row's own context menu,
- *  as distinct from the record editor's own commands (`registerEditorCommands`, one level up). */
+// One shared concern, the Plugins-tree row's own context menu, as distinct from the record
+// editor's own commands.
 function registerPluginRowCommands(
   session: ExtensionSession,
   controller: EditingController,
@@ -491,10 +389,8 @@ function registerPluginRowCommands(
   outputChannel: vscode.LogOutputChannel,
   compileDiagnostics: vscode.DiagnosticCollection,
 ): vscode.Disposable[] {
-  // Shared by the lifecycle and copy commands below — a node's own `origin` when the row already
-  // carries it (ADR-0036), else `controller.resolveOrigin`; reports and returns undefined when
-  // neither answers (there is no ambient fallback worth a QuickPick, which is why every command
-  // that needs this is palette-gated).
+  // A node's own `origin` when the row carries it (ADR-0036), else `controller.resolveOrigin`;
+  // there is no ambient fallback worth a QuickPick, which is why these commands are palette-gated.
   const resolveOriginOrReport = makeResolveOriginOrReport(controller, outputChannel);
   return [
     registerTrackCommand(
@@ -505,12 +401,9 @@ function registerPluginRowCommands(
     registerCompileAtRefCommand(controller, repository, outputChannel, compileDiagnostics),
     registerRebaseCommand(controller, repository, outputChannel),
     ...registerRecordLifecycleCommands(controller, repository, outputChannel),
-    // xEdit parity (xeMainForm.pas's CopyInto, reached from both mniNavCopyIntoClick — the
-    // tree row — and mniViewHeaderCopyIntoClick — the column header): one command per gesture,
-    // registered once, reached from either entry point. `arg` is a plugins-tree RecordNode or the
-    // column header's own ColumnHeaderContext (its data-vscode-context payload) — resolved to the
-    // same {formKey, plugin, origin} identity either way (recordCopyIdentity), so everything past
-    // that point is one implementation path regardless of which row was right-clicked.
+    // xEdit parity (xeMainForm.pas's CopyInto, reached from both the tree row and the column
+    // header): one command per gesture, reached from either entry point. `arg` resolves to the
+    // same {formKey, plugin, origin} identity either way.
     vscode.commands.registerCommand('modbench.record.copyAsOverride', async (arg?: RecordNode | ColumnHeaderContext) => {
       await runCopyRecordCommand('copy-as-override', arg, controller, repository, resolveOriginOrReport, outputChannel);
     }),
@@ -521,11 +414,8 @@ function registerPluginRowCommands(
   ];
 }
 
-// Reaches every plugin-bearing merged-tree row (modmanager's PluginListNode, not medit's own
-// PluginNode) via pluginFileOf() — the same row-agnostic adapter the composite already uses.
 // A join, not an Editing-only gesture (its argument is Mod Management's own row type), so it
-// lives alongside the other plugin-row commands above rather than in registerRecordViewCommands
-// with the rest of the record panel's own commands.
+// lives alongside the other plugin-row commands rather than with the record panel's own.
 function registerOpenHeaderCommand(): vscode.Disposable {
   return vscode.commands.registerCommand('modbench.openHeader', (node?: PluginListNode) => {
     const pluginName = node && pluginFileOf(node);
@@ -536,16 +426,9 @@ function registerOpenHeaderCommand(): vscode.Disposable {
   });
 }
 
-/** ADR-0041: the Track gesture. Resolves the clicked row's plugin name to the mod folder the
- *  load order actually loaded it from, asks which `.gitignore` preset to generate (Edits is the
- *  default — Everything is the opt-in authoring choice), then delegates the HTTP call to
- *  `EditingController`. `onTracked` re-registers the native SCM panel for the newly tracked repo
- *  immediately, without waiting for the next activation.
- *
- *  A mega-plugin's complete serialization is a one-time, worst-case
- *  tens-of-seconds cost (ADR-0041), so the whole `track` call runs under the same Plugins-view
- *  progress indicator already built for the other long, blocking-POST operation this view
- *  has (the reconcile) — same surface, same `say` narration, no second bespoke indicator. */
+// Edits is the default `.gitignore` preset — Everything is the opt-in authoring choice. A
+// mega-plugin's serialization is a one-time, worst-case tens-of-seconds cost (ADR-0041), so this
+// runs under the Plugins-view progress indicator.
 function registerTrackCommand(
   session: ExtensionSession, controller: EditingController, outputChannel: vscode.LogOutputChannel, onTracked: () => Promise<void>,
 ): vscode.Disposable {
@@ -571,8 +454,6 @@ function registerTrackCommand(
     await withPluginsViewProgress(session, async () => {
       say(session, trackProgressMessage(origin, { phase: 'Idle', pluginsDone: 0, pluginsTotal: 0 }));
       const ok = await controller.track(origin, choice.label as 'Edits' | 'Everything', {
-        // Narrates the same Plugins-view message this
-        // command already showed a static version of, updated on each poll tick.
         onProgress: (status) => say(session, trackProgressMessage(origin, status)),
       });
       if (!ok) return;
@@ -582,14 +463,9 @@ function registerTrackCommand(
   });
 }
 
-/** ADR-0041: New Plugin's destination QuickPick — the composition root joining both
- *  bounded contexts in one gesture (precedent: `makeEnterEditing`). `overwrite/` is listed first
- *  so it is the QuickPick's pre-highlighted default (`showQuickPick` has no `activeItem` option;
- *  array order is the only way to pre-highlight) — Enter alone accepts it, preserving the
- *  xEdit-under-MO2 reflex. "New mod…"
- *  creates the mod folder itself via `installMod` with an empty source dir before returning, so it
- *  registers in `modlist.txt` and the Mods tree the same way any other install does — free, not
- *  reinvented. Returns undefined if the user cancels any prompt. */
+// `overwrite/` is listed first so it is the QuickPick's pre-highlighted default — `showQuickPick`
+// has no `activeItem` option, and array order is the only way to pre-highlight — preserving the
+// xEdit-under-MO2 reflex.
 async function pickPluginDestination(
   modlistSource: Mo2ModlistSource, instanceRoot: string,
 ): Promise<{ path: string; origin: string } | undefined> {
@@ -616,12 +492,9 @@ async function pickPluginDestination(
   if (!modName) return undefined;
   const staging = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'medit-newmod-'));
   try {
-    // Accepted residue, the frontend's twin of PluginEndpoints.CreatePlugin's own
-    // GitUnavailableException-catch comment: the mod folder is registered here, before the create
-    // POST below even runs. If that POST then fails, the mod stays registered — empty and
-    // disabled, same as any fresh install — rather than being rolled back. Visible in the Mods
-    // tree, harmless, and the user's own delete-the-mod-folder undoes it; deliberately not
-    // engineered around.
+    // Accepted residue: the mod folder is registered before the create POST runs. If that POST
+    // fails, the mod stays registered — empty and disabled, same as any fresh install — rather
+    // than being rolled back.
     await modlistSource.installMod(modName, staging, {});
   } finally {
     await fs.promises.rm(staging, { recursive: true, force: true });
@@ -629,17 +502,9 @@ async function pickPluginDestination(
   return resolvePluginDestination(instanceRoot, { kind: 'newMod', modName });
 }
 
-/** ADR-0041: `modbench.newPlugin` — creation lands as tracked working-tree text. Editing's
- *  create endpoint writes the file, Tracks the destination if needed, and indexes it; only once
- *  that has actually succeeded does Mod Management's own writer (`appendPlugin`) add the load-order
- *  line — never the other way around, so the load order can never name a file that doesn't yet
- *  exist. Registered unconditionally (the command exists in every activation), but needs a live
- *  Loadout to have anywhere to put the plugin — the Plugins tree it's contributed to
- *  (`modbench.pluginListTree`) only renders with one anyway, so the guard below is defensive, not
- *  the normal path. */
-// Kept apart from registerCreatePluginCommand because the load-order append and its own
-// failure mode (created but unregistered — a real, surfaced state, not silently dropped) is one
-// coherent step.
+// ADR-0041: only once Editing's create endpoint has actually succeeded does Mod Management's
+// `appendPlugin` add the load-order line — never the other way around, so the load order can
+// never name a file that does not exist.
 async function appendCreatedPluginToLoadOrder(
   modlistSource: Mo2ModlistSource, pluginListProvider: PluginListProvider, pluginName: string, outputChannel: vscode.LogOutputChannel,
 ): Promise<void> {
@@ -695,11 +560,9 @@ function registerCreatePluginCommand(
 }
 
 
-/** `Modbench: Rebase onto Updated Baseline` — origin-scoped (the repo, not any one plugin,
- *  is the unit of baselines and rebase), resolved from a tracked plugin row the same way Track
- *  resolves origin. Also the *re-runnable* form: {@link SourceRepository.RebaseEditBranch}'s own
- *  resumption-aware design means this same command both starts a rebase and resumes one left
- *  conflicted after the user resolves it in the native merge editor. */
+// Origin-scoped: the repo, not any one plugin, is the unit of baselines and rebase. Also the
+// *re-runnable* form — {@link SourceRepository.RebaseEditBranch}'s resumption-aware design means
+// this same command both starts a rebase and resumes one left conflicted.
 function registerRebaseCommand(
   controller: EditingController, repository: PluginRepository, outputChannel: vscode.LogOutputChannel,
 ): vscode.Disposable {
@@ -728,12 +591,9 @@ function registerRebaseCommand(
   });
 }
 
-/** Save & Compile — reachable from a tracked plugin row's context menu (`node` given), the
- *  record editor's title-bar icon (compiles the *active* record's owning plugin — never an
- *  unfiltered QuickPick, which risks compiling the wrong plugin in a
- *  multi-mod load order), and the command palette (QuickPick fallback only when neither a tree row nor
- *  an active record is in hand — see `resolveCompileTarget` in `./medit/compileTarget` for the exact
- *  order). */
+// Reachable from a plugin row, from the record editor's title bar (the *active* record's owning
+// plugin — never a QuickPick, which risks compiling the wrong plugin), and from the palette
+// (QuickPick fallback only when neither is in hand).
 function registerSaveAndCompileCommand(
   controller: EditingController,
   repository: PluginRepository,
@@ -770,13 +630,8 @@ function registerSaveAndCompileCommand(
   });
 }
 
-/** Compiling at `main` (no checkout — the edit branch and its dirt are untouched) writes
- *  the binary as `main` has it, behind one confirmation that names the ref literally, never
- *  "pristine" (no stored mode, ADR-0041 amendment) — a Modified workflow's pristine restore and an
- *  Authored workflow's release rebuild are the same gesture, and neither is this command's business
- *  to tell apart. Tree-row only (unlike Save & Compile itself): naming a ref to compile at from the
- *  palette with no plugin in hand isn't a gesture worth a QuickPick, so `pickPlugin` here is a no-op
- *  (`resolveCompileTarget`'s third tier never fires without a tree row). */
+// One confirmation names the ref literally, never "pristine" — there is no stored mode
+// (ADR-0041). Tree-row only: naming a ref with no plugin in hand isn't worth a QuickPick.
 function registerCompileAtRefCommand(
   controller: EditingController, repository: PluginRepository,
   outputChannel: vscode.LogOutputChannel, diagnostics: vscode.DiagnosticCollection,
@@ -806,17 +661,9 @@ function registerCompileAtRefCommand(
   });
 }
 
-/** ADR-0044: the sync every loadout gesture feeds — see `loadOrderReconcile.ts`. Builds both
- *  halves of one reconcile pipeline from Mod Management's and Editing's own types, none of which
- *  cross into either module: the coalescing/debounce wrapper (`createLoadOrderSync`) and, folded
- *  into it, the reconcile's own steps (`createReconcileSequencer`) — arm, resolve the game
- *  directory, build the snapshot, PUT, apply, present crash-repair offers. Every reconcile runs
- *  under the Plugins view's own header progress indicator (`withPluginsViewProgress`), the same
- *  surface a launch uses. It receives only while the backend is up: with none, a request is
- *  dropped silently, since a loadout-only workspace is the ordinary case. 250 ms of debounce
- *  covers the bursts that matter — the modlist and mods watchers both firing for one install, a
- *  drag reorder's own write plus its watcher event, a checkbox toggle's explicit request plus the
- *  plugins.txt event it causes. */
+// ADR-0044: the sync every loadout gesture feeds. 250 ms covers the bursts — both watchers
+// firing for one install, a drag reorder's write plus its watcher event, a checkbox toggle's
+// request plus the event it causes.
 function makeLoadOrderSync(deps: ReconcileDeps): LoadOrderSync {
   const { session, instanceRoot, modlistSource, controller, outputChannel, heldPluginFiles, showCrashRepairOffers, gameDirResolver } = deps;
   return createLoadOrderSync<LoadOrderPlugin, LoadOrderProgress, CrashRepairOffer>({
@@ -829,9 +676,8 @@ function makeLoadOrderSync(deps: ReconcileDeps): LoadOrderSync {
     notifyNoGameDirectory: () => void vscode.window.showErrorMessage(
       'Modbench: No game directory found. Set modbench.mods.gameDirectory to your Stock Game Folder or Steam install.',
     ),
-    // gameDirResolver's own `null` ("resolved, but there is none") and the sequencer's own
-    // `undefined` ("nothing to build a snapshot from") are the same fact; normalized at the one
-    // seam between them rather than teaching the sequencer a second falsy spelling.
+    // gameDirResolver's `null` and the sequencer's `undefined` are the same fact, normalized at
+    // the one seam between them rather than teaching the sequencer a second falsy spelling.
     resolveGameDirectory: () => gameDirResolver.resolve().then((gd) => gd ?? undefined),
     buildSnapshot: (dataFolder) => buildLoadOrderSnapshot(modlistSource, instanceRoot, dataFolder, (entries, root) =>
       buildFileConflictIndex(entries, root, (msg) => outputChannel.debug(msg))),
@@ -845,30 +691,9 @@ function makeLoadOrderSync(deps: ReconcileDeps): LoadOrderSync {
 }
 
 
-/** ADR-0044: what keeps Editing's load order true — Mod Management's own reactive watchers, never
- *  a timer (modbench/CLAUDE.md: reactive over manual). Every event is "recompute the snapshot, PUT
- *  it", coalesced by the sync, so these three watchers plus the two explicit asks (a checkbox
- *  toggle, a profile switch) are the whole of the wiring — there is no command downstream of them.
- *
- *  Three watchers because one does not cover every gesture. `modlist.txt` is rewritten by
- *  install, uninstall *and* reprioritise, so it catches all three on the Mod axis; `mods/**`
- *  catches a folder appearing or vanishing without a `modlist.txt` write, which is what a
- *  hand-dropped or hand-deleted mod folder looks like before auto-registration notices it;
- *  `plugins.txt` is the Plugin axis — a reorder or an enable/disable, whether Modbench wrote it or
- *  MO2/the user did (root CLAUDE.md: never assume exclusive ownership of a file on disk).
- *
- *  Each passes `debounceMs: 0` — #621's mechanism 2: `sync.request()` already debounces every
- *  arrival on its own, so a second, uncoordinated wait in front of it (fsWatcher.ts's own
- *  historical 200ms) only adds latency without adding coalescing, since the sync's single timer
- *  is what every arrival, from whichever watcher, actually resets. Cuts the latency on this path
- *  from ~450ms to ~250ms.
- *
- *  #653: the same three signals also drive the Plugins tab's own row provider — until this,
- *  nothing did, so an external plugins.txt change (MO2, another tool, a hand edit) left the tab
- *  stale until a manual Refresh. `wirePluginListInvalidation` adds that second consumer onto
- *  each signal alongside `sync.request()`, never in place of it (unit-tested on its own,
- *  `src/test/wirePluginListInvalidation.test.ts`, since this composition root has no seam of
- *  its own). */
+// ADR-0044: reactive watchers, never a timer. Three because one misses gestures: `modlist.txt`
+// catches install, uninstall and reprioritise; `mods/**` a folder appearing without one;
+// `plugins.txt` the Plugin axis, whoever wrote it. `debounceMs: 0` — the sync already debounces.
 function wireLoadOrderWatchers(
   sync: LoadOrderSync, instanceRoot: string, pluginListProvider: PluginListProvider,
 ): vscode.Disposable[] {
@@ -884,11 +709,8 @@ function wireLoadOrderWatchers(
   ];
 }
 
-/** The merged Plugins tree's name filter — the axis that narrows *which plugin rows*
- *  appear, composing with (never replacing) the record filter's axis over which records appear
- *  under an expanded row. An error row survives every filter by design (ADR-0026), so it counts
- *  as content here: a view showing the reason its list is wrong must not also claim the term
- *  matched nothing. */
+// The axis that narrows *which plugin rows* appear, composing with (never replacing) the record
+// filter's axis over which records appear under an expanded row.
 function registerPluginsNameFilter(
   view: vscode.TreeView<PluginListNode | PluginTreeNode>, provider: PluginListProvider,
 ): NameFilter {
@@ -900,17 +722,13 @@ function registerPluginsNameFilter(
 }
 
 
-/** The Loadout half of activation, as one step: deployment-mode context key, the
- *  Mods/Plugins/Downloads views, and the header that sits above them. Split out of `activate`
- *  because these three are one wiring concern — and because the header must register even on
- *  the paths where `registerLoadoutView` bails (no workspace, or not an MO2 instance): it is
- *  the container's first view and must never be a hole. Returns what the integration tests
- *  read off `activate`'s exports. */
+// The Loadout half of activation as one step. The header must register even on the paths where
+// `registerLoadoutView` bails (no workspace, or not an MO2 instance): it is the container's first
+// view and must never be a hole.
 function registerLoadoutSurfaces(session: ExtensionSession, deps: Omit<LoadoutViewDeps, 'revealLog'>): {
   modListProvider?: ModListProvider; downloadsProvider?: DownloadsProvider; pluginListProvider?: PluginListProvider;
-  // Forwarded so the composition root can wire modbench.newPlugin's destination QuickPick —
-  // both are undefined together with the providers above, on the same no-workspace/not-an-MO2-
-  // instance paths registerLoadoutView already bails on.
+  // Forwarded so the composition root can wire modbench.newPlugin's destination QuickPick — both
+  // are undefined together with the providers above.
   modlistSource?: Mo2ModlistSource; instanceRoot?: string; enterEditing?: () => Promise<void>;
 } {
   const { context, outputChannel } = deps;
@@ -939,19 +757,12 @@ interface LoadoutViewDeps {
   /** The plugin files the backend's load order names, for deciding which rows can expand.
    *  Injected as a getter so the composite's own wiring stays at the composition root. */
   heldPluginFiles: () => Promise<HeldPluginFiles>;
-  /** Run the loud crash-repair offer sequence for whatever a completed reconcile found.
-   *  Composed once at the composition root (activate()), where the diagnostics collection and
-   *  compileAndReport's own compile door already live. */
+  /** Run the loud crash-repair offer sequence for whatever a completed reconcile found. Composed
+   *  at the composition root, where the diagnostics collection and compile door already live. */
   showCrashRepairOffers: (offers: CrashRepairOffer[]) => Promise<void>;
 }
-/** Register the Loadout (Mod List) view and its commands. Returns the live
- *  ModListProvider and DownloadsProvider (exposed via activate() for integration
- *  tests), or undefined with a neutral log when no workspace is open, or when the
- *  workspace isn't an MO2 instance (the Mods view shows welcome content instead). */
-// A crash-restart is a fresh backend, so the reconcile has to run again from scratch — the same
-// re-entry path a fresh Launch takes, not a bespoke recovery. Pulled out of registerLoadoutView so
-// that function's own body stays about *building* the views, not also about what happens after
-// one of their dependencies restarts.
+// A crash-restart is a fresh backend, so the reconcile runs again from scratch — the same re-entry
+// path a fresh launch takes, not a bespoke recovery.
 function wireEnterEditingOnRestart(
   session: ExtensionSession, enterEditing: () => Promise<void>, outputChannel: vscode.LogOutputChannel,
 ): void {
@@ -964,15 +775,13 @@ function wireEnterEditingOnRestart(
 
 function registerLoadoutView(session: ExtensionSession, deps: LoadoutViewDeps): { modListProvider: ModListProvider; downloadsProvider: DownloadsProvider; pluginListProvider: PluginListProvider; modlistSource: Mo2ModlistSource; instanceRoot: string; refreshAll: () => void; enterEditing: () => Promise<void> } | undefined {
   const { context, outputChannel, revealLog, controller, recordBrowser, heldPluginFiles, showCrashRepairOffers } = deps;
-  // #628: the flat log shim, built locally rather than threaded in as its own Deps field.
+  // The flat log shim, built locally rather than threaded in as its own Deps field.
   const log = (msg: string) => outputChannel.info(msg);
   const instanceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   if (!instanceRoot) {
     outputChannel.info('[extension] No workspace folder open — Mod List view not registered.');
-    // Explicit, not left implicitly falsy — the viewsWelcome `when` clause
-    // also guards on VS Code's own `workspaceFolderCount != 0`, so neither key's value
-    // actually matters with no workspace open, but every exit path sets both rather than
-    // leaving a fourth, implicit "never set" state.
+    // Explicit, not left implicitly falsy: the viewsWelcome `when` clause also guards on VS Code's
+    // own `workspaceFolderCount != 0`, but every exit path sets both keys rather than leaving one.
     setMo2InstanceContext(false);
     return undefined;
   }
@@ -986,32 +795,23 @@ function registerLoadoutView(session: ExtensionSession, deps: LoadoutViewDeps): 
   setMo2InstanceContext(true);
     const modListReporter = makeReporter(outputChannel, 'modList');
     const modlistSource = new Mo2ModlistSource(instanceRoot, log, modListReporter);
-    // The single GameDirectory resolver (config override → ini gamePath → autodetect),
-    // memoised and invalidated only when modbench.mods.gameDirectory changes — the one thing every
-    // consumer of the game directory (these views, the load-order snapshot, deploy)
-    // reads through, so none of them can disagree about which folder is current. Deliberately not
-    // an activation-scoped Promise resolved once: that would freeze the folder for the life of
-    // the window regardless of later edits to the setting.
+    // Memoised, and invalidated only when modbench.mods.gameDirectory changes, so no consumer can
+    // disagree about which folder is current. Deliberately not an activation-scoped Promise
+    // resolved once.
     const gameDirResolver = createGameDirectoryResolver(instanceRoot, meditConfig, makeDetectPaths(), detectWinePrefix, vscode.workspace.onDidChangeConfiguration);
-    // Non-blocking (keeps registration synchronous) and never rejects — a null resolution or a
-    // misconfigured explicit setting both fold to undefined, so the consumers degrade exactly as
-    // before (empty vanilla masters, badges absent). A rejection is re-thrown by every other
-    // consumer of `gameDirResolver` directly; only the views degrade to undefined.
-    // `dataFolderFrom` memoises the fold (and its error log) by the resolver's own cache
-    // generation, so a stuck-broken setting logs once — `ImplicitMasterDecorationProvider` alone
-    // reads this once per visible file, and a naive `.then()/.catch()` per call would re-log on
-    // every one of those reads instead of once for the life of the resolution.
+    // Never rejects: a null resolution and a misconfigured setting both fold to undefined, so the
+    // views degrade rather than throw. Memoised by the resolver's cache generation, so a
+    // stuck-broken setting logs once instead of once per visible file.
     const dataFolder = dataFolderFrom(gameDirResolver, (e) =>
       outputChannel.error(`[extension] resolving the game directory failed: ${e instanceof Error ? e.message : String(e)}`));
     const modListProvider = new ModListProvider({ source: modlistSource, log, instanceRoot, reporter: modListReporter, dataFolder });
-    // ADR-0044: the one path by which the Plugin load order reaches Editing. Built here, before
-    // the Plugins tree, because both the tree (its own hasMatchingRecords accessor) and
-    // enterEditing below need the session slot filled first.
+    // ADR-0044: built before the Plugins tree, because both the tree's hasMatchingRecords accessor
+    // and enterEditing below need the session slot filled first.
     session.loadOrderSync = makeLoadOrderSync({
       session, instanceRoot, modlistSource, controller, outputChannel, heldPluginFiles, showCrashRepairOffers, gameDirResolver,
     });
-    // #680: plugins.txt converges on what disk provides; the write reaches the Plugins tree and
-    // Editing's Plugin load order sync through the plugins.txt watcher (wireLoadOrderWatchers).
+    // plugins.txt converges on what disk provides; the write reaches the Plugins tree and Editing's
+    // Plugin load order sync through the plugins.txt watcher.
     const reconcilePlugins = () => reconcilePluginsWithDisk({
       source: modlistSource, instanceRoot, dataFolder, channel: outputChannel,
       buildIndex: (entries) => buildFileConflictIndex(entries, instanceRoot, (msg) => outputChannel.debug(msg)),
@@ -1020,8 +820,6 @@ function registerLoadoutView(session: ExtensionSession, deps: LoadoutViewDeps): 
       registerPluginListView({ session, modlistSource, outputChannel, reporter: makeReporter(outputChannel, 'pluginList'), instanceRoot, dataFolder, recordBrowser });
     const { modListView, modListFilter, updateProfileDescription } =
       createModListView(modListProvider, modlistSource, outputChannel);
-    // The three closures registerModInstallCommands needs, named for what's already true at
-    // the call site, where they're handed to it as one bundle.
     const runModAction = async (logLabel: string, failMessage: string, action: () => Promise<void>) => {
       try {
         await action();
@@ -1061,9 +859,8 @@ function registerLoadoutView(session: ExtensionSession, deps: LoadoutViewDeps): 
       ...registerPluginsReconcileWatchers(instanceRoot, () => void reconcilePlugins()),
       ...pluginListDisposables,
     );
-    // #93 / #680: the watchers above cover changes made while Modbench runs; these one-time
-    // passes reconcile what happened while it wasn't. Plugins follow mods, so a folder registered
-    // by the first pass is a known mod for the second.
+    // The watchers above cover changes made while Modbench runs; these one-time passes reconcile
+    // what happened while it wasn't. Plugins follow mods, so the first pass feeds the second.
     void reconcileModlistWithModsDir(modlistSource, () => modListProvider.invalidate(), outputChannel)
       .then(reconcilePlugins);
     const { downloadsProvider, disposables: downloadsDisposables } = registerDownloadsView(instanceRoot, outputChannel);
@@ -1072,9 +869,8 @@ function registerLoadoutView(session: ExtensionSession, deps: LoadoutViewDeps): 
     return { modListProvider, downloadsProvider, pluginListProvider, modlistSource, instanceRoot, refreshAll, enterEditing };
 }
 
-/** Refresh is one need, not three. Every Mod-Management source re-reads from disk
- *  together — a partial refresh is the state where the user believes they have resynced and
- *  one tree still quietly disagrees with the others. */
+// Refresh is one need, not three: a partial refresh is the state where the user believes they
+// have resynced and one tree still quietly disagrees.
 function makeRefreshAll(
   modListProvider: ModListProvider,
   pluginListProvider: PluginListProvider,
@@ -1092,19 +888,16 @@ function makeRefreshAll(
 interface LoadoutHeaderDepsWiring {
   context: vscode.ExtensionContext;
   outputChannel: vscode.LogOutputChannel;
-  /** Absent when no workspace is open or it isn't an MO2 instance — the header still
-   *  registers (it is the container's first view and must never be a hole), it just has
-   *  no profile to read. */
+  /** Absent when no workspace is open or it isn't an MO2 instance — the header still registers
+   *  (it is the container's first view and must never be a hole), it just has no profile. */
   modlistSource?: Mo2ModlistSource;
   /** Absent for the same reason as `modlistSource`; without it there is nothing to be
    *  deployed, so the deployment row stays absent regardless of the configured mode. */
   instanceRoot?: string;
-  /** Re-reads every Mod-Management source. Absent when there is nothing to read. */
   refreshAll?: () => void;
 }
-/** The Loadout header view — workspace-scope readout and action home. Wired here, at
- *  the composition root, because it spans both bounded contexts; the provider itself takes
- *  only getters and knows about neither. */
+// Wired here, at the composition root, because it spans both bounded contexts; the provider
+// itself takes only getters and knows about neither.
 function registerLoadoutHeaderView(session: ExtensionSession, deps: LoadoutHeaderDepsWiring): void {
   const { context, outputChannel, modlistSource, instanceRoot, refreshAll } = deps;
   const provider = new LoadoutHeaderProvider({
@@ -1128,78 +921,57 @@ function registerLoadoutHeaderView(session: ExtensionSession, deps: LoadoutHeade
   session.loadoutHeaderProvider = provider;
   context.subscriptions.push(
     vscode.window.createTreeView('modbench.loadoutHeader', { treeDataProvider: provider }),
-    // The one Refresh, replacing the three each tree had grown. Its scope is the workspace,
-    // so it lives here rather than on any single tree — and it is still only the safety net
-    // for a flaky watcher, never the primary path.
+    // Its scope is the workspace, so it lives here rather than on any single tree — and it is only
+    // the safety net for a flaky watcher, never the primary path.
     vscode.commands.registerCommand('modbench.refresh', () => {
       refreshAll?.();
       provider.refresh();
     }),
   );
-  // The header's rows (profile, deployment) read no backend/load order state — the
-  // mEdit row lives on the Plugins view — so there is nothing here for a backend status
-  // transition to invalidate.
+  // The header's rows read no backend or load order state, so there is nothing here for a backend
+  // status transition to invalidate.
 }
 
 
-/** The completed reconcile's whole hand-off to the tree: which plugins the load order names, which
- *  are read-only for editing, each one's master issues and each one's open failure.
- *
- *  ADR-0035: rows gain chevrons here — and *finish* gaining them here. A
- *  progressive reconcile's ticks carry only the indexed set and the failures, because read-only
- *  state and master issues are whole-load-order derivations a partial one cannot answer; this is
- *  the call that fills them in. **A tick must never be the last word** — if one were, both those
- *  decorations would silently vanish from a fully reconciled tree.
- */
+// ADR-0035: rows gain chevrons here — and *finish* gaining them here. A progressive reconcile's
+// ticks carry only the indexed set, because read-only state and master issues are
+// whole-load-order derivations a partial tick cannot answer.
 async function applyLoadOrderToTree(
   session: ExtensionSession,
   heldPluginFiles: () => Promise<HeldPluginFiles>,
   failures: { name?: string | null; reason?: string | null }[],
   outputChannel: vscode.LogOutputChannel,
-  // The backend's own reported plugin count (the last poll's `LoadOrderStatus.totalPlugins`,
-  // via `makeTreeProgressHandler`'s `lastTotalPlugins()`) — carried in only so this can be logged
-  // next to what actually reached the tree, not because this function needs it for anything else.
-  // Deliberately not `plugins.length` from the caller's own snapshot: that list is every copy
-  // the frontend sent, and omits the implicit masters the backend prepends, so comparing against
-  // it would read every healthy reconcile as short.
+  // Carried in only to be logged next to what reached the tree. Deliberately not `plugins.length`
+  // from the caller's snapshot: that omits the implicit masters the backend prepends, so every
+  // healthy reconcile would read as short.
   totalPlugins: number,
 ): Promise<void> {
   try {
     const held = await heldPluginFiles();
-    // This is the one line standing between a stuck-tail reconcile and a diagnosable one —
-    // do not remove it as logging noise. `totalPlugins` is the backend's own count; `failures` is
-    // what the reconcile already reported as unopenable or unindexable, so a plugin counted there
-    // is accounted for, not missing. `held.files.size + failures.length` should land close to
-    // `totalPlugins` for an ordinary reconcile — a gap bigger than that, or a reconcile that
-    // otherwise reaches "load order ready" with no line at all, is what points at this hand-off
-    // rather than at something upstream (most likely the backend's own `GET /plugins`).
+    // Do not remove as logging noise: `held.files.size + failures.length` landing close to
+    // `totalPlugins` is what tells a stuck-tail reconcile here from one broken upstream.
     outputChannel.info(
       `[extension] applying reconciled load order to tree: ${held.files.size} in the load order, ${failures.length} failed, of ${totalPlugins} copies`,
     );
-    // ADR-0037: the same failures the toast inside putLoadOrder already consumed —
-    // held here (not re-derived, not a second endpoint) and handed to the tree through the same
-    // setLoadOrder bundle as everything else the reconcile reports.
+    // ADR-0037: the same failures the toast inside putLoadOrder already consumed — held here, not
+    // re-derived, and handed to the tree through the same setLoadOrder bundle.
     const loadFailures = new Map(failures.map((f) => [f.name ?? '?', f.reason ?? 'Unknown error'] as const));
-    // ADR-0035 amending ADR-0018: set before setLoadOrder fires its re-render, so no row
-    // renders off a match set stale from whatever reconcile preceded this one — every reconcile
-    // re-runs this exact hand-off.
+    // Set before setLoadOrder fires its re-render, so no row renders off a match set stale from
+    // whatever reconcile preceded this one.
     session.loadOrderSync?.setMatches(held.matches);
     session.pluginsTree?.setLoadOrder(held.files, held.readOnly, held.masterIssues, loadFailures);
-    // The same read-only set, to the record rows — theirs is contextValue (Remove
-    // hidden), the plugin rows' is the tooltip note.
+    // The same read-only set, to the record rows — theirs is contextValue (Remove hidden), the
+    // plugin rows' is the tooltip note.
     session.recordBrowserProvider?.setImmutablePlugins(held.readOnly);
-    // #674: and tracked-ness, the record rows' other contextValue axis (Change FormID absent on an
-    // untracked plugin's rows). Every reconcile re-pushes it, which is the whole of AC5 — a `.git`
-    // appearing or vanishing under `mods/` is a watcher event, and a watcher event is a reconcile.
+    // And tracked-ness, the record rows' other contextValue axis. Every reconcile re-pushes it: a
+    // `.git` appearing or vanishing under `mods/` is a watcher event, and that is a reconcile.
     session.recordBrowserProvider?.setTrackedPlugins(held.tracked);
-    // #570: every reconcile re-runs the malformed-plugin scan — setLoadOrder above just cleared
-    // the previous scan's decorations, and this brings the new answer when it lands.
+    // Every reconcile re-runs the malformed-plugin scan — setLoadOrder above just cleared the last
+    // scan's decorations, and this brings the new answer when it lands.
     session.refreshDiagnoses?.();
   } catch (err) {
-    // Leaving every row a leaf is a safe *render*, but it is not an honest one: the reconcile
-    // did land, so the tree would be telling the user editing is unavailable when it is
-    // available, with nothing on screen to say why. ADR-0026 integrity tier — notify, don't
-    // just log.
+    // Leaving every row a leaf is a safe *render* but not an honest one: the reconcile did land,
+    // so the tree would claim editing is unavailable with nothing on screen to say why (ADR-0026).
     const message = err instanceof Error ? err.message : String(err);
     outputChannel.error(`[extension] reading the backend's plugin list failed; plugin rows will not expand: ${message}`);
     void vscode.window.showWarningMessage(
@@ -1208,26 +980,15 @@ async function applyLoadOrderToTree(
   }
 }
 
-/** The line every abandoned check point used to get for free from `armLoadAbort`'s own
- *  `abandoned()` closure, back when arming lived here. Now that `loadOrderSync.arm()` returns a
- *  pure check (it cannot hold an `outputChannel` — ADR-0044's "no VS Code types in the interface"),
- *  each call site logs explicitly instead; same message, same one-shot-per-abandonment call count,
- *  since a reconcile returns as soon as the first check point notices. */
+// `loadOrderSync.arm()` returns a pure check — it cannot hold an `outputChannel` (ADR-0044) — so
+// each call site logs explicitly instead.
 function reportAbandoned(outputChannel: vscode.LogOutputChannel): void {
   outputChannel.info('[extension] the reconcile was abandoned before it landed; leaving the closed view alone');
 }
 
-/** The progressive-reconcile tick handler, wired to this extension's own surfaces. Whether a
- *  tick is worth applying is decided in `medit/loadOrderProgress.ts` and unit-tested there; this
- *  supplies the hand-off itself, the only part that needs VS Code types. The empty read-only and
- *  master-issue arguments mid-reconcile are deliberate — see `makeReconcileProgressHandler`.
- *
- *  Also remembers each tick's own `totalPlugins`. That is the backend's count (implicit
- *  masters included, since the backend prepends them before this is ever reported) — a different,
- *  larger number than the frontend's own snapshot (`plugins.length` in `reconcile()` below),
- *  which never includes them. `applyLoadOrderToTree`'s completion log needs something to compare
- *  its own count against; a tick already carries the right number, and it does not change over
- *  the reconcile, so the last one seen is as good as asking again. */
+// Each tick's `totalPlugins` is the backend's count, implicit masters included — a larger number
+// than the frontend's own snapshot, and the one `applyLoadOrderToTree`'s completion log compares
+// against.
 function makeTreeProgressHandler(
   session: ExtensionSession,
 ): { onProgress: (status: LoadOrderProgress) => void; lastTotalPlugins: () => number } {
@@ -1257,17 +1018,13 @@ interface ReconcileDeps {
   heldPluginFiles: () => Promise<HeldPluginFiles>;
   /** Run once a reconcile completes, for whatever crash-repair offers it reported. */
   showCrashRepairOffers: (offers: CrashRepairOffer[]) => Promise<void>;
-  /** The single game-directory resolver, shared with the views — memoised and invalidated
-   *  only when modbench.mods.gameDirectory changes, so a snapshot always agrees with what they
-   *  currently show. */
+  /** Shared with the views — memoised and invalidated only when modbench.mods.gameDirectory
+   *  changes, so a snapshot always agrees with what they show. */
   gameDirResolver: GameDirectoryResolver;
 }
 
-/** Build the enter-editing action: spawn/attach the backend, then send it the load order. Also the
- *  crash-restart path.
- *
- *  ADR-0035: owns its own progress indicator (`withPluginsViewProgress` — see there)
- *  rather than leaving each of its callers to wrap it, and reports its steps through `say`. */
+// ADR-0035: owns its own progress indicator rather than leaving each caller to wrap it, and
+// reports its steps through `say`.
 function makeEnterEditing(
   session: ExtensionSession, outputChannel: vscode.LogOutputChannel, revealLog: () => void,
 ): () => Promise<void> {
@@ -1285,44 +1042,21 @@ function makeEnterEditing(
       void vscode.window.showErrorMessage('Modbench: Backend failed to start — see the Modbench output for details.');
       return;
     }
-    // No game directory means nothing to build a snapshot from, so nothing for the backend to
-    // hold — don't strand the UI in an empty editing view. `flush()` — not a separately threaded
-    // reconcile function — is the activation path's own documented reason to exist: it wants the
-    // outcome, not just a promise that a send will happen eventually.
+    // No game directory means nothing to build a snapshot from — don't strand the UI in an empty
+    // editing view. `flush()` is used because this path wants the outcome, not just a promise.
     if ((await session.loadOrderSync!.flush()) === 'no-game-directory') exitToLoadout(session);
   };
   return () => withPluginsViewProgress(session, enter);
 }
 
 
-/** Undici's default Agent times out a fetch with no response bytes after ~300s
- *  (headersTimeout/bodyTimeout). The backend's blocking endpoints — PUT /load-order chief among
- *  them — legitimately run for minutes on a large load order, and every such call
- *  already carries its own deliberate abort signal where one is wanted, so nothing
- *  else should time it out. 0 disables both.
- *
- *  Bound per-request via `ApiClient`'s own `fetch` override, not `undici.setGlobalDispatcher` —
- *  tried first, and confirmed *not* to reach the actual outgoing request from inside the
- *  extension host (VS Code's own network stack sits in front of the ambient global `fetch`;
- *  the global dispatcher override never took effect there, only in a bare Node process). This
- *  bypasses that entirely by calling undici's own `fetch` directly, dispatcher attached to each
- *  call.
- *
- *  Can't just forward openapi-fetch's `Request` object straight through: it's built with the
- *  *global* `Request` constructor, a distinct class from undici's own internal one, and undici's
- *  `fetch` only recognizes its own — handed a global `Request`, it falls back to coercing it to a
- *  URL string and fails with "Failed to parse URL from [object Request]". Unpacked into a plain
- *  url/method/headers/body call instead. Lives here, not in ApiClient.ts: that module is also
- *  imported by the webview bundle (RecordPanelClient.ts), which has no `undici`/Node runtime.
- *
- *  `input.signal` is part of that unpacking too, deliberately — it is the *other* half of
- *  the "own deliberate abort signal" this comment already promises above (the mid-load
- *  close). Dropping it here silently disconnects that abort from the network layer: the caller's
- *  `AbortController.abort()` still flips `signal.aborted`, but nothing downstream ever rejects
- *  the fetch on it, so the abandoned reconcile just runs to completion for nobody. If a future
- *  rewrite unpacks this request shape again, carry `signal` with it. */
+// Undici's default Agent times out a fetch after ~300s; the backend's blocking endpoints
+// legitimately run for minutes, so 0 disables both. Bound per-request: `setGlobalDispatcher`
+// never reaches the extension host's outgoing requests.
 function createUnlimitedFetch(): (input: Request) => Promise<Response> {
   const dispatcher = new Agent({ headersTimeout: 0, bodyTimeout: 0 });
+  // Handed a global `Request`, undici's own `fetch` coerces it to a URL string and fails, so it is
+  // unpacked — `signal` included, or an abandoned reconcile's abort never reaches the network.
   return async (input) => {
     const hasBody = input.method !== 'GET' && input.method !== 'HEAD';
     const body = hasBody ? await input.clone().arrayBuffer() : undefined;
@@ -1330,7 +1064,6 @@ function createUnlimitedFetch(): (input: Request) => Promise<Response> {
   };
 }
 
-/** Construct the editing backend manager wired to the bundled binary + status bar. */
 function createBackendManager(port: number, channel: vscode.LogOutputChannel, statusBarItem: vscode.StatusBarItem): BackendManager {
   // Bundled backend binary (see build:backend / .vscodeignore). __dirname is
   // out/ at runtime; the published self-contained executable lives in backend/.
@@ -1338,15 +1071,12 @@ function createBackendManager(port: number, channel: vscode.LogOutputChannel, st
   return new BackendManager({
     port,
     log: (msg) => channel.info(msg),
-    // Pipe the backend's Serilog console output into the same channel,
-    // at its own level. Only applies to a backend we spawn — an attached
-    // dev-launched one still logs to its own terminal.
+    // Pipe the backend's Serilog console output into the same channel, at its own level. Only
+    // applies to a backend we spawn — an attached dev-launched one logs to its own terminal.
     onOutput: makeBackendLogForwarder(channel),
-    // Make the backend's Serilog minimum level follow the channel's
-    // level at spawn time, so raising the channel to Debug/Trace actually
-    // surfaces backend lines at that level instead of just louder frontend
-    // ones. Read fresh per spawn (crash-restart picks up any level change);
-    // never applied when attaching to an already-running backend.
+    // The backend's Serilog minimum level follows the channel's at spawn time, so raising the
+    // channel to Debug actually surfaces backend lines. Read fresh per spawn; never applied when
+    // attaching to an already-running backend.
     serilogLevelArgs: () => backendLogLevelArgs(channel.logLevel),
     executablePath: path.join(__dirname, '..', 'backend', backendExe),
     spawn: (exe, args) => cp.spawn(exe, args, { detached: false, stdio: ['ignore', 'pipe', 'pipe'] }),
@@ -1358,10 +1088,7 @@ function createBackendManager(port: number, channel: vscode.LogOutputChannel, st
   });
 }
 
-/** Resolve the scripts dir (config or ~/.medit/scripts), seed the preset filter,
- *  and build the filter CodeLens provider over it. */
 function setupScripts(cfg: vscode.WorkspaceConfiguration): { scriptsPath: string; filterProvider: FilterCodeLensProvider } {
-  // Resolve scripts path (config or ~/.medit/scripts)
   const scriptsPathCfg: string = cfg.get('scriptsPath') ?? '';
   const scriptsPath = scriptsPathCfg || path.join(os.homedir(), '.medit', 'scripts');
   fs.mkdirSync(scriptsPath, { recursive: true });
@@ -1371,9 +1098,8 @@ function setupScripts(cfg: vscode.WorkspaceConfiguration): { scriptsPath: string
 }
 
 
-// VS Code's own `deactivate()` contract takes no arguments, so it has no way to receive
-// `activate()`'s session object directly — this is the one module-level reference left, existing
-// solely to bridge that gap, not a singleton with a "why module level" justification of its own.
+// VS Code's own `deactivate()` takes no arguments, so it has no way to receive `activate()`'s
+// session object directly — this module-level reference exists solely to bridge that gap.
 let activeSession: ExtensionSession | undefined;
 
 // Async so VS Code awaits confirmed-dead-child teardown (BackendManager.dispose() → stop())

@@ -4,10 +4,8 @@ import type { PluginMetadata } from '../ApiClient';
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
-/** Mimics a real non-ok openapi-fetch result: `error` is already parsed from the
- *  body, and the underlying Response's body stream is drained — a second
- *  `response.text()` call throws, just like real `fetch`. Production code must
- *  read `error`, not re-read the body (see the `launchMedit` "Body is unusable" bug). */
+// Mimics a real non-ok openapi-fetch result: the body stream is already drained, so a second
+// `response.text()` throws. Production code must read `error`, not re-read the body.
 function drainedError(status: number, error: string) {
   return {
     error,
@@ -128,8 +126,6 @@ function makeRepository({
   } as any;
 }
 
-/** One `GET /load-order/status` answer. Defaults describe a load that has done nothing yet,
- *  so a test states only the field it is about. */
 function makeStatus({
   totalPlugins = 2,
   indexedPlugins = [] as string[],
@@ -159,10 +155,8 @@ function makeDeps(overrides: Partial<EditingControllerDeps> = {}): EditingContro
 describe('EditingController.createPlugin', () => {
   beforeEach(() => vi.resetAllMocks());
 
-  // The destination (path/origin) is the caller's — Mod Management's QuickPick, not an
-  // implicit write into the Data folder — and the created plugin's own name comes back from the
-  // response rather than being assumed, so the composition root's plugins.txt append names
-  // whatever the backend actually wrote.
+  // The destination is the caller's — Mod Management's QuickPick, not an implicit write into the
+  // Data folder — and the created plugin's own name comes back from the response, never assumed.
   it('POSTs to /plugins/create with the destination and returns the created plugin\'s name', async () => {
     const deps = makeDeps();
     const ctrl = new EditingController(deps);
@@ -176,10 +170,8 @@ describe('EditingController.createPlugin', () => {
     expect(result).toEqual({ name: 'test.esp' });
   });
 
-  // The tree must not refresh until the caller's
-  // own plugins.txt append has also landed — refreshing here would show a plugin the load order
-  // doesn't name yet — so refreshTree is strictly the composition root's call, never this
-  // method's own.
+  // The tree must not refresh until the caller's own plugins.txt append has landed: refreshing
+  // here would show a plugin the load order does not name yet.
   it('never refreshes the tree itself — that is the caller\'s job, after its own plugins.txt append', async () => {
     const deps = makeDeps();
     const ctrl = new EditingController(deps);
@@ -283,10 +275,8 @@ describe('EditingController.setFilter', () => {
     expect(deps.showError).not.toHaveBeenCalled();
   });
 
-  // ADR-0035 amending ADR-0018: a plugin's chevron depends on the filter's per-plugin
-  // match set, which is only current as of the filter that produced it — a new filter has to
-  // trigger a fresh derivation, or a chevron the old filter suppressed (or restored) would keep
-  // stating the wrong thing about the new one.
+  // ADR-0035 amending ADR-0018: a chevron depends on the filter's per-plugin match set, so a new
+  // filter has to trigger a fresh derivation or the chevron keeps stating the wrong thing.
   it('refreshes the plugin-match set on success', async () => {
     const deps = makeDeps({ repository: makeRepository() });
     const ctrl = new EditingController(deps);
@@ -296,9 +286,8 @@ describe('EditingController.setFilter', () => {
     expect(deps.refreshMatchingPlugins).toHaveBeenCalledOnce();
   });
 
-  // The Plugins tree's description names both narrowing axes, so the record filter has to
-  // say *which* filter — raw SQL is unreadable as a readout, and "a filter is active" sends the
-  // user back to the palette to find out which one.
+  // The Plugins tree's description names both narrowing axes, so the record filter has to say
+  // *which* filter — raw SQL is unreadable and "a filter is active" answers nothing.
   it('forwards the filter source label to the readout alongside the SQL', async () => {
     const deps = makeDeps({ repository: makeRepository() });
     const ctrl = new EditingController(deps);
@@ -441,11 +430,8 @@ describe('EditingController.putLoadOrder', () => {
     expect(deps.showError).not.toHaveBeenCalled();
   });
 
-  // ADR-0035: reaching this method at all means the load PUT — which the backend only
-  // answers after the winner sweep — resolved successfully, so this is the one reliable,
-  // already-existing point at which conflicts become computed. Record panels open mid-load learn
-  // this to refetch their own settled comparison (RecordPanel's CONFLICTS_COMPUTED
-  // handler); no poller is added for it — the tick stream stops before/at this same transition.
+  // ADR-0035: the backend answers the load PUT only after the winner sweep, so reaching this
+  // method is the one reliable point at which conflicts have become computed.
   it('notifies that conflicts are computed on a successful load', async () => {
     const client = {
       ...makeClient(),
@@ -551,10 +537,8 @@ describe('EditingController.putLoadOrder', () => {
     expect(deps.refreshTree).toHaveBeenCalledOnce();
   });
 
-  // ADR-0044: every copy is sent, so a non-empty snapshot no longer means the profile has anything
-  // enabled — participation is enabled AND winning AND listed, derived. A snapshot where nothing
-  // participates reconciles fine and wins nothing — the same silently-empty conflict picture the
-  // zero-plugin warning exists to prevent.
+  // ADR-0044: every copy is sent, so a non-empty snapshot does not mean the profile has anything
+  // enabled — participation is enabled AND winning AND listed, derived.
   it('warns when plugins were sent but none of them participate', async () => {
     const client = {
       ...makeClient(),
@@ -595,9 +579,8 @@ describe('EditingController.putLoadOrder', () => {
     expect(deps.refreshTree).not.toHaveBeenCalled();
   });
 
-  // ADR-0001 point 6: another window holds this instance's index. The backend answers 423
-  // with a ProblemDetails whose `detail` is the sentence for the user; that sentence — not the
-  // JSON around it — is what the toast says, and the load is a plain failure: no retry, no wait.
+  // ADR-0001 point 6: another window holds this instance's index. The backend's 423
+  // ProblemDetails carries the sentence for the user, and the load is a plain failure.
   it('tells the user which cause refused the load when another window holds the instance (423)', async () => {
     const client = {
       ...makeClient(),
@@ -622,11 +605,9 @@ describe('EditingController.putLoadOrder', () => {
     expect(deps.refreshTree).not.toHaveBeenCalled();
   });
 
-  // The caller (makeEnterEditing) tells a failed load apart from a load that
-  // simply had nothing to report by the return value alone — `[]` would be ambiguous with
-  // "loaded, zero failures". Backend-confirmed (ADR-0044: LoadOrderMirror.Reconcile's
-  // EnsureScope disposes the old scope first, before the new one can even fail to build), so a
-  // failed PUT really does mean "no load order", not "the old one, stale".
+  // The caller tells a failed load from one with nothing to report by the return value alone —
+  // `[]` is ambiguous with "loaded, zero failures". A failed PUT really does mean no load
+  // order, not a stale one (ADR-0044).
   it('reports a failed load as failed, so it is never mistaken for a load with zero failures', async () => {
     const client = {
       ...makeClient(),
@@ -649,10 +630,8 @@ describe('EditingController.putLoadOrder', () => {
 
 // ── putLoadOrder: progressive load (ADR-0035) ───────────────────
 
-// The load PUT stays blocking, and the generated openapi-fetch client
-// has no streaming path — so progress is polled off GET /load-order/status *alongside* the still
-// in-flight PUT. This is the seam the polling logic is tested at: no VS Code types, a fake
-// client and a fake repository, fake timers for the cadence.
+// The load PUT stays blocking and the generated openapi-fetch client has no streaming path, so
+// progress is polled off GET /load-order/status alongside the still in-flight PUT.
 describe('EditingController.putLoadOrder progress polling', () => {
   beforeEach(() => {
     vi.resetAllMocks();
@@ -665,8 +644,7 @@ describe('EditingController.putLoadOrder progress polling', () => {
     { name: 'Fallout4.esm', path: '/game/Data/Fallout4.esm', origin: 'Data', slot: 1, enabled: true, winning: true },
   ];
 
-  /** A load PUT that stays in flight until the returned `finish` is called — the whole point of
-   *  this suite is what happens *during* that window, which a resolved mock cannot express. */
+  // A load PUT held in flight until `finish` is called; this suite is about that window.
   function heldLoad() {
     let finish!: () => void;
     const held = new Promise((resolve) => {
@@ -770,11 +748,9 @@ describe('EditingController.putLoadOrder progress polling', () => {
 
 // ── putLoadOrder: a deliberately abandoned load is not a failure ─────────────
 
-// Two ways a load ends without failing.
-// 409 is the backend saying "your snapshot was superseded" (LoadOrderEndpoints.SupersededReconcile) —
-// nothing went wrong, and the newer load now owns the load order. An aborted PUT is the user
-// closing mEdit mid-load. Neither is something to toast, and neither may
-// make the caller tear down a load order it does not own.
+// 409 is the backend saying the snapshot was superseded; an aborted PUT is the user closing
+// mEdit mid-load. Neither is something to toast, and neither may make the caller tear down a
+// load order it does not own.
 describe('EditingController.putLoadOrder abandonment', () => {
   beforeEach(() => vi.resetAllMocks());
 
@@ -791,10 +767,8 @@ describe('EditingController.putLoadOrder abandonment', () => {
     expect(log).toHaveBeenCalledWith(expect.stringContaining('superseded'));
   });
 
-  // If a superseded load returned the same "no load order"
-  // answer a failed one does, makeEnterEditing would respond by calling exitToLoadout() —
-  // tearing the backend down out from under the newer load that legitimately owns the load order.
-  // Reachable by running Reload Load Order while a load is still running.
+  // If a superseded load answered the way a failed one does, makeEnterEditing would call
+  // exitToLoadout(), tearing the backend down under the newer load that owns the load order.
   it('reports a superseded load as abandoned, distinctly from a failed one', async () => {
     const client = { ...makeClient(), PUT: vi.fn().mockResolvedValue(drainedError(409, 'superseded')) };
     const deps = makeDeps({ client });
@@ -866,14 +840,8 @@ describe('EditingController.resolveOrigin', () => {
     expect(origin).toBeUndefined();
   });
 
-  // Before Launch mEdit, no backend exists to answer GET /plugins at all — a rejected
-  // repository call, not a 200 with an empty/mismatched list. Every sibling EditingController
-  // method (track, compile, rebaseOntoMain, …) catches its own transport failure and
-  // degrades to a caught, logged outcome; without the same here the
-  // rejection would propagate out of Track/Rebase/Save & Compile's command callbacks uncaught — VS
-  // Code's own raw "Error running command … fetch failed" toast, not this codebase's error
-  // surfacing. Degrading to the same `undefined` "not found" already returns costs nothing new:
-  // every caller already turns that into a clear, existing message.
+  // Before Launch mEdit no backend answers GET /plugins, so the call rejects. Uncaught, that
+  // surfaces as VS Code's own raw "Error running command … fetch failed" toast.
   it('degrades to undefined — not a thrown rejection — when the backend itself is unreachable', async () => {
     const repository = makeRepository({ plugins: makePlugins(2) });
     repository.getPlugins = vi.fn().mockRejectedValue(new Error('fetch failed'));
@@ -946,9 +914,9 @@ describe('EditingController.createRecord', () => {
     });
   });
 
-  // #673 / ADR-0026: the process-wide write gate answers a contended write with 503 +
-  // `writeGateTimeout`, the same shape 503 "no load order held" arrives in. The two want opposite
-  // responses — retry versus reload — so the surface reads the extension, never the prose.
+  // ADR-0026: the write gate answers a contended write with 503 + `writeGateTimeout`, the same
+  // shape 503 "no load order held" arrives in. Retry versus reload, so the surface reads the
+  // extension, never the prose.
   describe('#673 write-gate contention', () => {
     it('says the write is retryable, not that the load order went away', async () => {
       const client = makeClient();
@@ -986,10 +954,8 @@ describe('EditingController.createRecord', () => {
       );
     });
 
-    // Five of the six gate-wrapped endpoints share `mutate`, so the branch is stated once and
-    // reached by all of them; deleteRecord stands in for the rest. The sixth — the field edit —
-    // does not come through here at all: it shapes its own outcome in `ApiPluginRepository`, and
-    // is covered there, in the same words (`writeGateBusyMessage`).
+    // The gate-wrapped endpoints share `mutate`, so the branch is stated once and reached by all of
+    // them; the field edit shapes its own outcome in `ApiPluginRepository` instead.
     it('reaches every write command that comes through mutate', async () => {
       const client = makeClient();
       client.POST = vi.fn().mockResolvedValue({
@@ -1156,8 +1122,7 @@ describe('EditingController.track progress polling', () => {
   });
   afterEach(() => vi.useRealTimers());
 
-  /** A track POST that stays in flight until the returned `finish` is called — mirrors
-   *  `heldLoad()` above; the whole point is what happens *during* that window. */
+  // A track POST held in flight until `finish` is called; this suite is about that window.
   function heldTrack() {
     let finish!: () => void;
     const held = new Promise((resolve) => {
@@ -1351,11 +1316,9 @@ describe('EditingController.rebaseOntoMain / continueRebase', () => {
 
 });
 
-// ── mutation error paths, one table (#636) ───────────────────────────────────
-// Every POST-shaped gesture shares one mutation frame; these rows pin its two failure modes per
-// method. Both are ADR-0026 "explicit action failed": the toast carries the gesture's own identity
-// token and the server's (or transport's) text, the method returns its failure value, and nothing
-// is refreshed — a failed gesture changed nothing to re-read.
+// ── mutation error paths ─────────────────────────────────────────────────────
+// ADR-0026 "explicit action failed": the toast carries the gesture's identity token and the
+// server's text, the method returns its failure value, and nothing is refreshed.
 const mutationErrorCases: Array<{
   name: string;
   run: (c: EditingController) => Promise<unknown>;

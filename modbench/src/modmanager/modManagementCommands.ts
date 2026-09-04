@@ -23,24 +23,16 @@ import { registerNameFilter, type NameFilter } from '../nameFilter';
 import { meditConfig, makeDetectPaths, setMo2InstanceContext } from '../workspaceConfig';
 
 
-/** Stub provider for the Mods view when the workspace isn't an MO2
- *  instance. Always empty so VS Code's `viewsWelcome` contribution (gated on
- *  `modbench.workspaceMo2CheckDone` and `modbench.workspaceIsMo2Instance` together)
- *  renders instead of the tree — getTreeItem is unreachable since getChildren never yields
- *  an element to render. */
+/** Always empty, so VS Code renders the `viewsWelcome` contribution instead of the tree.
+ *  `getTreeItem` is unreachable: `getChildren` never yields an element. */
 export const NOT_MO2_INSTANCE_PROVIDER: vscode.TreeDataProvider<never> = {
   getTreeItem: () => { throw new Error('unreachable — NOT_MO2_INSTANCE_PROVIDER never yields children'); },
   getChildren: () => [],
 };
 
-/** Loadout core commands: refresh, switch profile, filter. One call site (registerLoadoutView),
- *  so its params are positional, not a Deps bundle — #628: a bundle earns its keep by being
- *  shared across more than one consumer or call site (see EditorCommandDeps, ModInstallDeps,
- *  LoadoutViewDeps for real examples), not merely by having several fields.
- *  notifyLoadoutHeaderChanged/requestLoadOrderSync: ADR-0044 / the Loadout header — a profile
- *  switch is the next snapshot, and the header's own profile readout has to move with it — both
- *  narrow callbacks against the composition root's session object, since this is otherwise a
- *  pure Mod-Management registrar. */
+/** Positional params, not a Deps bundle: a bundle earns its keep by being shared across more
+ *  than one call site, not merely by having several fields. The two callbacks are narrow
+ *  windows onto the composition root's session object. */
 export function registerModListCoreCommands(
   modListProvider: ModListProvider, modlistSource: Mo2ModlistSource, updateProfileDescription: () => Promise<void>,
   notifyLoadoutHeaderChanged: () => void, requestLoadOrderSync: () => void,
@@ -67,10 +59,9 @@ export function registerModListCoreCommands(
         await modListProvider.switchProfile(picked.label);
         void updateProfileDescription();
         notifyLoadoutHeaderChanged();
-        // ADR-0044: a profile switch is the next snapshot, not a teardown — the backend keeps
-        // running, and the index (keyed on the instance, shared by every profile) makes
-        // the reconcile cheap. The profile files themselves are not watched for this (switching
-        // writes ModOrganizer.ini, not modlist/plugins.txt), so this asks explicitly.
+        // A profile switch is the next snapshot, not a teardown (ADR-0044). Switching writes
+        // ModOrganizer.ini rather than modlist/plugins.txt, which no watcher covers, so the
+        // sync is asked for explicitly.
         requestLoadOrderSync();
       }),
   ];
@@ -81,7 +72,6 @@ export interface ModInstallDeps {
   promptModName: (defaultName: string) => Thenable<string | undefined>;
   warnIfFomod: (name: string, isFomod: boolean) => void;
 }
-/** Loadout install commands: from archive, from folder. */
 export function registerModInstallCommands(deps: ModInstallDeps): vscode.Disposable[] {
   const { modlistSource, runModAction, promptModName, warnIfFomod } = deps;
   return [
@@ -133,9 +123,6 @@ export function registerModInstallCommands(deps: ModInstallDeps): vscode.Disposa
       }),
   ];
 }
-/** Loadout per-mod context commands: reveal, separator ops, uninstall, Nexus. One call site
- *  (registerLoadoutView) — positional params, not a Deps bundle; see registerModListCoreCommands's
- *  own comment on why (#628). */
 export function registerModContextCommands(
   instanceRoot: string, modlistSource: Mo2ModlistSource, outputChannel: vscode.LogOutputChannel,
   runModAction: (label: string, failMessage: string, action: () => Promise<void>) => Promise<void>,
@@ -191,9 +178,6 @@ export function registerModContextCommands(
       }),
   ];
 }
-/** Loadout separator context commands: rename, add-below, delete. One call site
- *  (registerLoadoutView) — positional params, not a Deps bundle; see registerModListCoreCommands's
- *  own comment on why (#628). */
 export function registerSeparatorCommands(
   modlistSource: Mo2ModlistSource,
   runModAction: (label: string, failMessage: string, action: () => Promise<void>) => Promise<void>,
@@ -220,9 +204,8 @@ export function registerSeparatorCommands(
       }),
   ];
 }
-/** Overwrite-folder surface: a live watcher that re-renders the Mods tree
- *  as `overwrite/` fills/empties (reactive over manual refresh), plus the sole
- *  action — reveal the folder in the Explorer (single-click reuses this too). */
+/** A live watcher, so the Mods tree follows `overwrite/` filling and emptying without a manual
+ *  refresh, plus the folder's sole action. */
 export function registerOverwriteView(
   instanceRoot: string,
   modListProvider: ModListProvider,
@@ -244,8 +227,8 @@ export function registerOverwriteView(
     }),
   ];
 }
-/** The live triggers of the plugins reconcile (#680): every signal that can change which plugin
- *  files are present. Never plugins.txt itself — an edit to the file changes nothing on disk. */
+/** Every signal that can change which plugin files are present. Never plugins.txt itself: an
+ *  edit to that file changes nothing on disk. */
 export function registerPluginsReconcileWatchers(instanceRoot: string, run: () => void): vscode.Disposable[] {
   return [
     createModsWatcher(instanceRoot, run),
@@ -254,10 +237,8 @@ export function registerPluginsReconcileWatchers(instanceRoot: string, run: () =
   ];
 }
 
-/** Auto-registration: a live watcher that adds a modlist.txt entry for
- *  any mods/<name>/ folder that appears while Modbench is running (dragged
- *  into Explorer, extracted by hand, or installed some other way outside
- *  Modbench) — reactive over manual, same as the overwrite/ watcher above. */
+/** A mods/<name>/ folder can appear outside Modbench at any time — dragged in, extracted by
+ *  hand, installed by another tool — so its modlist.txt entry is added reactively. */
 export function registerModsAutoRegisterWatcher(
   instanceRoot: string,
   modlistSource: Mo2ModlistSource,
@@ -275,12 +256,8 @@ export function registerModsAutoRegisterWatcher(
       });
   });
 }
-/** The workspace is open but isn't an MO2 instance (ModOrganizer.ini,
- *  mods/, profiles/ absent). Don't build a provider that would only fail
- *  lazily on first read — register the Mods view with an always-empty stub so
- *  its native `viewsWelcome` contribution (gated on `modbench.workspaceMo2CheckDone`
- *  and `modbench.workspaceIsMo2Instance` together) renders an actionable
- *  message instead of an error tree node. */
+/** A real provider would only fail lazily on first read, so the view gets an always-empty stub
+ *  and its `viewsWelcome` contribution renders an actionable message instead. */
 export function registerNotMo2InstanceWelcome(
   instanceRoot: string,
   context: vscode.ExtensionContext,
@@ -292,10 +269,9 @@ export function registerNotMo2InstanceWelcome(
     vscode.window.createTreeView('modbench.modList', { treeDataProvider: NOT_MO2_INSTANCE_PROVIDER }),
   );
 }
-/** The Mods tree, its name filter, and the profile readout — together, because they are
- *  one thing: the view's description is written by exactly one owner (the filter), and the
- *  active profile is what it composes the term around. Split apart, the profile update and a
- *  filter keystroke would race for the same property and the loser would silently vanish. */
+/** Tree, filter and profile readout together, because the view's description has exactly one
+ *  owner. Split apart, a profile update and a filter keystroke race for that property and the
+ *  loser silently vanishes. */
 export function createModListView(
   modListProvider: ModListProvider,
   modlistSource: Mo2ModlistSource,
@@ -328,19 +304,13 @@ export function createModListView(
   void updateProfileDescription();
   return { modListView, modListFilter, updateProfileDescription };
 }
-/** Downloads sidebar tree: a native TreeView over downloads/.
- *  The row's native `view/item/context` menu commands are registered here too — see
- *  DownloadsPanel.ts' registerDownloadsSingleRowCommands/registerDownloadsMultiRowCommands and
- *  package.json's contributes.menus["view/item/context"]. Returns the live provider (exposed
- *  via activate() for integration tests) alongside its disposables. */
+/** Returns the live provider alongside its disposables, so integration tests can reach it. */
 export function registerDownloadsView(
   instanceRoot: string,
   outputChannel: vscode.LogOutputChannel,
 ): { downloadsProvider: DownloadsProvider; disposables: vscode.Disposable[] } {
-  // `log` is a compat shim (defaults to .info) for modules taking a flat `(msg) => void` —
-  // constructed here, at the boundary, rather than threaded in as its own parameter alongside
-  // outputChannel (#628: finishing the reporter migration means the flat shape stops at the
-  // collaborator that still needs it, not one level higher).
+  // A shim for collaborators still taking a flat `(msg) => void`, built here at the boundary so
+  // the flat shape stops at them rather than one level higher.
   const log = (msg: string) => outputChannel.info(msg);
   const downloadsProvider = new DownloadsProvider(instanceRoot, log);
   const downloadsView = vscode.window.createTreeView('modbench.downloads', {
@@ -369,23 +339,19 @@ export function registerDownloadsView(
     ],
   };
 }
-/** Is Modbench itself the deployer? One reading of the setting, shared by the context key that
- *  gates the declarative `when` clauses and by the header's deployment row — two answers that
- *  disagreed would put an icon and its readout in different states. */
+/** One reading of the setting, shared by the `when`-clause context key and the header's
+ *  deployment row: two answers could put an icon and its readout in different states. */
 export function isStandaloneDeployment(): boolean {
   return (meditConfig().get('mods.deploymentMode') ?? 'external') !== 'external';
 }
 /** Seed and watch the deployment-mode context key (standalone vs external manager). */
 export function registerDeploymentModeContext(
   context: vscode.ExtensionContext,
-  // The deployment row appears/disappears with the mode — a narrow callback against the
-  // composition root's session object, same reasoning as registerModListCoreCommands's own
-  // pair of callbacks above.
+  // The deployment row appears and disappears with the mode.
   notifyLoadoutHeaderChanged: () => void,
 ): void {
-  // Deploy/Purge/Launch are standalone-only; hidden when an external manager owns
-  // deployment. Default external for the alpha — MO2 stays the deployer/launcher
-  // until standalone deploy ships post-alpha.
+  // Deploy, Purge and Launch are hidden when an external manager owns deployment, which is the
+  // alpha default: MO2 stays the deployer until standalone deploy ships.
   const applyDeploymentMode = () => {
     void vscode.commands.executeCommand('setContext', 'modbench.deploymentStandalone', isStandaloneDeployment());
   };
@@ -399,16 +365,12 @@ export function registerDeploymentModeContext(
     }),
   );
 }
-/** Deploy / Purge / Launch Game commands (standalone mode). Orchestrates the
- *  existing resolver + deployer over the active MO2 instance; surfacing goes
- *  through an injected reporter per ADR-0026. */
 export function registerDeployCommands(
   instanceRoot: string,
   modlistSource: Mo2ModlistSource,
   outputChannel: vscode.LogOutputChannel,
   gameDirResolver: GameDirectoryResolver,
-  // The deployment row appears/disappears with a successful deploy/purge — same narrow
-  // callback as registerDeploymentModeContext's own, against the session object.
+  // The deployment row appears and disappears with a successful deploy or purge.
   notifyLoadoutHeaderChanged: () => void,
 ): vscode.Disposable[] {
   const config = meditConfig;
@@ -417,8 +379,8 @@ export function registerDeployCommands(
   const reporter = makeReporter(outputChannel, 'deploy');
 
   const resolveGd = async () => {
-    // The single game-directory resolver, shared with the views/drift tracker/load order
-    // launch — memoised and invalidated only when modbench.mods.gameDirectory changes.
+    // The single game-directory resolver, memoised and invalidated only when
+    // modbench.mods.gameDirectory changes.
     const gd = await gameDirResolver.resolve();
     if (!gd) {
       reporter.report('error', 'No game directory found. Set modbench.mods.gameDirectory to your Stock Game Folder or Steam install.');
@@ -463,18 +425,12 @@ export function registerDeployCommands(
     }),
   ];
 }
-/** Tool launching (not yet landed) contributes one task per entry in MO2's executables registry
- *  under this type; Launch… is the single affordance that runs one of them. Named here so the
- *  future provider has one place to agree with. */
+/** The task type tool launching contributes one task per MO2 executables-registry entry under.
+ *  Named here so the provider and the Launch… command have one place to agree. */
 export const LAUNCH_TASK_TYPE = 'modbench';
-/** Launch… — one affordance no matter how many executables exist, because the registry
- *  decides what is launchable, not the title bar. It reads the contributed tasks at
- *  invocation (so an executable added in MO2 appears without a reload) and executes the
- *  selection; it never resolves a binary itself — deploying and then spawning a hardcoded
- *  exe would lock the command to one game and conflate two separate operations.
- *
- *  Until tool launching lands there are no such tasks, so this says so rather than guessing
- *  a path. */
+/** One affordance however many executables exist, because MO2's registry decides what is
+ *  launchable. Tasks are read at invocation, so an executable added in MO2 appears without a
+ *  reload; resolving a binary here would lock the command to one game. */
 export function registerLaunchCommand(outputChannel: vscode.LogOutputChannel): vscode.Disposable {
   return vscode.commands.registerCommand('modbench.launch', async () => {
     const tasks = await vscode.tasks.fetchTasks({ type: LAUNCH_TASK_TYPE });

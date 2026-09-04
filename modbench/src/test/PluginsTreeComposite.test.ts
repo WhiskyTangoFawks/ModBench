@@ -7,9 +7,8 @@ import * as vscode from 'vscode';
 import { PluginsTreeComposite } from '../PluginsTreeComposite';
 
 // The composite is the one place the two bounded contexts touch, so its tests speak in neither
-// context's vocabulary either: a "row" is whatever the load-order provider hands out and a "child"
-// is whatever the record provider hands back. Both fakes are structural — the real providers
-// satisfy the same shapes without an adapter.
+// context's vocabulary: a "row" is whatever the load-order provider hands out, a "child"
+// whatever the record provider hands back.
 
 interface FakeRow { file?: string; kind: string; orderIssueMasters?: string[] }
 interface FakeChild { id: string }
@@ -75,8 +74,7 @@ function make(
     hasMatchingRecords,
   });
   // The composite tells rows from children by having handed the rows out, so every test renders
-  // the root first — which is what VS Code does, and what its TreeDataProvider contract
-  // guarantees: getTreeItem is only ever called with an element getChildren returned.
+  // the root first — VS Code's TreeDataProvider contract guarantees that ordering.
   const render = () => composite.getChildren();
   return { composite, rowSource, children, render };
 }
@@ -151,9 +149,8 @@ describe('PluginsTreeComposite when a mEdit starts', () => {
     expect(composite.getTreeItem(ERROR_ROW).collapsibleState).toBe(vscode.TreeItemCollapsibleState.None);
   });
 
-  // "without rebuilding or reordering the tree": the rows are the load order the user is looking
-  // at, and re-reading plugins.txt here would cost them their filter and scroll position for a
-  // change that has nothing to do with what is on disk.
+  // The rows are the load order the user is looking at, and re-reading plugins.txt here would cost
+  // them their filter and scroll position for a change that has nothing to do with the disk.
   it('does not re-read the load order, and hands back the same rows in the same order', async () => {
     const { composite, rowSource, render } = make([PLUGIN_ROW, OTHER_ROW]);
     const before = await render();
@@ -176,11 +173,8 @@ describe('PluginsTreeComposite when a mEdit starts', () => {
   });
 });
 
-// ADR-0035's dated §Filters amendment: while a
-// record filter is active, a plugin with zero matching records is hidden entirely, not merely
-// left unexpandable — a visible-but-inert row is still noise, and the point of a filter is to cut
-// noise. Row omission and the chevron read the same fact (`hasMatchingRecords`), so a hidden row
-// never gets far enough to have a chevron opinion at all.
+// ADR-0035 §Filters: while a record filter is active, a plugin with zero matching records is
+// hidden entirely, not merely left unexpandable — a visible-but-inert row is still noise.
 describe('PluginsTreeComposite — a record filter hides a plugin with no matches (#396 / ADR-0035)', () => {
   it('omits a plugin with no matching records from the row set entirely', async () => {
     const { composite, render } = make([PLUGIN_ROW, OTHER_ROW], new FakeChildren(), (file) => file !== 'A.esp');
@@ -197,9 +191,7 @@ describe('PluginsTreeComposite — a record filter hides a plugin with no matche
     expect(composite.getTreeItem(OTHER_ROW).collapsibleState).toBe(vscode.TreeItemCollapsibleState.Collapsed);
   });
 
-  // No filter machinery wired (the accessor absent) has to read the same as "no filter active" —
-  // every existing load order-start test above already asserts a visible, expandable row with no
-  // third argument at all, so this only has to hold the line rather than prove it fresh.
+  // No filter machinery wired (the accessor absent) has to read the same as "no filter active".
   it('keeps every load order row present and expandable when hasMatchingRecords is not wired', async () => {
     const { composite, render } = make([PLUGIN_ROW]);
     composite.setLoadOrder(new Set(['A.esp']));
@@ -208,9 +200,8 @@ describe('PluginsTreeComposite — a record filter hides a plugin with no matche
     expect(composite.getTreeItem(PLUGIN_ROW).collapsibleState).toBe(vscode.TreeItemCollapsibleState.Collapsed);
   });
 
-  // A row that stands for no plugin file (an error/empty-state row) has nothing for a record
-  // filter to have an opinion about, so it is never a candidate for hiding — same as it was never
-  // a candidate for the chevron.
+  // A row that stands for no plugin file has nothing for a record filter to have an opinion
+  // about, so it is never a candidate for hiding.
   it('never hides a row that stands for no plugin file', async () => {
     const { composite, render } = make([PLUGIN_ROW, ERROR_ROW], new FakeChildren(), () => false);
     composite.setLoadOrder(new Set(['A.esp']));
@@ -234,12 +225,9 @@ describe('PluginsTreeComposite — a record filter hides a plugin with no matche
     expect(await composite.getChildren()).toEqual([PLUGIN_ROW, OTHER_ROW]);
   });
 
-  // Drag/drop reorders through PluginListProvider directly — extension.ts wires
-  // `dragAndDropController: pluginListProvider`, not this composite — and the composite itself
-  // never caches row order (see the "does not re-read the load order" test above): every
-  // getChildren() re-derives the visible set from a fresh rows.getChildren() call plus the
-  // current hasMatchingRecords answer. So a reorder that happens while a row is hidden must still
-  // land in its new position once the filter clears, not the position it had when hidden.
+  // Drag/drop reorders through PluginListProvider directly and the composite never caches row
+  // order, so a reorder made while a row is hidden still lands in its new position once the
+  // filter clears.
   it('restores a hidden row in its new position when the underlying order changed while it was hidden', async () => {
     let matches = false;
     const { composite, rowSource, render } = make(
@@ -255,11 +243,9 @@ describe('PluginsTreeComposite — a record filter hides a plugin with no matche
     expect(await composite.getChildren()).toEqual([OTHER_ROW, PLUGIN_ROW]);
   });
 
-  // This applies even to a plugin with a load error / missing
-  // master that would normally always stay visible — a deliberate call. Both facts
-  // ride the same setLoadOrder hand-off as hasMatchingRecords (extension.ts's LoadOrderPluginFiles),
-  // and isHiddenByFilter reads only pluginFileOf/hasMatchingRecords — never masterIssues or
-  // loadFailures — so a plugin flagged either way is hidden right along with an ordinary one.
+  // isHiddenByFilter reads only pluginFileOf/hasMatchingRecords — never masterIssues or
+  // loadFailures — so a plugin carrying a load error or a missing master is hidden right along
+  // with an ordinary one. A deliberate call.
   it('hides a plugin with a missing-master flag while the filter matches none of its records', async () => {
     const { composite, render } = make([PLUGIN_ROW], new FakeChildren(), () => false);
     composite.setLoadOrder(new Set(['A.esp']), new Set(), new Map([
@@ -386,15 +372,8 @@ describe('PluginsTreeComposite.hasLoadOrder', () => {
   });
 });
 
-// ADR-0035: read-only-for-editing (Editing's "Immutable plugin", medit/ApiClient.ts
-// PluginMetadata.isImmutable) is decided and rendered here — the one place already exempted from
-// contextBoundary.test.ts's import scan because it has to be able to say in prose what it joins —
-// so that neither PluginListProvider.ts (Mod Management) nor PluginTreeProvider.ts (Editing) has
-// to learn the other's vocabulary. One setter carries both facts a load order hands off (which files
-// it holds, which of those are read-only), since the two never change independently: nothing in
-// extension.ts calls one without the other. The other half — hiding editing actions from a
-// read-only plugin's context menu — has no command to gate yet (no per-row editing command is
-// contributed in package.json today), so it isn't tested here; see plugins.md.
+// ADR-0035: read-only-for-editing is decided and rendered here, the one place exempt from
+// contextBoundary.test.ts's import scan, so neither provider learns the other's vocabulary.
 describe('PluginsTreeComposite — read-only tooltip (#276 AC4/AC5)', () => {
   it('tags a read-only plugin\'s tooltip once the load order says so', async () => {
     const { composite, render } = make([PLUGIN_ROW]);
@@ -433,11 +412,9 @@ describe('PluginsTreeComposite — read-only tooltip (#276 AC4/AC5)', () => {
   });
 
   it('clears on mEdit close along with everything else', async () => {
-    // Both real row providers return the row itself as its own TreeItem (getTreeItem(el) { return
-    // el; }), so decorating it mutates the one object the tree keeps reusing across renders —
-    // reading the tooltip *while* read-only, before it clears, is what makes this a real
-    // regression test for accumulate-instead-of-reset, not just "never decorated in the first
-    // place" (which the previous, pre-fix version of this test could not have told apart).
+    // Both row providers return the row itself as its own TreeItem, so decorating mutates the one
+    // object the tree reuses across renders — reading the tooltip while still read-only is what
+    // catches accumulate-instead-of-reset.
     const { composite, render } = make([PLUGIN_ROW]);
     await render();
     composite.setLoadOrder(new Set(['A.esp']), new Set(['A.esp']));
@@ -471,10 +448,9 @@ describe('PluginsTreeComposite — read-only tooltip (#276 AC4/AC5)', () => {
   });
 });
 
-// ADR-0037: a plugin declaring a master absent from the load order is flagged
-// with an error decoration and stays fully browsable — never deactivated, excluded or hidden.
-// The wording distinguishes a directly-missing master from one that is itself unloadable, per
-// ADR-0037's own examples ("Missing master: X.esm" vs. "Master Foo.esp cannot be loaded").
+// ADR-0037: a plugin declaring a master absent from the load order is flagged and stays fully
+// browsable — never deactivated, excluded or hidden. The wording distinguishes a directly-missing
+// master from one that is itself unloadable.
 describe('PluginsTreeComposite — master-issue decoration (#277 / ADR-0037 AC1/AC2/AC4)', () => {
   it('flags a row with a directly-missing master', async () => {
     const { composite, render } = make([PLUGIN_ROW]);
@@ -562,11 +538,9 @@ describe('PluginsTreeComposite — master-issue decoration (#277 / ADR-0037 AC1/
     expect(item.description).toBeUndefined();
   });
 
-  // The generated wire type is `masterIssues?: MasterIssue[] | null` — optional and nullable —
-  // even though the backend always emits an array; a backend predating this
-  // field must degrade to "no issues", not throw. A fixture built from our own PluginMetadata
-  // type can never produce this shape (it's non-optional there), so this bypasses the type at
-  // the call site directly, the way a stale-backend response actually would.
+  // The wire type is `masterIssues?: MasterIssue[] | null`, so a response lacking it must degrade
+  // to "no issues" rather than throw; PluginMetadata cannot express that shape, so the fixture
+  // bypasses the type at the call site.
   it('degrades to undecorated, without throwing, when a plugin\'s issue list is absent', async () => {
     const { composite, render } = make([PLUGIN_ROW]);
     await render();
@@ -581,10 +555,9 @@ describe('PluginsTreeComposite — master-issue decoration (#277 / ADR-0037 AC1/
   });
 });
 
-// ADR-0037: a plugin that fails to open or parse still has a row — Mod Management
-// builds rows from plugins.txt, not from the load order — so this decorates an existing row with
-// its recorded reason rather than synthesising a missing one. Data already crosses the wire via
-// LoadOrderLoadResponse.failures (no new endpoint); this covers the tree receiving it.
+// ADR-0037: a plugin that fails to open or parse still has a row — Mod Management builds rows
+// from plugins.txt, not from the load order — so this decorates an existing row with its
+// recorded reason rather than synthesising one.
 describe('PluginsTreeComposite — load-failure decoration (#277 / ADR-0037 AC7)', () => {
   it('flags a row whose plugin failed to load, with the reason', async () => {
     const { composite, render } = make([PLUGIN_ROW]);
@@ -768,11 +741,8 @@ describe('PluginsTreeComposite — reconciling the order-aware badge with load o
   });
 });
 
-// A mod-level change that alters which file a plugin name resolves to is absorbed by the
-// reconcile verb (ADR-0044) — there is nothing for this composite to render about it: no
-// combination of inputs produces a `pluginDrifted` contextValue, an added tooltip line, or an
-// added icon/description for an origin change. `PluginListProvider`'s own `contextValue:
-// 'plugin'` is therefore the only value a plugin row can carry out of this composite.
+// A change to which file a plugin name resolves to is absorbed by the reconcile verb (ADR-0044),
+// so `contextValue: 'plugin'` is the only value a row carries out of here.
 describe('PluginsTreeComposite applies no decoration of its own to a plugin row', () => {
   it('renders every plugin row exactly as its own provider built it, regardless of load order state', async () => {
     const { composite, render } = make([PLUGIN_ROW, OTHER_ROW]);
@@ -788,10 +758,8 @@ describe('PluginsTreeComposite applies no decoration of its own to a plugin row'
   });
 });
 
-// A mod-level change alters no
-// line of the load order, so the rows are the same rows — re-decorated, never rebuilt. Wiring a
-// decoration refresh to the row provider's `invalidate()` instead breaks exactly this:
-// "the row list is unchanged, so this must be the same reused row object".
+// Such a change alters no line of the load order, so the rows are the same rows — re-decorated,
+// never rebuilt. Wiring the decoration refresh to the row provider's `invalidate()` breaks that.
 describe('PluginsTreeComposite decoration refresh', () => {
   it('re-renders without asking the row provider to re-read', async () => {
     const { composite, rowSource, render } = make([PLUGIN_ROW]);

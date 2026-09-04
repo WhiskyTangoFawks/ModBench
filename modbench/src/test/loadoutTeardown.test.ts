@@ -1,10 +1,9 @@
 import { describe, it, expect, vi } from 'vitest';
 import { exitToLoadout, clearTreeWhenBackendDies, refreshMatchingPlugins, say } from '../loadoutTeardown';
 
-// #650 (folded into #628): the three writers that clear loadOrderSync's record-filter match
-// map — exitToLoadout, the backend-death listener, and refreshMatchingPlugins' error path —
-// previously lived inline in extension.ts with no unit seam: dropping any of the writes left
-// the integration suite green. These tests are that seam.
+// The three writers that clear loadOrderSync's record-filter match map — exitToLoadout, the
+// backend-death listener, and refreshMatchingPlugins' error path — have no other unit seam:
+// dropping any of the writes leaves the integration suite green.
 
 function makeSession() {
   return {

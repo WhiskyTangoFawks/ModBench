@@ -2,12 +2,8 @@ import { describe, it, expect } from 'vitest';
 import { trackProgressMessage } from '../trackProgress';
 import type { TrackStatus } from '../ApiClient';
 
-// The text withPluginsViewProgress/say show over a
-// mega-plugin's worst-case tens-of-seconds Track — must genuinely name the phase and counts, not
-// stay a static, unchanging message.
-//
-// Track serializes each plugin through the whole-mod door in one call, so the wire status counts
-// plugins, not records, and these tests (and the fixture values below) follow that.
+// Track serializes each plugin through one whole-plugin call, so the wire status counts plugins,
+// not records, and the fixture values below follow that.
 describe('trackProgressMessage', () => {
   const status = (over: Partial<TrackStatus> = {}): TrackStatus =>
     ({ phase: 'Idle', pluginsDone: 0, pluginsTotal: 0, ...over });

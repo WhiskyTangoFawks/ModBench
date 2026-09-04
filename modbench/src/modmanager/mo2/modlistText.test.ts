@@ -165,15 +165,8 @@ describe('parseModlist', () => {
   });
 });
 
-// Fixture entries (0-based):
-// 0  mod  SKK Fast Start new game (Fallout 4)  [+]
-// 1  sep  Unassigned (Modlist Development)      [-]
-// 2  mod  [NODELETE] Radfall                    [+]
-// 3  mod  Unofficial Fallout 4 Patch            [+]
-// 4  sep  Radfall - All-In-One Survival Overhaul [-]
-// 5  mod  ENBoost - 12k                         [+]
-// 6  mod  Harder VATS                           [-]
-// 7  mod  Cracked and Smudged Pip-Boy Screen    [+]
+// Fixture entry order: SKK(0), Unassigned sep(1), NODELETE(2), Unofficial(3),
+// Radfall sep(4), ENBoost(5), Harder VATS(6), Cracked(7).
 
 const names = (text: string) => parseModlist(text).map((e) => e.name);
 
@@ -345,7 +338,7 @@ describe('moveModToSeparatorEndInText', () => {
 
   it('moves a mod to the ungrouped section (the file tail, after the last entry) when separatorName is null', () => {
     // [NODELETE] currently precedes the Radfall separator (its member); moving it
-    // to ungrouped now means the true file tail \u2014 after every other entry.
+    // to ungrouped now means the true file tail, after every other entry.
     const out = moveModToSeparatorEndInText(defaultModlist(), '[NODELETE] Radfall', null);
     expect(names(out)).toEqual([
       'SKK Fast Start new game (Fallout 4)',
@@ -380,11 +373,8 @@ describe('moveModToSeparatorEndInText', () => {
     ).toThrow(/No Such Sep/);
   });
 
-  // A *-prefixed foreign/unmanaged line after the last
-  // separator is never surfaced as a ModlistEntry (parseModlist ignores it — it's
-  // not a +/- entry line at all), so it can never be swept into the last
-  // separator's section. Moving a mod to ungrouped must land it as the last real
-  // ENTRY, still above those trailing *-prefixed lines, which stay verbatim.
+  // A trailing *-prefixed line is not an entry at all, so ungrouped means above
+  // it, not after it.
   it('a *-prefixed foreign/unmanaged line after the last separator stays ungrouped, untouched, and trailing', () => {
     const out = moveModToSeparatorEndInText(defaultModlist(), '[NODELETE] Radfall', null);
     expect(names(out).at(-1)).toBe('[NODELETE] Radfall');
@@ -417,11 +407,8 @@ describe('moveModToSeparatorEndInText', () => {
 
 describe('moveSeparatorBlockInText', () => {
   it('moves a separator and its real (preceding) members as a block to a new position', () => {
-    // Unassigned's block is now [SKK, Unassigned sep] — SKK is the only entry
-    // preceding it (nothing precedes SKK, so Unassigned is the first separator).
-    // After removing that block, 6 entries remain: [NODELETE](0), Unofficial(1),
-    // Radfall sep(2), ENBoost(3), HarderVATS(4), Cracked(5). toIndex=5 inserts
-    // before the entry at slot 5 (Cracked), landing the block just above it.
+    // Unassigned's block is [SKK, Unassigned sep]; of the six entries left,
+    // toIndex 5 is Cracked, so the block lands just above it.
     const out = moveSeparatorBlockInText(
       defaultModlist(),
       'Unassigned (Modlist Development)',
@@ -442,10 +429,8 @@ describe('moveSeparatorBlockInText', () => {
   });
 
   it('moves a separator block to the front (toIndex=0)', () => {
-    // Radfall's block is [NODELETE], Unofficial, Radfall sep — everything back
-    // to (not including) the previous separator, Unassigned. After removing it,
-    // the remaining entries are SKK(0), Unassigned sep(1), ENBoost(2),
-    // HarderVATS(3), Cracked(4); toIndex=0 inserts before the first one (SKK).
+    // Radfall's block runs back to, but excludes, the Unassigned separator; of
+    // the five entries left, toIndex 0 is SKK.
     const out = moveSeparatorBlockInText(
       defaultModlist(),
       'Radfall - All-In-One Survival Overhaul',
@@ -486,13 +471,9 @@ describe('moveSeparatorBlockInText', () => {
     expect(out).toBe('\uFEFF+A\r\n+B_separator\r\n+Sep_separator\r\n+C\r\n');
   });
 
-  // The file header documents "# comment (preserved verbatim, not surfaced)" —
-  // a comment carries no model meaning under any circumstance, including as a
-  // separator, even when its own text coincides with the separator suffix (as
-  // it would for a stale separator a user commented out instead of deleting:
-  // "+Foo_separator" -> "#Foo_separator"). The backward scan for "the previous
-  // separator" walks raw, untyped lines, so it's the one place that guarantee
-  // has to hold structurally, not just by absence of a clashing fixture.
+  // Commenting out a separator line rather than deleting it is an ordinary user
+  // move, and the backward scan for the previous separator walks raw lines — the
+  // one place the "a comment is never an entry" guarantee must hold structurally.
   it('never mistakes a commented-out separator line for a live one, and finds an enabled (+) previous separator', () => {
     const text = '+PrevSep_separator\r\n+B\r\n#fake_separator\r\n+C\r\n+TargetSep_separator\r\n+D\r\n';
     const out = moveSeparatorBlockInText(text, 'TargetSep', 0);

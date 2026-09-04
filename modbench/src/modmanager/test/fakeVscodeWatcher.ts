@@ -1,13 +1,7 @@
-// Shared fake for the fs-watcher unit tests (fsWatcher.test.ts, modsWatcher.test.ts,
-// overwriteWatcher.test.ts): a minimal stand-in for vscode.workspace.createFileSystemWatcher
-// that records the RelativePattern it was constructed with, so a test can assert which glob a
-// watcher was actually told to watch — an observable effect at the real vscode boundary,
-// never a mock verifying a mock. One copy, so the three call sites share it rather than each
-// re-declaring an identical `vi.mock('vscode', ...)` block.
+// Keeps the RelativePattern it was built with, so a test can assert which glob a
+// watcher was told to watch: an effect at the real vscode boundary.
 
-// A default fsPath so every existing argument-free fireCreate()/fireChange()/fireDelete() call
-// keeps working unchanged — only a test that cares about the path (the `.git`-boundary filter)
-// needs to pass one.
+// Only a test that cares about the path passes one.
 const DEFAULT_FS_PATH = '/instance/test/file';
 
 export class FakeWatcher {
@@ -25,12 +19,10 @@ export class FakeWatcher {
   dispose() { this.disposed = true; }
 }
 
-/** Every FakeWatcher a test's `createXWatcher(...)` call produced, in creation order. Callers
- *  reset it themselves (`watchers.length = 0`) between tests. */
+/** In creation order. Callers reset it themselves between tests. */
 export const watchers: FakeWatcher[] = [];
 
-/** Pass to `vi.mock('vscode', () => fakeVscodeModule())` in each test file — a factory, not a
- *  shared instance, so vi.mock's own hoisting rules are respected. */
+/** A factory, not a shared instance, so `vi.mock`'s hoisting rules are respected. */
 export function fakeVscodeModule() {
   return {
     RelativePattern: class { constructor(public base: unknown, public pattern: string) {} },

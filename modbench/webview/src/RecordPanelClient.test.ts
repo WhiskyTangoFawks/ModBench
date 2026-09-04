@@ -1,15 +1,12 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
-// The webview's vscode bridge is acquired at module load (vscode.ts's acquireVsCodeApi()) —
-// stubbed here the same way RecordPanel.test.tsx already does.
+// The webview's vscode bridge is acquired at module load, so it must be stubbed before import.
 vi.mock('./vscode', () => ({ vscode: { postMessage: vi.fn() } }));
 
 import { createRecordPanelClient } from './RecordPanelClient';
 import { columnKey } from './types';
 
-// The client is the record panel's single backend seam. `fetch` is the genuine external
-// boundary here, so these tests stub it — everything above the client injects a fake client
-// instead (see RecordPanel.test).
+// `fetch` is the genuine external boundary here; everything above the client injects a fake.
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -34,8 +31,7 @@ describe('RecordPanelClient.load', () => {
       if (url.includes('/compare')) return Promise.resolve(jsonResponse({ overrides: [], diffs: [], conflictAll: 'OnlyOne' }));
       if (url.includes('/changes')) return Promise.resolve(jsonResponse([{ id: 'c1' }]));
       if (url.includes('/plugins')) return Promise.resolve(jsonResponse([{ name: 'A.esp', isImmutable: true, loadOrderIndex: 0 }]));
-      // The shared happy-path fixture answers settled — the dedicated describe block below
-      // overrides this per test to exercise the false/failed-fetch cases.
+      // The shared happy-path fixture answers settled; the status cases override it.
       if (url.includes('/load-order/status')) return Promise.resolve(jsonResponse({ conflictsComputed: true }));
       return Promise.resolve(jsonResponse({}, 404));
     });
@@ -55,18 +51,13 @@ describe('RecordPanelClient.load', () => {
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     expect(r.result.conflictAll).toBe('OnlyOne');
-    // Immutable-set resolution lives behind the client. The raw plugin
-    // list itself is not exposed on LoadResult — it fetches /plugins internally only to
-    // derive this set. Keyed by compound column identity (ColumnKey), not the bare
-    // plugin name — this fixture has no `origin`, which columnKey() treats as the elided Data
-    // origin.
+    // Keyed by compound column identity, not the bare plugin name; this fixture has no
+    // `origin`, which columnKey() treats as the elided Data origin.
     expect(r.immutableSet).toEqual(new Set([columnKey('A.esp', null)]));
   });
 
-  // ADR-0036: the genuinely red case — two plugin entries sharing a filename but
-  // differing in origin must produce two distinct Set members, or one origin's mutability
-  // silently wins for both columns (RecordPanel.tsx's immutableSet.has(...) checks). A bare
-  // `.map(p => p.name)` would collapse both into one entry.
+  // ADR-0036: two entries sharing a filename but differing in origin must produce two distinct
+  // Set members, or one origin's mutability silently applies to both columns.
   it('keys immutableSet by compound identity, so two same-filename different-origin plugins stay distinct', async () => {
     fetchMock.mockImplementation((input: Request | string) => {
       const url = typeof input === 'string' ? input : input.url;
@@ -88,10 +79,8 @@ describe('RecordPanelClient.load', () => {
     expect(r.immutableSet?.has(columnKey('Shared.esp', 'ModB'))).toBe(false);
   });
 
-  // ADR-0036: notInLoadOrderSet mirrors immutableSet's own compound-identity construction
-  // (same plugin list, same columnKey()) — a copy the load order doesn't name is immutable
-  // *and* absent from it, and PluginHeader needs the second fact independently of the first (a
-  // vanilla master is immutable but still in the load order, and must not read the same way).
+  // ADR-0036: a copy the load order does not name is both immutable and absent from it, and
+  // PluginHeader needs the second fact independently — a vanilla master is only the first.
   it('computes notInLoadOrderSet from inLoadOrder flags, keyed by compound identity like immutableSet', async () => {
     fetchMock.mockImplementation((input: Request | string) => {
       const url = typeof input === 'string' ? input : input.url;
@@ -139,10 +128,8 @@ describe('RecordPanelClient.load', () => {
     expect(r.notInLoadOrderSet).toBeNull();
   });
 
-  // ADR-0035: the record panel's own half of "an absent conflict badge must never be
-  // mistakable for 'no conflict'" — load() reads GET /load-order/status alongside compare/changes/
-  // plugins so the panel can state, honestly, whether the comparison it is about to render is
-  // settled.
+  // ADR-0035: an absent conflict badge must never be mistakable for "no conflict", so the panel
+  // reads the load-order status alongside the comparison it is about to render.
   it('returns conflictsComputed true when the sweep has run', async () => {
     const r = await createRecordPanelClient(5172).load('000001:A.esp');
     expect(r.ok).toBe(true);
@@ -165,9 +152,8 @@ describe('RecordPanelClient.load', () => {
     expect(r.conflictsComputed).toBe(false);
   });
 
-  // Fails *closed*: an absent answer must read the same as "not computed", never as "settled" —
-  // the opposite default would let a status-fetch blip render a settled-looking grid over a
-  // comparison that was never actually checked (ADR-0026 / ADR-0035).
+  // Fails closed: the opposite default would let a status-fetch blip render a settled-looking
+  // grid over a comparison that was never checked (ADR-0026, ADR-0035).
   it('defaults conflictsComputed to false when the status fetch itself fails', async () => {
     fetchMock.mockImplementation((input: Request | string) => {
       const url = typeof input === 'string' ? input : input.url;

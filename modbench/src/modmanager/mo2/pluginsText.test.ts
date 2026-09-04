@@ -38,12 +38,8 @@ describe('parsePlugins', () => {
     expect(names('﻿# header\r\n*Foo.esp\r\n\r\n   \r\nBar.esp\r\n')).toEqual(['Foo.esp', 'Bar.esp']);
   });
 
-  // #635 regression: the deleted readPluginLines fully .trim()ed each line before reading
-  // `*`/the name off it. isEntryLine alone being trim-aware (the fix above) isn't enough —
-  // pluginNameOf and the enabled check must be too, or a line with incidental leading/trailing
-  // whitespace parses to a name containing the padding (or a literal `*`) and the wrong
-  // enabled state. PluginEntry.name is a matching key downstream, so this made a real,
-  // enabled plugin unreachable by name and reported as disabled.
+  // PluginEntry.name is a matching key downstream, so padding leaking into it
+  // makes a real, enabled plugin unreachable by name and reported as disabled.
   it('#635: leading whitespace before the marker does not hide it, and does not leak into the name', () => {
     expect(parsePlugins(' *Foo.esp\r\n')).toEqual([{ name: 'Foo.esp', enabled: true }] satisfies PluginEntry[]);
   });
@@ -83,8 +79,8 @@ describe('setPluginEnabledInText — byte-faithful surgical edit', () => {
     expect(out.length).toBe(input.length + 1);
   });
 
-  // #680: the tree is a pure read of plugins.txt, so a row with no entry line cannot exist;
-  // a toggle for such a name has nothing to flip and leaves the file byte-identical either way.
+  // The tree is a pure read of plugins.txt, so a row with no entry line cannot
+  // exist and a toggle for such a name has nothing to flip.
   it('toggling a plugin name with no entry line is a no-op in both directions, byte-identical', () => {
     const input = defaultPlugins();
     expect(setPluginEnabledInText(input, 'No Such.esp', false)).toBe(input);
@@ -97,9 +93,8 @@ describe('setPluginEnabledInText — byte-faithful surgical edit', () => {
   });
 
   it('#635: locates a hand-padded line by its trimmed name and flips only the marker byte, leaving the padding and every other line untouched', () => {
-    // The marker sits after the padding (index start+1), not at `start` \u2014 a naive
-    // "insert/remove at the line's own start index" would corrupt the padding
-    // instead of the marker (or silently no-op, reading the padding as the marker).
+    // Splicing at the line's own start index would corrupt the padding instead of
+    // the marker, or read the padding as the marker and no-op.
     const input = '*A.esp\r\n *Foo.esp\r\nB.esp\r\n';
     const out = setPluginEnabledInText(input, 'Foo.esp', false);
     expect(out).toBe('*A.esp\r\n Foo.esp\r\nB.esp\r\n');
@@ -114,18 +109,12 @@ describe('setPluginEnabledInText — byte-faithful surgical edit', () => {
   it('#635 end-to-end round trip: parse a hand-padded enabled line, toggle it off then back on, and land on byte-identical text \u2014 the exact ` *Foo.esp` case, traced through the full read/write path', () => {
     const input = '*A.esp\r\n *Foo.esp\r\nB.esp\r\n';
 
-    // Read side: parsePlugins (and so Mo2ModlistSource.readPluginOrder/readEnabledPlugins,
-    // which route through it) reports the real name and the real enabled state.
     expect(parsePlugins(input)).toContainEqual({ name: 'Foo.esp', enabled: true });
 
-    // Write side: setPluginEnabledInText finds that same name \u2014 the matching key
-    // parsePlugins handed back \u2014 and flips only its marker.
     const disabled = setPluginEnabledInText(input, 'Foo.esp', false);
     expect(disabled).toBe('*A.esp\r\n Foo.esp\r\nB.esp\r\n');
     expect(parsePlugins(disabled)).toContainEqual({ name: 'Foo.esp', enabled: false });
 
-    // Toggling back reaches the exact original bytes \u2014 nothing about the padding
-    // or the surrounding lines was ever touched.
     const reEnabled = setPluginEnabledInText(disabled, 'Foo.esp', true);
     expect(reEnabled).toBe(input);
   });
@@ -137,9 +126,8 @@ describe('setPluginEnabledInText — byte-faithful surgical edit', () => {
   });
 });
 
-// The New Plugin gesture's own append — a created plugin's line, always enabled, always at
-// the bottom (the winning end: "bottom wins record overrides", per this file's own header comment
-// — the natural default for a plugin the user is actively authoring).
+// A plugin the user is actively authoring defaults to enabled and at the bottom,
+// which is the winning end of the plugin override order.
 describe('appendPluginInText — byte-faithful append at the winning end', () => {
   it('appends an enabled entry line after the last existing entry, preserving everything before it', () => {
     const input = defaultPlugins();
@@ -151,8 +139,8 @@ describe('appendPluginInText — byte-faithful append at the winning end', () =>
     expect(appendPluginInText('', 'Only.esp')).toBe('*Only.esp\n');
   });
 
-  // #680: the plugins reconcile appends a disk-discovered plugin *disabled* — discovery is not
-  // user intent to enable — so the same append lands a bare line with no marker.
+  // The reconcile appends a disk-discovered plugin disabled: discovery is not user
+  // intent to enable.
   it('appends a disabled entry line (no marker) when asked to', () => {
     const input = '*A.esp\r\nB.esp\r\n';
     expect(appendPluginInText(input, 'New.esp', false)).toBe('*A.esp\r\nB.esp\r\nNew.esp\r\n');
@@ -263,11 +251,8 @@ describe('movePluginsInText — byte-faithful reorder', () => {
   });
 });
 
-// The drop-target index a UI drag hands the user is a *pre-removal* row index
-// ("insert before this row"), but movePluginsInText counts toIndex among the
-// entries *after* the moved names are removed. dropIndexForMove reconciles the
-// two so a round-trip (drag → movePluginsInText) lands the block where the user
-// aimed — verified below by feeding its result straight into movePluginsInText.
+// A drag hands over a pre-removal row index, but movePluginsInText counts among
+// the entries left after the moved names are removed.
 describe('dropIndexForMove — pre-removal drop target → post-removal toIndex', () => {
   const order = ['A', 'B', 'C', 'D', 'E'];
 

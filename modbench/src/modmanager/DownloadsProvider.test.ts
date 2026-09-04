@@ -18,9 +18,6 @@ import { DownloadsProvider, DownloadNode, type DownloadsNode } from './Downloads
 import type { DownloadRow } from './mo2/downloads';
 import { ErrorNode } from './ErrorNode';
 
-/** Archive filenames among a getChildren() result, ignoring any ErrorNode — the happy-path
- *  tests below only ever expect DownloadNodes; the error-path tests further down assert on
- *  `kind` directly instead. */
 const rowNames = (nodes: DownloadsNode[]): string[] =>
   nodes.filter((n): n is DownloadNode => n instanceof DownloadNode).map((n) => n.row.name);
 
@@ -352,11 +349,8 @@ describe('DownloadsProvider', () => {
     });
   });
 
-  // ADR-0026: a read failure other than "no downloads/ folder" (ENOENT, handled as the
-  // structural-absence empty state above) must surface, never silently render as "nothing
-  // here" — mirrors ModListProvider's ErrorNode on a readModlist failure. A `downloads` path
-  // that's a FILE, not a directory, makes readdir() throw ENOTDIR: a real, portable failure
-  // distinct from ENOENT, without needing to mock fs.
+  // A `downloads` path that is a file makes readdir() throw ENOTDIR: a real, portable failure
+  // distinct from ENOENT, without mocking fs.
   describe('getChildren — scan failure (ADR-0026)', () => {
     it('returns an error node instead of throwing, and logs the failure', async () => {
       const root = await mkdtemp(join(tmpdir(), 'downloads-provider-'));
@@ -369,8 +363,7 @@ describe('DownloadsProvider', () => {
 
       expect(children).toHaveLength(1);
       expect(children[0]).toBeInstanceOf(ErrorNode);
-      // The exact Node fs error prose isn't ours to pin (varies by Node version/platform); the
-      // error code is the portable part (see this describe block's own comment above).
+      // Node's fs error prose varies by version and platform; the error code is the portable part.
       expect((children[0] as ErrorNode).tooltip).toContain('ENOTDIR');
       expect(log).toHaveBeenCalledWith(expect.stringContaining('scanning downloads/ failed'));
     });

@@ -1,8 +1,5 @@
-// Scratch filesystem for Deployer tests. Creates mods/ and a game dir with an
-// empty Data/ **as siblings inside one mkdtemp root**, so the deployer's
-// same-volume check never false-fails from /tmp being a separate mount than the
-// workspace (see modbench-4 test-infra note). Every test registers
-// afterEach(fixture.cleanup) so a failing assertion can't leak temp dirs.
+// mods/ and the game dir are siblings inside ONE mkdtemp root, so the deployer's
+// same-volume check cannot false-fail when /tmp is a separate mount.
 
 import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -13,9 +10,8 @@ import { FileConflictLookup, type FileConflictIndex } from '../fileConflictIndex
 export interface DeployerFixture {
   instanceRoot: string;
   gameDirectory: GameDirectory;
-  /** Write mods/<mod>/<relativePath>; returns the absolute source path. */
   writeModFile(mod: string, relativePath: string, content?: string): Promise<string>;
-  /** Write a file directly into the game's Data/ (a vanilla/foreign file). */
+  /** Writes into the game's Data/ directly, standing in for a vanilla file. */
   writeDataFile(relativePath: string, content?: string): Promise<string>;
   cleanup(): Promise<void>;
 }
@@ -44,7 +40,6 @@ export async function makeDeployerFixture(): Promise<DeployerFixture> {
   };
 }
 
-/** Build a FileConflictIndex (the winner lookup) from relativePath → absolute source. */
 export function makeIndex(files: Record<string, string>): FileConflictIndex {
   const lookup = new FileConflictLookup();
   for (const [relativePath, winner] of Object.entries(files)) {

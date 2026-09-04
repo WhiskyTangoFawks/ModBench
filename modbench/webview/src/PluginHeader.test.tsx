@@ -21,8 +21,7 @@ function baseProps() {
     override: override(),
     isImmutable: false,
     inLoadOrder: true,
-    // Tracked by default, so the base cases describe an editable
-    // column — the untracked cases opt in explicitly below.
+    // Tracked by default; the untracked cases opt in explicitly.
     isTracked: true,
     showOriginInline: false,
     collapsed: false,
@@ -60,23 +59,16 @@ describe('PluginHeader', () => {
     );
   });
 
-  // ADR-0036: a copy the load order does not name reads differently on screen (not just
-  // in the tooltip) — same underlying fact (immutable) but a distinct cause, and the
-  // distinction must be visible, not only discoverable on hover. "(not loaded)", not "(not in load
-  // order)" — a shadowed copy is a file conflict, decided by the Mod override order, not the
-  // Plugin load order this label would otherwise (wrongly) imply (CONTEXT-MAP.md).
+  // ADR-0036: "(not loaded)", not "(not in load order)" — a shadowed copy is a file conflict
+  // decided by the Mod override order, not the Plugin load order the longer label would imply.
   it('shows a distinct label for an immutable column the load order does not name', () => {
     render(<PluginHeader {...baseProps()} isImmutable={true} inLoadOrder={false} />);
     expect(screen.queryByText('(read-only)')).not.toBeInTheDocument();
     expect(screen.getByText('(not loaded)')).toBeInTheDocument();
   });
 
-  // Pins the *meaning*, not just the vocabulary — a wording can avoid "mod" and
-  // "priority" while still asserting the wrong mechanism ("move it earlier in the load order",
-  // which only ever fixes a Plugin-load-order-absent case, never a shadowed-file conflict, which
-  // is decided by the Mod override order instead — CONTEXT-MAP.md, CONTEXT.md:37-49). An exact
-  // match means any future rewording is a deliberate, reviewed choice, not a silent drift back to
-  // something false that happens to still dodge two banned words.
+  // Pins the meaning, not just the vocabulary: a wording can dodge the banned words and still
+  // assert the wrong mechanism. An exact match makes any rewording a reviewed choice.
   it('the not-loaded tooltip is exactly the reviewed, true-for-both-causes wording', () => {
     render(<PluginHeader {...baseProps()} isImmutable={true} inLoadOrder={false} />);
     expect(screen.getByText('(not loaded)')).toHaveAttribute(
@@ -87,10 +79,8 @@ describe('PluginHeader', () => {
     );
   });
 
-  // Still checked as a floor, independent of the exact-match test above: whatever the wording is,
-  // it must never reintroduce Mod Management's vocabulary as a common noun/mechanism ("this mod",
-  // "raise its priority") — distinct from naming the actual "Mods"/"Plugins" view titles, which is
-  // naming a surface, not importing a bounded context's model.
+  // A floor whatever the wording: never Mod Management's vocabulary as a common noun or
+  // mechanism, as distinct from naming the "Mods"/"Plugins" view titles, which names a surface.
   it('the not-loaded tooltip never uses "mod" as a common noun or "priority" as a mechanism', () => {
     render(<PluginHeader {...baseProps()} isImmutable={true} inLoadOrder={false} />);
     const title = screen.getByText('(not loaded)').getAttribute('title') ?? '';
@@ -98,10 +88,8 @@ describe('PluginHeader', () => {
     expect(title).not.toMatch(/priority/i);
   });
 
-  // Dimming is applied exactly once, by RecordPanel's own <th> — PluginHeader must
-  // not also dim its own root, or the two compound (CSS opacity multiplies on nesting: 0.55 twice
-  // renders at ~0.30). Renders the actual nesting (a <th> wrapping <PluginHeader>, mirroring
-  // RecordPanel's real markup) so this can't silently return.
+  // CSS opacity multiplies on nesting (0.55 twice renders at ~0.30), so PluginHeader must not
+  // dim its own root as well as the <th> that wraps it.
   it('does not dim its own root when nested in a dimmed header cell — dimming is the header cell\'s job alone', () => {
     const { container } = render(
       <table><thead><tr>
@@ -134,10 +122,8 @@ describe('PluginHeader', () => {
     expect(screen.getByText('MyMod.esp')).toHaveAttribute('title', expect.stringContaining('ModA'));
   });
 
-  // "Copy as Override Into…"/"Copy
-  // as New Record Into…" live on the header's own native right-click menu — there is no rendered
-  // button to assert on (ADR-0027/0033), so this pins the `data-vscode-context` payload
-  // `contributes.menus["webview/context"]` gates those commands on instead.
+  // The copy commands live on the header's native right-click menu (ADR-0027/0033), so there is
+  // no rendered button to assert on — only the `data-vscode-context` payload they are gated on.
   it('carries the header cell\'s data-vscode-context, naming the column\'s record identity for the native Copy menu', () => {
     const vscodeContext = combineVscodeContexts(headerCellContext('000001:MyMod.esp', 'MyMod.esp', 'Data'));
     const { container } = render(<PluginHeader {...baseProps()} vscodeContext={vscodeContext} />);
@@ -160,9 +146,8 @@ describe('PluginHeader', () => {
   });
 });
 
-// ADR-0041: "an untracked plugin is visibly read-only with the way out
-// named". Visibly, i.e. before the user attempts an edit and is refused — which is why this lives
-// on the column header rather than only in the refusal the backend returns.
+// ADR-0041: an untracked plugin is visibly read-only with the way out named — visibly, before
+// the user attempts an edit, so it lives on the header, not only in the backend's refusal.
 describe('PluginHeader — untracked signposting (#415)', () => {
   it('marks an untracked column read-only on screen, not only in a tooltip', () => {
     render(<PluginHeader {...baseProps()} isTracked={false} />);
@@ -170,10 +155,8 @@ describe('PluginHeader — untracked signposting (#415)', () => {
     expect(screen.getByText('(untracked)')).toBeTruthy();
   });
 
-  // Asserted as the exact palette entry, not as "contains Track": package.json contributes the
-  // title "Track\u2026" under category "Modbench", and a signpost naming a command that does not
-  // exist verbatim is a dead end. A rename breaks this test instead of
-  // the signpost.
+  // The exact palette entry, not "contains Track": a signpost naming a command that does not
+  // exist verbatim is a dead end, so a rename must break this case instead.
   it('names the Track command exactly as the palette shows it', () => {
     render(<PluginHeader {...baseProps()} isTracked={false} />);
 
@@ -200,9 +183,6 @@ describe('PluginHeader — untracked signposting (#415)', () => {
   });
 });
 
-// The Partial Form header write — a checkbox on a partial-formable
-// column's own header, reflecting isPartialForm and dispatching the sanctioned is_partial_form
-// write on toggle.
 describe('PluginHeader — Partial Form toggle (#539)', () => {
   it('does not render the toggle for a column whose record type can never carry the flag', () => {
     render(<PluginHeader {...baseProps()} override={override({ isPartialFormable: false })} />);

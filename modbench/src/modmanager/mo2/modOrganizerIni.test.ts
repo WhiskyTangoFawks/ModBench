@@ -22,10 +22,8 @@ describe('readSelectedProfile', () => {
   });
 
   it('does not spuriously match a key-like line lacking "=" (#317)', () => {
-    // Under a mutated eq!==-1 guard, "selected_profileX" (no "=") would slice(0,-1)
-    // to exactly "selected_profile" and wrongly win — the real, later "=" line
-    // must be what's actually returned. Real files' own headers/blanks (eq===-1)
-    // already exercise this guard; this fixture is what actually discriminates it.
+    // The decoy is chosen so that a slice(0, -1) off the missing "=" would land on
+    // exactly "selected_profile", ahead of the real line.
     const text = '[General]\r\nselected_profileX\r\nselected_profile=Real Value\r\n';
     expect(readSelectedProfile(text)).toBe('Real Value');
   });

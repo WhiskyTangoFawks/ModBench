@@ -12,14 +12,8 @@ import type { LoadResult, RecordPanelClient } from './RecordPanelClient';
 import { vscode } from './vscode';
 import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION } from './messages';
 
-// #695: what a script, a script property and a script object binding read as while collapsed, and
-// what a row of a keyed array is identified by.
-//
-// The metadata below is the Fallout 4 schema's own shape, from MEditService.Tests'
-// ConcreteBaseUnionSchemaTests (the fifteen-leaf `concrete_type`, `data` split one field per shape,
-// the object leaf's flattened `object`/`alias`) and LeafTypeNameSchemaTests (`ScriptEntry`,
-// `ScriptProperty`, `ScriptObjectProperty` as declared type names) — trimmed to the leaves these
-// cases name. The keyed arrays and their key members are Fallout4VmadAnnotations.KeyedArrays.
+// The metadata below is the Fallout 4 schema's own shape, trimmed to the leaves these cases
+// name; the keyed arrays and their key members are Fallout4VmadAnnotations.KeyedArrays.
 
 const field = (name: string, type: string, extra: Partial<FieldMetadata> = {}): FieldMetadata =>
   ({ name, type: type as FieldMetadata['type'], isArray: false, validFormKeyTypes: [], enumMembers: [], ...extra });
@@ -79,9 +73,8 @@ const scriptsMeta: FieldMetadata = {
   },
 };
 
-/** The quest adapter's alias bindings — Fallout4VmadAnnotations keys them by `property.alias`, a
- *  dotted member, where a script is keyed by the plain `name`. The webview receives either as one
- *  opaque key string, so this is the same claim about identity stated over the general key. */
+// Fallout4VmadAnnotations keys alias bindings by the dotted `property.alias`, where a script is
+// keyed by the plain `name`; the webview receives either as one opaque key string.
 const aliasesMeta: FieldMetadata = {
   name: 'aliases', type: 'array', isArray: true, validFormKeyTypes: [], enumMembers: [],
   keyMembers: ['property.alias'],
@@ -94,8 +87,7 @@ const aliasesMeta: FieldMetadata = {
 
 type Obj = Record<string, unknown>;
 
-/** A property of one leaf: the discriminator, the name, and whichever member that leaf keeps its
- *  value in. Every other member of the sparse union reads null off it, exactly as the wire sends. */
+// Every other member of the sparse union reads null off it, exactly as the wire sends.
 const property = (name: string, concreteType: string, over: Obj = {}): Obj => ({
   name, flags: 1, concrete_type: concreteType,
   data_bool: null, data_float: null, data_int: null, data_string: null, data_string_array: null,
@@ -107,15 +99,10 @@ const script = (name: string, properties: Obj[] = []): Obj => ({ name, flags: 1,
 
 const PLUGIN = 'MyMod.esp';
 
-// ── Building the diff the panel renders ──────────────────────────────────────
-//
-// Driven by the metadata rather than by the values, so a member a column leaves null still has its
-// row and its per-column values — which is what the union-aligned tree the backend sends looks
-// like. Keyed array children are named by their key text (ElementKey.Text), positional ones by
-// "[N]"; the two together are what "keyed row identity" is a claim about.
+// Driven by the metadata rather than by the values, so a member a column leaves null still has
+// its row and its per-column values — the union-aligned tree the backend sends.
 
-/** ElementKey.Text: the element's key members, joined the way the backend joins them. A key member
- *  may be dotted (a quest alias binding is keyed by `property.alias`), so each one is a path. */
+// Joined the way the backend joins them; a key member may be dotted, so each one is a path.
 const keyTextOf = (keyMembers: string[], element: unknown): string =>
   keyMembers
     .map(m => m.split('.').reduce<unknown>((v, name) => (v as Obj | null)?.[name], element))
@@ -199,14 +186,12 @@ function renderPanel() {
   return render(<RecordPanel client={client} />);
 }
 
-/** The Field-column cell of the row that reads `field`. */
 function fieldCell(field: string): HTMLTableCellElement {
   const td = screen.getAllByText(field).find(el => el.tagName === 'TD');
   expect(td, `no row named ${field}`).toBeDefined();
   return td as HTMLTableCellElement;
 }
 
-/** What that row's one column reads out. */
 const summaryOf = (field: string): string =>
   fieldCell(field).closest('tr')!.querySelectorAll('td')[1].textContent ?? '';
 
@@ -218,7 +203,6 @@ async function expandScripts() {
   fireEvent.click(screen.getAllByText('▶')[0]);
 }
 
-/** The panel re-reads the record, the way it does after any write lands. */
 function reloadWith(compare: unknown) {
   currentCompare = compare;
   window.dispatchEvent(new MessageEvent('message', {
@@ -231,8 +215,6 @@ beforeEach(() => {
   (vscode.postMessage as ReturnType<typeof vi.fn>).mockClear();
 });
 afterEach(() => vi.unstubAllGlobals());
-
-// ── AC1: the three summary shapes ────────────────────────────────────────────
 
 describe('#695 — a collapsed script reads as xEdit prose', () => {
   it('a script reads under its own name with every property passed through, not counted', async () => {
@@ -368,8 +350,6 @@ describe('#695 — a collapsed script reads as xEdit prose', () => {
   });
 });
 
-// ── AC1: alias display ───────────────────────────────────────────────────────
-
 describe('#695 — the alias slot of an object binding', () => {
   const withAlias = (alias: number) => oneColumn(
     [script('Guard', [property('Owner', 'ScriptObjectProperty', {
@@ -388,8 +368,6 @@ describe('#695 — the alias slot of an object binding', () => {
         .toBe(`Guard(Owner: Object = PlayerRef [00000014:Fallout4.esm], Alias[${expected}])`);
     });
 });
-
-// ── AC1: keyed row identity under a sibling remove ───────────────────────────
 
 describe('#695 — a row of a keyed array is identified by its key', () => {
   it('expanding one script and then losing an earlier sibling leaves that script expanded', async () => {
@@ -453,14 +431,9 @@ describe('#695 — a row of a keyed array is identified by its key', () => {
   });
 });
 
-// ── AC4: Add on the scripts array ────────────────────────────────────────────
-
 describe('#695 — Add Script is the generic array gesture', () => {
-  // The panel half of one gesture; MEditService.Tests' VmadEditTests
-  // (AddingAScript_StoresEveryScriptInKeyOrder_AndTouchesNothingElse and
-  // AFreshlyAddedScriptIsAddressableByItsEmptyKey) feed this same envelope through EditField and
-  // assert what lands. The webview contributes no element: a new script's key is empty until the
-  // user names it, so it appears first and is then nameable.
+  // The webview contributes no element: a new script's key is empty until the user names it,
+  // so it appears first and is then nameable.
   it('posts the array op and no element of its own', async () => {
     currentCompare = oneColumn([script('Guard')]);
     renderPanel();
@@ -484,8 +457,7 @@ describe('#695 — Add Script is the generic array gesture', () => {
     await expandScripts();
     await waitFor(() => screen.getByText('Guard'));
 
-    // What the panel re-reads once the write lands: the new script's key is empty until the user
-    // names it (#710), so it sorts first and its row is named by that empty key.
+    // The new script's key is empty until the user names it, so it sorts first.
     reloadWith(oneColumn([script(''), script('Guard')]));
     await waitFor(() => expect(document.querySelectorAll('tbody tr')).toHaveLength(3));
 

@@ -12,7 +12,7 @@ afterEach(async () => {
   await rm(dir, { recursive: true, force: true });
 });
 
-/** Create files/dirs under `dir` from forward-slash relative paths (trailing / = dir). */
+// A trailing / means a directory.
 async function scaffold(...paths: string[]): Promise<void> {
   for (const p of paths) {
     if (p.endsWith('/')) {
@@ -66,9 +66,8 @@ describe('detectRoot', () => {
   it('does not peel any DATA_DIRS entry, not just meshes', async () => {
     for (const name of DATA_DIRS) {
       if (name === 'meshes') continue; // covered above
-      // A corrupted (empty-string) entry would collapse join(sub, name) into sub
-      // itself, silently passing the fixture below for the wrong reason — guard
-      // against that before it can happen.
+      // An empty entry would collapse join(sub, name) into sub itself, passing
+      // the fixture below for the wrong reason.
       expect(name).not.toBe('');
       const sub = await mkdtemp(join(tmpdir(), 'data-dirs-'));
       try {

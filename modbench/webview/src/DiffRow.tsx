@@ -49,10 +49,9 @@ function renderCell(
   onOpen: (fk: string) => void,
   { checkError, resolution, onCommit, rowCollapsed, absent }: RenderCellExtras = {},
 ): React.ReactNode {
-  // "[3]"/"{…}" say a container is present and merely unexpanded. Nothing stands in for a
+  // "[3]"/"{…}" say a container is present and merely unexpanded, so nothing stands in for a
   // container this column's plugin doesn't have. Containers only: an absent scalar keeps
-  // ScalarCell's own "—", the panel-wide reading of "this column has no value here" that its
-  // editor gesture is already built around.
+  // ScalarCell's own "—".
   if (absent && (meta.type === 'array' || meta.type === 'struct')) return null;
   if (meta.type === 'formKey') {
     return (
@@ -107,15 +106,9 @@ function renderCell(
   );
 }
 
-// A row's coordinates in the unified tree, at arbitrary nesting depth — a script property's own
-// struct data genuinely needs
-// more than any fixed set of levels. `path` is the chain of hops from the root
-// value this row's edits ultimately restage (see recordUtils.ts's getAtPath/setAtPath, the one
-// generic implementation every depth shares) down to this row's own value — `[]` at the root.
-// `overrideMeta` is this row's own metadata, present at every depth except the root (which reads
-// from `fieldMetaMap` instead, keyed by the diff tree's own top-level field name). `rootField` is
-// the wire path staged as one atomic change for every row in this subtree — constant across the
-// whole chain, and equal to the subtree root's own `diff.fieldName`.
+// A row's coordinates at arbitrary nesting depth — a script property's own struct data needs more
+// than any fixed set of levels. `rootField` is the wire path staged as one atomic change for every
+// row in this subtree.
 export interface RowContext {
   path: PathSegment[];
   overrideMeta?: FieldMetadata;
@@ -125,23 +118,14 @@ export interface RowContext {
   depth: number;
 }
 
-// ADR-0034: identifies one value cell, panel-wide — the state RecordPanel (the only
-// component that sees every row) holds to enforce "exactly one cell focused at a time, across the
-// whole panel." `rowKey` matches the string RecordPanel already computes for this row's own React
-// `key=` at every nesting level (top-level/array-element/struct-child/grandchild), so no new
-// identity scheme is invented.
-//
-// ADR-0036: `plugin` is this column's compound identity (ColumnKey), not the bare filename
-// — two columns sharing a filename but differing in origin must not both read as focused off one
-// `setFocusedCell` call.
+// ADR-0034: identifies one cell panel-wide, so one cell is focused at a time. ADR-0036: `plugin`
+// is this column's compound identity, not the bare filename — two columns sharing a filename must
+// not both read as focused.
 export interface FocusedCell {
   rowKey: string;
   plugin: ColumnKey;
 }
 
-// The one check the leaf branches below need — "is this exact row/plugin the
-// panel's single focused cell" — pulled out so nothing re-derives FocusedCell's own two-field
-// comparison inline.
 function isCellFocused(focusedCell: FocusedCell | null, rowKey: string, plugin: ColumnKey): boolean {
   return focusedCell?.rowKey === rowKey && focusedCell.plugin === plugin;
 }
@@ -152,17 +136,12 @@ const INDENT_PER_LEVEL = 24;
 interface DiffRowProps {
   diff: FieldDiff;
   columns: Column[];
-  // ADR-0036: keyed by ColumnKey (a mapped type over a non-literal string collapses to a
-  // plain index signature, so this isn't compiler-enforced — the protection is every builder
-  // using columnKey(), not this declared type; see types.ts' ColumnKey doc comment). Declared as
-  // Record<string, ...> since the brand is erased here regardless (matches RecordPanel.tsx's own
-  // overrideMap declaration, kept in sync for the same React Compiler reason documented there).
+  // ADR-0036: keyed by ColumnKey, though a mapped type erases the brand — the protection is every
+  // builder using columnKey(), not this declared type.
   overrideMap: Record<string, CompareOverride>;
   fieldMetaMap: Record<string, FieldMetadata>;
-  // ADR-0035: a column for a copy the load order does not name — distinct from
-  // immutableSet (a vanilla master is also immutable but stays out of this set; see
-  // recordUtils.ts's readOnlyReason). Dims every cell in the column so the cue survives
-  // scrolling past PluginHeader's own note (the grid's <thead> isn't sticky).
+  // ADR-0035: a column for a copy the load order does not name. Dims every cell in the column so
+  // the cue survives scrolling past the header (the grid's <thead> isn't sticky).
   notInLoadOrderSet: Set<ColumnKey>;
   collapsedColumns: Set<ColumnKey>;
   onOpen: (fk: string) => void;
@@ -170,42 +149,27 @@ interface DiffRowProps {
   hasChildren?: boolean;
   isExpanded?: boolean;
   onToggle?: () => void;
-  // This row's own identity (see FocusedCell above), the panel's current focused
-  // cell (or none), and the callback that reports a click up to RecordPanel's single source of
-  // truth. onFocusCell takes rowKey explicitly (rather than closing over it here) so RecordPanel
-  // stays the one place that knows how a click turns into a FocusedCell.
+  // onFocusCell takes rowKey explicitly rather than closing over it here, so RecordPanel stays
+  // the one place that knows how a click turns into a FocusedCell.
   rowKey: string;
   focusedCell: FocusedCell | null;
   onFocusCell: (rowKey: string, plugin: ColumnKey) => void;
-  // The columns whose cells can be written — mutable plugin, in the load order, and its mod
-  // tracked. RecordPanel computes it once for the whole grid so a single definition of "writable"
-  // reaches every row; a column absent from this set renders read-only everywhere it appears.
+  // The columns whose cells can be written — mutable plugin, in the load order, tracked. Computed
+  // once for the whole grid so one definition of "writable" reaches every row.
   editableColumns: Set<ColumnKey>;
-  // Commits an edited value for one column's cell on this row. Absent when this row cannot be
-  // written at all (a synthesized read-only row, or a panel with no write path wired).
-  //
   // Takes the leaf value alone — no field path. A caller-supplied path invites pairing the
-  // subtree's root wire path with one leaf's value, so an array/struct field receives a single
-  // element, the backend applier declines the shape without saying so, and the edit vanishes.
-  // *Where* an
-  // edited leaf goes is a question about the whole subtree (which root, and which path inside it),
-  // and only RecordPanel's row builder knows both halves — so it binds them per row and hands down
-  // a callback that needs neither. A row cannot pair them wrongly because it holds neither.
+  // subtree's root wire path with one leaf's value, so the backend applier declines the shape
+  // without saying so and the edit vanishes.
   onEditCell?: (plugin: ColumnKey, value: unknown) => void;
-  // Add on this row — present only when this row is itself a
-  // mutable, unsorted array's own row (RecordPanel's buildRows decides that; DiffRow only wires
-  // whatever it's handed, per column, gated by editableColumns the same as onEditCell).
+  // Add on this row — present only when this row is itself a mutable, unsorted array's own row.
   onArrayAdd?: (plugin: ColumnKey) => void;
   // Remove/Move Up/Move Down — present only when this row is itself a mutable, unsorted array's
   // element row.
   onArrayRemove?: (plugin: ColumnKey) => void;
   onArrayMoveUp?: (plugin: ColumnKey) => void;
   onArrayMoveDown?: (plugin: ColumnKey) => void;
-  // #693: what each column's cell reads while this row is collapsed, when the presentation table
-  // (presentation.ts) has an entry for this row's own schema leaf — a condition reads as the xEdit
-  // prose a modder already knows instead of "{…}". Absent for a row that is not an array element,
-  // and empty for an element whose leaf the table says nothing about. Supplied by the frame that
-  // descended into this row's own list, which is the only one that knows it.
+  // What each column's cell reads while this row is collapsed, when the presentation table has an
+  // entry for this row's own schema leaf — a condition reads as its xEdit prose rather than "{…}".
   collapsedSummary?: Record<string, string>;
 }
 
@@ -216,11 +180,8 @@ export function DiffRow({
   rowKey, focusedCell, onFocusCell, editableColumns, onEditCell,
   onArrayAdd, onArrayRemove, onArrayMoveUp, onArrayMoveDown, collapsedSummary,
 }: Readonly<DiffRowProps>) {
-  // Prefer the caller's own `context.overrideMeta` whenever it's supplied — RecordPanel
-  // always passes one (its recursive builder resolves every row's metadata itself, including
-  // the true top-level one). Falling
-  // back to `fieldMetaMap` only when `overrideMeta` is genuinely absent keeps every caller that
-  // still relies on that lookup (DiffRow.test.tsx's own top-level fixtures) working unchanged.
+  // RecordPanel resolves every row's metadata itself; `fieldMetaMap` is the fallback for a caller
+  // that supplies no `overrideMeta`.
   const meta = context.overrideMeta ?? fieldMetaMap[diff.fieldName];
   if (!meta) return null;
 
@@ -234,25 +195,20 @@ export function DiffRow({
   // one anywhere in a longer chain, turns it off).
   const showActions = context.path.every(seg => seg.kind === 'member');
   // Which array gestures this row offers — its own array's row (Add) or one of its element rows
-  // (Remove, and Move where the element's position is the user's to choose). One rule, named in
-  // recordUtils.ts, that RecordPanel's own handler wiring reads too.
+  // (Remove, and Move where the element's position is the user's to choose).
   const isArrayParentRow = offersArrayAdd(meta);
   const lastPathSegment = context.path[context.path.length - 1];
   const isArrayElementRow = isArrayElementHop(lastPathSegment);
   const isMovableElementRow = isMovableElementHop(lastPathSegment);
   const isRowFocused = focusedCell?.rowKey === rowKey;
-  // This row paints its own node's bottom-up conflict state, not a record-wide value
-  // smeared onto every row. A struct/array row with children defers to its own children's tints
-  // while expanded — painting both would duplicate the signal and misattribute it to fields that
-  // didn't change — and shows the subtree's aggregate only while collapsed, so collapsing never
-  // hides that something inside differs.
+  // This row paints its own node's conflict state, not a record-wide value. An expanded row with
+  // children defers to its children's tints — painting both would duplicate the signal — and
+  // shows the subtree's aggregate only while collapsed.
   const rowConflictAll = hasChildren && isExpanded ? undefined : diff.conflictAll;
 
-  // Maintainer rulings 2026-09-01: a flags row is collapsible like a struct row — chevron +
-  // double-click-the-label, the grid's one collapse gesture — though its "children" are the
-  // checkbox lines inside the cell, not sub-rows. It starts collapsed ("we start with the
-  // clean view"), so it shares struct rows' default exactly: expanded only when the toggle
-  // put the row in expandedStructs.
+  // Maintainer ruling 2026-09-01: a flags row is collapsible like a struct row, though its
+  // "children" are the checkbox lines inside the cell, not sub-rows. It starts collapsed, sharing
+  // struct rows' default exactly.
   const isFlagsRow = meta.type === 'enum' && flagBits(meta) != null;
   const rowExpanded = !!isExpanded;
   // A row no column carries a value for holds nothing but its children, so it is present in every
@@ -262,13 +218,9 @@ export function DiffRow({
 
   return (
     <tr style={{ backgroundColor: getRowBg(rowConflictAll), ...(isRowFocused ? focusedRowStyle : undefined) }}>
-      {/* ADR-0034: double-clicking the label column expands/collapses the node,
-          the same action the toggle button already performs. RecordPanel always supplies a
-          defined onToggle for top-level and array-element rows, even when hasChildren is
-          false — there, double-click harmlessly flips this row's key in expandedStructs, an
-          entry nothing ever reads for a row with no children to expand. onToggle is genuinely
-          undefined only for struct-child/grandchild rows, which RecordPanel never wires with
-          one (no expand button there either), so this is a true no-op only for those. */}
+      {/* ADR-0034: double-clicking the label column expands/collapses the node, the same action
+          the toggle button performs. For a row with no children the flip lands in
+          expandedStructs, an entry nothing reads. */}
       <td
         style={{ ...baseCell, opacity: 0.75, userSelect: 'text', paddingLeft: context.depth * INDENT_PER_LEVEL || undefined }}
         onDoubleClick={onToggle}
@@ -277,25 +229,22 @@ export function DiffRow({
           <button style={toggleBtnStyle} onClick={onToggle}>{rowExpanded ? '▼' : '▶'}</button>
         )}
         {/* The schema's own label when the field's name is a wire name rather than a readable
-            one (an abstract union's `concrete_type` is "Kind", #688). */}
+            one (an abstract union's `concrete_type` is "Kind"). */}
         {meta.displayLabel ?? diff.fieldName}
       </td>
       {columns.map(col => {
         if (col.kind === 'disk') {
           const { key, override } = col;
-          // ADR-0034: no `userSelect: 'text'` here — the cell is `draggable` at rest and
-          // `draggable` consumes the mousedown that would
-          // start a selection, and there is no in-cell surface to ever own a
-          // selection either. Adding it would tell the next reader selection works here.
-          // ADR-0036: every lookup below into a per-column wire dictionary (cellStates,
-          // values, resolutions) or panel state (collapsedColumns, immutableSet,
-          // overrideMap, focusedCell) is keyed by `key` (this column's ColumnKey), not `o.plugin`
-          // — the backend keys its own per-column dictionaries the same way (ColumnKey.Of), so
-          // `[o.plugin]` would be wrong the moment a non-Data-origin column exists, not merely
-          // ambiguous between two same-filename columns.
-          // A Partial Form column dims the same way a not-in-load-order one does — read
-          // straight off the column's own override.isPartialForm (already riding on this Column),
-          // not a separately-threaded Set, since the fact already lives on data this row has.
+          // ADR-0034: no `userSelect: 'text'` — the cell is `draggable` at rest and `draggable`
+          // consumes the mousedown that would start a selection, so adding it would tell the next
+          // reader selection works here.
+
+          // ADR-0036: every per-column lookup below is keyed by `key` (this column's ColumnKey),
+          // matching how the backend keys its own dictionaries — `[o.plugin]` would be wrong the
+          // moment a non-Data-origin column exists.
+
+          // A Partial Form column dims the same way a not-in-load-order one does — read straight
+          // off the column's own override, not a separately-threaded Set.
           const cellStyle = {
             ...baseCell, ...getCellStyle(diff.cellStates?.[key]),
             opacity: notInLoadOrderSet.has(key) || override.isPartialForm ? DIMMED_OPACITY : undefined,
@@ -306,26 +255,16 @@ export function DiffRow({
           const checkError = showActions
             ? overrideMap[key]?.fields.find(f => f.metadata.name === rootField)?.checkError
             : undefined;
-          // A synthesized row can mark itself unconditionally read-only regardless of column
-          // mutability — `meta.readOnly` is
-          // the one per-row override on top of immutableSet's per-column rule.
           const isFocused = isCellFocused(focusedCell, rowKey, key);
-          // ADR-0034: the string Ctrl+C copies for this cell — the same value used
-          // for display below (diff.values[key]), run through the one shared displayValue
-          // function, computed once here so both the struct/array-summary branch and the
-          // leaf branch below hand DiskCell the identical value a scalar/flag/formKey cell would
-          // display and a struct/array cell would otherwise only show as "{…}"/"[3]".
+          // ADR-0034: the string Ctrl+C copies for this cell, computed once so the
+          // struct/array-summary branch and the leaf branch below hand DiskCell the same value.
           const copyText = displayValue(diff.values[key], meta, diff.resolutions?.[key]);
           // Whether this column's plugin has an element on this row at all: an array slot within
           // its own length, a union member its own concrete leaf declares, a struct it carries.
           const hasElement = rowIsStructural || diff.values[key] != null;
-          // Array ops are offered only on a writable column —
-          // the same gate onEditCell/onCommit already use. `arrayLength` is deliberately not
-          // threaded down to this row, so canMoveDown reads
-          // permissive (true) rather than gating the menu item's presence on this plugin's own
-          // real length the way canMoveUp already does via `index > 0`; the underlying op still
-          // safely no-ops at the true boundary (ArrayOpWriter answers a move past either end
-          // as a NoOp that commits nothing).
+          // Array ops are offered only on a writable column. `arrayLength` is deliberately not
+          // threaded down, so canMoveDown reads permissive rather than gating on this plugin's own
+          // length; the underlying op still no-ops at the true boundary.
           const arrayEditable = !!onEditCell && editableColumns.has(key) && (isArrayParentRow || isArrayElementRow);
           const arrayOps = arrayEditable ? {
             add: isArrayParentRow ? () => onArrayAdd?.(key) : undefined,
@@ -333,16 +272,13 @@ export function DiffRow({
             moveUp: isMovableElementRow ? () => onArrayMoveUp?.(key) : undefined,
             moveDown: isMovableElementRow ? () => onArrayMoveDown?.(key) : undefined,
           } : undefined;
-          // The one definition of "this cell can be written" — onEditCell wired, the
-          // column in editableColumns, and no per-row readOnly veto. Hoisted above vscodeContext
-          // because
-          // stringValueContext needs it too — a string cell's own `readOnly` is this same boolean,
-          // negated, so the right-click menu and the inline-editor gate can never disagree about
-          // whether the cell is writable.
+          // Hoisted above vscodeContext because stringValueContext needs it too — a string cell's
+          // own `readOnly` is this same boolean negated, so the right-click menu and the
+          // inline-editor gate can never disagree.
           const cellEditable = !!onEditCell && editableColumns.has(key) && !meta.readOnly;
-          // ADR-0039: a `string` cell always carries its own right-click context — mutable
-          // or immutable alike, unlike arrayEditable above which only attaches on a writable
-          // column. A read-only tab is still the only way to read a long immutable value in full.
+          // ADR-0039: a `string` cell always carries its own right-click context, mutable or
+          // immutable alike — a read-only tab is still the only way to read a long immutable
+          // value in full.
           const vscodeContext = (arrayEditable || meta.type === 'string') ? combineVscodeContexts(
             // `context.path` addresses the array itself here (this row *is* the array) —
             // `[]` for a top-level array.

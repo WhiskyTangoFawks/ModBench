@@ -3,15 +3,11 @@ import { detectGamePaths } from './medit/GamePathDetector';
 import type { DetectPaths } from './modmanager/gameDirectory';
 import { mo2InstanceContext } from './modmanager/detectMo2Instance';
 
-/** Three small, genuinely neutral facts about the current workspace that both bounded contexts
- *  read — none of them carry a "mod"/"record" vocabulary of their own, so this file, not the
- *  composition root, is where they belong. A registrar file importing back from `extension.ts`
- *  would contradict the composition-root framing the split itself claims (#628 review) — these
- *  used to live there only because that was the one file everything else was already in. */
+/** Vocabulary-neutral workspace facts both bounded contexts read, so they belong to neither
+ *  context's folder nor to the composition root. */
 export const meditConfig = () => vscode.workspace.getConfiguration('modbench');
 
-/** Game-path resolver: explicit `game.*` overrides if both set, else autodetect.
- *  Shared by the deploy commands and editing launch. */
+/** The explicit `game.*` overrides win only when both are set, else autodetect. */
 export function makeDetectPaths(): DetectPaths {
   return () => {
     const c = meditConfig();
@@ -24,10 +20,8 @@ export function makeDetectPaths(): DetectPaths {
   };
 }
 
-/** The only place either MO2-instance context key is set — see mo2InstanceContext's own
- *  comment for why the two keys must always travel together. Every registerLoadoutView exit
- *  path (no workspace, not an instance, valid instance) calls this instead of `setContext`
- *  directly. */
+/** The only place either MO2-instance context key is set; the two keys must always travel
+ *  together. */
 export function setMo2InstanceContext(isInstance: boolean): void {
   for (const [key, value] of Object.entries(mo2InstanceContext(isInstance))) {
     void vscode.commands.executeCommand('setContext', key, value);

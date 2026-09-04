@@ -1,16 +1,12 @@
 import type { CrashRepairOffer } from './ApiClient';
 
-/** The loud detect-and-offer's two buttons — "the offer names the affected plugin(s) and
- *  what happened; accepting compiles (user's choice: working tree or main)". Working tree first/
- *  default (VS Code focuses/Enters the first button): an interrupted compile means the user was
- *  compiling their own working tree, so recovering to it matches intent, and unlike the
- *  external-change dialog there is no meta tell here to justify anything cleverer. */
+/** Working tree first, so VS Code focuses it: an interrupted compile means the user was compiling
+ *  their own working tree, so recovering to it matches intent. */
 export const REPAIR_WORKING_TREE_BUTTON = 'Compile from Working Tree';
 export const REPAIR_AT_MAIN_BUTTON = 'Compile at main';
 
-/** The modal's message + detail text — the evidence shown, not hidden, same posture the
- *  external-change dialog took: the detail names exactly what was detected (an unfinished journal marker vs a binary
- *  that could not be read), never a generic "something's wrong". */
+/** The detail names exactly what was detected — an unfinished journal marker versus a binary that
+ *  could not be read — never a generic "something's wrong". */
 export function messageFor(offer: CrashRepairOffer): { message: string; detail: string } {
   const message = `${offer.plugin} (in ${offer.origin}) needs its binary rebuilt.`;
   const what = offer.reason === 'InterruptedCompile'
@@ -34,14 +30,9 @@ export type ShowCrashRepairOffer = (
  *  `LoadOrderController.compile`'s own `atRef` parameter already takes. */
 export type AcceptCrashRepair = (offer: CrashRepairOffer, atRef: string | undefined) => Promise<void>;
 
-/**
- * One native modal **per offer**, shown **sequentially** — never two racing each other, the
- * same posture `runExternalChangeDialogs` already established for the sibling dialog (see
- * that module's own doc comment). Esc/dismiss (the resolved value matching neither button) is a
- * true no-op: nothing is written, `onAccept` is never called, and the offer re-appears at the next
- * reconcile by construction — nothing here or downstream clears the journal marker or fixes the
- * missing binary on a decline.
- */
+/** One native modal per offer, shown sequentially — never two racing each other. Esc/dismiss is a
+ *  no-op: nothing is written, and the offer re-appears at the next reconcile because nothing
+ *  clears the journal marker on a decline. */
 export async function presentCrashRepairOffers(
   offers: readonly CrashRepairOffer[],
   show: ShowCrashRepairOffer,

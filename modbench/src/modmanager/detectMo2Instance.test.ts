@@ -61,12 +61,8 @@ describe('isMo2Instance', () => {
 });
 
 
-// The welcome's viewsWelcome `when` clause needs a second key
-// (modbench.workspaceMo2CheckDone) to tell "checked, and it's not an instance" apart from
-// "never checked" — an unset context key reads identically to `false` under a plain `!key`
-// negation, so workspaceIsMo2Instance alone can't carry that distinction. This is the one
-// place either key's value is decided; every activation exit path (extension.ts) calls it
-// instead of setContext directly, so a future path can't set one key without the other.
+// An unset context key reads identically to `false` under a plain `!key` negation, so a second
+// key is what tells "checked, and not an instance" apart from "never checked".
 describe('mo2InstanceContext', () => {
   it('always marks the check done, whether the workspace is an instance or not', () => {
     expect(mo2InstanceContext(true)['modbench.workspaceMo2CheckDone']).toBe(true);

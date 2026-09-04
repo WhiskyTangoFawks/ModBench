@@ -4,7 +4,6 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { resolveGameDirectory, normalizeGamePath } from './gameDirectory';
 
-/** A minimal stand-in for vscode's WorkspaceConfiguration. */
 function fakeConfig(values: Record<string, string>) {
   return { get: (key: string) => values[key] };
 }

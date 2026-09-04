@@ -29,9 +29,8 @@ const exists = (path: string): Promise<boolean> =>
     () => false,
   );
 
-/** MO2 instance adapter. `instanceRoot` is the folder containing
- *  ModOrganizer.ini, mods/ and profiles/ — i.e. the open VS Code workspace.
- *  Reads/writes the active profile; all writes are byte-faithful. */
+/** `instanceRoot` is the folder holding ModOrganizer.ini, mods/ and profiles/,
+ *  which is the open VS Code workspace. Only the active profile is touched. */
 export class Mo2ModlistSource implements IModlistSource {
   private modlistMutex: Promise<void> = Promise.resolve();
 
@@ -125,13 +124,11 @@ export class Mo2ModlistSource implements IModlistSource {
   }
 
   async removeMod(modName: string): Promise<void> {
-    // Read meta.ini's installationFile before anything else is touched: once
-    // the folder is deleted below, the link to the source download is gone.
+    // Reads installationFile first: deleting the folder destroys the link to the
+    // source download.
     await this.writebackUninstalledOnDownload(modName);
-    // De-list before deleting the folder, not after: if the folder-delete step
-    // fails, the worst case is an orphaned folder (MO2 surfaces it as an
-    // unmanaged mod — recoverable). The reverse order risks a dangling modlist
-    // entry pointing at a folder that no longer exists.
+    // De-list before deleting: a failed delete leaves a recoverable orphan folder,
+    // where the reverse order leaves a modlist entry pointing at nothing.
     await this.modifyModlist((t) => removeModFromText(t, modName));
     const modDir = join(this.instanceRoot, 'mods', modName);
     try {
@@ -147,13 +144,9 @@ export class Mo2ModlistSource implements IModlistSource {
     }
   }
 
-  /** The symmetric half of Install's `installed=true` writeback — set
-   *  `uninstalled=true` on the source download's `.meta` (never clearing
-   *  `installed`; `parseDownloadMeta` resolves the precedence). Uninstall must
-   *  never fail because of this bookkeeping: an absent/unreadable meta.ini, a
-   *  blank or non-matching installationFile, and an absent download are all
-   *  normal states and skipped silently; a genuine write failure is logged
-   *  (ADR-0026 background/recoverable — no toast) and otherwise swallowed. */
+  // Uninstall must never fail over this bookkeeping, so every missing or
+  // unreadable file is a normal state and a write failure is logged only
+  // (ADR-0026 background/recoverable).
   private async writebackUninstalledOnDownload(modName: string): Promise<void> {
     let archiveFilename: string | undefined;
     try {
@@ -191,12 +184,9 @@ export class Mo2ModlistSource implements IModlistSource {
     await this.modifyModlist((t) => insertModAtWinningEnd(t, name));
   }
 
-  /** Add a disabled winning-end modlist.txt entry for every `mods/` folder
-   *  that isn't already registered (excluding `overwrite/` and separator
-   *  marker folders) — covers a mod folder dropped into `mods/` outside
-   *  Modbench (Explorer drag-in, hand-extracted archive). Returns the names
-   *  it registered, so callers can skip a no-op refresh. Idempotent: a name
-   *  already registered by an earlier call is excluded on the next one. */
+  /** Covers a mod folder that appeared in `mods/` outside Modbench. New entries
+   *  are disabled. Returns the names registered, so a caller can skip a no-op
+   *  refresh; a second call registers nothing. */
   async registerUnlistedMods(): Promise<string[]> {
     const listing = await this.readModsDirAndModlist();
     if (listing === null) return [];
@@ -210,12 +200,9 @@ export class Mo2ModlistSource implements IModlistSource {
     return names;
   }
 
-  /** The inverse of `registerUnlistedMods` (#93): remove every modlist.txt `mod` entry
-   *  whose `mods/<name>/` folder no longer exists — deleted outside Modbench while it
-   *  wasn't running or watching. Disk is the source of truth, so no confirmation: the user
-   *  is the one who deleted the folder. Returns the names it pruned. A missing `mods/`
-   *  directory prunes nothing (same ENOENT posture as registerUnlistedMods — a malformed
-   *  workspace must not read as a mass delete); any other readdir failure propagates. */
+  /** No confirmation: disk is the source of truth and the user is the one who
+   *  deleted the folder. A missing `mods/` prunes nothing, so a malformed
+   *  workspace cannot read as a mass delete. */
   async pruneDeadEntries(): Promise<string[]> {
     const listing = await this.readModsDirAndModlist();
     if (listing === null) return [];
@@ -226,9 +213,8 @@ export class Mo2ModlistSource implements IModlistSource {
     return names;
   }
 
-  /** The shared preamble of registerUnlistedMods/pruneDeadEntries: the mods/ folder listing
-   *  (directories only) beside the parsed modlist. `null` when mods/ does not exist — only ENOENT
-   *  means "no mods folder yet"; any other readdir failure (ENOTDIR etc.) propagates. */
+  // Only ENOENT means "no mods folder yet" and yields null; every other readdir
+  // failure propagates.
   private async readModsDirAndModlist(): Promise<{ dirNames: string[]; entries: ModlistEntry[] } | null> {
     let dirents;
     try {
@@ -274,8 +260,7 @@ export class Mo2ModlistSource implements IModlistSource {
     return join(this.instanceRoot, 'profiles', profile, 'plugins.txt');
   }
 
-  /** Read-modify-write under the plugins mutex; an unchanged result writes nothing, so a no-op
-   *  never fires the plugins.txt watcher. */
+  // An unchanged result writes nothing, so a no-op never fires the watcher.
   private modifyPlugins(fn: (text: string) => string): Promise<void> {
     const task = this.pluginsMutex.then(async () => {
       const path = await this.pluginsPath();
@@ -309,9 +294,8 @@ export class Mo2ModlistSource implements IModlistSource {
     await this.modifyPlugins((t) => appendPluginInText(t, pluginName));
   }
 
-  /** The plugins reconcile's write (#680): `delta` sees the names parsed inside the mutex, so
-   *  overlapping runs can't double-append; prune and append land in one write. New lines are
-   *  disabled — discovery is not user intent to enable. Returns the delta applied. */
+  /** `delta` sees names parsed inside the mutex, so overlapping runs cannot
+   *  double-append. New lines are disabled: discovery is not intent to enable. */
   async reconcilePluginLines(delta: (listed: string[]) => PluginLinesDelta): Promise<PluginLinesDelta> {
     let applied: PluginLinesDelta = { append: [], prune: [] };
     await this.modifyPlugins((t) => {

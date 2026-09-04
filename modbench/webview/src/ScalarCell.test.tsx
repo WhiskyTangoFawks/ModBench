@@ -5,12 +5,8 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import { ScalarCell } from './ScalarCell';
 import type { FieldMetadata } from './types';
 
-/**
- * The record editor's one editing gesture is xEdit's — a click focuses, it does not edit
- * (ADR-0034, root CLAUDE.md). A column that cannot be written stays inert under
- * every one of the three open triggers, which is what "no silent dead UI" means at this level:
- * nothing opens that has nowhere to write.
- */
+// ADR-0034: a click focuses, it does not edit, and a column that cannot be written stays inert
+// under every open trigger — nothing opens that has nowhere to write.
 const meta = (over: Partial<FieldMetadata> = {}): FieldMetadata => ({
   name: 'value', type: 'string', isArray: false, validFormKeyTypes: [], enumMembers: [], ...over,
 });
@@ -125,12 +121,8 @@ describe('ScalarCell — committing (#415 AC1)', () => {
   });
 });
 
-// ADR-0039 guard: a genuine mouse click (`detail: 1`, what a real click always carries) on
-// an already-focused string cell must open the inline editor *synchronously*, with no
-// debounce delay of any kind. A debounced implementation that defers this so a following native
-// `dblclick` can still redirect it fails this test outright (the textbox does not
-// exist until the timer is advanced), which is the point: no left click may cost latency waiting
-// to see whether a second one is coming.
+// ADR-0039: a genuine mouse click on an already-focused string cell opens the inline editor
+// synchronously — no left click may cost latency waiting to see whether a second is coming.
 describe('ScalarCell — string cell has no debounce (#258 / ADR-0039)', () => {
   it('a genuine second click on an already-focused string cell opens the inline editor immediately', () => {
     render(<ScalarCell value="Dogmeat" meta={meta()} editable isFocused onCommit={vi.fn()} />);
@@ -145,10 +137,8 @@ describe('ScalarCell — string cell has no debounce (#258 / ADR-0039)', () => {
   });
 });
 
-// ADR-0039: an immutable string cell is unaffected by any left-click gesture, exactly like
-// every other immutable type — its only read path for a long value is the right-click
-// menu (DiffRow's own stringValueContext wiring, tested there), not anything ScalarCell itself
-// handles.
+// ADR-0039: an immutable string cell is unaffected by any left-click gesture; its only read
+// path for a long value is the right-click menu.
 describe('ScalarCell — immutable string cell (#258 / ADR-0039)', () => {
   it('opens nothing on double click', () => {
     render(<ScalarCell value="Dogmeat" meta={meta()} editable={false} isFocused={false} onCommit={vi.fn()} />);
@@ -162,12 +152,8 @@ describe('ScalarCell — immutable string cell (#258 / ADR-0039)', () => {
   });
 });
 
-/**
- * #690: a byte-slice field is an ordinary reflected leaf whose widget comes from its metadata
- * `type` alone — a hex row edits as text because the schema says the field is hex, never because
- * the value happens to look like hex. The wrong-length and non-hex refusals are the writer's
- * (PRD corollary 6), so the cell's job is only to hand the typed text over verbatim.
- */
+// A hex row edits as text because the schema says the field is hex, never because the value
+// looks like hex; the wrong-length and non-hex refusals are the writer's.
 describe('ScalarCell — a hex row (#690)', () => {
   const hexMeta = meta({ name: 'unknown3', type: 'hex' });
 
@@ -198,9 +184,8 @@ describe('ScalarCell — a hex row (#690)', () => {
   });
 });
 
-// #688: some enums carry values that are wire tokens, not words — an abstract union's
-// `concrete_type` holds Mutagen class names. The schema labels each member; the cell shows the
-// label and commits the value behind it.
+// An abstract union's `concrete_type` holds Mutagen class names, not words: the schema labels
+// each member, and the cell shows the label but commits the value behind it.
 describe('ScalarCell — an enum whose values are wire tokens (#688)', () => {
   const kind = meta({
     name: 'concrete_type', type: 'enum',

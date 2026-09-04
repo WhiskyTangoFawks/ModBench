@@ -5,12 +5,6 @@ import {
 } from './messages';
 import { broadcastToRecordPanels } from './onRecordEdited';
 
-/** #630/ADR-0039: the record panel's own right-click commands the extension host cannot resolve
- *  itself — it has no live reference into any open panel's own React state, which alone holds the
- *  record's current values — so each of these only reads the `data-vscode-context` ctx VS Code
- *  parses and hands it, and broadcasts the one matching {@link ExtensionToWebview} message; every
- *  open panel self-filters on `formKey` and applies it (RecordPanel.tsx). One table + one
- *  generic registrar in place of three near-identical hand-written registrars. */
 interface ForwarderCommand {
   command: string;
   build: (ctx: never) => ExtensionToWebview;
@@ -20,8 +14,7 @@ function forwarder<Ctx>(command: string, build: (ctx: Ctx) => ExtensionToWebview
   return { command, build };
 }
 
-// `rootField`/`path` forwarded verbatim from ArrayParentContext/ArrayElementContext — see their
-// own doc comments (messages.ts).
+// `rootField`/`path` are forwarded verbatim, never re-derived from the context.
 function arrayStructuralOp(
   ctx: ArrayParentContext | ArrayElementContext, op: 'add' | 'remove' | 'moveUp' | 'moveDown',
 ): ExtensionToWebview {
@@ -43,6 +36,9 @@ export const FORWARDER_COMMANDS: ForwarderCommand[] = [
   forwarder<ArrayElementContext>('modbench.array.moveDown', (ctx) => arrayStructuralOp(ctx, 'moveDown')),
 ];
 
+/** The extension host holds no reference into an open panel's React state, so these commands
+ *  only relay the `data-vscode-context` VS Code hands them; every open panel self-filters on
+ *  `formKey` (ADR-0039). */
 export function registerForwarderCommands(recordPanels: Set<vscode.WebviewPanel>): vscode.Disposable[] {
   return FORWARDER_COMMANDS.map(({ command, build }) =>
     vscode.commands.registerCommand(command, (ctx?: never) => {

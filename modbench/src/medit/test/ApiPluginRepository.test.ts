@@ -153,8 +153,7 @@ describe('ApiPluginRepository.getRecordTypes', () => {
     await expect(repo.getRecordTypes('Plugin.esp')).rejects.toThrow(/500/);
   });
 
-  // A hung backend must not leave the tree spinning forever with no error — see the
-  // matching test in each other tree-populating describe block below for the full set.
+  // A hung backend must not leave the tree spinning forever with no error.
   it('rejects with a timeout error rather than hanging forever when the backend never responds', async () => {
     const client = { GET: vi.fn().mockReturnValue(new Promise(() => {})) } as any;
     const repo = new ApiPluginRepository(client, undefined, 20);
@@ -196,9 +195,8 @@ describe('ApiPluginRepository.getRecords', () => {
     await expect(repo.getRecords('Plugin.esp', 'WEAP', 0, 50)).rejects.toThrow(/500/);
   });
 
-  // WorkingTreeState is a string union on the wire and in the generated type alike (#627), so
-  // this is a pass-through rather than the trust-cast it used to exercise — kept because it is
-  // the only test that pins the tri-state reaching the tree at all.
+  // WorkingTreeState is a string union on the wire, so this is a pass-through; it is the only
+  // test that pins the tri-state reaching the tree at all.
   it('carries each row\'s workingTreeState through to the caller', async () => {
     const client = {
       GET: vi.fn().mockResolvedValue({
@@ -357,11 +355,8 @@ describe('ApiPluginRepository.getActiveFilter', () => {
   });
 });
 
-// ADR-0035: what the load order can honestly say about itself *while it is still loading* —
-// polled alongside the in-flight load POST. `conflictsComputed` is read separately from `state`
-// on purpose (LoadOrderStatus.cs): the sweep is whole-set, so ADR-0035's live mutations will leave
-// a Ready load order with stale winners, and anything deciding whether to render conflict
-// information must read that field, never the state.
+// ADR-0035: the whole-set conflict sweep leaves a Ready load order with stale winners, so
+// anything rendering conflict information must read `conflictsComputed`, never `state`.
 describe('ApiPluginRepository.getLoadOrderStatus', () => {
   it('calls GET /load-order/status and reports the plugins indexed so far, the sweep state and the failures', async () => {
     const client = {
@@ -388,10 +383,8 @@ describe('ApiPluginRepository.getLoadOrderStatus', () => {
     expect(client.GET).toHaveBeenCalledWith('/load-order/status', expect.anything());
   });
 
-  // The endpoint answers 200 in every state including "no load order" (LoadOrderEndpoints.cs), so a
-  // non-ok here is a genuine fault. It must not degrade to a plausible-looking "nothing indexed,
-  // conflicts not computed" — that reads as a load making no progress rather than a broken read,
-  // and the caller (LoadOrderController's poll loop) is the one that decides to tolerate it.
+  // The endpoint answers 200 in every state including "no load order" (LoadOrderEndpoints.cs), so
+  // a non-ok is a genuine fault; degrading to an empty status would read as a load stalling.
   it('throws on a non-OK response rather than degrading to an empty, still-loading-looking status', async () => {
     await expect(new ApiPluginRepository(nonOkClient()).getLoadOrderStatus()).rejects.toThrow(/500/);
   });
@@ -787,12 +780,9 @@ describe('ApiPluginRepository origin threading', () => {
   });
 });
 
-// #673: the field edit is the sixth gate-wrapped write endpoint and the only one that does not
-// reach the user through `EditingController.mutate` — it shapes its own outcome, which the record
-// panel's router reports verbatim. Without this branch a contended write reaches the user as the
-// backend's own "Another write to the record index is still in progress after 5s.": implementation
-// prose, no retry cue, nothing marking it transient. It is also the likeliest write to contend,
-// being the one a user can fire repeatedly.
+// The field edit is the one gate-wrapped write that does not reach the user through
+// `EditingController.mutate`, so it shapes its own outcome; without this branch the user gets
+// the backend's implementation prose, with no retry cue.
 describe('ApiPluginRepository.editRecordField write-gate contention (#673)', () => {
   function busyClient() {
     return {
@@ -819,9 +809,8 @@ describe('ApiPluginRepository.editRecordField write-gate contention (#673)', () 
     });
   });
 
-  // The rival: keying off the 503, or off the detail prose, instead of the extension. An ordinary
-  // refusal must keep arriving as the backend worded it — that message names the way out (Track
-  // this mod, author a patch plugin) and is deliberately not re-worded on this side.
+  // The rival: keying off the 503 or the detail prose instead of the extension. An ordinary
+  // refusal must arrive as the backend worded it, because that message names the way out.
   it('leaves an ordinary typed refusal exactly as the backend worded it', async () => {
     const client = {
       POST: vi.fn().mockResolvedValue({

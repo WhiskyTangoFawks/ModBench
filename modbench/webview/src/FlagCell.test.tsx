@@ -24,9 +24,8 @@ const sparseFlags: FieldMetadata = {
   enumMembers: [{ value: 'X', bitValue: '1' }, { value: 'Z', bitValue: '4' }],
 };
 
-// Maintainer ruling 2026-09-01 (deliberate ADR-0034 divergence, recorded there): the
-// checkbox list IS the cell — always visible, one checkbox per flag, no gesture to
-// reveal it. The former text-until-clicked render and its focus/open gating (#223) are gone.
+// A deliberate ADR-0034 divergence, recorded there: the checkbox list is the cell — always
+// visible, one checkbox per flag, no gesture to reveal it.
 describe('FlagCell — always-visible checkbox list', () => {
   it('renders one checkbox per flag with correct checked state, no click needed', () => {
     render(<FlagCell value={0b0101} meta={flagMeta} editable onCommit={vi.fn()} />);
@@ -87,8 +86,7 @@ describe('FlagCell — read-only column', () => {
 });
 
 describe('FlagCell — null on a writable column', () => {
-  // A writable column's null still offers the list (all unchecked) — the old
-  // text-until-clicked render let a click set flags from null, and that capability survives.
+  // A writable column's null still offers the list, all unchecked: flags can be set from null.
   it('renders the all-unchecked list and can set the first flag', () => {
     const onCommit = vi.fn();
     render(<FlagCell value={null} meta={flagMeta} editable onCommit={onCommit} />);

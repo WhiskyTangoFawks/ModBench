@@ -12,10 +12,6 @@ import type { LoadResult, RecordPanelClient } from './RecordPanelClient';
 import { vscode } from './vscode';
 import { WEBVIEW_TO_EXTENSION, EXTENSION_TO_WEBVIEW } from './messages';
 
-// Array/struct *rendering* — collapsed counts, expand-to-children, the dimmed em-dash for a null
-// element, deep nesting, and
-// the collapsed-aggregate / expanded-defers-to-children conflict-colour rule (CONTEXT.md's own
-// ConflictAll entry states that rule; DiffRow.tsx implements it) — plus array editing.
 
 const sortedArrayMeta: FieldMetadata = {
   name: 'Keywords',
@@ -345,9 +341,6 @@ describe('RecordPanel — a struct member that is itself an array of structs (is
 
 });
 
-// Add/Remove/Move Up/Move Down on an unsorted array — the
-// keyboard accelerators (Insert/Delete/Ctrl+↑/Ctrl+↓) on the focused cell, writing the whole
-// array through the exact same write path (EDIT_FIELD) every other gesture uses.
 describe('RecordPanel — array editing (unsorted, #426)', () => {
   const intArrayMeta: FieldMetadata = {
     name: 'Values', type: 'array', isArray: true, validFormKeyTypes: [], enumMembers: [],
@@ -407,10 +400,8 @@ describe('RecordPanel — array editing (unsorted, #426)', () => {
   });
   afterEach(() => vi.unstubAllGlobals());
 
-  // #630: the computation (what the next array looks like, including every boundary case) moved
-  // server-side — RecordFieldWriter/ArrayOpWriter compute it from the record's own current value
-  // and schema. What the keyboard accelerators still own is *which* op envelope to post under the
-  // field's own fieldPath; these three facts assert exactly that shape, not a computed array.
+  // The next array is computed server-side from the record's own value and schema; the
+  // accelerators own only which op envelope is posted under the field's fieldPath.
 
   it('Insert on the focused array-parent cell posts an array_add envelope', async () => {
     renderEditablePanel();
@@ -449,9 +440,6 @@ describe('RecordPanel — array editing (unsorted, #426)', () => {
     expect(lastEditField()?.value).toEqual({ op: 'array_move_down', path: [{ kind: 'index', index: 0 }] });
   });
 
-  // The right-click menu's own trigger — a broadcast from the extension host (no
-  // live reference into this panel's React state), self-filtered on formKey, posting the exact
-  // same op envelope the keyboard accelerators above post.
   it('an ARRAY_STRUCTURAL_OP broadcast for this open record posts the op envelope via EDIT_FIELD', async () => {
     renderEditablePanel();
     await waitFor(() => screen.getByText('Values'));
@@ -485,10 +473,7 @@ describe('RecordPanel — array editing (unsorted, #426)', () => {
   });
 });
 
-// Module scope (alongside
-// structCollapseExpandResult/nestedStructArrayResult above) so the inline-edit and
-// extended-editor describe blocks below — same shapes, different triggers — share fixtures
-// without duplication.
+// Module scope: the inline-edit and extended-editor blocks below share these fixtures.
 const editableIntArrayMeta: FieldMetadata = {
   name: 'Values', type: 'array', isArray: true, validFormKeyTypes: [], enumMembers: [],
   elementType: { name: '', type: 'int', isArray: false, validFormKeyTypes: [], enumMembers: [] },
@@ -537,11 +522,8 @@ const scalarResult = {
   }],
 };
 
-// A *value* edit inside a complex field commits the whole field, exactly as the arity ops
-// (Add/Remove/Move, above) do. CONTEXT.md: a complex field is "always edited as one atomic
-// value — a field-level write to the source document, never per-element". A leaf inside
-// an array or struct committing its own bare value under the array's/struct's field name would be
-// silently declined by the backend applier — the edit would vanish.
+// A complex field is always edited as one atomic value: a leaf committing its own bare value
+// under the array's or struct's field name is silently declined by the backend applier.
 describe('RecordPanel — a value edit inside a complex field commits the whole field (#503)', () => {
   function renderEditablePanel() {
     const client: RecordPanelClient = {
@@ -563,9 +545,8 @@ describe('RecordPanel — a value edit inside a complex field commits the whole 
     return call?.[0] as { fieldPath?: string; value?: unknown } | undefined;
   }
 
-  // The editable column is the last one in every fixture here, so a row's own last cell is the one
-  // with somewhere to write — addressed by row rather than by value text, since the same number can
-  // appear in more than one column (and in a collapsed-array label).
+  // The same number can appear in more than one column, so the editable last cell is addressed
+  // by row rather than by value text.
   function editLastCellOfRow(rowLabel: string, shownValue: string, typed: string) {
     const row = screen.getByText(rowLabel).closest('tr')!;
     const cells = row.querySelectorAll('td');
@@ -609,8 +590,7 @@ describe('RecordPanel — a value edit inside a complex field commits the whole 
     expect(lastEditField()?.value).toEqual({ X1: 7, X2: 100 });
   });
 
-  // The regression shape (OMOD `Properties[i].step`): the edited leaf is a member of
-  // a struct that is itself an element of an array, so reconstruction has to run two hops deep.
+  // OMOD `Properties[i].step` shape: the leaf sits two hops deep, so reconstruction runs twice.
   it('editing a sub-field of a struct-element array commits the whole root value', async () => {
     currentCompare = nestedStructArrayResult;
     renderEditablePanel();
@@ -642,13 +622,8 @@ describe('RecordPanel — a value edit inside a complex field commits the whole 
   });
 });
 
-// The extended editor's own trigger (right-click → FIELD_OPEN_EXTENDED_EDITOR → a real Ctrl+S
-// in the opened tab, simulated here as EXTENDED_EDITOR_COMMITTED per the pattern
-// RecordPanel.test.tsx's own extended-editor wiring tests already use) reconstructs the whole
-// complex field exactly the way an inline edit does (above) — committing the
-// saved text alone under the subtree root's own field path would be refused by the backend's
-// shape guards. Same fixtures, same four shapes as the inline-edit block above; only the
-// trigger differs.
+// Committing the saved text alone under the subtree root's own field path would be refused by
+// the backend's shape guards.
 describe('RecordPanel — the extended editor commits the whole field, at any depth (#533)', () => {
   function renderEditablePanel() {
     const client: RecordPanelClient = {
@@ -676,10 +651,6 @@ describe('RecordPanel — the extended editor commits the whole field, at any de
     return (call?.[0] as { requestId: string }).requestId;
   }
 
-  // Simulates the right-click command's own broadcast (FIELD_OPEN_EXTENDED_EDITOR), then the
-  // extension host's reply to a real Ctrl+S in the opened tab (EXTENDED_EDITOR_COMMITTED) — the
-  // full round trip RecordPanel.test.tsx's own "opens the extended editor bridge call" test already
-  // exercises the open half of.
   function saveThroughExtendedEditor(
     fieldName: string, path: { kind: string; name?: string; index?: number }[], rootField: string, value: string,
   ) {
@@ -728,8 +699,7 @@ describe('RecordPanel — the extended editor commits the whole field, at any de
     expect(lastEditField()?.value).toEqual({ X1: '7', X2: 100 });
   });
 
-  // The regression shape (OMOD `Properties[i].step`): the edited leaf is
-  // a member of a struct that is itself an element of an array, two hops deep.
+  // OMOD `Properties[i].step` shape: the leaf sits two hops deep.
   it('saving a sub-field of a struct-element array commits the whole root value', async () => {
     currentCompare = nestedStructArrayResult;
     renderEditablePanel();
@@ -759,10 +729,8 @@ describe('RecordPanel — the extended editor commits the whole field, at any de
   });
 });
 
-// #716: a keyed array's rows are labelled by the key their element carries
-// (ConflictClassifier.BuildKeyed), and one row's path is shared by every column — so the path
-// addresses the element by key and each column resolves it against its own array. The master here
-// carries only `Guard`, the override carries `Ambush` before it: the same key, two positions.
+// One row's path is shared by every column, so a keyed array's path addresses the element by
+// key and each column resolves it against its own array — the same key, two positions.
 describe('RecordPanel — a keyed array\'s element is addressed by key, per column (#716)', () => {
   const scriptMeta: FieldMetadata = {
     name: 'Scripts', type: 'array', isArray: true, validFormKeyTypes: [], enumMembers: [],
@@ -858,9 +826,8 @@ describe('RecordPanel — a keyed array\'s element is addressed by key, per colu
     await waitFor(() => screen.getAllByText('flags'));
   }
 
-  // `Guard` is element 1 in the column being written and element 0 in the master. The rival — the
-  // shipped `{kind:'index', index: parseElementIndex('Guard')}` — parses NaN, and the property it
-  // then writes is dropped by JSON.stringify, so it posts the array unchanged.
+  // `Guard` is element 1 in the column being written and element 0 in the master. Addressing it
+  // by index parses NaN, and JSON.stringify drops that property, posting the array unchanged.
   it('a value edit on a keyed element writes that element, at its own position in this column', async () => {
     await expandTo('Guard');
     const row = screen.getAllByText('flags')[0].closest('tr')!;

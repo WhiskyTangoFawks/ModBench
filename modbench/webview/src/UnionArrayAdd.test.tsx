@@ -12,16 +12,9 @@ import type { LoadResult, RecordPanelClient } from './RecordPanelClient';
 import { vscode } from './vscode';
 import { WEBVIEW_TO_EXTENSION } from './messages';
 
-// #710: Add on an abstract-union array (Quest.Aliases — element base AQuestAlias, no instantiable
-// "empty object"). The panel half of one gesture asserted through two harnesses: this posts the
-// envelope, and MEditService.Tests' own
-// AbstractUnionEditTests.Aliases_ArrayAdd_AppendsOneElementOfTheUnionsFirstLeaf feeds that same
-// literal envelope through EditField and asserts what lands. The envelope is the joint — a change
-// to either side's idea of what Add means shows up as a disagreement between the two.
-//
-// What this asserts of the client is therefore mostly a *negative*: the webview contributes no
-// element and no default. A reflected array's default element belongs to ArrayOpWriter, which is
-// the only place that can name a leaf the write path will accept.
+// Add on an abstract-union array: the webview contributes no element and no default. A
+// reflected array's default element belongs to ArrayOpWriter, the only place that can name a
+// leaf the write path will accept.
 
 const aliasesMeta: FieldMetadata = {
   name: 'aliases', type: 'array', isArray: true, validFormKeyTypes: [], enumMembers: [],
@@ -104,9 +97,7 @@ describe('RecordPanel — Add on an abstract-union array (#710)', () => {
     fireEvent.keyDown(cell, { key: 'Insert' });
 
     expect(lastEditField()?.fieldPath).toBe('aliases');
-    // Byte-for-byte the payload AbstractUnionEditTests spells for the same gesture.
     expect(lastEditField()?.value).toEqual({ op: 'array_add', path: [] });
-    // The whole rule, stated as an assertion: nothing about the new element is decided here.
     expect(Object.keys(lastEditField()?.value as object).sort()).toEqual(['op', 'path']);
   });
 });

@@ -1,9 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-// The name filter is one behavior shared by every Modbench list view, so it is tested
-// once, here, in neither bounded context's vocabulary: a "row" is whatever the wired provider
-// hands out. The fakes below stand in for the two things the widget talks to — VS Code's
-// InputBox (the entry mechanism) and a TreeView (the readout surface) — and nothing else.
+// One behaviour shared by every Modbench list view, tested once, here, in neither bounded
+// context's vocabulary: a "row" is whatever the wired provider hands out. The fakes stand in
+// for an InputBox and a TreeView, nothing else.
 
 const h = vi.hoisted(() => {
   class FakeInputBox {
@@ -20,9 +19,8 @@ const h = vi.hoisted(() => {
     onDidTriggerButton(cb: (b: unknown) => void) { this.buttonHandlers.push(cb); return { dispose() { /* no-op */ } }; }
     show() { this.shown = true; }
     dispose() { this.disposed = true; }
-    /** The user typing. */
     type(text: string) { this.value = text; this.changeHandlers.forEach((cb) => cb(text)); }
-    /** Enter, Escape, or clicking away — indistinguishable at this API. */
+    // Enter, Escape, or clicking away — indistinguishable at this API.
     hide() { this.hideHandlers.forEach((cb) => cb()); }
     pressButton() { this.buttonHandlers.forEach((cb) => cb(this.buttons[0])); }
   }
@@ -223,10 +221,9 @@ describe('a term that matches nothing says so (#255)', () => {
     expect(view.message).toBeUndefined();
   });
 
-  // ADR-0026: the message is decided by what survived the filter, not by whether the term
-  // matched anything. A view whose rows are an error row (DownloadsProvider and
-  // ModListProvider both keep theirs through every filter) still has rows — telling that user
-  // "no matches for arm" sends them debugging their filter instead of their data.
+  // ADR-0026: the message is decided by what survived the filter, not by whether the term matched.
+  // A view whose rows are an error row still has rows; "no matches" sends that user
+  // debugging the filter instead of the data.
   it('stays silent when what survived the filter is an error row', async () => {
     const { view } = setup({ hasRows: () => Promise.resolve(true) });
     await open();
@@ -235,9 +232,8 @@ describe('a term that matches nothing says so (#255)', () => {
     expect(view.message).toBeUndefined();
   });
 
-  // The Plugins view has one message surface and two things that can want it: the load order
-  // load's own statement and this. The load wins while it is running; `refresh` is how
-  // the filter gets its statement back once the load stops talking.
+  // The Plugins view has one message surface and two claimants: the load's own statement and this.
+  // The load wins while running; `refresh` is how the filter gets its statement back.
   it('restates its message on refresh, after something else has taken the view message surface', async () => {
     const { view, filter } = setup({ hasRows: () => Promise.resolve(false) });
     await open();

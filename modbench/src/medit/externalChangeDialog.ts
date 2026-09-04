@@ -6,16 +6,15 @@ export const KEEP_BUTTON = 'Keep as My Edit';
 
 export type ExternalChangeDialogAnswer = 'absorb' | 'keep' | 'defer';
 
-/** Every unanswered question sharing one mod folder — the pinned contract's own unit ("one native
- *  modal per affected mod **repo**... the repo is the unit of baselines and rebase"), never one
- *  per plugin: a mod folder can hold more than one plugin, and their questions answer together. */
+/** Every unanswered question sharing one origin — the repo, not the plugin, is the unit of
+ *  baselines and rebase, and one repo's plugins answer together. */
 export interface ExternalChangeRepoGroup {
   origin: string;
   items: readonly UnansweredExternalChange[];
 }
 
-/** Groups a flat unanswered-change list by `origin` — order-preserving (first-seen origin first), so the
- *  sequential dialog loop below visits repos in the order the backend reported them. */
+/** Order-preserving (first-seen origin first), so the sequential dialog loop visits repos in the
+ *  order the backend reported them. */
 export function groupByOrigin(unanswered: readonly UnansweredExternalChange[]): ExternalChangeRepoGroup[] {
   const byOrigin = new Map<string, UnansweredExternalChange[]>();
   for (const item of unanswered) {
@@ -26,30 +25,16 @@ export function groupByOrigin(unanswered: readonly UnansweredExternalChange[]): 
   return [...byOrigin.entries()].map(([origin, items]) => ({ origin, items }));
 }
 
-/**
- * The button array in **default order** for one repo's question — button order carries the
- * default (VS Code's modal focuses/Enters the first), never a separate flag. The Meta-SHA256
- * compare (`metaChanged`, computed server-side, never acted on there — ADR-0041 amendment:
- * "trailers may inform defaults, never actions") decides which button leads: meta changed →
- * Absorb Upstream Update first; unchanged or no trailer at all (both collapse to `metaChanged ===
- * false` on the wire) → Keep as My Edit first. Both buttons are always present either way.
- *
- * **One default per repo, not per plugin**: every plugin in one mod folder shares a single
- * `meta.ini`, so in practice every item in a group already agrees on `metaChanged` (both derive
- * from the same baseline commit's single `Meta-SHA256` trailer and the same on-disk file). This
- * takes the disjunction (`some`) across the group rather than trusting that agreement — if a
- * future source of per-plugin classification ever let them disagree, Absorb leads only when *any*
- * plugin's meta actually changed, never silently defaulting to Keep because one plugin's verdict
- * happened to be read first.
- */
+/** Button order carries the default — VS Code's modal focuses the first — never a separate flag:
+ *  Absorb leads when the meta changed (ADR-0041). Taken across the whole group, so Absorb leads
+ *  when any plugin's meta changed. */
 export function buttonsInDefaultOrder(group: ExternalChangeRepoGroup): [string, string] {
   const metaChanged = group.items.some((item) => item.metaChanged);
   return metaChanged ? [ABSORB_BUTTON, KEEP_BUTTON] : [KEEP_BUTTON, ABSORB_BUTTON];
 }
 
-/** The modal's message + detail text — evidence shown, not hidden, per the pinned contract. Keeps
- *  the pinned single-plugin wording when the repo has exactly one changed plugin; names the repo
- *  and lists every changed plugin when it has more than one. */
+/** Evidence shown, not hidden, per the pinned contract. Keeps the single-plugin wording for a
+ *  repo with one changed plugin; names the repo and lists every plugin otherwise. */
 export function messageFor(group: ExternalChangeRepoGroup): { message: string; detail: string } {
   const metaChanged = group.items.some((item) => item.metaChanged);
   // Evidence text: pulled from whichever item actually carries the tell (falling back to the
@@ -82,18 +67,9 @@ export interface ExternalChangeDialogOutcome {
   answer: ExternalChangeDialogAnswer;
 }
 
-/**
- * The one dialog: one native modal **per affected mod repo**, shown **sequentially** — never a
- * mega-dialog, never two modals racing each other (the pinned contract's own words), and never one
- * modal per plugin either — a mod folder can hold more than one plugin, and they answer the same
- * question together. Each {@link ExternalChangeRepoGroup} gets its own `showWarningMessage` call,
- * awaited before the next repo's is shown; Esc/dismiss (the resolved value matching neither
- * button) answers `'defer'` for every plugin in that group — nothing is written, consistent with
- * exit path 3 (the caller must not call absorb/keep for a deferred item). The returned outcome
- * list is flat, one entry per **plugin** (not per repo): every item in a group gets the same
- * answer, but each keeps its own identity for the caller's per-plugin dispatch (deferral markers
- * and the absorb/keep endpoints are both per-plugin, per the pinned contract).
- */
+/** One native modal per affected repo, shown sequentially, never one per plugin. Esc answers
+ *  `'defer'` for the whole group; the flat outcome list keeps each plugin's identity for the
+ *  caller's per-plugin dispatch. */
 export async function runExternalChangeDialogs(
   unanswered: readonly UnansweredExternalChange[],
   show: ShowExternalChangeDialog,

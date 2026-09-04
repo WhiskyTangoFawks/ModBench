@@ -12,13 +12,8 @@ import type { LoadResult, RecordPanelClient } from './RecordPanelClient';
 import { vscode } from './vscode';
 import { WEBVIEW_TO_EXTENSION } from './messages';
 
-// #693: what a condition reads as, and which of its rows exist.
-//
-// The metadata below is the Fallout 4 schema's own shape, verbatim from
-// MEditService.Tests' ConditionSchemaTests (the two discriminators, ComparisonValue split per
-// shape, the six aliased parameter slots, and the two SiblingsInUse maps) — trimmed to the
-// enum members these cases name, never restructured. `siblingsInUse` rows are copied from
-// Condition.GetParameterTypes' own answers for those functions.
+// The metadata below is the Fallout 4 schema's own shape, trimmed to the enum members these
+// cases name and never restructured; `siblingsInUse` rows come from Condition.GetParameterTypes.
 
 const leaf = (name: string, type: string, extra: Partial<FieldMetadata> = {}): FieldMetadata =>
   ({ name, type: type as FieldMetadata['type'], isArray: false, validFormKeyTypes: [], enumMembers: [], ...extra });
@@ -127,9 +122,7 @@ const condition = (over: Condition = {}, data: Condition = {}): Condition => ({
 
 const PLUGIN = 'MyMod.esp';
 
-// A compare over one or more columns, each with its own condition list. The member diffs the
-// summary reads its resolutions from are derived from the values themselves, so a case states its
-// conditions and nothing else.
+// Member diffs are derived from the values themselves, so a case states its conditions alone.
 function compareResult(
   byColumn: Record<string, Condition[]>, resolutions: Record<string, string> = {},
   meta: FieldMetadata = conditionsMeta,
@@ -181,7 +174,6 @@ function compareResult(
   };
 }
 
-// The single-column case every rule below but one is stated in.
 const oneColumn = (
   elements: Condition[], resolutions: Record<string, string> = {}, meta: FieldMetadata = conditionsMeta,
 ) => compareResult({ [PLUGIN]: elements }, resolutions, meta);
@@ -214,8 +206,6 @@ function summaryOf(index: number): string {
   return cells[1].textContent ?? '';
 }
 
-// Down to the members of the first condition's data — the one navigation every case below that
-// looks at a member row makes.
 async function expandFirstConditionData() {
   await expandConditions();
   const element = screen.getAllByText('[0]').find(el => el.tagName === 'TD')!;
@@ -225,7 +215,6 @@ async function expandFirstConditionData() {
   await waitFor(() => screen.getByText('function'));
 }
 
-// Opens a member row's own editor, the way a user does: click to focus, again to open.
 async function openMemberEditor(memberName: string): Promise<HTMLTableCellElement> {
   await expandFirstConditionData();
   const cell = screen.getByText(memberName).closest('tr')!.querySelectorAll('td')[1];
@@ -244,8 +233,6 @@ beforeEach(() => {
   (vscode.postMessage as ReturnType<typeof vi.fn>).mockClear();
 });
 afterEach(() => vi.unstubAllGlobals());
-
-// ── AC1: the collapsed row reads as xEdit's own wbConditionToStr ──────────────
 
 describe('#693 — a collapsed condition reads as xEdit prose', () => {
   it('run on, function, both parameter slots, operator, float to six places, and the AND that follows a non-last element', async () => {
@@ -374,14 +361,11 @@ describe('#693 — a collapsed condition reads as xEdit prose', () => {
   });
 });
 
-// #717: the table's key is the leaf's type name — the discriminator's value where the leaf is a
-// union, the schema's declared type name where it is not. The cases above are the other half of
-// this rule: every one of them has an element declaring `Condition`, a type name the table has no
-// entry for, and reads its summary off the `concrete_type` value regardless.
+// The table's key is the leaf's type name: the discriminator's value where the leaf is a union,
+// the schema's declared type name where it is not.
 
 describe('#717 — the table keys on the leaf type name', () => {
-  // Stated with an entry the table already has, so this is a claim about the key alone. The
-  // summary shapes a script entry or a script object read as are #695's.
+  // An entry the table already has, so this is a claim about the key alone.
   const notAUnion: FieldMetadata = {
     ...conditionsMeta,
     elementType: {
@@ -401,10 +385,8 @@ describe('#717 — the table keys on the leaf type name', () => {
     expect(summaryOf(0)).toBe('Subject.IsSneaking = 1.000000');
   });
 
-  // A union's declared name is its base, and a concrete base is one of its own leaves (#701) — so
-  // the declared name is a leaf name too, and the wrong one for an object whose payload does not
-  // say which leaf it is. Stated with a declared name the table has an entry for, since a name it
-  // has no entry for would read as '{…}' whichever way the rule went.
+  // A union's declared name is its base, and a concrete base is one of its own leaves — so the
+  // declared name is a leaf name too, and the wrong one for a payload naming no leaf.
   it('a union whose own value names no leaf keys on nothing, not on the name the schema declares', async () => {
     const declared: FieldMetadata = {
       ...conditionsMeta,
@@ -418,8 +400,6 @@ describe('#717 — the table keys on the leaf type name', () => {
     expect(summaryOf(0)).toBe('{…}');
   });
 });
-
-// ── AC2: one row per parameter slot the function actually uses ────────────────
 
 describe('#693 — a condition shows one row per parameter slot in use', () => {
   it('a record-slot function renders parameter_one_record and neither of its aliases', async () => {
@@ -479,8 +459,6 @@ describe('#693 — a condition shows one row per parameter slot in use', () => {
   });
 });
 
-// ── AC3: the cascades a governing member declares ─────────────────────────────
-
 describe('#693 — a governing member clears the siblings its new value idles', () => {
   it('changing Run On away from Reference posts an edit with the reference cleared', async () => {
     currentCompare = oneColumn([condition({}, {
@@ -502,8 +480,8 @@ describe('#693 — a governing member clears the siblings its new value idles', 
 
   it('changing the function posts an edit with every slot the new function does not use cleared', async () => {
     // ConditionBinaryWriteTranslation.CustomStringExports writes a CIS1/CIS2 subrecord for any
-    // non-null parameter string without consulting the function, so a string left behind by a
-    // function change reaches the plugin. The cleared parameter_one_string below is that fix.
+    // non-null parameter string without consulting the function, so a stale string reaches the
+    // plugin.
     currentCompare = oneColumn([condition({}, {
       function: 'GetGraphVariableFloat', parameter_one_string: 'bAllowRotation',
     })]);
@@ -517,11 +495,8 @@ describe('#693 — a governing member clears the siblings its new value idles', 
     const posted = lastEditField();
     const data = (posted?.value as Record<string, unknown>[])[0].data as Record<string, unknown>;
     expect(data.function).toBe('HasKeyword');
-    // Emptied to what a member with no data actually holds, per type. A JSON null into
-    // ParameterOneNumber — a non-nullable Int32 — is rejected by the write path, and a rejected
-    // member fails the whole array write, so the string clear would never land either.
-    // ConditionEditTests.ChangingTheFunction_ClearsTheSlotsTheNewFunctionDoesNotUse feeds this
-    // exact payload through EditField and asserts it applies.
+    // A JSON null into ParameterOneNumber — a non-nullable Int32 — is rejected by the write path,
+    // and a rejected member fails the whole array write, so each slot empties per its own type.
     expect(data.parameter_one_string).toBeNull();
     expect(data.parameter_two_record).toBeNull();
     expect(data.parameter_two_string).toBeNull();
@@ -561,8 +536,6 @@ describe('#693 — a governing member clears the siblings its new value idles', 
   });
 });
 
-// ── AC4: the function picker is the schema's own enum ─────────────────────────
-
 describe('#693 — the function picker comes from the schema', () => {
   it('Fallout 4 picks the function from the function member’s own enum', async () => {
     currentCompare = oneColumn([condition({}, { function: 'IsSneaking' })]);
@@ -583,13 +556,9 @@ describe('#693 — the function picker comes from the schema', () => {
   });
 });
 
-// ── The one rule no Fallout 4 schema can exercise ───────────────────────────
-
 describe('#693 — a Run On label that contains spaces', () => {
-  // xEdit writes the Run On prefix with its spaces stripped. No Fallout 4 enum reaches the webview
-  // with a label at all (only a union discriminator carries one), so the rule is stated here
-  // against a run_on_type whose members are labelled — the shape a game whose schema labels its
-  // enums would send. Nothing else about such a game is claimed or tested; #706 owns them.
+  // xEdit writes the Run On prefix with its spaces stripped. No Fallout 4 enum reaches the
+  // webview labelled at all, so the rule is stated against a labelled run_on_type instead.
   const labelled: FieldMetadata = {
     ...conditionsMeta,
     elementType: {

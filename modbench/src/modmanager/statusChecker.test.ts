@@ -7,11 +7,8 @@ import { buildFileConflictIndex, rootLevelWinners } from './fileConflictIndex';
 import { computeModStatuses, checkMasterOrder, computePluginOrderStatuses } from './statusChecker';
 import { buildTes4Buffer } from './test/buildTes4Buffer';
 
-// Scoped to this file only, passthrough by default: wraps `stat` so a single
-// test below can divert one specific path to a synthetic non-ENOENT error.
-// Same wrapper shape as Mo2ModlistSource.test.ts's `readFile` mock —
-// chmod-based permission denial is silently bypassed when the test runner is
-// root, which a real fs precondition isn't.
+// Passthrough by default, so one test can divert a single path to a synthetic non-ENOENT
+// error. chmod-based denial would be silently bypassed when the runner is root.
 vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof import('node:fs/promises')>();
   return { ...actual, stat: vi.fn(actual.stat) };
@@ -30,15 +27,8 @@ async function writeMod(instanceRoot: string, name: string, files: Record<string
 describe('computeModStatuses', () => {
   let instanceRoot: string;
 
-  // "MasterOK" depends on a master provided by another enabled mod ("Provider").
-  // "VanillaOK" depends on a vanilla master (Fallout4.esm, not backed by any mod).
-  // "CcOK" depends on a Creation Club vanilla master (a .esl, not a .esm).
-  // "Broken" depends on a master nobody provides.
-  // "DisabledBroken" is the same as Broken but disabled.
-  // "High"/"Low" conflict on meshes/shared.nif; High is listed first (top of file =
-  // winning end of the Mod override order), so High wins and Low is overridden.
-  // "Clean" has no masters and no conflicts.
-  // "Ghost" is referenced in entries but has no folder on disk.
+  // "High" and "Low" conflict on meshes/shared.nif, and High is listed first — the winning end
+  // of the Mod override order. "Ghost" is listed here but has no folder on disk.
   const entries: ModlistEntry[] = [
     mod('MasterOK'),
     mod('Provider'),
@@ -153,10 +143,7 @@ describe('computeModStatuses', () => {
   });
 
   it('skips separator entries entirely — no status map entry (#318)', async () => {
-    // readModlist()'s full entries (ModListProvider.ts) include separators
-    // (MO2's organizational rows) alongside mods — a real producer, not a
-    // synthetic one. A separator has no mods/<name> folder on disk, so if it
-    // isn't skipped it would wrongly surface as missingMod.
+    // A separator has no mods/<name> folder on disk, so an unskipped one surfaces as missingMod.
     const withSeparator: ModlistEntry[] = [{ kind: 'separator', name: 'WEAPONS', enabled: true }, ...entries];
     const index = await buildFileConflictIndex(withSeparator, instanceRoot, () => {});
     const result = await computeModStatuses(withSeparator, instanceRoot, index, vanillaMasters, () => {});
@@ -224,14 +211,9 @@ describe('computeModStatuses — non-ENOENT stat failures propagate (#318)', () 
 });
 
 describe('computeModStatuses — case-insensitive conflicts (#128)', () => {
-  // Proton/Wine resolves paths case-insensitively over ext4's case-sensitive
-  // mods/: ModA/Textures/Foo.dds and ModB/textures/foo.dds are the SAME file
-  // on-disk from the game's point of view and must produce a badge conflict.
-  // This is a zero-production-change test of statusChecker.ts: the fold must
-  // happen entirely inside FileConflictIndex/FileConflictLookup, since
-  // statusChecker only ever calls index.files.get(file.relativePath) with the
-  // path AS WRITTEN by the walk that built filesByMod — if the fold didn't
-  // happen on the index's own behalf, this would silently miss.
+  // Proton/Wine resolves paths case-insensitively over ext4, so Textures/Foo.dds and
+  // textures/foo.dds are one file. The fold belongs in the index, since statusChecker looks
+  // paths up exactly as the walk wrote them.
   const caseFixture = join(__dirname, 'test', 'fixtures', 'case-conflict-instance');
   const entries: ModlistEntry[] = [mod('ModA'), mod('ModB')];
 
@@ -288,10 +270,8 @@ describe('checkMasterOrder', () => {
   });
 
   it('flags a master positioned at exactly this plugin\'s own index — the documented "at" boundary (#318)', () => {
-    // The function's own doc comment specifies "at/after", not just "after".
-    // A plugin declaring itself as its own master is malformed data no real
-    // editor writes, but checkMasterOrder is a pure, exported utility whose
-    // contract this line specifies directly — exercise the boundary itself.
+    // A plugin declaring itself as its own master is malformed data no real editor writes, but
+    // it is the "at" boundary of this utility's contract.
     expect(checkMasterOrder(['Self.esp'], ['Self.esp', 'Other.esp'], 0)).toEqual({
       kind: 'masterNotLoadedBefore',
       masters: ['Self.esp'],
@@ -313,8 +293,8 @@ describe('computePluginOrderStatuses', () => {
     dataFolder = join(root, 'Game', 'Data');
     await mkdir(dataFolder, { recursive: true });
     await writeFile(join(dataFolder, 'Fallout4.esm'), buildTes4Buffer([]));
-    // A vanilla-only plugin (present in Data/, provided by no mod) that itself
-    // declares a master — used to prove vanilla-row masters are read via dataFolder.
+    // A vanilla-only plugin that itself declares a master: proof that vanilla-row masters are
+    // read through dataFolder.
     await writeFile(join(dataFolder, 'DLCRobot.esm'), buildTes4Buffer(['Fallout4.esm']));
     await writeMod(root, 'Provider', { 'Base.esp': buildTes4Buffer(['Fallout4.esm']) });
     await writeMod(root, 'Consumer', { 'Child.esp': buildTes4Buffer(['Base.esp']) });

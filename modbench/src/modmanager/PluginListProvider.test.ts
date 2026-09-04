@@ -21,10 +21,6 @@ import {
 } from './PluginListProvider';
 import { ErrorNode } from './ErrorNode';
 
-/** Implements exactly PluginListProvider's own Pick<> of IModlistSource — a method the provider
- *  doesn't touch can't even be added here by mistake. readModlist is part of that set but never
- *  exercised by these tests (the instanceRoot fixtures further down use the real
- *  Mo2ModlistSource instead), so it stays an 'unused' stub rather than a real implementation. */
 class FakeSource implements PluginListSource {
   setPluginEnabledCalls: { pluginName: string; enabled: boolean }[] = [];
   reorderPluginsCalls: { names: string[]; toIndex: number }[] = [];
@@ -55,13 +51,9 @@ class FakeSource implements PluginListSource {
   }
 }
 
-// The leading slot answers exactly one question — "can you change whether this loads?"
-// ImplicitMasterNode already renders no checkbox (nothing to toggle); it now also renders a lock
-// where a togglable row renders a checkbox, so the empty slot isn't mistakable for "no plugin
-// here". Icon/tooltip only — the platform has no non-interactive checkbox variant
-// (TreeItemCheckboxState is Checked/Unchecked only), so MO2's own grayed-but-checked-and-disabled
-// checkbox can't be reproduced; the label-graying and tooltip wording it does allow are adopted
-// verbatim (see ImplicitMasterDecorationProvider for the label graying).
+// The leading slot answers one question: can you change whether this loads? A lock fills it
+// where a togglable row renders a checkbox, since the platform has no non-interactive checkbox
+// variant.
 describe('ImplicitMasterNode — leading slot (#276)', () => {
   it('renders a lock icon, not a checkbox', () => {
     const node = new ImplicitMasterNode('Fallout4.esm');
@@ -86,13 +78,9 @@ describe('ImplicitMasterNode — leading slot (#276)', () => {
   });
 });
 
-// Clicking a plugin row opens its file header (xEdit parity — vstNavChange/
-// TryViewOrCompareSelectedRecords, xeMainForm.pas — selecting a plugin node shows its File Header
-// as a matter of course, no separate affordance). Routed through the existing modbench.openHeader
-// bridge command (extension.ts) rather than reaching for headerFormKeyFor/formKey directly here —
-// this file is forbidden record vocabulary (contextBoundary.test.ts), and openHeader already does
-// the pluginFileOf -> headerFormKeyFor -> modbench.openEditor(singleton) translation on the
-// composition-root side of that boundary.
+// xEdit parity: selecting a plugin node shows its File Header, with no separate affordance.
+// Routed through the modbench.openHeader bridge command, because this file is forbidden
+// Editing's vocabulary and the composition root owns that translation.
 describe('PluginNode / ImplicitMasterNode — row click opens the plugin header (#345)', () => {
   it('PluginNode wires .command to modbench.openHeader, passing itself', () => {
     const node = new PluginNode({ name: 'TestMod.esp', enabled: true });
@@ -105,11 +93,8 @@ describe('PluginNode / ImplicitMasterNode — row click opens the plugin header 
   });
 });
 
-// A row that stands for no plugin file in the load order at all — today that's only the
-// sentinel ErrorNode/EmptyNode rows — renders
-// neither a checkbox nor a lock. Guards against giving the
-// lock icon too broadly (e.g. to every non-PluginNode row) instead of scoping it to
-// ImplicitMasterNode specifically.
+// Guards against giving the lock icon to every non-PluginNode row rather than scoping it to
+// ImplicitMasterNode.
 describe('leading slot — rows outside the load order render neither checkbox nor lock (#276 AC3)', () => {
   it('ErrorNode has no checkbox and no lock', () => {
     const node = new ErrorNode('boom');
@@ -190,10 +175,8 @@ describe('PluginListProvider', () => {
     expect(source.readPluginOrderCalls).toBeGreaterThan(callsAfterFirstRead);
   });
 
-  // ADR-0035 § Live mutation: the composition root's cue to apply the same participation
-  // change to a running backend. Named plugin/enabled must match exactly what was
-  // written, since the backend call the composition root makes off this carries no other source
-  // of truth for which plugin or which state.
+  // The event carries the only source of truth the composition root has for which plugin and
+  // which state, so it must match exactly what was written (ADR-0035).
   it('setPluginEnabled fires onDidChangeParticipation with the plugin and its new state', async () => {
     const source = new FakeSource(['A.esp']);
     const provider = new PluginListProvider({ source });
@@ -205,11 +188,8 @@ describe('PluginListProvider', () => {
     expect(seen).toEqual([{ plugin: 'A.esp', enabled: false }]);
   });
 
-  // Rival named: an implementation that fires onDidChangeParticipation from invalidate() itself
-  // (reusing onDidChangeTreeData's own generic "something changed" firing) would also fire it for
-  // a filter keystroke or an external plugins.txt edit picked up by a watcher — neither is a
-  // participation change a backend should be told about. This is the test that would
-  // catch that: invalidate() alone must never fire it.
+  // Firing from invalidate() would also fire for a filter keystroke or a watcher-observed edit,
+  // neither of which is a participation change a backend should be told about.
   it('invalidate() alone does not fire onDidChangeParticipation', () => {
     const provider = new PluginListProvider({ source: new FakeSource(['A.esp']) });
     let fired = false;
@@ -270,9 +250,8 @@ describe('PluginListProvider — filter', () => {
     expect(rows.some((r) => r instanceof EmptyNode)).toBe(false);
   });
 
-  // The filter is durable within the load order — it outlives a Refresh and whatever the
-  // re-read turns up. The render-vs-invalidate split is what makes that true, so this is
-  // the test that says so: invalidate() clears the row cache and must not touch the term.
+  // The filter outlives a Refresh and whatever the re-read turns up: invalidate() clears the
+  // row cache and must not touch the term.
   it('survives a refresh and an underlying data change, narrowing whatever the re-read returns', async () => {
     const order = ['Alpha.esp', 'Beta.esp'];
     const provider = new PluginListProvider({ source: new FakeSource(order) });
@@ -362,9 +341,8 @@ describe('PluginNode — order-aware missing-master badge', () => {
   });
 });
 
-// ADR-0037: the composite's load order-aware reconciliation needs the raw master names
-// this row's order-aware badge flagged, structurally — not by parsing the rendered tooltip text
-// (fragile, and out of reach for a composite that must import no Mod-Management vocabulary).
+// The flagged master names have to be reachable structurally, not by parsing rendered tooltip
+// text (ADR-0037).
 describe('orderIssueMastersOf', () => {
   it('returns the flagged master names for a masterNotLoadedBefore row', () => {
     const node = new PluginNode({ name: 'Child.esp', enabled: true }, { kind: 'masterNotLoadedBefore', masters: ['Base.esp', 'Other.esp'] });
@@ -390,7 +368,6 @@ describe('PluginListProvider — drag-and-drop reorder', () => {
   const ORDER = ['A.esp', 'B.esp', 'C.esp', 'D.esp', 'E.esp'];
   const node = (name: string) => new PluginNode({ name, enabled: true });
 
-  /** Render once so the provider caches the order, then run a drag → drop. */
   async function drag(source: FakeSource, moved: string[], target: string | undefined) {
     const reports: { severity: string; message: string }[] = [];
     const provider = new PluginListProvider({
@@ -446,10 +423,8 @@ describe('PluginListProvider — drag-and-drop reorder', () => {
     expect(source.reorderPluginsCalls).toEqual([{ names: ['A.esp'], toIndex: 0 }]);
   });
 
-  // Rows have children now, so VS Code can hand this controller a drop target that is not
-  // one of its rows at all. "Not my row" is not the same as "past the last row" — that reads as
-  // the end of the load order, so a drop into an expanded plugin's records would silently move
-  // the dragged plugins to the bottom of plugins.txt.
+  // VS Code can hand this controller a drop target that is not one of its rows. "Not my row" is
+  // not "past the last row", which reads as the losing end of the load order.
   it('pluginFileOf names the file a row stands for, and nothing for the rows that stand for none', () => {
     expect(pluginFileOf(node('A.esp'))).toBe('A.esp');
     expect(pluginFileOf(new ImplicitMasterNode('Fallout4.esm'))).toBe('Fallout4.esm');
@@ -489,11 +464,8 @@ describe('PluginListProvider — drag-and-drop reorder', () => {
     expect(source.reorderPluginsCalls).toEqual([]);
   });
 
-  // ADR-0035: the position a drop computes has to come from the full plugins.txt
-  // order, never the filtered/displayed row list — a name filter narrows *which rows show*, not
-  // the load order they belong to. `dropIndexFor` computes against `this.lastOrder`
-  // (plugins.txt's raw order) rather than `getChildren()`'s filtered output; this pins that
-  // invariant explicitly.
+  // A drop position comes from the full plugins.txt order, never the displayed row list: a name
+  // filter narrows which rows show, not the load order they belong to (ADR-0035).
   it('produces the same load-order position with a name filter hiding a row between the drag and its target, as with no filter at all', async () => {
     const ORDER = ['M1.esp', 'M2.esp', 'X1.esp', 'M3.esp', 'X2.esp'];
 
@@ -669,10 +641,8 @@ describe('PluginListProvider — order-aware missing-master badge (instanceRoot 
   });
 
   it('checkMasterOrder itself does not special-case vanilla — a real (non-implicit) plugins.txt master sequenced after its dependent is still flagged (#67 regression, with implicit rows present)', async () => {
-    // Base.esp masters a second, mod-provided plugin (Late.esp) sequenced after it in
-    // plugins.txt — the check algorithm has no vanilla special-casing; the implicit-row
-    // work fixed the ROW SET (vanilla masters are now an implicit, always-first block),
-    // not this per-pair order check, which still flags a genuinely-late real-file master.
+    // Implicit rows change the row set, not this per-pair order check, which flags a genuinely
+    // late real-file master whether or not it is vanilla.
     await mkdir(join(dir, 'mods', 'Late'), { recursive: true });
     await writeFile(join(dir, 'mods', 'Late', 'Late.esp'), buildTes4Buffer([]));
     await writeFile(join(dir, 'mods', 'Provider', 'Base.esp'), buildTes4Buffer(['Fallout4.esm', 'Late.esp']));
@@ -684,18 +654,15 @@ describe('PluginListProvider — order-aware missing-master badge (instanceRoot 
   });
 
   it('a discovered implicit (vanilla) master never false-flags a plugin declaring it, even if plugins.txt lists it out of position (issue #108 — the bug this fixes)', async () => {
-    // Fallout4.esm sequenced AFTER Base.esp in plugins.txt's raw text — under the old
-    // row set this would have flagged Base.esp. Fallout4.esm is discovered from
-    // dataFolder (nlink 1) and rendered as an always-first implicit row, so the game's
-    // actual load order (vanilla first) is what's checked, not plugins.txt's stale line.
+    // Fallout4.esm is discovered from dataFolder and rendered as an always-first implicit row,
+    // so the game's actual load order is what gets checked, not plugins.txt's stale line.
     await writeFile(join(dir, 'profiles', 'Default', 'plugins.txt'), 'Base.esp\r\nFallout4.esm\r\nChild.esp\r\n');
     const nodes = await pluginNodes(provider());
     expect(byName(nodes, 'Base.esp').iconPath).toBeUndefined();
   });
 
-  // The file index build itself fails here (readModlist hits ENOTDIR before any walk starts), not
-  // the narrower badge pass — so the warning must name both things that degrade: badges AND a
-  // disk-derived row (issue #617 review) — not just "status", which undersold the second loss.
+  // The index build fails here, not the narrower badge pass, so the warning must name both
+  // things that degrade: badges and a disk-derived row.
   it('renders the plain tree (badges AND disk-derived rows degraded) with a warning naming both when the file index build fails', async () => {
     await writeFile(join(dir, 'profiles', 'Default', 'plugins.txt'), 'Fallout4.esm\r\nChild.esp\r\nBase.esp\r\n');
     const logs: string[] = [];
@@ -717,9 +684,8 @@ describe('PluginListProvider — order-aware missing-master badge (instanceRoot 
   });
 });
 
-// #680: the tree is a pure read of plugins.txt. A plugin file on disk with no line is the
-// plugins reconcile's business (pluginsReconcile.ts writes the line; the watcher re-renders) —
-// the provider itself never merges disk into the file's inventory.
+// The tree is a pure read of plugins.txt: a plugin file on disk with no line is the plugins
+// reconcile's business, never merged in by the provider.
 describe('PluginListProvider — rows are exactly plugins.txt\'s lines, never disk-derived (#680)', () => {
   let dir: string;
   beforeEach(async () => {
@@ -793,10 +759,8 @@ describe('PluginListProvider — resolvePluginPath (Reveal in Explorer, issue #6
   });
 });
 
-// The game's implicitly-loaded vanilla masters (discovered from the
-// resolved Data folder — a plugin file that is NOT a hardlink, nlink === 1) render
-// as forced-on rows ahead of plugins.txt's own lines, so their absence never makes a
-// plugin declaring one show a false "missing master".
+// Vanilla masters render as forced-on rows ahead of plugins.txt's lines, so their absence never
+// makes a plugin declaring one show a false "missing master".
 describe('PluginListProvider — implicit (vanilla) master rows (issue #108)', () => {
   let dir: string;
   const dataFolder = () => join(dir, 'Game', 'Data');

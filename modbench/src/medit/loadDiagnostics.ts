@@ -2,12 +2,9 @@ import * as vscode from 'vscode';
 import * as path from 'node:path';
 import type { PluginDiagnosisReport } from './ApiClient';
 
-/** #570: publishes the session-load Kind B scan's diagnoses to the Problems panel — a sibling of
- *  `editorCommands.ts`'s publishCompileDiagnostics, but targeting the plugin binary itself
- *  (`mods/<origin>/<plugin>`): these plugins are pre-Track, so there is no source-tree file to
- *  point at. Replaced wholesale each scan (never one plugin at a time): one scan answers for the whole load
- *  order. Each entry's message is `PluginDiagnosisReport.text` — the Track refusal's own wording
- *  (#569), one vocabulary. Warning severity: a Malformed plugin still loads and plays. */
+/** Targets the plugin binary itself — these plugins are pre-Track, so there is no source-tree
+ *  file to point at, and one scan answers for the whole load order. Warning severity: a
+ *  Malformed plugin still loads and plays. */
 export function publishLoadDiagnoses(
   collection: vscode.DiagnosticCollection, instanceRoot: string, reports: PluginDiagnosisReport[],
 ): void {
@@ -22,8 +19,8 @@ export function publishLoadDiagnoses(
   for (const [fsPath, list] of byUri) collection.set(vscode.Uri.file(fsPath), list);
 }
 
-/** #570: the same reports keyed by plugin filename, for `PluginsTreeComposite.setDiagnoses`'s
- *  row decoration — one derivation shared by both surfaces so they can never disagree. */
+/** The same reports keyed by plugin filename — one derivation shared by both surfaces, so they
+ *  can never disagree. */
 export function groupDiagnosesByPlugin(reports: PluginDiagnosisReport[]): Map<string, string[]> {
   const byPlugin = new Map<string, string[]>();
   for (const r of reports) {

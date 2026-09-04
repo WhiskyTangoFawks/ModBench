@@ -1,7 +1,5 @@
-// Shared by masterReader.test.ts and statusChecker.test.ts: builds a minimal
-// FO4 TES4 header record (24-byte major-record header + HEDR + MAST/DATA
-// subrecords) for a synthetic plugin fixture. See masterReader.ts for the
-// binary layout this mirrors.
+// A minimal TES4 plugin header: 24-byte major-record header, HEDR, then the
+// MAST/DATA subrecords, laid out as masterReader.ts reads them.
 
 export function buildTes4Buffer(masters: string[], opts: { dataAfterFirstMaster?: boolean } = {}): Buffer {
   const parts: Buffer[] = [];

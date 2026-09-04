@@ -11,10 +11,8 @@ const TEST_PORT = 15172;
 let mockBackend: http.Server;
 let ext: vscode.Extension<unknown> | undefined;
 
-// The Launch/Close mEdit commands are gone — the backend launches with the extension
-// (maintainer ruling 2026-09-01) — so tests drive the same lifecycle through activate()'s
-// test-API exports. enterEditing mirrors the old command's semantics exactly: a launch
-// failure is logged-and-swallowed after resetting to loadout, never thrown at the caller.
+// The backend launches with the extension, so tests drive the lifecycle through activate()'s
+// test-API exports: a launch failure is logged-and-swallowed after resetting to loadout.
 const editingApi = () =>
   ext?.exports as { enterEditing?: () => Promise<void>; exitToLoadout?: () => void } | undefined;
 async function enterEditing(): Promise<void> {
@@ -28,17 +26,10 @@ function exitEditing(): void {
   editingApi()?.exitToLoadout?.();
 }
 
-// Mock backend state, controlled by the launch suite. Models the real backend:
-// GET /plugins fails with 503 "No load order held" until PUT /load-order
-// is received, then serves the loaded plugins.
-// The load order holds every plugins.txt line, so a disabled one is present and browsable —
-// it just never participates in winner computation.
-// This mock's response body IS the wire: it is serialized straight to the client as
-// `PluginResponse[]`. So the fixture is the generated type, and `mockPlugin` fills in the fields
-// the backend always sends — entries below stay terse without ever describing a body the backend
-// could not actually produce. (Before #627 they deliberately omitted required fields to exercise
-// the frontend's `?? true`/`?? []` defaults; those defaults are gone, and so is the version skew
-// they guarded against — the extension spawns its own bundled backend, ADR-0022.)
+// Models the real backend: GET /plugins fails with 503 until PUT /load-order arrives. The
+// response body IS the wire, so a body the backend could not produce is not a legal fixture.
+
+// The load order holds every plugins.txt line, so a disabled one is browsable but never wins.
 type MockPlugin = PluginMetadata;
 function mockPlugin(over: Partial<PluginMetadata> & Pick<PluginMetadata, 'name' | 'path' | 'origin' | 'participates'>): MockPlugin {
   return {
@@ -52,13 +43,11 @@ const MOCK_PLUGINS: MockPlugin[] = [
   mockPlugin({ name: 'Fallout4.esm', path: '/data/Fallout4.esm', origin: 'Data', participates: true }),
   mockPlugin({ name: 'TestMod.esp', path: '/data/TestMod.esp', origin: 'Data', participates: true }),
   mockPlugin({ name: 'Other.esp', path: '/data/Other.esp', origin: 'Data', participates: false }),
-  // A plugins.txt line (not an implicit master) the backend reports read-only for editing
-  // (Editing's "Immutable plugin") — exercises the composite's tooltip decoration end-to-end,
-  // distinct from ImplicitMasterNode's own (Mod-Management-only, no load order needed) lock icon.
+  // A plugins.txt line the backend reports read-only for editing, exercising the composite's
+  // tooltip decoration end-to-end — distinct from ImplicitMasterNode's own lock icon.
   mockPlugin({ name: 'Immutable.esm', path: '/data/Immutable.esm', origin: 'Data', participates: true, isImmutable: true }),
-  // ADR-0037: a plugin the backend flags with a directly-missing master — exercises the
-  // composite's error decoration end-to-end. Every other entry carries an empty `masterIssues`,
-  // which is what the backend sends for a plugin whose masters all resolved.
+  // ADR-0037: a plugin the backend flags with a directly-missing master. Every other entry carries
+  // an empty `masterIssues`, which is what the backend sends when all masters resolved.
   mockPlugin({
     name: 'MissingMaster.esp', path: '/data/MissingMaster.esp', origin: 'Data', participates: true,
     masterIssues: [{ masterName: 'Ghost.esm', kind: 'DirectlyMissing' }],
@@ -71,24 +60,14 @@ const requestLog: string[] = [];
 // simulates a plugin's decoration-worthy state (a master issue, a load failure) changing between
 // one load and a reload of the same load order.
 let mockPluginsOverride: MockPlugin[] | null = null;
-// Makes the next PUT /load-order fail, the way a bad game directory or a
-// backend-side load error would — ADR-0044's contract (LoadOrderMirror.Reconcile's EnsureScope
-// disposes the previous scope first, on a scope change) means the mock must *not* set
-// loadOrderHeld on this path, matching the real backend leaving no load order behind either.
+// Makes the next PUT /load-order fail the way a bad game directory would. ADR-0044's contract
+// disposes the previous scope first, so the mock must not set loadOrderHeld on this path.
 let putLoadOrderShouldFail = false;
-// Makes the next GET /plugins fail, the way a transient backend hiccup would mid-session
-// (#650) — distinct from putLoadOrderShouldFail, which is about the reconcile's own PUT, and
-// from the 503 "no load order held" answer below, which is a normal, expected state rather than
-// a failure.
+// Makes the next GET /plugins fail the way a transient backend hiccup would mid-session —
+// distinct from the 503 "no load order held" answer, which is a normal state, not a failure.
 let getPluginsShouldFail = false;
-// GET /load-order/status' answer — what the load can honestly say about itself *right now*.
-// Mutable per-test so a suite can script a load landing one plugin at a time and observe the tree
-// react to each, which is the whole subject of progressive load. `conflictsComputed` is part of
-// the real wire contract regardless — the record-editor webview polls this same endpoint directly
-// (`RecordPanelClient.ts`) for its own comparison-completeness statement, unrelated to the tree.
-// `state` is carried even though PluginRepository deliberately drops it (LoadOrderStatus in
-// ApiClient.ts says why): it is non-nullable on the wire, so a body without it is one the backend
-// cannot send.
+// Mutable per-test so a suite can script a load landing one plugin at a time. `state` is carried
+// even though PluginRepository drops it: it is non-nullable on the wire.
 type MockLoadOrderStatus = {
   state: 'None' | 'Reconciling' | 'Ready';
   totalPlugins: number;
@@ -99,15 +78,12 @@ type MockLoadOrderStatus = {
 const NO_LOAD_ORDER_STATUS: MockLoadOrderStatus =
   { state: 'None', totalPlugins: 0, indexedPlugins: [], conflictsComputed: false, failures: [] };
 let loadOrderStatus: MockLoadOrderStatus = { ...NO_LOAD_ORDER_STATUS };
-// When set, PUT /load-order does not answer until the test calls it — the real
-// backend's load blocks for the whole indexing run, and every progressive-load assertion is about
-// what the tree does *during* that window. A mock that answers instantly cannot express it.
+// When set, PUT /load-order does not answer until the test releases it — the real backend's load
+// blocks for the whole indexing run, and the progressive-load assertions are about that window.
 let releasePutLoadOrder: (() => void) | null = null;
 let holdPutLoadOrder = false;
-// The same trick one step earlier in the launch. `BackendManager.start()` gates on
-// GET /health, so holding it parks a launch in its *first* phase — before the load POST exists at
-// all — which is the window a mid-load close has to survive too. One-shot: releasing clears the
-// hold, so the connect loop's next attempt answers normally.
+// `BackendManager.start()` gates on GET /health, so holding it parks a launch in its first
+// phase — the window a mid-load close also has to survive. One-shot: releasing clears the hold.
 let releaseHealth: (() => void) | null = null;
 let holdHealth = false;
 
@@ -126,8 +102,7 @@ function resetMockBackend(): void {
   releaseHealth = null;
 }
 
-/** Report the load as having indexed `names` so far. `conflictsComputed` stays false until
- *  a test says otherwise — the winner sweep is the last thing a real load does. */
+// `conflictsComputed` stays false until a test says so: the winner sweep is a load's last step.
 function setIndexed(names: string[], extra: Partial<MockLoadOrderStatus> = {}): void {
   loadOrderStatus = {
     state: 'Reconciling',
@@ -257,24 +232,13 @@ describe('modbench activation', () => {
     assert.ok(ext?.isActive, 'expected the extension to auto-activate via onStartupFinished');
   });
 
-  // The pre-activation welcome flash is NOT tested here. It lives entirely in the window between
-  // the workspace opening and this activation completing — the Mods view's `viewsWelcome` is a
-  // static package.json contribution the workbench can render before any extension code runs,
-  // which is exactly how "not an MO2 instance" can flash for a valid one. There is no
-  // public API to read a context key's current value back, and no property on TreeView (or
-  // anywhere else) exposing whether its `viewsWelcome` content is currently showing — so this
-  // window can't be observed from extension test code, only from a human watching the real UI.
-  // Manual check: open a real MO2 instance as the workspace root
-  // and watch the Mods view from the moment the window appears — a *brief flash* of "This
-  // isn't an MO2 instance" counts as a fail, not just it staying up.
+  // The pre-activation welcome flash is not testable: it lives between workspace open and
+  // activation, and no API exposes whether `viewsWelcome` is showing. Manual check only.
 });
 
 // ── Build integrity ────────────────────────────────────────────────────────────
-// The harness loads out/extension.js, a bundle produced by a separate esbuild step —
-// nothing about running this suite forces that bundle to be current. Assert the property
-// from inside the process that actually loaded it, rather than trust the npm script that
-// got us here (pretest:integration could be deleted, renamed, point at the wrong outfile,
-// or esbuild could silently stop emitting — every one of those goes red here).
+// The harness loads out/extension.js, a bundle from a separate esbuild step; nothing forces it
+// to be current, so freshness is asserted from inside the process that loaded it.
 
 describe('the loaded extension bundle is not older than its sources (#299)', () => {
   it('out/extension.js is at least as new as every file under src/', () => {
@@ -283,10 +247,8 @@ describe('the loaded extension bundle is not older than its sources (#299)', () 
     const pkgRoot = path.join(__dirname, '..', '..', '..');
     const srcDir = path.join(pkgRoot, 'src');
     const bundlePath = path.join(pkgRoot, 'out', 'extension.js');
-    // The workspace fixture VS Code opens as the test workspace folder — it's live,
-    // written to mid-run by other suites (downloads/, overwrite/, plugins.txt edits), so
-    // its mtimes churn independently of any bundle-affecting source edit and would flake
-    // this comparison. It also isn't part of the bundle.
+    // The workspace fixture is live — other suites write into it mid-run, so its mtimes churn
+    // independently of any bundle-affecting source edit. It is not part of the bundle either.
     const excluded = path.join(srcDir, 'test', 'integration', 'workspace');
 
     let newestMtimeMs = -Infinity;
@@ -336,20 +298,17 @@ describe('Modbench output channel (#198)', () => {
 // ── Command registration ───────────────────────────────────────────────────────
 
 describe('modbench command registration', () => {
-  // Derived from package.json rather than hand-copied (#634) — a contributed command that
-  // was never registered (or vice versa) now fails here instead of silently matching a
-  // hand-written list that forgot it too. __dirname is out/test/integration/ once compiled
-  // (tsconfig.integration.json), three levels under the modbench package root — same
-  // resolution the bundle-freshness test above already relies on.
+  // Derived from package.json rather than hand-copied, so a contributed command that was never
+  // registered fails here instead of matching a hand-written list that forgot it too. __dirname is
+  // three levels under the package root once compiled.
   const pkg = JSON.parse(
     fs.readFileSync(path.join(__dirname, '..', '..', '..', 'package.json'), 'utf8'),
   ) as { contributes: { commands: { command: string }[] } };
   const EXPECTED_COMMANDS = pkg.contributes.commands.map((c) => c.command);
 
   it('registers all expected commands on activation', async () => {
-    // A derived list can go silently empty (renamed/missing contributes.commands) in a way a
-    // hand-typed array never could — that would make the loop below assert nothing and still
-    // pass. Guard the floor explicitly rather than let emptiness read as success.
+    // A derived list can go silently empty (renamed contributes.commands) in a way a hand-typed
+    // array could not, leaving the loop below asserting nothing while still passing.
     assert.ok(EXPECTED_COMMANDS.length > 0, 'derived command list is empty — the manifest shape changed');
     const all = await vscode.commands.getCommands(/* filterInternal */ true);
     for (const cmd of EXPECTED_COMMANDS) {
@@ -420,9 +379,8 @@ describe('modbench.openEditor', () => {
 
 describe('modbench.openEditorBeside', () => {
   it('opens a plain {formKey,label}-shaped target as a genuinely new tab, never retargeting the singleton (#284)', async () => {
-    // Seed the singleton with a known title first — a wrong implementation that routed this
-    // through the singleton/retarget path instead of always creating a fresh panel would retarget
-    // *this* panel rather than opening a new tab, which is exactly what the assertions below catch.
+    // Seed the singleton with a known title first: an implementation that routed through the
+    // singleton/retarget path would retarget this panel instead of opening a new tab.
     await vscode.commands.executeCommand('modbench.openEditor', { formKey: 'Fallout4.esm:000020', label: 'Seed Record' });
     await new Promise(r => setTimeout(r, 300));
 
@@ -512,11 +470,8 @@ describe('modbench.openEditorBeside', () => {
 });
 
 // ── modbench.openHeader reachable from every plugin-bearing row ─────────────────
-// The merged tree's rows
-// come from modmanager/PluginListProvider.ts, whose implicit-master row is a *different*
-// class with a *different* contextValue ('pluginImplicit', not 'pluginImmutable') and no `.plugin`
-// field at all — so the handler's own node-shape handling, not just the package.json `when`,
-// is what keeps this row kind working.
+// The implicit-master row is a different class with a different contextValue and no `.plugin`
+// field, so the handler's node-shape handling, not package.json's `when`, keeps it working.
 import { PluginNode as PluginListPluginNode, ImplicitMasterNode } from '../../modmanager/PluginListProvider';
 
 describe('modbench.openHeader reachable from every plugin-bearing row of the merged tree (#273 Slice E)', () => {
@@ -575,9 +530,8 @@ describe('modbench.downloads tree (#233)', () => {
   it('reflects a new archive dropped into downloads/ via the file-watcher, with no manual refresh', async () => {
     fs.writeFileSync(path.join(downloadsDir, 'bar.zip'), 'data');
 
-    // The watcher debounces 200ms (downloadsWatcher.ts) before it calls invalidate() itself —
-    // poll for the row rather than a fixed sleep, so this isn't flaky under load. Never calls
-    // p.invalidate() directly: the point of this test is that the watcher does it unprompted.
+    // The watcher debounces 200ms before calling invalidate() itself, so poll for the row rather
+    // than sleeping a fixed time. Never calls invalidate() directly: the watcher must do it alone.
     const rows = await new Promise<Array<{ row?: { name: string } }>>((resolve, reject) => {
       const deadline = Date.now() + 10000;
       const check = () => {
@@ -650,10 +604,9 @@ describe('Overwrite row (#82)', () => {
   });
 });
 
-// ── External-change poller lifecycle is gated on the backend, not activation ────────────────────
-// Deliberately placed here, before any other describe below ever calls Launch mEdit — this suite
-// activates the extension exactly once (the file's own top-level before()), so "no poll before
-// Launch mEdit" is only provable at the one point in the run where that is still true.
+// ── External-change poller lifecycle is gated on the backend ────────────────────
+// Placed first: the suite activates once, so "no poll before launch" is provable only at the
+// one point in the run where that is still true.
 
 describe('External-change poller runs only while the backend is up (#432)', () => {
   const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
@@ -679,10 +632,7 @@ describe('External-change poller runs only while the backend is up (#432)', () =
     fs.rmSync(gameDir, { recursive: true, force: true });
   });
 
-  // The original #432 test also asserted no poll could fire before Launch mEdit had ever
-  // run — that assertion died with the command: the backend now launches with the extension
-  // (maintainer ruling 2026-09-01), so "before launch" is not a state the design has. What
-  // remains load-bearing is the second half: the poller runs only while a backend is up.
+  // What is load-bearing here: the poller runs only while a backend is up.
   it('polls while the backend is up and stops when editing ends', async function () {
     if (!root) this.skip();
     this.timeout(20000);
@@ -712,11 +662,8 @@ describe('Launch mEdit populates the editing plugin tree (#75)', () => {
   const treeProvider = () => (ext?.exports as { treeProvider?: TreeLike } | undefined)?.treeProvider;
   let gameDir = '';
 
-  // enterEditing needs a resolvable game directory and an enabled plugin in the
-  // active profile to reach PUT /load-order. The committed test
-  // workspace fixture already supplies a valid MO2 instance (empty
-  // plugins.txt) — only the suite-scoped plugins.txt content and game dir are
-  // set up here.
+  // enterEditing needs a resolvable game directory and an enabled plugin in the active profile to
+  // reach PUT /load-order, so only the suite-scoped plugins.txt and game dir are set up here.
   before(async () => {
     if (!root) return;
     resetMockBackend();
@@ -753,12 +700,9 @@ describe('Launch mEdit populates the editing plugin tree (#75)', () => {
     const prematurePlugins = duringLaunch.slice(0, load).includes('GET /plugins');
     assert.ok(!prematurePlugins, 'GET /plugins must not fire before PUT /load-order');
 
-    // Nothing in production calls treeProvider.getChildren(undefined). The merged
-    // Plugins tree (modbench.pluginListTree / pluginsTree export) is what actually reflects a
-    // successful launch: its TestMod.esp row only becomes expandable once
-    // PluginsTreeComposite.setLoadOrder() has run, which only happens after the load order's own
-    // GET /plugins lands — so an expandable row here proves both halves of the regression
-    // this test guards: the fetch happened, and it happened after load, not before.
+    // The merged Plugins tree is what reflects a successful launch: its TestMod.esp row becomes
+    // expandable only after the load order's own GET /plugins lands, so an expandable row proves
+    // the fetch happened, and happened after load.
     const pluginsTreeExport = (ext?.exports as { pluginsTree?: PluginsTreeLike } | undefined)?.pluginsTree;
     assert.ok(pluginsTreeExport, 'activate() should return { pluginsTree } for the merged view');
     const rows = await pluginsTreeExport.getChildren();
@@ -771,12 +715,9 @@ describe('Launch mEdit populates the editing plugin tree (#75)', () => {
   });
 });
 
-// ── Loadout stays visible through an editing backend ───────────────────────────
-// That no view, menu entry or keybinding gates on modbench.viewMode is proven statically in
-// packageJson.test.ts's repo-wide sweep. These prove the two user-observable consequences only
-// a live host can show: durable Plugin load order state survives a Launch mEdit / Close mEdit
-// round trip untouched (AC5), and its write path (enable/disable) stays reachable while the
-// backend is running (AC4).
+// ── Loadout survives an editing backend ────────────────────────────────────────
+// These prove the two consequences only a live host can show: load-order state survives a
+// round trip, and its write path stays reachable while the backend runs.
 
 interface PluginListNodeLike { plugin?: { name?: string; enabled?: boolean } }
 interface PluginListProviderLike {
@@ -877,20 +818,15 @@ describe('Loadout stays visible through an editing backend (#268)', () => {
 });
 
 // ── The Plugin load-order rows expand into records ────────────────────────────
-// The merged Plugins tree, exercised through the same seam the view uses: the composite's own
-// getChildren/getTreeItem. Chevrons appearing across the tree are the whole "editing is available
-// now" signal (ADR-0035), so that transition is what these assert — with no backend running the rows are
-// leaves, a load order makes them collapsible without disturbing the load order, and closing it puts
-// them back.
+// Chevrons appearing across the tree are the whole "editing is available now" signal (ADR-0035):
+// with no backend the rows are leaves, a load order makes them collapsible, closing puts them back.
 
 interface PluginsTreeLike {
   getChildren(element?: unknown): Promise<unknown[]>;
   getTreeItem(element: unknown): vscode.TreeItem;
 }
 
-/** A row's plugin file, however the row spells it: plugins.txt lines carry `plugin.name`, the
- *  game's implicitly-loaded masters carry `name`. The tree renders both — the implicit rows come
- *  from the resolved Data folder, so how many there are depends on the fixture instance. */
+// plugins.txt lines carry `plugin.name`; the game's implicitly-loaded masters carry `name`.
 const rowName = (row: unknown): string | undefined =>
   (row as PluginListNodeLike).plugin?.name ?? (row as { name?: string }).name;
 const findRow = (rows: unknown[], name: string): unknown => {
@@ -1008,11 +944,8 @@ describe('Plugin load-order rows expand into records (#270)', () => {
   });
 });
 
-// ADR-0035: read-only-for-editing is a tooltip, never an icon, and only ever known once a
-// load order says so — before launch (or after close) a plugin row carries no opinion about it at
-// all, matching this wiring's own real seam (extension.ts's heldPluginFilesFrom →
-// PluginsTreeComposite.setLoadOrder), not just the composite's own unit seam already covered by
-// PluginsTreeComposite.test.ts.
+// ADR-0035: read-only-for-editing is a tooltip, never an icon, and is known only once a load
+// order says so — before launch a plugin row carries no opinion about it at all.
 describe('A read-only plugin\'s tooltip says so once the backend is running (#276)', () => {
   const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   const pluginsTxtPath = root ? path.join(root, 'profiles', 'Default', 'plugins.txt') : '';
@@ -1071,12 +1004,9 @@ describe('A read-only plugin\'s tooltip says so once the backend is running (#27
   });
 });
 
-// ADR-0037: a plugin the backend flags with a missing master is decorated
-// through the real wiring (extension.ts's heldPluginFilesFrom → PluginsTreeComposite.setLoadOrder),
-// not just the composite's own unit seam already covered by PluginsTreeComposite.test.ts. Also
-// covers the defensive-read requirement: MOCK_PLUGINS sends raw JSON no PluginMetadata-typed
-// fixture could produce, so TestMod.esp — which carries no `masterIssues` key at all — proves the
-// "field absent" case degrades to undecorated rather than throwing.
+// ADR-0037: a plugin flagged with a missing master is decorated through the real wiring.
+// MOCK_PLUGINS sends raw JSON no PluginMetadata-typed fixture could produce, so TestMod.esp,
+// with no `masterIssues` key, proves an absent field degrades to undecorated.
 describe('A plugin with a missing master is flagged, never deactivated (#277)', () => {
   const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   const pluginsTxtPath = root ? path.join(root, 'profiles', 'Default', 'plugins.txt') : '';
@@ -1090,12 +1020,9 @@ describe('A plugin with a missing master is flagged, never deactivated (#277)', 
     resetMockBackend();
     gameDir = fs.mkdtempSync(path.join(os.tmpdir(), 'medit-missingmaster-'));
     fs.mkdirSync(path.join(gameDir, 'Data'), { recursive: true });
-    // The mock backend reports both of these with origin 'Data', so the Data folder has to
-    // actually hold them — otherwise reconcile correctly concludes their names now resolve to
-    // nothing and decorates every row with a load failure instead. Production reaches that state
-    // too (LoadOrder.cs: a missing file is recorded as a load failure, never refused outright —
-    // ADR-0044), so a fixture that skipped writing the files would just exercise the wrong
-    // decoration, not one production can't reach.
+    // The mock reports both with origin 'Data', so the Data folder must actually hold them, or
+    // reconcile concludes their names resolve to nothing and decorates every row with a load
+    // failure instead (ADR-0044).
     for (const name of ['TestMod.esp', 'MissingMaster.esp']) {
       fs.writeFileSync(path.join(gameDir, 'Data', name), '');
     }
@@ -1131,11 +1058,8 @@ describe('A plugin with a missing master is flagged, never deactivated (#277)', 
     assert.strictEqual(item.checkboxState, vscode.TreeItemCheckboxState.Checked);
   });
 
-  // The negative case, at the reachable precondition. This asserted an *absent* `masterIssues`
-  // key before #627; the field is non-nullable on the wire, so the shape the backend actually
-  // sends for a plugin whose masters all resolved is an empty array, and that is what TestMod.esp
-  // now carries. The behavior under test — a plugin with no master issues gets no decoration — is
-  // unchanged and still live.
+  // The negative case: `masterIssues` is non-nullable on the wire, so a plugin whose masters all
+  // resolved carries an empty array, and gets no decoration.
   it('leaves a plugin whose masters all resolve undecorated', async () => {
     const tree = pluginsTree()!;
     const row = findRow(await tree.getChildren(), 'TestMod.esp');
@@ -1147,9 +1071,8 @@ describe('A plugin with a missing master is flagged, never deactivated (#277)', 
 
 });
 
-// ADR-0044: a loadout change through the real wiring — the plugins.txt watcher, the
-// load-order sync, `PUT /load-order`, and the tree hand-off that follows — not just the sync's own
-// unit seam (already covered directly in loadOrderReconcile.test.ts).
+// ADR-0044: a loadout change through the real wiring — the plugins.txt watcher, the load-order
+// sync, `PUT /load-order`, and the tree hand-off that follows.
 describe('A loadout change sends a fresh load order snapshot (ADR-0044)', () => {
   const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   const pluginsTxtPath = root ? path.join(root, 'profiles', 'Default', 'plugins.txt') : '';
@@ -1160,8 +1083,7 @@ describe('A loadout change sends a fresh load order snapshot (ADR-0044)', () => 
   let pluginsTxtTrailer = '';
   const putCount = () => requestLog.filter((l) => l === 'PUT /load-order').length;
 
-  /** Rewrite plugins.txt (a trailing-newline toggle, so the bytes change) and wait for the sync to
-   *  send the snapshot that write is: the watcher → sync → PUT path, end to end. */
+  // A trailing-newline toggle so the bytes change, exercising watcher → sync → PUT end to end.
   async function changePluginsTxt(): Promise<void> {
     const before = putCount();
     const pluginReads = requestLog.filter((l) => l === 'GET /plugins').length;
@@ -1208,12 +1130,9 @@ describe('A loadout change sends a fresh load order snapshot (ADR-0044)', () => 
     assert.ok(putCount() >= before + 1, 'a plugins.txt change must send a fresh snapshot, not merely re-render the tree');
   });
 
-  // The WeakMap-based decoration in PluginsTreeComposite restores each row to its captured
-  // original before re-deciding what to layer back on (already covered in isolation by
-  // PluginsTreeComposite.test.ts) — this proves the *real* reconcile wiring actually reaches it:
-  // the same row object PluginListProvider handed out before must lose a decoration whose backend
-  // condition no longer holds, not merely gain a second copy of it. A bug of exactly
-  // this shape (stacked, not cleared) shipped once.
+  // The WeakMap decoration restores each row to its captured original before re-deciding what
+  // to layer back on, so the same row object must lose a decoration once the backend stops
+  // reporting its condition rather than gain a second copy.
   it('clears a resolved master-issue decoration on the same row after the next reconcile, not just applies it', async () => {
     const tree = pluginsTree()!;
     const before = findRow(await tree.getChildren(), 'MissingMaster.esp');
@@ -1230,14 +1149,9 @@ describe('A loadout change sends a fresh load order snapshot (ADR-0044)', () => 
       'a resolved master issue must clear the tooltip, not leave the stale decoration stacked on top of the fresh one');
   });
 
-  // If matchingPlugins were refreshed only by
-  // setFilter/clearFilter, a plugin a filter suppressed the row of would stay suppressed through a
-  // reconcile that came up with no filter at all — the "map outlives the filter state it
-  // describes" bug, in mirror image. Hence GET /plugins'
-  // hasMatchingRecords routes through the same completion hand-off (applyLoadOrderToTree) every
-  // reconcile reaches downstream of syncFilterState. ADR-0035's dated §Filters amendment:
-  // a plugin with no matching records has its row omitted entirely, hence asserting absence/
-  // presence of the row rather than its collapsibleState.
+  // If matchingPlugins were refreshed only by setFilter/clearFilter, a suppressed plugin would
+  // stay suppressed through a reconcile with no filter at all. Under ADR-0035 such a plugin has
+  // no row, so absence is what is asserted.
   it('hides a plugin a filter suppresses, and restores it once a reconcile comes up with no filter (#396 / #278 review)', async () => {
     const tree = pluginsTree()!;
     const before = findRow(await tree.getChildren(), 'TestMod.esp');
@@ -1278,16 +1192,9 @@ describe('A loadout change sends a fresh load order snapshot (ADR-0044)', () => 
   });
 });
 
-// ADR-0035 amending ADR-0018: `loadOrderSync`'s match map is a statement about which held
-// plugins' records the *currently active* record filter matches, and it has exactly three
-// writers that reset it to "no data" (undefined, read as "matches everywhere") rather than let it
-// answer for a filter or a load order that no longer holds: refreshMatchingPlugins's own failure
-// path, exitToLoadout, and clearTreeWhenBackendDies. None of the three had ever been exercised by
-// this suite (#650) — dropping any one of them left the suite green, because the *tree's* own
-// chevrons are also cleared independently by other writes (pluginsTree.setLoadOrder(undefined)),
-// which masks whether the match map underneath was ever actually reset. These tests read
-// loadOrderSync.matches() directly instead, so each is a proof of its own named writer and
-// nothing else.
+// ADR-0035 amending ADR-0018: the match map answers for the active filter only, so three
+// writers reset it to undefined rather than answer for a filter or load order that has gone:
+// refreshMatchingPlugins's failure path, exitToLoadout, and clearTreeWhenBackendDies.
 describe('matchingPlugins clears when it can no longer be trusted (#650)', () => {
   const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   const pluginsTxtPath = root ? path.join(root, 'profiles', 'Default', 'plugins.txt') : '';
@@ -1315,10 +1222,8 @@ describe('matchingPlugins clears when it can no longer be trusted (#650)', () =>
     fs.rmSync(gameDir, { recursive: true, force: true });
   });
 
-  // Each test starts from the same "a record filter has already ruled TestMod.esp out"
-  // state — set directly on the plugin the activation reconcile loads, rather than through an
-  // explicit setFilter round trip, since which filter produced the map is irrelevant to what
-  // clears it.
+  // Each test starts from "a record filter has already ruled TestMod.esp out", set directly rather
+  // than through a setFilter round trip: which filter produced the map cannot matter to what clears it.
   beforeEach(async () => {
     if (!root) return;
     resetMockBackend();
@@ -1341,10 +1246,8 @@ describe('matchingPlugins clears when it can no longer be trusted (#650)', () =>
   });
 
   it('exitToLoadout clears the match map, not just the tree', () => {
-    // exitToLoadout's own stop() call also fires clearTreeWhenBackendDies's 'status' listener,
-    // a second, independent writer of the same map (below) — detach it here so this test proves
-    // exitToLoadout's own write and nothing else, restoring it afterward so later tests (and
-    // clearTreeWhenBackendDies's own real job) are unaffected.
+    // exitToLoadout's stop() also fires clearTreeWhenBackendDies's 'status' listener, a second writer
+    // of the same map — detached here so this test proves exitToLoadout's own write, restored after.
     const bm = backendManagerOf();
     const statusListeners = bm?.listeners('status') ?? [];
     bm?.removeAllListeners('status');
@@ -1376,11 +1279,8 @@ describe('matchingPlugins clears when it can no longer be trusted (#650)', () =>
   });
 });
 
-// The Plugins tree's description names both of its narrowing axes, and the record filter
-// is a fact about the *load order* — so it cannot outlive one. Same exitToLoadout path and the same
-// silent-wrong-state class as the decoration above: a readout describing a load order that is gone.
-// The name filter's half is deliberately untouched by a close — it narrows load-order rows,
-// which are still there.
+// The record filter is a fact about the load order, so it cannot outlive one — a readout
+// describing a load order that is gone. The name filter survives a close: its rows remain.
 describe('The record-filter readout does not outlive its load order (#255)', () => {
   const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   const pluginsTxtPath = root ? path.join(root, 'profiles', 'Default', 'plugins.txt') : '';
@@ -1425,31 +1325,17 @@ describe('The record-filter readout does not outlive its load order (#255)', () 
   });
 });
 
-// Close mEdit must clear not only the readout above but also the context key the
-// Clear title-bar action is gated on (`modbench.filterActive`) and the code lens's own notion of
-// which SQL is active. All go through the record filter's single writer (makeSetFilterActive),
-// the same one every in-load order filter change already goes through, so `modbench.filterActive`
-// stays written from exactly one place.
-//
-// The context key itself is not asserted here: VS Code exposes no public API to read a context
-// key's value from a test. What *is* observable is the code
-// lens, because FilterCodeLensProvider is a genuinely registered `vscode.languages.CodeLensProvider`
-// — `vscode.executeCodeLensProvider` exercises the real instance, not a private field. Proving the
-// code lens clears on Close mEdit proves the single writer ran, and by that writer's own
-// construction the context key cleared with it.
+// Close mEdit must clear the readout, the context key the Clear action is gated on, and the code
+// lens's notion of which SQL is active; all go through the filter's single writer.
+
+// The context key is unreadable from a test, but the code lens is a genuinely registered
+// provider, so proving it clears proves that single writer ran.
 describe('Close mEdit clears the record filter\'s code lens too, not just the readout (#354)', () => {
   const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   const pluginsTxtPath = root ? path.join(root, 'profiles', 'Default', 'plugins.txt') : '';
-  // FilterCodeLensProvider only renders a lens for a document inside scriptsPath, and scriptsPath
-  // is resolved once at activate() (config, or ~/.medit/scripts) — not reconfigurable per test the
-  // way mods.gameDirectory is elsewhere in this file. setupScripts already creates and writes into
-  // this real directory on every activation; this file is additive to it, kept in its own
-  // mkdtempSync'd subdirectory (the file's own uniqueness idiom, used elsewhere including
-  // gameDir just below — atomic, unlike a hand-rolled Date.now() name, which two runs against the
-  // same $HOME could collide on) so a leaked artifact (a crash between write and cleanup) reads as
-  // this test's own rather than a mystery in a real product-facing folder. The provider gates on a
-  // URI *prefix*, so a subdirectory under scriptsPath still matches, same as gameDir under a temp
-  // root elsewhere in this file.
+  // FilterCodeLensProvider renders lenses only for documents inside scriptsPath, resolved once
+  // at activate() and not reconfigurable. The file goes in an mkdtempSync'd subdirectory so a
+  // leak reads as this test's own; a subdirectory still matches the prefix gate.
   const scriptsDir = path.join(os.homedir(), '.medit', 'scripts');
   const sql = 'SELECT form_key FROM "npc_"';
   let gameDir = '';
@@ -1522,16 +1408,10 @@ describe('Refresh never triggers a reconcile (#295 AC5)', () => {
 });
 
 // ── ADR-0035: progressive load ──────────────────────────────────────────────────
-// Rows land as each plugin finishes indexing, not all at once at the end — a plugin the load has
-// not reached yet stays an unexpandable leaf, and a per-plugin failure or master issue decorates
-// its row as it is discovered rather than being held back to the end.
-//
-// Every assertion here is about the window *during* the load POST, which is why the mock holds it
-// open (holdPutLoadOrder) rather than answering instantly like every other suite in this file.
+// Rows land as each plugin finishes indexing: a plugin the load has not reached stays a leaf.
+// Every assertion is about the window during the load POST, which is why the mock holds it open.
 
-/** Poll `read` until it returns a truthy value, or fail after `label`'s deadline. The tree reacts
- *  to a status poll on the backend's own 500ms cadence, so a fixed sleep would be either flaky or
- *  slow; same shape as the downloads watcher's own wait above. */
+// The tree reacts on the backend's own 500ms cadence, so a fixed sleep would be flaky or slow.
 async function waitFor<T>(label: string, read: () => Promise<T> | T, timeoutMs = 10_000): Promise<NonNullable<T>> {
   const deadline = Date.now() + timeoutMs;
   for (;;) {
@@ -1598,9 +1478,8 @@ describe('Progressive load (#307)', () => {
     await waitFor('TestMod.esp to gain a chevron mid-load', async () =>
       (await itemFor('TestMod.esp')).collapsibleState === vscode.TreeItemCollapsibleState.Collapsed);
 
-    // The other half of the claim, and the one that makes it progressive rather than merely
-    // early: a plugin the load has not reached yet stays a leaf. A row that expanded here would
-    // fetch records for a plugin that is not queryable yet.
+    // What makes it progressive rather than merely early: a plugin the load has not reached stays a
+    // leaf. A row that expanded here would fetch records for a plugin that is not queryable yet.
     assert.strictEqual(
       (await itemFor('Other.esp')).collapsibleState, vscode.TreeItemCollapsibleState.None,
       'Other.esp has not been indexed yet and must not be expandable',
@@ -1631,10 +1510,9 @@ describe('Progressive load (#307)', () => {
     await launch;
   });
 
-  // Closing mEdit mid-load is a deliberate abandonment, not a failure. The polling
-  // stops, the chevrons and the message go, and nothing is reported as broken — the user asked
-  // for exactly this. (The "no error toast" half is asserted at the LoadOrderController seam, where
-  // the reporter is injectable; here we assert the observable consequences in a live window.)
+  // Closing mEdit mid-load is a deliberate abandonment, not a failure: polling stops, chevrons and
+  // message go, and nothing is reported broken. The "no error toast" half is asserted at the
+  // LoadOrderController seam, where the reporter is injectable.
   it('stops polling and clears the view when mEdit is closed mid-load', async () => {
     setIndexed(['TestMod.esp']);
     const launch = enterEditing();
@@ -1665,13 +1543,9 @@ describe('Progressive load (#307)', () => {
     );
   });
 
-  // The *earlier* window. A launch has two phases: bring the backend up and walk the mod
-  // tree, then load. The test above closes during the second. This one closes during the first —
-  // before the load POST exists at all — because closing mEdit mid-load must be honoured with no
-  // qualification by phase, and backend spawn plus a filesystem walk is a realistic window to
-  // land in. Without the abort being armed before the first await, the stale launch runs on past
-  // the close, finds the backend it just stopped, and reports "Backend failed to start" — an
-  // error raised for something the user deliberately did.
+  // A launch has two phases: bring the backend up, then load; this closes during the first.
+  // Without the abort armed before the first await, the stale launch outruns the close, finds
+  // the stopped backend and reports "Backend failed to start".
   it('raises no error when mEdit is closed before the backend is even up', async () => {
     holdHealth = true;
     const errors: string[] = [];
@@ -1699,11 +1573,9 @@ describe('Progressive load (#307)', () => {
     }
   });
 
-  // Master issues are derived from the whole load order, so mid-load they would flag masters
-  // that simply have not been opened yet. The backend already suppresses them while loading
-  // (RecordQueryService.GetPlugins gates Classify on LoadOrderState.Ready) and the frontend never
-  // asks for them mid-load — this asserts the suppression is honoured end to end, and, just as
-  // importantly, that it lifts by itself once the load completes.
+  // Master issues derive from the whole load order, so mid-load they would flag masters not
+  // opened yet. The backend suppresses them while loading; this asserts the suppression holds
+  // end to end and then lifts by itself.
   it('leaves master issues off the rows until the load completes, then decorates them with no user action', async () => {
     setIndexed(['TestMod.esp', 'MissingMaster.esp']);
     const launch = enterEditing();
@@ -1722,18 +1594,14 @@ describe('Progressive load (#307)', () => {
     const loaded = await itemFor('MissingMaster.esp');
     assert.ok(typeof loaded.tooltip === 'string' && loaded.tooltip.includes('Missing master: Ghost.esm'),
       `expected the missing-master tooltip once the load completed, got: ${String(loaded.tooltip)}`);
-    // The other half of the same payload, and the trap this closes: a progressive tick carries
-    // empty readOnly/masterIssues, so if a tick were ever allowed to be the *last* setLoadOrder
-    // call, both these decorations would silently vanish from a fully loaded tree. Asserting one
-    // of each proves the completion hand-off still runs, whole, after the last tick.
+    // A progressive tick carries empty readOnly/masterIssues, so if a tick were ever the last
+    // setLoadOrder call both decorations would vanish from a fully loaded tree. Asserting one of each
+    // proves the completion hand-off runs after the last tick.
     const immutable = await itemFor('Immutable.esm');
     assert.ok(typeof immutable.tooltip === 'string' && immutable.tooltip.includes('read-only'),
       `expected the read-only note once the load completed, got: ${String(immutable.tooltip)}`);
-    // Immutable.esm never appeared in any progress tick's indexedPlugins — its chevron can
-    // only come from the completion hand-off's own file set. The tooltip check above proves
-    // the readOnly/masterIssues half of that payload landed; without this, a hand-off that applied
-    // readOnly/masterIssues but silently dropped (or never reached) the chevron-bearing file set
-    // would pass this test while leaving the row with no chevron, unexpandable.
+    // Immutable.esm never appears in a progress tick's indexedPlugins, so its chevron can only come
+    // from the completion hand-off's file set, which a hand-off applying only readOnly would drop.
     assert.strictEqual(
       immutable.collapsibleState, vscode.TreeItemCollapsibleState.Collapsed,
       'Immutable.esm was indexed but never named in a progress tick — its chevron must still come from the completion hand-off',
@@ -1741,25 +1609,12 @@ describe('Progressive load (#307)', () => {
   });
 });
 
-// pickCopyDestination (behind both copy commands) opens with an unguarded
-// repository.getPlugins() — a rejection there would escape the command callback as VS Code's raw
-// "fetch failed" toast rather than a Modbench-authored one. The real exposure window is the
-// backend dying *after* the copy surfaces (record row / record-header context menu) have
-// rendered — those are only reachable with a live load order, so the pre-launch repro this test
-// actually drives is not itself reachable through the UI. It
-// stands in for that real window on purpose: `resetMockBackend()` below leaves the mock
-// load order-less, so GET /plugins answers its existing 503 "No load order held" — a rejection out
-// of the exact same unguarded `pickCopyDestination` awaits a post-load backend death would
-// produce. The catch is deliberately untargeted (any rejection out of the
-// destination-picking step, not just a transport failure), so this stand-in exercises the same
-// code path as the literal scenario without needing new mock machinery to simulate a mid-session
-// crash.
+// pickCopyDestination opens with an unguarded repository.getPlugins(); a rejection escapes the
+// command callback as VS Code's raw "fetch failed" toast. A load order-less mock reproduces it.
 describe('Copy destination picking degrades to a reported error, never an uncaught rejection (#534)', () => {
-  // A record-editor column header's own data-vscode-context payload (ColumnHeaderContext) —
-  // always carries `origin`, so runCopyRecordCommand's origin-resolution step short-circuits
-  // with no HTTP call, and pickCopyDestination's getPlugins() is the first thing to reach the
-  // (refusing) backend. A plugins-tree RecordNode would work identically; the header is picked
-  // because it is the shape most immediately in hand with no tree lookup.
+  // A column header's data-vscode-context payload always carries `origin`, so origin resolution
+  // short-circuits with no HTTP call and pickCopyDestination's getPlugins() is the first thing to
+  // reach the refusing backend.
   const headerArg = {
     webviewSection: 'recordHeader',
     formKey: 'TestMod.esp:000001',
@@ -1777,9 +1632,8 @@ describe('Copy destination picking degrades to a reported error, never an uncaug
       (vscode.window as { showErrorMessage: unknown }).showErrorMessage =
         (message: string) => { errors.push(message); return Promise.resolve(undefined); };
       try {
-        // The assertion this bug is about: an escaped rejection out of the command callback
-        // fails executeCommand's own returned promise. Awaiting it with no try/catch is the
-        // point — a raw rejection here fails the test on its own, with no assertion needed.
+        // An escaped rejection out of the command callback fails executeCommand's own returned promise,
+        // so awaiting with no try/catch is the assertion.
         await vscode.commands.executeCommand(command, headerArg);
 
         assert.ok(requestLog.some((l) => l === 'GET /plugins'),

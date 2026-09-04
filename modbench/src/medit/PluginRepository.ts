@@ -6,17 +6,9 @@ import type {
 } from './ApiClient';
 import { errorText, isWriteGateTimeout, writeGateBusyMessage } from './ApiClient';
 
-/**
- * What one field edit came to. A refusal is a first-class outcome here, not an exception —
- * `refusal` is the backend's RecordEditRefusal name, which is what lets the caller act differently
- * for an untracked mod (offer Track) than for a base-game master (name the patch-plugin path).
- *
- * Two values are this side's own rather than the backend's: `'Unknown'`, the fallback when a
- * failure carries no `refusal` extension at all, and `'WriteGateBusy'` (#673) — a contended write
- * is not a refusal in the backend's sense (nothing judged the edit; the gate timed out before it
- * was attempted), but it reaches callers through this same outcome, and naming it is what keeps
- * the output-channel line diagnosable instead of another anonymous `'Unknown'`.
- */
+/** A refusal is an outcome, not an exception: `refusal` carries the backend's own name for it,
+ *  which lets a caller offer Track for one and the patch-plugin path for another. `'Unknown'`
+ *  and `'WriteGateBusy'` are this side's additions. */
 export type RecordFieldEditOutcome =
   | { applied: true }
   | { applied: false; refusal: string; message: string };
@@ -25,68 +17,46 @@ export type PluginRecordTypeCount = components['schemas']['PluginRecordTypeCount
 export type RecordPage = components['schemas']['RecordSummaryPagedResult'];
 export type CellPage = components['schemas']['CellSummaryPagedResult'];
 
-// The `?? []` / `?? { items: [], total: 0 }` defaults on `data` below are about *transport*, not
-// about the wire shape: openapi-fetch types `data` as `T | undefined` because a non-ok response
-// carries `error` instead, and TypeScript cannot see that `ensureOk` already threw. They are not
-// the per-field nullability compensation this file used to carry (#627) — that is gone, and the
-// generated types are now trusted field-for-field.
+// The `?? []` / `?? { items: [], total: 0 }` defaults below are about *transport*, not the wire
+// shape: openapi-fetch types `data` as `T | undefined` because a non-ok response carries `error`
+// instead, and TypeScript cannot see that `ensureOk` already threw.
 
 export interface PluginRepository {
   getPlugins(): Promise<PluginMetadata[]>;
-  /** #570: every held, mutable plugin's Kind B diagnoses off its original bytes — worded
-   *  exactly as the Track refusal would word them (one vocabulary; #569). One call for the
-   *  whole load order, made after a reconcile lands. */
+  /** Read off each held plugin's original bytes and worded exactly as the Track refusal words
+   *  them — one vocabulary. One call for the whole load order. */
   getDiagnoses(): Promise<PluginDiagnosisReport[]>;
-  // ADR-0035: the reconcile's own progress, polled alongside the in-flight PUT. Separate
-  // from getPlugins() rather than folded into it: this one answers while the load order is still
-  // incomplete, and it is the only read that can distinguish "not looked yet" from "no conflict".
+  // ADR-0035: separate from getPlugins() because this one answers while the load order is still
+  // incomplete, and it alone distinguishes "not looked yet" from "no conflict".
   getLoadOrderStatus(): Promise<LoadOrderStatus>;
-  // The Track gesture's own progress, polled alongside the in-flight track POST —
-  // same idiom as getLoadOrderStatus above.
+  // Polled alongside the in-flight track POST.
   getTrackStatus(): Promise<TrackStatus>;
-  // Every plugin currently holding an unanswered external-change question — polled the same
-  // way, no load-order dependency of its own (the queue lives on the backend's singleton watcher).
+  // No load-order dependency of its own: the queue lives on the backend's singleton watcher.
   getExternalChangeStatus(): Promise<UnansweredExternalChange[]>;
-  // origin (ADR-0036): which copy of `plugin` to read, when the load order holds two files of
-  // one filename. Optional — an ordinary load-order row has no origin to give, and the backend
-  // resolves that case from the load order, where a filename is unambiguous.
+  // origin (ADR-0036) says which copy of `plugin` to read when two files share a filename.
+  // Optional: a plain load-order row has none to give, and the backend resolves that case itself.
   getRecordTypes(plugin: string, origin?: string): Promise<PluginRecordTypeCount[]>;
   getRecords(plugin: string, type: string, offset: number, limit: number, origin?: string): Promise<RecordPage>;
-  // The FormKey picker's own search — free-text `query` matched against EditorID or
-  // a FormKey-shaped string, scoped to `validTypes` only when there's exactly one
-  // (an unscoped/multi-type field searches across every record type). Capped at 20 results.
+  // `query` matches an EditorID or a FormKey-shaped string. Scoped to `validTypes` only when
+  // there is exactly one; a multi-type field searches every record type. Capped at 20 results.
   searchRecords(query: string, validTypes: string[]): Promise<RecordPage>;
-  // Which plugin (+ origin) a FormKey's *winning* override belongs to — the record
-  // editor's Save & Compile icon resolves its active record's owning plugin through this, rather
-  // than falling through to an unfiltered QuickPick that can compile the wrong plugin in a
-  // multi-mod load order. undefined for an unknown FormKey (404) — never thrown, since "the actively
-  // open record just isn't resolvable" is the caller's own fallback path, not a failure to report.
+  // The *winning* override's plugin. undefined for an unknown FormKey (404), never thrown: an
+  // unresolvable open record is the caller's fallback path, not a failure to report.
   getRecordOwner(formKey: string): Promise<{ plugin: string; origin: string } | undefined>;
-  // The Copy as Override destination picker's own exclusion data — every plugin already
-  // holding an override (or the native/winning copy) of this FormKey, straight off GET
-  // /records/{formKey}/compare's existing Overrides list; no dedicated endpoint needed. Empty for
-  // an unknown FormKey (404), the same "not a fault" posture getRecordOwner's own 404 case uses.
+  // Read off the existing compare endpoint's Overrides list; no dedicated endpoint needed.
+  // Empty for an unknown FormKey (404), the same "not a fault" posture as getRecordOwner.
   getRecordOverridePlugins(formKey: string): Promise<string[]>;
-  // The Renumber gesture's FormID input box's suggested default — the same both-refs
-  // allocator create/renumber use internally, exposed read-only (xEdit's own "New FormID
-  // generated" flow). Never throws on the ordinary case; a genuine fault propagates like every
-  // other read here.
+  // The allocator create and renumber use internally, exposed read-only — xEdit's own
+  // "New FormID generated" flow.
   peekNextFreeFormKey(plugin: string, origin: string): Promise<string>;
-  /** Every (record, field) referencing formKey session-wide — the renumber confirm's blast
-   *  radius (#572); the same rows the Referenced By panel shows. */
+  /** The renumber confirmation's blast radius. */
   getReferences(formKey: string): Promise<components['schemas']['ReferenceResult'][]>;
   setFilter(sql: string): Promise<string | null>; // returns error message or null on success
   clearFilter(): Promise<void>;
   getActiveFilter(): Promise<string | null>;
 
-  // Per-plugin worldspace tree. origin (ADR-0036): same optional shape as
-  // getRecordTypes/getRecords above — a row that stands for a specific copy states it.
-  /**
-   * ADR-0041: one field edit through the single write path. Never throws on a refusal — a
-   * refused edit is an ordinary, expected answer (the plugin is untracked, the link would dangle),
-   * not a failure to report as one, so it comes back as a typed result the caller surfaces. Only a
-   * genuine transport failure rejects.
-   */
+  /** ADR-0041: the single write path. A refusal (untracked plugin, a link that would dangle) is
+   *  an expected answer and comes back typed; only a transport failure rejects. */
   editRecordField(
     formKey: string, plugin: string, origin: string, fieldPath: string, value: unknown,
   ): Promise<RecordFieldEditOutcome>;
@@ -95,20 +65,14 @@ export interface PluginRepository {
   getWorldspaceBlocks(plugin: string, worldspaceFormKey: string, origin?: string): Promise<WorldspaceBlocks>;
   getCellReferences(plugin: string, cellFormKey: string, origin?: string): Promise<CellReferences>;
   getInteriorCells(plugin: string, offset: number, limit: number, origin?: string): Promise<CellPage>;
-  // A container record's own children (a Quest's dialog topics/branches/scenes, a Dialog
-  // Topic's responses), in xEdit's own presentation order — same optional-origin shape as the
-  // worldspace-tree reads above. Cells/worldspaces are unaffected: this reads Quest/DialogTopic
-  // containment only, never Cell.NavigationMeshes/Landscape or Worldspace.TopCell/SubCells.
+  // Quest and DialogTopic containment only, in xEdit's presentation order — never
+  // Cell.NavigationMeshes/Landscape or Worldspace.TopCell/SubCells.
   getContainerChildren(plugin: string, parentFormKey: string, origin?: string): Promise<ContainerChildSummary[]>;
 }
 
-// ADR-0026: how long a tree-populating fetch (see `withTimeout` below) is given before it
-// is treated as hung rather than merely slow. No existing convention to anchor this to (checked
-// ADR-0026 and docs/specs/plugins.md) — 30s is a generous, ordinary HTTP-client default.
-// Deliberately not trying to distinguish "still working" from "actually stuck": a
-// slow-but-eventually-resolving call and a genuinely hung one look the same to the tree,
-// which has no way to tell them apart. Constructor-overridable so a test can inject a tiny
-// value instead of faking timers.
+// No convention in ADR-0026 or docs/specs/plugins.md anchors this: 30s is an ordinary
+// HTTP-client default. A slow call and a hung one look the same to the tree, so nothing tries to
+// tell them apart.
 export const DEFAULT_FETCH_TIMEOUT_MS = 30_000;
 
 export class ApiPluginRepository implements PluginRepository {
@@ -122,11 +86,9 @@ export class ApiPluginRepository implements PluginRepository {
     this.log = log ?? (() => {});
   }
 
-  // Don't swallow read failures into []/empty: a 503 "No load order has been received", a 500,
-  // or a network error must reach the tree so it renders an ErrorNode rather than
-  // a silent empty list indistinguishable from genuinely empty data (ADR-0026).
-  // A 200 with an empty/absent body is a legitimate empty result.
-  // Genuine network-level throws propagate as-is. Mirrors the getPlugins convention.
+  // Never swallow a read failure into an empty list: it would be indistinguishable from
+  // genuinely empty data, so the tree could not render an ErrorNode (ADR-0026). A 200 with an
+  // absent body is a legitimate empty result.
   private ensureOk(what: string, response: Response, error?: unknown): void {
     if (response.ok) return;
     const text = errorText(error);
@@ -136,14 +98,9 @@ export class ApiPluginRepository implements PluginRepository {
     throw new Error(msg);
   }
 
-  // Races `fn` (handed its own single-use AbortSignal) against a timeoutMs deadline, rather
-  // than trusting the underlying fetch to honor that signal on its own — a hung backend and a
-  // non-cooperative test double behave identically either way, and racing is what makes both
-  // still cause the returned promise to settle. `fn`'s own signal is aborted on timeout too, so a
-  // fetch implementation that *does* honor it (the real one, via undici) gets genuine
-  // cancellation of the in-flight request, not just a client-side rejection.
-  // Reuses `what` as the timeout message's own label,
-  // matching ensureOk's failure-message vocabulary so the two read as the same family of error.
+  // Races rather than trusting the fetch to honor the signal: a hung backend and an
+  // uncooperative test double both still settle the promise. The signal is aborted anyway, so a
+  // fetch that honors it cancels for real.
   private async withTimeout<T>(what: string, fn: (signal: AbortSignal) => Promise<T>): Promise<T> {
     const controller = new AbortController();
     let timer!: ReturnType<typeof setTimeout>;
@@ -172,9 +129,8 @@ export class ApiPluginRepository implements PluginRepository {
     return data ?? [];
   }
 
-  // The endpoint answers 200 in every state including "no load order" (LoadOrderEndpoints.cs),
-  // so a non-ok is a genuine fault and gets the same ensureOk treatment as every other read here.
-  // Degrading it to an empty status would be indistinguishable from a reconcile making no progress.
+  // The endpoint answers 200 in every state, "no load order" included, so a non-ok is a genuine
+  // fault: an empty status would be indistinguishable from a reconcile making no progress.
   async getLoadOrderStatus(): Promise<LoadOrderStatus> {
     const { data, error, response } = await this.client.GET('/load-order/status', {});
     this.ensureOk('GET /load-order/status', response, error);
@@ -316,21 +272,17 @@ export class ApiPluginRepository implements PluginRepository {
     });
     if (response.ok && data?.applied) return { applied: true };
 
-    // #673: the sixth gate-wrapped write endpoint, and the only one that does not reach the user
-    // through `EditingController.mutate` — so the busy branch is stated here too, off the same
-    // extension and in the same words (`writeGateBusyMessage` is the single place that sentence
-    // lives). Before the refusal shaping below, which would otherwise relay the gate's own
-    // implementation prose as though a judgement had been made about this edit.
+    // The one gate-wrapped write that does not reach the user through `EditingController.mutate`,
+    // so the busy branch is stated here too, before the refusal shaping below would relay the
+    // gate's prose as a judgement on this edit.
     if (isWriteGateTimeout(error)) {
       const message = writeGateBusyMessage('Could not edit this record');
       this.log(`[PluginRepository] editRecordField(${formKey}.${fieldPath}) hit the write gate (${response.status})`);
       return { applied: false, refusal: 'WriteGateBusy', message };
     }
 
-    // The backend's own typed discriminator, read off the ProblemDetails extension rather than
-    // re-derived from the status code — the status says what *kind* of problem it is, this says
-    // which one, and only the latter can tell "not tracked" from "no mod folder", whose ways out
-    // differ (ADR-0026).
+    // The backend's typed discriminator, off the ProblemDetails extension rather than re-derived
+    // from the status: only it tells "not tracked" from "no folder", whose ways out differ.
     const problem = error as { refusal?: string; detail?: string } | undefined;
     const outcome: RecordFieldEditOutcome = {
       applied: false,

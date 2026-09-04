@@ -1,10 +1,5 @@
-// Corpus test: single-file modlist.txt mutations against the committed
-// mo2-instance-corpus fixture. Each test drives the real Mo2ModlistSource write
-// path and asserts, over the WHOLE instance tree, that only modlist.txt changed —
-// not any mod's meta.ini, not the other profile, not plugins.txt, not the mods/
-// folder layout. That composition-level guarantee is this file's whole point: the
-// per-format tests (modlistText.test.ts) already prove modlist.txt itself is
-// byte-faithful in isolation.
+// Each test drives the real write path and asserts over the WHOLE instance tree that only
+// modlist.txt changed — the composition-level guarantee a per-format test cannot give.
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rm } from 'node:fs/promises';
 import { Mo2ModlistSource } from './mo2/Mo2ModlistSource';
@@ -61,10 +56,8 @@ describe('modlist.txt corpus — every entry mutation touches modlist.txt and no
     expect(await src.listSeparators()).toContain('QA Corpus Marker');
   });
 
-  // "Unassigned (Modlist Development)" has a corresponding mods/..._separator/
-  // folder on disk (a real MO2 shape) — the rival this catches is a rename that
-  // also renames the folder to "stay consistent": current shipped behavior is
-  // text-only, and the folder must be left exactly where it was, under its old name.
+  // This separator has a real mods/..._separator/ folder on disk; the rival is a rename that
+  // also renames the folder to "stay consistent".
   it('renameSeparator renames the marker, leaving its mods/ folder untouched', async () => {
     const before = await snapshotTree(dir);
     await src.renameSeparator('Unassigned (Modlist Development)', 'Renamed QA Group');
@@ -103,10 +96,8 @@ describe('modlist.txt corpus — every entry mutation touches modlist.txt and no
 
   it('reorderSeparatorBlock moves a separator and its (preceding) children as a unit, touching only modlist.txt', async () => {
     const before = await snapshotTree(dir);
-    // Past the last remaining entry once the block is lifted out — moves the
-    // block from the winning end to the losing end, a change large enough that
-    // any of "toIndex ignored", "only the separator moved", "children left
-    // behind" would all be visible in the result.
+    // Past the last remaining entry once the block is lifted out: a move large enough that
+    // "toIndex ignored" or "children left behind" would be visible.
     await src.reorderSeparatorBlock('Unassigned (Modlist Development)', 999);
     const after = await snapshotTree(dir);
     assertOnlyChanged(before, after, new Set([MODLIST]));
@@ -122,15 +113,13 @@ describe('modlist.txt corpus — every entry mutation touches modlist.txt and no
       'SKK Fast Start new game (Fallout 4)',
       'Unassigned (Modlist Development)',
     ]);
-    // And everything that used to follow the block now leads it.
+    // And everything that followed the block now leads it.
     const enboostIdx = entries.findIndex((e) => e.name === 'ENBoost - 12k');
     expect(enboostIdx).toBeLessThan(entries.length - 4);
   });
 
-  // "DragIn Manual Extract" sits in mods/ with no modlist.txt entry (a manually
-  // dropped-in archive, or MO2's own "unmanaged" case) — the rival this catches is
-  // a registration path that also touches the folder itself (e.g. writes a fresh
-  // meta.ini into it), which current shipped behavior never does.
+  // "DragIn Manual Extract" sits in mods/ with no modlist.txt entry; the rival is a
+  // registration path that also writes into the folder itself.
   it('registerUnlistedMods adopts the one unlisted folder, touching only modlist.txt', async () => {
     const before = await snapshotTree(dir);
     const added = await src.registerUnlistedMods();

@@ -1,9 +1,5 @@
-// Corpus test: mod lifecycle (install/uninstall) against the committed
-// mo2-instance-corpus fixture. These are the multi-file writers: install copies a
-// source tree AND writes meta.ini AND inserts a modlist line; uninstall deletes a
-// folder AND removes a modlist line AND writes back to an unrelated download's
-// .meta sidecar. The composition risk is exactly at those seams — one leg
-// succeeding while silently touching something it shouldn't.
+// Install and uninstall are multi-file writers, so the composition risk is at their seams: one
+// leg succeeding while silently touching something it should not.
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
