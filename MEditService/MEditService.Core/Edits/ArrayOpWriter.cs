@@ -222,9 +222,8 @@ internal static class ArrayOpWriter
         return true; // never a no-op
     }
 
-    // Deliberately not a field-by-field port of recordUtils.ts's own defaultElementValue — a
-    // struct element's own sub-fields are never individually defaulted here (see the "struct" arm
-    // below); everything else keeps the same shape recordUtils.ts used, with one fix: 'formKey'
+    // A struct element's own sub-fields are never individually defaulted here (see the "struct" arm
+    // below). 'formKey'
     // defaults to the string "Null" (Mutagen's own wire sentinel for an explicitly-unset FormLink —
     // the same token its codec already round-trips, seen verbatim in ColumnSpec.Extract's own
     // output for a field nobody set) rather than "" — "" is not a parseable FormKey
