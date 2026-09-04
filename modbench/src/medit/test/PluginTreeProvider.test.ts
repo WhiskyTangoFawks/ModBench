@@ -171,7 +171,7 @@ describe('PluginTreeProvider.getChildren(RecordTypeNode)', () => {
     expect(repo.getRecords).toHaveBeenCalledTimes(1);
   });
 
-  // #560: fetchRecords maps each row's own hasContainerChildren straight from the single
+  // fetchRecords maps each row's own hasContainerChildren straight from the single
   // getRecords response — a "qust" row with none is a leaf, one with some is Collapsed, read from
   // the listing rather than guessed from the record type alone.
   it('a "qust" row\'s collapsible state follows its own RecordSummary.hasContainerChildren, not its record type alone', async () => {
@@ -347,7 +347,7 @@ describe('RecordNode', () => {
     expect(args[0].label).toBe(record.formKey);
   });
 
-  // #674: the renumberable row — a master copy whose plugin is tracked — is the only one that
+  // The renumberable row — a master copy whose plugin is tracked — is the only one that
   // spells `recordTracked`, which is the whole of package.json's Change FormID when-clause.
   it('contextValue is recordTracked for a master row in a tracked plugin', () => {
     const node = new RecordNode(makeRecord(0), undefined, false, true);
@@ -474,7 +474,7 @@ describe('#281 record rows carry their copy identity', () => {
     expect((rec as RecordNode).contextValue).toBe('recordImmutable');
   });
 
-  // #674: an enabled, in-load-order, *untracked* plugin. Nothing about it is immutable, so the row
+  // An enabled, in-load-order, *untracked* plugin. Nothing about it is immutable, so the row
   // is fully actionable — and still not renumberable, which is what `recordUntracked` says.
   it('mutable but untracked load-order rows get contextValue recordUntracked', async () => {
     const repo = makeRepository();
@@ -487,7 +487,7 @@ describe('#281 record rows carry their copy identity', () => {
     expect((rec as RecordNode).contextValue).toBe('recordUntracked');
   });
 
-  // #674: tracked-ness reaches the row exactly the way immutability already does — a set pushed in
+  // Tracked-ness reaches the row exactly the way immutability already does — a set pushed in
   // from the reconcile's own `GET /plugins` answer (`PluginResponse.IsTracked`), never a
   // filesystem probe made here.
   it('record rows of a tracked plugin get contextValue recordTracked, case-insensitively', async () => {
@@ -1047,9 +1047,8 @@ describe('RecordNode collapsibility for container types (#424, #560)', () => {
     expect(node.collapsibleState).toBe(1);
   });
 
-  // #560: the reported bug — a Quest/Dialog Topic with zero actual container children showed an
-  // expand chevron that expanded to nothing. Collapsibility now reads the listing's own
-  // hasContainerChildren fact instead of the record's type signature alone.
+  // Collapsibility reads the listing's own hasContainerChildren fact, not the record's type
+  // signature: a Quest with zero container children must show no expand chevron.
   it('stays None (a leaf) when built as a "qust" row with no container children', () => {
     const node = new RecordNode(makeRecord(0), undefined, false, false, 'qust', false);
     expect(node.collapsibleState).toBe(0);

@@ -28,7 +28,7 @@ interface PluginHeaderProps {
 }
 
 // The tooltip must not advise moving this copy in the load order — wrong axis: a shadowed copy is
-// a file conflict, decided by the file override order and not by `plugins.txt`.
+// a file conflict, decided by the Mod override order and not by `plugins.txt`.
 
 // A column marked `!inLoadOrder` may be shadowed *or* be a plugin file `plugins.txt` never lists;
 // the wire carries no signal telling them apart, so the wording must be true for both.

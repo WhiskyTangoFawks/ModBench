@@ -52,9 +52,9 @@ import { onModCheckboxChanged } from './modmanager/modCheckboxHandler';
 import { meditConfig, makeDetectPaths, setMo2InstanceContext } from './workspaceConfig';
 
 
-// Everything one `activate()` call constructs that a choke point registered elsewhere also has to
-// reach. `undefined` until `activate()`'s wiring reaches the field — every reader treats "not yet
-// built" and "no live workspace" the same way.
+// Everything `activate()` constructs that a choke point registered elsewhere must also reach —
+// one object rather than nine module-level singletons. `undefined` until the wiring reaches the
+// field; every reader treats "not yet built" and "no live workspace" alike.
 interface ExtensionSession {
   backendManager?: BackendManager;
   loadoutHeaderProvider?: LoadoutHeaderProvider;
@@ -1050,9 +1050,9 @@ function makeEnterEditing(
 }
 
 
-// Undici's default Agent times out a fetch after ~300s; the backend's blocking endpoints
-// legitimately run for minutes, so 0 disables both. Bound per-request: `setGlobalDispatcher`
-// never reaches the extension host's outgoing requests.
+// Undici's default Agent times out a fetch with no response bytes after ~300s; the backend's
+// blocking endpoints legitimately run for minutes, so 0 disables both. Bound per-request:
+// `setGlobalDispatcher` never reaches the extension host's outgoing requests.
 function createUnlimitedFetch(): (input: Request) => Promise<Response> {
   const dispatcher = new Agent({ headersTimeout: 0, bodyTimeout: 0 });
   // Handed a global `Request`, undici's own `fetch` coerces it to a URL string and fails, so it is

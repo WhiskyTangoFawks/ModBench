@@ -30,7 +30,7 @@ describe('exitToLoadout', () => {
     expect(session.setFilterActive).toHaveBeenCalledWith(false);
     expect(session.loadOrderSync.setMatches).toHaveBeenCalledWith(undefined);
     expect(session.recordBrowserProvider.setImmutablePlugins).toHaveBeenCalledWith([]);
-    // #674: the tracked set is the same class of statement about a live backend as the immutable
+    // The tracked set is the same class of statement about a live backend as the immutable
     // one — left behind, it would keep offering Change FormID on rows nothing backs.
     expect(session.recordBrowserProvider.setTrackedPlugins).toHaveBeenCalledWith([]);
     expect(session.backendManager.stop).toHaveBeenCalled();

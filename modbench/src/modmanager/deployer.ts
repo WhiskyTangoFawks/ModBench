@@ -213,9 +213,8 @@ async function linkWinners(
   const crossVolume: string[] = [];
   for (const entry of index.files) {
     const relativePath = entry.relativePath;
-    // MO2 Root-Builder: a mod's root/ contents map to the game root, not Data/, so deploying
-    // them into Data/root/ would be wrong. Folder only — a mod file literally named `root` is
-    // not this convention and deploys normally.
+    // MO2 Root-Builder: a mod's root/ contents map to the game root, not Data/. Folder only — no
+    // vendored MO2 source special-cases a bare `root` file, so one deploys normally.
     if (relativePath.startsWith('root/')) continue;
 
     const foldedKey = foldPath(relativePath);

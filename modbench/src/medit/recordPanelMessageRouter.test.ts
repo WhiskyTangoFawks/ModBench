@@ -358,9 +358,8 @@ describe('pickFormKeyViaQuickPick (issue #210)', () => {
     await resultPromise;
   });
 
-  // Pasting a whole "EditorID [FormKey]" label copied from a cell searches on the
-  // FormKey, not on the literal — the normalizer's one wiring point. The unbracketed case is
-  // covered by the debounce test below and must not regress.
+  // Pasting a whole "EditorID [FormKey]" label copied from a cell searches on the FormKey, not
+  // on the literal — the normalizer's one wiring point.
   it('normalizes a pasted composite label to its FormKey before searching', async () => {
     vi.useFakeTimers();
     const { deps, searchRecords } = fakeDeps();

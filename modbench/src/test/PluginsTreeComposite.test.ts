@@ -620,9 +620,8 @@ describe('PluginsTreeComposite — load-failure decoration (#277 / ADR-0037 AC7)
   });
 });
 
-// #570: the session-load Kind B diagnoses (Malformed plugin, CONTEXT.md) join the same
-// backend-decoration chain — warning tier, below a load failure or master issue, since a
-// malformed plugin still loads and plays.
+// The malformed-plugin diagnoses join the same backend-decoration chain at warning tier, below a
+// load failure or master issue, since a malformed plugin still loads and plays.
 describe('malformed-plugin diagnosis decoration', () => {
   it('decorates a diagnosed plugin row with the warning badge and the diagnosis text', async () => {
     const { composite, render } = make([PLUGIN_ROW]);

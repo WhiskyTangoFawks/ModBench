@@ -375,9 +375,8 @@ describe('createReconcileSequencer', () => {
     expect(withOffers.presentCrashRepairOffers).toHaveBeenCalledWith(['offer-1']);
   });
 
-  // createLoadOrderSync is the sole caller and its coalescing guarantees one reconcile() call
-  // in flight at a time, so the sequencer serializes nothing itself: called directly, two
-  // concurrent reconcile() calls race, so another caller must bring its own serialization.
+  // The coalescing above guarantees one reconcile() in flight at a time, so the sequencer
+  // serializes nothing itself: called directly, two concurrent reconcile() calls race.
   it('does not serialize overlapping reconcile() calls on its own — two concurrent calls race', async () => {
     let resolveFirst!: () => void;
     const order: string[] = [];

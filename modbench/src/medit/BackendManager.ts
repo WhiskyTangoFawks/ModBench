@@ -155,9 +155,9 @@ export class BackendManager extends EventEmitter {
     if (wasRunning) this.emitStatus('stopped');
   }
 
-  // A backend mid a long, non-yielding synchronous request won't notice SIGTERM promptly, so
-  // this escalates to SIGKILL, which the OS does not let it ignore, and waits for the real
-  // 'exit' either way. Never resolves on a guess.
+  // A backend mid a long synchronous request won't notice SIGTERM, so this escalates to SIGKILL
+  // and waits for a real 'exit'. Accepted race: stop() clears `this.child` first, so a start()
+  // racing the wait can spawn a second child.
   private killAndConfirmExit(child: BackendProcess): Promise<void> {
     return new Promise((resolve) => {
       // A container, not a `let`, so it exists (as `undefined`) before onExit is even defined —

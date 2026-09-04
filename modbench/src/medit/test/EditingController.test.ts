@@ -86,9 +86,6 @@ function makeClient({
             : drainedError(422, 'Unprocessable Content'),
         );
       }
-      // The two copy gestures' real wire shapes (RecordCopyAsOverrideResponse/
-      // RecordCopyAsNewRecordResponse), not the retired /copy-to/{targetPlugin} endpoint
-      // (RetiredEditingWireSurfaceTests.cs pins that route absent).
       if (path === '/records/{formKey}/copy-as-override') {
         return Promise.resolve(
           copyAsOverrideOk
@@ -499,8 +496,8 @@ describe('EditingController.putLoadOrder', () => {
     expect(result).toEqual({ outcome: 'reconciled', failures: [], crashRepairOffers: [] });
   });
 
-  // crashRepairOffers rides the same response failures already does — the caller (extension.ts)
-  // reads them off the return value to run the repair-offer dialog, never a second fetch.
+  // crashRepairOffers rides the same response failures already does — the caller reads them off
+  // the return value to run the repair-offer dialog, never a second fetch.
   it('resolves with the crash-repair offers the load-order response carried, string reason trusted over the generated numeric type', async () => {
     const client = {
       ...makeClient(),
@@ -972,7 +969,7 @@ describe('EditingController.createRecord', () => {
     });
   });
 
-  // #290: the ESL-exhaustion refusal carries the same typed marker compile's own
+  // The ESL-exhaustion refusal carries the same typed marker compile's own
   // eslContradiction does, wired through mutate()'s onEslContradiction hook rather than the
   // ordinary toast-and-fail — declining leaves the refusal exactly as untouched as any other.
   describe('#290 eslContradiction', () => {

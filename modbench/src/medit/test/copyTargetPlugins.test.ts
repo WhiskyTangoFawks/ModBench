@@ -17,8 +17,8 @@ describe('copyTargetPlugins (#347 / #494)', () => {
   const allPlugins = [plugin('Source.esp'), plugin('Other.esp'), plugin('ThirdOverride.esp'), plugin('Base.esm', true)];
 
   it('copy-as-new keeps the source plugin as a candidate — a new record gets its own FormID and coexists with the source', () => {
-    // An empty carrying list — new-record mode ignores it regardless of what's passed
-    // (proven separately below), but the ordinary caller has no reason to compute one for it.
+    // An empty carrying list — new-record mode ignores it regardless of what is passed, and the
+    // ordinary caller has no reason to compute one for it.
     const names = copyTargetPlugins(allPlugins, 'copy-as-new', []).map(p => p.name);
     expect(names).toEqual(['Source.esp', 'Other.esp', 'ThirdOverride.esp']);
   });

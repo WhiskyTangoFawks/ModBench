@@ -141,9 +141,9 @@ function strRight3(n: number | null | undefined): string {
 export class CellNode extends vscode.TreeItem {
   readonly kind = 'cell' as const;
   constructor(public readonly plugin: string, public readonly cell: CellSummary, public readonly origin?: string) {
-    // xEdit's TwbMainRecord.GetDisplayName (wbImplementation.pas) runs GetFullName
-    // unconditionally, before any signature branch — so FULL wins even for a persistent
-    // worldspace cell, and the placeholder and grid format are reached only when FULL is empty.
+    // xEdit's GetDisplayName runs GetFullName before any signature branch, so FULL wins even for
+    // a persistent worldspace cell. The EditorID-or-FormKey fallback below is this file's choice,
+    // not xEdit's precedence.
     const label = cell.fullName
       ? cell.fullName
       : cell.isPersistentWorldspaceCell

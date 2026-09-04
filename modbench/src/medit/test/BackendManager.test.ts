@@ -359,7 +359,6 @@ describe('BackendManager crash-restart / stop', () => {
 
     const stopped = mgr.stop();
     expect(child.kill).toHaveBeenCalledWith('SIGTERM');
-    // Rival: today's code emits 'stopped' synchronously right here, before any exit is observed.
     expect(statuses).not.toContain('stopped');
 
     child.emit('exit', 0);          // deliberate stop → no respawn
@@ -392,9 +391,7 @@ describe('BackendManager crash-restart / stop', () => {
     await vi.advanceTimersByTimeAsync(3000); // grace period elapses with no exit
     expect(child.kill).toHaveBeenCalledTimes(2);
     expect(child.kill).toHaveBeenNthCalledWith(2, 'SIGKILL');
-    // Rival: today's code has no escalation logic and already reported 'stopped' at the top of
-    // stop() regardless of any timeout — here it's still correctly withheld, since exit still
-    // hasn't actually been observed even after SIGKILL is sent.
+    // Still withheld: exit has not been observed even after SIGKILL is sent.
     expect(statuses).not.toContain('stopped');
 
     child.emit('exit', null); // the OS finally reaps it
@@ -414,8 +411,6 @@ describe('BackendManager crash-restart / stop', () => {
 
     const disposed = mgr.dispose();
     expect(child.kill).toHaveBeenCalledWith('SIGTERM');
-    // Rival: today's dispose() is `this.stop(); this.statusBar.dispose();` — synchronous, so the
-    // status bar would already be disposed here regardless of whether the child has exited.
     expect(statusBar.disposed).toBe(false);
 
     child.emit('exit', 0);

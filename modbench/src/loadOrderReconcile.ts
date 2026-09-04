@@ -259,7 +259,7 @@ export function createReconcileSequencer<TPlugin = unknown, TProgress = unknown,
     return 'reconciled';
   };
 
-  // No serialization here on purpose: `createLoadOrderSync` is the sole caller and already invokes
-  // `reconcile()` one at a time. A second concurrent caller would have to bring its own.
+  // No serialization here on purpose: the sole caller already invokes `reconcile()` one at a
+  // time. A second, concurrent caller would have to bring its own.
   return { reconcile: reconcileOnce };
 }
