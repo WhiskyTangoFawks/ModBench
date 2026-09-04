@@ -55,7 +55,7 @@ public static class ModelIdentity
                     $"differs after being recompiled from its own tracked source — field '{field}' changed.");
             }
 
-            // #669: the mask lies by omission (a polymorphic hierarchy's derived-only fields bind through the
+            // The mask lies by omission (a polymorphic hierarchy's derived-only fields bind through the
             // base overload and are never compared), so a mask-equal pair is never the verdict; the codec
             // document is.
             if (!CodecDocumentsMatch(originalRecord, recompiledRecord, original.GameRelease))
@@ -97,7 +97,7 @@ public static class ModelIdentity
                 return field;
         }
 
-        // #669: the mask reports a TransientTypes item against the nested leaf's type and ignores a count
+        // The mask reports a TransientTypes item against the nested leaf's type and ignores a count
         // difference, so it is compared by plain values here.
         if (!TransientTypesMatch(original, recompiled)) return "TransientTypes";
         return null;
@@ -117,7 +117,7 @@ public static class ModelIdentity
         return true;
     }
 
-    // #669's decider: both records through the codec, byte-compared, from group-header-normalized copies.
+    // Both records through the codec, byte-compared, from group-header-normalized copies.
     private static bool CodecDocumentsMatch(
         IMajorRecordGetter original, IMajorRecordGetter recompiled, Mutagen.Bethesda.GameRelease release)
     {

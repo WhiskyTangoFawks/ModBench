@@ -38,6 +38,8 @@ internal static class SourceIngest
         ILogger logger, CancellationToken cancel = default)
     {
         var timer = Stopwatch.StartNew();
+        // Blocking is deliberate: the reconcile loop is synchronous, and making IRecordIndex async to
+        // match Mutagen's signature would push a false shape upward.
         var mod = RecordTextCodecGeneratorSeed
             .DeserializeWholeMod(sourceTree, InlineWorkDropoff.Instance, cancel)
             .GetAwaiter().GetResult();

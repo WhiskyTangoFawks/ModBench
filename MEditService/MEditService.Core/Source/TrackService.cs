@@ -142,8 +142,8 @@ public sealed class TrackService(ILogger<TrackService> logger)
 
             var recompiledPath = Path.Combine(scratchDir, pluginName);
             // Raw Mutagen write, not PluginWriter: a scratch verification must not drop a .bak beside the real
-            // plugin. WithLoadOrderFromHeaderMasters, NoNextFormIDProcessing and NoCheck reproduce the
-            // original's bytes rather than Mutagen's recompute.
+            // plugin. WithLoadOrderFromHeaderMasters fixes master order; NoNextFormIDProcessing and NoCheck
+            // keep the header's stored values rather than Mutagen's recompute.
             try
             {
                 await recompiled.BeginWrite
@@ -171,7 +171,7 @@ public sealed class TrackService(ILogger<TrackService> logger)
 
             if (PluginBinaryWalk.FindFirstSubrecordLoss(originalBytes, recompiledBytes) is { } loss)
             {
-                // #569: a Kind B diagnosis on the record names the cause ahead of the drop it produced.
+                // A Kind B diagnosis on the record names the cause ahead of the drop it produced.
                 var kindB = MalformedPluginScan.Scan(originalBytes).FirstOrDefault(d =>
                     d.Anchor?.StartsWith($"{loss.RecordType} {loss.FormId:X8}", StringComparison.Ordinal) == true);
                 throw new SourceRoundTripFailedException(

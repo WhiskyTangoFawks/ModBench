@@ -19,8 +19,8 @@ internal readonly record struct SourceUnit(
 }
 
 /// <summary>The record→source-unit question for every record shape (ADR-0041 amendment). Disk, not a
-/// path map: the tree is the serializer's own output and cannot drift from it. Scans are narrowed
-/// to one group subtree.</summary>
+/// path map: the tree is the serializer's own output and cannot drift from it. Scans narrow to
+/// one subtree where possible.</summary>
 internal static class SourceUnitResolver
 {
     /// <summary>The whole-mod door's own name for a directory-per-record container's field file
@@ -293,7 +293,6 @@ internal static class SourceUnitResolver
         }
     }
 
-    /// <summary><see cref="InMintedDirectory{T}"/> for a write with no result of its own.</summary>
     internal static void InMintedDirectory(string directory, Action write) =>
         InMintedDirectory(directory, () => { write(); return true; });
 

@@ -11,6 +11,7 @@ internal static class ContainerChildFields
     {
         ["Cell"] = ["Persistent", "Temporary", "NavigationMeshes", "Landscape"],
         ["Worldspace"] = ["TopCell", "SubCells"],
+        // Scenes: Scene is a major record with no top-level group of its own.
         ["Quest"] = ["DialogBranches", "DialogTopics", "Scenes"],
         ["DialogTopic"] = ["Responses"],
     };

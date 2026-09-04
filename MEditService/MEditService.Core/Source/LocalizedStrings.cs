@@ -59,6 +59,7 @@ public static class LocalizedStrings
 
         foreach (var source in new[] { StringsSource.Normal, StringsSource.IL, StringsSource.DL })
         {
+            // English only; multi-language is deliberately out of scope.
             var fileName = StringsUtility.GetFileName(languageFormat, modKey, Language.English, source);
             if (!File.Exists(Path.Combine(stringsFolder, fileName)))
                 return fileName;

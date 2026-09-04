@@ -7,8 +7,9 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Core.Source;
 
-/// <summary>Re-checks a record's source text before a read. At read time, not a watcher: git itself
-/// is the change source and moving HEAD touches no file. Cost is bounded by dirt.</summary>
+/// <summary>Re-checks source text before a read, not from a watcher: git is the change source and
+/// moving HEAD touches no file. Both refs are re-derived, or Head would serve bytes no ref
+/// holds.</summary>
 public sealed class SourceFreshness(ILoadOrderMirror mirror, ILogger<SourceFreshness> logger, RecordTextCodec codec)
 {
     // Needed to extract an embedded child's body out of its owner's document.
@@ -152,7 +153,7 @@ public sealed class SourceFreshness(ILoadOrderMirror mirror, ILogger<SourceFresh
         if (headText is not { } resolvedHeadText) return;
         if (string.Equals(resolvedHeadText, committedBody, StringComparison.Ordinal)) return;
 
-        // #673: the gate wraps the write only; every early return above is a read.
+        // The gate wraps the write only; every early return above is a read.
         using (mirror.WriteGate.Enter())
             index.SetCommittedBaseline(entry.Plugin, [(formKey, resolvedHeadText)]);
 

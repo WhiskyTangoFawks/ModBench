@@ -456,7 +456,6 @@ public sealed record RebaseResult(RebaseOutcome Outcome, string? RefusalReason, 
 [JsonConverter(typeof(JsonStringEnumConverter))]
 public enum RebaseOutcome
 {
-    /// <summary>The edit branch now sits on top of main's new tip, replayed cleanly.</summary>
     Clean,
 
     /// <summary>Refused before touching the branch — uncommitted dirt in the working tree.</summary>

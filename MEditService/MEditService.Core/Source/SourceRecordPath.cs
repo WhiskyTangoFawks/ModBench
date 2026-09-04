@@ -27,8 +27,8 @@ internal static class SourceRecordPath
     private const string RecordDataFileName = "RecordData.json";
     private const string GroupRecordDataFileName = "GroupRecordData.json";
 
-    /// <summary><c>source/&lt;pluginFileName&gt;</c> — the single way any reader or writer finds a plugin's
-    /// tree; nothing else concatenates a plugin name to build it.</summary>
+    /// <summary><c>source/&lt;pluginFileName&gt;</c>, one root rather than a per-plugin sibling tree: a
+    /// per-plugin suffix guard orphans the tree when its plugin is renamed or deleted outside Modbench.</summary>
     internal static string RootFor(string pluginFileName) => Path.Combine(RootFolderName, pluginFileName);
 
     /// <summary><c>source/&lt;plugin&gt;/&lt;GroupFolder&gt;/[&lt;EditorID&gt; - ]&lt;hex6&gt;_&lt;originModKey&gt;.json</c>;
