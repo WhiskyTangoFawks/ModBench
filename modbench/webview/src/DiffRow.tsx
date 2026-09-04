@@ -217,6 +217,12 @@ interface DiffRowProps {
   onArrayRemove?: (plugin: ColumnKey) => void;
   onArrayMoveUp?: (plugin: ColumnKey) => void;
   onArrayMoveDown?: (plugin: ColumnKey) => void;
+  // #693: what each column's cell reads while this row is collapsed, when the presentation table
+  // (presentation.ts) has an entry for this row's own schema leaf — a condition reads as the xEdit
+  // prose a modder already knows instead of "{…}". Absent for a row that is not an array element,
+  // and empty for an element whose leaf the table says nothing about. Supplied by the frame that
+  // descended into this row's own list, which is the only one that knows it.
+  collapsedSummary?: Record<string, string>;
 }
 
 export function DiffRow({
@@ -224,7 +230,7 @@ export function DiffRow({
   collapsedColumns, onOpen,
   context, hasChildren, isExpanded, onToggle,
   rowKey, focusedCell, onFocusCell, editableColumns, onEditCell,
-  onArrayAdd, onArrayRemove, onArrayMoveUp, onArrayMoveDown,
+  onArrayAdd, onArrayRemove, onArrayMoveUp, onArrayMoveDown, collapsedSummary,
 }: Readonly<DiffRowProps>) {
   // Prefer the caller's own `context.overrideMeta` whenever it's supplied — RecordPanel
   // always passes one (its recursive builder resolves every row's metadata itself, including
@@ -409,7 +415,10 @@ export function DiffRow({
             const len = meta.type === 'array' && Array.isArray(diff.values[key])
               ? (diff.values[key] as unknown[]).length
               : '…';
-            const collapsedLabel = meta.type === 'array' ? `[${len}]` : '{…}';
+            // A summary is content, not a placeholder — it reads at full weight, where "[3]"/"{…}"
+            // stay dimmed to say only that something unexpanded is there.
+            const summary = collapsedSummary?.[key];
+            const collapsedLabel = summary ?? (meta.type === 'array' ? `[${len}]` : '{…}');
             return (
               <DiskCell
                 key={`disk:${key}`}
@@ -421,7 +430,7 @@ export function DiffRow({
                 vscodeContext={vscodeContext}
               >
                 {!isExpanded && hasElement && (
-                  <span style={{ opacity: 0.5, display: 'inline-flex', alignItems: 'center' }}>
+                  <span style={{ opacity: summary ? undefined : 0.5, display: 'inline-flex', alignItems: 'center' }}>
                     {collapsedLabel}<CheckErrorIcon checkError={checkError} />
                   </span>
                 )}

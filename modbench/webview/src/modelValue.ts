@@ -12,12 +12,11 @@ import type { FieldMetadata, FormKeyResolution } from './types';
 // function that knows how to build "EditorID [FormKey]", and this just calls it.
 //
 // Struct/array is a deliberate divergence from xEdit's own `Element.Summary`: JSON serialization
-// of the field's current value, not a per-record-type human-readable summary. A faithful
-// `Element.Summary` equivalent needs domain knowledge this codebase doesn't have anywhere yet
-// (how to render a REFR's position, a condition's function call, an arbitrary nested struct) and
-// would be its own open-ended design effort.
-// JSON needs no per-type knowledge, is honest about what a struct/array actually is, and is
-// genuinely round-trippable (`JSON.parse` recovers the same value) — a prose summary is neither.
+// of the field's current value, not a per-record-type human-readable summary. This is the edit
+// value and what Ctrl+C hands over, so it is the shape that has to round-trip (`JSON.parse`
+// recovers the same value); a prose summary does not. xEdit's own prose lives in the presentation
+// table (presentation.ts) instead, which the grid renders on a collapsed row and which claims
+// nothing about round-tripping.
 export function modelValue(value: unknown, meta: FieldMetadata, resolution?: FormKeyResolution): string {
   if (value == null) return '';
   switch (meta.type) {

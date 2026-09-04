@@ -26,8 +26,11 @@ export type FieldType =
  *  mutability; every other field's editability still comes purely from the column (immutableSet),
  *  matching the "per column, never a mode" rule. */
 export type FieldMetadata =
-  // `isDiscriminator` is dropped rather than narrowed: it says which concrete class an object is,
-  // which is the write path's decision alone (ArrayOpWriter) — the webview reads no such field.
+  // `isDiscriminator` says which member of a struct names the concrete class its object is —
+  // `concrete_type` for a Loqui union, OMOD's `value_type` for its own. Read by the presentation
+  // table (presentation.ts) to find a collapsed element's leaf, which is the one thing on this
+  // side that has to know a leaf apart from its siblings; nothing else here reads it, and nothing
+  // writes it.
   Omit<Schemas['FieldMetadata'],
     'type' | 'elementType' | 'fields' | 'isSortable' | 'allowsNull' | 'isDiscriminator'> & {
     type: FieldType;
@@ -43,6 +46,7 @@ export type FieldMetadata =
     // stays optional for the same reason `type` stays narrowed.
     isSortable?: boolean;   // on elementType: true for pure FormLink arrays
     allowsNull?: boolean;   // for 'formKey': true when the Mutagen type is IFormLinkNullable<T>
+    isDiscriminator?: boolean;  // this member names its object's concrete leaf
   };
 
 export type FieldValue = Omit<Schemas['FieldValue'], 'metadata'> & { metadata: FieldMetadata };
