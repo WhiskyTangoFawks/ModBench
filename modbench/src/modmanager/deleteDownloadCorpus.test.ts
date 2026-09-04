@@ -1,7 +1,5 @@
-// Corpus test: deleteDownload against the committed mo2-instance-corpus fixture.
-// deleteDownload() mutates MO2-owned state (downloads/*.meta and the archive
-// itself) via injected deps, purpose-built for exactly this kind of
-// unit-testability (see deleteDownload.ts's own module comment).
+// Runs against the committed corpus fixture, because deleteDownload mutates MO2-owned state:
+// the archive itself and its `.meta` sidecar.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rm } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -44,7 +42,7 @@ describe('deleteDownload corpus', () => {
     assertOnlyChanged(before, after, new Set([ARCHIVE, META]));
     expect(after.has(ARCHIVE)).toBe(false);
     expect(after.has(META)).toBe(false);
-    // .meta trashed before the archive (deleteDownload.ts's own ordering guarantee).
+    // .meta trashed before the archive.
     expect(trashed).toEqual([metaPath, archivePath]);
   });
 
@@ -66,9 +64,7 @@ describe('deleteDownload corpus', () => {
     assertOnlyChanged(before, after, new Set());
   });
 
-  // Rival this catches: trashing the archive before the .meta (the reverse order)
-  // would leave a lone `.meta` on a mid-failure — deleteDownload.ts's own comment
-  // calls this out as the failure mode it exists to avoid.
+  // The reverse order would leave a lone `.meta` behind on a mid-failure.
   it('a trash failure on the archive leaves the .meta already gone but the archive intact, and reports the failure', async () => {
     const before = await snapshotTree(dir);
     const report = vi.fn();

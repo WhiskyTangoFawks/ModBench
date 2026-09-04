@@ -1,15 +1,13 @@
 import { spawn } from 'node:child_process';
 
-/** Runs a binary to completion; rejects with the spawn error (e.g. ENOENT when
- *  the binary is absent) or a non-zero-exit error. Injectable for testing. */
+/** Rejects with the spawn error (ENOENT when the binary is absent) or a
+ *  non-zero-exit error; `extractArchive` distinguishes the two. */
 export type Runner = (bin: string, args: string[]) => Promise<void>;
 
 const CANDIDATES = ['7z', '7za', '7zz'] as const;
 
-/** The real spawn-based `Runner`. Exported only as a test seam — call it directly
- *  with any real executable (e.g. `process.execPath`) to exercise the resolve/
- *  reject wiring without a 7z binary or archive fixture. Not part of the module's
- *  public API; callers of `extractArchive` never need it. */
+// Exported only as a test seam: any real executable exercises the resolve/reject
+// wiring without a 7z binary or archive fixture.
 export const defaultRunner: Runner = (bin, args) =>
   new Promise((resolve, reject) => {
     const child = spawn(bin, args, { stdio: 'ignore' });
@@ -19,9 +17,8 @@ export const defaultRunner: Runner = (bin, args) =>
     );
   });
 
-/** Extract a `.zip`/`.7z`/`.rar` archive into `destDir` via the system 7z binary.
- *  Tries the common 7-Zip binary names; if none is installed, throws an
- *  actionable error. A spawned-but-failed extraction (bad archive) throws too. */
+/** Extracts via whichever system 7-Zip binary name exists; a missing binary and a
+ *  bad archive both throw, with different messages. */
 export async function extractArchive(
   archivePath: string,
   destDir: string,

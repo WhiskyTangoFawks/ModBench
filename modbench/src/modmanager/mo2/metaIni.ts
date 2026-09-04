@@ -1,5 +1,3 @@
-// Parse/serialize a mod's meta.ini [General] section.
-
 export interface ModMeta {
   version?: string;
   nexusId?: string;
@@ -22,8 +20,7 @@ export function parseMetaIni(text: string): ModMeta {
   };
 }
 
-/** Serialize a mod's meta.ini [General] section, emitting only the keys present.
- *  Keys use MO2's names so the result round-trips through parseMetaIni. */
+/** Keys use MO2's own names, so the result round-trips through `parseMetaIni`. */
 export function writeMetaIni(meta: {
   gameName?: string;
   modid?: string;

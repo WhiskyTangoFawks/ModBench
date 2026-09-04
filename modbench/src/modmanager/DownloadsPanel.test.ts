@@ -35,12 +35,8 @@ import {
 } from './DownloadsPanel';
 import type { DownloadNode, DownloadsProvider } from './DownloadsProvider';
 
-/** A minimal stand-in for a tree row — only `row.name` is read by anything under test here,
- *  so a real vscode.TreeItem-backed DownloadNode isn't needed in this file. */
 const node = (name: string): DownloadNode => ({ row: { name } } as DownloadNode);
 
-/** A minimal stand-in for DownloadsProvider — only setSort/setShowHidden are called by
- *  anything under test here, so a real fs-backed DownloadsProvider isn't needed in this file. */
 const fakeDownloadsProvider = (): DownloadsProvider & { setSort: ReturnType<typeof vi.fn>; setShowHidden: ReturnType<typeof vi.fn> } =>
   ({ setSort: vi.fn(), setShowHidden: vi.fn() } as unknown as DownloadsProvider & { setSort: ReturnType<typeof vi.fn>; setShowHidden: ReturnType<typeof vi.fn> });
 
@@ -54,8 +50,6 @@ afterEach(async () => {
   instanceRoots = [];
 });
 
-/** Fresh MO2-instance-shaped tmpdir with a downloads/ folder, for handlers that
- *  touch the filesystem. Caller writes archive/.meta fixtures as needed. */
 async function makeInstanceRoot(): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), 'downloads-panel-'));
   await mkdir(join(root, 'downloads'), { recursive: true });
@@ -63,30 +57,22 @@ async function makeInstanceRoot(): Promise<string> {
   return root;
 }
 
-/** Write an archive fixture under `<root>/downloads/<name>`. */
 async function writeArchive(root: string, name: string, data = 'data'): Promise<string> {
   const path = join(root, 'downloads', name);
   await writeFile(path, data);
   return path;
 }
 
-/** Write a `.meta` sidecar fixture for `<root>/downloads/<name>`. */
 async function writeMeta(root: string, name: string, text = '[General]\r\n'): Promise<string> {
   const path = join(root, 'downloads', `${name}.meta`);
   await writeFile(path, text);
   return path;
 }
 
-/** First positional arg's `fsPath` from a mocked vscode call, e.g.
- *  `openExternal(uri)` — reduces repeated inline casts across nav-action tests. */
 function calledFsPath(mockFn: { mock: { calls: unknown[][] } }): string {
   return (mockFn.mock.calls[0][0] as { fsPath: string }).fsPath;
 }
 
-/** Invoke a command registered via the mocked `vscode.commands.registerCommand` by id — the
- *  real captured callback, not a handler reached by any other path. Every behavior test in this
- *  file goes through this, so each one exercises the actual production wiring (the node?
- *  null-guard, `selectionNames`' selection-collapsing) along with the action itself. */
 function invoke(commandId: string, ...args: unknown[]): void {
   const call = registerCommand.mock.calls.find((c) => c[0] === commandId);
   if (!call) throw new Error(`command not registered: ${commandId}`);
@@ -94,10 +80,6 @@ function invoke(commandId: string, ...args: unknown[]): void {
 }
 
 // ── registerDownloadsSingleRowCommands ──────────────────────────────────────
-// Install / Visit on Nexus / Open File / Open Meta File: clicked-row-only commands, each
-// registered as a direct vscode.commands.registerCommand call (no id->handler lookup table).
-// Registration itself (that all 7 ids get wired to vscode.commands.registerCommand) is also
-// covered by the EXPECTED_COMMANDS integration test; these are the dispatch/gating/behavior.
 
 describe('registerDownloadsSingleRowCommands', () => {
   beforeEach(() => vi.clearAllMocks());

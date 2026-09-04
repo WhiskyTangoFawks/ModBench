@@ -1,32 +1,19 @@
-// Pure, byte-faithful text transforms over an MO2 profile's modlist.txt.
-//
-// modlist.txt lines (top of file = winning end; bottom = losing end):
-//   # comment              (preserved verbatim, not surfaced)
-//   +Mod Name              (enabled mod)
-//   -Mod Name              (disabled mod)
-//   +Name_separator        (separator, enabled/disabled via prefix)
-//   *DLC: …                (unmanaged/DLC/CC, preserved verbatim, not surfaced)
-//
-// All mutations splice the raw string in place, so CRLF/LF, trailing newline,
-// BOM, and every unmodelled line survive untouched.
+// MO2's modlist.txt: `+`/`-` prefix an enabled/disabled mod, a `_separator`
+// suffix marks a separator, and `*` (DLC/CC) and `#` lines are never surfaced.
+// The top of the file is the winning end. Mutations splice the raw string.
 
 import type { ModlistEntry } from '../model';
 import { detectEol, insertIndexAmongEntries, lineContent, lineRanges, splitLinesKeepEol, stripBom, withBomPreserved } from './lineScan';
 
 const SEPARATOR_SUFFIX = '_separator';
 
-/** Does `line` carry the entry `name`, enabled or disabled? `line` may be a raw
- *  line (with or without trailing EOL) or an already-EOL-stripped slice —
- *  `lineContent` is a no-op on the latter. Separator lines are matched by
- *  composing `name + SEPARATOR_SUFFIX` at the call site; this predicate is
- *  state-insensitive by design (both `+` and `-` match) — callers that need to
- *  know *which* state matched (e.g. `setEnabledInText`) read that separately. */
+// Deliberately state-insensitive: both prefixes match, and a caller that needs to
+// know which one did reads the prefix itself.
 const matchesModLine = (line: string, name: string): boolean =>
   lineContent(line) === '+' + name || lineContent(line) === '-' + name;
 
-/** Parse modlist.txt into the ordered model view (file order; top = winning end).
- *  Only +/- mod and separator lines are surfaced; comment/*-prefixed/blank
- *  lines carry no model meaning and are ignored (but preserved on write). */
+/** File order, so the winning end comes first. Only `+`/`-` lines are surfaced;
+ *  the rest carry no meaning here and are preserved on write. */
 export function parseModlist(text: string): ModlistEntry[] {
   const entries: ModlistEntry[] = [];
   const withoutBom = stripBom(text); // model view only; write path preserves the BOM byte
@@ -44,7 +31,6 @@ export function parseModlist(text: string): ModlistEntry[] {
   return entries;
 }
 
-/** Index of the leading +/- prefix char for the mod line named `modName`, or -1. */
 function findModPrefixIndex(text: string, modName: string): number {
   for (const { start, contentEnd } of lineRanges(text)) {
     if (matchesModLine(text.slice(start, contentEnd), modName)) return start;
@@ -52,7 +38,7 @@ function findModPrefixIndex(text: string, modName: string): number {
   return -1;
 }
 
-/** Set a mod's enabled state by flipping its +/- prefix. Throws if the mod is absent. */
+/** Throws if the mod is absent. */
 export function setEnabledInText(text: string, modName: string, enabled: boolean): string {
   return withBomPreserved(text, (bomless) => {
     const idx = findModPrefixIndex(bomless, modName);
@@ -73,8 +59,7 @@ const isSeparatorLine = (line: string): boolean => {
   return (c.startsWith('+') || c.startsWith('-')) && c.endsWith(SEPARATOR_SUFFIX);
 };
 
-/** Insert a new enabled separator line after the `afterIndex`-th entry (0-based).
- *  Out-of-range afterIndex clamps to the last entry position. */
+/** `afterIndex` is 0-based among entry lines, and clamps to the last one. */
 export function insertSeparatorAtIndexInText(
   text: string,
   name: string,
@@ -96,7 +81,6 @@ export function insertSeparatorAtIndexInText(
   });
 }
 
-/** Rename a separator in place, preserving its +/- prefix and every other byte. */
 export function renameSeparatorInText(text: string, oldName: string, newName: string): string {
   return withBomPreserved(text, (bomless) => {
     for (const { start, end, contentEnd } of lineRanges(bomless)) {
@@ -110,7 +94,7 @@ export function renameSeparatorInText(text: string, oldName: string, newName: st
   });
 }
 
-/** Remove a separator line only; its child mods are naturally promoted. */
+/** Removes the separator line only; the mods it wrapped join the section above. */
 export function deleteSeparatorInText(text: string, name: string): string {
   return withBomPreserved(text, (bomless) => {
     const lines = splitLinesKeepEol(bomless);
@@ -121,11 +105,8 @@ export function deleteSeparatorInText(text: string, name: string): string {
   });
 }
 
-/** Insert a disabled mod line at the winning end — the first entry line (top of
- *  file), where MO2 places a freshly installed mod. It lands
- *  below any leading comment/blank/`*` lines but above the first `+`/`-` entry,
- *  disabled so it never silently changes the load until enabled. Preserves every
- *  existing byte and uses the file's own EOL (CRLF if present, else LF). */
+/** The winning end is where MO2 puts a freshly installed mod. Inserted disabled,
+ *  so it cannot silently change what the game sees before the user enables it. */
 export function insertModAtWinningEnd(text: string, modName: string): string {
   return withBomPreserved(text, (bomless) => {
     const eol = detectEol(bomless);
@@ -143,21 +124,12 @@ export function insertModAtWinningEnd(text: string, modName: string): string {
 
 const RESERVED_DIR_NAMES = new Set(['overwrite']);
 
-/** Which `mods/` folder names (from a directory listing) have no modlist.txt
- *  entry yet, given the currently parsed `entries`. Excludes `overwrite`
- *  (not a mod) and separator marker folders (`<name>_separator`, MO2's
- *  on-disk record of a separator — already represented by a `separator`
- *  entry, never a mod). Sorted for deterministic registration order. */
+/** Excludes `overwrite` and the `<name>_separator` marker folders MO2 writes,
+ *  neither of which is a mod. Sorted, for a deterministic registration order. */
 export function unlistedModNames(dirNames: string[], entries: ModlistEntry[]): string[] {
-  // Separators contribute nothing to `registered`, in either form. The suffixed
-  // form (`${name}${SEPARATOR_SUFFIX}`) is unreachable: any dirName that could
-  // match it already ends in SEPARATOR_SUFFIX, and the filter below excludes
-  // those unconditionally before `registered` is even consulted. But mapping a
-  // separator to its BARE name is wrong the other way — it would register that
-  // name as a mod, so a real `mods/<name>/` folder sharing a separator's name
-  // (an ordinary case: users name separators after what they group) silently
-  // stops being offered for registration. Excluding separator entries entirely
-  // is the only form consistent with both halves of that argument.
+  // Separators must not contribute to `registered` under their bare name: users
+  // name separators after what they group, so a real `mods/<name>/` folder
+  // sharing that name would silently stop being offered for registration.
   const registered = new Set(
     entries.filter((e) => e.kind !== 'separator').map((e) => e.name),
   );
@@ -169,11 +141,9 @@ export function unlistedModNames(dirNames: string[], entries: ModlistEntry[]): s
     .sort((a, b) => a.localeCompare(b));
 }
 
-/** The inverse of `unlistedModNames` (#93): which modlist `mod` entries name a `mods/`
- *  folder the directory listing no longer holds — deleted outside Modbench, so the entry
- *  is dead. Separator entries are never dead here: their on-disk form is the
- *  `<name>_separator` marker folder, not a mod folder this listing describes. Returned in
- *  modlist order. */
+/** Entries whose folder is absent from the listing — deleted outside Modbench.
+ *  Separators are never dead here: their on-disk form is a marker folder, which
+ *  this listing does not describe. In modlist order. */
 export function deadModEntryNames(dirNames: string[], entries: ModlistEntry[]): string[] {
   const present = new Set(dirNames);
   return entries
@@ -181,7 +151,7 @@ export function deadModEntryNames(dirNames: string[], entries: ModlistEntry[]): 
     .map((e) => e.name);
 }
 
-/** Remove a mod's entry line entirely. Throws if absent; throws if the name resolves to a separator. */
+/** Throws if the name is absent, or resolves to a separator. */
 export function removeModFromText(text: string, modName: string): string {
   return withBomPreserved(text, (bomless) => {
     const lines = splitLinesKeepEol(bomless);
@@ -192,8 +162,8 @@ export function removeModFromText(text: string, modName: string): string {
   });
 }
 
-// Ungrouped means "after the last separator" — the file's tail among entry
-// lines — never a position relative to the first separator.
+// Ungrouped means "after the last separator" — the tail of the entry lines —
+// never a position relative to the first separator.
 function ungroupedInsertAt(lines: string[]): number {
   const last = [...lines.keys()].findLast((i: number) => isEntryLine(lines[i]));
   return last === undefined ? lines.length : last + 1;
@@ -208,9 +178,8 @@ function separatorSectionInsertAt(lines: string[], separatorName: string): numbe
   return sepIdx;
 }
 
-/** Move a mod to the end of a separator's child section (immediately preceding
- *  the separator's own line), or to the ungrouped section (the file's
- *  tail, after the last entry) when `separatorName` is null. */
+/** The end of a separator's section is immediately above the separator's own
+ *  line. A null `separatorName` means the ungrouped tail of the file. */
 export function moveModToSeparatorEndInText(
   text: string,
   modName: string,
@@ -233,8 +202,8 @@ export function moveModToSeparatorEndInText(
   });
 }
 
-/** Move a separator and all its children as a block so the separator occupies
- *  entry-index `toIndex` among the remaining entries (after the block is removed). */
+/** The block is the separator plus the mods it wraps; `toIndex` counts the
+ *  entries remaining once that block is removed. */
 export function moveSeparatorBlockInText(
   text: string,
   separatorName: string,
@@ -246,11 +215,9 @@ export function moveSeparatorBlockInText(
     const sepIdx = lines.findIndex((l) => matchesModLine(l, separatorName + SEPARATOR_SUFFIX));
     if (sepIdx === -1) throw new Error(`Separator not found in modlist: ${separatorName}`);
 
-    // Extent of the block: everything back to (but not including) the previous
-    // separator line, or the file's first entry line if none, up to and
-    // including the sep's own line — the separator trails its real (preceding)
-    // members. Falling back to line 0 instead of the first entry would
-    // sweep a leading comment/blank line into the block.
+    // A separator trails the mods it wraps, so the block runs back to the previous
+    // separator, or to the first entry line — falling back to line 0 instead would
+    // sweep a leading comment or blank line into the block.
     let prevSepIdx = -1;
     for (let i = sepIdx - 1; i >= 0; i--) {
       if (isSeparatorLine(lines[i])) {
@@ -261,17 +228,14 @@ export function moveSeparatorBlockInText(
     const blockStart = prevSepIdx >= 0 ? prevSepIdx + 1 : lines.findIndex(isEntryLine);
     const block = lines.splice(blockStart, sepIdx - blockStart + 1);
 
-    // Insert at toIndex among remaining entry lines
     const insertAt = insertIndexAmongEntries(lines, isEntryLine, toIndex);
     lines.splice(insertAt, 0, ...block);
     return lines.join('');
   });
 }
 
-/** Move a mod's line so it occupies entry-index `toIndex` among the +/- entry
- *  lines (top of file = winning end), counting the entries *with the moved mod
- *  removed*. Out-of-range clamps to the last entry slot. Non-entry lines
- *  (comment, *) keep their relative position; bytes are preserved. */
+/** `toIndex` counts the entry lines with the moved mod already removed, and
+ *  clamps to the last slot. Non-entry lines keep their relative positions. */
 export function moveModInText(text: string, modName: string, toIndex: number): string {
   return withBomPreserved(text, (bomless) => {
     const lines = splitLinesKeepEol(bomless);

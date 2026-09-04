@@ -1,11 +1,8 @@
 import { describe, it, expect, vi } from 'vitest';
 import { TreeItem, TreeItemCollapsibleState, ThemeIcon, EventEmitter } from './vscodeMock';
 
-// The Loadout header is the home for workspace-scope actions — profile, deployment —
-// none of which belong to any one tree's domain. It spans both bounded contexts, so it may
-// not import either context's internals: every piece of state arrives as an injected getter.
-// That constraint is what makes it unit-testable here without a VS Code harness
-// (`vi.mock('vscode')`, the reporter.test.ts precedent).
+// The Loadout header spans both bounded contexts, so it may not import either context's
+// internals: every piece of state arrives as an injected getter.
 vi.mock('vscode', () => ({ TreeItem, TreeItemCollapsibleState, ThemeIcon, EventEmitter }));
 
 import { LoadoutHeaderProvider, type LoadoutHeaderDeps } from '../LoadoutHeaderProvider';
@@ -20,12 +17,8 @@ function makeProvider(overrides: Partial<LoadoutHeaderDeps> = {}) {
 }
 
 describe('LoadoutHeaderProvider', () => {
-  // The header registers on every path, including the ones where there is no loadout at all
-  // (no workspace open, or a workspace that isn't an MO2 instance) — it is the container's
-  // first view and must never be a hole. But on those paths the commands its rows activate
-  // are never registered, so a row would be a click that throws "command not found". There
-  // is nothing to read and nothing to run, so it renders nothing; the Mods view's existing
-  // welcome content is what tells the user why.
+  // The header registers even where there is no loadout, since it is the container's first view.
+  // On those paths its rows' commands are unregistered, so a row would throw "command not found".
   it('renders no rows when there is no loadout to read', async () => {
     const rows = await makeProvider({ hasLoadout: () => false }).getChildren();
 

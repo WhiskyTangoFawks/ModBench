@@ -21,14 +21,8 @@ describe('wirePluginListInvalidation', () => {
     expect(invalidate).toHaveBeenCalledTimes(1);
   });
 
-  // #653 AC2: all three watcher signals — mods folder, modlist.txt, plugins.txt — are wired the
-  // same way, not just plugins.txt. AC4 (a Mods-view checkbox toggle refreshes the Plugins tab)
-  // is this same modlist.txt case: `ModListProvider.setModEnabled` delegates to
-  // `Mo2ModlistSource.setEnabled` (pinned by "setModEnabled delegates to the source and fires a
-  // refresh", ModListProvider.test.ts), which writes modlist.txt on disk (pinned by "setEnabled
-  // flips only the target prefix on disk, preserving all other bytes", Mo2ModlistSource.test.ts)
-  // — the same file this watcher signal covers, so there is no second mechanism to wire, only
-  // this one.
+  // All three watcher signals — mods folder, modlist.txt, plugins.txt — are wired alike: a
+  // Mods-view checkbox toggle is the modlist.txt case, since setModEnabled writes that file.
   it('invalidates the plugin list for every watcher signal, not only plugins.txt', () => {
     const { events } = makeWatcherEvents();
     const invalidate = vi.fn();
@@ -40,13 +34,9 @@ describe('wirePluginListInvalidation', () => {
     expect(invalidate).toHaveBeenCalledTimes(2);
   });
 
-  // #653 AC5 (a green-on-arrival guard): the reconcile fan-out (`sync.request()`, stood in for
-  // here by the original watcherEvents callbacks) must keep firing — the invalidate call is
-  // added alongside it, never in its place. The named rival this guards against: a wiring that
-  // *replaces* the original consumer instead of adding a second one, which would silently drop
-  // Editing's own reconcile (#621). See this file's own rival experiment, run once by hand
-  // against a copy with the body swapped to call only `pluginListProvider.invalidate()` — it
-  // failed this exact assertion, confirming the guard is not vacuous.
+  // The reconcile fan-out (`sync.request()`) must keep firing: the invalidate call is added
+  // alongside it, never in its place. The rival — a wiring that replaces the original consumer —
+  // would silently drop Editing's own reconcile.
   it('never drops the original watcher callback — sync.request()\'s stand-in still fires for every signal', () => {
     const { events, onMods, onModlist, onPlugins } = makeWatcherEvents();
     const invalidate = vi.fn();

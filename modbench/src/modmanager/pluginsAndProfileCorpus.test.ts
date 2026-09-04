@@ -1,8 +1,5 @@
-// Corpus test: plugins.txt mutations and profile switching against the committed
-// mo2-instance-corpus fixture. As with modlistCorpus.test.ts, the point is composition:
-// proving these writers touch only their own file and nothing else (not modlist.txt,
-// not meta.ini, not the other profile) — pluginsText.test.ts already proves plugins.txt
-// itself is byte-faithful in isolation.
+// Composition, against the committed mo2-instance-corpus fixture: proving these writers touch
+// only their own file and nothing else.
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rm } from 'node:fs/promises';
 import { Mo2ModlistSource } from './mo2/Mo2ModlistSource';

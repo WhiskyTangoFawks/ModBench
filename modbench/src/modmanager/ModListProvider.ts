@@ -14,23 +14,16 @@ import { ErrorNode } from './ErrorNode';
 
 const DND_MIME = 'application/vnd.medit.modlist-node';
 
-/** Shared resolved-undefined default for an omitted `dataFolder` — hoisted out of
- *  the constructor so it isn't a fresh closure per instance. */
+// Hoisted out of the constructor so an omitted `dataFolder` isn't a fresh closure per instance.
 const NO_DATA_FOLDER: () => Promise<string | undefined> = () => Promise.resolve(undefined);
 
-/** The only IModlistSource members this provider calls — see loadOrderSnapshot.ts's
- *  own `Source` alias for the same narrowing pattern. */
+/** The only `IModlistSource` members this provider calls. */
 export type ModListSource = Pick<
   IModlistSource, 'setEnabled' | 'reorder' | 'moveModToSeparator' | 'reorderSeparatorBlock' | 'setActiveProfile' | 'readModlist'
 >;
 
-/** Constructor options for {@link ModListProvider}. Field order matches
- *  PluginListProvider's identically-shaped options so the two siblings read the
- *  same.
- *
- *  `dataFolder` is a getter, not a settled `Promise` — the setting it resolves is editable
- *  while Modbench runs, so a value captured once at construction could go stale for the life of
- *  the provider. Each call re-reads through the single game-directory resolver. */
+/** `dataFolder` is a getter, not a settled `Promise` — the game-directory setting is
+ *  editable while Modbench runs, so a value captured at construction could go stale. */
 export interface ModListProviderOptions {
   source: ModListSource;
   log?: (msg: string) => void;
@@ -39,7 +32,6 @@ export interface ModListProviderOptions {
   dataFolder?: () => Promise<string | undefined>;
 }
 
-/** 'ok'/undefined -&gt; default package icon; warn for conflicts, error for broken. */
 function statusIconId(status?: ModStatusResult): string {
   switch (status?.status.kind) {
     case 'conflicts':
@@ -81,9 +73,7 @@ export class SeparatorNode extends vscode.TreeItem {
   }
 }
 
-/** A mod row with a native checkbox, version description, and tooltip.
- *  `status` (Modbench-3) overlays a conflict/missing-master/missing-mod badge
- *  onto the icon, description, and tooltip when present and not 'ok'. */
+/** A non-'ok' status overlays a badge onto the icon, description, and tooltip. */
 export class ModNode extends vscode.TreeItem {
   readonly kind = 'mod' as const;
   constructor(public readonly mod: Mod, status?: ModStatusResult) {
@@ -128,8 +118,6 @@ export class OverwriteNode extends vscode.TreeItem {
 
 export type ModlistNode = CountNode | SeparatorNode | ModNode | ErrorNode | OverwriteNode;
 
-/** Mod/separator rows are the only nodes with a modlist.txt entry to drag or index;
- *  CountNode and ErrorNode are non-interactive summary/status rows. */
 function isEntryNode(node: ModlistNode): node is ModNode | SeparatorNode {
   return node.kind === 'mod' || node.kind === 'separator';
 }
@@ -161,15 +149,9 @@ export class ModListProvider
   private readonly instanceRoot?: string;
   private readonly dataFolder: () => Promise<string | undefined>;
 
-  /** `instanceRoot`, when provided, enables status badges (Modbench-3):
-   *  file-conflict index + missing-master/missing-mod checks against real
-   *  files on disk. Omitted in tests that use an in-memory-only source.
-   *  `reporter`, when provided, surfaces a status-computation failure as a
-   *  warning (ADR-0026: badges silently absent would otherwise look
-   *  identical to "no conflicts"). `dataFolder` reads the game's resolved
-   *  Data folder through the single game-directory resolver — its
-   *  vanilla/DLC masters seed the missing-master check; an undefined
-   *  resolution degrades that check to an empty set. */
+  /** `instanceRoot` gates the status badges — without files on disk there is no conflict
+   *  index and no missing-master check; an undefined `dataFolder` degrades that check to an
+   *  empty master set. */
   constructor(options: ModListProviderOptions) {
     this.source = options.source;
     this.log = options.log ?? (() => {});
@@ -178,10 +160,7 @@ export class ModListProvider
     this.dataFolder = options.dataFolder ?? NO_DATA_FOLDER;
   }
 
-  /** Clears cached data and re-renders — a mutation (drop, toggle, profile
-   *  switch, ...) invalidated what's on disk, so the next read must re-walk
-   *  the source. Distinct from `render()`, which only re-renders
-   *  already-built rows. */
+  /** Drops cached data so the next read re-walks the source; `render` only redraws. */
   invalidate(): void {
     this.tree = undefined;
     this.cachedEntries = undefined;
@@ -190,16 +169,11 @@ export class ModListProvider
     this._onDidChangeTreeData.fire(undefined);
   }
 
-  /** Re-renders already-built rows without touching cached data.
-   *  The only call site is `setFilter` — a filter keystroke never changes what's
-   *  on disk, so it must not force a re-read/re-walk of the source. */
   private render(): void {
     this._onDidChangeTreeData.fire(undefined);
   }
 
-  /** Update the filter and re-render. Clears always resets groupingOn to true.
-   *  Render-only: the filter narrows which already-built rows show —
-   *  it never invalidates cached data. */
+  /** Render-only: a filter keystroke narrows already-built rows and never re-reads disk. */
   setFilter(text: string, grouping: boolean): void {
     this.filterText = text;
     this.filterLower = text.toLowerCase();
@@ -229,24 +203,16 @@ export class ModListProvider
     // position — dropping onto them must not fall through to "move to end".
     if (target?.kind === 'count' || target?.kind === 'overwrite') return;
     const { kind, name } = payload.value as { kind: 'mod' | 'separator'; name: string };
-    // ADR-0026: an explicit user action failed — notify + log (see runMutation, which already
-    // knows which of the three mutations threw), then resync the moved rows against disk so the
-    // tree never shows a phantom reorder.
+    // Resync against disk afterwards so a failed mutation never leaves a phantom reorder on
+    // screen (ADR-0026).
     await this.applyDrop(kind, name, target);
     this.invalidate();
   }
 
-  /** Dispatches a drop's mutation call: mod-onto-separator, mod-reorder, or
-   *  separator-block-reorder. Split out of `handleDrop` only to keep that
-   *  method's cyclomatic complexity under lint's threshold.
-   *  Each branch runs through `runMutation`, which logs and reports a failure itself
-   *  (specific log lines over a generic one) rather than throwing. */
   private async applyDrop(kind: 'mod' | 'separator', name: string, target: ModlistNode | undefined): Promise<void> {
-    // A drop hands us the *pre-removal* target ("insert before this row"), but
-    // moveModInText/moveSeparatorBlockInText count toIndex among the entries with
-    // the moved line(s) already removed — so any moved entry above the target
-    // shifts it left. dropIndexForMove reconciles that; a separator drops its
-    // whole block, so all block members count as "moved".
+    // A drop hands us the *pre-removal* target, but moveModInText counts toIndex among the
+    // entries with the moved lines already removed, so a moved entry above the target shifts
+    // it left. A separator drops its whole block.
     const order = this.cachedEntries?.map((e) => e.name) ?? [];
     const targetName = this.targetName(target);
     if (kind === 'mod') {
@@ -262,10 +228,7 @@ export class ModListProvider
     }
   }
 
-  /** Runs a single drop mutation, logging and reporting a failure itself — it already knows
-   *  which of the three mutations this is, so `handleDrop` doesn't need to unpack a tagged
-   *  exception to find out. Swallows the failure (rather than rethrowing) so `handleDrop` always
-   *  reaches its resync `invalidate()` call, exactly as it did before this method existed. */
+  // Swallows the failure rather than rethrowing, so `handleDrop` still reaches its resync.
   private async runMutation(
     operation: 'reorder' | 'moveModToSeparator' | 'reorderSeparatorBlock',
     mutate: () => Promise<void>,
@@ -279,28 +242,20 @@ export class ModListProvider
     }
   }
 
-  /** File-order insert index for a drop, honoring the view direction. `order` is
-   *  modlist.txt file order (winning-first). "Drop X onto Y" means X takes Y's
-   *  visual slot: in the winning-at-top view that is just *before* Y in the file;
-   *  in the default losing-at-top view the file runs opposite to the view, so it
-   *  is just *after* Y. A drop past the last row lands at the empty end of the
-   *  view — the file's losing end (winning-at-top) or its winning end
-   *  (losing-at-top, index 0). */
+  // "Drop X onto Y" gives X the visual slot of Y: before Y in the winning-first file when
+  // winning-at-top, after it when the view runs opposite.
   private dropToIndex(order: string[], movedNames: string[], targetName: string | undefined): number {
     const before = dropIndexForMove(order, movedNames, targetName);
     if (this.winningAtTop) return before;
     return targetName === undefined ? 0 : before + 1;
   }
 
-  /** The dropped-onto row's entry name, or undefined to drop past the last row. */
   private targetName(node: ModlistNode | undefined): string | undefined {
     if (!node || !isEntryNode(node)) return undefined;
     return node.kind === 'mod' ? node.mod.name : node.separator.name;
   }
 
-  /** A separator moves with its real (preceding) members as a block: every
-   *  entry back to (not including) the previous separator, then the separator
-   *  itself last — matching moveSeparatorBlockInText's block extent. */
+  // A separator's members are the entries *preceding* it, back to the previous separator.
   private separatorBlockNames(sepName: string): string[] {
     const entries = this.cachedEntries ?? [];
     const idx = entries.findIndex((e) => e.kind === 'separator' && e.name === sepName);
@@ -333,9 +288,7 @@ export class ModListProvider
     return this.groupedFilteredRoots(tree);
   }
 
-  /** The pinned Overwrite leaf, or undefined when the folder is absent/empty or
-   *  no instanceRoot is wired. Sits outside all grouping/sort — always appended
-   *  last — because it is a fixture over the folder, not a modlist.txt entry. */
+  // Appended last, outside grouping and sort: a fixture over the folder, not a modlist.txt entry.
   private async overwriteNode(): Promise<OverwriteNode | undefined> {
     if (!this.instanceRoot) return undefined;
     const dir = path.join(this.instanceRoot, 'overwrite');
@@ -361,9 +314,7 @@ export class ModListProvider
     return [new CountNode(tree.activeCount, tree.installedCount), ...blocks[0], ...blocks[1]];
   }
 
-  /** Order a sibling list for display. modlist.txt file order is winning-first
-   *  (top of file wins), so the default losing-at-top view reverses it; the
-   *  winning-at-top view shows file order as-is. View order only. */
+  // modlist.txt is winning-first, so the default losing-at-top view reverses it. View order only.
   private orderedMods(mods: Mod[]): Mod[] {
     return this.winningAtTop ? mods : [...mods].reverse();
   }
@@ -398,20 +349,17 @@ export class ModListProvider
     return name.toLowerCase().includes(this.filterLower);
   }
 
-  /** Toggle a mod's enabled state, writing through the source, then refresh. */
   async setModEnabled(modName: string, enabled: boolean): Promise<void> {
     await this.source.setEnabled(modName, enabled);
     this.invalidate();
   }
 
-  /** Persist the active profile and refresh the tree. */
   async switchProfile(name: string): Promise<void> {
     await this.source.setActiveProfile(name);
     this.invalidate();
   }
 
-  /** Flip the view direction (losing-at-top &lt;-&gt; winning-at-top) and refresh
-   *  the tree. Presentation only — never changes which mod wins a conflict. */
+  /** Presentation only — never changes which mod wins a conflict. */
   toggleViewDirection(): void {
     this.winningAtTop = !this.winningAtTop;
     this.invalidate();

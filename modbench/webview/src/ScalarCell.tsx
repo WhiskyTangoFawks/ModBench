@@ -6,15 +6,12 @@ import type { FieldMetadata } from './types';
 interface ScalarCellProps {
   value: unknown;
   meta: FieldMetadata;
-  // Whether this cell's column can be written. There is no edit mode — editability is a
-  // property of the column (is the plugin mutable, is its mod tracked), never of a state the user
-  // toggles into.
+  // There is no edit mode — editability is a property of the column (is the plugin mutable, is it
+  // tracked), never of a state the user toggles into.
   editable?: boolean;
-  // ADR-0034: whether this is the panel's single focused cell. Gates the plain click,
-  // so a *second* click on an already-focused cell opens while a first click only focuses — this
-  // handler runs before DiskCell's ancestor onFocusCell in the bubble order, so `isFocused` is
-  // still the pre-click value here. Defaults true (open on any click) for callers outside the
-  // field grid's focus model.
+  // ADR-0034: gates the plain click, so a *second* click on an already-focused cell opens while a
+  // first click only focuses — this handler runs before DiskCell's ancestor onFocusCell, so
+  // `isFocused` is still the pre-click value here.
   isFocused?: boolean;
   // Where an edited value goes. Absent is the ordinary state for every caller outside the
   // field grid — there is nowhere to write, so the cell
@@ -37,27 +34,9 @@ function ScalarText({ value, meta, displayOverride, ariaLabel }: {
     : <span aria-label={ariaLabel}>{displayValue(value, meta)}</span>;
 }
 
-/**
- * ADR-0041: the record editor's one editing gesture, on the text-first write path.
- *
- * The gesture is xEdit's, unchanged and non-negotiable (ADR-0034, root CLAUDE.md): a click
- * *focuses* a cell, it does not edit it. Editing opens on a second click on the already-focused
- * cell, on F2, or on a double click.
- *
- * ADR-0039: `string` is not a distinct branch here — every type's second click, F2 and double
- * click agree on the inline editor, so no click needs a debounce to disambiguate from a
- * following `dblclick`. A VS Code tab *relocates* the user in a way
- * xEdit's own modeless multiline editor never did, so no left-click gesture may reach the
- * extended editor. It is reached only from the cell's right-click menu (DiffRow's own
- * `stringValueContext` wiring), which needs no gesture handling here at all: a native
- * `webview/context` menu is driven entirely by the `data-vscode-context` attribute DiskCell
- * carries, never by a JS event handler on this component.
- *
- * An immutable or untracked column simply refuses: no editor, and no distinct affordance
- * beforehand — matching xEdit's own `vstViewEditing`, which sets `Allowed := False` and shows
- * nothing in advance. The signposting for *why*, and the way out, lives on the column header
- * (PluginHeader), where it can be read without first attempting an edit.
- */
+/** ADR-0034: xEdit's gesture, unchanged — a click *focuses* a cell, it does not edit it.
+ *  ADR-0039: a VS Code tab relocates the user, so no left-click gesture may reach the extended
+ *  editor. */
 export function ScalarCell({
   value, meta, editable = false, isFocused = true, onCommit, ariaLabel, displayOverride,
 }: ScalarCellProps) {
@@ -69,21 +48,17 @@ export function ScalarCell({
     setDraft(modelValue(value, meta));
   }
 
-  // Checked ahead of `active`/`isFocused` because there is no state to gate: a plain click, a
-  // second click, F2 and a double click all land here and do nothing. Ctrl+C on the focused,
-  // unopened cell still works (DiskCell/DiffRow) — reading out of a read-only column is
-  // still a read. ADR-0039: a `string` cell carves out no exception here either —
-  // its own long-value-read path is the right-click menu, wired at DiskCell/DiffRow, not a
-  // gesture handled by this component.
+  // Checked ahead of `active`/`isFocused` because there is no state to gate: every open trigger
+  // lands here and does nothing — matching xEdit's `vstViewEditing`, which sets `Allowed := False`
+  // and shows nothing in advance.
   if (!editable || !onCommit) {
     return <ScalarText value={value} meta={meta} displayOverride={displayOverride} ariaLabel={ariaLabel} />;
   }
 
   if (!active) {
-    // `data-open-trigger` is F2's target: DiskCell dispatches a real `.click()` at it, so all three
-    // xEdit triggers converge on one code path instead of three near-copies.
-    // ADR-0034: no cursor override — the parent DiskCell's own cursor is the resting
-    // affordance; a text caret would falsely imply editing is the only thing a click can start.
+    // `data-open-trigger` is F2's target: DiskCell dispatches a real `.click()` at it. ADR-0034:
+    // no cursor override — a text caret would falsely imply editing is the only thing a click can
+    // start.
     return (
       <span
         data-open-trigger
@@ -107,11 +82,9 @@ export function ScalarCell({
     boxSizing: 'border-box',
   };
 
-  // A commit writes a file: click-to-activate puts every cell one
-  // mis-click away from a working-tree change. A value equal to the one already there is not an
-  // edit — committing it would rewrite the source file, produce a diff of nothing, and show the
-  // record as dirty in the Source Control panel for a keystroke the user never made. Compared as
-  // rendered strings, so 5 typed over 5 is a no-op like any other.
+  // A commit writes a file, so every mis-click is a working-tree change. A value equal to the one
+  // already there is not an edit — committing it would show the record dirty for a keystroke
+  // nobody made.
   const commit = onCommit;
   function commitIfChanged(next: unknown) {
     if (modelValue(next, meta) !== modelValue(value, meta)) commit(next);

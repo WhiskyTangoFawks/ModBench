@@ -138,12 +138,9 @@ describe('PluginTreeProvider.getChildren(RecordTypeNode)', () => {
     expect(children.every(c => c instanceof RecordNode)).toBe(true);
   });
 
-  // Record-type children do not paginate — xEdit's own record-type group nodes load
-  // unconditionally in full (`vstNavInitChildren`, xeMainForm.pas: `ChildCount :=
-  // Container.ElementCount`), and measurement found no meaningful cost even at the realistic
-  // worst case (Fallout4.esm's own INFO records in a full FO4 load order, ~78k rows, ~500ms
-  // backend query + extension-host materialization combined; docs/specs/plugins.md). A genuinely
-  // large count still comes back as one batch with no manual step.
+  // Record-type children do not paginate — xEdit's own record-type group nodes load in full
+  // (`vstNavInitChildren`, xeMainForm.pas), and measurement found no meaningful cost even at the
+  // realistic worst case (~78k INFO rows, ~500ms; docs/specs/plugins.md).
   it('returns every record in one call at a large, realistic-worst-case count — no manual step', async () => {
     const count = 78_089; // Fallout4.esm's own measured INFO count in a full FO4 load order
     const records = Array.from({ length: count }, (_, i) => makeRecord(i));
@@ -174,7 +171,7 @@ describe('PluginTreeProvider.getChildren(RecordTypeNode)', () => {
     expect(repo.getRecords).toHaveBeenCalledTimes(1);
   });
 
-  // #560: fetchRecords maps each row's own hasContainerChildren straight from the single
+  // fetchRecords maps each row's own hasContainerChildren straight from the single
   // getRecords response — a "qust" row with none is a leaf, one with some is Collapsed, read from
   // the listing rather than guessed from the record type alone.
   it('a "qust" row\'s collapsible state follows its own RecordSummary.hasContainerChildren, not its record type alone', async () => {
@@ -202,14 +199,9 @@ describe('PluginTreeProvider.getChildren(RecordTypeNode)', () => {
 
 // ── AC3 guard: listing a record type issues no per-row fan-out (#560) ─────────
 
-// Option 1 (per-row `getContainerChildren` fan-out to learn whether each qust/dial row has
-// children) was rejected at triage on cost grounds — up to ~1,300 concurrent round trips for one
-// "expand all Quests" action on Fallout4.esm. This guard pins the chosen option 2 instead: presence
-// travels inside the single getRecords response, so building N RecordNodes from one page issues
-// zero additional repository calls. Rival: fetchRecords/RecordNode awaiting
-// `repository.getContainerChildren(...)` per qust/dial row instead of trusting
-// `record.hasContainerChildren` — applied and observed failing (see report) before this guard was
-// trusted green.
+// A per-row `getContainerChildren` fan-out was rejected on cost: up to ~1,300 concurrent round
+// trips for one "expand all Quests" on Fallout4.esm. Presence travels inside the single
+// getRecords response instead, so no extra repository calls.
 describe('PluginTreeProvider.getChildren(RecordTypeNode) — no per-row fan-out for container presence (#560)', () => {
   it('listing ~1,300 Quests issues exactly one getRecords call and zero getContainerChildren calls', async () => {
     const count = 1_300; // Fallout4.esm's own approximate QUST count
@@ -355,25 +347,22 @@ describe('RecordNode', () => {
     expect(args[0].label).toBe(record.formKey);
   });
 
-  // #674: the renumberable row — a master copy whose plugin is tracked — is the only one that
+  // The renumberable row — a master copy whose plugin is tracked — is the only one that
   // spells `recordTracked`, which is the whole of package.json's Change FormID when-clause.
   it('contextValue is recordTracked for a master row in a tracked plugin', () => {
     const node = new RecordNode(makeRecord(0), undefined, false, true);
     expect(node.contextValue).toBe('recordTracked');
   });
 
-  // #674: the same master row in an untracked plugin. The product refuses to renumber it
-  // (RecordEditRefusal.PluginNotTracked), so the gesture must be absent rather than offered and
-  // then eaten — which it can only be if the row says it is untracked.
+  // The same master row in an untracked plugin: the product refuses to renumber it, so the
+  // gesture must be absent rather than offered and then eaten.
   it('contextValue is recordUntracked for a master row in an untracked plugin', () => {
     const node = new RecordNode(makeRecord(0), undefined, false, false);
     expect(node.contextValue).toBe('recordUntracked');
   });
 
-  // #572 ruling 1: an override doesn't own its FormID — the row says so, and package.json's
-  // renumber when-clause reads it: Change FormID is absent (not offered-then-refused) on a row
-  // whose plugin is not the FormKey's own origin. Tracked-ness never rescues it: a tracked
-  // plugin's override row is still an override.
+  // An override doesn't own its FormID, so package.json's renumber when-clause hides Change FormID
+  // on a row whose plugin is not the FormKey's own origin; tracked-ness never rescues it.
   it('contextValue is recordOverride when the row\'s plugin is not the FormKey\'s origin', () => {
     const record: RecordSummary = { ...makeRecord(0), plugin: 'PatchMod.esp' };
     expect(new RecordNode(record).contextValue).toBe('recordOverride');
@@ -398,8 +387,7 @@ describe('RecordNode', () => {
 });
 
 // ── a field edit flips a cached row's badge without a refetch ─────────────────
-// An EDIT_FIELD on a clean record flips its row to Modified without a full refresh (spy on the
-// fetch path — a rival that calls refreshTree() wholesale fails the no-refetch assertion).
+// A rival that calls refreshTree() wholesale fails the no-refetch assertion.
 
 describe('#428 markWorkingTreeState / workingTreeStateOf (scoped, no refetch)', () => {
   it('flips a cached clean record to Modified without calling getRecords again', async () => {
@@ -433,12 +421,9 @@ describe('#428 markWorkingTreeState / workingTreeStateOf (scoped, no refetch)', 
     expect(provider.markWorkingTreeState('Fallout4.esm', 'ModA', '000001:Fallout4.esm', 'Modified')).toBe(false);
   });
 
-  // A create never seeds records_committed no matter how many field edits
-  // follow it (the backend's own discrimination would still answer Added on the next real fetch),
-  // so a field edit on an Added row must never downgrade it to Modified — that would actively
-  // misrepresent a committed counterpart existing, not just go briefly stale. The rival: an
-  // unconditional overwrite (`items[idx] = { ...items[idx], workingTreeState: state }`
-  // with no current-state check) fails this.
+  // A create never seeds records_committed, so a field edit on an Added row must never downgrade
+  // it to Modified — that would misrepresent a committed counterpart existing. The rival, an
+  // unconditional overwrite with no current-state check, fails this.
   it('preserves Added across a field edit — create, then edit, still badges A', async () => {
     const record = makeRecord(0, 'Added');
     const repo = makeRepository({ records: { items: [record], total: 1 } });
@@ -454,9 +439,8 @@ describe('#428 markWorkingTreeState / workingTreeStateOf (scoped, no refetch)', 
 });
 
 // ── record rows carry their copy identity ─────────────────────────────────────
-// A record-scoped command acts on the clicked row's own copy of the record — so the row has to
-// say which copy it is ((plugin, origin), ADR-0036), and rows whose plugin can't be edited hide
-// Remove via an immutable contextValue, matching the column header's !immutable `when` gate.
+// A record-scoped command acts on the clicked row's own copy, so the row says which copy it is
+// ((plugin, origin), ADR-0036); rows whose plugin cannot be edited hide Remove.
 
 describe('#281 record rows carry their copy identity', () => {
   it('RecordNode carries the browsed origin, threaded from its RecordTypeNode', async () => {
@@ -490,7 +474,7 @@ describe('#281 record rows carry their copy identity', () => {
     expect((rec as RecordNode).contextValue).toBe('recordImmutable');
   });
 
-  // #674: an enabled, in-load-order, *untracked* plugin. Nothing about it is immutable, so the row
+  // An enabled, in-load-order, *untracked* plugin. Nothing about it is immutable, so the row
   // is fully actionable — and still not renumberable, which is what `recordUntracked` says.
   it('mutable but untracked load-order rows get contextValue recordUntracked', async () => {
     const repo = makeRepository();
@@ -503,7 +487,7 @@ describe('#281 record rows carry their copy identity', () => {
     expect((rec as RecordNode).contextValue).toBe('recordUntracked');
   });
 
-  // #674: tracked-ness reaches the row exactly the way immutability already does — a set pushed in
+  // Tracked-ness reaches the row exactly the way immutability already does — a set pushed in
   // from the reconcile's own `GET /plugins` answer (`PluginResponse.IsTracked`), never a
   // filesystem probe made here.
   it('record rows of a tracked plugin get contextValue recordTracked, case-insensitively', async () => {
@@ -529,10 +513,8 @@ describe('#281 record rows carry their copy identity', () => {
     expect((rec as RecordNode).contextValue).toBe('recordImmutable');
   });
 
-  // #674 AC5: tracking or untracking a plugin updates the affected rows with no reload. Both
-  // directions ride the reconcile the `mods/**` watcher already fires when a `.git` directory
-  // appears or vanishes (fsWatcher.ts deliberately does not filter that one event), so the only
-  // thing this provider owes is a re-render off its *existing* cache — no repository call.
+  // Tracking or untracking a plugin rides the reconcile the `mods/**` watcher already fires when
+  // a `.git` directory appears or vanishes, so this provider owes only a re-render off its cache.
   it('re-rendering after tracking flips the rows without a repository refetch', async () => {
     const repo = makeRepository();
     const getRecords = vi.spyOn(repo, 'getRecords');
@@ -674,13 +656,9 @@ describe('PluginTreeProvider worldspace tree', () => {
     expect(node.label).toBe('< 12,  -5>');
   });
 
-  // Guard test: a plausible wrong implementation checks isPersistentWorldspaceCell before
-  // fullName — but xEdit's actual GetDisplayName checks
-  // GetFullName first, unconditionally, and only reaches the GroupType=1 (persistent) check when
-  // FULL is empty. Confirmed by reading wbImplementation.pas directly: `Result := GetFullName; if
-  // Result = '' then if ... (GetSignature = 'CELL') then begin if ... GroupType = 1 ... Result :=
-  // '<Persistent Worldspace Cell>' else ...`. The persistent-check-first rival makes this fail by
-  // producing '<Persistent Worldspace Cell>' instead.
+  // xEdit's GetDisplayName checks GetFullName first, unconditionally, and only reaches the
+  // GroupType=1 (persistent) check when FULL is empty (wbImplementation.pas). The rival that
+  // checks isPersistentWorldspaceCell first fails here.
   it('#497: the persistent worldspace cell with a FULL name shows the FULL name, not the placeholder', () => {
     const node = new CellNode('M.esp', {
       formKey: 'top:M.esp', editorId: 'TopCell', cellX: null, cellY: null,
@@ -767,9 +745,8 @@ describe('PluginTreeProvider fetch failures', () => {
     expect(children.map(c => c.label)).toEqual(['Worldspaces', 'cell - Interior', 'WEAP']);
   });
 
-  // A record reached by expanding a load-order row opens the editor the same way one
-  // reached through this tree does — it is the same node, carrying its own command, so the
-  // merged tree inherits the behaviour rather than re-implementing it.
+  // A record reached by expanding a load-order row is the same node carrying its own command, so
+  // the merged tree inherits the open-editor behaviour rather than re-implementing it.
   it('getPluginChildren: records below it carry the open-editor command', async () => {
     const repo = makeRepository({ recordTypes: [{ type: 'WEAP', count: 1 }] });
     const provider = new PluginTreeProvider(repo);
@@ -859,10 +836,8 @@ describe('headerFormKeyFor', () => {
 });
 
 // ── spatial node chain carries origin (ADR-0036) ───────────────────────────────
-// The chain WorldspacesNode → WorldspaceNode → BlockNode → SubBlockNode → CellNode →
-// PlacedGroupNode → PlacedNode, plus InteriorCellsNode → CellNode, must carry the origin a
-// specific copy's row was built with all the way down — otherwise a node two hops from the root
-// silently reverts to browsing the load-order winner instead of the copy the user opened.
+// Every node in the chain must carry the origin its row was built with, or a deep node silently
+// reverts to browsing the load-order winner instead of the copy the user opened.
 
 describe('PluginTreeProvider spatial origin threading (#305)', () => {
   it('fetchWorldspaces: asks the repository for the node\'s own copy, and the WorldspaceNodes it builds carry that origin forward', async () => {
@@ -929,9 +904,8 @@ describe('PluginTreeProvider spatial origin threading (#305)', () => {
     expect(cellNode.origin).toBe('ModB');
   });
 
-  // refCache/interiorCache must be keyed by (origin, plugin), the same reason pageCache
-  // already is — a cache keyed on plugin alone serves one copy's cell references / interior
-  // page under the other copy's node, invisible in any test that only loads one copy.
+  // refCache/interiorCache must be keyed by (origin, plugin) like pageCache — a key on plugin
+  // alone serves one copy's pages under the other copy's node, invisible when only one copy loads.
   it('refCache: caches each copy\'s cell references separately, so one copy\'s page is never served for the other', async () => {
     const repo = makeRepository();
     const provider = new PluginTreeProvider(repo);
@@ -1073,9 +1047,8 @@ describe('RecordNode collapsibility for container types (#424, #560)', () => {
     expect(node.collapsibleState).toBe(1);
   });
 
-  // #560: the reported bug — a Quest/Dialog Topic with zero actual container children showed an
-  // expand chevron that expanded to nothing. Collapsibility now reads the listing's own
-  // hasContainerChildren fact instead of the record's type signature alone.
+  // Collapsibility reads the listing's own hasContainerChildren fact, not the record's type
+  // signature: a Quest with zero container children must show no expand chevron.
   it('stays None (a leaf) when built as a "qust" row with no container children', () => {
     const node = new RecordNode(makeRecord(0), undefined, false, false, 'qust', false);
     expect(node.collapsibleState).toBe(0);
@@ -1114,12 +1087,8 @@ describe('PluginTreeProvider.getChildren(RecordNode) — container children (#42
     expect((children[0] as RecordNode).command).toMatchObject({ command: 'modbench.openEditor' });
   });
 
-  // #560 correction: before this fix, the assertion below read `expect(dialChild...).toBe(1)`
-  // against a dial1 fixture that never claimed to have any children of its own — the test was
-  // unknowingly certifying the reported bug (a "dial" child always shows a chevron, even one that
-  // expands to nothing), not the intended "a container child is itself expandable" behaviour. Fixed
-  // by giving dial1 a genuine child (hasContainerChildren: true) and adding dial2, the previously
-  // untested case of a "dial" child with none, which must stay a leaf exactly like a top-level one.
+  // dial1 has a genuine container child and dial2 has none: a "dial" child with no children must
+  // stay a leaf exactly like a top-level one, or every dial row shows a chevron expanding to nothing.
   it('a returned "dial" child with its own children is itself Collapsed — expandable to its own Responses; one with none stays a leaf', async () => {
     const repo = makeRepository();
     repo.getContainerChildren = vi.fn().mockResolvedValue([
@@ -1169,11 +1138,8 @@ describe('PluginTreeProvider.getChildren(RecordNode) — container children (#42
     expect(repo.getContainerChildren).toHaveBeenCalledTimes(1);
   });
 
-  // Two same-filename plugin copies expanding the same Quest FormKey must hit
-  // their own repository call / cache entry — a cache key that omits origin is the same
-  // regression class the rest of this spatial chain already guards against. Rival: a cache key
-  // built from formKey alone (no origin component) would return ModA's cached children for ModB's
-  // expansion instead of issuing its own call.
+  // Two same-filename copies expanding the same Quest FormKey must hit their own cache entry: a
+  // key built from formKey alone returns ModA's cached children for ModB's expansion.
   it('origin-keyed caching: two copies of one plugin browse their own children independently', async () => {
     const repo = makeRepository();
     repo.getContainerChildren = vi.fn()

@@ -1,7 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-// Captures every registerCommand(id, handler) call so each row's handler can be invoked
-// directly, the same pattern recordPanelMessageRouter.test.ts's own vscode mock uses.
+// Captures every registerCommand(id, handler) so each row's handler can be invoked directly.
 const handlers = new Map<string, (ctx?: unknown) => void>();
 const registerCommand = vi.fn((command: string, handler: (ctx?: unknown) => void) => {
   handlers.set(command, handler);
@@ -20,11 +19,8 @@ function fakePanels() {
   return { panels, postMessage };
 }
 
-// The exhaustive command list this table must cover — independent of the table's own
-// source, the same "nothing missing, nothing extra" bar packageJson.test.ts's own
-// EXPECTED_COMMANDS list uses. Registration alone (extension.test.ts) proves a command exists;
-// it does not prove which message it broadcasts, which is the actual risk in collapsing three
-// hand-written registrars into one data table — this file is that proof.
+// Written independently of the table under test, so "nothing missing, nothing extra" is a real
+// bar. Registration proves a command exists, never which message it broadcasts.
 const EXPECTED_FORWARDER_COMMANDS = [
   'modbench.field.openExtended',
   'modbench.array.add',

@@ -1,8 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-// #655: onPluginCheckboxChanged used to be an inline handler inside registerPluginListView
-// (extension.ts), with no seam a unit test could reach — this file is that seam, the same way
-// modManagementCommands.test.ts is for onModCheckboxChanged, its Mod-Management-side twin.
+// onPluginCheckboxChanged is extracted from registerPluginListView so a unit test can reach it,
+// the same way modManagementCommands.test.ts reaches onModCheckboxChanged.
 const { showErrorMessage, showWarningMessage } = vi.hoisted(() => ({
   showErrorMessage: vi.fn(),
   showWarningMessage: vi.fn(),

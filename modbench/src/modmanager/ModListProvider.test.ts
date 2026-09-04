@@ -25,8 +25,7 @@ const mod = (name: string, enabled = true, extra: Partial<Mod> = {}): Mod => ({
 });
 const sep = (name: string, enabled = false): Separator => ({ kind: 'separator', name, enabled });
 
-/** Implements exactly ModListProvider's own Pick<> of IModlistSource — a method the provider
- *  doesn't touch can't even be added here by mistake. */
+// Typed as the provider's own Pick<>, so a method it never touches can't be added by mistake.
 class FakeSource implements ModListSource {
   setEnabledCalls: { modName: string; enabled: boolean }[] = [];
   activeProfile = 'Default';
@@ -252,10 +251,8 @@ describe('ModListProvider', () => {
     const item = (value: unknown): DragItem => ({ value });
     const token = { isCancellationRequested: false };
 
-    // A separator wraps the entries that PRECEDE it. So Group A's real
-    // member is Alpha (the only entry before it); Group B's real members are
-    // Beta and Gamma (everything back to Group A); Delta trails the last
-    // separator and is ungrouped.
+    // A separator wraps the entries that PRECEDE it, so Group A holds Alpha, Group B holds
+    // Beta and Gamma, and Delta trails the last separator ungrouped.
     const dndEntries: ModlistEntry[] = [
       mod('Alpha'),           // index 0 — Group A's member
       sep('Group A'),         // index 1
@@ -335,15 +332,8 @@ describe('ModListProvider', () => {
       expect(moveToSepCalls).toEqual([{ mod: 'Alpha', sep: 'Group A' }]);
     });
 
-    // These four characterize the file-space "insert before the target" math in
-    // the WINNING-AT-TOP view (view == file order), including the down-drag
-    // off-by-one case. The reversed default view is covered by "honors the view
-    // direction" below.
-
-    // Down-drag: dragging a mod DOWNWARD (Alpha, above the target,
-    // onto Gamma) must land Alpha immediately before Gamma — passing the
-    // pre-removal target index would land Alpha one slot too low.
-    // Gamma is Group B's member (it precedes Group B's line), not Group A's.
+    // Down-drag off-by-one: passing the pre-removal target index would land Alpha one slot
+    // too low.
     it('winning-at-top down-drag: drop mod onto a lower mod lands it before that mod', async () => {
       const { provider, source } = makeApplyingProvider();
       provider.toggleViewDirection(); // -> winning-at-top (view == file order)
@@ -371,11 +361,8 @@ describe('ModListProvider', () => {
       expect(source.order()).toEqual(['Group A', 'Beta', 'Gamma', 'Group B', 'Delta', 'Alpha']);
     });
 
-    // Same for separator blocks: the whole block (separator + its real, preceding
-    // members) is removed before toIndex is counted, so every block
-    // member above the target shifts it — dragging Group A's block (Alpha +
-    // itself) down onto Delta must land the block before Delta, not fling it to
-    // the bottom. Delta trails the last separator, so it's a root ungrouped mod.
+    // The whole block is removed before toIndex is counted, so every block member above the
+    // target shifts it — otherwise the block is flung to the bottom.
     it('winning-at-top down-drag: drop separator block onto a lower mod lands the block before it', async () => {
       const { provider, source } = makeApplyingProvider();
       provider.toggleViewDirection(); // -> winning-at-top (view == file order)
@@ -395,10 +382,8 @@ describe('ModListProvider', () => {
       expect(source.order()).toEqual(before);
     });
 
-    // A drop must honor what the user SEES, not raw file position. In the default
-    // losing-at-top view the file runs opposite to the view, so dropping X onto Y
-    // must place X just above Y *in the view*. Asserting the displayed order (not
-    // the file order) is what makes this view-relative rather than file-relative.
+    // In the default losing-at-top view the file runs opposite to the view, so these assert
+    // displayed order rather than file order.
     describe('honors the view direction', () => {
       class SimpleApplyingSource extends FakeSource {
         text = '+Winning\n+Middle\n+Losing\n'; // file order: winning-first
@@ -431,10 +416,8 @@ describe('ModListProvider', () => {
       });
 
       it('default (losing-at-top): dropping a separator block onto a row lands the block just above it in the view', async () => {
-        // dndEntries file order: [Alpha, Group A{Alpha}, Beta, Gamma, Group B{Beta,Gamma},
-        // Delta(ungrouped)] (a separator's real members are the entries preceding
-        // it). Delta is the losing-most row in the default view; dropping Group A's block
-        // onto Delta puts the block just above Delta in the view = just after Delta in the file.
+        // Delta is the losing-most row in the default view, so just above it in the view is
+        // just after it in the file.
         const { provider, source } = makeApplyingProvider();
         const roots = await provider.getChildren();
         const deltaNode = roots.find((n): n is ModNode => n instanceof ModNode && n.label === 'Delta')!;
@@ -444,10 +427,8 @@ describe('ModListProvider', () => {
     });
   });
 
-  // A failed drop must report on ADR-0026's "explicit action failed" tier
-  // (error notification + log) via the injected reporter, and the tree must
-  // resync against disk rather than show a phantom move — mirrors
-  // PluginListProvider.handleDrop's failure handling exactly.
+  // A failed drop reports on ADR-0026's "explicit action failed" tier, and the tree resyncs
+  // against disk rather than showing a phantom move.
   describe('drag-and-drop — failure handling (#130)', () => {
     type DragItem = { value: unknown };
     class FakeDataTransfer {
@@ -840,11 +821,8 @@ describe('ModListProvider', () => {
   });
 });
 
-// The game's resolved Data folder is threaded from the
-// composition root instead of ModListProvider re-reading the ini. This exercises
-// that seam end-to-end over a real temp instance: a mod plugin masters a vanilla
-// master that lives only in the injected Data folder, so the missing-master badge
-// hinges entirely on the dataFolder the provider was handed.
+// The vanilla master lives only in the injected Data folder, so the badge hinges entirely on
+// the dataFolder the provider was handed rather than on any ini re-read.
 describe('ModListProvider — missing-master badge over the injected game Data folder (#78)', () => {
   let dir: string;
   const modA = (): ModlistEntry => ({ kind: 'mod', name: 'Consumer', enabled: true });

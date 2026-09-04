@@ -4,11 +4,9 @@ import { join } from 'node:path';
 import { EXTENSION_TO_WEBVIEW, type ExtensionToWebview } from './messages';
 import type { Reporter } from '../modmanager/deployer';
 
-// Filesystem-safe rendering of one path segment (a record label, field name, or
-// plugin name — any of which may carry a FormKey's `:`, or characters Windows paths reject
-// outright). Collapsed whitespace and a length cap keep the result a sane single segment even for
-// an unusually long EditorID; the `|| '_'` guards the (practically unreachable, but real) case of
-// a segment that sanitizes down to nothing.
+// Any segment may carry a FormKey's `:` or characters Windows paths reject. Collapsed whitespace
+// and a length cap keep the result one sane segment; `|| '_'` guards a segment that sanitizes
+// down to nothing.
 function sanitizeForPath(segment: string): string {
   return segment
     .replace(/[<>:"/\\|?*]/g, '_')
@@ -17,23 +15,9 @@ function sanitizeForPath(segment: string): string {
     .slice(0, 80) || '_';
 }
 
-// Deterministic — not random — per record+field+plugin, so
-// re-double-clicking the same cell reveals the same already-open tab (VS Code's own per-URI
-// reuse) instead of opening a duplicate. Directory keyed by the record (readable, and groups a
-// record's several open fields together); filename is what the tab title shows by default —
-// `Description [SomePlugin.esp].txt`, naming the field and the plugin without repeating the
-// record identity the directory already carries.
-//
-// ADR-0036: `origin` is its own directory segment, between the record and the field.
-// Two columns can share a filename (a shadowed copy), and without origin here they'd alias onto
-// the same temp file: column A's tab would silently show column B's content (right commit target
-// — the closure is bound in the webview — wrong displayed content). No "elide the Data origin"
-// branch, unlike columnKey()'s own convention: the directory is never what the user reads (the
-// tab title stays the plain filename, per ADR-0036 — "origin is never what the user reads"), so
-// there is nothing to keep quiet for the common single-origin case and no collision-dependent rule
-// to get wrong. Run through the same sanitizeForPath every other segment already gets — a mod
-// folder name is a real directory name MO2 already accepted, but on whatever filesystem created
-// it, not necessarily this one, and it can carry columnKey()'s own `|` delimiter.
+// Deterministic per record+field+plugin, so re-opening the same cell reveals the same tab.
+// `origin` is its own directory segment: two columns can share a filename and would otherwise
+// alias onto one temp file (ADR-0036).
 export function extendedEditorPath(
   tempRoot: string, recordLabel: string, fieldName: string, plugin: string, origin: string,
 ): string {
@@ -48,9 +32,8 @@ export interface OpenExtendedFieldEditorParams {
   recordLabel: string;
   fieldName: string;
   plugin: string;
-  // ADR-0036: required alongside `plugin`, consistent with every other column-identity
-  // message — threaded into extendedEditorPath (its own directory segment) so two
-  // same-filename columns never alias onto one temp file.
+  // ADR-0036: threaded into extendedEditorPath so two same-filename columns never alias onto one
+  // temp file.
   origin: string;
   readOnly: boolean;
 }
@@ -65,43 +48,25 @@ export interface ExtendedFieldEditorDeps {
   reporter: Reporter;
 }
 
-// Opens a `string` cell's value as a real editor tab — a temp file, not a
-// FileSystemProvider and not an `untitled:` document (design note:
-// docs/specs/medit-record-editor.md, Editing § extended editor). A real file gets native
-// dirty-tracking and the native "Save changes to X? Save/Don't Save/Cancel" close prompt for
-// free, so abandoning it (closing without saving) commits nothing without any code here having to
-// enforce that — and read-only enforcement is the OS file-permission bit VS Code already honors
-// (`chmod` below), not a bespoke read-only UI state.
-//
-// Each `Ctrl+S` re-sends the current content through
-// EXTENDED_EDITOR_COMMITTED — the same discrete, explicit-action shape every other commit in this
-// surface has (never on keystroke, never only on close). Closing sends only
-// EXTENDED_EDITOR_CLOSED, the signal nativeBridge needs to drop its own bookkeeping for this
-// requestId — never a value, since closing alone commits nothing beyond whatever saves already
-// happened.
+// A temp file, not a FileSystemProvider: a real file gets native dirty-tracking and the native
+// close prompt for free, so abandoning it commits nothing, and read-only is the OS permission bit
+// VS Code already honors.
 export async function openExtendedFieldEditor(
   params: OpenExtendedFieldEditorParams, deps: ExtendedFieldEditorDeps,
 ): Promise<void> {
   const path = extendedEditorPath(deps.tempRoot, params.recordLabel, params.fieldName, params.plugin, params.origin);
   try {
     await mkdir(join(path, '..'), { recursive: true });
-    // The path is deterministic (same record+field+plugin -> same
-    // file), so a *second* open of an immutable cell finds a file already `chmod`-ed 0o444 by
-    // its first open — writeFile against a non-writable file throws EACCES. Force it writable
-    // before writing, every open, not just the first; ENOENT (nothing to chmod yet — the very
-    // first open) is the one error this ignores, since mkdir above already guarantees the
-    // parent directory exists for the writeFile that follows.
+    // A second open of an immutable cell finds a file already `chmod`-ed 0o444 by the first, and
+    // writeFile against a non-writable file throws EACCES. ENOENT is the one error to ignore —
+    // nothing exists to chmod yet.
     await chmod(path, 0o644).catch((err: unknown) => {
       if ((err as NodeJS.ErrnoException).code !== 'ENOENT') throw err;
     });
     await writeFile(path, params.value, 'utf8');
-    // Read-only, not absent — a read-only tab is still the
-    // only way to read a long value in full. Enforced by the OS permission bit rather than any
-    // renderer-side state: VS Code shows a locked, uneditable editor for a non-writable local
-    // file natively, so there is nothing bespoke to build or to get out of sync. Applied *after*
-    // the write above (not folded into a single chmod before it) so this is the one call that
-    // decides the file's resting permissions on every open, independent of whichever transient
-    // writable state the write itself needed.
+    // Read-only, not absent — a read-only tab is still the only way to read a long value in full,
+    // and the OS permission bit is enforcement VS Code already honors. Applied after the write,
+    // which needs it writable.
     await chmod(path, params.readOnly ? 0o444 : 0o644);
 
     const uri = vscode.Uri.file(path);
@@ -117,12 +82,9 @@ export async function openExtendedFieldEditor(
       saveListener.dispose();
       closeListener.dispose();
       deps.reply({ type: EXTENSION_TO_WEBVIEW.EXTENDED_EDITOR_CLOSED, requestId: params.requestId });
-      // Best-effort: the temp dir is reclaimed by the OS regardless, and nothing user-facing
-      // depends on this succeeding — logged, not surfaced, per the "background/recoverable"
-      // row of the error-surfacing table (ADR-0026), not the "explicit action failed" one (the
-      // user's close already succeeded; only cleanup after it didn't). Awaited so the listener's
-      // returned promise settles only once the file is gone — an orphaned unlink promise races
-      // anything observing the path after close (#651).
+      // Best-effort: the OS reclaims the temp dir regardless, so this is logged, not surfaced
+      // (ADR-0026). Awaited so the listener's promise settles only once the file is gone — an
+      // orphaned unlink races anything observing the path.
       await unlink(path).catch((err: unknown) => {
         deps.log(`[extendedFieldEditor] could not delete temp file ${path}: ${err instanceof Error ? err.message : String(err)}`);
       });
@@ -131,12 +93,9 @@ export async function openExtendedFieldEditor(
     // The user double-clicked a cell — an explicit action — so a failure here is ADR-0026's
     // "explicit action failed" row: error notification + log, not a silent swallow.
     deps.reporter.report('error', 'Could not open the extended editor.', err instanceof Error ? err.message : String(err));
-    // No tab ever opened on this path, so there is no
-    // onDidCloseTextDocument left to fire EXTENDED_EDITOR_CLOSED the normal way — without this,
-    // nativeBridge's requestId -> onCommit map entry (registered optimistically, before any
-    // reply exists) would never be deleted. Reusing EXTENDED_EDITOR_CLOSED rather than inventing
-    // a distinct failure message keeps the webview's cleanup to the one signal it already knows:
-    // "this requestId is done, stop tracking it."
+    // No tab ever opened, so no onDidCloseTextDocument will fire — without this, nativeBridge's
+    // requestId entry (registered optimistically) would never be deleted. Reusing the CLOSED
+    // message keeps the webview's cleanup to the one signal it already knows.
     deps.reply({ type: EXTENSION_TO_WEBVIEW.EXTENDED_EDITOR_CLOSED, requestId: params.requestId });
   }
 }

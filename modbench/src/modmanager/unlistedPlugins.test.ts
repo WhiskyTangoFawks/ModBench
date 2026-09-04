@@ -2,12 +2,10 @@ import { describe, it, expect } from 'vitest';
 import { FileConflictLookup, type FileConflictIndex } from './fileConflictIndex';
 import { findUnlistedPlugins } from './unlistedPlugins';
 
-// ADR-0035: the plugin files the effective load order does not point at — a copy shadowed by
-// a winning mod, and a file plugins.txt never names at all. Pure over the index Mod Management
-// already builds, so no filesystem walk of its own.
+// The plugin files the effective load order does not point at (ADR-0035): a copy shadowed by
+// a winning mod, or a file plugins.txt never names.
 
-/** filesByMod is what discovery reads; the winner lookup only matters for the load-order set,
- *  which is passed in already resolved. */
+// Discovery reads filesByMod only; the load-order set is passed in already resolved.
 function indexOf(filesByMod: Record<string, string[]>): FileConflictIndex {
   return {
     files: new FileConflictLookup(),

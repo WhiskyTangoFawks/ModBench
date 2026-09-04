@@ -5,10 +5,7 @@ vi.mock('vscode', () => fakeVscodeModule());
 
 import { createDownloadsWatcher } from './downloadsWatcher';
 
-// Coalesce/dispose/dispose-before-window behavior is covered generically by
-// fsWatcher.test.ts, which this delegates to (same pattern as modsWatcher.test.ts /
-// overwriteWatcher.test.ts). Only the glob this watcher is responsible for is
-// asserted here, at the real vscode boundary.
+// Only the glob is asserted here; coalesce and dispose are covered generically elsewhere.
 describe('createDownloadsWatcher', () => {
   it('watches downloads/** under the instance root', () => {
     watchers.length = 0;

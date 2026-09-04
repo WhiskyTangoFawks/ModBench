@@ -1,54 +1,30 @@
-// Pure, byte-faithful text transforms over an MO2 profile's plugins.txt.
-//
-// plugins.txt lines (top = loads first, bottom wins record overrides):
-//   # comment              (preserved verbatim, not surfaced)
-//   *Some Plugin.esp       (enabled plugin — leading * marker)
-//   Some Plugin.esp        (disabled plugin — no marker)
-//                          (blank line, preserved verbatim, not surfaced)
-//
-// Simpler than modlist.txt: no separator concept. All mutations splice the raw
-// string in place, so CRLF/LF, trailing newline, BOM, and every unmodelled line
-// (comment/blank) survive untouched.
+// MO2's plugins.txt: a leading `*` marks enabled, `#` lines and blanks carry no
+// meaning, and the bottom of the file is winning-most. Mutations splice the raw
+// string, so EOLs, BOM and unmodelled lines survive untouched.
 
 import type { PluginEntry } from '../model';
 import { detectEol, insertIndexAmongEntries, lineContent, lineRanges, splitLinesKeepEol, stripBom, withBomPreserved } from './lineScan';
 
-/** The part of a line #635's fixes key off: EOL-stripped, then leading/trailing
- *  whitespace stripped too — MO2 itself never writes padded lines, but a
- *  hand-edited plugins.txt (never assume exclusive ownership of the file) can,
- *  and the deleted `readPluginLines` this module's `isEntryLine`/`pluginNameOf`
- *  replaced always `.trim()`ed the whole line before reading `*`/the name off
- *  it. Only used for *reading* — `setPluginEnabledInText`'s write still has to
- *  locate the marker's real byte offset, which this collapses away, so it
- *  computes that separately (see its own comment). */
+// MO2 never writes padded lines, but a hand-edited plugins.txt can, so reads trim.
+// Writes cannot use this: it collapses away the marker's real byte offset.
 const trimmedEntryContent = (line: string): string => lineContent(line).trim();
 
-/** An entry line is any non-blank, non-comment line (after trimming — a
- *  whitespace-only line, or a `#` comment with incidental leading whitespace,
- *  both count as blank/comment, not an entry). Comment and blank lines carry
- *  no model meaning. */
 const isEntryLine = (line: string): boolean => {
   const c = trimmedEntryContent(line);
   return c.length > 0 && !c.startsWith('#');
 };
 
-/** Whether an entry line's `*` (enabled) marker is present — after trimming, so
- *  incidental leading whitespace before the marker doesn't hide it. */
 const isEnabledEntry = (line: string): boolean => trimmedEntryContent(line).startsWith('*');
 
-/** Plugin name for an entry line, with the leading `*` (enabled) marker and any
- *  incidental leading/trailing whitespace removed — `PluginEntry.name` is a
- *  matching key (`setPluginEnabledInText`, `appendPluginInText`'s duplicate
- *  check, `movePluginsInText`), so it must report the same name a hand-padded
- *  line's *real* plugin resolves to, not a name containing the padding or a
- *  literal `*`. */
+// `PluginEntry.name` is a matching key, so a hand-padded line must resolve to the
+// same name as a clean one — neither the padding nor the `*` may leak into it.
 const pluginNameOf = (line: string): string => {
   const c = trimmedEntryContent(line);
   return c.startsWith('*') ? c.slice(1) : c;
 };
 
-/** Parse plugins.txt into the ordered model view (top = loads first). Only
- *  entry lines are surfaced; comment/blank lines are ignored (preserved on write). */
+/** Only entry lines are surfaced; comment and blank lines are ignored here and
+ *  preserved on write. */
 export function parsePlugins(text: string): PluginEntry[] {
   const entries: PluginEntry[] = [];
   for (const raw of stripBom(text).split(/\r\n|\r|\n/)) {
@@ -58,12 +34,9 @@ export function parsePlugins(text: string): PluginEntry[] {
   return entries;
 }
 
-/** Splice a new entry line for `pluginName` at the winning end (bottom: "bottom wins record
- *  overrides", this file's own header comment) of `bomless`, landing before any trailing
- *  comment/blank lines rather than after them — the same "before the tail" placement
- *  `movePluginsInText`'s own end-of-file case uses. Byte-faithful: every existing byte survives
- *  untouched, and the new line's EOL matches whatever the file already uses. Caller has already
- *  established the name has no entry line. */
+// Lands at the winning end but before any trailing comment/blank lines, matching
+// where `movePluginsInText` puts a block moved to the end. Caller has already
+// established the name has no entry line.
 function appendEntryLine(bomless: string, pluginName: string, enabled: boolean): string {
   const eol = detectEol(bomless);
   const line = `${enabled ? '*' : ''}${pluginName}${eol}`;
@@ -79,8 +52,8 @@ function appendEntryLine(bomless: string, pluginName: string, enabled: boolean):
   return lines.join('');
 }
 
-/** Set a plugin's enabled state by adding/removing its leading `*` marker. A name with no entry
- *  line has no marker to toggle and leaves the text untouched (#680). */
+/** A name with no entry line has no marker to toggle, and leaves the text
+ *  untouched rather than throwing. */
 export function setPluginEnabledInText(text: string, pluginName: string, enabled: boolean): string {
   return withBomPreserved(text, (bomless) => {
     for (const { start, contentEnd } of lineRanges(bomless)) {
@@ -88,11 +61,8 @@ export function setPluginEnabledInText(text: string, pluginName: string, enabled
       if (!isEntryLine(content) || pluginNameOf(content) !== pluginName) continue;
       const isEnabled = isEnabledEntry(content);
       if (isEnabled === enabled) return bomless; // already in the requested state
-      // The marker sits at the first non-whitespace character of the line, which is
-      // `start` for a real MO2-written line but not necessarily for a hand-edited one
-      // with incidental leading whitespace — matching pluginNameOf/isEnabledEntry's own
-      // trim-then-read means this write must locate the marker the same trim-aware way,
-      // or it would splice into the padding instead of flipping the real marker.
+      // The marker is at the first non-whitespace character, not at `start`: a
+      // hand-padded line would otherwise be spliced in its padding.
       const markerAt = start + (content.length - content.trimStart().length);
       if (enabled) return bomless.slice(0, markerAt) + '*' + bomless.slice(markerAt);
       return bomless.slice(0, markerAt) + bomless.slice(markerAt + 1); // drop the leading *
@@ -101,8 +71,8 @@ export function setPluginEnabledInText(text: string, pluginName: string, enabled
   });
 }
 
-/** Append a new entry line at the winning end — enabled for the New Plugin gesture, disabled
- *  for the plugins reconcile (#680). Throws if the name is already present. */
+/** Enabled for the New Plugin gesture, disabled for the reconcile. Throws if the
+ *  name is already present. */
 export function appendPluginInText(text: string, pluginName: string, enabled = true): string {
   return withBomPreserved(text, (bomless) => {
     for (const { start, contentEnd } of lineRanges(bomless)) {
@@ -115,8 +85,7 @@ export function appendPluginInText(text: string, pluginName: string, enabled = t
   });
 }
 
-/** Remove a plugin's entry line, byte-faithfully (the plugins reconcile's prune, #680). Throws
- *  if the name has no entry line. The plugins twin of `modlistText.ts`'s `removeModFromText`. */
+/** Throws if the name has no entry line. */
 export function removePluginFromText(text: string, pluginName: string): string {
   return withBomPreserved(text, (bomless) => {
     const lines = splitLinesKeepEol(bomless);
@@ -127,12 +96,9 @@ export function removePluginFromText(text: string, pluginName: string): string {
   });
 }
 
-/** Move one or more plugins (by name) so the moved block occupies entry-index
- *  `toIndex` among plugins.txt's entry lines (top = loads first), counting the
- *  entries with the moved lines removed. The moved lines keep their original
- *  relative order regardless of selection contiguity or the order names are
- *  passed in. Non-entry lines (comment/blank) keep their position. Out-of-range
- *  `toIndex` clamps to the last slot. Throws if any name is absent. */
+/** `toIndex` counts entries with the moved lines already removed, and clamps to
+ *  the last slot. The block keeps its source order, whatever order the names came
+ *  in; comment and blank lines keep their positions. */
 export function movePluginsInText(text: string, pluginNames: string[], toIndex: number): string {
   return withBomPreserved(text, (bomless) => {
     const lines = splitLinesKeepEol(bomless);
@@ -155,12 +121,9 @@ export function movePluginsInText(text: string, pluginNames: string[], toIndex: 
   });
 }
 
-/** Convert a UI drop onto a row into the `toIndex` `movePluginsInText` expects.
- *  A drag hands us a *pre-removal* target ("insert the block before this row"),
- *  but `movePluginsInText` counts `toIndex` among the entries with the moved
- *  names already removed — so any moved row sitting above the target shifts it
- *  left. `targetName` is the row dropped onto, or `undefined` to drop past the
- *  last row (append). An unknown target name also appends (defensive). */
+/** A drag names a pre-removal target row, but `movePluginsInText` counts from the
+ *  list with the moved names gone, so every moved row above the target shifts it
+ *  left. An absent or unknown `targetName` appends. */
 export function dropIndexForMove(
   order: string[],
   movedNames: string[],

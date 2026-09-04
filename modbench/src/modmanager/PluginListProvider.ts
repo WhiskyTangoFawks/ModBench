@@ -15,23 +15,15 @@ import { ErrorNode } from './ErrorNode';
 
 const DND_MIME = 'application/vnd.medit.pluginlist-node';
 
-/** Shared resolved-undefined default for an omitted `dataFolder` — hoisted out of
- *  the constructor so it isn't a fresh closure per instance. */
+// Hoisted out of the constructor so an omitted `dataFolder` is not a fresh closure per instance.
 const NO_DATA_FOLDER: () => Promise<string | undefined> = () => Promise.resolve(undefined);
 
-/** The only IModlistSource members this provider calls — see loadOrderSnapshot.ts's
- *  own `Source` alias for the same narrowing pattern. */
 export type PluginListSource = Pick<
   IModlistSource, 'setPluginEnabled' | 'readModlist' | 'readPluginOrder' | 'readEnabledPlugins' | 'reorderPlugins'
 >;
 
-/** Constructor options for {@link PluginListProvider}. Field order matches
- *  ModListProvider's identically-shaped options so the two siblings read the
- *  same.
- *
- *  `dataFolder` is a getter, not a settled `Promise` — the setting it resolves is editable
- *  while Modbench runs, so a value captured once at construction could go stale for the life of
- *  the provider. Each call re-reads through the single game-directory resolver. */
+/** `dataFolder` is a getter, not a settled `Promise`: the setting it resolves is editable while
+ *  Modbench runs, so a value captured at construction could go stale for the provider's life. */
 export interface PluginListProviderOptions {
   source: PluginListSource;
   log?: (msg: string) => void;
@@ -40,18 +32,9 @@ export interface PluginListProviderOptions {
   dataFolder?: () => Promise<string | undefined>;
 }
 
-/** A single plugins.txt line, with a native checkbox mirroring its `*` (enabled)
- *  state. Toggling the checkbox writes plugins.txt immediately (wired via the
- *  view's `onDidChangeCheckboxState` handler in extension.ts). An order-aware
- *  missing-master `status` overlays an error icon/description/tooltip
- *  when a declared master isn't loaded before this plugin — deliberately worded
- *  distinctly from the Mods tree's presence-only "Missing master:" badge.
- *
- *  No `resourceUri`: VS Code infers a file-type base icon from one whenever no explicit
- *  `iconPath` overrides it, so setting one would change every row's rendered icon — a regression
- *  no unit test here could catch (`iconPath` itself would stay untouched). A plugin whose
- *  filename more than one enabled mod provides renders exactly like any other row — the losing
- *  copies are registered (ADR-0044) but not displayed; their surface is an open UX design. */
+/** No `resourceUri`: VS Code infers a base icon from one unless `iconPath` overrides it, so
+ *  setting one would silently change every row's icon. Losing copies are registered
+ *  (ADR-0044), not displayed. */
 export class PluginNode extends vscode.TreeItem {
   readonly kind = 'plugin' as const;
   constructor(
@@ -60,13 +43,9 @@ export class PluginNode extends vscode.TreeItem {
   ) {
     super(plugin.name, vscode.TreeItemCollapsibleState.None);
     this.contextValue = 'plugin';
-    // xEdit parity (vstNavChange/TryViewOrCompareSelectedRecords, xeMainForm.pas: selecting
-    // a plugin node shows its File Header as a matter of course, no separate affordance): opening
-    // the header panel is routed through the existing modbench.openHeader bridge command, never
-    // built directly here — this row provider is forbidden Editing's own vocabulary
-    // (contextBoundary.test.ts), and openHeader already owns the plugin-name-to-header-panel
-    // translation on the composition-root side of that boundary (extension.ts), retargeting
-    // the singleton panel.
+    // xEdit parity: selecting a plugin node shows its File Header, with no separate affordance.
+    // Routed through the `modbench.openHeader` bridge command because this provider is forbidden
+    // Editing's own vocabulary, which the composition root owns instead.
     this.command = { command: 'modbench.openHeader', title: 'Open Header', arguments: [this] };
     this.checkboxState = plugin.enabled
       ? vscode.TreeItemCheckboxState.Checked
@@ -82,39 +61,17 @@ export class PluginNode extends vscode.TreeItem {
   }
 }
 
-/** This row's order-aware badge's flagged master names, or undefined when it carries none
- *  (ADR-0037) — the composite's structured access to what `PluginNode`'s constructor
- *  above otherwise only bakes into rendered icon/description/tooltip text, so the load order-aware
- *  reconciliation there can dedupe by master name without parsing that text. */
+/** Structured access to what the row otherwise bakes into icon, description and tooltip text,
+ *  so a caller can dedupe by master name without parsing that text (ADR-0037). */
 export function orderIssueMastersOf(node: PluginListNode): string[] | undefined {
   return node.kind === 'plugin' && node.orderStatus?.kind === 'masterNotLoadedBefore'
     ? node.orderStatus.masters
     : undefined;
 }
 
-/** A synthetic row for one of the game's implicitly-loaded vanilla/DLC masters
- *  — discovered from the resolved Data folder (a plugin file that
- *  is NOT a hardlink), never hardcoded. Rendered ahead of plugins.txt's own
- *  rows, in topological order. No checkbox (unset, so VS Code renders none —
- *  nothing to toggle), and excluded from drag by `handleDrag`'s existing
- *  `kind === 'plugin'` filter (not draggable). Its `contextValue`
- *  (`pluginImplicit`, distinct from `plugin`) lets package.json menu `when`
- *  clauses hide any plugin-only command (reorder, toggle) for it.
- *
- *  ADR-0035: the leading slot answers exactly one question — "can you
- *  change whether this loads?" — so this row (forced on, can't be toggled or
- *  moved) renders a lock where a togglable row renders a checkbox, adopting
- *  MO2's own `forceLoaded` wording verbatim (`pluginlist.cpp`) rather than
- *  inventing new copy. MO2 itself renders this case as a checked-but-disabled
- *  checkbox plus grayed name text, not a lock — that's not reproducible here:
- *  `vscode.TreeItemCheckboxState` is `Checked`/`Unchecked` only, with no
- *  non-interactive variant, so a rendered checkbox is always clickable and a
- *  forced-on row would invite a toggle the extension would have to silently
- *  revert. A lock is the platform-forced substitute for the icon only; the
- *  label-graying MO2 also does *is* reproducible (`resourceUri` +
- *  `FileDecorationProvider`, same pattern as `HiddenDownloadDecorationProvider`)
- *  and is wired separately via `ImplicitMasterDecorationProvider`, keyed off
- *  the `resourceUri` this constructor sets when given a resolved path. */
+/** MO2's checked-but-disabled checkbox is not reproducible: `TreeItemCheckboxState` has no
+ *  non-interactive variant, so a rendered checkbox would invite a toggle the extension must
+ *  revert. A lock substitutes (ADR-0035). */
 export class ImplicitMasterNode extends vscode.TreeItem {
   readonly kind = 'implicitMaster' as const;
   constructor(public readonly name: string, path?: string) {
@@ -129,7 +86,6 @@ export class ImplicitMasterNode extends vscode.TreeItem {
   }
 }
 
-/** Empty state: a single informational row when plugins.txt has no lines. */
 export class EmptyNode extends vscode.TreeItem {
   readonly kind = 'empty' as const;
   constructor() {
@@ -140,36 +96,27 @@ export class EmptyNode extends vscode.TreeItem {
 
 export type PluginListNode = PluginNode | ImplicitMasterNode | ErrorNode | EmptyNode;
 
-/** The `kind`s this provider produces — see `handleDrop`, which has to tell its own rows from a
- *  row some other provider contributed to the same view. */
+// The view is shared, so a drop must be able to tell these rows from another provider's.
 const OWN_ROW_KINDS = new Set<string>(['plugin', 'implicitMaster', 'error', 'empty']);
 
-/** The plugin file a row stands for, or undefined when the row stands for no file (the error and
- *  empty-state rows). This is what the merged Plugins tree's composite asks a row for — the
- *  boundary object CONTEXT-MAP.md names, and the only thing about these rows anything outside
- *  Mod Management needs to know. Kept here, next to the node classes, so no caller has to
- *  destructure them. */
+/** The plugin file a row stands for, undefined for the error and empty-state rows. The boundary
+ *  object CONTEXT-MAP.md names — the only thing about these rows anything outside Mod
+ *  Management needs to know. */
 export function pluginFileOf(node: PluginListNode): string | undefined {
   if (node.kind === 'plugin') return node.plugin.name;
   if (node.kind === 'implicitMaster') return node.name;
   return undefined;
 }
 
-/** ADR-0035 § Live mutation: the checkbox gesture's own payload — which plugin,
- *  and its new `plugins.txt` `*` state, exactly as `setPluginEnabled` just wrote it. Fired only
- *  from a real toggle, never from `invalidate()`'s generic re-render (a filter keystroke, an
- *  external plugins.txt edit picked up by a watcher) — those have nothing for a backend
- *  to apply. The composition root (`extension.ts`) is the only subscriber: Mod Management itself
- *  never calls the backend (root CLAUDE.md), so this event is as far as this module's own
- *  knowledge of the mutation goes. */
+/** Fired only from a real toggle, never a generic re-render, which carries nothing to apply.
+ *  Mod Management never calls the backend, so this event is where its knowledge ends
+ *  (ADR-0035). */
 export interface PluginParticipationChange {
   plugin: string;
   enabled: boolean;
 }
 
-/** Sidebar Plugin List (Loadout) tree: one row per plugins.txt line, in Plugin
- *  load order (top = loads first). Toggling a row's checkbox writes plugins.txt
- *  immediately via `setPluginEnabled`. */
+/** One row per plugins.txt line, in Plugin load order. */
 export class PluginListProvider
   implements vscode.TreeDataProvider<PluginListNode>, vscode.TreeDragAndDropController<PluginListNode>
 {
@@ -179,8 +126,7 @@ export class PluginListProvider
   private readonly _onDidChangeTreeData = new vscode.EventEmitter<PluginListNode | undefined>();
   readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
 
-  // ADR-0035 § Live mutation: see PluginParticipationChange's own doc comment for why this
-  // is a distinct event from onDidChangeTreeData rather than reusing it.
+  // Distinct from onDidChangeTreeData: see PluginParticipationChange.
   private readonly _onDidChangeParticipation = new vscode.EventEmitter<PluginParticipationChange>();
   readonly onDidChangeParticipation = this._onDidChangeParticipation.event;
 
@@ -189,26 +135,17 @@ export class PluginListProvider
   private readonly reporter?: Reporter;
   private readonly instanceRoot?: string;
   private readonly dataFolder: () => Promise<string | undefined>;
-  /** The last rendered plugin order, so a drop computes its index against exactly
-   *  what the user dragged against (not a fresh read that an external edit could skew).
-   *  A separate concern from `cache` below — this is plugins.txt's raw file order
-   *  (what drop-index math writes against), not the full display row set. */
+  // plugins.txt's raw file order as last rendered, so a drop computes its index against what
+  // the user dragged against rather than a fresh read an external edit could skew.
   private lastOrder: string[] = [];
-  /** Active title-bar filter (case-insensitive substring on plugin name); empty = off. */
   private filterText = '';
   private filterLower = '';
-  /** Caches the unfiltered computed row list (implicit masters +
-   *  PluginNodes with badges) so a filter keystroke re-renders instead of
-   *  re-reading plugins.txt / re-walking the conflict index and status pass.
-   *  `invalidate()` clears it; `render()` (setFilter) leaves it intact. */
+  // Unfiltered rows, so a filter keystroke re-renders instead of re-reading plugins.txt and
+  // re-walking the conflict index. `invalidate()` clears it; `render()` leaves it intact.
   private cache?: { rows: PluginListNode[] };
 
-  /** `instanceRoot`, when provided, enables the order-aware missing-master badge:
-   *  each plugin's declared masters are read and checked against the
-   *  Plugin load order. Omitted in tests using an in-memory-only source.
-   *  `dataFolder` reads the game's resolved Data folder through the single
-   *  game-directory resolver — for locating vanilla/DLC/CC plugins no mod
-   *  ships; an undefined resolution degrades those lookups. */
+  /** `instanceRoot` enables the order-aware missing-master badge and is omitted by tests using
+   *  an in-memory source; an undefined `dataFolder` degrades the vanilla-plugin lookups. */
   constructor(options: PluginListProviderOptions) {
     this.source = options.source;
     this.log = options.log ?? (() => {});
@@ -217,54 +154,35 @@ export class PluginListProvider
     this.dataFolder = options.dataFolder ?? NO_DATA_FOLDER;
   }
 
-  /** Clears the cached row set and re-renders — a mutation (toggle, drop, ...)
-   *  invalidated what's on disk, so the next `getChildren()` must re-read
-   *  plugins.txt/enabled state. Also the title-bar Refresh button's action.
-   *  Distinct from `render()`, which only re-renders already-built rows. */
   invalidate(): void {
     this.cache = undefined;
     this._onDidChangeTreeData.fire(undefined);
   }
 
-  /** Re-renders already-built rows without touching the cache. The
-   *  only call site is `setFilter` — a filter keystroke never changes what's on
-   *  disk, so it must not force a re-read of plugins.txt/enabled state. */
+  // A filter keystroke changes nothing on disk, so it must not force a re-read.
   private render(): void {
     this._onDidChangeTreeData.fire(undefined);
   }
 
-  /** Set the title-bar filter (empty string clears it) and re-render. Narrows the
-   *  rendered rows to plugins whose name contains `text`, case-insensitively —
-   *  the same transient-InputBox pattern used across every Modbench list surface.
-   *  Render-only: the filter narrows which already-built rows show — it
-   *  never invalidates the cache. */
+  /** Case-insensitive substring on plugin name; an empty string clears it. Render-only, so the
+   *  cache survives. */
   setFilter(text: string): void {
     this.filterText = text;
     this.filterLower = text.toLowerCase();
     this.render();
   }
 
-  /** Toggle a plugin's `*` (enabled) state, writing plugins.txt immediately, then
-   *  invalidate so the tree re-reads the persisted state. Fires `onDidChangeParticipation`
-   *  after the write succeeds (ADR-0035 § Live mutation) — the composition root's cue to
-   *  apply the same change to a running backend, live.
-   *
-   *  `source.setPluginEnabled` reads plugins.txt fresh rather than trusting this provider's
-   *  possibly stale row cache; a name whose line has meanwhile gone is a no-op there (#680) —
-   *  see `setPluginEnabledInText`'s own doc comment. */
+  /** The write reads plugins.txt fresh rather than trusting this provider's possibly stale row
+   *  cache; a name whose line has meanwhile gone is a no-op. */
   async setPluginEnabled(pluginName: string, enabled: boolean): Promise<void> {
     await this.source.setPluginEnabled(pluginName, enabled);
     this.invalidate();
     this._onDidChangeParticipation.fire({ plugin: pluginName, enabled });
   }
 
-  /** Resolve a plugin NAME to its winning physical path — the MO2-priority
-   *  FileConflictIndex winner for a mod-provided plugin, else the game's Data
-   *  folder for an unmanaged vanilla/DLC/CC plugin (the same resolution the
-   *  editing-load order builder performs via `resolvePluginPaths`). Used by the
-   *  Reveal in Explorer row action. Returns undefined when no
-   *  instanceRoot is configured or resolution fails (ini/index unreadable) — a
-   *  fresh read each call, since reveal is a rare explicit action. */
+  /** The winning copy in the Mod override order, else the game's Data folder for a plugin no
+   *  mod provides. Undefined when resolution fails; a fresh read each call, since the one
+   *  caller is a rare explicit action. */
   async resolvePluginPath(name: string): Promise<string | undefined> {
     if (!this.instanceRoot) return undefined;
     try {
@@ -300,11 +218,8 @@ export class PluginListProvider
       : this.cache.rows;
   }
 
-  /** Reads plugins.txt/enabled state and computes the full unfiltered row set
-   *  (the cache-population path, run only on a cache miss). Returns a
-   *  discriminated result rather than caching an error/empty placeholder, so a
-   *  transient read failure or a momentarily-empty plugins.txt never sticks
-   *  around as stale cached state. */
+  // Returns a discriminated result rather than caching an error or empty placeholder, so a
+  // transient read failure never sticks around as stale cached state.
   private async buildRows(): Promise<
     | { kind: 'error'; message: string }
     | { kind: 'empty' }
@@ -325,21 +240,16 @@ export class PluginListProvider
 
     this.lastOrder = order;
 
-    // The game's implicitly-loaded vanilla/DLC masters: discovered from
-    // the resolved Data folder, never from plugins.txt. Rendered first, forced on — can't be
-    // toggled or moved. A name in both sets renders exactly once — as the implicit row — so its
-    // plugins.txt line (if any, e.g. a stale CC .esl entry) is filtered out here.
-    // `fullOrder` (implicit-first) is used for row rendering and badge computation
-    // ONLY; `this.lastOrder` above stays plugins.txt's raw order, since that's what
-    // `dropIndexForMove`/`reorderPlugins` write positions against.
+    // A name in both sets renders once, as the implicit row. `fullOrder` is display and badge
+    // order only: `this.lastOrder` stays plugins.txt's raw order, which is what write positions
+    // are computed against.
     const dataFolder = await this.dataFolder();
     const implicitNames = await discoverImplicitMasters(dataFolder, this.log);
     const implicitLower = new Set(implicitNames.map((n) => n.toLowerCase()));
     const dedupedOrder = order.filter((n) => !implicitLower.has(n.toLowerCase()));
 
-    // Rows are exactly plugins.txt's lines (#680): a plugin file on disk with no line is the
-    // plugins reconcile's business (pluginsReconcile.ts writes the line; the watcher re-renders),
-    // never merged in here. The FileConflictIndex walk serves only the order-aware badge pass.
+    // Rows are exactly plugins.txt's lines: a plugin file on disk with no line is the plugins
+    // reconcile's business, never merged in here.
     const index = await this.buildFileIndex();
     const winnerByName = index ? rootLevelWinners(index) : undefined;
     const fullOrder = [...implicitNames, ...dedupedOrder];
@@ -357,23 +267,15 @@ export class PluginListProvider
     return { kind: 'ok', cache: { rows } };
   }
 
-  /** The lowercased implicit-master names from the last render — what
-   *  `ImplicitMasterDecorationProvider` matches a `resourceUri` against to gray an
-   *  implicit master's label the way MO2 grays `COL_NAME` for a `forceLoaded` row. Empty
-   *  before the first render; a live read (not a snapshot), same convention as
-   *  `DownloadsProvider.hiddenNames()`. */
+  /** Lowercased, and empty before the first render. A live read, not a snapshot. */
   implicitMasterNames(): ReadonlySet<string> {
     return this.lastImplicitNames;
   }
 
   private lastImplicitNames: ReadonlySet<string> = new Set();
 
-  /** The FileConflictIndex `computeOrderStatuses` below (badges) needs — built once per
-   *  `buildRows()` call. `undefined` when no instanceRoot is configured, or when the read/walk
-   *  itself fails (logged + reported as a warning). A secondary, non-blocking step
-   *  (modmanager/CLAUDE.md): on failure the tree still renders every plugins.txt line, just
-   *  without badges (ADR-0026: a silently missing badge would look identical to "nothing to
-   *  flag", so the loss is reported). */
+  // A secondary, non-blocking step: on failure the tree still renders every plugins.txt line,
+  // without badges. The loss is reported because a missing badge looks like "nothing to flag".
   private async buildFileIndex(): Promise<FileConflictIndex | undefined> {
     if (!this.instanceRoot) return undefined;
     try {
@@ -391,12 +293,8 @@ export class PluginListProvider
     }
   }
 
-  /** Order-aware missing-master verdicts for `order` (the implicit-first, deduped full row
-   *  order — see `buildRows`) against `winnerByName` (`rootLevelWinners(index)`, built once by
-   *  the caller: a full O(total-files-across-all-mods) scan, not free to repeat). Kept as its own
-   *  try/catch, separate from `buildFileIndex` above: a
-   *  badge-pass failure here must not take away rows the index already found (ADR-0026, same
-   *  non-blocking-degrade reasoning). */
+  // `winnerByName` is built once by the caller: a full scan across every mod's files, not free
+  // to repeat. Its own try/catch, so a badge failure never takes away rows already found.
   private async computeOrderStatuses(
     order: string[], winnerByName: Map<string, string>, dataFolder: string | undefined,
   ): Promise<Map<string, PluginOrderStatus> | undefined> {
@@ -410,9 +308,8 @@ export class PluginListProvider
     }
   }
 
-  /** Serialise the dragged selection. VS Code passes the whole selection when the
-   *  grabbed row is part of it (an unselected grab collapses to a single-item
-   *  selection), so `source` is the full block to move. Non-plugin rows can't move. */
+  /** VS Code passes the whole selection when the grabbed row is part of it, so `source` is the
+   *  full block to move. Non-plugin rows cannot move. */
   handleDrag(
     source: readonly PluginListNode[],
     dataTransfer: vscode.DataTransfer,
@@ -423,15 +320,9 @@ export class PluginListProvider
     dataTransfer.set(DND_MIME, new vscode.DataTransferItem({ names }));
   }
 
-  /** Move the dragged block so it lands before `target` (or at the end when the
-   *  drop is past the last row / onto a non-plugin node), writing plugins.txt
-   *  immediately. `dropIndexForMove` reconciles the drop target with
-   *  `movePluginsInText`'s post-removal index convention. A drop onto the
-   *  undraggable implicit-master block is not a plugins.txt position —
-   *  those rows have no line — so it lands at file-index 0, the top of the
-   *  reorderable region, computed against `this.lastOrder` (plugins.txt's raw order,
-   *  NEVER the display-composed implicit-first order — writing against the
-   *  wrong index would corrupt plugins.txt). */
+  /** The block lands before `target`, or at the end past the last row. A drop onto the implicit
+   *  masters is no plugins.txt position — those rows have no line — so it lands at file
+   *  index 0. */
   async handleDrop(
     target: PluginListNode | undefined,
     dataTransfer: vscode.DataTransfer,
@@ -455,15 +346,9 @@ export class PluginListProvider
     this.invalidate();
   }
 
-  /** The plugins.txt index the dragged block should land at, or undefined when the drop is not a
-   *  position at all and must be refused.
-   *
-   *  That distinction is load-bearing: this view's rows have children now, so VS Code can
-   *  hand the drop a row this controller never produced, and "not one of my rows" is not the same
-   *  as "past the last row" — the latter legitimately means the end of the load order, so letting
-   *  a foreign row fall through to it would silently move the dragged plugins to the bottom of
-   *  plugins.txt. The provider stays ignorant of what those other rows *are*; it only knows which
-   *  kinds are its own. */
+  // VS Code can hand the drop a row this controller never produced, and "not one of my rows" is
+  // not "past the last row" — the latter means the losing end, so a foreign row must not fall
+  // through to it.
   private dropIndexFor(target: PluginListNode | undefined, names: string[]): number | undefined {
     if (target !== undefined && !OWN_ROW_KINDS.has(target.kind)) return undefined;
     if (target?.kind === 'implicitMaster') return 0;

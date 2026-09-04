@@ -1,6 +1,5 @@
-// #680: plugins.txt is the complete inventory the Plugins tree reads; when disk disagrees, the
-// file is updated (docs/specs/plugins.md, "Rows are exactly plugins.txt's lines"). The plugins
-// twin of startupModlistReconcile.ts.
+// plugins.txt is the complete inventory the Plugins tree reads, so when disk disagrees the
+// file is updated (docs/specs/plugins.md, "Rows are exactly plugins.txt's lines").
 
 import { readdir } from 'node:fs/promises';
 import { basename, join } from 'node:path';
@@ -16,10 +15,8 @@ export interface PluginLinesDelta {
   prune: string[];
 }
 
-/** `provided`: case-folded name → real name of every plugin an enabled mod or overwrite/
- *  provides (the append source, and presence). `inData`: case-folded names in the game's Data
- *  folder — presence only, never an append source; `undefined` (game directory unresolved)
- *  makes presence unknowable, so nothing is pruned. */
+/** `inData` is presence only, never an append source; `undefined` — an unresolved game
+ *  directory — makes presence unknowable, so nothing is pruned. */
 export function pluginLinesDelta(
   listed: readonly string[],
   provided: ReadonlyMap<string, string>,
@@ -48,15 +45,13 @@ export interface PluginsReconcileDeps {
   channel: { info(msg: string): void; error(msg: string): void };
 }
 
-/** Root-level plugin files directly under `folder`, case-folded → real name. A `.mohidden`
- *  file fails the extension test, so MO2's hide-by-rename reads as absent. */
+// A `.mohidden` file fails the extension test, so MO2's hide-by-rename reads as absent.
 async function rootLevelPlugins(folder: string): Promise<Map<string, string>> {
   const dirents = await readdir(folder, { withFileTypes: true });
   return new Map(dirents.filter((d) => d.isFile() && isPluginFile(d.name)).map((d) => [foldPath(d.name), d.name]));
 }
 
-/** overwrite/ doesn't exist until the first purge deposits a stray file, so ENOENT is "none"
- *  here — for any other folder it is an enumeration failure and aborts the run. */
+// overwrite/ doesn't exist until a purge deposits a stray file, so ENOENT is "none" here.
 async function overwritePlugins(instanceRoot: string): Promise<Map<string, string>> {
   try {
     return await rootLevelPlugins(join(instanceRoot, 'overwrite'));
@@ -66,9 +61,8 @@ async function overwritePlugins(instanceRoot: string): Promise<Map<string, strin
   }
 }
 
-/** Every plugin an enabled mod or overwrite/ provides, case-folded → real name, overwrite/ on
- *  top. An implicit master is left out: the tree renders it from Data, never from a line, so a
- *  mod's copy of one must not earn a line. */
+// An implicit master is left out: the tree renders it from Data, never from a line, so a
+// mod's copy of one must not earn a line.
 function providedPlugins(
   index: FileConflictIndex, overwrite: ReadonlyMap<string, string>, implicit: ReadonlySet<string>,
 ): Map<string, string> {
@@ -81,11 +75,8 @@ function providedPlugins(
   return provided;
 }
 
-/** Bring the active profile's plugins.txt into line with what disk provides. The write is
- *  picked up by the plugins.txt watcher like any other edit; nothing is called from here. Any
- *  failure to enumerate disk aborts the whole run — an errored walk must never read as
- *  "everything vanished" — logged, never thrown (ADR-0026 background tier). Disk is the source
- *  of truth (#93), so the log line is the only record. */
+/** Any failure to enumerate disk aborts the whole run — an errored walk must never read as
+ *  "everything vanished" — and is logged, never thrown (ADR-0026 background tier). */
 export async function reconcilePluginsWithDisk(deps: PluginsReconcileDeps): Promise<void> {
   try {
     const [index, overwrite, dataFolder] = await Promise.all([

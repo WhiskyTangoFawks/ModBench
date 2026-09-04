@@ -8,10 +8,8 @@ interface FlagCellProps {
   // Whether this cell's column can be written — presence of somewhere to write is the
   // editability signal (see ScalarCell's identical contract).
   editable?: boolean;
-  // Where a toggled bitmask goes — mirrors ScalarCell's onCommit contract exactly (a decimal
-  // string, per modelValue's own flags convention, so precision above 2^53 survives the wire).
-  // Optional for the same reason ScalarCell's is: a caller with nowhere to write (outside the
-  // field grid's focus model) renders read-only rather than crashing.
+  // A decimal string, per modelValue's own flags convention, so precision above 2^53 survives the
+  // wire. Optional: a caller with nowhere to write renders read-only rather than crashing.
   onCommit?: (v: unknown) => void;
   // The row's collapse state (the grid's chevron/double-click gesture, owned by the row —
   // all columns collapse together): collapsed shows the compact active-flag-name summary,
@@ -19,13 +17,9 @@ interface FlagCellProps {
   collapsed?: boolean;
 }
 
-/**
- * A bitmask `enum` column renders as an always-visible checkbox list, one flag per line —
- * maintainer ruling 2026-09-01, a deliberate ADR-0034 divergence recorded there (xEdit's own
- * default is a text row whose `etCheckComboBox` appears only on the edit gesture). There is no
- * text state and nothing to open: no `data-open-trigger`, so F2 is inert here by construction
- * (DiskCell's rule), and Ctrl+C still copies modelValue's flag-name string via DiskCell.
- */
+/** A bitmask `enum` column renders as an always-visible checkbox list — a deliberate ADR-0034
+ *  divergence from xEdit, whose `etCheckComboBox` appears only on the edit gesture. There is no
+ *  text state and nothing to open, so F2 is inert. */
 export function FlagCell({ value, meta, editable, onCommit, collapsed }: FlagCellProps) {
   const bits = flagBits(meta);
   if (bits == null) return null;
@@ -39,8 +33,8 @@ export function FlagCell({ value, meta, editable, onCommit, collapsed }: FlagCel
   }
 
   // Null is a column that doesn't hold the field — a placeholder, not an all-unchecked value
-  // (ADR-0034's placeholder rule)… except on a writable column, where the old text render let a
-  // click set flags starting from null; the all-unchecked list preserves that capability.
+  // (ADR-0034), except on a writable column, where the all-unchecked list lets a click set flags
+  // starting from null.
   const writable = editable && onCommit != null;
   if (value == null && !writable) return <span style={{ opacity: 0.35 }}>—</span>;
 

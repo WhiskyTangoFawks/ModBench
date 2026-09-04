@@ -1,12 +1,6 @@
-// Corpus test: the hardlink deploy/purge pipeline against the committed
-// mo2-instance-corpus fixture, driven end-to-end: read the real modlist, build the
-// real FileConflictIndex by walking real mods/ folders, deploy, then purge. The
-// standing regression this guards: a tracked mod's `.git/` and `source/` subtrees
-// (ADR-0041) must never be walked, hardlinked into Data/, or otherwise disturbed
-// by any of this — deployer.test.ts covers the mechanics in isolation; this proves
-// it holds against a real multi-mod instance. (Real-instance, environment-gated
-// deploy verification against a tester's actual MO2 instance stays with
-// /manual-test; this is synthetic-fixture, composition-level coverage.)
+// Deploy and purge end-to-end against the committed mo2-instance-corpus fixture. The standing
+// regression it guards: a tracked mod's `.git/` and `source/` subtrees (ADR-0041) must never be
+// walked, hardlinked into Data/, or otherwise disturbed.
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';

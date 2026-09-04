@@ -39,10 +39,8 @@ function makeOverride(plugin: string, extra: Partial<CompareOverride> = {}): Com
   };
 }
 
-// #618 follow-up: the grid is the record's full override stack again — one column per
-// CompareOverride, in the wire's own load order (master leftmost, winner rightmost — xEdit's
-// layout, guaranteed by GetOverrideStack's ORDER BY and trusted here, not re-sorted). The
-// backend already excludes file-level losers (ADR-0036 amended).
+// One column per CompareOverride, in the wire's own load order — master leftmost, winner
+// rightmost, as in xEdit — trusted as sent rather than re-sorted here.
 describe('buildColumns', () => {
   it('returns one column per override, in response order', () => {
     const cols = buildColumns([
@@ -69,10 +67,8 @@ describe('buildColumns', () => {
   });
 });
 
-// Every column carries exactly one of four statuses, always shown (PluginHeader) — `immutableSet`
-// alone can't tell a vanilla master (isImmutable, still inLoadOrder) apart from a copy the load
-// order doesn't name (isImmutable *because* !inLoadOrder — a losing copy's registration derives
-// both, ADR-0044). PluginHeader needs both to word the tooltip and decide whether to dim.
+// ADR-0044: `immutableSet` alone can't tell a vanilla master from a copy the load order does
+// not name, and the header needs both facts to word the tooltip and decide whether to dim.
 describe('columnStatus', () => {
   it('is "tracked" for a mutable, tracked column, regardless of inLoadOrder', () => {
     expect(columnStatus(false, true)).toBe('tracked');
@@ -87,10 +83,8 @@ describe('columnStatus', () => {
     expect(columnStatus(true, false)).toBe('notInLoadOrder');
   });
 
-  // ADR-0041: "editing requires tracking; viewing never does". A mutable, loaded plugin in
-  // an untracked mod folder is read-only for a reason that is one command away from gone, which is
-  // why it needs its own value rather than folding into the two above — each names a different way
-  // out, and offering the wrong one is worse than offering none.
+  // ADR-0041: editing requires tracking, viewing never does. This status earns its own value
+  // because each names a different way out, and offering the wrong one is worse than none.
   it('is "untracked" for an otherwise editable column whose mod has no repository', () => {
     expect(columnStatus(false, true, false)).toBe('untracked');
   });
@@ -107,9 +101,8 @@ describe('columnStatus', () => {
   });
 });
 
-// ADR-0036: "origin inline only on collision" — computed from the overrides a single
-// compare response already carries (CompareResult.Overrides), never from the load order's whole
-// plugin list. A filename appearing once is the overwhelming common case and must not collide.
+// ADR-0036: origin inline only on collision, computed from the overrides one compare response
+// already carries, never from the load order's whole plugin list.
 describe('collidingFilenames', () => {
   it('is empty when every override has a distinct filename', () => {
     const overrides = [makeOverride('Fallout4.esm'), makeOverride('MyMod.esp')];
@@ -145,9 +138,8 @@ describe('parseElementIndex', () => {
   });
 });
 
-// #716: a keyed array's rows are labelled by key, and the label is what the path has to carry.
-// Rendered here the way the backend renders it (Queries/ElementKey.cs), since the backend's own
-// text is what a row is labelled with and the two have to agree exactly.
+// A keyed array's row label is what the path has to carry, rendered the way the backend renders
+// it (Queries/ElementKey.cs), since the two texts have to agree exactly.
 describe('elementKeyText', () => {
   it('reads a string member', () => {
     expect(elementKeyText({ name: 'Ambush', flags: 'Local' }, ['name'])).toBe('Ambush');
@@ -165,8 +157,8 @@ describe('elementKeyText', () => {
     expect(elementKeyText({ on: true }, ['on'])).toBe('true');
   });
 
-  // #710: a freshly added element carries its discriminator and nothing else, so its key is empty
-  // — a real key, and the only handle on the row until the user names it.
+  // A freshly added element carries its discriminator and nothing else, so its key is empty — a
+  // real key, and the only handle on the row until the user names it.
   it('reads an absent or null member as the empty key', () => {
     expect(elementKeyText({ concrete_type: 'ScriptIntProperty' }, ['name'])).toBe('');
     expect(elementKeyText({ name: null }, ['name'])).toBe('');
@@ -197,8 +189,7 @@ describe('elementSegment', () => {
   });
 });
 
-// Which array gestures a row's last hop confers — asked by RecordPanel's handler wiring, DiffRow's
-// cell menu and the native context menu alike, so it is one rule rather than four.
+// One rule, since the panel's handler wiring, the cell menu and the native menu all ask it.
 describe('isArrayElementHop / isMovableElementHop', () => {
   it('a positional element offers Remove and both Moves', () => {
     const seg: PathSegment = { kind: 'index', index: 0 };
@@ -239,9 +230,8 @@ describe('keyedElementIndex', () => {
 });
 
 
-// The generic path-based node accessors — one recursive
-// implementation for a row's value at any depth within the field/wire-path it restages as one
-// atomic unit, rather than one hand-coded case per nesting level.
+// One recursive implementation for a row's value at any depth within the field it restages as
+// one atomic unit, rather than a hand-coded case per nesting level.
 describe('getAtPath', () => {
   it('returns the root itself for an empty path', () => {
     expect(getAtPath({ X: 1 }, [])).toEqual({ X: 1 });
@@ -290,10 +280,8 @@ describe('getAtPath', () => {
   });
 });
 
-// `path` is the row's own restage coordinates (PathSegment[]), never a bare scalar
-// index — a top-level array's element is a one-hop path (`[{kind:'index',index:N}]`), but
-// an array nested inside a struct/array needs every hop from the subtree root, which a scalar
-// index could never carry. `canMoveUp`/`canMoveDown` derive from the *last* path segment's index.
+// `path` is the row's restage coordinates, never a bare scalar index: an array nested inside a
+// struct needs every hop from the subtree root. `canMoveUp`/`canMoveDown` read the last segment.
 describe('arrayElementContext', () => {
   it('produces the data-vscode-context object for a middle element (can move either way)', () => {
     const path: PathSegment[] = [{ kind: 'index', index: 1 }];
@@ -320,9 +308,8 @@ describe('arrayElementContext', () => {
     expect(arrayElementContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', 'Items', path, 3).canMoveDown).toBe(false);
   });
 
-  // #716: a keyed array is stored in key order on every write (Edits/KeyedArrays.cs), so neither
-  // Move could change the file whatever it targeted. Remove still applies, which is why the row
-  // carries this context at all.
+  // A keyed array is stored in key order on every write, so neither Move could change the file;
+  // Remove still applies, which is why the row carries this context at all.
   it('offers neither Move on a keyed element, and still offers the element itself', () => {
     const path: PathSegment[] = [{ kind: 'key', key: 'Guard', members: ['name'] }];
     const context = arrayElementContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', 'Scripts', path, 3);
@@ -341,9 +328,8 @@ describe('arrayElementContext', () => {
     ).canMoveUp).toBe(false);
   });
 
-  // A top-level array's element path is one hop, but a nested
-  // array's is longer; canMoveUp/canMoveDown must key off the *last* hop, not path.length, and the
-  // full chain must survive onto the payload rather than collapsing to the trailing index alone.
+  // canMoveUp/canMoveDown must key off the last hop, not path.length, and the full chain must
+  // survive onto the payload rather than collapse to the trailing index.
   it('a nested element carries every hop of its own path, and canMoveUp/canMoveDown read the last one', () => {
     const path: PathSegment[] = [{ kind: 'member', name: 'Sub' }, { kind: 'index', index: 0 }];
     const ctx = arrayElementContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', 'Container', path, 2);
@@ -367,9 +353,8 @@ describe('arrayParentContext', () => {
     });
   });
 
-  // A nested array's own "Add" context must address the array itself (the row's own path),
-  // not the subtree root — "the root field is the
-  // array" is only true for a top-level array.
+  // A nested array's "Add" must address the array itself: "the root field is the array" holds
+  // only for a top-level array.
   it('carries the row\'s own path for a nested array-parent cell', () => {
     const path: PathSegment[] = [{ kind: 'member', name: 'Entries' }];
     const ctx = arrayParentContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', 'Container', path);
@@ -378,9 +363,8 @@ describe('arrayParentContext', () => {
   });
 });
 
-// A row can be more than one structural-op target at once (a VMAD
-// array-of-scalars property is both an array parent/element and a VMAD property) — combining
-// contexts rather than picking one is what makes both menus reachable from the same cell.
+// A row can be more than one structural-op target at once, so combining contexts rather than
+// picking one is what makes both menus reachable from the same cell.
 describe('combineVscodeContexts', () => {
   it('returns undefined when every context is absent', () => {
     expect(combineVscodeContexts(undefined, undefined)).toBeUndefined();
@@ -420,9 +404,8 @@ describe('combineVscodeContexts', () => {
   });
 });
 
-// Copy as Override Into…/Copy as New Record Into…, the column header's own
-// native context — unconditional on the column's own read-only-ness, since copying *from* an
-// immutable/vanilla column is the headline use case, unlike every row-scoped context above.
+// Unconditional on the column's read-only-ness, since copying from an immutable column is the
+// headline use case, unlike every row-scoped context above.
 describe('headerCellContext', () => {
   it('identifies the header cell, carrying the column\'s own record identity', () => {
     expect(headerCellContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA')).toEqual({
@@ -462,9 +445,8 @@ describe('stringValueContext', () => {
     expect(stringValueContext('000001:Fallout4.esm', 'Fallout4.esm', 'Data', 'Name', 'Dogmeat', true, [], 'Name').readOnly).toBe(true);
   });
 
-  // A string leaf nested inside a struct/array carries its own path within the field and the
-  // subtree root's own wire path — the two coordinates RecordPanel's whole-field reconstruction
-  // needs, distinct from `fieldName` (the extended editor tab's own display path).
+  // A nested string leaf carries its own path within the field and the subtree root's wire path
+  // — the two coordinates whole-field reconstruction needs, distinct from the display `fieldName`.
   it('carries the row\'s own path and the subtree root\'s wire path for a nested string leaf', () => {
     const path: PathSegment[] = [{ kind: 'member', name: 'Entries' }, { kind: 'index', index: 0 }, { kind: 'member', name: 'Id' }];
     const ctx = stringValueContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', 'Container', 'A', false, path, 'Container');
@@ -504,10 +486,8 @@ describe('setAtPath', () => {
     expect(setAtPath(['KwdA', 'KwdB'], path, 'KwdZ')).toEqual(['KwdA', 'KwdZ']);
   });
 
-  // #716: the fact the whole key hop exists for. Two plugins hold `Guard` at different positions,
-  // and one path — the row's, shared by both columns — has to reach it in each. The rival is the
-  // shipped `{kind:'index', index: parseElementIndex(key)}`, which parses "Guard" to NaN and writes
-  // a property JSON.stringify then drops, so the posted payload is the array unchanged.
+  // Two plugins hold `Guard` at different positions and one path, shared by both columns, must
+  // reach it in each. Addressing by index parses NaN and posts the array unchanged.
   it('sets a keyed-array element at each column\'s own position for that key', () => {
     const path: PathSegment[] = [{ kind: 'key', key: 'Guard', members: ['name'] }, { kind: 'member', name: 'flags' }];
     expect(setAtPath([{ name: 'Ambush', flags: 'a' }, { name: 'Guard', flags: 'g' }], path, 'X'))
@@ -516,9 +496,8 @@ describe('setAtPath', () => {
       .toEqual([{ name: 'Guard', flags: 'X' }]);
   });
 
-  // The corrupting case: "10 / 3" slices to "0 / " and reads as a perfectly valid index 0 — the
-  // fragment at stage 5 — so a wrong answer here is a silent write to a different element rather
-  // than a visibly dropped edit. Any key whose second character is a digit behaves this way.
+  // "10 / 3" slices to "0 / " and reads as a valid index 0, so a wrong answer is a silent write
+  // to a different element. Any key whose second character is a digit behaves this way.
   it('sets the element a composite key names, not the one that key parses to as an index', () => {
     const fragments = [
       { stage: 5, stage_index: 1, script_name: 'Five' },
@@ -534,8 +513,7 @@ describe('setAtPath', () => {
     ]);
   });
 
-  // The payload the panel posts, seen as the backend sees it: a rename that reaches the write path
-  // as a real change rather than as the array it started from.
+  // A rename must reach the write path as a real change, not as the array it started from.
   it('posts a keyed rename that JSON.stringify actually carries', () => {
     const scripts = [{ name: 'Ambush', flags: 'Local' }, { name: 'Guard', flags: 'Local' }];
     const path: PathSegment[] = [{ kind: 'key', key: 'Ambush', members: ['name'] }, { kind: 'member', name: 'name' }];
@@ -548,8 +526,7 @@ describe('setAtPath', () => {
     expect(setAtPath([{ name: 'Ambush', flags: 'a' }], path, 'X')).toEqual([{ name: 'Ambush', flags: 'a' }]);
   });
 
-  // #710: a freshly added element is named by the empty key until the user names it, and that is
-  // the only handle the rename itself has.
+  // The empty key is the only handle a freshly added element's own rename has.
   it('sets a freshly added element addressed by the empty key', () => {
     const path: PathSegment[] = [{ kind: 'key', key: '', members: ['name'] }, { kind: 'member', name: 'name' }];
     expect(setAtPath([{ name: 'Alpha' }, { flags: 'Local' }], path, 'Named'))
@@ -577,12 +554,8 @@ describe('setAtPath', () => {
   });
 });
 
-// getAtPath/setAtPath's metadata-side counterpart — the array-op broadcast handler
-// (RecordPanel.tsx) has only the wire's rootField/path, never a render-time `context.overrideMeta`
-// the way DiffRow's own buildRows does, so it needs the same descent over FieldMetadata that
-// buildRows already does by hand (member → `.fields`, index/sortKey → `.elementType`) to find a
-// *nested* array's own element type — reading `fieldMetaMap[rootField].elementType` directly
-// only works when the array itself is the subtree root.
+// The array-op broadcast handler has only the wire's rootField and path, never a render-time
+// `overrideMeta`, so it descends FieldMetadata itself to reach a nested array's element type.
 describe('metaAtPath', () => {
   const idMeta: FieldMetadata = { name: 'Id', type: 'string', isArray: false, validFormKeyTypes: [], enumMembers: [] };
   const weightMeta: FieldMetadata = { name: 'Weight', type: 'int', isArray: false, validFormKeyTypes: [], enumMembers: [] };
@@ -616,8 +589,7 @@ describe('metaAtPath', () => {
     expect(metaAtPath(entriesMeta, [{ kind: 'key', key: 'anything', members: ['Id'] }])).toBe(entryMeta);
   });
 
-  // The load-bearing shape: a nested array's own element type, reached through a
-  // member → member chain from the subtree root.
+  // A nested array's own element type, reached through a member chain from the subtree root.
   it('finds a nested array\'s own element type through a member chain', () => {
     const path: PathSegment[] = [{ kind: 'member', name: 'Entries' }];
     expect(metaAtPath(containerMeta, path)?.elementType).toBe(entryMeta);

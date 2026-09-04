@@ -3,16 +3,9 @@ import type { PluginListProvider, PluginListNode } from './modmanager/PluginList
 import type { PluginTreeNode } from './medit/PluginTreeProvider';
 import { makeReporter } from './reporter';
 
-/** Enable/disable a plugin from its row checkbox on the merged Plugins tree. ADR-0026: a failed
- *  toggle must surface, not silently leave the checkbox out of sync with disk — log detail,
- *  notify, and invalidate so the checkbox resyncs to what plugins.txt actually says. Same shape
- *  as Mod Management's own `onModCheckboxChanged` (modmanager/modManagementCommands.ts) — #655:
- *  this one lived inline in `registerPluginListView` with no unit seam until now.
- *
- *  Lives at the composition root, not in modmanager/, for the same reason `PluginsTreeComposite`
- *  does: the checkbox fires on the *merged* tree, whose row type is `PluginListNode |
- *  PluginTreeNode` — both contexts' own row types — even though this handler only ever acts on
- *  the `'plugin'`-kind rows and touches nothing else. */
+/** ADR-0026: a failed toggle must surface and resync, never leave the checkbox disagreeing with
+ *  plugins.txt. At the composition root because the checkbox fires on the merged tree, whose rows
+ *  belong to both bounded contexts. */
 export async function onPluginCheckboxChanged(
   e: vscode.TreeCheckboxChangeEvent<PluginListNode | PluginTreeNode>,
   pluginListProvider: PluginListProvider,

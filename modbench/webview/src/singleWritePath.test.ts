@@ -2,16 +2,9 @@ import { describe, it, expect } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 
-/**
- * ADR-0041: the webview writes through exactly one message, EDIT_FIELD, posted from exactly
- * one module. Not through RecordPanelClient, which stays read-only — an edit travels
- * webview → extension host → backend so that a refusal can become a native notification, a surface
- * only the host has.
- *
- * Asserted against the sources rather than rendered components, because this is a statement about
- * what capability the webview *has*. Each absence assertion carries a positive control found by the
- * identical scan, so a renamed file or a failed read cannot pass as a deletion.
- */
+// ADR-0041: the webview writes through exactly one message, EDIT_FIELD, from one module — an
+// edit travels through the extension host so a refusal can become a native notification, a
+// surface only the host has.
 describe('the record editor webview writes through exactly one path (#415)', () => {
   const dir = __dirname;
   const clientSrc = fs.readFileSync(path.join(dir, 'RecordPanelClient.ts'), 'utf8');

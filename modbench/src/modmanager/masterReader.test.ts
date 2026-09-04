@@ -5,11 +5,8 @@ import { join } from 'node:path';
 import { readMasters } from './masterReader';
 import { buildTes4Buffer } from './test/buildTes4Buffer';
 
-// Scoped to this file only: wraps the handle `open()` returns so a test can spy
-// on `.close()` — the only two methods readMasters calls on it are `.read()`
-// and `.close()`, so the stub only needs to cover those. Same
-// `vi.mock('node:fs/promises', importOriginal)` wrapper idiom as
-// Mo2ModlistSource.test.ts.
+// Wraps the handle `open()` returns so a test can spy on `.close()`; `readMasters` calls only
+// `.read()` and `.close()` on it.
 vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof import('node:fs/promises')>();
   return {

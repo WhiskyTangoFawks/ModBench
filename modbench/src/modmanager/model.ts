@@ -1,7 +1,5 @@
-// In-memory modlist model. The MO2 source (mo2/Mo2ModlistSource.ts) reads an
-// instance into ModlistEntry[] and writes mutations back byte-faithfully via the
-// pure text transforms in mo2/. These types are a read-view over the raw files;
-// they never own serialization.
+// A read-view over the raw MO2 files: these types never own serialization, which stays with
+// the byte-faithful text transforms in mo2/.
 
 export interface Mod {
   kind: 'mod';
@@ -30,9 +28,8 @@ export interface PluginEntry {
   enabled: boolean;
 }
 
-/** Metadata known at install time for a new mod's meta.ini. For a manual local
- *  install only `installationFile` is typically known; Nexus id/version arrive
- *  with the download flow (Modbench-7). */
+/** For a manual local install only `installationFile` is typically known; Nexus id and
+ *  version arrive with the download flow. */
 export interface InstallMeta {
   modid?: string;
   version?: string;
@@ -70,22 +67,14 @@ export interface IModlistSource {
   setActiveProfile(name: string): Promise<void>;
   /** plugins.txt load order, read-only (the Plugin List view owns plugin order). */
   readPluginOrder(): Promise<string[]>;
-  /** plugins.txt load order, enabled-only (the `*`-prefixed lines) — the plugins
-   *  that actually load, used to build the editing backend's load-order snapshot. */
+  /** plugins.txt load order, enabled-only: the `*`-prefixed lines that actually load. */
   readEnabledPlugins(): Promise<string[]>;
-  /** Set a plugin's enabled state (plugins.txt's `*` marker), byte-faithfully. A name with no
-   *  entry line has no row (#680: the tree is a pure read of the file) and is a no-op — see
-   *  `setPluginEnabledInText`. */
+  /** Byte-faithful. A name with no entry line has no row, so it is a no-op. */
   setPluginEnabled(pluginName: string, enabled: boolean): Promise<void>;
-  /** Move one or more plugins (by name) so the moved block occupies entry-index
-   *  `toIndex` among plugins.txt's lines (top = loads first), counting entries
-   *  with the moved lines removed. Preserves the moved lines' relative order
-   *  regardless of selection contiguity or the order names are given in. Throws
-   *  if any name is absent. */
+  /** `toIndex` counts entries with the moved lines already removed. Preserves the moved
+   *  lines' relative order regardless of selection contiguity. Throws if a name is absent. */
   reorderPlugins(pluginNames: string[], toIndex: number): Promise<void>;
-  /** Appends a new, always-enabled entry line for a just-created plugin at the winning end
-   *  of plugins.txt (bottom). The Editing-side creation itself (writing the plugin file, tracking
-   *  its mod folder) is done by the time this is called — this only ever registers a plugin that
-   *  already exists on disk into the load order. Throws if the name is already present. */
+  /** Appends an always-enabled line at the winning end (bottom) of plugins.txt; the plugin
+   *  file already exists on disk by the time this is called. Throws if the name is present. */
   appendPlugin(pluginName: string): Promise<void>;
 }

@@ -1,30 +1,17 @@
 import * as vscode from 'vscode';
 
-/** The Loadout header — a small readout pinned above the domain trees, and the home
- *  for every action whose scope is the workspace rather than one tree (profile, deployment).
- *  The title-bar rubric's first rule ("scope first") needs somewhere for such actions to go,
- *  and VS Code's container-level `…` is its own auto-generated Views menu, not a contribution
- *  point. mEdit (Launch/Close) is an option on Plugins, not a workspace action, so this view
- *  reads no backend/load order state at all.
- *
- *  Lives at the composition root, not in either bounded context: it reads a Mod-Management
- *  readout, so importing either context's internals would put the language boundary inside
- *  one file. State arrives as injected getters instead — the same constraint the merged
- *  plugins provider keeps. */
+/** Home for actions scoped to the workspace, not one tree: VS Code's container-level `…` is an
+ *  auto-generated Views menu, not a contribution point, so they need a view of their own.
+ *  Injected getters keep both contexts' vocabulary out. */
 export interface LoadoutHeaderDeps {
-  /** False when there is no loadout at all — no workspace open, or one that isn't an MO2
-   *  instance. The view still registers on those paths (it is the container's first view and
-   *  must never be a hole), but the commands its rows activate are registered alongside the
-   *  Loadout views and so do not exist, which would make every row throw on click. */
+  /** False when there is no loadout. The view still registers then — it is the container's
+   *  first view and must never be a hole — but the commands its rows activate do not exist. */
   hasLoadout: () => boolean;
   activeProfile: () => Promise<string | undefined>;
   deployment: () => Promise<'external' | 'deployed' | 'notDeployed'>;
 }
 
-/** The deployment readout, contributed only when Modbench itself is the deployer. Not
- *  deployed offers Deploy; deployed is a readout with no command — Purge is destructive, and
- *  the rubric keeps destructive actions in overflow behind a modal confirm rather than one
- *  click away on a row the user is reading. */
+// No command once deployed: Purge is destructive and belongs in overflow behind a modal confirm.
 function deploymentRow(state: 'deployed' | 'notDeployed'): vscode.TreeItem {
   const deployed = state === 'deployed';
   const row = new vscode.TreeItem('Deployment');

@@ -15,23 +15,15 @@ describe('package.json viewsWelcome (#192)', () => {
     const welcome = (pkg.contributes.viewsWelcome as { view: string; when: string }[])
       .find((w) => w.view === 'modbench.modList');
     expect(welcome, 'expected a viewsWelcome entry for modbench.modList').toBeTruthy();
-    // modbench.viewMode flips to 'loadout' before a workspace is even checked
-    // (activate()), and workspaceIsMo2Instance is never set when no folder is
-    // open — so without this guard, !workspaceIsMo2Instance reads true on a
-    // bare VS Code window and the wrong-folder message would show with no
-    // workspace open at all. workspaceFolderCount is VS Code's own built-in key.
+    // modbench.viewMode flips to 'loadout' before a workspace is checked, and
+    // workspaceIsMo2Instance is never set with no folder open, so without this guard the
+    // wrong-folder message shows on a bare window. workspaceFolderCount is VS Code's own key.
     expect(welcome!.when).toContain('workspaceFolderCount != 0');
   });
 
-  // Unset context keys read falsy under `!key`, so before activation ever runs,
-  // `!modbench.workspaceIsMo2Instance` is indistinguishable from a real "checked, not an
-  // instance" result — the welcome would render for every workspace, valid or not, until the
-  // extension activated. modbench.workspaceMo2CheckDone is a second key set only once the
-  // check has actually run (extension.ts's mo2InstanceContext, on every exit path), so an
-  // unset check can never satisfy this clause. Exact-match, not .toContain: a loose
-  // substring check can't tell `modbench.workspaceMo2CheckDone` from
-  // `!modbench.workspaceMo2CheckDone` — the exact string can, and a rival that negates
-  // either term must fail here.
+  // Unset context keys read falsy under `!key`, so `!modbench.workspaceIsMo2Instance` alone cannot
+  // tell "not yet checked" from "checked, not an instance"; workspaceMo2CheckDone is set only once
+  // the check has run. Exact-match, not .toContain, so a negated term cannot pass.
   it('cannot render before the MO2 check has actually run (#554)', () => {
     const welcome = (pkg.contributes.viewsWelcome as { view: string; when: string }[])
       .find((w) => w.view === 'modbench.modList');
@@ -149,13 +141,9 @@ describe('package.json New Plugin / record filter reachable from the merged tree
   });
 });
 
-// There is no Open Header button (context menu entry or inline icon) — xEdit parity
-// (vstNavChange / TryViewOrCompareSelectedRecords, xeMainForm.pas: selecting a plugin node shows
-// its File Header as a matter of course, no separate affordance) means selecting/clicking a
-// plugin row opens its header directly (PluginNode/ImplicitMasterNode wire `.command` to
-// modbench.openHeader themselves — modmanager/PluginListProvider.ts). The command survives, as
-// the row-click's own bridge implementation, palette-gated (see PALETTE_GATED below) — only its
-// former UI affordance is gone.
+// There is no Open Header button: xEdit parity (xeMainForm.pas — selecting a plugin node shows
+// its File Header as a matter of course) means clicking a plugin row opens its header directly,
+// through the row's own `.command`.
 describe('package.json Open Header has no button of its own — row click replaces it (#345)', () => {
   const contextMenus = () => pkg.contributes.menus['view/item/context'] as { command: string; when: string; group: string }[];
 
@@ -198,10 +186,8 @@ describe('package.json filtering is one UX (#247)', () => {
     expect(commandTitle('modbench.setFilter')!.icon).toBe('$(filter)');
   });
 
-  // The filter is durable, so it needs a way out — the established two-command +
-  // context-key toggle template (sort direction, show-hidden), so slot 1 shows exactly one of
-  // the pair at a time. The key is per view: the record filter's `modbench.filterActive` is a
-  // different, independently-clearable axis on the same title bar.
+  // The filter is durable, so it needs a way out: the two-command + context-key toggle template,
+  // so slot 1 shows exactly one of the pair at a time. The key is per view.
   const DURABLE_FILTERS = [
     ['modbench.modList', 'modbench.modList.filter', 'modbench.modList.clearFilter', 'modbench.modList.filterActive'],
     ['modbench.pluginListTree', 'modbench.pluginListTree.filter', 'modbench.pluginListTree.clearFilter', 'modbench.pluginListTree.filterActive'],
@@ -217,18 +203,15 @@ describe('package.json filtering is one UX (#247)', () => {
     expect(clearEntry!.group).toBe('navigation@1');
   });
 
-  // $(clear-all) is what VS Code's own Extensions view uses for "Clear Extensions Search
-  // Results" — clearing a text filter on a list. $(search-stop) was rejected: it means halting a
-  // search in progress, which would imply the results stay. The title-bar icon rubric may
-  // override this; it is recorded here rather than silently inherited.
+  // $(clear-all) is what VS Code's own Extensions view uses for clearing a list's text filter.
+  // $(search-stop) was rejected: it means halting a search in progress, implying results stay.
   it.each(DURABLE_FILTERS)('%s clears with $(clear-all)', (_view, _open, clearCommand) => {
     expect(commandTitle(clearCommand)!.icon).toBe('$(clear-all)');
   });
 
-  // `ctrl+F` means find-within-the-focused-surface everywhere else in VS Code (editor,
-  // terminal, Output, debug console). Trees left it unbound when `list.find` moved to
-  // `ctrl+alt+F` in 1.89, so a per-view `focusedView` binding conflicts with nothing and closes
-  // the one surface where the platform's own idiom silently does nothing.
+  // `ctrl+F` means find-within-the-focused-surface everywhere else in VS Code. Trees left it
+  // unbound when `list.find` moved to `ctrl+alt+F` in 1.89, so a per-view `focusedView` binding
+  // conflicts with nothing.
   it.each(DURABLE_FILTERS)('%s opens its filter on ctrl+F while focused', (view, openCommand) => {
     const keybindings = pkg.contributes.keybindings as { command: string; key: string; when: string }[];
     const entry = keybindings.find((k) => k.command === openCommand);
@@ -272,12 +255,8 @@ describe('package.json title-bar rubric (#247)', () => {
   const viewsOf = (entries: MenuEntry[]) =>
     new Set(entries.map((e) => /view == ([\w.]+)/.exec(e.when)?.[1]).filter(Boolean) as string[]);
 
-  // Rule 1, scope first: an action that isn't about this tree's own domain doesn't go on this
-  // tree. These three are workspace-scope — they swap the modlist or act on the whole
-  // deployment. (There is no Reload Load Order: ADR-0044 reconciles the load order on every
-  // change, so there is nothing to reload.) There is no Launch/Close mEdit anywhere: the
-  // backend launches with the extension (maintainer ruling 2026-09-01 — the DB-file-backed
-  // session made startup cheap enough that lifecycle stopped being a user decision).
+  // Rule 1, scope first: an action not about this tree's own domain does not go on this tree.
+  // There is no Reload Load Order (ADR-0044 reconciles on every change) and no Launch/Close mEdit.
   const WORKSPACE_ACTIONS = [
     'modbench.modList.switchProfile',
     'modbench.modList.deploy',
@@ -297,9 +276,8 @@ describe('package.json title-bar rubric (#247)', () => {
     expect(entries.every((e) => !e.group.startsWith('navigation'))).toBe(true);
   });
 
-  // Rule 2, four navigation icons maximum. Not taste: VS Code collapses navigation icons into
-  // the `…` when a view is narrow, so a fifth is already unreliable. A two-command context-key
-  // toggle (sort direction, show-hidden) is one icon — only ever one of the pair is visible.
+  // Rule 2, four navigation icons maximum. Not taste: VS Code collapses navigation icons into the
+  // `…` when a view is narrow, so a fifth is unreliable. A two-command toggle is one icon.
   it('never exposes more than four navigation icons on any view, in any state', () => {
     const navEntries = titleMenus().filter((e) => e.group.startsWith('navigation'));
     for (const view of viewsOf(navEntries)) {
@@ -321,9 +299,8 @@ describe('package.json title-bar rubric (#247)', () => {
       expect(entries.every((e) => e.when.includes('modbench.workspaceIsMo2Instance'))).toBe(true);
     });
 
-  // Rule 7: Collapse All belongs on a hierarchy and nowhere else — on a flat list it is an
-  // icon that does nothing. `showCollapseAll` is a createTreeView option, so the assertion
-  // lives with the wiring; here we only pin which views are hierarchical.
+  // Rule 7: Collapse All belongs on a hierarchy and nowhere else — on a flat list it is an icon
+  // that does nothing. `showCollapseAll` is a createTreeView option, so only hierarchy is pinned.
   it('the Mods tree and the merged Plugins tree are the hierarchical ones', () => {
     const sidebar = (pkg.contributes.views.modbench as { id: string }[]).map((v) => v.id);
     expect(sidebar).toContain('modbench.modList');
@@ -331,13 +308,9 @@ describe('package.json title-bar rubric (#247)', () => {
   });
 });
 
-// mEdit isn't a universal option, it's an option on the Plugins view — so its affordance
-// lives on the one Plugins tree, not the Loadout header.
-// Placement is overflow, not a navigation icon: rule 2's own ceiling test
-// above already measures modbench.pluginListTree at its 4-icon maximum before this pair is
-// added — a two-command toggle still "counts as one icon" per rule 2, but that accounting
-// only matters once there is a free slot to spend it on, and rule 5's own slot sequence ends
-// "then overflow" for whatever arrives once domain-action slots are exhausted.
+// mEdit is an option on the Plugins view, so its affordance lives on that tree, not the Loadout
+// header. Placement is overflow, not a navigation icon: rule 2's ceiling test already measures
+// this tree at its four-icon maximum.
 describe('package.json standalone Deploy/Purge/Launch withdrawal (#186)', () => {
   it('defaults deploymentMode to external so the alpha never exposes standalone deploy without explicit opt-in', () => {
     const prop = pkg.contributes.configuration.properties['modbench.mods.deploymentMode'];
@@ -363,13 +336,9 @@ describe('package.json standalone Deploy/Purge/Launch withdrawal (#186)', () => 
   });
 });
 
-// A hardcoded "Modbench: " in `title` leaks into every context menu the command appears
-// in — "Modbench: Delete Record" on a tree row. `category:
-// "Modbench"` with a bare `title` instead lets VS Code compose "Modbench: <title>" for the
-// palette while context menus render the bare title. Every command takes that
-// shape — category is metadata independent of palette visibility (it changes nothing in
-// a context menu, which always renders the bare title), so every command gets one even when also
-// gated out of the palette below.
+// A hardcoded "Modbench: " in `title` leaks into every context menu the command appears in.
+// `category: "Modbench"` with a bare `title` lets VS Code compose the palette label while
+// context menus render the bare title, so every command carries a category.
 describe('package.json command titles and categories (#280)', () => {
   const commands = pkg.contributes.commands as { command: string; title: string; category?: string }[];
   const palette = pkg.contributes.menus.commandPalette as { command: string; when: string }[];
@@ -384,15 +353,9 @@ describe('package.json command titles and categories (#280)', () => {
     expect(offenders.map((c) => c.command)).toEqual([]);
   });
 
-  // These only do something when invoked with a tree/webview argument the Command Palette never
-  // supplies (no formKey, no ctx, no clicked node) — and unlike modbench.deleteRecord (falls back
-  // to a tracked tree selection) or modbench.referencedByTree.copy (falls back to the view's own
-  // selection), none of these has an ambient fallback. Left live, each is either a silent no-op
-  // or — modbench.copyAsOverrideInto — a guaranteed "No record selected." toast: a palette entry
-  // whose only possible outcome is an error costs a user a click to discover, for nothing (AC5).
-  // modbench.showReferencedBy is deliberately absent: it takes no argument at all
-  // (focuses the Referenced By view) and always works from the palette.
-  // Exhaustive both ways, same "nothing missing, nothing extra" shape as EXPECTED_COMMANDS.
+  // These do something only when invoked with a tree/webview argument the palette never supplies,
+  // and none has an ambient fallback: left live, each is a silent no-op or a guaranteed error
+  // toast. Exhaustive both ways, like EXPECTED_COMMANDS.
   const PALETTE_GATED = [
     'modbench.openHeader',
     // Each needs the clicked cell's own row/column identity from its
@@ -402,10 +365,8 @@ describe('package.json command titles and categories (#280)', () => {
     'modbench.array.remove',
     'modbench.array.moveUp',
     'modbench.array.moveDown',
-    // Same posture as the array-op commands above — each needs the clicked VMAD
-    // row's own script/property identity from its data-vscode-context, no ambient fallback.
-    // ADR-0039: needs the clicked string cell's own identity/value/readOnly from its
-    // data-vscode-context — no ambient fallback, same posture as the array/VMAD ops above.
+    // ADR-0039: each needs the clicked cell's or VMAD row's own identity from its
+    // data-vscode-context — no ambient fallback, same posture as the array ops above.
     'modbench.field.openExtended',
     'modbench.downloads.install',
     'modbench.downloads.visitNexus',
@@ -439,10 +400,8 @@ describe('package.json command titles and categories (#280)', () => {
     'modbench.record.create',
     'modbench.record.delete',
     'modbench.record.renumber',
-    // Reached from a plugins-tree record row (RecordNode) or the record editor's own
-    // column header (ColumnHeaderContext, via its data-vscode-context) — neither has an ambient
-    // fallback worth a QuickPick-over-QuickPick, same posture as every other tree/webview-argument
-    // command above.
+    // Reached from a plugins-tree record row or the record editor's column header, neither with an
+    // ambient fallback worth a QuickPick-over-QuickPick.
     'modbench.record.copyAsOverride',
     'modbench.record.copyAsNewRecord',
   ] as const;
@@ -457,12 +416,9 @@ describe('package.json command titles and categories (#280)', () => {
   });
 });
 
-// #572 ruling 1 / #674: Change FormID exists only on a master record in a *tracked* plugin, and is
-// absent — not greyed, not offered-then-refused — everywhere else. Both halves of that ruling are
-// contextValue facts the row states for itself (RecordNode): `recordTracked` is the only row the
-// product will actually renumber, while `recordUntracked` (a master whose plugin holds no `.git`),
-// `recordOverride` (a copy that doesn't own the FormID) and `recordImmutable` never offer it. The
-// other record actions stay available on all of them, where they are legal.
+// Change FormID exists only on a master record in a tracked plugin, and is absent — not greyed,
+// not offered-then-refused — everywhere else. Both halves are contextValue facts the row states
+// for itself.
 describe('package.json record-row context menu — renumber gated to native tracked rows (#572, #674)', () => {
   const contextMenus = () => pkg.contributes.menus['view/item/context'] as { command: string; when: string }[];
   const whenOf = (command: string) => contextMenus().find((e) => e.command === command)!.when;
@@ -483,9 +439,8 @@ describe('package.json record-row context menu — renumber gated to native trac
     }
   });
 
-  // Open Editor to the Side reaches both spellings too, but it has a second entry on the
-  // Referenced By tree, so `whenOf`'s first-match lookup cannot read it — it is pinned by exact
-  // equality in the #284 describe block below instead.
+  // Open Editor to the Side has a second entry on the Referenced By tree, so `whenOf`'s first-match
+  // lookup cannot read it; it is pinned by exact equality below.
 });
 
 // Origin drift is absorbed automatically by the reconcile verb (ADR-0044) — there is nothing for
@@ -495,10 +450,8 @@ describe('package.json plugin-row context menu', () => {
   const contextMenus = () => pkg.contributes.menus['view/item/context'] as { command: string; when: string; group: string }[];
   const forPluginRows = () => contextMenus().filter((e) => e.when.includes('viewItem == plugin'));
 
-  // The enumeration, kept honest: every command reachable from a plugin row, listed, with
-  // exactly one contextValue (`plugin`). Open Header has no
-  // entries here — it opens via row click (PluginNode/ImplicitMasterNode's own
-  // `.command`), not a context/inline menu entry, so it does not appear in this enumeration.
+  // Every command reachable from a plugin row, listed, with exactly one contextValue (`plugin`).
+  // Open Header has no entries: it opens via row click, not a menu entry.
   it('every plugin-row command states exactly which plugin rows it applies to', () => {
     expect(forPluginRows().map((e) => [e.command, e.when])).toEqual([
       ['modbench.pluginListTree.revealInExplorer', 'view == modbench.pluginListTree && viewItem == plugin'],

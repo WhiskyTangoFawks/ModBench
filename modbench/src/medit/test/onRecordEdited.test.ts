@@ -19,10 +19,8 @@ function fakeDecorationProvider(): RecordDecorationProvider {
   return { refresh: vi.fn() } as unknown as RecordDecorationProvider;
 }
 
-// This is the actual production callback a field edit drives — driven here through a real
-// call, not by hand-feeding an accessor directly. `hasMatchingRecords` (ADR-0035 amending
-// ADR-0018) needs a re-derive on every edit since a field edit can change which records match the
-// active filter; this proves an edit is what triggers that re-derive.
+// `hasMatchingRecords` (ADR-0035 amending ADR-0018) needs a re-derive on every edit, since a
+// field edit can change which records match the active filter.
 describe('makeOnRecordEdited — record-filter-match refresh', () => {
   it('calls the injected refreshMatchingPlugins on every edit', () => {
     const refreshMatchingPlugins = vi.fn();
@@ -36,9 +34,8 @@ describe('makeOnRecordEdited — record-filter-match refresh', () => {
   });
 
   it('calls refreshMatchingPlugins even when the record-row cache has no entry for this FormKey', () => {
-    // markWorkingTreeState returning false means "not cached", not "the edit didn't happen" — the
-    // edit already landed server-side by the time onRecordEdited fires, so hasMatchingRecords's
-    // re-derive must not be gated on the record-row cache's own hit/miss.
+    // markWorkingTreeState returning false means "not cached", not "the edit did not happen": the
+    // edit already landed server-side, so the re-derive must not be gated on the record-row cache.
     const refreshMatchingPlugins = vi.fn();
     const onRecordEdited = makeOnRecordEdited(
       fakeTreeProvider(false), fakeDecorationProvider(), new Set(), refreshMatchingPlugins, vi.fn(),
@@ -68,9 +65,8 @@ describe('makeOnRecordEdited — record-filter-match refresh', () => {
   });
 });
 
-// The native Source Control panel doesn't pick up a field edit's working-tree dirt on its
-// own — this is the wiring that closes that gap, driven through the same real call every other
-// onRecordEdited-fires test in this file uses, not by hand-feeding some other accessor directly.
+// The native Source Control panel does not pick up a field edit's working-tree dirt on its own;
+// this is the wiring that closes that gap.
 describe('makeOnRecordEdited — Source Control refresh (#557)', () => {
   it('calls the injected refreshSourceControl with the edited plugin filename on every edit', () => {
     const refreshSourceControl = vi.fn();

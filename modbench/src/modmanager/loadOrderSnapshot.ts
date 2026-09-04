@@ -1,12 +1,6 @@
-// Assembles the load-order snapshot Mod Management sends Editing as `PUT /load-order` (ADR-0044):
-// **every physical plugin copy** the instance's enabled mods and overwrite/ provide, plus the
-// game's own Data-folder copy of every plugins.txt line no mod provides — each with the three facts
-// its registration carries. Plugin *order* (the slot) comes from plugins.txt; which copy of a name
-// wins comes from the MO2-priority FileConflictIndex, overwrite/ winning-most of all. Vanilla
-// masters are NOT listed here — the backend prepends them from the game directory, forced on and
-// immutable, ahead of this list. Creation Club content cataloged in the game's own [Game].ccc gets
-// the same forced treatment, also prepended server-side — this module never reads that
-// catalog.
+// Every physical plugin copy the enabled mods and overwrite/ provide, plus the Data-folder copy
+// of any plugins.txt line no mod provides (ADR-0044). Vanilla masters and .ccc content are
+// prepended by the backend, never listed here.
 
 import { readdir } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -15,10 +9,8 @@ import { buildFileConflictIndex, foldPath, rootLevelWinnerMods, rootLevelWinners
 import { isPluginFile } from './masterReader';
 import { findUnlistedPlugins } from './unlistedPlugins';
 
-// Reserved origin values (ADR-0036): the game's Data directory, and MO2's overwrite
-// folder — matching their literal directory names. Never a real mod folder name: mod folders live
-// under a different namespace (`mods/`), and "overwrite" is already a reserved MO2 folder name
-// elsewhere in this codebase (modlistText.ts's RESERVED_DIR_NAMES).
+// Reserved origin values (ADR-0036), matching their literal directory names. Never a real mod
+// folder name: mod folders live under `mods/`.
 export const DATA_DIRECTORY_ORIGIN = 'Data';
 export const OVERWRITE_ORIGIN = 'overwrite';
 
@@ -40,13 +32,8 @@ export interface LoadOrderPlugin {
   winning: boolean;
 }
 
-/** Resolve each plugin name to its winning physical path: the MO2-priority
- *  FileConflictIndex winner for a mod-provided plugin, else the game's Data
- *  folder for a base-game/DLC/CC plugin no mod provides. Keyed by lowercased
- *  name (plugins.txt casing is not authoritative). Only root-level index files
- *  are considered — a nested file sharing a plugin's basename must not shadow
- *  the real plugin. Shared by the snapshot builder and the Plugin List's
- *  order-aware missing-master check. */
+/** Keyed by lowercased name, since plugins.txt casing is not authoritative. Root-level index
+ *  files only: a nested file sharing a plugin's basename must not shadow the real plugin. */
 export function resolvePluginPaths(
   names: string[],
   index: FileConflictIndex,
@@ -56,13 +43,8 @@ export function resolvePluginPaths(
   return new Map(names.map((name) => [name, winnerByName.get(name.toLowerCase()) ?? join(dataFolder, name)]));
 }
 
-/** Root-level files directly under the instance's overwrite/ folder, keyed by case-folded name to
- *  their real on-disk name (ADR-0036). MO2's VFS makes overwrite/ winning-most of
- *  all — above every mod and the Data folder — so a plugin found here always wins path resolution
- *  too, not just origin classification. Root-level only, mirroring rootLevelWinners' own reasoning:
- *  a nested file sharing a plugin's basename must not shadow the real plugin. Empty when the
- *  overwrite folder doesn't exist yet — it isn't created until the first purge deposits a stray
- *  file (overwriteFolder.ts). */
+// MO2's VFS makes overwrite/ winning-most of all, so a plugin found here wins path resolution
+// too, not just origin classification. Empty until a purge first creates the folder.
 async function overwritePluginFiles(instanceRoot: string): Promise<Map<string, string>> {
   try {
     const entries = await readdir(join(instanceRoot, 'overwrite'), { withFileTypes: true });
@@ -79,21 +61,14 @@ type BuildIndex = (
   instanceRoot: string,
 ) => Promise<FileConflictIndex>;
 
-/** Builds the snapshot for `PUT /load-order`: the winning copy of every plugins.txt line (disabled
- *  ones included — the `*` prefix becomes `enabled` rather than deciding whether it is sent,
- *  ADR-0035), then every other root-level plugin copy an enabled mod or overwrite/ provides — a
- *  losing copy of a listed name at that name's slot, an unlisted file with no slot — as
- *  `winning: false` unless it is the one the Mod override order would pick. Sole callers are the
- *  load-order sync and "enter editing" in extension.ts. */
+/** A disabled plugins.txt line is still sent: its missing `*` becomes `enabled: false` rather
+ *  than deciding whether the line appears at all (ADR-0035). */
 export async function buildLoadOrderSnapshot(
   source: Source,
   instanceRoot: string,
   dataFolder: string,
-  // buildFileConflictIndex requires a log. This function itself takes no log/channel
-  // parameter, so the default stays a no-op rather than growing this signature for it — but the
-  // real caller (extension.ts) passes its own outputChannel-backed buildIndex explicitly, so the
-  // walker's skip/cycle/broken-link surfacing does reach the Output channel in production; this
-  // default only fires for a caller (e.g. a test) that doesn't supply one.
+  // The real caller passes an outputChannel-backed buildIndex, so the walker's surfacing does
+  // reach the Output channel; this no-op default only fires for a caller that supplies none.
   buildIndex: BuildIndex = (entries, root) => buildFileConflictIndex(entries, root, () => {}),
 ): Promise<LoadOrderPlugin[]> {
   const [names, enabled, index, overwriteFiles] = await Promise.all([
@@ -126,9 +101,8 @@ export async function buildLoadOrderSnapshot(
     };
   });
 
-  // Every other copy an enabled mod provides: a file-level loser of a listed name, or a file no
-  // line names at all. `winning` is the Mod override order's own answer, independent of listing —
-  // an unlisted file's sole provider is still the copy the name resolves to.
+  // `winning` is the Mod override order's own answer, independent of listing: an unlisted
+  // file's sole provider is still the copy the name resolves to.
   const isWinningCopy = (copy: { name: string; origin: string }) =>
     !overwriteFiles.has(foldPath(copy.name))
     && foldPath(winnerModByName.get(foldPath(copy.name)) ?? '') === foldPath(copy.origin);

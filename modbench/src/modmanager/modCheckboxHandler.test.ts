@@ -1,9 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-// #655: onModCheckboxChanged already had its own unit seam (a named, standalone function) before
-// this ticket, but no test ever reached it — the ADR-0026 checkbox-failure path (log/notify/
-// invalidate) had zero coverage on either loadout tree. See pluginCheckboxHandler.test.ts for
-// its Editing-side twin.
 const { showErrorMessage, showWarningMessage } = vi.hoisted(() => ({
   showErrorMessage: vi.fn(),
   showWarningMessage: vi.fn(),

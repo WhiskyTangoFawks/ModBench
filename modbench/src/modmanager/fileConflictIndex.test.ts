@@ -12,10 +12,8 @@ import { readVanillaMasters } from './vanillaMasters';
 import { deploy } from './deployer';
 import { makeDeployerFixture, makeIndex } from './test/deployerFixture';
 
-// Scoped to this file only, passthrough by default: wraps `stat` so a single test below can
-// divert one specific path to a synthetic non-ENOENT error. Same wrapper shape as
-// statusChecker.test.ts's stat mock — chmod-based permission denial is silently bypassed
-// when the test runner is root, which a real fs precondition isn't.
+// Passthrough by default, so one test can divert a path to a synthetic non-ENOENT error:
+// chmod-based permission denial is silently bypassed when the runner is root.
 vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof import('node:fs/promises')>();
   return { ...actual, stat: vi.fn(actual.stat) };
@@ -29,10 +27,7 @@ const separator = (name: string, enabled = true): Separator => ({ kind: 'separat
 
 describe('buildFileConflictIndex', () => {
   it('resolves the winner for an overridden file to the topmost (winning) mod', async () => {
-    // Entries are in modlist.txt file order, top-first. Top of the file is the
-    // winning end (MO2: vanilla/base is losing-most, everything above overrides
-    // it), so ModA — the array's first enabled mod — wins over ModB. Both provide
-    // textures/shared/foo.dds. Getting the direction wrong would make ModB win.
+    // modlist.txt is winning-first, so ModA — the array's first enabled mod — wins over ModB.
     const entries: ModlistEntry[] = [mod('ModA'), mod('ModB')];
     const index = await buildFileConflictIndex(entries, fixture, () => {});
 
@@ -88,11 +83,8 @@ describe('buildFileConflictIndex', () => {
   });
 });
 
-// Proton/Wine resolves paths case-insensitively over ext4's case-sensitive
-// mods/, so two mods providing case-variant paths (Textures/Foo.dds vs
-// textures/foo.dds) must resolve to ONE conflict entry with a deterministic
-// winner. caseFixture: ModA/Textures/Foo.dds vs ModB/textures/foo.dds;
-// RootA/Foo.esp vs RootB/foo.ESP (root-level, for rootLevelWinners).
+// Proton/Wine folds case over case-sensitive ext4, so case-variant paths must resolve to one
+// conflict entry with a deterministic winner.
 describe('buildFileConflictIndex — case-insensitive conflicts', () => {
   it('resolves case-variant paths from two mods to a single conflict entry with both providers', async () => {
     const index = await buildFileConflictIndex([mod('ModA'), mod('ModB')], caseFixture, () => {});
@@ -129,13 +121,8 @@ describe('buildFileConflictIndex — case-insensitive conflicts', () => {
   });
 });
 
-// Non-regular dirent policy: what MO2 itself does with such entries
-// (references/modorganizer/ — grep-only, see fileConflictIndex.ts's walk() doc comment)
-// is the precedent — follow a symlink transparently, surface what fails, guard the cycle
-// Windows' own reparse-hop ceiling would otherwise hide. fs.symlink needs admin rights or
-// Developer Mode on Windows, and mkfifo doesn't exist there at all — skip the whole block
-// there rather than fail for an environment reason that isn't a code defect. Linux
-// coverage, including mutation, is unaffected.
+// fs.symlink needs admin rights or Developer Mode on Windows and mkfifo doesn't exist there
+// at all, so the whole block is skipped rather than failing for an environment reason.
 describe.skipIf(process.platform === 'win32')('buildFileConflictIndex — non-regular dirent policy', () => {
   let instanceRoot: string;
   let modARoot: string;
@@ -201,11 +188,8 @@ describe.skipIf(process.platform === 'win32')('buildFileConflictIndex — non-re
   });
 
   it('a symlink cycle is skipped and logged, not hung — and does not duplicate sibling content walked before the cycle is caught', async () => {
-    // Real content alongside the self-referencing link: this is what pins the ancestor
-    // set's seed (the mod root itself). An unseeded walk still terminates — it just catches
-    // the cycle one hop later, after re-walking (and re-indexing) everything through
-    // `loop/` once more — so a mod containing *only* the loop can't tell the two apart; both
-    // produce the same empty result.
+    // Real content alongside the self-referencing link pins the ancestor set's seed: a mod
+    // containing only the loop cannot tell a seeded walk from an unseeded one.
     await writeFile(join(modARoot, 'sibling.dds'), 'DATA');
     await symlink(modARoot, join(modARoot, 'loop'));
     const log = vi.fn();
@@ -244,10 +228,8 @@ describe.skipIf(process.platform === 'win32')('buildFileConflictIndex — non-re
   });
 });
 
-// The layout root's own exclusion — a plain root "source/" folder (SourceRecordPath's
-// layout) and, separately, any dot-prefixed entry at any depth (".git" and friends).
-// Neither rule needs a sibling-plugin check: a root "source/" folder is excluded
-// unconditionally, which closes the orphaning trap by construction.
+// A root "source/" folder is excluded unconditionally, so neither it nor the dot-prefixed
+// rule needs a sibling-plugin check and nothing can be left orphaned.
 describe('buildFileConflictIndex — root "source/" and dot-prefixed exclusion (#441, closes #438)', () => {
   let instanceRoot: string;
   let modARoot: string;
@@ -309,9 +291,8 @@ describe('buildFileConflictIndex — root "source/" and dot-prefixed exclusion (
     expect([...index.files].map((e) => e.relativePath)).toEqual(['Plugin.esp']);
   });
 
-  // Root-anchoring proof: Papyrus ships its own scripts nested under "Scripts/Source/…", never at
-  // the mod root — SourceRecordPath's own layout is what "source" means only at the root, so a
-  // nested directory of that exact name must still deploy normally.
+  // Papyrus ships its own scripts nested under "Scripts/Source/…", never at the mod root, so a
+  // nested directory of that name must still deploy.
   it('does NOT exclude a nested directory literally named "Source" — root-anchored, not any depth', async () => {
     await writeFile(join(modARoot, 'Plugin.esp'), 'PLUGINBYTES');
     await mkdir(join(modARoot, 'Scripts', 'Source'), { recursive: true });
@@ -333,20 +314,14 @@ describe('buildFileConflictIndex — root "source/" and dot-prefixed exclusion (
   });
 });
 
-// Regression backstop: prove the override-order direction against a REAL MO2 instance, not
-// just synthetic fixtures — the direction was once inverted (bottom-of-modlist.txt picked as
-// winner); this is what stands between that bug and it silently
-// re-inverting again. Opt-in like modlistText.test.ts's own LitR round-trip: skipped when the
-// instance is absent (CI, Windows, other machines), same MEDIT_LITR_INSTANCE override.
+// Proves the override-order direction against a REAL MO2 instance, not synthetic fixtures.
+// Opt-in: skipped when the instance is absent, via the MEDIT_LITR_INSTANCE override.
 const litrInstance = process.env.MEDIT_LITR_INSTANCE ?? join(homedir(), 'Games', 'FO4', 'LitR');
 const litrModlistPath = join(litrInstance, 'profiles', 'Life in the Ruins', 'modlist.txt');
 const hasLitr = existsSync(litrModlistPath);
 
-// The game directory a badge/deploy check against the real instance needs — read
-// from ModOrganizer.ini in principle, but this opt-in test is already coupled to this specific
-// real instance's on-disk shape (its exact mod names), so hardcoding the sibling "Stock Game
-// Folder" is no more fragile than the mod names above and avoids pulling in gameDirectory.ts's
-// full resolver (config → ini → Steam scan) for a read-only masters lookup.
+// This opt-in test is already coupled to the instance's exact on-disk shape, so hardcoding the
+// sibling "Stock Game Folder" is no more fragile than the mod names and needs no resolver.
 const litrVanillaData = join(litrInstance, 'Stock Game Folder', 'Data');
 
 function fakeReporter() {
@@ -354,11 +329,8 @@ function fakeReporter() {
 }
 
 describe.skipIf(!hasLitr)('buildFileConflictIndex — real LitR instance (opt-in, #84)', () => {
-  // Real, independently-verifiable conflict discovered in the live LitR modlist (not planted):
-  // "Pipboy Arm Fix for Grafs Assaultron Armor" sits above "Graf's Assaultron Armor" in
-  // modlist.txt (nearer the winning end) and both ship the same 4 mesh files. A fix patch must
-  // override what it fixes, or it isn't a fix — an oracle independent of this codebase's own
-  // logic, not re-derived from it.
+  // A real conflict in the live LitR modlist, not planted: a fix patch must override what it
+  // fixes, which is an oracle independent of this codebase's own logic.
   const fixName = 'Pipboy Arm Fix for Grafs Assaultron Armor';
   const baseName = "Graf's Assaultron Armor";
   const contested = [
@@ -368,10 +340,8 @@ describe.skipIf(!hasLitr)('buildFileConflictIndex — real LitR instance (opt-in
     'meshes/graf/assaultronarmor/assaultronarmorarmlmediumm.nif',
   ];
 
-  // Badge and deploy must match MO2's winner, not just the index — statusChecker.ts and
-  // deployer.ts both consume the index's winner/winnerMod with no divergent logic of their
-  // own, so this proves all three agree on the same real conflict rather than asserting the
-  // index alone and documenting the rest away.
+  // Badge and deploy consume the index's winner with no logic of their own, so asserting all
+  // three proves they agree rather than documenting the rest away.
   it('a fix patch positioned above the mod it fixes wins the meshes they both ship — index, badge, and deploy all agree', async () => {
     const entries = parseModlist(readFileSync(litrModlistPath, 'utf8'));
     const fixEntry = entries.find((e) => e.kind === 'mod' && e.name === fixName);
@@ -397,15 +367,11 @@ describe.skipIf(!hasLitr)('buildFileConflictIndex — real LitR instance (opt-in
     const vanillaMasters = await readVanillaMasters(litrVanillaData, () => {});
     const statuses = await computeModStatuses([fixEntry, baseEntry], litrInstance, index, vanillaMasters, () => {});
     expect(statuses.get(fixName)?.status).toEqual({ kind: 'overrides', count: contested.length });
-    // baseName's real count is 5, not 4: it also ships GrafAssaultronArmorNoAwkcrDlc01.esl,
-    // which "Lunar Arsenal Unique Replacer - Armor And Power Armor" happens to ship too (a real,
-    // separate root-level name collision, confirmed on disk) — one more real conflict this mod
-    // loses, unrelated to the fix pair under test but part of its honest real badge.
+    // baseName's real count is 5: it also ships an .esl another enabled mod happens to ship,
+    // a separate real collision that is part of its honest badge.
     expect(statuses.get(baseName)?.status).toEqual({ kind: 'conflicts', count: contested.length + 1 });
     for (const relativePath of contested) {
-      // The badge's conflictLines carry the base mod's OWN on-disk casing (e.g.
-      // "Meshes/Graf/...", not the lowercase form used above for index lookups) — compare
-      // case-insensitively, the same rule the index itself applies (foldPath).
+      // conflictLines carry the base mod's own on-disk casing, so compare through foldPath.
       expect(
         statuses
           .get(baseName)
@@ -413,10 +379,8 @@ describe.skipIf(!hasLitr)('buildFileConflictIndex — real LitR instance (opt-in
       ).toBe(true);
     }
 
-    // 3. Deploy — the real deployer hardlinks the SAME real winner file (Pipboy Arm Fix's actual
-    // mesh, not a synthetic fixture) into Data/. instanceRoot/gameDirectory are scratch temp
-    // dirs (makeDeployerFixture) so the live LitR instance is never written to; only the winner
-    // SOURCE path is real.
+    // Scratch temp dirs, so the live LitR instance is never written to; only the winner's
+    // source path is real.
     const fx = await makeDeployerFixture();
     try {
       const deployIndex = makeIndex(Object.fromEntries(winnerPaths));
@@ -433,16 +397,7 @@ describe.skipIf(!hasLitr)('buildFileConflictIndex — real LitR instance (opt-in
     }
   });
 
-  // Vanilla-loses anchor check against the real instance. Checked for a genuine
-  // pair — the real vanilla Data/ (litrVanillaData) ships every asset packed inside .ba2
-  // archives with NO loose textures/meshes/sounds at all, and no root-level file (plugin, BA2,
-  // ini) it ships shares a name with any enabled mod's root-level file either (diffed the full
-  // real mod list against it). So there genuinely is no real vanilla-vs-mod loose-file conflict
-  // pair in this instance to assert against — stating that explicitly rather than silently
-  // skipping the check. The invariant itself (an existing file at a target path,
-  // vanilla or otherwise, is always skipped rather than overwritten) is exercised with a
-  // synthetic vanilla file in deployer.test.ts's "skips and reports a winner whose Data/ path
-  // already exists and is not a prior link" — that is real code, just not data this specific
-  // instance can supply.
+  // This instance supplies no real vanilla-vs-mod loose-file pair: vanilla Data/ ships every
+  // asset inside .ba2 archives and shares no root-level name with any enabled mod.
   it.todo('vanilla Data/ loose file loses to an enabled mod shipping the same file — no such real pair exists in this LitR instance; see deployer.test.ts for the synthetic-fixture proof of the invariant');
 });

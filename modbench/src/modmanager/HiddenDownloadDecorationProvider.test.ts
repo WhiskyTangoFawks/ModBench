@@ -32,10 +32,8 @@ describe('HiddenDownloadDecorationProvider (#238)', () => {
     expect(provider.provideFileDecoration({ fsPath: join(instanceRoot, 'mods', 'SomeMod') } as never)).toBeUndefined();
   });
 
-  // The startsWith check anchors on downloadsDir + '/', not downloadsDir alone: a sibling
-  // path that merely shares the "downloads" string prefix (e.g. an unrelated file placed
-  // right after it in the instance root) must never be treated as inside downloads/, even
-  // when slicing its path happens to reproduce a real hidden download's name.
+  // A sibling path that merely shares the "downloads" string prefix must not read as inside
+  // downloads/, even when slicing it reproduces a real hidden download's name.
   it('returns undefined for a sibling path that only shares the downloads/ string prefix', () => {
     const downloadsDir = join(instanceRoot, 'downloads');
     const provider = new HiddenDownloadDecorationProvider(instanceRoot, () => new Set(['evil.zip']));

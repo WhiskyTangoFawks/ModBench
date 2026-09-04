@@ -1,17 +1,13 @@
-// Pure model for the Downloads tab: turns a downloads/ directory listing plus
-// each archive's .meta sidecar text into render-ready rows.
-//
-// .meta is a QSettings::IniFormat file MO2 writes beside each download
-// (mirrors modorganizer/src/downloadmanager.cpp). Status is one of three MVP
-// values; the `removed=true` (hidden) flag is a SEPARATE axis from Status —
-// MO2's `removed` means HIDDEN, never the Uninstalled Status (`uninstalled=true`).
+// `.meta` is a QSettings::IniFormat file MO2 writes beside each download. Its
+// `removed=true` flag means HIDDEN and is a separate axis from Status, which
+// `uninstalled=true` carries.
 
 import { lineRanges } from './lineScan';
 
 export type DownloadStatus = 'Installed' | 'Uninstalled' | 'Downloaded';
 
-/** A file in downloads/, pre-suppression: `.meta` sidecars still included so
- *  callers can pass a raw directory listing without filtering it themselves. */
+/** `.meta` sidecars are still included, so a caller can pass a raw directory
+ *  listing without filtering it first. */
 export interface DownloadEntry {
   name: string;
   size: number;
@@ -21,34 +17,25 @@ export interface DownloadEntry {
 
 export interface DownloadRow {
   name: string;
-  /** Friendly name for display: `.meta` `name` when present and non-empty,
-   *  else the raw filename — never blank, even with no `.meta` at all. */
+  /** The `.meta` `name` when non-empty, else the raw filename — never blank. */
   displayName: string;
   status: DownloadStatus;
   size: number;
   mtimeMs: number;
-  /** Whether a `.meta` sidecar exists — gates the Open Meta File action. */
   hasMeta: boolean;
-  /** Hidden (`.meta` `removed=true`) — a separate axis from Status. Hidden rows
-   *  are filtered out unless Show hidden is on, then shown dimmed. */
+  /** `.meta` `removed=true` — a separate axis from Status. */
   hidden: boolean;
-  /** Nexus mod id from the `.meta`; absent (or `0`) gates Visit on Nexus off. */
+  /** Nexus mod id; MO2 writes `0` for none, which reads as absent here. */
   modID?: string;
-  /** Version string from the `.meta`, absent when not recorded. */
   version?: string;
-  /** Tooltip field from the `.meta`: the mod's name (distinct from the file's
-   *  own `displayName`), absent when not recorded. */
+  /** The mod's own name, distinct from the file's `displayName`. */
   modName?: string;
-  /** Tooltip field from the `.meta`: the game this download is for, absent when not recorded. */
   gameName?: string;
-  /** Tooltip field from the `.meta`: the mod's author, absent when not recorded. */
   author?: string;
 }
 
 export type DownloadSortColumn = 'name' | 'status' | 'size' | 'mtimeMs';
 
-/** Re-sort rendered rows by column. Default sort (Filetime desc) is
- *  `sortDownloadRows(rows, 'mtimeMs', true)`. */
 export function sortDownloadRows(
   rows: DownloadRow[],
   column: DownloadSortColumn,
@@ -102,12 +89,8 @@ export function parseDownloadMeta(
   };
 }
 
-/** Surgically set `key=value` in a `.meta` text — the shared byte-faithful
- *  `[General]` flag write behind the Install/Hide/Unhide mutations. Flips an
- *  existing `key=` line's value in place, or inserts the key right after
- *  `[General]`, or — if the archive had no `.meta` at all (`text === ''`) —
- *  creates a minimal one from scratch. Writes the value verbatim (`false`
- *  clears, not a key deletion), matching MO2's `QSettings::setValue`. */
+// Writes the value verbatim, so `false` clears rather than deleting the key,
+// matching MO2's `QSettings::setValue`. Empty text yields a minimal `.meta`.
 function setMetaFlag(text: string, key: string, value: boolean): string {
   const line = `${key}=${value}`;
   for (const { start, contentEnd } of lineRanges(text)) {
@@ -125,43 +108,31 @@ function setMetaFlag(text: string, key: string, value: boolean): string {
   return `[General]${eol}${line}${eol}` + text;
 }
 
-/** Set `installed=true` in a `.meta` text (the Install writeback). */
 export function setInstalledInText(text: string): string {
   return setMetaFlag(text, 'installed', true);
 }
 
-/** Set `uninstalled=true` in a `.meta` text (the Uninstall writeback — the
- *  symmetric half of `setInstalledInText`). `installed` is left untouched:
- *  both keys carry history, and `parseDownloadMeta` resolves the precedence
- *  (`uninstalled` wins), matching MO2's own `installed`/`uninstalled` pair. */
+/** `installed` is left untouched, as MO2 leaves it: the two keys coexist and
+ *  `parseDownloadMeta` resolves the precedence. */
 export function setUninstalledInText(text: string): string {
   return setMetaFlag(text, 'uninstalled', true);
 }
 
-/** Set (`hidden=true`) or clear (`hidden=false`) the `.meta`'s `removed` flag —
- *  the Hide/Unhide mutation. `removed` (HIDDEN) is a SEPARATE axis from the
- *  `uninstalled` Uninstalled Status. Unhide writes `removed=false`, not a key
- *  deletion, matching MO2's `setValue("removed", false)`. */
+/** Unhide writes `removed=false` rather than deleting the key, matching MO2's
+ *  `setValue("removed", false)`. */
 export function setHiddenInText(text: string, hidden: boolean): string {
   return setMetaFlag(text, 'removed', hidden);
 }
 
-/** Filter hidden rows for rendering — a view concern, so it runs client-side on
- *  the already-built rows (like `sortDownloadRows`), not in row building. Off
- *  by default excludes hidden rows; on includes all, flags left intact so the
- *  dimming decoration can distinguish them. Name filtering has no equivalent
- *  here — it is applied at the provider level (DownloadsProvider.setFilter),
- *  so there is no filterRowsByName. */
+/** A view concern, so it runs over already-built rows. `showHidden` keeps the
+ *  flags intact, so the dimming decoration can still tell hidden rows apart. */
 export function filterHiddenRows(rows: DownloadRow[], showHidden: boolean): DownloadRow[] {
   return showHidden ? rows : rows.filter((r) => !r.hidden);
 }
 
-// The row's right-click menu is a native `contributes.menus["view/item/context"]`
-// contribution on the `modbench.downloads` TreeView, gated by this space-separated `contextValue`
-// flag string and `viewItem =~ /\bflag\b/` `when` clauses. The base
-// `'download'` token identifies the row kind (mirrors ModNode's plain `contextValue = 'mod'`);
-// `hasMeta`/`hasModID`/`hidden` are appended only when true, in that fixed order, so a `when`
-// clause testing any one of them via a word-boundary regex doesn't care about the others' order.
+// A space-separated flag string, because `when` clauses match it with
+// `viewItem =~ /\bflag\b/`: flags appear only when true, and the word-boundary
+// regex makes any one of them testable regardless of the others.
 export function downloadContextValue(row: DownloadRow): string {
   const flags = [
     row.hasMeta && 'hasMeta',
@@ -171,9 +142,8 @@ export function downloadContextValue(row: DownloadRow): string {
   return ['download', ...flags].join(' ');
 }
 
-/** Build render-ready rows: suppresses `.meta` sidecars as their own rows,
- *  and default-sorts Filetime desc. Hidden rows are built (flagged `hidden`),
- *  not filtered — hidden-filtering is a view concern (see `filterHiddenRows`). */
+/** Hidden rows are built and flagged, never filtered — filtering is a view
+ *  concern. Sidecars do not become rows of their own. */
 export function buildDownloadRows(entries: DownloadEntry[]): DownloadRow[] {
   const rows = entries
     .filter((e) => !e.name.endsWith('.meta'))

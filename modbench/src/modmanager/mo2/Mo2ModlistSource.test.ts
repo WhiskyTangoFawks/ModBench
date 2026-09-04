@@ -5,14 +5,9 @@ import { join } from 'node:path';
 import { Mo2ModlistSource } from './Mo2ModlistSource';
 import type { Mod } from '../model';
 
-// Scoped to this file only (not a global test-setup mock): wraps readFile in a
-// real passthrough by default, so every existing real-fs test in this file is
-// unaffected; only the one test below that calls `.mockImplementation` on it
-// diverts a single path to a synthetic error, restoring the passthrough before
-// it returns. This is how a real, non-ENOENT read failure on a download's
-// `.meta` is constructed deterministically — chmod-based permission denial is
-// silently bypassed when the test runner is root, which a real fs precondition
-// isn't.
+// A passthrough by default, so the real-fs tests here are unaffected. It is the
+// only deterministic way to construct a non-ENOENT read failure: chmod-based
+// permission denial is silently bypassed when the runner is root.
 vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof import('node:fs/promises')>();
   return { ...actual, readFile: vi.fn(actual.readFile) };
@@ -98,10 +93,8 @@ describe('Mo2ModlistSource — writes (against a tmp copy)', () => {
   });
 
   it('a separator entry never carries meta fields, even if a same-named mod folder exists (#317)', async () => {
-    // "Unassigned (Modlist Development)" is a separator; its on-disk marker folder
-    // is suffixed "_separator". A real mod folder could still be named identically
-    // to the separator's bare display name — that must never leak meta.ini fields
-    // onto the separator entry.
+    // A real mod folder can share a separator's bare display name, and must never
+    // leak meta.ini fields onto the separator entry.
     await mkdir(join(dir, 'mods', 'Unassigned (Modlist Development)'), { recursive: true });
     await writeFile(
       join(dir, 'mods', 'Unassigned (Modlist Development)', 'meta.ini'),
@@ -173,8 +166,8 @@ describe('Mo2ModlistSource — writes (against a tmp copy)', () => {
     ]);
   });
 
-  // #680: the tree is a pure read of plugins.txt, so a toggle for a name with no line has nothing
-  // to flip — byte-identical either way, and never throws, so a later mutation isn't blocked.
+  // The tree is a pure read of plugins.txt, so a toggle for a name with no line
+  // has nothing to flip, and must not throw and block a later mutation.
   it('toggling an absent plugin is a no-op in both directions, and does not block a later mutation', async () => {
     const before = await readFile(pluginsPath(), 'utf8');
     await src.setPluginEnabled('No Such.esp', false);
@@ -187,8 +180,8 @@ describe('Mo2ModlistSource — writes (against a tmp copy)', () => {
     expect(after).not.toContain('*Unofficial Fallout 4 Patch.esp');
   });
 
-  // #680: the plugins reconcile's write — one read-modify-write under the plugins mutex, the delta
-  // computed from the freshly-read names so two overlapping runs can't double-append.
+  // One read-modify-write under the plugins mutex, the delta computed from the
+  // freshly-read names, so two overlapping runs cannot double-append.
   it('reconcilePluginLines prunes and appends (disabled) in one pass, from a fresh read of the file', async () => {
     const seen: string[][] = [];
     const result = await src.reconcilePluginLines((listed) => {
@@ -504,7 +497,7 @@ describe('Mo2ModlistSource — writes (against a tmp copy)', () => {
     expect(added).toEqual(['Hand Extracted Mod']);
     const entries = await src.readModlist();
     expect(entries.at(0)).toMatchObject({ kind: 'mod', name: 'Hand Extracted Mod', enabled: false });
-    // Every previously-registered entry survives, byte-for-byte, below the new line.
+    // Every entry already registered survives, byte-for-byte, below the new line.
     const after = await readFile(modlistPath(), 'utf8');
     expect(after.endsWith(before)).toBe(false); // sanity: file did change
     expect(after).toContain(before.split('\r\n').slice(1).join('\r\n')); // original body preserved
@@ -584,8 +577,8 @@ describe('Mo2ModlistSource — writes (against a tmp copy)', () => {
   });
 
   it('pruneDeadEntries never touches a separator entry, whose folder is the _separator marker (#93)', async () => {
-    // The fixture's separators have marker folders; even deleting one must not prune the
-    // separator ENTRY — a dead separator is not a dead mod, and #93 scopes prune to mods.
+    // A dead separator is not a dead mod: prune is scoped to mods, so deleting a
+    // separator's marker folder must not remove the separator entry.
     await rm(join(dir, 'mods', 'Unassigned (Modlist Development)_separator'), { recursive: true, force: true });
     const pruned = await src.pruneDeadEntries();
     expect(pruned).toEqual([]);

@@ -321,10 +321,8 @@ describe('buildDownloadRows', () => {
     expect(rows.map((r) => r.name)).toEqual(['foo.zip']);
   });
 
-  // Entries are given out of mtimeMs order on purpose: if the default sort were a
-  // no-op (e.g. sorting by the wrong column), a 2-element already-ascending fixture
-  // would still pass by coincidence once reversed. This fixture only passes if the
-  // rows are genuinely re-sorted by mtimeMs.
+  // Entries are out of mtimeMs order on purpose: a two-element ascending fixture
+  // would pass by coincidence even if nothing were re-sorted.
   it('defaults to Filetime (mtimeMs) descending', () => {
     const rows = buildDownloadRows([entry('b.zip', 2), entry('a.zip', 1), entry('c.zip', 3)]);
     expect(rows.map((r) => r.name)).toEqual(['c.zip', 'b.zip', 'a.zip']);

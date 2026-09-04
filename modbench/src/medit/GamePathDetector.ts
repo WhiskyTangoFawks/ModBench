@@ -15,8 +15,7 @@ const FO4_APP_ID = '377160';
 
 // Parses Valve's VDF format just enough to find a library path that contains a given AppID.
 export function parseLibraryFoldersVdf(content: string): string | null {
-  // Each library block looks like:  "path"  "/some/path"  ...  "appid"  "value"
-  // We split by library entry and look for one containing FO4_APP_ID.
+  // A library block reads:  "path"  "/some/path"  ...  "appid"  "value"
   const libraryBlocks = content.split(/"\d+"\s*\{/);
   for (const block of libraryBlocks) {
     if (!block.includes(`"${FO4_APP_ID}"`)) continue;
@@ -38,9 +37,6 @@ export async function detectGamePaths(platform: NodeJS.Platform): Promise<GamePa
   return detectLinux();
 }
 
-/** The Steam library folder containing FO4, or `null` if `libraryfolders.vdf` is absent/unreadable
- *  or has no FO4 entry. Shared by `detectLinux` and `detectWinePrefix` so the VDF lookup lives in
- *  exactly one place. */
 async function findFo4Library(): Promise<string | null> {
   const vdfPath = path.join(os.homedir(), '.steam', 'steam', 'config', 'libraryfolders.vdf');
   try {
@@ -68,26 +64,21 @@ async function detectLinux(): Promise<GamePaths | null> {
   }
 }
 
-/** The Proton prefix root (`steamapps/compatdata/<appid>/pfx`) for the FO4 Steam library, or
- *  `null` if the library can't be found — reuses `findFo4Library`'s lookup (the same one
- *  `detectLinux` already does to build `Plugins.txt`'s path) so `gameDirectory.ts`'s Wine
- *  drive-letter translation doesn't re-derive it. */
+/** The Proton prefix root (`steamapps/compatdata/<appid>/pfx`) for the FO4 Steam library, so
+ *  Wine drive-letter translation does not re-derive it. */
 export async function detectWinePrefix(): Promise<string | null> {
   const library = await findFo4Library();
   return library ? path.join(library, 'steamapps', 'compatdata', FO4_APP_ID, 'pfx') : null;
 }
 
-// Parses `reg query "HKCU\Software\Valve\Steam" /v SteamPath` output for the SteamPath value.
 export function parseRegQuerySteamPath(stdout: string): string | null {
   const match = stdout.match(/SteamPath\s+REG_SZ\s+(.+)/);
   return match ? match[1].trim() : null;
 }
 
-/** Exported (rather than kept private like `detectLinux`) purely as a test seam: `execAsync` is
- *  `promisify(exec)`, and `vi.mock`'s automock of `node:child_process` drops `promisify.custom`,
- *  which changes what `execAsync` resolves to and breaks the `{ stdout }` shape this function
- *  relies on. Injecting `runRegQuery`/`localAppData` lets a test pin the registry-output mapping
- *  directly instead of trying to mock the promisified call. */
+/** Exported and injected purely as a test seam: `vi.mock`'s automock of `node:child_process`
+ *  drops `promisify.custom`, which changes what `promisify(exec)` resolves to and breaks the
+ *  `{ stdout }` shape this relies on. */
 export async function detectWindowsGamePaths(
   runRegQuery: () => Promise<string>,
   localAppData: string | undefined,

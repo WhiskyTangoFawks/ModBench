@@ -61,10 +61,7 @@ describe('deploy', () => {
     },
   );
 
-  // A tracked mod's ".git" and its root "source/" folder never reach a deploy
-  // plan — end to end through the real walk, not just the index-level assertion
-  // fileConflictIndex.test.ts already covers, so "never appears in a deploy plan" is checked at
-  // the deployer's own seam too.
+  // End to end through the real walk, not just at the index level.
   it('deploys neither .git nor the root source/ folder, even though both exist in the mod', async () => {
     fx = await makeDeployerFixture();
     await fx.writeModFile('ModA', 'MyMod.esp', 'PLUGINBYTES');
@@ -275,7 +272,7 @@ describe('deploy', () => {
     // b.esp's (still-present) cleanup.
     await rm(join(fx.gameDirectory.dataFolder, 'c.esp'), { force: true });
 
-    // ModB and ModC disabled → no longer in the index.
+    // ModB and ModC disabled: absent from the index.
     await deploy(fx.instanceRoot, fx.gameDirectory, makeIndex({ 'a.esp': a }), fakeReporter());
 
     await expect(stat(join(fx.gameDirectory.dataFolder, 'b.esp'))).rejects.toThrow();
@@ -424,12 +421,8 @@ describe('deploy', () => {
     expect(reporter.reports.some((r) => r.severity === 'error')).toBe(true);
   });
 
-  // Proton/Wine resolves paths case-insensitively over ext4's case-sensitive
-  // mods/ — two mods providing case-variant paths (Textures/Foo.dds vs
-  // textures/foo.dds) are the SAME file to the game, but DIFFERENT physical
-  // paths on ext4. The winner map only ever has one entry per folded path
-  // (fileConflictIndex's job), so the deployer must link exactly the winner's
-  // own casing and never both.
+  // Proton/Wine resolves paths case-insensitively over case-sensitive ext4, so case-variant
+  // paths are the same file to the game but different physical paths on disk.
   it('links exactly one file for a case-variant winner, at the winner\'s own casing', async () => {
     fx = await makeDeployerFixture();
     const source = await fx.writeModFile('ModA', 'Textures/Foo.dds', 'A');

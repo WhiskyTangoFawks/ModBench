@@ -39,48 +39,37 @@ export interface EditorCommandDeps {
   // fallback (`.selection`). The provider is not threaded here: nothing in this file retargets
   // it directly (`activate()` wires that to activeRecordTracker once).
   referencedByTreeView: vscode.TreeView<ReferencedByTreeNode>;
-  // `modbench.openEditorBeside`'s own selection fallback (below), against the merged Plugins
-  // tree instead of Referenced By's — narrow rather than the composition root's own session
-  // object, since the merged tree's current selection is the one cross-context fact this file
-  // needs, not the tree/sync/backend it's built from.
+  // `modbench.openEditorBeside`'s selection fallback, against the merged Plugins tree. Narrowed
+  // to the one cross-context fact this file needs, not the composition root's session object.
   mergedTreeSelection: () => readonly unknown[];
-  // ADR-0035 amending ADR-0018 / ADR-0041: the two things a committed field edit has to redrive
-  // (the record filter's match map, the plugin's own Source Control status) both live on the
-  // composition root's session object — narrowed to callbacks for the same reason
-  // mergedTreeSelection is, just above.
+  // The two things a committed field edit redrives (the filter's match map, the plugin's Source
+  // Control status) live on the session object, narrowed to callbacks like mergedTreeSelection.
   refreshMatchingPlugins: () => void;
   refreshSourceControlFor: (plugin: string) => void;
   outputChannel: vscode.LogOutputChannel;
 }
-/** Editor-side commands, grouped by what they belong to: the record view/navigation/filter
- *  commands and the record panel's own message-forwarded commands — two distinct concerns under
- *  the one webview surface, named here rather than left as an unlabeled flat list. */
 export function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposable[] {
   return [
     ...registerRecordViewCommands(deps),
     ...registerForwarderCommands(deps.recordPanels),
   ];
 }
-/** Record view/navigation + filter commands. */
 export function registerRecordViewCommands(deps: EditorCommandDeps): vscode.Disposable[] {
   const {
     context, openPanels, recordPanels, activeRecordTracker, port, treeProvider, controller, scriptsPath,
     referencedByTreeView, outputChannel, mergedTreeSelection,
   } = deps;
-  // The *shared* part of the router deps; `formKeyPicker` itself
-  // is rebuilt per panel at the onDidReceiveMessage call site below, since its reply must reach
-  // the one panel that asked, never a broadcast.
-  // One provider per extension activation (not per panel/command) — its lookup reads
-  // treeProvider's own cache live, so it never needs its own copy of the same state.
+  // The *shared* router deps; `formKeyPicker` is rebuilt per panel below, since its reply must
+  // reach the one panel that asked. One decoration provider per activation: its lookup reads
+  // treeProvider's cache live, so it needs no copy of that state.
   const recordDecorationProvider = new RecordDecorationProvider(
     (plugin, origin, formKey) => treeProvider.workingTreeStateOf(plugin, origin, formKey));
   const routerDeps: RouteRecordPanelMessageDeps = {
     channel: outputChannel,
     // COPY_TO_CLIPBOARD's ADR-0026 surfacing on a failed clipboard write.
     reporter: makeReporter(outputChannel, 'copyToClipboard'),
-    // ADR-0041: the single write path, and the broadcast that tells every open panel showing
-    // this record to re-read. Broadcast rather than replying to the one panel that asked: the same
-    // record can be open in more than one panel (openEditorBeside), and all of them are now stale.
+    // ADR-0041: the single write path, plus the broadcast telling every panel showing this record
+    // to re-read — broadcast, not a reply, since the record can be open in several panels.
     repository: deps.repository,
     onRecordEdited: makeOnRecordEdited(
       treeProvider, recordDecorationProvider, recordPanels,
@@ -97,12 +86,9 @@ export function registerRecordViewCommands(deps: EditorCommandDeps): vscode.Disp
       openRecordPanel(context, openPanels, args?.label ?? args?.formKey ?? 'mEdit', args?.formKey, port,
         vscode.ViewColumn.One, { routerDeps, recordPanels, activeRecordTracker, singleton: true });
     }),
-    // Referenced By's named "Open to the Side" (ADR-0034), not a right-click side
-    // effect — also reachable from the Plugins tree's record/placed-reference rows (single or
-    // multi-selected). `item`/`allSelected` mirror VS Code's own view/item/context invocation shape
-    // (clicked, selected[]), falling back to the Plugins tree's own current selection when neither
-    // is supplied (e.g. Command Palette) — same fallback chain modbench.referencedByTree.copy
-    // already uses, just against pluginsTreeView instead of referencedByTreeView.
+    // A named "Open to the Side" (ADR-0034), not a right-click side effect. `item`/`allSelected`
+    // mirror VS Code's view/item/context invocation shape, falling back to the tree's current
+    // selection when neither is supplied.
     vscode.commands.registerCommand('modbench.openEditorBeside',
       (item?: RecordNode | PlacedNode | ReferencedByGroupNode | { formKey?: string; label?: string },
         allSelected?: unknown[]) => {
@@ -125,14 +111,8 @@ export function registerRecordViewCommands(deps: EditorCommandDeps): vscode.Disp
     // Kept as a Command Palette reveal-this-view convenience; no menu invokes this.
     vscode.commands.registerCommand('modbench.showReferencedBy',
       () => vscode.commands.executeCommand('modbench.referencedByTree.focus')),
-    // The Referenced By view's own Copy. xEdit parity (xeMainForm.pas's CopyInto) — a
-    // keybinding (Ctrl+C while focused) and a view/item/context entry both invoke this one command
-    // (package.json), the same "keybinding + menu, one command" shape modbench.deleteRecord already
-    // uses; ADR-0034's "no action reachable two ways" is about redundant *affordances* for one action
-    // (e.g. an inline button duplicating a menu item), not a command having both a keybinding and a
-    // menu entry. Selection resolution mirrors modbench.deleteRecord: the multi-select array VS Code
-    // passes when several rows are selected, else the view's own current selection, else the single
-    // right-clicked node.
+    // xEdit parity (xeMainForm.pas's CopyInto). One command behind both a keybinding and a menu
+    // entry: ADR-0034's "no action reachable two ways" bars redundant affordances, not this.
     vscode.commands.registerCommand('modbench.referencedByTree.copy',
       async (node?: ReferencedByGroupNode, allSelected?: ReferencedByTreeNode[]) => {
         const nodes = allSelected?.length ? allSelected
@@ -149,10 +129,8 @@ export function registerRecordViewCommands(deps: EditorCommandDeps): vscode.Disp
       }),
   ];
 }
-// modbench.setFilter/setFilterFromDocument/clearFilter — kept apart from
-// registerRecordViewCommands because the three commands are one concern (select/apply/clear the
-// active SQL filter), distinct from the record-panel and reveal commands that dominate the rest
-// of that function.
+// Apart from registerRecordViewCommands because select/apply/clear the active SQL filter is one
+// concern, distinct from the record-panel and reveal commands.
 export function registerFilterCommands(scriptsPath: string, controller: EditingController): vscode.Disposable[] {
   return [
     vscode.commands.registerCommand('modbench.setFilter', async () => {
@@ -184,25 +162,17 @@ export function registerFilterCommands(scriptsPath: string, controller: EditingC
     vscode.commands.registerCommand('modbench.clearFilter', () => controller.clearFilter()),
   ];
 }
-/** The three lifecycle gestures — create, delete, renumber — as Plugins-tree row commands on
- *  the record browser (ADR-0034: xEdit hosts Add/Remove/Change FormID in its own tree's context
- *  menu, not the grid — this is the tree, not the record editor's field grid). Titled to match
- *  xEdit's own captions exactly ("Add" / "Remove" / "Change FormID…", `xeMainForm.dfm`'s
- *  `mniNavAdd`/`mniNavRemove`/`mniNavChangeFormID`).
- *
- *  Each resolves the clicked row's origin the same way `registerTrackCommand` does (a node's own
- *  `origin` when the row already carries it, else `controller.resolveOrigin` — undefined means an
- *  ordinary load-order plugin, per ADR-0036) — there is no ambient fallback worth a QuickPick, which
- *  is why all three are palette-gated (`packageJson.test.ts`'s `PALETTE_GATED`). */
+/** ADR-0034: xEdit hosts Add/Remove/Change FormID in its tree's context menu, not the grid, and
+ *  the titles match its captions exactly. No ambient fallback is worth a QuickPick, so all three
+ *  are palette-gated. */
 export function registerRecordLifecycleCommands(
   controller: EditingController, repository: PluginRepository, outputChannel: vscode.LogOutputChannel,
 ): vscode.Disposable[] {
   const resolveOriginOrReport = makeResolveOriginOrReport(controller, outputChannel);
 
   return [
-    // xEdit's own "Add": zero friction, no prompt — a blank record appears immediately, named
-    // after the fact by editing its EditorID field like any other, matching xEdit's own gesture
-    // (EditTips: no modal confirmation on edit beyond the one-time EditWarn).
+    // xEdit's own "Add": no prompt — a blank record appears immediately and is named afterward
+    // by editing its EditorID, matching xEdit's own gesture.
     vscode.commands.registerCommand('modbench.record.create', async (node?: RecordTypeNode) => {
       if (node?.kind !== 'recordType') return;
       const origin = await resolveOriginOrReport({ origin: node.origin, pluginName: node.plugin });
@@ -232,9 +202,8 @@ export function registerRecordLifecycleCommands(
       await controller.deleteRecord(node.record.formKey, node.record.plugin, origin);
     }),
 
-    // xEdit's own "Change FormID": InputQuery('New FormID', ...) — a native InputBox, prefilled with
-    // the both-refs next-free suggestion (xEdit's own "New FormID generated" flow) so accepting the
-    // default is a single Enter; typing over it is xEdit's typed-FormID path, validated server-side.
+    // xEdit's own "Change FormID": a native InputBox prefilled with the next-free suggestion, so
+    // accepting the default is one Enter; typing over it is validated server-side.
     vscode.commands.registerCommand('modbench.record.renumber', async (node?: RecordNode) => {
       if (node?.kind !== 'record') return;
       const origin = await resolveOriginOrReport({ origin: node.origin, pluginName: node.record.plugin });
@@ -256,9 +225,8 @@ export function registerRecordLifecycleCommands(
       });
       if (input === undefined) return; // cancelled
 
-      // #572 ruling 3: a renumber with referencers cascades automatically behind one up-front
-      // confirm stating the blast radius. A fetch failure degrades to a confirm with no counts
-      // rather than blocking — the backend re-checks referencers (untracked ones refuse there)
+      // A renumber with referencers cascades behind one up-front confirm stating the blast radius.
+      // A fetch failure degrades to a confirm with no counts: the backend re-checks referencers
       // regardless of what this preview said.
       let confirmMessage: string | null;
       try {
@@ -279,11 +247,8 @@ export function registerRecordLifecycleCommands(
     }),
   ];
 }
-/** Shared by `registerRecordLifecycleCommands` here and by `registerPluginRowCommands`
- *  (extension.ts, for the record copy commands it registers inline) — a node's
- *  own `origin` when the row already carries it (ADR-0036), else `controller.resolveOrigin`;
- *  reports and returns undefined when neither answers (there is no ambient fallback worth a
- *  QuickPick, which is why every command that needs this is palette-gated). */
+/** A node's own `origin` when the row already carries it (ADR-0036), else
+ *  `controller.resolveOrigin`; reports and returns undefined when neither answers. */
 export function makeResolveOriginOrReport(
   controller: EditingController, outputChannel: vscode.LogOutputChannel,
 ): (node: { origin?: string; pluginName: string }) => Promise<string | undefined> {
@@ -296,11 +261,8 @@ export function makeResolveOriginOrReport(
     return origin;
   };
 }
-/** The plugins-tree row and column-header entry points' shared identity — a
- *  `RecordNode` names it via its own `record.plugin`, a `ColumnHeaderContext` (the header's
- *  `data-vscode-context` payload) names it directly. Undefined for anything else (a `RecordNode`
- *  whose `kind` isn't `'record'` — the command is only ever contributed on a record row, but a
- *  stale/mistyped invocation should still resolve to nothing rather than throw). */
+/** A `RecordNode` names the record through `record.plugin`, a `ColumnHeaderContext` directly.
+ *  Undefined for anything else, so a stale invocation resolves to nothing rather than throwing. */
 export function recordCopyIdentity(
   arg: RecordNode | ColumnHeaderContext | undefined,
 ): { formKey: string; plugin: string; origin?: string } | undefined {
@@ -308,23 +270,9 @@ export function recordCopyIdentity(
   if ('kind' in arg) return arg.kind === 'record' ? { formKey: arg.record.formKey, plugin: arg.record.plugin, origin: arg.origin } : undefined;
   return { formKey: arg.formKey, plugin: arg.plugin, origin: arg.origin };
 }
-/** The destination QuickPick both copy commands share — candidates are
- *  `copyTargetPlugins`' own gesture-aware filter (immutable always excluded; every plugin already
- *  carrying the record excluded too, but only for 'copy-as-override' — xEdit parity,
- *  xeMainForm.pas:3023-3042). No "New Plugin…" entry: "copy into
- *  a new file" is out of scope. Returns the picked `PluginMetadata` (not just its name) so
- *  the caller reads `.origin` straight off it — a second `resolveOrigin` round trip for the
- *  destination would be redundant, `repository.getPlugins()` already answers it.
- *
- *  Unlike `resolveOriginOrReport`'s call above it in `runCopyRecordCommand` (which the
- *  invoking row's own carried `origin` usually lets it skip entirely), this step's two repository
- *  calls are unconditional — the real exposure window is the backend dying after the copy
- *  surfaces (a record row, or the record-header webview) have already rendered, which needs a
- *  live load order and so isn't reachable pre-launch. Either awaited call rejecting is deliberately
- *  caught wholesale — this destination-picking step has no further fallback tier below it, the
- *  same "no tier left, so report and resolve to no target" posture `resolveCompileTarget`'s own
- *  `pickPlugin` tier takes — and any rejection gets the same treatment, not just a
- *  transport failure, since nothing past this point can tell the two apart usefully. */
+/** Returns the picked `PluginMetadata`, not just its name, so the caller reads `.origin` off it
+ *  instead of a second round trip. Either call rejecting is caught wholesale: no fallback tier
+ *  remains below this step. */
 export async function pickCopyDestination(
   repository: PluginRepository, gesture: CopyGesture, formKey: string, outputChannel: vscode.LogOutputChannel,
 ): Promise<{ name: string; origin: string } | undefined> {
@@ -349,12 +297,8 @@ export async function pickCopyDestination(
     return undefined;
   }
 }
-/** The shared body behind both `modbench.record.copyAsOverride`/`copyAsNewRecord` —
- *  resolve which record was right-clicked and from where, pick a destination, call the matching
- *  `EditingController` method, toast on success. No confirmation modal (xEdit's own CopyInto asks
- *  nothing before an override copy, only before an EditorID-changing copy-as-new — and Copy as New
- *  Record here prompts for neither an EditorID nor a FormKey, the same "land immediately, rename
- *  via the grid afterward" posture `record.create` already established for a blank creation). */
+/** No confirmation modal: xEdit's CopyInto asks nothing before an override copy, and Copy as New
+ *  Record prompts for neither an EditorID nor a FormKey — land immediately, rename via the grid. */
 export async function runCopyRecordCommand(
   gesture: CopyGesture, arg: RecordNode | ColumnHeaderContext | undefined,
   controller: EditingController, repository: PluginRepository,
@@ -386,11 +330,9 @@ export async function runCopyRecordCommand(
 export interface MinimalRepository {
   status(): Thenable<unknown>;
 }
-/** The one shape this extension needs from `vscode.git`'s exported API (ADR-0041: "the native git
- *  UI is the review surface") — deliberately not the full upstream `git.d.ts`, just the members
- *  actually called, so there is nothing here to drift out of sync with an API surface this
- *  extension otherwise never touches. `openRepository` resolves `null` — the real API's own
- *  answer for "declined to open"; the resolved handle is retained by the caller. */
+// Deliberately not the full upstream `git.d.ts`, just the members called, so nothing here can
+// drift against an API this extension otherwise never touches. `openRepository` resolves `null`
+// for "declined to open".
 interface MinimalGitApi {
   openRepository(uri: vscode.Uri): Thenable<MinimalRepository | null>;
 }
@@ -398,17 +340,9 @@ interface GitExtensionExports {
   getAPI(version: 1): MinimalGitApi;
 }
 
-/** ADR-0041: one `openRepository` per distinct tracked mod folder, so each shows its own
- *  native Source Control group — re-run whenever the load order becomes newly readable
- *  (`notifyConflictsComputed`'s own call site) and immediately after a successful Track, so a
- *  freshly tracked repo appears without waiting for the next activation. Silent no-op (logged, not
- *  surfaced) when `vscode.git` isn't installed/enabled: this only ever narrows the native UI,
- *  never blocks reading or editing.
- *
- *  #628: narrowed to a setter callback rather than the composition root's session object — this
- *  is Editing-side git-tracking logic that only ever needs to hand its result somewhere, never
- *  to read or own the session itself, the same pattern the four EditorCommandDeps callbacks
- *  already use. */
+/** ADR-0041: one `openRepository` per distinct tracked folder, so each shows its own native
+ *  Source Control group. A silent, logged no-op when `vscode.git` is unavailable: this only
+ *  narrows the native UI, never blocks reading or editing. */
 export async function registerHeldTrackedRepositories(
   repository: ApiPluginRepository, outputChannel: vscode.LogOutputChannel,
   setPluginRepositories: (repos: Map<string, MinimalRepository>) => void,
@@ -432,18 +366,9 @@ export async function registerHeldTrackedRepositories(
   }
 }
 
-/** Prompts the edited plugin's own repository to re-check its working tree —
- *  `Repository.status()`, the same effect the SCM panel's manual Refresh button has, fired
- *  automatically from `onRecordEdited` instead of waiting on it (or on the native watcher, which
- *  is what left the panel needing that click in the first place). A plugin with no tracked
- *  repository handle (never tracked, or Source Control unavailable) is a silent no-op, same
- *  posture as `registerHeldTrackedRepositories`'s own gates: this only ever narrows the native
- *  UI, never blocks the edit that already succeeded. A rejected `status()` is logged, not
- *  surfaced — a refresh failing must never read as the edit itself having failed.
- *
- *  #628: takes the match map's current value directly rather than the session object — the
- *  caller reads `session.pluginRepositories` fresh at its own call site, so this never holds a
- *  stale reference across the map's own wholesale rebuilds. */
+/** `Repository.status()`, the same effect the SCM panel's Refresh button has, fired from the
+ *  edit rather than waiting on the native watcher. A plugin with no handle is a silent no-op; a
+ *  rejected `status()` is logged, never surfaced. */
 export function refreshSourceControlFor(
   pluginRepositories: Map<string, MinimalRepository> | undefined, plugin: string, outputChannel: vscode.LogOutputChannel,
 ): void {
@@ -454,15 +379,9 @@ export function refreshSourceControlFor(
   });
 }
 
-/** The poller has no backend to answer it until Launch mEdit's spawn succeeds — gated on
- *  BackendManager's own 'status'/isHealthy signal, the same idiom `clearTreeWhenBackendDies`
- *  (extension.ts) already reacts to. No disposable to register: a deliberate Close mEdit and
- *  `deactivate()` (`backendManager.dispose()`) both already emit 'stopped', which this reacts to
- *  like any other transition.
- *
- *  #628: narrowed to the same two callbacks `gateExternalChangePolling` itself already wants,
- *  rather than the composition root's session object — this function only ever asks the
- *  backend's own health signal, never reads or owns anything else on the session. */
+/** Gated on the backend's health signal, since the poller has no backend to answer it until a
+ *  spawn succeeds. No disposable to register: Close mEdit and `deactivate()` both emit 'stopped',
+ *  which this reacts to like any other transition. */
 export function wireExternalChangePolling(
   repository: PluginRepository, controller: EditingController, outputChannel: vscode.LogOutputChannel,
   onBackendStatusChange: (cb: () => void) => void, isBackendHealthy: () => boolean,
@@ -473,10 +392,8 @@ export function wireExternalChangePolling(
     // Polls `GET /plugins/external-changes/status` (fed by both the backend's live watcher and
     // its load-time hash check) and runs the one dialog, sequentially, for whatever it finds.
     startPolling: () => {
-      // `log` is a compat shim (defaults to .info) for modules taking a flat `(msg) => void` —
-      // constructed here, at the boundary, rather than threaded in as its own parameter alongside
-      // outputChannel (#628: finishing the reporter migration means the flat shape stops at the
-      // collaborator that still needs it, not one level higher).
+      // `log` is a compat shim (defaults to .info) for modules taking a flat `(msg) => void`,
+      // built here at the boundary so the flat shape stops at the collaborator that needs it.
       const log = (msg: string) => outputChannel.info(msg);
       return startExternalChangePolling({
         repository,
@@ -490,14 +407,9 @@ export function wireExternalChangePolling(
   });
 }
 
-/** The {@link OpenMergeEditor} every rebase caller shares — resolves `origin`'s mod folder from any
- *  plugin already known to share it, then opens the conflicted path inside it. VS Code's built-in
- *  git extension shows its own 3-way merge editor for a file it recognizes as conflicted in a
- *  tracked repo (confirmed against the local vscode-docs clone's 1.70 release notes: "The merge
- *  editor can be opened by clicking on a conflicting file in the Source Control view" — `vscode.
- *  open` is that same gesture, scripted). Resolved fresh per call rather than pre-bound to one
- *  origin: the dialog-driven path (unlike the standalone command) has no single already-resolved
- *  origin in scope, since more than one repo can be mid-answer at once. */
+/** Resolved fresh per call rather than bound to one origin: the dialog-driven path has no single
+ *  resolved origin in scope, since several repositories can be mid-answer at once. `vscode.open`
+ *  is git's own merge-editor gesture, scripted. */
 export function makeMergeEditorOpener(repository: PluginRepository, outputChannel: vscode.LogOutputChannel): OpenMergeEditor {
   return async (origin, relativePath) => {
     const plugins = await repository.getPlugins();
@@ -515,14 +427,9 @@ export function reportCompileTargetError(outputChannel: vscode.LogOutputChannel,
   makeReporter(outputChannel, command).report('error', message);
 }
 
-/** The shared tail both compile commands share once they have a target: call through
- *  `EditingController.compile`, publish diagnostics, and report the one of two outcomes
- *  (`CompileResult.succeeded`) the user got. `EditingController.compile` already surfaces a
- *  transport/HTTP failure itself (`null`), so this has nothing to report in that case.
- *
- *  Nothing here re-reads `GET /plugins` after a successful compile — `EditingController.compile`'s
- *  own doc comment is why: a compiled binary changes nothing that endpoint reports (masters, load
- *  order, record content), only bytes on disk. */
+/** `EditingController.compile` already surfaces a transport failure itself (`null`), so this has
+ *  nothing to report in that case. Nothing re-reads `GET /plugins` after a compile: a compiled
+ *  binary changes only bytes on disk. */
 export async function compileAndReport(
   controller: EditingController, diagnostics: vscode.DiagnosticCollection,
   target: CompileTarget, atRef: string | undefined,
@@ -550,9 +457,7 @@ export async function compileAndReport(
   );
 }
 
-/** `offerEslFlagRemoval`, wired to this extension's own `vscode.window` — the DI-friendly core
- *  lives in `eslFlagRemovalPrompt.ts` (no `vscode` import, unit-testable directly); every call
- *  site here goes through this thin binding instead. */
+// Binds `offerEslFlagRemoval` to `vscode.window`; the core stays `vscode`-free and testable.
 async function promptEslFlagRemoval(
   target: EslFlagRemovalTarget, refusalReason: string, verb: string, repository: PluginRepository,
 ): Promise<boolean> {
@@ -563,17 +468,15 @@ async function promptEslFlagRemoval(
   );
 }
 
-/** Publishes one compile's diagnostics to the Problems panel, replacing whatever this plugin's
- *  source files held from its last compile — never additive, or a fixed diagnostic would survive
- *  forever once its record stopped reappearing in a later compile's own report. Grouped by source
- *  file (one `Uri` can carry several diagnostics) since `CompileDiagnostic` names its record's
- *  field, not a line/column this text format doesn't define. */
+/** Replaces whatever this plugin's source files held from the last compile — never additive, or
+ *  a fixed diagnostic would survive forever. Grouped by file, since a diagnostic names its
+ *  record's field, not a line this text format defines. */
 export function publishCompileDiagnostics(collection: vscode.DiagnosticCollection, origin: string, result: CompileResult): void {
   const instanceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   if (!instanceRoot) return;
   const modFolder = path.join(instanceRoot, 'mods', origin);
 
-  // Clear every URI this collection previously held for this mod folder before republishing —
+  // Clear every URI this collection holds under this folder before republishing —
   // DiagnosticCollection has no "clear just this prefix" primitive, so the set is tracked here.
   for (const [uri] of collection) {
     if (uri.fsPath.startsWith(modFolder + path.sep)) collection.delete(uri);
@@ -595,24 +498,17 @@ export const RECORD_PANEL_KEY = '__record_view__';
 // load order-static (the same value every panel gets), so it lives at module scope rather than in
 // any per-panel bundle.
 export const extendedFieldEditorTempRoot = path.join(os.tmpdir(), 'modbench-medit-fields');
-// Bundled as one trailing param (not two/three) since these travel together as one
-// panel-wiring concern — unpacking them into separate positional params only to repack them into
-// this same shape below would add a step with no reader benefit. recordPanels is every
-// open 'modbench'-viewType panel (main *and* any "Beside" one — see modbench.openEditorBeside
-// above); broadcasting commands post to every panel
-// in it and let each one self-filter (see RecordPanel.tsx) rather than picking "the right one"
-// here.
+// Bundled as one trailing param since these travel together as one panel-wiring concern.
+// `recordPanels` is every open panel, main and Beside alike: broadcasts post to all and let each
+// self-filter rather than picking "the right one".
 export interface OpenRecordPanelDeps {
   routerDeps: RouteRecordPanelMessageDeps;
   recordPanels: Set<vscode.WebviewPanel>;
   // Kept current at both branches below (reuse-and-retarget, create) — the Referenced By
   // view's whole input.
   activeRecordTracker: ActiveRecordTracker<vscode.WebviewPanel>;
-  // Whether this open should reuse/retarget the singleton RECORD_PANEL_KEY panel (plain
-  // "Open"/"Compare") or always create a fresh, non-retargeting panel ("Open Editor to the Side",
-  // single or batched). Deliberately independent of `viewColumn` below — a batched Beside open's
-  // 2nd..Nth panel needs a concrete resolved ViewColumn (not the Beside sentinel, see
-  // openBesideRecordPanels) while still being non-retargeting, so `viewColumn !== Beside` cannot
+  // Deliberately independent of `viewColumn`: a batched Beside open's 2nd..Nth panel needs a
+  // concrete resolved column while still being non-retargeting, so `viewColumn !== Beside` cannot
   // stand in for "is this the singleton".
   singleton: boolean;
 }
@@ -654,13 +550,9 @@ export function openRecordPanel(
   recordPanels.add(panel);
   panel.onDidDispose(() => recordPanels.delete(panel));
 
-  // Wires the freshly created panel into activeRecordTracker. FormKey is recorded before the
-  // panel is declared active, so a brand new panel fires the Referenced By retarget exactly once,
-  // already carrying it (see ActiveRecordTracker's own doc comment on ordering).
-  // onDidChangeViewState only needs to announce *gaining* focus: losing it to another record
-  // panel is that other panel's own onDidChangeViewState(active) firing, which naturally
-  // supersedes this one (ActiveRecordTracker.setActivePanel dedupes same-panel calls), and losing
-  // it to a closed panel is removePanel's job.
+  // FormKey is recorded before the panel is declared active, so a new panel fires the Referenced
+  // By retarget exactly once, already carrying it. onDidChangeViewState announces only *gaining*
+  // focus: losing it is another panel's event, or removePanel's job.
   if (formKey) activeRecordTracker.setFormKey(panel, formKey);
   activeRecordTracker.setActivePanel(panel);
   panel.onDidChangeViewState(() => {
@@ -669,11 +561,8 @@ export function openRecordPanel(
   panel.onDidDispose(() => activeRecordTracker.removePanel(panel));
 
   panel.webview.onDidReceiveMessage((msg: unknown) => {
-    // Every reply below must reach the one panel that
-    // asked, never a broadcast (see messages.ts' FORM_KEY_PICKED/OPEN_EXTENDED_EDITOR
-    // doc comments) — routerDeps itself is shared across every panel (built
-    // once in registerRecordViewCommands), so these are the per-panel fields, rebuilt fresh on
-    // every message with the panel this closure already holds.
+    // Every reply must reach the one panel that asked, never a broadcast; `routerDeps` is shared
+    // across panels, so these per-panel fields are rebuilt with the panel this closure holds.
     const reply = (m: ExtensionToWebview) => { void panel.webview.postMessage(m); };
     void routeRecordPanelMessage(msg, {
       ...routerDeps,
@@ -701,11 +590,9 @@ export function openRecordPanel(
     cspSource: panel.webview.cspSource,
   });
 }
-// A right-clicked Plugins-tree record/placed-reference row, a multi-selection of them, or
-// the Referenced By group row's own plain shape — whichever one duck-types against, resolved to
-// the (formKey, label) pair openRecordPanel needs. `'kind' in node` (not `instanceof`), matching
-// recordCopyIdentity's existing convention above — keeps this testable against plain object
-// literals shaped like the real tree nodes, with no dependency on constructing one.
+// Whichever of the three row shapes duck-types, resolved to the (formKey, label) pair
+// openRecordPanel needs. `'kind' in node` rather than `instanceof`, so a test can use plain
+// object literals shaped like the real tree nodes.
 export function recordOpenIdentity(node: unknown): { formKey: string; label: string } | undefined {
   if (!node || typeof node !== 'object') return undefined;
   const n = node as { kind?: string; record?: { formKey?: string }; placed?: { formKey?: string };
@@ -716,17 +603,9 @@ export function recordOpenIdentity(node: unknown): { formKey: string; label: str
   if (!formKey) return undefined;
   return { formKey, label: typeof n.label === 'string' ? n.label : formKey };
 }
-// Opens one non-retargeting panel per identity, all landing as tabs in a single new editor
-// group beside the currently active one — not one new group per record. `ViewColumn.Beside` only
-// resolves correctly once: after the first panel is created it becomes the active editor, so a
-// second `createWebviewPanel(..., ViewColumn.Beside, ...)` call would resolve beside *that* panel
-// instead, cascading into a new column per record. Resolving it once — via
-// `tabGroups.activeTabGroup.viewColumn` right after each create — and reusing that concrete
-// column for every remaining identity is what keeps them stacked as tabs in one group instead.
-// Not `panel.viewColumn`: that getter stays `undefined` synchronously right after
-// `createWebviewPanel` returns (its resolution is a round trip to the renderer that hasn't landed
-// yet), so it can never supply the concrete column the very next iteration needs — confirmed by
-// instrumenting it directly against this function's own multi-select integration test.
+// `ViewColumn.Beside` resolves once: the first panel created becomes the active editor, so a
+// second Beside call would cascade a new column per record. Not `panel.viewColumn` — that getter
+// is still undefined synchronously after `createWebviewPanel` returns.
 export function openBesideRecordPanels(
   context: vscode.ExtensionContext,
   openPanels: Map<string, vscode.WebviewPanel>,

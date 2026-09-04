@@ -1,13 +1,6 @@
-/** #93: the one-time startup reconciliation of modlist.txt against mods/ — the on-load
- *  complement of the live mods/ watcher (registerModsAutoRegisterWatcher), covering changes
- *  made while Modbench wasn't running. Both directions: register folders with no entry,
- *  prune entries whose folder is gone. Disk is the source of truth (maintainer ruling), so
- *  neither direction prompts or toasts — the log line is the record. Never throws:
- *  activation must not die on a reconcile blip, so a failure is logged and swallowed
- *  (ADR-0026 background tier).
- *
- *  No VS Code types — the same extracted-handler seam the checkbox handlers use, so this is
- *  unit-testable without a harness. */
+/** One-time startup reconciliation covering changes made while Modbench wasn't running, in
+ *  both directions. Never throws — activation must not die on a reconcile blip, so a failure
+ *  is logged and swallowed (ADR-0026 background tier). */
 export async function reconcileModlistWithModsDir(
   source: { registerUnlistedMods(): Promise<string[]>; pruneDeadEntries(): Promise<string[]> },
   invalidate: () => void,

@@ -5,11 +5,8 @@ import { join } from 'node:path';
 import { readVanillaMasters, discoverImplicitMasters } from './vanillaMasters';
 import { buildTes4Buffer } from './test/buildTes4Buffer';
 
-// Scoped to this file only, passthrough by default: wraps `readdir` so one test
-// below can force a specific discovery order deterministically (POSIX doesn't
-// guarantee readdir order, and this repo's own tests elsewhere rely on the
-// topological sort being correct *regardless* of it — so ordering-sensitive
-// assertions must force the order rather than assume it).
+// Passthrough by default: POSIX doesn't guarantee readdir order, so a test that depends on a
+// discovery order must force it rather than assume it.
 vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof import('node:fs/promises')>();
   return { ...actual, readdir: vi.fn(actual.readdir) };
@@ -68,11 +65,8 @@ describe('readVanillaMasters', () => {
   });
 });
 
-// Discovers the game's implicitly-loaded masters: a plugin file in
-// the resolved Data folder that is NOT a hardlink (nlink === 1) is vanilla; a
-// hardlinked file (nlink >= 2) is a deployed mod plugin, not vanilla. Ordering
-// is derived via topological sort over each implicit master's own declared
-// masters — never alphabetical, never a hardcoded per-game table.
+// A Data-folder plugin that is not a hardlink (nlink === 1) is vanilla; a hardlinked one is a
+// deployed mod plugin. Ordering is topological, never alphabetical or per-game hardcoded.
 describe('discoverImplicitMasters', () => {
   let dir: string;
 
@@ -233,11 +227,8 @@ describe('discoverImplicitMasters', () => {
     await writeFile(join(dataFolder, 'ZZZDep1.esm'), buildTes4Buffer([]));
     await writeFile(join(dataFolder, 'ZZZDep2.esm'), buildTes4Buffer([]));
 
-    // Force AAAMaster.esm to be discovered before either of its own two
-    // dependencies — POSIX doesn't guarantee readdir order, so this isolates
-    // "visits every dep, not just the first" from filesystem ordering.
-    // discoverImplicitMasters always calls `readdir(dataFolder)` with no
-    // options, so the mock only needs to honor that one call shape.
+    // Forcing AAAMaster.esm ahead of its own dependencies isolates "visits every dep, not just
+    // the first" from filesystem ordering.
     const { readdir: actualReaddir } = await vi.importActual<typeof import('node:fs/promises')>('node:fs/promises');
     vi.mocked(readdir).mockImplementation((async (path: string) => {
       const names = await actualReaddir(path);

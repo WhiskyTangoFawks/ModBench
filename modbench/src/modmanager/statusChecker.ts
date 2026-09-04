@@ -25,7 +25,6 @@ function isPlugin(relativePath: string): boolean {
   return isPluginFile(relativePath);
 }
 
-/** Lowercased basenames of every plugin any enabled mod provides. */
 function providedPluginBasenames(filesByMod: FileConflictIndex['filesByMod']): Set<string> {
   const basenames = new Set<string>();
   for (const files of filesByMod.values()) {
@@ -75,7 +74,7 @@ async function computeEntryStatus(
   return { status: classifyStatus(missingMasters, conflicts, overrides), conflictLines };
 }
 
-/** True if the mod's folder exists; false on ENOENT. Other stat errors propagate. */
+// ENOENT reads as absent; any other stat error propagates.
 async function modFolderExists(instanceRoot: string, modName: string): Promise<boolean> {
   try {
     await stat(join(instanceRoot, 'mods', modName));
@@ -86,7 +85,7 @@ async function modFolderExists(instanceRoot: string, modName: string): Promise<b
   }
 }
 
-/** Tally this mod's contested files as overrides (it wins) or conflicts (it loses). */
+// A contested file this mod wins is an override; one it loses is a conflict.
 function countConflicts(
   modFiles: ModFile[],
   index: FileConflictIndex,
@@ -105,7 +104,6 @@ function countConflicts(
   return { conflictLines, conflicts, overrides };
 }
 
-/** Masters referenced by this mod's plugins that no vanilla/enabled mod provides. */
 async function findMissingMasters(
   modFiles: ModFile[],
   vanillaMasters: Set<string>,
@@ -133,7 +131,6 @@ async function findMissingMasters(
   return missingMasters;
 }
 
-/** Precedence: a missing master outranks a conflict, which outranks an override. */
 function classifyStatus(missingMasters: Set<string>, conflicts: number, overrides: number): ModStatus {
   if (missingMasters.size > 0) return { kind: 'missingMaster', masters: [...missingMasters] };
   if (conflicts > 0) return { kind: 'conflicts', count: conflicts };
@@ -143,19 +140,15 @@ function classifyStatus(missingMasters: Set<string>, conflicts: number, override
 
 // --- Order-aware missing-master check (Plugin List surface, docs/specs/plugins.md) ---
 //
-// Stronger than the per-mod presence check above: the Plugin List has an actual
-// plugin sequence, so it flags a master that is present-but-loaded-too-late, not
-// just one that is absent. Both are CTD conditions the game hits at load.
+// Stronger than the per-mod presence check: a master present but loaded too late is a CTD
+// condition too, not just an absent one.
 
 export type PluginOrderStatus =
   | { kind: 'ok' }
   | { kind: 'masterNotLoadedBefore'; masters: string[] };
 
-/** Verdict for one plugin at `pluginIndex` in the raw plugins.txt line order
- *  `orderedPluginNames`: flag every declared master that is NOT positioned
- *  strictly before it — whether absent from the order entirely or present but
- *  sequenced at/after this plugin's own line. Case-insensitive; no vanilla
- *  special-casing (vanilla plugins are ordinary rows). Pure. */
+/** Flags every declared master not positioned strictly before `pluginIndex` — absent from the
+ *  order entirely, or present at or after this plugin's line. No vanilla special-casing. */
 export function checkMasterOrder(
   declaredMasters: string[],
   orderedPluginNames: string[],
@@ -171,18 +164,9 @@ export function checkMasterOrder(
   return offenders.length > 0 ? { kind: 'masterNotLoadedBefore', masters: offenders } : { kind: 'ok' };
 }
 
-/** Per-plugin order-aware missing-master verdicts for the Plugin List. Resolves
- *  each name to its physical file (mod winner via `index`, else `dataFolder`),
- *  reads its declared masters, and checks their order against `order`. Every row
- *  is checked regardless of enabled state (the row set IS plugins.txt's lines).
- *  Only offending plugins get a map entry — an `ok` plugin is absent. Degrades
- *  gracefully: an unreadable plugin (or one whose path can't be resolved, e.g. a
- *  vanilla plugin when `dataFolder` is undefined) is logged and treated as having
- *  no masters, never throwing and never blanking other plugins' verdicts.
- *
- *  `winnerByName` is `rootLevelWinners(index)` — the caller's, not recomputed here. It's a full
- *  O(total-files-across-all-mods) scan/allocation over the index; the caller builds it once per
- *  render and hands it in. */
+/** Only offending plugins get a map entry. An unreadable or unresolvable plugin is logged and
+ *  treated as having no masters, so one bad file never blanks the rest. `winnerByName` is
+ *  handed in because building it costs a full index scan. */
 export async function computePluginOrderStatuses(
   order: string[],
   winnerByName: Map<string, string>,

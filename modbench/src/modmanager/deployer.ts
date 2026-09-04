@@ -1,8 +1,6 @@
-// Standalone deployer: hardlinks the merged mod view (the FileConflictIndex
-// winner map) into the game directory's Data/, and purges it back out. The
-// binary plugins remain the source of truth; a manifest at
-// mods/.medit-manifest.json records what we created so purge is exact and
-// crash-recovery is self-contained. Native fs.link — no VFS, no P/Invoke.
+// Hardlinks the winning copy of each file into Data/, and purges it back out. The manifest at
+// mods/.medit-manifest.json makes purge exact and crash recovery self-contained. Native
+// fs.link — no VFS.
 
 import { copyFile, link, mkdir, readFile, readdir, rename, rm, rmdir, stat, writeFile } from 'node:fs/promises';
 import { dirname, join, relative, sep } from 'node:path';
@@ -40,11 +38,8 @@ interface Manifest {
   loadOrder?: string[];
 }
 
-/** readManifest's result: 'absent' (nothing deployed yet) and 'corrupt' (unreadable
- *  or unparseable) are distinct outcomes — conflating them let a corrupt manifest
- *  fall through to "nothing deployed" and re-snapshot Data/ (with our own prior
- *  links still present) as the vanilla baseline. ADR-0026 integrity tier: corrupt
- *  must stop the operation and surface, never silently proceed as absent. */
+// 'absent' and 'corrupt' must stay distinct: conflating them re-snapshots a Data/ that already
+// holds this deployer's own links as the vanilla baseline.
 type ManifestResult =
   | { status: 'absent' }
   | { status: 'corrupt'; error: Error }
@@ -56,11 +51,9 @@ function manifestPath(instanceRoot: string): string {
   return join(instanceRoot, 'mods', MANIFEST_NAME);
 }
 
-/** Is there a live deployment? The manifest's presence is already the answer purge
- *  relies on, so the Loadout header's deployment readout asks the same question rather than
- *  keeping a second notion of deployed-ness that could disagree with it. A corrupt manifest
- *  reads as deployed — there is state out there needing a purge, which is exactly what the
- *  row should say. */
+/** The manifest's presence, which is what purge relies on, rather than a second notion of
+ *  deployed-ness that could disagree. A corrupt manifest reads as deployed: there is state out
+ *  there needing a purge. */
 export async function isDeployed(instanceRoot: string): Promise<boolean> {
   try {
     await stat(manifestPath(instanceRoot));
@@ -70,15 +63,9 @@ export async function isDeployed(instanceRoot: string): Promise<boolean> {
   }
 }
 
-/** Link one winner into Data/. Skips (returns 'skipped') when a vanilla/foreign
- *  file already occupies the target; leaves an unchanged prior link untouched;
- *  relinks only when the winner's inode changed. Returns 'cross-volume'
- *  when the link itself fails with EXDEV — a winner resolved through a symlink can
- *  now live outside mods/ entirely (a shared asset folder on another disk, the
- *  motivating scenario), so `onSameVolume`'s coarse mods/-vs-Data/ precheck no
- *  longer guarantees every individual winner shares Data/'s volume. Any other
- *  linkFn failure propagates — only a known, nameable cause is downgraded to a
- *  per-file outcome. */
+// A winner resolved through a symlink can live outside mods/, so `onSameVolume`'s coarse
+// precheck does not guarantee every individual winner shares Data/'s volume: EXDEV becomes
+// 'cross-volume'. Any other failure propagates.
 async function linkWinner(
   target: string,
   winner: string,
@@ -170,9 +157,8 @@ export async function deploy(
   await writeFile(manifestPath(instanceRoot), JSON.stringify(manifest, null, 2));
 }
 
-/** Hardlinks require mods/ and the game directory to share a volume. Reports and
- *  returns false if they don't (ADR-0026 "explicit action failed") — the caller
- *  offers a stock-folder move or symlink fallback; we never silently symlink. */
+// Hardlinks need mods/ and the game directory on one volume. A mismatch is reported, never
+// silently symlinked; the caller offers a stock-folder move instead.
 async function onSameVolume(
   modsDir: string,
   gameDirectory: GameDirectory,
@@ -189,11 +175,8 @@ async function onSameVolume(
   return false;
 }
 
-/** Resolve the prior-deploy baseline: our previous links, and the vanilla Data/
- *  snapshot. First deploy snapshots Data/; re-deploy preserves the prior baseline
- *  (Data/ now includes our links, so it must not be re-snapshotted). Returns null
- *  (caller must abort) when the manifest is corrupt — a genuinely-absent manifest
- *  is the only case that snapshots Data/ as vanilla. */
+// Only a genuinely absent manifest snapshots Data/ as the vanilla baseline; a re-deploy must
+// preserve the prior one, since Data/ already holds this deployer's links.
 async function readBaseline(
   instanceRoot: string,
   dataFolder: string,
@@ -211,21 +194,14 @@ async function readBaseline(
   }
 }
 
-/** Manifest links (original-cased) -> folded key -> original-cased path, so a
- *  later casing change (a reorder makes a different-case-variant provider win)
- *  can be detected against the PRIOR casing rather than just the folded key. */
+// Keyed by folded path but keeping the original casing, so a casing change is detectable
+// against the prior casing rather than only the folded key.
 function toFoldedLinkMap(links: string[]): Map<string, string> {
   return new Map(links.map((path) => [foldPath(path), path]));
 }
 
-/** Hardlink each winner into Data/, partitioning paths into linked vs skipped.
- *  A prior link is matched by FOLDED key (so a lookup finds it regardless of
- *  casing), but "is this the same link" is judged by EXACT casing — if the
- *  winner's casing changed since the last deploy (e.g. a reorder makes a
- *  different mod, shipping a different-case variant of the same logical file,
- *  win), the old-cased target is a stale file at a path distinct from the new
- *  one on ext4 and must be removed before the new-cased link is created, or it
- *  would be orphaned in Data/ forever. */
+// Found by folded key, but judged the same link only by exact casing: on ext4 an old-cased
+// target is a distinct path and must be removed, or it is orphaned in Data/.
 async function linkWinners(
   index: FileConflictIndex,
   dataFolder: string,
@@ -237,22 +213,14 @@ async function linkWinners(
   const crossVolume: string[] = [];
   for (const entry of index.files) {
     const relativePath = entry.relativePath;
-    // MO2 Root-Builder: a mod's root/ contents map to the game root, not Data/.
-    // Deploying them into Data/root/ would be wrong; skip (deferred — see modbench-4).
-    // Folder only, deliberately — a mod file literally named `root` (no slash) is not
-    // this convention and deploys normally. Checked references/modorganizer/:
-    // Root Builder itself isn't vendored there (it's a third-party plugin, not part of
-    // the ModOrganizer2 org's own repos per its readme's repo list), and the core VFS/
-    // directory-entry code that is vendored (directoryentry.cpp, fileentry.cpp, etc.)
-    // uses "root" only as a walk-origin parameter name, never as a special-cased
-    // filename. No MO2 basis for skipping a bare `root` file was found.
+    // MO2 Root-Builder: a mod's root/ contents map to the game root, not Data/. Folder only — no
+    // vendored MO2 source special-cases a bare `root` file, so one deploys normally.
     if (relativePath.startsWith('root/')) continue;
 
     const foldedKey = foldPath(relativePath);
     const priorPath = previousLinks.get(foldedKey);
     if (priorPath !== undefined && priorPath !== relativePath) {
-      // Casing changed since the last deploy — the old-cased target is a
-      // distinct on-disk path from the new one; remove it explicitly.
+      // The old-cased target is a distinct on-disk path from the new one; remove it explicitly.
       await rm(join(dataFolder, priorPath), { force: true });
     }
     const wasPreviouslyLinked = priorPath === relativePath;
@@ -265,10 +233,8 @@ async function linkWinners(
   return { links, skipped, crossVolume };
 }
 
-/** Remove prior links whose folded key is no longer a winner at all (e.g. a
- *  mod was disabled/removed), so a later purge doesn't misfile them as
- *  strays. Distinct from linkWinners' stale-old-casing removal: this is the
- *  "genuinely gone" case, NOT the "casing changed" case. */
+// A prior link whose folded key wins nothing now would otherwise be misfiled as a stray by the
+// next purge. The "genuinely gone" case, distinct from a casing change.
 async function removeStaleLinks(dataFolder: string, previousLinks: Map<string, string>, links: string[]): Promise<void> {
   const nowLinkedFolded = new Set(links.map(foldPath));
   for (const [foldedKey, path] of previousLinks) {
@@ -276,10 +242,8 @@ async function removeStaleLinks(dataFolder: string, previousLinks: Map<string, s
   }
 }
 
-/** Copy load-order files to their game-read targets. Best-effort: a failure is
- *  reported but does not abort the deploy (the caller must still write the
- *  manifest, or the links it created would be orphaned). Returns the targets
- *  that were written. */
+// A failure is reported but must not abort the deploy: the caller still has to write the
+// manifest, or the links it created are orphaned.
 async function deployLoadOrder(loadOrder: LoadOrderDeployment[], reporter: Reporter): Promise<string[]> {
   const written: string[] = [];
   for (const { source, target } of loadOrder) {
@@ -298,8 +262,6 @@ async function deployLoadOrder(loadOrder: LoadOrderDeployment[], reporter: Repor
   return written;
 }
 
-/** Normalize a catch clause's `unknown` to a real Error — readManifest's two catch
- *  sites (an unreadable file, invalid JSON) both need this identically. */
 function toError(err: unknown): Error {
   return err instanceof Error ? err : new Error(String(err));
 }
@@ -327,10 +289,8 @@ function reportCorruptManifest(reporter: Reporter, error: Error): void {
   );
 }
 
-/** Resolves the manifest to purge, or null when there's nothing to do: genuinely
- *  absent (silent no-op — nothing was ever deployed) or corrupt (reported on the
- *  integrity tier; the caller must abort without touching Data/ or the manifest
- *  file, which stays on disk as corruption evidence). */
+// A corrupt manifest leaves the file on disk as evidence and the caller must abort without
+// touching Data/; an absent one is a silent no-op.
 async function resolveManifestForPurge(instanceRoot: string, reporter: Reporter): Promise<Manifest | null> {
   const result = await readManifest(instanceRoot);
   if (result.status === 'corrupt') reportCorruptManifest(reporter, result.error);
@@ -374,13 +334,9 @@ export async function purge(
   await rm(manifestPath(instanceRoot), { force: true });
 }
 
-/** Anything left in Data/ that is neither one of our links nor part of the vanilla
- *  baseline is a runtime output (F4SE logs, MCM INI writes). Preserve it by moving
- *  it into the instance's overwrite/ (sibling of mods/, per MO2). Compared by folded
- *  path: a real on-disk entry's casing must match a kept path only up to case, since
- *  Proton/Wine resolves it case-insensitively. Returns paths (with their error) that
- *  couldn't be moved, for the caller to surface — never abort the rest of the purge
- *  over one stubborn file. */
+// Anything in Data/ that is neither a link nor part of the vanilla baseline is a runtime output
+// worth preserving in overwrite/. Folded-path comparison, because Proton/Wine resolves casing
+// insensitively.
 async function relocateStrayFiles(
   instanceRoot: string,
   dataFolder: string,
@@ -404,7 +360,7 @@ async function relocateStrayFiles(
   return unmoved;
 }
 
-/** Move a file, falling back to copy+delete across volumes (rename's EXDEV). */
+// Falls back to copy+delete across volumes (rename's EXDEV).
 async function moveFile(
   from: string,
   to: string,
@@ -419,7 +375,7 @@ async function moveFile(
   }
 }
 
-/** Remove now-empty directories under `root` (root itself is kept). */
+// `root` itself is kept.
 async function pruneEmptyDirs(root: string): Promise<void> {
   for (const dirent of await readdir(root, { withFileTypes: true })) {
     if (!dirent.isDirectory()) continue;

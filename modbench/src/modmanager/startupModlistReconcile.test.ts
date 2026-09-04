@@ -24,8 +24,8 @@ describe('reconcileModlistWithModsDir — one-time startup pass (#93)', () => {
     expect(deps.source.registerUnlistedMods).toHaveBeenCalled();
     expect(deps.source.pruneDeadEntries).toHaveBeenCalled();
     expect(deps.invalidate).toHaveBeenCalledTimes(1);
-    // Silent by ruling: disk is the source of truth and the user made the change —
-    // the log line is the only record, never a toast.
+    // Silent by ruling: disk is the source of truth and the user made the change, so the log
+    // line is the only trace, never a toast.
     expect(deps.channel.info).toHaveBeenCalledWith(expect.stringContaining('New Mod'));
     expect(deps.channel.info).toHaveBeenCalledWith(expect.stringContaining('Gone Mod'));
   });

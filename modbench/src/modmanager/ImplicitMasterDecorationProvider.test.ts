@@ -8,10 +8,8 @@ vi.mock('vscode', () => ({
 import * as vscode from 'vscode';
 import { ImplicitMasterDecorationProvider } from './ImplicitMasterDecorationProvider';
 
-// Reproduces MO2's `foregroundData()` graying of `COL_NAME` for a `forceLoaded` row
-// (`pluginlist.cpp`) — the one piece of MO2's forced-master presentation the platform *does*
-// let this surface adopt verbatim (unlike the checkbox itself, see ImplicitMasterNode). Same
-// resourceUri + FileDecorationProvider pattern as HiddenDownloadDecorationProvider.
+// MO2 grays a `forceLoaded` row's name (`pluginlist.cpp`) — the one piece of its
+// forced-master presentation the platform lets this surface adopt verbatim.
 describe('ImplicitMasterDecorationProvider (#276)', () => {
   const dataFolder = '/game/Data';
   const dataUri = (name: string) => ({ fsPath: join(dataFolder, name) } as never);
@@ -36,11 +34,8 @@ describe('ImplicitMasterDecorationProvider (#276)', () => {
     expect(await provider.provideFileDecoration({ fsPath: '/other/Fallout4.esm' } as never)).toBeUndefined();
   });
 
-  // Both tests below isolate the first guard (dataFolder && the '/'-joined
-  // startsWith) by making implicitMasterNames maximally permissive. Without
-  // that, a garbled `name` slice from a broken first guard still fails to
-  // match the real (narrow) set and the second guard masks the bug — proven
-  // by hand-tracing both mutants against a narrow set before writing these.
+  // A permissive set isolates the first guard: against a narrow one, a garbled `name`
+  // slice fails to match anyway and the second guard masks the bug.
   const permissive = () => ({ has: () => true }) as unknown as ReadonlySet<string>;
 
   it('returns undefined for a sibling folder whose name is Data-prefixed (#318)', async () => {

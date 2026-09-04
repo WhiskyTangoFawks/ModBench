@@ -2,11 +2,8 @@ import { describe, it, expect } from 'vitest';
 import { modelValue, toBigInt } from './modelValue';
 import type { FieldMetadata, FormKeyResolution } from './types';
 
-// ADR-0034: modelValue is the single definition of "the string a cell's editor
-// shows" for every field type (xEdit's Element.EditValue) — DiffRow's Ctrl+C copy reads straight
-// off it, and ScalarCell/FlagCell source their own display/draft text from it too (see their own
-// test files), so this suite is the independent source of truth for what each type's string
-// looks like, checked independently of the leaf components' own logic.
+// ADR-0034: modelValue is the single definition of the string a cell's editor shows for every
+// field type, checked here independently of the leaf components' own logic.
 
 const strMeta: FieldMetadata = { name: 'Name', type: 'string', isArray: false, validFormKeyTypes: [], enumMembers: [] };
 const intMeta: FieldMetadata = { name: 'Level', type: 'int', isArray: false, validFormKeyTypes: [], enumMembers: [] };

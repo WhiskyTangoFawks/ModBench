@@ -1,16 +1,11 @@
 import { vscode } from './vscode';
 import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION, type ExtensionToWebview, type WebviewToExtension } from './messages';
 
-// The webview's bridge to native VS Code surfaces. New native-surface gestures extend the shared
-// request/reply mechanism below rather than reinventing it — see the doc comment on
-// `requestReply` and `InFlight`.
+// The webview's bridge to native VS Code surfaces: a new native-surface gesture extends the
+// request/reply mechanism below rather than reinventing it.
 
-// Every native-prompt bridge using this shape shares one
-// contract — post a request carrying a fresh requestId, await the extension host's reply
-// correlated by that same requestId, resolve whichever in-flight call matches and leave every
-// other one untouched. `read` absorbs the one genuine difference between bridges — each reply's
-// payload lives under a different field (formKey/functionName/confirmed/name) — so this file, and
-// the single listener below, stay blind to what any particular bridge is actually asking for.
+// `read` absorbs the only real difference between bridges — each reply's payload lives under a
+// different field — so the listener below stays blind to what is being asked.
 interface InFlight {
   replyType: ExtensionToWebview['type'];
   read: (msg: ExtensionToWebview) => unknown;
@@ -20,12 +15,9 @@ interface InFlight {
 let counter = 0;
 const inFlight = new Map<string, InFlight>();
 
-// The extended editor's commit callback doesn't fit `InFlight` above — a real editor
-// tab can be saved more than once while it stays open, so EXTENDED_EDITOR_COMMITTED is not a
-// one-shot reply that resolves-then-deletes; the callback stays registered until
-// EXTENDED_EDITOR_CLOSED explicitly says the tab is gone. A second map (rather than stretching
-// `InFlight`'s single-resolve shape to cover both lifecycles) keeps requestReply's own contract —
-// "resolves exactly once" — true for every caller that already depends on it.
+// An editor tab can be saved many times while open, so its commit callback is not the one-shot
+// reply `InFlight` models; it stays registered until EXTENDED_EDITOR_CLOSED. A second map keeps
+// requestReply's resolve-once contract true.
 const extendedEditors = new Map<string, (value: string) => void>();
 
 window.addEventListener('message', (event: MessageEvent<unknown>) => {
@@ -36,9 +28,8 @@ window.addEventListener('message', (event: MessageEvent<unknown>) => {
     return;
   }
   if (msg.type === EXTENSION_TO_WEBVIEW.EXTENDED_EDITOR_CLOSED) {
-    // Deleted here, not left to accumulate — a load order that opens many
-    // fields' extended editors over time would otherwise grow one stale map entry per tab ever
-    // opened, each one holding a closure over that tab's onCommit and everything it captured.
+    // Deleted here, not left to accumulate: a stale entry holds a closure over that tab's
+    // onCommit and everything it captured.
     extendedEditors.delete(msg.requestId);
     return;
   }
@@ -60,12 +51,9 @@ function requestReply<T>(
   });
 }
 
-// The FormKey picker is a native QuickPick — the webview cannot call
-// vscode.window.createQuickPick itself, only the extension host can.
-// Every FormKeyCell call site uses this in place of a rendered picker. `seed` is the current
-// reference (empty string when there is none, e.g. adding a brand-new property) — the extension
-// host seeds the QuickPick's value with it and pre-selects the matching item. Resolves to the
-// picked FormKey, or null on Escape/blur — the caller leaves its field unchanged either way.
+// The FormKey picker is a native QuickPick — only the extension host can call
+// vscode.window.createQuickPick. Resolves to the picked FormKey, or null on Escape/blur, leaving
+// the field unchanged.
 export function pickFormKey(seed: string, validTypes: string[]): Promise<string | null> {
   return requestReply(
     EXTENSION_TO_WEBVIEW.FORM_KEY_PICKED,
@@ -74,39 +62,30 @@ export function pickFormKey(seed: string, validTypes: string[]): Promise<string 
   );
 }
 
-// Ctrl+C's clipboard write — `vscode.env.clipboard.writeText` is extension-host-only
-// (webview clipboard access isn't guaranteed), so DiskCell/DiffRow post the already-computed
-// model value (modelValue.ts) up here instead. Fire-and-forget: nothing needs to come back, since
-// the caller already has the string it copied — there's no answer to wait for, only a write.
+// `vscode.env.clipboard.writeText` is extension-host-only (webview clipboard access isn't
+// guaranteed), so the caller posts the already-computed model value up here. Fire-and-forget:
+// there is no answer to wait for.
 export function copyToClipboard(value: string): void {
   vscode.postMessage({ type: WEBVIEW_TO_EXTENSION.COPY_TO_CLIPBOARD, value });
 }
 
-// ADR-0041: one field edit, on its way to the single write path. Fire-and-forget in the same
-// sense COPY_TO_CLIPBOARD is — the panel does not await a value back, because the answer to "what
-// does the record say now" is a re-read (RECORD_EDITED), never this call's return. A refusal
-// surfaces as a native notification from the host, which is why this goes through the bridge at all
-// rather than posting to the backend from here the way every read does.
+// ADR-0041: fire-and-forget — the answer to "what does the record say now" is a re-read, never
+// this call's return. Refusals surface as a native notification, so this crosses the bridge, not
+// the backend.
 export function editField(
   formKey: string, plugin: string, origin: string, fieldPath: string, value: unknown,
 ): void {
   vscode.postMessage({ type: WEBVIEW_TO_EXTENSION.EDIT_FIELD, formKey, plugin, origin, fieldPath, value });
 }
 
-// A `string` cell's double click opens the value in a real editor
-// tab — the extension host can't be reached any other way (only it can call
-// vscode.workspace.openTextDocument/showTextDocument). Unlike every bridge above, this doesn't
-// return a Promise: there's no single answer to await, since the tab can be saved any number of
-// times (each save commits, exactly like any other edit) before the user closes it, or never
-// saved at all if they abandon it. `onCommit` is called once per save with that save's full
-// content — DiffRow passes the same `onCommit` closure it already builds for the cell's inline
-// editor, so this is a second *trigger* onto the identical commit path, not a second path.
+// Only the extension host can open a real editor tab. No Promise: the tab can be saved any number
+// of times before closing, or never. `onCommit` runs once per save, on the same commit path as
+// the inline editor.
 export function openExtendedFieldEditor(
   params: {
     value: string; recordLabel: string; fieldName: string; plugin: string;
-    // ADR-0036: required alongside `plugin` — folded into the temp-file path
-    // (extendedEditorPath's own directory segment) so two same-filename columns never alias onto
-    // one file. See messages.ts' OPEN_EXTENDED_EDITOR doc comment.
+    // ADR-0036: required alongside `plugin` — folded into the temp-file path so two
+    // same-filename columns never alias onto one file.
     origin: string;
     readOnly: boolean;
   },

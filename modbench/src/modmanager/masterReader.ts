@@ -8,10 +8,8 @@ import { open } from 'node:fs/promises';
 const HEADER_LENGTH = 24; // FO4 major-record header: sig(4) + size(4) + flags(4) + formID(4) + VC1(4) + formVersion(2) + VC2(2)
 const SUBRECORD_HEADER_LENGTH = 6; // sig(4) + size(2, LE uint16)
 
-/** Recognized Creation Engine plugin extensions (FO4/SSE/Starfield share these — not
- *  an FO4 lock). Shared by statusChecker.ts (per-mod plugin classification) and
- *  vanillaMasters.ts (Data-folder plugin discovery); defined once here since both
- *  already depend on this module. */
+/** Creation Engine plugin extensions — FO4, SSE and Starfield share these, so this is not
+ *  an FO4 lock. */
 export const PLUGIN_EXTENSIONS = new Set(['.esp', '.esm', '.esl']);
 
 /** Whether a filename carries a plugin extension (case-insensitive). */

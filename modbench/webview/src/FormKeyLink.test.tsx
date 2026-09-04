@@ -10,24 +10,17 @@ const validType: FormKeyResolution = { state: 'ResolvedValidType', recordType: '
 const wrongType: FormKeyResolution = { state: 'ResolvedWrongType', recordType: 'npc_', editorId: 'SomeNpc' };
 const unresolved: FormKeyResolution = { state: 'Unresolved', recordType: null, editorId: null };
 
-// ADR-0031: the link labels itself from the resolution signal instead of always
-// echoing the raw FormKey — a resolved reference reads as the record it points to.
-//
-// The label is the composite "EditorID [FormKey]", never the EditorID alone: the format a
-// reference is chosen in (the picker's own items) and the format it is read back in must agree,
-// and a cell that does not display its own identity cannot hand it to the user.
+// ADR-0031: the label is the composite "EditorID [FormKey]", never the EditorID alone — the
+// format a reference is chosen in and the format it is read back in must agree.
 describe('FormKeyLink — label', () => {
   it('renders the composite EditorID [FormKey] as its label when resolved (valid type)', () => {
     render(<FormKeyLink value="000019:Fallout4.esm" resolution={validType} onOpen={vi.fn()} />);
     expect(screen.getByText('DogmeatRace [000019:Fallout4.esm]')).toBeInTheDocument();
   });
 
-  // The composite is long and the grid has one column per plugin, so width is managed
-  // by truncation rather than by shortening the label — a truncated element still copies its full
-  // text, so the visual cost is paid without a correctness cost. gridStyles' baseCell already sets
-  // maxWidth/ellipsis on the <td>, but that clips at the boundary of an atomic inline box and never
-  // inside a <button>'s own text, so the link has to carry the ellipsis itself. jsdom has no
-  // layout, so this proves only that the declaration is present, not that it paints.
+  // The <td>'s own ellipsis clips at the boundary of an atomic inline box, never inside a
+  // <button>'s text, so the link carries the ellipsis itself. jsdom has no layout, so this
+  // proves only that the declaration is present.
   it('declares its own ellipsis truncation rather than relying on the cell to clip it', () => {
     render(<FormKeyLink value="000019:Fallout4.esm" resolution={validType} onOpen={vi.fn()} />);
     const link = screen.getByText('DogmeatRace [000019:Fallout4.esm]');
@@ -35,9 +28,8 @@ describe('FormKeyLink — label', () => {
     expect(link.style.textOverflow).toBe('ellipsis');
     expect(link.style.whiteSpace).toBe('nowrap');
     expect(link.style.maxWidth).toBe('100%');
-    // Load-bearing: FormKeyCell wraps this in a `display: inline-flex` span, so the
-    // link is a flex item, and a flex item's default `min-width: auto` refuses to shrink below its
-    // content — which silently cancels the ellipsis above.
+    // FormKeyCell wraps this in an `inline-flex` span, and a flex item's default
+    // `min-width: auto` refuses to shrink below its content, cancelling the ellipsis above.
     expect(link.style.minWidth).toBe('0');
   });
 
@@ -75,12 +67,9 @@ describe('FormKeyLink — Ctrl-hover affordance from resolution', () => {
     expect(link.style.cursor).toBe('pointer');
   });
 
-  // ADR-0034: the link must not assert a resting cursor, because DiskCell sets `grab` on the
-  // parent <td> and the cell is a drag source the whole time — an inline `cursor: 'default'`
-  // here would paint an arrow over that, so the one gesture always available on the cell would
-  // be the one it never advertised. jsdom can't prove which cursor paints (no cascade), so this
-  // only proves the mask itself is gone; the `hot` override above is unaffected and still
-  // asserted.
+  // ADR-0034: DiskCell sets `grab` on the parent <td> and the cell is a drag source throughout,
+  // so an inline `cursor: 'default'` here would paint an arrow over the one gesture always
+  // available on the cell.
   it('does not mask the parent drag cursor with its own cursor style at rest', () => {
     render(<FormKeyLink value="000019:Fallout4.esm" resolution={validType} onOpen={vi.fn()} />);
     expect(screen.getByText('DogmeatRace [000019:Fallout4.esm]').style.cursor).toBe('');
