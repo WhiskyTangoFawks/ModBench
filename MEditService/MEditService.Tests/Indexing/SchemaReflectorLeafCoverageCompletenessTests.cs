@@ -86,9 +86,9 @@ public sealed class SchemaReflectorLeafCoverageCompletenessTests
         // ASceneActionType is the one "A<Name>"-named exception: its generated class
         // (ASceneActionType_Generated.cs) is `public partial class ASceneActionType`, not `public
         // abstract partial class` — confirmed against the real source, not assumed from the naming
-        // convention. A concrete base with subclasses is a union too since #701, so this one is
-        // kept out by name (SchemaAnnotations.ExcludedUnions) for the second reason below, and
-        // falls through to the empty sub-schema.
+        // convention. A concrete base with subclasses is a union too, so this one is kept out by
+        // name (SchemaAnnotations.ExcludedUnions) for the second reason below, and falls through
+        // to the empty sub-schema.
         //
         // The scheme (Scene.xml declares SceneAction.Type as `binary="Custom"`, so Loqui generates
         // no read/write code for it at all — it is entirely hand-written): SceneAction.cs reads the

@@ -992,13 +992,18 @@ VMAD/Condition rows included since they render through this exact code now:
    schema reaches. Where leaves declare a same-named member of *different* shape (a script
    property's `Data` is an int, a float, a bool, a string or a list of each, by leaf), the name
    is split into one field per shape, suffixed by it (`data_int`, `data_float`,
-   `data_string_array`), each written only onto a leaf of that shape. Expanding the struct
+   `data_string_array`), each written only onto a leaf of that shape. On write, a concrete-base
+   union resolves its leaf from `concrete_type` exactly as an abstract one does — an element
+   sent without it is refused, never quietly built as the base. Expanding the struct
    leaf is what lets the walk reach `ScriptStructProperty.Members` -> `ScriptEntry.Properties`
    -> `ScriptProperty` again, so the walk keeps the getter types it is inside on its stack: a
    type re-entered on that path is a type cycle and fails schema generation naming the chain,
    unless the game's annotation table names it as a point its own data format cannot nest past
    (`SchemaAnnotations.CycleTruncations`; Fallout 4 Papyrus structs hold no struct or struct
-   array, so the struct leaves end the walk silently on their second entry). That is a
+   array, so the struct leaves end the walk silently on their second entry). A re-entry whose
+   loop runs through such a point is let through for the same reason — every lap passes it,
+   and it is entered once — which is what lets `ScriptEntry` be re-entered under a struct
+   leaf's `Members` before that leaf's own second entry ends the walk. That is a
    different mechanism from the depth cap, which bounds struct nesting and resets across a
    list hop.
    `ASceneActionType` is a concrete base with two leaves the mechanism must not expand

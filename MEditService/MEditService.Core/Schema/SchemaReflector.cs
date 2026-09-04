@@ -402,8 +402,7 @@ public sealed partial class SchemaReflector
     // RecordQueryService.GetVmad), so reflecting it again here would duplicate it as an opaque
     // struct column. The gate is the same annotation that keeps the walk from modelling the
     // adapter's leaves (SchemaAnnotations.ExcludedUnions): a struct column whose Loqui class is, or
-    // derives from, an excluded union is not a column, so lifting that one annotation in a test
-    // reflects the adapter whole.
+    // derives from, an excluded union is not a column. One annotation, one concept.
     private static List<ColumnSpec> ReflectColumns(
         Type getterType, IConditionCodec? conditionCodec, GameReflection game, ILogger logger)
     {
@@ -1309,26 +1308,24 @@ public sealed partial class SchemaReflector
             result.AddRange(BuildObjectModPropertyLeafFields(getterInterface, game, logger));
         else if (TryGetUnion(getterInterface, game) is { } union)
             result.AddRange(BuildUnionLeafFields(
-                getterInterface, union, game, path, depth + 1, logger));
+                getterInterface, union, game, inner, depth + 1, logger));
 
         return result;
     }
 
     private static readonly Type[] RootPath = [];
 
-    // The getter interfaces whose members the walk is inside, root first — a union's leaf is
-    // entered in place of its base, since the leaf is the class whose members are walked.
-    // Re-entering one is a type cycle: fatal, unless the game's annotations name the type as a
-    // point its own data format cannot nest past, where the walk ends silently instead. Depth is
-    // deliberately not this: the depth cap bounds struct nesting and resets across a list hop, so
-    // a cycle through a list is invisible to it.
+    // The getter interfaces whose members the walk is inside, root first. Re-entering one is a
+    // type cycle, fatal — except through a truncation point, a type the game's annotations say
+    // its data format cannot nest past: the point itself ends the walk silently on its second
+    // entry (null), and a lap that runs through one is let through, since it will end there.
+    // Depth is deliberately not this: the depth cap bounds struct nesting and resets across a
+    // list hop, so a cycle through a list is invisible to it.
     private static Type[]? Enter(Type[] path, Type getterInterface, GameReflection game)
     {
         var earlier = Array.IndexOf(path, getterInterface);
         if (earlier < 0) return [.. path, getterInterface];
         if (game.Annotations.IsCycleTruncation(getterInterface)) return null;
-        // The cycle this re-entry closes runs through a truncation point, so it ends when that
-        // point is reached again — every lap passes it, and it is entered once.
         if (path.Skip(earlier).Any(game.Annotations.IsCycleTruncation)) return [.. path, getterInterface];
         throw new InvalidOperationException(
             "SchemaReflector: type cycle in the schema walk: " +
@@ -1645,9 +1642,6 @@ public sealed partial class SchemaReflector
     // BuildUnionDiscriminatorField). IsAssignableFrom is transitive, so a two-level chain
     // (APerkEffect -> APerkEntryPointEffect -> PerkEntryPointModifyValue) is found the same way a
     // one-level one (ANpcLevel -> NpcLevel) is, with no depth-specific handling needed.
-    private static List<(Type GetterType, string ClassName)> FindUnionLeaves(Type setterType) =>
-        [.. LeavesByBase.GetOrAdd(setterType.Assembly, IndexLeavesByBase)[setterType]];
-
     // Every base is asked once per schema build for every Loqui struct the walk reaches, so the
     // assembly is scanned once and each concrete class filed under its whole base chain. Leaves are
     // ordered most-derived first: a leaf is recognised by IsInstanceOfType, and a concrete base
@@ -1663,9 +1657,10 @@ public sealed partial class SchemaReflector
             .SelectMany(l => BaseChain(l.Leaf).Select(b => (Base: b, Leaf: (l.Getter!, l.Leaf.Name))))
             .ToLookup(e => e.Base, e => e.Leaf);
 
+    // The type and its bases within its own assembly — a Loqui base is never outside it.
     private static IEnumerable<Type> BaseChain(Type type)
     {
-        for (var t = type; t != null; t = t.BaseType) yield return t;
+        for (var t = type; t != null && t.Assembly == type.Assembly; t = t.BaseType) yield return t;
     }
 
     // A base with something under it: every concrete class assignable to it, itself included when
@@ -1687,12 +1682,14 @@ public sealed partial class SchemaReflector
     {
         if (GetSetterType(getterInterface) is not { } setterType) return null;
         if (game.Annotations.IsExcludedUnion(setterType)) return null;
-        var leaves = FindUnionLeaves(setterType);
+        var leaves = LeavesByBase.GetOrAdd(setterType.Assembly, IndexLeavesByBase)[setterType].ToList();
         return IsUnionBase(setterType, leaves) ? new LoquiUnion(setterType, leaves) : null;
     }
 
     /// <summary>A Loqui base and the concrete classes under it, itself among them when it is
-    /// concrete. The base travels
+    /// concrete, most-derived first: a leaf is recognised by <c>IsInstanceOfType</c>, first match
+    /// wins, and a concrete base would otherwise claim every object of its subclasses (the order
+    /// <see cref="IndexLeavesByBase"/> files them in). The base travels
     /// with the leaves because the discriminator's own labels are the leaf names read
     /// <i>relative to</i> it (<see cref="LeafLabel"/>).</summary>
     private sealed record LoquiUnion(Type SetterType, List<(Type GetterType, string ClassName)> Leaves);
@@ -1714,57 +1711,46 @@ public sealed partial class SchemaReflector
         int depth,
         ILogger logger)
     {
-        // A leaf the walk is already inside is left out of the union here entirely — members and
-        // discriminator value both — which is how a documented truncation (CycleTruncations) ends.
-        var leaves = union.Leaves
-            .Select(leaf => (leaf.GetterType, leaf.ClassName, Path: Enter(path, leaf.GetterType, game)))
-            .Where(leaf => leaf.Path != null)
-            .ToList();
         var baseMemberNames = GetAllInterfaceProperties(getterInterface)
             .Where(p => !game.Annotations.IsExcludedMember(p))
             .Select(p => ToSnakeCase(p.Name))
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-        var perLeaf = leaves.Select(leaf => (
-            leaf.GetterType,
-            leaf.ClassName,
-            leaf.Path,
-            Members: GetAllInterfaceProperties(leaf.GetterType)
+        // The base is already on the path when it is its own leaf; every other leaf is entered
+        // here. A leaf the walk is already inside is left out of the union entirely — members
+        // and discriminator value both — which is how a documented truncation ends.
+        var leaves = new List<UnionLeafWalk>();
+        foreach (var (getterType, className) in union.Leaves)
+        {
+            var leafPath = getterType == getterInterface ? path : Enter(path, getterType, game);
+            if (leafPath == null) continue;
+            var members = GetAllInterfaceProperties(getterType)
                 .Where(p => !game.Annotations.IsExcludedMember(p) && !baseMemberNames.Contains(ToSnakeCase(p.Name)))
                 .GroupBy(p => ToSnakeCase(p.Name), StringComparer.OrdinalIgnoreCase)
                 .ToDictionary(
                     g => g.Key,
                     g => g.Aggregate((best, cand) =>
                         best.DeclaringType!.IsAssignableFrom(cand.DeclaringType!) ? cand : best),
-                    StringComparer.OrdinalIgnoreCase)
-            )).ToList();
-
-        var allNames = perLeaf.SelectMany(l => l.Members.Keys).Distinct(StringComparer.OrdinalIgnoreCase);
+                    StringComparer.OrdinalIgnoreCase);
+            leaves.Add(new(getterType, className, leafPath, members));
+        }
+        union = union with { Leaves = [.. leaves.Select(l => (l.GetterType, l.ClassName))] };
 
         var result = new List<SubFieldSpec>();
-        foreach (var name in allNames)
+        foreach (var name in leaves.SelectMany(l => l.Members.Keys).Distinct(StringComparer.OrdinalIgnoreCase))
         {
-            var declaring = perLeaf
+            var declaring = leaves
                 .Where(l => l.Members.ContainsKey(name))
-                .Select(l => ((l.GetterType, l.ClassName), l.Path!, Prop: l.Members[name]))
+                .Select(l => (Leaf: l, Prop: l.Members[name]))
                 .ToList();
-
             result.AddRange(BuildUnionMemberFields(name, declaring, game, depth, logger));
         }
 
-        // Defensive, not live — no Mutagen leaf across any game assembly
-        // declares a member that snake-cases to "concrete_type" today (checked). But this
-        // discriminator is appended unconditionally after every real leaf member into what becomes
-        // a last-write-wins Dictionary<string, object?> downstream (ExtractSubObject) — a future
-        // leaf that did collide would have its own real data silently replaced by the discriminator,
-        // no warning, ADR-0026's failure class. Same "log and omit" rule
-        // BuildUnionMemberFields' own ambiguous-split branch already uses, not a new one.
-        var discriminator = BuildUnionDiscriminatorField(
-            new LoquiUnion(union.SetterType, [.. leaves.Select(l => (l.GetterType, l.ClassName))]));
+        var discriminator = BuildUnionDiscriminatorField(union);
         if (result.Any(f => f.Name == discriminator.Name))
         {
             logger.LogWarning(
-                "Abstract union {Base}'s own {Discriminator} field name collides with a real leaf " +
+                "Union {Base}'s own {Discriminator} field name collides with a real leaf " +
                 "member; omitting the discriminator rather than silently shadowing that member's data",
                 getterInterface.Name, UnionTypeDiscriminator);
         }
@@ -1776,6 +1762,11 @@ public sealed partial class SchemaReflector
         return result;
     }
 
+    /// <summary>One leaf as the walk sees it: its getter, its class name (the discriminator
+    /// value), the path its members are walked under, and those members by snake_case name.</summary>
+    private sealed record UnionLeafWalk(
+        Type GetterType, string ClassName, Type[] Path, Dictionary<string, PropertyInfo> Members);
+
     // One field when every declaring leaf agrees on shape; one field per shape otherwise, each
     // suffixed by the shape it carries (ScriptProperty's Data is an int on one leaf, a float on
     // another, a list of strings on a third: data_int, data_float, data_string_array). Shape is
@@ -1784,28 +1775,29 @@ public sealed partial class SchemaReflector
     // re-deriving GetSubFieldInfo's own dispatch.
     private static List<SubFieldSpec> BuildUnionMemberFields(
         string colName,
-        List<((Type GetterType, string ClassName) Leaf, Type[] Path, PropertyInfo Prop)> declaring,
+        List<(UnionLeafWalk Leaf, PropertyInfo Prop)> declaring,
         GameReflection game,
         int depth,
         ILogger logger)
     {
         var byShape = declaring
-            .Select(d => (d.Leaf, d.Prop, Spec: GetSubFieldInfo(d.Prop, game, d.Path, depth, logger)))
+            .Select(d => (d.Leaf, d.Prop, Spec: GetSubFieldInfo(d.Prop, game, d.Leaf.Path, depth, logger)))
             .Where(d => d.Spec != null)
-            .GroupBy(d => ShapeKey(d.Spec!))
+            .Select(d => (d.Leaf, d.Prop, Spec: d.Spec!))
+            .GroupBy(d => ShapeKey(d.Spec))
             .ToList();
-        if (byShape.Count == 1) return [BuildUnionShapeField(colName, byShape[0].ToList(), logger)];
-
         var fields = byShape
-            .Select(g => BuildUnionShapeField($"{colName}_{ShapeSuffix(g.First().Spec!)}", g.ToList(), logger))
+            .Select(g => BuildUnionShapeField(
+                byShape.Count == 1 ? colName : $"{colName}_{ShapeSuffix(g.First().Spec)}", g.ToList(), logger))
             .ToList();
+
         var ambiguous = fields.GroupBy(f => f.Name).Where(g => g.Count() > 1).Select(g => g.Key).ToList();
         if (ambiguous.Count > 0)
         {
             // Two shapes the suffix cannot tell apart (two structs with different members): neither
             // is exposed rather than one silently shadowing the other (ADR-0026).
             logger.LogWarning(
-                "Abstract union member {Member} has shapes the split names cannot distinguish ({Names}); omitted",
+                "Union member {Member} has shapes the split names cannot distinguish ({Names}); omitted",
                 colName, string.Join(", ", ambiguous));
             fields.RemoveAll(f => ambiguous.Contains(f.Name));
         }
@@ -1824,18 +1816,17 @@ public sealed partial class SchemaReflector
     // refusing on it, even where the incoming leaf has a same-named member of another shape.
     private static SubFieldSpec BuildUnionShapeField(
         string name,
-        List<((Type GetterType, string ClassName) Leaf, PropertyInfo Prop, SubFieldSpec? Spec)> declaring,
+        List<(UnionLeafWalk Leaf, PropertyInfo Prop, SubFieldSpec Spec)> declaring,
         ILogger logger)
     {
-        var rep = declaring[0].Spec!;
+        var rep = declaring[0].Spec;
 
         object? Extract(object obj)
         {
             foreach (var (leaf, _, spec) in declaring)
-                if (leaf.GetterType.IsInstanceOfType(obj)) return spec!.Extract(obj);
+                if (leaf.GetterType.IsInstanceOfType(obj)) return spec.Extract(obj);
             return null;
         }
-
         // rep.Apply resolves its target *property* off the object's own runtime type
         // (MakeApplier/ApplyFormLinkJson/the struct- and list-column appliers all do) — but
         // MakeApplier's own *converter* is bound to rep's declared CLR type, so reusing it
@@ -1903,7 +1894,7 @@ public sealed partial class SchemaReflector
     // refuse rather than guess — the same contract ResolveObjectModPropertyConcreteType already
     // gives ApplyListJson, extended to BuildStructColumn's own single-object case too.
     //
-    // Deliberately not a FindUnionLeaves-style full assembly.GetTypes() scan (12,914 types
+    // Deliberately not an IndexLeavesByBase-style full assembly.GetTypes() scan (12,914 types
     // for Mutagen.Bethesda.Fallout4.dll) —
     // fine on the read side, where that runs once per abstract type behind GetSchemas' own cache, but
     // this is the write path, called once per array element (ApplyListJson/ApplyListSubFieldJson)
@@ -1912,7 +1903,7 @@ public sealed partial class SchemaReflector
     // already leans on for OMOD), so the discriminator string names an O(1) lookup directly —
     // IsAssignableFrom still gates it, so a name that resolves to some unrelated same-namespace type
     // is refused exactly the same as an unrecognized one, never silently accepted.
-    private static Type? ResolveUnionConcreteType(Type abstractSetterType, JsonElement json)
+    private static Type? ResolveUnionConcreteType(Type setterType, JsonElement json)
     {
         if (json.ValueKind != JsonValueKind.Object) return null;
         if (!json.TryGetProperty(UnionTypeDiscriminator, out var dt) || dt.ValueKind != JsonValueKind.String)
@@ -1921,8 +1912,8 @@ public sealed partial class SchemaReflector
         var name = dt.GetString();
         if (string.IsNullOrEmpty(name)) return null;
 
-        var candidate = abstractSetterType.Assembly.GetType($"{abstractSetterType.Namespace}.{name}");
-        return candidate is { IsAbstract: false } && abstractSetterType.IsAssignableFrom(candidate)
+        var candidate = setterType.Assembly.GetType($"{setterType.Namespace}.{name}");
+        return candidate is { IsAbstract: false } && setterType.IsAssignableFrom(candidate)
             ? candidate
             : null;
     }
@@ -2413,8 +2404,7 @@ public sealed partial class SchemaReflector
         var g = SubGetter(prop);
         var pName = prop.Name;
         var setterType = GetSetterType(core);
-        var writable = setterType != null
-            && (!setterType.IsAbstract || sub.Any(f => f.Name == UnionTypeDiscriminator));
+        var writable = setterType != null && (!setterType.IsAbstract || HasDiscriminator(sub));
         return new(colName, "struct", Empty, Empty,
             obj => { var v = g(obj); return v == null ? null : ExtractSubObject(v, sub); },
             Apply: writable
@@ -2657,13 +2647,8 @@ public sealed partial class SchemaReflector
 
         foreach (var elem in json.EnumerateArray())
         {
-            var concreteType = elemConcreteType;
-            if (!isFl && IsUnionWritten(concreteType, subFields))
-            {
-                if (ResolveAbstractListElementType(concreteType, elem) is not { } resolved)
-                    return ApplyOutcome.ListElementTypeUnresolved;
-                concreteType = resolved;
-            }
+            if (ResolveListElementType(isFl, elemConcreteType, subFields, elem) is not { } concreteType)
+                return ApplyOutcome.ListElementTypeUnresolved;
 
             var item = BuildListElement(elem, isFl, elemCore, concreteType, subFields, out var elementOutcome);
             if (elementOutcome != ApplyOutcome.Applied) return elementOutcome;
@@ -2821,7 +2806,7 @@ public sealed partial class SchemaReflector
     /// today — <see cref="IsListType"/>'s Getter-side element type is never abstract itself, only the
     /// mutable Setter list's own generic argument can be). Which concrete leaf an element is depends
     /// on that element's own data, so it is resolved per element from the payload
-    /// (<see cref="ResolveAbstractListElementType"/>) rather than assumed once for the whole field.
+    /// (<see cref="ResolveListElementType"/>) rather than assumed once for the whole field.
     /// Unresolvable — no known discriminator scheme for this abstract type, or a discriminator value
     /// this scheme doesn't recognise — answers <see cref="ApplyOutcome.ListElementTypeUnresolved"/>
     /// immediately, before <c>newList</c> is ever attached to <paramref name="record"/>, so a
@@ -2872,13 +2857,8 @@ public sealed partial class SchemaReflector
 
         foreach (var elem in json.EnumerateArray())
         {
-            var concreteType = elemConcreteType;
-            if (!isFl && IsUnionWritten(concreteType, subFields))
-            {
-                if (ResolveAbstractListElementType(concreteType, elem) is not { } resolved)
-                    return ApplyOutcome.ListElementTypeUnresolved;
-                concreteType = resolved;
-            }
+            if (ResolveListElementType(isFl, elemConcreteType, subFields, elem) is not { } concreteType)
+                return ApplyOutcome.ListElementTypeUnresolved;
 
             var item = BuildListElement(elem, isFl, elemCore, concreteType, subFields, out var elementOutcome);
             if (elementOutcome != ApplyOutcome.Applied) return elementOutcome;
@@ -2900,10 +2880,14 @@ public sealed partial class SchemaReflector
     // way, an abstract-element field with no scheme that resolves — a missing/unrecognized
     // discriminator, or a genuinely unknown shape — falls straight through to null, which
     // ApplyListJson/ApplyListSubFieldJson turn into a refusal rather than a guess or a throw.
-    private static Type? ResolveAbstractListElementType(Type elemConcreteType, JsonElement elem) =>
-        elemConcreteType.IsGenericType && elemConcreteType.GetGenericTypeDefinition().Name == "AObjectModProperty`1"
+    private static Type? ResolveListElementType(
+        bool isFl, Type elemConcreteType, IReadOnlyList<SubFieldSpec>? subFields, JsonElement elem)
+    {
+        if (isFl || !IsUnionWritten(elemConcreteType, subFields)) return elemConcreteType;
+        return elemConcreteType.IsGenericType && elemConcreteType.GetGenericTypeDefinition().Name == "AObjectModProperty`1"
             ? ResolveObjectModPropertyConcreteType(elemConcreteType, elem)
             : ResolveUnionConcreteType(elemConcreteType, elem);
+    }
 
     // Reads the `value_type` discriminator BuildObjectModValueTypeField exposes on read and maps it
     // back to the one leaf getter interface that owns it (ObjectModPropertyLeaves — the exact same
@@ -3092,11 +3076,11 @@ public sealed partial class SchemaReflector
     /// partially-built value to the target, matching <see cref="ApplyListJson"/>'s own "before
     /// <c>newList</c> is attached" guarantee at every nesting level this method is wired at.</para>
     ///
-    /// <para><paramref name="setterType"/> is abstract for an abstract Loqui union (ANpcLevel,
-    /// ALocationTarget, ...) — <c>Activator.CreateInstance</c> would throw
-    /// <c>MissingMethodException</c> on it directly, so the concrete type is resolved off the
-    /// incoming JSON's own discriminator first, refusing (<c>ValueRejected</c>) rather than
-    /// crashing when it can't be. Only reused when the target's existing value is already that same
+    /// <para><paramref name="setterType"/> is a union base for an abstract Loqui union (ANpcLevel,
+    /// ALocationTarget, ...) or a concrete one whose sub-schema carries a discriminator
+    /// (<see cref="IsUnionWritten"/>) — the concrete type is resolved off the incoming JSON's own
+    /// discriminator first, refusing (<c>ValueRejected</c>) rather than constructing the wrong
+    /// class (or, for an abstract base, crashing) when it can't be. Only reused when the target's existing value is already that same
     /// concrete type — switching concrete leaf (NpcLevel to PcLevelMult, WorldspaceNavmeshParent to
     /// CellNavmeshParent) cannot reuse the old object, so it constructs fresh instead.</para>
     ///
@@ -3124,7 +3108,7 @@ public sealed partial class SchemaReflector
         var existing = rp.GetValue(target);
         // Exactly the named leaf, not merely assignable to it: an AlphaLayer is a BaseLayer, and
         // switching to the base must build a bare one rather than keep the subclass.
-        var obj = existing?.GetType() == concreteType ? existing : Activator.CreateInstance(concreteType)!;
+        var obj = existing is { } same && same.GetType() == concreteType ? same : Activator.CreateInstance(concreteType)!;
         var subOutcome = ApplySubFields(obj, json, subFields);
         if (subOutcome != ApplyOutcome.Applied) return subOutcome;
         if (rp.CanWrite) rp.SetValue(target, obj);
@@ -3135,7 +3119,10 @@ public sealed partial class SchemaReflector
     // constructed, or concrete with a discriminator in its own sub-schema (ScriptProperty), where
     // building the base regardless would silently discard the leaf the payload asked for.
     private static bool IsUnionWritten(Type setterType, IReadOnlyList<SubFieldSpec>? subFields) =>
-        setterType.IsAbstract || (subFields?.Any(f => f.Name == UnionTypeDiscriminator) ?? false);
+        setterType.IsAbstract || HasDiscriminator(subFields);
+
+    private static bool HasDiscriminator(IReadOnlyList<SubFieldSpec>? subFields) =>
+        subFields?.Any(f => f.Name == UnionTypeDiscriminator) ?? false;
 
     private static ColumnInfoResult? BuildStructColumn(
         PropertyInfo prop, Type core, GameReflection game, ILogger logger)

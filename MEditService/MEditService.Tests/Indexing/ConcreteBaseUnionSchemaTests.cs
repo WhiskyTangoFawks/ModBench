@@ -1,6 +1,8 @@
+using System.Reflection;
 using System.Text.Json;
 using MEditService.Core.Queries;
 using MEditService.Core.Schema;
+using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -16,13 +18,6 @@ namespace MEditService.Tests.Indexing;
 /// </summary>
 public sealed class ConcreteBaseUnionSchemaTests
 {
-    private static SchemaReflector Fallout4With(Func<SchemaAnnotations, SchemaAnnotations> amend) =>
-        new(category => amend(SchemaAnnotations.For(category)));
-
-    private static SchemaAnnotations WithVmadReflected(SchemaAnnotations a) =>
-        a with { ExcludedUnions = [.. a.ExcludedUnions.Where(u => u != "AVirtualMachineAdapter")] };
-
-    private static SchemaReflector Fallout4WithVmadReflected() => Fallout4With(WithVmadReflected);
 
     private static ColumnSpec NpcAdapterColumn(SchemaReflector reflector) =>
         reflector.GetSchemas(GameRelease.Fallout4)["npc_"].RecordColumns
@@ -31,7 +26,7 @@ public sealed class ConcreteBaseUnionSchemaTests
     [Fact]
     public void VmadExclusionLifted_AdapterIsAnOrdinaryStructColumn()
     {
-        var column = NpcAdapterColumn(Fallout4WithVmadReflected());
+        var column = NpcAdapterColumn(VmadReflectedSchemaReflector.Instance);
 
         Assert.Equal("struct", column.ApiType);
         Assert.Contains(column.SubFields!, f => f.Name == "scripts");
@@ -44,7 +39,7 @@ public sealed class ConcreteBaseUnionSchemaTests
     [Fact]
     public void ScriptProperty_ConcreteType_ListsFourteenLeavesAndTheBaseItself()
     {
-        var element = ScriptPropertyElement(NpcAdapterColumn(Fallout4WithVmadReflected()));
+        var element = ScriptPropertyElement(NpcAdapterColumn(VmadReflectedSchemaReflector.Instance));
 
         var discriminator = element.Fields!.Single(f => f.Name == "concrete_type");
         Assert.Equal("enum", discriminator.Type);
@@ -67,13 +62,12 @@ public sealed class ConcreteBaseUnionSchemaTests
     [Fact]
     public void ReEntryWithNoDocumentedTruncation_FailsSchemaGenerationNamingTheChain()
     {
-        var reflector = Fallout4With(a => WithVmadReflected(a) with { CycleTruncations = [] });
+        var reflector = VmadReflectedSchemaReflector.Fallout4With(a => VmadReflectedSchemaReflector.WithVmadReflected(a) with { CycleTruncations = [] });
 
         var ex = Assert.Throws<InvalidOperationException>(() => reflector.GetSchemas(GameRelease.Fallout4));
 
-        Assert.Contains(
-            "IScriptEntryGetter -> IScriptStructPropertyGetter -> IScriptEntryGetter",
-            ex.Message, StringComparison.Ordinal);
+        const string chain = "IScriptEntryGetter -> IScriptPropertyGetter -> IScriptStructPropertyGetter -> IScriptEntryGetter";
+        Assert.True(ex.Message.Contains(chain, StringComparison.Ordinal), ex.Message);
     }
 
     /// <summary>
@@ -84,7 +78,7 @@ public sealed class ConcreteBaseUnionSchemaTests
     [Fact]
     public void ScriptProperty_DataMember_IsOneFieldPerShape()
     {
-        var element = ScriptPropertyElement(NpcAdapterColumn(Fallout4WithVmadReflected()));
+        var element = ScriptPropertyElement(NpcAdapterColumn(VmadReflectedSchemaReflector.Instance));
 
         var data = element.Fields!.Where(f => f.Name.StartsWith("data", StringComparison.Ordinal))
             .ToDictionary(f => f.Name, f => f.IsArray ? f.ElementType!.Type + "[]" : f.Type);
@@ -104,7 +98,7 @@ public sealed class ConcreteBaseUnionSchemaTests
     [Fact]
     public void ScriptProperty_ObjectLeafAndStructLeaf_ExposeTheirOwnMembers()
     {
-        var element = ScriptPropertyElement(NpcAdapterColumn(Fallout4WithVmadReflected()));
+        var element = ScriptPropertyElement(NpcAdapterColumn(VmadReflectedSchemaReflector.Instance));
         var byName = element.Fields!.ToDictionary(f => f.Name);
 
         Assert.Equal("formKey", byName["object"].Type);
@@ -139,5 +133,32 @@ public sealed class ConcreteBaseUnionSchemaTests
         Assert.Equal("BaseLayer", layers[0].GetProperty("concrete_type").GetString());
         Assert.Equal("AlphaLayer", layers[1].GetProperty("concrete_type").GetString());
         Assert.Equal("0x0102", layers[1].GetProperty("alpha_layer_data").GetString());
+    }
+
+    /// <summary>
+    /// The scan the ticket asked for, pinned against the compiled assembly rather than the source
+    /// clone: every concrete Loqui class with a concrete subclass. Each has a ruling — ScriptProperty
+    /// and BaseLayer are expanded, ASceneActionType is excluded by annotation, and the other three
+    /// sit behind shapes the walk never enters (a dictionary, a gendered item, VMAD fragments). A
+    /// Mutagen bump that changes this set fails here, where the rulings can be revisited.
+    /// </summary>
+    [Fact]
+    public void ConcreteBasesWithSubclasses_InThePinnedFallout4Assembly_AreExactlyTheRuledOnSix()
+    {
+        var assembly = typeof(Fallout4Mod).Assembly;
+        Assert.Equal("0.53.1.0", assembly.GetName().Version!.ToString());
+
+        static bool IsLoquiClass(Type t) =>
+            t.IsClass && !t.IsAbstract && !t.ContainsGenericParameters && !t.Name.EndsWith("BinaryOverlay", StringComparison.Ordinal)
+            && t.GetProperty("StaticRegistration", BindingFlags.Public | BindingFlags.Static) != null;
+        var classes = assembly.GetTypes().Where(IsLoquiClass).ToList();
+        var concreteBases = classes
+            .Where(b => classes.Any(t => t != b && b.IsAssignableFrom(t)))
+            .Select(b => b.Name)
+            .Order(StringComparer.Ordinal);
+
+        Assert.Equal(
+            ["APackageData", "ASceneActionType", "BaseLayer", "ScriptFragments", "ScriptProperty", "SimpleModel"],
+            concreteBases);
     }
 }

@@ -4,6 +4,7 @@ using MEditService.Core.Plugins;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
 using MEditService.Core.Source;
+using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -103,11 +104,6 @@ public sealed class ConcreteBaseUnionEditTests : IDisposable
         private const string PluginName = "ScriptedNpc701.esp";
         private const string Origin = "ScriptedNpc701Mod";
 
-        private static readonly SchemaReflector VmadReflected = new(category =>
-            SchemaAnnotations.For(category) is var a
-                ? a with { ExcludedUnions = [.. a.ExcludedUnions.Where(u => u != "AVirtualMachineAdapter")] }
-                : throw new InvalidOperationException());
-
         private readonly string _modFolder = Directory.CreateTempSubdirectory("medit-701-mod-").FullName;
         private readonly string _gameDirectory = Directory.CreateTempSubdirectory("medit-701-game-").FullName;
         private readonly LoadOrderMirror _mirror;
@@ -136,7 +132,7 @@ public sealed class ConcreteBaseUnionEditTests : IDisposable
             mod.WriteToBinary(pluginPath);
 
             _mirror = new LoadOrderMirror(
-                new DuckDbRecordIndexFactory(VmadReflected, new TableDdlBuilder(VmadReflected)));
+                new DuckDbRecordIndexFactory(VmadReflectedSchemaReflector.Instance, new TableDdlBuilder(VmadReflectedSchemaReflector.Instance)));
             ((ILoadOrderMirror)_mirror).Reconcile(
                 _gameDirectory, [new LoadOrderEntry(PluginName, pluginPath, Origin, Slot: 0, Enabled: true, Winning: true)],
                 GameRelease.Fallout4);
@@ -146,7 +142,7 @@ public sealed class ConcreteBaseUnionEditTests : IDisposable
         }
 
         public RecordEditService Service() =>
-            new(_mirror, VmadReflected, NullLogger<RecordEditService>.Instance);
+            new(_mirror, VmadReflectedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
 
         public string NpcBody() => _mirror.Index!.At(RecordRef.Effective).GetDocument(Npc.ToString(), Plugin)!.Body!;
 

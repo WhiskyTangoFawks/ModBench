@@ -1,4 +1,5 @@
 using MEditService.Core.Schema;
+using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 
 namespace MEditService.Tests.Indexing;
@@ -12,7 +13,7 @@ namespace MEditService.Tests.Indexing;
 public sealed class SchemaAnnotationTests
 {
     private static SchemaReflector Fallout4With(Func<SchemaAnnotations, SchemaAnnotations> amend) =>
-        new(category => amend(SchemaAnnotations.For(category)));
+        VmadReflectedSchemaReflector.Fallout4With(amend);
 
     private static void AssertFailsNaming(SchemaReflector reflector, string entry)
     {
@@ -48,7 +49,7 @@ public sealed class SchemaAnnotationTests
     }
 
     [Fact]
-    public void ExcludedAbstractUnion_ReflectionDidNotFind_FailsSchemaGenerationNamingTheEntry()
+    public void ExcludedUnion_ReflectionDidNotFind_FailsSchemaGenerationNamingTheEntry()
     {
         var reflector = Fallout4With(a => a with { ExcludedUnions = [.. a.ExcludedUnions, "ANoSuchUnion"] });
         AssertFailsNaming(reflector, "ANoSuchUnion");

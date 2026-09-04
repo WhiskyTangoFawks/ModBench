@@ -130,6 +130,10 @@ internal sealed record SchemaAnnotations(
                 ("IObjectModEnumPropertyGetter`1", "Unused"),
             ],
             ExcludedUnions: [.. ConditionAndVmadUnions],
+            // Starfield's VirtualMachineAdapter.xml declares the same struct-property chain as
+            // Fallout 4's; the rows arrive with the first Starfield-verified schema build, since
+            // Validate can only check them there. Empty is loud, not wrong: a lifted VMAD exclusion
+            // would fail generation naming the chain rather than truncate silently.
             CycleTruncations: [],
             EmptySubSchemaTypes: [.. EmptySubSchemaTypesInEveryGame],
             AlphaBearingColorFields: [.. RgbaColorFields]),
