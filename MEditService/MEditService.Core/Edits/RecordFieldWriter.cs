@@ -72,13 +72,26 @@ internal enum FieldApplyOutcome
     /// op is not a mistake the caller needs to fix, it is a request that was already satisfied.
     /// </summary>
     NoOp,
+
+    /// <summary>
+    /// Two elements of one keyed array (<see cref="FieldMetadata.KeyMembers"/>) share a key —
+    /// two scripts of one name, two properties of one name, two quest fragments on one stage. The
+    /// key identifies the element, so a second one holding it is not an addition but a collision
+    /// the array cannot represent: xEdit writes these sorted by that key
+    /// (<c>wbDefinitionsFO4.pas</c>'s <c>wbArrayS</c>), and the game reads whichever it meets first.
+    ///
+    /// <para>Its own outcome rather than <see cref="ValueShapeMismatch"/>: the payload was exactly
+    /// the shape the field takes, and the way out is specific — rename or remove one of the two —
+    /// so the refusal names the key it is talking about, which only a distinct outcome carrying that
+    /// key can do.</para>
+    /// </summary>
+    DuplicateKeyInKeyedArray,
 }
 
 /// <summary>
 /// Applies one field value to one live Mutagen record — the single dispatch point every write path
 /// goes through. Only the dispatch lives here: the field semantics live in the codecs it dispatches
-/// *to* (<see cref="ColumnSpec.Apply"/>, <see cref="VmadCodec"/>, <see cref="VmadPath"/>), not in a
-/// second implementation.
+/// *to* (<see cref="ColumnSpec.Apply"/>), not in a second implementation.
 ///
 /// <para>Complex fields (CONTEXT.md: array or struct) are applied as one atomic value, never
 /// per-element — <see cref="ColumnSpec.Apply"/> takes the whole field's JSON, which is exactly the
@@ -93,16 +106,15 @@ internal static class RecordFieldWriter
         string recordType,
         string fieldPath,
         JsonElement value,
-        IReadOnlyDictionary<string, RecordTableSchema> schemas)
+        IReadOnlyDictionary<string, RecordTableSchema> schemas,
+        out string? duplicateKey)
     {
+        duplicateKey = null;
         if (fieldPath.Equals(EditorIdFieldPath, StringComparison.Ordinal))
             return ApplyEditorId(record, value);
 
         if (fieldPath.Equals(IsPartialFormFieldPath, StringComparison.Ordinal))
             return ApplyIsPartialForm(record, value);
-
-        if (VmadPath.IsVmadPath(fieldPath))
-            return ApplyVmadField(record, fieldPath, value);
 
         if (!schemas.TryGetValue(recordType, out var schema))
             return FieldApplyOutcome.NotFound;
@@ -110,15 +122,19 @@ internal static class RecordFieldWriter
         if (col == null)
             return FieldApplyOutcome.NotFound;
 
-        // #630: an array arity/order op envelope — same shape-based detection as VmadField's own
-        // op envelopes just above (a JSON object carrying an "op" string member), checked here
-        // rather than earlier since it only ever targets an ordinary reflected column, never a
-        // VMAD path (already dispatched above this line).
+        // #630: an array arity/order op envelope — a JSON object carrying an "op" string member,
+        // detected by shape rather than by path, since it only ever targets an ordinary reflected
+        // column.
         if (TryGetOpName(value, out var arrayOpName) && ArrayOpWriter.IsArrayOp(arrayOpName))
-            return ArrayOpWriter.Apply(record, col, arrayOpName, value);
+            return ArrayOpWriter.Apply(record, col, arrayOpName, value, out duplicateKey);
 
         if (col.Apply.Writer is not { } apply)
             return FieldApplyOutcome.ReadOnly;
+
+        // A keyed array is written back in key order, whatever order the payload arrived in, and
+        // two elements sharing a key are refused before anything is written (KeyedArrays).
+        value = KeyedArrays.Normalize(value, col.ToFieldMetadata(), out duplicateKey);
+        if (duplicateKey != null) return FieldApplyOutcome.DuplicateKeyInKeyedArray;
 
         // The applier's own answer, not an assumption — each of these is a different
         // reason with a different fix (see FieldApplyOutcome's own docs), so each translates to its
@@ -218,51 +234,10 @@ internal static class RecordFieldWriter
         return FieldApplyOutcome.Applied;
     }
 
-    // A VMAD path carries either a plain scalar property value
-    // or a structural op — add/remove script, set script flags, add/remove property, set type, set
-    // property flags. The two are distinguished by shape, not by path: `value` doubles as
-    // VmadCodec's own `op` parameter when it is a JSON object carrying an `"op"` string member,
-    // reusing the exact envelope VmadCodecTests already pins (`{"op": "add_script", ...}`) rather
-    // than inventing a second wire contract. A script-level path (`VMAD\<Script>`, no property
-    // segment) is only ever a structural op — there is no scalar "whole script" value to set — so
-    // it falls through to NotFound when `value` isn't an op envelope.
-    //
-    // The one accepted ambiguity: a Struct-typed property whose own member happens to be named
-    // "op" would misparse as an op envelope instead of a scalar struct write. Papyrus property
-    // names are author-chosen and "op" collides with nothing this codebase or Bethesda's own
-    // scripts use, so this is a documented, not a defended, edge case.
-    private static FieldApplyOutcome ApplyVmadField(IMajorRecord record, string fieldPath, JsonElement value)
-    {
-        if (record is not IHaveVirtualMachineAdapter vmadRecord) return FieldApplyOutcome.NotFound;
-
-        if (TryGetOpName(value, out var opName))
-        {
-            // #630 guarded this branch against "array_remove"/etc — ArrayOpWriter's own op names —
-            // arriving under a VMAD path and misrouting into VmadCodec.ApplyPropertyOp/ApplyScriptOp
-            // as an unrecognised op name. #658 removes that guard: a Papyrus scalar-array property's
-            // own arity ops now live here deliberately, under VmadCodec's own vocabulary
-            // (add_element/remove_element/move_element_up/move_element_down, chosen precisely to
-            // never collide with ArrayOpWriter's array_* names), so the guard's premise — that no
-            // legitimate op envelope should ever reach this dispatch for an arity op — is gone. An
-            // actual "array_remove" envelope arriving here (a genuine misroute from the ordinary
-            // reflected-field path) still falls through to NotFound below on its own, the same as any
-            // other opName neither ApplyPropertyOp nor ApplyScriptOp recognises.
-            if (VmadPath.TryParse(fieldPath, out var opPropScript, out var opPropName))
-                return ToOutcome(VmadCodec.ApplyPropertyOp(vmadRecord, opPropScript, opPropName, opName, value));
-            if (VmadPath.TryParseScript(fieldPath, out var opScriptName))
-                return ToOutcome(VmadCodec.ApplyScriptOp(vmadRecord, opScriptName, opName, value));
-            return FieldApplyOutcome.NotFound;
-        }
-
-        return VmadPath.TryParse(fieldPath, out var scriptName, out var propName)
-            ? ToOutcome(VmadCodec.ApplyFieldValue(vmadRecord, scriptName, propName, value))
-            : FieldApplyOutcome.NotFound;
-    }
-
     // Never throws on a malformed envelope: a non-object value, an absent "op", or a non-string
     // "op" all simply fail to match, so a plain scalar write (a JSON number/string/bool/array, or
-    // an Object-typed property's own `{formKey, alias}`) can never be mistaken for one — those
-    // never carry an "op" member — and the caller falls back to the scalar path or NotFound.
+    // an object-shaped struct value) can never be mistaken for one — those never carry an "op"
+    // member — and the caller falls back to the ordinary whole-value write.
     private static bool TryGetOpName(JsonElement value, out string opName)
     {
         opName = "";
@@ -271,16 +246,4 @@ internal static class RecordFieldWriter
         opName = opEl.GetString()!;
         return true;
     }
-
-    private static FieldApplyOutcome ToOutcome(VmadApplyResult result) => result switch
-    {
-        VmadApplyResult.Applied => FieldApplyOutcome.Applied,
-        VmadApplyResult.ReadOnly => FieldApplyOutcome.ReadOnly,
-        // #658: a scalar-array element op's own boundary no-op (VmadCodec.RemoveAt/Move) — mirrors
-        // ArrayOpWriter's own NoOp mapping one-for-one, so RecordEditService's existing "commit
-        // nothing for a boundary op" handling (no rename, no re-serialize, no working-tree write)
-        // applies here unchanged, regardless of which codec answered it.
-        VmadApplyResult.NoOp => FieldApplyOutcome.NoOp,
-        _ => FieldApplyOutcome.NotFound,
-    };
 }

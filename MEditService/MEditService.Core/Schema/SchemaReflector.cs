@@ -159,20 +159,11 @@ public sealed class SchemaReflector
                 .ToDictionary(x => x.Type, x => x.Table),
             annotations);
 
-        // Resolved once per category, game-neutral like everything else here — each game
-        // assembly declares its own IHaveVirtualMachineAdapterGetter in its flat
-        // Mutagen.Bethesda.{category} namespace (no shared cross-game interface exists), the same
-        // one Records/DuckDbRecordIndex.IndexVmad keys off for a given game's compiled type.
-        // Null (a hypothetical future game without the concept) means no table in that category
-        // can ever carry VMAD.
-        var vmadInterfaceType = assembly.GetType($"Mutagen.Bethesda.{category}.IHaveVirtualMachineAdapterGetter");
-
         var schemas = new Dictionary<string, RecordTableSchema>();
         foreach (var (tableName, getterType) in discovered)
         {
             schemas[tableName] = BuildSchema(
-                tableName, getterType, siblingsByTable[tableName],
-                game, logger, vmadInterfaceType);
+                tableName, getterType, siblingsByTable[tableName], game, logger);
         }
 
         ModHeaderSchema.AddHeaderSchemaIfAvailable(schemas, category, assembly, game, logger);
@@ -189,7 +180,7 @@ public sealed class SchemaReflector
     // has nothing to gain from pointing at the abstract base.
     private static RecordTableSchema BuildSchema(
         string tableName, Type getterType, List<Type> siblingGetterTypes,
-        GameReflection game, ILogger logger, Type? vmadInterfaceType)
+        GameReflection game, ILogger logger)
     {
         var columns = ColumnReflection.ReflectColumns(getterType, game, logger);
 
@@ -218,7 +209,6 @@ public sealed class SchemaReflector
             DisplayName = RecordDisplayNames.For(tableName),
             RecordType = getterType,
             RecordColumns = columns,
-            HasVmad = vmadInterfaceType?.IsAssignableFrom(getterType) ?? false,
         };
     }
 

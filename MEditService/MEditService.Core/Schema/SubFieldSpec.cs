@@ -37,7 +37,9 @@ internal sealed record SubFieldSpec(
     bool IsDiscriminator = false,
     // See FieldMetadata.SiblingsInUse. Set from the game's annotation table by
     // SubFieldReflection.ProjectSubField, for the enum leaf the table names.
-    IReadOnlyDictionary<string, IReadOnlyList<string>>? SiblingsInUse = null)
+    IReadOnlyDictionary<string, IReadOnlyList<string>>? SiblingsInUse = null,
+    // See FieldMetadata.KeyMembers. Set from the game's annotation table by ListLeaves.
+    IReadOnlyList<string>? KeyMembers = null)
 {
     // Mirrors ColumnSpec.IsArray's own derivation (ColumnReflection.ReflectColumns: `info.ApiType ==
     // "array"`) rather than adding a redundant constructor flag that could disagree with ApiType.
@@ -48,5 +50,6 @@ internal sealed record SubFieldSpec(
             AllowsNull: AllowsNull,
             DisplayLabel: DisplayLabel,
             IsDiscriminator: IsDiscriminator,
-            SiblingsInUse: SiblingsInUse);
+            SiblingsInUse: SiblingsInUse,
+            KeyMembers: KeyMembers);
 }

@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import {
   EXTENSION_TO_WEBVIEW, type ExtensionToWebview, type ArrayElementContext, type ArrayParentContext,
-  type VmadScriptContext, type VmadPropertyContext, type StringValueContext,
+  type StringValueContext,
 } from './messages';
 import { broadcastToRecordPanels } from './onRecordEdited';
 
@@ -11,9 +11,8 @@ import { broadcastToRecordPanels } from './onRecordEdited';
  *  parses and hands it, and broadcasts the one matching {@link ExtensionToWebview} message; every
  *  open panel self-filters on `formKey` and applies it (RecordPanel.tsx). One table + one
  *  generic registrar in place of three near-identical hand-written registrars
- *  (`registerFieldOpCommands`/`registerArrayOpCommands`/half of `registerVmadOpCommands`).
+ *  (`registerFieldOpCommands`/`registerArrayOpCommands`).
  *
- *  Deliberately not every VMAD command: `addScript` (needs a native input box for the new script's
  *  name), `setScriptFlags`/`setPropertyFlags` (need a native QuickPick) and the array/VMAD
  *  gestures that need no message at all all resolve something host-side first, so they stay
  *  hand-written in `extension.ts` alongside this table's own registrar. */
@@ -47,18 +46,6 @@ export const FORWARDER_COMMANDS: ForwarderCommand[] = [
   forwarder<ArrayElementContext>('modbench.array.remove', (ctx) => arrayStructuralOp(ctx, 'remove')),
   forwarder<ArrayElementContext>('modbench.array.moveUp', (ctx) => arrayStructuralOp(ctx, 'moveUp')),
   forwarder<ArrayElementContext>('modbench.array.moveDown', (ctx) => arrayStructuralOp(ctx, 'moveDown')),
-  forwarder<VmadScriptContext>('modbench.vmad.removeScript', (ctx) => ({
-    type: EXTENSION_TO_WEBVIEW.VMAD_STRUCTURAL_OP, formKey: ctx.formKey, plugin: ctx.plugin, origin: ctx.origin,
-    fieldPath: `VMAD\\${ctx.scriptName}`, value: { op: 'remove_script' },
-  })),
-  forwarder<VmadScriptContext>('modbench.vmad.addProperty', (ctx) => ({
-    type: EXTENSION_TO_WEBVIEW.VMAD_OPEN_ADD_PROPERTY, formKey: ctx.formKey, plugin: ctx.plugin, origin: ctx.origin,
-    scriptName: ctx.scriptName,
-  })),
-  forwarder<VmadPropertyContext>('modbench.vmad.removeProperty', (ctx) => ({
-    type: EXTENSION_TO_WEBVIEW.VMAD_STRUCTURAL_OP, formKey: ctx.formKey, plugin: ctx.plugin, origin: ctx.origin,
-    fieldPath: `VMAD\\${ctx.scriptName}\\${ctx.propName}`, value: { op: 'remove_property' },
-  })),
 ];
 
 export function registerForwarderCommands(recordPanels: Set<vscode.WebviewPanel>): vscode.Disposable[] {

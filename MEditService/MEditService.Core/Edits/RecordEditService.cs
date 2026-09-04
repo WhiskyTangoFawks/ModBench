@@ -156,7 +156,8 @@ public sealed class RecordEditService(
             && PartialFormFlag.IsPartialFormable(target.GetType());
         var bit14Before = checkBit14Leak ? target.MajorRecordFlagsRaw & PartialFormFlag.Bit : 0;
 
-        var outcome = RecordFieldWriter.TryApply(target, document.RecordType, fieldPath, value, schemas);
+        var outcome = RecordFieldWriter.TryApply(
+            target, document.RecordType, fieldPath, value, schemas, out var duplicateKey);
         // #630: a boundary array op (remove past the end, move the first element up / the last
         // down) — already fully "satisfied" with nothing to commit. Returned before the bit-14 leak
         // check and every write below (rename, re-serialize, ApplyWorkingTreeChanges, ReapplyFilter)
@@ -166,7 +167,7 @@ public sealed class RecordEditService(
         if (outcome == FieldApplyOutcome.NoOp)
             return RecordEditResult.Success();
         if (outcome != FieldApplyOutcome.Applied)
-            return RefuseFieldOutcome(outcome, fieldPath, document.RecordType, schemas);
+            return RefuseFieldOutcome(outcome, fieldPath, document.RecordType, schemas, duplicateKey);
 
         if (checkBit14Leak && (target.MajorRecordFlagsRaw & PartialFormFlag.Bit) != bit14Before)
         {
@@ -1446,7 +1447,8 @@ public sealed class RecordEditService(
     /// <c>ScriptStructListProperty.RemapLinks</c> is generated base-only and never descends into its
     /// own <c>Structs</c>, so a VMAD <c>ArrayOfStruct</c> property's Object members keep pointing at
     /// the old FormKey — written up in <c>upstream-mutagen-issue.md</c> at the repository root.
-    /// mEdit's own reference index walks struct-lists (<c>VmadCodec</c>), so a referencer linked only
+    /// mEdit's own reference index walks struct-lists (the reflected schema reaches their
+    /// members), so a referencer linked only
     /// that way <i>is</i> in this list, gets loaded here, and is caught by the textual check below
     /// rather than being written half-remapped. Delete this check when the upstream fix ships.</para>
     /// </summary>
@@ -1501,7 +1503,7 @@ public sealed class RecordEditService(
             var owner = ReadRecordFromSource(_codec, logger, filePath, ownerDoc, release);
             ((IFormLinkContainer)owner).RemapLinks(mapping);
             var ownerBody = SerializeToText(owner, release);
-            if (RefuseIfRemapIncomplete(owner, ownerDoc.RecordType, oldFormKey, referencerPlugin) is { } incomplete)
+            if (RefuseIfRemapIncomplete(owner, ownerDoc.RecordType, oldFormKey, referencerPlugin, release) is { } incomplete)
                 return incomplete;
 
             var changes = new List<(string FormKey, string? Body)> { (unit.OwnerFormKey, ownerBody) };
@@ -1523,7 +1525,7 @@ public sealed class RecordEditService(
                 // struct-list link is its own record's, and has to be asked of the child directly.
                 var childDoc = reads.GetDocument(embeddedFormKey, referencerPlugin);
                 if (RefuseIfRemapIncomplete(
-                        child, childDoc?.RecordType ?? unit.OwnerRecordType, oldFormKey, referencerPlugin)
+                        child, childDoc?.RecordType ?? unit.OwnerRecordType, oldFormKey, referencerPlugin, release)
                     is { } childIncomplete) return childIncomplete;
 
                 changes.Add((embeddedFormKey, SerializeToText(child, release)));
@@ -1563,20 +1565,22 @@ public sealed class RecordEditService(
     /// Delete this guard when the upstream fix ships.</para>
     ///
     /// <para><b>Asked of the reference index's own walker, not of the serialized text.</b>
-    /// <see cref="PluginIngest.CollectVmadRefsForRecord"/> is the same collector a fresh ingest
-    /// derives <c>form_references</c> with, and it walks struct-lists (<c>VmadCodec</c>) where the
-    /// generated remap does not — that asymmetry is the whole reason this can catch anything. A
+    /// <see cref="PluginIngest.CollectFormRefs"/> is the same collector a fresh ingest derives
+    /// <c>form_references</c> with, and it walks the reflected schema's whole link tree — struct
+    /// lists included — where the generated remap does not; that asymmetry is the whole reason this
+    /// can catch anything. A
     /// textual "no occurrence of the old FormKey survives" check would be broader, but it cannot
     /// tell a link from an EditorID, a string field, or a sibling record inside a container
     /// document, and would refuse a perfectly good renumber for any of them. Precision here is not
     /// a nicety: the record being renumbered may legitimately spell its own old FormKey in a string
     /// field, and refusing that is refusing the gesture outright.</para>
     /// </summary>
-    private static RecordEditResult? RefuseIfRemapIncomplete(
-        IMajorRecordGetter record, string recordType, string oldFormKey, PluginKey plugin)
+    private RecordEditResult? RefuseIfRemapIncomplete(
+        IMajorRecordGetter record, string recordType, string oldFormKey, PluginKey plugin, GameRelease release)
     {
         var refs = new List<FormRef>();
-        PluginIngest.CollectVmadRefsForRecord(record, recordType, refs);
+        if (schemaReflector.GetSchemas(release).TryGetValue(recordType, out var schema))
+            PluginIngest.CollectFormRefs(refs, record, recordType, schema);
         if (refs.FirstOrDefault(r => r.TargetFormKey == oldFormKey) is { TargetFormKey: not null } stale)
         {
             return RecordEditResult.Refused(
@@ -1670,9 +1674,9 @@ public sealed class RecordEditService(
             // asked about. The renumbered record's own self-link is remapped on this path and
             // nowhere else — the referencer list excludes the target — so without this the one gap
             // the guard exists for would pass silently here.
-            if (RefuseIfRemapIncomplete(owner, ownerDocument.RecordType, oldFormKey, plugin) is { } ownerIncomplete)
+            if (RefuseIfRemapIncomplete(owner, ownerDocument.RecordType, oldFormKey, plugin, release) is { } ownerIncomplete)
                 return ownerIncomplete;
-            if (RefuseIfRemapIncomplete(found.Child, document.RecordType, oldFormKey, plugin) is { } childIncomplete)
+            if (RefuseIfRemapIncomplete(found.Child, document.RecordType, oldFormKey, plugin, release) is { } childIncomplete)
                 return childIncomplete;
 
             ((IMajorRecordInternal)found.Child).FormKey = FormKey.Factory(newFormKey);
@@ -1685,7 +1689,7 @@ public sealed class RecordEditService(
         var record = ReadRecordFromSource(_codec, logger, unit.FullPath, document, release);
         ((IFormLinkContainer)record).RemapLinks(mapping);
 
-        if (RefuseIfRemapIncomplete(record, document.RecordType, oldFormKey, plugin) is { } recordIncomplete)
+        if (RefuseIfRemapIncomplete(record, document.RecordType, oldFormKey, plugin, release) is { } recordIncomplete)
             return recordIncomplete;
 
         ((IMajorRecordInternal)record).FormKey = FormKey.Factory(newFormKey);
@@ -2323,8 +2327,19 @@ public sealed class RecordEditService(
 
     private static RecordEditResult RefuseFieldOutcome(
         FieldApplyOutcome outcome, string fieldPath, string recordType,
-        IReadOnlyDictionary<string, RecordTableSchema> schemas)
+        IReadOnlyDictionary<string, RecordTableSchema> schemas, string? duplicateKey = null)
     {
+        // The key identifies the element, so the refusal names it — a caller told only that
+        // something collided would have to diff the array itself to find out what.
+        if (outcome == FieldApplyOutcome.DuplicateKeyInKeyedArray)
+        {
+            return RecordEditResult.Refused(
+                RecordEditRefusal.DuplicateKeyInKeyedArray,
+                $"'{fieldPath}' has two entries keyed '{duplicateKey}'. Entries there are identified " +
+                "by that key rather than by position, so rename or remove one of the two.");
+        }
+
+
         if (outcome == FieldApplyOutcome.ReadOnly)
             return RecordEditResult.Refused(RecordEditRefusal.FieldReadOnly, $"'{fieldPath}' is read-only.");
 

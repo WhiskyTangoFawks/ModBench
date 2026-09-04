@@ -257,13 +257,13 @@ public sealed class CompareResultColumnKeyIntegrityTests
         // structList Raw and non-empty condition subtrees — assert that directly first, so a
         // future fixture regression that accidentally stops exercising these paths fails loudly
         // here rather than the JSON walk silently passing over empty objects.
-        Assert.NotNull(compare.Vmad);
-        var configProp = compare.Vmad.Scripts.Single().Properties.Single(p => p.Name == "Config");
-        Assert.Equal("struct", configProp.Kind);
-        Assert.NotEmpty(configProp.Raw ?? []);
-        var itemsProp = compare.Vmad.Scripts.Single().Properties.Single(p => p.Name == "Items");
-        Assert.Equal("structList", itemsProp.Kind);
-        Assert.NotEmpty(itemsProp.Raw ?? []);
+        var properties = Assert.Single(compare.Diffs, d => d.FieldName == "virtual_machine_adapter")
+            .Children!.Single(c => c.FieldName == "scripts")
+            .Children!.Single()
+            .Children!.Single(c => c.FieldName == "properties")
+            .Children!;
+        Assert.NotEmpty(properties.Single(p => p.FieldName == "Config").Children!.Single(c => c.FieldName == "members").Children!);
+        Assert.NotEmpty(properties.Single(p => p.FieldName == "Items").Children!.Single(c => c.FieldName == "structs").Children!);
 
         // #692: conditions reach the grid as an ordinary reflected array column, so the walk's
         // condition coverage is a nested FieldDiff subtree with per-column Values/CellStates.

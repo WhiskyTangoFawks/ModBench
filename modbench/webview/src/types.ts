@@ -4,27 +4,24 @@ type Schemas = components['schemas'];
 
 // The record editor's wire DTOs. Every type here is the generated schema type — named, and in a
 // few cases *narrowed*. The narrowings are the only hand-written shape left, and each one passes
-// the same test: would this still need to exist if the generator were perfect? A field the
-// VMAD tree adapter synthesizes and the backend never emits is a genuine frontend
-// refinement and stays; re-declaring a field the schema already describes is a second, staler copy
-// and does not (#627).
+// the same test: would this still need to exist if the generator were perfect? Narrowing a wire
+// `string` to the closed set this side switches on exhaustively is a genuine frontend refinement
+// and stays; re-declaring a field the schema already describes is a second, staler copy and does
+// not (#627).
 
 export type FormKeyResolutionState = Schemas['FormKeyResolutionState'];
 export type FormKeyResolution = Schemas['FormKeyResolution'];
 export type ConflictAll = Schemas['ConflictAll'];
 export type ConflictThis = Schemas['ConflictThis'];
 export type EnumMember = Schemas['EnumMember'];
-/** The widget a leaf renders with. Wider than the backend's own `type` string: `vmadObject` is
- *  synthesized by vmadTreeAdapter.ts for rows the backend never sends at all, and names a leaf
- *  whose editor is a genuine exception to the plain type -> widget mapping, the same way 'formKey'
- *  already is — a VMAD object property is a (FormKey, alias) pair. */
+/** The widget a leaf renders with — the backend's own `type` string, narrowed to the closed set
+ *  DiffRow switches on exhaustively. */
 export type FieldType =
-  | 'string' | 'int' | 'float' | 'bool' | 'enum' | 'formKey' | 'struct' | 'array' | 'hex'
-  | 'vmadObject';
+  | 'string' | 'int' | 'float' | 'bool' | 'enum' | 'formKey' | 'struct' | 'array' | 'hex';
 
-/** `readOnly` is likewise adapter-only, and unconditional, regardless of the column's own
- *  mutability; every other field's editability still comes purely from the column (immutableSet),
- *  matching the "per column, never a mode" rule. */
+/** `readOnly` is a per-row stamp the panel applies (the header's own masters field), unconditional
+ *  regardless of the column's own mutability; every other field's editability still comes purely
+ *  from the column (immutableSet), matching the "per column, never a mode" rule. */
 export type FieldMetadata =
   // `isDiscriminator` says which member of a struct names the concrete class its object is —
   // `concrete_type` for a Loqui union, OMOD's `value_type` for its own. Read by the presentation
@@ -37,13 +34,8 @@ export type FieldMetadata =
     elementType?: FieldMetadata | null;   // present when type === 'array'
     fields?: FieldMetadata[] | null;      // present when type === 'struct'
     readOnly?: boolean;
-    // Required non-nullable booleans on the wire, optional here — deliberately, and not as
-    // fixture-compat slack. This type describes two different things: metadata that arrived from
-    // the backend, and metadata an adapter *invented* for one of the five synthesized `type`
-    // values above. For a synthesized `vmadObject` leaf, "is this a sortable pure-FormLink
-    // array?" has no answer; `undefined` says "not applicable" where `false` would fabricate one.
-    // A perfect generator would still not describe an object the backend never sends, so this
-    // stays optional for the same reason `type` stays narrowed.
+    // Required non-nullable booleans on the wire, optional here so a test fixture can leave a
+    // question that does not apply to its row unanswered rather than fabricating `false` for it.
     isSortable?: boolean;   // on elementType: true for pure FormLink arrays
     allowsNull?: boolean;   // for 'formKey': true when the Mutagen type is IFormLinkNullable<T>
     isDiscriminator?: boolean;  // this member names its object's concrete leaf
@@ -59,7 +51,7 @@ export type FieldValue = Omit<Schemas['FieldValue'], 'metadata'> & { metadata: F
 // `string`: comparing it against a bare `plugin` string becomes a compile error instead of a
 // silent same-filename collision. `Record<ColumnKey, T>`/`{ [k: string]: T }` still erase the
 // brand (a mapped type over a non-literal string collapses to an index signature) — the
-// per-column dictionaries on the wire (FieldDiff.values, VmadPropertyDiff.values, etc.) are not
+// per-column dictionaries on the wire (FieldDiff.values, FieldDiff.cellStates, etc.) are not
 // type-protected by this and rely on the value actually being `ColumnKey.Of`'s output instead.
 export type ColumnKey = string & { readonly __col: unique symbol };
 
@@ -118,8 +110,8 @@ export type RecordDetail = Omit<Schemas['RecordDetail'], 'fields'> & { fields: F
 
 export type CompareOverride = Omit<Schemas['CompareOverride'], 'fields'> & { fields: FieldValue[] };
 
-// The chain from a row's own restage root (a plain reflected field, or a
-// wirePath-bearing VMAD subtree — see FieldDiff.wirePath below) down to a given row's
+// The chain from a row's own restage root — the reflected field it stages under — down to a
+// given row's
 // own value: a struct hop addressed by member name, an unsorted-array hop by position, a sorted
 // (pure FormLink) array hop by the element's own value (there is nothing to address *beneath* a
 // sortKey hop — a sorted array's elements are themselves the value, never a struct/array).
@@ -130,38 +122,15 @@ export type CompareOverride = Omit<Schemas['CompareOverride'], 'fields'> & { fie
 // './types'.
 export type { PathSegment } from './messages';
 
-/** `wirePath` is adapter-only, like FieldMetadata's readOnly: the path this row (and
- *  its subtree) stages under, decoupled from `fieldName`, which stays a pure display label —
- *  absent for an ordinary reflected field where the two coincide, set by the VMAD adapter whose
- *  rows display as "Health" but stage under "VMAD\ScriptA\Health".
- *
- *  `conflictAll` is required on the wire but optional here: the adapter computes it itself for
- *  its own synthesized nodes (recordUtils.ts's aggregateConflictAll), and a node that has not
- *  set it degrades to "no background" in DiffRow's getRowBg. */
+/** `conflictAll` is required on the wire but optional here, so a test fixture that says nothing
+ *  about a row's conflict state degrades to "no background" in DiffRow's getRowBg rather than
+ *  having to state one. */
 export type FieldDiff = Omit<Schemas['FieldDiff'], 'children' | 'conflictAll'> & {
   conflictAll?: ConflictAll;
   children?: FieldDiff[] | null;
-  wirePath?: string;
 };
 
-/** The shapes a VMAD property row takes — 'object' is a (FormKey, alias) pair, 'structList' a
- *  list of per-instance member lists. Narrowed from the wire's `string` for the same reason
- *  FieldType is: DiffRow switches on it exhaustively. */
-export type VmadKind = 'scalar' | 'object' | 'array' | 'struct' | 'structList' | 'variable';
-
-export type VmadPropertyDiff = Omit<Schemas['VmadPropertyDiff'], 'kind' | 'children'> & {
-  kind: VmadKind;
-  children?: VmadPropertyDiff[] | null;
-};
-
-export type VmadScriptDiff = Omit<Schemas['VmadScriptDiff'], 'properties'> & {
-  properties: VmadPropertyDiff[];
-};
-
-export type VmadCompare = { scripts: VmadScriptDiff[] };
-
-export type CompareResult = Omit<Schemas['CompareResult'], 'overrides' | 'diffs' | 'vmad'> & {
+export type CompareResult = Omit<Schemas['CompareResult'], 'overrides' | 'diffs'> & {
   overrides: CompareOverride[];
   diffs: FieldDiff[];
-  vmad?: VmadCompare | null;
 };

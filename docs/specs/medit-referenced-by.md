@@ -228,7 +228,7 @@ deferred**, and that narrowing is a recorded decision, not an omission:
   product filter (`land`, `navm`, `navi`, plus the collapsed xEdit REFR-signature variants `pgre`,
   `pmis`, `parw`, `pbar`, `pbea`, `pcon`, `pfla`, `phzd`). Ingest walks the schema's tables, so a
   record of an excluded type gets no document, no `records` row, and no `form_references` rows at
-  all — not from the reflected field walk, not from the VMAD walk. A
+  all. A
   FormKey one of those records points at is therefore invisible here. That follows from the types
   not being editable records in mEdit rather than from a gap in reference discovery, and it holds
   until a type leaves the exclusion list. `PluginIngest.IndexPlugin` says the same thing at the code.

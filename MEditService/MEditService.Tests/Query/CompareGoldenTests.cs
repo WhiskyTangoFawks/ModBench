@@ -122,8 +122,6 @@ public sealed class CompareGoldenTests : IDisposable
     private static object Project(CompareResult r) => new
     {
         r.ConflictAll,
-        r.HasVmad,
-        HasVmadData = r.Vmad != null,
         Overrides = r.Overrides.Select(o => new
         {
             o.FormKey,

@@ -69,9 +69,8 @@ export function createRecordPanelClient(port: number): RecordPanelClient {
       return {
         ok: true,
         // Still a cast, but a different kind of one. This is a *narrowing* to the webview's own
-        // refinement of the wire — `FieldMetadata.type` and `VmadPropertyDiff.kind` are unions
-        // here and `string` on the wire, because the VMAD tree adapter synthesizes
-        // members the backend never sends (see types.ts). Wire -> webview is a downcast by
+        // refinement of the wire — `FieldMetadata.type` is a closed union here and `string` on
+        // the wire (see types.ts). Wire -> webview is a downcast by
         // construction, so no amount of schema honesty removes it; what changed is that it now
         // asserts a documented refinement rather than distrust of the generated types.
         result: cmp.data as CompareResult,

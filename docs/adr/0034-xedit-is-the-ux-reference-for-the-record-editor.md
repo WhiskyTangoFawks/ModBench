@@ -125,8 +125,8 @@ Anything not on this list aligns.
 ## Applies beyond this surface
 
 The rule — **consult xEdit before designing any record-editing interaction, and diverge only
-under a platform limitation** — governs the record editor, VMAD and Condition sections, and any
-future plugin-editing surface. Divergences taken under that wider rule are recorded as their own
+under a platform limitation** — governs the record editor and any future plugin-editing
+surface. Divergences taken under that wider rule are recorded as their own
 ADRs, so they stay findable: [ADR-0037](0037-unresolvable-masters-are-indexed-and-flagged.md) (a
 plugin with unresolvable masters is indexed and flagged rather than force-deactivated, justified
 by Mutagen's self-describing FormKeys against xEdit's whole-graph resolution) and

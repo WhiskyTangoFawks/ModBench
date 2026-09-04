@@ -4,7 +4,7 @@ namespace MEditService.Core.Queries;
 
 // ADR-0036: the compound identity a compare-grid column is keyed by everywhere two
 // same-filename, different-origin columns must stay distinguishable — FieldDiff.Values/CellStates/
-// Resolutions, VmadPropertyDiff/VmadScriptDiff's equivalents, ClassifyResult.
+// Resolutions, ClassifyResult.
 // PluginStates, SaveGroupResponse.ByPlugin. `|` is illegal in a Windows filename and an MO2
 // mod-folder name, so it can't collide with either half's own content, and it avoids `:`, already
 // load-bearing in the "000000:<plugin>" synthetic header FormKey and "param:{i}" field-cell-state

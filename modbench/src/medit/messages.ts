@@ -33,33 +33,12 @@ export const EXTENSION_TO_WEBVIEW = {
   // React state — but unlike before, no webview-side computation happens for an ordinary reflected
   // field's array: `op`/`rootField`/`path` travel straight through to `handleEditCell`/EDIT_FIELD as
   // an op envelope (`{op, path}` under `rootField`), and `RecordFieldWriter`/`ArrayOpWriter` compute
-  // the result server-side from the record's own current value and schema — the same shape
-  // VMAD_STRUCTURAL_OP below already established for VMAD's own ops. A VMAD scalar-array
-  // property's arity ops go server-side too, in VmadCodec's own structural-op vocabulary (#658);
-  // VMAD's ArrayOfObject and ArrayOfStruct shapes are the two that still compute client-side, and
-  // RecordPanel's own handleArrayOp is what tells them apart. `path` addresses the array itself
-  // for 'add', the element for the other three; a top-level array's is a one-hop (or empty) path,
-  // a nested array's carries every hop from `rootField`.
+  // the result server-side from the record's own current value and schema. `path` addresses the
+  // array itself for 'add', the element for the other three; a top-level array's is a one-hop (or
+  // empty) path, a nested array's carries every hop from `rootField`.
   ARRAY_STRUCTURAL_OP: 'arrayStructuralOp',
-  // VMAD's six structural-op right-click commands
-  // (Add/Remove Script, Add/Remove Property, Set Script/Property Flags) all reduce, on Track 0's
-  // backend, to the exact same shape EDIT_FIELD already carries — a VmadPath fieldPath
-  // (`VMAD\<Script>` or `VMAD\<Script>\<Property>`) and an op-envelope value
-  // (`{op: "add_script", ...}`, RecordFieldWriter.ApplyVmadField's own contract). Rather than six
-  // near-identical broadcast shapes, every command below resolves its own fieldPath/value and broadcasts this one
-  // message; each open panel self-filters on `formKey` and commits through the identical
-  // handleEditCell/EDIT_FIELD path every other gesture already uses — no new webview-side
-  // computation at all, unlike the array-op broadcasts above.
-  VMAD_STRUCTURAL_OP: 'vmadStructuralOp',
-  // Add Property is the one structural op that collects more than a single native
-  // prompt can hold (name, type, and a type-appropriate value) — a deliberate exception:
-  // a webview-rendered dialog rather than a QuickPick chain. This broadcast only tells the
-  // matching panel which script/plugin to open it for; the dialog's own confirm computes the
-  // fieldPath/value itself and commits through the ordinary write path, the same as every other
-  // gesture — no reply travels back through this message.
-  VMAD_OPEN_ADD_PROPERTY: 'vmadOpenAddProperty',
   // ADR-0039: the string-cell right-click menu's own entry — same broadcast-and-self-filter
-  // shape as the array/VMAD ops above, and for the identical reason: the extension host has no
+  // shape as the array ops above, and for the identical reason: the extension host has no
   // live reference into the webview's own React state, which alone knows the record's own display
   // label (RecordPanel's handleOpenExtended builds it). This message carries everything the
   // stringValueContext (recordUtils.ts) already captured at right-click time — identity, current
@@ -158,41 +137,6 @@ export interface ArrayParentContext {
   preventDefaultContextMenuItems: true;
 }
 
-// Same mechanism as ArrayElementContext/ArrayParentContext
-// above, carried by VMAD's own row kinds instead — the "Scripts (VMAD)" wrapper row (Add Script),
-// a script row (Remove Script, Add Property, Set Script Flags), or a property row (Remove
-// Property, Set Property Flags). No extra identity beyond script/property name travels here: the
-// structural op itself resolves the rest from the record's own current VMAD tree, server-side.
-export interface VmadScriptsContext {
-  webviewSection: 'vmadScripts';
-  formKey: string;
-  plugin: string;
-  origin: string;
-  preventDefaultContextMenuItems: true;
-}
-
-export interface VmadScriptContext {
-  webviewSection: 'vmadScript';
-  formKey: string;
-  plugin: string;
-  origin: string;
-  scriptName: string;
-  // Seeds Set Script Flags' own QuickPick — null when this column has no disk value for the row
-  // (nothing to seed with).
-  currentFlags: string | null;
-  preventDefaultContextMenuItems: true;
-}
-
-export interface VmadPropertyContext {
-  webviewSection: 'vmadProperty';
-  formKey: string;
-  plugin: string;
-  origin: string;
-  scriptName: string;
-  propName: string;
-  preventDefaultContextMenuItems: true;
-}
-
 // The record editor's own column header — one
 // override column's identity, carried the same way every other native-menu context here is.
 // Unlike the row-scoped contexts above, resolving the command this feeds (Copy as Override Into…/
@@ -209,7 +153,7 @@ export interface ColumnHeaderContext {
 }
 
 // The chain from a row's own restage root
-// (a plain reflected field, or a wirePath-bearing VMAD subtree) down to a given row's
+// (a plain reflected field, or a wirePath-bearing subtree) down to a given row's
 // own value — a struct hop addressed by member name, an unsorted-array hop by position, a sorted
 // (pure FormLink) array hop by the element's own value (nothing addresses *beneath* a sortKey
 // hop). Lives here, not in a webview module, because StringValueContext/
@@ -261,8 +205,6 @@ export type ExtensionToWebview =
       type: typeof EXTENSION_TO_WEBVIEW.ARRAY_STRUCTURAL_OP; formKey: string; plugin: string; origin: string;
       rootField: string; path: PathSegment[]; op: 'add' | 'remove' | 'moveUp' | 'moveDown';
     }
-  | { type: typeof EXTENSION_TO_WEBVIEW.VMAD_STRUCTURAL_OP; formKey: string; plugin: string; origin: string; fieldPath: string; value: unknown }
-  | { type: typeof EXTENSION_TO_WEBVIEW.VMAD_OPEN_ADD_PROPERTY; formKey: string; plugin: string; origin: string; scriptName: string }
   | {
       type: typeof EXTENSION_TO_WEBVIEW.FIELD_OPEN_EXTENDED_EDITOR; formKey: string; plugin: string; origin: string;
       fieldName: string; value: string; readOnly: boolean;

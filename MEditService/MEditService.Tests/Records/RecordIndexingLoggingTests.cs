@@ -9,12 +9,11 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Tests.Records;
 
-// The per-plugin VMAD summary line duplicates the per-plugin progress milestone
-// LoadOrderMirror already logs at Info, so it logs at Debug here. Individual record
-// processing during indexing (append, VMAD) logs at Trace.
-// Indexing *behavior* (rows land correctly, VMAD round-trips) is already covered by
-// DuckDbRecordIndexTests and VmadIndexerTests, which remain the safety net for this
-// reclassification; this file only asserts on log level/content, which none of those do.
+// A per-plugin summary line duplicates the per-plugin progress milestone LoadOrderMirror already
+// logs at Info, so it logs at Debug here; individual record processing during indexing logs at
+// Trace. Indexing *behavior* (rows land correctly) is covered by DuckDbRecordIndexTests, which
+// remains the safety net for this reclassification; this file only asserts on log level and
+// content, which that suite does not.
 public sealed class RecordIndexingLoggingTests : IDisposable
 {
     private static readonly SchemaReflector Reflector = SharedSchemaReflector.Instance;
@@ -85,16 +84,6 @@ public sealed class RecordIndexingLoggingTests : IDisposable
         return repo;
     }
 
-    [Fact]
-    public void Index_PerPluginVmadSummary_LogsAtDebugNotInformation()
-    {
-        var (loggerFactory, entries) = CapturingLoggerFactory();
-        using var _ = loggerFactory;
-        using var repo = IndexedRepository(loggerFactory.CreateLogger(nameof(DuckDbRecordIndex)));
-
-        Assert.Contains(entries, e => e.Level == LogLevel.Debug && e.Message.Contains("Indexed VMAD for"));
-        Assert.DoesNotContain(entries, e => e.Level == LogLevel.Information && e.Message.Contains("Indexed VMAD for"));
-    }
 
     [Fact]
     public void Index_PerRecordAppend_LogsAtTraceWithFormKey()
@@ -107,16 +96,4 @@ public sealed class RecordIndexingLoggingTests : IDisposable
             e.Level == LogLevel.Trace && e.Message.Contains(_npcFormKey.ToString()) && e.Message.Contains("Appended"));
     }
 
-    [Fact]
-    public void Index_PerRecordVmad_LogsAtTraceWithFormKey()
-    {
-        var (loggerFactory, entries) = CapturingLoggerFactory();
-        using var _ = loggerFactory;
-        using var repo = IndexedRepository(loggerFactory.CreateLogger(nameof(DuckDbRecordIndex)));
-
-        Assert.Contains(entries, e =>
-            e.Level == LogLevel.Trace
-            && e.Message.Contains(_npcFormKey.ToString())
-            && e.Message.Contains("Indexed VMAD for"));
-    }
 }

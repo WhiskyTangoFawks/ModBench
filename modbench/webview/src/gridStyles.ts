@@ -2,7 +2,7 @@ import type React from 'react';
 import type { ConflictThis } from './types';
 
 // Shared compare-grid presentation primitives, used by both the generic field
-// rows (RecordPanel/DiffRow) and the VMAD section (VmadSection). Also used by
+// rows (RecordPanel/DiffRow). Also used by
 // DownloadsApp (Mod Management context) for its themed table cells — baseCell/
 // headerCell are the only primitives that cross that boundary.
 

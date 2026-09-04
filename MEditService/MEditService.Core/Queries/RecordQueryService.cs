@@ -13,14 +13,11 @@ public sealed class RecordQueryService(
     ILoadOrderMirror loadOrder,
     SchemaReflector schemaReflector,
     ConflictClassifier conflictClassifier,
-    ILogger<RecordQueryService>? logger = null,
     SourceFreshness? freshness = null) : IRecordQueryService
 {
     private readonly ILoadOrderMirror _mirror = loadOrder;
     private readonly SchemaReflector _schemaReflector = schemaReflector;
     private readonly ConflictClassifier _conflictClassifier = conflictClassifier;
-    private readonly ILogger _logger = (ILogger?)logger ?? NullLogger.Instance;
-
     // The two point reads below are the record editor's and compare grid's own
     // answers, so they are where source text is re-checked against what the index stored. Optional
     // only so the many read-shape tests that construct this service directly keep compiling; the
@@ -129,8 +126,8 @@ public sealed class RecordQueryService(
         // ADR-0035: a non-participating plugin's override is indexed and browsable but
         // never contributes to conflict classification.
         var pluginParticipates = heldPlugins.ToDictionary(p => ColumnKey.Of(p.Name, p.Origin), p => p.Participates);
-        var (classification, conflictAll, vmad) =
-            ClassifyStack(stack, committedOverrides, pluginMasters, pluginParticipates, resolveFormKey);
+        var (classification, conflictAll) =
+            ClassifyStack(committedOverrides, pluginMasters, pluginParticipates, resolveFormKey);
         // ADR-0036: Origin must be passed through explicitly (never left to default to
         // PluginOrigin.DataDirectory), and classification.PluginStates is keyed by
         // ColumnKey.Of(o.Plugin, o.Origin) — a bare-plugin lookup misses for any non-Data-origin
@@ -142,41 +139,20 @@ public sealed class RecordQueryService(
                 Origin: o.Origin, RecordType: o.RecordType, IsPartialForm: o.IsPartialForm,
                 IsPartialFormable: o.IsPartialFormable));
 
-        var hasVmad = RequireSchemas()[stack.RecordType].HasVmad;
-        return new CompareResult(annotated, classification.Diffs, conflictAll, hasVmad, vmad);
+        return new CompareResult(annotated, classification.Diffs, conflictAll);
     }
 
     /// <summary>The record-wide classification <see cref="GetCompare"/> needs — one definition of
-    /// "what is this record's ConflictAll". VMAD is outside the generic reflection pipeline
-    /// (reconstituted here from the entry's own document body via
-    /// <c>RecordDocumentCodecs</c>), so it is classified separately and its contribution folded
-    /// into the generic result via <see cref="ConflictRules.Escalate"/>.</summary>
-    private (ClassifyResult Classification, ConflictAll ConflictAll, VmadCompare? Vmad) ClassifyStack(
-        RecordOverrides stack,
+    /// "what is this record's ConflictAll".</summary>
+    private (ClassifyResult Classification, ConflictAll ConflictAll) ClassifyStack(
         IReadOnlyList<RecordDetail> committedOverrides,
         IReadOnlyDictionary<string, IReadOnlyList<string>> pluginMasters,
         IReadOnlyDictionary<string, bool> pluginParticipates,
         Func<string, RecordLookupEntry?> resolveFormKey)
     {
-        var gameRelease = RequireLoadOrder().GameRelease;
-        var classification = _conflictClassifier.Classify(committedOverrides, pluginMasters, gameRelease, resolveFormKey, pluginParticipates);
-        var conflictAll = classification.ConflictAll;
-
-        // VMAD is outside the generic reflection pipeline, so classify it separately and fold
-        // its conflict contribution into the record-level ConflictAll (computed on demand, never stored).
-        var vmadInputs = stack.Entries
-            .Select(e => new VmadPluginInput(
-                e.Plugin.Name, e.LoadOrderIndex, RecordDocumentCodecs.GetVmad(e.Effective, gameRelease, _logger), e.Plugin.Origin!))
-            .ToList();
-        VmadCompare? vmad = null;
-        if (vmadInputs.Any(i => i.Vmad != null))
-        {
-            var vmadResult = VmadConflictClassifier.Classify(vmadInputs, gameRelease, resolveFormKey, pluginParticipates);
-            vmad = vmadResult.Compare;
-            conflictAll = ConflictRules.Escalate(conflictAll, vmadResult.ConflictContribution);
-        }
-
-        return (classification, conflictAll, vmad);
+        var classification = _conflictClassifier.Classify(
+            committedOverrides, pluginMasters, RequireLoadOrder().GameRelease, resolveFormKey, pluginParticipates);
+        return (classification, classification.ConflictAll);
     }
 
     public IReadOnlyList<PluginRecordTypeCount> GetPluginRecordTypes(string plugin, string? origin = null)

@@ -60,8 +60,7 @@ export function formKeyLabel(value: string, resolution?: FormKeyResolution): str
   return resolution?.editorId ? `${resolution.editorId} [${value}]` : value;
 }
 
-// A FormKey rendered as its link affordance. Shared by FormKeyCell (generic fields) and
-// VmadSection (VMAD object properties).
+// A FormKey rendered as its link affordance, used by FormKeyCell.
 //
 // The click gesture is split here so it stays uniform across every cell in the
 // grid — Ctrl+click follows the reference (xEdit's vstViewClick likewise requires VK_CONTROL),
@@ -87,8 +86,7 @@ export function FormKeyLink({ value, onOpen, onPlainClick, onDoubleClick, openTr
   onPlainClick?: () => void;
   // ADR-0034: both optional, and both used by exactly one caller — FormKeyCell's
   // mutable branch, which wires them to the same `openPicker` gated the way ScalarCell/FlagCell
-  // gate their own mutable open triggers. VmadSection doesn't pass
-  // either — no `data-open-trigger` attribute, no double-click behavior.
+  // gate their own mutable open triggers.
   onDoubleClick?: () => void;
   openTrigger?: boolean;
   resolution?: FormKeyResolution;
@@ -130,8 +128,8 @@ export function FormKeyLink({ value, onOpen, onPlainClick, onDoubleClick, openTr
         // rather than shortening keeps the full reference in the DOM, so a selection copies the
         // untruncated text.
         //
-        // minWidth: 0 is load-bearing, not tidying: FormKeyCell and VmadSection both wrap this in
-        // a `display: inline-flex` span, which makes the button a flex item, and a flex item's
+        // minWidth: 0 is load-bearing, not tidying: FormKeyCell wraps this in a
+        // `display: inline-flex` span, which makes the button a flex item, and a flex item's
         // default `min-width: auto` refuses to shrink below its content — silently defeating the
         // overflow/ellipsis above and letting a long composite blow the column out instead.
         display: 'inline-block',

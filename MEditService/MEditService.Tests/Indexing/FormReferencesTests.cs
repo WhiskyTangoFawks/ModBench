@@ -228,14 +228,14 @@ public class FormReferencesTests
         while (reader.Read())
             rows.Add((reader.GetString(0), reader.GetString(1), reader.GetString(2)));
 
-        var row = rows.FirstOrDefault(r => r.FieldPath == @"VMAD\DefaultScript\Config\TargetRef");
+        var row = rows.FirstOrDefault(r => r.FieldPath == "virtual_machine_adapter.scripts[0].properties[0].members[0].properties[0].object");
         Assert.NotEqual(default, row);
         Assert.Equal(targetFormKey.ToString(), row.Target);
         Assert.Equal("npc_", row.RecordType);  // ResolveRecordType must tag the source record's own table
     }
 
     [Fact]
-    public void Index_VmadNestedStructWithObjectMember_IsIndexedInFormReferences()
+    public void Index_VmadStructNestedInsideAStruct_IsNotWalked_TheDocumentedTruncation()
     {
         FormKey targetFormKey = default;
         FormKey npcFormKey = default;
@@ -252,7 +252,9 @@ public class FormReferencesTests
                 var vmad = new VirtualMachineAdapter();
                 var script = new ScriptEntry { Name = "DefaultScript", Flags = ScriptEntry.Flag.Local };
 
-                // Config = Struct { Inner = Struct { TargetRef = Object } }
+                // Config = Struct { Inner = Struct { TargetRef = Object } } — a shape Papyrus
+                // itself cannot author (a struct member is never another struct), built here only
+                // to pin where the walk stops.
                 var outer = new ScriptStructProperty { Name = "Config" };
                 var outerWrapper = new ScriptEntry();
                 var inner = new ScriptStructProperty { Name = "Inner" };
@@ -283,9 +285,12 @@ public class FormReferencesTests
         while (reader.Read())
             rows.Add((reader.GetString(0), reader.GetString(1)));
 
-        var row = rows.FirstOrDefault(r => r.FieldPath == @"VMAD\DefaultScript\Config\Inner\TargetRef");
-        Assert.NotEqual(default, row);
-        Assert.Equal(targetFormKey.ToString(), row.Target);
+        // The walk stops at the re-entry, by SchemaAnnotations.CycleTruncations' own ruling: a
+        // Fallout 4 Papyrus struct member is never itself a struct, so the shape built above is
+        // unreachable from real data and the schema does not model it. One level shallower — a
+        // struct member's own Object property — is walked, which
+        // Index_VmadStructWithObjectMember_IsIndexedInFormReferences pins.
+        Assert.Empty(rows);
     }
 
     [Fact]
@@ -335,12 +340,12 @@ public class FormReferencesTests
         while (reader.Read())
             rows.Add((reader.GetString(0), reader.GetString(1)));
 
-        Assert.Contains(rows, r => r.FieldPath == @"VMAD\DefaultScript\Config\Refs[0]" && r.Target == target0Fk.ToString());
-        Assert.Contains(rows, r => r.FieldPath == @"VMAD\DefaultScript\Config\Refs[1]" && r.Target == target1Fk.ToString());
+        Assert.Contains(rows, r => r.FieldPath == "virtual_machine_adapter.scripts[0].properties[0].members[0].properties[0].objects[0].object" && r.Target == target0Fk.ToString());
+        Assert.Contains(rows, r => r.FieldPath == "virtual_machine_adapter.scripts[0].properties[0].members[0].properties[0].objects[1].object" && r.Target == target1Fk.ToString());
     }
 
     [Fact]
-    public void Index_VmadStructWithStructListMember_IsIndexedInFormReferences()
+    public void Index_VmadStructListProperty_IsIndexedInFormReferences()
     {
         FormKey target0Fk = default, target1Fk = default;
         FormKey npcFormKey = default;
@@ -357,9 +362,8 @@ public class FormReferencesTests
                 var vmad = new VirtualMachineAdapter();
                 var script = new ScriptEntry { Name = "DefaultScript", Flags = ScriptEntry.Flag.Local };
 
-                // Config = Struct { Parts = ArrayOfStruct [ {PartRef=Object}, {PartRef=Object} ] }
-                var outer = new ScriptStructProperty { Name = "Config" };
-                var outerWrapper = new ScriptEntry();
+                // Parts = ArrayOfStruct [ {PartRef=Object}, {PartRef=Object} ] — the shape
+                // upstream-mutagen-issue.md's own RemapLinks gap lives in.
                 var parts = new ScriptStructListProperty { Name = "Parts" };
 
                 var inst0 = new ScriptEntryStructs();
@@ -374,9 +378,7 @@ public class FormReferencesTests
                 inst1.Members.Add(ref1);
                 parts.Structs.Add(inst1);
 
-                outerWrapper.Properties.Add(parts);
-                outer.Members.Add(outerWrapper);
-                script.Properties.Add(outer);
+                script.Properties.Add(parts);
                 vmad.Scripts.Add(script);
                 npc.VirtualMachineAdapter = vmad;
             })
@@ -396,8 +398,8 @@ public class FormReferencesTests
         while (reader.Read())
             rows.Add((reader.GetString(0), reader.GetString(1)));
 
-        Assert.Contains(rows, r => r.FieldPath == @"VMAD\DefaultScript\Config\Parts[0]\PartRef" && r.Target == target0Fk.ToString());
-        Assert.Contains(rows, r => r.FieldPath == @"VMAD\DefaultScript\Config\Parts[1]\PartRef" && r.Target == target1Fk.ToString());
+        Assert.Contains(rows, r => r.FieldPath == "virtual_machine_adapter.scripts[0].properties[0].structs[0].members[0].object" && r.Target == target0Fk.ToString());
+        Assert.Contains(rows, r => r.FieldPath == "virtual_machine_adapter.scripts[0].properties[0].structs[1].members[0].object" && r.Target == target1Fk.ToString());
     }
 
     // ── #671: scripts reachable only through an adapter sub-structure ───────────────────────────
@@ -466,7 +468,7 @@ public class FormReferencesTests
 
         var row = Assert.Single(ReferencesTo(repo, targetFormKey));
         Assert.Equal(questFormKey.ToString(), row.Source);
-        Assert.Equal(@"VMAD\Aliases[0]\AliasScript\TargetRef", row.FieldPath);
+        Assert.Equal("virtual_machine_adapter.aliases[0].scripts[0].properties[0].object", row.FieldPath);
         Assert.Equal("qust", row.RecordType);
     }
 
@@ -496,7 +498,7 @@ public class FormReferencesTests
 
         var row = Assert.Single(ReferencesTo(repo, targetFormKey));
         Assert.Equal(questFormKey.ToString(), row.Source);
-        Assert.Equal(@"VMAD\Aliases[0]\Property", row.FieldPath);
+        Assert.Equal("virtual_machine_adapter.aliases[0].property.object", row.FieldPath);
         Assert.Equal("qust", row.RecordType);
     }
 
@@ -524,7 +526,7 @@ public class FormReferencesTests
 
         var row = Assert.Single(ReferencesTo(repo, targetFormKey));
         Assert.Equal(questFormKey.ToString(), row.Source);
-        Assert.Equal(@"VMAD\Script\QuestFragments\TargetRef", row.FieldPath);
+        Assert.Equal("virtual_machine_adapter.script.properties[0].object", row.FieldPath);
         Assert.Equal("qust", row.RecordType);
     }
 
@@ -555,7 +557,7 @@ public class FormReferencesTests
 
         var row = Assert.Single(ReferencesTo(repo, targetFormKey));
         Assert.Equal(packageFormKey.ToString(), row.Source);
-        Assert.Equal(@"VMAD\ScriptFragments\PackageScript\TargetRef", row.FieldPath);
+        Assert.Equal("virtual_machine_adapter.script_fragments.script.properties[0].object", row.FieldPath);
         Assert.Equal("pack", row.RecordType);
     }
 
@@ -587,7 +589,7 @@ public class FormReferencesTests
 
         var row = Assert.Single(ReferencesTo(repo, targetFormKey));
         Assert.Equal(sceneFormKey.ToString(), row.Source);
-        Assert.Equal(@"VMAD\ScriptFragments\SceneScript\TargetRef", row.FieldPath);
+        Assert.Equal("virtual_machine_adapter.script_fragments.script.properties[0].object", row.FieldPath);
         Assert.Equal("scen", row.RecordType);
     }
 
@@ -621,7 +623,7 @@ public class FormReferencesTests
 
         var row = Assert.Single(ReferencesTo(repo, targetFormKey));
         Assert.Equal(responseFormKey.ToString(), row.Source);
-        Assert.Equal(@"VMAD\ScriptFragments\InfoScript\TargetRef", row.FieldPath);
+        Assert.Equal("virtual_machine_adapter.script_fragments.script.properties[0].object", row.FieldPath);
         Assert.Equal("info", row.RecordType);
     }
 
@@ -646,16 +648,12 @@ public class FormReferencesTests
 
                 var script = new ScriptEntry { Name = "AliasScript", Flags = ScriptEntry.Flag.Local };
 
-                // Struct → Struct → Object
+                // Struct → Object
                 var outer = new ScriptStructProperty { Name = "Config" };
                 var outerWrapper = new ScriptEntry();
-                var inner = new ScriptStructProperty { Name = "Inner" };
-                var innerWrapper = new ScriptEntry();
                 var innerObj = new ScriptObjectProperty { Name = "DeepRef", Alias = -1 };
                 innerObj.Object.SetTo(nestedTarget);
-                innerWrapper.Properties.Add(innerObj);
-                inner.Members.Add(innerWrapper);
-                outerWrapper.Properties.Add(inner);
+                outerWrapper.Properties.Add(innerObj);
                 outer.Members.Add(outerWrapper);
                 script.Properties.Add(outer);
 
@@ -680,10 +678,10 @@ public class FormReferencesTests
 
         var nestedRow = Assert.Single(ReferencesTo(repo, nestedTarget));
         Assert.Equal(questFormKey.ToString(), nestedRow.Source);
-        Assert.Equal(@"VMAD\Aliases[0]\AliasScript\Config\Inner\DeepRef", nestedRow.FieldPath);
+        Assert.Equal("virtual_machine_adapter.aliases[0].scripts[0].properties[0].members[0].properties[0].object", nestedRow.FieldPath);
 
         var listRow = Assert.Single(ReferencesTo(repo, listTarget));
         Assert.Equal(questFormKey.ToString(), listRow.Source);
-        Assert.Equal(@"VMAD\Aliases[0]\AliasScript\Parts[0]\PartRef", listRow.FieldPath);
+        Assert.Equal("virtual_machine_adapter.aliases[0].scripts[0].properties[1].structs[0].members[0].object", listRow.FieldPath);
     }
 }

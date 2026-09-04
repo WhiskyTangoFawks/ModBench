@@ -10,18 +10,8 @@ namespace MEditService.Core.Edits;
 /// #630: the four array arity/order op envelopes — <c>array_remove</c>/<c>array_move_up</c>/
 /// <c>array_move_down</c>/<c>array_add</c> — computed here instead of round-tripped as a
 /// client-computed whole array through the webview. Scope is ordinary reflected fields only
-/// (<see cref="ColumnSpec"/>-backed columns). One exclusion, deliberate, with its own
-/// codec and wire vocabulary this class does not reach into:
-/// <list type="bullet">
-/// <item>A VMAD property's own array is <c>VmadCodec</c>'s surface, with its own structural-op
-/// vocabulary (#658: <c>add_element</c>/<c>remove_element</c>/<c>move_element_up</c>/
-/// <c>move_element_down</c>, dispatched through <c>VmadCodec.ApplyPropertyOp</c>) — this class is
-/// structurally unreachable for a VMAD path, not merely guarded against one:
-/// <see cref="RecordFieldWriter.TryApply"/> dispatches on <c>VmadPath.IsVmadPath(fieldPath)</c>
-/// before it ever reaches the schema/column lookup that leads here, so a VMAD fieldPath never
-/// makes it as far as this class's own op-envelope detection to be excluded from in the first
-/// place.</item>
-/// </list>
+/// (<see cref="ColumnSpec"/>-backed columns) — which, since the virtual-machine-adapter column
+/// became one, includes a script's properties and a Papyrus scalar-array property's elements.
 ///
 /// <para>Each op reads the column's own <i>current</i> value (<see cref="ColumnSpec.Extract"/>),
 /// walks the envelope's own <c>path</c> to the target array — an ordinary reflected field's wire
@@ -39,8 +29,10 @@ internal static class ArrayOpWriter
 
     internal static bool IsArrayOp(string opName) => OpNames.Contains(opName);
 
-    internal static FieldApplyOutcome Apply(IMajorRecord record, ColumnSpec col, string opName, JsonElement envelope)
+    internal static FieldApplyOutcome Apply(
+        IMajorRecord record, ColumnSpec col, string opName, JsonElement envelope, out string? duplicateKey)
     {
+        duplicateKey = null;
         if (col.Apply.Writer is not { } apply) return FieldApplyOutcome.ReadOnly;
         if (!envelope.TryGetProperty("path", out var pathEl) || pathEl.ValueKind != JsonValueKind.Array)
             return FieldApplyOutcome.ValueShapeMismatch;
@@ -89,7 +81,13 @@ internal static class ArrayOpWriter
         if (!changed) return FieldApplyOutcome.NoOp;
 
         StripNulls(root);
-        var newValue = JsonSerializer.SerializeToElement(root);
+        // The reconstructed value goes through the same keyed-array normalization a hand-authored
+        // payload does (RecordFieldWriter.TryApply): an element appended to a keyed array lands in
+        // key order, and a second element added before the first one was given a key collides with it.
+        var newValue = KeyedArrays.Normalize(
+            JsonSerializer.SerializeToElement(root), col.ToFieldMetadata(), out duplicateKey);
+        if (duplicateKey != null) return FieldApplyOutcome.DuplicateKeyInKeyedArray;
+
         return apply(record, newValue) switch
         {
             ApplyOutcome.Applied => FieldApplyOutcome.Applied,
@@ -233,10 +231,6 @@ internal static class ArrayOpWriter
     // the wire type) — both are simply never named, and the constructed instance's own default is
     // already correct for either.
     //
-    // No 'defaultValue' override and no 'vmadObject' case: both are adapter-only concepts the
-    // VMAD tree adapter synthesizes client-side (webview/src/types.ts's own doc comment),
-    // never present on a real reflected column's wire FieldMetadata, which is the only kind this
-    // class ever sees.
     private static JsonNode? DefaultElementValue(FieldMetadata? meta) => meta?.Type switch
     {
         "string" => "",

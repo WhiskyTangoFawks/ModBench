@@ -78,7 +78,8 @@ internal static class ListLeaves
             obj => g(obj) is IEnumerable list ? BuildListItems(list, elementType, elemSubFields) : null,
             LeafWrite.Writable<object>(
                 (obj, json) => ApplyListSubFieldJson(obj, json, pName, isFl, elementType, elemSubFields)),
-            ElementSpec: elementSpec);
+            ElementSpec: elementSpec,
+            KeyMembers: game.Annotations.KeyMembersFor(prop));
     }
 
     // ApplyListJson's own sub-field twin: writes a struct/array-nested list's whole value, same
@@ -186,7 +187,7 @@ internal static class ListLeaves
             : LeafWrite.ReadOnly<IMajorRecord>(SchemaRefusals.UnconvertibleElementListReason);
 
         return new("VARCHAR", Extractor, "array", LeafSpec.NoFormKeyTypes, LeafSpec.NoEnumMembers, apply,
-            ElementMeta: elemMeta);
+            ElementMeta: elemMeta, KeyMembers: game.Annotations.KeyMembersFor(prop));
     }
 
     /// <summary>

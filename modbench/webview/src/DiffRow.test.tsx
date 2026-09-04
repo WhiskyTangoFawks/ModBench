@@ -697,9 +697,8 @@ describe('DiffRow — a collapsed container row, per column', () => {
     expect(cells[2].textContent).toBe('');
   });
 
-  // A structural container no plugin carries a value for — the always-present "Scripts (VMAD)"
-  // wrapper (vmadTreeAdapter.ts) is one — is present in every column. There is nothing there for a
-  // column to lack, so every column keeps its placeholder.
+  // A structural container no plugin carries a value for is present in every column. There is
+  // nothing there for a column to lack, so every column keeps its placeholder.
   it('keeps the placeholder in every column for a container no plugin carries a value for', () => {
     renderContainer({});
     expect(cellText(0)).toBe('{…}');

@@ -13,10 +13,9 @@ interface FormKeyCellProps {
   editable?: boolean;
   // ADR-0034: see ScalarCell's identical prop for the full rationale — gates the
   // mutable branch's plain-click open of the QuickPick. Unused by the immutable branch,
-  // which opens nothing regardless of focus. Optional, defaulting to `true`:
-  // VmadObjectEditor renders this cell directly (its Object-typed property
-  // FormKey cells), outside the field grid's focus model, and doesn't pass it — same reasoning
-  // as ScalarCell's identical default.
+  // which opens nothing regardless of focus. Optional, defaulting to `true`, so a caller
+  // rendering this cell outside the field grid's focus model need not pass it — same reasoning as
+  // ScalarCell's identical default.
   isFocused?: boolean;
   onOpen: (fk: string) => void;
   // Optional for the same reason `editable` is — a caller with nowhere to write never calls it,

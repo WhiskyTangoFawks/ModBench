@@ -53,7 +53,7 @@ those things and would leak the user's filesystem into every wire message.
 - **This is a wide refactor.** `plugin` is not merely a column: it is the identity threaded through
   every override, field, placement and reference query, through the backend wire protocol, and
   through the record editor's webview state — focused cell, collapsed columns, remove-override,
-  add-master, copy-as-override, every array and VMAD operation, every edit. Two columns that look
+  add-master, copy-as-override, every array operation, every edit. Two columns that look
   alike are indistinguishable to all of them, so the display change and the key change must land
   together or the grid silently mis-targets.
 - The open question "plugin identity scheme when the same filename appears N times" is answered

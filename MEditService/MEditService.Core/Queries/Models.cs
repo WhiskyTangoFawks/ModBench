@@ -174,7 +174,17 @@ public record FieldMetadata(
     // Per-game knowledge, so it reaches the schema only as a validated annotation table
     // (Schema.SchemaAnnotations.SiblingsInUse) — Fallout 4's condition function is the first
     // member with one, from Mutagen's own Condition.GetParameterTypes.
-    IReadOnlyDictionary<string, IReadOnlyList<string>>? SiblingsInUse = null)
+    IReadOnlyDictionary<string, IReadOnlyList<string>>? SiblingsInUse = null,
+
+    // For 'array': the element member(s), in key order, that identify an element — xEdit's own
+    // wbArrayS sort key. Null for a positional array, which is most of them. A keyed array is
+    // aligned across plugins by key rather than by index (ConflictClassifier), written back in key
+    // order, and refuses two elements sharing a key (Edits.KeyedArrays). A name may be dotted to
+    // reach one struct member down (a quest fragment alias's `property.alias`).
+    //
+    // Per-game knowledge, so it reaches the schema only as a validated annotation table
+    // (Schema.SchemaAnnotations.KeyedArrays).
+    IReadOnlyList<string>? KeyMembers = null)
 {
     /// <summary>Whether this field renders as a set of independent flags rather than one choice.
     /// Derived, not stored — a member's own <c>BitValue</c> is the only place that fact lives, so
@@ -267,45 +277,10 @@ public record ClassifyResult(
     IReadOnlyDictionary<string, ConflictThis> PluginStates,
     IReadOnlyList<FieldDiff> Diffs);
 
-// VMAD aligned diff — mirrors FieldDiff so the frontend reuses the same per-plugin cell + CellStates rendering.
-public record VmadPropertyDiff(
-    string Name,                                       // sort key = propertyName / member name / "[i]"
-    string Kind,                                       // "scalar"|"object"|"array"|"struct"|"structList"|"variable"
-    [property: ColumnKeyed] Dictionary<string, object?> Values,                // per-plugin leaf value (scalar / "FormKey [Alias]" / null when absent or has children)
-    [property: ColumnKeyed] Dictionary<string, string> Types,                  // per-plugin property Type (types differing across plugins → a conflict)
-    string WinnerColumn,
-    [property: ColumnKeyed] IReadOnlyDictionary<string, ConflictThis> CellStates,
-    IReadOnlyList<VmadPropertyDiff>? Children,          // struct members (by name) / array elements (by index), aligned & recursive
-                                                        // Raw: per-plugin struct subtree in the editable node-tree shape — a struct carries a list of
-                                                        // member nodes; a structList carries a list of per-instance member-node lists. Populated only
-                                                        // for struct/structList. The frontend patches one member by path and restages the whole value
-                                                        // (atomic column, ADR-0019).
-    [property: ColumnKeyed] Dictionary<string, object?>? Raw = null,
-    // ADR-0031: only populated on a Kind=="object" leaf, keyed by plugin like Values/CellStates —
-    // never aggregated up from Children, so a dangling sibling Object can't hide a live
-    // hyperlink/affordance on the leaf next to it.
-    [property: ColumnKeyed] IReadOnlyDictionary<string, FormKeyResolution>? Resolutions = null);
-
-public record VmadScriptDiff(
-    string Name,                                       // sort key = ScriptName
-    [property: ColumnKeyed] Dictionary<string, string?> Flags,                 // per-plugin script flags; null = script absent in that plugin
-    string WinnerColumn,
-    [property: ColumnKeyed] IReadOnlyDictionary<string, ConflictThis> CellStates,
-    IReadOnlyList<VmadPropertyDiff> Properties);
-
-public record VmadCompare(IReadOnlyList<VmadScriptDiff> Scripts);
-
-// HasVmad: the record type's schema-level capability to carry a VMAD subrecord at
-// all (Schema.RecordTableSchema.HasVmad, reflected from Mutagen's IHaveVirtualMachineAdapterGetter)
-// — distinct from Vmad above, which is per-record *data* (null whenever no plugin happens to have
-// scripts, even for a VMAD-capable type like an un-scripted NPC). The frontend gates whether it
-// renders a Scripts (VMAD) section at all on HasVmad, not on Vmad's presence.
 public record CompareResult(
     IReadOnlyList<CompareOverride> Overrides,
     IReadOnlyList<FieldDiff> Diffs,
-    ConflictAll ConflictAll,
-    bool HasVmad,
-    VmadCompare? Vmad = null);
+    ConflictAll ConflictAll);
 
 public record PluginRecordTypeCount(string Type, int Count, string DisplayName);
 

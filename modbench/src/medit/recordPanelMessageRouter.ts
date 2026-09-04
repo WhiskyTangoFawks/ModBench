@@ -225,20 +225,6 @@ async function replyFormKeyPicked(
   deps.reply({ type: EXTENSION_TO_WEBVIEW.FORM_KEY_PICKED, requestId: m.requestId, formKey });
 }
 
-// Add Script's own native input box — unlike the two pickers
-// above, this needs no reply bridge back to the webview at all: modbench.vmad.addScript
-// (extension.ts) calls it directly and broadcasts VMAD_STRUCTURAL_OP itself once a name comes
-// back, the same "no round trip" shape Set Script/Property Flags' own showQuickPick calls use.
-// Exported (not module-private) purely so extension.ts's command handler can call it — this file
-// is where every other native-prompt bridge already lives.
-export async function pickScriptNameViaInputBox(): Promise<string | null> {
-  const name = await vscode.window.showInputBox({
-    prompt: 'Script name',
-    validateInput: v => (v.trim() === '' ? 'Name is required' : null),
-  });
-  return name ?? null;
-}
-
 /**
  * ADR-0041: one field edit, and the surfacing of whatever came back.
  *

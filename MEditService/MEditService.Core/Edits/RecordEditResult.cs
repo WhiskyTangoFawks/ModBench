@@ -77,8 +77,9 @@ public enum RecordEditRefusal
     /// <c>upstream-mutagen-issue.md</c>: <c>ScriptStructListProperty.RemapLinks</c> is generated
     /// base-only and never descends into its own <c>Structs</c> list, so a VMAD <c>ArrayOfStruct</c>
     /// script property's Object members are left pointing at the old FormKey. mEdit's own reference
-    /// index does walk them (<c>VmadCodec</c>), which is why such a referencer is found, loaded and
-    /// caught here rather than written half-remapped.
+    /// index does walk them (the reflected schema reaches a struct-list property's own members),
+    /// which is why such a referencer is found, loaded and caught here rather than written
+    /// half-remapped.
     ///
     /// <para>Deliberately conservative: the check is textual over the serialized record, so a
     /// genuine referencer that <i>also</i> spells the old FormKey inside an EditorID or a string
@@ -259,6 +260,18 @@ public enum RecordEditRefusal
     /// it did before this refusal existed.
     /// </summary>
     NestedFieldReadOnly,
+
+    /// <summary>
+    /// A keyed array (<c>FieldMetadata.KeyMembers</c>) was given two elements sharing a key — two
+    /// scripts of one name, two properties of one name, two quest fragments on one stage. Entries
+    /// there are identified by that key rather than by position, so the second one is not an
+    /// addition but a collision the array cannot represent. The message names the key; the way out
+    /// is renaming or removing one of the two.
+    ///
+    /// <para>Distinct from <see cref="FieldValueShapeMismatch"/>: the payload was exactly the shape
+    /// the field takes, and "send a value this field accepts" says nothing a caller could act on.</para>
+    /// </summary>
+    DuplicateKeyInKeyedArray,
 
     /// <summary>
     /// Delete or renumber, targeting the plugin header (#661) — meaningless for both. Deleting it

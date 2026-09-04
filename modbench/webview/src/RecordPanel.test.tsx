@@ -341,132 +341,6 @@ const structCompareResult = {
   ],
 };
 
-const mastersMeta: FieldMetadata = {
-  name: 'masters', type: 'array', isArray: true, validFormKeyTypes: [], enumMembers: [],
-  elementType: { name: '', type: 'string', isArray: false, validFormKeyTypes: [], enumMembers: [] },
-};
-
-const headerCompareResult = {
-  conflictAll: 'OnlyOne',
-  overrides: [
-    {
-      formKey: '000000:MyMod.esp',
-      plugin: 'MyMod.esp',
-      loadOrderIndex: 1,
-      isWinner: true,
-      editorId: null,
-      fields: [{ metadata: mastersMeta, value: ['Fallout4.esm'] }],
-      conflictThis: 'OnlyOne',
-    },
-  ],
-  diffs: [
-    {
-      fieldName: 'masters',
-      values: { 'MyMod.esp': ['Fallout4.esm'] },
-      winnerColumn: 'MyMod.esp',
-      winnerValue: ['Fallout4.esm'],
-      cellStates: {},
-    },
-  ],
-};
-
-const headerPluginsResponse = [
-  { name: 'Fallout4.esm', isImmutable: true, loadOrderIndex: 0 },
-  { name: 'MyMod.esp', isImmutable: false, loadOrderIndex: 1 },
-  { name: 'DLCRobot.esm', isImmutable: true, loadOrderIndex: 2 },
-];
-
-const vmadIncapableCompareResult = {
-  conflictAll: 'OnlyOne',
-  hasVmad: false,
-  overrides: [
-    {
-      formKey: '000001:MyMod.esp',
-      plugin: 'MyMod.esp',
-      loadOrderIndex: 0,
-      isWinner: true,
-      editorId: 'SomeComponent',
-      fields: [{ metadata: strMeta, value: 'Some Component' }],
-      conflictThis: 'OnlyOne',
-    },
-  ],
-  diffs: [
-    {
-      fieldName: 'Name',
-      values: { 'MyMod.esp': 'Some Component' },
-      winnerColumn: 'MyMod.esp',
-      winnerValue: 'Some Component',
-      cellStates: {},
-    },
-  ],
-};
-
-const vmadCapableCompareResult = {
-  conflictAll: 'OnlyOne',
-  hasVmad: true,
-  overrides: [
-    {
-      formKey: '000001:MyMod.esp',
-      plugin: 'MyMod.esp',
-      loadOrderIndex: 0,
-      isWinner: true,
-      editorId: 'TestNPC',
-      fields: [{ metadata: strMeta, value: 'Test Name' }],
-      conflictThis: 'OnlyOne',
-    },
-  ],
-  diffs: [
-    {
-      fieldName: 'Name',
-      values: { 'MyMod.esp': 'Test Name' },
-      winnerColumn: 'MyMod.esp',
-      winnerValue: 'Test Name',
-      cellStates: {},
-    },
-  ],
-};
-
-// #622 AC: VMAD script-level flags stay read-only — even on a tracked, editable column, so
-// the refusal is provably the row's own readOnly veto (vmadTreeAdapter.ts's FLAGS_META) and not
-// just the column having nowhere to write. Mirrors vmadCapableCompareResult but adds a real
-// script (buildVmadRows synthesizes its read-only Flags child from this) and marks the one
-// column tracked, the same real editableColumns computation the #622 flags-cell block above uses.
-const vmadFlagsCompareResult = {
-  conflictAll: 'OnlyOne',
-  hasVmad: true,
-  vmad: {
-    scripts: [
-      { name: 'ScriptA', flags: { 'MyMod.esp': 'Local' }, winnerColumn: 'MyMod.esp', cellStates: {}, properties: [] },
-    ],
-  },
-  overrides: [
-    {
-      formKey: '000001:MyMod.esp',
-      plugin: 'MyMod.esp',
-      loadOrderIndex: 0,
-      isWinner: true,
-      editorId: 'TestNPC',
-      fields: [{ metadata: strMeta, value: 'Test Name' }],
-      conflictThis: 'OnlyOne',
-    },
-  ],
-  diffs: [
-    {
-      fieldName: 'Name',
-      values: { 'MyMod.esp': 'Test Name' },
-      winnerColumn: 'MyMod.esp',
-      winnerValue: 'Test Name',
-      cellStates: {},
-    },
-  ],
-};
-
-const vmadFlagsTrackedPluginsResponse = [
-  { name: 'MyMod.esp', isImmutable: false, loadOrderIndex: 0, isTracked: true },
-];
-
-
-
 interface FakeOpts {
   plugins?: unknown[];
   // ADR-0035: defaults to true (settled, no banner) — the overwhelmingly common fixture
@@ -612,8 +486,8 @@ describe('RecordPanel — same-filename, different-origin columns (#272 AC5)', (
 
 // Copy as Override Into…/Copy as New Record Into… on the column header's
 // own native right-click menu — proves the real end-to-end wiring (RecordPanel → PluginHeader),
-// not just PluginHeader.test.tsx's own component-level pin, the same two-layer treatment VMAD's
-// own contexts got (recordUtils.test.ts's builder test + VmadStructuralOps.test.tsx's panel test).
+// not just PluginHeader.test.tsx's own component-level pin — the same two-layer treatment the
+// array contexts get (recordUtils.test.ts's builder test plus a panel test here).
 describe('RecordPanel — column header native right-click menu (#494)', () => {
   afterEach(() => vi.unstubAllGlobals());
 
@@ -695,7 +569,7 @@ describe('RecordPanel — a Partial Form column (#491)', () => {
 // The column header's own Partial Form checkbox dispatches the sanctioned is_partial_form
 // write — proves the real end-to-end wiring (RecordPanel → PluginHeader → handleEditCell →
 // vscode.postMessage), not just PluginHeader.test.tsx's own component-level pin of
-// onTogglePartialForm, the same two-layer treatment the header right-click menu and VMAD's own
+// onTogglePartialForm, the same two-layer treatment the header right-click menu and the array
 // contexts got.
 describe('RecordPanel — Partial Form header toggle (#539)', () => {
   beforeEach(() => {
@@ -1006,61 +880,6 @@ describe('RecordPanel — struct sub-rows', () => {
     await waitFor(() => screen.getByText('15'));
     const cell = screen.getByText('15').closest('td')!;
     expect(cell.style.backgroundColor).toBe('rgba(76, 175, 80, 0.18)');
-  });
-});
-
-describe('RecordPanel — no VMAD section on the header record (issue #119)', () => {
-  afterEach(() => vi.unstubAllGlobals());
-
-  it('does not show a Scripts (VMAD) section on the header record', async () => {
-    vi.stubGlobal('mEditFormKey', '000000:MyMod.esp');
-    renderPanel(headerCompareResult, { plugins: headerPluginsResponse });
-    await waitFor(() => screen.getByText('MyMod.esp'));
-    expect(screen.queryByText('Scripts (VMAD)')).not.toBeInTheDocument();
-  });
-});
-
-describe('RecordPanel — no VMAD section on a VMAD-incapable record type (issue #179)', () => {
-  afterEach(() => vi.unstubAllGlobals());
-
-  it('does not show a Scripts (VMAD) section when hasVmad is false, even on a non-header record', async () => {
-    vi.stubGlobal('mEditFormKey', '000001:MyMod.esp');
-    renderPanel(vmadIncapableCompareResult);
-    await waitFor(() => screen.getByText('Name'));
-    expect(screen.queryByText('Scripts (VMAD)')).not.toBeInTheDocument();
-  });
-
-  it('still shows a Scripts (VMAD) section on a non-header record when hasVmad is true', async () => {
-    vi.stubGlobal('mEditFormKey', '000001:MyMod.esp');
-    renderPanel(vmadCapableCompareResult);
-    await waitFor(() => expect(screen.getByText('Scripts (VMAD)')).toBeInTheDocument());
-  });
-});
-
-// vmadTreeAdapter.test.ts's own "the Flags field metadata is readOnly" test already pins this
-// at the metadata level (buildVmadRows' output, no rendering involved). This is the
-// interaction-level counterpart — real message-fed compare data, expanded through the actual
-// ▶ toggles, double-clicked through the actual DiffRow/ScalarCell gesture, on a column that
-// (per its own Name field, exercised the same way in the #622 block above) is genuinely
-// writable — so nothing but the row's own readOnly veto explains a refusal here.
-describe('RecordPanel — VMAD script Flags stay read-only on a tracked, editable column (#622)', () => {
-  afterEach(() => vi.unstubAllGlobals());
-
-  it('double click on the script Flags row opens nothing, even on an otherwise-editable column', async () => {
-    vi.stubGlobal('mEditFormKey', '000001:MyMod.esp');
-    renderPanel(vmadFlagsCompareResult, { plugins: vmadFlagsTrackedPluginsResponse });
-    await waitFor(() => expect(screen.getByText('Scripts (VMAD)')).toBeInTheDocument());
-
-    fireEvent.click(screen.getByText('▶')); // expand the wrapper
-    await waitFor(() => expect(screen.getByText('ScriptA')).toBeInTheDocument());
-    fireEvent.click(screen.getByText('▶')); // expand the script row
-    await waitFor(() => expect(screen.getByText('Local')).toBeInTheDocument());
-
-    fireEvent.doubleClick(screen.getByText('Local'));
-    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
-    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
-    expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
-    expect(screen.getByText('Local')).toBeInTheDocument();
   });
 });
 

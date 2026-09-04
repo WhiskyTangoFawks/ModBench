@@ -78,7 +78,7 @@ public class UnionArrayAddInventoryTests
         var record = NewRecord(mod, table);
 
         var outcome = ArrayOpWriter.Apply(record, col, "array_add",
-            JsonDocument.Parse("""{"op": "array_add", "path": []}""").RootElement);
+            JsonDocument.Parse("""{"op": "array_add", "path": []}""").RootElement, out _);
 
         Assert.Equal(FieldApplyOutcome.Applied, outcome);
         var written = JsonDocument.Parse((string)col.Extract(record)!).RootElement;

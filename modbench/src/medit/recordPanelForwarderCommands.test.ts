@@ -31,13 +31,10 @@ const EXPECTED_FORWARDER_COMMANDS = [
   'modbench.array.remove',
   'modbench.array.moveUp',
   'modbench.array.moveDown',
-  'modbench.vmad.removeScript',
-  'modbench.vmad.addProperty',
-  'modbench.vmad.removeProperty',
 ].sort();
 
 describe('FORWARDER_COMMANDS', () => {
-  it('covers exactly the 8 pure-forwarder commands, no more, no fewer', () => {
+  it('covers exactly the 5 pure-forwarder commands, no more, no fewer', () => {
     expect(FORWARDER_COMMANDS.map((f) => f.command).sort()).toEqual(EXPECTED_FORWARDER_COMMANDS);
   });
 });
@@ -91,41 +88,4 @@ describe('registerForwarderCommands', () => {
     });
   });
 
-  it('vmad.removeScript broadcasts VMAD_STRUCTURAL_OP with a remove_script envelope', () => {
-    const { panels, postMessage } = fakePanels();
-    registerForwarderCommands(panels);
-    handlers.get('modbench.vmad.removeScript')!({
-      formKey: 'Fallout4.esm:000003', plugin: 'Fallout4.esm', origin: 'Fallout4.esm', scriptName: 'MyScript',
-    });
-    expect(postMessage).toHaveBeenCalledWith({
-      type: EXTENSION_TO_WEBVIEW.VMAD_STRUCTURAL_OP,
-      formKey: 'Fallout4.esm:000003', plugin: 'Fallout4.esm', origin: 'Fallout4.esm',
-      fieldPath: 'VMAD\\MyScript', value: { op: 'remove_script' },
-    });
-  });
-
-  it('vmad.addProperty broadcasts VMAD_OPEN_ADD_PROPERTY naming the script', () => {
-    const { panels, postMessage } = fakePanels();
-    registerForwarderCommands(panels);
-    handlers.get('modbench.vmad.addProperty')!({
-      formKey: 'Fallout4.esm:000004', plugin: 'Fallout4.esm', origin: 'Fallout4.esm', scriptName: 'MyScript',
-    });
-    expect(postMessage).toHaveBeenCalledWith({
-      type: EXTENSION_TO_WEBVIEW.VMAD_OPEN_ADD_PROPERTY,
-      formKey: 'Fallout4.esm:000004', plugin: 'Fallout4.esm', origin: 'Fallout4.esm', scriptName: 'MyScript',
-    });
-  });
-
-  it('vmad.removeProperty broadcasts VMAD_STRUCTURAL_OP with a remove_property envelope', () => {
-    const { panels, postMessage } = fakePanels();
-    registerForwarderCommands(panels);
-    handlers.get('modbench.vmad.removeProperty')!({
-      formKey: 'Fallout4.esm:000005', plugin: 'Fallout4.esm', origin: 'Fallout4.esm', scriptName: 'MyScript', propName: 'MyProp',
-    });
-    expect(postMessage).toHaveBeenCalledWith({
-      type: EXTENSION_TO_WEBVIEW.VMAD_STRUCTURAL_OP,
-      formKey: 'Fallout4.esm:000005', plugin: 'Fallout4.esm', origin: 'Fallout4.esm',
-      fieldPath: 'VMAD\\MyScript\\MyProp', value: { op: 'remove_property' },
-    });
-  });
 });

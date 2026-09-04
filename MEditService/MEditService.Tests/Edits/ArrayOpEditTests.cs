@@ -17,7 +17,7 @@ namespace MEditService.Tests.Edits;
 /// value and schema rather than round-tripped as a client-computed whole array. Each op arrives
 /// through the exact same <c>EditField</c> door every other edit does — the envelope is <c>value</c>
 /// itself, distinguished from an ordinary whole-array write by shape (a JSON object carrying an
-/// <c>"op"</c> string member), the same convention <c>VmadCodec</c>'s own structural ops already use
+/// <c>"op"</c> string member)
 /// (<c>RecordFieldWriter.TryGetOpName</c>).
 ///
 /// <para>Same fixture/posture as <see cref="ComplexFieldElementEditTests"/> — a real tracked mod

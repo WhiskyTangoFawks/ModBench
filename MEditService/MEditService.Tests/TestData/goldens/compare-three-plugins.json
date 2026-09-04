@@ -475,8 +475,6 @@
         ]
       }
     ],
-    "HasVmad": false,
-    "HasVmadData": false,
     "Overrides": [
       {
         "ConflictThis": "Master",
@@ -662,8 +660,6 @@
         "WinnerValue": 999
       }
     ],
-    "HasVmad": true,
-    "HasVmadData": false,
     "Overrides": [
       {
         "ConflictThis": "Master",
@@ -772,6 +768,7 @@
           "unused": 0,
           "use_template_actors": "0",
           "version2": 0,
+          "virtual_machine_adapter": null,
           "voice": null,
           "weight": null,
           "xp_value_offset": 0
@@ -891,6 +888,7 @@
           "unused": 0,
           "use_template_actors": "0",
           "version2": 0,
+          "virtual_machine_adapter": null,
           "voice": null,
           "weight": null,
           "xp_value_offset": 0
@@ -1010,6 +1008,7 @@
           "unused": 0,
           "use_template_actors": "0",
           "version2": 0,
+          "virtual_machine_adapter": null,
           "voice": null,
           "weight": null,
           "xp_value_offset": 0
@@ -1028,8 +1027,6 @@
     "ConflictAll": "OnlyOne",
     "DiffFieldCount": 42,
     "Diffs": [],
-    "HasVmad": true,
-    "HasVmadData": false,
     "Overrides": [
       {
         "ConflictThis": "OnlyOne",
@@ -1138,6 +1135,7 @@
           "unused": 0,
           "use_template_actors": "0",
           "version2": 0,
+          "virtual_machine_adapter": null,
           "voice": null,
           "weight": null,
           "xp_value_offset": 0
@@ -1156,8 +1154,6 @@
     "ConflictAll": "OnlyOne",
     "DiffFieldCount": 41,
     "Diffs": [],
-    "HasVmad": true,
-    "HasVmadData": false,
     "Overrides": [
       {
         "ConflictThis": "OnlyOne",
@@ -1266,6 +1262,7 @@
           "unused": 0,
           "use_template_actors": "0",
           "version2": 0,
+          "virtual_machine_adapter": null,
           "voice": null,
           "weight": null,
           "xp_value_offset": 0
@@ -1284,8 +1281,6 @@
     "ConflictAll": "NoConflict",
     "DiffFieldCount": 44,
     "Diffs": [],
-    "HasVmad": true,
-    "HasVmadData": false,
     "Overrides": [
       {
         "ConflictThis": "Master",
@@ -1374,6 +1369,7 @@
           "unknown3": 0,
           "value": 25,
           "version2": 0,
+          "virtual_machine_adapter": null,
           "weight": 2.5,
           "zoom": null
         },
@@ -1472,6 +1468,7 @@
           "unknown3": 0,
           "value": 25,
           "version2": 0,
+          "virtual_machine_adapter": null,
           "weight": 2.5,
           "zoom": null
         },
