@@ -88,6 +88,18 @@ describe('ScalarCell — committing (#415 AC1)', () => {
     expect(onCommit).toHaveBeenCalledWith('after');
   });
 
+  it('commits exactly once on Enter, though Enter also blurs the input', () => {
+    const onCommit = vi.fn();
+    render(<ScalarCell value="before" meta={meta()} editable isFocused onCommit={onCommit} />);
+    fireEvent.click(screen.getByText('before'));
+    const input = screen.getByRole('textbox');
+
+    fireEvent.change(input, { target: { value: 'after' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+
+    expect(onCommit).toHaveBeenCalledTimes(1);
+  });
+
   it('commits a number as a number, not as the text that was typed', () => {
     const onCommit = vi.fn();
     render(<ScalarCell value={1} meta={meta({ type: 'float' })} editable isFocused onCommit={onCommit} />);
