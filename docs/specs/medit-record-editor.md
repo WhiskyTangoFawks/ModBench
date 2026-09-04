@@ -867,7 +867,7 @@ field (`SchemaReflector` excludes it from the generic reflection pass).
 design dead end): **Set Type** has no right-click entry yet (still reachable only by removing and
 re-adding); a **structList instance's own Add** has no right-click entry yet — its `elementType`
 has no `defaultValue` override the way a condition's does, and the raw node format
-`defaultElementValue`'s own generic struct default would produce doesn't match it, so Add is
+`defaultAdapterElementValue`'s own generic struct default would produce doesn't match it, so Add is
 withheld outright there rather than writing a wrong-shaped instance (Remove/Move are unaffected —
 neither needs a default, and both go through `commitOverride`'s own whole-array passthrough
 correctly); a **not-yet-compiled** `add_script`/`add_property` structural op has no synthetic-row

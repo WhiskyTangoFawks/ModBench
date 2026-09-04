@@ -194,8 +194,7 @@ public sealed class ArrayOpEditTests : IDisposable
     /// unresolvable FormKey string is silently dropped rather than refused
     /// (<c>SchemaReflector.BuildListElement</c>'s own <c>isFl</c> branch returns <c>null</c>, and its
     /// caller only adds non-null items) — a genuine, pre-existing gap in that one shape, unrelated to
-    /// this ticket and not something a "default" value can route around (recordUtils.ts's own
-    /// <c>defaultElementValue</c> inherits the identical gap once the client stops computing). Every
+    /// this ticket and not something a "default" value can route around. Every
     /// <c>DestructionStage</c> member is a plain scalar, so its own default always applies cleanly —
     /// the same reason the deleted client-side test this one replaces
     /// (<c>ArrayDiffRows.test.tsx</c>'s "Insert…appends a default element (0)") used a plain int array.
