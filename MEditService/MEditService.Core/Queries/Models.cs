@@ -7,16 +7,9 @@ using MEditService.Core.Source;
 
 namespace MEditService.Core.Queries;
 
-// Origin (ADR-0036): opaque here — the mod folder that provided this plugin, or a reserved
-// PluginOrigin value. Nothing keys on it yet; see PluginMetadata.
-//
-// MasterIssues (ADR-0037): this plugin's own declared masters that aren't resolvable in the
-// load order — never a transitive/cascaded fact about a master's own masters. Empty, never null, for
-// a plugin whose masters all resolved. See MasterResolution.Classify.
-// #570: one Kind B diagnosis on a held plugin's binary, as the session-load scan found it.
-// Text is PluginDiagnosis.Describe()'s exact refusal fragment (#569) — the Problems panel and the
-// Track refusal share one vocabulary by construction. Anchor/DefectClass/Tail ride separately so
-// the frontend can decorate rows and (later) route a repair gesture without re-parsing prose.
+// One Kind B diagnosis (#570). Text is PluginDiagnosis.Describe()'s exact refusal fragment, so the
+// Problems panel and the Track refusal share one vocabulary; Anchor/DefectClass/Tail ride
+// separately so the frontend can route a repair without re-parsing prose.
 public record PluginDiagnosisReport(
     string Plugin,
     string Origin,
@@ -29,9 +22,8 @@ public record PluginDiagnosisReport(
 public record PluginResponse(
     string Name,
     string Path,
-    // ADR-0044: the name's plugins.txt slot past the forced masters, or null when no line names
-    // this copy — the plugin-level wire keeps the honest null; record-level LoadOrderIndex values
-    // are column sort keys and put such a copy last.
+    // ADR-0044: the plugins.txt slot past the forced masters, or null when no line names this
+    // copy; record-level LoadOrderIndex values are sort keys and put such a copy last.
     int? LoadOrderIndex,
     bool IsLight,
     bool IsMaster,
@@ -42,6 +34,8 @@ public record PluginResponse(
     // compete for winner or count in a conflict.
     bool Participates,
     string Origin,
+    // MasterIssues (ADR-0037): this plugin's own unresolvable masters, never a transitive fact.
+    // Empty rather than null when every master resolved.
     IReadOnlyList<MasterIssue> MasterIssues,
     // InLoadOrder (ADR-0035, ADR-0044): derived — the winning copy of a listed name, enabled
     // or not. False for a losing copy or an unlisted file. See PluginMetadata.InLoadOrder.
@@ -50,23 +44,13 @@ public record PluginResponse(
     // stated them — what lets a row say *why* it does not participate (disabled, or overridden).
     bool Enabled,
     bool Winning,
-    // HasMatchingRecords (ADR-0035 amending ADR-0018): true with no active filter, or when
-    // this plugin owns at least one record the active filter matches. A record filter prunes
-    // records and record types, never a plugin row — GetPlugins() always returns every plugin —
-    // so this is the one additive fact a caller needs to decide whether the row should still
-    // offer a chevron. Defaults true: every call site but RecordQueryService.GetPlugins() returns
-    // a single plugin outside any filtered listing, where "has matches" isn't a question being
-    // asked.
+    // HasMatchingRecords (ADR-0035 amending ADR-0018): a record filter prunes records, never a
+    // plugin row, so this is what a caller uses to decide whether to offer a chevron. Defaults
+    // to true: only the plugin listing answers inside a filter.
     bool HasMatchingRecords = true,
-    // IsTracked (ADR-0041): whether this plugin's mod folder holds a `.git` — the single
-    // fact "editing requires tracking; viewing never does" turns on, and the reason the record
-    // editor can render a column as visibly read-only instead of only refusing on attempt. False
-    // for a plugin with no mod folder at all (a Data-directory master), which is a different state
-    // with a different way out — the record editor tells the two apart by pairing this with
-    // IsImmutable, exactly as the backend's own two refusals do.
-    //
-    // Derived on every read, never cached: tracking *is* the presence of that directory, and it can
-    // appear or vanish outside Modbench between one response and the next.
+    // IsTracked (ADR-0041): whether the mod folder holds a git directory, which editing requires
+    // and viewing never does. False with no mod folder at all (IsImmutable tells the two apart).
+    // Derived on every read: the directory can vanish outside Modbench.
     bool IsTracked = false)
 {
     public static PluginResponse FromMetadata(
@@ -78,25 +62,14 @@ public record PluginResponse(
     }
 }
 
-// The Plugins-tree listing's own working-tree fact — a tri-state rather than a pair of
-// booleans, because the three states (clean / edited-existing / newly created) are mutually
-// exclusive by construction (Added implies HasWorkingTreeChange, so a boolean pair would need a
-// "check Added before Modified" reading order every consumer would have to remember) and because a
-// value addition here (a future Deleted) is a wire addition, not a reshape. Deliberately distinct
-// from OverrideStackEntry.HasWorkingTreeChange (Records/RecordDocument.cs) — that seam answers "does
-// this one plugin's copy differ from its Head", scoped to a single record already resolved; this one
-// answers the same question for every row a listing returns, plus which kind of divergence it is.
-// Deleted is not a value here: a working-tree-deleted record has no row
-// in Search() at all (EffectiveRelation never held it), so there is nothing for this field to
-// describe for that case — surfacing it would need GetRecordTypeCounts/Search to union in
-// Head-only rows.
+// A tri-state rather than two booleans: the states are mutually exclusive, and a future Deleted
+// would be a wire addition, not a reshape. Deleted is absent because a working-tree-deleted
+// record has no Search() row to describe.
 [JsonConverter(typeof(JsonStringEnumConverter))]
 public enum WorkingTreeState { None, Modified, Added }
 
-// Origin (ADR-0036): the mod folder that provided this row's physical file, or a reserved
-// PluginOrigin value — additive alongside Plugin, same shape as RecordDetail.Origin. Without
-// it, two same-filename plugins listed together (GetRecords/SearchRecords filter by plugin,
-// never origin) are indistinguishable rows.
+// Origin (ADR-0036): additive alongside Plugin; without it two same-filename plugins listed
+// together are indistinguishable rows.
 public record RecordSummary(
     string FormKey,
     string Plugin,
@@ -107,33 +80,20 @@ public record RecordSummary(
     // Defaults to None (test fixtures, GetOverrideStack's own unrelated read paths) — Search() is
     // the only real producer of a non-None value; see DuckDbRecordIndex.Search.
     WorkingTreeState WorkingTreeState = WorkingTreeState.None,
-    // #560: whether this FormKey has at least one container_child row naming it as parent — the
-    // Plugins tree's RecordNode reads this to decide a qust/dial row's expand chevron, rather than
-    // showing one for every row of those two types regardless of whether expanding it would yield
-    // anything. Defaults to false for the same reason WorkingTreeState defaults to None: Search()
-    // is the only real producer of a true value; every other construction site (test fixtures,
-    // GetOverrideStack's own unrelated read paths) has nothing to report.
+    // Whether at least one container_child row names this FormKey as parent — the Plugins tree's
+    // expand chevron for a qust/dial row (#560). Search() is the only producer of true; every
+    // other construction site has nothing to report.
     bool HasContainerChildren = false);
 
 public record PagedResult<T>(IReadOnlyList<T> Items, int Total);
 
-/// <summary>
-/// One member of an enum field's closed value set: the wire value, the bit it stands for when the
-/// field is a bitmask, and what to show instead of the value when the value is not a word the user
-/// should read.
-///
-/// <para><c>BitValue</c> is a decimal string rather than a number so a bit above 2^53 survives JSON
-/// without IEEE 754 loss, and is null for a plain (non-bitmask) enum, which stands for no bit.
-/// <c>Label</c> is null for a member that is already the game's own vocabulary — an abstract
-/// union's discriminator sets it, its values being Mutagen class names the user is never
-/// shown.</para>
-/// </summary>
+/// <summary>BitValue is a decimal string so a bit above 2^53 survives JSON without IEEE 754
+/// loss, null for a plain enum. Label is null for a member that is already the game's own
+/// vocabulary.</summary>
 public record EnumMember(string Value, string? BitValue = null, string? Label = null)
 {
-    /// <summary>Whether these members are a set of flags rather than a closed choice: every one of
-    /// them stands for a bit. The one definition of that question — a field, a column and the
-    /// webview's own <c>flagBits</c> all answer it the same way. An enum with no members at all
-    /// (Fallout 4's <c>NoneProperty</c>) satisfies "every member" vacuously and is not one.</summary>
+    /// <summary>The one definition of "flags rather than a closed choice" — a field, a column and
+    /// the webview's flagBits all answer it this way. An enum with no members is not one.</summary>
     public static bool IsBitmask(IReadOnlyList<EnumMember> members) =>
         members.Count > 0 && members.All(m => m.BitValue != null);
 }
@@ -161,46 +121,23 @@ public record FieldMetadata(
     // value_type, false for every other field.
     bool IsDiscriminator = false,
 
-    // For an enum field whose value decides which of its own sibling fields carry data: each of
-    // this field's values mapped to the sibling field names that are in use under it. Null for the
-    // overwhelming majority of fields, whose siblings are all always in use.
-    //
-    // A sibling some value names and the current one does not holds no data under the current
-    // value: the form-reference and check walks skip it (Records.FormRefPathBuilder), so an unused
-    // slot is neither a reference nor a dangling one. #693 owns what the editor does with it.
-    // Keyed by value rather than carried as a list positionally aligned with EnumMembers, so a
-    // reordering of the domain can never silently re-point a row (#709).
-    //
-    // Per-game knowledge, so it reaches the schema only as a validated annotation table
-    // (Schema.SchemaAnnotations.SiblingsInUse) — Fallout 4's condition function is the first
-    // member with one, from Mutagen's own Condition.GetParameterTypes.
+    // For an enum whose value decides which sibling fields carry data; null when every sibling is
+    // always in use. Keyed by value, not aligned positionally with EnumMembers, so a reordering
+    // can never re-point a row (#709).
     IReadOnlyDictionary<string, IReadOnlyList<string>>? SiblingsInUse = null,
 
-    // For 'array': the element member(s), in key order, that identify an element — xEdit's own
-    // wbArrayS sort key. Null for a positional array, which is most of them. A keyed array is
-    // aligned across plugins by key rather than by index (ConflictClassifier), written back in key
-    // order, and refuses two elements sharing a key (Edits.KeyedArrays). A name may be dotted to
-    // reach one struct member down (a quest fragment alias's `property.alias`).
-    //
-    // Per-game knowledge, so it reaches the schema only as a validated annotation table
-    // (Schema.SchemaAnnotations.KeyedArrays).
+    // The element member(s) identifying an element (xEdit's wbArrayS); null for a positional
+    // array. Aligned across plugins by key, written back in key order, duplicates refused. A name
+    // may be dotted to reach one struct member down.
     IReadOnlyList<string>? KeyMembers = null,
 
-    // For 'struct': the Loqui/CLR class this struct is, as the schema declares it — null for every
-    // other type, read off the reflected type (Schema.ReflectedTypes.LeafTypeName). Distinct from a
-    // discriminator's value, which says which class an *object* turned out to be: an abstract
-    // union's element declares `Condition` here and answers `ConditionFloat` there.
-    // Null on most nodes, so it carries real weight as a serialized null. Omitting nulls is a
-    // serializer-wide posture for all four nullables on this record rather than this one's — #715.
+    // For 'struct': the Loqui/CLR class the schema declares, null for every other type. Distinct
+    // from a discriminator's value, which says which class an object turned out to be. Serialized
+    // nulls stay on all four nullables here (#715).
     string? LeafTypeName = null)
 {
-    /// <summary>Whether this field renders as a set of independent flags rather than one choice.
-    /// Derived, not stored — a member's own <c>BitValue</c> is the only place that fact lives, so
-    /// nothing can claim to be a bitmask over members that name no bit.
-    ///
-    /// <para>Off the wire for the same reason: the members are already there, and the webview asks
-    /// them the same question (<c>flagBits</c>, modelValue.ts). Shipping the answer too would put a
-    /// second copy of it on every field of every record.</para></summary>
+    /// <summary>Derived, not stored: a member's own BitValue is the only place that fact lives.
+    /// Off the wire because the webview asks the members the same question (flagBits).</summary>
     [JsonIgnore]
     public bool IsBitmask => EnumMember.IsBitmask(EnumMembers);
 }
@@ -209,26 +146,6 @@ public record FieldMetadata(
 // string, not a number — so values above 2^53 survive JSON round-tripping without IEEE 754 loss.
 public record FieldValue(FieldMetadata Metadata, object? Value, string? CheckError = null);
 
-// RecordType: the schema table name (e.g. "NPC_") this record belongs to — needed by
-// the webview's "Copy as New Record" column-header action, which must supply a RecordType up
-// front to CreateRecord (schema validation happens before the TemplateFormKey is even read; see
-// RecordEditService's create path). Defaults to "" for the many call sites (mostly
-// test fixtures) that don't need it — always populated for real reads (ReadDetail knows its own
-// schema's TableName).
-// Origin (ADR-0036): the mod folder that provided this row's physical file, or a reserved
-// PluginOrigin value — paired with Plugin, never encoded into it. Required: every
-// construction (including a test fixture) must say which origin, not fall back to one silently.
-// Declared before the two still-defaulted trailing fields only because C# requires a required
-// parameter to precede any optional one — callers may still pass it by name in any position.
-// IsPartialForm: this override's own record-header Partial Form flag
-// (Schema.PartialFormFlag), independent of any field's own value — always false for a row whose
-// record cannot carry one (the plugin header: a ModHeader has no such flag). Drives
-// ConflictClassifier's field-exclusion rule and the compare grid's column dimming (CompareOverride
-// below).
-// IsPartialFormable: whether this record's own type could ever carry the flag at all —
-// independent of IsPartialForm's current state. Lets the webview decide whether to render its own
-// Partial Form toggle (PluginHeader.tsx) without hand-duplicating Source.ContainerChildFields'
-// container-type table client-side.
 public record RecordDetail(
     string FormKey,
     string Plugin,
@@ -236,9 +153,17 @@ public record RecordDetail(
     bool IsWinner,
     string? EditorId,
     IReadOnlyList<FieldValue> Fields,
+    // Origin (ADR-0036): paired with Plugin, never encoded into it. Required so every construction
+    // says which origin; it precedes the defaulted fields only because C# requires that.
     string Origin,
+    // The schema table name; "Copy as New Record" must supply it to CreateRecord up front. Defaults
+    // to "" for test fixtures — always populated for real reads.
     string RecordType = "",
+    // The record header's Partial Form flag, independent of any field value; always false for a
+    // record that cannot carry one (the plugin header). Drives field exclusion and column dimming.
     bool IsPartialForm = false,
+    // Whether this record type could carry the flag at all, so the webview can render its Partial
+    // Form toggle without duplicating the container-type table client-side.
     bool IsPartialFormable = false);
 
 public record CompareOverride(
@@ -257,27 +182,18 @@ public record CompareOverride(
         FormKey, Plugin, LoadOrderIndex, IsWinner, EditorId, Fields, Origin, RecordType, IsPartialForm,
         IsPartialFormable);
 
-// Resolutions (ADR-0031): only populated for a scalar formKey-typed leaf, keyed by plugin like
-// Values/CellStates — one entry per plugin whose cell holds a FormKey value. Never populated on a
-// struct/array field's own FieldDiff (its Values aren't FormKey strings) and never aggregated up
-// from Children — each leaf's signal is independent, so a dangling sibling can't hide a live
-// hyperlink/affordance on the leaf next to it.
-//
-// ConflictAll: this node's own bottom-up conflict classification — this field/element's own
-// CellStates folded with the same ConflictAll aggregate of every descendant (recursively), via the
-// shared ConflictRules.Reduce/Escalate rules. Scoped to exactly this FieldDiff's subtree — distinct
-// from ClassifyResult.ConflictAll (record-wide, drives the Plugins-tree badge), which is computed
-// only from the top-level Diffs. Drives the compare
-// grid's per-row background (ADR-0016): a leaf's own value; a struct/array's aggregate while
-// collapsed, deferred to its children while expanded.
 public record FieldDiff(
     string FieldName,
     [property: ColumnKeyed] Dictionary<string, object?> Values,
     string WinnerColumn,
     object? WinnerValue,
     [property: ColumnKeyed] IReadOnlyDictionary<string, ConflictThis> CellStates,
+    // This subtree's own aggregate, distinct from the record-wide ClassifyResult.ConflictAll; drives
+    // the compare grid's per-row background (ADR-0016): a struct's aggregate while collapsed.
     ConflictAll ConflictAll,
     IReadOnlyList<FieldDiff>? Children = null,
+    // ADR-0031: only on a scalar formKey leaf, keyed like Values; never aggregated up from Children,
+    // so a dangling sibling can't hide a live hyperlink on the leaf next to it.
     [property: ColumnKeyed] IReadOnlyDictionary<string, FormKeyResolution>? Resolutions = null);
 
 public record ClassifyResult(
@@ -295,46 +211,29 @@ public record PluginRecordTypeCount(string Type, int Count, string DisplayName);
 public record FilterRequest(string Sql);
 public record FilterResponse(string? Sql);
 
-// CrashRepairOffers: every tracked plugin this same load found stale/missing against
-// Modbench's own record — an interrupted compile's journal marker, or a binary that could not be
-// read at all — surfaced the same structured-failures way Failures already is (ADR-0026), never a
-// second endpoint or poller: the only way either condition can newly appear is a compile this
-// process itself drives, or a process restart, both of which this load call already observes.
+// CrashRepairOffers: tracked plugins found stale/missing against Modbench's own record, surfaced
+// the same structured way Failures is (ADR-0026), never a second endpoint or poller: either
+// condition can only appear through a compile this process drives or a restart.
 public record LoadOrderResponse(
     string Status, IReadOnlyList<PluginLoadFailure> Failures, IReadOnlyList<CrashRepairOffer> CrashRepairOffers);
-// ADR-0044: Mod Management's snapshot — every physical plugin copy in the instance. InstanceRoot
-// (ADR-0001) is the MO2 instance these mod folders belong to, what the index file is keyed
-// on; it must be the instance rather than anything wider, because Origin is a mod folder *name*
-// unique only within one. GameDirectory is where the backend resolves the forced masters from.
+// ADR-0044: Mod Management's snapshot. InstanceRoot (ADR-0001) must be the MO2 instance rather
+// than anything wider, because Origin is a mod folder name unique only within one.
 public record LoadOrderRequest(
     IReadOnlyList<LoadOrderPlugin> Plugins, string GameDirectory, string InstanceRoot, string GameRelease = "Fallout4");
-// One copy of the snapshot: Origin (ADR-0036) is Mod Management's to resolve — the mod
-// folder that provided the file, or a reserved value (PluginOrigin.DataDirectory / MO2's
-// overwrite). Slot is the name's plugins.txt line index, null when no line names it. Enabled (the
-// `*` prefix) and Winning (this copy is what the Mod override order resolves the name to) are
-// nullable purely to make an omitted field detectable: a plain bool would bind a missing property
-// to false, quietly making every copy non-participating, so nothing would win any FormKey and the
-// conflict picture would be empty but well-formed. The endpoint rejects null (400) rather than
-// choosing a value on the caller's behalf.
+// Slot is null when no plugins.txt line names it. Enabled and Winning are nullable only so an
+// omitted field is detectable: a plain bool would bind a missing property to false, quietly
+// making every copy non-participating.
 public record LoadOrderPlugin(string Name, string Path, string Origin, int? Slot, bool? Enabled, bool? Winning);
 
-// Origin (ADR-0036): the mod folder that provided the source row's physical file, or a
-// reserved PluginOrigin value — additive alongside Plugin, same shape as RecordDetail.Origin.
-// GetReferences never filters by plugin, so this isn't a filter gap; without Origin here,
-// two same-filename sources referencing the same target are indistinguishable in the result.
+// Origin (ADR-0036): additive alongside Plugin; without it two same-filename sources referencing
+// the same target are indistinguishable.
 public record ReferenceResult(string FormKey, string Plugin, string FieldPath, string RecordType, string? EditorId, string Origin);
 
 public record HealthResponse(string Status);
 
-// ADR-0041: one field edit on one plugin's copy of a record — the wire form of the single
-// write path. Plugin and Origin travel as the compound identity ADR-0036 requires rather than a bare
-// filename: a caller with only a filename is asking an ambiguous question the moment two mods ship a
-// plugin of the same name.
-//
-// Value is a raw JsonElement, deliberately. A field's value is whatever its schema says it is — a
-// number, a string, an enum name, or the entire JSON array/object of a complex field written
-// atomically (CONTEXT.md's "Complex field") — so typing it here would mean re-declaring the
-// reflected schema on the wire.
+// ADR-0041: one field edit on one plugin's copy. Value is a raw JsonElement: a value is whatever
+// its schema says (a complex field's whole JSON), so typing it here would re-declare the schema
+// on the wire.
 public record RecordFieldEditRequest(
     string Plugin,
     string Origin,
@@ -369,18 +268,15 @@ public record RecordRenumberResponse(bool Applied, string OldFormKey, string New
 /// <summary>The Renumber gesture's FormID input box's suggested default (<c>RecordEditService.PeekNextFreeFormKey</c>).</summary>
 public record NextFreeFormKeyResponse(string FormKey);
 
-// ADR-0041: xEdit's "Copy as Override Into…" / "Copy as New Record Into…", on the
-// same door the other lifecycle gestures use — the route's own {formKey} names the record being
-// copied, so the two plugins involved travel as SourcePlugin/SourceOrigin and
-// DestinationPlugin/DestinationOrigin (ADR-0036's compound identity, on both sides of the copy).
+// ADR-0041: xEdit's "Copy as Override Into…" / "Copy as New Record Into…". The route's {formKey}
+// names the record copied; both plugins travel as ADR-0036 compound identities.
 
 public record RecordCopyAsOverrideRequest(string SourcePlugin, string SourceOrigin, string DestinationPlugin, string DestinationOrigin);
 
 public record RecordCopyAsOverrideResponse(bool Applied, string FormKey);
 
 /// <summary><see cref="RequestedFormKey"/> null means auto-allocate the next free local FormID
-/// (both-refs collision-safe, the same posture <see cref="RecordCreateRequest.FormKey"/> uses); non-null
-/// is xEdit's typed-FormID path.</summary>
+/// (both-refs collision-safe); non-null is xEdit's typed-FormID path.</summary>
 public record RecordCopyAsNewRecordRequest(
     string SourcePlugin, string SourceOrigin, string DestinationPlugin, string DestinationOrigin, string? RequestedFormKey);
 

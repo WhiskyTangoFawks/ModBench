@@ -3,10 +3,9 @@ using MEditService.Core.Plugins;
 
 namespace MEditService.Core.Queries;
 
-// ADR-0037: a plugin with an unresolvable master is indexed and flagged, never deactivated.
-// Distinguishes a directly-missing master (never attempted at all — absent from both the loaded
-// set and the failed set) from a master that is itself unloadable (attempted, recorded in
-// LoadOrder.LoadFailures) so a cascade of failures doesn't read as one undifferentiated error.
+// ADR-0037: a plugin with an unresolvable master is indexed and flagged, never deactivated. A
+// directly-missing master (never attempted) is told apart from one that is itself unloadable
+// so a cascade doesn't read as one undifferentiated error.
 [JsonConverter(typeof(JsonStringEnumConverter))]
 public enum MasterIssueKind
 {
@@ -16,11 +15,9 @@ public enum MasterIssueKind
 
 public sealed record MasterIssue(string MasterName, MasterIssueKind Kind);
 
-// Pure — no load order, no Mutagen re-read: `LoadOrder.Plugins` and `LoadOrder.LoadFailures`
-// already carry everything this needs. Deliberately shallow: only a plugin's OWN declared
-// `Masters` list is consulted, never a master's own masters — a cascade is exactly what
-// ADR-0037 rules out (xEdit's fixpoint loop exists only because deactivation cascades; nothing
-// here deactivates, so there is nothing to propagate).
+// Pure and deliberately shallow: only a plugin's own declared Masters are consulted, never a
+// master's masters — a cascade is exactly what ADR-0037 rules out; nothing here deactivates,
+// so there is nothing to propagate.
 public static class MasterResolution
 {
     /// <summary>Per-plugin master issues, keyed by plugin name; a plugin with every master

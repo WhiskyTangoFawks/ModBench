@@ -9,18 +9,14 @@ public interface IWorldspaceQueryService
 {
     // ADR-0036: origin — stated by a caller that knows which copy of `plugin` it's
     // browsing (a tree row does; it was built from one), else resolved from the load order.
-    // Mirrors GetRecords/GetPluginRecordTypes.
     IReadOnlyList<WorldspaceSummary> GetWorldspaces(string plugin, string? origin = null);
     WorldspaceBlocks GetWorldspaceBlocks(string plugin, string worldspaceFormKey, string? origin = null);
     CellReferences GetCellReferences(string plugin, string cellFormKey, string? origin = null);
     PagedResult<CellSummary> GetInteriorCells(string plugin, int limit, int offset, string? origin = null);
 }
 
-/// <summary>
-/// Per-plugin worldspace / cell / placed-object tree. Reads the indexed worldspace records and the
-/// placement / cell_location side tables — everything that plugin declares (its own records and
-/// overrides), never a cross-plugin winner. See ADR-0023.
-/// </summary>
+/// <summary>Everything a plugin declares (own records and overrides), never a cross-plugin winner.
+/// See ADR-0023.</summary>
 public sealed class WorldspaceQueryService(ILoadOrderMirror loadOrder, ILogger<WorldspaceQueryService>? logger = null)
     : IWorldspaceQueryService
 {
@@ -45,12 +41,9 @@ public sealed class WorldspaceQueryService(ILoadOrderMirror loadOrder, ILogger<W
         origin ??= ResolveOrigin(plugin);
         var cells = RequireReads().GetWorldspaceCells(new PluginKey(plugin, origin), worldspaceFormKey);
 
-        // A worldspace's TopCell (persistent interior cell) has no block/sub-block coordinates.
-        // Normally there is exactly one such row — the worldspace's own TopCell slot — but
-        // every block-less row is surfaced rather than keeping only the first and discarding the
-        // rest. The data can't say which of several is the "real" TopCell, so the first
-        // (deterministic order) is the one treated as the persistent cell; anything past it is
-        // still shown, just not labeled as persistent, and is genuinely anomalous — worth a warning.
+        // A TopCell has no block coordinates. Every block-less row is surfaced, but the data can't
+        // say which of several is the real TopCell, so the first (deterministic order) is treated
+        // as persistent and the rest are anomalous.
         var topCellRows = cells.Where(c => c.BlockX == null).ToList();
         if (topCellRows.Count > 1)
         {
@@ -91,9 +84,8 @@ public sealed class WorldspaceQueryService(ILoadOrderMirror loadOrder, ILogger<W
 
     private IRecordReads RequireReads() => _mirror.RequireScope().Reads;
 
-    // Wire-facing (WorldspaceEndpoints) — an ordinary load-order row has no origin to give, so
-    // this stays the fallback; callers that *do* know (a tree row built from a specific copy)
-    // pass an explicit origin parameter on every method above instead.
+    // An ordinary load-order row has no origin to give, so this stays the fallback; callers that
+    // do know (a tree row built from a specific copy) pass an explicit origin instead.
     private string ResolveOrigin(string plugin) =>
         PluginOriginResolver.Resolve(_mirror.LoadOrder, plugin);
 }

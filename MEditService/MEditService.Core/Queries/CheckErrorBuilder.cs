@@ -3,20 +3,12 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Core.Queries;
 
-/// <summary>
-/// Computes a diagnostic string for FormLink fields read from the record index. Null when the
-/// value is clean. The resolved/wrong-type/unresolved three-way split is mEdit's own shape, not an
-/// xEdit citation — only the engine-hardcoded-range exemption within it is TES5Edit's read,
-/// confirmed at source in wbImplementation.pas's TwbFile.FileFormIDtoLoadOrderFormID and
-/// TwbFile.RemoveMainRecord (both gate on ObjectID &lt; $800; neither carries any wrong-record-type
-/// logic — that distinction is not theirs to cite).
-/// </summary>
+/// <summary>Null when clean. Only the engine-hardcoded-range exemption (ObjectID &lt; $800) is
+/// TES5Edit's read (wbImplementation.pas); the resolved/wrong-type/unresolved split is mEdit's own.</summary>
 public static class CheckErrorBuilder
 {
-    // ADR-0031: resolve callers pass IRecordReads.Resolve (the O(1) form_lookup read),
-    // not FindRecordType's per-table scan — resolve is a raw lookup; the not-found/wrong-type/
-    // valid-type distinction is computed uniformly here via FormKeyResolution.From, the same factory
-    // FieldDiff resolution uses.
+    // ADR-0031: `resolve` is the O(1) form_lookup read, not a per-table scan; the
+    // not-found/wrong-type/valid-type distinction is computed here via FormKeyResolution.From.
     public static string? Build(FieldMetadata meta, object? value, Func<string, RecordLookupEntry?> resolve, GameRelease release)
     {
         var entries = new List<string>();

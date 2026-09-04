@@ -5,14 +5,9 @@ using Microsoft.Extensions.Logging;
 
 namespace MEditService.Core.Queries;
 
-/// <summary>
-/// The session-load half of the Kind B detectors (#570): scans every held, mutable plugin's
-/// binary with <see cref="MalformedPluginScan"/> — original bytes only, no Mutagen — so a
-/// silently-lossy plugin is named the moment the load order arrives instead of looking healthy
-/// until Track. Immutable plugins are never diagnosed: they are the proof set the tables were
-/// built from (<c>docs/specs/medit-repair.md</c>); a hit there is the vanilla-proof test's bug to
-/// catch, never a user-facing diagnosis.
-/// </summary>
+/// <summary>Kind B detection (#570): original bytes only, no Mutagen. Immutable plugins are never
+/// diagnosed — they are the proof set the tables were built from (docs/specs/medit-repair.md),
+/// so a hit there is a test bug.</summary>
 public sealed class MalformedPluginQueryService(ILoadOrderMirror mirror, ILogger<MalformedPluginQueryService>? logger = null)
 {
     public IReadOnlyList<PluginDiagnosisReport> GetLoadOrderDiagnoses()
@@ -36,7 +31,7 @@ public sealed class MalformedPluginQueryService(ILoadOrderMirror mirror, ILogger
                 reports.Add(new PluginDiagnosisReport(plugin.Name, plugin.Origin, d.Anchor, d.DefectClass, d.Tail, d.Message, d.Describe()));
         }
         stopwatch.Stop();
-        // #570 AC: the load-time cost is measured and reported, not assumed.
+        // The load-time cost is measured and reported, not assumed (#570).
         if (logger is not null && logger.IsEnabled(LogLevel.Information))
         {
             logger.LogInformation(

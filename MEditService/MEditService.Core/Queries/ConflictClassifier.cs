@@ -10,16 +10,9 @@ public sealed class ConflictClassifier(ILogger<ConflictClassifier>? logger = nul
 {
     private readonly ILogger _logger = (ILogger?)logger ?? NullLogger.Instance;
 
-    // resolveFormKey: ADR-0031's O(1) lookup (IRecordReads.Resolve), batched once per
-    // Classify call so every formKey-typed FieldDiff leaf's Resolutions is populated in this same
-    // pass rather than round-tripped per value. Null when the caller has no resolver available
-    // (no Resolutions populated).
-    //
-    // pluginParticipates (ADR-0035): the plugins.txt `*` prefix, keyed by ColumnKey.Of(
-    // plugin, origin) — a filename alone can name two loaded copies. A
-    // non-participating plugin's override is excluded before conflict/diff computation — it can
-    // never contribute a conflict, regardless of its field values. Null (the default) means every
-    // plugin in conflictingRecords participates.
+    // resolveFormKey (ADR-0031): the O(1) lookup, batched once per Classify so every formKey leaf's
+    // Resolutions is populated in this pass; null leaves Resolutions empty. pluginParticipates
+    // (ADR-0035) is keyed by ColumnKey.Of; null means every plugin participates.
     public ClassifyResult Classify(
         IReadOnlyList<RecordDetail> conflictingRecords,
         IReadOnlyDictionary<string, IReadOnlyList<string>> pluginMasters,
@@ -111,11 +104,8 @@ public sealed class ConflictClassifier(ILogger<ConflictClassifier>? logger = nul
 
     private const int MaxArrayChildCount = 500;
 
-    // Bundles the per-Classify-call context (master plugin, all overrides, logger, and the ADR-0031
-    // resolver) that every recursive Build*Children/MakeChild step needs.
-    // MasterColumn (ADR-0036): the compound (plugin, origin) identity of the master record,
-    // pre-computed by the caller via ColumnKey.Of — every dictionary/lookup below is keyed the same
-    // way, so a plain-plugin comparison never accidentally matches the wrong column.
+    // MasterColumn (ADR-0036) is the compound ColumnKey.Of identity, so no plain-plugin comparison
+    // can match the wrong column.
     private sealed record DiffContext(
         string MasterColumn,
         IReadOnlyList<RecordDetail> Records,
@@ -138,20 +128,13 @@ public sealed class ConflictClassifier(ILogger<ConflictClassifier>? logger = nul
         return [.. fieldNames
             .Select(fieldName =>
             {
-                // A Partial Form override's own fields are excluded from conflict detection
-                // entirely — treated the same way a genuinely-null field already is, regardless of
-                // what value this field actually carries. That reuse is deliberate:
-                // ComputeCellStates/PickWinner/BuildStructChildren already skip a null
-                // value's plugin as a candidate for winning, contesting or contributing a cell state,
-                // which is exactly "this override's own fields fall through to the previous
-                // non-partial override" (CONTEXT.md's Partial Form entry) with no new state to invent.
+                // A Partial Form override's fields are excluded as if null (ADR-0016), so they
+                // fall through to the previous non-partial override with no new state.
                 var values = records.ToDictionary(
                     o => ColumnKey.Of(o.Plugin, o.Origin),
                     o => o.IsPartialForm ? null : o.Fields.FirstOrDefault(f => f.Metadata.Name == fieldName)?.Value);
-                // WinnerColumn/WinnerValue are this *field's* own winner — the highest
-                // load-order plugin that actually carries a (non-excluded) value for it — not the
-                // record-wide winner, which may have no value for this one field (Partial Form, or
-                // a genuinely-null field). Mirrors BuildStructChildren's per-field winner below.
+                // This field's own winner, not the record-wide one, which may carry no value for
+                // this field (Partial Form, or a genuinely-null field).
                 var fieldWinner = records
                     .Where(r => values.GetValueOrDefault(ColumnKey.Of(r.Plugin, r.Origin)) != null)
                     .MaxBy(r => r.LoadOrderIndex);
@@ -184,9 +167,8 @@ public sealed class ConflictClassifier(ILogger<ConflictClassifier>? logger = nul
         var resolutions = new Dictionary<string, FormKeyResolution>();
         foreach (var (plugin, value) in values)
         {
-            // Top-level scalar formKey fields carry a raw string (DuckDB VARCHAR); struct sub-fields
-            // and array elements carry a JsonElement (parsed from the struct/array column's JSON) —
-            // ExtractString handles both so struct/array leaves resolve exactly like top-level ones.
+            // Top-level scalar formKey fields carry a raw string; struct sub-fields and array
+            // elements carry a JsonElement — ExtractString handles both.
             var fk = FormRefPathBuilder.ExtractString(value);
             if (string.IsNullOrEmpty(fk) || fk == "Null") continue;
             resolutions[plugin] = FormKeyResolution.From(fk, resolveFormKey(fk), meta.ValidFormKeyTypes, release);
@@ -230,30 +212,21 @@ public sealed class ConflictClassifier(ILogger<ConflictClassifier>? logger = nul
         private readonly string _masterColumn = ctx.MasterColumn;
         private readonly ILogger _logger = ctx.Logger;
 
-        /// <summary>A keyed array aligns element-for-element by key across plugins, so a script
-        /// one plugin does not carry is an absence at that key rather than a shift of everything
-        /// after it — the positional reading of the same two arrays would report every element from
-        /// the missing one onwards as a conflict. Rows come out in key order, which is also the
-        /// order the write path stores them in (Edits.KeyedArrays), so the grid reads the same way
-        /// the file does.</summary>
+        /// <summary>Aligns by key, so a script one plugin lacks is an absence at that key rather
+        /// than a shift of everything after it. Rows come out in key order, the order the write
+        /// path stores them.</summary>
         public List<FieldDiff>? BuildKeyed(IReadOnlyList<string> keyMembers) =>
             BuildAligned(e => ElementKey.Of(e, keyMembers), (a, b) => a.CompareTo(b));
 
-        /// <summary>A pure-FormLink array's element <i>is</i> its key. A non-string element — the
-        /// JSON null a never-set slot serializes as — has none and is not a row at all. Rows stay
-        /// in first-seen order across the load order, since the elements carry no order of their
-        /// own beyond the one the plugins wrote them in.</summary>
+        /// <summary>The element is its own key. A non-string element (the JSON null of a never-set
+        /// slot) is not a row. Rows stay in first-seen order across the load order.</summary>
         public List<FieldDiff>? BuildSorted() =>
             BuildAligned(
                 e => e.ValueKind == System.Text.Json.JsonValueKind.String ? ElementKey.OfValue(e.GetString()!) : null,
                 order: null);
 
-        /// <summary>One row per key in the union across plugins, each carrying whichever element
-        /// each plugin holds at that key and null where it holds none. One EnumerateArray pass per
-        /// plugin, and one definition of what happens to a second element sharing a key: the first
-        /// wins. The write path refuses to store such a pair
-        /// (<see cref="Edits.RecordEditRefusal.DuplicateKeyInKeyedArray"/>), but a plugin another
-        /// tool wrote can still hold one, and the grid has to show something.</summary>
+        // One row per key in the union across plugins. A second element sharing a key: the first
+        // wins — the write path refuses such a pair, but another tool's plugin can hold one.
         private List<FieldDiff>? BuildAligned(
             Func<System.Text.Json.JsonElement, ElementKey?> keyOf, Comparison<ElementKey>? order)
         {
@@ -389,12 +362,8 @@ public sealed class ConflictClassifier(ILogger<ConflictClassifier>? logger = nul
             : null;
     }
 
-    // A FieldDiff node's own bottom-up ConflictAll — this node's own CellStates reduced via
-    // the shared rule, escalated against each already-built child's own (already-aggregated)
-    // ConflictAll. Escalate's "worst of two" folding is associative/commutative over
-    // {NoConflict, Override, Conflict} (Reduce never produces OnlyOne/ConflictCritical, which are
-    // record-wide-only terminal states), so this is equivalent to reducing the union of this
-    // node's own CellStates with every descendant's, in one pass, without re-walking the subtree.
+    // Escalate is associative and commutative over {NoConflict, Override, Conflict} (Reduce never
+    // produces the terminal states), so folding children equals reducing the whole subtree at once.
     private static ConflictAll AggregateConflictAll(
         IReadOnlyDictionary<string, ConflictThis> ownCellStates, IReadOnlyList<FieldDiff>? children)
     {

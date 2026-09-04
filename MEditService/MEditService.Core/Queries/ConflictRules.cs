@@ -1,20 +1,12 @@
 namespace MEditService.Core.Queries;
 
-// Single owner of the ADR-0016 two-axis model's decision rules: both ConflictClassifier (generic
-// reflected fields) folds its per-plugin values through the same cell
-// classification and row-level reduction here, so a rule change can't drift between the two paths.
+// Single owner of the ADR-0016 two-axis model's decision rules, so a rule change cannot drift
+// between the sites that fold per-plugin values through them.
 public static class ConflictRules
 {
-    // Per-cell classification for one field/property: field winner (highest load-order plugin with
-    // a value) is ConflictWins if contested by another non-master plugin, else Override; other
-    // non-master plugins are IdenticalToMaster, ConflictLoses (differ from the winner), or Override.
-    // Callers supply `valuesEqual` so generic fields can use sorted-array-aware comparison while VMAD
-    // compares pre-canonicalized strings.
-    // ADR-0035: a non-participating plugin's override/input never contributes to conflict
-    // classification — filtered out before any diff/winner/cell-state computation, not just masked
-    // in the result. Used by ConflictClassifier
-    // so the "what does an absent key mean" default (fail-open: true) can't drift between the three.
-    // Null pluginParticipates (the default) means every plugin participates.
+    // ADR-0035: a non-participating plugin never contributes to conflict classification — filtered
+    // out before any diff/winner/cell-state computation, not masked in the result. Null
+    // pluginParticipates means every plugin participates (absent key: fail-open).
     public static IReadOnlyList<T> FilterParticipating<T>(
         IReadOnlyList<T> items, Func<T, string> plugin, IReadOnlyDictionary<string, bool>? pluginParticipates) =>
         pluginParticipates == null ? items : [.. items.Where(i => pluginParticipates.GetValueOrDefault(plugin(i), true))];
@@ -26,6 +18,9 @@ public static class ConflictRules
         Func<string, bool> hasValue) =>
         pluginOrder.Where(p => hasValue(p.Plugin)).MaxBy(p => p.LoadOrderIndex)!.Plugin;
 
+    // The field winner (highest load-order plugin with a value) is ConflictWins if contested by
+    // another non-master plugin, else Override; the rest are IdenticalToMaster, ConflictLoses or
+    // Override. `valuesEqual` is supplied so callers can use sorted-array-aware comparison.
     public static Dictionary<string, ConflictThis> ComputeCellStates(
         IReadOnlyDictionary<string, object?> valuesByPlugin,
         string masterPlugin,
@@ -97,9 +92,8 @@ public static class ConflictRules
         };
     }
 
-    // Combines a generic-field ConflictAll with another axis's contribution (e.g. VMAD), taking the
-    // more severe of the two. OnlyOne and ConflictCritical are terminal states that pass through
-    // unchanged — explicit severity table so this doesn't depend on enum declaration order.
+    // Takes the more severe of the two; OnlyOne and ConflictCritical are terminal and pass through.
+    // Explicit severity table so this doesn't depend on enum declaration order.
     public static ConflictAll Escalate(ConflictAll generic, ConflictAll contribution)
     {
         return generic switch

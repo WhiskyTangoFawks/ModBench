@@ -18,10 +18,8 @@ public sealed class RecordQueryService(
     private readonly ILoadOrderMirror _mirror = loadOrder;
     private readonly SchemaReflector _schemaReflector = schemaReflector;
     private readonly ConflictClassifier _conflictClassifier = conflictClassifier;
-    // The two point reads below are the record editor's and compare grid's own
-    // answers, so they are where source text is re-checked against what the index stored. Optional
-    // only so the many read-shape tests that construct this service directly keep compiling; the
-    // default is the real validator, never a no-op, so production wiring cannot silently lose it.
+    // GetRecord/GetCompare are where source text is re-checked against the index. Optional only so
+    // read-shape tests construct this directly; the default is the real validator, never a no-op.
     private readonly SourceFreshness _freshness =
         freshness ?? new SourceFreshness(
             loadOrder, NullLogger<SourceFreshness>.Instance, new RecordTextCodec(NullLogger<RecordTextCodec>.Instance));
@@ -29,15 +27,9 @@ public sealed class RecordQueryService(
     public IReadOnlyList<PluginResponse> GetPlugins()
     {
         var s = RequireLoadOrder();
-        // ADR-0037: one whole-load-order classification per call, not per plugin — Classify
-        // is already a single pass over every plugin's Masters list.
-        //
-        // Only once the load is complete. Classify answers "is this master anywhere in the
-        // load order", which a partial load order cannot answer — a master that is present on disk and
-        // merely not opened yet is indistinguishable from one that is genuinely absent, and the
-        // wrong answer is the alarming one. Reported as "no issues" while loading rather than as a
-        // separate not-yet-computed value: the caller already knows the load is running (it is in
-        // the same status), and inventing a third state here would put that knowledge in two places.
+        // ADR-0037: classified once per call, and only once the load is complete: a partial load
+        // order cannot tell a master not yet opened from one genuinely absent. Loading reports no
+        // issues rather than inventing a third state.
         IReadOnlyDictionary<string, IReadOnlyList<MasterIssue>> masterIssues =
             _mirror.Status.State == LoadOrderState.Ready
                 ? MasterResolution.Classify(s.Plugins, s.LoadFailures)
@@ -50,29 +42,20 @@ public sealed class RecordQueryService(
 
         // ADR-0035 amending ADR-0018: a record filter prunes records and record types, never
         // a plugin row — every plugin is still returned, and HasMatchingRecords is the additive fact
-        // a caller (the composite's chevron) decides expandability from, not row presence.
+        // a caller decides expandability from, not row presence.
         var matchingPlugins = RequireReads().GetPluginsWithMatchingRecords(RequireSchemas().Keys);
         return [.. s.Plugins.Select(p => ToResponse(p, matchingPlugins.Contains(p.Name)))];
     }
 
-    // The header isn't a browsable record type (the "expand a plugin -> record types"
-    // listing, or an unscoped "all types" search) — it's reached only via "Open Header" on the
-    // plugin node. It stays a real schemas.Keys entry so GetRecord/GetCompare (a direct FormKey
-    // lookup) can still resolve it; only the two browse paths below exclude it, and since #631 both
-    // exclusions are real rather than side effects of the header living outside `records`.
-    //
-    // Named through HeaderIndexer.RecordType, not a local copy of the literal: this file used to
-    // carry its own private const, which is exactly the kind of second spelling #631 exists to
-    // delete — and being private, it had already forced CompareGoldenTests into a third copy as a
-    // bare literal. That one now names the canonical constant too.
+    // The header is not a browsable record type: it stays a schemas.Keys entry so GetRecord/
+    // GetCompare resolve it by FormKey, but both browse paths below exclude it (#631).
 
     public PagedResult<RecordSummary> GetRecords(string? type, string? plugin, string? search, int limit, int offset, string? origin = null)
     {
         var reads = RequireReads();
         var schemas = RequireSchemas();
-        // The caller states which copy when it knows (a tree row does — it was built from one).
-        // Otherwise resolve server-side from the load order, since a bare filename is all most
-        // callers have. Null when plugin itself is null (nothing to resolve).
+        // The caller states which copy when it knows (a tree row does); otherwise resolve from the
+        // load order, since a bare filename is all most callers have.
         origin ??= plugin == null ? null : PluginOriginResolver.Resolve(_mirror.LoadOrder, plugin);
 
         if (type != null && !schemas.ContainsKey(type))
@@ -107,13 +90,9 @@ public sealed class RecordQueryService(
         if (stack == null) return null;
 
         var heldPlugins = RequireLoadOrder().Plugins;
-        // ADR-0036 (amended, #618 follow-up): the compare grid is xEdit parity — the record's
-        // in-game resolution stack. A file-level loser (Registration.Winning false: another
-        // origin's same-named file is the one the game loads) is not a column; it stays indexed
-        // and browsable from the plugins tree. Winning alone, never Participates — a disabled or
-        // unlisted copy is a different axis and still columns. This is the one filter site a
-        // future show-losing-copies toggle would parameterize. Fail-open on a copy the load
-        // order doesn't hold, matching pluginParticipates' own absent-key default.
+        // ADR-0036: the grid is the record's in-game resolution stack, so a file-level loser is
+        // not a column. Winning alone, never Participates — a disabled copy still columns.
+        // Fail-open on a copy the load order lacks.
         var pluginWinning = heldPlugins.ToDictionary(p => ColumnKey.Of(p.Name, p.Origin), p => p.Winning);
         var committedOverrides = stack.Entries
             .Where(e => pluginWinning.GetValueOrDefault(ColumnKey.Of(e.Plugin.Name, e.Plugin.Origin!), true))
@@ -128,10 +107,8 @@ public sealed class RecordQueryService(
         var pluginParticipates = heldPlugins.ToDictionary(p => ColumnKey.Of(p.Name, p.Origin), p => p.Participates);
         var (classification, conflictAll) =
             ClassifyStack(committedOverrides, pluginMasters, pluginParticipates, resolveFormKey);
-        // ADR-0036: Origin must be passed through explicitly (never left to default to
-        // PluginOrigin.DataDirectory), and classification.PluginStates is keyed by
-        // ColumnKey.Of(o.Plugin, o.Origin) — a bare-plugin lookup misses for any non-Data-origin
-        // column, silently defaulting ConflictThis to OnlyOne.
+        // ADR-0036: PluginStates is keyed by ColumnKey.Of, so a bare-plugin lookup would miss for
+        // any non-Data-origin column and silently default ConflictThis to OnlyOne.
         var annotated = committedOverrides
             .ConvertAll(o => new CompareOverride(
                 o.FormKey, o.Plugin, o.LoadOrderIndex, o.IsWinner, o.EditorId, o.Fields,
@@ -142,8 +119,6 @@ public sealed class RecordQueryService(
         return new CompareResult(annotated, classification.Diffs, conflictAll);
     }
 
-    /// <summary>The record-wide classification <see cref="GetCompare"/> needs — one definition of
-    /// "what is this record's ConflictAll".</summary>
     private (ClassifyResult Classification, ConflictAll ConflictAll) ClassifyStack(
         IReadOnlyList<RecordDetail> committedOverrides,
         IReadOnlyDictionary<string, IReadOnlyList<string>> pluginMasters,
@@ -163,11 +138,8 @@ public sealed class RecordQueryService(
         origin ??= PluginOriginResolver.Resolve(_mirror.LoadOrder, plugin);
         var schemas = RequireSchemas();
 
-        // #631: the header IS in `records` now — one row per plugin, grouped by record_type like
-        // every other — so this exclusion has to be real rather than a side effect of the header
-        // living somewhere else. Without it "Main File Header" appears as a browsable record-type
-        // node (count 1) under every plugin, which is not how the header is reached
-        // (GetPluginRecordTypes_ExcludesHeader is the standing guard).
+        // The header is one `records` row per plugin, so this exclusion has to be real; without it
+        // "Main File Header" appears as a browsable record-type node under every plugin (#631).
         return [.. reads.GetRecordTypeCounts(new PluginKey(plugin, origin))
             .Where(c => c.Type != HeaderIndexer.RecordType && schemas.ContainsKey(c.Type))
             .Select(c => new PluginRecordTypeCount(c.Type, c.Count, schemas.DisplayNameFor(c.Type)))
