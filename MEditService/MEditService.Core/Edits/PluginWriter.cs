@@ -26,10 +26,8 @@ public sealed class PluginWriter(ILogger<PluginWriter> logger)
         IReadOnlyList<string>? loadOrder = null)
     {
         var modKey = ModKey.FromFileName(Path.GetFileName(pluginPath));
-        // Same explicit strings parameters every other deep-parse call site builds. This
-        // method has no load order concept of its own (see its own doc comment) and so no origin to
-        // distinguish a mod folder from the game Data folder — the single-argument ForRead overload
-        // applies, the same as ExternalChangeAbsorber/ExternalChangeEditLander's identical call.
+        // No load order concept here, so no origin to distinguish a mod folder from the game Data folder:
+        // the single-argument ForRead overload applies.
         var mod = ModFactory.ImportSetter(new ModPath(modKey, pluginPath), gameRelease, LocalizedStrings.ForRead(Path.GetDirectoryName(pluginPath)!));
         return PrepareFromModAsync(mod, pluginPath, loadOrder);
     }
@@ -48,29 +46,14 @@ public sealed class PluginWriter(ILogger<PluginWriter> logger)
         var tmpPath = Path.Combine(tmpDir, Path.GetFileName(pluginPath));
         Directory.CreateDirectory(tmpDir);
 
-        // Everything from here down can throw before this method ever returns a
-        // PreparedPluginSave — most concretely, a plugin whose only reference to a master lives in
-        // a VMAD struct-list script property (Mutagen-Modding/Mutagen#688) throws
-        // UnmappableFormIDException out of WriteAsync below, on every retry, for as long as that
-        // plugin stays broken. PreparedPluginSave.Dispose() is what normally deletes tmpDir, but a
-        // Dispose that never gets constructed never runs — the caller's `using` has nothing to bind
-        // when this method itself throws. Same discipline TrackService.VerifyRoundTrip already uses
-        // for its own scratch directory, adapted for the one difference that matters here: tmpDir
-        // must survive a *successful* return (Commit() still needs tmpPath), so cleanup is
-        // catch-and-rethrow, not an unconditional finally. The .bak stays untouched either way
-        // (ADR-0008) — a write that never happened is a different question from a write that did,
-        // and the ADR does not decide it, so this method doesn't either.
+        // Cleanup is catch-and-rethrow, not finally: tmpDir must survive a successful return (Commit still
+        // needs tmpPath), and a throw from WriteAsync (Mutagen-Modding/Mutagen#688) leaves no
+        // PreparedPluginSave to Dispose it.
         try
         {
-            // ADR-0042: HEDR.NextObjectID and HEDR.NumRecords are written verbatim from the mod's
-            // own header, never recomputed. Mutagen's defaults (NextFormIDOption.Iterate,
-            // RecordCountOption.Iterate) re-derive both from the record set — NextObjectID as max
-            // self-authored FormID + 1 (or the game's initial value when there are none) — and real-world
-            // override/patch plugins routinely carry stored values that match neither (nothing in-game
-            // reads either field), so the defaults silently rewrite them on every save. No production
-            // path allocates a new FormKey today (the only AddNew is source deserialization, with the
-            // source's own key); one that does must allocate through Mutagen's GetNextFormKey, which
-            // advances the in-memory header, so the value written here keeps up.
+            // ADR-0042: the header's stored NextObjectID and record count are written as stored, never
+            // recomputed. Mutagen's Iterate defaults re-derive both, and real override plugins routinely
+            // carry stored values that match neither.
             var writeBuilder = mod.BeginWrite
                 .ToPath(tmpPath)
                 .WithLoadOrderFromHeaderMasters()
@@ -78,16 +61,9 @@ public sealed class PluginWriter(ILogger<PluginWriter> logger)
                 .NoNextFormIDProcessing()
                 .WithRecordCount(RecordCountOption.NoCheck);
 
-            // A Localized mod's own strings must land beside the *real* plugin, not
-            // orphaned in the temp directory this method discards — but not written directly to their
-            // real destination either. Mutagen's own default (PluginUtilityTranslation.SetStringsWriter,
-            // which only fires when nothing here supplies one) derives its write folder from the write
-            // path — the temp path here — which is why a writer must be supplied explicitly at all.
-            // That writer's own folder nests inside the same tmpDir the plugin binary already
-            // writes to, rather than pointing at pluginPath's real Strings/ folder directly: the real
-            // .esp/.esm gets the same temp-write-then-rename discipline from PreparedPluginSave.Commit,
-            // and the strings files now get it too, moved into place only once every write here has
-            // succeeded.
+            // Mutagen's default StringsWriter derives its folder from the write path, which is the temp path
+            // here; supplying one nested inside tmpDir gives strings files the same temp-write-then-rename
+            // discipline as the binary.
             var tmpStringsDir = Path.Combine(tmpDir, "Strings");
             if (mod.UsingLocalization)
             {
@@ -97,11 +73,8 @@ public sealed class PluginWriter(ILogger<PluginWriter> logger)
                     encodingProvider: MutagenEncoding.Default));
             }
 
-            // ADR-0038: masters are wholly content-derived, unconditionally, on every write —
-            // Mutagen's default MastersListContentOption.Iterate. Ordering is explicit rather than left
-            // to Mutagen's default (alphabetical, masters-first): the load order's current load order when
-            // supplied, so the written file's master list matches what a modder opening it in xEdit
-            // afterward expects (ADR-0034 at the file level).
+            // ADR-0038: masters are ordered explicitly from the load order when supplied, so the written
+            // file's master list matches what xEdit shows (ADR-0034 at the file level).
             if (loadOrder != null)
                 writeBuilder = writeBuilder.WithMastersListOrdering(loadOrder.Select(name => ModKey.FromFileName(name)));
 
@@ -120,16 +93,9 @@ public sealed class PluginWriter(ILogger<PluginWriter> logger)
         }
         catch
         {
-            // The cleanup below is a courtesy, never allowed to outrank the exception it's cleaning
-            // up after: a failed WriteAsync can plausibly leave a file handle open on tmpDir (Mutagen's
-            // writer or the StringsWriter not having released it on the throwing path), and a locked
-            // directory is exactly when Directory.Delete itself throws — if that escaped unguarded it
-            // would replace the real exception (UnmappableFormIDException, the one
-            // PluginDiagnosis.HasUnmappableFormID and every catch downstream is built to recognize)
-            // with a confusing IOException about a temp directory, exactly when the filesystem is
-            // uncooperative. This method is static, so
-            // there is no ILogger in scope to note the failed cleanup with; an orphaned tmpDir is
-            // strictly better than losing the diagnosis, so it is swallowed rather than escalated.
+            // Cleanup is a courtesy, never allowed to outrank the exception it follows: a locked temp
+            // directory makes Directory.Delete throw, which would replace UnmappableFormIDException with an
+            // IOException. No ILogger is in scope, so the failed cleanup is swallowed.
             try { Directory.Delete(tmpDir, recursive: true); }
             catch (IOException) { /* best-effort; tmpDir will remain on disk */ }
             catch (UnauthorizedAccessException) { /* Windows file lock (AV/game); tmpDir will remain */ }
@@ -161,12 +127,9 @@ public sealed class PluginWriter(ILogger<PluginWriter> logger)
         return prep.BackupPath;
     }
 
-    // The timestamp resolves to sub-second because one user gesture can write a plugin more than
-    // once a second. At one-second resolution the second of those collided with the first's backup
-    // and threw, failing the save. Sub-second keeps every backup — deliberately not
-    // File.Copy(overwrite: true), which would destroy the earlier one, nor a uniquifying retry,
-    // which would silently mask a genuine collision; CreateBackup_FileAlreadyExists_ThrowsIOException
-    // pins that throw.
+    // Sub-second timestamps: one user gesture can write a plugin twice in a second, and at one-second
+    // resolution the second backup collided and threw. Not File.Copy(overwrite: true), which would
+    // silently mask a genuine collision.
     internal static string CreateBackup(string pluginPath, string? timestamp = null)
     {
         var dir = Path.GetDirectoryName(pluginPath)!;

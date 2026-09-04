@@ -24,10 +24,8 @@ public sealed class PreparedPluginSave(
         // threw), so no overwrite is needed here
         File.Move(tmpPath, finalPath);
 
-        // Every strings write already succeeded (it happened during Prepare, into temp) by
-        // the time Commit runs, so this is pure rename — the same "only move once everything has
-        // succeeded" guarantee the plugin binary itself gets above. overwrite:true because a second
-        // save of the same Localized plugin is the common case, not the first.
+        // Every strings write succeeded during Prepare, so Commit is pure rename. Overwrite, because a
+        // re-save of the same Localized plugin is the common case, not the first.
         foreach (var (tempStringsPath, finalStringsPath) in _stringsFiles)
         {
             Directory.CreateDirectory(Path.GetDirectoryName(finalStringsPath)!);

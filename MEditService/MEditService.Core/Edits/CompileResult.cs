@@ -12,10 +12,8 @@ public sealed record CompileResult(
     string? RefusalReason,
     IReadOnlyList<CompileDiagnostic> Diagnostics,
     IReadOnlyList<string> Masters,
-    // #290: true only for the flag-vs-content coherence refusal a removable ESL flag causes — the
-    // typed marker the frontend turns into its "remove the flag and compile?" prompt. Never set
-    // for any other refusal, including the same contradiction on a plugin light by .esl extension
-    // (no flag to remove).
+    // A typed marker the frontend turns into its "remove the flag and compile?" prompt. Never set
+    // for any other refusal, including the same contradiction on a plugin light by .esl extension.
     bool EslContradiction = false)
 {
     public static CompileResult Refused(string reason, bool eslContradiction = false) =>
