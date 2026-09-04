@@ -148,8 +148,8 @@ internal sealed record SchemaAnnotations(
             ExcludedUnions: [],
             CycleTruncations: [],
             EmptySubSchemaTypes: [.. EmptySubSchemaTypesInEveryGame],
-            // #706 owns Skyrim's condition and keyed-array rows: this repo builds no Skyrim schema,
-            // so a table written here could not be validated against the assembly it describes.
+            // This repo builds no Skyrim schema, so a condition or keyed-array row written here could
+            // not be validated against the assembly it describes. Empty until one can be built.
             SiblingsInUse: [],
             KeyedArrays: [],
             PermittedNullFormLinks: [],
@@ -169,7 +169,7 @@ internal sealed record SchemaAnnotations(
             // lifted VMAD exclusion fails generation naming the chain rather than truncating silently.
             CycleTruncations: [],
             EmptySubSchemaTypes: [.. EmptySubSchemaTypesInEveryGame],
-            // #706 owns Starfield's condition and keyed-array rows, for the same reason as Skyrim's above.
+            // Empty for the same reason as Skyrim's above.
             SiblingsInUse: [],
             KeyedArrays: [],
             PermittedNullFormLinks: [],

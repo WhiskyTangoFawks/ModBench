@@ -845,13 +845,15 @@ reads as no operator: the condition still reads, missing only the sign.
 per function it is the `concrete_type` discriminator dropdown (#688), rendered by the same cell. No
 picker command, and no catalog endpoint, exists on either shape.
 
-Skyrim and Starfield are not built or tested in this repo (#706 owns them). Their
+Skyrim and Starfield are not built or tested in this repo; multi-game verification was descoped
+from #686 and is not tracked. Their
 `Condition.xml` declares the same abstract `Condition` with a `ConditionFloat` carrying a `Float`
 `ComparisonValue` and a `ConditionGlobal` carrying a `FormLink` to `Global`, so the per-shape split
 above is game-agnostic and needs no code for them. Their `ConditionData` is not Fallout 4's one
 generic class: Skyrim has 426 per-function subclasses and Starfield about 610 plus an
-`IConditionParameters` whose `Parameter1` is a bare `object`. Two things follow that #706 has to
-settle rather than inherit: a bare `object` has no closed domain and lands in `SchemaRefusals`, and
+`IConditionParameters` whose `Parameter1` is a bare `object`. Two things follow that any future
+multi-game work has to settle rather than inherit: a bare `object` has no closed domain and lands
+in `SchemaRefusals`, and
 `LoquiUnions.BuildUnionShapeField` takes its metadata from the first declaring leaf alone — so
 same-named parameters closed over *different* record types would share one shape key, not split, and
 would silently advertise the first leaf's `ValidFormKeyTypes`. Fallout 4 never meets that: its
