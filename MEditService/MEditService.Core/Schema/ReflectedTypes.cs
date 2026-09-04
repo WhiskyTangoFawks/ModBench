@@ -98,11 +98,11 @@ internal static partial class ReflectedTypes
     /// model it (Noggog's P3Float, System.Drawing.Color). The same vocabulary an abstract union's
     /// discriminator values are drawn from, so a union leaf and a plain struct name themselves
     /// alike.</summary>
-    internal static string StructTypeName(Type type)
+    internal static string LeafTypeName(Type type)
     {
         var name = (GetSetterType(type) ?? type).Name;
-        // A closed generic's CLR name carries its arity (`IAObjectModPropertyGetter`1`), which is
-        // spelling, not identity.
+        // A closed generic's CLR name carries its arity (OMOD's own `AObjectModProperty`1`), which
+        // is spelling, not identity.
         var arity = name.IndexOf('`', StringComparison.Ordinal);
         return arity < 0 ? name : name[..arity];
     }

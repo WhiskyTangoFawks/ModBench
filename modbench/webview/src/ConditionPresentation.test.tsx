@@ -379,7 +379,7 @@ describe('#693 — a collapsed condition reads as xEdit prose', () => {
 // this rule: every one of them has an element declaring `Condition`, a type name the table has no
 // entry for, and reads its summary off the `concrete_type` value regardless.
 
-describe('#717 — a leaf with no discriminator is keyed by its declared type name', () => {
+describe('#717 — the table keys on the leaf type name', () => {
   // Stated with an entry the table already has, so this is a claim about the key alone. The
   // summary shapes a script entry or a script object read as are #695's.
   const notAUnion: FieldMetadata = {
@@ -391,7 +391,7 @@ describe('#717 — a leaf with no discriminator is keyed by its declared type na
     },
   };
 
-  it('reads its summary, where before it had no key at all', async () => {
+  it('reads its summary from the type name the schema declares', async () => {
     const noDiscriminator = condition({}, { function: 'IsSneaking' });
     delete noDiscriminator.concrete_type;
     currentCompare = oneColumn([noDiscriminator], {}, notAUnion);
@@ -399,6 +399,23 @@ describe('#717 — a leaf with no discriminator is keyed by its declared type na
     await expandConditions();
 
     expect(summaryOf(0)).toBe('Subject.IsSneaking = 1.000000');
+  });
+
+  // A union's declared name is its base, and a concrete base is one of its own leaves (#701) — so
+  // the declared name is a leaf name too, and the wrong one for an object whose payload does not
+  // say which leaf it is. Stated with a declared name the table has an entry for, since a name it
+  // has no entry for would read as '{…}' whichever way the rule went.
+  it('a union whose own value names no leaf keys on nothing, not on the name the schema declares', async () => {
+    const declared: FieldMetadata = {
+      ...conditionsMeta,
+      elementType: { ...conditionsMeta.elementType!, leafTypeName: 'ConditionFloat' },
+    };
+    const unnamed = condition({ concrete_type: null }, { function: 'IsSneaking' });
+    currentCompare = oneColumn([unnamed], {}, declared);
+    renderPanel();
+    await expandConditions();
+
+    expect(summaryOf(0)).toBe('{…}');
   });
 });
 

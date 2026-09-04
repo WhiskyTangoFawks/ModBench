@@ -187,13 +187,9 @@ public record FieldMetadata(
     IReadOnlyList<string>? KeyMembers = null,
 
     // For 'struct': the Loqui/CLR class this struct is, as the schema declares it — null for every
-    // other type. Read off the reflected type (Schema.ReflectedTypes.StructTypeName), so it is
-    // structural, never per-game knowledge.
-    //
-    // Distinct from a discriminator's value, which says which class an *object* turned out to be:
-    // an abstract union's element declares `Condition` here and answers `ConditionFloat` there.
-    // Nothing else on the wire determines it — a struct that is not a union carries no
-    // discriminator, and its member names are its shape, not its identity.
+    // other type, read off the reflected type (Schema.ReflectedTypes.LeafTypeName). Distinct from a
+    // discriminator's value, which says which class an *object* turned out to be: an abstract
+    // union's element declares `Condition` here and answers `ConditionFloat` there.
     string? LeafTypeName = null)
 {
     /// <summary>Whether this field renders as a set of independent flags rather than one choice.

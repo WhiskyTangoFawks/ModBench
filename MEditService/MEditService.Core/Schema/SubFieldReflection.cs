@@ -91,14 +91,7 @@ internal static class SubFieldReflection
         }
 
         if (ReflectedTypes.IsLoquiInterface(core))
-        {
-            var sub = BuildSubSchema(core, game, logger, path);
-            return sub.Count == 0
-                ? null
-                : new FieldMetadata("", "struct", false, LeafSpec.NoFormKeyTypes, LeafSpec.NoEnumMembers,
-                Fields: [.. sub.Select(s => s.ToFieldMetadata())],
-                LeafTypeName: ReflectedTypes.StructTypeName(core));
-        }
+            return StructElementMeta(BuildSubSchema(core, game, logger, path), core);
 
         // A list of vector-struct elements (e.g. IslandData.Vertices, a list of P3Float,
         // or LocationCoordinate.Coordinates, a list of P2Int16). Without this arm, the element
@@ -108,14 +101,7 @@ internal static class SubFieldReflection
         // (`result.Add(item)`) would hand a raw boxed vector struct straight to JsonSerializer, which
         // would recurse forever over several of these types' own self-referencing `Point` property.
         if (ReflectedTypes.IsVectorStructType(core))
-        {
-            var sub = VectorStructLeaves.BuildVectorComponentSubFields(core, game, 0, logger);
-            return sub.Count == 0
-                ? null
-                : new FieldMetadata("", "struct", false, LeafSpec.NoFormKeyTypes, LeafSpec.NoEnumMembers,
-                Fields: [.. sub.Select(s => s.ToFieldMetadata())],
-                LeafTypeName: ReflectedTypes.StructTypeName(core));
-        }
+            return StructElementMeta(VectorStructLeaves.BuildVectorComponentSubFields(core, game, 0, logger), core);
 
         return core switch
         {
@@ -126,6 +112,15 @@ internal static class SubFieldReflection
             _ => null,
         };
     }
+
+    // An element has no name of its own — its members and the class it is are what identify it.
+    // A shape with no members is not one the walk can present, and is left out of the array.
+    private static FieldMetadata? StructElementMeta(List<SubFieldSpec> members, Type core) =>
+        members.Count == 0
+            ? null
+            : new FieldMetadata("", "struct", false, LeafSpec.NoFormKeyTypes, LeafSpec.NoEnumMembers,
+                Fields: [.. members.Select(s => s.ToFieldMetadata())],
+                LeafTypeName: ReflectedTypes.LeafTypeName(core));
 
     internal static SubFieldSpec? GetSubFieldInfo(
         PropertyInfo prop,

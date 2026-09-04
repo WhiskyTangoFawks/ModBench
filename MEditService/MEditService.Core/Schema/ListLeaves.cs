@@ -37,7 +37,7 @@ internal static class ListLeaves
         if (elemSubFields != null)
             return new("", "struct", LeafSpec.NoFormKeyTypes, LeafSpec.NoEnumMembers, _ => null,
                 Apply: LeafWrite.ReadOnly<object>(SchemaRefusals.ElementTemplateReason), SubFields: elemSubFields,
-                LeafTypeName: ReflectedTypes.StructTypeName(elementType));
+                LeafTypeName: ReflectedTypes.LeafTypeName(elementType));
         if (isFl)
         {
             return new("", "formKey", LeafClassification.GetFormLinkValidTypes(elementType, game), LeafSpec.NoEnumMembers,

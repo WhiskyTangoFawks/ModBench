@@ -58,7 +58,7 @@ internal static class VectorStructLeaves
             obj => { var v = g(obj); return v == null ? null : SubFieldValues.ExtractSubObject(v, components); },
             Apply: LeafWrite.Writable<object>((obj, val) => ApplyVectorJson(obj, val, pName, core, components)),
             SubFields: components,
-            LeafTypeName: ReflectedTypes.StructTypeName(core));
+            LeafTypeName: ReflectedTypes.LeafTypeName(core));
     }
 
     // A vector-struct field at the record's own top level (e.g. IslandData.Min/Max,
@@ -90,7 +90,7 @@ internal static class VectorStructLeaves
         var pName = prop.Name;
         return new("VARCHAR", Extractor, "struct", LeafSpec.NoFormKeyTypes, LeafSpec.NoEnumMembers,
             LeafWrite.Writable<IMajorRecord>((record, json) => ApplyVectorJson(record, json, pName, core, components)),
-            SubFieldMetas: subFieldMetas, LeafTypeName: ReflectedTypes.StructTypeName(core));
+            SubFieldMetas: subFieldMetas, LeafTypeName: ReflectedTypes.LeafTypeName(core));
     }
 
     /// <summary>The one vector write, shared by the top-level column and the nested sub-field — the
