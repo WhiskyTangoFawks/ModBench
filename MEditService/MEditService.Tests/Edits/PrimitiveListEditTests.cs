@@ -161,8 +161,8 @@ public sealed class PrimitiveListEditTests : IDisposable
         var result = _fixture.Service().EditField(
             _fixture.Plugin, _fixture.MiscItem.ToString(), "component_display_indices", Json("[3, 4096]"));
 
-        Assert.Contains("element", result.Message, StringComparison.Ordinal);
-        Assert.DoesNotContain("not a single element", result.Message, StringComparison.Ordinal);
+        Assert.Contains("element that was not accepted", result.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("takes the whole array", result.Message, StringComparison.Ordinal);
     }
 
     /// <summary>A value that is not a number at all still refuses the whole write.</summary>
@@ -175,6 +175,7 @@ public sealed class PrimitiveListEditTests : IDisposable
             _fixture.Plugin, _fixture.MiscItem.ToString(), "component_display_indices", Json("""[3, "nope"]"""));
 
         Assert.False(result.Applied);
+        Assert.Contains("element that was not accepted", result.Message, StringComparison.Ordinal);
         Assert.Equal(before, _fixture.MiscItemBody());
     }
 

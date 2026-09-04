@@ -2317,11 +2317,11 @@ public sealed class RecordEditService(
         string fieldPath, IReadOnlyDictionary<string, RecordTableSchema> schemas)
     {
         if (!schemas.TryGetValue(HeaderIndexer.RecordType, out var schema))
-            return RefuseFieldOutcome(FieldApplyOutcome.NotFound, fieldPath, HeaderIndexer.RecordType, schemas, JsonValueKind.Undefined);
+            return RefuseFieldOutcome(FieldApplyOutcome.NotFound, fieldPath, HeaderIndexer.RecordType, schemas);
 
         var column = schema.RecordColumns.FirstOrDefault(c => c.Name == fieldPath);
         if (column == null)
-            return RefuseFieldOutcome(FieldApplyOutcome.NotFound, fieldPath, HeaderIndexer.RecordType, schemas, JsonValueKind.Undefined);
+            return RefuseFieldOutcome(FieldApplyOutcome.NotFound, fieldPath, HeaderIndexer.RecordType, schemas);
 
         if (column.Apply.Writer != null)
         {
@@ -2331,12 +2331,12 @@ public sealed class RecordEditService(
                 "(#290) before giving any header column an Apply delegate.");
         }
 
-        return RefuseFieldOutcome(FieldApplyOutcome.ReadOnly, fieldPath, HeaderIndexer.RecordType, schemas, JsonValueKind.Undefined);
+        return RefuseFieldOutcome(FieldApplyOutcome.ReadOnly, fieldPath, HeaderIndexer.RecordType, schemas);
     }
 
     private static RecordEditResult RefuseFieldOutcome(
         FieldApplyResult applied, string fieldPath, string recordType,
-        IReadOnlyDictionary<string, RecordTableSchema> schemas, JsonValueKind sentKind)
+        IReadOnlyDictionary<string, RecordTableSchema> schemas, JsonValueKind sentKind = default)
     {
         var outcome = applied.Outcome;
         // The key identifies the element, so the refusal names it — a caller told only that

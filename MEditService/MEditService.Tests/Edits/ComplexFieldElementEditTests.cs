@@ -55,7 +55,7 @@ public sealed class ComplexFieldElementEditTests : IDisposable
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.FieldValueShapeMismatch, result.Refusal);
         Assert.Contains("keywords", result.Message, StringComparison.Ordinal);
-        Assert.Contains("array", result.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("takes the whole array", result.Message, StringComparison.Ordinal);
         Assert.Equal(before, NpcBody());
     }
 
@@ -70,7 +70,7 @@ public sealed class ComplexFieldElementEditTests : IDisposable
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.FieldValueShapeMismatch, result.Refusal);
         Assert.Contains("weight", result.Message, StringComparison.Ordinal);
-        Assert.Contains("object", result.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("takes the whole struct", result.Message, StringComparison.Ordinal);
         Assert.Equal(before, NpcBody());
     }
 
@@ -382,6 +382,8 @@ public sealed class ComplexFieldElementEditTests : IDisposable
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.FieldValueShapeMismatch, result.Refusal);
         Assert.Contains("weight", result.Message, StringComparison.Ordinal);
+        Assert.Contains("member that was not accepted", result.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("takes the whole struct", result.Message, StringComparison.Ordinal);
         Assert.Equal(before, NpcBody());
     }
 
