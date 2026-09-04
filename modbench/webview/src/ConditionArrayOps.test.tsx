@@ -155,7 +155,7 @@ describe('computeArrayOpClientSide — backs the surviving Condition and VMAD Ar
     expect(next).toEqual([1, 2, 3, 0]);
   });
 
-  // The VMAD ArrayOfObject-specific case: `defaultElementValue`'s own 'vmadObject' arm.
+  // The VMAD ArrayOfObject-specific case: `defaultAdapterElementValue`'s own 'vmadObject' arm.
   it("add: builds a VMAD ArrayOfObject property's own default element ({formKey: '', alias: -1})", () => {
     const vmadObjectMeta: FieldMetadata = { name: '', type: 'vmadObject', isArray: false, validFormKeyTypes: [], enumValues: [] };
     const next = computeArrayOpClientSide([], [], 'add', vmadObjectMeta);

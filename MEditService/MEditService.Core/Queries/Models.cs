@@ -134,7 +134,12 @@ public record FieldMetadata(
     // already the game's own vocabulary; set by the abstract-union discriminator, whose values are
     // Mutagen class names the user is never shown.
     IReadOnlyList<string>? EnumLabels = null, // aligned with EnumValues: what to display per value
-    string? DisplayLabel = null);            // what to title the row, when Name is a wire name
+    string? DisplayLabel = null,             // what to title the row, when Name is a wire name
+
+    // This field names which concrete class its object is, read off the payload before that object
+    // exists (SchemaReflector.ResolveAbstractListElementType). True for concrete_type and OMOD's
+    // value_type, false for every other field.
+    bool IsDiscriminator = false);
 
 // Value contract: a bitmask field (Metadata.IsBitmask) carries its combined flags as a decimal
 // string, not a number — so values above 2^53 survive JSON round-tripping without IEEE 754 loss.

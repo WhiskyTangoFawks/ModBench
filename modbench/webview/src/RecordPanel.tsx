@@ -3,7 +3,7 @@ import { PluginHeader } from './PluginHeader';
 import { DiffRow, type FocusedCell } from './DiffRow';
 import {
   buildColumns, parseElementIndex, collidingFilenames,
-  getAtPath, setAtPath, metaAtPath, appendArrayElement, removeArrayElement, moveArrayElement, defaultElementValue,
+  getAtPath, setAtPath, metaAtPath, appendArrayElement, removeArrayElement, moveArrayElement, defaultAdapterElementValue,
   headerCellContext, combineVscodeContexts,
 } from './recordUtils';
 import type { PathSegment } from './recordUtils';
@@ -116,7 +116,7 @@ export function computeArrayOpClientSide(
   const index = lastSeg?.kind === 'index' ? lastSeg.index : -1;
   let nextArray: unknown[];
   if (op === 'add') {
-    nextArray = appendArrayElement(currentArray, defaultElementValue(elementMeta ?? { name: '', type: 'string', isArray: false, validFormKeyTypes: [], enumValues: [] }));
+    nextArray = appendArrayElement(currentArray, defaultAdapterElementValue(elementMeta ?? { name: '', type: 'string', isArray: false, validFormKeyTypes: [], enumValues: [] }));
   } else if (op === 'remove') {
     nextArray = removeArrayElement(currentArray, index);
   } else {

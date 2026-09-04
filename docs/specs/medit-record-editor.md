@@ -390,6 +390,19 @@ already empty: matching xEdit's own guard (`Element.EditValue` must be non-empty
   reads but has no converter — a translated string, or an integer width `PrimitiveMap` lacks — is
   read-only under its own named reason; no Fallout 4 list is either, so the reason keeps the
   classification total rather than describing live data.
+  **A new array element's default is the backend's, and names only the discriminator** (#710) — the
+  Add gesture posts an op envelope carrying nothing but `{op, path}`, and `ArrayOpWriter` builds the
+  element from the column's own schema. The default is the empty object: every member is left
+  absent, so the freshly constructed instance's CLR defaults stand. The one exception is a
+  discriminator (`concrete_type`, OMOD's `value_type`), which is not a member of the instance at all
+  — it is read off the payload to choose which concrete class to construct, before that object
+  exists — so an element of an abstract-element array that omits it cannot be built and is refused
+  `ListElementTypeUnresolved`. A default element therefore carries its discriminator, set to the
+  first leaf the schema lists, and the user changes it with the same `Kind` dropdown any other
+  element uses. The webview computes no element of its own for a reflected column; the field-by-field
+  default in `recordUtils.ts` belongs to the VMAD/Condition tree adapters, whose element shapes have
+  no constructor to fall back on.
+
   **Read/write symmetry is structural, not conventional** (#649). A leaf carries either a writer or
   a named read-only reason — `ColumnSpec.Apply`/`SubFieldSpec.Apply` are a two-case union, so a leaf
   that reads but silently cannot be written is no longer representable, and an audit asserts every

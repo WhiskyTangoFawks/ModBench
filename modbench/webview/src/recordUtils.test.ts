@@ -13,6 +13,7 @@ import {
   moveArrayElement,
   removeArrayElement,
   appendArrayElement,
+  defaultAdapterElementValue,
   arrayElementContext,
   arrayParentContext,
   combineVscodeContexts,
@@ -296,6 +297,29 @@ describe('appendArrayElement', () => {
     const source = ['a', 'b'];
     appendArrayElement(source, 'c');
     expect(source).toEqual(['a', 'b']);
+  });
+});
+
+// #710: the adapter path's half of one rule. A reflected column's element is defaulted by
+// ArrayOpWriter, never here — but a Condition or script-property element (#692/#694) carries the
+// same `concrete_type` discriminator, and must start at the same leaf the backend would choose:
+// the first the schema lists. Its agreeing backend half is
+// MEditService.Tests.Edits.UnionArrayAddInventoryTests.ArrayAdd_BuildsAnElementTheWritePathAccepts.
+describe('defaultAdapterElementValue — a struct element carrying a discriminator', () => {
+  const unionElement: FieldMetadata = {
+    name: '', type: 'struct', isArray: false, validFormKeyTypes: [], enumValues: [],
+    fields: [
+      {
+        name: 'concrete_type', type: 'enum', isArray: false, validFormKeyTypes: [],
+        enumValues: ['QuestReferenceAlias', 'QuestLocationAlias', 'QuestCollectionAlias'],
+      },
+      { name: 'name', type: 'string', isArray: false, validFormKeyTypes: [], enumValues: [] },
+    ],
+  };
+
+  it('starts at the first leaf the schema lists', () => {
+    expect(defaultAdapterElementValue(unionElement)).toEqual(
+      { concrete_type: 'QuestReferenceAlias', name: '' });
   });
 });
 
