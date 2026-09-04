@@ -190,6 +190,8 @@ public record FieldMetadata(
     // other type, read off the reflected type (Schema.ReflectedTypes.LeafTypeName). Distinct from a
     // discriminator's value, which says which class an *object* turned out to be: an abstract
     // union's element declares `Condition` here and answers `ConditionFloat` there.
+    // Null on most nodes, so it carries real weight as a serialized null. Omitting nulls is a
+    // serializer-wide posture for all four nullables on this record rather than this one's — #715.
     string? LeafTypeName = null)
 {
     /// <summary>Whether this field renders as a set of independent flags rather than one choice.
