@@ -159,12 +159,6 @@ public sealed class SchemaReflector
                 .ToDictionary(x => x.Type, x => x.Table),
             annotations);
 
-        // Resolved once per category (condition codecs are stateless per-call factories,
-        // and the codec itself doesn't vary per table) — passed into BuildSchema so it can skip
-        // condition-shaped properties the same way the header members are skipped, keeping the
-        // Conditions section (Fallout4ConditionCodec.Extract) as the one place they're surfaced.
-        var conditionCodec = ConditionCodecRegistry.For(category);
-
         // Resolved once per category, game-neutral like everything else here — each game
         // assembly declares its own IHaveVirtualMachineAdapterGetter in its flat
         // Mutagen.Bethesda.{category} namespace (no shared cross-game interface exists), the same
@@ -178,7 +172,7 @@ public sealed class SchemaReflector
         {
             schemas[tableName] = BuildSchema(
                 tableName, getterType, siblingsByTable[tableName],
-                game, logger, conditionCodec, vmadInterfaceType);
+                game, logger, vmadInterfaceType);
         }
 
         ModHeaderSchema.AddHeaderSchemaIfAvailable(schemas, category, assembly, game, logger);
@@ -195,10 +189,9 @@ public sealed class SchemaReflector
     // has nothing to gain from pointing at the abstract base.
     private static RecordTableSchema BuildSchema(
         string tableName, Type getterType, List<Type> siblingGetterTypes,
-        GameReflection game, ILogger logger,
-        IConditionCodec? conditionCodec, Type? vmadInterfaceType)
+        GameReflection game, ILogger logger, Type? vmadInterfaceType)
     {
-        var columns = ColumnReflection.ReflectColumns(getterType, conditionCodec, game, logger);
+        var columns = ColumnReflection.ReflectColumns(getterType, game, logger);
 
         // Union in every other concrete subclass sharing this signature (siblingGetterTypes
         // is just [getterType] for the overwhelming majority of tables, so this loop is a no-op
@@ -213,7 +206,7 @@ public sealed class SchemaReflector
             foreach (var sibling in siblingGetterTypes)
             {
                 if (sibling == getterType) continue;
-                var siblingColumns = ColumnReflection.ReflectColumns(sibling, conditionCodec, game, logger);
+                var siblingColumns = ColumnReflection.ReflectColumns(sibling, game, logger);
                 foreach (var siblingSpec in siblingColumns)
                     SiblingColumns.MergeSiblingColumn(columns, widenedDispatch, nonScalarMergeDispatch, getterType, sibling, siblingSpec);
             }

@@ -44,7 +44,7 @@ filter probe over a full FO4 load order found the views fast enough without any.
 
 - **Reflected per-type wide tables.** Reflect
   `typeof(Npc)` → `CREATE TABLE npc (...)`, scalars as typed columns, arrays and deep structs as
-  JSON columns, plus five VMAD/condition side tables. It cost ~130 tables of DDL to maintain, every whole-load-order
+  JSON columns, plus five VMAD and condition side tables. It cost ~130 tables of DDL to maintain, every whole-load-order
   query became a union over all of them, nested lists inside structs silently dropped when the
   reflector had no mapping, and the schema shape was coupled to Mutagen's at DDL time. Once the
   source became the record's text (ADR-0041), the document *was* the natural row, and the 2026-08

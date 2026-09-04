@@ -36,7 +36,7 @@ and [ADR-0042](docs/adr/0042-plugin-is-the-source-of-truth-lossless-source.md).
 |---|---|---|
 | **Mods** — install from archive, separators, drag-order, enable, deploy (hardlinks), purge, profiles | [mods.md](docs/specs/mods.md) | Implemented |
 | **Plugins** — `plugins.txt` order and checkboxes, and with an mEdit load order running, every plugin expands into its record types, records, worldspace/cell tree | [plugins.md](docs/specs/plugins.md) | Implemented |
-| **Record editor** — xEdit-style compare grid across the whole load order, conflict coloring (ConflictAll/ConflictThis), in-place editing, copy-as-override / new record, VMAD and conditions | [medit-record-editor.md](docs/specs/medit-record-editor.md) | Implemented |
+| **Record editor** — xEdit-style compare grid across the whole load order, conflict coloring (ConflictAll/ConflictThis), in-place editing, copy-as-override / new record, VMAD | [medit-record-editor.md](docs/specs/medit-record-editor.md) | Implemented |
 | **Version control** — Track, edit branch, Save & Compile, native SCM integration, external-change handling, crash recovery | [medit-version-control.md](docs/specs/medit-version-control.md) | Implemented |
 | **Referenced By** — what points at a record | [medit-referenced-by.md](docs/specs/medit-referenced-by.md) | Implemented |
 | **Loadout header** — profile, load order, deployment readout | [loadout-header.md](docs/specs/loadout-header.md) | Implemented |

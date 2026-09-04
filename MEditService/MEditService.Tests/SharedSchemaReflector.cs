@@ -16,4 +16,13 @@ public static class SharedSchemaReflector
             .RecordColumns.Single(c => c.Name == column)
             .ElementType!.Fields!.Single(f => f.Name == discriminator)
             .EnumMembers[0].Value;
+
+    /// <summary>The same rule one level in: the first leaf the schema lists for a discriminator on
+    /// a struct member of an abstract-element array's own element (a condition's <c>data</c>).</summary>
+    public static string FirstArrayElementLeafSubField(string table, string column, string member, string discriminator) =>
+        Instance.GetSchemas(GameRelease.Fallout4)[table]
+            .RecordColumns.Single(c => c.Name == column)
+            .ElementType!.Fields!.Single(f => f.Name == member)
+            .Fields!.Single(f => f.Name == discriminator)
+            .EnumMembers[0].Value;
 }

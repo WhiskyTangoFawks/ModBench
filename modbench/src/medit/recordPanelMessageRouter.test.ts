@@ -24,8 +24,8 @@ vi.mock('./extendedFieldEditor', () => ({
 }));
 
 import {
-  routeRecordPanelMessage, pickFormKeyViaQuickPick, normalizeFormKeyQuery, pickConditionFunctionViaQuickPick,
-  type FormKeyPickerDeps, type ConditionFunctionPickerDeps, type RouteRecordPanelMessageDeps,
+  routeRecordPanelMessage, pickFormKeyViaQuickPick, normalizeFormKeyQuery,
+  type FormKeyPickerDeps, type RouteRecordPanelMessageDeps,
 } from './recordPanelMessageRouter';
 import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION } from './messages';
 import type { RecordSummary } from './ApiClient';
@@ -39,10 +39,10 @@ const fakeReporter = { report: vi.fn() };
 
 // The edit path's two deps default to "applied, nobody listening"; the edit tests override them
 // explicitly.
-// searchRecords/getConditionFunctions are unused outside their own OPEN_*_PICKER tests below
-// (which build their own *PickerDeps.repository), but both fields are required because this
-// router's shared `repository` field covers editField and both pickers' own catalogue fetches.
-const fakeRepository = { editRecordField: vi.fn(), searchRecords: vi.fn(), getConditionFunctions: vi.fn() };
+// searchRecords is unused outside the OPEN_FORM_KEY_PICKER tests below (which build their own
+// FormKeyPickerDeps.repository), but the field is required because this router's shared
+// `repository` field covers editField and the picker's own search.
+const fakeRepository = { editRecordField: vi.fn(), searchRecords: vi.fn() };
 const onRecordEdited = vi.fn();
 
 function makeDeps(overrides: Partial<RouteRecordPanelMessageDeps> = {}): RouteRecordPanelMessageDeps {
@@ -52,7 +52,6 @@ function makeDeps(overrides: Partial<RouteRecordPanelMessageDeps> = {}): RouteRe
     // Undefined by default, matching every other per-panel bridge bundle — a message that
     // arrives with no deps wired is a no-op, not a crash.
     formKeyPicker: undefined,
-    conditionFunctionPicker: undefined,
     extendedFieldEditor: undefined,
     ...overrides,
   };
@@ -584,87 +583,5 @@ describe('routeRecordPanelMessage — OPEN_EXTENDED_EDITOR (issue #230)', () => 
       expect.objectContaining({ plugin: 'Shared.esp', origin: 'ModB' }),
       extendedFieldEditorDeps,
     );
-  });
-});
-
-// The condition-function picker — unlike pickFormKeyViaQuickPick,
-// the catalogue is bounded/game-scoped and fetched once, so this is a plain showQuickPick, not a
-// debounced createQuickPick search.
-describe('pickConditionFunctionViaQuickPick (issue #211)', () => {
-  function fakeDeps(getConditionFunctions = vi.fn().mockResolvedValue([])): { deps: ConditionFunctionPickerDeps; getConditionFunctions: typeof getConditionFunctions; reply: ReturnType<typeof vi.fn> } {
-    const reply = vi.fn();
-    return { deps: { repository: { getConditionFunctions }, reply }, getConditionFunctions, reply };
-  }
-
-  it('fetches the catalogue and shows it via showQuickPick', async () => {
-    const { deps, getConditionFunctions } = fakeDeps(vi.fn().mockResolvedValue(['GetIsID', 'GetDistance']));
-    showQuickPick.mockResolvedValue('GetDistance');
-
-    const result = await pickConditionFunctionViaQuickPick(deps, '');
-
-    expect(getConditionFunctions).toHaveBeenCalled();
-    expect(showQuickPick).toHaveBeenCalledWith(['GetIsID', 'GetDistance'], expect.objectContaining({ placeHolder: expect.any(String) }));
-    expect(result).toBe('GetDistance');
-  });
-
-  it('sorts the seed to the front of the array when it is in the catalogue', async () => {
-    const { deps } = fakeDeps(vi.fn().mockResolvedValue(['GetIsID', 'GetDistance', 'GetActorValue']));
-    showQuickPick.mockResolvedValue(undefined);
-
-    await pickConditionFunctionViaQuickPick(deps, 'GetDistance');
-
-    expect(showQuickPick).toHaveBeenCalledWith(['GetDistance', 'GetIsID', 'GetActorValue'], expect.anything());
-  });
-
-  it('leaves the array unreordered when the seed is not in the catalogue', async () => {
-    const { deps } = fakeDeps(vi.fn().mockResolvedValue(['GetIsID', 'GetDistance']));
-    showQuickPick.mockResolvedValue(undefined);
-
-    await pickConditionFunctionViaQuickPick(deps, 'NotReal');
-
-    expect(showQuickPick).toHaveBeenCalledWith(['GetIsID', 'GetDistance'], expect.anything());
-  });
-
-  it('resolves null when dismissed without a selection', async () => {
-    const { deps } = fakeDeps();
-    showQuickPick.mockResolvedValue(undefined);
-
-    expect(await pickConditionFunctionViaQuickPick(deps, '')).toBeNull();
-  });
-});
-
-describe('routeRecordPanelMessage — OPEN_CONDITION_FUNCTION_PICKER (issue #211)', () => {
-  it('with conditionFunctionPicker deps undefined is a no-op', async () => {
-    await expect(routeRecordPanelMessage(
-      { type: WEBVIEW_TO_EXTENSION.OPEN_CONDITION_FUNCTION_PICKER, requestId: 'r1', seed: '' },
-      makeDeps(),
-    )).resolves.toBeUndefined();
-    expect(showQuickPick).not.toHaveBeenCalled();
-  });
-
-  it('replies with the picked function name, correlated by requestId', async () => {
-    const getConditionFunctions = vi.fn().mockResolvedValue(['GetIsID']);
-    const reply = vi.fn();
-    showQuickPick.mockResolvedValue('GetIsID');
-
-    await routeRecordPanelMessage(
-      { type: WEBVIEW_TO_EXTENSION.OPEN_CONDITION_FUNCTION_PICKER, requestId: 'r1', seed: '' },
-      makeDeps({ conditionFunctionPicker: { repository: { getConditionFunctions }, reply } }),
-    );
-
-    expect(reply).toHaveBeenCalledWith({ type: EXTENSION_TO_WEBVIEW.CONDITION_FUNCTION_PICKED, requestId: 'r1', functionName: 'GetIsID' });
-  });
-
-  it('replies with functionName: null when dismissed without a selection', async () => {
-    const getConditionFunctions = vi.fn().mockResolvedValue([]);
-    const reply = vi.fn();
-    showQuickPick.mockResolvedValue(undefined);
-
-    await routeRecordPanelMessage(
-      { type: WEBVIEW_TO_EXTENSION.OPEN_CONDITION_FUNCTION_PICKER, requestId: 'r2', seed: '' },
-      makeDeps({ conditionFunctionPicker: { repository: { getConditionFunctions }, reply } }),
-    );
-
-    expect(reply).toHaveBeenCalledWith({ type: EXTENSION_TO_WEBVIEW.CONDITION_FUNCTION_PICKED, requestId: 'r2', functionName: null });
   });
 });

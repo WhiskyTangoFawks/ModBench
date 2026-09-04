@@ -18,14 +18,4 @@ public interface IRecordQueryService
 
     IReadOnlyList<PluginRecordTypeCount> GetPluginRecordTypes(string plugin, string? origin = null);
     IReadOnlyList<ReferenceResult> GetReferences(string targetFormKey);
-
-    // The condition function picker's catalog: every function name the loaded load order's
-    // game/category actually resolves — see ConditionCodecRegistry / IConditionCodec.AvailableFunctions.
-    IReadOnlyList<string> GetConditionFunctions();
-
-    // The Run On target list's catalog: every RunOnType name the loaded load order's
-    // game/category actually resolves — see ConditionCodecRegistry / IConditionCodec.AvailableRunOnTargets.
-    // Same rationale as GetConditionFunctions: not a hardcoded frontend array, so a future game's
-    // differently-shaped RunOnType enum never silently offers a name it can't parse or write.
-    IReadOnlyList<string> GetConditionRunOnTargets();
 }

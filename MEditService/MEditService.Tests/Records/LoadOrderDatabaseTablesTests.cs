@@ -96,8 +96,8 @@ public sealed class LoadOrderDatabaseTablesTests(LoadedApiFixture<TestPluginFixt
     }
 
     /// <summary>
-    /// Conditions' two side tables are gone — <c>GetConditions</c> reconstitutes from the
-    /// record's own document via <c>IConditionCodec.Extract</c> instead. Same positive control as
+    /// Conditions have no side tables — a condition list is an ordinary reflected array column,
+    /// read from the record's own document like every other field. Same positive control as
     /// <see cref="AHeldLoadOrder_HasNoVmadTables"/>, for the same reason.
     /// </summary>
     [Fact]

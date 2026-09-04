@@ -51,8 +51,8 @@ public sealed class DuckDbRecordIndex : IRecordIndex
 
     // The prepare/append/collectors collaborator — see PluginIngest's own doc comment.
     // Constructed at the end of Initialize (below), once Connection is stable for the rest of this
-    // object's lifetime (IndexStore never rebuilds again after Initialize returns) and schemas /
-    // the condition codec / the release are all resolved — every one of PluginIngest's dependencies
+    // object's lifetime (IndexStore never rebuilds again after Initialize returns) and the schemas
+    // and release are both resolved — every one of PluginIngest's dependencies
     // is captured once rather than chased through a mutable back-reference.
     private PluginIngest _pluginIngest = null!;
 
@@ -76,8 +76,8 @@ public sealed class DuckDbRecordIndex : IRecordIndex
     }
 
     // Reading a record back out of its document needs the release it was written under, and this
-    // repository is one game for its whole lifetime — the same reasoning that already resolves the
-    // condition codec once, here.
+    // repository is one game for its whole lifetime — the same reasoning that resolves the schemas
+    // once, here.
     private GameRelease _release;
 
     public void Initialize(GameRelease release)
@@ -89,17 +89,11 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         _indexStore.Initialize(release, indexVersion);
 
         _schemas = _schemaReflector.GetSchemas(release);
-        // Resolved once here (this repository is one game/load order for its whole lifetime),
-        // handed to PluginIngest below rather than kept as a field of this class — CollectConditionRefsForRecord's
-        // only other caller (WorkingTreeOverlay's own rederivation) reaches it through the same
-        // PluginIngest instance. Null for a game with no condition codec — same "fails to nothing,
-        // not silently wrong" fallback ConditionCodecRegistry.For already establishes elsewhere.
-        var conditionCodec = ConditionCodecRegistry.For(release.ToCategory());
         _release = release;
 
-        _pluginIngest = new PluginIngest(Connection, _logger, _codec, _placementWalker, conditionCodec);
+        _pluginIngest = new PluginIngest(Connection, _logger, _codec, _placementWalker);
         _workingTreeOverlay = new WorkingTreeOverlay(
-            Connection, _logger, _codec, _placementWalker, _pluginIngest, release, _schemas);
+            Connection, _logger, _codec, _placementWalker, release, _schemas);
 
         // IndexStore only ever computes and reports the stale set — it
         // is never the one to act on it. Unindex is this class's own cross-cutting verb (registration

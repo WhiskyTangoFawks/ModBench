@@ -222,7 +222,6 @@ function fakeClient(): RecordPanelClient {
       notInLoadOrderSet: new Set(),
       conflictsComputed: true,
     } as unknown as LoadResult)),
-    conditionRunOnTargets: vi.fn().mockResolvedValue([]),
   };
 }
 
@@ -387,7 +386,6 @@ describe('RecordPanel — array editing (unsorted, #426)', () => {
         trackedSet: new Set([columnKey('MyMod.esp', null)]),
         conflictsComputed: true,
       } as unknown as LoadResult)),
-      conditionRunOnTargets: vi.fn().mockResolvedValue([]),
     };
   }
 
@@ -555,7 +553,6 @@ describe('RecordPanel — a value edit inside a complex field commits the whole 
         trackedSet: new Set([columnKey('MyMod.esp', null)]),
         conflictsComputed: true,
       } as unknown as LoadResult)),
-      conditionRunOnTargets: vi.fn().mockResolvedValue([]),
     };
     return { client, ...render(<RecordPanel client={client} />) };
   }
@@ -663,7 +660,6 @@ describe('RecordPanel — the extended editor commits the whole field, at any de
         trackedSet: new Set([columnKey('MyMod.esp', null)]),
         conflictsComputed: true,
       } as unknown as LoadResult)),
-      conditionRunOnTargets: vi.fn().mockResolvedValue([]),
     };
     return { client, ...render(<RecordPanel client={client} />) };
   }

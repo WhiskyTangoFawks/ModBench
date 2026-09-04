@@ -3,12 +3,12 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 vi.mock('./vscode', () => ({ vscode: { postMessage: vi.fn() } }));
 
 import { vscode } from './vscode';
-import { pickFormKey, pickConditionFunction, openExtendedFieldEditor } from './nativeBridge';
+import { pickFormKey, openExtendedFieldEditor } from './nativeBridge';
 import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION } from './messages';
 
 // pickFormKey's suite exercises the shared requestReply plumbing (resolve-on-match,
 // ignore-a-mismatched-requestId, ignore-unrelated-message-types) once, as the exemplar for the
-// near-identical bridges. Further native-prompt bridges (the condition-function picker, etc.)
+// near-identical bridges. Further native-prompt bridges
 // extend this file rather than re-proving the shared mechanism.
 
 function postedRequestId(): string {
@@ -94,43 +94,6 @@ describe('pickFormKey', () => {
   });
 });
 
-describe('pickConditionFunction', () => {
-  it('posts OPEN_CONDITION_FUNCTION_PICKER with the seed', () => {
-    void pickConditionFunction('GetIsID');
-
-    expect(vscode.postMessage).toHaveBeenCalledWith(expect.objectContaining({
-      type: WEBVIEW_TO_EXTENSION.OPEN_CONDITION_FUNCTION_PICKER,
-      seed: 'GetIsID',
-    }));
-  });
-
-  it('resolves the function name from the matching reply', async () => {
-    const resultPromise = pickConditionFunction('');
-    const requestId = postedRequestId();
-
-    window.dispatchEvent(new MessageEvent('message', {
-      data: { type: EXTENSION_TO_WEBVIEW.CONDITION_FUNCTION_PICKED, requestId, functionName: 'GetDistance' },
-    }));
-
-    expect(await resultPromise).toBe('GetDistance');
-  });
-
-  it('resolves null when the reply carries functionName: null (Escape/blur)', async () => {
-    const resultPromise = pickConditionFunction('');
-    const requestId = postedRequestId();
-
-    window.dispatchEvent(new MessageEvent('message', {
-      data: { type: EXTENSION_TO_WEBVIEW.CONDITION_FUNCTION_PICKED, requestId, functionName: null },
-    }));
-
-    expect(await resultPromise).toBeNull();
-  });
-});
-
-// Unlike pickFormKey above, openExtendedFieldEditor doesn't return a
-// Promise — the editor tab it opens can be saved any number of times before it's closed, so its
-// own map entry isn't deleted on the first EXTENDED_EDITOR_COMMITTED the way `inFlight`'s entries
-// are deleted on their first (and only) reply.
 describe('openExtendedFieldEditor', () => {
   it('posts OPEN_EXTENDED_EDITOR with the field identity and readOnly flag', () => {
     openExtendedFieldEditor(

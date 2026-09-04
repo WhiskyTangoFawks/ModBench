@@ -12,7 +12,7 @@ public static class ConflictRules
     // compares pre-canonicalized strings.
     // ADR-0035: a non-participating plugin's override/input never contributes to conflict
     // classification — filtered out before any diff/winner/cell-state computation, not just masked
-    // in the result. Shared by ConflictClassifier/VmadConflictClassifier/ConditionConflictClassifier
+    // in the result. Shared by ConflictClassifier/VmadConflictClassifier
     // so the "what does an absent key mean" default (fail-open: true) can't drift between the three.
     // Null pluginParticipates (the default) means every plugin participates.
     public static IReadOnlyList<T> FilterParticipating<T>(

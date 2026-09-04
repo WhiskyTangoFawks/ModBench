@@ -1550,20 +1550,18 @@ public class SchemaReflectorTests
         Assert.False(typeof(Mutagen.Bethesda.Plugins.Records.IMajorRecordGetter).IsAssignableFrom(schema.RecordType));
     }
 
-    // ── Condition-list properties must not double as generic array columns ──────
-    // Perk.Conditions is condition-shaped (IReadOnlyList<IConditionGetter>) and is already
-    // surfaced by Fallout4ConditionCodec.Extract into the dedicated Conditions section;
-    // reflecting it again here as a plain array column duplicates it in the record editor.
-    // Perk.Effects (IReadOnlyList<IAPerkEffectGetter>) is an ordinary list-of-struct with no
-    // condition shape and must keep its normal array column — paired here so the fix can't be
-    // a blanket "skip all list-of-struct properties" overreach.
+    // ── Condition lists are ordinary reflected array columns ───────────────────
+    // #692: Perk.Conditions (IReadOnlyList<IConditionGetter>) reaches the record editor through the
+    // same array-of-struct column every other list of Loqui structs does. Perk.Effects
+    // (IReadOnlyList<IAPerkEffectGetter>) is paired here as the neighbouring list-of-struct, so a
+    // regression that dropped one shape would have to drop the other too.
 
     [Fact]
-    public void GetSchemas_Perk_ConditionsProperty_ExcludedFromGenericColumns()
+    public void GetSchemas_Perk_ConditionsProperty_IsAGenericArrayColumn()
     {
         var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
         var columns = schemas["perk"].RecordColumns;
-        Assert.DoesNotContain(columns, c => c.Name == "conditions");
+        Assert.Contains(columns, c => c.Name == "conditions" && c.ApiType == "array");
     }
 
     [Fact]

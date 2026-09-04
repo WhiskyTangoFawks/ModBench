@@ -5,7 +5,7 @@ type Schemas = components['schemas'];
 // The record editor's wire DTOs. Every type here is the generated schema type — named, and in a
 // few cases *narrowed*. The narrowings are the only hand-written shape left, and each one passes
 // the same test: would this still need to exist if the generator were perfect? A field the
-// VMAD/Condition tree adapters synthesize and the backend never emits is a genuine frontend
+// VMAD tree adapter synthesizes and the backend never emits is a genuine frontend
 // refinement and stays; re-declaring a field the schema already describes is a second, staler copy
 // and does not (#627).
 
@@ -14,30 +14,17 @@ export type FormKeyResolution = Schemas['FormKeyResolution'];
 export type ConflictAll = Schemas['ConflictAll'];
 export type ConflictThis = Schemas['ConflictThis'];
 export type EnumMember = Schemas['EnumMember'];
-export type ConditionOperator = Schemas['ConditionOperator'];
-export type ConditionParamCategory = Schemas['ConditionParamCategory'];
-export type ParsedConditionParam = Schemas['ParsedConditionParam'];
-export type ParsedCondition = Schemas['ParsedCondition'];
-
-/** The widget a leaf renders with. Wider than the backend's own `type` string: the five
- *  `vmadObject`/`condition*` members are synthesized by vmadTreeAdapter.ts/conditionTreeAdapter.ts
- *  for rows the backend never sends at all. Each names a leaf whose editor is a genuine exception
- *  to the plain type -> widget mapping, the same way 'formKey' already is: a VMAD object property
- *  is a (FormKey, alias) pair; a condition's Function field opens a QuickPick over the function
- *  catalogue; Run On, Comparison and a parameter are each composite and vary their widget from
- *  their own value's shape rather than from a second per-plugin metadata branch DiffRow would
- *  otherwise need. */
+/** The widget a leaf renders with. Wider than the backend's own `type` string: `vmadObject` is
+ *  synthesized by vmadTreeAdapter.ts for rows the backend never sends at all, and names a leaf
+ *  whose editor is a genuine exception to the plain type -> widget mapping, the same way 'formKey'
+ *  already is — a VMAD object property is a (FormKey, alias) pair. */
 export type FieldType =
   | 'string' | 'int' | 'float' | 'bool' | 'enum' | 'formKey' | 'struct' | 'array' | 'hex'
-  | 'vmadObject' | 'conditionFunction' | 'conditionRunOn' | 'conditionComparison' | 'conditionParam';
+  | 'vmadObject';
 
-/** `readOnly`/`defaultValue` are likewise adapter-only. `readOnly` is unconditional, regardless of
- *  the column's own mutability — the Condition section's AND/OR gate is the one row that needs it;
- *  every other field's editability still comes purely from the column (immutableSet), matching the
- *  "per column, never a mode" rule. `defaultValue` overrides recordUtils.ts's generic
- *  defaultAdapterElementValue for a synthesized elementType whose real wire shape isn't the generic
- *  per-field-type default: a new condition's shape is `ParsedCondition`, not an object keyed by
- *  the display field names with a per-type scalar default in each. */
+/** `readOnly` is likewise adapter-only, and unconditional, regardless of the column's own
+ *  mutability; every other field's editability still comes purely from the column (immutableSet),
+ *  matching the "per column, never a mode" rule. */
 export type FieldMetadata =
   // `isDiscriminator` is dropped rather than narrowed: it says which concrete class an object is,
   // which is the write path's decision alone (ArrayOpWriter) — the webview reads no such field.
@@ -47,11 +34,10 @@ export type FieldMetadata =
     elementType?: FieldMetadata | null;   // present when type === 'array'
     fields?: FieldMetadata[] | null;      // present when type === 'struct'
     readOnly?: boolean;
-    defaultValue?: unknown;
     // Required non-nullable booleans on the wire, optional here — deliberately, and not as
     // fixture-compat slack. This type describes two different things: metadata that arrived from
     // the backend, and metadata an adapter *invented* for one of the five synthesized `type`
-    // values above. For a synthesized `conditionFunction` leaf, "is this a sortable pure-FormLink
+    // values above. For a synthesized `vmadObject` leaf, "is this a sortable pure-FormLink
     // array?" has no answer; `undefined` says "not applicable" where `false` would fabricate one.
     // A perfect generator would still not describe an object the backend never sends, so this
     // stays optional for the same reason `type` stays narrowed.
@@ -129,7 +115,7 @@ export type RecordDetail = Omit<Schemas['RecordDetail'], 'fields'> & { fields: F
 export type CompareOverride = Omit<Schemas['CompareOverride'], 'fields'> & { fields: FieldValue[] };
 
 // The chain from a row's own restage root (a plain reflected field, or a
-// wirePath-bearing VMAD/Condition subtree — see FieldDiff.wirePath below) down to a given row's
+// wirePath-bearing VMAD subtree — see FieldDiff.wirePath below) down to a given row's
 // own value: a struct hop addressed by member name, an unsorted-array hop by position, a sorted
 // (pure FormLink) array hop by the element's own value (there is nothing to address *beneath* a
 // sortKey hop — a sorted array's elements are themselves the value, never a struct/array).
@@ -140,23 +126,18 @@ export type CompareOverride = Omit<Schemas['CompareOverride'], 'fields'> & { fie
 // './types'.
 export type { PathSegment } from './messages';
 
-/** `wirePath` and `collapsedSummary` are adapter-only, like FieldMetadata's readOnly/defaultValue.
- *  `wirePath` is the path this row (and its subtree) stages under, decoupled from `fieldName`,
- *  which stays a pure display label — absent for an ordinary reflected field where the two
- *  coincide, set by the VMAD/Condition adapters whose rows display as "Health"/"Function" but
- *  stage under "VMAD\ScriptA\Health"/"CTDA\Conditions\0\Function". `collapsedSummary` is a
- *  per-plugin xEdit-style one-line prose summary (`wbConditionToStr`,
- *  references/TES5Edit/Core/wbDefinitionsCommon.pas) shown in place of a struct row's generic
- *  "{...}" — condition rows only.
+/** `wirePath` is adapter-only, like FieldMetadata's readOnly: the path this row (and
+ *  its subtree) stages under, decoupled from `fieldName`, which stays a pure display label —
+ *  absent for an ordinary reflected field where the two coincide, set by the VMAD adapter whose
+ *  rows display as "Health" but stage under "VMAD\ScriptA\Health".
  *
- *  `conflictAll` is required on the wire but optional here: the adapters compute it themselves for
- *  their own synthesized nodes (recordUtils.ts's aggregateConflictAll), and a node that has not
+ *  `conflictAll` is required on the wire but optional here: the adapter computes it itself for
+ *  its own synthesized nodes (recordUtils.ts's aggregateConflictAll), and a node that has not
  *  set it degrades to "no background" in DiffRow's getRowBg. */
 export type FieldDiff = Omit<Schemas['FieldDiff'], 'children' | 'conflictAll'> & {
   conflictAll?: ConflictAll;
   children?: FieldDiff[] | null;
   wirePath?: string;
-  collapsedSummary?: Record<string, string>;
 };
 
 /** The shapes a VMAD property row takes — 'object' is a (FormKey, alias) pair, 'structList' a
@@ -175,17 +156,8 @@ export type VmadScriptDiff = Omit<Schemas['VmadScriptDiff'], 'properties'> & {
 
 export type VmadCompare = { scripts: VmadScriptDiff[] };
 
-export type ConditionDiff = Schemas['ConditionDiff'];
-
-export type ConditionGroupDiff = Omit<Schemas['ConditionGroupDiff'], 'conditions'> & {
-  conditions: ConditionDiff[];
-};
-
-export type ConditionCompare = { groups: ConditionGroupDiff[] };
-
-export type CompareResult = Omit<Schemas['CompareResult'], 'overrides' | 'diffs' | 'vmad' | 'conditions'> & {
+export type CompareResult = Omit<Schemas['CompareResult'], 'overrides' | 'diffs' | 'vmad'> & {
   overrides: CompareOverride[];
   diffs: FieldDiff[];
   vmad?: VmadCompare | null;
-  conditions?: ConditionCompare | null;
 };

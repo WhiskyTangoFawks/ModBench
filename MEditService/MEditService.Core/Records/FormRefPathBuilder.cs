@@ -56,11 +56,39 @@ internal static class FormRefPathBuilder
         Action<string, string?, bool, IReadOnlyList<string>> onFormKeyLeaf)
     {
         if (meta.Fields == null || value is not JsonElement { ValueKind: JsonValueKind.Object } obj) return;
+        var idle = IdleMembers(meta.Fields, obj);
         foreach (var field in meta.Fields)
         {
+            if (idle?.Contains(field.Name) == true) continue;
             if (obj.TryGetProperty(field.Name, out var prop))
                 Walk(field, prop, path.Length > 0 ? $"{path}.{field.Name}" : field.Name, onFormKeyLeaf);
         }
+    }
+
+    /// <summary>The members this object's own governing values say carry no data, or null when
+    /// nothing here governs anything — which is every struct but a condition's, so the walk pays no
+    /// allocation for a concept two members use. See <see cref="FieldMetadata.SiblingsInUse"/>.
+    /// An idle member is not walked at all, so an unused parameter slot is neither a reference nor a
+    /// dangling one: Mutagen aliases a condition's number and record parameters onto the same four
+    /// bytes, so a quest-stage index reads as a FormID and would otherwise be filed as a reference
+    /// to whatever record happens to hold it.</summary>
+    private static HashSet<string>? IdleMembers(IReadOnlyList<FieldMetadata> fields, JsonElement obj)
+    {
+        HashSet<string>? idle = null;
+        foreach (var governing in fields)
+        {
+            if (governing.SiblingsInUse is not { } byValue) continue;
+
+            var inUse = obj.TryGetProperty(governing.Name, out var current)
+                && current.ValueKind == JsonValueKind.String
+                && byValue.TryGetValue(current.GetString()!, out var named)
+                    ? named
+                    : [];
+            idle ??= new(StringComparer.Ordinal);
+            foreach (var member in byValue.Values.SelectMany(m => m))
+                if (!inUse.Contains(member)) idle.Add(member);
+        }
+        return idle;
     }
 
     private static void WalkArray(

@@ -67,8 +67,8 @@ function buildScalarOrObject(p: VmadPropertyDiff): Built {
     meta: isObject ? OBJECT_META : scalarMeta(scalarKindOf(p)) };
 }
 
-// ── variable (never editable — `readOnly`, the same mechanism the Condition
-// section's AND/OR gate uses, rather than a bespoke non-editing leaf renderer) ──────────────────
+// ── variable (never editable — `readOnly`, a per-row override rather than a bespoke
+// non-editing leaf renderer) ───────────────────────────────────────────────────────────────────
 
 function variableText(p: VmadPropertyDiff, plugin: string): string | null {
   const present = plugin in p.cellStates || p.values[plugin] != null;
@@ -100,7 +100,7 @@ function buildVariable(p: VmadPropertyDiff): Built {
 // Reconstructing each plugin's own array from its per-element `values` must skip a
 // position where this plugin is null (past its own real length — VmadConflictClassifier always
 // reports every plugin at every union-aligned position) rather than carry the null through as
-// filler; sparseArrayByPlugin (recordUtils.ts, shared with conditionTreeAdapter's own identical
+// filler; sparseArrayByPlugin (recordUtils.ts, which states the identical
 // need) is what does that.
 function buildArray(p: VmadPropertyDiff): Built {
   const children = p.children ?? [];
@@ -236,7 +236,7 @@ export interface VmadTreeRows {
 }
 
 // A VMAD-*capable* record type (RecordPanel's own `hasVmad` gate) needs a place
-// for "Add Script" to live even when it currently has *no* scripts at all — unlike a condition-
+// for "Add Script" to live even when it currently has *no* scripts at all — unlike an ordinary array-
 // owning field (always reflected with an empty list, never simply absent), `vmad` itself can be
 // entirely `null`/`undefined` for such a record. One always-present wrapper row (an ordinary
 // struct container — `{…}` collapsed, focusable/draggable/right-click-able exactly like any other

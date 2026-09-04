@@ -34,6 +34,7 @@ public sealed class CompareGoldenTests : IDisposable
     private static readonly FormKey UnchangedWeapon = MakeKey("Base.esm", 0x801);
     private static readonly FormKey SoleNpc = MakeKey("Base.esm", 0x802);
     private static readonly FormKey InjectedNpc = MakeKey("Mid.esp", 0x800);
+    private static readonly FormKey ConflictedRecipe = MakeKey("Base.esm", 0x803);
 
     private static FormKey MakeKey(string plugin, uint id) => new(ModKey.FromFileName(plugin), id);
 
@@ -53,6 +54,19 @@ public sealed class CompareGoldenTests : IDisposable
 
                 var lonely = mod.Npcs.AddNew("SoleNPC");
                 lonely.CalculatedHealth = 7;
+
+                // #692: a condition list is an ordinary reflected array column, so a record
+                // carrying one belongs in this golden like any other conflicting field — the
+                // classifier that produces its diff tree is the one classifier, with no section,
+                // DTO or codec of its own to pin separately.
+                var recipe = mod.ConstructibleObjects.AddNew("ConflictedRecipe");
+                recipe.Conditions.Add(new ConditionFloat
+                {
+                    CompareOperator = CompareOperator.EqualTo,
+                    ComparisonValue = 1f,
+                    Flags = Condition.Flag.OR,
+                    Data = new FunctionConditionData { Function = Condition.Function.GetIsID },
+                });
             })
             .WithPlugin("Mid.esp", (mod, built) =>
             {
@@ -83,6 +97,12 @@ public sealed class CompareGoldenTests : IDisposable
                 npc.CalculatedHealth = 999;
                 npc.Race.SetTo(MakeKey("Base.esm", 0x901));
                 mod.Npcs.Set(npc);
+
+                // The condition list disagrees with its master on one member of one condition —
+                // the compare tree has to reach the member, not stop at the array.
+                var recipe = basePlugin.ConstructibleObjects.First(c => c.FormKey == ConflictedRecipe).DeepCopy();
+                recipe.Conditions[0].Data.RunOnType = Condition.RunOnType.Target;
+                mod.ConstructibleObjects.Set(recipe);
             })
             .Build();
 
@@ -104,7 +124,6 @@ public sealed class CompareGoldenTests : IDisposable
         r.ConflictAll,
         r.HasVmad,
         HasVmadData = r.Vmad != null,
-        HasConditionData = r.Conditions != null,
         Overrides = r.Overrides.Select(o => new
         {
             o.FormKey,
@@ -134,6 +153,7 @@ public sealed class CompareGoldenTests : IDisposable
             ["unchanged-weapon"] = Project(_service.GetCompare(UnchangedWeapon.ToString())!),
             ["sole-npc"] = Project(_service.GetCompare(SoleNpc.ToString())!),
             ["injected-npc"] = Project(_service.GetCompare(InjectedNpc.ToString())!),
+            ["conflicted-conditions"] = Project(_service.GetCompare(ConflictedRecipe.ToString())!),
         };
 
         Golden.Verify("compare-three-plugins", captured);
@@ -172,7 +192,7 @@ public sealed class CompareGoldenTests : IDisposable
             RecordTypes = _reflector.GetSchemas(GameRelease.Fallout4).Keys.Count(t => t != HeaderIndexer.RecordType),
             PerPluginTypes = new[] { "Base.esm", "Mid.esp", "Top.esp" }
                 .ToDictionary(p => p, p => _service.GetPluginRecordTypes(p)),
-            WinningRecords = new[] { ConflictedNpc, UnchangedWeapon, SoleNpc, InjectedNpc }
+            WinningRecords = new[] { ConflictedNpc, UnchangedWeapon, SoleNpc, InjectedNpc, ConflictedRecipe }
                 .ToDictionary(fk => fk.ToString(), fk =>
                 {
                     var d = _service.GetRecord(fk.ToString())!;

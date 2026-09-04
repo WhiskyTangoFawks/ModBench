@@ -1,7 +1,7 @@
 {
   "ReferencedBy": {
     "003648:Fallout4.esm": {
-      "Count": 1249,
+      "Count": 1390,
       "Sample": [
         {
           "EditorId": null,
@@ -29,7 +29,7 @@
         },
         {
           "EditorId": "DialogueDiamondCity",
-          "FieldPath": "dialog_topics[100].quest",
+          "FieldPath": "dialog_topics[0].responses[103].conditions[1].data.parameter_one_record",
           "FormKey": "003648:Fallout4.esm",
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
@@ -37,7 +37,7 @@
         },
         {
           "EditorId": "DialogueDiamondCity",
-          "FieldPath": "dialog_topics[101].quest",
+          "FieldPath": "dialog_topics[0].responses[166].conditions[1].data.parameter_one_record",
           "FormKey": "003648:Fallout4.esm",
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
@@ -181,7 +181,7 @@
       ]
     },
     "0179F3:Fallout4.esm": {
-      "Count": 575,
+      "Count": 615,
       "Sample": [
         {
           "EditorId": null,
@@ -193,11 +193,11 @@
         },
         {
           "EditorId": null,
-          "FieldPath": "CTDA\\Stages[2].LogEntries[0].Conditions\\0\\Parameter\\0",
-          "FormKey": "0179F3:Fallout4.esm",
+          "FieldPath": "responses[41].conditions[2].data.parameter_one_record",
+          "FormKey": "0179F1:Fallout4.esm",
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
-          "RecordType": "qust"
+          "RecordType": "dial"
         },
         {
           "EditorId": null,

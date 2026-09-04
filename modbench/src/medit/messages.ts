@@ -14,11 +14,6 @@ export const EXTENSION_TO_WEBVIEW = {
   // QuickPick that produced it only ever existed for that one request. `formKey: null` means the
   // user dismissed the picker (Escape/blur) — the caller leaves its field unchanged.
   FORM_KEY_PICKED: 'formKeyPicked',
-  // Same shape as FORM_KEY_PICKED above (direct reply, keyed by requestId, never a
-  // broadcast) — the condition-function QuickPick only ever exists for the one request that
-  // opened it. `functionName: null` means the user dismissed it — the caller leaves the
-  // condition's function unchanged.
-  CONDITION_FUNCTION_PICKED: 'conditionFunctionPicked',
   // The extended editor's commit — unlike FORM_KEY_PICKED above (resolved once, then
   // done), a real editor tab can be saved more than once while it stays open, so this is not a
   // one-shot reply: the extension host posts one of these per `Ctrl+S` against the temp file it
@@ -39,13 +34,12 @@ export const EXTENSION_TO_WEBVIEW = {
   // field's array: `op`/`rootField`/`path` travel straight through to `handleEditCell`/EDIT_FIELD as
   // an op envelope (`{op, path}` under `rootField`), and `RecordFieldWriter`/`ArrayOpWriter` compute
   // the result server-side from the record's own current value and schema — the same shape
-  // VMAD_STRUCTURAL_OP below already established for VMAD's own ops. Two deliberate exceptions: a
-  // VMAD scalar-array property's own arity ops (VmadCodec's own structural-op vocabulary) and a
-  // Condition-owning field's (Fallout4ConditionCodec.ApplyListValue requires a JSON array and
-  // refuses an op-envelope object) are both out of #630's scope and still compute client-side —
-  // RecordPanel's own handleArrayOp tells all three apart. `path` addresses the array
-  // itself for 'add', the element for the other three; a top-level array's is a one-hop (or empty)
-  // path, a nested array's carries every hop from `rootField`.
+  // VMAD_STRUCTURAL_OP below already established for VMAD's own ops. A VMAD scalar-array
+  // property's arity ops go server-side too, in VmadCodec's own structural-op vocabulary (#658);
+  // VMAD's ArrayOfObject and ArrayOfStruct shapes are the two that still compute client-side, and
+  // RecordPanel's own handleArrayOp is what tells them apart. `path` addresses the array itself
+  // for 'add', the element for the other three; a top-level array's is a one-hop (or empty) path,
+  // a nested array's carries every hop from `rootField`.
   ARRAY_STRUCTURAL_OP: 'arrayStructuralOp',
   // VMAD's six structural-op right-click commands
   // (Add/Remove Script, Add/Remove Property, Set Script/Property Flags) all reduce, on Track 0's
@@ -97,13 +91,6 @@ export const WEBVIEW_TO_EXTENSION = {
   // value and used to pre-select the matching item; `validTypes` is the field's allowed record
   // types, same filter the picker always applied.
   OPEN_FORM_KEY_PICKER: 'openFormKeyPicker',
-  // The condition-function picker is host-side the same way the FormKey
-  // picker is — a native `showQuickPick` over the loaded game's function catalogue
-  // (bounded, game-scoped, fetched once — no per-keystroke search, unlike OPEN_FORM_KEY_PICKER
-  // above). `seed` is the condition's current function; the extension host sorts it to the front
-  // of the QuickPick's item array (showQuickPick has no activeItem option the way createQuickPick
-  // does, so array order is the only way to pre-highlight an item).
-  OPEN_CONDITION_FUNCTION_PICKER: 'openConditionFunctionPicker',
   // A `string`-typed value cell's double click — the *only* type/gesture combination where
   // double-click's target differs from second-click/F2's (see ScalarCell's own doc comment). `value`
   // seeds the tab; `readOnly` is decided by the webview (it already knows the column's own
@@ -130,7 +117,6 @@ export type WebviewToExtension =
       value: unknown;
     }
   | { type: typeof WEBVIEW_TO_EXTENSION.OPEN_FORM_KEY_PICKER; requestId: string; seed: string; validTypes: string[] }
-  | { type: typeof WEBVIEW_TO_EXTENSION.OPEN_CONDITION_FUNCTION_PICKER; requestId: string; seed: string }
   | {
       type: typeof WEBVIEW_TO_EXTENSION.OPEN_EXTENDED_EDITOR; requestId: string; value: string;
       recordLabel: string; fieldName: string; plugin: string;
@@ -223,7 +209,7 @@ export interface ColumnHeaderContext {
 }
 
 // The chain from a row's own restage root
-// (a plain reflected field, or a wirePath-bearing VMAD/Condition subtree) down to a given row's
+// (a plain reflected field, or a wirePath-bearing VMAD subtree) down to a given row's
 // own value — a struct hop addressed by member name, an unsorted-array hop by position, a sorted
 // (pure FormLink) array hop by the element's own value (nothing addresses *beneath* a sortKey
 // hop). Lives here, not in a webview module, because StringValueContext/
@@ -266,7 +252,6 @@ export type ExtensionToWebview =
   | { type: typeof EXTENSION_TO_WEBVIEW.CONFLICTS_COMPUTED }
   | { type: typeof EXTENSION_TO_WEBVIEW.RECORD_EDITED; formKey: string }
   | { type: typeof EXTENSION_TO_WEBVIEW.FORM_KEY_PICKED; requestId: string; formKey: string | null }
-  | { type: typeof EXTENSION_TO_WEBVIEW.CONDITION_FUNCTION_PICKED; requestId: string; functionName: string | null }
   | { type: typeof EXTENSION_TO_WEBVIEW.EXTENDED_EDITOR_COMMITTED; requestId: string; value: string }
   | { type: typeof EXTENSION_TO_WEBVIEW.EXTENDED_EDITOR_CLOSED; requestId: string }
   // `rootField`/`path` are forwarded verbatim from

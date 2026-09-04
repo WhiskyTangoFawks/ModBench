@@ -79,7 +79,7 @@ export function parseElementIndex(fieldName: string): number {
 
 // The one definition of "does this plugin's own array actually
 // have an element at this index" — a row's index comes from the union-aligned tree across every
-// plugin's column (an ordinary array with differing per-plugin lengths, or VMAD/Condition's own
+// plugin's column (an ordinary array with differing per-plugin lengths, or VMAD's own
 // positional alignment), not from this one plugin's own array, so it can be at or past *this
 // specific* array's length even though the row itself exists (a sibling plugin has more elements
 // there). `length` rather than the array itself so arrayElementContext (which only ever has
@@ -91,11 +91,9 @@ export function hasElementAt(length: number, index: number): boolean {
 // #630: the three pure array-arity/order mutations behind Move Up/Move Down/Remove/Add — for an
 // ordinary reflected field these moved server-side (RecordFieldWriter/ArrayOpWriter compute the
 // result from the record's own current value and schema); the surviving callers are
-// RecordPanel's own VMAD and Condition carve-outs (both routed through computeArrayOpClientSide),
-// each deliberately out of #630's scope — a Papyrus scalar-array property's own arity ops belong
-// in VmadCodec's own structural-op vocabulary, a Condition-owning field's in
-// Fallout4ConditionCodec's (ApplyListValue requires a JSON array and refuses an op-envelope object
-// the same way VMAD's own path dispatch does) — neither is ArrayOpWriter's ColumnSpec-backed one.
+// RecordPanel's own VMAD carve-outs (routed through computeArrayOpClientSide), deliberately out
+// of #630's scope — a Papyrus scalar-array property's own arity ops belong in VmadCodec's own
+// structural-op vocabulary, not ArrayOpWriter's ColumnSpec-backed one.
 // Each returns a new array; the carve-out commits the whole thing via onEditCell, the same as any
 // other field commit.
 //
@@ -248,10 +246,9 @@ export function combineVscodeContexts(...contexts: (object | undefined)[]): stri
   return JSON.stringify({ ...merged, webviewSection: sections.join(' ') });
 }
 
-// Shared by VMAD's and Condition's tree adapters (vmadTreeAdapter.ts/
-// conditionTreeAdapter.ts) — both align their own array elements positionally across plugins
-// (VmadConflictClassifier.IndexedChildren / ConditionConflictClassifier.BuildDiff), and both
-// backends report *every* plugin at *every* union-aligned position, null past that plugin's own
+// Used by VMAD's tree adapter (vmadTreeAdapter.ts), which aligns its own array elements
+// positionally across plugins (VmadConflictClassifier.IndexedChildren), and whose
+// backend reports *every* plugin at *every* union-aligned position, null past that plugin's own
 // real length (always trailing — a plugin's own list is contiguous, so a null here only ever means
 // "this plugin's list ends before this position," never a genuine mid-list hole). Reconstructing
 // each plugin's own array must skip those nulls rather than carry them through as literal filler:
@@ -276,10 +273,10 @@ export function sparseArrayByPlugin<T>(perPositionValues: Record<string, T | nul
 //
 // The compare grid colors each row from its own FieldDiff.conflictAll (DiffRow), not a
 // record-wide value smeared across every row. The backend computes it for an ordinary reflected
-// field (MEditService.Core/Queries/ConflictClassifier.cs's AggregateConflictAll); VMAD/Condition
-// rows are synthesized entirely on the frontend (vmadTreeAdapter.ts/conditionTreeAdapter.ts) from
-// their own backend DTOs (VmadPropertyDiff/ConditionDiff), which carry no such field themselves —
-// so those two adapters compute it here, at every node they build, using the identical rule the
+// field (MEditService.Core/Queries/ConflictClassifier.cs's AggregateConflictAll); VMAD
+// rows are synthesized entirely on the frontend (vmadTreeAdapter.ts) from
+// its own backend DTO (VmadPropertyDiff), which carries no such field itself —
+// so that adapter computes it here, at every node it builds, using the identical rule the
 // backend applies. Kept in sync by design (same rule, mirrored by hand across the two languages),
 // not by shared code — there is no cross-language module to share.
 
@@ -370,7 +367,7 @@ export function setAtPath(root: unknown, path: readonly PathSegment[], value: un
 }
 
 // getAtPath/setAtPath's metadata-side counterpart, over FieldMetadata instead of a value — #630:
-// still needed by the array-op broadcast handler (RecordPanel.tsx) for its own VMAD/Condition
+// still needed by the array-op broadcast handler (RecordPanel.tsx) for its own VMAD
 // carve-outs ('add' on either needs an element schema to default from), which has only
 // the wire's rootField/path to work with, never a render-time `context.overrideMeta` the way DiffRow's own
 // buildRows resolves a row's meta by hand (member → `.fields`, index/sortKey → `.elementType`,
@@ -390,8 +387,8 @@ export function metaAtPath(meta: FieldMetadata | undefined, path: readonly PathS
   return cur ?? undefined;
 }
 
-// The default element for an array the *adapters* synthesize — a VMAD property's own instances, a
-// Condition group's conditions. Keyed off the compare grid's own FieldMetadata shape rather than
+// The default element for an array the *adapter* synthesizes — a VMAD property's own instances.
+// Keyed off the compare grid's own FieldMetadata shape rather than
 // VMAD's raw node JSON, which the two do not share. A reflected column's array has no default here
 // at all: its Add posts `{op, path}` and ArrayOpWriter builds the element
 // (docs/specs/medit-record-editor.md, "A new array element's default is the backend's").
@@ -399,10 +396,6 @@ export function metaAtPath(meta: FieldMetadata | undefined, path: readonly PathS
 // The `default` arm is deliberate, not lazy: an unrecognized/future `type` returns '' rather than
 // falling through to `undefined`, which would silently append a hole into a saved array.
 export function defaultAdapterElementValue(meta: FieldMetadata): unknown {
-  // An explicit override wins outright — a condition list's own elementType carries
-  // one (a real `ParsedCondition`, since its wire shape doesn't match this function's generic
-  // per-display-field-name struct default). Absent for every ordinary/VMAD elementType.
-  if (meta.defaultValue !== undefined) return structuredClone(meta.defaultValue);
   switch (meta.type) {
     case 'string': case 'formKey': return '';
     case 'int': case 'float': return 0;

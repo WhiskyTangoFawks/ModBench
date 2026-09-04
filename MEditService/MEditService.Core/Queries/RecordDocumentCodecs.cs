@@ -11,11 +11,11 @@ using Mutagen.Bethesda.Plugins.Records;
 namespace MEditService.Core.Queries;
 
 /// <summary>
-/// VMAD/condition reconstitution from a record's document body. <c>GetVmad</c>/<c>GetConditions</c>
-/// are deliberately not <see cref="Records.IRecordReads"/> members (raw-SQL and per-capability
-/// members are both ruled out for the seam); the capability lives at the query-service level
-/// instead — deserializing <see cref="RecordDocument.Body"/> through <see cref="RecordTextCodec"/>
-/// and walking the same <c>VmadCodec</c>/<see cref="IConditionCodec"/>.
+/// VMAD reconstitution from a record's document body. <c>GetVmad</c> is deliberately not a
+/// <see cref="Records.IRecordReads"/> member (raw-SQL and per-capability members are both ruled out
+/// for the seam); the capability lives at the query-service level instead — deserializing
+/// <see cref="RecordDocument.Body"/> through <see cref="RecordTextCodec"/> and walking
+/// <c>VmadCodec</c>.
 /// </summary>
 internal static class RecordDocumentCodecs
 {
@@ -52,30 +52,6 @@ internal static class RecordDocumentCodecs
         return new VmadData(scripts);
     }
 
-    // Owners are re-sorted by FieldPath (ordinal): Extract's own discovery order (reflection order
-    // for flat fields, then nested owners appended after) is not a stable presentation order.
-    //
-    // A document this codec cannot reconstitute reads as "no conditions", same as GetVmad's
-    // null-VMAD case.
-    public static IReadOnlyList<ConditionOwner> GetConditions(RecordDocument document, GameRelease release, IConditionCodec? conditionCodec)
-    {
-        if (conditionCodec == null) return [];
-        if (Deserialize(document, release) is not IMajorRecordGetter record) return [];
-
-        return [.. conditionCodec.Extract(record)
-            .OrderBy(o => o.FieldPath, StringComparer.Ordinal)
-            .Select(o => o with
-            {
-                Conditions = [.. o.Conditions.Select(c => c with
-                {
-                    Parameters = [.. c.Parameters.Select(p => p with
-                    {
-                        DecodedValue = DecodeParamValue(conditionCodec, p.Category.ToString(), p.TypeName, p.Number),
-                    })],
-                })],
-            })];
-    }
-
     /// <summary>
     /// The document as a live record, or null when this codec structurally cannot produce one.
     ///
@@ -84,29 +60,19 @@ internal static class RecordDocumentCodecs
     /// <c>RecordData.json</c> — but a ModHeader is not an <see cref="IMajorRecordGetter"/>, so the
     /// per-record codec cannot read it: handed the header's <c>record_type</c> it takes the
     /// self-describing path, finds no <c>MutagenObjectType</c>, and throws
-    /// <c>RecordTypeSerializationUnsupportedException</c>. Both capabilities here are structurally
-    /// impossible for a header anyway (<c>RecordTableSchema.HasVmad</c> is false for it, and a
-    /// ModHeader owns no condition list), so "no VMAD, no conditions" is the honest answer rather
-    /// than a swallowed failure.</para>
+    /// <c>RecordTypeSerializationUnsupportedException</c>. The capability here is structurally
+    /// impossible for a header anyway (<c>RecordTableSchema.HasVmad</c> is false for it), so
+    /// "no VMAD" is the honest answer rather than a swallowed failure.</para>
     ///
-    /// <para>This used to be a null-<c>Body</c> check, which answered the same question only because
-    /// the header was the one document-less row. That is no longer true, and a null body would now
-    /// mean something quite different — so the guard names what it actually excludes.</para>
+    /// <para>Two separate exclusions, deliberately: the header by name, and any row with no body
+    /// at all. Naming the header is what the first one is for — every kind of row can lack a body,
+    /// so the null-body test alone would not say which row this is.</para>
     /// </summary>
     private static IMajorRecord? Deserialize(RecordDocument document, GameRelease release) =>
         document.RecordType == HeaderIndexer.RecordType || document.Body is not { } body
             ? null
             : Codec.DeserializeFromBytesAsync(Encoding.UTF8.GetBytes(body), release, document.RecordType)
                 .GetAwaiter().GetResult();
-
-    // Only a Number-category parameter is ever decodable (Form/Text are already
-    // human-legible); a Form/Text row's stored number_value is null regardless of category, so this
-    // also guards the null-Number case a Number row itself can never actually hit (Number.Value is
-    // always non-null once category checks out).
-    private static string? DecodeParamValue(IConditionCodec conditionCodec, string category, string typeName, int? number) =>
-        category == nameof(ConditionParamCategory.Number) && number is { } n
-            ? conditionCodec.DecodeParamValue(typeName, n)
-            : null;
 
     // Types with an element type are the ones whose elements come from VmadParsedProperty.Items.
     private static VmadPropertyValue MapVmadProperty(VmadParsedProperty parsed) =>

@@ -1,4 +1,595 @@
 {
+  "conflicted-conditions": {
+    "ConflictAll": "Override",
+    "DiffFieldCount": 4,
+    "Diffs": [
+      {
+        "CellStates": {
+          "Top.esp": "Override"
+        },
+        "Children": [
+          {
+            "CellStates": {
+              "Top.esp": "Override"
+            },
+            "Children": [
+              {
+                "CellStates": {
+                  "Top.esp": "Override"
+                },
+                "Children": [
+                  {
+                    "CellStates": {
+                      "Top.esp": "Override"
+                    },
+                    "Children": null,
+                    "ConflictAll": "Override",
+                    "FieldName": "run_on_type",
+                    "Resolutions": null,
+                    "Values": {
+                      "Base.esm": "Subject",
+                      "Top.esp": "Target"
+                    },
+                    "WinnerColumn": "Top.esp",
+                    "WinnerValue": "Target"
+                  },
+                  {
+                    "CellStates": {
+                      "Top.esp": "IdenticalToMaster"
+                    },
+                    "Children": null,
+                    "ConflictAll": "NoConflict",
+                    "FieldName": "reference",
+                    "Resolutions": null,
+                    "Values": {
+                      "Base.esm": "Null",
+                      "Top.esp": "Null"
+                    },
+                    "WinnerColumn": "Top.esp",
+                    "WinnerValue": "Null"
+                  },
+                  {
+                    "CellStates": {
+                      "Top.esp": "IdenticalToMaster"
+                    },
+                    "Children": null,
+                    "ConflictAll": "NoConflict",
+                    "FieldName": "unknown3",
+                    "Resolutions": null,
+                    "Values": {
+                      "Base.esm": -1,
+                      "Top.esp": -1
+                    },
+                    "WinnerColumn": "Top.esp",
+                    "WinnerValue": -1
+                  },
+                  {
+                    "CellStates": {
+                      "Top.esp": "IdenticalToMaster"
+                    },
+                    "Children": null,
+                    "ConflictAll": "NoConflict",
+                    "FieldName": "function",
+                    "Resolutions": null,
+                    "Values": {
+                      "Base.esm": "GetIsID",
+                      "Top.esp": "GetIsID"
+                    },
+                    "WinnerColumn": "Top.esp",
+                    "WinnerValue": "GetIsID"
+                  },
+                  {
+                    "CellStates": {
+                      "Top.esp": "IdenticalToMaster"
+                    },
+                    "Children": null,
+                    "ConflictAll": "NoConflict",
+                    "FieldName": "unknown2",
+                    "Resolutions": null,
+                    "Values": {
+                      "Base.esm": 0,
+                      "Top.esp": 0
+                    },
+                    "WinnerColumn": "Top.esp",
+                    "WinnerValue": 0
+                  },
+                  {
+                    "CellStates": {
+                      "Top.esp": "IdenticalToMaster"
+                    },
+                    "Children": null,
+                    "ConflictAll": "NoConflict",
+                    "FieldName": "parameter_one_record",
+                    "Resolutions": null,
+                    "Values": {
+                      "Base.esm": "Null",
+                      "Top.esp": "Null"
+                    },
+                    "WinnerColumn": "Top.esp",
+                    "WinnerValue": "Null"
+                  },
+                  {
+                    "CellStates": {
+                      "Top.esp": "IdenticalToMaster"
+                    },
+                    "Children": null,
+                    "ConflictAll": "NoConflict",
+                    "FieldName": "parameter_one_number",
+                    "Resolutions": null,
+                    "Values": {
+                      "Base.esm": 0,
+                      "Top.esp": 0
+                    },
+                    "WinnerColumn": "Top.esp",
+                    "WinnerValue": 0
+                  },
+                  {
+                    "CellStates": {
+                      "Top.esp": "IdenticalToMaster"
+                    },
+                    "Children": null,
+                    "ConflictAll": "NoConflict",
+                    "FieldName": "parameter_two_record",
+                    "Resolutions": null,
+                    "Values": {
+                      "Base.esm": "Null",
+                      "Top.esp": "Null"
+                    },
+                    "WinnerColumn": "Top.esp",
+                    "WinnerValue": "Null"
+                  },
+                  {
+                    "CellStates": {
+                      "Top.esp": "IdenticalToMaster"
+                    },
+                    "Children": null,
+                    "ConflictAll": "NoConflict",
+                    "FieldName": "parameter_two_number",
+                    "Resolutions": null,
+                    "Values": {
+                      "Base.esm": 0,
+                      "Top.esp": 0
+                    },
+                    "WinnerColumn": "Top.esp",
+                    "WinnerValue": 0
+                  },
+                  {
+                    "CellStates": {
+                      "Top.esp": "IdenticalToMaster"
+                    },
+                    "Children": null,
+                    "ConflictAll": "NoConflict",
+                    "FieldName": "concrete_type",
+                    "Resolutions": null,
+                    "Values": {
+                      "Base.esm": "FunctionConditionData",
+                      "Top.esp": "FunctionConditionData"
+                    },
+                    "WinnerColumn": "Top.esp",
+                    "WinnerValue": "FunctionConditionData"
+                  }
+                ],
+                "ConflictAll": "Override",
+                "FieldName": "data",
+                "Resolutions": null,
+                "Values": {
+                  "Base.esm": {
+                    "concrete_type": "FunctionConditionData",
+                    "event_function": null,
+                    "event_member": null,
+                    "function": "GetIsID",
+                    "parameter3": null,
+                    "parameter_one_number": 0,
+                    "parameter_one_record": "Null",
+                    "parameter_one_string": null,
+                    "parameter_two_number": 0,
+                    "parameter_two_record": "Null",
+                    "parameter_two_string": null,
+                    "reference": "Null",
+                    "run_on_type": "Subject",
+                    "unknown2": 0,
+                    "unknown3": -1
+                  },
+                  "Top.esp": {
+                    "concrete_type": "FunctionConditionData",
+                    "event_function": null,
+                    "event_member": null,
+                    "function": "GetIsID",
+                    "parameter3": null,
+                    "parameter_one_number": 0,
+                    "parameter_one_record": "Null",
+                    "parameter_one_string": null,
+                    "parameter_two_number": 0,
+                    "parameter_two_record": "Null",
+                    "parameter_two_string": null,
+                    "reference": "Null",
+                    "run_on_type": "Target",
+                    "unknown2": 0,
+                    "unknown3": -1
+                  }
+                },
+                "WinnerColumn": "Top.esp",
+                "WinnerValue": {
+                  "concrete_type": "FunctionConditionData",
+                  "event_function": null,
+                  "event_member": null,
+                  "function": "GetIsID",
+                  "parameter3": null,
+                  "parameter_one_number": 0,
+                  "parameter_one_record": "Null",
+                  "parameter_one_string": null,
+                  "parameter_two_number": 0,
+                  "parameter_two_record": "Null",
+                  "parameter_two_string": null,
+                  "reference": "Null",
+                  "run_on_type": "Target",
+                  "unknown2": 0,
+                  "unknown3": -1
+                }
+              },
+              {
+                "CellStates": {
+                  "Top.esp": "IdenticalToMaster"
+                },
+                "Children": null,
+                "ConflictAll": "NoConflict",
+                "FieldName": "compare_operator",
+                "Resolutions": null,
+                "Values": {
+                  "Base.esm": "EqualTo",
+                  "Top.esp": "EqualTo"
+                },
+                "WinnerColumn": "Top.esp",
+                "WinnerValue": "EqualTo"
+              },
+              {
+                "CellStates": {
+                  "Top.esp": "IdenticalToMaster"
+                },
+                "Children": null,
+                "ConflictAll": "NoConflict",
+                "FieldName": "flags",
+                "Resolutions": null,
+                "Values": {
+                  "Base.esm": 1,
+                  "Top.esp": 1
+                },
+                "WinnerColumn": "Top.esp",
+                "WinnerValue": 1
+              },
+              {
+                "CellStates": {
+                  "Top.esp": "IdenticalToMaster"
+                },
+                "Children": null,
+                "ConflictAll": "NoConflict",
+                "FieldName": "unknown1",
+                "Resolutions": null,
+                "Values": {
+                  "Base.esm": "0x000000",
+                  "Top.esp": "0x000000"
+                },
+                "WinnerColumn": "Top.esp",
+                "WinnerValue": "0x000000"
+              },
+              {
+                "CellStates": {
+                  "Top.esp": "IdenticalToMaster"
+                },
+                "Children": null,
+                "ConflictAll": "NoConflict",
+                "FieldName": "comparison_value_float",
+                "Resolutions": null,
+                "Values": {
+                  "Base.esm": 1,
+                  "Top.esp": 1
+                },
+                "WinnerColumn": "Top.esp",
+                "WinnerValue": 1
+              },
+              {
+                "CellStates": {
+                  "Top.esp": "IdenticalToMaster"
+                },
+                "Children": null,
+                "ConflictAll": "NoConflict",
+                "FieldName": "concrete_type",
+                "Resolutions": null,
+                "Values": {
+                  "Base.esm": "ConditionFloat",
+                  "Top.esp": "ConditionFloat"
+                },
+                "WinnerColumn": "Top.esp",
+                "WinnerValue": "ConditionFloat"
+              }
+            ],
+            "ConflictAll": "Override",
+            "FieldName": "[0]",
+            "Resolutions": null,
+            "Values": {
+              "Base.esm": {
+                "compare_operator": "EqualTo",
+                "comparison_value_float": 1,
+                "comparison_value_form_key": null,
+                "concrete_type": "ConditionFloat",
+                "data": {
+                  "concrete_type": "FunctionConditionData",
+                  "event_function": null,
+                  "event_member": null,
+                  "function": "GetIsID",
+                  "parameter3": null,
+                  "parameter_one_number": 0,
+                  "parameter_one_record": "Null",
+                  "parameter_one_string": null,
+                  "parameter_two_number": 0,
+                  "parameter_two_record": "Null",
+                  "parameter_two_string": null,
+                  "reference": "Null",
+                  "run_on_type": "Subject",
+                  "unknown2": 0,
+                  "unknown3": -1
+                },
+                "flags": 1,
+                "unknown1": "0x000000"
+              },
+              "Top.esp": {
+                "compare_operator": "EqualTo",
+                "comparison_value_float": 1,
+                "comparison_value_form_key": null,
+                "concrete_type": "ConditionFloat",
+                "data": {
+                  "concrete_type": "FunctionConditionData",
+                  "event_function": null,
+                  "event_member": null,
+                  "function": "GetIsID",
+                  "parameter3": null,
+                  "parameter_one_number": 0,
+                  "parameter_one_record": "Null",
+                  "parameter_one_string": null,
+                  "parameter_two_number": 0,
+                  "parameter_two_record": "Null",
+                  "parameter_two_string": null,
+                  "reference": "Null",
+                  "run_on_type": "Target",
+                  "unknown2": 0,
+                  "unknown3": -1
+                },
+                "flags": 1,
+                "unknown1": "0x000000"
+              }
+            },
+            "WinnerColumn": "Top.esp",
+            "WinnerValue": {
+              "compare_operator": "EqualTo",
+              "comparison_value_float": 1,
+              "comparison_value_form_key": null,
+              "concrete_type": "ConditionFloat",
+              "data": {
+                "concrete_type": "FunctionConditionData",
+                "event_function": null,
+                "event_member": null,
+                "function": "GetIsID",
+                "parameter3": null,
+                "parameter_one_number": 0,
+                "parameter_one_record": "Null",
+                "parameter_one_string": null,
+                "parameter_two_number": 0,
+                "parameter_two_record": "Null",
+                "parameter_two_string": null,
+                "reference": "Null",
+                "run_on_type": "Target",
+                "unknown2": 0,
+                "unknown3": -1
+              },
+              "flags": 1,
+              "unknown1": "0x000000"
+            }
+          }
+        ],
+        "ConflictAll": "Override",
+        "FieldName": "conditions",
+        "Resolutions": null,
+        "Values": {
+          "Base.esm": [
+            {
+              "compare_operator": "EqualTo",
+              "comparison_value_float": 1,
+              "comparison_value_form_key": null,
+              "concrete_type": "ConditionFloat",
+              "data": {
+                "concrete_type": "FunctionConditionData",
+                "event_function": null,
+                "event_member": null,
+                "function": "GetIsID",
+                "parameter3": null,
+                "parameter_one_number": 0,
+                "parameter_one_record": "Null",
+                "parameter_one_string": null,
+                "parameter_two_number": 0,
+                "parameter_two_record": "Null",
+                "parameter_two_string": null,
+                "reference": "Null",
+                "run_on_type": "Subject",
+                "unknown2": 0,
+                "unknown3": -1
+              },
+              "flags": 1,
+              "unknown1": "0x000000"
+            }
+          ],
+          "Top.esp": [
+            {
+              "compare_operator": "EqualTo",
+              "comparison_value_float": 1,
+              "comparison_value_form_key": null,
+              "concrete_type": "ConditionFloat",
+              "data": {
+                "concrete_type": "FunctionConditionData",
+                "event_function": null,
+                "event_member": null,
+                "function": "GetIsID",
+                "parameter3": null,
+                "parameter_one_number": 0,
+                "parameter_one_record": "Null",
+                "parameter_one_string": null,
+                "parameter_two_number": 0,
+                "parameter_two_record": "Null",
+                "parameter_two_string": null,
+                "reference": "Null",
+                "run_on_type": "Target",
+                "unknown2": 0,
+                "unknown3": -1
+              },
+              "flags": 1,
+              "unknown1": "0x000000"
+            }
+          ]
+        },
+        "WinnerColumn": "Top.esp",
+        "WinnerValue": [
+          {
+            "compare_operator": "EqualTo",
+            "comparison_value_float": 1,
+            "comparison_value_form_key": null,
+            "concrete_type": "ConditionFloat",
+            "data": {
+              "concrete_type": "FunctionConditionData",
+              "event_function": null,
+              "event_member": null,
+              "function": "GetIsID",
+              "parameter3": null,
+              "parameter_one_number": 0,
+              "parameter_one_record": "Null",
+              "parameter_one_string": null,
+              "parameter_two_number": 0,
+              "parameter_two_record": "Null",
+              "parameter_two_string": null,
+              "reference": "Null",
+              "run_on_type": "Target",
+              "unknown2": 0,
+              "unknown3": -1
+            },
+            "flags": 1,
+            "unknown1": "0x000000"
+          }
+        ]
+      }
+    ],
+    "HasVmad": false,
+    "HasVmadData": false,
+    "Overrides": [
+      {
+        "ConflictThis": "Master",
+        "EditorId": "ConflictedRecipe",
+        "Fields": {
+          "categories": null,
+          "components": null,
+          "conditions": [
+            {
+              "compare_operator": "EqualTo",
+              "comparison_value_float": 1,
+              "comparison_value_form_key": null,
+              "concrete_type": "ConditionFloat",
+              "data": {
+                "concrete_type": "FunctionConditionData",
+                "event_function": null,
+                "event_member": null,
+                "function": "GetIsID",
+                "parameter3": null,
+                "parameter_one_number": 0,
+                "parameter_one_record": "Null",
+                "parameter_one_string": null,
+                "parameter_two_number": 0,
+                "parameter_two_record": "Null",
+                "parameter_two_string": null,
+                "reference": "Null",
+                "run_on_type": "Subject",
+                "unknown2": 0,
+                "unknown3": -1
+              },
+              "flags": 1,
+              "unknown1": "0x000000"
+            }
+          ],
+          "created_object": null,
+          "created_object_counts": null,
+          "description": null,
+          "fallout4_major_record_flags": "0",
+          "is_deleted": false,
+          "menu_art_object": null,
+          "nam1": null,
+          "nam2": null,
+          "nam3": null,
+          "pick_up_sound": null,
+          "put_down_sound": null,
+          "version2": 0,
+          "workbench_keyword": null
+        },
+        "FormKey": "000803:Base.esm",
+        "IsPartialForm": false,
+        "IsWinner": false,
+        "LoadOrderIndex": 0,
+        "Origin": "Data",
+        "Plugin": "Base.esm",
+        "RecordType": "cobj"
+      },
+      {
+        "ConflictThis": "Override",
+        "EditorId": "ConflictedRecipe",
+        "Fields": {
+          "categories": null,
+          "components": null,
+          "conditions": [
+            {
+              "compare_operator": "EqualTo",
+              "comparison_value_float": 1,
+              "comparison_value_form_key": null,
+              "concrete_type": "ConditionFloat",
+              "data": {
+                "concrete_type": "FunctionConditionData",
+                "event_function": null,
+                "event_member": null,
+                "function": "GetIsID",
+                "parameter3": null,
+                "parameter_one_number": 0,
+                "parameter_one_record": "Null",
+                "parameter_one_string": null,
+                "parameter_two_number": 0,
+                "parameter_two_record": "Null",
+                "parameter_two_string": null,
+                "reference": "Null",
+                "run_on_type": "Target",
+                "unknown2": 0,
+                "unknown3": -1
+              },
+              "flags": 1,
+              "unknown1": "0x000000"
+            }
+          ],
+          "created_object": null,
+          "created_object_counts": null,
+          "description": null,
+          "fallout4_major_record_flags": "0",
+          "is_deleted": false,
+          "menu_art_object": null,
+          "nam1": null,
+          "nam2": null,
+          "nam3": null,
+          "pick_up_sound": null,
+          "put_down_sound": null,
+          "version2": 0,
+          "workbench_keyword": null
+        },
+        "FormKey": "000803:Base.esm",
+        "IsPartialForm": false,
+        "IsWinner": true,
+        "LoadOrderIndex": 2,
+        "Origin": "Data",
+        "Plugin": "Top.esp",
+        "RecordType": "cobj"
+      }
+    ]
+  },
   "conflicted-npc": {
     "ConflictAll": "Conflict",
     "DiffFieldCount": 42,
@@ -71,7 +662,6 @@
         "WinnerValue": 999
       }
     ],
-    "HasConditionData": false,
     "HasVmad": true,
     "HasVmadData": false,
     "Overrides": [
@@ -438,7 +1028,6 @@
     "ConflictAll": "OnlyOne",
     "DiffFieldCount": 42,
     "Diffs": [],
-    "HasConditionData": false,
     "HasVmad": true,
     "HasVmadData": false,
     "Overrides": [
@@ -567,7 +1156,6 @@
     "ConflictAll": "OnlyOne",
     "DiffFieldCount": 41,
     "Diffs": [],
-    "HasConditionData": false,
     "HasVmad": true,
     "HasVmadData": false,
     "Overrides": [
@@ -696,7 +1284,6 @@
     "ConflictAll": "NoConflict",
     "DiffFieldCount": 44,
     "Diffs": [],
-    "HasConditionData": false,
     "HasVmad": true,
     "HasVmadData": false,
     "Overrides": [

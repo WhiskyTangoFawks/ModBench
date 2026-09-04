@@ -117,7 +117,6 @@ function fakeVmadClient(): RecordPanelClient {
       trackedSet: new Set([columnKey('MyMod.esp', 'Data')]),
       conflictsComputed: true,
     }),
-    conditionRunOnTargets: vi.fn().mockResolvedValue([]),
   };
 }
 
@@ -367,7 +366,7 @@ describe('RecordPanel — a VMAD property resolves its own root through the scri
   // out of scope, and must keep computing client-side exactly as it did before this ticket —
   // VmadCodec's new add_element/remove_element/move_element_up/move_element_down only match the
   // four scalar-list types (VmadCodecTests), so an envelope posted for an ArrayOfObject property
-  // would refuse as NotFound. This is the regression review caught in #630 for Conditions,
+  // would refuse as NotFound. This is the regression review caught in #630,
   // recurring here for VMAD's own second carve-out.
   it('ARRAY_STRUCTURAL_OP (remove) on a VMAD ArrayOfObject property still commits a computed array, not an envelope', async () => {
     renderVmadPanel();
@@ -387,7 +386,7 @@ describe('RecordPanel — a VMAD property resolves its own root through the scri
   });
 
   // #658 review: VMAD's *third* array shape, ArrayOfStruct (structList) — missed by the original
-  // survey, which enumerated only Conditions and ArrayOfObject as surviving carve-outs. Its element
+  // survey, which enumerated only ArrayOfObject as a surviving carve-out. Its element
   // meta is type: 'struct', a third value the old `elementMeta?.type === 'vmadObject'` denylist did
   // not exclude, so it fell into the new server-envelope branch and refused (VmadCodec's element ops
   // only match Bool/Int/Float/String lists — NotFound for a ScriptStructListProperty). The fix is an

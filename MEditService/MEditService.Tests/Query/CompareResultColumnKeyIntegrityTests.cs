@@ -30,9 +30,8 @@ namespace MEditService.Tests.Query;
 //
 // The set of "which dictionaries are column-keyed" is derived by reflecting over the
 // [ColumnKeyed] attribute on the DTOs themselves (Queries/Models.cs), not hand-typed here — a
-// hand-typed allowlist is exactly the mechanism that let three column-keyed dictionaries
-// (VmadPropertyDiff.Raw, ConditionDiff.FieldCellStates, ConditionDiff.FieldResolutions) go
-// unchecked, plus one dead entry (ClassifyResult.PluginStates, never itself serialized) linger.
+// hand-typed allowlist is exactly the mechanism that let a column-keyed dictionary
+// (VmadPropertyDiff.Raw) go unchecked, plus one dead entry (ClassifyResult.PluginStates, never itself serialized) linger.
 // See ColumnKeyedAttribute's own doc comment (Queries/ColumnKey.cs).
 public sealed class CompareResultColumnKeyIntegrityTests
 {
@@ -184,13 +183,12 @@ public sealed class CompareResultColumnKeyIntegrityTests
     [Fact]
     public void GetCompare_SameFilenameTwoOrigins_EveryDictionaryKeyIsARealColumnKey()
     {
-        // Perk (not Npc): the one Fallout4 record type this fixture needs to carry both VMAD *and*
-        // a top-level Conditions field at once, so a single record reaches every column-keyed
-        // dictionary this test guards. VmadPropertyDiff.Raw is populated only for struct/structList
-        // VMAD properties, and ConditionDiff.FieldCellStates/FieldResolutions are populated only
-        // when the record has a condition at all — the two the old hand-typed allowlist missed
-        // entirely. The old Npc-based fixture had neither: Npc has no top-level Conditions-bearing
-        // field, and its one VMAD property was a plain scalar bool.
+        // Perk (not Npc): a Fallout4 record type carrying both VMAD *and* a top-level Conditions
+        // field at once, so a single record reaches every column-keyed dictionary this test guards
+        // as well as the nested condition subtree. VmadPropertyDiff.Raw is populated only for
+        // struct/structList VMAD properties — the one the old hand-typed allowlist missed
+        // entirely, and one an Npc-based fixture (whose single VMAD property was a plain scalar
+        // bool) never reached.
         var mod = new Fallout4Mod(ModKey.FromFileName("Shared.esp"), Fallout4Release.Fallout4);
         var perk = mod.Perks.AddNew("SharedPerk");
 
@@ -219,10 +217,9 @@ public sealed class CompareResultColumnKeyIntegrityTests
         perk.VirtualMachineAdapter = vmad;
 
         // A condition with a Run-On target of Reference (pointing at the Perk's own FormKey, which
-        // is resolvable since the Perk itself is indexed) — populates ConditionDiff.FieldResolutions
-        // for the "runOn" field id, not just FieldCellStates, so both nested dictionaries this test
-        // guards actually carry real per-column content rather than being reached only vacuously
-        // empty.
+        // is resolvable since the Perk itself is indexed) — gives the nested condition FieldDiff
+        // subtree a resolvable formKey leaf, so the walk reaches real per-column content rather
+        // than a vacuously empty subtree.
         var runOnData = new FunctionConditionData
         {
             Function = Condition.Function.GetIsID,
@@ -257,7 +254,7 @@ public sealed class CompareResultColumnKeyIntegrityTests
         Assert.Equal(2, validKeys.Count);
 
         // Sanity: the walk below is only meaningful if it actually reaches non-empty struct/
-        // structList Raw and non-empty condition dictionaries — assert that directly first, so a
+        // structList Raw and non-empty condition subtrees — assert that directly first, so a
         // future fixture regression that accidentally stops exercising these paths fails loudly
         // here rather than the JSON walk silently passing over empty objects.
         Assert.NotNull(compare.Vmad);
@@ -268,10 +265,14 @@ public sealed class CompareResultColumnKeyIntegrityTests
         Assert.Equal("structList", itemsProp.Kind);
         Assert.NotEmpty(itemsProp.Raw ?? []);
 
-        Assert.NotNull(compare.Conditions);
-        var condition = compare.Conditions.Groups.Single().Conditions.Single();
-        Assert.True(condition.FieldCellStates.TryGetValue("runOn", out var runOnCellStates) && runOnCellStates.Count > 0);
-        Assert.True(condition.FieldResolutions?.TryGetValue("runOn", out var runOnResolutions) == true && runOnResolutions.Count > 0);
+        // #692: conditions reach the grid as an ordinary reflected array column, so the walk's
+        // condition coverage is a nested FieldDiff subtree with per-column Values/CellStates.
+        var conditions = Assert.Single(compare.Diffs, d => d.FieldName == "conditions");
+        var conditionRow = Assert.Single(conditions.Children!);
+        Assert.NotEmpty(conditionRow.CellStates);
+        var conditionData = Assert.Single(conditionRow.Children!, c => c.FieldName == "data");
+        var runOnReference = Assert.Single(conditionData.Children!, c => c.FieldName == "reference");
+        Assert.NotEmpty(runOnReference.Resolutions ?? new Dictionary<string, FormKeyResolution>());
 
         var json = JsonSerializer.SerializeToElement(compare, WireOptions);
         AssertEveryColumnDictKeyIsValid(json, validKeys);

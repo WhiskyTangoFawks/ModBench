@@ -75,12 +75,6 @@ export interface PluginRepository {
   /** Every (record, field) referencing formKey session-wide — the renumber confirm's blast
    *  radius (#572); the same rows the Referenced By panel shows. */
   getReferences(formKey: string): Promise<components['schemas']['ReferenceResult'][]>;
-  // The condition-function picker's catalog — every function name Mutagen resolves
-  // for the held load order's game, backing the extension-host QuickPick. Degrades to [] on a
-  // failed fetch (mirrors setFilter/clearFilter's catch-and-log-no-throw below, not the
-  // ensureOk-then-throw convention most reads here use) — a failed catalogue fetch must never
-  // surface as a raw error.
-  getConditionFunctions(): Promise<string[]>;
   setFilter(sql: string): Promise<string | null>; // returns error message or null on success
   clearFilter(): Promise<void>;
   getActiveFilter(): Promise<string | null>;
@@ -278,20 +272,6 @@ export class ApiPluginRepository implements PluginRepository {
     });
     this.ensureOk(`getReferences(${formKey})`, response, error);
     return data ?? [];
-  }
-
-  async getConditionFunctions(): Promise<string[]> {
-    try {
-      const { data, response } = await this.client.GET('/condition-functions', {});
-      if (!response.ok) {
-        this.log(`[PluginRepository] getConditionFunctions failed (${response.status})`);
-        return [];
-      }
-      return data ?? [];
-    } catch (e) {
-      this.log(`[PluginRepository] getConditionFunctions failed: ${e instanceof Error ? e.message : String(e)}`);
-      return [];
-    }
   }
 
   async setFilter(sql: string): Promise<string | null> {

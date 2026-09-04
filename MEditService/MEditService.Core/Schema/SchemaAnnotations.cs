@@ -31,6 +31,12 @@ namespace MEditService.Core.Schema;
 /// <param name="EmptySubSchemaTypes">Getter interfaces whose sub-schema is known to come out empty,
 /// each with a reasoned entry in <c>SchemaReflectorLeafCoverageCompletenessTests.KnownGaps</c>; the
 /// walk reports them as excluded rather than unclassified.</param>
+/// <param name="SiblingsInUse">Members whose own value decides which of their sibling members carry
+/// data — see <see cref="Queries.FieldMetadata.SiblingsInUse"/> for what the map means. Keyed by the
+/// governing member; the inner map is keyed by that member's own enum values — every one of them,
+/// since an unnamed value would silently idle every member the row governs — and every name it
+/// lists must be a member of the same declaring type. Validated in all four directions, so a
+/// Mutagen rename or addition on either side of the relationship fails schema generation.</param>
 /// <param name="AlphaBearingColorFields">The Color fields xEdit renders with an Alpha leaf
 /// (<c>wbByteRGBA</c>); every other Color field takes the 3-leaf <c>wbByteColors</c> shape. A
 /// property of the field, not the type — Mutagen selects <c>ColorBinaryType</c> inside generated
@@ -42,6 +48,7 @@ internal sealed record SchemaAnnotations(
     HashSet<string> ExcludedUnions,
     HashSet<string> CycleTruncations,
     HashSet<string> EmptySubSchemaTypes,
+    Dictionary<(string TypeName, string MemberName), IReadOnlyDictionary<string, IReadOnlyList<string>>> SiblingsInUse,
     HashSet<(string TypeName, string MemberName)> AlphaBearingColorFields)
 {
     // Rows every game shares are named once here; a row true of only some games is written inline
@@ -63,9 +70,9 @@ internal sealed record SchemaAnnotations(
         ("IAMagicEffectArchetypeGetter", "AssociationKey"),  // IFormLinkIdentifier alias of Association
     ];
 
-    // Condition/ConditionData (CTDA) and AVirtualMachineAdapter (VMAD) are abstract exactly like
-    // ANpcLevel/AQuestAlias, but their sections own them (Queries/RecordDocumentCodecs).
-    private static readonly string[] ConditionAndVmadUnions = ["Condition", "ConditionData", "AVirtualMachineAdapter"];
+    // AVirtualMachineAdapter (VMAD) is abstract exactly like ANpcLevel/AQuestAlias, but its own
+    // section owns it (Queries/RecordDocumentCodecs).
+    private static readonly string[] VmadUnions = ["AVirtualMachineAdapter"];
 
     private static readonly string[] EmptySubSchemaTypesInEveryGame =
     [
@@ -100,7 +107,7 @@ internal sealed record SchemaAnnotations(
             ],
             ExcludedUnions:
             [
-                .. ConditionAndVmadUnions,
+                .. VmadUnions,
                 // A concrete base with two leaves, one of whose binary-overlay Type getter is an
                 // unimplemented throw upstream; the full scheme is on KnownGaps' ISceneActionGetter.Type.
                 "ASceneActionType",
@@ -111,14 +118,22 @@ internal sealed record SchemaAnnotations(
                 .. EmptySubSchemaTypesInEveryGame,
                 "IASceneActionTypeGetter",      // deliberately not abstract upstream; see KnownGaps
             ],
+            SiblingsInUse: new()
+            {
+                [("IFunctionConditionDataGetter", "Function")] = Fallout4ConditionAnnotations.FunctionParameterSlots,
+                [("IConditionDataGetter", "RunOnType")] = Fallout4ConditionAnnotations.RunOnReference,
+            },
             AlphaBearingColorFields: [.. RgbaColorFields]),
 
         [GameCategory.Skyrim] = new(
             ExcludedColumns: [.. GrupTimestampColumns],
             ExcludedMembers: [.. PlumbingMembers, ("IGlobalGetter", "TypeChar")],
-            ExcludedUnions: [.. ConditionAndVmadUnions],
+            ExcludedUnions: [.. VmadUnions],
             CycleTruncations: [],
             EmptySubSchemaTypes: [.. EmptySubSchemaTypesInEveryGame],
+            // #706 owns Skyrim's condition rows: this repo builds no Skyrim schema, so a table
+            // written here could not be validated against the assembly it describes.
+            SiblingsInUse: [],
             AlphaBearingColorFields: [.. RgbaColorFields]),
 
         [GameCategory.Starfield] = new(
@@ -129,12 +144,14 @@ internal sealed record SchemaAnnotations(
                 ("IObjectModStringPropertyGetter`1", "Unused"),
                 ("IObjectModEnumPropertyGetter`1", "Unused"),
             ],
-            ExcludedUnions: [.. ConditionAndVmadUnions],
+            ExcludedUnions: [.. VmadUnions],
             // Starfield's VirtualMachineAdapter.xml declares the same struct-property chain as
             // Fallout 4's, unverified against a built Starfield schema. Empty is loud, not wrong: a
             // lifted VMAD exclusion fails generation naming the chain rather than truncating silently.
             CycleTruncations: [],
             EmptySubSchemaTypes: [.. EmptySubSchemaTypesInEveryGame],
+            // #706 owns Starfield's condition rows, for the same reason as Skyrim's above.
+            SiblingsInUse: [],
             AlphaBearingColorFields: [.. RgbaColorFields]),
     };
 
@@ -155,8 +172,49 @@ internal sealed record SchemaAnnotations(
     public bool IsCycleTruncation(Type getterInterface) => CycleTruncations.Contains(getterInterface.Name);
     public bool IsEmptySubSchemaType(Type getterInterface) => EmptySubSchemaTypes.Contains(getterInterface.Name);
     public bool HasAlphaLeaf(PropertyInfo prop) => AlphaBearingColorFields.Contains(Key(prop));
+    public IReadOnlyDictionary<string, IReadOnlyList<string>>? SiblingsInUseFor(PropertyInfo prop) =>
+        SiblingsInUse.GetValueOrDefault(Key(prop));
 
     private static (string, string) Key(PropertyInfo prop) => (prop.DeclaringType!.Name, prop.Name);
+
+    /// <summary>Everything about a <see cref="SiblingsInUse"/> row that reflection has to agree
+    /// with: it governs from an enum, the inner map's keys are exactly that enum's own members, and
+    /// every sibling it names is a member of the same declaring type under the schema's own
+    /// snake_case naming. A row that named a value or a sibling the assembly does not have would
+    /// silently govern nothing; one that omitted a value would silently idle everything under
+    /// it.</summary>
+    private IEnumerable<string> UnresolvedSiblingRelations(ILookup<string, Type> typesByName)
+    {
+        foreach (var (entry, byValue) in SiblingsInUse)
+        {
+            var declaring = typesByName[entry.TypeName]
+                .FirstOrDefault(t => t.GetProperty(entry.MemberName) != null);
+            if (declaring == null) continue;   // already reported by UnresolvedMembers above
+
+            var enumType = Nullable.GetUnderlyingType(declaring.GetProperty(entry.MemberName)!.PropertyType)
+                ?? declaring.GetProperty(entry.MemberName)!.PropertyType;
+            var label = $"{nameof(SiblingsInUse)}: {entry.TypeName}.{entry.MemberName}";
+            if (!enumType.IsEnum)
+            {
+                yield return $"{label} governs from a non-enum member ({enumType.Name})";
+                continue;
+            }
+
+            var values = Enum.GetNames(enumType).ToHashSet(StringComparer.Ordinal);
+            var members = ReflectedTypes.GetAllInterfaceProperties(declaring)
+                .Select(p => ReflectedTypes.ToSnakeCase(p.Name))
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var value in byValue.Keys.Where(v => !values.Contains(v)).Order(StringComparer.Ordinal))
+                yield return $"{label} names value {value}, which {enumType.Name} does not have";
+            // The other direction, and it is the one that fails quietly: an unnamed value reads as
+            // "no sibling in use", which idles every member this row governs.
+            foreach (var value in values.Where(v => !byValue.ContainsKey(v)).Order(StringComparer.Ordinal))
+                yield return $"{label} does not name value {value}, which {enumType.Name} has";
+            foreach (var sibling in byValue.Values.SelectMany(v => v).Distinct().Where(m => !members.Contains(m)).Order(StringComparer.Ordinal))
+                yield return $"{label} names sibling {sibling}, which {entry.TypeName} does not declare";
+        }
+    }
 
     /// <summary>
     /// Resolves every entry against the game assembly's own types and every interface they
@@ -187,6 +245,8 @@ internal sealed record SchemaAnnotations(
             .. UnresolvedTypes(nameof(CycleTruncations), CycleTruncations),
             .. UnresolvedTypes(nameof(EmptySubSchemaTypes), EmptySubSchemaTypes),
             .. UnresolvedMembers(nameof(AlphaBearingColorFields), AlphaBearingColorFields),
+            .. UnresolvedMembers(nameof(SiblingsInUse), SiblingsInUse.Keys),
+            .. UnresolvedSiblingRelations(typesByName),
         ];
 
         if (missing.Length > 0)

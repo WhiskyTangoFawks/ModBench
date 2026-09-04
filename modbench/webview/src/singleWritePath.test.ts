@@ -24,7 +24,6 @@ describe('the record editor webview writes through exactly one path (#415)', () 
   it('RecordPanelClient stays read-only — the backend client is not the write path', () => {
     // Positive control, same scan: the reads the compare grid is built on are still declared.
     expect(memberNames).toContain('load');
-    expect(memberNames).toContain('conditionRunOnTargets');
 
     const writes = ['save', 'revert', 'copyTo', 'removeOverride', 'copyAsNew',
       'groupMembers', 'saveGroup', 'revertGroup', 'editField'];

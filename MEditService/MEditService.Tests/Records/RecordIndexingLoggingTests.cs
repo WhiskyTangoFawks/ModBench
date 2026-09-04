@@ -9,13 +9,12 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Tests.Records;
 
-// The per-plugin VMAD/conditions summary lines duplicate the per-plugin progress milestone
-// LoadOrderMirror already logs at Info, so they log at Debug here. Individual record
-// processing during indexing (append, VMAD, conditions) logs at Trace.
-// Indexing *behavior* (rows land correctly,
-// VMAD/conditions round-trip) is already covered by DuckDbRecordIndexTests, VmadIndexerTests
-// and ConditionIndexerTests, which remain the safety net for this reclassification; this file only
-// asserts on log level/content, which none of those do.
+// The per-plugin VMAD summary line duplicates the per-plugin progress milestone
+// LoadOrderMirror already logs at Info, so it logs at Debug here. Individual record
+// processing during indexing (append, VMAD) logs at Trace.
+// Indexing *behavior* (rows land correctly, VMAD round-trips) is already covered by
+// DuckDbRecordIndexTests and VmadIndexerTests, which remain the safety net for this
+// reclassification; this file only asserts on log level/content, which none of those do.
 public sealed class RecordIndexingLoggingTests : IDisposable
 {
     private static readonly SchemaReflector Reflector = SharedSchemaReflector.Instance;
@@ -87,7 +86,7 @@ public sealed class RecordIndexingLoggingTests : IDisposable
     }
 
     [Fact]
-    public void Index_PerPluginVmadAndConditionSummaries_LogAtDebugNotInformation()
+    public void Index_PerPluginVmadSummary_LogsAtDebugNotInformation()
     {
         var (loggerFactory, entries) = CapturingLoggerFactory();
         using var _ = loggerFactory;
@@ -95,9 +94,6 @@ public sealed class RecordIndexingLoggingTests : IDisposable
 
         Assert.Contains(entries, e => e.Level == LogLevel.Debug && e.Message.Contains("Indexed VMAD for"));
         Assert.DoesNotContain(entries, e => e.Level == LogLevel.Information && e.Message.Contains("Indexed VMAD for"));
-
-        Assert.Contains(entries, e => e.Level == LogLevel.Debug && e.Message.Contains("Indexed conditions for"));
-        Assert.DoesNotContain(entries, e => e.Level == LogLevel.Information && e.Message.Contains("Indexed conditions for"));
     }
 
     [Fact]
@@ -122,18 +118,5 @@ public sealed class RecordIndexingLoggingTests : IDisposable
             e.Level == LogLevel.Trace
             && e.Message.Contains(_npcFormKey.ToString())
             && e.Message.Contains("Indexed VMAD for"));
-    }
-
-    [Fact]
-    public void Index_PerRecordConditions_LogsAtTraceWithFormKey()
-    {
-        var (loggerFactory, entries) = CapturingLoggerFactory();
-        using var _ = loggerFactory;
-        using var repo = IndexedRepository(loggerFactory.CreateLogger(nameof(DuckDbRecordIndex)));
-
-        Assert.Contains(entries, e =>
-            e.Level == LogLevel.Trace
-            && e.Message.Contains(_cobjFormKey.ToString())
-            && e.Message.Contains("Indexed conditions for"));
     }
 }

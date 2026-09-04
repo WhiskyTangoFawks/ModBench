@@ -624,13 +624,13 @@ describe('DiffRow — array parent/element right-click context (#535)', () => {
 });
 
 describe('DiffRow — label indentation', () => {
-  // A VMAD property or Condition field starts a fresh write subtree (subtreeFor resets `path` to
+  // A VMAD property starts a fresh write subtree (subtreeFor resets `path` to
   // `[]` on any row carrying `wirePath`, RecordPanel.tsx), so `path.length` alone can't tell this
   // row apart from a true top-level one — only `depth` (the ancestor-hop count that survives the
   // reset) can. Regression for the bug where these rows rendered flush with their container
   // instead of indented under it.
   it('indents a row whose path was reset by a wirePath subtree but whose depth is nonzero', () => {
-    renderRow({ context: { path: [], rootField: 'Condition\\0\\Function', depth: 2 } });
+    renderRow({ context: { path: [], rootField: 'VMAD\\Script\\Health', depth: 2 } });
     expect(screen.getByText('Name').closest('td')).toHaveStyle({ paddingLeft: '48px' });
   });
 

@@ -60,7 +60,7 @@ public sealed class RecordEditService(
     /// <summary>
     /// Applies <paramref name="value"/> to <paramref name="fieldPath"/> on one plugin's copy of
     /// <paramref name="formKey"/>. Complex fields arrive as one whole value (CONTEXT.md's atomic
-    /// field-level write), VMAD and condition paths included — see <see cref="RecordFieldWriter"/>
+    /// field-level write), a VMAD path included — see <see cref="RecordFieldWriter"/>
     /// for the dispatch.
     /// </summary>
     public RecordEditResult EditField(PluginKey plugin, string formKey, string fieldPath, JsonElement value)
@@ -156,7 +156,7 @@ public sealed class RecordEditService(
             && PartialFormFlag.IsPartialFormable(target.GetType());
         var bit14Before = checkBit14Leak ? target.MajorRecordFlagsRaw & PartialFormFlag.Bit : 0;
 
-        var outcome = RecordFieldWriter.TryApply(target, document.RecordType, fieldPath, value, schemas, release);
+        var outcome = RecordFieldWriter.TryApply(target, document.RecordType, fieldPath, value, schemas);
         // #630: a boundary array op (remove past the end, move the first element up / the last
         // down) — already fully "satisfied" with nothing to commit. Returned before the bit-14 leak
         // check and every write below (rename, re-serialize, ApplyWorkingTreeChanges, ReapplyFilter)

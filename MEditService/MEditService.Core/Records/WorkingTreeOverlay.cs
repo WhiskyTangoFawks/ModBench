@@ -20,7 +20,7 @@ namespace MEditService.Core.Records;
 ///
 /// <para><b>Depends on <see cref="PluginIngest"/>, one-directionally</b>:
 /// rederivation reuses ingest's own collectors (<see cref="PluginIngest.CollectFormRefs"/>/
-/// <see cref="PluginIngest.CollectVmadRefsForRecord"/>/<see cref="PluginIngest.CollectConditionRefsForRecord"/>)
+/// <see cref="PluginIngest.CollectVmadRefsForRecord"/>)
 /// and append primitives, deliberately — an edit's derived rows must come from the identical code a
 /// fresh ingest would produce them with, or the two could drift apart. PluginIngest never
 /// references this class back.</para>
@@ -50,19 +50,17 @@ internal sealed class WorkingTreeOverlay
     private readonly ILogger _logger;
     private readonly RecordTextCodec _codec;
     private readonly PlacementWalker _placementWalker;
-    private readonly PluginIngest _pluginIngest;
     private readonly GameRelease _release;
     private readonly IReadOnlyDictionary<string, RecordTableSchema> _schemas;
 
     public WorkingTreeOverlay(
         DuckDBConnection connection, ILogger logger, RecordTextCodec codec, PlacementWalker placementWalker,
-        PluginIngest pluginIngest, GameRelease release, IReadOnlyDictionary<string, RecordTableSchema> schemas)
+        GameRelease release, IReadOnlyDictionary<string, RecordTableSchema> schemas)
     {
         _connection = connection;
         _logger = logger;
         _codec = codec;
         _placementWalker = placementWalker;
-        _pluginIngest = pluginIngest;
         _release = release;
         _schemas = schemas;
     }
@@ -401,7 +399,6 @@ internal sealed class WorkingTreeOverlay
         // per-record rederivation cannot describe a different graph than a fresh ingest would.
         PluginIngest.CollectFormRefs(refs, record, recordType, schema);
         PluginIngest.CollectVmadRefsForRecord(record, recordType, refs);
-        _pluginIngest.CollectConditionRefsForRecord(record, recordType, refs);
 
         DeleteFormReferencesForRecord(key, formKey);
         if (refs.Count > 0)

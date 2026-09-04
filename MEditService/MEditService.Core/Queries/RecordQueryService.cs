@@ -129,7 +129,7 @@ public sealed class RecordQueryService(
         // ADR-0035: a non-participating plugin's override is indexed and browsable but
         // never contributes to conflict classification.
         var pluginParticipates = heldPlugins.ToDictionary(p => ColumnKey.Of(p.Name, p.Origin), p => p.Participates);
-        var (classification, conflictAll, vmad, conditions) =
+        var (classification, conflictAll, vmad) =
             ClassifyStack(stack, committedOverrides, pluginMasters, pluginParticipates, resolveFormKey);
         // ADR-0036: Origin must be passed through explicitly (never left to default to
         // PluginOrigin.DataDirectory), and classification.PluginStates is keyed by
@@ -143,15 +143,15 @@ public sealed class RecordQueryService(
                 IsPartialFormable: o.IsPartialFormable));
 
         var hasVmad = RequireSchemas()[stack.RecordType].HasVmad;
-        return new CompareResult(annotated, classification.Diffs, conflictAll, hasVmad, vmad, conditions);
+        return new CompareResult(annotated, classification.Diffs, conflictAll, hasVmad, vmad);
     }
 
     /// <summary>The record-wide classification <see cref="GetCompare"/> needs — one definition of
-    /// "what is this record's ConflictAll". VMAD/conditions are outside the generic reflection pipeline
-    /// (reconstituted here from each entry's own document body via
-    /// <c>RecordDocumentCodecs</c>), so each is classified separately and its contribution folded
-    /// into the generic result via <see cref="ConflictRules.Escalate"/>. [ADR-0032]</summary>
-    private (ClassifyResult Classification, ConflictAll ConflictAll, VmadCompare? Vmad, ConditionCompare? Conditions) ClassifyStack(
+    /// "what is this record's ConflictAll". VMAD is outside the generic reflection pipeline
+    /// (reconstituted here from the entry's own document body via
+    /// <c>RecordDocumentCodecs</c>), so it is classified separately and its contribution folded
+    /// into the generic result via <see cref="ConflictRules.Escalate"/>.</summary>
+    private (ClassifyResult Classification, ConflictAll ConflictAll, VmadCompare? Vmad) ClassifyStack(
         RecordOverrides stack,
         IReadOnlyList<RecordDetail> committedOverrides,
         IReadOnlyDictionary<string, IReadOnlyList<string>> pluginMasters,
@@ -176,22 +176,7 @@ public sealed class RecordQueryService(
             conflictAll = ConflictRules.Escalate(conflictAll, vmadResult.ConflictContribution);
         }
 
-        // Conditions (CTDA) are outside the reflection pipeline too — classify separately and
-        // fold their contribution into the record-level ConflictAll, mirroring VMAD.
-        var conditionCodec = ConditionCodecRegistry.For(gameRelease.ToCategory());
-        var conditionInputs = stack.Entries
-            .Select(e => new ConditionPluginInput(
-                e.Plugin.Name, e.LoadOrderIndex, RecordDocumentCodecs.GetConditions(e.Effective, gameRelease, conditionCodec), e.Plugin.Origin!))
-            .ToList();
-        ConditionCompare? conditions = null;
-        if (conditionInputs.Any(i => i.Owners.Count > 0))
-        {
-            var conditionResult = ConditionConflictClassifier.Classify(conditionInputs, gameRelease, resolveFormKey, pluginParticipates);
-            conditions = conditionResult.Compare;
-            conflictAll = ConflictRules.Escalate(conflictAll, conditionResult.ConflictContribution);
-        }
-
-        return (classification, conflictAll, vmad, conditions);
+        return (classification, conflictAll, vmad);
     }
 
     public IReadOnlyList<PluginRecordTypeCount> GetPluginRecordTypes(string plugin, string? origin = null)
@@ -215,12 +200,6 @@ public sealed class RecordQueryService(
 
     public IReadOnlyList<ReferenceResult> GetReferences(string targetFormKey) =>
         RequireReads().GetReferencedBy(targetFormKey);
-
-    public IReadOnlyList<string> GetConditionFunctions() =>
-        ConditionCodecRegistry.For(RequireLoadOrder().GameRelease.ToCategory())?.AvailableFunctions().ToList() ?? [];
-
-    public IReadOnlyList<string> GetConditionRunOnTargets() =>
-        ConditionCodecRegistry.For(RequireLoadOrder().GameRelease.ToCategory())?.AvailableRunOnTargets().ToList() ?? [];
 
     private static RecordDetail ToRecordDetail(RecordDocument document) =>
         new(document.FormKey, document.Plugin.Name, document.LoadOrderIndex, document.IsWinner, document.EditorId,
