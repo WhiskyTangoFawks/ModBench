@@ -125,7 +125,7 @@ public static class SourceRepository
             if (fields.Length < 3 || fields[1] != "blob") continue;
             var relativePath = entry[(tab + 1)..];
 
-            // cat-file -p, not show — see ReadCommittedSourceText.
+            // cat-file -p, not show: for a missing glob-shaped path show exits 0 with empty output.
             if (!GitCli.TryRun(gitDir, modFolder, out var text, "cat-file", "-p", $"{gitRef}:{relativePath}")) continue;
             results.Add((relativePath, System.Text.Encoding.UTF8.GetBytes(text)));
         }

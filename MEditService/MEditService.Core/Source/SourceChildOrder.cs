@@ -483,8 +483,8 @@ internal static class SourceChildOrder
             .Where(p => p.GetIndexParameters().Length == 0 && typeof(IListGroupGetter).IsAssignableFrom(p.PropertyType))
             .OrderBy(p => p.Name, StringComparer.Ordinal);
 
-    // Tests IEnumerable, not IList (see ListSlot); groups have their own carrier and strings are
-    // enumerables of chars.
+    // Tests IEnumerable, not IList; groups have their own carrier and strings are enumerables of
+    // chars.
     private static Type? ElementOf(Type type)
     {
         if (type == typeof(string) || !type.IsGenericType) return null;

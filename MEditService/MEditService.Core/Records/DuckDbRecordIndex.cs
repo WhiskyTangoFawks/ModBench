@@ -113,8 +113,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         // And the disk claim these rows are about, replaced with them rather than beside them.
         _indexStore.StampIndexedFile(plugin, origin, filePath);
 
-        // Must run before the appender is created — see PluginIngest.DeletePriorDocuments's own
-        // doc comment.
+        // Must run before the appender is created.
         _pluginIngest.DeletePriorDocuments(plugin, origin);
 
         // The appender's `using` stays here so its disposal keeps the required ordering relative to
@@ -363,7 +362,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
     private const string HeadRelation = "records_head";
 
     // Created on first ask and reused: each is a stateless projection over this same connection, and
-    // At() is called per read on hot paths (GetCompare walks an override stack through it).
+    // At() is called per read on hot paths.
     private IRecordReads? _effectiveReads;
     private IRecordReads? _headReads;
 

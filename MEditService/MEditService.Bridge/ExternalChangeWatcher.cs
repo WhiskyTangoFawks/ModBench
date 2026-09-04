@@ -41,18 +41,14 @@ public sealed class ExternalChangeWatcher : IDisposable
     {
         var fsWatcher = new FileSystemWatcher(directory, Path.GetFileName(pluginPath))
         {
-            // FileName is required for Renamed to fire: PluginWriter.Commit()'s temp-file-then-rename
-            // write raises neither Changed nor Created, and .NET's inotify-backed Linux watcher gates
-            // Renamed on this bit.
+            // FileName is required for Renamed to fire: a temp-file-then-rename write raises neither
+            // Changed nor Created, and .NET's inotify-backed Linux watcher gates Renamed on this bit.
             NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.Size | NotifyFilters.FileName,
         };
         var debounceTimer = new Timer(_debounce.TotalMilliseconds) { AutoReset = false };
         debounceTimer.Elapsed += (_, _) => onSettle();
         fsWatcher.Changed += (_, _) => Restart(debounceTimer);
         fsWatcher.Created += (_, _) => Restart(debounceTimer);
-        // A rename *into* the watched filename (PluginWriter.Commit()'s File.Move(tmpPath,
-        // finalPath), the shape every production binary write actually takes) surfaces here,
-        // never as Changed/Created — see the NotifyFilter comment above.
         fsWatcher.Renamed += (_, _) => Restart(debounceTimer);
         // A deletion is a settle like any other: the whole point of a mirror watch, and a no-op for
         // a classification watch, whose Settle finds no bytes and returns.
@@ -193,8 +189,8 @@ public sealed class ExternalChangeWatcher : IDisposable
         }
         catch
         {
-            // The subscriber is expected to answer rather than throw (see IndexMirror), but this
-            // runs on a timer callback with no caller to catch anything: an escaping exception here
+            // The subscriber is expected to answer rather than throw, but this runs on a timer
+            // callback with no caller to catch anything: an escaping exception here
             // would take the process down over one file event.
             applied = false;
         }
@@ -252,8 +248,7 @@ public enum IndexedBinaryChange
 }
 
 /// <summary>ADR-0001: one indexed binary's disk event. A bare (name, origin) pair rather than a
-/// PluginKey: an assembly-boundary test fails on any reference to the load order or record-index
-/// namespaces, by literal text.</summary>
+/// PluginKey: this assembly may not reference the load order or record-index namespaces.</summary>
 public sealed record IndexedBinaryEvent(string PluginName, string Origin, string PluginPath, IndexedBinaryChange Change);
 
 /// <summary>One plugin's unanswered external-change question, as the watcher (or the load-time

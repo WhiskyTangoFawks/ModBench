@@ -147,7 +147,7 @@ internal static class SiblingColumns
             ViewDefaultLiteral = null,
             IsFlagsEnum = false,
             // Editing a widened value is out of scope; the write path already refuses a leaf that
-            // carries no writer (see RecordFieldWriter.TryApply).
+            // carries no writer.
             Apply = LeafWrite.ReadOnly<IMajorRecord>(
                 "widened scalar column: sibling subclasses disagree on this field's CLR type, so " +
                 "there is no single value shape to write"),

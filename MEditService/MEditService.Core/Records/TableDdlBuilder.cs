@@ -324,9 +324,8 @@ public sealed class TableDdlBuilder(SchemaReflector reflector)
             """);
     }
 
-    // The ContainerChildFields relationships placement/cell_location don't already
-    // carry (see ContainerChildRow for the set) — additive to the tables above, never a replacement
-    // for what they already cover.
+    // The ContainerChildFields relationships placement/cell_location don't already carry — additive
+    // to the tables above, never a replacement for what they already cover.
     internal static void CreateContainerChildTable(DuckDBConnection connection)
     {
         Execute(connection, $"""

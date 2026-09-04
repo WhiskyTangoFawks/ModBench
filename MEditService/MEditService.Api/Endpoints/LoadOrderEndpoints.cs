@@ -119,7 +119,7 @@ public static class LoadOrderEndpoints
             return Results.Problem("Each plugin entry must have a non-empty Name, Path, and Origin, and must state Enabled and Winning.", statusCode: 400);
 
         // A copy whose file is gone by the time the snapshot arrives is not a bad request but a
-        // row in an error state (ADR-0044): LoadOrder.Open records it in Failures.
+        // row in an error state (ADR-0044).
         try
         {
             var entries = req.Plugins

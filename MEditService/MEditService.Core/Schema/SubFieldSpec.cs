@@ -12,8 +12,8 @@ internal sealed record SubFieldSpec(
     IReadOnlyList<SubFieldSpec>? SubFields = null,
     SubFieldSpec? ElementSpec = null,
     bool AllowsNull = false,
-    // True for a leaf with no write door (see StructLeaves.BuildStructSubField), so a payload naming
-    // it is refused. A discriminator stays false: it is consumed before its object exists, so naming
+    // True for a leaf with no write door, so a payload naming it is refused. A discriminator stays
+    // false: it is consumed before its object exists, so naming
     // it is a silent skip.
     bool TargetingRefuses = false,
     // The row's title when Name is a wire token; see FieldMetadata.DisplayLabel.

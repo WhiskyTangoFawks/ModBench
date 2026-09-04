@@ -4,18 +4,8 @@
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <!-- #417/ADR-0041: "a standalone assembly hosted in the existing backend process — watch /
-         deserialize / compile, knowing nothing of sessions or the DB." This project is the literal
-         reading of that sentence: it exists so the property is a compile-time fact (MEditService.
-         Tests/Bridge/BridgeKnowsNothingOfSessionsTests.cs greps its own sources for the forbidden
-         namespaces), not a discipline someone has to remember. It stays thin by design — the watch
-         lifecycle and an in-memory unanswered-question queue are all that live here. Every git/codec
-         mechanic it calls (classification, plumbing commit, rebase, the deferral marker) lives in
-         MEditService.Core/Source instead, next to SourceRepository/CompileJournal/SourceFreshness,
-         which are already session/DB-free by the same construction — that's what lets the load-time
-         hash check (fired from the session-load path in MEditService.Api, which cannot depend on
-         this project without a circular reference back through Core) call the identical
-         classification logic this project's watcher calls, with no code shared between them twice. -->
+    <!-- ADR-0041: its own assembly so that knowing nothing of load orders or the DB is structural,
+         not a discipline someone has to remember. -->
   </PropertyGroup>
 
   <ItemGroup>
