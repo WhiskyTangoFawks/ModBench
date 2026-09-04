@@ -13,9 +13,8 @@ public static class LoadOrderEndpoints
 
     public static IEndpointRouteBuilder MapLoadOrderEndpoints(this IEndpointRouteBuilder app)
     {
-        // ADR-0044: the one way the load order reaches Editing — an idempotent snapshot of every
-        // physical plugin copy in the instance, reconciled against what is held. PUT, because it
-        // is state, not a command: sending the same body twice changes nothing.
+        // ADR-0044: the one way the load order reaches Editing. PUT, because it is state, not a
+        // command: sending the same body twice changes nothing.
         app.MapPut("/load-order", PutLoadOrder)
             .WithName("PutLoadOrder")
             .WithTags(Tag)
@@ -66,29 +65,25 @@ public static class LoadOrderEndpoints
         return app;
     }
 
-    // This reconcile was cancelled because something replaced it — another snapshot, or a
-    // close. 409 rather than 500: nothing went wrong, and the caller must be able to tell "your
-    // snapshot was superseded" (ignore it; the newer one owns the load order) from "the reconcile
-    // failed" (surface it). A warning, not an error, for the same reason.
+    // 409 rather than 500: nothing went wrong, and the caller must tell "your snapshot was
+    // superseded" (ignore it) from "the reconcile failed" (surface it).
     private static IResult SupersededReconcile(ILogger logger, OperationCanceledException ex)
     {
         logger.LogWarning(ex, "Load order reconcile was cancelled before it completed");
         return Results.Problem("The load order snapshot was superseded by a newer one or by closing the load order.", statusCode: 409);
     }
 
-    // A client asking for a release this build has no Mutagen assembly for is a bad request,
-    // not a server fault — 400 with the exception's own actionable message (names the release and
-    // the missing assembly), matching ParseGameRelease's own 400 for a bad enum string just above.
+    // A release this build has no Mutagen assembly for is a bad request, not a server fault:
+    // 400 with the exception's own message naming the release and the missing assembly.
     private static IResult UnsupportedGameRelease(ILogger logger, UnsupportedGameReleaseException ex)
     {
         logger.LogWarning(ex, "Rejected load order for unsupported game release {Release}", ex.Release);
         return Results.Problem(ex.Message, statusCode: 400);
     }
 
-    // ADR-0001 point 6: another Modbench window holds this instance's index. 423 Locked, so
-    // the client can tell it from a failed reconcile (500) and from its own superseded snapshot
-    // (409): nothing is wrong with the snapshot or the index, the instance is simply in use. A
-    // warning, not an error — the user opened two windows on one instance, and the message says so.
+    // ADR-0001 point 6: another Modbench window holds this instance's index. 423 Locked, distinct
+    // from a failed reconcile (500) and a superseded snapshot (409): nothing is wrong, the
+    // instance is simply in use.
     private static IResult IndexHeldElsewhere(ILogger logger, IndexHeldElsewhereException ex)
     {
         logger.LogWarning(ex, "Refused load order: the index at {Path} is held by another window", ex.IndexPath);
@@ -102,8 +97,6 @@ public static class LoadOrderEndpoints
             : Results.Problem($"Unknown game release: '{raw}'. Valid values: {string.Join(", ", Enum.GetNames<GameRelease>())}", statusCode: 400);
     }
 
-    // internal (not private), matching Compile/ExternalChangeStatus's visibility: the door
-    // LoadOrderEndpointsTests exercises directly.
     internal static IResult PutLoadOrder(LoadOrderRequest req, ILoadOrderMirror mirror, ExternalChangeWatcher externalChangeWatcher, ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(nameof(LoadOrderEndpoints));
@@ -120,28 +113,21 @@ public static class LoadOrderEndpoints
 
         if (ParseGameRelease(req.GameRelease, out var gameRelease) is { } releaseErr) return releaseErr;
 
-        // Every one of the three registration facts is Mod Management's to state, never defaulted
-        // here: a bool that silently bound a missing
-        // property to false would make every copy non-participating, so nothing would win any
-        // FormKey and the conflict picture would be empty but well-formed.
+        // Every registration fact is Mod Management's to state, never defaulted here: a missing
+        // bool silently bound to false would make every copy non-participating.
         if (req.Plugins?.Any(p => string.IsNullOrEmpty(p.Name) || string.IsNullOrEmpty(p.Path) || string.IsNullOrEmpty(p.Origin) || p.Enabled is null || p.Winning is null) != false)
             return Results.Problem("Each plugin entry must have a non-empty Name, Path, and Origin, and must state Enabled and Winning.", statusCode: 400);
 
-        // A copy whose file is gone by the time the snapshot arrives (MO2, or the user, deleting it
-        // between the walk and the PUT — root CLAUDE.md's never-assume-exclusive-ownership rule) is
-        // not a bad request but a row in an error state (ADR-0044): LoadOrder.Open records it in
-        // Failures and the rest of the snapshot reconciles.
+        // A copy whose file is gone by the time the snapshot arrives is not a bad request but a
+        // row in an error state (ADR-0044): LoadOrder.Open records it in Failures.
         try
         {
             var entries = req.Plugins
                 .Select(p => new LoadOrderEntry(p.Name, p.Path, p.Origin, p.Slot, p.Enabled!.Value, p.Winning!.Value))
                 .ToList();
             mirror.Reconcile(req.GameDirectory, entries, gameRelease, req.InstanceRoot);
-            // The hash check, plus (re-)registering the live watch for every plugin the load
-            // order now holds — one pass, right after the completion signal this endpoint has
-            // always been (the PUT returns only once the sweep has run). Its return is the
-            // crash-repair offers, riding the response the same way Failures already does; a copy
-            // registered by any reconcile gets its mirror watch here.
+            // The hash check and the live watches for every plugin now held, in one pass after the
+            // sweep; the crash-repair offers ride the response the same way Failures does.
             var crashRepairOffers = ExternalChangeLoadOrderHook.RunAfterReconcile(
                 mirror.LoadOrder, mirror.Index, externalChangeWatcher, logger);
             return Results.Ok(new LoadOrderResponse("reconciled", mirror.LoadOrder?.LoadFailures ?? [], crashRepairOffers));

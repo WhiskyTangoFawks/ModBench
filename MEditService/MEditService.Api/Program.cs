@@ -17,17 +17,11 @@ Log.Logger = new LoggerConfiguration()
     .WriteTo.Console(formatProvider: CultureInfo.InvariantCulture)
     .CreateBootstrapLogger();
 
-// The "LocalAppData" env var default lives in LocalizedStrings.EnsureLocalAppDataDefault, called
-// from every Core deep-parse call site (Source.LocalizedStrings.ForRead) before Mutagen ever
-// needs it — no reconcile runs (and no Mutagen call at all) before this process's first plugin
-// parse, so nothing here needs to set it up front.
+// The "LocalAppData" env var default is set by LocalizedStrings.EnsureLocalAppDataDefault at every
+// Core deep-parse site, before Mutagen ever needs it, so nothing here sets it.
 
 try
 {
-    // Default content root is the launching process's cwd, not this binary's own directory —
-    // the extension spawns us without setting one, so appsettings.json (and its
-    // Microsoft.AspNetCore: Warning override) silently never loaded. Anchor to our own directory so
-    // every launch mode (dev-attached, extension-spawned) behaves alike.
     var builder = WebApplication.CreateBuilder(new WebApplicationOptions
     {
         Args = args,
@@ -54,12 +48,9 @@ try
     builder.Services.ConfigureHttpJsonOptions(options =>
         options.SerializerOptions.Converters.Add(new JsonStringEnumConverter()));
     builder.Services.AddEndpointsApiExplorer();
-    // Two halves of one job: describe C# nullability honestly on the wire (#627).
-    // SupportNonNullableReferenceTypes is Swashbuckle's own — it stops marking every
-    // reference-typed property `nullable: true`. It does not touch `required` (that is a separate
-    // built-in, NonNullableReferenceTypesAsRequired, which covers reference types only and so
-    // would leave `bool`/`int` optional), which is what NullabilitySchemaFilter does — for value
-    // and reference types alike, plus the allOf wrapper a nullable $ref needs under OpenAPI 3.0.
+    // SupportNonNullableReferenceTypes stops marking every reference property nullable but does not
+    // touch `required`; NullabilitySchemaFilter does that for value and reference types alike, plus
+    // the allOf wrapper a nullable $ref needs under OpenAPI 3.0 (#627).
     builder.Services.AddSwaggerGen(o =>
     {
         o.SupportNonNullableReferenceTypes();
@@ -74,10 +65,8 @@ try
     builder.Services.AddSingleton<PluginWriter>();
     builder.Services.AddSingleton<IModImporter, DefaultModImporter>();
     builder.Services.AddSingleton<ILoadOrderMirror, LoadOrderMirror>();
-    // #673: resolved *from* the mirror rather than registered on its own, so there is exactly one
-    // write gate and it is the one the mirror's own write doors and the read-time source self-heal
-    // already take. A bare `AddSingleton<IndexWriteGate>()` would compile, inject cleanly, and
-    // serialize the write endpoints against nothing at all.
+    // Resolved from the mirror rather than registered on its own, so there is exactly one write
+    // gate — a bare `AddSingleton<IndexWriteGate>()` would inject cleanly and serialize nothing (#673).
     builder.Services.AddSingleton(sp => sp.GetRequiredService<ILoadOrderMirror>().WriteGate);
     builder.Services.AddSingleton<IRecordQueryService, RecordQueryService>();
     builder.Services.AddSingleton<MalformedPluginQueryService>();
@@ -96,22 +85,17 @@ try
 
     var app = builder.Build();
 
-    // ADR-0001: the index keeps mirroring the disk while a load order is held. Subscribed
-    // once here rather than per reconcile — the watcher is a process singleton, and re-subscribing
-    // on every reconcile would stack a handler per reconcile; which plugins are watched is re-decided
-    // per reconcile instead (ExternalChangeLoadOrderHook.RunAfterReconcile).
+    // ADR-0001: subscribed once, not per reconcile — the watcher is a process singleton, and
+    // re-subscribing would stack a handler per reconcile. Which plugins are watched is re-decided
+    // per reconcile instead.
     var indexMirror = new IndexMirror(
         app.Services.GetRequiredService<ILoadOrderMirror>(),
         app.Services.GetRequiredService<ILoggerFactory>().CreateLogger(nameof(IndexMirror)));
     app.Services.GetRequiredService<ExternalChangeWatcher>().IndexedBinaryChanged = indexMirror.Apply;
 
-    // One summary line per request instead of ASP.NET Core's own six-line pipeline log (now
-    // silenced by appsettings.json's Microsoft.AspNetCore: Warning override — a different category
-    // than this middleware writes under, so the override doesn't touch it and no second override is
-    // needed here). The level is what makes it a win rather than a regression: most endpoint guards
-    // and the RecordEditRefusal → ProblemDetails mapping return a 4xx without logging anything of their own,
-    // so without an explicit selector a deliberate failure would be invisible; with the default
-    // (Information), a success line would flood right back in at one line/request.
+    // Most endpoint guards return a 4xx without logging, so without the selector a deliberate failure
+    // would be invisible; at Information a success line would flood. The appsettings
+    // Microsoft.AspNetCore override is a different category and does not touch this line.
     app.UseSerilogRequestLogging(opts => opts.GetLevel = RequestLogLevel);
 
     static LogEventLevel RequestLogLevel(HttpContext ctx, double _, Exception? ex) => ex switch

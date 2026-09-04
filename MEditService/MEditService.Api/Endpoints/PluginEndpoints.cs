@@ -19,10 +19,8 @@ public static class PluginEndpoints
             .WithTags(Tag)
             .Produces<IReadOnlyList<PluginResponse>>();
 
-        // #570: every held, mutable plugin's Kind B diagnoses off its original bytes — the
-        // session-load complement of Track's refusal, one call for the whole load order. Same
-        // no-load-order handling as MapCatalog below: RequireScope's throw becomes a 503, never
-        // an unmapped 500.
+        // Every held, mutable plugin's Kind B diagnoses off its original bytes — the session-load
+        // complement of Track's refusal. RequireScope's throw becomes a 503, never an unmapped 500.
         app.MapGet("/plugins/diagnoses", (MalformedPluginQueryService svc, ILoggerFactory loggerFactory) =>
         {
             var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
@@ -75,20 +73,16 @@ public static class PluginEndpoints
             .ProducesProblem(500)
             .ProducesProblem(503);
 
-        // Polled alongside the still in-flight POST /plugins/track, same idiom
-        // GET /load-order/status already established for the reconcile — always 200 (TrackProgress.
-        // Idle when nothing is running), no load order dependency, since progress lives on the
-        // singleton TrackService itself.
+        // Polled alongside the in-flight POST /plugins/track: always 200, no load order
+        // dependency, since progress lives on the singleton TrackService.
         app.MapGet("/plugins/track/status", (TrackService trackService) => Results.Ok(trackService.Progress))
             .WithName("GetTrackStatus")
             .WithTags(Tag)
             .Produces<TrackProgress>();
 
-        // Save & Compile's own door — a plugin and, optionally, a git ref (CompileSource.AtRef,
-        // e.g. "main"). No "confirmed" flag: the compile-at-main modal is extension-side UX — a
-        // backend gate on a confirmation boolean would be UX leaking through the wire. Refusal is a
-        // typed, successful response (CompileResult.Succeeded == false), never an HTTP error
-        // status — 200 either way.
+        // No "confirmed" flag: the compile-at-main modal is extension-side UX that must not leak
+        // through the wire. Refusal is a typed 200 (CompileResult.Succeeded == false), never an
+        // HTTP error.
         app.MapPost("/plugins/{plugin}/compile", Compile)
             .WithName("CompilePlugin")
             .WithTags(Tag)
@@ -112,12 +106,9 @@ public static class PluginEndpoints
             .ProducesProblem(500)
             .ProducesProblem(503);
 
-        // A read-only peek at what CreateRecord/RenumberRecord would auto-allocate — feeds the
-        // Renumber gesture's FormID input box a suggested default (xEdit's own "New FormID
-        // generated" flow), never a write, no tracked gate (pure arithmetic over indexed state).
-        // Refusals (no load order, FormKey space exhausted) go through the same
-        // RecordEditResult/Refusal mapping its siblings use, rather than a bespoke nullable-string
-        // contract with no way to distinguish the two.
+        // A read-only peek at what CreateRecord/RenumberRecord would allocate, feeding the Renumber
+        // gesture's FormID box a default. Refusals go through the same Refusal mapping its siblings
+        // use rather than a nullable-string contract that cannot distinguish them.
         app.MapGet("/plugins/{plugin}/records/next-form-key", (
             string plugin, string origin, RecordEditService edits) =>
         {
@@ -130,9 +121,8 @@ public static class PluginEndpoints
             .ProducesProblem(404)
             .ProducesProblem(422);
 
-        // Polled the same way GET /plugins/track/status is — always 200, an empty list when
-        // nothing is unanswered, no load order dependency of its own (the watcher's queue lives on the
-        // singleton ExternalChangeWatcher, same idiom as TrackService.Progress).
+        // Always 200, an empty list when nothing is unanswered; no load order dependency, since
+        // the queue lives on the singleton ExternalChangeWatcher.
         app.MapGet("/plugins/external-changes/status", ExternalChangeStatus)
             .WithName("GetExternalChangeStatus")
             .WithTags(Tag)
@@ -181,16 +171,9 @@ public static class PluginEndpoints
         return app;
     }
 
-    // ADR-0041: creates a plugin at a caller-resolved destination (Mod Management's
-    // destination QuickPick — overwrite/, an existing mod, or a freshly installed mod folder) and,
-    // when that destination is untracked, Tracks it as part of the same gesture under the Edits
-    // preset — silently, and always Edits: the one-keystroke "Enter accepts overwrite/" framing
-    // this gesture is built around rules out a second prompt here, and Edits is Track's own
-    // default. A user who wants a different preset deletes .git and re-Tracks by hand, same as
-    // changing a Track preset anywhere else.
-    //
-    // Deliberately does not touch plugins.txt — that append is the caller's (see .WithDescription
-    // above); this handler's job ends at "the plugin exists, is indexed, and is editable."
+    // ADR-0041: an untracked destination is Tracked in the same gesture, silently and always under
+    // Edits — the one-keystroke "Enter accepts overwrite/" framing rules out a second prompt.
+    // Never touches plugins.txt; that append is the caller's.
     internal static async Task<IResult> CreatePlugin(
         CreatePluginRequest req, ILoadOrderMirror mirror, TrackService trackService, ILoggerFactory loggerFactory)
     {
@@ -221,19 +204,16 @@ public static class PluginEndpoints
         }
         catch (SourceAlreadyTrackedException ex)
         {
-            // Defensive, not the ordinary path: CreatePlugin only Tracks a destination it just
-            // checked was untracked, so reaching this means something else tracked the same folder
-            // in the window between that check and this call — still a state conflict, same status
-            // the Track endpoint itself uses for a redundant Track.
+            // Defensive: CreatePlugin only Tracks a destination it just checked was untracked, so
+            // something else tracked the same folder in between — still a state conflict, 409.
             logger.LogWarning(ex, "Raced tracking {Origin} while creating {Name}", req.Origin, req.Name);
             return Results.Problem(ex.Message, statusCode: 409);
         }
         catch (GitUnavailableException ex)
         {
-            // Loud, not silent: the plugin file and load order entry from the CreatePlugin call above
-            // already landed, but plugins.txt is never appended without a 2xx response (the caller's
-            // own gate), so no load order can ever name this half-created plugin. The orphaned
-            // load order entry is accepted residue, surfaced here rather than swallowed.
+            // Loud, not silent: the plugin file and load order entry already landed, but
+            // plugins.txt is never appended without a 2xx, so no load order can name this
+            // half-created plugin. The orphaned entry is accepted residue.
             logger.LogError(ex, "git unavailable while creating {Name} in {Origin}", req.Name, req.Origin);
             return Results.Problem(ex.Message, statusCode: 500);
         }
@@ -276,10 +256,8 @@ public static class PluginEndpoints
             logger.LogWarning(ex, "Refused to re-track {Origin}", req.Origin);
             return Results.Problem(ex.Message, statusCode: 409);
         }
-        // ADR-0042 decision 2: a data-quality problem with the plugin itself, not a state
-        // conflict (409 is already spoken for by "this mod folder is already tracked") — 422 is the
-        // status Compile's own refusal already uses for the same kind of "understood, but cannot be
-        // processed" answer.
+        // ADR-0042 decision 2: a data-quality problem with the plugin, not a state conflict (409 is
+        // already "this mod folder is tracked") — 422, the status Compile's refusal uses.
         catch (SourceRoundTripFailedException ex)
         {
             logger.LogWarning(ex, "Refused to track {Origin}: round-trip gate failed", req.Origin);
@@ -299,10 +277,8 @@ public static class PluginEndpoints
         }
     }
 
-    // Save & Compile. plugin/origin name the target the same way every other plugin-scoped
-    // door here does; req.Ref, when given, is CompileSource.AtRef rather than the default
-    // CompileSource.WorkingTree — the extension supplies "main" for the compile-at-main gesture,
-    // behind its own confirmation, never a flag on this request.
+    // req.Ref, when given, is CompileSource.AtRef rather than the default WorkingTree — the
+    // extension supplies "main" for the compile-at-main gesture, behind its own confirmation.
     internal static IResult Compile(string plugin, CompileRequest req, PluginCompileService compileService, ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
@@ -310,10 +286,8 @@ public static class PluginEndpoints
         if (string.IsNullOrWhiteSpace(req.Origin))
             return Results.Problem("Origin is required.", statusCode: 400);
 
-        // The write path touches a file inside a live git working tree Modbench does not own
-        // exclusively (root CLAUDE.md) — same posture as RecordEndpoints.EditField's own catch, this
-        // door's write-side equivalent, rather than a bodyless 500 a client can't tell apart from the
-        // backend having died.
+        // The write touches a file inside a git working tree Modbench does not own exclusively
+        // (root CLAUDE.md), so the I/O failure is shaped here rather than escaping as a bodyless 500.
         try
         {
             CompileSource source = req.Ref is { } gitRef ? new CompileSource.AtRef(gitRef) : new CompileSource.WorkingTree();
@@ -327,14 +301,9 @@ public static class PluginEndpoints
         }
     }
 
-    // Create-record. FormKey null means auto-allocate (both-refs collision-safe); non-null is
-    // xEdit's typed-FormID path, validated server-side either way (RecordEditRefusal.FormKeyCollision).
-    // #637: routed through WriteEndpointMapping.Execute like its five RecordEndpoints siblings.
-    // logReceived is deliberately null here, not an oversight — every PluginEndpoints handler had
-    // its own "Received ..." line removed as redundant with UseSerilogRequestLogging's per-request
-    // summary (see EndpointReceptionLoggingTests's header comment, the one place that decision is
-    // recorded); this method is consistent with its own file's six other handlers, none of which
-    // logs on entry either.
+    // FormKey null means auto-allocate; non-null is xEdit's typed-FormID path, validated
+    // server-side either way. logReceived is null on purpose: no PluginEndpoints handler logs on
+    // entry, UseSerilogRequestLogging's per-request summary covers it.
     internal static IResult CreateRecord(
         string plugin, RecordCreateRequest req, RecordEditService edits, IndexWriteGate gate,
         ILoggerFactory loggerFactory)
@@ -359,11 +328,8 @@ public static class PluginEndpoints
                 logger.LogError(ex, "Could not write the source file while creating a {RecordType} in {Plugin}", req.RecordType, decoded);
                 return WriteEndpointMapping.WriteFailure($"Could not write the source file for the new record: {ex.Message}");
             },
-            // xEdit's own typed-FormID path (req.FormKey) reaches Mutagen's FormKey.Factory
-            // (RecordEditService.RefuseIfNotNativeTarget) with no TryFactory guard — a malformed value
-            // (wrong shape, non-hex, missing ':') throws ArgumentException there. Malformed syntax, not a
-            // well-formed-but-refused RecordEditRefusal, so this is CreatePlugin's own catch shape (400),
-            // never WriteEndpointMapping.Refusal's 422.
+            // req.FormKey reaches Mutagen's FormKey.Factory with no TryFactory guard, so a malformed
+            // value throws ArgumentException: malformed syntax is a 400, never Refusal's 422.
             onMalformedFormKey: ex =>
             {
                 logger.LogError(ex, "Malformed FormKey creating a {RecordType} in {Plugin}", req.RecordType, decoded);
@@ -376,10 +342,8 @@ public static class PluginEndpoints
             });
     }
 
-    // The watcher's own queue plus (best-effort) the origin each unanswered plugin currently
-    // resolves to in the loaded load order — a load order that has since reloaded away from a plugin still
-    // reports the question with an empty Origin rather than dropping it, since the question itself
-    // is still real and unanswered regardless of what's loaded right now.
+    // Best-effort origin: a load order that has reloaded away from a plugin still reports the
+    // question with an empty Origin rather than dropping it, since the question is still real.
     internal static IResult ExternalChangeStatus(ExternalChangeWatcher watcher, ILoadOrderMirror mirror)
     {
         var loadOrder = mirror.LoadOrder;
@@ -490,21 +454,9 @@ public static class PluginEndpoints
     private static RebaseResponse ToRebaseResponse(RebaseResult result) =>
         new(result.Outcome, result.RefusalReason, result.ConflictedPaths);
 
-    // The one resolver for the origin-scoped gestures (Rebase/ContinueRebase,
-    // AbsorbExternalChange, KeepExternalChange) — deliberately not PluginOriginResolver.Resolve/
-    // LoadOrderPlugin, which filters to load-order members only (InLoadOrder), by design, so a bare
-    // filename stays a safe write target elsewhere on this write path. These four gestures must still
-    // resolve a shadowed copy: a plugin loaded under this origin but shadowed by a higher-priority mod
-    // of the same filename is exactly a mod whose external-change question, absorb, keep, or rebase
-    // still needs answering, so the omission of that filter is named here rather than left to two
-    // near-duplicate comments on two near-duplicate methods. pluginName narrows the match within the
-    // origin (Absorb/Keep's own route carries one); null answers "whichever plugin this origin holds"
-    // (Rebase/ContinueRebase's own RebaseRequest carries no plugin name). Each caller derives its own
-    // mod folder from the matched entry afterward — Rebase/ContinueRebase via a bare
-    // Path.GetDirectoryName (SourceRepository.RebaseEditBranch/ContinueRebase apply their own tracked
-    // check), Absorb/Keep via ModFolders.TrackedOf (their own 503 gate) — because those are two
-    // genuinely different questions ("where does this file live" vs "is this a tracked working tree"),
-    // not a second copy of the matching this method already centralizes.
+    // Deliberately not PluginOriginResolver, which filters to load-order members: a copy shadowed
+    // by a higher-priority mod of the same filename still has its question to answer. A null
+    // pluginName means whichever plugin this origin holds.
     private static (PluginMetadata? Plugin, ILoadOrder? LoadOrder) ResolveAnyPhysicalCopy(
         ILoadOrderMirror mirror, string origin, string? pluginName, ILogger logger)
     {
@@ -553,9 +505,7 @@ public record ExternalChangeActionResponse(bool Succeeded, string? RefusalReason
 // Origin-scoped — the repo is the unit of baselines and rebase.
 public record RebaseRequest(string Origin);
 
-// Outcome names the RebaseOutcome enum rather than restating it as a `string`: the enum carries
-// [JsonConverter(typeof(JsonStringEnumConverter))], so the bytes are the same member names a
-// `.ToString()` produced ("Clean"/"Refused"/"Conflicted") while the OpenAPI schema — and therefore
-// the generated client — now gets the closed union instead of an open `string` (#627).
-// ConflictedPaths is the extension's cue to open each path in VS Code's native merge editor.
+// Outcome is the RebaseOutcome enum rather than a string so the OpenAPI schema, and the generated
+// client, get the closed union (#627). ConflictedPaths is the extension's cue to open each path in
+// VS Code's merge editor.
 public record RebaseResponse(RebaseOutcome Outcome, string? RefusalReason, IReadOnlyList<string> ConflictedPaths);

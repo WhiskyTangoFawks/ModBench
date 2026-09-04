@@ -2,12 +2,8 @@ using MEditService.Core.Queries;
 
 namespace MEditService.Api.Endpoints;
 
-/// <summary>
-/// The container-child read — deliberately its own file rather than folded into
-/// <see cref="WorldspaceEndpoints"/>: that file is named for a different domain concept
-/// (spatial/cell containment), while <see cref="ContainerChildQueryService"/> is container-type-
-/// agnostic even though only Quest/DialogTopic rows call it today.
-/// </summary>
+/// <summary>Its own file rather than part of <see cref="WorldspaceEndpoints"/>: that file is about
+/// spatial containment, while the container-child query is container-type-agnostic.</summary>
 public static class ContainerChildEndpoints
 {
     public static IEndpointRouteBuilder MapContainerChildEndpoints(this IEndpointRouteBuilder app, ILoggerFactory loggerFactory)

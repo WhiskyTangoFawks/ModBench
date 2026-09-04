@@ -67,9 +67,8 @@ public static class RecordEndpoints
         .Produces<IReadOnlyList<ReferenceResult>>()
         .ProducesProblem(500);
 
-        // ADR-0041: the single write path's one door. Scripts and agents (ADR-0024's ordinary
-        // HTTP clients) reach the same RecordEditService the UI does — there is no second write path,
-        // which is exactly why the untracked refusal is expressible here at all.
+        // ADR-0041: the single write path's one door. Scripts and agents (ADR-0024) reach the same
+        // RecordEditService the UI does, which is why the untracked refusal is expressible here.
         app.MapPost("/records/{formKey}/field", (
             string formKey, RecordFieldEditRequest request, RecordEditService edits, IndexWriteGate gate) =>
             EditField(formKey, request, edits, gate, logger))
@@ -107,7 +106,6 @@ public static class RecordEndpoints
         .ProducesProblem(500)
         .ProducesProblem(503);
 
-        // Renumber — a delete+create pair plus the cross-plugin reference cascade.
         app.MapPost("/records/{formKey}/renumber", (
             string formKey, RecordRenumberRequest request, RecordEditService edits, IndexWriteGate gate) =>
             RenumberRecord(formKey, request, edits, gate, logger))
@@ -129,8 +127,7 @@ public static class RecordEndpoints
         .ProducesProblem(500)
         .ProducesProblem(503);
 
-        // ADR-0041: Copy as Override Into… — the source record's own bytes,
-        // landing under the same FormKey in the destination's working tree.
+        // ADR-0041: the source record's own bytes land under the same FormKey in the destination.
         app.MapPost("/records/{formKey}/copy-as-override", (
             string formKey, RecordCopyAsOverrideRequest request, RecordEditService edits, IndexWriteGate gate) =>
             CopyRecordAsOverride(formKey, request, edits, gate, logger))
@@ -177,16 +174,9 @@ public static class RecordEndpoints
         return app;
     }
 
-    // The write path touches a file inside a live git working tree that Modbench does not own
-    // exclusively (root CLAUDE.md) — it can be locked by another tool, replaced, or sitting on a
-    // mount that just went away — and there is no global exception middleware to shape what comes
-    // back. Every sibling write endpoint here catches and maps rather than letting one escape as a
-    // bodyless 500 that a client cannot tell apart from the backend having died. SourceFreshness
-    // already degrades on this same exception set on the read side, so this is the write side's
-    // equivalent rather than a new policy. #637: the shared skeleton (decode → log → validate →
-    // try/Applied/catch×3) lives in WriteEndpointMapping.Execute; each method below supplies only
-    // what's genuinely its own — the log line, the validation, the service call, and the
-    // success/failure message shapes.
+    // The source file sits in a working tree Modbench does not own exclusively (root CLAUDE.md)
+    // and there is no exception middleware, so I/O failures are mapped here rather than escaping
+    // as a bodyless 500.
     internal static IResult EditField(
         string formKey, RecordFieldEditRequest request, RecordEditService edits, IndexWriteGate gate, ILogger logger)
     {
@@ -291,11 +281,8 @@ public static class RecordEndpoints
                 logger.LogError(ex, "Could not complete renumbering {FormKey}", decoded);
                 return WriteEndpointMapping.WriteFailure(ex.Message);
             },
-            // request.NewFormKey is xEdit's own typed-FormID path, reaching Mutagen's
-            // FormKey.Factory (RecordEditService.RefuseIfNotNativeTarget) with no TryFactory guard — a
-            // malformed value throws ArgumentException there. Malformed syntax, not a well-formed-but-
-            // refused RecordEditRefusal, so this matches PluginEndpoints.CreatePlugin's own catch shape
-            // (400), never this file's own Refusal's 422.
+            // request.NewFormKey reaches Mutagen's FormKey.Factory with no TryFactory guard, so a
+            // malformed value throws ArgumentException: malformed syntax is a 400, never Refusal's 422.
             onMalformedFormKey: ex =>
             {
                 logger.LogError(ex, "Malformed FormKey renumbering {FormKey}", decoded);
@@ -382,11 +369,8 @@ public static class RecordEndpoints
                 logger.LogError(ex, "Could not write the source file while copying {FormKey} as a new record", decoded);
                 return WriteEndpointMapping.WriteFailure($"Could not write the source file for the copy: {ex.Message}");
             },
-            // request.RequestedFormKey is xEdit's own typed-FormID path, sharing
-            // RecordEditService.CreateRecord/RenumberRecord's own ResolveTargetFormKey/
-            // RefuseIfNotNativeTarget resolution — reaches Mutagen's FormKey.Factory with no TryFactory
-            // guard, so a malformed value throws ArgumentException there too. Same 400 shape as the other
-            // two typed-FormID endpoints, never this file's own Refusal's 422.
+            // request.RequestedFormKey reaches Mutagen's FormKey.Factory with no TryFactory guard, so
+            // a malformed value throws ArgumentException: malformed syntax is a 400, never Refusal's 422.
             onMalformedFormKey: ex =>
             {
                 logger.LogError(ex, "Malformed FormKey copying {FormKey} as a new record", decoded);
