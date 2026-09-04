@@ -18,7 +18,6 @@ namespace MEditService.Tests.Indexing;
 /// </summary>
 public sealed class ConcreteBaseUnionSchemaTests
 {
-
     private static ColumnSpec NpcAdapterColumn(SchemaReflector reflector) =>
         reflector.GetSchemas(GameRelease.Fallout4)["npc_"].RecordColumns
             .Single(c => c.Name == "virtual_machine_adapter");
@@ -107,6 +106,27 @@ public sealed class ConcreteBaseUnionSchemaTests
         var member = byName["members"].ElementType!.Fields!.ToDictionary(f => f.Name);
         Assert.Equal("string", member["name"].Type);
         Assert.True(member["properties"].IsArray);
+    }
+
+    /// <summary>
+    /// A Fallout 4 Papyrus struct member is never a struct or a struct array, so inside either
+    /// struct leaf the walk offers neither again: the nested property's choice of kind is the
+    /// thirteen non-struct leaves, and the chain ends there.
+    /// </summary>
+    [Theory]
+    [InlineData("members")]
+    [InlineData("structs")]
+    public void InsideAStructLeaf_NeitherStructLeafIsOfferedAgain(string structLeafList)
+    {
+        var element = ScriptPropertyElement(NpcAdapterColumn(VmadReflectedSchemaReflector.Instance));
+        var nestedElement = element.Fields!.Single(f => f.Name == structLeafList).ElementType!;
+        var nestedProperty = nestedElement.Fields!.Single(f => f.Name == (structLeafList == "members" ? "properties" : "members")).ElementType!;
+
+        var kinds = nestedProperty.Fields!.Single(f => f.Name == "concrete_type").EnumValues;
+        Assert.Equal(13, kinds.Count);
+        Assert.DoesNotContain("ScriptStructProperty", kinds);
+        Assert.DoesNotContain("ScriptStructListProperty", kinds);
+        Assert.DoesNotContain(nestedProperty.Fields!, f => f.Name is "members" or "structs");
     }
 
     /// <summary>

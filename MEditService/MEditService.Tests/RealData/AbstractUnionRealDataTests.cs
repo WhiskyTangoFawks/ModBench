@@ -22,7 +22,7 @@ namespace MEditService.Tests.RealData;
 /// <c>LevelMult</c> read never reaches <c>PcLevelMultBinaryOverlay</c>'s unimplemented stub. Quest
 /// alias elements, by contrast, do stay lazy <c>...BinaryOverlay</c> instances until touched — this
 /// file's own <see cref="Aliases_DialogueConcordArea_HasBothReferenceAndLocationAliasKinds"/> is the
-/// proof that still works, because <c>BuildUnionMemberField</c>'s own <c>IsInstanceOfType</c>
+/// proof that still works, because <c>BuildUnionShapeField</c>'s own <c>IsInstanceOfType</c>
 /// checks are against each leaf's *getter interface*, which an overlay class implements the same as
 /// its eager counterpart.
 ///

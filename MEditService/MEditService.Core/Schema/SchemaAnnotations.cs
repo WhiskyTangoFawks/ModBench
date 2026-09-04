@@ -131,9 +131,8 @@ internal sealed record SchemaAnnotations(
             ],
             ExcludedUnions: [.. ConditionAndVmadUnions],
             // Starfield's VirtualMachineAdapter.xml declares the same struct-property chain as
-            // Fallout 4's; the rows arrive with the first Starfield-verified schema build, since
-            // Validate can only check them there. Empty is loud, not wrong: a lifted VMAD exclusion
-            // would fail generation naming the chain rather than truncate silently.
+            // Fallout 4's, unverified against a built Starfield schema. Empty is loud, not wrong: a
+            // lifted VMAD exclusion fails generation naming the chain rather than truncating silently.
             CycleTruncations: [],
             EmptySubSchemaTypes: [.. EmptySubSchemaTypesInEveryGame],
             AlphaBearingColorFields: [.. RgbaColorFields]),

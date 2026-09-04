@@ -1317,16 +1317,16 @@ public sealed partial class SchemaReflector
 
     // The getter interfaces whose members the walk is inside, root first. Re-entering one is a
     // type cycle, fatal — except through a truncation point, a type the game's annotations say
-    // its data format cannot nest past: the point itself ends the walk silently on its second
-    // entry (null), and a lap that runs through one is let through, since it will end there.
-    // Depth is deliberately not this: the depth cap bounds struct nesting and resets across a
-    // list hop, so a cycle through a list is invisible to it.
+    // its data format cannot nest past: inside any truncation point none is entered again (null),
+    // and a lap that runs through one is let through, since it ends there. Depth is deliberately
+    // not this: the depth cap bounds struct nesting and resets across a list hop, so a cycle
+    // through a list is invisible to it.
     private static Type[]? Enter(Type[] path, Type getterInterface, GameReflection game)
     {
-        var earlier = Array.IndexOf(path, getterInterface);
-        if (earlier < 0) return [.. path, getterInterface];
-        if (game.Annotations.IsCycleTruncation(getterInterface)) return null;
-        if (path.Skip(earlier).Any(game.Annotations.IsCycleTruncation)) return [.. path, getterInterface];
+        var insideTruncation = path.Any(game.Annotations.IsCycleTruncation);
+        if (game.Annotations.IsCycleTruncation(getterInterface) && insideTruncation) return null;
+        var lastEntry = Array.LastIndexOf(path, getterInterface);
+        if (lastEntry < 0 || path.Skip(lastEntry).Any(game.Annotations.IsCycleTruncation)) return [.. path, getterInterface];
         throw new InvalidOperationException(
             "SchemaReflector: type cycle in the schema walk: " +
             $"{string.Join(" -> ", path.Append(getterInterface).Select(t => t.Name))}. " +
@@ -1637,11 +1637,10 @@ public sealed partial class SchemaReflector
             ?.GetValue(null) as Type;
     }
 
-    // Every non-abstract class in the same assembly assignable to abstractSetterType, paired with
-    // its own getter interface and its own class Name (the discriminator value — see
-    // BuildUnionDiscriminatorField). IsAssignableFrom is transitive, so a two-level chain
-    // (APerkEffect -> APerkEntryPointEffect -> PerkEntryPointModifyValue) is found the same way a
-    // one-level one (ANpcLevel -> NpcLevel) is, with no depth-specific handling needed.
+    // Every concrete class in the same assembly under a base, paired with its own getter interface
+    // and its own class Name (the discriminator value — see BuildUnionDiscriminatorField). Filed
+    // under the whole base chain, so a two-level chain (APerkEffect -> APerkEntryPointEffect ->
+    // PerkEntryPointModifyValue) is found the same way a one-level one (ANpcLevel -> NpcLevel) is.
     // Every base is asked once per schema build for every Loqui struct the walk reaches, so the
     // assembly is scanned once and each concrete class filed under its whole base chain. Leaves are
     // ordered most-derived first: a leaf is recognised by IsInstanceOfType, and a concrete base
@@ -1717,8 +1716,8 @@ public sealed partial class SchemaReflector
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         // The base is already on the path when it is its own leaf; every other leaf is entered
-        // here. A leaf the walk is already inside is left out of the union entirely — members
-        // and discriminator value both — which is how a documented truncation ends.
+        // here. A leaf Enter declines is left out of the union entirely — members and
+        // discriminator value both — which is how a documented truncation ends.
         var leaves = new List<UnionLeafWalk>();
         foreach (var (getterType, className) in union.Leaves)
         {

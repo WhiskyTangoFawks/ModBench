@@ -1000,10 +1000,10 @@ VMAD/Condition rows included since they render through this exact code now:
    type re-entered on that path is a type cycle and fails schema generation naming the chain,
    unless the game's annotation table names it as a point its own data format cannot nest past
    (`SchemaAnnotations.CycleTruncations`; Fallout 4 Papyrus structs hold no struct or struct
-   array, so the struct leaves end the walk silently on their second entry). A re-entry whose
-   loop runs through such a point is let through for the same reason — every lap passes it,
-   and it is entered once — which is what lets `ScriptEntry` be re-entered under a struct
-   leaf's `Members` before that leaf's own second entry ends the walk. That is a
+   array, so inside either struct leaf neither is offered again and the walk ends there). A
+   re-entry whose loop runs through such a point is let through for the same reason — every
+   lap passes it, and it is entered once — which is what lets `ScriptEntry` be re-entered
+   under a struct leaf's `Members` before the walk ends. That is a
    different mechanism from the depth cap, which bounds struct nesting and resets across a
    list hop.
    `ASceneActionType` is a concrete base with two leaves the mechanism must not expand
