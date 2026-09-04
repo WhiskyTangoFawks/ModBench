@@ -245,19 +245,15 @@ public sealed class ExternalChangeWatcher : IDisposable
     }
 }
 
-/// <summary>What happened to one indexed binary on disk.</summary>
 public enum IndexedBinaryChange
 {
-    /// <summary>Its bytes changed — the index must re-read it.</summary>
     Modified,
-
-    /// <summary>It is gone — the index must forget it.</summary>
     Deleted,
 }
 
-/// <summary>ADR-0001: one indexed binary's disk event. Carries a bare (name, origin) pair rather than
-/// a PluginKey because BridgeKnowsNothingOfLoadOrdersTests fails on any reference from this assembly
-/// to the load order or record-index namespaces, by literal text.</summary>
+/// <summary>ADR-0001: one indexed binary's disk event. A bare (name, origin) pair rather than a
+/// PluginKey: an assembly-boundary test fails on any reference to the load order or record-index
+/// namespaces, by literal text.</summary>
 public sealed record IndexedBinaryEvent(string PluginName, string Origin, string PluginPath, IndexedBinaryChange Change);
 
 /// <summary>One plugin's unanswered external-change question, as the watcher (or the load-time

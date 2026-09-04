@@ -93,9 +93,9 @@ try
         app.Services.GetRequiredService<ILoggerFactory>().CreateLogger(nameof(IndexMirror)));
     app.Services.GetRequiredService<ExternalChangeWatcher>().IndexedBinaryChanged = indexMirror.Apply;
 
-    // One summary line per request. Most endpoint guards return a 4xx without logging anything of
-    // their own, so without the selector a deliberate failure would be invisible, and at
-    // Information a success line would flood in per request.
+    // Most endpoint guards return a 4xx without logging, so without the selector a deliberate failure
+    // would be invisible; at Information a success line would flood. The appsettings
+    // Microsoft.AspNetCore override is a different category and does not touch this line.
     app.UseSerilogRequestLogging(opts => opts.GetLevel = RequestLogLevel);
 
     static LogEventLevel RequestLogLevel(HttpContext ctx, double _, Exception? ex) => ex switch

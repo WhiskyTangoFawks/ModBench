@@ -106,7 +106,6 @@ public static class RecordEndpoints
         .ProducesProblem(500)
         .ProducesProblem(503);
 
-        // Renumber — a delete+create pair plus the cross-plugin reference cascade.
         app.MapPost("/records/{formKey}/renumber", (
             string formKey, RecordRenumberRequest request, RecordEditService edits, IndexWriteGate gate) =>
             RenumberRecord(formKey, request, edits, gate, logger))
@@ -128,8 +127,7 @@ public static class RecordEndpoints
         .ProducesProblem(500)
         .ProducesProblem(503);
 
-        // ADR-0041: Copy as Override Into… — the source record's own bytes,
-        // landing under the same FormKey in the destination's working tree.
+        // ADR-0041: the source record's own bytes land under the same FormKey in the destination.
         app.MapPost("/records/{formKey}/copy-as-override", (
             string formKey, RecordCopyAsOverrideRequest request, RecordEditService edits, IndexWriteGate gate) =>
             CopyRecordAsOverride(formKey, request, edits, gate, logger))
