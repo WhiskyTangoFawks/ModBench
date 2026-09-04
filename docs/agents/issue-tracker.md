@@ -59,8 +59,12 @@ Traverse with `gh`:
   Mutagen's problem, not ours" and cross-check against this maintainer's own open upstream
   issues/PRs (`gh issue list --repo Mutagen-Modding/Mutagen --author <user>`) before
   re-investigating something already reported.
-- **Blocking links**: dependency is tracker state, not a label or prose. Link the moment a
-  dependency is known: `gh issue edit <n> --add-blocked-by <m>`
+- **Blocking links**: dependency is tracker state, not a label or prose. A ticket body's
+  "Blocked by" section is a human-readable mirror of the native edges, never the source of
+  truth — an edge that exists only in prose is not set. `/to-tickets` publishes tickets in
+  dependency order (blockers first, so every number exists), then sets every edge natively
+  in the same run and reads them back to verify. Link the moment a dependency is known:
+  `gh issue edit <n> --add-blocked-by <m>`
   (`--remove-blocked-by` to undo); read via `--json blockedBy` (nodes carry `state`). Blocked =
   any `OPEN` node. If `gh`'s installed version predates the `--add-blocked-by`/`--remove-blocked-by`
   flags (added after 2.45.0), use the REST endpoint directly instead — version-independent:
