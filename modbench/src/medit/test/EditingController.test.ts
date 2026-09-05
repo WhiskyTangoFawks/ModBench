@@ -32,6 +32,7 @@ function makePlugins(count: number): PluginMetadata[] {
     masterIssues: [],
     hasMatchingRecords: true,
     isTracked: false,
+    hasParseFailure: false,
   }));
 }
 

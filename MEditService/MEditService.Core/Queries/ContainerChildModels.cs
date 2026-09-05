@@ -11,4 +11,8 @@ public record ContainerChildSummary(
     int LoadOrderIndex, bool IsWinner, WorkingTreeState WorkingTreeState, string RecordType,
     // A returned "dial" child is itself a container the Plugins tree recurses into, so it needs
     // the same presence fact for its own expand chevron.
-    bool HasContainerChildren = false);
+    bool HasContainerChildren = false,
+    // The same pair every record row carries: this child's own diagnosis, and the fact widened to
+    // its own children so the tree renders the failure prefix without walking them.
+    string? ParseDiagnosis = null,
+    bool HasParseFailure = false);

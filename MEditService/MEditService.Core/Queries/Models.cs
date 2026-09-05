@@ -51,14 +51,18 @@ public record PluginResponse(
     // IsTracked (ADR-0041): whether the mod folder holds a git directory, which editing requires
     // and viewing never does. False with no mod folder at all (IsImmutable tells the two apart).
     // Derived on every read: the directory can vanish outside Modbench.
-    bool IsTracked = false)
+    bool IsTracked = false,
+    // HasParseFailure: whether this plugin holds a record Mutagen could not read. The plugin-level
+    // load failure (LoadOrderResponse.Failures) stays its own channel for a file that never indexed.
+    bool HasParseFailure = false)
 {
     public static PluginResponse FromMetadata(
-        PluginMetadata m, IReadOnlyList<MasterIssue>? masterIssues = null, bool hasMatchingRecords = true)
+        PluginMetadata m, IReadOnlyList<MasterIssue>? masterIssues = null, bool hasMatchingRecords = true,
+        bool hasParseFailure = false)
     {
         return new(m.Name, m.Path, m.LoadOrderIndex, m.IsLight, m.IsMaster, m.Masters, m.RecordCount, m.IsImmutable, m.Participates, m.Origin,
             masterIssues ?? [], m.InLoadOrder, m.Enabled, m.Winning, hasMatchingRecords,
-            Source.ModFolders.IsEditable(m.Origin, m.Path));
+            Source.ModFolders.IsEditable(m.Origin, m.Path), hasParseFailure);
     }
 }
 
@@ -83,7 +87,12 @@ public record RecordSummary(
     // Whether at least one container_child row names this FormKey as parent — the Plugins tree's
     // expand chevron for a qust/dial row. Search() is the only producer of true; every
     // other construction site has nothing to report.
-    bool HasContainerChildren = false);
+    bool HasContainerChildren = false,
+    // Non-null when ingest could not turn this record into its document — the Mutagen read, the
+    // reference walk or the codec write — so Search can never omit one silently.
+    string? ParseDiagnosis = null,
+    // The same fact widened to this row's subtree, so the tree never walks children to aggregate.
+    bool HasParseFailure = false);
 
 public record PagedResult<T>(IReadOnlyList<T> Items, int Total);
 
@@ -198,7 +207,9 @@ public record CompareResult(
     IReadOnlyList<FieldDiff> Diffs,
     ConflictAll ConflictAll);
 
-public record PluginRecordTypeCount(string Type, int Count, string DisplayName);
+// HasParseFailure: whether this subtree holds a record Mutagen could not read, so the tree renders
+// the failure prefix from the page it has instead of walking children.
+public record PluginRecordTypeCount(string Type, int Count, string DisplayName, bool HasParseFailure);
 
 public record FilterRequest(string Sql);
 public record FilterResponse(string? Sql);

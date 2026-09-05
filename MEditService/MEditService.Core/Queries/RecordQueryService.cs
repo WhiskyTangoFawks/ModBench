@@ -34,8 +34,11 @@ public sealed class RecordQueryService(
             _mirror.Status.State == LoadOrderState.Ready
                 ? MasterResolution.Classify(s.Plugins, s.Failures)
                 : new Dictionary<string, IReadOnlyList<MasterIssue>>();
+        var parseFailures = RequireReads().GetPluginsWithParseFailures();
         PluginResponse ToResponse(PluginMetadata p, bool hasMatchingRecords) =>
-            PluginResponse.FromMetadata(p, masterIssues.GetValueOrDefault(p.Name), hasMatchingRecords);
+            PluginResponse.FromMetadata(
+                p, masterIssues.GetValueOrDefault(p.Name), hasMatchingRecords,
+                parseFailures.Contains(ColumnKey.Of(p.Name, p.Origin)));
 
         if (s.FilterSql is null)
             return [.. s.Plugins.Select(p => ToResponse(p, hasMatchingRecords: true))];
@@ -142,7 +145,7 @@ public sealed class RecordQueryService(
         // "Main File Header" appears as a browsable record-type node under every plugin.
         return [.. reads.GetRecordTypeCounts(new PluginKey(plugin, origin))
             .Where(c => c.Type != HeaderIndexer.RecordType && schemas.ContainsKey(c.Type))
-            .Select(c => new PluginRecordTypeCount(c.Type, c.Count, schemas.DisplayNameFor(c.Type)))
+            .Select(c => new PluginRecordTypeCount(c.Type, c.Count, schemas.DisplayNameFor(c.Type), c.HasParseFailure))
             .OrderBy(r => r.Type)];
     }
 
