@@ -26,9 +26,11 @@ Classify changed files → run matching gate (never review non-compiling code):
 | both | `… --backend --frontend --api-drift` |
 | config/docs only | `… ` with no flag — Gate 1 alone |
 
-Gate 1 (comment discipline) runs on every invocation over every tracked `.cs`/`.ts`/`.tsx`/`.md`
-file (excluded paths in `run-gates.sh`'s `EXCLUDE_RE`): Vale (`.vale.ini`, pinned binary via
-`install-vale.sh`) and, for `.cs`/`.ts`/`.tsx` only, `.claude/hooks/comment-shape.py`.
+Gate 1 (comment discipline) runs on every invocation over every tracked text file (excluded paths
+in `run-gates.sh`'s `EXCLUDE_RE`): Vale over comments and markdown (`.vale.ini`), Vale over each
+file as raw text for string literals and config prose (`.vale-raw.ini`), `comment-shape.py` for
+the doc-comment shape checks on `.cs`/`.ts`/`.tsx`, and the discipline's own tests
+(`.claude/hooks/test_*.py`). The pinned binary comes from `install-vale.sh`.
 
 `--api-drift` boots a fresh backend and fails if `modbench/src/medit/generated/api.ts`
 has drifted from the live OpenAPI spec — any endpoint/DTO annotation change can
