@@ -15,9 +15,8 @@ TS_TOP_LEVEL_DECL = re.compile(r"^(?:async\s+)?(?:function|const|let|class|inter
 # Our tracker's numbers have never been single-digit; a lone digit is an in-document enumeration
 # (divergence #2, AC #4), never a ticket.
 TICKET = re.compile(r"#\d{2,}\b")
-# A number is an external tracker's, not ours, when a tracker name or owner/repo path sits right
-# before it, with only that name's own separators between: "Mutagen #688", "Mutagen-#688",
-# "Mutagen-Modding/Mutagen#688", "upstream #685/#686" chained across the slash.
+# An external tracker's number, not ours: a tracker name or owner/repo path sits right before it,
+# only that name's own separators between, chained "/#N" citations included.
 EXTERNAL_TICKET = re.compile(
     r"\b(?:Mutagen|upstream|VS ?Code)\b[\w ./-]{0,20}?#\d+(?:\s*/\s*#\d+)*"
     r"|[\w.-]+/[\w.-]+#\d+")

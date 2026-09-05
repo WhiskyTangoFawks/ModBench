@@ -23,6 +23,8 @@ def vale_hits(path, text):
     ext = os.path.splitext(path)[1]
     if not ext:
         return []
+    if ext == ".mjs":
+        ext = ".js"
     install = subprocess.run(["bash", os.path.join(ROOT, ".claude/skills/validate/install-vale.sh")],
                              capture_output=True, text=True)
     if install.returncode != 0:

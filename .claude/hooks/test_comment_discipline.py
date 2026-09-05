@@ -41,6 +41,14 @@ class ValeRules(unittest.TestCase):
         code = f'var s = "this {HISTORY} held";\n'
         self.assertIn("Repo.History", vale(code, ".cs", config=".vale-raw.ini"))
 
+    def test_raw_pass_covers_scripts_and_project_files(self):
+        for ext in (".py", ".sh", ".yml", ".json", ".mjs", ".csproj", ".props"):
+            with self.subTest(ext=ext):
+                self.assertIn("Repo.History", vale(f"x = '{HISTORY}'\n", ext, config=".vale-raw.ini"))
+
+    def test_comment_pass_covers_python_comments(self):
+        self.assertIn("Repo.CommentLength", vale("# " + "word " * 41 + "\n", ".py"))
+
     def test_one_cref_passes(self):
         one = '/// <summary>See <see cref="B"/>.</summary>\npublic int X;\n'
         self.assertNotIn("Repo.Cref", vale(one, ".cs"))
@@ -65,6 +73,11 @@ class WriteHook(unittest.TestCase):
     def test_reports_a_comment_hit_once(self):
         run = hook("a.ts", f"// this {HISTORY} did X\nexport const a = 1;\n")
         self.assertEqual(run.stderr.count("History"), 1, run.stderr)
+
+    def test_refuses_an_oversize_comment_in_an_mjs_file(self):
+        run = hook("eslint.config.mjs", "// " + "word " * 41 + "\nexport default [];\n")
+        self.assertEqual(run.returncode, 2, run.stderr)
+        self.assertIn("40", run.stderr)
 
     def test_accepts_a_present_tense_comment(self):
         run = hook("a.ts", "// the cap is a constraint from the format\nexport const a = 1;\n")
