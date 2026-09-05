@@ -171,11 +171,11 @@ deferred**, and that narrowing is a recorded decision, not an omission:
   (`canSelectMany`), Copy (a selected group's own label), Open, and Open to the Side. None of
   these mutate a record, so they don't trip the "tree navigates, it does not mutate" line below.
 - **The mutating family (the copy-as-override/copy-as-new-record group, Remove, Mark Modified,
-  Visible When Distant) is deferred, not rejected.** #281 already unified one record context menu
+  Visible When Distant) is deferred, not rejected.** The shared record context menu
   (Copy as Override Into…, Copy as New Record Into…, Remove, in xEdit's `pmuViewHeader` order)
-  across three surfaces — the record row, the placed-record row, and the record editor's column
+  already spans three surfaces — the record row, the placed-record row, and the record editor's column
   header — but Referenced By rows are records too and were not made a fourth surface for that
-  shared menu when it shipped. Tracked as its own polish pass (#580) rather than folded in here.
+  shared menu when it shipped. Tracked as its own polish pass rather than folded in here.
 - **Compare Selected is deferred until multi-record compare exists**, which this surface would
   need and does not yet have.
 

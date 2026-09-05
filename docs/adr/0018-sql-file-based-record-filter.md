@@ -36,9 +36,9 @@ in.
 - Scripts inherit `modbench.scriptsPath` and the Code Lens infrastructure rather than building
   their own.
 - A plugin-scoped conflict endpoint is still not built. The reason originally given here — plugin
-  scoping via `Apply Filter to Selected` — no longer holds: that gesture (#574) and the Plugins
-  tree's own conflict surface it would have scoped (the Conflicts node, #624) have both been
-  removed. `GET /records/conflicts` itself has since been deleted as dead code (#558).
+  scoping via `Apply Filter to Selected` — no longer holds: that gesture and the Plugins
+  tree's own conflict surface it would have scoped (the Conflicts node) have both been
+  removed. `GET /records/conflicts` itself has since been deleted as dead code.
 
 ## Alternatives rejected
 

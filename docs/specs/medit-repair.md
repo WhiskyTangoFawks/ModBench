@@ -108,7 +108,7 @@ counter pairs with which entries), each row backed by a vanilla-scan proof and a
   *plus* the repair's own declared additions/removals — the repair is verified against its
   own preview, not just "parses now". Anything else rolls back from the `.bak` and reports.
   The endpoint then **reloads that plugin in the load order itself** (it already holds the
-  parsed result; the external-change watcher covers every indexed binary, tracked or not — #587)
+  parsed result; the external-change watcher covers every indexed binary, tracked or not)
   and republishes
   the plugin's Problems entries from the re-run, so they clear or shrink at once. A plugin
   that is untracked stays untracked; a tracked plugin is additionally *externally changed*

@@ -16,9 +16,9 @@ Renumbering a record moves its FormKey, and every FormLink pointing at it has to
 dangling. That cascade writes across **every source tree holding a reference** — other tracked mods,
 other repositories, folders the author never chose to touch for this gesture.
 
-#676 made the cascade compute before it writes: the whole write set — every affected record's new
+The renumber cascade computes before it writes: the whole write set — every affected record's new
 bytes — is produced in memory first, and every way the computation can fail is a typed refusal
-returned before the first byte lands. What #676 deliberately left exposed was genuine I/O. A write
+returned before the first byte lands. What that ordering deliberately left exposed was genuine I/O. A write
 that failed part-way left the writes before it durably on disk, and the error told the author so:
 
 > Those repos now hold working-tree dirt from this partial renumber — review and revert in the
@@ -66,15 +66,15 @@ something broken behind after we are done is not.** This ADR is about failure at
 
 5. **Process death is out of scope.** An in-memory transaction dies with its process. The compile
    round-trip gate and re-Track remain the recovery path for a tree left mid-write by a crash, as
-   they already are for #675's minted directories. Making failure atomicity survive process death would mean an on-disk journal in the author's
+   they already are for `SourceUnitResolver.InMintedDirectory`'s own minted directories. Making failure atomicity survive process death would mean an on-disk journal in the author's
    folder — new state, new staleness, new recovery semantics — for a failure mode the existing gate
    already catches.
 
 6. **The index is re-derived, not rolled back.** It is a cache over the source trees, and unwinding
    rows would be a second implementation of what a re-ingest already computes, free to drift from it.
    After the files go back, every affected plugin is re-derived from its restored tree through
-   `ILoadOrderMirror.ReingestPluginFromSource` (#672). Note that #677 already makes the renumber's own
-   index update a single transaction, so the only index rows a mid-cascade failure can leave behind
+   `ILoadOrderMirror.ReingestPluginFromSource`. Note that the renumber's own
+   index update is already a single transaction, so the only index rows a mid-cascade failure can leave behind
    are the referencers' — exactly what the re-ingest corrects.
 
 7. **A rollback that cannot complete reports, it does not fail silently.** `Rollback()` returns a
@@ -88,14 +88,14 @@ something broken behind after we are done is not.** This ADR is about failure at
    still shown — it is the only thing that says *why* — with every affected mod folder's prefix cut
    off it, textually, because an exception message is prose and there is no typed path to reach for.
 
-8. **Directory lifetime stays with #675.** `SourceUnitResolver.InMintedDirectory` already lists
+8. **Directory lifetime stays with `SourceUnitResolver.InMintedDirectory`.** It already lists
    missing ancestors before creating them and removes exactly those, non-recursively, when the write
    fails — so a directory a third party has written into survives. The transaction routes its writes
    *through* that wrapper and holds no directory pre-images of its own; two mechanisms racing to
    remove the same level would be worse than either. The one directory shape the transaction does own
    is the relocation of a container's whole subtree, which it puts back.
 
-   The seam has a known edge, stated here so it is a decision rather than an oversight: #675 removes a
+   The seam has a known edge, stated here so it is a decision rather than an oversight: `InMintedDirectory` removes a
    minted directory when *that* write throws, and cannot remove one minted by a write that succeeded
    and is only being undone because a later act failed. **No write on the renumber path mints
    anything** — every referencer write goes to a resolved unit's own directory, the flat target's new
@@ -143,7 +143,7 @@ renumber deliberately refuses to write.
 - "Unchanged" is asserted with two oracles: a direct filesystem comparison (path set, content, and
   the directory list *including empty directories*) and the repository's own `git status`. They are
   not redundant — git tracks files, not directories, and reports clean over precisely the empty-record
-  -directory debris #675 exists to prevent. Tests demonstrate that disagreement rather than assuming
+  -directory debris `InMintedDirectory` exists to prevent. Tests demonstrate that disagreement rather than assuming
   it.
 - The restore mechanism is testable on its own with a synthetic write sequence, which is what makes
   reverse ordering and the ownership check provable rather than merely exercised.

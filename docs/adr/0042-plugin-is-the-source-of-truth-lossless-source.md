@@ -36,7 +36,7 @@ on Mutagen's own encoding choices (recompressed zlib, `-0.0`→`+0.0`, subrecord
 reordering, derived sizes, ADR-0038's own master pruning, recomputed derived counters), never on
 content. Byte identity was a test of whichever tool last wrote the file, never of our codec.
 
-The verdict (#669 amendment, 2026-09-02 — the comparison mechanism actually in force): every
+The verdict (2026-09-02 amendment — the comparison mechanism actually in force): every
 record in `parse(original)` has a counterpart in `parse(recompiled)` and vice versa, and each pair
 passes a **two-stage check in one door** (`MEditService.Core.Source.ModelIdentity.FindFirst`,
 shared by `TrackService`'s live gate and the test suite's own Compile assertions, one checker and
@@ -74,7 +74,7 @@ is `System.Drawing.Color`, quantized to a byte per channel at **parse** time, so
 already destroyed identically on both sides of the comparison before this gate ever runs. Direct
 verification against the full LitR corpus found zero genuine float-precision refusals.)*
 
-**Former known limitation, closed by #669: the mask's `Single` epsilon no longer decides
+**Former known limitation, now closed: the mask's `Single` epsilon no longer decides
 anything.** Mutagen's generated `FillEqualsMask` compares `Single` (float32) fields with
 `EqualsWithin`, a 1e-9 absolute-epsilon tolerance band — but the mask is only stage one now. The
 codec decider sees a sub-epsilon-but-genuinely-different float's own distinct spelling in the
@@ -213,7 +213,7 @@ the plugin *readable*; it does not by itself make it *compilable*. The round-tri
 tree against what the codec would reserialize from it, and a list still naming the deleted record does
 not match — so a hand delete leaves the plugin's own next Save & Compile refusing until the author
 either removes the stale entry or re-Tracks. Modbench does not repair it: a tree changed behind its
-back is the author's to put right (maintainer ruling, #566), the same refusal posture git itself takes.
+back is the author's to put right (maintainer ruling), the same refusal posture git itself takes.
 The superseded numbering scheme had the same limit in the same place — a hand-deleted file left a
 numbering gap the compile gate refused — so this is a faithful port of the old limit, not a new one.
 
@@ -284,7 +284,7 @@ and every text posted to another project is signed off by the maintainer first.
   reviewer's diff) still sees them, and the model stays denormalized either way. Superseded by
   decision 4 rather than kept as a fallback: once order lives in the parent, there is nothing left to
   collapse.
-- **Order keys inside each child's own document** (#459's "dominated" verdict). That verdict leaned on
+- **Order keys inside each child's own document** (the original "dominated" verdict). That verdict leaned on
   stock Spriggit silently dropping an unrecognized key, which decision 6 made irrelevant by abandoning
   Spriggit compatibility — no foreign reader exists. Still rejected, but now on its own merits: a
   child that records its own position denormalizes the parent's data exactly as a numbered filename
