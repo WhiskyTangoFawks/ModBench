@@ -116,8 +116,8 @@ public sealed class SourceRepositoryRebaseTests : IDisposable
         // No degraded load, and the record reads with the edit that survived the replay — which it can
         // only do if the source tree was read, since the binary on disk is upstream's and has 1.0.
         Assert.Empty(reloaded.Status.Failures);
-        Assert.Equal(0.3f, reloaded.Index!.At(RecordRef.Effective).GetDocument(_mod.Npc.ToString(), _mod.Plugin)!.Fields
-            .Single(f => f.Metadata.Name == "HeightMax").Value as float?);
+        Assert.Equal(0.3f, Assert.IsType<JsonElement>(reloaded.Index!.At(RecordRef.Effective).GetDocument(_mod.Npc.ToString(), _mod.Plugin)!.Fields
+            .Single(f => f.Metadata.Name == "HeightMax").Value).GetSingle());
     }
 
     [Fact]

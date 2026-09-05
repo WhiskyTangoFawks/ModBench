@@ -22,6 +22,14 @@ internal static class ObjectModPropertyLeaves
         "IObjectModFormLinkFloatPropertyGetter`1",
     ];
 
+    // "IObjectModIntPropertyGetter`1" names the class ObjectModIntProperty`1.
+    private static string ClassNameOfGetter(string interfaceName)
+    {
+        const string prefix = "I";
+        const string suffix = "Getter`1";
+        return interfaceName[prefix.Length..^suffix.Length] + "`1";
+    }
+
     internal static bool IsObjectModPropertyBase(Type getterInterface) =>
         getterInterface.IsGenericType &&
         getterInterface.GetGenericTypeDefinition().Name == "IAObjectModPropertyGetter`1";
@@ -49,10 +57,19 @@ internal static class ObjectModPropertyLeaves
                     interfaceName, asm.GetName().Name);
                 continue;
             }
-            // The codec names the leaf by its closed setter class; the open one is spelled with the
-            // base's own type arguments rather than constructed.
-            var valueTypeName = ReflectedTypes.DocumentTypeName(ReflectedTypes.GetSetterType(open.MakeGenericType(args))!, args);
+            // The codec names the leaf by its closed setter class, which Loqui spells from the
+            // getter's own name (IXGetter`1 for X<T>); the closed class is checked below to agree.
+            var valueTypeName = ReflectedTypes.DocumentTypeName(ClassNameOfGetter(interfaceName), args);
             leaves.Add((open.MakeGenericType(args), valueTypeName));
+        }
+        foreach (var (leafType, valueTypeName) in leaves)
+        {
+            var spelled = ReflectedTypes.DocumentTypeName(ReflectedTypes.GetSetterType(leafType)!, args);
+            if (spelled != valueTypeName)
+            {
+                throw new InvalidOperationException(
+                    $"OMOD leaf {leafType.Name} is spelled {spelled} by its setter class but {valueTypeName} by the leaf table.");
+            }
         }
 
         var members = leaves

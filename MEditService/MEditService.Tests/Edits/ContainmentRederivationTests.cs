@@ -314,7 +314,7 @@ public sealed class ContainmentRederivationTests : IDisposable
         repo.Index(new Fallout4Mod(ModKey.FromFileName("FreshCreate.esp"), Fallout4Release.Fallout4), Registration.Participating(0), new PluginKey("FreshCreate.esp", "Data"));
 
         var key = new PluginKey("FreshCreate.esp", "Data");
-        repo.CreateWorkingTreeRecord(key, cell.FormKey.ToString(), "Cell", Encoding.UTF8.GetString(body));
+        repo.CreateWorkingTreeRecord(key, cell.FormKey.ToString(), "cell", Encoding.UTF8.GetString(body));
 
         // GetPlacement/GetContainerChildren read `placement`/`container_child` directly, unlike
         // GetCellReferences (which additionally joins against `records` for the placed ref's own row —

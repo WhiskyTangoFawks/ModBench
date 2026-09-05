@@ -10,7 +10,11 @@ public static class CheckErrorBuilder
 {
     // ADR-0031: `resolve` is the O(1) form_lookup read, not a per-table scan; the
     // not-found/wrong-type/valid-type distinction is computed here via FormKeyResolution.From.
-    public static string? Build(FieldMetadata meta, JsonElement? value, Func<string, RecordLookupEntry?> resolve, GameRelease release)
+    // absentMeansNull: a stored document omits a link that is unset, which is a fact about the
+    // record; a write payload omitting one asserts nothing about it.
+    public static string? Build(
+        FieldMetadata meta, JsonElement? value, Func<string, RecordLookupEntry?> resolve, GameRelease release,
+        bool absentMeansNull = true)
     {
         var entries = new List<string>();
         FormRefPathBuilder.Walk(meta, value, "",
@@ -18,7 +22,8 @@ public static class CheckErrorBuilder
             {
                 var err = CheckScalar(raw, allowsNull, validTypes, resolve, release);
                 if (err != null) entries.Add(path.Length > 0 ? $"{path}: {err}" : err);
-            });
+            },
+            absentMeansNull);
         return entries.Count > 0 ? string.Join("; ", entries) : null;
     }
 

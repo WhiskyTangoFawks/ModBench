@@ -222,7 +222,7 @@ public class PlacementIndexingTests
         Assert.Equal(0, ToI(row["block_y"]));
         Assert.Equal(12, ToI(row["grid_x"]));
         Assert.Equal(-5, ToI(row["grid_y"]));
-        Assert.False(ToB(row["IsInterior"]));
+        Assert.False(ToB(row["is_interior"]));
     }
 
     [Fact]
@@ -238,7 +238,7 @@ public class PlacementIndexingTests
         Assert.Null(row["sub_x"]);
         Assert.Null(row["grid_x"]);
         Assert.Null(row["grid_y"]);
-        Assert.False(ToB(row["IsInterior"]));
+        Assert.False(ToB(row["is_interior"]));
     }
 
     [Fact]
@@ -249,7 +249,7 @@ public class PlacementIndexingTests
             "SELECT parent_worldspace, is_interior FROM cell_location WHERE cell_form_key = $1", b.IntCellFk);
         var row = Assert.Single(rows);
         Assert.Null(row["parent_worldspace"]);
-        Assert.True(ToB(row["IsInterior"]));
+        Assert.True(ToB(row["is_interior"]));
     }
 
     [Fact]

@@ -228,7 +228,7 @@ export function DiffRow({
           <button style={toggleBtnStyle} onClick={onToggle}>{rowExpanded ? '▼' : '▶'}</button>
         )}
         {/* The schema's own label when the field's name is a wire name rather than a readable
-            one (an abstract union's `concrete_type` is "Kind"). */}
+            one (a union's MutagenObjectType is "Kind"). */}
         {meta.displayLabel ?? diff.fieldName}
       </td>
       {columns.map(col => {

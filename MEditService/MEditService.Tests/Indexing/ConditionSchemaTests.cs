@@ -43,17 +43,16 @@ public sealed class ConditionSchemaTests
     }
 
     [Fact]
-    public void ComparisonValue_IsOneFieldPerShape_FloatAndGlobalLink()
+    public void ComparisonValue_IsOneMemberWithAVariantPerLeaf_FloatAndGlobalLink()
     {
-        var element = ConditionElement();
+        var comparison = Member(ConditionElement(), "ComparisonValue");
 
-        Assert.Equal("float", Member(element, "comparison_value_float").Type);
-        var link = Member(element, "comparison_value_form_key");
+        Assert.Equal("float", comparison.Variants![nameof(ConditionFloat)].Type);
+        var link = comparison.Variants[nameof(ConditionGlobal)];
         Assert.Equal("formKey", link.Type);
         // Empty, meaning "any record type": the link closes over the abstract IGlobalGetter, and GLOB's
         // schema table is keyed by its four concrete sibling getters, so the base resolves to no table.
         Assert.Empty(link.ValidFormKeyTypes);
-        Assert.DoesNotContain(element.Fields!, f => f.Name == "ComparisonValue");
     }
 
     // ── the two per-game facts ───────────────────────────────────────────────
@@ -110,7 +109,7 @@ public sealed class ConditionSchemaTests
     [InlineData("qust", "DialogConditions")]
     [InlineData("qust", "UnusedConditions")]
     [InlineData("mesg", "MenuButtons")]
-    [InlineData("Perk", "Effects")]
+    [InlineData("perk", "Effects")]
     [InlineData("alch", "Effects")]
     public void EveryConditionBearingColumn_ReachesTheFunctionMemberBelowIt(string table, string column)
     {
@@ -118,7 +117,7 @@ public sealed class ConditionSchemaTests
         Walk(Schemas[table].RecordColumns.Single(c => c.Name == column).ToFieldMetadata(), column, found);
 
         Assert.NotEmpty(found);
-        Assert.All(found, path => Assert.EndsWith("data.function", path, StringComparison.Ordinal));
+        Assert.All(found, path => Assert.EndsWith("Data.Function", path, StringComparison.Ordinal));
     }
 
     private static void Walk(FieldMetadata meta, string path, List<string> found)

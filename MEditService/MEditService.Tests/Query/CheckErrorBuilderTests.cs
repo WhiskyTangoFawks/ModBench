@@ -10,21 +10,21 @@ public class CheckErrorBuilderTests
     private static JsonElement J(string json) => JsonSerializer.Deserialize<JsonElement>(json);
 
     private static readonly FieldMetadata FormKeyMeta = new(
-        "Race", "formKey", false, ["Race"], [], AllowsNull: false);
+        "Race", "formKey", false, ["race"], [], AllowsNull: false);
 
     private static RecordLookupEntry? Entry(string recordType) => new RecordLookupEntry(recordType, null);
 
     [Fact]
     public void Build_CleanScalarReference_ReturnsNull()
     {
-        var err = CheckErrorBuilder.Build(FormKeyMeta, J("\"000001:Test.esp\""), _ => Entry("Race"), GameRelease.Fallout4);
+        var err = CheckErrorBuilder.Build(FormKeyMeta, J("\"000001:Test.esp\""), _ => Entry("race"), GameRelease.Fallout4);
         Assert.Null(err);
     }
 
     [Fact]
     public void Build_NullScalarReference_NonNullableField_ReturnsNullNotAllowedMessage()
     {
-        var err = CheckErrorBuilder.Build(FormKeyMeta, null, _ => Entry("Race"), GameRelease.Fallout4);
+        var err = CheckErrorBuilder.Build(FormKeyMeta, null, _ => Entry("race"), GameRelease.Fallout4);
         Assert.Equal("Found a NULL reference, expected: race", err);
     }
 
@@ -32,7 +32,7 @@ public class CheckErrorBuilderTests
     public void Build_NullScalarReference_NullableField_ReturnsNull()
     {
         var meta = FormKeyMeta with { AllowsNull = true };
-        var err = CheckErrorBuilder.Build(meta, null, _ => Entry("Race"), GameRelease.Fallout4);
+        var err = CheckErrorBuilder.Build(meta, null, _ => Entry("race"), GameRelease.Fallout4);
         Assert.Null(err);
     }
 
@@ -72,7 +72,22 @@ public class CheckErrorBuilderTests
 
         var err = CheckErrorBuilder.Build(meta, value, _ => null, GameRelease.Fallout4);
 
-        Assert.Equal("[0].faction: Found a NULL reference, expected: fact", err);
+        Assert.Equal("[0].Faction: Found a NULL reference, expected: fact", err);
+    }
+
+    // A stored document omits an unset non-nullable link, which is a NULL reference worth flagging;
+    // a write payload omitting a member asserts nothing about it.
+    [Fact]
+    public void Build_AbsentNonNullableMember_IsANullReferenceInADocument_AndNothingInAPayload()
+    {
+        var factionField = new FieldMetadata("Faction", "formKey", false, ["fact"], [], AllowsNull: false);
+        var meta = new FieldMetadata("Factions", "array", true, [], [],
+            ElementType: new FieldMetadata("", "struct", false, [], [], Fields: [factionField]));
+        var value = J("""[{"Rank": 0}]""");
+
+        Assert.Equal("[0].Faction: Found a NULL reference, expected: fact",
+            CheckErrorBuilder.Build(meta, value, _ => null, GameRelease.Fallout4));
+        Assert.Null(CheckErrorBuilder.Build(meta, value, _ => null, GameRelease.Fallout4, absentMeansNull: false));
     }
 
     [Fact]
@@ -103,7 +118,7 @@ public class CheckErrorBuilderTests
 
         var err = CheckErrorBuilder.Build(meta, value, _ => null, GameRelease.Fallout4);
 
-        Assert.Equal("[0].inner.target: Found a NULL reference, expected: kywd", err);
+        Assert.Equal("[0].inner.Target: Found a NULL reference, expected: kywd", err);
     }
 
     // The Player and friends, in the game's implicitly-always-loaded master, never carry a

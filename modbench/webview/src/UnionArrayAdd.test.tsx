@@ -22,7 +22,7 @@ const aliasesMeta: FieldMetadata = {
     name: '', type: 'struct', isArray: false, validFormKeyTypes: [], enumMembers: [],
     fields: [
       {
-        name: 'concrete_type', type: 'enum', isArray: false, validFormKeyTypes: [],
+        name: 'MutagenObjectType', type: 'enum', isArray: false, validFormKeyTypes: [],
         enumMembers: [
           { value: 'QuestReferenceAlias', label: 'Reference' },
           { value: 'QuestLocationAlias', label: 'Location' },
@@ -40,22 +40,22 @@ const aliasesCompareResult = {
     {
       formKey: '000001:Quest548.esp', plugin: 'MyMod.esp', origin: 'Data',
       loadOrderIndex: 1, isWinner: true, editorId: 'Quest548',
-      fields: [{ metadata: aliasesMeta, value: [{ concrete_type: 'QuestLocationAlias', name: 'OriginalLoc' }] }],
+      fields: [{ metadata: aliasesMeta, value: [{ MutagenObjectType: 'QuestLocationAlias', name: 'OriginalLoc' }] }],
       conflictThis: 'Master',
     },
   ],
   diffs: [{
     fieldName: 'aliases',
-    values: { 'MyMod.esp': [{ concrete_type: 'QuestLocationAlias', name: 'OriginalLoc' }] },
+    values: { 'MyMod.esp': [{ MutagenObjectType: 'QuestLocationAlias', name: 'OriginalLoc' }] },
     winnerColumn: 'MyMod.esp',
-    winnerValue: [{ concrete_type: 'QuestLocationAlias', name: 'OriginalLoc' }],
+    winnerValue: [{ MutagenObjectType: 'QuestLocationAlias', name: 'OriginalLoc' }],
     cellStates: {},
     children: [
       {
         fieldName: '[0]',
-        values: { 'MyMod.esp': { concrete_type: 'QuestLocationAlias', name: 'OriginalLoc' } },
+        values: { 'MyMod.esp': { MutagenObjectType: 'QuestLocationAlias', name: 'OriginalLoc' } },
         winnerColumn: 'MyMod.esp',
-        winnerValue: { concrete_type: 'QuestLocationAlias', name: 'OriginalLoc' },
+        winnerValue: { MutagenObjectType: 'QuestLocationAlias', name: 'OriginalLoc' },
         cellStates: {},
       },
     ],

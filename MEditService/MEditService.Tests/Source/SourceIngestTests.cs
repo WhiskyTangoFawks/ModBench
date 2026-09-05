@@ -241,7 +241,7 @@ public sealed class SourceIngestTests
         // The binary was never consulted: it holds the fixture's untouched height_max, and what
         // still answers is the edited 0.75 the source-derived rows already carried.
         var document = mod.Mirror.Index!.At(RecordRef.Effective).GetDocument(mod.Npc.ToString(), mod.Plugin)!;
-        Assert.Equal(0.75f, Assert.IsType<float>(document.Fields.Single(f => f.Metadata.Name == "HeightMax").Value));
+        Assert.Equal(0.75f, Assert.IsType<JsonElement>(document.Fields.Single(f => f.Metadata.Name == "HeightMax").Value).GetSingle());
 
         var failure = Assert.Single(mod.Mirror.Status.Failures);
         Assert.Equal(TrackedModFixture.PluginName, failure.Name);

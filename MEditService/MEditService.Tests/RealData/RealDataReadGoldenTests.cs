@@ -21,7 +21,7 @@ public sealed class RealDataReadGoldenTests(CutDownPluginFixture fixture) : ICla
         SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4);
 
     private static readonly string[] Types =
-        ["achr", "acti", "armo", "Cell", "dial", "dlbr", "fact", "glob", "info", "kywd", "misc", "npc_", "qust", "Race", "refr", "scen", "weap", "wrld"];
+        ["achr", "acti", "armo", "cell", "dial", "dlbr", "fact", "glob", "info", "kywd", "misc", "npc_", "qust", "race", "refr", "scen", "weap", "wrld"];
 
     private static object Project(RecordDocument d) => new
     {
@@ -90,7 +90,7 @@ public sealed class RealDataReadGoldenTests(CutDownPluginFixture fixture) : ICla
     public void SpatialReads_MatchGolden()
     {
         var worldspaces = FormKeysOf("wrld");
-        var cells = FormKeysOf("Cell");
+        var cells = FormKeysOf("cell");
         var captured = new
         {
             WorldspaceCells = worldspaces.ToDictionary(

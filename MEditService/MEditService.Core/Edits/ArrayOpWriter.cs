@@ -17,7 +17,7 @@ internal static class ArrayOpWriter
     internal static bool IsArrayOp(string opName) => OpNames.Contains(opName);
 
     internal static FieldApplyResult Apply(
-        IMajorRecord record, ColumnSpec col, string opName, JsonElement envelope, JsonElement? current)
+        IMajorRecord record, ColumnSpec col, FieldMetadata shape, string opName, JsonElement envelope, JsonElement? current)
     {
         if (col.Apply.Writer is not { } apply) return FieldApplyOutcome.ReadOnly;
         if (!envelope.TryGetProperty("path", out var pathEl) || pathEl.ValueKind != JsonValueKind.Array)
@@ -46,7 +46,7 @@ internal static class ArrayOpWriter
 
         // The walk carries the schema with the value: a key hop reads the array's declared key members,
         // never the envelope's, and a key hop into an unkeyed array is refused.
-        var (array, arrayMeta) = ResolveOrCreate(root, arrayPath, col.ToFieldMetadata());
+        var (array, arrayMeta) = ResolveOrCreate(root, arrayPath, shape);
         if (array == null) return FieldApplyOutcome.ValueShapeMismatch;
 
         // The element hop is resolved against the array it was just walked to, never before it: a
@@ -68,7 +68,7 @@ internal static class ArrayOpWriter
         // The reconstructed value goes through the same keyed-array normalization a hand-authored payload
         // does, so a second element added before the first was keyed collides with it.
         var newValue = KeyedArrays.Normalize(
-            JsonSerializer.SerializeToElement(root), col.ToFieldMetadata(), out var duplicateKey);
+            JsonSerializer.SerializeToElement(root), shape, out var duplicateKey);
         if (duplicateKey != null) return new(FieldApplyOutcome.DuplicateKeyInKeyedArray, duplicateKey);
 
         return apply(record, newValue) switch
@@ -106,13 +106,13 @@ internal static class ArrayOpWriter
     private sealed record KeySegment(string Key) : IPathSegment
     {
         public int? IndexIn(JsonArray array, FieldMetadata? arrayMeta) =>
-            arrayMeta?.KeyMembers is { } members ? IndexOf(array, members) : null;
+            arrayMeta?.KeyMembers is { } members ? IndexOf(array, members, arrayMeta.ElementType) : null;
 
-        private int IndexOf(JsonArray array, IReadOnlyList<string> members)
+        private int IndexOf(JsonArray array, IReadOnlyList<string> members, FieldMetadata? elementMeta)
         {
             for (var i = 0; i < array.Count; i++)
             {
-                if (string.Equals(ElementKey.Of(array[i], members).Text, Key, StringComparison.Ordinal)) return i;
+                if (string.Equals(ElementKey.Of(array[i], members, elementMeta).Text, Key, StringComparison.Ordinal)) return i;
             }
             return -1;
         }

@@ -47,7 +47,7 @@ public sealed class ColorCompileRoundTripTests : IDisposable
     [Fact]
     public void Light_ColorEdit_CompilesAndReparsesTheNewRgb()
     {
-        Edit(_fixture.Light, "Color", """{"red": 200, "green": 100, "blue": 50}""");
+        Edit(_fixture.Light, "Color", "\"#C86432\"");
 
         var light = CompileAndReparse().Lights.Single(l => l.FormKey == _fixture.Light);
         Assert.Equal(200, light.Color.R);
@@ -58,7 +58,7 @@ public sealed class ColorCompileRoundTripTests : IDisposable
     [Fact]
     public void Light_ColorEdit_NamingOnlyRgb_PreservesTheExistingAlphaByte()
     {
-        Edit(_fixture.Light, "Color", """{"red": 200, "green": 100, "blue": 50}""");
+        Edit(_fixture.Light, "Color", "\"#C86432\"");
 
         var light = CompileAndReparse().Lights.Single(l => l.FormKey == _fixture.Light);
         Assert.Equal(ColorCompileFixture.SeededLightAlpha, light.Color.A);
@@ -82,7 +82,7 @@ public sealed class ColorCompileRoundTripTests : IDisposable
             _ => throw new ArgumentOutOfRangeException(nameof(table), table, "unknown allowlist table"),
         };
 
-        Edit(record, "Color", """{"red": 40, "green": 80, "blue": 120, "Alpha": 160}""");
+        Edit(record, "Color", "\"#A0285078\"");
 
         var mod = CompileAndReparse();
         var actual = table switch
@@ -103,7 +103,7 @@ public sealed class ColorCompileRoundTripTests : IDisposable
     [Fact]
     public void FloatEncodedColor_Edit_CompilesAndReparsesTheExactBytes()
     {
-        Edit(_fixture.MaterialObject, "SinglePassColor", """{"red": 1, "green": 254, "blue": 127}""");
+        Edit(_fixture.MaterialObject, "SinglePassColor", "\"#01FE7F\"");
 
         var materialObject = CompileAndReparse().MaterialObjects.Single(m => m.FormKey == _fixture.MaterialObject);
         Assert.Equal(1, materialObject.SinglePassColor.R);

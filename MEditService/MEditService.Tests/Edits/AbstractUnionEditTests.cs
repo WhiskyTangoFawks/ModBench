@@ -27,8 +27,8 @@ public sealed class AbstractUnionEditTests : IDisposable
     public void Level_EditingWithinSameConcreteType_RoundTrips()
     {
         var result = _fixture.Service().EditField(
-            _fixture.Plugin, _fixture.Npc.ToString(), "level",
-            Json("""{"level": 20, "MutagenObjectType": "NpcLevel"}"""));
+            _fixture.Plugin, _fixture.Npc.ToString(), "Level",
+            Json("""{"Level": 20, "MutagenObjectType": "NpcLevel"}"""));
 
         Assert.True(result.Applied, result.Message);
         var body = _fixture.NpcBody();
@@ -42,7 +42,7 @@ public sealed class AbstractUnionEditTests : IDisposable
         // The fixture NPC starts as a NpcLevel(5) — this switches its Level to the other leaf
         // entirely, which cannot reuse the old NpcLevel instance.
         var result = _fixture.Service().EditField(
-            _fixture.Plugin, _fixture.Npc.ToString(), "level",
+            _fixture.Plugin, _fixture.Npc.ToString(), "Level",
             Json("""{"LevelMult": 1.5, "MutagenObjectType": "PcLevelMult"}"""));
 
         Assert.True(result.Applied, result.Message);
@@ -57,7 +57,7 @@ public sealed class AbstractUnionEditTests : IDisposable
         var before = _fixture.NpcBody();
 
         var result = _fixture.Service().EditField(
-            _fixture.Plugin, _fixture.Npc.ToString(), "level", Json("""{"level": 20}"""));
+            _fixture.Plugin, _fixture.Npc.ToString(), "Level", Json("""{"Level": 20}"""));
 
         Assert.False(result.Applied);
         Assert.Equal(before, _fixture.NpcBody());
@@ -69,8 +69,8 @@ public sealed class AbstractUnionEditTests : IDisposable
         var before = _fixture.NpcBody();
 
         var result = _fixture.Service().EditField(
-            _fixture.Plugin, _fixture.Npc.ToString(), "level",
-            Json("""{"level": 20, "MutagenObjectType": "NotARealLevelShape"}"""));
+            _fixture.Plugin, _fixture.Npc.ToString(), "Level",
+            Json("""{"Level": 20, "MutagenObjectType": "NotARealLevelShape"}"""));
 
         Assert.False(result.Applied);
         Assert.Equal(before, _fixture.NpcBody());
@@ -82,8 +82,8 @@ public sealed class AbstractUnionEditTests : IDisposable
     public void Aliases_WholeArrayWrite_QuestReferenceAliasElement_RoundTrips()
     {
         var result = _fixture.Service().EditField(
-            _fixture.Plugin, _fixture.Quest.ToString(), "aliases",
-            Json("""[{"MutagenObjectType": "QuestReferenceAlias", "name": "NewRef", "ClosestToAlias": 4}]"""));
+            _fixture.Plugin, _fixture.Quest.ToString(), "Aliases",
+            Json("""[{"MutagenObjectType": "QuestReferenceAlias", "Name": "NewRef", "ClosestToAlias": 4}]"""));
 
         Assert.True(result.Applied, result.Message);
         var body = _fixture.QuestBody();
@@ -96,10 +96,10 @@ public sealed class AbstractUnionEditTests : IDisposable
     public void Aliases_WholeArrayWrite_QuestReferenceAliasElement_LocationNamedInPayload_RoundTrips()
     {
         var result = _fixture.Service().EditField(
-            _fixture.Plugin, _fixture.Quest.ToString(), "aliases",
+            _fixture.Plugin, _fixture.Quest.ToString(), "Aliases",
             Json("""
-            [{"MutagenObjectType": "QuestReferenceAlias", "name": "NewRef", "ClosestToAlias": 4,
-              "location": {"AliasID": 9}}]
+            [{"MutagenObjectType": "QuestReferenceAlias", "Name": "NewRef", "ClosestToAlias": 4,
+              "Location": {"AliasID": 9}}]
             """));
 
         Assert.True(result.Applied, result.Message);
@@ -113,7 +113,7 @@ public sealed class AbstractUnionEditTests : IDisposable
     public void Aliases_WholeArrayWrite_QuestCollectionAliasElement_RoundTrips()
     {
         var result = _fixture.Service().EditField(
-            _fixture.Plugin, _fixture.Quest.ToString(), "aliases",
+            _fixture.Plugin, _fixture.Quest.ToString(), "Aliases",
             Json("""[{"MutagenObjectType": "QuestCollectionAlias"}]"""));
 
         Assert.True(result.Applied, result.Message);
@@ -128,10 +128,10 @@ public sealed class AbstractUnionEditTests : IDisposable
         var before = _fixture.QuestBody();
 
         var result = _fixture.Service().EditField(
-            _fixture.Plugin, _fixture.Quest.ToString(), "aliases",
+            _fixture.Plugin, _fixture.Quest.ToString(), "Aliases",
             Json("""
-            [{"MutagenObjectType": "QuestReferenceAlias", "name": "NewRef",
-              "conditions": [{"ComparisonValue": 1.0}]}]
+            [{"MutagenObjectType": "QuestReferenceAlias", "Name": "NewRef",
+              "Conditions": [{"ComparisonValue": 1.0}]}]
             """));
 
         Assert.False(result.Applied);
@@ -145,18 +145,18 @@ public sealed class AbstractUnionEditTests : IDisposable
         // The element under test, spelled once: only its leaf changes between the two writes, the
         // way the editor's own resend does.
         static JsonElement Aliases(string leaf) => Json($$"""
-            [{"MutagenObjectType": "{{leaf}}", "name": "Switched", "ClosestToAlias": 7, "id": 1,
+            [{"MutagenObjectType": "{{leaf}}", "Name": "Switched", "ClosestToAlias": 7, "ID": 1,
               "ReferenceAliasLocation": {"AliasID": 5} },
-             {"MutagenObjectType": "QuestReferenceAlias", "name": "Sibling", "ClosestToAlias": 9, "id": 2}]
+             {"MutagenObjectType": "QuestReferenceAlias", "Name": "Sibling", "ClosestToAlias": 9, "ID": 2}]
             """);
 
         var setUp = _fixture.Service().EditField(
-            _fixture.Plugin, _fixture.Quest.ToString(), "aliases", Aliases("QuestLocationAlias"));
+            _fixture.Plugin, _fixture.Quest.ToString(), "Aliases", Aliases("QuestLocationAlias"));
         Assert.True(setUp.Applied, setUp.Message);
         var before = _fixture.QuestBody();
 
         var result = _fixture.Service().EditField(
-            _fixture.Plugin, _fixture.Quest.ToString(), "aliases", Aliases("QuestReferenceAlias"));
+            _fixture.Plugin, _fixture.Quest.ToString(), "Aliases", Aliases("QuestReferenceAlias"));
 
         Assert.True(result.Applied, result.Message);
         var after = _fixture.QuestBody();
@@ -190,7 +190,7 @@ public sealed class AbstractUnionEditTests : IDisposable
     public void Aliases_ArrayAdd_AppendsOneElementOfTheUnionsFirstLeaf()
     {
         var result = _fixture.Service().EditField(
-            _fixture.Plugin, _fixture.Quest.ToString(), "aliases",
+            _fixture.Plugin, _fixture.Quest.ToString(), "Aliases",
             Json("""{"op": "array_add", "path": []}"""));
 
         Assert.Equal(RecordEditRefusal.None, result.Refusal);
@@ -201,7 +201,7 @@ public sealed class AbstractUnionEditTests : IDisposable
         // The element that was already there is untouched.
         Assert.Equal("OriginalLoc", written[0].GetProperty("Name").GetString());
         Assert.Equal(
-            SharedSchemaReflector.FirstArrayElementLeaf("qust", "aliases", "MutagenObjectType"),
+            SharedSchemaReflector.FirstArrayElementLeaf("qust", "Aliases", "MutagenObjectType"),
             written[1].GetProperty("MutagenObjectType").GetString());
     }
 
@@ -214,8 +214,8 @@ public sealed class AbstractUnionEditTests : IDisposable
         var before = _fixture.QuestBody();
 
         var result = _fixture.Service().EditField(
-            _fixture.Plugin, _fixture.Quest.ToString(), "aliases",
-            Json("""[{"MutagenObjectType": "NotARealAliasKind", "name": "X"}]"""));
+            _fixture.Plugin, _fixture.Quest.ToString(), "Aliases",
+            Json("""[{"MutagenObjectType": "NotARealAliasKind", "Name": "X"}]"""));
 
         Assert.Equal(RecordEditRefusal.ListElementTypeUnresolved, result.Refusal);
         Assert.False(result.Applied);

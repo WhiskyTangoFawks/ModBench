@@ -107,7 +107,7 @@ public sealed class RecordEditServiceTests : IDisposable
         // from, not by reaching into the Mutagen object a second way.
         var field = _mod.Mirror.Index!.At(RecordRef.Effective).GetDocument(_mod.Npc.ToString(), _mod.Plugin)!
             .Fields.Single(f => f.Metadata.Name == "HeightMax");
-        Assert.Equal(0.75f, Assert.IsType<float>(field.Value));
+        Assert.Equal(0.75f, Assert.IsType<JsonElement>(field.Value).GetSingle());
     }
 
     [Fact]
@@ -177,7 +177,7 @@ public sealed class RecordEditServiceTests : IDisposable
     [Fact]
     public void EditField_MakesTheRecordNewlyMatchAnActiveFilter_FilteredListingIncludesIt()
     {
-        _mod.Mirror.SetFilter("SELECT form_key FROM npc_ WHERE height_max = 0.75");
+        _mod.Mirror.SetFilter("SELECT form_key FROM npc_ WHERE HeightMax = 0.75");
         Assert.Equal(0, _mod.Mirror.Reads!.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0)).Total);
 
         Service().EditField(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", Json("0.75"));

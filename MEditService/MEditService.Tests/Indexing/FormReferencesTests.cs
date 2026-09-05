@@ -58,7 +58,7 @@ public class FormReferencesTests
         while (reader.Read())
             rows.Add((reader.GetString(0), reader.GetString(1), reader.GetString(2)));
 
-        var raceRow = rows.FirstOrDefault(r => r.FieldPath == "race");
+        var raceRow = rows.FirstOrDefault(r => r.FieldPath == "Race");
         Assert.NotEqual(default, raceRow);
         Assert.Equal(raceFormKey.ToString(), raceRow.Target);
         Assert.Equal("npc_", raceRow.RecordType);
@@ -105,7 +105,7 @@ public class FormReferencesTests
         repo.UpdateWinners();
 
         using var raceCmd = repo.Connection.CreateCommand();
-        raceCmd.CommandText = "SELECT COUNT(*) FROM form_references WHERE field_path = 'race' AND source_plugin = 'Reindex.esp'";
+        raceCmd.CommandText = "SELECT COUNT(*) FROM form_references WHERE field_path = 'Race' AND source_plugin = 'Reindex.esp'";
         var raceCount = (long)raceCmd.ExecuteScalar()!;
         Assert.Equal(1, raceCount);
     }
@@ -143,7 +143,7 @@ public class FormReferencesTests
         while (reader.Read())
             rows.Add((reader.GetString(0), reader.GetString(1)));
 
-        var kwRow = rows.FirstOrDefault(r => r.FieldPath == "keywords[0]");
+        var kwRow = rows.FirstOrDefault(r => r.FieldPath == "Keywords[0]");
         Assert.NotEqual(default, kwRow);
         Assert.Equal(kwFormKey.ToString(), kwRow.Target);
     }
@@ -180,7 +180,7 @@ public class FormReferencesTests
         while (reader.Read())
             rows.Add((reader.GetString(0), reader.GetString(1)));
 
-        var factionRow = rows.FirstOrDefault(r => r.FieldPath == "factions[0].faction");
+        var factionRow = rows.FirstOrDefault(r => r.FieldPath == "Factions[0].Faction");
         Assert.NotEqual(default, factionRow);
         Assert.Equal(factionFormKey.ToString(), factionRow.Target);
     }
@@ -228,7 +228,7 @@ public class FormReferencesTests
         while (reader.Read())
             rows.Add((reader.GetString(0), reader.GetString(1), reader.GetString(2)));
 
-        var row = rows.FirstOrDefault(r => r.FieldPath == "virtual_machine_adapter.scripts[0].properties[0].members[0].properties[0].object");
+        var row = rows.FirstOrDefault(r => r.FieldPath == "VirtualMachineAdapter.Scripts[0].Properties[0].Members[0].Properties[0].Object");
         Assert.NotEqual(default, row);
         Assert.Equal(targetFormKey.ToString(), row.Target);
         Assert.Equal("npc_", row.RecordType);  // ResolveRecordType must tag the source record's own table
@@ -338,8 +338,8 @@ public class FormReferencesTests
         while (reader.Read())
             rows.Add((reader.GetString(0), reader.GetString(1)));
 
-        Assert.Contains(rows, r => r.FieldPath == "virtual_machine_adapter.scripts[0].properties[0].members[0].properties[0].objects[0].object" && r.Target == target0Fk.ToString());
-        Assert.Contains(rows, r => r.FieldPath == "virtual_machine_adapter.scripts[0].properties[0].members[0].properties[0].objects[1].object" && r.Target == target1Fk.ToString());
+        Assert.Contains(rows, r => r.FieldPath == "VirtualMachineAdapter.Scripts[0].Properties[0].Members[0].Properties[0].Objects[0].Object" && r.Target == target0Fk.ToString());
+        Assert.Contains(rows, r => r.FieldPath == "VirtualMachineAdapter.Scripts[0].Properties[0].Members[0].Properties[0].Objects[1].Object" && r.Target == target1Fk.ToString());
     }
 
     [Fact]
@@ -396,8 +396,8 @@ public class FormReferencesTests
         while (reader.Read())
             rows.Add((reader.GetString(0), reader.GetString(1)));
 
-        Assert.Contains(rows, r => r.FieldPath == "virtual_machine_adapter.scripts[0].properties[0].structs[0].members[0].object" && r.Target == target0Fk.ToString());
-        Assert.Contains(rows, r => r.FieldPath == "virtual_machine_adapter.scripts[0].properties[0].structs[1].members[0].object" && r.Target == target1Fk.ToString());
+        Assert.Contains(rows, r => r.FieldPath == "VirtualMachineAdapter.Scripts[0].Properties[0].Structs[0].Members[0].Object" && r.Target == target0Fk.ToString());
+        Assert.Contains(rows, r => r.FieldPath == "VirtualMachineAdapter.Scripts[0].Properties[0].Structs[1].Members[0].Object" && r.Target == target1Fk.ToString());
     }
 
     // ── Scripts reachable only through an adapter sub-structure ──
@@ -462,7 +462,7 @@ public class FormReferencesTests
 
         var row = Assert.Single(ReferencesTo(repo, targetFormKey));
         Assert.Equal(questFormKey.ToString(), row.Source);
-        Assert.Equal("virtual_machine_adapter.aliases[0].scripts[0].properties[0].object", row.FieldPath);
+        Assert.Equal("VirtualMachineAdapter.Aliases[0].Scripts[0].Properties[0].Object", row.FieldPath);
         Assert.Equal("qust", row.RecordType);
     }
 
@@ -492,7 +492,7 @@ public class FormReferencesTests
 
         var row = Assert.Single(ReferencesTo(repo, targetFormKey));
         Assert.Equal(questFormKey.ToString(), row.Source);
-        Assert.Equal("virtual_machine_adapter.aliases[0].property.object", row.FieldPath);
+        Assert.Equal("VirtualMachineAdapter.Aliases[0].Property.Object", row.FieldPath);
         Assert.Equal("qust", row.RecordType);
     }
 
@@ -520,7 +520,7 @@ public class FormReferencesTests
 
         var row = Assert.Single(ReferencesTo(repo, targetFormKey));
         Assert.Equal(questFormKey.ToString(), row.Source);
-        Assert.Equal("virtual_machine_adapter.script.properties[0].object", row.FieldPath);
+        Assert.Equal("VirtualMachineAdapter.Script.Properties[0].Object", row.FieldPath);
         Assert.Equal("qust", row.RecordType);
     }
 
@@ -551,7 +551,7 @@ public class FormReferencesTests
 
         var row = Assert.Single(ReferencesTo(repo, targetFormKey));
         Assert.Equal(packageFormKey.ToString(), row.Source);
-        Assert.Equal("virtual_machine_adapter.script_fragments.script.properties[0].object", row.FieldPath);
+        Assert.Equal("VirtualMachineAdapter.ScriptFragments.Script.Properties[0].Object", row.FieldPath);
         Assert.Equal("pack", row.RecordType);
     }
 
@@ -583,7 +583,7 @@ public class FormReferencesTests
 
         var row = Assert.Single(ReferencesTo(repo, targetFormKey));
         Assert.Equal(sceneFormKey.ToString(), row.Source);
-        Assert.Equal("virtual_machine_adapter.script_fragments.script.properties[0].object", row.FieldPath);
+        Assert.Equal("VirtualMachineAdapter.ScriptFragments.Script.Properties[0].Object", row.FieldPath);
         Assert.Equal("scen", row.RecordType);
     }
 
@@ -617,7 +617,7 @@ public class FormReferencesTests
 
         var row = Assert.Single(ReferencesTo(repo, targetFormKey));
         Assert.Equal(responseFormKey.ToString(), row.Source);
-        Assert.Equal("virtual_machine_adapter.script_fragments.script.properties[0].object", row.FieldPath);
+        Assert.Equal("VirtualMachineAdapter.ScriptFragments.Script.Properties[0].Object", row.FieldPath);
         Assert.Equal("info", row.RecordType);
     }
 
@@ -671,10 +671,10 @@ public class FormReferencesTests
 
         var nestedRow = Assert.Single(ReferencesTo(repo, nestedTarget));
         Assert.Equal(questFormKey.ToString(), nestedRow.Source);
-        Assert.Equal("virtual_machine_adapter.aliases[0].scripts[0].properties[0].members[0].properties[0].object", nestedRow.FieldPath);
+        Assert.Equal("VirtualMachineAdapter.Aliases[0].Scripts[0].Properties[0].Members[0].Properties[0].Object", nestedRow.FieldPath);
 
         var listRow = Assert.Single(ReferencesTo(repo, listTarget));
         Assert.Equal(questFormKey.ToString(), listRow.Source);
-        Assert.Equal("virtual_machine_adapter.aliases[0].scripts[0].properties[1].structs[0].members[0].object", listRow.FieldPath);
+        Assert.Equal("VirtualMachineAdapter.Aliases[0].Scripts[0].Properties[1].Structs[0].Members[0].Object", listRow.FieldPath);
     }
 }

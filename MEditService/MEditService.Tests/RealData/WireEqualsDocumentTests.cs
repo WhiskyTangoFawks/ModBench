@@ -66,7 +66,10 @@ public sealed class WireEqualsDocumentTests(CutDownPluginCompareFixture fixture)
             var compare = fixture.Compare.GetCompare(formKey);
             Assert.NotNull(compare);
 
-            foreach (var diff in compare!.Diffs) Collect(diff, stored, formKey, mismatches);
+            // The metadata says how an array's children are labelled: by key for a keyed array, by
+            // value for a sorted one, by position otherwise.
+            var metadata = compare!.Overrides[0].Fields.ToDictionary(f => f.Metadata.Name, f => f.Metadata);
+            foreach (var diff in compare.Diffs) Collect(diff, stored, null, metadata.GetValueOrDefault(diff.FieldName), formKey, mismatches);
         }
 
         Assert.True(mismatches.Count == 0,
@@ -74,9 +77,11 @@ public sealed class WireEqualsDocumentTests(CutDownPluginCompareFixture fixture)
             + $"document's nodes:\n{string.Join("\n", mismatches.Take(20))}");
     }
 
-    private static void Collect(FieldDiff diff, JsonNode? parent, string path, List<string> mismatches)
+    // parentMeta describes the node the diff sits under; meta describes the diff's own node.
+    private static void Collect(
+        FieldDiff diff, JsonNode? parent, FieldMetadata? parentMeta, FieldMetadata? meta, string path, List<string> mismatches)
     {
-        var node = Resolve(parent, diff.FieldName);
+        var node = Resolve(parent, diff.FieldName, parentMeta);
         var here = $"{path}.{diff.FieldName}";
 
         foreach (var (column, value) in diff.Values)
@@ -94,13 +99,23 @@ public sealed class WireEqualsDocumentTests(CutDownPluginCompareFixture fixture)
                 mismatches.Add($"{here} [{column}]: wire {Short(onTheWire)} vs document {Short(node)}");
         }
 
-        foreach (var child in diff.Children ?? []) Collect(child, node, here, mismatches);
+        var shape = meta == null || node == null ? meta : DocumentNodes.VariantFor(meta, JsonSerializer.SerializeToElement(node));
+        foreach (var child in diff.Children ?? [])
+            Collect(child, node, shape, ChildMeta(shape, child.FieldName), here, mismatches);
     }
 
-    private static JsonNode? Resolve(JsonNode? parent, string name) => parent switch
+    // An array's children share the element's metadata; a struct's each have their own member's.
+    private static FieldMetadata? ChildMeta(FieldMetadata? owner, string label) =>
+        owner?.Type == "array" ? owner.ElementType : owner?.Fields?.FirstOrDefault(f => f.Name == label);
+
+    // The array metadata resolving a child is the *parent's* own: a keyed array's child is found by
+    // the key the metadata names, a sorted array's by its value, any other by position.
+    private static JsonNode? Resolve(JsonNode? parent, string name, FieldMetadata? meta) => parent switch
     {
         JsonObject o => o.TryGetPropertyValue(name, out var member) ? member : null,
         JsonArray a when ElementIndex(name) is { } i && i >= 0 && i < a.Count => a[i],
+        JsonArray a when meta?.KeyMembers is { } keyMembers => a.FirstOrDefault(e => ElementKey.Of(e, keyMembers, meta.ElementType).Text == name),
+        JsonArray a when meta?.ElementType?.IsSortable == true => a.FirstOrDefault(e => e?.GetValue<string>() == name),
         _ => null,
     };
 

@@ -82,7 +82,7 @@ public sealed class ContainerRecordRegressionTests : IDisposable
         var before = File.ReadAllBytes(file);
         var codec = new RecordTextCodec(NullLogger<RecordTextCodec>.Instance);
 
-        var record = await codec.DeserializeAsync(file, GameRelease.Fallout4, "Cell");
+        var record = await codec.DeserializeAsync(file, GameRelease.Fallout4, "cell");
         var reserialized = await codec.SerializeToBytesAsync(record, GameRelease.Fallout4);
 
         Assert.Equal(before, reserialized);
@@ -137,7 +137,7 @@ public sealed class ContainerRecordRegressionTests : IDisposable
     [Fact]
     public void CreatingANewCell_RefusesWithTheContainerRefusal()
     {
-        var result = EditService().CreateRecord(_fixture.Plugin, "Cell", "BrandNewCell");
+        var result = EditService().CreateRecord(_fixture.Plugin, "cell", "BrandNewCell");
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.ContainerRecordNotYetSupported, result.Refusal);
@@ -146,7 +146,7 @@ public sealed class ContainerRecordRegressionTests : IDisposable
     [Fact]
     public void CreatingANewCell_RefusalMessage_NamesOnlyCreationAsUnsupported()
     {
-        var result = EditService().CreateRecord(_fixture.Plugin, "Cell", "BrandNewCell");
+        var result = EditService().CreateRecord(_fixture.Plugin, "cell", "BrandNewCell");
 
         Assert.False(result.Applied);
         Assert.DoesNotContain("structural gesture", result.Message, StringComparison.Ordinal);

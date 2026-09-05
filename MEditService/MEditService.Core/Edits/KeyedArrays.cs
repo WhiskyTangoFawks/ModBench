@@ -47,13 +47,13 @@ internal static class KeyedArrays
             if (Rewrite(element, elementMeta) is { } dup) return dup;
         }
 
-        return meta.KeyMembers is { } keyMembers ? SortByKey(array, keyMembers) : null;
+        return meta.KeyMembers is { } keyMembers ? SortByKey(array, keyMembers, elementMeta) : null;
     }
 
-    private static string? SortByKey(JsonArray array, IReadOnlyList<string> keyMembers)
+    private static string? SortByKey(JsonArray array, IReadOnlyList<string> keyMembers, FieldMetadata elementMeta)
     {
         var keyed = new List<(ElementKey Key, JsonNode? Node)>(array.Count);
-        foreach (var element in array) keyed.Add((ElementKey.Of(element, keyMembers), element));
+        foreach (var element in array) keyed.Add((ElementKey.Of(element, keyMembers, elementMeta), element));
 
         if (keyed.GroupBy(k => k.Key.Text, StringComparer.Ordinal).FirstOrDefault(g => g.Count() > 1) is { } dup)
             return dup.Key;

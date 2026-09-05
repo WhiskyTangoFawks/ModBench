@@ -40,11 +40,14 @@ internal static class FormRefPathBuilder
         }
         || meta.Variants?.Values.Any(CarriesFormKeys) == true;
 
-    /// <summary>Visits every formKey leaf under <paramref name="meta"/>, a member the document omits
-    /// included (as null), since an unset non-nullable link is a fact about the record.</summary>
+    /// <summary>Visits every formKey leaf under <paramref name="meta"/>. With
+    /// <paramref name="absentMeansNull"/>, a member the document omits is visited as null, since an
+    /// unset non-nullable link is a fact about the record; without it, an omitted member is skipped,
+    /// which is what a write payload naming only some members means.</summary>
     internal static void Walk(
         FieldMetadata meta, JsonElement? value, string path,
-        Action<string, string?, bool, IReadOnlyList<string>> onFormKeyLeaf)
+        Action<string, string?, bool, IReadOnlyList<string>> onFormKeyLeaf,
+        bool absentMeansNull = true)
     {
         if (meta.Type == "formKey")
         {
@@ -52,21 +55,23 @@ internal static class FormRefPathBuilder
             return;
         }
 
-        if (meta.Type == "struct" && meta.Fields != null) WalkStruct(meta, value, path, onFormKeyLeaf);
-        else if (meta.Type == "array" && meta.ElementType != null) WalkArray(meta, value, path, onFormKeyLeaf);
+        if (meta.Type == "struct" && meta.Fields != null) WalkStruct(meta, value, path, onFormKeyLeaf, absentMeansNull);
+        else if (meta.Type == "array" && meta.ElementType != null) WalkArray(meta, value, path, onFormKeyLeaf, absentMeansNull);
     }
 
     private static void WalkStruct(
         FieldMetadata meta, JsonElement? value, string path,
-        Action<string, string?, bool, IReadOnlyList<string>> onFormKeyLeaf)
+        Action<string, string?, bool, IReadOnlyList<string>> onFormKeyLeaf, bool absentMeansNull)
     {
         if (value is not { ValueKind: JsonValueKind.Object } obj) return;
         var idle = IdleMembers(meta.Fields!, obj);
         foreach (var field in meta.Fields!)
         {
             if (idle?.Contains(field.Name) == true) continue;
-            var member = obj.TryGetProperty(field.Name, out var prop) && prop.ValueKind != JsonValueKind.Null ? prop : (JsonElement?)null;
-            Walk(DocumentNodes.VariantFor(field, obj), member, path.Length > 0 ? $"{path}.{field.Name}" : field.Name, onFormKeyLeaf);
+            var present = obj.TryGetProperty(field.Name, out var prop);
+            if (!present && !absentMeansNull) continue;
+            var member = present && prop.ValueKind != JsonValueKind.Null ? prop : (JsonElement?)null;
+            Walk(DocumentNodes.VariantFor(field, obj), member, path.Length > 0 ? $"{path}.{field.Name}" : field.Name, onFormKeyLeaf, absentMeansNull);
         }
     }
 
@@ -94,12 +99,12 @@ internal static class FormRefPathBuilder
 
     private static void WalkArray(
         FieldMetadata meta, JsonElement? value, string path,
-        Action<string, string?, bool, IReadOnlyList<string>> onFormKeyLeaf)
+        Action<string, string?, bool, IReadOnlyList<string>> onFormKeyLeaf, bool absentMeansNull)
     {
         if (value is not { ValueKind: JsonValueKind.Array } array) return;
         var idx = 0;
         foreach (var elem in array.EnumerateArray())
-            Walk(meta.ElementType!, elem, $"{path}[{idx++}]", onFormKeyLeaf);
+            Walk(meta.ElementType!, elem, $"{path}[{idx++}]", onFormKeyLeaf, absentMeansNull);
     }
 
     private static bool IsRealRef(string? s) => s is not null && s != "Null";

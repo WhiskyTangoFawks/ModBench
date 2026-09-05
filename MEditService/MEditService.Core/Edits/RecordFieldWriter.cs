@@ -89,7 +89,12 @@ internal static class RecordFieldWriter
         // An array op envelope is detected by shape (an object with an "op" member), since it only
         // ever targets an ordinary reflected column.
         if (TryGetOpName(value, out var arrayOpName) && ArrayOpWriter.IsArrayOp(arrayOpName))
-            return ArrayOpWriter.Apply(record, col, arrayOpName, value, DocumentNodes.MemberOf(body, col.PropertyName));
+        {
+            using var document = JsonDocument.Parse(body);
+            var root = document.RootElement;
+            return ArrayOpWriter.Apply(
+                record, col, DocumentNodes.VariantFor(col.ToFieldMetadata(), root), arrayOpName, value, DocumentNodes.At(root, col.PropertyName));
+        }
 
         if (col.Apply.Writer is not { } apply)
             return FieldApplyOutcome.ReadOnly;
@@ -110,8 +115,9 @@ internal static class RecordFieldWriter
         };
     }
 
-    /// <summary>Internal so <see cref="RecordEditService"/>'s Partial Form guard can exempt exactly this literal.</summary>
-    internal const string EditorIdFieldPath = "editor_id";
+    /// <summary>The document's own EditorID member. Internal so <see cref="RecordEditService"/>'s
+    /// Partial Form guard can exempt exactly this literal.</summary>
+    internal const string EditorIdFieldPath = "EditorID";
 
     // Dispatched ahead of the reflected columns because SchemaReflector excludes EditorID as an
     // identity column. Null clears it (legal: the layout has a bare-FormKey file name); anything else

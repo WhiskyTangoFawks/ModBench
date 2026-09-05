@@ -88,8 +88,8 @@ public class FormRefPathBuilderTests
         var json = "[\"000001:Fallout4.esm\",\"000002:Plugin.esp\"]";
         var hits = Collect(col, json);
         Assert.Equal(2, hits.Count);
-        Assert.Equal(("keywords[0]", "000001:Fallout4.esm"), hits[0]);
-        Assert.Equal(("keywords[1]", "000002:Plugin.esp"), hits[1]);
+        Assert.Equal(("Keywords[0]", "000001:Fallout4.esm"), hits[0]);
+        Assert.Equal(("Keywords[1]", "000002:Plugin.esp"), hits[1]);
     }
 
     [Fact]
@@ -99,8 +99,8 @@ public class FormRefPathBuilderTests
         var je = JsonDocument.Parse("[\"000001:Fallout4.esm\",\"000002:Plugin.esp\"]").RootElement.Clone();
         var hits = Collect(col, je);
         Assert.Equal(2, hits.Count);
-        Assert.Equal(("keywords[0]", "000001:Fallout4.esm"), hits[0]);
-        Assert.Equal(("keywords[1]", "000002:Plugin.esp"), hits[1]);
+        Assert.Equal(("Keywords[0]", "000001:Fallout4.esm"), hits[0]);
+        Assert.Equal(("Keywords[1]", "000002:Plugin.esp"), hits[1]);
     }
 
     [Fact]
@@ -110,7 +110,7 @@ public class FormRefPathBuilderTests
         var json = "[null,\"Null\",\"000003:Plugin.esp\"]";
         var hits = Collect(col, json);
         Assert.Single(hits);
-        Assert.Equal(("keywords[2]", "000003:Plugin.esp"), hits[0]);
+        Assert.Equal(("Keywords[2]", "000003:Plugin.esp"), hits[0]);
     }
 
     // --- Case 3: array of struct with formKey subfields ---
@@ -119,27 +119,27 @@ public class FormRefPathBuilderTests
     public void Walk_ArrayStruct_StringJsonInput_SubFieldPaths()
     {
         var col = ArrayStructCol("Factions", "Faction");
-        var json = "[{\"faction\":\"000010:Plugin.esp\",\"rank\":1}]";
+        var json = "[{\"Faction\":\"000010:Plugin.esp\",\"Rank\":1}]";
         var hits = Collect(col, json);
         Assert.Single(hits);
-        Assert.Equal(("factions[0].faction", "000010:Plugin.esp"), hits[0]);
+        Assert.Equal(("Factions[0].Faction", "000010:Plugin.esp"), hits[0]);
     }
 
     [Fact]
     public void Walk_ArrayStruct_JsonElementInput_SubFieldPaths()
     {
         var col = ArrayStructCol("Factions", "Faction");
-        var je = JsonDocument.Parse("[{\"faction\":\"000010:Plugin.esp\",\"rank\":1}]").RootElement.Clone();
+        var je = JsonDocument.Parse("[{\"Faction\":\"000010:Plugin.esp\",\"Rank\":1}]").RootElement.Clone();
         var hits = Collect(col, je);
         Assert.Single(hits);
-        Assert.Equal(("factions[0].faction", "000010:Plugin.esp"), hits[0]);
+        Assert.Equal(("Factions[0].Faction", "000010:Plugin.esp"), hits[0]);
     }
 
     [Fact]
     public void Walk_ArrayStruct_NonFormKeySubFieldsIgnored()
     {
         var col = ArrayStructCol("Factions", "Faction"); // "Rank" is not in fkSubFields
-        var json = "[{\"faction\":\"000010:Plugin.esp\",\"rank\":1}]";
+        var json = "[{\"Faction\":\"000010:Plugin.esp\",\"Rank\":1}]";
         var hits = Collect(col, json);
         Assert.Single(hits);
     }
@@ -148,21 +148,21 @@ public class FormRefPathBuilderTests
     public void Walk_ArrayStruct_NullLiteralSubFieldSkipped()
     {
         var col = ArrayStructCol("Factions", "Faction");
-        var json = "[{\"faction\":\"Null\"}]";
+        var json = "[{\"Faction\":\"Null\"}]";
         Assert.Empty(Collect(col, json));
     }
 
     [Fact]
     public void Walk_ArrayStruct_MultipleElementsMultipleSubFields_AllPaths()
     {
-        var col = ArrayStructCol("links", "linkFrom", "linkTo");
-        var json = "[{\"linkFrom\":\"000001:A.esp\",\"linkTo\":\"000002:A.esp\"},{\"linkFrom\":\"000003:A.esp\",\"linkTo\":\"000004:A.esp\"}]";
+        var col = ArrayStructCol("links", "LinkFrom", "LinkTo");
+        var json = "[{\"LinkFrom\":\"000001:A.esp\",\"LinkTo\":\"000002:A.esp\"},{\"LinkFrom\":\"000003:A.esp\",\"LinkTo\":\"000004:A.esp\"}]";
         var hits = Collect(col, json);
         Assert.Equal(4, hits.Count);
-        Assert.Contains(("links[0].linkFrom", "000001:A.esp"), hits);
-        Assert.Contains(("links[0].linkTo", "000002:A.esp"), hits);
-        Assert.Contains(("links[1].linkFrom", "000003:A.esp"), hits);
-        Assert.Contains(("links[1].linkTo", "000004:A.esp"), hits);
+        Assert.Contains(("links[0].LinkFrom", "000001:A.esp"), hits);
+        Assert.Contains(("links[0].LinkTo", "000002:A.esp"), hits);
+        Assert.Contains(("links[1].LinkFrom", "000003:A.esp"), hits);
+        Assert.Contains(("links[1].LinkTo", "000004:A.esp"), hits);
     }
 
     // --- Unrecognized ApiType ---
@@ -183,7 +183,7 @@ public class FormRefPathBuilderTests
         var json = "[1, \"000001:Fallout4.esm\", true]";
         var hits = Collect(col, json);
         Assert.Single(hits);
-        Assert.Equal(("keywords[1]", "000001:Fallout4.esm"), hits[0]);
+        Assert.Equal(("Keywords[1]", "000001:Fallout4.esm"), hits[0]);
     }
 
     // --- Non-object elements in struct array skipped (not throw) ---
@@ -192,27 +192,27 @@ public class FormRefPathBuilderTests
     public void Walk_ArrayStruct_NullElementSkipped()
     {
         var col = ArrayStructCol("Factions", "Faction");
-        var json = "[null, {\"faction\":\"000010:Plugin.esp\"}]";
+        var json = "[null, {\"Faction\":\"000010:Plugin.esp\"}]";
         var hits = Collect(col, json);
         Assert.Single(hits);
-        Assert.Equal(("factions[1].faction", "000010:Plugin.esp"), hits[0]);
+        Assert.Equal(("Factions[1].Faction", "000010:Plugin.esp"), hits[0]);
     }
 
     [Fact]
     public void Walk_ArrayStruct_NonObjectElementSkipped()
     {
         var col = ArrayStructCol("Factions", "Faction");
-        var json = "[\"not-an-object\", {\"faction\":\"000010:Plugin.esp\"}]";
+        var json = "[\"not-an-object\", {\"Faction\":\"000010:Plugin.esp\"}]";
         var hits = Collect(col, json);
         Assert.Single(hits);
-        Assert.Equal(("factions[1].faction", "000010:Plugin.esp"), hits[0]);
+        Assert.Equal(("Factions[1].Faction", "000010:Plugin.esp"), hits[0]);
     }
 
     [Fact]
     public void Walk_ArrayStruct_MissingSubFieldSkipped()
     {
         var col = ArrayStructCol("Factions", "Faction");
-        var json = "[{\"rank\":1}]";
+        var json = "[{\"Rank\":1}]";
         Assert.Empty(Collect(col, json));
     }
 
@@ -238,10 +238,10 @@ public class FormRefPathBuilderTests
         var col = new ColumnSpec("links", "links", "JSON", "array", [], [], LeafWrite.ReadOnly<IMajorRecord>("test fixture: write capability is not under test"),
             IsArray: true, ElementType: elemMeta);
 
-        var json = "[{\"inner\":{\"target\":\"000001:Plugin.esp\"}}]";
+        var json = "[{\"inner\":{\"Target\":\"000001:Plugin.esp\"}}]";
         var hits = Collect(col, json);
 
         Assert.Single(hits);
-        Assert.Equal(("links[0].inner.target", "000001:Plugin.esp"), hits[0]);
+        Assert.Equal(("links[0].inner.Target", "000001:Plugin.esp"), hits[0]);
     }
 }

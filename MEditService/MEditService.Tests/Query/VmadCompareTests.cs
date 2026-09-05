@@ -114,13 +114,15 @@ public sealed class VmadCompareTests : IDisposable
         // The alias array is keyed by the alias number its binding names; the scripts under it by
         // script name; the properties under those by property name.
         var properties = Child(Child(Child(Child(Child(adapter, "Aliases"), "0"), "Scripts"), "AliasScript"), "Properties");
-        var row = Child(Child(properties, "Level"), "data_int");
+        var row = Child(Child(properties, "Level"), "Data");
         Assert.Equal(ConflictThis.Override, row.CellStates["Top.esp"]);
         Assert.Equal("Top.esp", row.WinnerColumn);
 
-        // Confined: the adapter's own sibling members, and the quest's other scripts, agree.
-        Assert.Equal(ConflictThis.IdenticalToMaster, Child(adapter, "Scripts").CellStates["Top.esp"]);
-        Assert.Equal(ConflictThis.IdenticalToMaster, Child(adapter, "Fragments").CellStates["Top.esp"]);
+        // Confined: the adapter's own sibling members agree — the quest's own script binding is
+        // identical in both, and the empty script and fragment lists, which both documents omit,
+        // are not rows at all.
+        Assert.Equal(ConflictThis.IdenticalToMaster, Child(adapter, "Script").CellStates["Top.esp"]);
+        Assert.DoesNotContain(adapter.Children!, c => c.FieldName is "Scripts" or "Fragments");
     }
 
     [Fact]

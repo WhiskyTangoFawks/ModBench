@@ -63,7 +63,7 @@ public sealed class SourceRecordPathTests
     }
 
     [Theory]
-    [InlineData("Cell")]
+    [InlineData("cell")]
     [InlineData("Worldspace")]
     [InlineData("Quest")]
     public void For_ForADirectoryPerRecordType_ThrowsNamedException(string recordType)

@@ -184,11 +184,11 @@ describe('ScalarCell — a hex row', () => {
   });
 });
 
-// An abstract union's `concrete_type` holds Mutagen class names, not words: the schema labels
+// An abstract union's `MutagenObjectType` holds Mutagen class names, not words: the schema labels
 // each member, and the cell shows the label but commits the value behind it.
 describe('ScalarCell — an enum whose values are wire tokens', () => {
   const kind = meta({
-    name: 'concrete_type', type: 'enum',
+    name: 'MutagenObjectType', type: 'enum',
     enumMembers: [{ value: 'NpcLevel', label: 'Npc Level' },
       { value: 'PcLevelMult', label: 'Pc Level Mult' }],
   });

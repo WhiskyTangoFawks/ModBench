@@ -121,7 +121,7 @@ public sealed class AbstractUnionCompileRoundTripTests : IDisposable
     {
         var result = EditService().EditField(
             _fixture.Plugin, _fixture.ColorRecord.ToString(), "Data",
-            Json("""{"MutagenObjectType": "ColorData", "Color": {"red": 17, "green": 34, "blue": 51}}"""));
+            Json("""{"MutagenObjectType": "ColorData", "Color": "#112233"}"""));
         Assert.True(result.Applied, result.Message);
 
         var color = CompileAndReparse().Colors.Single(c => c.FormKey == _fixture.ColorRecord);

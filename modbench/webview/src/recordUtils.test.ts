@@ -160,7 +160,7 @@ describe('elementKeyText', () => {
   // A freshly added element carries its discriminator and nothing else, so its key is empty — a
   // real key, and the only handle on the row until the user names it.
   it('reads an absent or null member as the empty key', () => {
-    expect(elementKeyText({ concrete_type: 'ScriptIntProperty' }, ['name'])).toBe('');
+    expect(elementKeyText({ MutagenObjectType: 'ScriptIntProperty' }, ['name'])).toBe('');
     expect(elementKeyText({ name: null }, ['name'])).toBe('');
     expect(elementKeyText(undefined, ['name'])).toBe('');
   });

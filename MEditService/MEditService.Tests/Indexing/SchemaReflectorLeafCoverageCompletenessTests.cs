@@ -168,6 +168,8 @@ public sealed class SchemaReflectorLeafCoverageCompletenessTests
                 var ownerProp = ownProperties.FirstOrDefault(p => p.Name == column.PropertyName);
                 if (ownerProp == null) continue; // not this schema's own property (e.g. sibling-shape merge) — depth-0 test covers it on its own type
                 if (NestedGetterType(ownerProp.PropertyType) is not { } nestedType) continue;
+                // A vector is one text leaf the codec spells itself ("x, y, z"), so it has no members to reach.
+                if (IsVectorStructType(nestedType)) continue;
 
                 var subFields = column.IsArray ? column.ElementType?.Fields : column.SubFields;
                 foreach (var nestedProp in DirectDataProperties(nestedType, LoquiSkipProps))
@@ -188,17 +190,9 @@ public sealed class SchemaReflectorLeafCoverageCompletenessTests
     }
 
     // The same interface-hierarchy walk SchemaReflector's GetAllInterfaceProperties does, re-derived
-    // here because it is private. Noggog's vector structs are special-cased to X/Y/Z because their
-    // other properties are computed geometry helpers, not serialized data.
+    // here because it is private.
     private static IEnumerable<PropertyInfo> DirectDataProperties(Type type, HashSet<string> skip)
     {
-        if (IsVectorStructType(type))
-        {
-            return new[] { "X", "Y", "Z" }
-                .Select(n => type.GetProperty(n, BindingFlags.Public | BindingFlags.Instance))
-                .Where(p => p != null)!;
-        }
-
         return type.GetInterfaces().Append(type)
             .SelectMany(i => i.GetProperties(BindingFlags.Public | BindingFlags.Instance))
             .Where(p => !skip.Contains(p.Name) && IsRecognizedShape(p.PropertyType))

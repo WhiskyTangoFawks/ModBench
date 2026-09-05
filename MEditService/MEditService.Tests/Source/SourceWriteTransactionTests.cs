@@ -34,7 +34,7 @@ public sealed class SourceWriteTransactionTests : IDisposable
     {
         Seed("Npcs/existing.json", "original");
         Seed("Races/doomed.json", "doomed");
-        Seed("Cells/Home/RecordData.json", "Cell");
+        Seed("Cells/Home/RecordData.json", "cell");
         // An empty directory in the tree from the start: it must still be there afterwards, and it is
         // the entry no git-based oracle would see either way.
         Directory.CreateDirectory(Path_("Cells/Home/Empty"));

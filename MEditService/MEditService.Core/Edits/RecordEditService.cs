@@ -1526,8 +1526,8 @@ public sealed class RecordEditService(
         if (col == null) return null;
 
         // The same builder the read model renders check errors from, so the two definitions of a
-        // broken link cannot drift.
-        return CheckErrorBuilder.Build(col.ToFieldMetadata(), value, reads.Resolve, release);
+        // broken link cannot drift. A member the payload leaves out is not a claim about it.
+        return CheckErrorBuilder.Build(col.ToFieldMetadata(), value, reads.Resolve, release, absentMeansNull: false);
     }
 
     /// <summary>The palette title verbatim (package.json's "Track…" under category "Modbench"); a signpost
@@ -1726,8 +1726,7 @@ public sealed class RecordEditService(
             return RecordEditResult.Refused(
                 RecordEditRefusal.ListElementTypeUnresolved,
                 $"'{fieldPath}' has an element whose concrete type could not be determined from " +
-                "its own payload — include that element's own type discriminator (e.g. " +
-                "'value_type') to say which one it is.");
+                "its own payload — include that element's own MutagenObjectType to say which one it is.");
         }
 
         if (outcome == FieldApplyOutcome.ValueShapeMismatch)

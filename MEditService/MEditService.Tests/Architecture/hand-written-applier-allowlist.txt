@@ -4,7 +4,6 @@ MEditService.Core/Edits/RecordCopy.cs: var record = MajorRecordInstantiator.Acti
 MEditService.Core/Edits/RecordEditService.cs: var bare = MajorRecordInstantiator.Activator(
 MEditService.Core/Edits/RecordEditService.cs: var record = MajorRecordInstantiator.Activator(FormKey.Factory(targetFormKey), release, schema.RecordType);
 MEditService.Core/Edits/SpatialContainerMint.cs: var mod = new Fallout4Mod(ModKey.FromFileName(destinationPlugin.Name), release.ToFallout4Release());
-MEditService.Core/Schema/AtomicValueLeaves.cs: if (rp.CanWrite) rp.SetValue(obj, RebuildAtomicValue(box));
 MEditService.Core/Schema/ByteSliceHex.cs: return LeafWriters.SetOrDecline(rp, obj, new MemorySlice<byte>(bytes), pName, logger);
 MEditService.Core/Schema/LeafClassification.cs: v => new TranslatedString(Language.English, v.GetString()));
 MEditService.Core/Schema/LeafWriters.cs: (rp.GetValue(obj))?.GetType().GetMethod("Clear")?.Invoke(rp.GetValue(obj), []);

@@ -661,28 +661,28 @@ describe('DiffRow — a collapsed container row, per column', () => {
 // including Ctrl+C, which ADR-0034 binds to the one string the cell displays.
 describe('DiffRow — an enum whose values are wire tokens', () => {
   const kindMeta: FieldMetadata = {
-    name: 'concrete_type', type: 'enum', isArray: false, validFormKeyTypes: [],
+    name: 'MutagenObjectType', type: 'enum', isArray: false, validFormKeyTypes: [],
     enumMembers: [{ value: 'QuestReferenceAlias', label: 'Reference' },
       { value: 'QuestLocationAlias', label: 'Location' }],
     displayLabel: 'Kind',
   };
   const kindDiff = diff({
-    fieldName: 'concrete_type',
+    fieldName: 'MutagenObjectType',
     values: { 'Fallout4.esm': 'QuestReferenceAlias', 'MyMod.esp': 'QuestReferenceAlias' },
     winnerValue: 'QuestReferenceAlias',
   });
 
   function renderKindRow() {
     return renderRow({
-      diff: kindDiff, fieldMetaMap: { concrete_type: kindMeta }, rowKey: 'concrete_type',
-      context: { path: [], rootField: 'concrete_type', depth: 0, overrideMeta: kindMeta },
+      diff: kindDiff, fieldMetaMap: { MutagenObjectType: kindMeta }, rowKey: 'MutagenObjectType',
+      context: { path: [], rootField: 'MutagenObjectType', depth: 0, overrideMeta: kindMeta },
     });
   }
 
   it('titles the row from the schema rather than from the wire name', () => {
     renderKindRow();
     expect(screen.getByText('Kind')).toBeInTheDocument();
-    expect(screen.queryByText('concrete_type')).not.toBeInTheDocument();
+    expect(screen.queryByText('MutagenObjectType')).not.toBeInTheDocument();
   });
 
   it('copies what the cell reads, not the class name behind it', () => {

@@ -141,7 +141,7 @@ public class DuckDbRecordIndexTests(TestPluginFixture fixture)
         Assert.NotNull(record);
         var raceField = record.Fields.FirstOrDefault(f => f.Metadata.Name == "Race");
         Assert.NotNull(raceField);
-        Assert.Equal(raceFormKey.ToString(), raceField.Value);
+        Assert.Equal(raceFormKey.ToString(), Assert.IsType<JsonElement>(raceField.Value).GetString());
     }
 
     // ADR-0036: two origins loading the same physical file under different origin values —
@@ -210,7 +210,7 @@ public class DuckDbRecordIndexTests(TestPluginFixture fixture)
 
             Assert.NotNull(record);
             var flags = record.Fields.Single(f => f.Metadata.Name == "Flags");
-            Assert.Equal("Flags", flags.Metadata.Type);
+            Assert.Equal("flags", flags.Metadata.Type);
             // The document's own spelling: the contained members by name, whatever their bit.
             var names = Assert.IsType<JsonElement>(flags.Value).EnumerateArray().Select(e => e.GetString()).ToList();
             Assert.Equal([nameof(Race.Flag.Playable), nameof(Race.Flag.LowPriorityPushable)], names);
@@ -552,19 +552,6 @@ public class DuckDbRecordIndexTests(TestPluginFixture fixture)
         Assert.NotNull(record);
         var linkField = record.Fields.FirstOrDefault(f => f.Metadata.Type == "formKey" && f.Value == null);
         Assert.NotNull(linkField); // NPC has unset FormLink fields → null in DuckDB
-    }
-
-    [Fact]
-    public void GetRecord_FloatField_ReturnsNonNullValue()
-    {
-        // Float fields (height, weight) are value types — always non-null in DuckDB
-        using var repo = LoadedRepository();
-        var formKey = _fixture.Npc1FormKey.ToString();
-        var record = repo.At(RecordRef.Effective).GetDocument(formKey);
-        Assert.NotNull(record);
-        var floatField = record.Fields.FirstOrDefault(f => f.Metadata.Type == "float");
-        Assert.NotNull(floatField);
-        Assert.NotNull(floatField.Value); // float value type is never null
     }
 
     // --- CheckError ---

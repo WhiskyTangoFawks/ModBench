@@ -1,10 +1,11 @@
-import { displayValue, flagBits, toBigInt } from './modelValue';
+import { displayValue } from './modelValue';
 import { getAtPath, metaAtPath, toStr } from './recordUtils';
 import { siblingsInUseFor } from './siblingsInUse';
 import type { FieldDiff, FieldMetadata, PathSegment } from './types';
 
 // The one place in the webview where a game's own reading conventions live — a game-shaped rule
-// that is not an entry in this table is in the wrong file.
+// that is not an entry in this table is in the wrong file. Members are named as the document
+// names them: Mutagen's own property names.
 
 // A formatter is pure: it renders no markup, reads no panel state, and changes neither the value
 // the row commits nor the value it copies.
@@ -13,7 +14,8 @@ import type { FieldDiff, FieldMetadata, PathSegment } from './types';
  *  Value, schema and resolution are joined here, so a formatter names each member once. */
 export interface Member {
   value: unknown;
-  /** The member's schema, for a rule that reads metadata rather than a value. */
+  /** The member's schema, for a rule that reads metadata rather than a value. Where the member's
+   *  type varies by the union's leaf, this is the variant the element's own leaf names. */
   meta?: FieldMetadata;
   /** What this member's own cell reads out: an enum's label, a number, a plain string, a FormKey's
    *  "EditorID [FormKey]". */
@@ -49,61 +51,64 @@ const COMPARISON_OPERATORS: Record<string, string | undefined> = {
   LessThan: '<', LessThanOrEqualTo: '<=',
 };
 
-// The OR flag's own member name; its bit is read off the schema, never transcribed.
+// The OR flag's own member name, read off the flags array the document carries.
 const OR_FLAG = 'OR';
 
 function conditionSummary(row: SummaryRow, comparison: (row: SummaryRow) => string): string {
   // An operator outside the schema's own six reads as no operator at all, exactly as xEdit's own
   // `case Typ and $E0` falls through — the condition still reads, missing only the sign.
-  const operator = COMPARISON_OPERATORS[String(row.member('compare_operator').value)];
+  const operator = COMPARISON_OPERATORS[String(row.member('CompareOperator').value)];
   const call = `${runOn(row)}.${functionName(row)}${parameters(row)}`;
   return `${call}${operator ? ` ${operator} ` : ''}${comparison(row)}${conjunction(row)}`;
 }
 
 function runOn(row: SummaryRow): string {
-  const runOnType = row.member('data', 'run_on_type');
-  if (runOnType.value === 'Reference') return `(${row.member('data', 'reference').shortName})`;
-  return runOnType.label.replace(/ /g, '');
+  const runOnType = row.member('Data', 'RunOnType');
+  if (runOnType.value === 'Reference') return `(${row.member('Data', 'Reference').shortName})`;
+  // An absent Run On is the codec's omission of the default: xEdit's first value, Subject.
+  const label = runOnType.value == null ? 'Subject' : runOnType.label;
+  return label.replace(/ /g, '');
 }
 
 // The function member's own value, or — on the leaf that declares no function member because it
 // *is* one function (Fallout 4's GetEventData) — that leaf's own type name, which is the
 // function's name.
 function functionName(row: SummaryRow): string {
-  const fn = row.member('data', 'function');
-  const data = row.member('data');
+  const fn = row.member('Data', 'Function');
+  const data = row.member('Data');
   return fn.value != null ? fn.label : leafOf(data.meta, data.value) ?? '';
 }
 
 // A slot Mutagen carries as a string is written to its own subrecord and reads on its own row, so
 // xEdit leaves it out of the call — and a call whose first slot is left out has no parentheses.
 function parameters(row: SummaryRow): string {
-  const fn = row.member('data', 'function');
+  const fn = row.member('Data', 'Function');
   const slots = fn.meta ? siblingsInUseFor(fn.meta, fn.value) : [];
   const written = (prefix: string): string | undefined => {
     const slot = slots.find(s => s.startsWith(prefix));
-    if (slot == null || slot.endsWith('_string')) return undefined;
-    const member = row.member('data', slot);
-    return slot.endsWith('_record') ? member.shortName : member.label;
+    if (slot == null || slot.endsWith('String')) return undefined;
+    const member = row.member('Data', slot);
+    return slot.endsWith('Record') ? member.shortName : member.label;
   };
-  const first = written('parameter_one_');
+  const first = written('ParameterOne');
   if (first == null) return '';
-  const second = written('parameter_two_');
+  const second = written('ParameterTwo');
   return `(${second == null ? first : `${first}, ${second}`})`;
 }
 
 // The last condition of a list joins nothing.
 function conjunction(row: SummaryRow): string {
   if (row.isLast) return '';
-  const flags = row.member('flags');
-  const orBit = flags.meta ? flagBits(flags.meta)?.find(b => b.value === OR_FLAG)?.bit : undefined;
-  return orBit != null && (toBigInt(flags.value) & orBit) !== 0n ? ' OR' : ' AND';
+  const flags = row.member('Flags').value;
+  return Array.isArray(flags) && flags.includes(OR_FLAG) ? ' OR' : ' AND';
 }
 
+// ComparisonValue is one member whose type the leaf decides: a float on ConditionFloat, a link to
+// a global on ConditionGlobal.
 const floatComparison = (row: SummaryRow): string =>
-  Number(row.member('comparison_value_float').value ?? 0).toFixed(6);
+  Number(row.member('ComparisonValue').value ?? 0).toFixed(6);
 
-const globalComparison = (row: SummaryRow): string => row.member('comparison_value_form_key').shortName;
+const globalComparison = (row: SummaryRow): string => row.member('ComparisonValue').shortName;
 
 // ── Fallout 4 scripts ────────────────────────────────────────────────────────
 //
@@ -119,37 +124,33 @@ const RESERVED_ALIASES: Record<string, string | undefined> = { '-1': 'None', '-2
 // the compare wire carries no alias list, so the number stands for itself — what xEdit prints with
 // `wbResolveAlias` off.
 function scriptObject(row: SummaryRow): string {
-  const alias = row.member('alias').label;
-  return `${row.member('object').label}, Alias[${RESERVED_ALIASES[alias] ?? alias}]`;
+  const alias = row.member('Alias').label;
+  return `${row.member('Object').label}, Alias[${RESERVED_ALIASES[alias] ?? alias}]`;
 }
 
-// A leaf whose value is a list or a nested struct is absent: xEdit passes a property's value
-// through only one level deep (`SetSummaryPassthroughMaxDepth(1)`), so such a property reads by
-// name and kind alone.
-const PROPERTY_VALUE_MEMBERS: Record<string, string | undefined> = {
-  ScriptBoolProperty: 'data_bool',
-  ScriptFloatProperty: 'data_float',
-  ScriptIntProperty: 'data_int',
-  ScriptStringProperty: 'data_string',
-};
+// A property's value is its one Data member, whose type the leaf decides. A leaf whose Data is a
+// list or a nested struct is absent: xEdit passes a property's value through only one level deep
+// (`SetSummaryPassthroughMaxDepth(1)`), so such a property reads by name and kind alone.
+const SCALAR_PROPERTY_LEAVES = new Set([
+  'ScriptBoolProperty', 'ScriptFloatProperty', 'ScriptIntProperty', 'ScriptStringProperty',
+]);
 
 // Read anywhere but as a member of the script-property union, a value is just itself — which is
 // how one class serves both as a property and as an element of a list of bindings.
 function asProperty(row: SummaryRow, value: string | undefined): string {
   if (row.kind == null) return value ?? '';
-  return `${row.member('name').label}: ${row.kind}${value == null ? '' : ` = ${value}`}`;
+  return `${row.member('Name').label}: ${row.kind}${value == null ? '' : ` = ${value}`}`;
 }
 
 function scriptPropertyValue(row: SummaryRow): string | undefined {
-  const member = PROPERTY_VALUE_MEMBERS[row.leaf];
-  return member == null ? undefined : row.member(member).label;
+  return SCALAR_PROPERTY_LEAVES.has(row.leaf) ? row.member('Data').label : undefined;
 }
 
 // xEdit passes the properties list through rather than counting it. Its length caps
 // (`SetSummaryPassthroughMaxLength`) answer a fixed-width tree column; this cell ellipsizes at its
 // own width, so the summary carries every property.
 function scriptEntry(row: SummaryRow): string {
-  return `${row.member('name').label}(${row.elements('properties').join(', ')})`;
+  return `${row.member('Name').label}(${row.elements('Properties').join(', ')})`;
 }
 
 const PRESENTATION_TABLE: Record<string, Summarizer | undefined> = {
@@ -224,7 +225,7 @@ function summaryIn(
 
   const discriminator = discriminatorOf(meta);
   const member = (...path: string[]): Member => {
-    const memberMeta = metaAtPath(meta, memberPath(path));
+    const memberMeta = metaAtPath(meta, memberPath(path), value);
     const memberValue = getAtPath(value, memberPath(path));
     const resolution = diffAt(diff, path)?.resolutions?.[column];
     return {
@@ -241,7 +242,7 @@ function summaryIn(
     leaf: found.leaf,
     kind: discriminator == null ? undefined : member(discriminator).label,
     elements: (...path) => {
-      const listMeta = metaAtPath(meta, memberPath(path))?.elementType ?? undefined;
+      const listMeta = metaAtPath(meta, memberPath(path), value)?.elementType ?? undefined;
       const present = (diffAt(diff, path)?.children ?? []).filter(c => c.values[column] != null);
       return present.map((child, i) =>
         summaryIn(child, listMeta, column, i === present.length - 1) ?? COLLAPSED_PLACEHOLDER);

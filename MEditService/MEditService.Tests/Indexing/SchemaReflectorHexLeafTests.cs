@@ -42,7 +42,7 @@ public sealed class SchemaReflectorHexLeafTests
     [Fact]
     public void ByteSliceColumn_IsAHexVarcharColumn()
     {
-        var col = Column("gras", "unknown3");
+        var col = Column("gras", "Unknown3");
 
         Assert.Equal("hex", col.ApiType);
         Assert.Equal("VARCHAR", col.DuckDbType);
@@ -82,7 +82,7 @@ public sealed class SchemaReflectorHexLeafTests
     }
 
     private static ApplyOutcome Write(Grass grass, string valueJson) =>
-        Column("gras", "unknown3").Apply.Writer!(grass, Json(valueJson));
+        Column("gras", "Unknown3").Apply.Writer!(grass, Json(valueJson));
 
     private static Grass NewGrass() =>
         new(FormKey.Factory("123456:Fixture.esp"), Fallout4Release.Fallout4)
@@ -155,7 +155,7 @@ public sealed class SchemaReflectorHexLeafTests
 
     private static ApplyOutcome WriteMarkerParameters(Furniture furniture, string unknownHex) =>
         Column("furn", "MarkerParameters").Apply.Writer!(
-            furniture, Json($$"""[{"enabled": true, "unknown": {{unknownHex}}}]"""));
+            furniture, Json($$"""[{"Enabled": true, "Unknown": {{unknownHex}}}]"""));
 
     private static Furniture NewFurniture() =>
         new(FormKey.Factory("123456:Fixture.esp"), Fallout4Release.Fallout4);
@@ -183,8 +183,8 @@ public sealed class SchemaReflectorHexLeafTests
     }
 
     private static ApplyOutcome WriteDebrisModels(Debris debris, string hashesHex) =>
-        Column("debr", "models").Apply.Writer!(
-            debris, Json($$"""[{"percentage": 50, "ModelFilename": "A.nif", "TextureFileHashes": {{hashesHex}}}]"""));
+        Column("debr", "Models").Apply.Writer!(
+            debris, Json($$"""[{"Percentage": 50, "ModelFilename": "A.nif", "TextureFileHashes": {{hashesHex}}}]"""));
 
     // A whole-list write builds each element fresh, so the gate reads the constructor's own default
     // size; gating on the pre-write element instead would refuse an ordinary reorder.
@@ -208,7 +208,7 @@ public sealed class SchemaReflectorHexLeafTests
         var grass = NewGrass();
 
         Assert.Equal(ApplyOutcome.ValueRejected,
-            Column("weap", "unknown").Apply.Writer!(grass, Json("1.5")));
+            Column("weap", "Unknown").Apply.Writer!(grass, Json("1.5")));
     }
 
     [Fact]

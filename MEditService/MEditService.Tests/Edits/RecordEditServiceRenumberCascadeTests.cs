@@ -34,7 +34,7 @@ public sealed class RecordEditServiceRenumberCascadeTests
 
         // Refused before any write, on both sides of the cascade.
         Assert.Equal(referencerBefore, File.ReadAllText(referencerFile));
-        Assert.True(File.Exists(fixture.SourceFileOf(fixture.Target, "Race", "CascadeTargetRace")));
+        Assert.True(File.Exists(fixture.SourceFileOf(fixture.Target, "race", "CascadeTargetRace")));
         Assert.NotNull(fixture.Mirror.Index!.At(RecordRef.Effective)
             .GetDocument(fixture.Target.ToString(), fixture.Plugin));
     }

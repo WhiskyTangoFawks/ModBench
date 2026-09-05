@@ -93,20 +93,19 @@ public class SchemaReflectorTests
     }
 
     [Fact]
-    public void GetSchemas_Omod_PropertiesColumn_PropertySubField_EnumMembersAreUnionOfSiblingEnums()
+    public void GetSchemas_Omod_PropertiesColumn_CarriesEachRecordClassOwnPropertyDomain()
     {
-        // The `property` sub-field's members are the union of every sibling's own T enum member
-        // names.
+        // Each record class's Properties element closes over its own T, so the column carries a
+        // variant per class, each Property sub-field its own enum domain.
         var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
         var properties = schemas["omod"].RecordColumns.Single(c => c.Name == "Properties");
-        var propertyField = properties.ElementType!.Fields!.Single(f => f.Name == "Property");
 
-        var values = propertyField.EnumMembers.Select(m => m.Value).ToList();
-        Assert.Contains("BodyPart", values); // Armor.Property-only member
-        Assert.Contains("ForcedInventory", values); // Npc.Property-only member
-        Assert.Contains("AmmoCapacity", values); // Weapon.Property-only member
-        Assert.Contains("Keywords", values); // shared by Armor.Property and Npc.Property — union must not duplicate it
-        Assert.Equal(values.Count, values.Distinct().Count());
+        static List<string> PropertyDomain(MEditService.Core.Queries.FieldMetadata variant) =>
+            [.. variant.ElementType!.Fields!.Single(f => f.Name == "Property").EnumMembers.Select(m => m.Value)];
+        Assert.Contains("BodyPart", PropertyDomain(properties.Variants![nameof(ArmorModification)]));
+        Assert.Contains("ForcedInventory", PropertyDomain(properties.Variants[nameof(NpcModification)]));
+        Assert.Contains("AmmoCapacity", PropertyDomain(properties.Variants[nameof(WeaponModification)]));
+        Assert.DoesNotContain("BodyPart", PropertyDomain(properties.Variants[nameof(NpcModification)]));
     }
 
     // ── OMOD's Properties element must surface the property's actual Value ──
@@ -117,8 +116,7 @@ public class SchemaReflectorTests
     [Fact]
     public void GetSchemas_Omod_PropertiesElement_ExposesSevenLeafUnionFields()
     {
-        // Schema-shape half of the fix; the seven extraction tests below are the value half —
-        // this alone doesn't prove any leaf's own data actually reaches these fields.
+        // The seven leaves' members, as one element schema.
         var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
         var properties = schemas["omod"].RecordColumns.Single(c => c.Name == "Properties");
         var fields = properties.ElementType!.Fields!;
@@ -129,13 +127,16 @@ public class SchemaReflectorTests
         var functionType = fields.Single(f => f.Name == "FunctionType");
         var enumIntValue = fields.Single(f => f.Name == "EnumIntValue");
 
-        // value/value2/function_type collide in CLR type across the seven leaves, so they take the
-        // read-only-text rung. record and enum_int_value do not collide across the leaves that declare
-        // them, so they stay typed.
-        Assert.Equal("string", value.Type);
-        Assert.Equal("string", value2.Type);
-        Assert.Equal("string", functionType.Type);
+        // Value/Value2/FunctionType collide in CLR type across the seven leaves, so each carries a
+        // variant per leaf. Record and EnumIntValue do not collide across the leaves that declare
+        // them, so they stay one typed member.
+        Assert.Equal("int", value.Variants!["ObjectModIntProperty<Armor+Property>"].Type);
+        Assert.Equal("float", value.Variants["ObjectModFloatProperty<Armor+Property>"].Type);
+        Assert.Equal("bool", value.Variants["ObjectModBoolProperty<Armor+Property>"].Type);
+        Assert.NotNull(value2.Variants);
+        Assert.NotNull(functionType.Variants);
         Assert.Equal("formKey", record.Type);
+        Assert.Null(record.Variants);
         Assert.Equal("int", enumIntValue.Type);
 
         // Every one of these is sparse — declared by some leaves, not all — so every row of a
@@ -235,7 +236,7 @@ public class SchemaReflectorTests
         Assert.NotNull(col);
         Assert.Equal("VARCHAR", col.DuckDbType);
         Assert.Equal("formKey", col.ApiType);
-        Assert.Contains("Race", col.ValidFormKeyTypes);
+        Assert.Contains("race", col.ValidFormKeyTypes);
     }
 
     [Fact]
@@ -440,7 +441,7 @@ public class SchemaReflectorTests
             Mutagen.Bethesda.Plugins.FormKey.Factory("000001:Fallout4.esm"),
             Mutagen.Bethesda.Fallout4.Fallout4Release.Fallout4);
         var factionKey = Mutagen.Bethesda.Plugins.FormKey.Factory("000003:Fallout4.esm");
-        var json = $"[{{\"faction\":\"{factionKey}\",\"rank\":7}}]";
+        var json = $"[{{\"Faction\":\"{factionKey}\",\"Rank\":7}}]";
 
         col.Apply.Writer!(npc, System.Text.Json.JsonDocument.Parse(json).RootElement);
 
@@ -537,7 +538,7 @@ public class SchemaReflectorTests
             Weight = new Mutagen.Bethesda.Fallout4.NpcWeight { Thin = 0.9f, Fat = 0.1f, Muscular = 0.2f }
         };
 
-        col.Apply.Writer!(npc, System.Text.Json.JsonDocument.Parse("{\"thin\":0.5}").RootElement);
+        col.Apply.Writer!(npc, System.Text.Json.JsonDocument.Parse("{\"Thin\":0.5}").RootElement);
 
         Assert.NotNull(npc.Weight);
         Assert.Equal(0.5f, npc.Weight!.Thin, precision: 3);
@@ -605,7 +606,7 @@ public class SchemaReflectorTests
         var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
         var col = schemas["npc_"].RecordColumns.FirstOrDefault(c => c.Name == "Flags");
         Assert.NotNull(col);
-        Assert.Equal("Flags", col!.ApiType);
+        Assert.Equal("flags", col!.ApiType);
         Assert.Equal("VARCHAR", col.DuckDbType);
     }
 
@@ -651,7 +652,7 @@ public class SchemaReflectorTests
         // CannotUsePlayableItems = 2^54 — both beyond JS Number MAX_SAFE_INTEGER.
         // A member's BitValue must be string so the frontend can parse it as BigInt.
         var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
-        var col = schemas["Race"].RecordColumns.Single(c => c.Name == "Flags");
+        var col = schemas["race"].RecordColumns.Single(c => c.Name == "Flags");
         var bits = col.EnumMembers.Select(m => m.BitValue).ToList();
         Assert.Contains("9007199254740992", bits);   // LowPriorityPushable = 2^53
         Assert.Contains("18014398509481984", bits);  // CannotUsePlayableItems = 2^54
@@ -664,7 +665,7 @@ public class SchemaReflectorTests
         // Bitmask edits arrive from the frontend as decimal strings so values above 2^53
         // survive JSON. Apply must parse the string token, not throw on it (GetInt64 would).
         var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
-        var col = schemas["Race"].RecordColumns.Single(c => c.Name == "Flags");
+        var col = schemas["race"].RecordColumns.Single(c => c.Name == "Flags");
         Assert.NotNull(col.Apply.Writer);
 
         var race = new Mutagen.Bethesda.Fallout4.Race(
@@ -704,7 +705,7 @@ public class SchemaReflectorTests
         Assert.True(schemas.ContainsKey("misc"), "misc schema must be present");
         var col = schemas["misc"].RecordColumns.FirstOrDefault(c => c.Name == "MajorFlags");
         Assert.NotNull(col);
-        Assert.Equal("Flags", col!.ApiType);
+        Assert.Equal("flags", col!.ApiType);
         Assert.All(col.EnumMembers, m => Assert.Null(m.BitValue));
     }
 
@@ -716,14 +717,14 @@ public class SchemaReflectorTests
     public void GetSchemas_ContainsHeaderTable()
     {
         var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
-        Assert.True(schemas.ContainsKey("Header"));
+        Assert.True(schemas.ContainsKey("header"));
     }
 
     [Fact]
     public void GetSchemas_Header_AuthorColumn_IsStringType()
     {
         var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
-        var col = schemas["Header"].RecordColumns.FirstOrDefault(c => c.Name == "Author");
+        var col = schemas["header"].RecordColumns.FirstOrDefault(c => c.Name == "Author");
         Assert.NotNull(col);
         Assert.Equal("VARCHAR", col!.DuckDbType);
         Assert.Equal("string", col.ApiType);
@@ -735,9 +736,9 @@ public class SchemaReflectorTests
         // The document spells the header's flags by Mutagen's member names; xEdit's vocabulary is
         // the label, never the value (presentation never rewrites a value).
         var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
-        var col = schemas["Header"].RecordColumns.FirstOrDefault(c => c.Name == "Flags");
+        var col = schemas["header"].RecordColumns.FirstOrDefault(c => c.Name == "Flags");
         Assert.NotNull(col);
-        Assert.Equal("Flags", col!.ApiType);
+        Assert.Equal("flags", col!.ApiType);
         Assert.Equal("ESM", col.EnumMembers.Single(m => m.Value == "Master").Label);
         Assert.Equal("ESL", col.EnumMembers.Single(m => m.Value == "Small").Label);
         Assert.Null(col.EnumMembers.Single(m => m.Value == "Localized").Label);
@@ -763,7 +764,7 @@ public class SchemaReflectorTests
     public void GetSchemas_Header_MastersColumn_IsTheDocumentsOwnMasterReferences()
     {
         var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
-        var col = schemas["Header"].RecordColumns.FirstOrDefault(c => c.Name == "MasterReferences");
+        var col = schemas["header"].RecordColumns.FirstOrDefault(c => c.Name == "MasterReferences");
         Assert.NotNull(col);
         Assert.Equal("array", col!.ApiType);
         Assert.Equal("ModHeader.MasterReferences", col.PropertyName);
@@ -778,7 +779,7 @@ public class SchemaReflectorTests
         // The column itself must be flagged as an array (not just ApiType == "array") — this is
         // what the frontend's array rows key off to render masters as a repeatable list.
         var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
-        var col = schemas["Header"].RecordColumns.Single(c => c.Name == "MasterReferences");
+        var col = schemas["header"].RecordColumns.Single(c => c.Name == "MasterReferences");
         Assert.True(col.ToFieldMetadata().IsArray);
     }
 
@@ -789,7 +790,7 @@ public class SchemaReflectorTests
         // FieldMetadata's own IsArray must be false, or the frontend would try to render each
         // master entry as a further repeatable list.
         var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
-        var col = schemas["Header"].RecordColumns.Single(c => c.Name == "MasterReferences");
+        var col = schemas["header"].RecordColumns.Single(c => c.Name == "MasterReferences");
         Assert.NotNull(col.ElementType);
         Assert.False(col.ElementType!.IsArray);
     }
@@ -800,7 +801,7 @@ public class SchemaReflectorTests
         // Guards against the header schema ever being routed through the major-record
         // indexing loop (EnumerateMajorRecords), which assumes an IMajorRecordGetter.
         var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
-        var schema = schemas["Header"];
+        var schema = schemas["header"];
         Assert.False(typeof(Mutagen.Bethesda.Plugins.Records.IMajorRecordGetter).IsAssignableFrom(schema.RecordType));
     }
 
@@ -813,7 +814,7 @@ public class SchemaReflectorTests
     public void GetSchemas_Perk_ConditionsProperty_IsAGenericArrayColumn()
     {
         var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
-        var columns = schemas["Perk"].RecordColumns;
+        var columns = schemas["perk"].RecordColumns;
         Assert.Contains(columns, c => c.Name == "Conditions" && c.ApiType == "array");
     }
 
@@ -821,7 +822,7 @@ public class SchemaReflectorTests
     public void GetSchemas_Perk_EffectsProperty_StillGetsGenericArrayColumn()
     {
         var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
-        var columns = schemas["Perk"].RecordColumns;
+        var columns = schemas["perk"].RecordColumns;
         Assert.Contains(columns, c => c.Name == "Effects" && c.ApiType == "array");
     }
 
@@ -968,7 +969,7 @@ public class SchemaReflectorTests
         // Cell.Grid.Point is a Noggog.P2Int, which a ClassifyLeaf limited to P3Int16/P3Float maps
         // not at all.
         var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
-        var col = schemas["Cell"].RecordColumns.FirstOrDefault(c => c.Name == "Grid");
+        var col = schemas["cell"].RecordColumns.FirstOrDefault(c => c.Name == "Grid");
         Assert.NotNull(col);
         Assert.Equal("struct", col!.ApiType);
         Assert.Equal(2, col.SubFields!.Count);

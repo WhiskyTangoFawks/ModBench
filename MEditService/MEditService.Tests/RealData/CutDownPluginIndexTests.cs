@@ -46,9 +46,9 @@ public sealed class CutDownPluginIndexTests(CutDownPluginFixture fixture) : ICla
         var adapter = Assert.Single(document!.Fields, f => f.Metadata.Name == "VirtualMachineAdapter");
         using var value = JsonDocument.Parse(
             adapter.Value is JsonElement json ? json.GetRawText() : (string)adapter.Value!);
-        var scripts = value.RootElement.GetProperty("scripts");
+        var scripts = value.RootElement.GetProperty("Scripts");
         Assert.Equal(2, scripts.GetArrayLength());
-        Assert.Contains(scripts.EnumerateArray(), s => s.GetProperty("name").GetString() == "RadroachLegendaryScript");
+        Assert.Contains(scripts.EnumerateArray(), s => s.GetProperty("Name").GetString() == "RadroachLegendaryScript");
     }
 
     [Fact]

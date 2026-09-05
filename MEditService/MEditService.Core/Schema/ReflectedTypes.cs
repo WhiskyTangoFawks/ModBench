@@ -104,16 +104,16 @@ internal static class ReflectedTypes
     /// Mutagen.Bethesda.Serialization's <c>GetNameWithDeclaringType</c>, spelled here so a discriminator
     /// domain and the document agree. <paramref name="typeArguments"/> closes an open generic without
     /// constructing it.</summary>
-    internal static string DocumentTypeName(Type type, Type[]? typeArguments = null)
-    {
-        var name = type.Name;
-        var arity = name.IndexOf('`', StringComparison.Ordinal);
-        if (arity < 0)
-            return type.DeclaringType == null ? name : $"{type.DeclaringType.Name}+{name}";
+    internal static string DocumentTypeName(Type type, Type[]? typeArguments = null) =>
+        DocumentTypeName(type.DeclaringType == null ? type.Name : $"{type.DeclaringType.Name}+{type.Name}", typeArguments ?? type.GetGenericArguments());
 
-        var args = typeArguments ?? type.GetGenericArguments();
-        var prefix = type.DeclaringType == null ? "" : $"{type.DeclaringType}+";
-        return $"{prefix}{name[..arity]}<{string.Join(", ", args.Select(a => DocumentTypeName(a)))}>";
+    /// <summary>The same spelling from a CLR name (<c>Outer+Inner</c>, <c>Open`1</c>) and the
+    /// arguments closing it, for a generic the caller need not construct.</summary>
+    internal static string DocumentTypeName(string clrName, Type[] typeArguments)
+    {
+        var arity = clrName.IndexOf('`', StringComparison.Ordinal);
+        if (arity < 0) return clrName;
+        return $"{clrName[..arity]}<{string.Join(", ", typeArguments.Select(a => DocumentTypeName(a)))}>";
     }
 
     internal static bool IsModKey(Type type) => type == typeof(ModKey);

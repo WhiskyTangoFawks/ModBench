@@ -36,7 +36,9 @@ public class UnionArrayAddInventoryTests
         // cobj.conditions and every other condition-bearing column
         "ConditionFloat|ConditionGlobal",
         // omod.properties
-        "Int|Float|Bool|String|Enum|FormIdInt|FormIdFloat",
+        "ObjectModIntProperty<Armor+Property>|ObjectModFloatProperty<Armor+Property>|ObjectModBoolProperty<Armor+Property>|"
+        + "ObjectModStringProperty<Armor+Property>|ObjectModEnumProperty<Armor+Property>|"
+        + "ObjectModFormLinkIntProperty<Armor+Property>|ObjectModFormLinkFloatProperty<Armor+Property>",
         // perk.effects
         "PerkEntryPointModifyActorValue|PerkEntryPointModifyValue|PerkQuestEffect|PerkAbilityEffect|" +
         "PerkEntryPointAddRangeToValue|PerkEntryPointAbsoluteValue|PerkEntryPointAddLeveledItem|" +
@@ -50,11 +52,11 @@ public class UnionArrayAddInventoryTests
 
     public static TheoryData<string, string> UnionArrays() => new()
     {
-        { "cobj", "conditions" },
-        { "qust", "aliases" },
-        { "perk", "effects" },
-        { "aech", "effects" },
-        { "omod", "properties" },
+        { "cobj", "Conditions" },
+        { "qust", "Aliases" },
+        { "perk", "Effects" },
+        { "aech", "Effects" },
+        { "omod", "Properties" },
     };
 
     [Theory]
@@ -66,7 +68,7 @@ public class UnionArrayAddInventoryTests
         var col = schema.RecordColumns.Single(c => c.Name == column);
         var record = NewRecord(mod, table);
 
-        var outcome = ArrayOpWriter.Apply(record, col, "array_add",
+        var outcome = ArrayOpWriter.Apply(record, col, col.ToFieldMetadata(), "array_add",
             JsonDocument.Parse("""{"op": "array_add", "path": []}""").RootElement, current: null);
 
         Assert.Equal(FieldApplyOutcome.Applied, outcome);

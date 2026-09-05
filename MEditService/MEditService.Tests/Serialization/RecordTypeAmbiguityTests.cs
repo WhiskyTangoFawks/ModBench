@@ -32,7 +32,7 @@ public sealed class RecordTypeAmbiguityTests
         // and its Body is null. Excluded by name rather than by predicate, so a second unresolvable name
         // cannot hide behind a rule that grew.
         var tableNames = SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4).Keys
-            .Where(n => n != "Header")
+            .Where(n => n != "header")
             .ToList();
 
         var unresolved = tableNames.Where(n => Dispatch.ConcreteFor(n) is null).ToList();
@@ -47,7 +47,7 @@ public sealed class RecordTypeAmbiguityTests
     [InlineData("gmst", true)]
     [InlineData("weap", false)]
     [InlineData("npc_", false)]
-    [InlineData("Cell", false)]
+    [InlineData("cell", false)]
     [InlineData("wrld", false)]
     [InlineData("refr", false)]
     [InlineData("Landscape", false)]

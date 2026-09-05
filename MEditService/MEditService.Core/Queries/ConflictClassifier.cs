@@ -241,7 +241,7 @@ public sealed class ConflictClassifier(ILogger<ConflictClassifier>? logger = nul
         /// than a shift of everything after it. Rows come out in key order, the order the write
         /// path stores them.</summary>
         public List<FieldDiff>? BuildKeyed(IReadOnlyList<string> keyMembers) =>
-            BuildAligned(e => ElementKey.Of(e, keyMembers), (a, b) => a.CompareTo(b));
+            BuildAligned(e => ElementKey.Of(e, keyMembers, elementMeta), (a, b) => a.CompareTo(b));
 
         /// <summary>The element is its own key. A non-string element (the JSON null of a never-set
         /// slot) is not a row. Rows stay in first-seen order across the load order.</summary>

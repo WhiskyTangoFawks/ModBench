@@ -41,6 +41,31 @@ public class ConflictClassifierTests
         new("000001:Test.esp", plugin, loadOrder, isWinner, null,
             [.. fields.Select(f => new FieldValue(Meta(f.name), f.value))], "Data", IsPartialForm: true);
 
+    // The codec omits a member equal to its default, so one document's omission and another's
+    // spelled-out default are the same value, never a conflict; a non-default still is.
+    [Theory]
+    [InlineData("int", "0", true)]
+    [InlineData("int", "5", false)]
+    [InlineData("bool", "false", true)]
+    [InlineData("bool", "true", false)]
+    [InlineData("flags", "[]", true)]
+    [InlineData("flags", "[\"OR\"]", false)]
+    [InlineData("formKey", "\"Null\"", true)]
+    [InlineData("formKey", "\"000001:Test.esp\"", false)]
+    [InlineData("struct", "{}", true)]
+    public void Classify_AbsentAgainstAnExplicitValue_IsAConflictOnlyWhenTheValueIsNotTheDefault(
+        string type, string json, bool equal)
+    {
+        var meta = new FieldMetadata("Member", type, false, [], []);
+        var master = new RecordDetail("000001:Test.esp", "A.esp", 0, false, null, [new FieldValue(meta, null)], "Data");
+        var spelled = new RecordDetail("000001:Test.esp", "B.esp", 1, true, null,
+            [new FieldValue(meta, JsonSerializer.Deserialize<JsonElement>(json))], "Data");
+
+        var diff = Assert.Single(Classify([master, spelled]).Diffs);
+
+        Assert.Equal(equal ? ConflictThis.IdenticalToMaster : ConflictThis.Override, diff.CellStates["B.esp"]);
+    }
+
     // --- OnlyOne ---
 
     [Fact]
@@ -972,7 +997,7 @@ public class ConflictClassifierTests
             [new FieldValue(meta, "000BBB:Test.esp")], Origin: "Data");
 
         static MEditService.Core.Records.RecordLookupEntry? Resolve(string fk) =>
-            fk == "000AAA:Test.esp" ? new MEditService.Core.Records.RecordLookupEntry("Race", "GoodRace") : null;
+            fk == "000AAA:Test.esp" ? new MEditService.Core.Records.RecordLookupEntry("race", "GoodRace") : null;
 
         var result = Classifier.Classify([master, override1], NoMasters, GameRelease.Fallout4, Resolve);
 

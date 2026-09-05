@@ -1,3 +1,4 @@
+using System.Text.Json;
 using MEditService.Core.Plugins;
 using MEditService.Core.Queries;
 using MEditService.Core.Records;
@@ -136,7 +137,7 @@ public sealed class PartialFormCompareTests : IDisposable
 
         Assert.Equal("Base.esm", waterHeight.WinnerColumn);
         Assert.NotNull(waterHeight.WinnerValue);
-        Assert.Equal(MasterWaterHeight, Convert.ToSingle(waterHeight.WinnerValue, System.Globalization.CultureInfo.InvariantCulture));
+        Assert.Equal(MasterWaterHeight, Assert.IsType<JsonElement>(waterHeight.WinnerValue).GetSingle());
     }
 
     [Fact]
@@ -175,7 +176,7 @@ public sealed class PartialFormCompareTests : IDisposable
     {
         var captured = new Dictionary<string, object?>
         {
-            ["Cell"] = Project(_service.GetCompare(CellKey.ToString())!),
+            ["cell"] = Project(_service.GetCompare(CellKey.ToString())!),
             ["Ref"] = Project(_service.GetCompare(RefKey.ToString())!),
         };
 

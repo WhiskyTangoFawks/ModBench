@@ -145,7 +145,7 @@ public sealed class ScalarFieldApplierRefusalTests : IDisposable
         var before = omod.Body();
 
         var result = omod.Service().EditField(omod.Plugin, omod.ArmorMod.ToString(), "Properties",
-            Json("""[{"Property":"BodyPart","Step":1.0,"MutagenObjectType":"Int","Value":"not-a-number","Value2":"7","FunctionType":"Set"}]"""));
+            Json("""[{"Property":"BodyPart","Step":1.0,"MutagenObjectType":"ObjectModIntProperty<Armor+Property>","Value":"not-a-number","Value2":"7","FunctionType":"Set"}]"""));
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.FieldValueShapeMismatch, result.Refusal);

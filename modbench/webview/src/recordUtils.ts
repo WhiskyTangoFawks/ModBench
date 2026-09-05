@@ -67,6 +67,8 @@ function memberKeyText(element: unknown, member: string): string {
   }
   if (typeof cur === 'string') return cur;
   if (typeof cur === 'number' || typeof cur === 'boolean') return String(cur);
+  // A flags member is an array of names (a scene phase fragment keys on its Flags).
+  if (Array.isArray(cur)) return cur.map(String).join(', ');
   return '';
 }
 
@@ -232,14 +234,32 @@ export function setAtPath(root: unknown, path: readonly PathSegment[], value: un
   return arr.map(e => (e === seg.key ? value : e));
 }
 
+// The document's own discriminator member, the first key of every union element the codec writes.
+export const DISCRIMINATOR = 'MutagenObjectType';
+
+/** The shape a member has under the object holding it: its own, or the variant the object's
+ *  discriminator names when the member's type varies by leaf. */
+export function variantFor(meta: FieldMetadata, owner: unknown): FieldMetadata {
+  if (!meta.variants || owner == null || typeof owner !== 'object') return meta;
+  const leaf = (owner as Record<string, unknown>)[DISCRIMINATOR];
+  return (typeof leaf === 'string' && meta.variants[leaf]) || meta;
+}
+
 // Reading `fieldMetaMap[rootField].elementType` finds the right element type only when the array
 // itself is the subtree root; for a nested array it names the wrong node's. `?? undefined`
-// collapses the wire's `T | null` at this one boundary.
-export function metaAtPath(meta: FieldMetadata | undefined, path: readonly PathSegment[]): FieldMetadata | undefined {
+// collapses the wire's `T | null` at this one boundary. With `root`, the value at each hop picks a
+// union member's variant.
+export function metaAtPath(
+  meta: FieldMetadata | undefined, path: readonly PathSegment[], root?: unknown,
+): FieldMetadata | undefined {
   let cur: FieldMetadata | null | undefined = meta;
+  let value: unknown = root;
   for (const seg of path) {
     if (!cur) return undefined;
+    const owner = value;
+    value = getAtPath(value, [seg]);
     cur = seg.kind === 'member' ? cur.fields?.find(f => f.name === seg.name) : cur.elementType;
+    if (cur && seg.kind === 'member' && root !== undefined) cur = variantFor(cur, owner);
   }
   return cur ?? undefined;
 }

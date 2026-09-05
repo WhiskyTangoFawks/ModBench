@@ -1,48 +1,61 @@
+using System.Text.Json;
 using MEditService.Core.Schema;
 using Mutagen.Bethesda;
+using Mutagen.Bethesda.Fallout4;
+using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Tests.Indexing;
 
-/// <summary>Color's shape is decided per field, not per type (ADR-0034): xEdit renders most as RGB and four
+/// <summary>A Color is one text leaf the codec spells as "#AARRGGBB". Whether the alpha byte is the
+/// field's to edit is decided per field, not per type (ADR-0034): xEdit renders most as RGB and four
 /// as RGBA.</summary>
 public class SchemaReflectorAtomicValueTests
 {
     private readonly SchemaReflector _reflector = SharedSchemaReflector.Instance;
 
-    private static string[] SubFieldNames(ColumnSpec column) =>
-        column.SubFields?.Select(f => f.Name).ToArray() ?? [];
-
     private ColumnSpec Column(string table, string column) =>
         _reflector.GetSchemas(GameRelease.Fallout4)[table].RecordColumns.Single(c => c.Name == column);
 
-    // ── The 3-leaf shape: xEdit's wbByteColors, the overwhelming majority ──────────────────────
+    private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
 
     [Fact]
-    public void Color_OnANonAllowlistedField_IsAStructOfRedGreenBlue()
+    public void Color_IsAColorLeaf_WithNoMembersOfItsOwn()
     {
-        // Light.Color is `wbByteColors('Color')` in wbDefinitionsFO4.pas:10539, so no Alpha leaf,
-        // the fourth byte being wbUnused(1).
+        // Light.Color is `wbByteColors('Color')` in wbDefinitionsFO4.pas:10539.
         var color = Column("ligh", "Color");
 
-        Assert.Equal("struct", color.ApiType);
-        Assert.Equal(["red", "green", "blue"], SubFieldNames(color));
-        Assert.All(color.SubFields!, f => Assert.Equal("int", f.Type));
+        Assert.Equal("color", color.ApiType);
+        Assert.Null(color.SubFields);
+        Assert.True(color.IsViewable);
     }
 
     [Fact]
-    public void Color_NestedInsideAStruct_IsAStructOfRedGreenBlue()
+    public void Color_NestedInsideAStruct_IsAColorLeaf()
     {
         // Cell.Lighting -> CellLighting.AmbientColor, one level in — the nested twin of the fact
-        // above, proving the atomic-value class is reached from BuildSubSchema's dispatch and not
-        // only from the top-level column dispatch.
-        var lighting = Column("Cell", "Lighting");
+        // above, proving the leaf kind is reached from BuildSubSchema's dispatch and not only from
+        // the top-level column dispatch.
+        var lighting = Column("cell", "Lighting");
         var ambient = lighting.SubFields!.Single(f => f.Name == "AmbientColor");
 
-        Assert.Equal("struct", ambient.Type);
-        Assert.Equal(["red", "green", "blue"], ambient.Fields!.Select(f => f.Name).ToArray());
+        Assert.Equal("color", ambient.Type);
+        Assert.Null(ambient.Fields);
     }
 
-    // ── The 4-leaf shape: xEdit's wbByteRGBA, exactly four fields ──────────────────────────────
+    // ── The alpha byte is written only where xEdit shows one (wbByteRGBA) ──────────────────────
+
+    [Fact]
+    public void Color_OnANonAllowlistedField_KeepsItsAlphaByteWhateverTheEditNames()
+    {
+        var light = new Light(FormKey.Factory("000001:Test.esp"), Fallout4Release.Fallout4)
+        {
+            Color = System.Drawing.Color.FromArgb(0x7F, 1, 2, 3),
+        };
+
+        Assert.Equal(ApplyOutcome.Applied, Column("ligh", "Color").Apply.Writer!(light, Json("\"#A0C86432\"")));
+
+        Assert.Equal((0x7F, 200, 100, 50), (light.Color.A, light.Color.R, light.Color.G, light.Color.B));
+    }
 
     [Theory]
     // Every row is a `wbByteRGBA(CNAM)` definition cited by line, and every one is
@@ -52,15 +65,16 @@ public class SchemaReflectorAtomicValueTests
     [InlineData("lcrt", 7040)]  // LCRT — LocationReferenceType_Generated.cs:1510
     [InlineData("aact", 7051)]  // AACT — ActionRecord_Generated.cs:1766
     [InlineData("lctn", 8256)]  // LCTN — Location_Generated.cs:5435
-    public void Color_OnAnAllowlistedField_IsAStructOfRedGreenBlueAlpha(string table, int xEditDefinitionLine)
+    public void Color_OnAnAllowlistedField_TakesTheAlphaByteTheEditNames(string table, int xEditDefinitionLine)
     {
         Assert.True(xEditDefinitionLine > 0); // the citation is the point of the row, not a value under test
 
         var color = Column(table, "Color");
+        Assert.Equal("color", color.ApiType);
 
-        Assert.Equal("struct", color.ApiType);
-        Assert.Equal(["red", "green", "blue", "Alpha"], SubFieldNames(color));
-        Assert.All(color.SubFields!, f => Assert.Equal("int", f.Type));
+        var keyword = new Keyword(FormKey.Factory("000001:Test.esp"), Fallout4Release.Fallout4);
+        Assert.Equal(ApplyOutcome.Applied, Column("kywd", "Color").Apply.Writer!(keyword, Json("\"#A0285078\"")));
+        Assert.Equal((0xA0, 40, 80, 120), (keyword.Color!.Value.A, keyword.Color.Value.R, keyword.Color.Value.G, keyword.Color.Value.B));
     }
 
     [Fact]
@@ -68,7 +82,7 @@ public class SchemaReflectorAtomicValueTests
     {
         // The completeness guard on a hand-transcribed table: a typo, or a Mutagen rename of the
         // getter interface or the property, must fail loudly rather than dropping that field to the
-        // 3-leaf shape.
+        // RGB rule.
         var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
 
         var unresolved = new List<string>();
@@ -79,13 +93,12 @@ public class SchemaReflectorAtomicValueTests
 
             var column = schema.RecordColumns.SingleOrDefault(c => c.PropertyName == propertyName);
             if (column == null) { unresolved.Add($"{ownerGetterTypeName}.{propertyName} (no column)"); continue; }
-            if (!SubFieldNames(column).Contains("Alpha"))
-                unresolved.Add($"{ownerGetterTypeName}.{propertyName} (no alpha leaf)");
+            if (column.ApiType != "color") unresolved.Add($"{ownerGetterTypeName}.{propertyName} (not a color)");
         }
 
         Assert.True(unresolved.Count == 0,
-            $"AlphaBearingColorFields names a field that does not resolve to a Color column with an " +
-            $"alpha leaf: {string.Join(", ", unresolved)}. Re-check the row against wbDefinitionsFO4.pas " +
+            $"AlphaBearingColorFields names a field that does not resolve to a Color column: " +
+            $"{string.Join(", ", unresolved)}. Re-check the row against wbDefinitionsFO4.pas " +
             "and the Mutagen getter — don't just delete it.");
     }
 

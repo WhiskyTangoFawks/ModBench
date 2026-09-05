@@ -11,20 +11,25 @@ export type FormKeyResolution = Schemas['FormKeyResolution'];
 export type ConflictAll = Schemas['ConflictAll'];
 export type ConflictThis = Schemas['ConflictThis'];
 export type EnumMember = Schemas['EnumMember'];
-/** The backend's own `type` string, narrowed to the closed set this side switches on exhaustively. */
+/** The backend's own `type` string, narrowed to the closed set this side switches on exhaustively.
+ *  Each names how the codec spells the value in the document: a translated string is an object,
+ *  a color "#AARRGGBB", a vector "x, y, z", flags an array of member names, hex "0x..". */
 export type FieldType =
-  | 'string' | 'int' | 'float' | 'bool' | 'enum' | 'formKey' | 'struct' | 'array' | 'hex';
+  | 'string' | 'translatedString' | 'int' | 'float' | 'bool' | 'enum' | 'flags' | 'formKey'
+  | 'struct' | 'array' | 'hex' | 'color' | 'vector';
 
 /** `readOnly` is a per-row stamp the panel applies regardless of the column's own mutability;
  *  every other field's editability comes purely from the column — "per column, never a mode". */
 export type FieldMetadata =
-  // `isDiscriminator` says which member of a struct names the concrete class its object is —
-  // `concrete_type` for a Loqui union, OMOD's `value_type` for its own.
+  // `isDiscriminator` says which member of a struct names the concrete class its object is — the
+  // document's own `MutagenObjectType`. `variants` is a union member's shape per leaf, keyed by
+  // that discriminator's values.
   Omit<Schemas['FieldMetadata'],
-    'type' | 'elementType' | 'fields' | 'isSortable' | 'allowsNull' | 'isDiscriminator'> & {
+    'type' | 'elementType' | 'fields' | 'isSortable' | 'allowsNull' | 'isDiscriminator' | 'variants'> & {
     type: FieldType;
     elementType?: FieldMetadata | null;   // present when type === 'array'
     fields?: FieldMetadata[] | null;      // present when type === 'struct'
+    variants?: Record<string, FieldMetadata> | null;
     readOnly?: boolean;
     // Required non-nullable booleans on the wire, optional here so a test fixture can leave a
     // question that does not apply to its row unanswered rather than fabricating `false` for it.

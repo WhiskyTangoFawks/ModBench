@@ -26,12 +26,12 @@ public sealed class ConcreteBaseUnionSchemaTests
         var column = NpcAdapterColumn(SharedSchemaReflector.Instance);
 
         Assert.Equal("struct", column.ApiType);
-        Assert.Contains(column.SubFields!, f => f.Name == "scripts");
+        Assert.Contains(column.SubFields!, f => f.Name == "Scripts");
     }
 
     private static FieldMetadata ScriptPropertyElement(ColumnSpec adapter) =>
-        adapter.SubFields!.Single(f => f.Name == "scripts").ElementType!
-            .Fields!.Single(f => f.Name == "properties").ElementType!;
+        adapter.SubFields!.Single(f => f.Name == "Scripts").ElementType!
+            .Fields!.Single(f => f.Name == "Properties").ElementType!;
 
     [Fact]
     public void ScriptProperty_ConcreteType_ListsFourteenLeavesAndTheBaseItself()
@@ -67,29 +67,29 @@ public sealed class ConcreteBaseUnionSchemaTests
         var element = ScriptPropertyElement(NpcAdapterColumn(SharedSchemaReflector.Instance));
         var byName = element.Fields!.ToDictionary(f => f.Name);
 
-        Assert.Equal("formKey", byName["object"].Type);
-        Assert.Equal("int", byName["alias"].Type);
-        Assert.True(byName["members"].IsArray);
-        var member = byName["members"].ElementType!.Fields!.ToDictionary(f => f.Name);
-        Assert.Equal("string", member["name"].Type);
-        Assert.True(member["properties"].IsArray);
+        Assert.Equal("formKey", byName["Object"].Type);
+        Assert.Equal("int", byName["Alias"].Type);
+        Assert.True(byName["Members"].IsArray);
+        var member = byName["Members"].ElementType!.Fields!.ToDictionary(f => f.Name);
+        Assert.Equal("string", member["Name"].Type);
+        Assert.True(member["Properties"].IsArray);
     }
 
     [Theory]
-    [InlineData("members")]
-    [InlineData("structs")]
+    [InlineData("Members")]
+    [InlineData("Structs")]
     public void InsideAStructLeaf_NeitherStructLeafIsOfferedAgain(string structLeafList)
     {
         var element = ScriptPropertyElement(NpcAdapterColumn(SharedSchemaReflector.Instance));
         var nestedElement = element.Fields!.Single(f => f.Name == structLeafList).ElementType!;
-        var nestedProperty = nestedElement.Fields!.Single(f => f.Name == (structLeafList == "members" ? "properties" : "members")).ElementType!;
+        var nestedProperty = nestedElement.Fields!.Single(f => f.Name == (structLeafList == "Members" ? "Properties" : "Members")).ElementType!;
 
         var kinds = nestedProperty.Fields!.Single(f => f.Name == "MutagenObjectType")
             .EnumMembers.Select(m => m.Value).ToList();
         Assert.Equal(13, kinds.Count);
         Assert.DoesNotContain("ScriptStructProperty", kinds);
         Assert.DoesNotContain("ScriptStructListProperty", kinds);
-        Assert.DoesNotContain(nestedProperty.Fields!, f => f.Name is "members" or "structs");
+        Assert.DoesNotContain(nestedProperty.Fields!, f => f.Name is "Members" or "Structs");
     }
 
     [Fact]

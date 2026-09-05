@@ -15,10 +15,11 @@ public sealed class DocumentWireSchemaTests
     private static readonly IReadOnlyDictionary<string, RecordTableSchema> Schemas =
         SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4);
 
-    private static readonly Regex MutagenPropertyName = new("^[A-Z][A-Za-z0-9]*$", RegexOptions.Compiled);
+    // Mutagen's own spelling: PascalCase, with an underscore only where Mutagen wrote one (EdgeLink_0_1).
+    private static readonly Regex MutagenPropertyName = new("^[A-Z][A-Za-z0-9_]*$", RegexOptions.Compiled);
 
     private static readonly string[] LeafKinds =
-        ["bool", "int", "float", "string", "translatedString", "hex", "Color", "vector", "enum", "Flags", "formKey", "struct", "array"];
+        ["bool", "int", "float", "string", "translatedString", "hex", "color", "vector", "enum", "flags", "formKey", "struct", "array"];
 
     private static IEnumerable<(string Path, FieldMetadata Meta)> AllFields()
     {
@@ -64,11 +65,11 @@ public sealed class DocumentWireSchemaTests
     }
 
     [Theory]
-    [InlineData("kywd", "Color", "Color")]
+    [InlineData("kywd", "Color", "color")]
     [InlineData("refr", "Position", "vector")]
     [InlineData("npc_", "Name", "translatedString")]
     [InlineData("gras", "Unknown3", "hex")]
-    [InlineData("npc_", "Flags", "Flags")]
+    [InlineData("npc_", "Flags", "flags")]
     [InlineData("npc_", "Aggression", "enum")]
     public void ALeafEncodingTheCodecOwns_IsNamedByItsKind(string table, string column, string kind) =>
         Assert.Equal(kind, Column(table, column).Type);
@@ -135,7 +136,7 @@ public sealed class DocumentWireSchemaTests
         var property = Member(Member(Column("npc_", "VirtualMachineAdapter"), "Scripts").ElementType!, "Properties").ElementType!;
         var data = Member(property, "Data");
 
-        Assert.Equal(new Dictionary<string, string>
+        Assert.Equivalent(new Dictionary<string, string>
         {
             [nameof(ScriptIntProperty)] = "int",
             [nameof(ScriptFloatProperty)] = "float",
@@ -145,7 +146,9 @@ public sealed class DocumentWireSchemaTests
             [nameof(ScriptFloatListProperty)] = "float[]",
             [nameof(ScriptBoolListProperty)] = "bool[]",
             [nameof(ScriptStringListProperty)] = "string[]",
-        }, data.Variants!.ToDictionary(v => v.Key, v => v.Value.IsArray ? v.Value.ElementType!.Type + "[]" : v.Value.Type));
+            [nameof(ScriptVariableProperty)] = "int",
+            [nameof(ScriptVariableListProperty)] = "int[]",
+        }, data.Variants!.ToDictionary(v => v.Key, v => v.Value.IsArray ? v.Value.ElementType!.Type + "[]" : v.Value.Type), strict: true);
         Assert.Single(property.Fields!, f => f.Name == "Data");
     }
 
@@ -166,7 +169,7 @@ public sealed class DocumentWireSchemaTests
 
         Assert.Equal("float", data.Variants![nameof(GameSettingFloat)].Type);
         Assert.Equal("int", data.Variants[nameof(GameSettingInt)].Type);
-        Assert.Equal("string", data.Variants[nameof(GameSettingString)].Type);
+        Assert.Equal("translatedString", data.Variants[nameof(GameSettingString)].Type);
         Assert.Equal("bool", data.Variants[nameof(GameSettingBool)].Type);
     }
 

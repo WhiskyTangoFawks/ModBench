@@ -23,39 +23,39 @@ const RUN_ON_VALUES = ['Subject', 'Target', 'Reference', 'CombatTarget'];
 // Only the functions these cases use; each maps to the members Mutagen's own GetParameterTypes
 // picks for it.
 const FUNCTION_SLOTS: Record<string, string[]> = {
-  GetStageDone: ['parameter_one_record', 'parameter_two_number'],
-  HasKeyword: ['parameter_one_record'],
-  GetVATSValue: ['parameter_one_number', 'parameter_two_number'],
+  GetStageDone: ['ParameterOneRecord', 'ParameterTwoNumber'],
+  HasKeyword: ['ParameterOneRecord'],
+  GetVATSValue: ['ParameterOneNumber', 'ParameterTwoNumber'],
   IsSneaking: [],
-  GetGraphVariableFloat: ['parameter_one_string'],
-  GetVMQuestVariable: ['parameter_one_record', 'parameter_two_string'],
-  HasAssociationType: ['parameter_one_record', 'parameter_two_record'],
+  GetGraphVariableFloat: ['ParameterOneString'],
+  GetVMQuestVariable: ['ParameterOneRecord', 'ParameterTwoString'],
+  HasAssociationType: ['ParameterOneRecord', 'ParameterTwoRecord'],
 };
 
 const dataMeta: FieldMetadata = {
-  name: 'data', type: 'struct', isArray: false, validFormKeyTypes: [], enumMembers: [],
+  name: 'Data', type: 'struct', isArray: false, validFormKeyTypes: [], enumMembers: [],
   leafTypeName: 'ConditionData',
   fields: [
-    leaf('run_on_type', 'enum', {
+    leaf('RunOnType', 'enum', {
       enumMembers: RUN_ON_VALUES.map(value => ({ value, bitValue: null, label: null })),
-      siblingsInUse: Object.fromEntries(RUN_ON_VALUES.map(v => [v, v === 'Reference' ? ['reference'] : []])),
+      siblingsInUse: Object.fromEntries(RUN_ON_VALUES.map(v => [v, v === 'Reference' ? ['Reference'] : []])),
     }),
-    leaf('reference', 'formKey'),
-    leaf('unknown3', 'int'),
-    leaf('function', 'enum', {
+    leaf('Reference', 'formKey'),
+    leaf('Unknown3', 'int'),
+    leaf('Function', 'enum', {
       enumMembers: Object.keys(FUNCTION_SLOTS).map(value => ({ value, bitValue: null, label: null })),
       siblingsInUse: FUNCTION_SLOTS,
     }),
-    leaf('parameter_one_record', 'formKey'),
-    leaf('parameter_one_number', 'int'),
-    leaf('parameter_one_string', 'string'),
-    leaf('parameter_two_record', 'formKey'),
-    leaf('parameter_two_number', 'int'),
-    leaf('parameter_two_string', 'string'),
-    leaf('event_function', 'int'),
-    leaf('event_member', 'int'),
-    leaf('parameter3', 'formKey'),
-    leaf('concrete_type', 'enum', {
+    leaf('ParameterOneRecord', 'formKey'),
+    leaf('ParameterOneNumber', 'int'),
+    leaf('ParameterOneString', 'string'),
+    leaf('ParameterTwoRecord', 'formKey'),
+    leaf('ParameterTwoNumber', 'int'),
+    leaf('ParameterTwoString', 'string'),
+    leaf('EventFunction', 'int'),
+    leaf('EventMember', 'int'),
+    leaf('Parameter3', 'formKey'),
+    leaf('MutagenObjectType', 'enum', {
       displayLabel: 'Kind', isDiscriminator: true,
       enumMembers: [
         { value: 'FunctionConditionData', bitValue: null, label: 'Function' },
@@ -65,26 +65,31 @@ const dataMeta: FieldMetadata = {
   ],
 };
 
+// ComparisonValue is one member whose type the leaf decides; the variant per leaf is what the
+// backend's schema carries, and the field's own shape is the first leaf's.
+const comparisonValueMeta: FieldMetadata = leaf('ComparisonValue', 'float', {
+  variants: { ConditionFloat: leaf('ComparisonValue', 'float'), ConditionGlobal: leaf('ComparisonValue', 'formKey') },
+});
+
 const conditionsMeta: FieldMetadata = {
-  name: 'conditions', type: 'array', isArray: true, validFormKeyTypes: [], enumMembers: [],
+  name: 'Conditions', type: 'array', isArray: true, validFormKeyTypes: [], enumMembers: [],
   elementType: {
     name: '', type: 'struct', isArray: false, validFormKeyTypes: [], enumMembers: [],
     leafTypeName: 'Condition',
     fields: [
       dataMeta,
-      leaf('compare_operator', 'enum', {
+      leaf('CompareOperator', 'enum', {
         enumMembers: ['EqualTo', 'NotEqualTo', 'GreaterThan', 'GreaterThanOrEqualTo', 'LessThan', 'LessThanOrEqualTo']
           .map(value => ({ value, bitValue: null, label: null })),
       }),
-      leaf('flags', 'enum', {
+      leaf('Flags', 'flags', {
         enumMembers: [
           { value: 'OR', bitValue: '1', label: null },
           { value: 'ParametersUseAliases', bitValue: '2', label: null },
         ],
       }),
-      leaf('comparison_value_float', 'float'),
-      leaf('comparison_value_form_key', 'formKey'),
-      leaf('concrete_type', 'enum', {
+      comparisonValueMeta,
+      leaf('MutagenObjectType', 'enum', {
         displayLabel: 'Kind', isDiscriminator: true,
         enumMembers: [
           { value: 'ConditionFloat', bitValue: null, label: 'Float' },
@@ -97,24 +102,17 @@ const conditionsMeta: FieldMetadata = {
 
 type Condition = Record<string, unknown>;
 
+// The document's own spelling: a member at its default is omitted, flags are the names carried.
 const condition = (over: Condition = {}, data: Condition = {}): Condition => ({
-  concrete_type: 'ConditionFloat',
-  compare_operator: 'EqualTo',
-  flags: 0,
-  comparison_value_float: 1,
-  comparison_value_form_key: null,
-  data: {
-    concrete_type: 'FunctionConditionData',
-    run_on_type: 'Subject',
-    reference: null,
-    unknown3: -1,
-    function: 'IsSneaking',
-    parameter_one_record: null,
-    parameter_one_number: null,
-    parameter_one_string: null,
-    parameter_two_record: null,
-    parameter_two_number: null,
-    parameter_two_string: null,
+  MutagenObjectType: 'ConditionFloat',
+  CompareOperator: 'EqualTo',
+  Flags: [],
+  ComparisonValue: 1,
+  Data: {
+    MutagenObjectType: 'FunctionConditionData',
+    RunOnType: 'Subject',
+    Unknown3: -1,
+    Function: 'IsSneaking',
     ...data,
   },
   ...over,
@@ -142,14 +140,16 @@ function compareResult(
   const valuesFor = (path: string[], index: number) =>
     Object.fromEntries(columns.map(c => [c, at(c, index, path) ?? null]));
 
+  // A row exists for any member some column carries, as the backend's classifier aligns them; a
+  // document omits a member at its default, so the keys are the union across columns.
   const memberDiffs = (path: string[], index: number): unknown[] => {
-    const shape = at(columns[0], index, path) as Condition;
-    return Object.keys(shape).map(name => ({
+    const keys = [...new Set(columns.flatMap(c => Object.keys((at(c, index, path) as Condition | undefined) ?? {})))];
+    return keys.map(name => ({
       fieldName: name,
       values: valuesFor([...path, name], index),
       winnerColumn: columns[0], winnerValue: at(columns[0], index, [...path, name]), cellStates: {},
       resolutions: resolutionsFor([...path, name], index),
-      children: name === 'data' ? memberDiffs([...path, name], index) : undefined,
+      children: name === 'Data' ? memberDiffs([...path, name], index) : undefined,
     }));
   };
 
@@ -161,7 +161,7 @@ function compareResult(
       fields: [{ metadata: meta, value: byColumn[plugin] }], conflictThis: 'Master',
     })),
     diffs: [{
-      fieldName: 'conditions',
+      fieldName: 'Conditions',
       values: Object.fromEntries(columns.map(c => [c, byColumn[c]])),
       winnerColumn: columns[0], winnerValue: byColumn[columns[0]], cellStates: {},
       children: byColumn[columns[0]].map((_, i) => ({
@@ -195,7 +195,7 @@ function renderPanel() {
 }
 
 async function expandConditions() {
-  await waitFor(() => screen.getByText('conditions'));
+  await waitFor(() => screen.getByText('Conditions'));
   fireEvent.click(screen.getAllByText('▶')[0]);
   await waitFor(() => expect(screen.getAllByText('[0]').some(el => el.tagName === 'TD')).toBe(true));
 }
@@ -206,18 +206,23 @@ function summaryOf(index: number): string {
   return cells[1].textContent;
 }
 
+// A row's label cell: the member's own name, which a value cell can also read as (the Kind row
+// of a FunctionConditionData reads "Function").
+const labelCell = (name: string): HTMLElement | undefined =>
+  screen.queryAllByText(name).find(el => el.tagName === 'TD');
+
 async function expandFirstConditionData() {
   await expandConditions();
   const element = screen.getAllByText('[0]').find(el => el.tagName === 'TD')!;
   fireEvent.click(element.closest('tr')!.querySelector('button')!);
-  await waitFor(() => screen.getByText('data'));
-  fireEvent.click(screen.getByText('data').closest('tr')!.querySelector('button')!);
-  await waitFor(() => screen.getByText('function'));
+  await waitFor(() => expect(labelCell('Data')).toBeDefined());
+  fireEvent.click(labelCell('Data')!.closest('tr')!.querySelector('button')!);
+  await waitFor(() => expect(labelCell('Function')).toBeDefined());
 }
 
 async function openMemberEditor(memberName: string): Promise<HTMLTableCellElement> {
   await expandFirstConditionData();
-  const cell = screen.getByText(memberName).closest('tr')!.querySelectorAll('td')[1];
+  const cell = labelCell(memberName)!.closest('tr')!.querySelectorAll('td')[1];
   fireEvent.doubleClick(cell.querySelector('[data-open-trigger]')!);
   return cell;
 }
@@ -238,9 +243,9 @@ describe('a collapsed condition reads as xEdit prose', () => {
   it('run on, function, both parameter slots, operator, float to six places, and the AND that follows a non-last element', async () => {
     currentCompare = oneColumn(
       [
-        condition({ comparison_value_float: 1 }, {
-          run_on_type: 'CombatTarget', function: 'GetStageDone',
-          parameter_one_record: '00123456:MyMod.esp', parameter_two_number: 10,
+        condition({}, {
+          RunOnType: 'CombatTarget', Function: 'GetStageDone',
+          ParameterOneRecord: '00123456:MyMod.esp', ParameterTwoNumber: 10,
         }),
         condition(),
       ],
@@ -255,8 +260,8 @@ describe('a collapsed condition reads as xEdit prose', () => {
   it('Run On = Reference renders the reference as its short name in parentheses', async () => {
     currentCompare = oneColumn(
       [condition({}, {
-        run_on_type: 'Reference', reference: '00000014:Fallout4.esm',
-        function: 'HasKeyword', parameter_one_record: '00AABBCC:MyMod.esp',
+        RunOnType: 'Reference', Reference: '00000014:Fallout4.esm',
+        Function: 'HasKeyword', ParameterOneRecord: '00AABBCC:MyMod.esp',
       })],
       { '00000014:Fallout4.esm': 'PlayerRef', '00AABBCC:MyMod.esp': 'ArmorKeyword' },
     );
@@ -267,7 +272,7 @@ describe('a collapsed condition reads as xEdit prose', () => {
   });
 
   it('a function with no parameters is written without parentheses', async () => {
-    currentCompare = oneColumn([condition({ compare_operator: 'NotEqualTo' }, { function: 'IsSneaking' })]);
+    currentCompare = oneColumn([condition({ CompareOperator: 'NotEqualTo' }, { Function: 'IsSneaking' })]);
     renderPanel();
     await expandConditions();
 
@@ -276,7 +281,7 @@ describe('a collapsed condition reads as xEdit prose', () => {
 
   it('a string parameter is written without parentheses — xEdit ignores the slot, the value has its own row', async () => {
     currentCompare = oneColumn([condition({}, {
-      function: 'GetGraphVariableFloat', parameter_one_string: 'bAllowRotation',
+      Function: 'GetGraphVariableFloat', ParameterOneString: 'bAllowRotation',
     })]);
     renderPanel();
     await expandConditions();
@@ -287,8 +292,8 @@ describe('a collapsed condition reads as xEdit prose', () => {
   it('both record slots read as short names', async () => {
     currentCompare = oneColumn(
       [condition({}, {
-        function: 'HasAssociationType',
-        parameter_one_record: '00000014:Fallout4.esm', parameter_two_record: '00003333:MyMod.esp',
+        Function: 'HasAssociationType',
+        ParameterOneRecord: '00000014:Fallout4.esm', ParameterTwoRecord: '00003333:MyMod.esp',
       })],
       { '00000014:Fallout4.esm': 'PlayerRef', '00003333:MyMod.esp': 'MyAssocType' },
     );
@@ -301,8 +306,8 @@ describe('a collapsed condition reads as xEdit prose', () => {
   it('a string second parameter drops only itself', async () => {
     currentCompare = oneColumn(
       [condition({}, {
-        function: 'GetVMQuestVariable',
-        parameter_one_record: '00000F1E:MyMod.esp', parameter_two_string: '::myVar',
+        Function: 'GetVMQuestVariable',
+        ParameterOneRecord: '00000F1E:MyMod.esp', ParameterTwoString: '::myVar',
       })],
       { '00000F1E:MyMod.esp': 'MyQuest' },
     );
@@ -315,9 +320,9 @@ describe('a collapsed condition reads as xEdit prose', () => {
   it('a GLOB comparison reads as the global’s short name, not a float', async () => {
     currentCompare = oneColumn(
       [condition({
-        concrete_type: 'ConditionGlobal', compare_operator: 'GreaterThanOrEqualTo',
-        comparison_value_float: null, comparison_value_form_key: '00000ABC:MyMod.esp',
-      }, { function: 'IsSneaking' })],
+        MutagenObjectType: 'ConditionGlobal', CompareOperator: 'GreaterThanOrEqualTo',
+        ComparisonValue: null, ComparisonValue: '00000ABC:MyMod.esp',
+      }, { Function: 'IsSneaking' })],
       { '00000ABC:MyMod.esp': 'MyGlobal' },
     );
     renderPanel();
@@ -328,8 +333,8 @@ describe('a collapsed condition reads as xEdit prose', () => {
 
   it('the OR flag writes OR, and the last element of the list carries no conjunction at all', async () => {
     currentCompare = oneColumn([
-      condition({ flags: 1 }, { function: 'IsSneaking' }),
-      condition({ flags: 1 }, { function: 'IsSneaking' }),
+      condition({ Flags: ['OR'] }, { Function: 'IsSneaking' }),
+      condition({ Flags: ['OR'] }, { Function: 'IsSneaking' }),
     ]);
     renderPanel();
     await expandConditions();
@@ -342,7 +347,7 @@ describe('a collapsed condition reads as xEdit prose', () => {
     // GetEventData is Fallout 4's second ConditionData leaf: it declares no `function`, because it
     // *is* one function. Its own type name is the function's name.
     currentCompare = oneColumn([condition({}, {
-      concrete_type: 'GetEventData', function: null, event_function: 0, event_member: 0, parameter3: null,
+      MutagenObjectType: 'GetEventData', Function: null, EventFunction: 0, EventMember: 0,
     })]);
     renderPanel();
     await expandConditions();
@@ -351,12 +356,12 @@ describe('a collapsed condition reads as xEdit prose', () => {
   });
 
   it('an expanded condition shows its members instead of the summary', async () => {
-    currentCompare = oneColumn([condition({}, { function: 'IsSneaking' })]);
+    currentCompare = oneColumn([condition({}, { Function: 'IsSneaking' })]);
     renderPanel();
     await expandConditions();
     fireEvent.click(screen.getAllByText('▶')[0]);
 
-    await waitFor(() => screen.getByText('data'));
+    await waitFor(() => screen.getByText('Data'));
     expect(summaryOf(0)).toBe('');
   });
 });
@@ -376,8 +381,8 @@ describe('the table keys on the leaf type name', () => {
   };
 
   it('reads its summary from the type name the schema declares', async () => {
-    const noDiscriminator = condition({}, { function: 'IsSneaking' });
-    delete noDiscriminator.concrete_type;
+    const noDiscriminator = condition({}, { Function: 'IsSneaking' });
+    delete noDiscriminator.MutagenObjectType;
     currentCompare = oneColumn([noDiscriminator], {}, notAUnion);
     renderPanel();
     await expandConditions();
@@ -392,7 +397,7 @@ describe('the table keys on the leaf type name', () => {
       ...conditionsMeta,
       elementType: { ...conditionsMeta.elementType!, leafTypeName: 'ConditionFloat' },
     };
-    const unnamed = condition({ concrete_type: null }, { function: 'IsSneaking' });
+    const unnamed = condition({ MutagenObjectType: null }, { Function: 'IsSneaking' });
     currentCompare = oneColumn([unnamed], {}, declared);
     renderPanel();
     await expandConditions();
@@ -402,80 +407,80 @@ describe('the table keys on the leaf type name', () => {
 });
 
 describe('a condition shows one row per parameter slot in use', () => {
-  it('a record-slot function renders parameter_one_record and neither of its aliases', async () => {
+  it('a record-slot function renders ParameterOneRecord and neither of its aliases', async () => {
     currentCompare = oneColumn([condition({}, {
-      function: 'HasKeyword', parameter_one_record: '00AABBCC:MyMod.esp',
+      Function: 'HasKeyword', ParameterOneRecord: '00AABBCC:MyMod.esp',
     })]);
     renderPanel();
     await expandFirstConditionData();
 
-    expect(screen.getByText('parameter_one_record')).toBeInTheDocument();
-    expect(screen.queryByText('parameter_one_number')).not.toBeInTheDocument();
-    expect(screen.queryByText('parameter_one_string')).not.toBeInTheDocument();
-    expect(screen.queryByText('parameter_two_record')).not.toBeInTheDocument();
-    expect(screen.queryByText('parameter_two_number')).not.toBeInTheDocument();
-    expect(screen.queryByText('parameter_two_string')).not.toBeInTheDocument();
+    expect(labelCell('ParameterOneRecord')).toBeDefined();
+    expect(labelCell('ParameterOneNumber')).toBeUndefined();
+    expect(labelCell('ParameterOneString')).toBeUndefined();
+    expect(labelCell('ParameterTwoRecord')).toBeUndefined();
+    expect(labelCell('ParameterTwoNumber')).toBeUndefined();
+    expect(labelCell('ParameterTwoString')).toBeUndefined();
   });
 
-  it('a number-slot function renders parameter_one_number and not the record twin sharing its four bytes', async () => {
+  it('a number-slot function renders ParameterOneNumber and not the record twin sharing its four bytes', async () => {
     currentCompare = oneColumn([condition({}, {
-      function: 'GetVATSValue', parameter_one_number: 10, parameter_two_number: 0,
+      Function: 'GetVATSValue', ParameterOneNumber: 10, ParameterTwoNumber: 0,
     })]);
     renderPanel();
     await expandFirstConditionData();
 
-    expect(screen.getByText('parameter_one_number')).toBeInTheDocument();
-    expect(screen.getByText('parameter_two_number')).toBeInTheDocument();
-    expect(screen.queryByText('parameter_one_record')).not.toBeInTheDocument();
-    expect(screen.queryByText('parameter_two_record')).not.toBeInTheDocument();
+    expect(labelCell('ParameterOneNumber')).toBeDefined();
+    expect(labelCell('ParameterTwoNumber')).toBeDefined();
+    expect(labelCell('ParameterOneRecord')).toBeUndefined();
+    expect(labelCell('ParameterTwoRecord')).toBeUndefined();
   });
 
   it('Parameter #3 is written whatever the function is, so it is never hidden', async () => {
-    currentCompare = oneColumn([condition({}, { function: 'IsSneaking' })]);
+    currentCompare = oneColumn([condition({}, { Function: 'IsSneaking' })]);
     renderPanel();
     await expandFirstConditionData();
 
-    expect(screen.getByText('unknown3')).toBeInTheDocument();
+    expect(labelCell('Unknown3')).toBeDefined();
   });
 
   it('the reference row appears only under Run On = Reference', async () => {
-    currentCompare = oneColumn([condition({}, { function: 'IsSneaking' })]);
+    currentCompare = oneColumn([condition({}, { Function: 'IsSneaking' })]);
     renderPanel();
     await expandFirstConditionData();
 
-    expect(screen.queryByText('reference')).not.toBeInTheDocument();
+    expect(labelCell('Reference')).toBeUndefined();
   });
 
   it('a slot any column uses is shown, so a conflicting override never hides its own data', async () => {
     currentCompare = compareResult({
-      [PLUGIN]: [condition({}, { function: 'HasKeyword', parameter_one_record: '00AABBCC:MyMod.esp' })],
-      'Other.esp': [condition({}, { function: 'GetVATSValue', parameter_one_number: 3 })],
+      [PLUGIN]: [condition({}, { Function: 'HasKeyword', ParameterOneRecord: '00AABBCC:MyMod.esp' })],
+      'Other.esp': [condition({}, { Function: 'GetVATSValue', ParameterOneNumber: 3 })],
     });
     renderPanel();
     await expandFirstConditionData();
 
-    expect(screen.getByText('parameter_one_record')).toBeInTheDocument();
-    expect(screen.getByText('parameter_one_number')).toBeInTheDocument();
+    expect(labelCell('ParameterOneRecord')).toBeDefined();
+    expect(labelCell('ParameterOneNumber')).toBeDefined();
   });
 });
 
 describe('a governing member clears the siblings its new value idles', () => {
   it('changing Run On away from Reference posts an edit with the reference cleared', async () => {
     currentCompare = oneColumn([condition({}, {
-      run_on_type: 'Reference', reference: '00000014:Fallout4.esm', function: 'IsSneaking',
+      RunOnType: 'Reference', Reference: '00000014:Fallout4.esm', Function: 'IsSneaking',
     })]);
     renderPanel();
-    const cell = await openMemberEditor('run_on_type');
+    const cell = await openMemberEditor('RunOnType');
 
     const select = cell.querySelector('select')!;
     fireEvent.change(select, { target: { value: 'Subject' } });
     fireEvent.blur(select);
 
     const posted = lastEditField();
-    expect(posted?.fieldPath).toBe('conditions');
-    const data = (posted?.value as Record<string, unknown>[])[0].data as Record<string, unknown>;
-    expect(data.run_on_type).toBe('Subject');
-    expect(data.reference).toBeNull();
+    expect(posted?.fieldPath).toBe('Conditions');
+    const data = (posted?.value as Record<string, unknown>[])[0].Data as Record<string, unknown>;
+    expect(data.RunOnType).toBe('Subject');
+    expect(data.Reference).toBeNull();
   });
 
   it('changing the function posts an edit with every slot the new function does not use cleared', async () => {
@@ -483,73 +488,73 @@ describe('a governing member clears the siblings its new value idles', () => {
     // non-null parameter string without consulting the function, so a stale string reaches the
     // plugin.
     currentCompare = oneColumn([condition({}, {
-      function: 'GetGraphVariableFloat', parameter_one_string: 'bAllowRotation',
+      Function: 'GetGraphVariableFloat', ParameterOneString: 'bAllowRotation',
     })]);
     renderPanel();
-    const cell = await openMemberEditor('function');
+    const cell = await openMemberEditor('Function');
 
     const select = cell.querySelector('select')!;
     fireEvent.change(select, { target: { value: 'HasKeyword' } });
     fireEvent.blur(select);
 
     const posted = lastEditField();
-    const data = (posted?.value as Record<string, unknown>[])[0].data as Record<string, unknown>;
-    expect(data.function).toBe('HasKeyword');
+    const data = (posted?.value as Record<string, unknown>[])[0].Data as Record<string, unknown>;
+    expect(data.Function).toBe('HasKeyword');
     // A JSON null into ParameterOneNumber — a non-nullable Int32 — is rejected by the write path,
     // and a rejected member fails the whole array write, so each slot empties per its own type.
-    expect(data.parameter_one_string).toBeNull();
-    expect(data.parameter_two_record).toBeNull();
-    expect(data.parameter_two_string).toBeNull();
-    expect(data.parameter_one_number).toBe(0);
-    expect(data.parameter_two_number).toBe(0);
+    expect(data.ParameterOneString).toBeNull();
+    expect(data.ParameterTwoRecord).toBeNull();
+    expect(data.ParameterTwoString).toBeNull();
+    expect(data.ParameterOneNumber).toBe(0);
+    expect(data.ParameterTwoNumber).toBe(0);
   });
 
   it('a member the new value still uses keeps its value', async () => {
     currentCompare = oneColumn([condition({}, {
-      function: 'HasKeyword', parameter_one_record: '00AABBCC:MyMod.esp',
+      Function: 'HasKeyword', ParameterOneRecord: '00AABBCC:MyMod.esp',
     })]);
     renderPanel();
-    const cell = await openMemberEditor('function');
+    const cell = await openMemberEditor('Function');
 
     const select = cell.querySelector('select')!;
     fireEvent.change(select, { target: { value: 'GetVMQuestVariable' } });
     fireEvent.blur(select);
 
-    const data = (lastEditField()?.value as Record<string, unknown>[])[0].data as Record<string, unknown>;
-    expect(data.parameter_one_record).toBe('00AABBCC:MyMod.esp');
+    const data = (lastEditField()?.value as Record<string, unknown>[])[0].Data as Record<string, unknown>;
+    expect(data.ParameterOneRecord).toBe('00AABBCC:MyMod.esp');
   });
 
   it('an edit to a member that governs nothing leaves its siblings alone', async () => {
     currentCompare = oneColumn([condition({}, {
-      function: 'HasKeyword', parameter_one_record: '00AABBCC:MyMod.esp', unknown3: -1,
+      Function: 'HasKeyword', ParameterOneRecord: '00AABBCC:MyMod.esp', Unknown3: -1,
     })]);
     renderPanel();
-    const cell = await openMemberEditor('unknown3');
+    const cell = await openMemberEditor('Unknown3');
 
     const input = cell.querySelector('input')!;
     fireEvent.change(input, { target: { value: '7' } });
     fireEvent.blur(input);
 
-    const data = (lastEditField()?.value as Record<string, unknown>[])[0].data as Record<string, unknown>;
-    expect(data.unknown3).toBe(7);
-    expect(data.parameter_one_record).toBe('00AABBCC:MyMod.esp');
+    const data = (lastEditField()?.value as Record<string, unknown>[])[0].Data as Record<string, unknown>;
+    expect(data.Unknown3).toBe(7);
+    expect(data.ParameterOneRecord).toBe('00AABBCC:MyMod.esp');
   });
 });
 
 describe('the function picker comes from the schema', () => {
   it('Fallout 4 picks the function from the function member’s own enum', async () => {
-    currentCompare = oneColumn([condition({}, { function: 'IsSneaking' })]);
+    currentCompare = oneColumn([condition({}, { Function: 'IsSneaking' })]);
     renderPanel();
-    await waitFor(() => screen.getByText('conditions'));
+    await waitFor(() => screen.getByText('Conditions'));
     fireEvent.click(screen.getAllByText('▶')[0]);
     await waitFor(() => expect(screen.getAllByText('[0]').some(el => el.tagName === 'TD')).toBe(true));
     const el0 = screen.getAllByText('[0]').find(e => e.tagName === 'TD')!;
     fireEvent.click(el0.closest('tr')!.querySelector('button')!);
-    await waitFor(() => screen.getByText('data'));
-    fireEvent.click(screen.getByText('data').closest('tr')!.querySelector('button')!);
-    await waitFor(() => screen.getByText('function'));
+    await waitFor(() => expect(labelCell('Data')).toBeDefined());
+    fireEvent.click(labelCell('Data')!.closest('tr')!.querySelector('button')!);
+    await waitFor(() => expect(labelCell('Function')).toBeDefined());
 
-    const cell = screen.getByText('function').closest('tr')!.querySelectorAll('td')[1];
+    const cell = labelCell('Function')!.closest('tr')!.querySelectorAll('td')[1];
     fireEvent.doubleClick(cell.querySelector('[data-open-trigger]')!);
     const options = Array.from(cell.querySelector('select')!.options).map(o => o.value);
     expect(options).toEqual(Object.keys(FUNCTION_SLOTS));
@@ -558,14 +563,14 @@ describe('the function picker comes from the schema', () => {
 
 describe('a Run On label that contains spaces', () => {
   // xEdit writes the Run On prefix with its spaces stripped. No Fallout 4 enum reaches the
-  // webview labelled at all, so the rule is stated against a labelled run_on_type instead.
+  // webview labelled at all, so the rule is stated against a labelled RunOnType instead.
   const labelled: FieldMetadata = {
     ...conditionsMeta,
     elementType: {
       ...conditionsMeta.elementType!,
-      fields: conditionsMeta.elementType!.fields!.map(f => (f.name !== 'data' ? f : {
+      fields: conditionsMeta.elementType!.fields!.map(f => (f.name !== 'Data' ? f : {
         ...f,
-        fields: f.fields!.map(m => (m.name !== 'run_on_type' ? m : {
+        fields: f.fields!.map(m => (m.name !== 'RunOnType' ? m : {
           ...m,
           enumMembers: m.enumMembers.map(e => ({ ...e, label: e.value.replace('CombatTarget', 'Combat Target') })),
         })),
@@ -574,7 +579,7 @@ describe('a Run On label that contains spaces', () => {
   };
 
   it('strips them, so the prefix reads as one word', async () => {
-    const element = condition({}, { run_on_type: 'CombatTarget', function: 'IsSneaking' });
+    const element = condition({}, { RunOnType: 'CombatTarget', Function: 'IsSneaking' });
     const base = oneColumn([element]);
     currentCompare = {
       ...base,

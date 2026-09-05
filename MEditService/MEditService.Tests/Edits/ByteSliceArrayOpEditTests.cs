@@ -25,8 +25,8 @@ public sealed class ByteSliceArrayOpEditTests : IDisposable
     // list.
     private static readonly string[] TwoModels =
     [
-        """{"percentage": 50, "ModelFilename": "First.nif", "TextureFileHashes": "0x1122"}""",
-        """{"percentage": 50, "ModelFilename": "Second.nif", "TextureFileHashes": "0xAABBCCDD"}""",
+        """{"Percentage": 50, "ModelFilename": "First.nif", "TextureFileHashes": "0x1122"}""",
+        """{"Percentage": 50, "ModelFilename": "Second.nif", "TextureFileHashes": "0xAABBCCDD"}""",
     ];
 
     private string SeedDebrisWithTwoModelsCarryingBlobs()
@@ -34,7 +34,7 @@ public sealed class ByteSliceArrayOpEditTests : IDisposable
         var created = Service().CreateRecord(_mod.Plugin, "debr", DebrisEditorId);
         Assert.True(created.Applied, created.Message);
 
-        var seed = Service().EditField(_mod.Plugin, created.NewFormKey!, "models",
+        var seed = Service().EditField(_mod.Plugin, created.NewFormKey!, "Models",
             Json("[" + string.Join(",", TwoModels) + "]"));
         Assert.True(seed.Applied, seed.Message);
         return created.NewFormKey!;
@@ -49,7 +49,7 @@ public sealed class ByteSliceArrayOpEditTests : IDisposable
         var debris = SeedDebrisWithTwoModelsCarryingBlobs();
         Assert.Contains("0xAABBCCDD", DebrisBody(debris), StringComparison.Ordinal);
 
-        var result = Service().EditField(_mod.Plugin, debris, "models",
+        var result = Service().EditField(_mod.Plugin, debris, "Models",
             Json("""{"op": "array_remove", "path": [{"kind": "index", "index": 0}]}"""));
 
         Assert.True(result.Applied, result.Message);
@@ -63,7 +63,7 @@ public sealed class ByteSliceArrayOpEditTests : IDisposable
     {
         var debris = SeedDebrisWithTwoModelsCarryingBlobs();
 
-        var result = Service().EditField(_mod.Plugin, debris, "models",
+        var result = Service().EditField(_mod.Plugin, debris, "Models",
             Json("""{"op": "array_move_up", "path": [{"kind": "index", "index": 1}]}"""));
 
         Assert.True(result.Applied, result.Message);

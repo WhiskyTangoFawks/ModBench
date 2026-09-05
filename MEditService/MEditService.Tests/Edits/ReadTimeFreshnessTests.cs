@@ -33,12 +33,12 @@ public sealed class ReadTimeFreshnessTests : IDisposable
     private void Git(params string[] args) =>
         GitCli.Run(Path.Combine(_mod.ModFolder, ".git"), _mod.ModFolder, args);
 
-    private object? HeightMaxFromRecordEditor() =>
-        Reads().GetRecord(_mod.Npc.ToString())!.Fields.Single(f => f.Metadata.Name == "HeightMax").Value;
+    private float? HeightMaxFromRecordEditor() =>
+        (Reads().GetRecord(_mod.Npc.ToString())!.Fields.Single(f => f.Metadata.Name == "HeightMax").Value as JsonElement?)?.GetSingle();
 
-    private object? HeightMaxFromCompareGrid() =>
-        Reads().GetCompare(_mod.Npc.ToString())!.Overrides.Single()
-            .Fields.Single(f => f.Metadata.Name == "HeightMax").Value;
+    private float? HeightMaxFromCompareGrid() =>
+        (Reads().GetCompare(_mod.Npc.ToString())!.Overrides.Single()
+            .Fields.Single(f => f.Metadata.Name == "HeightMax").Value as JsonElement?)?.GetSingle();
 
     [Fact]
     public void ReadingATrackedPluginsHeader_DoesNotFoldADeletionIntoTheIndex()
@@ -80,9 +80,9 @@ public sealed class ReadTimeFreshnessTests : IDisposable
         File.WriteAllText(HeaderSourceFile, text.Replace(
             "\"ModHeader\": {", "\"ModHeader\": {\n    \"Author\": \"RenamedByHand\",", StringComparison.Ordinal));
 
-        var author = Reads().GetRecord(HeaderFormKey)!.Fields.Single(f => f.Metadata.Name == "author").Value;
+        var author = Reads().GetRecord(HeaderFormKey)!.Fields.Single(f => f.Metadata.Name == "Author").Value;
 
-        Assert.Equal("RenamedByHand", author);
+        Assert.Equal("RenamedByHand", Assert.IsType<JsonElement>(author).GetString());
     }
 
     [Fact]
@@ -91,7 +91,7 @@ public sealed class ReadTimeFreshnessTests : IDisposable
         var masters = EditService().EditField(
             _mod.Plugin, HeaderFormKey, HeaderIndexer.MastersFieldName, Json("[\"Other.esm\"]"));
         var author = EditService().EditField(
-            _mod.Plugin, HeaderFormKey, "author", Json("\"Someone Else\""));
+            _mod.Plugin, HeaderFormKey, "Author", Json("\"Someone Else\""));
 
         Assert.Equal(RecordEditRefusal.FieldReadOnly, masters.Refusal);
         // The writable-looking sibling refuses identically, which is the evidence that no

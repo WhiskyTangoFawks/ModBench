@@ -55,7 +55,7 @@ export function clearIdleSiblings(
   const live = new Set(inUse(governingMeta, structValue));
   const next = { ...(structValue as Record<string, unknown>) };
   for (const name of governed(governingMeta)) {
-    if (!live.has(name) && name in next) next[name] = emptied(siblings.find(f => f.name === name));
+    if (!live.has(name)) next[name] = emptied(siblings.find(f => f.name === name));
   }
   return next;
 }

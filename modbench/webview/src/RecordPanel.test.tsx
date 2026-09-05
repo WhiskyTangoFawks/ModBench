@@ -1130,7 +1130,7 @@ const unionFieldMeta: FieldMetadata = {
   fields: [
     { name: 'level', type: 'int', isArray: false, validFormKeyTypes: [], enumMembers: [] },
     {
-      name: 'concrete_type', type: 'enum', isArray: false, validFormKeyTypes: [],
+      name: 'MutagenObjectType', type: 'enum', isArray: false, validFormKeyTypes: [],
       enumMembers: [{ value: 'NpcLevel', label: 'Npc Level' },
         { value: 'PcLevelMult', label: 'Pc Level Mult' }],
       displayLabel: 'Kind',
@@ -1138,7 +1138,7 @@ const unionFieldMeta: FieldMetadata = {
   ],
 };
 
-const unionValue = { level: 5, concrete_type: 'NpcLevel' };
+const unionValue = { level: 5, MutagenObjectType: 'NpcLevel' };
 
 const unionCompareResult = {
   conflictAll: 'OnlyOne',
@@ -1160,7 +1160,7 @@ const unionCompareResult = {
           winnerColumn: 'MyMod.esp', winnerValue: 5, cellStates: {},
         },
         {
-          fieldName: 'concrete_type', values: { 'MyMod.esp': 'NpcLevel' },
+          fieldName: 'MutagenObjectType', values: { 'MyMod.esp': 'NpcLevel' },
           winnerColumn: 'MyMod.esp', winnerValue: 'NpcLevel', cellStates: {},
         },
       ],
@@ -1189,7 +1189,7 @@ describe('RecordPanel — an abstract union\'s leaf is an editable field', () =>
   it('labels the row from the schema and never shows the class name it holds', async () => {
     await expandLevel();
 
-    expect(screen.queryByText('concrete_type')).not.toBeInTheDocument();
+    expect(screen.queryByText('MutagenObjectType')).not.toBeInTheDocument();
     expect(screen.getByText('Npc Level')).toBeInTheDocument();
     expect(screen.queryByText('NpcLevel')).not.toBeInTheDocument();
   });
@@ -1217,7 +1217,7 @@ describe('RecordPanel — an abstract union\'s leaf is an editable field', () =>
       formKey: '000001:Fallout4.esm',
       plugin: 'MyMod.esp',
       fieldPath: 'Level',
-      value: { level: 5, concrete_type: 'PcLevelMult' },
+      value: { level: 5, MutagenObjectType: 'PcLevelMult' },
     }));
   });
 });

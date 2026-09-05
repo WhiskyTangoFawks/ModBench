@@ -144,8 +144,8 @@ public class ArrayChildDiffTests
         var meta = StructArrayMeta("Ranks",
             new FieldMetadata("Rank", "int", false, [], []));
 
-        var arrayA = JsonSerializer.Deserialize<JsonElement>("[{\"rank\":1},{\"rank\":2}]");
-        var arrayB = JsonSerializer.Deserialize<JsonElement>("[{\"rank\":1},{\"rank\":9}]");
+        var arrayA = JsonSerializer.Deserialize<JsonElement>("[{\"Rank\":1},{\"Rank\":2}]");
+        var arrayB = JsonSerializer.Deserialize<JsonElement>("[{\"Rank\":1},{\"Rank\":9}]");
 
         var master = MakeRecord("A.esp", 0, false, meta, arrayA);
         var override1 = MakeRecord("B.esp", 1, true, meta, arrayB);

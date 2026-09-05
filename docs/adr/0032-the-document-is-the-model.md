@@ -45,10 +45,10 @@ the model: it changes no edit value and no copy value.
   server-side, naming the field. One gate, on the side that holds the assembly — never a client-side
   guess that has to agree with it.
 
-- **The document carries data plus the discriminator, and Modbench never adds to it.** The only
-  member in a document that is not Mutagen's own is the synthesized discriminator naming which leaf
-  of a union a value turned out to be (`concrete_type`, OMOD's `value_type`). Nothing else is
-  invented: no computed field, no display string, no index. A shape the walk reaches and no one has
+- **The document carries data plus the discriminator, and Modbench never adds to it.** The member
+  naming which leaf of a union a value turned out to be is the codec's own `MutagenObjectType`, and
+  the compare hands it over as the document spells it. Nothing else is invented: no computed field,
+  no display string, no index, and every member keeps Mutagen's own name. A shape the walk reaches and no one has
   decided a presentation for is named and counted (`SchemaRefusals`) — the honest third outcome
   beside "reflected" and "annotated" — never silently dropped.
 
@@ -73,8 +73,9 @@ subclasses in Skyrim; the same Float/Global split over a single generic `Functio
 Fallout 4; a `ConditionDatas` container over `IConditionParameters` in Starfield. That divergence
 reads as four shapes needing four strategies. It is not — it is **union shape**, and the reflector
 models unions directly. A Loqui base with concrete classes under it becomes the sparse union of
-every leaf's members plus a discriminator, and a member whose shape disagrees across leaves becomes
-one field per shape (`comparison_value_float`/`comparison_value_form_key`). Fallout 4's `Condition`
+every leaf's members plus its `MutagenObjectType` discriminator, and a member whose shape disagrees
+across leaves stays one field whose metadata carries a `Variants` map, one shape per leaf
+(`ComparisonValue`: a float under `ConditionFloat`, a GLOB link under `ConditionGlobal`). Fallout 4's `Condition`
 and `ConditionData` reflect through that mechanism with no condition-specific code at all, and the
 "Use Global" gesture falls out as an ordinary discriminator switch.
 
@@ -84,9 +85,9 @@ rows read from Mutagen's own `Condition.GetParameterTypes` rather than transcrib
 against the assembly in all three directions (the governing member exists, the values keying it are
 that enum's members, the siblings it names are that type's members).
 
-Per-*variant* metadata — a separate schema per leaf of a union — is refused for the same reason:
-the per-shape field split already distinguishes the leaves, so a second axis would describe the same
-fact twice.
+A separate schema per leaf of a union is refused for the same reason: the discriminator already
+distinguishes the leaves, and `Variants` describes only the members whose shape differs by leaf, so a
+second axis would describe the same fact twice.
 
 The virtual-machine adapter goes through that same door, keyed arrays and all. There is no
 hand-written Mutagen-edge codec anywhere in the stack, and a structurally divergent Mutagen shape is

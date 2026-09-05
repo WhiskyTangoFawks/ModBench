@@ -1,3 +1,4 @@
+using System.Text.Json;
 using DuckDB.NET.Data;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
@@ -66,12 +67,13 @@ public class MultiSubclassIndexingTests
         repo.Index((IModGetter)mod, Registration.Participating(0), new PluginKey(mod.ModKey.FileName.ToString(), "Data"));
         repo.UpdateWinners();
 
-        var byEdid = FieldByEditorId(repo, "gmst", "Data").ToDictionary(kv => kv.Key, kv => kv.Value?.ToString());
+        var byEdid = FieldByEditorId(repo, "gmst", "Data").ToDictionary(kv => kv.Key, kv => (JsonElement)kv.Value!);
         Assert.Equal(4, byEdid.Count);
-        Assert.Equal("42", byEdid["iTest"]);
-        Assert.Equal("3.5", byEdid["fTest"]);
-        Assert.Equal("hello", byEdid["sTest"]);
-        Assert.Equal("true", byEdid["bTest"]);
+        Assert.Equal(42, byEdid["iTest"].GetInt32());
+        Assert.Equal(3.5f, byEdid["fTest"].GetSingle());
+        // A game setting's string is a translated string, which the codec spells as an object.
+        Assert.Equal("hello", byEdid["sTest"].GetProperty("Value").GetString());
+        Assert.True(byEdid["bTest"].GetBoolean());
     }
 
     [Fact]
@@ -91,12 +93,12 @@ public class MultiSubclassIndexingTests
         repo.Index((IModGetter)mod, Registration.Participating(0), new PluginKey(mod.ModKey.FileName.ToString(), "Data"));
         repo.UpdateWinners();
 
-        var byEdid = FieldByEditorId(repo, "glob", "Data").ToDictionary(kv => kv.Key, kv => kv.Value?.ToString());
+        var byEdid = FieldByEditorId(repo, "glob", "Data").ToDictionary(kv => kv.Key, kv => (JsonElement)kv.Value!);
         Assert.Equal(4, byEdid.Count);
-        Assert.Equal("7", byEdid["TestGlobInt"]);
-        Assert.Equal("1.25", byEdid["TestGlobFloat"]);
-        Assert.Equal("3", byEdid["TestGlobShort"]);
-        Assert.Equal("true", byEdid["TestGlobBool"]);
+        Assert.Equal(7, byEdid["TestGlobInt"].GetInt32());
+        Assert.Equal(1.25f, byEdid["TestGlobFloat"].GetSingle());
+        Assert.Equal(3, byEdid["TestGlobShort"].GetInt32());
+        Assert.True(byEdid["TestGlobBool"].GetBoolean());
     }
 
     [Fact]
@@ -141,40 +143,10 @@ public class MultiSubclassIndexingTests
     }
 
     [Fact]
-    public void Index_Dmgt_ConflictingListSiblings_DoesNotCrashAndWinnersOwnShapeColumnStaysReadable()
+    public void Index_Dmgt_BothSubclasses_EachReadsItsOwnShapeThroughTheOneDamageTypesColumn()
     {
-        // DMGT is a second non-scalar carve-out, not the additive case it looks like: the siblings'
-        // DamageTypes share a column name but conflict in element shape.
-        var mod = new Fallout4Mod(ModKey.FromFileName("Dmgt263.esp"), Fallout4Release.Fallout4);
-        var plain = new DamageType(mod, "TestPlainDmgt");
-        mod.DamageTypes.Add(plain);
-        var indexed = new DamageTypeIndexed(mod, "TestIndexedDmgt") { DamageTypes = new ExtendedList<uint> { 5, 9 } };
-        mod.DamageTypes.Add(indexed);
-
-        // Which subclass wins the schema race is a reflection-order artifact this test must not
-        // pin (see BuildForCategory's own comment) — ask the schema itself instead of assuming.
-        var schemas = Reflector.GetSchemas(GameRelease.Fallout4);
-        var winnerIsStructShaped = schemas["dmgt"].RecordType.IsInstanceOfType(plain);
-        var winnerEdid = winnerIsStructShaped ? "TestPlainDmgt" : "TestIndexedDmgt";
-        var winnerColumnName = (winnerIsStructShaped
-            ? DmgtSplitColumns.StructShaped(schemas["dmgt"])
-            : DmgtSplitColumns.ScalarShaped(schemas["dmgt"])).Name;
-
-        using var repo = new DuckDbRecordIndex(Reflector, Ddl, NullLogger.Instance);
-        repo.Initialize(GameRelease.Fallout4);
-        repo.Index((IModGetter)mod, Registration.Participating(0), new PluginKey(mod.ModKey.FileName.ToString(), "Data"));
-        repo.UpdateWinners();
-
-        var byEdid = FieldByEditorId(repo, "dmgt", winnerColumnName);
-        Assert.Equal(2, byEdid.Count); // rows are never dropped, whichever subclass loses the schema race
-        Assert.NotNull(byEdid[winnerEdid]); // winner's own data is still readable, now via its shape column
-    }
-
-    [Fact]
-    public void Index_Dmgt_BothSubclasses_EachRoundTripsThroughItsOwnShapeColumn()
-    {
-        // Distinct from the test above: a regression keeping both split columns but populating only the
-        // discovery winner's would still pass that one, which never looks at the non-winner's column.
+        // DamageType and DamageTypeIndexed declare DamageTypes with different element shapes: one
+        // column, one variant per record class, each record's document read as its own class.
         var mod = new Fallout4Mod(ModKey.FromFileName("DmgtSplit339.esp"), Fallout4Release.Fallout4);
         var structShaped = new DamageType(mod, "PlainDmgt339");
         structShaped.DamageTypes.Add(new DamageTypeItem
@@ -186,25 +158,18 @@ public class MultiSubclassIndexingTests
         var scalarShaped = new DamageTypeIndexed(mod, "IndexedDmgt339") { DamageTypes = new ExtendedList<uint> { 7, 11 } };
         mod.DamageTypes.Add(scalarShaped);
 
-        var schemas = Reflector.GetSchemas(GameRelease.Fallout4);
-        var structColumnName = DmgtSplitColumns.StructShaped(schemas["dmgt"]).Name;
-        var scalarColumnName = DmgtSplitColumns.ScalarShaped(schemas["dmgt"]).Name;
-
         using var repo = new DuckDbRecordIndex(Reflector, Ddl, NullLogger.Instance);
         repo.Initialize(GameRelease.Fallout4);
         repo.Index((IModGetter)mod, Registration.Participating(0), new PluginKey(mod.ModKey.FileName.ToString(), "Data"));
         repo.UpdateWinners();
 
-        var structValues = FieldByEditorId(repo, "dmgt", structColumnName);
-        var scalarValues = FieldByEditorId(repo, "dmgt", scalarColumnName);
-        Assert.Equal(2, structValues.Count);
+        var values = FieldByEditorId(repo, "dmgt", "DamageTypes").ToDictionary(kv => kv.Key, kv => (JsonElement)kv.Value!);
+        var classes = FieldByEditorId(repo, "dmgt", "MutagenObjectType").ToDictionary(kv => kv.Key, kv => (JsonElement)kv.Value!);
+        Assert.Equal(2, values.Count);
 
-        // Each sibling reads through its own shape column and nowhere else — the dispatch guard,
-        // exercised against a record reconstituted from its document rather than against a wide row.
-        Assert.NotNull(structValues["PlainDmgt339"]);
-        Assert.Null(scalarValues["PlainDmgt339"]);
-
-        Assert.NotNull(scalarValues["IndexedDmgt339"]);
-        Assert.Null(structValues["IndexedDmgt339"]);
+        Assert.Equal(nameof(DamageType), classes["PlainDmgt339"].GetString());
+        Assert.Equal("000001:Test.esp", values["PlainDmgt339"][0].GetProperty("ActorValue").GetString());
+        Assert.Equal(nameof(DamageTypeIndexed), classes["IndexedDmgt339"].GetString());
+        Assert.Equal([7, 11], values["IndexedDmgt339"].EnumerateArray().Select(e => e.GetInt32()));
     }
 }

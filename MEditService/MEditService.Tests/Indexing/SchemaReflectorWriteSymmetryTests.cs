@@ -83,7 +83,7 @@ public class SchemaReflectorWriteSymmetryTests
     {
         // Pinned by path because the nested one needs a PACK record no edit-path fixture builds, and
         // its writability is still a fact worth holding.
-        var byteSliceLists = new[] { "dlvw.tnams", "mato.dnams", "pack.procedure_tree.unknown" };
+        var byteSliceLists = new[] { "dlvw.TNAMs", "mato.DNAMs", "pack.ProcedureTree.Unknown" };
 
         var declaredReadOnly = Facts()
             .Where(f => byteSliceLists.Contains(f.Path, StringComparer.Ordinal) && f.ReadOnlyReason != null)

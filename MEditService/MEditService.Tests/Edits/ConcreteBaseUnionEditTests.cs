@@ -25,10 +25,10 @@ public sealed class ConcreteBaseUnionEditTests : IDisposable
     // The adapter under test, spelled once: only the property's leaf changes between the two
     // writes, the way the editor's own resend does — data_int rides along into the second write.
     private static JsonElement Adapter(string leaf) => Json($$"""
-        {"version": 6, "ObjectFormat": 2, "scripts": [
-          {"name": "TestScript", "flags": "Local", "properties": [
-            {"MutagenObjectType": "{{leaf}}", "name": "Switched", "flags": "Removed", "data_int": 42},
-            {"MutagenObjectType": "ScriptStringProperty", "name": "Sibling", "flags": "Edited", "data_string": "kept"}
+        {"Version": 6, "ObjectFormat": 2, "Scripts": [
+          {"Name": "TestScript", "Flags": "Local", "Properties": [
+            {"MutagenObjectType": "{{leaf}}", "Name": "Switched", "Flags": "Removed", "Data": 42},
+            {"MutagenObjectType": "ScriptStringProperty", "Name": "Sibling", "Flags": "Edited", "Data": "kept"}
           ]}
         ]}
         """);
@@ -52,10 +52,9 @@ public sealed class ConcreteBaseUnionEditTests : IDisposable
         Assert.Equal("ScriptFloatProperty", switched.GetProperty("MutagenObjectType").GetString());
         Assert.Equal("Switched", switched.GetProperty("Name").GetString());
         Assert.Equal("Removed", switched.GetProperty("Flags").GetString());
-        // The incoming leaf's own Data is a float at the fresh instance's default, which the
-        // document's serializer leaves out — the int that rode along in data_int is the outgoing
-        // leaf's member, dropped rather than carried over.
-        Assert.False(switched.TryGetProperty("Data", out _));
+        // Data is one member across the leaves, so the value posted with the switch lands as the
+        // incoming leaf's own Data, converted to its type.
+        Assert.Equal(42f, switched.GetProperty("Data").GetSingle());
         Assert.Equal(before["Sibling"].GetRawText(), after["Sibling"].GetRawText());
     }
 
@@ -79,8 +78,8 @@ public sealed class ConcreteBaseUnionEditTests : IDisposable
         var result = _fixture.Service().EditField(
             _fixture.Plugin, _fixture.Npc.ToString(), "VirtualMachineAdapter",
             Json("""
-                {"version": 6, "ObjectFormat": 2, "scripts": [{"name": "S", "flags": "Local",
-                 "properties": [{"name": "P", "flags": "Edited", "data_int": 1}]}]}
+                {"Version": 6, "ObjectFormat": 2, "Scripts": [{"Name": "S", "Flags": "Local",
+                 "Properties": [{"Name": "P", "Flags": "Edited", "Data": 1}]}]}
                 """));
 
         Assert.False(result.Applied);

@@ -50,11 +50,11 @@ public sealed class SchemaAnnotationTests
     // The key names a member its element does not have. This fails quietly without validation: every
     // element would share the empty key, collapsing the array to one compare row and refusing every
     // second element as a duplicate on write.
-    [InlineData("IScriptEntryGetter", "Properties", "no_such_key", "names key no_such_key, which IScriptPropertyGetter does not reach at no_such_key")]
+    [InlineData("IScriptEntryGetter", "Properties", "NoSuchKey", "names key NoSuchKey, which IScriptPropertyGetter does not reach at NoSuchKey")]
     // A key that reaches a list rather than a value — one element, one key.
     [InlineData("IAVirtualMachineAdapterGetter", "Scripts", "Properties", "which is itself a list")]
     // A dotted key whose first hop is a scalar, so there is nothing to descend into.
-    [InlineData("IAVirtualMachineAdapterGetter", "Scripts", "name.alias", "whose name hop is not a struct to descend into")]
+    [InlineData("IAVirtualMachineAdapterGetter", "Scripts", "Name.Alias", "whose Name hop is not a struct to descend into")]
     public void KeyedArray_ReflectionDidNotFind_FailsSchemaGenerationNamingTheEntry(
         string type, string member, string key, string expected)
     {

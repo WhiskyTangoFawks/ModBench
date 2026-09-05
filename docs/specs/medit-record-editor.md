@@ -237,7 +237,7 @@ flags render their active names, comma-separated, never the bitmask; a FormKey r
 is the one place that turns that into what the cell *reads out*, and is what both the copy path and
 a leaf's own resting text ask — so what the user sees and what `Ctrl+C` hands over cannot drift.
 The two differ for exactly one shape: an enum whose values are wire tokens rather than words (an
-abstract union's `concrete_type`), where the schema labels each value and the label is what
+abstract union's `MutagenObjectType`), where the schema labels each value and the label is what
 is displayed and copied. The editor still holds, and a payload still carries, the value itself.
 
 **Struct and array summary rows are the one exception to "the same string the editor shows"** —
@@ -258,7 +258,7 @@ are Fallout 4's two `Condition` leaves (*Conditions* below) and its `ScriptEntry
 and `ScriptObjectProperty` (*Scripts* below).
 
 **The key is the leaf a value turned out to be, not the one its schema promised**: the value of
-whichever member the schema marks as the discriminator (`concrete_type`, OMOD's `value_type`) where
+whichever member the schema marks as the discriminator (`MutagenObjectType`) where
 the element has one, and `FieldMetadata.LeafTypeName` — the reflected type name, which the backend
 sets on every `struct` and on nothing else — where it does not. A union is exactly where the two
 disagree, so the discriminator answers alone: a union whose value names no leaf reads as nothing
@@ -393,7 +393,7 @@ already empty: matching xEdit's own guard (`Element.EditValue` must be non-empty
   **Nested Loqui struct sub-fields write through the same one path** — a struct member one
   or more levels inside another struct column, or inside an array element, applies with the exact
   semantics the top-level struct column has (one shared applier): unions resolve their
-  concrete leaf from the payload's own `concrete_type`, refusing when it can't be resolved; the
+  concrete leaf from the payload's own `MutagenObjectType`, refusing when it can't be resolved; the
   existing value object is reused only when it is already the same concrete type; and a write with
   one bad member anywhere in the nested tree refuses the whole write before anything is written,
   leaving the working tree byte-identical.
@@ -414,7 +414,7 @@ already empty: matching xEdit's own guard (`Element.EditValue` must be non-empty
   Add gesture posts an op envelope carrying nothing but `{op, path}`, and `ArrayOpWriter` builds the
   element from the column's own schema. The default is the empty object: every member is left
   absent, so the freshly constructed instance's CLR defaults stand. The one exception is a
-  discriminator (`concrete_type`, OMOD's `value_type`), which is not a member of the instance at all
+  discriminator (`MutagenObjectType`), which is not a member of the instance at all
   — it is read off the payload to choose which concrete class to construct, before that object
   exists — so an element of an abstract-element array that omits it cannot be built and is refused
   `ListElementTypeUnresolved`. A default element therefore carries its discriminator, set to the
@@ -454,7 +454,7 @@ already empty: matching xEdit's own guard (`Element.EditValue` must be non-empty
   refuses the whole write, and the message says the sub-field is not editable rather than implying
   the value was invalid.
   Three cases stay distinct and must not be collapsed: a sub-field **absent** from the payload is
-  skipped (absence is not targeting); the `value_type` and `concrete_type` **discriminators** are
+  skipped (absence is not targeting); the `MutagenObjectType` **discriminator** is
   read off the raw JSON to decide which concrete type to construct, before the object any member
   could be applied to exists — so naming one is a silent skip at the member level, and the edit it
   carries has already been honoured by the enclosing object's own construction; only a
@@ -714,12 +714,13 @@ gesture — Sim Settlements 2 is a real-world example on Fallout 4.
 
 ### Scripts are an ordinary reflected field
 
-A record's virtual-machine adapter is a reflected **struct column**, `virtual_machine_adapter`,
+A record's virtual-machine adapter is a reflected **struct column**, `VirtualMachineAdapter`,
 like any other — no section, adapter, codec, wire path, or command of its own. Its scripts are an
 array of structs; each script's properties are an array whose element is the `ScriptProperty`
-union, so a property carries a `concrete_type` discriminator over its fifteen leaves and the
-sparse union of their members, with a member whose shape disagrees across leaves split one field
-per shape (`data_int`, `data_float_array`, …). Struct properties, arrays of structs, arrays of
+union, so a property carries a `MutagenObjectType` discriminator over its fifteen leaves and the
+sparse union of their members, with a member whose shape disagrees across leaves one field whose
+metadata carries a `Variants` map keyed by leaf (`Data`: an int under `ScriptIntProperty`, a float
+array under `ScriptFloatListProperty`, …). Struct properties, arrays of structs, arrays of
 scalars, quest fragments and quest alias scripts are all reached the same way. Every gesture —
 cell edit, discriminator switch, add/remove/move — is the gesture that field kind already had.
 
@@ -790,9 +791,9 @@ otherwise re-enter `ScriptEntry -> ScriptProperty -> ScriptStructProperty` witho
 A condition list is an **ordinary reflected array-of-struct field**, at whatever depth it sits
 (`Perk.Effects[i].Conditions[j].Conditions`, `Message.MenuButtons[i].Conditions`), with no section,
 adapter, codec, wire path, or command of its own. `Condition` and `ConditionData` are each Loqui
-unions, so each condition element carries a `concrete_type` discriminator over its concrete classes
-and the sparse union of their members; `ComparisonValue`, a float on one leaf and a GLOB link on the
-other, is one field per shape (`comparison_value_float`/`comparison_value_form_key`), which is what
+unions, so each condition element carries a `MutagenObjectType` discriminator over its concrete
+classes and the sparse union of their members; `ComparisonValue`, a float on one leaf and a GLOB link
+on the other, is one field with a `Variants` map keyed by leaf, which is what
 makes "Use Global" an ordinary discriminator switch that keeps every member the two leaves agree on.
 Every gesture — cell edit, discriminator switch, add/remove/move — is the gesture that field kind
 already had.
@@ -839,9 +840,9 @@ carries as a string reads on its own row rather than in the call, exactly as in 
 whose first slot is left out has no parentheses at all. An operator outside the schema's own six
 reads as no operator: the condition still reads, missing only the sign.
 
-**The function picker is the schema's own enum.** On Fallout 4 that is the `function` member's
+**The function picker is the schema's own enum.** On Fallout 4 that is the `Function` member's
 479-member enum, rendered by the ordinary enum cell; on a shape whose `ConditionData` is one class
-per function it is the `concrete_type` discriminator dropdown, rendered by the same cell. No
+per function it is the `MutagenObjectType` discriminator dropdown, rendered by the same cell. No
 picker command, and no catalog endpoint, exists on either shape.
 
 Skyrim and Starfield are not built or tested in this repo; multi-game verification was descoped
@@ -904,8 +905,8 @@ These apply everywhere a field value is rendered — the one compare grid and an
    arrays offer add / remove and no move (they are written back in key order regardless), and an
    array sorted by its own element value offers none — these ops use the same
    whole-array reconstruction. A list whose element's concrete type is
-   polymorphic (OMOD `properties`' `AObjectModProperty<T>`, seven concrete leaves) resolves
-   each element's own type from a `value_type` discriminator sub-field at write time; an
+   polymorphic (OMOD `Properties`' `AObjectModProperty<T>`, seven concrete leaves) resolves
+   each element's own type from its `MutagenObjectType` discriminator sub-field at write time; an
    element whose discriminator is missing or unrecognized refuses naming the field, rather
    than guessing or crashing — the same polymorphism applies read-side.
 
@@ -915,10 +916,10 @@ These apply everywhere a field value is rendered — the one compare grid and an
    sibling interfaces the base never inherits from, each needing its own hand-verified value-type
    table). The same discriminator pattern generalizes reflectively — `SchemaReflector` finds
    every concrete subclass of an abstract base in the same Mutagen assembly, exposes each leaf's own
-   members as a sparse union keyed by a synthesized `concrete_type` sub-field (the leaf's own class
-   name, e.g. `"NpcLevel"`/`"PcLevelMult"`, `"QuestReferenceAlias"`/`"QuestLocationAlias"`/
-   `"QuestCollectionAlias"`), and writes back by resolving `concrete_type` the same way OMOD's
-   `value_type` resolves — no per-type table, and OMOD's own `BuildObjectModPropertyLeafFields`
+   members as a sparse union keyed by the document's own `MutagenObjectType` sub-field (the leaf's
+   own class name as the codec spells it, e.g. `"NpcLevel"`/`"PcLevelMult"`, `"QuestReferenceAlias"`/
+   `"QuestLocationAlias"`/`"QuestCollectionAlias"`), and writes back by resolving `MutagenObjectType`
+   the same way OMOD's does — no per-type table, and OMOD's own `BuildObjectModPropertyLeafFields`
    stays alongside it unmerged, since OMOD's leaf discovery is a genuinely different mechanism (a
    generic base with no reflectively-enumerable subclasses of its own), not a special case of this
    one.
@@ -926,7 +927,7 @@ These apply everywhere a field value is rendered — the one compare grid and an
    reflected type name on every `struct` and is null on every other type. The discriminator is a
    different claim — the schema's name says which class was *promised*, the discriminator's value
    which one a value *turned out to be*, and a union is exactly where the two disagree.
-   **Which leaf an element is, is itself an editable field.** `concrete_type` is an `enum`
+   **Which leaf an element is, is itself an editable field.** `MutagenObjectType` is an `enum`
    over the union's leaves, so switching one is an ordinary edit of the enclosing struct/array:
    the editor resends the element with that one member changed, the write path builds the named
    leaf, applies every member the payload also names that the new leaf declares, and leaves the
@@ -958,9 +959,9 @@ These apply everywhere a field value is rendered — the one compare grid and an
    the case that matters, `Landscape.Layers`' `BaseLayer`/`AlphaLayer` the other one the shipped
    schema reaches. Where leaves declare a same-named member of *different* shape (a script
    property's `Data` is an int, a float, a bool, a string or a list of each, by leaf), the name
-   is split into one field per shape, suffixed by it (`data_int`, `data_float`,
-   `data_string_array`), each written only onto a leaf of that shape. On write, a concrete-base
-   union resolves its leaf from `concrete_type` exactly as an abstract one does — an element
+   stays one field whose metadata carries a `Variants` map, one shape per leaf, each written only
+   onto a leaf of that shape. On write, a concrete-base
+   union resolves its leaf from `MutagenObjectType` exactly as an abstract one does — an element
    sent without it is refused, never quietly built as the base. Expanding the struct
    leaf is what lets the walk reach `ScriptStructProperty.Members` -> `ScriptEntry.Properties`
    -> `ScriptProperty` again, so the walk keeps the getter types it is inside on its stack: a
