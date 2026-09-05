@@ -624,6 +624,7 @@ public sealed class LoadOrderMirror(
         lock (_lock)
         {
             if (_index == null) return;
+            if (_loadOrder?.Find(key) is { } held && File.Exists(held.Path)) return;
 
             if (_logger.IsEnabled(LogLevel.Information))
             {
