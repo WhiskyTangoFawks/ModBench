@@ -8,10 +8,9 @@ namespace MEditService.Core.Queries;
 /// TES5Edit's read (wbImplementation.pas); the resolved/wrong-type/unresolved split is mEdit's own.</summary>
 public static class CheckErrorBuilder
 {
-    // ADR-0031: `resolve` is the O(1) form_lookup read, not a per-table scan; the
-    // not-found/wrong-type/valid-type distinction is computed here via FormKeyResolution.From.
-    // absentMeansNull: a stored document omits a link that is unset, which is a fact about the
-    // record; a write payload omitting one asserts nothing about it.
+    // ADR-0031: `resolve` is the O(1) form_lookup read, not a per-table scan. absentMeansNull: a
+    // stored document omits an unset link, a fact about the record; a write payload omitting one
+    // asserts nothing about it.
     public static string? Build(
         FieldMetadata meta, JsonElement? value, Func<string, RecordLookupEntry?> resolve, GameRelease release,
         bool absentMeansNull = true)

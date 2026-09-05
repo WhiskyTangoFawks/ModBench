@@ -983,9 +983,9 @@ public sealed class DuckDbRecordIndex : IRecordIndex
             reader.GetBoolean(4), reader.IsDBNull(5) ? null : reader.GetString(5),
             reader.GetString(6), schema, resolveFormKey);
 
-    // The construction half of ReadDocumentFromBody, split out so the bulk read can build
-    // documents from rows it materialized before reading any of them. The fields are the
-    // document's own nodes at each column's path (ADR-0032): nothing is reconstituted or projected.
+    // The construction half of ReadDocumentFromBody, split out so the bulk read can build documents
+    // from rows materialized before reading any. The fields are the document's own nodes at each
+    // column's path (ADR-0032): nothing is reconstituted.
     private RecordDocument DocumentFromBody(
         string formKey, string plugin, string origin, int loadOrderIndex, bool isWinner,
         string? editorId, string body, RecordTableSchema schema,

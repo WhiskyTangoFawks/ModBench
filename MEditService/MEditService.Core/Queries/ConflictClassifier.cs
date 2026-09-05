@@ -418,10 +418,9 @@ public sealed class ConflictClassifier(ILogger<ConflictClassifier>? logger = nul
         return ConflictRules.ComputeCellStates(values, masterColumn, columnOrder, (a, b) => ValuesEqual(a, b, isSorted, meta));
     }
 
-    // JsonElement doesn't override Equals() — compare by raw JSON text to handle array/struct fields.
-    // For sorted arrays, sort elements before comparing so insertion-order differences don't register
-    // as conflicts. The codec omits a member equal to its default, so a member one document omits
-    // and another spells as the default are the same value.
+    // JsonElement doesn't override Equals(), so compare by raw JSON text; a sorted array compares
+    // sorted. The codec omits a member equal to its default, so an omitted member and one spelled
+    // as the default are the same value.
     private static bool ValuesEqual(object? a, object? b, bool isSortedArray = false, FieldMetadata? meta = null)
     {
         if (a is JsonElement ja && b is JsonElement jb)

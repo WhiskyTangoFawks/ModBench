@@ -242,13 +242,12 @@ export const DISCRIMINATOR = 'MutagenObjectType';
 export function variantFor(meta: FieldMetadata, owner: unknown): FieldMetadata {
   if (!meta.variants || owner == null || typeof owner !== 'object') return meta;
   const leaf = (owner as Record<string, unknown>)[DISCRIMINATOR];
-  return (typeof leaf === 'string' && meta.variants[leaf]) || meta;
+  return typeof leaf === 'string' && leaf in meta.variants ? meta.variants[leaf] : meta;
 }
 
-// Reading `fieldMetaMap[rootField].elementType` finds the right element type only when the array
-// itself is the subtree root; for a nested array it names the wrong node's. `?? undefined`
-// collapses the wire's `T | null` at this one boundary. With `root`, the value at each hop picks a
-// union member's variant.
+// `fieldMetaMap[rootField].elementType` is the right element type only when the array is the
+// subtree root, never a nested array's. `?? undefined` collapses the wire's `T | null` here; `root`
+// picks a union member's variant at each hop.
 export function metaAtPath(
   meta: FieldMetadata | undefined, path: readonly PathSegment[], root?: unknown,
 ): FieldMetadata | undefined {

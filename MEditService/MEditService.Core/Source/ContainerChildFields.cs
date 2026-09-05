@@ -26,10 +26,9 @@ internal static class ContainerChildFields
     private const string GetterPrefix = "I";
     private const string GetterSuffix = "Getter";
 
-    /// <summary>A binary overlay's runtime type is <c>"&lt;Name&gt;BinaryOverlay"</c> and a schema's
-    /// record type its <c>"I&lt;Name&gt;Getter"</c> interface; normalized once so every caller keys
-    /// off the same name whether handed an overlay (ingest), a deep-parsed setter (Track) or the
-    /// schema's getter (a document read).</summary>
+    /// <summary>A binary overlay's runtime type is "NameBinaryOverlay" and a schema's record type
+    /// its "INameGetter" interface; normalized once so ingest, Track and a document read key off the
+    /// same name.</summary>
     internal static string NormalizedTypeName(Type recordType)
     {
         var name = recordType.Name;

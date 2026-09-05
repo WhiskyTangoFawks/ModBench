@@ -321,7 +321,7 @@ describe('a collapsed condition reads as xEdit prose', () => {
     currentCompare = oneColumn(
       [condition({
         MutagenObjectType: 'ConditionGlobal', CompareOperator: 'GreaterThanOrEqualTo',
-        ComparisonValue: null, ComparisonValue: '00000ABC:MyMod.esp',
+        ComparisonValue: '00000ABC:MyMod.esp',
       }, { Function: 'IsSneaking' })],
       { '00000ABC:MyMod.esp': 'MyGlobal' },
     );

@@ -163,10 +163,9 @@ public sealed class SchemaReflector
     {
         var columns = ColumnReflection.ReflectColumns(getterType, game, logger);
 
-        // The rule is expressed purely in terms of a column's shape, never a table or signature name,
-        // so a third subclass or another game's own multi-subclass signature needs no change here.
-        // Such a table is a union at the record level: its document names its class first, and the
-        // discriminator column carries that member like a union element's does.
+        // Decided by column shape, never table or signature name, so another game's multi-subclass
+        // signature needs no change. The table is a union at the record level: its document names
+        // its class first, and the discriminator column carries it.
         if (siblingGetterTypes.Count > 1)
         {
             var union = LoquiUnions.RecordUnion(siblingGetterTypes);

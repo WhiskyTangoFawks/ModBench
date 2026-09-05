@@ -7,8 +7,8 @@ using Mutagen.Bethesda.Strings;
 namespace MEditService.Core.Schema;
 
 /// <summary>What kind of leaf a reflected property is — the one classification a column and a
-/// sub-field both ask, so the two never disagree about api type, enum domain or converter. Each
-/// kind names how the codec spells the value in the document.</summary>
+/// sub-field both ask, so the two never disagree. Each kind names how the codec spells the value in
+/// the document.</summary>
 internal static class LeafClassification
 {
     internal static string[] GetFormLinkValidTypes(

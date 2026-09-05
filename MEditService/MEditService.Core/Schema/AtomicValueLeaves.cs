@@ -10,8 +10,8 @@ namespace MEditService.Core.Schema;
 internal static class AtomicValueLeaves
 {
     // Six digits is an RGB edit that keeps the existing alpha byte; eight names all four. Only an
-    // alpha-bearing field (xEdit's wbByteRGBA) takes the posted alpha, since the fourth byte of any
-    // other color is wbUnused and never shown.
+    // alpha-bearing field (xEdit's wbByteRGBA) takes the posted alpha: any other color's fourth byte
+    // is wbUnused.
     internal static Func<object, JsonElement, ApplyOutcome> MakeColorApplier(string pName, bool hasAlpha, ILogger logger)
     {
         var resolve = LeafWriters.ResolveProperty(pName);

@@ -7,8 +7,8 @@ using Microsoft.Extensions.Logging;
 namespace MEditService.Core.Schema;
 
 /// <summary>Noggog's small value-vector structs (P2*/P3*), spelled by the codec as one comma-joined
-/// text leaf ("x, y, z"). Loqui does not model them, so a write sets the components by name-keyed
-/// reflection on X/Y/Z.</summary>
+/// text leaf ("x, y, z"). Loqui does not model them, so a write sets X/Y/Z by name-keyed
+/// reflection.</summary>
 internal static class VectorStructLeaves
 {
     private static readonly string[] VectorComponentNames = ["X", "Y", "Z"];

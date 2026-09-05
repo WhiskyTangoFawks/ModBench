@@ -4,8 +4,8 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Core.Schema;
 
-/// <summary>One record type's own top-level columns: every member of its getter interface that is not
-/// record-header metadata, dispatched to whichever leaf kind it is and projected into a
+/// <summary>One record type's top-level columns: every member of its getter interface that is not
+/// record-header metadata, dispatched to its leaf kind and projected into a
 /// <see cref="ColumnSpec"/> named by the member itself.</summary>
 internal static class ColumnReflection
 {

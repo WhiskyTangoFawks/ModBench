@@ -40,10 +40,9 @@ internal static class FormRefPathBuilder
         }
         || meta.Variants?.Values.Any(CarriesFormKeys) == true;
 
-    /// <summary>Visits every formKey leaf under <paramref name="meta"/>. With
-    /// <paramref name="absentMeansNull"/>, a member the document omits is visited as null, since an
-    /// unset non-nullable link is a fact about the record; without it, an omitted member is skipped,
-    /// which is what a write payload naming only some members means.</summary>
+    /// <summary>Visits every formKey leaf under the metadata. absentMeansNull: an omitted member is
+    /// visited as null, since a stored document omits an unset link; without it, skipped, since a
+    /// write payload asserts nothing about members it omits.</summary>
     internal static void Walk(
         FieldMetadata meta, JsonElement? value, string path,
         Action<string, string?, bool, IReadOnlyList<string>> onFormKeyLeaf,

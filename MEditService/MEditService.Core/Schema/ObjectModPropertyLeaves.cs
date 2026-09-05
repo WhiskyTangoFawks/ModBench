@@ -34,9 +34,9 @@ internal static class ObjectModPropertyLeaves
         getterInterface.IsGenericType &&
         getterInterface.GetGenericTypeDefinition().Name == "IAObjectModPropertyGetter`1";
 
-    // Resolved by name off getterInterface's namespace so any game's assembly works. A member every
-    // declaring leaf types alike becomes one typed sub-field; one they disagree on becomes one
-    // sub-field with a variant per leaf. The document's own discriminator is added last.
+    // Resolved by name off getterInterface's namespace so any game's assembly works. A member the
+    // leaves type alike is one sub-field; one they disagree on has a variant per leaf. The
+    // discriminator is added last.
     internal static List<SubFieldSpec> BuildObjectModPropertyLeafFields(
         Type baseGetterInterface, GameReflection game, ILogger logger)
     {

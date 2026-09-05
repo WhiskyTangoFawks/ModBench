@@ -1,9 +1,9 @@
 using System.Text.Json;
 using MEditService.Core.Schema;
 using MEditService.Core.Serialization;
-using Microsoft.Extensions.Logging.Abstractions;
 using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;

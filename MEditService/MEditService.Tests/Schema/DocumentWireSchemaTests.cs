@@ -6,10 +6,9 @@ using Mutagen.Bethesda.Fallout4;
 
 namespace MEditService.Tests.Schema;
 
-/// <summary>The metadata tree describes the codec document by Mutagen's own names: every field is a
-/// property the assembly declares, every union's discriminator is the document's own
-/// <c>MutagenObjectType</c>, and a member whose type varies by leaf is one field with a variant per
-/// leaf (ADR-0032).</summary>
+/// <summary>The metadata describes the codec document by Mutagen's own names: every field a
+/// declared property, every discriminator the document's MutagenObjectType, a type-varying member
+/// one field with a variant per leaf (ADR-0032).</summary>
 public sealed class DocumentWireSchemaTests
 {
     private static readonly IReadOnlyDictionary<string, RecordTableSchema> Schemas =

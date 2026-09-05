@@ -76,9 +76,9 @@ public static class LeafWrite
             : new(null, reason);
 }
 
-/// <summary>One column of a record table: which member of the document it is, how to write it
-/// back, and what a generated view (ADR-0041) may do with it. <see cref="Apply"/> answers an
-/// outcome, so a silently lost edit is unrepresentable.</summary>
+/// <summary>One column of a record table: which document member it is, how it writes back, and
+/// what a generated view (ADR-0041) may do with it. Apply answers an outcome, so a silently lost
+/// edit is unrepresentable.</summary>
 public sealed record ColumnSpec(
     // The document's own member name, which is the wire name and the view column name.
     string Name,

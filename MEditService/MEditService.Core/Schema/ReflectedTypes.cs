@@ -100,10 +100,9 @@ internal static class ReflectedTypes
         typeof(int), typeof(uint), typeof(long), typeof(ulong),
     ];
 
-    /// <summary>The name the codec writes as <c>MutagenObjectType</c> for a value of this class:
-    /// Mutagen.Bethesda.Serialization's <c>GetNameWithDeclaringType</c>, spelled here so a discriminator
-    /// domain and the document agree. <paramref name="typeArguments"/> closes an open generic without
-    /// constructing it.</summary>
+    /// <summary>The name the codec writes as <c>MutagenObjectType</c> for a value of this class
+    /// (Mutagen.Bethesda.Serialization's <c>GetNameWithDeclaringType</c>), so a discriminator domain
+    /// and the document agree; <paramref name="typeArguments"/> closes an open generic.</summary>
     internal static string DocumentTypeName(Type type, Type[]? typeArguments = null) =>
         DocumentTypeName(type.DeclaringType == null ? type.Name : $"{type.DeclaringType.Name}+{type.Name}", typeArguments ?? type.GetGenericArguments());
 

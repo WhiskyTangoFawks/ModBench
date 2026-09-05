@@ -4,8 +4,7 @@ import { siblingsInUseFor } from './siblingsInUse';
 import type { FieldDiff, FieldMetadata, PathSegment } from './types';
 
 // The one place in the webview where a game's own reading conventions live — a game-shaped rule
-// that is not an entry in this table is in the wrong file. Members are named as the document
-// names them: Mutagen's own property names.
+// not in this table is in the wrong file. Members are named as the document names them.
 
 // A formatter is pure: it renders no markup, reads no panel state, and changes neither the value
 // the row commits nor the value it copies.
@@ -128,9 +127,9 @@ function scriptObject(row: SummaryRow): string {
   return `${row.member('Object').label}, Alias[${RESERVED_ALIASES[alias] ?? alias}]`;
 }
 
-// A property's value is its one Data member, whose type the leaf decides. A leaf whose Data is a
-// list or a nested struct is absent: xEdit passes a property's value through only one level deep
-// (`SetSummaryPassthroughMaxDepth(1)`), so such a property reads by name and kind alone.
+// A property's value is its one Data member, whose type the leaf decides. A list or struct Data is
+// absent: xEdit passes a value through one level only (`SetSummaryPassthroughMaxDepth(1)`), so
+// such a property reads by name and kind.
 const SCALAR_PROPERTY_LEAVES = new Set([
   'ScriptBoolProperty', 'ScriptFloatProperty', 'ScriptIntProperty', 'ScriptStringProperty',
 ]);

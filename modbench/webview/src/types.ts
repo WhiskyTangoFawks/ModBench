@@ -11,9 +11,9 @@ export type FormKeyResolution = Schemas['FormKeyResolution'];
 export type ConflictAll = Schemas['ConflictAll'];
 export type ConflictThis = Schemas['ConflictThis'];
 export type EnumMember = Schemas['EnumMember'];
-/** The backend's own `type` string, narrowed to the closed set this side switches on exhaustively.
- *  Each names how the codec spells the value in the document: a translated string is an object,
- *  a color "#AARRGGBB", a vector "x, y, z", flags an array of member names, hex "0x..". */
+/** The backend's own `type` string, narrowed to the closed set this side switches on. Each names
+ *  the codec's spelling: a translated string is an object, a color "#AARRGGBB", a vector
+ *  "x, y, z", flags an array of names. */
 export type FieldType =
   | 'string' | 'translatedString' | 'int' | 'float' | 'bool' | 'enum' | 'flags' | 'formKey'
   | 'struct' | 'array' | 'hex' | 'color' | 'vector';

@@ -7,16 +7,14 @@ using Microsoft.Extensions.Logging;
 namespace MEditService.Core.Schema;
 
 /// <summary>A Loqui base whose per-subclass data lives on the classes under it: the union of each
-/// leaf's members plus the document's own discriminator. A concrete base is its last leaf, keeping the
-/// discriminator's first member stable.</summary>
+/// leaf's members plus the document's own discriminator. A concrete base is its last leaf.</summary>
 internal static class LoquiUnions
 {
     // Kept separate from ObjectModPropertyLeaves' hand-picked table: two different discovery
     // mechanisms, not one abstraction.
 
     // Every concrete class under a base, filed under its whole base chain so a two-level chain is
-    // found like a one-level one. The assembly is scanned once per schema build. A leaf's name is
-    // the one the codec writes for it.
+    // found like a one-level one; scanned once per schema build. A leaf's name is the codec's.
     private static readonly ConcurrentDictionary<Assembly, ILookup<Type, (Type GetterType, string ClassName)>> LeavesByBase = new();
 
     private static ILookup<Type, (Type GetterType, string ClassName)> IndexLeavesByBase(Assembly assembly) =>
@@ -122,10 +120,9 @@ internal static class LoquiUnions
     private static (string, string?, int, int) ShapeKey(SubFieldSpec spec) =>
         (spec.ApiType, spec.ElementSpec?.ApiType, spec.SubFields?.Count ?? -1, spec.ElementSpec?.SubFields?.Count ?? -1);
 
-    // One field whose own shape is the first declaring leaf's; when the leaves disagree, every leaf's
-    // shape rides along as that leaf's variant. Written through whichever declaring leaf the object
-    // is, any other answering PropertyNotFound, so a resend after a leaf switch drops the outgoing
-    // leaf's member.
+    // One field shaped as the first declaring leaf's; when the leaves disagree, each leaf's shape
+    // is its variant. Written through the object's own leaf, any other answering PropertyNotFound,
+    // so a leaf switch drops the outgoing member.
     private static SubFieldSpec BuildUnionMemberField(List<(UnionLeafWalk Leaf, SubFieldSpec Spec)> declaring)
     {
         var rep = declaring[0].Spec;

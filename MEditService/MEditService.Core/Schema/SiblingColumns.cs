@@ -5,8 +5,8 @@ using Mutagen.Bethesda.Plugins.Records;
 namespace MEditService.Core.Schema;
 
 /// <summary>Subclasses sharing one GRUP signature contribute to one table: a member every class
-/// shapes alike is one column; one they disagree on, in any way, is one column with a variant per
-/// record class, written through whichever class the record is.</summary>
+/// shapes alike is one column; one they disagree on is one column with a variant per record class,
+/// written through the record's own class.</summary>
 internal static class SiblingColumns
 {
     /// <summary>Which record class each writer belongs to, so a column shared by several classes
@@ -19,10 +19,9 @@ internal static class SiblingColumns
         JsonSerializer.Serialize(a.ToFieldMetadata() with { AllowsNull = false })
         == JsonSerializer.Serialize(b.ToFieldMetadata() with { AllowsNull = false });
 
-    // Folds one sibling's column into the union; shape-based, never keyed by table or signature
-    // name. Absent: add, nullable (GlobalFloat.OutputChar). Same shape: leave. Any disagreement —
-    // a scalar of another type (gmst.Data), another element shape (dmgt.DamageTypes), another enum
-    // domain (omod.Properties) — a variant per class.
+    // Folds one sibling's column in by shape, never by table or signature name. Absent: add,
+    // nullable (GlobalFloat.OutputChar). Same shape: leave. Any disagreement (gmst.Data's scalar
+    // type, dmgt.DamageTypes' element, omod.Properties' enum domain): a variant per class.
     internal static void MergeSiblingColumn(
         List<ColumnSpec> columns,
         Dictionary<string, List<WriterByClass>> writersByColumn,

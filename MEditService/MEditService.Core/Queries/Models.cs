@@ -96,9 +96,9 @@ public record RecordSummary(
 
 public record PagedResult<T>(IReadOnlyList<T> Items, int Total);
 
-/// <summary>BitValue is the member's own bit as a decimal string, so one above 2^53 survives JSON
-/// without IEEE 754 loss; null for a member of a plain enum. Label is null for a member that is
-/// already the game's own vocabulary.</summary>
+/// <summary>BitValue is the member's bit as a decimal string, so one above 2^53 survives JSON;
+/// null for a plain enum's member. Label is null when the value is already the game's own
+/// vocabulary.</summary>
 public record EnumMember(string Value, string? BitValue = null, string? Label = null);
 
 public record FieldMetadata(
@@ -138,9 +138,8 @@ public record FieldMetadata(
     // nulls stay on all four nullables here.
     string? LeafTypeName = null,
 
-    // For a member of a union whose type differs by leaf: this member's shape under each leaf,
-    // keyed by the discriminator's own values. The field's own shape is the first leaf's. Null when
-    // every leaf declaring the member agrees.
+    // A union member whose type differs by leaf: its shape under each leaf, keyed by the
+    // discriminator's values. The field's own shape is the first leaf's. Null when every leaf agrees.
     IReadOnlyDictionary<string, FieldMetadata>? Variants = null);
 
 /// <summary>Value is the stored document's own node for this field, verbatim, or null when the

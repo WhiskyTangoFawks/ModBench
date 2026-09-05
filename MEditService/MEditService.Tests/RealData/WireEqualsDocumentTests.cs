@@ -70,6 +70,13 @@ public sealed class WireEqualsDocumentTests(CutDownPluginCompareFixture fixture)
             // value for a sorted one, by position otherwise.
             var metadata = compare!.Overrides[0].Fields.ToDictionary(f => f.Metadata.Name, f => f.Metadata);
             foreach (var diff in compare.Diffs) Collect(diff, stored, null, metadata.GetValueOrDefault(diff.FieldName), formKey, mismatches);
+
+            // A column the compare drops leaves no diff at all, so its absence is checked from the
+            // document's side: every member the document spells under a column's name is on the wire.
+            var onTheWire = compare.Diffs.Select(d => d.FieldName).ToHashSet(StringComparer.Ordinal);
+            foreach (var name in metadata.Keys)
+                if (stored?[name] != null && !onTheWire.Contains(name))
+                    mismatches.Add($"{formKey}.{name}: the document has this node and the wire has no such field");
         }
 
         Assert.True(mismatches.Count == 0,
