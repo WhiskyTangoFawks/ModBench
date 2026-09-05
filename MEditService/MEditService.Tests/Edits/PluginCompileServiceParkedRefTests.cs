@@ -77,10 +77,14 @@ public sealed class PluginCompileServiceParkedRefTests : IDisposable
 
         // A file name past NAME_MAX, committed by plumbing onto a ref of its own. No checkout ever
         // happens, so git stores it without complaint and only the materialise step meets the OS.
-        var blob = RunGit("hash-object", "-w", "--stdin", "--path", "x.json").Trim();
-        var scratchIndex = Path.Combine(Path.GetTempPath(), $"medit-test-index-{Guid.NewGuid():N}");
+        // The blob comes from an empty file, not `--stdin`: git inherits this process's stdin, which
+        // under a test harness can be a socket that never reaches EOF.
+        var scratch = Path.Combine(Path.GetTempPath(), $"medit-test-index-{Guid.NewGuid():N}");
+        var scratchIndex = scratch + ".index";
         try
         {
+            File.WriteAllBytes(scratch, []);
+            var blob = RunGit("hash-object", "-w", "--path", "x.json", scratch).Trim();
             GitCli.RunWithIndex(GitDir, _mod.ModFolder, scratchIndex, "read-tree", "main");
             GitCli.RunWithIndex(GitDir, _mod.ModFolder, scratchIndex,
                 "update-index", "--add", "--cacheinfo", $"100644,{blob},{sourceRoot}/Npcs/{new string('n', 300)}.json");
@@ -90,6 +94,7 @@ public sealed class PluginCompileServiceParkedRefTests : IDisposable
         }
         finally
         {
+            File.Delete(scratch);
             if (File.Exists(scratchIndex)) File.Delete(scratchIndex);
         }
 

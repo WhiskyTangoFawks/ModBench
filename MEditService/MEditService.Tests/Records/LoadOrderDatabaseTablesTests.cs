@@ -8,6 +8,7 @@ namespace MEditService.Tests.Records;
 
 /// <summary>Every absence assertion carries a positive control from the same catalog listing,
 /// or an empty result would satisfy "X is absent" as well as a real deletion.</summary>
+[Collection(ApiTestCollection.Name)]
 public sealed class LoadOrderDatabaseTablesTests(LoadedApiFixture<TestPluginFixture> loaded)
     : IClassFixture<LoadedApiFixture<TestPluginFixture>>
 {

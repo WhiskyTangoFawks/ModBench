@@ -4,6 +4,7 @@ using System.Text.Json;
 
 namespace MEditService.Tests.Api;
 
+[Collection(ApiTestCollection.Name)]
 public sealed class FilterApiTests(LoadedApiFixture<TestPluginFixture> loaded) : IClassFixture<LoadedApiFixture<TestPluginFixture>>
 {
     private readonly HttpClient _client = loaded.Client;

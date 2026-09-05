@@ -17,6 +17,7 @@ namespace MEditService.Tests.Api;
 
 /// <summary>Status code and body shape for the write handlers' error-mapping paths the endpoint
 /// suites do not reach, including the IO/UnauthorizedAccess to 500 mapping.</summary>
+[Collection(ApiTestCollection.Name)]
 public sealed class WriteEndpointMappingCharacterizationTests(LoadedApiFixture<TestPluginFixture> loaded)
     : IClassFixture<LoadedApiFixture<TestPluginFixture>>
 {
@@ -433,6 +434,7 @@ public sealed class WriteEndpointMappingCharacterizationTests(LoadedApiFixture<T
 /// <summary>Sabotages the plugin binary rather than the mod folder's write permission: both handlers
 /// deep-parse it before anything reaches git, and a git failure would surface as
 /// <see cref="GitUnavailableException"/>, which the 500 mapper must not catch.</summary>
+[Collection(ApiTestCollection.Name)]
 public sealed class ExternalChangeEndpointMappingCharacterizationTests : IDisposable
 {
     private readonly TrackedModFixture _mod = TrackedModFixture.Tracked();
