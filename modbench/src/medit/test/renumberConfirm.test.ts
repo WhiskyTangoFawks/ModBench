@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { renumberConfirmMessage } from '../renumberConfirm';
 
-// #572 ruling 3: when every referencer is tracked, the cascade is automatic behind one up-front
-// confirm stating the blast radius — "updates N references across M plugins". No referencers →
-// no confirm at all (the simple rename #427 already covers).
+// When every referencer is tracked, the cascade is automatic behind one up-front confirm
+// stating the blast radius — "updates N references across M plugins". No referencers means
+// no confirm at all.
 describe('renumberConfirmMessage', () => {
   const ref = (formKey: string, plugin: string, fieldPath = 'F') =>
     ({ formKey, plugin, fieldPath, recordType: 'weap', editorId: null, origin: 'Data' });

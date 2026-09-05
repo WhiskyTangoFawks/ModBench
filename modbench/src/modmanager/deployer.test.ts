@@ -39,7 +39,7 @@ describe('deploy', () => {
   // fs.symlink needs admin rights or Developer Mode on Windows — skip there
   // rather than fail for an environment reason, not a code one.
   it.skipIf(process.platform === 'win32')(
-    'deploys a symlinked file as a real hardlink to its target, not a duplicated symlink (#322)',
+    'deploys a symlinked file as a real hardlink to its target, not a duplicated symlink',
     async () => {
       fx = await makeDeployerFixture();
       const target = await fx.writeModFile('ModA', 'shared/real.dds', 'REAL');
