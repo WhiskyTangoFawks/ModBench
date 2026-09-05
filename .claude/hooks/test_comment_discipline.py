@@ -49,6 +49,13 @@ class ValeRules(unittest.TestCase):
     def test_comment_pass_covers_python_comments(self):
         self.assertIn("Repo.CommentLength", vale("# " + "word " * 41 + "\n", ".py"))
 
+    def test_a_date_in_a_comment_or_prose(self):
+        self.assertIn("Repo.Date", vale("// maintainer ruling 2026-09-01\nconst a = 1;\n", ".ts"))
+        self.assertIn("Repo.Date", vale("Ruling 2026-09-01: the grid renders the stack.\n", ".md"))
+
+    def test_a_date_in_a_string_literal_is_data(self):
+        self.assertNotIn("Repo.Date", vale('const d = "2024-01-01";\n', ".ts", config=".vale-raw.ini"))
+
     def test_one_cref_passes(self):
         one = '/// <summary>See <see cref="B"/>.</summary>\npublic int X;\n'
         self.assertNotIn("Repo.Cref", vale(one, ".cs"))

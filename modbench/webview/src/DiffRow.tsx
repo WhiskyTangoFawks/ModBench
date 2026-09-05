@@ -206,7 +206,7 @@ export function DiffRow({
   // shows the subtree's aggregate only while collapsed.
   const rowConflictAll = hasChildren && isExpanded ? undefined : diff.conflictAll;
 
-  // Maintainer ruling 2026-09-01: a flags row is collapsible like a struct row, though its
+  // A flags row is collapsible like a struct row, though its
   // "children" are the checkbox lines inside the cell, not sub-rows. It starts collapsed, sharing
   // struct rows' default exactly.
   const isFlagsRow = meta.type === 'enum' && flagBits(meta) != null;

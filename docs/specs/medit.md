@@ -49,9 +49,9 @@ load order over the active loadout:
 | **Version control (Track, branch, compile)** | Track gesture, native Source Control panel review & commit per tracked mod, Save & Compile, external-change handling | [medit-version-control.md](medit-version-control.md) |
 | **Status bar item** | Backend/load order state | This document |
 
-The backend **launches with the extension** (maintainer ruling 2026-09-01: the DB-file-backed
-session made startup cheap enough that lifecycle stopped being a user decision — there is no
-Launch mEdit / Close mEdit command). At activation it spawns the
+The backend **launches with the extension** (the DB-file-backed session makes startup
+cheap enough that lifecycle is not a user decision; there is no Launch mEdit / Close mEdit
+command). At activation it spawns the
 backend and builds the load order from every line of the active profile's `plugins.txt` — disabled
 entries included, carrying their participation (ADR-0035) — plus vanilla masters
 (the `PUT /load-order` snapshot, ADR-0044); teardown is workspace close (or crash handling). A

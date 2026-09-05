@@ -66,7 +66,7 @@ Mutation runs against `src/modmanager/` and `src/medit/`:
 
 ## Cost model
 
-Measured 2026-08-16 at the capped 4-worker concurrency. Nothing like the .NET side —
+Measured at the capped 4-worker concurrency. Nothing like the .NET side —
 this is cheap enough to run per-ticket:
 
 | Scope | Mutants | Wall clock |
@@ -123,7 +123,7 @@ survivor list reaches context.
 
 ## Baseline
 
-The first full run (2026-08-13) produced **330 actionable findings** — 272 survived, 58
+The first full run produced **330 actionable findings** — 272 survived, 58
 uncovered — concentrated in `deployer.ts` (66), `mo2/modlistText.ts` (44) and
 `install/detectRoot.ts` (43).
 

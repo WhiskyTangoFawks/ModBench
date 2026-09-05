@@ -623,10 +623,9 @@ overflow, then native **Collapse All** last.
   frontend never saw it applied), never by its SQL text: a `WHERE` clause is not a readout.
   Clearing either axis leaves the other applied and still named.
 - **Slot 3 — New Plugin…**.
-- **No Launch/Close mEdit anywhere** — the backend launches with the extension (maintainer
-  ruling 2026-09-01: the DB-file-backed session made startup cheap enough that lifecycle
-  stopped being a user decision), so the former overflow toggle pair and its
-  `modbench.backendRunning` context key are gone.
+- **No Launch/Close mEdit anywhere** — the backend launches with the extension (the
+  DB-file-backed session makes startup cheap enough that lifecycle is not a user decision), so
+  there is no overflow toggle pair and no `modbench.backendRunning` context key.
 - **Native Collapse All** — the merge made this the deepest tree in the product
   (plugin → record type → record), so it earns the affordance.
 - **No Refresh of its own.** Re-reading `plugins.txt` is part of the single
