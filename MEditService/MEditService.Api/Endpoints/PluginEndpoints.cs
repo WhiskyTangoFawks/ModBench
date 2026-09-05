@@ -506,6 +506,6 @@ public record ExternalChangeActionResponse(bool Succeeded, string? RefusalReason
 public record RebaseRequest(string Origin);
 
 // Outcome is the RebaseOutcome enum rather than a string so the OpenAPI schema, and the generated
-// client, get the closed union (#627). ConflictedPaths is the extension's cue to open each path in
+// client, get the closed union. ConflictedPaths is the extension's cue to open each path in
 // VS Code's merge editor.
 public record RebaseResponse(RebaseOutcome Outcome, string? RefusalReason, IReadOnlyList<string> ConflictedPaths);

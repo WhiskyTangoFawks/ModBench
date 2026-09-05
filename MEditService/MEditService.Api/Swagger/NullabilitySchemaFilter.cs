@@ -7,7 +7,7 @@ namespace MEditService.Api.Swagger;
 
 // Swashbuckle ignores nullable-reference annotations, so every DTO property would be optional and
 // nullable. Non-nullable properties become `required`; a nullable $ref is wrapped in allOf, since
-// OpenAPI 3.0 forbids `nullable` beside a bare $ref (#627, #644).
+// OpenAPI 3.0 forbids `nullable` beside a bare $ref.
 public sealed class NullabilitySchemaFilter : ISchemaFilter
 {
     private static readonly NullabilityInfoContext NullabilityContext = new();
@@ -40,7 +40,7 @@ public sealed class NullabilitySchemaFilter : ISchemaFilter
     }
 
     // Keyed off the dictionary's value generic argument, not the property's own nullability, which
-    // is an unrelated axis; additionalProperties is a separate code path from the property walk (#644).
+    // is an unrelated axis; additionalProperties is a separate code path from the property walk.
     private static void WrapNullableDictionaryValue(IOpenApiSchema propertySchema, PropertyInfo property)
     {
         if (propertySchema is not OpenApiSchema { AdditionalProperties: OpenApiSchemaReference valueSchema } dictSchema)

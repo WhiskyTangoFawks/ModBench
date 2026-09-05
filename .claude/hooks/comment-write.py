@@ -19,9 +19,12 @@ path = tool_input.get("file_path", "")
 text = tool_input.get("new_string") if data.get("tool_name") == "Edit" else tool_input.get("content")
 hits = comment_shape.check(path, text or "")
 if hits:
-    print("A comment states a constraint from outside the code; a string states the current "
-          "state.", file=sys.stderr)
-    print("Delete it, or cut it to one present-tense sentence.", file=sys.stderr)
+    if any("ticket number" in h for h in hits):
+        print("A ticket number belongs in the commit message, never in the tree.", file=sys.stderr)
+    else:
+        print("A comment states a constraint from outside the code; a string states the current "
+              "state.", file=sys.stderr)
+        print("Delete it, or cut it to one present-tense sentence.", file=sys.stderr)
     for h in hits:
         print("  " + h.replace(path + ":", "line "), file=sys.stderr)
     sys.exit(2)

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Structural comment checks Vale cannot express: doc block over three lines, doc comment on a
-test method, on a private member, carrying more than one cref, or a History token inside a
-string literal. Exit 1 on any hit.
+test method, on a private member, carrying more than one cref, a History token inside a string
+literal, or a ticket-number citation anywhere. Exit 1 on any hit.
 
 Usage: comment-shape.py FILE...            check files
        comment-shape.py --as PATH < text   check a fragment as if it were PATH"""
@@ -16,6 +16,31 @@ TS_TOP_LEVEL_DECL = re.compile(r"^(?:async\s+)?(?:function|const|let|class|inter
 CREF = re.compile(r"cref=|\{@link\s")
 HISTORY = re.compile(
     r"\b(previously|used to|no longer|originally|pre-fix|formerly)\b", re.IGNORECASE)
+
+# Our tracker's numbers have never been single-digit; a lone digit is an in-document enumeration
+# (divergence #2, AC #4), never a ticket.
+TICKET = re.compile(r"#\d{2,}\b")
+# A number is an external tracker's, not ours, when a tracker name or owner/repo path sits right
+# before it, with only that name's own separators between: "Mutagen #688", "Mutagen-#688",
+# "Mutagen-Modding/Mutagen#688", "upstream #685/#686" chained across the slash.
+EXTERNAL_TICKET = re.compile(
+    r"\b(?:Mutagen|upstream|VS ?Code)\b[\w ./-]{0,20}?#\d+(?:\s*/\s*#\d+)*"
+    r"|[\w.-]+/[\w.-]+#\d+")
+# A hex colour is a hash-digit run that is the entire quoted literal, or sits right after the
+# comma in a `var(--x, #fff)` fallback — never a bare, unquoted "#NNN" or "(#NNN)".
+HEX_COLOR = re.compile(r",\s*#[0-9a-fA-F]{3,8}\s*\)|['\"`]#[0-9a-fA-F]{3,8}['\"`]")
+
+
+def ticket_hits(path, lines):
+    hits = []
+    for lineno, line in enumerate(lines, start=1):
+        exempt = [m.span() for m in EXTERNAL_TICKET.finditer(line)]
+        exempt += [m.span() for m in HEX_COLOR.finditer(line)]
+        for m in TICKET.finditer(line):
+            if any(s <= m.start() and m.end() <= e for s, e in exempt):
+                continue
+            hits.append(f"{path}:{lineno}: ticket number '{m.group(0)}' — cite it in the commit message, not the tree")
+    return hits
 
 
 def strip_comments(lines):
@@ -92,11 +117,12 @@ def next_code_line(lines, after):
 
 
 def check(path, text):
+    lines = text.splitlines()
+    hits = ticket_hits(path, lines)
     is_cs = path.endswith(".cs")
     if not (is_cs or path.endswith((".ts", ".tsx"))):
-        return []
-    lines = text.splitlines()
-    hits = history_hits(path, lines)
+        return hits
+    hits += history_hits(path, lines)
     for start, end in doc_blocks(lines, is_cs):
         where = f"{path}:{start + 1}"
         n = end - start + 1
