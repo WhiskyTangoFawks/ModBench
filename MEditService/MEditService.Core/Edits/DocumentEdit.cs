@@ -59,10 +59,9 @@ internal static class DocumentEdit
                 RecordEditEnvelope.Set => Set(cursor, envelope.Value!.Value, request, spelled, out edited, out editedMeta),
                 RecordEditEnvelope.Add => Add(cursor, envelope.Value, request, spelled, out edited, out editedMeta),
                 RecordEditEnvelope.Remove => Remove(cursor, out edited, out editedMeta),
-                _ => Move(cursor, envelope.Value, out edited, out editedMeta),
+                _ => Move(cursor, envelope.Value, spelled, out edited, out editedMeta),
             };
         if (patched is { } refused) return refused;
-        if (edited is null) return null;
 
         if (KeyedArrays.Normalize(record, RootMetadata(request.Schema), "") is { } duplicate)
         {
@@ -215,8 +214,6 @@ internal static class DocumentEdit
         {
             var hop = path[i];
             var sofar = RecordEditEnvelope.Spell(path.Take(i + 1));
-            if (cursor.OwnerArray != null && cursor.Node == null)
-                return RecordEditResult.RefusedAt(RecordEditRefusal.FieldNotFound, sofar, $"'{RecordEditEnvelope.Spell(path.Take(i))}' names no element of the array.");
             if (hop.Kind == PathHop.MemberKind)
             {
                 if (cursor.Meta.Fields is not { } fields)
@@ -271,10 +268,13 @@ internal static class DocumentEdit
                     if (string.Equals(ElementKey.Of(array[e], keyMembers, elementMeta).Text, hop.Key, StringComparison.Ordinal)) { index = e; break; }
                 }
             }
+            // An element that is not there is a path the document does not know, on every operation:
+            // a stale panel must never hear that a write which did nothing landed.
+            if (index < 0 || index >= array.Count) return NoElement(sofar, array.Count);
             cursor = new Cursor
             {
                 Column = column,
-                Node = index >= 0 && index < array.Count ? array[index] : null,
+                Node = array[index],
                 Meta = elementMeta,
                 Field = elementMeta,
                 OwnerArray = array,
@@ -283,6 +283,11 @@ internal static class DocumentEdit
         }
         return null;
     }
+
+    private static RecordEditResult NoElement(string spelled, int count) =>
+        RecordEditResult.RefusedAt(
+            RecordEditRefusal.FieldNotFound, spelled,
+            $"'{spelled}' names no element: the array holds {count} element(s), so nothing was written.");
 
     private static void Attach(Cursor cursor, JsonNode node)
     {
@@ -319,8 +324,6 @@ internal static class DocumentEdit
     {
         edited = null;
         editedMeta = cursor.Meta;
-        if (cursor.OwnerArray != null && cursor.Node == null)
-            return RecordEditResult.RefusedAt(RecordEditRefusal.FieldNotFound, spelled, $"'{spelled}' names no element of the array.");
         if (value.ValueKind == JsonValueKind.Null && cursor.OwnerArray != null)
             return Malformed(spelled, "an element is not cleared with null; remove it");
 
@@ -480,22 +483,21 @@ internal static class DocumentEdit
 
     private static RecordEditResult? Remove(Cursor cursor, out JsonNode? edited, out FieldMetadata editedMeta)
     {
-        edited = null;
-        editedMeta = cursor.Meta;
-        if (cursor.OwnerArray is not { } array || cursor.Node == null) return null;   // nothing to remove: already satisfied
+        var array = cursor.OwnerArray!;
         array.RemoveAt(cursor.Index);
         edited = array;
         editedMeta = ArrayMeta(cursor);
         return null;
     }
 
-    private static RecordEditResult? Move(Cursor cursor, JsonElement? value, out JsonNode? edited, out FieldMetadata editedMeta)
+    private static RecordEditResult? Move(Cursor cursor, JsonElement? value, string spelled, out JsonNode? edited, out FieldMetadata editedMeta)
     {
         edited = null;
         editedMeta = cursor.Meta;
-        if (cursor.OwnerArray is not { } array || cursor.Node == null) return null;
+        var array = cursor.OwnerArray!;
         var destination = value!.Value.GetInt32();
-        if (destination < 0 || destination >= array.Count || destination == cursor.Index) return null;
+        if (destination < 0 || destination >= array.Count) return NoElement($"{Owner(spelled)}[{destination}]", array.Count);
+        if (destination == cursor.Index) return Malformed(spelled, $"the element is already at position {destination}");
         var node = array[cursor.Index];
         array.RemoveAt(cursor.Index);
         array.Insert(destination, node);
@@ -503,6 +505,9 @@ internal static class DocumentEdit
         editedMeta = ArrayMeta(cursor);
         return null;
     }
+
+    // The array's own spelling, which is the element's without its last hop.
+    private static string Owner(string spelledElement) => spelledElement[..spelledElement.LastIndexOf('[')];
 
     // The array an element cursor sits in has the element's shape as its ElementType; its own key
     // members are what the comparison needs, so the array's metadata is rebuilt around the element's.

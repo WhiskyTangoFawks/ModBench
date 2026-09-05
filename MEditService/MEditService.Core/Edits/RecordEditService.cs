@@ -89,7 +89,8 @@ public sealed class RecordEditService(
         var request = new DocumentEditRequest(text, prefix, schema, envelope, release, reads.Resolve, roundTrip);
         if (DocumentEdit.Apply(request, out var newText) is { } refused) return refused;
 
-        // A boundary array op is already satisfied: nothing to commit, so no dirty file or history entry.
+        // The document already said this (a value set to itself): nothing to commit, so no dirty file
+        // or history entry.
         if (string.Equals(newText, text, StringComparison.Ordinal)) return RecordEditResult.Success();
 
         // The file name carries the EditorID, so an EditorID edit is a rename too. Done before the write.

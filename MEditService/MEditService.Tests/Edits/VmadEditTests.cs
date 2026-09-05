@@ -522,14 +522,16 @@ public sealed class VmadEditTests : IDisposable
     }
 
     [Fact]
-    public void RemovingByAKeyNoElementCarries_WritesNothing()
+    public void RemovingByAKeyNoElementCarries_IsRefusedByName_AndWritesNothing()
     {
         _fixture.Normalize(_fixture.Npc);
         var before = _fixture.Body(_fixture.Npc);
 
         var result = Edit(_fixture.Npc, RemoveAt(Under(Member("Scripts"), Key("Gamma"))));
 
-        Assert.True(result.Applied, result.Message);
+        Assert.False(result.Applied);
+        Assert.Equal(RecordEditRefusal.FieldNotFound, result.Refusal);
+        Assert.Equal("VirtualMachineAdapter.Scripts[Gamma]", result.Path);
         Assert.Equal(before, _fixture.Body(_fixture.Npc));
     }
 

@@ -235,15 +235,47 @@ public sealed class DocumentEditTests
         Assert.Equal(["Alpha", "Beta", "Zulu"], Node(after, "VirtualMachineAdapter.Scripts").AsArray().Select(s => s!["Name"]!.GetValue<string>()));
     }
 
+    // An element that is not there is a path the document does not know, on every operation.
+    [Theory]
+    [InlineData(RecordEditEnvelope.Remove)]
+    [InlineData(RecordEditEnvelope.Move)]
+    [InlineData(RecordEditEnvelope.Set)]
+    public void AnElementPastTheEnd_IsRefusedNamingThePathAndTheLength_OnEveryOperation(string op)
+    {
+        var before = DocumentEdits.Serialize(_npc);
+        var envelope = new RecordEditEnvelope(op, [Member("Keywords"), At(7)], Json("0"));
+
+        var refusal = Apply(before, "npc_", envelope, out var written);
+
+        Assert.Equal(RecordEditRefusal.FieldNotFound, refusal!.Refusal);
+        Assert.Equal("Keywords[7]", refusal.Path);
+        Assert.Contains("holds 1 element", refusal.Message, StringComparison.Ordinal);
+        Assert.Equal(before, written);
+    }
+
     [Fact]
-    public void Remove_OfAnElementPastTheEnd_IsNothingToDo_AndTheTextIsTheInput()
+    public void AKeyNoElementCarries_IsRefusedNamingThePathAndTheLength()
     {
         var before = DocumentEdits.Serialize(_npc);
 
-        var refusal = Apply(before, "npc_", RemoveAt(Member("Keywords"), At(7)), out var written);
+        var refusal = Apply(before, "npc_", RemoveAt(Member("VirtualMachineAdapter"), Member("Scripts"), Key("Gamma")), out var written);
 
-        Assert.Null(refusal);
-        Assert.Same(before, written);
+        Assert.Equal(RecordEditRefusal.FieldNotFound, refusal!.Refusal);
+        Assert.Equal("VirtualMachineAdapter.Scripts[Gamma]", refusal.Path);
+        Assert.Contains("holds 2 element", refusal.Message, StringComparison.Ordinal);
+        Assert.Equal(before, written);
+    }
+
+    [Fact]
+    public void Move_ToADestinationOutsideTheArray_IsRefusedNamingThatPosition()
+    {
+        var before = DocumentEdits.Serialize(_npc);
+
+        var refusal = Apply(before, "npc_", MoveTo(3, Member("Keywords"), At(0)), out var written);
+
+        Assert.Equal(RecordEditRefusal.FieldNotFound, refusal!.Refusal);
+        Assert.Equal("Keywords[3]", refusal.Path);
+        Assert.Equal(before, written);
     }
 
     // ── the cascade is the writer's ─────────────────────────────────────────
