@@ -39,6 +39,7 @@ if [[ -n "$SHAPE_FILES" ]]; then
     (cd "$ROOT" && echo "$COMMENT_FILES" | xargs -d '\n' "$VALE" --config=.vale.ini) || COMMENT_OK=false
   fi
   (cd "$ROOT" && echo "$SHAPE_FILES" | xargs -d '\n' -r python3 .claude/hooks/comment-shape.py) || COMMENT_OK=false
+  (cd "$ROOT" && python3 -m unittest discover -q -s .claude/hooks -p 'test_*.py') || COMMENT_OK=false
   $COMMENT_OK || { echo "--- COMMENT GATE FAILED ---"; FAILED=true; }
 fi
 
