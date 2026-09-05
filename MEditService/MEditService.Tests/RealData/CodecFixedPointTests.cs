@@ -1,15 +1,16 @@
 using System.Text;
 using MEditService.Core.Records;
 using MEditService.Core.Serialization;
+using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Xunit.Abstractions;
 
 namespace MEditService.Tests.RealData;
 
-/// <summary>Whole-document equality is only a meaningful assertion where the codec is a fixed
-/// point: deserializing a stored document and serializing it again gives the same bytes, over
-/// every record of the real plugin rather than a curated few.</summary>
+/// <summary>Whole-document equality means nothing unless the codec is a fixed point: deserializing
+/// a stored document and serializing it again gives the same bytes, over every record of the real
+/// plugin rather than a curated few.</summary>
 public sealed class CodecFixedPointTests(CutDownPluginFixture fixture, ITestOutputHelper output)
     : IClassFixture<CutDownPluginFixture>
 {
@@ -18,9 +19,7 @@ public sealed class CodecFixedPointTests(CutDownPluginFixture fixture, ITestOutp
     {
         var codec = new RecordTextCodec(NullLogger<RecordTextCodec>.Instance);
         var documents = fixture.Repo.At(RecordRef.Effective)
-            .GetDocuments(new PluginKey(CutDownPluginFixture.PluginFileName, "Data"))
-            .Where(d => d.RecordType != HeaderIndexer.RecordType)
-            .ToList();
+            .GetDocuments(new PluginKey(CutDownPluginFixture.PluginFileName, "Data"));
 
         // The plugin's own record count, so a fixture that stopped being indexed cannot pass this
         // over an empty list.
@@ -30,14 +29,8 @@ public sealed class CodecFixedPointTests(CutDownPluginFixture fixture, ITestOutp
         var divergent = new List<string>();
         foreach (var document in documents)
         {
-            var stored = Encoding.UTF8.GetBytes(document.Body!);
-            var record = await codec.DeserializeFromBytesAsync(stored, GameRelease.Fallout4, document.RecordType);
-            var reserialized = await codec.SerializeToBytesAsync(record, GameRelease.Fallout4);
-            if (!reserialized.AsSpan().SequenceEqual(stored))
-            {
-                divergent.Add($"{document.RecordType} {document.FormKey} ({document.EditorId}): "
-                    + FirstDifference(Encoding.UTF8.GetString(stored), Encoding.UTF8.GetString(reserialized)));
-            }
+            var stored = Assert.IsType<string>(document.Body);
+            divergent.AddRange(await Divergence(codec, document, stored));
         }
 
         output.WriteLine($"{documents.Count} records round-tripped through the codec.");
@@ -46,14 +39,35 @@ public sealed class CodecFixedPointTests(CutDownPluginFixture fixture, ITestOutp
             + string.Join("\n", divergent.Take(10)));
     }
 
-    private static string FirstDifference(string stored, string reserialized)
+    private static async Task<IEnumerable<string>> Divergence(
+        RecordTextCodec codec, RecordDocument document, string stored)
     {
-        var limit = Math.Min(stored.Length, reserialized.Length);
-        var at = 0;
-        while (at < limit && stored[at] == reserialized[at]) at++;
-        return $"at offset {at} stored '{Excerpt(stored, at)}' vs reserialized '{Excerpt(reserialized, at)}'";
+        var where = $"{document.RecordType} {document.FormKey} ({document.EditorId})";
+        string reserialized;
+        try
+        {
+            reserialized = document.RecordType == HeaderIndexer.RecordType
+                ? await RoundTripHeader(stored)
+                : await RoundTripRecord(codec, document.RecordType, stored);
+        }
+        catch (Exception ex) when (ex is not Xunit.Sdk.XunitException)
+        {
+            return [$"{where}: the codec could not read its own document — {ex.Message}"];
+        }
+
+        return reserialized == stored ? [] : [$"{where}: {Golden.FirstDifference(stored, reserialized)}"];
     }
 
-    private static string Excerpt(string text, int at) =>
-        text.Substring(Math.Max(0, at - 40), Math.Min(120, text.Length - Math.Max(0, at - 40)));
+    private static async Task<string> RoundTripRecord(RecordTextCodec codec, string recordType, string stored)
+    {
+        var record = await codec.DeserializeFromBytesAsync(
+            Encoding.UTF8.GetBytes(stored), GameRelease.Fallout4, recordType);
+        return Encoding.UTF8.GetString(await codec.SerializeToBytesAsync(record, GameRelease.Fallout4));
+    }
+
+    // A ModHeader is not an IMajorRecordGetter, so the per-record codec has no path to it; the
+    // whole-mod door is the codec that owns the header, and the fixed point is the same claim.
+    private static Task<string> RoundTripHeader(string stored) =>
+        Task.FromResult(Encoding.UTF8.GetString(
+            HeaderDocument.Write(HeaderDocument.Read(Encoding.UTF8.GetBytes(stored)))));
 }

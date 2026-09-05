@@ -1,98 +1,132 @@
+using System.Text.RegularExpressions;
+using MEditService.Tests.TestSupport;
+using Mutagen.Bethesda;
+
 namespace MEditService.Tests.Architecture;
 
-/// <summary>ADR-0032 rule 2: the codec is the one deserializer, so a hand-written applier is a
-/// second one. The allowlist holds the sites that predate the rule; moving one onto the codec
-/// deletes its line.</summary>
 public sealed class HandWrittenApplierScanTests
 {
-    // One needle per move of the hand-written applier stack: build an object without its
-    // constructor, set a property found by name, call a member found by name, close a generic by
-    // hand.
     private static readonly string[] Needles =
-        ["Activator.CreateInstance", ".SetValue(", ".Invoke(", "MakeGenericType"];
+    [
+        "Activator.CreateInstance",
+        "MajorRecordInstantiator.Activator(",
+        ".SetValue(",
+        ".Invoke(",
+        "MakeGenericType",
+    ];
 
-    // The editing stack: the schema layer that reflects the leaves and the edits layer that writes
-    // them.
     private static readonly string[] ScannedRoots =
         [Path.Combine("MEditService.Core", "Schema"), Path.Combine("MEditService.Core", "Edits")];
 
     private const string AllowlistPath = "MEditService.Tests/Architecture/hand-written-applier-allowlist.txt";
 
+    // The name is captured dotted and matched on its last segment, so a fully qualified
+    // construction cannot slip past a scan that only ever saw simple names.
+    private static readonly Regex Construction = new(@"\bnew\s+([A-Za-z_][A-Za-z0-9_.]*)\s*[(<{]", RegexOptions.Compiled);
+
+    private static readonly IReadOnlySet<string> MutagenTypeNames = MutagenAndNoggogTypeNames();
+
     [Fact]
     public void EditingStack_HandWritesNoApplier_OutsideTheAllowlist()
     {
-        var root = SolutionDirectory();
-        var found = Sites(root);
-        var allowed = File.ReadAllLines(Path.Combine(root, AllowlistPath.Replace('/', Path.DirectorySeparatorChar)))
-            .Select(l => l.Trim())
-            .Where(l => l.Length > 0 && !l.StartsWith('#'))
-            .ToList();
+        // The names come from the assemblies, so a load order that resolved none would pass this
+        // over an empty set rather than over the surface it guards.
+        Assert.Contains("MemorySlice", MutagenTypeNames);
+        Assert.Contains("TranslatedString", MutagenTypeNames);
+        Assert.Contains("FormLink", MutagenTypeNames);
 
-        var added = Excess(found, allowed);
-        var gone = Excess(allowed, found);
+        var root = ArchitectureTests.SolutionDirectory();
 
-        Assert.True(
-            added.Count == 0 && gone.Count == 0,
-            $"The editing stack's hand-written applier sites differ from {AllowlistPath}.\n"
-            + $"Sites the allowlist does not name ({added.Count}) — the codec owns deserialization, "
-            + "so a site here needs the maintainer's ruling before its line is added:\n"
-            + string.Join("\n", added)
-            + $"\nAllowlist lines matching no site ({gone.Count}) — delete them; the shrinking of this "
-            + "list is what the work is measured by:\n"
-            + string.Join("\n", gone));
+        AssertSitesMatchAllowlist(
+            Sites(root, ScannedRoots),
+            SourceTree.ReadAllowlist(Path.Combine(root, AllowlistPath.Replace('/', Path.DirectorySeparatorChar))),
+            AllowlistPath);
     }
 
     [Fact]
-    public void TheScan_ReachesTheApplierFilesItGuards()
+    public void TheScan_NamesASiteNoLineAllows_AndALineNoSiteMatches()
     {
-        var scanned = ScannedFiles(SolutionDirectory()).Select(Path.GetFileName).ToList();
+        var root = Directory.CreateTempSubdirectory("medit-applier-scan-").FullName;
+        try
+        {
+            Directory.CreateDirectory(Path.Combine(root, "Layer", "obj"));
+            File.WriteAllText(Path.Combine(root, "Layer", "Applier.cs"), "var made = new MemorySlice<byte>(bytes);");
+            File.WriteAllText(Path.Combine(root, "Layer", "Generated.cs"), "var made = new MemorySlice<byte>(bytes);");
+            File.Move(
+                Path.Combine(root, "Layer", "Generated.cs"),
+                Path.Combine(root, "Layer", "obj", "Generated.cs"));
+            File.WriteAllText(Path.Combine(root, "Layer", "Clean.cs"), "var made = new JsonObject();");
 
-        Assert.Contains("LeafWriters.cs", scanned, StringComparer.Ordinal);
-        Assert.Contains("ListLeaves.cs", scanned, StringComparer.Ordinal);
-        Assert.Contains("StructLeaves.cs", scanned, StringComparer.Ordinal);
-        Assert.Contains("RecordFieldWriter.cs", scanned, StringComparer.Ordinal);
-        Assert.Contains("ArrayOpWriter.cs", scanned, StringComparer.Ordinal);
+            var sites = Sites(root, ["Layer"]);
+
+            Assert.Equal(["Layer/Applier.cs: var made = new MemorySlice<byte>(bytes);"], sites);
+
+            var unallowedSite = Assert.Throws<Xunit.Sdk.TrueException>(
+                () => AssertSitesMatchAllowlist(sites, [], AllowlistPath));
+            Assert.Contains("Layer/Applier.cs", unallowedSite.Message, StringComparison.Ordinal);
+
+            var lineWithNoSite = Assert.Throws<Xunit.Sdk.TrueException>(
+                () => AssertSitesMatchAllowlist([], ["Layer/Gone.cs: var made = new MemorySlice<byte>(bytes);"], AllowlistPath));
+            Assert.Contains("Layer/Gone.cs", lineWithNoSite.Message, StringComparison.Ordinal);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
     }
 
-    // One line per site: the file and the source line, so a later change reads as which line went.
-    // Line numbers are absent deliberately — they would fail the gate for any unrelated edit above
-    // a site.
-    private static List<string> Sites(string root) =>
-        [.. ScannedFiles(root)
+    private static void AssertSitesMatchAllowlist(
+        IReadOnlyList<string> sites, IReadOnlyList<string> allowlist, string allowlistPath)
+    {
+        var unallowed = NotCoveredBy(sites, allowlist);
+        var unmatched = NotCoveredBy(allowlist, sites);
+
+        Assert.True(
+            unallowed.Count == 0 && unmatched.Count == 0,
+            $"The editing stack's hand-written applier sites differ from {allowlistPath}.\n"
+            + $"Sites the allowlist does not name ({unallowed.Count}) — the codec owns deserialization, "
+            + "so a site here needs the maintainer's ruling before its line is added:\n"
+            + string.Join("\n", unallowed)
+            + $"\nAllowlist lines matching no site ({unmatched.Count}) — delete them; the shrinking of this "
+            + "list is what the work is measured by:\n"
+            + string.Join("\n", unmatched));
+    }
+
+    private static List<string> Sites(string root, string[] scannedRoots) =>
+        [.. scannedRoots
+            .SelectMany(r => SourceTree.CSharpFiles(Path.Combine(root, r)).Order(StringComparer.Ordinal))
             .SelectMany(file => File.ReadLines(file)
-                .Where(line => Needles.Any(n => line.Contains(n, StringComparison.Ordinal)))
+                .Where(IsApplierSite)
                 .Select(line => $"{Path.GetRelativePath(root, file).Replace(Path.DirectorySeparatorChar, '/')}: {line.Trim()}"))
             .Order(StringComparer.Ordinal)];
 
-    private static IEnumerable<string> ScannedFiles(string root) =>
-        ScannedRoots
-            .SelectMany(r => Directory.EnumerateFiles(Path.Combine(root, r), "*.cs", SearchOption.AllDirectories))
-            .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal)
-                     && !f.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
-            .Order(StringComparer.Ordinal);
+    private static bool IsApplierSite(string line) =>
+        Needles.Any(needle => line.Contains(needle, StringComparison.Ordinal))
+        || Construction.Matches(line).Any(m => MutagenTypeNames.Contains(m.Groups[1].Value.Split('.')[^1]));
 
-    // Multiset difference: two sites can be the same line of the same file, and dropping one of
-    // them has to fail the gate.
-    private static List<string> Excess(IEnumerable<string> from, IEnumerable<string> subtract)
+    // A site carries no line number: that would fail the gate for any unrelated edit above one.
+    // Two sites can therefore be the same text in the same file.
+    private static List<string> NotCoveredBy(IEnumerable<string> lines, IEnumerable<string> cover)
     {
-        var remaining = subtract.GroupBy(l => l, StringComparer.Ordinal)
+        var available = cover.GroupBy(l => l, StringComparer.Ordinal)
             .ToDictionary(g => g.Key, g => g.Count(), StringComparer.Ordinal);
-        var excess = new List<string>();
-        foreach (var line in from)
+        var uncovered = new List<string>();
+        foreach (var line in lines)
         {
-            if (remaining.TryGetValue(line, out var count) && count > 0) remaining[line] = count - 1;
-            else excess.Add(line);
+            if (available.TryGetValue(line, out var count) && count > 0) available[line] = count - 1;
+            else uncovered.Add(line);
         }
-        return excess;
+        return uncovered;
     }
 
-    private static string SolutionDirectory()
+    private static IReadOnlySet<string> MutagenAndNoggogTypeNames()
     {
-        for (var directory = new DirectoryInfo(AppContext.BaseDirectory); directory != null; directory = directory.Parent)
-        {
-            if (File.Exists(Path.Combine(directory.FullName, "MEditService.sln"))) return directory.FullName;
-        }
-
-        throw new InvalidOperationException("MEditService.sln not found above the test output directory.");
+        _ = SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4);
+        return AppDomain.CurrentDomain.GetAssemblies()
+            .Where(a => a.GetName().Name is { } name
+                && (name.StartsWith("Mutagen", StringComparison.Ordinal) || name.StartsWith("Noggog", StringComparison.Ordinal)))
+            .SelectMany(a => a.GetExportedTypes())
+            .Select(t => t.Name.Split('`')[0])
+            .ToHashSet(StringComparer.Ordinal);
     }
 }
