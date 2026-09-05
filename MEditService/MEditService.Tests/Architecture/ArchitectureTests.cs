@@ -2,6 +2,7 @@ using System.Reflection;
 using System.Text.RegularExpressions;
 using MEditService.Core.Plugins;
 using MEditService.Core.Records;
+using MEditService.Tests.TestSupport;
 
 namespace MEditService.Tests.Architecture;
 
@@ -84,8 +85,8 @@ public sealed class ArchitectureTests
     public void TestDataPlugins_AreExactlyTheAllowlist()
     {
         var testData = Path.Combine(SolutionDirectory(), "MEditService.Tests", "TestData");
-        var allowed = File.ReadAllLines(Path.Combine(testData, "allowed-plugins.txt"))
-            .Select(l => l.Trim()).Where(l => l.Length > 0 && !l.StartsWith('#')).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var allowed = SourceTree.ReadAllowlist(Path.Combine(testData, "allowed-plugins.txt"))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
         var present = Directory.EnumerateFiles(testData, "*.es?").Select(Path.GetFileName).Select(n => n!)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
         Assert.Equal(allowed.Order(), present.Order());
@@ -96,9 +97,7 @@ public sealed class ArchitectureTests
     internal static List<string> Offenders(string root, string[] projects, string needle, string[] allowedFiles)
     {
         return projects
-            .SelectMany(p => Directory.EnumerateFiles(Path.Combine(root, p), "*.cs", SearchOption.AllDirectories))
-            .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal)
-                     && !f.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
+            .SelectMany(p => SourceTree.CSharpFiles(Path.Combine(root, p)))
             .Where(f => !allowedFiles.Contains(Path.GetFileName(f)))
             .Where(f => File.ReadAllText(f).Contains(needle, StringComparison.Ordinal))
             .Select(f => Path.GetRelativePath(root, f))
@@ -142,7 +141,7 @@ public sealed class ArchitectureTests
 
     private static ParameterInfo[] ParametersOf(Delegate method) => method.Method.GetParameters();
 
-    private static string SolutionDirectory()
+    internal static string SolutionDirectory()
     {
         var dir = new DirectoryInfo(AppContext.BaseDirectory);
         while (dir != null && !File.Exists(Path.Combine(dir.FullName, "MEditService.sln")))
