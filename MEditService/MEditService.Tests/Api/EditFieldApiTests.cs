@@ -8,7 +8,7 @@ namespace MEditService.Tests.Api;
 
 /// <summary>"Typed" is the load-bearing word: an agent must branch on which refusal it got without
 /// matching on prose, so the refusal travels as a ProblemDetails extension (ADR-0026).</summary>
-[Collection(ApiTestCollection.Name)]
+[Collection(WebHostCollection.Name)]
 public sealed class EditFieldApiTests(LoadedApiFixture<TestPluginFixture> loaded)
     : IClassFixture<LoadedApiFixture<TestPluginFixture>>
 {

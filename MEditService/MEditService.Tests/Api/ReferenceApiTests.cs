@@ -5,7 +5,7 @@ using Microsoft.AspNetCore.Mvc.Testing;
 
 namespace MEditService.Tests.Api;
 
-[Collection(ApiTestCollection.Name)]
+[Collection(WebHostCollection.Name)]
 public sealed class ReferenceApiTests(LoadedApiFixture<ReferencePluginFixture> loaded) : IClassFixture<LoadedApiFixture<ReferencePluginFixture>>
 {
     private readonly HttpClient _client = loaded.Client;

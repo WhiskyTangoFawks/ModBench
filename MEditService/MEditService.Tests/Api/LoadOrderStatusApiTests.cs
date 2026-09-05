@@ -11,7 +11,7 @@ namespace MEditService.Tests.Api;
 /// <summary>The Plugins tree polls this alongside an in-flight load, so the no-load-order answer
 /// matters as much as the loading one: a poller should not read an error to learn nothing is
 /// happening.</summary>
-[Collection(ApiTestCollection.Name)]
+[Collection(WebHostCollection.Name)]
 public sealed class LoadOrderStatusApiTests : IDisposable
 {
     private readonly WebApplicationFactory<Program> _app = new();

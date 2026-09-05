@@ -10,7 +10,7 @@ namespace MEditService.Tests.Api;
 
 // ADR-0044: the three registration facts are Mod Management's to state, so they travel on
 // the wire the same way Origin does, and participation comes back derived.
-[Collection(ApiTestCollection.Name)]
+[Collection(WebHostCollection.Name)]
 public sealed class LoadOrderApiReconcileTests(LoadedApiFixture<TestPluginFixture> loaded) : IClassFixture<LoadedApiFixture<TestPluginFixture>>
 {
     private readonly HttpClient _client = loaded.Client;

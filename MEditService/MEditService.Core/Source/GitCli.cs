@@ -63,6 +63,7 @@ internal static class GitCli
     {
         var psi = new ProcessStartInfo("git")
         {
+            RedirectStandardInput = true,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             WorkingDirectory = workTree,
@@ -75,6 +76,8 @@ internal static class GitCli
         // Both streams read concurrently: draining one to completion before the other is the classic .NET
         // Process deadlock once a child fills a ~64 KB pipe buffer, and payloads here are not bounded.
         using var process = Process.Start(psi) ?? throw new InvalidOperationException("Failed to start the git process.");
+        // Closed at once: git otherwise inherits this process's stdin, and a socket never reaches EOF.
+        process.StandardInput.Close();
         var stdoutTask = process.StandardOutput.ReadToEndAsync();
         var stderrTask = process.StandardError.ReadToEndAsync();
         Task.WaitAll(stdoutTask, stderrTask);

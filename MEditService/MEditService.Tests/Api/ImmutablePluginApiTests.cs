@@ -4,7 +4,7 @@ using MEditService.Core.Source;
 
 namespace MEditService.Tests.Api;
 
-[Collection(ApiTestCollection.Name)]
+[Collection(WebHostCollection.Name)]
 public sealed class ImmutablePluginApiTests(LoadedApiFixture<ImmutablePluginFixture> loaded) : IClassFixture<LoadedApiFixture<ImmutablePluginFixture>>
 {
     private readonly HttpClient _client = loaded.Client;

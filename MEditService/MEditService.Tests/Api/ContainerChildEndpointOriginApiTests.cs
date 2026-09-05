@@ -8,7 +8,7 @@ namespace MEditService.Tests.Api;
 
 // ADR-0036: a load order holding two physical files of one filename, so a route that resolved a
 // Quest's children through the wrong copy shows in the assertion, not just in the row count.
-[Collection(ApiTestCollection.Name)]
+[Collection(WebHostCollection.Name)]
 public sealed class ContainerChildEndpointOriginApiTests(LoadedApiFixture<TestPluginFixture> loaded)
     : IClassFixture<LoadedApiFixture<TestPluginFixture>>
 {

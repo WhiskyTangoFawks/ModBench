@@ -1,6 +1,6 @@
 using MEditService.Core.Source;
 
-namespace MEditService.Tests.Isolated;
+namespace MEditService.Tests.ProcessEnvironment;
 
 /// <summary><c>core.autocrlf=false</c> is the byte-equality invariant dirty/ITM detection depends
 /// on; <c>commit.gpgsign=false</c> stops a global signing config hanging a plumbing commit; the

@@ -4,7 +4,7 @@ namespace MEditService.Tests.Api;
 /// race on the entry-point host builder and fail with "entry point exited", so they serialize
 /// behind one collection while the rest of the suite runs in parallel.</summary>
 [CollectionDefinition(Name)]
-public sealed class ApiTestCollection
+public sealed class WebHostCollection
 {
     public const string Name = "Web host collection";
 }

@@ -11,7 +11,7 @@ namespace MEditService.Tests.Api;
 // ADR-0036 through the real load path, so bugs at the joins between phases are reachable. Both
 // copies need real mod-folder origins: ColumnKey.Of elides the reserved DataDirectory one, so a
 // default-origin fixture passes either way.
-[Collection(ApiTestCollection.Name)]
+[Collection(WebHostCollection.Name)]
 public sealed class DuplicateFilenameLoadOrderApiTests(LoadedApiFixture<TestPluginFixture> loaded)
     : IClassFixture<LoadedApiFixture<TestPluginFixture>>
 {

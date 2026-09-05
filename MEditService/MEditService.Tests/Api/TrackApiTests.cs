@@ -6,7 +6,7 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Tests.Api;
 
-[Collection(ApiTestCollection.Name)]
+[Collection(WebHostCollection.Name)]
 public sealed class TrackApiTests(LoadedApiFixture<TestPluginFixture> loaded)
     : IClassFixture<LoadedApiFixture<TestPluginFixture>>
 {

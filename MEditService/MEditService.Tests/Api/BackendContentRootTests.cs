@@ -7,7 +7,6 @@ namespace MEditService.Tests.Api;
 /// <summary>The extension spawns the backend with no working directory, so an unanchored content
 /// root would never load the committed <c>appsettings.json</c>. A real child process from an
 /// unrelated directory, since <c>WebApplicationFactory</c> never reproduces this.</summary>
-[Collection(ApiTestCollection.Name)]
 public sealed class BackendContentRootTests
 {
     private static readonly string ApiDirectory = Path.GetDirectoryName(typeof(Program).Assembly.Location)!;

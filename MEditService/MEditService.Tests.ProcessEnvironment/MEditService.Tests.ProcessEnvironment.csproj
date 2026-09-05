@@ -1,13 +1,11 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <!-- Tests that rewrite this process's environment (PATH, HOME, git config variables) and so
-       cannot share a process with anything that spawns git. One collection, never parallel. -->
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
-    <NoWarn>$(NoWarn);CA1707;CA1711;CA1816;CA1859;CA1861</NoWarn>
+    <NoWarn>$(NoWarn);CA1707</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>

@@ -9,7 +9,7 @@ namespace MEditService.Tests.Api;
 /// <summary>Renumbers a record fresh off <c>CreateRecord</c>, still working-tree-only
 /// <c>Added</c>: that is the shape that reproduces the stale-record bug; an already committed
 /// record would not exercise it.</summary>
-[Collection(ApiTestCollection.Name)]
+[Collection(WebHostCollection.Name)]
 public sealed class RenumberApiTests(LoadedApiFixture<TestPluginFixture> loaded)
     : IClassFixture<LoadedApiFixture<TestPluginFixture>>
 {
