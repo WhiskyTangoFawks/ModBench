@@ -11,7 +11,7 @@ export function messageFor(offer: CrashRepairOffer): { message: string; detail: 
   const message = `${offer.plugin} (in ${offer.origin}) needs its binary rebuilt.`;
   const what = offer.reason === 'InterruptedCompile'
     ? 'A previous Save & Compile looks like it was interrupted before it finished — the binary ' +
-      'on disk no longer matches what Modbench last wrote.'
+      'on disk does not match what Modbench last wrote.'
     : 'The compiled binary is missing or could not be read.';
   const detail = `${what} Compile now from your working tree, or restore the pristine version at ` +
     '"main". Declining leaves it exactly as it is — you\'ll be asked again next time this reconciles.';

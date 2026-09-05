@@ -1086,7 +1086,7 @@ public sealed class RecordEditService(
             {
                 return RecordEditResult.Refused(
                     RecordEditRefusal.RecordNotFound,
-                    $"{referencerPlugin.Name} no longer holds {referencerFormKey}, which the index lists " +
+                    $"{referencerPlugin.Name} does not hold {referencerFormKey}, which the index lists " +
                     $"as referencing {oldFormKey}. Nothing was written — reindex {referencerPlugin.Name} and try again.");
             }
 
@@ -1114,7 +1114,7 @@ public sealed class RecordEditService(
             {
                 return RecordEditResult.Refused(
                     RecordEditRefusal.RecordNotFound,
-                    $"{referencerPlugin.Name} no longer holds {unit.OwnerFormKey}, the record {unit.RelativePath} " +
+                    $"{referencerPlugin.Name} does not hold {unit.OwnerFormKey}, the record {unit.RelativePath} " +
                     $"carries. Nothing was written — reindex {referencerPlugin.Name} and try again.");
             }
 
@@ -1224,7 +1224,7 @@ public sealed class RecordEditService(
         {
             return RecordEditResult.Refused(
                 RecordEditRefusal.RecordNotFound,
-                $"{plugin.Name} no longer holds {oldFormKey}. Nothing was written — reindex {plugin.Name} and try again.");
+                $"{plugin.Name} does not hold {oldFormKey}. Nothing was written — reindex {plugin.Name} and try again.");
         }
 
         if (SourceUnitResolver.Resolve(reads, plugin, modFolder, oldFormKey, document.RecordType, document.EditorId, release)
@@ -1243,7 +1243,7 @@ public sealed class RecordEditService(
             {
                 return RecordEditResult.Refused(
                     RecordEditRefusal.RecordNotFound,
-                    $"{plugin.Name} no longer holds {unit.OwnerFormKey}, the record {unit.RelativePath} carries " +
+                    $"{plugin.Name} does not hold {unit.OwnerFormKey}, the record {unit.RelativePath} carries " +
                     $"{oldFormKey} inside. Nothing was written — reindex {plugin.Name} and try again.");
             }
 

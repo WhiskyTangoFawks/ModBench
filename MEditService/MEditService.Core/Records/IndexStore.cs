@@ -160,7 +160,7 @@ internal sealed class IndexStore
                 if (_logger.IsEnabled(LogLevel.Information))
                 {
                     _logger.LogInformation(
-                        "{Plugin} ({Origin}) is no longer on disk at {Path}; removing its rows",
+                        "{Plugin} ({Origin}) is absent from disk at {Path}; removing its rows",
                         key.Name, key.Origin, filePath);
                 }
                 stale.Add(key);

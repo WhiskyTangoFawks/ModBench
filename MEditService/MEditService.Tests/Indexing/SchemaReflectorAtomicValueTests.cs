@@ -84,7 +84,7 @@ public class SchemaReflectorAtomicValueTests
         }
 
         Assert.True(unresolved.Count == 0,
-            $"AlphaBearingColorFields names a field that no longer resolves to a Color column with an " +
+            $"AlphaBearingColorFields names a field that does not resolve to a Color column with an " +
             $"alpha leaf: {string.Join(", ", unresolved)}. Re-check the row against wbDefinitionsFO4.pas " +
             "and the Mutagen getter — don't just delete it.");
     }

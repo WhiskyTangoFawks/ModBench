@@ -30,10 +30,10 @@ public sealed class EmbedCustomizationsAreExcludedFromChildOrderTests
         Assert.NotNull(element);
         Assert.True(
             typeof(IList).IsAssignableFrom(property.PropertyType),
-            $"{owner.Name}.{member} is not list-shaped, so this row no longer guards anything.");
+            $"{owner.Name}.{member} is not list-shaped, so this row does not guard anything.");
         Assert.True(
             typeof(IMajorRecordGetter).IsAssignableFrom(element),
-            $"{owner.Name}.{member} is not a list of major records, so this row no longer guards anything.");
+            $"{owner.Name}.{member} is not a list of major records, so this row does not guard anything.");
 
         Assert.Contains(member, SourceChildOrder.EmbeddedListMembers, StringComparer.Ordinal);
     }
