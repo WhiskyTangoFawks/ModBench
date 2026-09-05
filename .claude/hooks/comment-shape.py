@@ -39,7 +39,7 @@ def ticket_hits(path, lines):
         for m in TICKET.finditer(line):
             if any(s <= m.start() and m.end() <= e for s, e in exempt):
                 continue
-            hits.append(f"{path}:{lineno}: ticket number '{m.group(0)}' — cite it in the commit message, not the tree")
+            hits.append(f"{path}:{lineno}: ticket number '{m.group(0)}' — cite it in the commit message, not the code")
     return hits
 
 

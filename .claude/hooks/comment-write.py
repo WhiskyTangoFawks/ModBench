@@ -20,7 +20,7 @@ text = tool_input.get("new_string") if data.get("tool_name") == "Edit" else tool
 hits = comment_shape.check(path, text or "")
 if hits:
     if any("ticket number" in h for h in hits):
-        print("A ticket number belongs in the commit message, never in the tree.", file=sys.stderr)
+        print("A ticket number belongs in the commit message, never in the code.", file=sys.stderr)
     else:
         print("A comment states a constraint from outside the code; a string states the current "
               "state.", file=sys.stderr)
