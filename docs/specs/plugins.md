@@ -115,7 +115,7 @@ there is no separate load-order step.
 11. As a user, I want one Refresh, in one place, that re-reads every list at once if any of
     them looks stale, so that I never have to remember which tree owns which refresh (it
     lives on the [Loadout header](containers.md)). An external MO2 edit is *not* the case
-    this exists for — that reaches the tab on its own (#653, see *Toolbar*).
+    this exists for — that reaches the tab on its own (see *Toolbar*).
 12. As a user, I want to right-click a plugin and Reveal it in my OS file manager, so that I
     can go inspect the actual file behind a badge without hunting for it myself.
 13. As a user, I want this list visible at all times, with no separate open/launch step, so
@@ -162,10 +162,11 @@ there is no separate load-order step.
     at edit time when the plugin isn't ESL-eligible) — so that maintaining a plugin's header is
     an ordinary working-tree edit, reviewable in the Source Control panel like any other.
     Viewing is built; **editing is not yet built**: no header column carries a write delegate
-    (`author`, `flags` and `masters` are each declared read-only with a named reason, since #649
-    made a null write delegate unrepresentable), so every header field edit refuses.
-    #661 makes the header a source unit, which changes only *which* refusal fires; genuine
-    writability — setting the author, toggling ESL/ESM with eligibility rejection — is #290.
+    (`author`, `flags` and `masters` are each declared read-only with a named reason, since a null
+    write delegate is structurally unrepresentable), so every header field edit refuses.
+    Making the header a source unit (ADR-0041) changes only *which* refusal fires; genuine
+    writability — setting the author, toggling ESL/ESM with eligibility rejection — remains
+    future work, not yet built.
 25. As a user, I want to create and manage placed references (REFR/ACHR) inside a cell's
     persistent or temporary group, so that I can edit world placement spatially — **not yet
     built**: today a placed-reference row opens only (Open to the Side); no context-menu
@@ -354,7 +355,7 @@ end.
   row's plugin is the FormKey's own origin), told apart by whether the plugin is tracked;
   `"recordOverride"` is a copy that does not own its FormID; `"recordImmutable"` is any row whose
   plugin is read-only for editing — an immutable plugin or a shadowed copy — and hides Remove
-  though not Copy, see below. **Change FormID… is offered on `"recordTracked"` alone** (#674): the
+  though not Copy, see below. **Change FormID… is offered on `"recordTracked"` alone**: the
   product refuses to renumber an override, and refuses to write to an untracked plugin at all, so
   the gesture is *absent* on every other row rather than offered and then refused. Rows are labeled
   `{EditorID}  [{RecordType}:{FormID}]`
@@ -450,8 +451,8 @@ end.
 - A Quest/Dialog Topic row shows its expand chevron only when it actually has at least one
   container child — the presence fact travels with the row's own listing entry
   (`RecordSummary`/`ContainerChildSummary.hasContainerChildren`, read from the same containment
-  index the children themselves come from), never guessed from the record's type signature alone
-  (#560). This is a different rule from a group node like a placed-reference group, which omits
+  index the children themselves come from), never guessed from the record's type signature alone.
+  This is a different rule from a group node like a placed-reference group, which omits
   itself entirely when its collection is empty — a Quest/Dialog Topic row stays visible either way
   and only withholds the chevron, since the row is itself an ordinary, fully-affordanced record
   row regardless of whether it has children.
@@ -632,7 +633,7 @@ overflow, then native **Collapse All** last.
   workspace-scope Refresh on the [Loadout header](containers.md), which re-reads every
   Mod-Management source together. There is no reload of the editing backend to offer: the load
   order it holds is reconciled on every change (ADR-0044).
-- **Refresh is not how the tab recovers from an external edit** (#653). The `mods/**`,
+- **Refresh is not how the tab recovers from an external edit.** The `mods/**`,
   `profiles/*/modlist.txt` and `profiles/*/plugins.txt` watchers each invalidate this tree as
   well as requesting the editing-side reconcile, so a `plugins.txt` line added, removed,
   reordered or enable-toggled outside Modbench — by MO2, a tool, or the user — reaches the tab
@@ -642,10 +643,10 @@ overflow, then native **Collapse All** last.
   (the never-assume-exclusive-ownership invariant in `CLAUDE.md`). The composition happens in
   `wirePluginListInvalidation.ts`, which adds the invalidation alongside the existing
   `sync.request()` fan-out rather than replacing it — no watcher was added.
-- **Rows are exactly `plugins.txt`'s lines; the file converges on disk** (#680). The tree never
+- **Rows are exactly `plugins.txt`'s lines; the file converges on disk.** The tree never
   merges disk into the file's inventory — a plugin file with no `plugins.txt` line has no row.
   Instead a **plugins reconcile** (`pluginsReconcile.ts`, the plugins twin of the Mods tree's
-  `modlist.txt`-vs-`mods/` reconcile, #93) updates the file to match disk, the way MO2's own
+  `modlist.txt`-vs-`mods/` reconcile) updates the file to match disk, the way MO2's own
   refresh-then-full-rewrite converges: every root-level plugin an enabled mod or `overwrite/`
   provides with no line gets one **appended, disabled** (discovery is not user intent to enable),
   ascending case-folded; every line whose plugin nothing provides — no enabled mod, not
@@ -685,7 +686,7 @@ overflow, then native **Collapse All** last.
   splice-transform pattern: parse `plugins.txt` into an ordered model view, mutate via surgical
   splice (`lineRanges`, `mo2/lineScan.ts`) — never model→re-serialization — so comments, blank
   lines, and CRLF/BOM survive untouched.
-- **Line endings for *newly inserted* lines** (#635). Existing lines are never rewritten, so
+- **Line endings for *newly inserted* lines.** Existing lines are never rewritten, so
   byte-faithfulness does not answer what terminator a new line gets — that needs its own rule, and
   `plugins.txt` and `modlist.txt` share one rule in `mo2/lineScan.ts`: **if the file contains
   `\r\n` anywhere, use `\r\n`; otherwise `\n`.** A per-file rule — sniffing the first terminated

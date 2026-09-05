@@ -57,8 +57,8 @@ in, produces broken plugins.
 
 ## Solution
 
-> **Current behaviour (#618 follow-up, 2026-09-02): the grid renders the full override stack.**
-> #618's collapse-to-winner over-reached its ruling and was reverted — the multi-column
+> **Current behaviour (2026-09-02): the grid renders the full override stack.**
+> An earlier collapse-to-winner change over-reached its ruling and was reverted — the multi-column
 > description throughout this document is the shipped shape again, per
 > [ADR-0019](../adr/0019-xedit-unified-tree-model-for-compare-grid.md) and
 > [ADR-0034](../adr/0034-xedit-is-the-ux-reference-for-the-record-editor.md). The one narrowing
@@ -238,7 +238,7 @@ flags render their active names, comma-separated, never the bitmask; a FormKey r
 is the one place that turns that into what the cell *reads out*, and is what both the copy path and
 a leaf's own resting text ask — so what the user sees and what `Ctrl+C` hands over cannot drift.
 The two differ for exactly one shape: an enum whose values are wire tokens rather than words (an
-abstract union's `concrete_type`, #688), where the schema labels each value and the label is what
+abstract union's `concrete_type`), where the schema labels each value and the label is what
 is displayed and copied. The editor still holds, and a payload still carries, the value itself.
 
 **Struct and array summary rows are the one exception to "the same string the editor shows"** —
@@ -263,7 +263,7 @@ whichever member the schema marks as the discriminator (`concrete_type`, OMOD's 
 the element has one, and `FieldMetadata.LeafTypeName` — the reflected type name, which the backend
 sets on every `struct` and on nothing else — where it does not. A union is exactly where the two
 disagree, so the discriminator answers alone: a union whose value names no leaf reads as nothing
-rather than as its declared base, since a concrete base is one of its own leaves (#701).
+rather than as its declared base, since a concrete base is one of its own leaves.
 
 Three rules complete the lookup:
 
@@ -391,14 +391,14 @@ already empty: matching xEdit's own guard (`Element.EditValue` must be non-empty
   write, not just that member; a member legitimately absent from a record's own subclass (the
   sparse leaf-union case, e.g. some OMOD property members) stays a silent no-op, since that's
   correct round-tripping, not a defect.
-  **Nested Loqui struct sub-fields write through the same one path** (#643) — a struct member one
+  **Nested Loqui struct sub-fields write through the same one path** — a struct member one
   or more levels inside another struct column, or inside an array element, applies with the exact
   semantics the top-level struct column has (one shared applier): unions resolve their
   concrete leaf from the payload's own `concrete_type`, refusing when it can't be resolved; the
   existing value object is reused only when it is already the same concrete type; and a write with
   one bad member anywhere in the nested tree refuses the whole write before anything is written,
   leaving the working tree byte-identical.
-  **A list of bare scalars writes through the same one path** (#699) — a string/number/hex-element
+  **A list of bare scalars writes through the same one path** — a string/number/hex-element
   list at the record's own top level (`race.movement_type_names`, `sndr.sound_files`,
   `mato.dnams`) and one nested inside a struct or array element
   (`race.subgraphs[].animation_paths`, `scen.actions[].npc_headtracking_actor_ids`) take the whole
@@ -411,7 +411,7 @@ already empty: matching xEdit's own guard (`Element.EditValue` must be non-empty
   reads but has no converter — a translated string, or an integer width `PrimitiveMap` lacks — is
   read-only under its own named reason; no Fallout 4 list is either, so the reason keeps the
   classification total rather than describing live data.
-  **A new array element's default is the backend's, and names only the discriminator** (#710) — the
+  **A new array element's default is the backend's, and names only the discriminator** — the
   Add gesture posts an op envelope carrying nothing but `{op, path}`, and `ArrayOpWriter` builds the
   element from the column's own schema. The default is the empty object: every member is left
   absent, so the freshly constructed instance's CLR defaults stand. The one exception is a
@@ -423,7 +423,7 @@ already empty: matching xEdit's own guard (`Element.EditValue` must be non-empty
   element uses. The webview computes no element of its own: every array field is a reflected
   column, and the backend builds its default element.
 
-  **Read/write symmetry is structural, not conventional** (#649). A leaf carries either a writer or
+  **Read/write symmetry is structural, not conventional.** A leaf carries either a writer or
   a named read-only reason — `ColumnSpec.Apply`/`SubFieldSpec.Apply` are a two-case union, so a leaf
   that reads but silently cannot be written is unrepresentable, and an audit asserts every
   writable-shaped leaf has one or the other. Classification is likewise total: every property the
@@ -440,7 +440,7 @@ already empty: matching xEdit's own guard (`Element.EditValue` must be non-empty
   are not bytes — `Weather.CloudTextures` (`<String>`) and `Weather.NAM4` (`<Single>`) — which are
   list shapes rather than blobs. A byte slice appearing as a *list element* (`dlvw.tnams`,
   `mato.dnams`, `pack.procedure_tree[].unknown`) reads and writes in the same grammar, through the
-  list's own applier (#699).
+  list's own applier.
   **Atomic values are a table, not a handler branch.** `System.Drawing.Color` is its first entry,
   presented as xEdit presents it (`wbByteColors`): `red`/`green`/`blue` byte sub-fields, editable
   through the one write path like any struct member. Four fields — `ActionRecord.Color`,
@@ -449,7 +449,7 @@ already empty: matching xEdit's own guard (`Element.EditValue` must be non-empty
   type, and is not reflectable from Mutagen, so it is a transcribed allowlist in the same idiom as
   the vector-struct list. Editing a Color leaf preserves any existing alpha byte it does not name.
   **Naming a sub-field that genuinely has no write path is itself a refusal**
-  (`RecordEditRefusal.NestedFieldReadOnly`, #642). Since #643 and #699 the residue is a nested
+  (`RecordEditRefusal.NestedFieldReadOnly`). The residue is a nested
   struct with no usable write door — a getter type with no resolvable Loqui setter class, or an
   excluded union whose discriminator can never appear in a payload. Naming one
   refuses the whole write, and the message says the sub-field is not editable rather than implying
@@ -458,7 +458,7 @@ already empty: matching xEdit's own guard (`Element.EditValue` must be non-empty
   skipped (absence is not targeting); the `value_type` and `concrete_type` **discriminators** are
   read off the raw JSON to decide which concrete type to construct, before the object any member
   could be applied to exists — so naming one is a silent skip at the member level, and the edit it
-  carries has already been honoured by the enclosing object's own construction (#688); only a
+  carries has already been honoured by the enclosing object's own construction; only a
   sub-field the schema exposes with no write delegate refuses.
 - **A `string` cell's right-click menu opens the extended editor** — **Open in Editor…**
   ([ADR-0039](../adr/0039-no-left-click-leaves-the-record-panel.md); ADR-0034
@@ -523,7 +523,7 @@ already empty: matching xEdit's own guard (`Element.EditValue` must be non-empty
   as DOM keydown accelerators on the focused cell, no extension-host round trip needed for the
   keys since `onArrayEdit`/`onArrayAdd` are pure in-webview state.) Add is available regardless of
   the array's expand state, matching xEdit. **The ops post a server-side op
-  envelope** (`{op, path}`, #630) through the ordinary edit path; the backend reads the record's
+  envelope** (`{op, path}`) through the ordinary edit path; the backend reads the record's
   own current value, computes the result, and applies it as the same atomic whole-array
   complex-field write CONTEXT.md describes — so the write itself is unchanged, only who computes
   it. Boundary cases (move the first element up, the last down, remove an out-of-range index)
@@ -842,11 +842,11 @@ reads as no operator: the condition still reads, missing only the sign.
 
 **The function picker is the schema's own enum.** On Fallout 4 that is the `function` member's
 479-member enum, rendered by the ordinary enum cell; on a shape whose `ConditionData` is one class
-per function it is the `concrete_type` discriminator dropdown (#688), rendered by the same cell. No
+per function it is the `concrete_type` discriminator dropdown, rendered by the same cell. No
 picker command, and no catalog endpoint, exists on either shape.
 
 Skyrim and Starfield are not built or tested in this repo; multi-game verification was descoped
-from #686 and is not tracked. Their
+and is not tracked. Their
 `Condition.xml` declares the same abstract `Condition` with a `ConditionFloat` carrying a `Float`
 `ComparisonValue` and a `ConditionGlobal` carrying a `FormLink` to `Global`, so the per-shape split
 above is game-agnostic and needs no code for them. Their `ConditionData` is not Fallout 4's one
@@ -927,7 +927,7 @@ These apply everywhere a field value is rendered — the one compare grid and an
    reflected type name on every `struct` and is null on every other type. The discriminator is a
    different claim — the schema's name says which class was *promised*, the discriminator's value
    which one a value *turned out to be*, and a union is exactly where the two disagree.
-   **Which leaf an element is, is itself an editable field** (#688). `concrete_type` is an `enum`
+   **Which leaf an element is, is itself an editable field.** `concrete_type` is an `enum`
    over the union's leaves, so switching one is an ordinary edit of the enclosing struct/array:
    the editor resends the element with that one member changed, the write path builds the named
    leaf, applies every member the payload also names that the new leaf declares, and leaves the
@@ -944,16 +944,16 @@ These apply everywhere a field value is rendered — the one compare grid and an
    closes; the mechanism also covers, as a byproduct, `Book.Teaches`, `ColorRecord.Data`,
    `Holotape.Data`, `SoundDescriptor.Data`, `Perk.Effects`, `MagicEffect.Archetype`,
    `AudioEffectChain.Effects`, `NavmeshGeometry.Parent` and `LocationTargetRadius.Target`. All nine
-   have their write side compile-and-reparse verified (#611/#643,
-   `MEditService.Tests/Edits/AbstractUnionCompileRoundTripTests.cs`), the
+   have their write side compile-and-reparse verified
+   (`MEditService.Tests/Edits/AbstractUnionCompileRoundTripTests.cs`), the
    same bar `Npc.Level`/`Quest.Aliases` themselves only gained there. Two of them,
    `NavmeshGeometry.Parent` and `LocationTargetRadius.Target`, are reached one level *inside* another
    struct column (`Static.NavmeshGeometry`/`Faction.VendorLocation`) rather than as a column of their
-   own — #643 extended the write side down through nesting (`StructLeaves.BuildStructSubField`
+   own — the write side was extended down through nesting (`StructLeaves.BuildStructSubField`
    wires the same shared struct applier `BuildStructColumn` uses, at every depth the read schema
    builds), so a nested struct sub-field writes with identical discriminator-resolution and
    refuse-before-attach semantics to a top-level struct column.
-   A base need not be `abstract` to be a union (#701): a concrete class with subclasses in the
+   A base need not be `abstract` to be a union: a concrete class with subclasses in the
    same assembly is one too, its leaves the subclasses plus the base itself — a script property
    (`ScriptProperty`, fourteen leaves, a bare `ScriptProperty` for a property of type None) is
    the case that matters, `Landscape.Layers`' `BaseLayer`/`AlphaLayer` the other one the shipped

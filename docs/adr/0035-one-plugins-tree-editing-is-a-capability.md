@@ -68,8 +68,8 @@ matches nothing of** — a visible-but-permanently-inert row was never the load 
 purpose; clearing the filter restores every row immediately, in load order. The backend never
 prunes a plugin row itself: `GetPlugins()` returns every plugin with `HasMatchingRecords` as an
 additive fact, and `PluginsTreeComposite` omits the row. xEdit's `mniNavFilterApplySelected` has
-no Modbench equivalent by decision, not by omission — shipped as "Filter to Selected Plugins" (#363),
-rejected by the maintainer on sight, and removed (#574).
+no Modbench equivalent by decision, not by omission — shipped as "Filter to Selected Plugins",
+rejected by the maintainer on sight, and removed.
 
 ### Live mutation
 

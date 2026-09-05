@@ -10,8 +10,8 @@ The compare grid is designed to show field values across all loaded plugin overr
 For scalar fields (string, int, FormKey, enum), each field is one row. For complex fields — arrays
 and structs — a design decision is required.
 
-> **Shipped state (#618 follow-up, 2026-09-02):** the grid renders the full override stack — one
-> column per override, load-order ascending, xEdit parity. #618's collapse-to-winner over-reached
+> **Shipped state (2026-09-02):** the grid renders the full override stack — one
+> column per override, load-order ascending, xEdit parity. An earlier collapse-to-winner change over-reached
 > its ruling (the maintainer never intended to remove the stack view) and was reverted; the only
 > narrowing that remains is ADR-0036's amended file-level-loser exclusion, applied backend-side.
 
