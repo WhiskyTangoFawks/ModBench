@@ -44,21 +44,3 @@ npm run package           # build alpha .vsix — pinned local @vscode/vsce, no 
   `wbArray` = unsorted); also `modorganizer/` (MO2 C++), `SFRecordCompareEngine/`, `vscode-docs`.
   Gitignored, so **absent from every `git worktree`** — read it at the main checkout's absolute
   path; a relative grep from a worktree silently matches nothing.
-
-## Comment Discipline
-- A comment exists only to say what the code and its names cannot: a why, a constraint from
-  outside the code (a Mutagen quirk, a game-format fact), or a decision with its rejected
-  alternative. A comment that explains *what* is a rename or a restructure waiting to happen.
-- Hard limits. A doc comment is at most three lines. A member whose name says what it does
-  gets none. Private members get none unless the constraint is non-obvious. Tests get none:
-  the test name and its assertions are the documentation.
-- No narration of the call graph. A comment does not list its callers, its callees, the tests
-  that cover it, or the ticket that introduced it. `<see cref>` only where the reader must go
-  to that symbol to understand this one.
-- Rationale longer than two sentences goes in the commit message or an ADR, linked from the
-  code.
-- In review, a comment that breaks any rule above is a finding, and the fix is deletion, not
-  rewriting.
-
-CLAUDE.MD Files are owned by the developer. Any edit to a claude.md developer needs explicit permission,
-given for the exact edit to be made.
