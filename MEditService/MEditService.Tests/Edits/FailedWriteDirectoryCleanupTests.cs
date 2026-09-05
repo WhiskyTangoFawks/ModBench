@@ -54,7 +54,7 @@ public sealed class FailedWriteDirectoryCleanupTests
         var npcsDirectory = Path.Combine(
             mod.ModFolder, SourceRecordPath.RootFor(TrackedModFixture.PluginName), "Npcs");
 
-        // Two records plus the group's own GroupRecordData.json, which carries their order since #566.
+        // Two records plus the group's own GroupRecordData.json, which carries their order.
         Assert.Equal(3, Directory.GetFiles(npcsDirectory).Length);
 
         Assert.ThrowsAny<Exception>(() => ServiceFor(mod).CreateRecord(mod.Plugin, "npc_", OverLongEditorId));

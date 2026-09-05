@@ -13,7 +13,7 @@ using Mutagen.Bethesda.Strings;
 namespace MEditService.Tests.Edits;
 
 /// <summary>The renumber cascade computes every affected record's new content before it writes
-/// anything (#676); a computation failure is a typed refusal with the tree untouched.</summary>
+/// anything; a computation failure is a typed refusal with the tree untouched.</summary>
 public sealed class RecordEditServiceRenumberCascadeTests
 {
     private static RecordEditService ServiceFor(ILoadOrderMirror mirror) =>

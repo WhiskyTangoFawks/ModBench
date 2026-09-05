@@ -67,7 +67,7 @@ public sealed class ReadTimeFreshnessTests : IDisposable
 
         // ...and it reads as genuinely dirty, not merely as present. A dirty header became representable
         // only once SourceFreshness stopped skipping it, EditField stopped refusing it at the gate, and
-        // the structural Head reconcile stopped diffing through EnumerateMajorRecords (#661).
+        // the structural Head reconcile stopped diffing through EnumerateMajorRecords.
         var entry = Assert.Single(_mod.Mirror.Index!.At(RecordRef.Effective).GetOverrideStack(headerFormKey)!.Entries);
         Assert.True(entry.HasWorkingTreeChange);
         Assert.NotEqual(entry.Effective.Body, entry.Head.Body);

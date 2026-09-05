@@ -42,7 +42,7 @@ public class ColorQuantizationTests
         // source float must be assumed lost, which makes the quantization a real fidelity loss.
         Assert.True(survived.Count < 20,
             $"{survived.Count} of 20,000 arbitrary floats survived byte quantization. If this is now " +
-            "high, Mutagen's Color encoding changed and #649's read-only reasoning needs revisiting.");
+            "high, Mutagen's Color encoding changed and the read-only reasoning here needs revisiting.");
     }
 
     [Fact]

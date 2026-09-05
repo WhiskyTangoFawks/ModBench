@@ -12,7 +12,7 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Tests.Edits;
 
-/// <summary>Compile, not document text: read coverage does not imply write correctness (#360), so each fact
+/// <summary>Compile, not document text: read coverage does not imply write correctness, so each fact
 /// reparses the written binary through Mutagen's reader.</summary>
 public sealed class AbstractUnionCompileRoundTripTests : IDisposable
 {
@@ -38,7 +38,7 @@ public sealed class AbstractUnionCompileRoundTripTests : IDisposable
             new ModPath(ModKey.FromFileName(AbstractUnionCompileFixture.PluginName), pluginPath), GameRelease.Fallout4);
     }
 
-    // ── Npc.Level (ANpcLevel) — #548's own mandatory type, closing its compile-round-trip gap ──
+    // ── Npc.Level (ANpcLevel) — a mandatory type, closing its compile-round-trip gap ──
 
     [Fact]
     public void Level_EditingWithinSameConcreteType_CompilesAndReparsesTheNewValue()
@@ -66,7 +66,7 @@ public sealed class AbstractUnionCompileRoundTripTests : IDisposable
         Assert.Equal(1.5f, mult.LevelMult);
     }
 
-    // ── Quest.Aliases (AQuestAlias) — #548's own mandatory type, closing its compile-round-trip gap ──
+    // ── Quest.Aliases (AQuestAlias) — a mandatory type, closing its compile-round-trip gap ──
 
     [Fact]
     public void Aliases_WholeArrayWrite_QuestReferenceAliasElement_CompilesAndReparsesTheNewElement()

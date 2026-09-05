@@ -82,7 +82,7 @@ public sealed class SwaggerSchemaTests
         Assert.False(prop.TryGetProperty("allOf", out _));
     }
 
-    // NullabilitySchemaFilter's dictionary-value rule (#644, case 3) must not wrap
+    // NullabilitySchemaFilter's dictionary-value rule must not wrap
     // indiscriminately: a dictionary whose value is a non-nullable $ref (C#
     // `IReadOnlyDictionary<string, ConflictThis>`, an enum) stays a bare $ref.
     [Fact]

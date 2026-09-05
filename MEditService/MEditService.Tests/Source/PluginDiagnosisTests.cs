@@ -104,7 +104,7 @@ public sealed class PluginDiagnosisTests
     [Fact]
     public void Describe_AClassedDiagnosisWithATail_CarriesBoth()
     {
-        // A Kind B diagnosis (#569) knows its class *and* its repair tail; neither may shadow
+        // A Kind B diagnosis knows its class *and* its repair tail; neither may shadow
         // the other in the refusal text. Kind A stays as before: its class is `unknown`, so
         // only the tail shows.
         var diagnosis = new PluginDiagnosis(

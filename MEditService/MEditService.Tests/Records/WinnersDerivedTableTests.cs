@@ -133,7 +133,7 @@ public sealed class WinnersDerivedTableTests : IDisposable
         index.UpdateWinners();
 
         Assert.True(Scalar(index, $"SELECT COUNT(*) FROM mirror.records WHERE plugin = '{OverKey.Name}'") > 0,
-            "Premise: unregistering leaves the mirror rows in place (#582).");
+            "Premise: unregistering leaves the mirror rows in place.");
         Assert.Equal(0, Scalar(index, $"SELECT COUNT(*) FROM winners WHERE plugin = '{OverKey.Name}'"));
         Assert.Equal(Expected(BaseKey), WinnerOf(index, RecordRef.Effective, _npc));
     }

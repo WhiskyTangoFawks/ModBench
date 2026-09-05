@@ -21,7 +21,7 @@ public sealed class ModelIdentityTests
         // The rival, applied and observed: this fixture's own rewrite really does change its bytes —
         // otherwise this test would pass vacuously regardless of which verdict ModelIdentity computes.
         Assert.False(originalBytes.AsSpan().SequenceEqual(rewrittenBytes),
-            "RecruitSierra.esl's rewrite no longer changes bytes — this test no longer exercises #513's own case.");
+            "RecruitSierra.esl's rewrite no longer changes bytes — this test no longer exercises the byte-changing rewrite it depends on.");
 
         var divergence = ModelIdentity.FindFirst(original, recompiled);
 

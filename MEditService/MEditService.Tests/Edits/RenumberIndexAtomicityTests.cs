@@ -3,7 +3,7 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Tests.Edits;
 
-/// <summary>A renumber's index update commits once or not at all (#677). The fault is real, not
+/// <summary>A renumber's index update commits once or not at all. The fault is real, not
 /// injected: a body the declared record type cannot parse throws after its own insert is written.
 /// Reader isolation is not claimed.</summary>
 public sealed class RenumberIndexAtomicityTests : IDisposable

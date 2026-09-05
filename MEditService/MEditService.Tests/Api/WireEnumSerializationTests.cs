@@ -10,8 +10,8 @@ using Microsoft.Extensions.Options;
 namespace MEditService.Tests.Api;
 
 /// <summary>Swashbuckle only honors a per-enum <c>JsonStringEnumConverter</c> attribute while
-/// <c>Program.cs</c> registers the converter globally, so adding the attribute must leave the bytes alone
-/// (#627).</summary>
+/// <c>Program.cs</c> registers the converter globally, so adding the attribute must leave the bytes
+/// alone.</summary>
 public sealed class WireEnumSerializationTests
 {
     private static async Task<JsonSerializerOptions> AppSerializerOptionsAsync()

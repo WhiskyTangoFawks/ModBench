@@ -4,7 +4,7 @@ using MEditService.Core.Queries;
 namespace MEditService.Tests.Query;
 
 /// <summary>A wire contract: the webview re-derives this text to locate a row's element, and a disagreement
-/// drops the write silently (#716).</summary>
+/// drops the write silently.</summary>
 public class ElementKeyTextTests
 {
     [Theory]

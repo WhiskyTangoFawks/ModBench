@@ -39,7 +39,7 @@ public sealed class CopyOverwriteTests : IDisposable
         Assert.NotNull(reads.GetDocument(_fixture.PersistentRef.ToString(), _fixture.DestinationPlugin));
     }
 
-    // The scope boundary: a flat record keeps #436's FormKeyCollision refusal — the overwrite rule
+    // The scope boundary: a flat record keeps the FormKeyCollision refusal — the overwrite rule
     // is the container-copy family's divergence, not a general one.
     [Fact]
     public void CopyAsOverride_OnAFlatRecordTheDestinationAlreadyOverrides_StillRefuses()
@@ -78,9 +78,9 @@ public sealed class CopyOverwriteTests : IDisposable
         Assert.Equal(1, occurrences);
     }
 
-    // #550 AC6's narrow underride refusal: a destination that loads before the record's origin
-    // plugin would underride it (#439's territory) — typed refusal, nothing written. Flat and
-    // container targets both refuse the same way.
+    // The narrow underride refusal: a destination that loads before the record's origin plugin
+    // would underride it — typed refusal, nothing written. Flat and container targets both refuse
+    // the same way.
     [Fact]
     public void CopyAsOverride_IntoADestinationThatLoadsBeforeTheOrigin_RefusesAsUnderride()
     {

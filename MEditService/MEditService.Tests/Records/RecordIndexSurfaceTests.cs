@@ -5,7 +5,7 @@ namespace MEditService.Tests.Records;
 
 /// <summary>Neither <see cref="IRecordIndex"/> implementer carries a one-line forwarding member for
 /// an <c>IRecordReads</c> read. Reflection-derived so a new read member cannot silently reintroduce
-/// the forwarding tax (#639).</summary>
+/// the forwarding tax.</summary>
 public sealed class RecordIndexSurfaceTests
 {
     [Fact]

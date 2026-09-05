@@ -60,7 +60,7 @@ public sealed class ExteriorCellCopyCompileTests : IDisposable
         Assert.DoesNotContain(compiledCell.Temporary, r => r.FormKey == _fixture.ExteriorTemporaryRef);
     }
 
-    // #597 shape 1: the destination overrides the WRLD but neither the target block nor sub-block.
+    // Shape 1: the destination overrides the WRLD but neither the target block nor sub-block.
     // The second copy lands its new block/sub-block inside the one existing worldspace directory,
     // never a sibling dir for the same WRLD.
     [Fact]
@@ -101,7 +101,7 @@ public sealed class ExteriorCellCopyCompileTests : IDisposable
             c => c.FormKey == _fixture.ExteriorCell);
     }
 
-    // #597 shape 2: only the sub-block and the cell are new. The compiled block is one block carrying
+    // Shape 2: only the sub-block and the cell are new. The compiled block is one block carrying
     // both sub-blocks; a sibling block directory would compile into two, or fail the round-trip gate.
     [Fact]
     public void CopyExteriorCell_WhenDestinationAlreadyOverridesTheBlock_CreatesTheSubBlockInsideIt()
@@ -133,7 +133,7 @@ public sealed class ExteriorCellCopyCompileTests : IDisposable
         Assert.Contains(newSub.Items, c => c.FormKey == _fixture.SameBlockCell);
     }
 
-    // #597 shape 3: WRLD, block and sub-block all exist, so the copy adds exactly one cell directory
+    // Shape 3: WRLD, block and sub-block all exist, so the copy adds exactly one cell directory
     // inside the existing sub-block and every pre-existing file keeps its exact bytes.
     [Fact]
     public void CopyExteriorCell_WhenDestinationAlreadyOverridesTheSubBlock_AddsTheCellAndTouchesNothingElse()
@@ -183,9 +183,9 @@ public sealed class ExteriorCellCopyCompileTests : IDisposable
         Assert.Contains(subBlock.Items, c => c.FormKey == _fixture.ExteriorCell);
     }
 
-    // Re-copying a cell the destination already holds replaces it in place (#550 AC7's
-    // container-family overwrite — this superseded #597-era FormKeyCollision here): no second cell
-    // directory, no refusal, and the compiled worldspace still carries exactly one copy.
+    // Re-copying a cell the destination already holds replaces it in place (the container-family
+    // overwrite rule): no second cell directory, no refusal, and the compiled worldspace still
+    // carries exactly one copy.
     [Fact]
     public void CopyExteriorCell_WhenDestinationAlreadyHoldsTheCellItself_ReplacesItInPlace()
     {

@@ -30,7 +30,7 @@ public sealed class AbstractUnionCompileFixture : IDisposable
     public FormKey Light { get; }
     public FormKey ActorValueInformation { get; }
 
-    // ── #611's own nine subject records (plus Npc/Quest, #548's own mandatory two) ─
+    // ── Nine subject records (plus Npc/Quest, two mandatory types) ─
     public FormKey Npc { get; }
     public FormKey Quest { get; }
     public FormKey Book { get; }
@@ -41,7 +41,7 @@ public sealed class AbstractUnionCompileFixture : IDisposable
     public FormKey MagicEffect { get; }
     public FormKey AudioEffectChain { get; }
 
-    // ── #643's two nested abstract unions (ALocationTarget / ANavmeshParent), reached one
+    // ── Two nested abstract unions (ALocationTarget / ANavmeshParent), reached one
     // level inside an ordinary struct column rather than as a column of their own ─
     public FormKey Faction { get; }
     public FormKey Static { get; }

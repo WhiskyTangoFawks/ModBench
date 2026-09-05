@@ -228,7 +228,7 @@ public sealed class ArrayOpEditTests : IDisposable
         Assert.Equal(10, stages[1].GetProperty("HealthPercent").GetByte());
     }
 
-    // ── #642/#643 interaction: an array op reuses ColumnSpec.Apply unchanged, so it inherits
+    // ── An array op reuses ColumnSpec.Apply unchanged, so it inherits
     // the nested write path exactly as any other whole-value write does ────────────────────────
 
     [Fact]

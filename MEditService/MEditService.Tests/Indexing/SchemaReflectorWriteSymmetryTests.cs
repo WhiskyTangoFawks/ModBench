@@ -34,7 +34,7 @@ public class SchemaReflectorWriteSymmetryTests
             $"{lies.Count} leaf/leaves whose shape is writable are declared read-only. A resolvable, " +
             "non-abstract Loqui setter class exists for each, so a write could construct and set it — " +
             "declaring it read-only hides a capability rather than describing one. This is what a " +
-            "reverted nested-struct write path looks like (#643).\n  " + string.Join("\n  ", lies));
+            "reverted nested-struct write path looks like.\n  " + string.Join("\n  ", lies));
     }
 
     [Fact]

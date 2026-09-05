@@ -169,7 +169,7 @@ public sealed class SourceIngestTests
         Assert.Equal(WorkingTreeState.None, byFormKey[mod.Race.ToString()].WorkingTreeState);
     }
 
-    // ---- The named source re-ingest door (#672) ----
+    // ---- The named source re-ingest door ----
 
     [Fact]
     public void ReingestPluginFromSource_ReDerivesFromTheMovedSourceTree_UnderALiveLoadOrder()
