@@ -28,6 +28,22 @@ describe('plugins.txt + profile corpus', () => {
     expect(await src.readPluginOrder()).toContain('Tracked Patch Mod.esp');
   });
 
+  it('reconcilePluginLines applies the delta it is handed, touching only plugins.txt', async () => {
+    const before = await snapshotTree(dir);
+    const applied = await src.reconcilePluginLines((listed) => ({
+      append: ['Added.esp'],
+      prune: listed.filter((name) => name === 'ccSBJFO4003-Grenade.esl'),
+    }));
+    const after = await snapshotTree(dir);
+    assertOnlyChanged(before, after, new Set([DEFAULT_PLUGINS]));
+
+    expect(applied).toEqual({ append: ['Added.esp'], prune: ['ccSBJFO4003-Grenade.esl'] });
+    const order = await src.readPluginOrder();
+    expect(order).not.toContain('ccSBJFO4003-Grenade.esl');
+    expect(order.at(-1)).toBe('Added.esp');
+    expect(await src.readEnabledPlugins()).not.toContain('Added.esp');
+  });
+
   it('reorderPlugins moves a plugin within load order, touching only plugins.txt', async () => {
     const before = await snapshotTree(dir);
     await src.reorderPlugins(['NonAsciiRetexture.esp'], 999);

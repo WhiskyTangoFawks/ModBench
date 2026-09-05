@@ -19,6 +19,42 @@ export default tseslint.config(
         },
     },
 
+    // Mod Management never calls the backend (root CLAUDE.md).
+    {
+        files: ['src/modmanager/**/*.ts'],
+        rules: {
+            'no-restricted-imports': ['error', { patterns: [{ group: ['**/medit/**', '**/ApiClient*'], message: 'Mod Management never calls the backend.' }] }],
+        },
+    },
+
+    // Every backend call goes through the generated client, so the wire shape stays typed.
+    {
+        files: ['src/**/*.ts', 'webview/src/**/*.{ts,tsx}'],
+        ignores: ['src/medit/ApiClient.ts'],
+        rules: {
+            'no-restricted-globals': ['error', { name: 'fetch', message: 'Backend HTTP goes through ApiClient.' }],
+        },
+    },
+
+    // ADR-0012: controllers take no VS Code types, so chat tool handlers can call them directly.
+    {
+        files: ['src/**/*Controller.ts'],
+        rules: {
+            'no-restricted-imports': ['error', { paths: [{ name: 'vscode', message: 'Controllers take no VS Code types (ADR-0012).' }] }],
+        },
+    },
+
+    // Extension source (tsconfig.json)
+    {
+        files: ['src/**/*.ts'],
+        languageOptions: {
+            parserOptions: {
+                project: './tsconfig.json',
+                tsconfigRootDir: import.meta.dirname,
+            },
+        },
+    },
+
     // Comprehension heuristics mirroring the backend Sonar rules, at `warn` because the
     // code-quality Stop hook is their channel, not the lint gate: an honestly long function may
     // stay. `--max-warnings 0` must not come back.
