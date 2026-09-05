@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """Structural comment checks Vale cannot express: doc block over three lines, doc comment on a
-test method, on a private member, a History token inside a string literal, or a ticket-number
-citation anywhere. Exit 1 on any hit.
+test method, on a private member, or a ticket-number citation anywhere. Exit 1 on any hit.
 
 Usage: comment-shape.py FILE...            check files
        comment-shape.py --as PATH < text   check a fragment as if it were PATH"""
@@ -13,9 +12,6 @@ TEST_FILE = re.compile(r"(Tests\.cs|\.test\.tsx?)$")
 CS_METHOD = re.compile(r"^\s*(?:public|private|internal|protected|static|async|override|virtual)\b[\w<>\[\],.?\s]*\s\w+\s*(?:<[^>]*>)?\s*\(")
 TS_TEST_METHOD = re.compile(r"^\s*(?:(?:it|test|describe)(?:\.\w+)?\s*\(|(?:export\s+)?(?:async\s+)?function\s+\w+|(?:public|private|protected|static|async|\s)*\w+\s*\([^)]*\)\s*(?::\s*[^{]+)?\{)")
 TS_TOP_LEVEL_DECL = re.compile(r"^(?:async\s+)?(?:function|const|let|class|interface|type|enum|abstract class)\s")
-HISTORY = re.compile(
-    r"\b(previously|used to|no longer|originally|pre-fix|formerly)\b", re.IGNORECASE)
-
 # Our tracker's numbers have never been single-digit; a lone digit is an in-document enumeration
 # (divergence #2, AC #4), never a ticket.
 TICKET = re.compile(r"#\d{2,}\b")
@@ -39,47 +35,6 @@ def ticket_hits(path, lines):
             if any(s <= m.start() and m.end() <= e for s, e in exempt):
                 continue
             hits.append(f"{path}:{lineno}: ticket number '{m.group(0)}' — cite it in the commit message, not the code")
-    return hits
-
-
-def strip_comments(lines):
-    """Blank out // and /* */ comment text (or a whole # line) so the rest of a line, string
-    literals included, is what remains to scan for content Vale's comment-only scope can't see."""
-    out = []
-    in_block = False
-    for line in lines:
-        if in_block:
-            end = line.find("*/")
-            if end == -1:
-                out.append("")
-                continue
-            line = line[end + 2:]
-            in_block = False
-        if line.lstrip().startswith("#"):
-            out.append("")
-            continue
-        cut = line.find("//")
-        if cut != -1:
-            line = line[:cut]
-        start = line.find("/*")
-        while start != -1:
-            end = line.find("*/", start + 2)
-            if end == -1:
-                line = line[:start]
-                in_block = True
-                break
-            line = line[:start] + line[end + 2:]
-            start = line.find("/*")
-        out.append(line)
-    return out
-
-
-def history_hits(path, lines):
-    hits = []
-    for lineno, line in enumerate(strip_comments(lines), start=1):
-        m = HISTORY.search(line)
-        if m:
-            hits.append(f"{path}:{lineno}: History word '{m.group(1)}' in a string literal")
     return hits
 
 
@@ -121,7 +76,6 @@ def check(path, text):
     is_cs = path.endswith(".cs")
     if not (is_cs or path.endswith((".ts", ".tsx"))):
         return hits
-    hits += history_hits(path, lines)
     for start, end in doc_blocks(lines, is_cs):
         where = f"{path}:{start + 1}"
         n = end - start + 1

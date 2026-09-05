@@ -36,7 +36,11 @@ if [[ -n "$SHAPE_FILES" ]]; then
   COMMENT_OK=true
   if [[ -n "$COMMENT_FILES" ]]; then
     VALE="$(bash "$ROOT/.claude/skills/validate/install-vale.sh")" || COMMENT_OK=false
-    (cd "$ROOT" && echo "$COMMENT_FILES" | xargs -d '\n' "$VALE" --config=.vale.ini) || COMMENT_OK=false
+    (cd "$ROOT" && echo "$COMMENT_DOCS" | xargs -d '\n' "$VALE" --config=.vale.ini) || COMMENT_OK=false
+    # Code gets two passes: comments as code, then the whole file as raw text for string literals.
+    # History is left to the raw pass so a comment hit is reported once.
+    (cd "$ROOT" && echo "$COMMENT_CODE" | xargs -d '\n' "$VALE" --config=.vale.ini --filter='.Name!="Repo.History"') || COMMENT_OK=false
+    (cd "$ROOT" && echo "$COMMENT_CODE" | xargs -d '\n' "$VALE" --config=.vale-raw.ini) || COMMENT_OK=false
   fi
   (cd "$ROOT" && echo "$SHAPE_FILES" | xargs -d '\n' -r python3 .claude/hooks/comment-shape.py) || COMMENT_OK=false
   (cd "$ROOT" && python3 -m unittest discover -q -s .claude/hooks -p 'test_*.py') || COMMENT_OK=false

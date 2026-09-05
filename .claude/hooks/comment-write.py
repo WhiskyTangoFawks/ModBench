@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """PreToolUse[Edit|Write]: refuse text Gate 1 would reject — Vale over the fragment as its file
-type, plus comment-shape.py's structural checks.
+type, Vale again over it as raw text (string literals), plus comment-shape.py's structural checks.
 
 Only the text being written is checked, never the resulting file, so trimming an oversize
 comment across two edits is never blocked; the validate gate covers the whole file."""
@@ -28,11 +28,13 @@ def vale_hits(path, text):
     if install.returncode != 0:
         print("comment discipline: Vale unavailable, structural checks only", file=sys.stderr)
         return []
-    run = subprocess.run([install.stdout.strip(), "--config=.vale.ini", "--output=JSON", f"--ext={ext}"],
-                         input=text, capture_output=True, text=True, cwd=ROOT)
-    alerts = json.loads(run.stdout or "{}")
-    return [f"line {a['Line']}: {a['Message']}"
-            for file_alerts in alerts.values() for a in file_alerts if a["Severity"] == "error"]
+    hits = []
+    for config in (".vale.ini", ".vale-raw.ini"):
+        run = subprocess.run([install.stdout.strip(), f"--config={config}", "--output=JSON", f"--ext={ext}"],
+                             input=text, capture_output=True, text=True, cwd=ROOT)
+        for file_alerts in json.loads(run.stdout or "{}").values():
+            hits += [f"line {a['Line']}: {a['Message']}" for a in file_alerts if a["Severity"] == "error"]
+    return list(dict.fromkeys(hits))
 
 
 data = json.load(sys.stdin)

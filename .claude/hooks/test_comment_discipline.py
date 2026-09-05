@@ -37,6 +37,10 @@ class ValeRules(unittest.TestCase):
         two = "/** See {@link B} and {@link C}. */\nexport const x = 1;\n"
         self.assertIn("Repo.Cref", vale(two, ".ts"))
 
+    def test_history_in_a_string_literal_via_the_raw_pass(self):
+        code = f'var s = "this {HISTORY} held";\n'
+        self.assertIn("Repo.History", vale(code, ".cs", config=".vale-raw.ini"))
+
     def test_one_cref_passes(self):
         one = '/// <summary>See <see cref="B"/>.</summary>\npublic int X;\n'
         self.assertNotIn("Repo.Cref", vale(one, ".cs"))
@@ -52,6 +56,15 @@ class WriteHook(unittest.TestCase):
         run = hook("a.ts", f"// this {HISTORY} did X\nexport const a = 1;\n")
         self.assertEqual(run.returncode, 2, run.stderr)
         self.assertIn("History", run.stderr)
+
+    def test_refuses_a_history_word_in_a_string_literal(self):
+        run = hook("a.ts", f'export const s = "{HISTORY} held";\n')
+        self.assertEqual(run.returncode, 2, run.stderr)
+        self.assertIn("History", run.stderr)
+
+    def test_reports_a_comment_hit_once(self):
+        run = hook("a.ts", f"// this {HISTORY} did X\nexport const a = 1;\n")
+        self.assertEqual(run.stderr.count("History"), 1, run.stderr)
 
     def test_accepts_a_present_tense_comment(self):
         run = hook("a.ts", "// the cap is a constraint from the format\nexport const a = 1;\n")
