@@ -328,7 +328,7 @@ function fakeReporter() {
   return { report: () => {} };
 }
 
-describe.skipIf(!hasLitr)('buildFileConflictIndex — real LitR instance (opt-in, #84)', () => {
+describe.skipIf(!hasLitr)('buildFileConflictIndex — real LitR instance (opt-in)', () => {
   // A real conflict in the live LitR modlist, not planted: a fix patch must override what it
   // fixes, which is an oracle independent of this codebase's own logic.
   const fixName = 'Pipboy Arm Fix for Grafs Assaultron Armor';

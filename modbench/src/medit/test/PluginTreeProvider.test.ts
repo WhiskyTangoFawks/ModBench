@@ -193,11 +193,9 @@ describe('PluginTreeProvider.getChildren(RecordTypeNode)', () => {
     const withChildren = children.find(c => c.record.formKey === 'qustWithChildren:Fallout4.esm')!;
     const withoutChildren = children.find(c => c.record.formKey === 'qustWithoutChildren:Fallout4.esm')!;
     expect(withChildren.collapsibleState).toBe(1); // Collapsed
-    expect(withoutChildren.collapsibleState).toBe(0); // None (#560)
+    expect(withoutChildren.collapsibleState).toBe(0); // None
   });
 });
-
-// ── AC3 guard: listing a record type issues no per-row fan-out (#560) ─────────
 
 // A per-row `getContainerChildren` fan-out was rejected on cost: up to ~1,300 concurrent round
 // trips for one "expand all Quests" on Fallout4.esm. Presence travels inside the single
@@ -1106,7 +1104,7 @@ describe('PluginTreeProvider.getChildren(RecordNode) — container children', ()
     const dialWithoutChildren = children.find(c => c.record.formKey === 'dial2:Fallout4.esm')!;
     const scenChild = children.find(c => c.record.formKey === 'scen1:Fallout4.esm')!;
     expect(dialWithChildren.collapsibleState).toBe(1); // Collapsed — a nested "dial" with its own children
-    expect(dialWithoutChildren.collapsibleState).toBe(0); // None (#560) — a "dial" with none stays a leaf
+    expect(dialWithoutChildren.collapsibleState).toBe(0); // None — a "dial" with none stays a leaf
     expect(scenChild.collapsibleState).toBe(0); // None — a Scene is always a leaf
   });
 
