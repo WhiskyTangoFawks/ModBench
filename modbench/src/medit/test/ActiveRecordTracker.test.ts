@@ -16,7 +16,7 @@ function panel(): object {
   return {};
 }
 
-describe('ActiveRecordTracker — Referenced By\'s "active record" input (#282)', () => {
+describe('ActiveRecordTracker — Referenced By\'s "active record" input', () => {
   it('setActivePanel with the panel that is already active does not refire — avoids a redundant retarget/refetch when VS Code reports the same panel active twice', () => {
     const tracker = new ActiveRecordTracker();
     const a = panel();

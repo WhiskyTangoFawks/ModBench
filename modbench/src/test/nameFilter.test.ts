@@ -90,7 +90,7 @@ beforeEach(() => {
   h.state.boxes.length = 0;
 });
 
-describe('the name filter is durable (#255)', () => {
+describe('the name filter is durable', () => {
   it('keeps the filter applied when the box hides — Enter, Escape and clicking a row are one API event, and none of them is an intent to discard', async () => {
     const { applied } = setup();
     await open();
@@ -148,7 +148,7 @@ describe('the name filter is durable (#255)', () => {
   });
 });
 
-describe('the active term reads out in the view description (#255)', () => {
+describe('the active term reads out in the view description', () => {
   it('names the active term, so the user can see what they are filtered by without opening anything', async () => {
     const { view } = setup();
     await open();
@@ -192,7 +192,7 @@ describe('the active term reads out in the view description (#255)', () => {
   });
 });
 
-describe('a term that matches nothing says so (#255)', () => {
+describe('a term that matches nothing says so', () => {
   const flush = () => new Promise((resolve) => setImmediate(resolve));
 
   it('names the term rather than leaving a bare empty tree, which reads as "there is nothing here"', async () => {
@@ -245,7 +245,7 @@ describe('a term that matches nothing says so (#255)', () => {
     expect(view.message).toBe('No matches for "zzz".');
   });
 
-  it('leaves the message alone when no filter is active — the view has other things to say (#307 load progress)', async () => {
+  it('leaves the message alone when no filter is active — the view has other things to say', async () => {
     const { view } = setup({ hasRows: () => Promise.resolve(false) });
     view.message = 'Loading plugins…';
     await open();
@@ -255,7 +255,7 @@ describe('a term that matches nothing says so (#255)', () => {
   });
 });
 
-describe('the Mods separator toggle rides on the box (#247, unchanged by #255)', () => {
+describe('the Mods separator toggle rides on the box', () => {
   const toggle = { icon: 'list-tree', label: 'Group by separator' };
 
   it('reapplies the current term when the toggle is pressed, so the option takes effect without retyping', async () => {

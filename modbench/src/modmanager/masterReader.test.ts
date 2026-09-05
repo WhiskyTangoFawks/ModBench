@@ -58,7 +58,7 @@ describe('readMasters', () => {
     await expect(readMasters(path)).rejects.toThrow(/TES4/);
   });
 
-  it('closes the file handle both on a successful read and on a TES4 signature failure (#318)', async () => {
+  it('closes the file handle both on a successful read and on a TES4 signature failure', async () => {
     vi.mocked(open).mockClear(); // ignore opens from earlier tests in this file
     const okPath = await writeFixture(buildTes4Buffer([]));
     await readMasters(okPath);

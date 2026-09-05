@@ -17,7 +17,7 @@ public class AbstractUnionSchemaTests
     // ── Npc.Level (ANpcLevel: NpcLevel / PcLevelMult) ───────────────────────────
 
     [Fact]
-    public void GetSchemas_Npc_LevelColumn_IsNoLongerEmpty()
+    public void GetSchemas_Npc_LevelColumn_IsAStructColumn()
     {
         var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
         var level = schemas["npc_"].RecordColumns.SingleOrDefault(c => c.Name == "level");
@@ -61,7 +61,7 @@ public class AbstractUnionSchemaTests
     // ── Quest.Aliases (AQuestAlias: QuestReferenceAlias / QuestLocationAlias / QuestCollectionAlias) ──
 
     [Fact]
-    public void GetSchemas_Quest_AliasesColumn_ElementIsNoLongerEmpty()
+    public void GetSchemas_Quest_AliasesColumn_ElementHasFields()
     {
         var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
         var aliases = schemas["qust"].RecordColumns.SingleOrDefault(c => c.Name == "aliases");

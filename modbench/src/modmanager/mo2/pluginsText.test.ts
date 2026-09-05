@@ -34,25 +34,25 @@ describe('parsePlugins', () => {
     ] satisfies PluginEntry[]);
   });
 
-  it('#635: a whitespace-only line is blank, not a phantom entry named for its spaces — this is what lets Mo2ModlistSource route readPluginOrder/readEnabledPlugins through this function', () => {
+  it('a whitespace-only line is blank, not a phantom entry named for its spaces — this is what lets Mo2ModlistSource route readPluginOrder/readEnabledPlugins through this function', () => {
     expect(names('﻿# header\r\n*Foo.esp\r\n\r\n   \r\nBar.esp\r\n')).toEqual(['Foo.esp', 'Bar.esp']);
   });
 
   // PluginEntry.name is a matching key downstream, so padding leaking into it
   // makes a real, enabled plugin unreachable by name and reported as disabled.
-  it('#635: leading whitespace before the marker does not hide it, and does not leak into the name', () => {
+  it('leading whitespace before the marker does not hide it, and does not leak into the name', () => {
     expect(parsePlugins(' *Foo.esp\r\n')).toEqual([{ name: 'Foo.esp', enabled: true }] satisfies PluginEntry[]);
   });
 
-  it('#635: leading whitespace with no marker parses as disabled, not a name containing the padding', () => {
+  it('leading whitespace with no marker parses as disabled, not a name containing the padding', () => {
     expect(parsePlugins(' Foo.esp\r\n')).toEqual([{ name: 'Foo.esp', enabled: false }] satisfies PluginEntry[]);
   });
 
-  it('#635: trailing whitespace does not leak into the name', () => {
+  it('trailing whitespace does not leak into the name', () => {
     expect(parsePlugins('Foo.esp \r\n')).toEqual([{ name: 'Foo.esp', enabled: false }] satisfies PluginEntry[]);
   });
 
-  it('#635: a comment line with incidental leading whitespace is still recognized as a comment, not an entry', () => {
+  it('a comment line with incidental leading whitespace is still recognized as a comment, not an entry', () => {
     expect(parsePlugins('  # header\r\n*Foo.esp\r\n')).toEqual([{ name: 'Foo.esp', enabled: true }] satisfies PluginEntry[]);
   });
 });
@@ -92,7 +92,7 @@ describe('setPluginEnabledInText — byte-faithful surgical edit', () => {
     expect(out).toBe('\uFEFFFirst.esp\r\n*Second.esp\r\n');
   });
 
-  it('#635: locates a hand-padded line by its trimmed name and flips only the marker byte, leaving the padding and every other line untouched', () => {
+  it('locates a hand-padded line by its trimmed name and flips only the marker byte, leaving the padding and every other line untouched', () => {
     // Splicing at the line's own start index would corrupt the padding instead of
     // the marker, or read the padding as the marker and no-op.
     const input = '*A.esp\r\n *Foo.esp\r\nB.esp\r\n';
@@ -100,13 +100,13 @@ describe('setPluginEnabledInText — byte-faithful surgical edit', () => {
     expect(out).toBe('*A.esp\r\n Foo.esp\r\nB.esp\r\n');
   });
 
-  it('#635: enabling a hand-padded disabled line inserts the marker after the padding, not before it', () => {
+  it('enabling a hand-padded disabled line inserts the marker after the padding, not before it', () => {
     const input = '*A.esp\r\n Foo.esp\r\nB.esp\r\n';
     const out = setPluginEnabledInText(input, 'Foo.esp', true);
     expect(out).toBe('*A.esp\r\n *Foo.esp\r\nB.esp\r\n');
   });
 
-  it('#635 end-to-end round trip: parse a hand-padded enabled line, toggle it off then back on, and land on byte-identical text \u2014 the exact ` *Foo.esp` case, traced through the full read/write path', () => {
+  it('end-to-end round trip: parse a hand-padded enabled line, toggle it off then back on, and land on byte-identical text \u2014 the exact ` *Foo.esp` case, traced through the full read/write path', () => {
     const input = '*A.esp\r\n *Foo.esp\r\nB.esp\r\n';
 
     expect(parsePlugins(input)).toContainEqual({ name: 'Foo.esp', enabled: true });
@@ -169,13 +169,13 @@ describe('appendPluginInText — byte-faithful append at the winning end', () =>
     expect(() => appendPluginInText(input, 'Unofficial Fallout 4 Patch.esp')).toThrow(/Unofficial Fallout 4 Patch\.esp/);
   });
 
-  it('#635: a file with both LF- and CRLF-terminated lines uses CRLF for the new line, not the first line\'s own LF — the ruled behaviour change (this module\'s own detectEol used to sniff the first line, LF here; consolidated onto the shared whole-file-scan, which sees the CRLF line further down)', () => {
+  it('a file with both LF- and CRLF-terminated lines uses CRLF for the new line, not the first line\'s own LF (the shared detectEol\'s ruled whole-file-scan behavior, end to end through this caller)', () => {
     const out = appendPluginInText('*A.esp\nB.esp\r\n', 'New.esp');
     expect(out).toBe('*A.esp\nB.esp\r\n*New.esp\r\n');
   });
 });
 
-describe('removePluginFromText — byte-faithful line removal (#680)', () => {
+describe('removePluginFromText — byte-faithful line removal', () => {
   it('removes exactly the named entry line, leaving every other byte (CRLF, comment, blank) identical', () => {
     const input = '# header\r\n*A.esp\r\n\r\nB.esp\r\n*C.esp\r\n';
     expect(removePluginFromText(input, 'B.esp')).toBe('# header\r\n*A.esp\r\n\r\n*C.esp\r\n');

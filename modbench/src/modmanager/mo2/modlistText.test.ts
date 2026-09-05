@@ -216,7 +216,7 @@ describe('insertSeparatorAtIndexInText', () => {
     expect(out).toBe('# header\n+FirstSep_separator\n');
   });
 
-  it('#635: a file with both LF- and CRLF-terminated lines uses CRLF for the new line, not the first line\'s own LF (the shared detectEol\'s ruled whole-file-scan behavior, end to end through this caller)', () => {
+  it('a file with both LF- and CRLF-terminated lines uses CRLF for the new line, not the first line\'s own LF (the shared detectEol\'s ruled whole-file-scan behavior, end to end through this caller)', () => {
     const out = insertSeparatorAtIndexInText('+A\n+B\r\n', 'Sep', 1);
     expect(out).toBe('+A\n+B\r\n+Sep_separator\r\n');
   });
@@ -315,7 +315,7 @@ describe('removeModFromText', () => {
 });
 
 describe('moveModToSeparatorEndInText', () => {
-  it('moves a mod to the end of a target separator section (immediately before the separator line \u2014 #107)', () => {
+  it('moves a mod to the end of a target separator section (immediately before the separator line)', () => {
     // Move SKK (currently the Unassigned separator's sole preceding member) into
     // the Radfall separator's section: it becomes Radfall's LAST (most recent,
     // i.e. immediately preceding) member, not appended after the whole file.
@@ -534,7 +534,7 @@ describe('insertModAtWinningEnd — add a disabled mod at the winning end (first
     expect(out).toBe('# header\r\n-New\r\n+A\r\n*DLC: Foo');
   });
 
-  it('#635: a file with both LF- and CRLF-terminated lines uses CRLF for the new line, not the first line\'s own LF (the shared detectEol\'s ruled whole-file-scan behavior, end to end through this caller)', () => {
+  it('a file with both LF- and CRLF-terminated lines uses CRLF for the new line, not the first line\'s own LF (the shared detectEol\'s ruled whole-file-scan behavior, end to end through this caller)', () => {
     const out = insertModAtWinningEnd('+A\n+B\r\n', 'New');
     expect(out).toBe('-New\r\n+A\n+B\r\n');
   });
@@ -576,7 +576,7 @@ describe('unlistedModNames — which mods/ folders need a modlist.txt entry', ()
   });
 });
 
-describe('deadModEntryNames — which modlist entries lost their mods/ folder (#93)', () => {
+describe('deadModEntryNames — which modlist entries lost their mods/ folder', () => {
   it('includes a mod entry whose folder is gone', () => {
     const entries = parseModlist(defaultModlist());
     // The fixture registers this mod; a dir listing without it means the folder was deleted.

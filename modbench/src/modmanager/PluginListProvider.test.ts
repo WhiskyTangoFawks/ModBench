@@ -54,7 +54,7 @@ class FakeSource implements PluginListSource {
 // The leading slot answers one question: can you change whether this loads? A lock fills it
 // where a togglable row renders a checkbox, since the platform has no non-interactive checkbox
 // variant.
-describe('ImplicitMasterNode — leading slot (#276)', () => {
+describe('ImplicitMasterNode — leading slot', () => {
   it('renders a lock icon, not a checkbox', () => {
     const node = new ImplicitMasterNode('Fallout4.esm');
     expect(node.iconPath).toEqual({ id: 'lock' });
@@ -81,7 +81,7 @@ describe('ImplicitMasterNode — leading slot (#276)', () => {
 // xEdit parity: selecting a plugin node shows its File Header, with no separate affordance.
 // Routed through the modbench.openHeader bridge command, because this file is forbidden
 // Editing's vocabulary and the composition root owns that translation.
-describe('PluginNode / ImplicitMasterNode — row click opens the plugin header (#345)', () => {
+describe('PluginNode / ImplicitMasterNode — row click opens the plugin header', () => {
   it('PluginNode wires .command to modbench.openHeader, passing itself', () => {
     const node = new PluginNode({ name: 'TestMod.esp', enabled: true });
     expect(node.command).toEqual({ command: 'modbench.openHeader', title: 'Open Header', arguments: [node] });
@@ -95,7 +95,7 @@ describe('PluginNode / ImplicitMasterNode — row click opens the plugin header 
 
 // Guards against giving the lock icon to every non-PluginNode row rather than scoping it to
 // ImplicitMasterNode.
-describe('leading slot — rows outside the load order render neither checkbox nor lock (#276 AC3)', () => {
+describe('leading slot — rows outside the load order render neither checkbox nor lock', () => {
   it('ErrorNode has no checkbox and no lock', () => {
     const node = new ErrorNode('boom');
     expect(node.label).toBe('⚠ Failed to load: boom');
@@ -640,7 +640,7 @@ describe('PluginListProvider — order-aware missing-master badge (instanceRoot 
     expect(byName(nodes, 'Child.esp').iconPath).toEqual({ id: 'error' });
   });
 
-  it('checkMasterOrder itself does not special-case vanilla — a real (non-implicit) plugins.txt master sequenced after its dependent is still flagged (#67 regression, with implicit rows present)', async () => {
+  it('checkMasterOrder itself does not special-case vanilla — a real (non-implicit) plugins.txt master sequenced after its dependent is still flagged, with implicit rows present', async () => {
     // Implicit rows change the row set, not this per-pair order check, which flags a genuinely
     // late real-file master whether or not it is vanilla.
     await mkdir(join(dir, 'mods', 'Late'), { recursive: true });
@@ -653,7 +653,7 @@ describe('PluginListProvider — order-aware missing-master badge (instanceRoot 
     expect(byName(nodes, 'Base.esp').tooltip).toContain('Late.esp');
   });
 
-  it('a discovered implicit (vanilla) master never false-flags a plugin declaring it, even if plugins.txt lists it out of position (issue #108 — the bug this fixes)', async () => {
+  it('a discovered implicit (vanilla) master never false-flags a plugin declaring it, even if plugins.txt lists it out of position', async () => {
     // Fallout4.esm is discovered from dataFolder and rendered as an always-first implicit row,
     // so the game's actual load order is what gets checked, not plugins.txt's stale line.
     await writeFile(join(dir, 'profiles', 'Default', 'plugins.txt'), 'Base.esp\r\nFallout4.esm\r\nChild.esp\r\n');
@@ -686,7 +686,7 @@ describe('PluginListProvider — order-aware missing-master badge (instanceRoot 
 
 // The tree is a pure read of plugins.txt: a plugin file on disk with no line is the plugins
 // reconcile's business, never merged in by the provider.
-describe('PluginListProvider — rows are exactly plugins.txt\'s lines, never disk-derived (#680)', () => {
+describe('PluginListProvider — rows are exactly plugins.txt\'s lines, never disk-derived', () => {
   let dir: string;
   beforeEach(async () => {
     dir = await mkdtemp(join(tmpdir(), 'plugin-honest-'));
@@ -712,7 +712,7 @@ describe('PluginListProvider — rows are exactly plugins.txt\'s lines, never di
   });
 });
 
-describe('PluginListProvider — resolvePluginPath (Reveal in Explorer, issue #69)', () => {
+describe('PluginListProvider — resolvePluginPath (Reveal in Explorer)', () => {
   let dir: string;
   beforeEach(async () => {
     dir = await mkdtemp(join(tmpdir(), 'plugin-reveal-'));
@@ -761,7 +761,7 @@ describe('PluginListProvider — resolvePluginPath (Reveal in Explorer, issue #6
 
 // Vanilla masters render as forced-on rows ahead of plugins.txt's lines, so their absence never
 // makes a plugin declaring one show a false "missing master".
-describe('PluginListProvider — implicit (vanilla) master rows (issue #108)', () => {
+describe('PluginListProvider — implicit (vanilla) master rows', () => {
   let dir: string;
   const dataFolder = () => join(dir, 'Game', 'Data');
   const providerFor = (extra: Partial<import('./PluginListProvider').PluginListProviderOptions> = {}) =>
@@ -877,7 +877,7 @@ describe('PluginListProvider — implicit (vanilla) master rows (issue #108)', (
   });
 });
 
-describe('PluginListProvider — implicit master drop-index mapping (issue #108 drop-index hazard)', () => {
+describe('PluginListProvider — implicit master drop-index mapping', () => {
   let dir: string;
   const pluginsTxt = () => join(dir, 'profiles', 'Default', 'plugins.txt');
   const dataFolder = () => join(dir, 'Game', 'Data');

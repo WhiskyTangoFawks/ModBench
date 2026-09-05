@@ -32,7 +32,7 @@ describe('lineRanges', () => {
 
 // Whole-file CRLF presence is the ruled implementation: sniffing one line could
 // surface a bare `\r` as the terminator, and a bare `\r` is a partial write.
-describe('detectEol — the single ruled implementation (#635)', () => {
+describe('detectEol — the single ruled implementation', () => {
   it('a file with both LF- and CRLF-terminated lines detects CRLF (the historical divergence case)', () => {
     expect(detectEol('+ModA\n+ModB\r\n')).toBe('\r\n');
   });

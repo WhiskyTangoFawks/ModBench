@@ -21,7 +21,7 @@ describe('readSelectedProfile', () => {
     );
   });
 
-  it('does not spuriously match a key-like line lacking "=" (#317)', () => {
+  it('does not spuriously match a key-like line lacking "="', () => {
     // The decoy is chosen so that a slice(0, -1) off the missing "=" would land on
     // exactly "selected_profile", ahead of the real line.
     const text = '[General]\r\nselected_profileX\r\nselected_profile=Real Value\r\n';
@@ -30,7 +30,7 @@ describe('readSelectedProfile', () => {
 });
 
 describe('readGameName', () => {
-  it('throws a message naming the missing key when gameName is absent (#317)', () => {
+  it('throws a message naming the missing key when gameName is absent', () => {
     expect(() => readGameName('[General]\r\nselected_profile=Default\r\n')).toThrow(/missing gameName/);
   });
 });
@@ -64,7 +64,7 @@ describe('setSelectedProfileInText — surgical, byte-faithful', () => {
     expect(setSelectedProfileInText(ini(), 'Default')).toBe(ini());
   });
 
-  it('throws a message naming the missing key when selected_profile is absent (#317)', () => {
+  it('throws a message naming the missing key when selected_profile is absent', () => {
     expect(() => setSelectedProfileInText('[General]\r\ngameName=Fallout 4\r\n', 'X')).toThrow(
       /missing selected_profile/,
     );

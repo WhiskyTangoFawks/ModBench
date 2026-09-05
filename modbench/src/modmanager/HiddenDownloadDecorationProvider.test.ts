@@ -9,7 +9,7 @@ vi.mock('vscode', () => ({
 import * as vscode from 'vscode';
 import { HiddenDownloadDecorationProvider } from './HiddenDownloadDecorationProvider';
 
-describe('HiddenDownloadDecorationProvider (#238)', () => {
+describe('HiddenDownloadDecorationProvider', () => {
   const instanceRoot = '/instance';
   const downloadUri = (name: string) => ({ fsPath: join(instanceRoot, 'downloads', name) } as never);
 

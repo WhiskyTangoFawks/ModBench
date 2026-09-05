@@ -9,7 +9,7 @@ vi.mock('vscode', () => ({
 
 import { recordResourceUri, parseRecordResourceUri } from '../recordResourceUri';
 
-describe('recordResourceUri / parseRecordResourceUri (#428)', () => {
+describe('recordResourceUri / parseRecordResourceUri', () => {
   it('round-trips (plugin, origin, formKey) through the medit-record: scheme', () => {
     const uri = recordResourceUri('Fallout4.esm', 'ModA', '000001:Fallout4.esm');
     expect(uri.scheme).toBe('medit-record');

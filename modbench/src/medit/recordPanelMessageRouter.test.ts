@@ -150,7 +150,7 @@ describe('routeRecordPanelMessage', () => {
 // The router carries no panel identity, so "two panels" is two independently-built deps bundles.
 // No PASTE message exists to route: Ctrl+V lands in a plain <input> (ADR-0034) and committing it
 // is the ordinary EDIT_FIELD write.
-describe('cross-panel copy/paste — two independently-opened panels share this router unmodified (#284)', () => {
+describe('cross-panel copy/paste — two independently-opened panels share this router unmodified', () => {
   beforeEach(() => {
     writeText.mockReset();
     fakeRepository.editRecordField.mockReset().mockResolvedValue({ applied: true });
@@ -186,7 +186,7 @@ describe('cross-panel copy/paste — two independently-opened panels share this 
 // ADR-0041: the one write the panel can ask for. Routed through the host rather than posted
 // to the backend from the webview precisely so a refusal can become a native notification — which
 // is what these cases are really pinning.
-describe('routeRecordPanelMessage — EDIT_FIELD (#415)', () => {
+describe('routeRecordPanelMessage — EDIT_FIELD', () => {
   const editMessage = {
     type: WEBVIEW_TO_EXTENSION.EDIT_FIELD,
     formKey: '000800:Mod.esp',
@@ -253,7 +253,7 @@ describe('routeRecordPanelMessage — EDIT_FIELD (#415)', () => {
   });
 });
 
-describe('normalizeFormKeyQuery (issue #218)', () => {
+describe('normalizeFormKeyQuery', () => {
   it('searches on the bracketed FormKey when a whole composite label is pasted', () => {
     expect(normalizeFormKeyQuery('DogmeatRace [000019:Fallout4.esm]')).toBe('000019:Fallout4.esm');
   });
@@ -295,7 +295,7 @@ describe('normalizeFormKeyQuery (issue #218)', () => {
 // The FormKey picker as a native QuickPick — the extension-host half
 // of the bridge pickFormKey (webview/src/nativeBridge.ts) talks to. Exercised directly here,
 // separately from routeRecordPanelMessage's dispatch.
-describe('pickFormKeyViaQuickPick (issue #210)', () => {
+describe('pickFormKeyViaQuickPick', () => {
   function fakeDeps(searchRecords = vi.fn().mockResolvedValue({ items: [], total: 0 })): { deps: FormKeyPickerDeps; searchRecords: typeof searchRecords; reply: ReturnType<typeof vi.fn> } {
     const reply = vi.fn();
     return { deps: { repository: { searchRecords }, reply }, searchRecords, reply };
@@ -475,7 +475,7 @@ describe('pickFormKeyViaQuickPick (issue #210)', () => {
   });
 });
 
-describe('routeRecordPanelMessage — OPEN_FORM_KEY_PICKER (issue #210)', () => {
+describe('routeRecordPanelMessage — OPEN_FORM_KEY_PICKER', () => {
   it('with formKeyPicker deps undefined is a no-op', async () => {
     await expect(routeRecordPanelMessage(
       { type: WEBVIEW_TO_EXTENSION.OPEN_FORM_KEY_PICKER, requestId: 'r1', seed: '', validTypes: [] },
@@ -518,7 +518,7 @@ describe('routeRecordPanelMessage — OPEN_FORM_KEY_PICKER (issue #210)', () => 
   });
 });
 
-describe('routeRecordPanelMessage — OPEN_EXTENDED_EDITOR (issue #230)', () => {
+describe('routeRecordPanelMessage — OPEN_EXTENDED_EDITOR', () => {
   it('with extendedFieldEditor deps undefined is a no-op', async () => {
     await expect(routeRecordPanelMessage(
       { type: WEBVIEW_TO_EXTENSION.OPEN_EXTENDED_EDITOR, requestId: 'r1', value: 'x', recordLabel: 'Deacon', fieldName: 'Description', plugin: 'MyMod.esp', origin: 'Data', readOnly: false },

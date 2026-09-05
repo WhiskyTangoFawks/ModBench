@@ -31,7 +31,7 @@ describe('parseMetaIni', () => {
     });
   });
 
-  it('does not let a line lacking "=" corrupt the parsed fields (#317)', () => {
+  it('does not let a line lacking "=" corrupt the parsed fields', () => {
     // The decoy is chosen so that a slice(0, -1) off the missing "=" would land on
     // exactly "installationFile".
     expect(parseMetaIni('[General]\r\ninstallationFilex\r\nversion=1.0\r\n')).toEqual({

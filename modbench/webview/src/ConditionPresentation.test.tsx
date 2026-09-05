@@ -234,7 +234,7 @@ beforeEach(() => {
 });
 afterEach(() => vi.unstubAllGlobals());
 
-describe('#693 — a collapsed condition reads as xEdit prose', () => {
+describe('a collapsed condition reads as xEdit prose', () => {
   it('run on, function, both parameter slots, operator, float to six places, and the AND that follows a non-last element', async () => {
     currentCompare = oneColumn(
       [
@@ -364,7 +364,7 @@ describe('#693 — a collapsed condition reads as xEdit prose', () => {
 // The table's key is the leaf's type name: the discriminator's value where the leaf is a union,
 // the schema's declared type name where it is not.
 
-describe('#717 — the table keys on the leaf type name', () => {
+describe('the table keys on the leaf type name', () => {
   // An entry the table already has, so this is a claim about the key alone.
   const notAUnion: FieldMetadata = {
     ...conditionsMeta,
@@ -401,7 +401,7 @@ describe('#717 — the table keys on the leaf type name', () => {
   });
 });
 
-describe('#693 — a condition shows one row per parameter slot in use', () => {
+describe('a condition shows one row per parameter slot in use', () => {
   it('a record-slot function renders parameter_one_record and neither of its aliases', async () => {
     currentCompare = oneColumn([condition({}, {
       function: 'HasKeyword', parameter_one_record: '00AABBCC:MyMod.esp',
@@ -459,7 +459,7 @@ describe('#693 — a condition shows one row per parameter slot in use', () => {
   });
 });
 
-describe('#693 — a governing member clears the siblings its new value idles', () => {
+describe('a governing member clears the siblings its new value idles', () => {
   it('changing Run On away from Reference posts an edit with the reference cleared', async () => {
     currentCompare = oneColumn([condition({}, {
       run_on_type: 'Reference', reference: '00000014:Fallout4.esm', function: 'IsSneaking',
@@ -536,7 +536,7 @@ describe('#693 — a governing member clears the siblings its new value idles', 
   });
 });
 
-describe('#693 — the function picker comes from the schema', () => {
+describe('the function picker comes from the schema', () => {
   it('Fallout 4 picks the function from the function member’s own enum', async () => {
     currentCompare = oneColumn([condition({}, { function: 'IsSneaking' })]);
     renderPanel();
@@ -556,7 +556,7 @@ describe('#693 — the function picker comes from the schema', () => {
   });
 });
 
-describe('#693 — a Run On label that contains spaces', () => {
+describe('a Run On label that contains spaces', () => {
   // xEdit writes the Run On prefix with its spaces stripped. No Fallout 4 enum reaches the
   // webview labelled at all, so the rule is stated against a labelled run_on_type instead.
   const labelled: FieldMetadata = {

@@ -240,7 +240,7 @@ describe('modbench activation', () => {
 // The harness loads out/extension.js, a bundle from a separate esbuild step; nothing forces it
 // to be current, so freshness is asserted from inside the process that loaded it.
 
-describe('the loaded extension bundle is not older than its sources (#299)', () => {
+describe('the loaded extension bundle is not older than its sources', () => {
   it('out/extension.js is at least as new as every file under src/', () => {
     // Compiled location is out/test/integration/extension.test.js — three levels under
     // the modbench package root.
@@ -282,7 +282,7 @@ describe('the loaded extension bundle is not older than its sources (#299)', () 
 
 // ── Output channel ──────────────────────────────────────────────────────────────
 
-describe('Modbench output channel (#198)', () => {
+describe('Modbench output channel', () => {
   it('is created as a leveled LogOutputChannel, not a plain text channel', () => {
     const channel = (ext?.exports as { outputChannel?: vscode.LogOutputChannel } | undefined)?.outputChannel;
     assert.ok(channel, 'activate() should return { outputChannel }');
@@ -378,7 +378,7 @@ describe('modbench.openEditor', () => {
 // shapes, single or multi-selected).
 
 describe('modbench.openEditorBeside', () => {
-  it('opens a plain {formKey,label}-shaped target as a genuinely new tab, never retargeting the singleton (#284)', async () => {
+  it('opens a plain {formKey,label}-shaped target as a genuinely new tab, never retargeting the singleton', async () => {
     // Seed the singleton with a known title first: an implementation that routed through the
     // singleton/retarget path would retarget this panel instead of opening a new tab.
     await vscode.commands.executeCommand('modbench.openEditor', { formKey: 'Fallout4.esm:000020', label: 'Seed Record' });
@@ -395,7 +395,7 @@ describe('modbench.openEditorBeside', () => {
     assert.ok(tabs.some(t => t.label === 'Beside Record'), 'expected a new tab for the Beside-opened record');
   });
 
-  it('resolves a Plugins-tree RecordNode-shaped argument to its own record (#284)', async () => {
+  it('resolves a Plugins-tree RecordNode-shaped argument to its own record', async () => {
     const tabsBefore = vscode.window.tabGroups.all.flatMap(g => g.tabs).length;
 
     await vscode.commands.executeCommand('modbench.openEditorBeside', {
@@ -414,7 +414,7 @@ describe('modbench.openEditorBeside', () => {
     );
   });
 
-  it('resolves a Plugins-tree PlacedNode-shaped argument (placed-reference row) to its own record (#284)', async () => {
+  it('resolves a Plugins-tree PlacedNode-shaped argument (placed-reference row) to its own record', async () => {
     const tabsBefore = vscode.window.tabGroups.all.flatMap(g => g.tabs).length;
 
     await vscode.commands.executeCommand('modbench.openEditorBeside', {
@@ -433,7 +433,7 @@ describe('modbench.openEditorBeside', () => {
     );
   });
 
-  it('two sequential single-target opens land as two separate tabs — neither retargets the other (#284)', async () => {
+  it('two sequential single-target opens land as two separate tabs — neither retargets the other', async () => {
     const tabsBefore = vscode.window.tabGroups.all.flatMap(g => g.tabs).length;
 
     await vscode.commands.executeCommand('modbench.openEditorBeside', { formKey: 'Fallout4.esm:000050', label: 'First Beside' });
@@ -447,7 +447,7 @@ describe('modbench.openEditorBeside', () => {
     assert.ok(tabs.some(t => t.label === 'Second Beside'), 'second Beside panel should show its own record');
   });
 
-  it('a multi-selection opens one panel per record, all landing in a single new editor group beside the active one (#284)', async () => {
+  it('a multi-selection opens one panel per record, all landing in a single new editor group beside the active one', async () => {
     const groupsBefore = vscode.window.tabGroups.all.length;
     const tabsBefore = vscode.window.tabGroups.all.flatMap(g => g.tabs).length;
 
@@ -474,7 +474,7 @@ describe('modbench.openEditorBeside', () => {
 // field, so the handler's node-shape handling, not package.json's `when`, keeps it working.
 import { PluginNode as PluginListPluginNode, ImplicitMasterNode } from '../../modmanager/PluginListProvider';
 
-describe('modbench.openHeader reachable from every plugin-bearing row of the merged tree (#273 Slice E)', () => {
+describe('modbench.openHeader reachable from every plugin-bearing row of the merged tree', () => {
   it('opens a header tab from an ordinary plugin row (PluginListProvider.PluginNode)', async () => {
     const node = new PluginListPluginNode({ name: 'TestMod.esp', path: '/data/TestMod.esp', enabled: true } as any);
     await vscode.commands.executeCommand('modbench.openHeader', node);
@@ -483,7 +483,7 @@ describe('modbench.openHeader reachable from every plugin-bearing row of the mer
     assert.ok(tabs.some(t => t.label === 'TestMod.esp'), 'expected a header tab titled after the plugin');
   });
 
-  it('opens a header tab from an implicit-master row (PluginListProvider.ImplicitMasterNode) — the gap #273 closes', async () => {
+  it('opens a header tab from an implicit-master row (PluginListProvider.ImplicitMasterNode)', async () => {
     const node = new ImplicitMasterNode('Fallout4.esm');
     await vscode.commands.executeCommand('modbench.openHeader', node);
     await new Promise(r => setTimeout(r, 300));
@@ -499,7 +499,7 @@ interface DownloadsProviderLike {
   getChildren(element?: unknown): Promise<Array<{ label?: unknown; row?: { name: string } }>>;
 }
 
-describe('modbench.downloads tree (#233)', () => {
+describe('modbench.downloads tree', () => {
   const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   const downloadsDir = root ? path.join(root, 'downloads') : '';
   const provider = () => (ext?.exports as { downloadsProvider?: DownloadsProviderLike } | undefined)?.downloadsProvider;
@@ -557,7 +557,7 @@ interface ModListLike {
   getChildren(element?: unknown): Promise<Array<{ label?: unknown; kind?: string; resourceUri?: vscode.Uri }>>;
 }
 
-describe('Overwrite row (#82)', () => {
+describe('Overwrite row', () => {
   const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   const overwriteDir = root ? path.join(root, 'overwrite') : '';
   const provider = () => (ext?.exports as { modListProvider?: ModListLike } | undefined)?.modListProvider;
@@ -608,7 +608,7 @@ describe('Overwrite row (#82)', () => {
 // Placed first: the suite activates once, so "no poll before launch" is provable only at the
 // one point in the run where that is still true.
 
-describe('External-change poller runs only while the backend is up (#432)', () => {
+describe('External-change poller runs only while the backend is up', () => {
   const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   let gameDir = '';
   const pollRequests = (log: string[]) => log.filter((r) => r.includes('external-changes/status'));
@@ -657,7 +657,7 @@ interface TreeLike {
   getChildren(element?: unknown): Promise<Array<{ kind?: string; plugin?: { name?: string } }>>;
 }
 
-describe('Launch mEdit populates the editing plugin tree (#75)', () => {
+describe('Launch mEdit populates the editing plugin tree', () => {
   const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   const treeProvider = () => (ext?.exports as { treeProvider?: TreeLike } | undefined)?.treeProvider;
   let gameDir = '';
@@ -728,7 +728,7 @@ interface PluginListProviderLike {
   getChildren(element?: unknown): Promise<PluginListNodeLike[]>;
 }
 
-describe('Loadout stays visible through an editing backend (#268)', () => {
+describe('Loadout stays visible through an editing backend', () => {
   const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   const pluginsTxtPath = root ? path.join(root, 'profiles', 'Default', 'plugins.txt') : '';
   const pluginListProvider = () =>
@@ -835,7 +835,7 @@ const findRow = (rows: unknown[], name: string): unknown => {
   return row;
 };
 
-describe('Plugin load-order rows expand into records (#270)', () => {
+describe('Plugin load-order rows expand into records', () => {
   const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   const pluginsTxtPath = root ? path.join(root, 'profiles', 'Default', 'plugins.txt') : '';
   const pluginsTree = () => (ext?.exports as { pluginsTree?: PluginsTreeLike } | undefined)?.pluginsTree;
@@ -946,7 +946,7 @@ describe('Plugin load-order rows expand into records (#270)', () => {
 
 // ADR-0035: read-only-for-editing is a tooltip, never an icon, and is known only once a load
 // order says so — before launch a plugin row carries no opinion about it at all.
-describe('A read-only plugin\'s tooltip says so once the backend is running (#276)', () => {
+describe('A read-only plugin\'s tooltip says so once the backend is running', () => {
   const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   const pluginsTxtPath = root ? path.join(root, 'profiles', 'Default', 'plugins.txt') : '';
   const pluginsTree = () => (ext?.exports as { pluginsTree?: PluginsTreeLike } | undefined)?.pluginsTree;
@@ -1007,7 +1007,7 @@ describe('A read-only plugin\'s tooltip says so once the backend is running (#27
 // ADR-0037: a plugin flagged with a missing master is decorated through the real wiring.
 // MOCK_PLUGINS sends raw JSON no PluginMetadata-typed fixture could produce, so TestMod.esp,
 // with no `masterIssues` key, proves an absent field degrades to undecorated.
-describe('A plugin with a missing master is flagged, never deactivated (#277)', () => {
+describe('A plugin with a missing master is flagged, never deactivated', () => {
   const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   const pluginsTxtPath = root ? path.join(root, 'profiles', 'Default', 'plugins.txt') : '';
   const pluginsTree = () => (ext?.exports as { pluginsTree?: PluginsTreeLike } | undefined)?.pluginsTree;
@@ -1152,7 +1152,7 @@ describe('A loadout change sends a fresh load order snapshot (ADR-0044)', () => 
   // If matchingPlugins were refreshed only by setFilter/clearFilter, a suppressed plugin would
   // stay suppressed through a reconcile with no filter at all. Under ADR-0035 such a plugin has
   // no row, so absence is what is asserted.
-  it('hides a plugin a filter suppresses, and restores it once a reconcile comes up with no filter (#396 / #278 review)', async () => {
+  it('hides a plugin a filter suppresses, and restores it once a reconcile comes up with no filter', async () => {
     const tree = pluginsTree()!;
     const before = findRow(await tree.getChildren(), 'TestMod.esp');
     assert.strictEqual(tree.getTreeItem(before).collapsibleState, vscode.TreeItemCollapsibleState.Collapsed,
@@ -1195,7 +1195,7 @@ describe('A loadout change sends a fresh load order snapshot (ADR-0044)', () => 
 // ADR-0035 amending ADR-0018: the match map answers for the active filter only, so three
 // writers reset it to undefined rather than answer for a filter or load order that has gone:
 // refreshMatchingPlugins's failure path, exitToLoadout, and clearTreeWhenBackendDies.
-describe('matchingPlugins clears when it can no longer be trusted (#650)', () => {
+describe('matchingPlugins resets to undefined once it cannot answer for the active filter or load order', () => {
   const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   const pluginsTxtPath = root ? path.join(root, 'profiles', 'Default', 'plugins.txt') : '';
   const loadOrderSyncOf = () =>
@@ -1281,7 +1281,7 @@ describe('matchingPlugins clears when it can no longer be trusted (#650)', () =>
 
 // The record filter is a fact about the load order, so it cannot outlive one — a readout
 // describing a load order that is gone. The name filter survives a close: its rows remain.
-describe('The record-filter readout does not outlive its load order (#255)', () => {
+describe('The record-filter readout does not outlive its load order', () => {
   const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   const pluginsTxtPath = root ? path.join(root, 'profiles', 'Default', 'plugins.txt') : '';
   const description = () =>
@@ -1330,7 +1330,7 @@ describe('The record-filter readout does not outlive its load order (#255)', () 
 
 // The context key is unreadable from a test, but the code lens is a genuinely registered
 // provider, so proving it clears proves that single writer ran.
-describe('Close mEdit clears the record filter\'s code lens too, not just the readout (#354)', () => {
+describe('Close mEdit clears the record filter\'s code lens too, not just the readout', () => {
   const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   const pluginsTxtPath = root ? path.join(root, 'profiles', 'Default', 'plugins.txt') : '';
   // FilterCodeLensProvider renders lenses only for documents inside scriptsPath, resolved once
@@ -1393,7 +1393,7 @@ describe('Close mEdit clears the record filter\'s code lens too, not just the re
 // Refresh (the single Mod-Management refresh) must remain distinct and never
 // trigger a reload — a regression assertion, not new behavior; modbench.refresh's own body
 // never touches enterEditing/putLoadOrder.
-describe('Refresh never triggers a reconcile (#295 AC5)', () => {
+describe('Refresh never triggers a reconcile', () => {
   before(() => resetMockBackend());
   after(() => resetMockBackend());
 
@@ -1422,7 +1422,7 @@ async function waitFor<T>(label: string, read: () => Promise<T> | T, timeoutMs =
   }
 }
 
-describe('Progressive load (#307)', () => {
+describe('Progressive load', () => {
   const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   const pluginsTxtPath = root ? path.join(root, 'profiles', 'Default', 'plugins.txt') : '';
   const pluginsTree = () => (ext?.exports as { pluginsTree?: PluginsTreeLike } | undefined)?.pluginsTree;
@@ -1611,7 +1611,7 @@ describe('Progressive load (#307)', () => {
 
 // pickCopyDestination opens with an unguarded repository.getPlugins(); a rejection escapes the
 // command callback as VS Code's raw "fetch failed" toast. A load order-less mock reproduces it.
-describe('Copy destination picking degrades to a reported error, never an uncaught rejection (#534)', () => {
+describe('Copy destination picking degrades to a reported error, never an uncaught rejection', () => {
   // A column header's data-vscode-context payload always carries `origin`, so origin resolution
   // short-circuits with no HTTP call and pickCopyDestination's getPlugins() is the first thing to
   // reach the refusing backend.

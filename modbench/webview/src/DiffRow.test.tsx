@@ -134,7 +134,7 @@ describe('DiffRow — top-level scalar row', () => {
 
 // Read off the column's own override.isPartialForm, already riding on the Column the row is
 // handed, rather than a separately-threaded Set.
-describe('DiffRow — Partial Form column dimming (#491)', () => {
+describe('DiffRow — Partial Form column dimming', () => {
   it('dims a cell whose column override is a Partial Form record', () => {
     const master = override('Fallout4.esm');
     const partial = override('MyMod.esp', { isPartialForm: true });
@@ -328,7 +328,7 @@ describe('DiffRow — FormKey leaf resolution is independent of the parent field
   });
 });
 
-describe('DiffRow — flags cell wiring (#426)', () => {
+describe('DiffRow — flags cell wiring', () => {
   const flagMeta: FieldMetadata = {
     name: 'Flags', type: 'enum', isArray: false, validFormKeyTypes: [],
     enumMembers: [{ value: 'A', bitValue: '1' }, { value: 'B', bitValue: '2' }],
@@ -387,7 +387,7 @@ describe('DiffRow — flags cell wiring (#426)', () => {
   });
 });
 
-describe('DiffRow — formKey cell wiring (#426)', () => {
+describe('DiffRow — formKey cell wiring', () => {
   const fkMeta: FieldMetadata = { name: 'Race', type: 'formKey', isArray: false, validFormKeyTypes: ['race'], enumMembers: [] };
 
   function fkRow(overrides: Partial<React.ComponentProps<typeof DiffRow>> = {}) {
@@ -432,7 +432,7 @@ describe('DiffRow — formKey cell wiring (#426)', () => {
 
 // ADR-0039: the extended editor's only trigger is the string cell's right-click menu, driven by
 // the `data-vscode-context` attribute DiskCell carries; no left-click gesture reaches it.
-describe('DiffRow — string cell right-click menu (#258 / ADR-0039)', () => {
+describe('DiffRow — string cell right-click menu (ADR-0039)', () => {
   function stringContext(text: string, index = 0): Record<string, unknown> {
     const td = screen.getAllByText(text)[index].closest('td');
     const attr = td?.getAttribute('data-vscode-context');
@@ -483,7 +483,7 @@ describe('DiffRow — string cell right-click menu (#258 / ADR-0039)', () => {
     expect(ctx.fieldName).toBe('Struct');
   });
 
-  it('double click opens the inline editor, never a tab — DiffRow no longer has any callback to call', () => {
+  it('double click opens the inline editor in place, never a tab, calling no callback', () => {
     renderRow({ editableColumns: new Set([columnKey('MyMod.esp', null)]), onEditCell: vi.fn() });
     fireEvent.doubleClick(screen.getAllByText('disk-value')[1]);
     expect(screen.getByDisplayValue('disk-value')).toBeInTheDocument();
@@ -492,7 +492,7 @@ describe('DiffRow — string cell right-click menu (#258 / ADR-0039)', () => {
 
 // A nested array's element is more than one hop from its subtree root, which the subtree root
 // plus a bare scalar index could never express.
-describe('DiffRow — array parent/element right-click context (#535)', () => {
+describe('DiffRow — array parent/element right-click context', () => {
   function vscodeContextFor(text: string, index = 0): Record<string, unknown> {
     const td = screen.getAllByText(text)[index].closest('td');
     const attr = td?.getAttribute('data-vscode-context');

@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { resolveCompileTarget } from '../compileTarget';
 
-describe('resolveCompileTarget (#416 review)', () => {
+describe('resolveCompileTarget', () => {
   function deps(overrides: Partial<Parameters<typeof resolveCompileTarget>[2]> = {}) {
     return {
       resolveOrigin: vi.fn().mockResolvedValue('SomeMod'),

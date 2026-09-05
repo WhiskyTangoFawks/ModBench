@@ -10,7 +10,7 @@ import { buildTes4Buffer } from './test/buildTes4Buffer';
 const provided = (...names: string[]) => new Map(names.map((n) => [n.toLowerCase(), n] as const));
 const folded = (...names: string[]) => new Set(names.map((n) => n.toLowerCase()));
 
-describe('pluginLinesDelta — what plugins.txt must gain and lose to match disk (#680)', () => {
+describe('pluginLinesDelta — what plugins.txt must gain and lose to match disk', () => {
   it('appends every provided plugin with no line, ascending case-folded, and prunes nothing when all lines are provided', () => {
     const delta = pluginLinesDelta(['A.esp'], provided('A.esp', 'zeta.esp', 'Beta.esl'), folded());
     expect(delta).toEqual({ append: ['Beta.esl', 'zeta.esp'], prune: [] });
@@ -42,7 +42,7 @@ describe('pluginLinesDelta — what plugins.txt must gain and lose to match disk
   });
 });
 
-describe('reconcilePluginsWithDisk — plugins.txt converges on what disk provides (#680)', () => {
+describe('reconcilePluginsWithDisk — plugins.txt converges on what disk provides', () => {
   let dir: string;
   let channel: { info: ReturnType<typeof vi.fn>; error: ReturnType<typeof vi.fn> };
   const pluginsPath = () => join(dir, 'profiles', 'Default', 'plugins.txt');

@@ -268,7 +268,7 @@ describe('RecordPanel — array child rows (sorted)', () => {
 });
 
 
-describe('RecordPanel — struct row conflict color follows collapse state (#114)', () => {
+describe('RecordPanel — struct row conflict color follows collapse state', () => {
   beforeEach(() => {
     vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
     currentCompare = structCollapseExpandResult;
@@ -310,7 +310,7 @@ describe('RecordPanel — struct row conflict color follows collapse state (#114
 });
 
 
-describe('RecordPanel — a struct member that is itself an array of structs (issue #231)', () => {
+describe('RecordPanel — a struct member that is itself an array of structs', () => {
   beforeEach(() => {
     vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
     currentCompare = nestedStructArrayResult;
@@ -341,7 +341,7 @@ describe('RecordPanel — a struct member that is itself an array of structs (is
 
 });
 
-describe('RecordPanel — array editing (unsorted, #426)', () => {
+describe('RecordPanel — array editing (unsorted)', () => {
   const intArrayMeta: FieldMetadata = {
     name: 'Values', type: 'array', isArray: true, validFormKeyTypes: [], enumMembers: [],
     elementType: { name: '', type: 'int', isArray: false, validFormKeyTypes: [], enumMembers: [] },
@@ -524,7 +524,7 @@ const scalarResult = {
 
 // A complex field is always edited as one atomic value: a leaf committing its own bare value
 // under the array's or struct's field name is silently declined by the backend applier.
-describe('RecordPanel — a value edit inside a complex field commits the whole field (#503)', () => {
+describe('RecordPanel — a value edit inside a complex field commits the whole field', () => {
   function renderEditablePanel() {
     const client: RecordPanelClient = {
       load: vi.fn().mockImplementation(() => Promise.resolve({
@@ -624,7 +624,7 @@ describe('RecordPanel — a value edit inside a complex field commits the whole 
 
 // Committing the saved text alone under the subtree root's own field path would be refused by
 // the backend's shape guards.
-describe('RecordPanel — the extended editor commits the whole field, at any depth (#533)', () => {
+describe('RecordPanel — the extended editor commits the whole field, at any depth', () => {
   function renderEditablePanel() {
     const client: RecordPanelClient = {
       load: vi.fn().mockImplementation(() => Promise.resolve({
@@ -731,7 +731,7 @@ describe('RecordPanel — the extended editor commits the whole field, at any de
 
 // One row's path is shared by every column, so a keyed array's path addresses the element by
 // key and each column resolves it against its own array — the same key, two positions.
-describe('RecordPanel — a keyed array\'s element is addressed by key, per column (#716)', () => {
+describe('RecordPanel — a keyed array\'s element is addressed by key, per column', () => {
   const scriptMeta: FieldMetadata = {
     name: 'Scripts', type: 'array', isArray: true, validFormKeyTypes: [], enumMembers: [],
     keyMembers: ['name'],

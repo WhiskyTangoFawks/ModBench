@@ -176,7 +176,7 @@ describe('FormKeyCell — editable column', () => {
 
 // ADR-0034: same open-gate as ScalarCell/FlagCell — second click on the
 // already-focused cell, F2 (via DiskCell's data-open-trigger dispatch), or a double click.
-describe('FormKeyCell — mutable column gates opening on the focus check (#223)', () => {
+describe('FormKeyCell — mutable column gates opening on the focus check', () => {
   afterEach(() => { pickFormKey.mockClear(); });
 
   it('a click on a cell with a value, while not the focused cell, does not open the picker', () => {

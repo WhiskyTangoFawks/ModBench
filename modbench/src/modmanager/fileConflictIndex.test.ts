@@ -170,7 +170,7 @@ describe.skipIf(process.platform === 'win32')('buildFileConflictIndex — non-re
     expect(log).toHaveBeenCalledWith(expect.stringContaining('broken.dds'));
   });
 
-  it('propagates a non-ENOENT stat error on a symlink target, rather than silently skipping it (#322 / #318 convention)', async () => {
+  it('propagates a non-ENOENT stat error on a symlink target, rather than silently skipping it', async () => {
     await symlink(join(instanceRoot, 'whatever.dds'), join(modARoot, 'restricted.dds'));
     const { stat: actualStat } = await vi.importActual<typeof import('node:fs/promises')>('node:fs/promises');
     vi.mocked(stat).mockImplementation(async (path, ...rest) => {
@@ -230,7 +230,7 @@ describe.skipIf(process.platform === 'win32')('buildFileConflictIndex — non-re
 
 // A root "source/" folder is excluded unconditionally, so neither it nor the dot-prefixed
 // rule needs a sibling-plugin check and nothing can be left orphaned.
-describe('buildFileConflictIndex — root "source/" and dot-prefixed exclusion (#441, closes #438)', () => {
+describe('buildFileConflictIndex — root "source/" and dot-prefixed exclusion', () => {
   let instanceRoot: string;
   let modARoot: string;
 
@@ -244,7 +244,7 @@ describe('buildFileConflictIndex — root "source/" and dot-prefixed exclusion (
     await rm(instanceRoot, { recursive: true, force: true });
   });
 
-  it('excludes a .git directory at the mod root, at any depth beneath it (closes #438)', async () => {
+  it('excludes a .git directory at the mod root, at any depth beneath it', async () => {
     await writeFile(join(modARoot, 'Plugin.esp'), 'PLUGINBYTES');
     await mkdir(join(modARoot, '.git', 'objects', 'pack'), { recursive: true });
     await writeFile(join(modARoot, '.git', 'HEAD'), 'ref: refs/heads/main');

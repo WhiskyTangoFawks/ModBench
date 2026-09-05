@@ -116,7 +116,7 @@ public sealed class SourceIngestParityTests : IDisposable
         mirror.Index!.At(RecordRef.Effective).GetRecordTypeCounts(_plugin).FirstOrDefault(c => c.Type == recordType)?.Count ?? 0;
 
     [Fact]
-    public void EveryRecordsDocument_IsByteIdentical_ExceptTheOneKnown369OverlayVsDeepParseCell()
+    public void EveryRecordsDocument_IsByteIdentical_ExceptOnePinnedOverlayVsDeepParseCellDivergence()
     {
         var mismatched = new List<string>();
         var byType = new Dictionary<string, int>(StringComparer.Ordinal);

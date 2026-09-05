@@ -89,7 +89,7 @@ describe('ApiPluginRepository.getPlugins', () => {
     await expect(repo.getPlugins()).rejects.toThrow(/GET \/plugins failed \(503\)/);
   });
 
-  it('maps origin from the wire PluginResponse (#275 / ADR-0036) instead of dropping it', async () => {
+  it('maps origin from the wire PluginResponse (ADR-0036) instead of dropping it', async () => {
     const raw = [{ ...makePlugin(0), origin: 'SomeMod' }];
     const client = { GET: vi.fn().mockResolvedValue({ data: raw, response: { ok: true } }) } as any;
     const repo = new ApiPluginRepository(client);
@@ -783,7 +783,7 @@ describe('ApiPluginRepository origin threading', () => {
 // The field edit is the one gate-wrapped write that does not reach the user through
 // `EditingController.mutate`, so it shapes its own outcome; without this branch the user gets
 // the backend's implementation prose, with no retry cue.
-describe('ApiPluginRepository.editRecordField write-gate contention (#673)', () => {
+describe('ApiPluginRepository.editRecordField write-gate contention', () => {
   function busyClient() {
     return {
       POST: vi.fn().mockResolvedValue({

@@ -68,7 +68,7 @@ public sealed class PluginCompileServiceRefusalTests : IDisposable
     // The generated deserializer is lenient both ways — an unrecognized property is skipped, a
     // missing one left at its default — so a renamed key reproduces a breaking codec change exactly.
     [Fact]
-    public void Compile_WithSourceFieldRenamedToOneTheCodecNoLongerReads_RefusesNamingTheFile()
+    public void Compile_WithSourceFieldRenamedToOneTheCodecDoesNotRead_RefusesNamingTheFile()
     {
         var npcSourceText = File.ReadAllText(_mod.NpcSourceFile);
         Assert.Contains("\"Race\"", npcSourceText);

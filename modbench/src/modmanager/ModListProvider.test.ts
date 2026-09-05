@@ -429,7 +429,7 @@ describe('ModListProvider', () => {
 
   // A failed drop reports on ADR-0026's "explicit action failed" tier, and the tree resyncs
   // against disk rather than showing a phantom move.
-  describe('drag-and-drop — failure handling (#130)', () => {
+  describe('drag-and-drop — failure handling', () => {
     type DragItem = { value: unknown };
     class FakeDataTransfer {
       private readonly _items = new Map<string, DragItem>();
@@ -751,7 +751,7 @@ describe('ModListProvider', () => {
   // A pinned Overwrite leaf, last row of the tree, outside separator
   // grouping, over the instance's overwrite/ folder (a purge sink for runtime
   // outputs). Read-only fixture — no modlist.txt entry, no mod actions.
-  describe('Overwrite row (#82)', () => {
+  describe('Overwrite row', () => {
     let dir: string;
     beforeEach(async () => {
       dir = await mkdtemp(join(tmpdir(), 'medit-overwrite-row-'));
@@ -823,7 +823,7 @@ describe('ModListProvider', () => {
 
 // The vanilla master lives only in the injected Data folder, so the badge hinges entirely on
 // the dataFolder the provider was handed rather than on any ini re-read.
-describe('ModListProvider — missing-master badge over the injected game Data folder (#78)', () => {
+describe('ModListProvider — missing-master badge over the injected game Data folder', () => {
   let dir: string;
   const modA = (): ModlistEntry => ({ kind: 'mod', name: 'Consumer', enabled: true });
 

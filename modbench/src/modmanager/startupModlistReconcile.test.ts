@@ -15,7 +15,7 @@ function makeDeps({
   };
 }
 
-describe('reconcileModlistWithModsDir — one-time startup pass (#93)', () => {
+describe('reconcileModlistWithModsDir — one-time startup pass', () => {
   it('registers and prunes, then invalidates the tree once when anything changed', async () => {
     const deps = makeDeps({ added: ['New Mod'], pruned: ['Gone Mod'] });
 
