@@ -42,7 +42,7 @@ internal static class SourceUnitResolver
         string formKey, string recordType, string? editorId, GameRelease release,
         SourceUnitResolutionCache? cache = null)
     {
-        // The header's unit is the fixed root RecordData.json (#661): nothing to compute, scan or embed.
+        // The header's unit is the fixed root RecordData.json: nothing to compute, scan or embed.
         if (recordType == HeaderIndexer.RecordType)
         {
             var headerPath = Path.Combine(modFolder, SourceRecordPath.RootFor(plugin.Name), RecordDataFileName);
@@ -260,7 +260,7 @@ internal static class SourceUnitResolver
         else File.Move(from, to);
     }
 
-    /// <summary>Removes the directories this call minted when <paramref name="write"/> throws (#675): an
+    /// <summary>Removes the directories this call minted when <paramref name="write"/> throws: an
     /// empty record directory is invisible to git and fails the next ingest, since the reader opens
     /// every one unconditionally.</summary>
     internal static T InMintedDirectory<T>(string directory, Func<T> write)

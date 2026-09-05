@@ -36,7 +36,7 @@ public sealed class SourceFreshness(ILoadOrderMirror mirror, ILogger<SourceFresh
                 or NotSupportedException or IndexWriteGateTimeoutException)
             {
                 // A read degrades to "serve what we have", never fails: the folder vanished, a locked file, git
-                // mid-rebase, a corrupt tree, or the write gate unavailable (#673) — nothing was written, so the
+                // mid-rebase, a corrupt tree, or the write gate unavailable — nothing was written, so the
                 // next read finds the same drift. Logged.
                 logger.LogWarning(ex,
                     "Could not validate source freshness for {FormKey} in {Plugin}; serving the indexed state",
@@ -68,7 +68,7 @@ public sealed class SourceFreshness(ILoadOrderMirror mirror, ILogger<SourceFresh
         if (!string.Equals(fileText, entry.Effective.Body, StringComparison.Ordinal))
         {
             // The file is the source for a tracked plugin, so whatever it says now is Effective, null included.
-            // The gate wraps only the fold-in (#673): the read-and-compare above must not queue behind
+            // The gate wraps only the fold-in: the read-and-compare above must not queue behind
             // in-flight edits.
             using (mirror.WriteGate.Enter())
             {

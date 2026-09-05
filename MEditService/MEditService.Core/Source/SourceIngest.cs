@@ -112,7 +112,7 @@ internal static class SourceIngest
             var fullPath = Path.Combine(modFolder, relativePath);
             var headText = SourceRepository.ReadCommittedSourceText(modFolder, relativePath);
 
-            // The header (#661): its FormKey is computed directly, since a ModHeader cannot flow through the
+            // The header: its FormKey is computed directly, since a ModHeader cannot flow through the
             // per-record codec, and the structural pass cannot reach it either.
             if (identity.RecordType == HeaderIndexer.RecordType)
             {

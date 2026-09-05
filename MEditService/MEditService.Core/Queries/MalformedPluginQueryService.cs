@@ -5,7 +5,7 @@ using Microsoft.Extensions.Logging;
 
 namespace MEditService.Core.Queries;
 
-/// <summary>Kind B detection (#570): original bytes only, no Mutagen. Immutable plugins are never
+/// <summary>Kind B detection: original bytes only, no Mutagen. Immutable plugins are never
 /// diagnosed — they are the proof set the tables were built from (docs/specs/medit-repair.md),
 /// so a hit there is a test bug.</summary>
 public sealed class MalformedPluginQueryService(ILoadOrderMirror mirror, ILogger<MalformedPluginQueryService>? logger = null)
@@ -31,7 +31,7 @@ public sealed class MalformedPluginQueryService(ILoadOrderMirror mirror, ILogger
                 reports.Add(new PluginDiagnosisReport(plugin.Name, plugin.Origin, d.Anchor, d.DefectClass, d.Tail, d.Message, d.Describe()));
         }
         stopwatch.Stop();
-        // The load-time cost is measured and reported, not assumed (#570).
+        // The load-time cost is measured and reported, not assumed.
         if (logger is not null && logger.IsEnabled(LogLevel.Information))
         {
             logger.LogInformation(

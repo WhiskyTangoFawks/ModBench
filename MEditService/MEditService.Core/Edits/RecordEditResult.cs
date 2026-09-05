@@ -82,7 +82,7 @@ public enum RecordEditRefusal
     /// <summary>Permanent, matching xEdit: a fresh FormKey for CELL/WRLD leaves the copy with no parent group to sit in.</summary>
     CopyAsNewRecordDisallowedForType,
 
-    /// <summary>A destination loading before the origin would be an underride (#439's own operation): the
+    /// <summary>A destination loading before the origin would be an underride: the
     /// origin's copy would still win at runtime.</summary>
     UnderrideDestination,
 
