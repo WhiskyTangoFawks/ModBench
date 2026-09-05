@@ -18,7 +18,7 @@
          binary-overlay reader (Fallout4ModBinaryOverlay / ModFactory.ImportGetter) — an
          alphabetized ObjectTemplate_Registration.AllRecordTypes splits every on-disk
          OBTF/FULL/OBTS template in two on read, and the write serializes the inflated list
-         (FO4 weapon ObjectTemplates, spike #359). Confirmed still failing
+         (FO4 weapon ObjectTemplates). Confirmed still failing
          BinaryRoundTripGateTests.LazyOverlayReloadAndRewrite_ProducesByteIdenticalOutput
          (MEditService.Tests/RealData) as of this pin. The production save path
          (PluginWriter.SaveAsync, .SaveAsync_ReloadAndResave_ProducesByteIdenticalOutput in the same
@@ -26,19 +26,19 @@
          this defect — so a green save-path test is not evidence 0.54.0 is safe; the overlay test is
          the one that gates a bump. LoadOrder's own read/indexing path uses the same
          ModFactory.ImportGetter overlay this bug lives in, so this isn't a defect confined to an
-         unused code path. Move only once #385 confirms the regression is fixed upstream. -->
+         unused code path. Move the pin forward only once the regression is confirmed fixed upstream. -->
     <PackageReference Include="Mutagen.Bethesda.Fallout4" Version="0.53.1" />
-    <!-- #367: library-level integration of Spriggit's codec (ADR-0041), not the Spriggit tool
+    <!-- Library-level integration of Spriggit's codec (ADR-0041), not the Spriggit tool
          itself: avoids its exe-per-version machinery and its exact Mutagen [0.54.0] pin, which
          this repo cannot take (see the 0.53.1 pin comment above). Serialization 1.37.1 depends on
          Mutagen.Bethesda.Core >= 0.51.3 (a floor, not Spriggit's exact pin), so it is compatible
          with 0.53.1, confirmed via the nuspec; restores with zero NuGet warnings.
-         #412: the JSON kernel (ADR-0041) is the Newtonsoft
+         The JSON kernel (ADR-0041) is the Newtonsoft
          translation package, not a package literally named ".Json" — confirmed on nuget.org; it
          exists at this exact 1.37.1 version, matching the other two pins here. -->
     <PackageReference Include="Mutagen.Bethesda.Serialization" Version="1.37.1" />
     <PackageReference Include="Mutagen.Bethesda.Serialization.Newtonsoft" Version="1.37.1" />
-    <!-- #405: GitCli logs a git failure's full argument vector via Serilog's ambient Log.Logger
+    <!-- GitCli logs a git failure's full argument vector via Serilog's ambient Log.Logger
          (the same gateway MEditService.Api/Program.cs already sets for the whole process) rather
          than take an ILogger — there is no injected logger reaching this static class, and this is
          a single fire-and-forget diagnostic line at one throw site, not a case for wiring ILogger
@@ -50,7 +50,7 @@
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
-    <!-- #413: not a new dependency — Mutagen.Bethesda.Serialization already resolves this exact
+    <!-- Not a new dependency — Mutagen.Bethesda.Serialization already resolves this exact
          version transitively, and SerializationMetaData takes an IFileSystem from it. Referenced
          explicitly because RecordTextCodec now names those types in production code (it suppresses
          the child-record folder creation a container write would otherwise do), and a type used

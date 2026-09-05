@@ -48,7 +48,7 @@ public sealed class RecordQueryService(
     }
 
     // The header is not a browsable record type: it stays a schemas.Keys entry so GetRecord/
-    // GetCompare resolve it by FormKey, but both browse paths below exclude it (#631).
+    // GetCompare resolve it by FormKey, but both browse paths below exclude it.
 
     public PagedResult<RecordSummary> GetRecords(string? type, string? plugin, string? search, int limit, int offset, string? origin = null)
     {
@@ -139,7 +139,7 @@ public sealed class RecordQueryService(
         var schemas = RequireSchemas();
 
         // The header is one `records` row per plugin, so this exclusion has to be real; without it
-        // "Main File Header" appears as a browsable record-type node under every plugin (#631).
+        // "Main File Header" appears as a browsable record-type node under every plugin.
         return [.. reads.GetRecordTypeCounts(new PluginKey(plugin, origin))
             .Where(c => c.Type != HeaderIndexer.RecordType && schemas.ContainsKey(c.Type))
             .Select(c => new PluginRecordTypeCount(c.Type, c.Count, schemas.DisplayNameFor(c.Type)))

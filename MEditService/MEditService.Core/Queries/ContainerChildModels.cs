@@ -10,5 +10,5 @@ public record ContainerChildSummary(
     string FormKey, string? EditorId, string Plugin, string Origin,
     int LoadOrderIndex, bool IsWinner, WorkingTreeState WorkingTreeState, string RecordType,
     // A returned "dial" child is itself a container the Plugins tree recurses into, so it needs
-    // the same presence fact for its own expand chevron (#560).
+    // the same presence fact for its own expand chevron.
     bool HasContainerChildren = false);

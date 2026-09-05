@@ -23,7 +23,7 @@ internal static class SourceTreeMerge
             }
 
             // Per file and unminted on failure: a copy that throws must not leave the directories it just
-            // needed standing empty (#675). Earlier files keep theirs — this merge is additive.
+            // needed standing empty. Earlier files keep theirs — this merge is additive.
             SourceUnitResolver.InMintedDirectory(
                 Path.GetDirectoryName(destinationFile)!, () => File.Copy(sourceFile, destinationFile));
         }
