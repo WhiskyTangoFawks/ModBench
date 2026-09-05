@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Structural comment checks Vale cannot express: doc block over three lines, doc comment on a
-test method, on a private member, carrying more than one cref, a History token inside a string
-literal, or a ticket-number citation anywhere. Exit 1 on any hit.
+"""Structural comment checks Vale cannot express because it sees neither the comment markers nor
+the code beneath: a doc block over three lines, a doc comment on a test method or a private member.
+Exit 1 on any hit.
 
 Usage: comment-shape.py FILE...            check files
        comment-shape.py --as PATH < text   check a fragment as if it were PATH"""
@@ -13,75 +13,6 @@ TEST_FILE = re.compile(r"(Tests\.cs|\.test\.tsx?)$")
 CS_METHOD = re.compile(r"^\s*(?:public|private|internal|protected|static|async|override|virtual)\b[\w<>\[\],.?\s]*\s\w+\s*(?:<[^>]*>)?\s*\(")
 TS_TEST_METHOD = re.compile(r"^\s*(?:(?:it|test|describe)(?:\.\w+)?\s*\(|(?:export\s+)?(?:async\s+)?function\s+\w+|(?:public|private|protected|static|async|\s)*\w+\s*\([^)]*\)\s*(?::\s*[^{]+)?\{)")
 TS_TOP_LEVEL_DECL = re.compile(r"^(?:async\s+)?(?:function|const|let|class|interface|type|enum|abstract class)\s")
-CREF = re.compile(r"cref=|\{@link\s")
-HISTORY = re.compile(
-    r"\b(previously|used to|no longer|originally|pre-fix|formerly)\b", re.IGNORECASE)
-
-# Our tracker's numbers have never been single-digit; a lone digit is an in-document enumeration
-# (divergence #2, AC #4), never a ticket.
-TICKET = re.compile(r"#\d{2,}\b")
-# A number is an external tracker's, not ours, when a tracker name or owner/repo path sits right
-# before it, with only that name's own separators between: "Mutagen #688", "Mutagen-#688",
-# "Mutagen-Modding/Mutagen#688", "upstream #685/#686" chained across the slash.
-EXTERNAL_TICKET = re.compile(
-    r"\b(?:Mutagen|upstream|VS ?Code)\b[\w ./-]{0,20}?#\d+(?:\s*/\s*#\d+)*"
-    r"|[\w.-]+/[\w.-]+#\d+")
-# A hex colour is a hash-digit run that is the entire quoted literal, or sits right after the
-# comma in a `var(--x, #fff)` fallback — never a bare, unquoted "#NNN" or "(#NNN)".
-HEX_COLOR = re.compile(r",\s*#[0-9a-fA-F]{3,8}\s*\)|['\"`]#[0-9a-fA-F]{3,8}['\"`]")
-
-
-def ticket_hits(path, lines):
-    hits = []
-    for lineno, line in enumerate(lines, start=1):
-        exempt = [m.span() for m in EXTERNAL_TICKET.finditer(line)]
-        exempt += [m.span() for m in HEX_COLOR.finditer(line)]
-        for m in TICKET.finditer(line):
-            if any(s <= m.start() and m.end() <= e for s, e in exempt):
-                continue
-            hits.append(f"{path}:{lineno}: ticket number '{m.group(0)}' — cite it in the commit message, not the code")
-    return hits
-
-
-def strip_comments(lines):
-    """Blank out // and /* */ comment text (or a whole # line) so the rest of a line, string
-    literals included, is what remains to scan for content Vale's comment-only scope can't see."""
-    out = []
-    in_block = False
-    for line in lines:
-        if in_block:
-            end = line.find("*/")
-            if end == -1:
-                out.append("")
-                continue
-            line = line[end + 2:]
-            in_block = False
-        if line.lstrip().startswith("#"):
-            out.append("")
-            continue
-        cut = line.find("//")
-        if cut != -1:
-            line = line[:cut]
-        start = line.find("/*")
-        while start != -1:
-            end = line.find("*/", start + 2)
-            if end == -1:
-                line = line[:start]
-                in_block = True
-                break
-            line = line[:start] + line[end + 2:]
-            start = line.find("/*")
-        out.append(line)
-    return out
-
-
-def history_hits(path, lines):
-    hits = []
-    for lineno, line in enumerate(strip_comments(lines), start=1):
-        m = HISTORY.search(line)
-        if m:
-            hits.append(f"{path}:{lineno}: History word '{m.group(1)}' in a string literal")
-    return hits
 
 
 def doc_blocks(lines, is_cs):
@@ -118,19 +49,15 @@ def next_code_line(lines, after):
 
 def check(path, text):
     lines = text.splitlines()
-    hits = ticket_hits(path, lines)
+    hits = []
     is_cs = path.endswith(".cs")
     if not (is_cs or path.endswith((".ts", ".tsx"))):
         return hits
-    hits += history_hits(path, lines)
     for start, end in doc_blocks(lines, is_cs):
         where = f"{path}:{start + 1}"
         n = end - start + 1
         if n > MAX_LINES:
             hits.append(f"{where}: doc comment is {n} lines; the cap is {MAX_LINES}")
-        block = "\n".join(lines[start:end + 1])
-        if len(CREF.findall(block)) > 1:
-            hits.append(f"{where}: more than one cref in a doc comment")
         target = next_code_line(lines, end)
         stripped = target.strip()
         if is_cs:

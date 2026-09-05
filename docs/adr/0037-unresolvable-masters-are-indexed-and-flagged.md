@@ -44,7 +44,7 @@ plugin still loads, its dependents resolve against it normally and there is noth
 says it does, with the failure surfaced loudly. The tree reports the user's actual configuration; it
 does not silently disappear a plugin they believe is loading. The conflict picture then describes a
 load order that would crash — which is the truth about that configuration, and the thing they need to
-see in order to fix it.
+see to fix it.
 
 **The flag distinguishes direct from inherited causes** in its tooltip ("Missing master: `X.esm`"
 versus "Master `Foo.esp` cannot be loaded"), so a cascade does not read as many unrelated failures.

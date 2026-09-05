@@ -10,7 +10,7 @@ a real MO2 instance directory. Do all steps proactively without waiting to be as
 
 The extension spawns the backend itself at activation
 ([ADR-0022](../../../docs/adr/0022-extension-owns-backend-lifecycle.md); there is no Launch/Close
-mEdit command — maintainer ruling 2026-09-01) — no manual `dotnet run` step. Setup and prerequisites: [README.md](../../../README.md) § Getting started.
+mEdit command) — no manual `dotnet run` step. Setup and prerequisites: [README.md](../../../README.md) § Getting started.
 
 ## 0 — Confirm the checkout is current
 

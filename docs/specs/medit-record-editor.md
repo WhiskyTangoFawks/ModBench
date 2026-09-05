@@ -57,15 +57,14 @@ in, produces broken plugins.
 
 ## Solution
 
-> **Current behaviour (2026-09-02): the grid renders the full override stack.**
-> An earlier collapse-to-winner change over-reached its ruling and was reverted — the multi-column
-> description throughout this document is the shipped shape again, per
+> **The grid renders the full override stack** — the multi-column description throughout this
+> document is the shipped shape, per
 > [ADR-0019](../adr/0019-xedit-unified-tree-model-for-compare-grid.md) and
 > [ADR-0034](../adr/0034-xedit-is-the-ux-reference-for-the-record-editor.md). The one narrowing
-> that remains is [ADR-0036](../adr/0036-plugin-identity-is-origin-plus-filename.md)'s amended
+> is [ADR-0036](../adr/0036-plugin-identity-is-origin-plus-filename.md)'s
 > file-level-loser exclusion: a losing physical copy of a duplicate-named plugin file
 > (`Registration.Winning` false — never the broader `Participates`) is excluded backend-side at
-> `RecordQueryService.GetCompare`, the single site a future show-losing-copies toggle would
+> `RecordQueryService.GetCompare`, the single site a show-losing-copies toggle would
 > parameterize.
 
 An editor-tab webview presenting a **compare grid**: one row per field, one column per plugin

@@ -1,0 +1,6 @@
+extends: occurrence
+message: "%d crefs in one doc comment; at most one, and only where the reader must go there."
+level: error
+scope: comment
+max: 1
+token: 'cref=|\{@link\s'

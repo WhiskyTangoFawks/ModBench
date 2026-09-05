@@ -1,0 +1,9 @@
+extends: existence
+message: "Date '%s': prose describes the present; git holds the timeline."
+level: error
+nonword: true
+scope:
+  - comment
+  - text
+raw:
+  - '\b20\d\d-\d\d-\d\d\b'

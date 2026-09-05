@@ -131,8 +131,7 @@ requires a deploy.**
     change only the bytes that need changing, so that my comments, CRLF line endings,
     unmanaged (`*`) lines, and separators survive verbatim and MO2 still reads the files.
 32. As a user, I want the record editor running against my active loadout the moment Modbench
-    opens, so that I can move from managing mods to editing records without any launch step
-    (maintainer ruling 2026-09-01 — the former "Launch mEdit" action is gone).
+    opens, so that I can move from managing mods to editing records without any launch step.
 33. As a user, I want an "update available" indicator on mods (planned) once Nexus
     integration lands, so that I can tell when an installed mod is behind its Nexus
     version.
@@ -278,7 +277,7 @@ the configured game directory's `Data/`.
 The extension owns the editing backend process
 ([ADR-0022](../adr/0022-extension-owns-backend-lifecycle.md)):
 
-- **Spawn** — at activation (maintainer ruling 2026-09-01; a launch that found no game
+- **Spawn** — at activation (a launch that found no game
   directory retries when `modbench.mods.gameDirectory` changes).
 - **Load order** — sent whole as the `PUT /load-order` snapshot (ADR-0044): every physical
   plugin copy in the instance as `(name, path, origin, slot, enabled, winning)` — disabled

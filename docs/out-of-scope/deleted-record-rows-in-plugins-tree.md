@@ -24,7 +24,7 @@ reviewed in SCM. Modbench already matches that exactly.
 
 Building the badge would mean teaching both backend query paths a Head-union view
 so the tree could render ghost rows — records present at Head but absent at
-Effective. That is backend surgery across two read paths in order to *diverge
+Effective. That is backend surgery across two read paths to *diverge
 from* the native idiom. An ingest-from-source rearchitecture does not change this
 question: a deleted record is still "absent from source, visible in SCM" under
 any ingest design.

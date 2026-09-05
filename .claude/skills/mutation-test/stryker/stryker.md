@@ -59,7 +59,7 @@ cd MEditService && python3 ../.claude/skills/mutation-test/stryker/parse-report.
 
 ## Cost model
 
-Measured on this repo, 2026-08-13. Budget from these, not from folklore:
+Measured on this repo. Budget from these, not from folklore:
 
 | Phase | Cost |
 | ----- | ---- |
