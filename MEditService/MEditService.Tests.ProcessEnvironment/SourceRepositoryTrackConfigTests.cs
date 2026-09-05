@@ -3,7 +3,9 @@ using MEditService.Core.Source;
 namespace MEditService.Tests.ProcessEnvironment;
 
 /// <summary><c>core.autocrlf=false</c> is the byte-equality invariant dirty/ITM detection depends
-/// on; <c>commit.gpgsign=false</c> stops a global signing config hanging a plumbing commit; the
+/// on; <c>commit.gpgsign=false</c> stops a global signing config hanging a plumbing commit;
+/// <c>gc.autoDetach=false</c> keeps an automatic repack inside the git command that triggered it,
+/// never a background process in a folder other tools share; the
 /// identity fallback never touches a real global identity.</summary>
 public sealed class SourceRepositoryTrackConfigTests
 {
@@ -16,7 +18,7 @@ public sealed class SourceRepositoryTrackConfigTests
             new TrackProvenance(null, null, new Dictionary<string, string>()));
 
     [Fact]
-    public void Track_PinsAutocrlfFalseAndGpgsignFalse_RepoLocal()
+    public void Track_PinsAutocrlfFalseGpgsignFalseAndGcAutoDetachFalse_RepoLocal()
     {
         var modFolder = NewModFolder();
         try
@@ -26,6 +28,7 @@ public sealed class SourceRepositoryTrackConfigTests
             var gitDir = Path.Combine(modFolder, ".git");
             Assert.Equal("false", GitCli.Run(gitDir, modFolder, "config", "--get", "core.autocrlf").Trim());
             Assert.Equal("false", GitCli.Run(gitDir, modFolder, "config", "--get", "commit.gpgsign").Trim());
+            Assert.Equal("false", GitCli.Run(gitDir, modFolder, "config", "--get", "gc.autoDetach").Trim());
         }
         finally
         {

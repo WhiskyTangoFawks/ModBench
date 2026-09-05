@@ -30,6 +30,7 @@ public static class SourceRepository
             GitCli.Run(gitDir, modFolder, "init", "-q", "-b", "main");
             GitCli.Run(gitDir, modFolder, "config", "core.autocrlf", "false");
             GitCli.Run(gitDir, modFolder, "config", "commit.gpgsign", "false");
+            GitCli.Run(gitDir, modFolder, "config", "gc.autoDetach", "false");
             // Flat file names routinely carry a space; git's default quotePath=true C-quotes such paths in
             // porcelain output, and every porcelain reader here expects the raw path. Set once where every
             // repo is born.
