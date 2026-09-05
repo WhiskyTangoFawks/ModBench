@@ -9,8 +9,6 @@ function makeWatcherEvents(): { events: WatcherEvents; onMods: () => void; onMod
 }
 
 describe('wirePluginListInvalidation', () => {
-  // #653 AC1: an external plugins.txt change must reach the Plugins tab. This is the red test —
-  // it reproduces the miss at the seam the fix lands on, before any wiring into extension.ts.
   it('invalidates the plugin list when the plugins.txt watcher signal fires', () => {
     const { events } = makeWatcherEvents();
     const invalidate = vi.fn();

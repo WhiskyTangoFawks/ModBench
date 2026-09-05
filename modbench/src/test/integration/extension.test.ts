@@ -142,7 +142,7 @@ function createMockBackend(): http.Server {
           loadOrderHeld = true;
           res.writeHead(200, { 'Content-Type': 'application/json' });
           // The full LoadOrderResponse — `status` and `crashRepairOffers` are non-nullable on the
-          // wire, so a body without them is one the backend cannot send (#627).
+          // wire, so a body without them is one the backend cannot send.
           res.end(JSON.stringify({ status: 'reconciled', failures: [], crashRepairOffers: [] }));
         };
         // One-shot, like the health hold: the first PUT is the launch's cold reconcile and is
@@ -1162,7 +1162,7 @@ describe('A loadout change sends a fresh load order snapshot (ADR-0044)', () => 
     await changePluginsTxt();
     const hidden = (await tree.getChildren()).find((r) => rowName(r) === 'TestMod.esp');
     assert.strictEqual(hidden, undefined,
-      'sanity: the mechanism reaches the tree — #396: a filter with no matches on this plugin hides its row entirely, not just its chevron');
+      'sanity: the mechanism reaches the tree — a filter with no matches on this plugin hides its row entirely, not just its chevron');
 
     mockPluginsOverride = null;
     await changePluginsTxt();

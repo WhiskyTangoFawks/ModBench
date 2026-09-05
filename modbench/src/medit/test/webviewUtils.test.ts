@@ -14,9 +14,6 @@ function makeOverride(plugin: string, loadOrderIndex = 0): RecordDetail {
 }
 
 describe('buildColumns', () => {
-  // #618 follow-up: one column per override, in the wire's own load order. Mirrors
-  // recordUtils.test.ts's own thorough coverage of this seam; this file only pins the extension
-  // host's own import path into it stays wired.
   it('builds one disk column per override', () => {
     const cols = buildColumns([makeOverride('A', 0), { ...makeOverride('B', 5), isWinner: true }]);
     expect(cols).toHaveLength(2);
