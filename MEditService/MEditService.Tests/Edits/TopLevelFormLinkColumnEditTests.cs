@@ -24,14 +24,14 @@ public sealed class TopLevelFormLinkColumnEditTests : IDisposable
 
     private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
 
-    // OtherNpc's own "race" field is at the CLR default, so pointing it at _mod.Race is a real value
+    // OtherNpc's own "Race" field is at the CLR default, so pointing it at _mod.Race is a real value
     // change, not a same-value no-op that could pass by producing byte-identical output.
     [Fact]
     public void EditField_TopLevelFormLinkColumn_AcceptsAValidTarget_LandsAsWorkingTreeChange()
     {
         Assert.Empty(_mod.GitStatus());
 
-        var result = Service().EditField(_mod.Plugin, _mod.OtherNpc.ToString(), "race", Json($"\"{_mod.Race}\""));
+        var result = Service().EditField(_mod.Plugin, _mod.OtherNpc.ToString(), "Race", Json($"\"{_mod.Race}\""));
 
         Assert.True(result.Applied, result.Message);
         Assert.NotEmpty(_mod.GitStatus());
@@ -47,7 +47,7 @@ public sealed class TopLevelFormLinkColumnEditTests : IDisposable
     [Fact]
     public void EditField_TopLevelFormLinkColumn_RefusesADanglingTarget()
     {
-        var result = Service().EditField(_mod.Plugin, _mod.OtherNpc.ToString(), "race", Json("\"ABCDEF:NoSuchPlugin.esp\""));
+        var result = Service().EditField(_mod.Plugin, _mod.OtherNpc.ToString(), "Race", Json("\"ABCDEF:NoSuchPlugin.esp\""));
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.InvalidFormLink, result.Refusal);
@@ -59,7 +59,7 @@ public sealed class TopLevelFormLinkColumnEditTests : IDisposable
     [Fact]
     public void EditField_TopLevelFormLinkColumn_RefusesTheWrongRecordType()
     {
-        var result = Service().EditField(_mod.Plugin, _mod.OtherNpc.ToString(), "race", Json($"\"{_mod.Keyword}\""));
+        var result = Service().EditField(_mod.Plugin, _mod.OtherNpc.ToString(), "Race", Json($"\"{_mod.Keyword}\""));
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.InvalidFormLink, result.Refusal);
@@ -74,7 +74,7 @@ public sealed class TopLevelFormLinkColumnEditTests : IDisposable
         using var untracked = TrackedModFixture.Untracked();
 
         var result = new RecordEditService(untracked.Mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance)
-            .EditField(untracked.Plugin, untracked.OtherNpc.ToString(), "race", Json($"\"{untracked.Race}\""));
+            .EditField(untracked.Plugin, untracked.OtherNpc.ToString(), "Race", Json($"\"{untracked.Race}\""));
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.PluginNotTracked, result.Refusal);
@@ -86,7 +86,7 @@ public sealed class TopLevelFormLinkColumnEditTests : IDisposable
     {
         ExternalChangeDeferral.Set(_mod.ModFolder, TrackedModFixture.PluginName, "unanswered");
 
-        var result = Service().EditField(_mod.Plugin, _mod.OtherNpc.ToString(), "race", Json($"\"{_mod.Race}\""));
+        var result = Service().EditField(_mod.Plugin, _mod.OtherNpc.ToString(), "Race", Json($"\"{_mod.Race}\""));
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.ExternalChangeUnanswered, result.Refusal);
@@ -102,7 +102,7 @@ public sealed class TopLevelFormLinkColumnEditTests : IDisposable
         using var vanilla = new DataDirectoryFixture();
 
         var result = new RecordEditService(vanilla.Mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance)
-            .EditField(vanilla.Plugin, vanilla.Npc.ToString(), "race", Json($"\"{_mod.Race}\""));
+            .EditField(vanilla.Plugin, vanilla.Npc.ToString(), "Race", Json($"\"{_mod.Race}\""));
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.PluginHasNoModFolder, result.Refusal);

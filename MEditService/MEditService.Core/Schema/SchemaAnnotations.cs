@@ -24,8 +24,8 @@ internal sealed record SchemaAnnotations(
     // See FieldMetadata.SiblingsInUse. The inner map must name every enum value, since an unnamed one
     // would silently idle every member the row governs; validated in all four directions.
     Dictionary<(string TypeName, string MemberName), IReadOnlyDictionary<string, IReadOnlyList<string>>> SiblingsInUse,
-    // xEdit's wbArrayS: elements identified by key members (wire names, dotted one struct down), not
-    // by position. Aligned by key in the compare grid, written back in key order, duplicates refused.
+    // xEdit's wbArrayS: elements identified by key members (Mutagen member names, dotted one struct
+    // down), not by position. Aligned by key in the compare grid, written back in key order, duplicates refused.
     Dictionary<(string TypeName, string MemberName), IReadOnlyList<string>> KeyedArrays,
     // FormLinks Mutagen types non-nullable that the game's format leaves unset as a matter of course,
     // so an unset one is a value, not a dangling reference. The CLR type cannot answer this.
@@ -185,8 +185,8 @@ internal sealed record SchemaAnnotations(
 
             var values = Enum.GetNames(enumType).ToHashSet(StringComparer.Ordinal);
             var members = ReflectedTypes.GetAllInterfaceProperties(declaring)
-                .Select(p => ReflectedTypes.ToSnakeCase(p.Name))
-                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+                .Select(p => p.Name)
+                .ToHashSet(StringComparer.Ordinal);
 
             foreach (var value in byValue.Keys.Where(v => !values.Contains(v)).Order(StringComparer.Ordinal))
                 yield return $"{label} names value {value}, which {enumType.Name} does not have";
@@ -229,7 +229,7 @@ internal sealed record SchemaAnnotations(
         for (var i = 0; i < segments.Length; i++)
         {
             var prop = ReflectedTypes.GetAllInterfaceProperties(owner)
-                .FirstOrDefault(p => ReflectedTypes.ToSnakeCase(p.Name).Equals(segments[i], StringComparison.OrdinalIgnoreCase));
+                .FirstOrDefault(p => p.Name.Equals(segments[i], StringComparison.Ordinal));
             if (prop == null) return $"names key {keyPath}, which {owner.Name} does not reach at {segments[i]}";
             if (i == segments.Length - 1)
             {

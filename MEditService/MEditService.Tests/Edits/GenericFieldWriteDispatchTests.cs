@@ -33,7 +33,7 @@ public sealed class GenericFieldWriteDispatchTests : IDisposable
         // Decimal-string encoded, per LeafClassification.ReadBitmaskLong — survives above 2^53 where a
         // raw JSON number would lose precision. The exact bit pattern doesn't matter to this proof;
         // that the write lands at all through EditField does.
-        var result = Service().EditField(_mod.Plugin, _mod.Npc.ToString(), "flags", Json("\"1\""));
+        var result = Service().EditField(_mod.Plugin, _mod.Npc.ToString(), "Flags", Json("\"1\""));
 
         Assert.True(result.Applied, result.Message);
         Assert.NotEmpty(_mod.GitStatus());

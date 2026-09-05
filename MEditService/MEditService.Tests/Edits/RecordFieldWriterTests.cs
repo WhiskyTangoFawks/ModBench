@@ -26,7 +26,7 @@ public sealed class RecordFieldWriterTests
         var cell = new Cell(mod) { EditorID = "SomeCell" };
 
         var outcome = RecordFieldWriter.TryApply(
-            cell, "cell", "is_partial_form", J("true"), NoSchemas);
+            cell, "Cell", "is_partial_form", J("true"), NoSchemas, "{}");
 
         Assert.Equal(FieldApplyOutcome.Applied, outcome.Outcome);
         Assert.Equal(0x0000_4000, cell.MajorRecordFlagsRaw);
@@ -39,7 +39,7 @@ public sealed class RecordFieldWriterTests
         var cell = new Cell(mod) { EditorID = "SomeCell", MajorRecordFlagsRaw = 0x0000_4000 };
 
         var outcome = RecordFieldWriter.TryApply(
-            cell, "cell", "is_partial_form", J("false"), NoSchemas);
+            cell, "Cell", "is_partial_form", J("false"), NoSchemas, "{}");
 
         Assert.Equal(FieldApplyOutcome.Applied, outcome.Outcome);
         Assert.Equal(0, cell.MajorRecordFlagsRaw);
@@ -54,7 +54,7 @@ public sealed class RecordFieldWriterTests
         var npc = mod.Npcs.AddNew("SomeNpc");
 
         var outcome = RecordFieldWriter.TryApply(
-            npc, "npc_", "is_partial_form", J("true"), NoSchemas);
+            npc, "npc_", "is_partial_form", J("true"), NoSchemas, "{}");
 
         Assert.Equal(FieldApplyOutcome.NotFound, outcome.Outcome);
         Assert.Equal(0, npc.MajorRecordFlagsRaw);
@@ -67,7 +67,7 @@ public sealed class RecordFieldWriterTests
         var cell = new Cell(mod) { EditorID = "SomeCell" };
 
         var outcome = RecordFieldWriter.TryApply(
-            cell, "cell", "is_partial_form", J("\"yes\""), NoSchemas);
+            cell, "Cell", "is_partial_form", J("\"yes\""), NoSchemas, "{}");
 
         Assert.Equal(FieldApplyOutcome.NotFound, outcome.Outcome);
         Assert.Equal(0, cell.MajorRecordFlagsRaw);

@@ -19,29 +19,29 @@ public class LeafTypeNameSchemaTests
 
     [Fact]
     public void StructColumn_NamesItsLoquiClass() =>
-        Assert.Equal(nameof(Destructible), Column("npc_", "destructible").LeafTypeName);
+        Assert.Equal(nameof(Destructible), Column("npc_", "Destructible").LeafTypeName);
 
     [Fact]
     public void StructSubField_NamesItsLoquiClass() =>
         Assert.Equal(
             nameof(ConditionData),
-            Member(Column("acti", "conditions").ElementType!, "data").LeafTypeName);
+            Member(Column("acti", "Conditions").ElementType!, "Data").LeafTypeName);
 
     [Fact]
     public void NonUnionArrayElement_NamesItsLoquiClass() =>
         Assert.Equal(
             nameof(ScriptEntry),
-            Member(Column("npc_", "virtual_machine_adapter"), "scripts").ElementType!.LeafTypeName);
+            Member(Column("npc_", "VirtualMachineAdapter"), "Scripts").ElementType!.LeafTypeName);
 
     [Fact]
     public void NonUnionArrayElement_NestedUnderAUnionLeaf_NamesItsLoquiClass()
     {
-        var scriptProperty = Member(Column("npc_", "virtual_machine_adapter"), "scripts")
-            .ElementType!.Fields!.Single(f => f.Name == "properties").ElementType!;
+        var scriptProperty = Member(Column("npc_", "VirtualMachineAdapter"), "Scripts")
+            .ElementType!.Fields!.Single(f => f.Name == "Properties").ElementType!;
 
         Assert.Equal(
             nameof(ScriptObjectProperty),
-            Member(scriptProperty, "objects").ElementType!.LeafTypeName);
+            Member(scriptProperty, "Objects").ElementType!.LeafTypeName);
     }
 
     // A union element names its own base class and still carries its discriminator: the two are
@@ -50,7 +50,7 @@ public class LeafTypeNameSchemaTests
     [Fact]
     public void UnionArrayElement_NamesItsBaseClass_AndKeepsItsDiscriminator()
     {
-        var element = Column("acti", "conditions").ElementType!;
+        var element = Column("acti", "Conditions").ElementType!;
 
         Assert.Equal(nameof(Condition), element.LeafTypeName);
         Assert.Contains(element.Fields!, f => f.IsDiscriminator);

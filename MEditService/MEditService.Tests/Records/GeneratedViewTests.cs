@@ -56,7 +56,7 @@ public sealed class GeneratedViewTests : IClassFixture<CutDownPluginFixture>
     public void ScalarColumns_ReadTheSameValuesTheExtractorProduces()
     {
         var schema = SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4)["npc_"];
-        var col = schema.RecordColumns.First(c => c.Name == "xp_value_offset");
+        var col = schema.RecordColumns.First(c => c.Name == "XpValueOffset");
 
         using var cmd = _fixture.Repo.Connection.CreateCommand();
         cmd.CommandText = "SELECT form_key, \"xp_value_offset\" FROM \"npc_\" ORDER BY form_key";
@@ -135,7 +135,7 @@ public sealed class GeneratedViewTests : IClassFixture<CutDownPluginFixture>
     public void GrupTimestamps_AreAbsentFromSchemaAndViewsAlike()
     {
         var schemas = SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4);
-        string[] timestamps = ["timestamp", "temporary_timestamp", "persistent_timestamp"];
+        string[] timestamps = ["timestamp", "TemporaryTimestamp", "PersistentTimestamp"];
 
         foreach (var table in (string[])["cell", "dial", "qust"])
         {

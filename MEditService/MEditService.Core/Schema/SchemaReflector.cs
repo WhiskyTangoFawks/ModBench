@@ -165,17 +165,30 @@ public sealed class SchemaReflector
 
         // The rule is expressed purely in terms of a column's shape, never a table or signature name,
         // so a third subclass or another game's own multi-subclass signature needs no change here.
+        // Such a table is a union at the record level: its document names its class first, and the
+        // discriminator column carries that member like a union element's does.
         if (siblingGetterTypes.Count > 1)
         {
-            var widenedDispatch = new Dictionary<string, List<(Type Type, Func<IMajorRecordGetter, object?> Extract)>>();
-            var nonScalarMergeDispatch = new Dictionary<string, List<(Type Type, Func<IMajorRecordGetter, object?> Extract)>>();
+            var union = LoquiUnions.RecordUnion(siblingGetterTypes);
+            var classNames = union.Leaves.ToDictionary(l => l.GetterType, l => l.ClassName);
+            var writersByColumn = new Dictionary<string, List<SiblingColumns.WriterByClass>>();
             foreach (var sibling in siblingGetterTypes)
             {
                 if (sibling == getterType) continue;
                 var siblingColumns = ColumnReflection.ReflectColumns(sibling, game, logger);
                 foreach (var siblingSpec in siblingColumns)
-                    SiblingColumns.MergeSiblingColumn(columns, widenedDispatch, nonScalarMergeDispatch, getterType, sibling, siblingSpec);
+                {
+                    SiblingColumns.MergeSiblingColumn(
+                        columns, writersByColumn, getterType, classNames[getterType], sibling, classNames[sibling], siblingSpec);
+                }
             }
+
+            var discriminator = LoquiUnions.BuildUnionDiscriminatorField(union);
+            columns.Insert(0, new ColumnSpec(
+                discriminator.Name, discriminator.Name, "VARCHAR", discriminator.ApiType,
+                discriminator.ValidFormKeyTypes, discriminator.EnumMembers,
+                LeafWrite.ReadOnly<IMajorRecord>(SchemaRefusals.DiscriminatorReason),
+                IsDiscriminator: true, DisplayLabel: discriminator.DisplayLabel));
         }
 
         return new RecordTableSchema

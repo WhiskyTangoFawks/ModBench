@@ -2,18 +2,10 @@ using System.Text.Json;
 
 namespace MEditService.Core.Schema;
 
-/// <summary>Reads named sub-fields off any object and folds a JSON object's members back onto one.
-/// Shared by every composite leaf kind, which differ only in what object the members hang off.</summary>
+/// <summary>Folds a JSON object's members back onto one object. Shared by every composite leaf
+/// kind, which differ only in what object the members hang off.</summary>
 internal static class SubFieldValues
 {
-    internal static Dictionary<string, object?> ExtractSubObject(
-        object item, IReadOnlyList<SubFieldSpec> fields)
-    {
-        var dict = new Dictionary<string, object?>();
-        foreach (var f in fields) dict[f.Name] = f.Extract(item);
-        return dict;
-    }
-
     /// <summary>A member absent from the JSON is never targeted. Naming one with no writer is a silent
     /// skip for a discriminator and <see cref="ApplyOutcome.SubFieldReadOnly"/> otherwise; a rejected
     /// member fails the whole object.</summary>

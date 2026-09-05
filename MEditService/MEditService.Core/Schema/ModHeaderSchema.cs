@@ -1,5 +1,4 @@
 using System.Reflection;
-using System.Text.Json;
 using MEditService.Core.Queries;
 using MEditService.Core.Records;
 using Microsoft.Extensions.Logging;
@@ -9,7 +8,7 @@ using Mutagen.Bethesda.Plugins.Records;
 namespace MEditService.Core.Schema;
 
 /// <summary>The synthetic "header" schema: a plugin's own ModHeader as a record table, whose columns
-/// hang off an <c>IModGetter</c> rather than an <c>IMajorRecordGetter</c>.</summary>
+/// sit one level into the whole mod's root <c>RecordData.json</c>.</summary>
 internal static class ModHeaderSchema
 {
     internal static void AddHeaderSchemaIfAvailable(
@@ -20,9 +19,8 @@ internal static class ModHeaderSchema
             schemas[HeaderIndexer.RecordType] = headerSchema;
     }
 
-    // A mod header is not a major record, so it is hand-assembled; HeaderColumnExtract, aligned with
-    // RecordColumns, is the read. PropertyName carries the "ModHeader." prefix because the header's
-    // document is the whole mod's root RecordData.json.
+    // A mod header is not a major record, so it is hand-assembled. PropertyName carries the
+    // "ModHeader." prefix because the header's document is the whole mod's root RecordData.json.
     private static RecordTableSchema? BuildHeaderSchema(
         GameCategory category, Assembly assembly,
         GameReflection game, ILogger logger)
@@ -37,18 +35,16 @@ internal static class ModHeaderSchema
 
         var headerGetterType = modHeaderProp.PropertyType;
         var columns = new List<ColumnSpec>();
-        var extracts = new List<Func<IModGetter, object?>>();
 
         var authorProp = headerGetterType.GetProperty("Author", BindingFlags.Public | BindingFlags.Instance);
         if (authorProp != null && LeafClassification.ClassifyLeaf(authorProp, authorProp.PropertyType, game) is { } authorLeaf)
         {
             // Author is a string, so ClassifyLeaf answers a null default: absent means "no author" and
             // NULL is the honest rendering.
-            columns.Add(new ColumnSpec("author", HeaderDocumentPath(modHeaderProp, authorProp), authorLeaf.DuckDbType, _ => null,
+            columns.Add(new ColumnSpec(authorProp.Name, HeaderDocumentPath(modHeaderProp, authorProp), authorLeaf.DuckDbType,
                 authorLeaf.ApiType, authorLeaf.ValidFormKeyTypes, authorLeaf.EnumMembers,
                 Apply: LeafWrite.ReadOnly<IMajorRecord>(SchemaRefusals.HeaderNoWritePathReason),
                 ViewDefaultLiteral: authorLeaf.ViewDefaultLiteral));
-            extracts.Add(HeaderPropertyExtract(modHeaderProp, authorLeaf.Get));
         }
         else
         {
@@ -58,33 +54,39 @@ internal static class ModHeaderSchema
         var flagsProp = headerGetterType.GetProperty("Flags", BindingFlags.Public | BindingFlags.Instance);
         if (flagsProp?.PropertyType.IsEnum == true)
         {
-            var flagsLeaf = LeafClassification.ClassifyEnumLeaf(flagsProp, flagsProp.PropertyType);
+            var flagsLeaf = LeafClassification.ClassifyEnumLeaf(flagsProp.PropertyType);
 
-            // Only the header's flags take xEdit's display names. IsFlagsEnum is load-bearing: the
-            // serializer writes a [Flags] enum as a name array, and without it the view casts that
-            // array to BIGINT and fails to bind.
-            var displayMembers = flagsLeaf.EnumMembers
-                .Select(m => m with { Value = MapToXEditFlagName(m.Value) }).ToArray();
-            columns.Add(new ColumnSpec("flags", HeaderDocumentPath(modHeaderProp, flagsProp), flagsLeaf.DuckDbType, _ => null,
-                flagsLeaf.ApiType, flagsLeaf.ValidFormKeyTypes, displayMembers,
+            // The document carries Mutagen's member names; only the header's flags are labelled with
+            // xEdit's, and a name xEdit spells the same carries no label (ADR-0034).
+            var labelled = flagsLeaf.EnumMembers
+                .Select(m => m with { Label = MapToXEditFlagName(m.Value) is var label && label != m.Value ? label : null })
+                .ToArray();
+            columns.Add(new ColumnSpec(flagsProp.Name, HeaderDocumentPath(modHeaderProp, flagsProp), flagsLeaf.DuckDbType,
+                flagsLeaf.ApiType, flagsLeaf.ValidFormKeyTypes, labelled,
                 Apply: LeafWrite.ReadOnly<IMajorRecord>(SchemaRefusals.HeaderNoWritePathReason),
-                IsFlagsEnum: flagsLeaf.IsFlagsEnum, ViewDefaultLiteral: flagsLeaf.ViewDefaultLiteral));
-            extracts.Add(HeaderPropertyExtract(modHeaderProp, flagsLeaf.Get));
+                ViewDefaultLiteral: flagsLeaf.ViewDefaultLiteral));
         }
         else
         {
             logger.LogWarning("No Flags enum property found on {HeaderType}; header flags column omitted", headerGetterType);
         }
 
-        // Masters comes straight off the game-agnostic IModGetter, so its path is spelled directly. It
-        // is read-only: masters are content-derived at compile time (ADR-0038), and a write reaching
-        // it is refused FieldReadOnly.
-        var mastersElement = new FieldMetadata("", "string", false, LeafSpec.NoFormKeyTypes, LeafSpec.NoEnumMembers);
-        columns.Add(new ColumnSpec(HeaderIndexer.MastersFieldName, $"{modHeaderProp.Name}.MasterReferences", "VARCHAR", _ => null, "array",
-            LeafSpec.NoFormKeyTypes, LeafSpec.NoEnumMembers,
-            Apply: LeafWrite.ReadOnly<IMajorRecord>("masters are wholly content-derived at compile time"),
-            IsArray: true, ElementType: mastersElement));
-        extracts.Add(mod => JsonSerializer.Serialize(mod.MasterReferences.Select(r => r.Master.FileName.ToString()).ToList()));
+        // Masters are read-only: content-derived at compile time (ADR-0038), so a write reaching
+        // them is refused FieldReadOnly.
+        var mastersProp = headerGetterType.GetProperty(HeaderIndexer.MastersFieldName, BindingFlags.Public | BindingFlags.Instance);
+        if (mastersProp != null
+            && ReflectedTypes.IsListType(mastersProp.PropertyType, out var masterType)
+            && SubFieldReflection.BuildElementMeta(masterType, game, SubFieldReflection.RootPath, logger) is { } masterElement)
+        {
+            columns.Add(new ColumnSpec(mastersProp.Name, HeaderDocumentPath(modHeaderProp, mastersProp), "VARCHAR", "array",
+                LeafSpec.NoFormKeyTypes, LeafSpec.NoEnumMembers,
+                Apply: LeafWrite.ReadOnly<IMajorRecord>("masters are wholly content-derived at compile time"),
+                IsArray: true, ElementType: masterElement));
+        }
+        else
+        {
+            logger.LogWarning("No MasterReferences list found on {HeaderType}; header masters column omitted", headerGetterType);
+        }
 
         return new RecordTableSchema
         {
@@ -92,12 +94,9 @@ internal static class ModHeaderSchema
             DisplayName = RecordDisplayNames.For(HeaderIndexer.RecordType),
             RecordType = headerGetterType,
             RecordColumns = columns,
-            HeaderColumnExtract = extracts,
+            IsHeader = true,
         };
     }
-
-    private static Func<IModGetter, object?> HeaderPropertyExtract(PropertyInfo modHeaderProp, Func<object, object?> leafGet) =>
-        mod => modHeaderProp.GetValue(mod) is { } header ? leafGet(header) : null;
 
     // Built from the reflected names rather than a literal so it follows a rename of either property.
     private static string HeaderDocumentPath(PropertyInfo modHeaderProp, PropertyInfo leafProp) =>

@@ -7,7 +7,8 @@ using Mutagen.Bethesda.Strings;
 namespace MEditService.Core.Schema;
 
 /// <summary>What kind of leaf a reflected property is — the one classification a column and a
-/// sub-field both ask, so the two never disagree about api type, enum domain or converter.</summary>
+/// sub-field both ask, so the two never disagree about api type, enum domain or converter. Each
+/// kind names how the codec spells the value in the document.</summary>
 internal static class LeafClassification
 {
     internal static string[] GetFormLinkValidTypes(
@@ -52,8 +53,8 @@ internal static class LeafClassification
         return false;
     }
 
-    // A CLR enum's members. Bitmask ([Flags] with power-of-two members) keeps only the atomic
-    // members and carries each one's bit; anything else keeps every member and carries no bit.
+    // A CLR enum's members: a flags enum keeps only the atomic members, each with its bit, and any
+    // other keeps every member with no bit.
     private static EnumMember[] GetEnumMembers(Type enumType)
     {
         var allNames = Enum.GetNames(enumType);
@@ -68,19 +69,32 @@ internal static class LeafClassification
             if (v > 0 && (v & (v - 1)) == 0)   // atomic power-of-two only; excludes None=0 and composite values
                 atomic.Add(new EnumMember(allNames[i], v.ToString(System.Globalization.CultureInfo.InvariantCulture)));
         }
-        // Every member carrying a bit is what makes the field a bitmask (FieldMetadata.IsBitmask),
-        // so an enum with no atomic member is a plain one and keeps every name it declares.
         return atomic.Count > 0 ? atomic.ToArray() : [.. allNames.Select(n => new EnumMember(n))];
     }
 
-    // Bitmask values travel as decimal strings to survive JSON above 2^53; a bare number is accepted too.
-    private static long ReadBitmaskLong(JsonElement v) =>
-        v.ValueKind == JsonValueKind.String
+    // The document spells a flags value as the array of contained member names, an undefined bit
+    // as its hex; a decimal string or a bare number is accepted too.
+    private static long ReadFlags(JsonElement v, Type enumType)
+    {
+        if (v.ValueKind == JsonValueKind.Array)
+        {
+            long bits = 0;
+            foreach (var name in v.EnumerateArray()) bits |= FlagBit(name.GetString()!, enumType);
+            return bits;
+        }
+        return v.ValueKind == JsonValueKind.String
             ? long.Parse(v.GetString()!, System.Globalization.CultureInfo.InvariantCulture)
             : v.GetInt64();
+    }
+
+    private static long FlagBit(string name, Type enumType) =>
+        name.StartsWith("0x", StringComparison.Ordinal)
+            ? Convert.ToInt64(name[2..], 16)
+            : Convert.ToInt64(Enum.Parse(enumType, name, ignoreCase: true), System.Globalization.CultureInfo.InvariantCulture);
 
     // Classifies the leaf kinds shared by both dispatch paths: primitive, translated-string,
-    // enum, form-link. Returns null for list/loqui-struct — the callers handle those.
+    // byte slice, color, vector, mod key, enum, form-link. Returns null for list/loqui-struct — the
+    // callers handle those.
     internal static LeafSpec? ClassifyLeaf(
         PropertyInfo prop, Type core, GameReflection game)
     {
@@ -92,31 +106,33 @@ internal static class LeafClassification
             if (core == typeof(string)) defaultLiteral = null;
             else if (core == typeof(bool)) defaultLiteral = "false";
             else defaultLiteral = "0";
-            return new(apiType, duckDb, LeafSpec.NoFormKeyTypes, LeafSpec.NoEnumMembers, ReflectedTypes.SubGetter(prop), conv, ViewDefaultLiteral: defaultLiteral);
+            return new(apiType, duckDb, LeafSpec.NoFormKeyTypes, LeafSpec.NoEnumMembers, conv, ViewDefaultLiteral: defaultLiteral);
         }
 
         if (ReflectedTypes.IsTranslatedString(core))
         {
-            var g = ReflectedTypes.SubGetter(prop);
-            return new("string", "VARCHAR", LeafSpec.NoFormKeyTypes, LeafSpec.NoEnumMembers,
-                obj => { try { return (g(obj) as ITranslatedStringGetter)?.String; } catch { return null; } }, // Stryker disable once Block: silent accessor lambda — lookup-backed strings throw when game strings files are absent (see MEditService CLAUDE.md)
+            return new("translatedString", "VARCHAR", LeafSpec.NoFormKeyTypes, LeafSpec.NoEnumMembers,
                 v => new TranslatedString(Language.English, v.GetString()));
         }
 
         if (ByteSliceHex.IsByteSlice(core))
-        {
-            var g = ReflectedTypes.SubGetter(prop);
-            return new(ByteSliceHex.HexApiType, "VARCHAR", LeafSpec.NoFormKeyTypes, LeafSpec.NoEnumMembers, obj => ByteSliceHex.HexText(g(obj)), Convert: null);
-        }
+            return new(ByteSliceHex.HexApiType, "VARCHAR", LeafSpec.NoFormKeyTypes, LeafSpec.NoEnumMembers, Convert: null);
+
+        if (ReflectedTypes.IsAtomicValueType(core))
+            return new("color", "VARCHAR", LeafSpec.NoFormKeyTypes, LeafSpec.NoEnumMembers, Convert: null);
+
+        if (ReflectedTypes.IsVectorStructType(core))
+            return new("vector", "VARCHAR", LeafSpec.NoFormKeyTypes, LeafSpec.NoEnumMembers, Convert: null);
+
+        if (ReflectedTypes.IsModKey(core))
+            return new("string", "VARCHAR", LeafSpec.NoFormKeyTypes, LeafSpec.NoEnumMembers, v => ModKey.FromFileName(v.GetString()!));
 
         if (core.IsEnum)
-            return ClassifyEnumLeaf(prop, core);
+            return ClassifyEnumLeaf(core);
 
         if (ReflectedTypes.IsFormLink(core))
         {
-            var g = ReflectedTypes.SubGetter(prop);
             return new("formKey", "VARCHAR", GetFormLinkValidTypes(core, game), LeafSpec.NoEnumMembers,
-                obj => (g(obj) as IFormLinkGetter)?.FormKeyNullable?.ToString(),
                 Convert: null,
                 AllowsNull: ReflectedTypes.IsNullableFormLink(core) || game.Annotations.IsPermittedNullFormLink(prop));
         }
@@ -124,32 +140,27 @@ internal static class LeafClassification
         return null;
     }
 
-    // Enum leaf, shared by both projections. Bitmask ([Flags] with power-of-two members) stores as
-    // BIGINT and round-trips through decimal strings; a plain enum stores its name as VARCHAR.
-    internal static LeafSpec ClassifyEnumLeaf(PropertyInfo prop, Type core)
+    // Enum leaf, shared by both projections. A [Flags] enum is written by the codec as an array of
+    // member names ("flags"); a plain enum stores its name as VARCHAR.
+    internal static LeafSpec ClassifyEnumLeaf(Type core)
     {
-        var g = ReflectedTypes.SubGetter(prop);
         var members = GetEnumMembers(core);
 
         // Whether the serializer writes this enum as a name array is a question about the Flags
         // attribute alone, since a flags enum with no power-of-two members still serializes as an array.
-        var isFlags = core.GetCustomAttribute<FlagsAttribute>() != null;
+        if (core.GetCustomAttribute<FlagsAttribute>() != null)
+        {
+            // A flags enum renders as a joined name list in a view, so its default is the empty string.
+            return new("flags", "VARCHAR", LeafSpec.NoFormKeyTypes, members,
+                v => Enum.ToObject(core, ReadFlags(v, core)),
+                ViewDefaultLiteral: "''");
+        }
 
-        // A flags enum renders as a joined name list, so its default is the empty string, the same as
-        // an empty array; a plain enum falls back to its zero member, when defined.
-        string? defaultLiteral;
-        if (isFlags) defaultLiteral = "''";
-        else if (Enum.IsDefined(core, Enum.ToObject(core, 0))) defaultLiteral = $"'{Enum.GetName(core, Enum.ToObject(core, 0))}'";
-        else defaultLiteral = null;
-
-        return EnumMember.IsBitmask(members)
-            ? new("enum", "BIGINT", LeafSpec.NoFormKeyTypes, members,
-                obj => g(obj) is { } v ? (object?)Convert.ToInt64(v, System.Globalization.CultureInfo.InvariantCulture) : null,
-                v => Enum.ToObject(core, ReadBitmaskLong(v)),
-                IsFlagsEnum: isFlags, ViewDefaultLiteral: defaultLiteral)
-            : new("enum", "VARCHAR", LeafSpec.NoFormKeyTypes, members,
-            obj => g(obj)?.ToString(),
+        var defaultLiteral = Enum.IsDefined(core, Enum.ToObject(core, 0))
+            ? $"'{Enum.GetName(core, Enum.ToObject(core, 0))}'"
+            : null;
+        return new("enum", "VARCHAR", LeafSpec.NoFormKeyTypes, members,
             v => Enum.Parse(core, v.GetString()!, ignoreCase: true),
-            IsFlagsEnum: isFlags, ViewDefaultLiteral: defaultLiteral);
+            ViewDefaultLiteral: defaultLiteral);
     }
 }

@@ -72,7 +72,7 @@ public class HeaderIndexingTests
         Assert.Equal("000000:HeaderTest.esp", row["form_key"]);
         Assert.Equal("header", row["record_type"]);
         // Headers have no EditorID concept — the one identity column that stays null.
-        Assert.Null(row["editor_id"]);
+        Assert.Null(row["EditorID"]);
         Assert.Equal(SourceRef.Committed, row["ref"]);
     }
 

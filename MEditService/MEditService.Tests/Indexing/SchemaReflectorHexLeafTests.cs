@@ -1,5 +1,7 @@
 using System.Text.Json;
 using MEditService.Core.Schema;
+using MEditService.Core.Serialization;
+using Microsoft.Extensions.Logging.Abstractions;
 using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
@@ -10,8 +12,7 @@ using Noggog;
 
 namespace MEditService.Tests.Indexing;
 
-/// <summary>The hex form is Mutagen's own, so the generated <c>json_extract</c> view and <see
-/// cref="ColumnSpec.Extract"/> answer the same string rather than two spellings.</summary>
+/// <summary>The hex form is Mutagen's own: what the document holds is what a write accepts.</summary>
 public sealed class SchemaReflectorHexLeafTests
 {
     private static ColumnSpec Column(string table, string column) =>
@@ -51,40 +52,10 @@ public sealed class SchemaReflectorHexLeafTests
     }
 
     [Fact]
-    public void Extract_RendersMutagensOwnHexForm()
-    {
-        var grass = new Grass(FormKey.Factory("123456:Fixture.esp"), Fallout4Release.Fallout4)
-        {
-            Unknown3 = new byte[] { 0xDE, 0xAD, 0xBE },
-        };
-
-        Assert.Equal("0xDEADBE", Column("gras", "unknown3").Extract(grass));
-    }
-
-    [Fact]
-    public void Extract_EmptySlice_IsMutagensOwnEmptyMarker()
-    {
-        var grass = new Grass(FormKey.Factory("123456:Fixture.esp"), Fallout4Release.Fallout4)
-        {
-            Unknown3 = Array.Empty<byte>(),
-        };
-
-        Assert.Equal("[]", Column("gras", "unknown3").Extract(grass));
-    }
-
-    [Fact]
-    public void Extract_AbsentNullableSlice_IsNull()
-    {
-        var worldspace = new Worldspace(FormKey.Factory("123456:Fixture.esp"), Fallout4Release.Fallout4);
-
-        Assert.Null(Column("wrld", "offset_data").Extract(worldspace));
-    }
-
-    [Fact]
     public void Write_AnyLengthOntoAnAbsentNullableSlice_IsApplied()
     {
         var worldspace = new Worldspace(FormKey.Factory("123456:Fixture.esp"), Fallout4Release.Fallout4);
-        var apply = Column("wrld", "offset_data").Apply.Writer!;
+        var apply = Column("wrld", "OffsetData").Apply.Writer!;
 
         Assert.Equal(ApplyOutcome.Applied, apply(worldspace, Json("\"0xAABBCCDD\"")));
         Assert.Equal(new byte[] { 0xAA, 0xBB, 0xCC, 0xDD }, worldspace.OffsetData!.Value.ToArray());
@@ -103,7 +74,7 @@ public sealed class SchemaReflectorHexLeafTests
     public void Write_MutagensAbsentMarker_ClearsANullableSlice()
     {
         var worldspace = new Worldspace(FormKey.Factory("123456:Fixture.esp"), Fallout4Release.Fallout4);
-        var apply = Column("wrld", "offset_data").Apply.Writer!;
+        var apply = Column("wrld", "OffsetData").Apply.Writer!;
         Assert.Equal(ApplyOutcome.Applied, apply(worldspace, Json("\"0xAABB\"")));
 
         Assert.Equal(ApplyOutcome.Applied, apply(worldspace, Json("\"\"")));
@@ -129,10 +100,13 @@ public sealed class SchemaReflectorHexLeafTests
     }
 
     [Fact]
-    public void Write_TheValueExtractJustServed_IsApplied()
+    public async Task Write_TheValueTheDocumentHolds_IsApplied()
     {
         var grass = NewGrass();
-        var served = (string)Column("gras", "unknown3").Extract(grass)!;
+        var body = await new RecordTextCodec(NullLogger<RecordTextCodec>.Instance)
+            .SerializeToBytesAsync(grass, GameRelease.Fallout4);
+        using var document = JsonDocument.Parse(body);
+        var served = document.RootElement.GetProperty("Unknown3").GetString()!;
 
         Assert.Equal(ApplyOutcome.Applied, Write(grass, JsonSerializer.Serialize(served)));
     }
@@ -156,7 +130,7 @@ public sealed class SchemaReflectorHexLeafTests
         var worldspace = new Worldspace(FormKey.Factory("123456:Fixture.esp"), Fallout4Release.Fallout4);
 
         Assert.Equal(ApplyOutcome.ValueRejected,
-            Column("wrld", "offset_data").Apply.Writer!(worldspace, Json(value)));
+            Column("wrld", "OffsetData").Apply.Writer!(worldspace, Json(value)));
         Assert.Null(worldspace.OffsetData);
     }
 
@@ -180,7 +154,7 @@ public sealed class SchemaReflectorHexLeafTests
     // the top level leaves every nested blob writable to any length.
 
     private static ApplyOutcome WriteMarkerParameters(Furniture furniture, string unknownHex) =>
-        Column("furn", "marker_parameters").Apply.Writer!(
+        Column("furn", "MarkerParameters").Apply.Writer!(
             furniture, Json($$"""[{"enabled": true, "unknown": {{unknownHex}}}]"""));
 
     private static Furniture NewFurniture() =>
@@ -210,7 +184,7 @@ public sealed class SchemaReflectorHexLeafTests
 
     private static ApplyOutcome WriteDebrisModels(Debris debris, string hashesHex) =>
         Column("debr", "models").Apply.Writer!(
-            debris, Json($$"""[{"percentage": 50, "model_filename": "A.nif", "texture_file_hashes": {{hashesHex}}}]"""));
+            debris, Json($$"""[{"percentage": 50, "ModelFilename": "A.nif", "TextureFileHashes": {{hashesHex}}}]"""));
 
     // A whole-list write builds each element fresh, so the gate reads the constructor's own default
     // size; gating on the pre-write element instead would refuse an ordinary reorder.

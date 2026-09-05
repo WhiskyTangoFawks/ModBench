@@ -49,9 +49,7 @@ public sealed class WireEqualsDocumentTests(CutDownPluginCompareFixture fixture)
     private static readonly JsonSerializerOptions WireOptions =
         new() { Converters = { new JsonStringEnumConverter() } };
 
-    [Fact(Skip = "Red until the compare wire is the codec document verbatim: today it is a "
-        + "projection with snake_case names, a synthesized concrete_type and re-encoded leaves. "
-        + "Making the wire the document (debt #722) deletes this Skip.")]
+    [Fact]
     public void EveryCompareValue_IsTheStoredDocumentsOwnNode()
     {
         var reads = fixture.Mirror.Index!.At(RecordRef.Effective);

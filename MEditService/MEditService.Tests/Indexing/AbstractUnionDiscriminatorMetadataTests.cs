@@ -22,7 +22,7 @@ public class AbstractUnionDiscriminatorMetadataTests
     [Fact]
     public void QuestAliasDiscriminator_IsAnEnumOverTheLeafClassNames()
     {
-        var kind = Discriminator("qust", "aliases", "[]", "concrete_type");
+        var kind = Discriminator("qust", "Aliases", "[]", "MutagenObjectType");
 
         Assert.Equal("enum", kind.Type);
         Assert.Equal(
@@ -33,7 +33,7 @@ public class AbstractUnionDiscriminatorMetadataTests
     [Fact]
     public void QuestAliasDiscriminator_LabelsTheRowAndEveryLeafWithoutNamingAClass()
     {
-        var kind = Discriminator("qust", "aliases", "[]", "concrete_type");
+        var kind = Discriminator("qust", "Aliases", "[]", "MutagenObjectType");
 
         Assert.Equal("Kind", kind.DisplayLabel);
         Assert.Equal(["Reference", "Location", "Collection"], kind.EnumMembers.Select(m => m.Label));
@@ -42,7 +42,7 @@ public class AbstractUnionDiscriminatorMetadataTests
     [Fact]
     public void NpcLevelDiscriminator_FallsBackToTheLeafsOwnWordsWhenStrippingTheBaseLeavesNothing()
     {
-        var kind = Discriminator("npc_", "level", "concrete_type");
+        var kind = Discriminator("npc_", "Level", "MutagenObjectType");
 
         Assert.Equal(["NpcLevel", "PcLevelMult"], kind.EnumMembers.Select(m => m.Value));
         Assert.Equal(["Npc Level", "Pc Level Mult"], kind.EnumMembers.Select(m => m.Label));
@@ -54,7 +54,7 @@ public class AbstractUnionDiscriminatorMetadataTests
         var offenders = new List<string>();
         foreach (var (table, path, meta) in AllFields())
         {
-            if (meta.Name != "concrete_type") continue;
+            if (meta.Name != "MutagenObjectType") continue;
             var labels = meta.EnumMembers.Select(m => m.Label).ToList();
             if (labels.Any(string.IsNullOrWhiteSpace)
                 || labels.Distinct(StringComparer.Ordinal).Count() != labels.Count
@@ -71,7 +71,7 @@ public class AbstractUnionDiscriminatorMetadataTests
     public void EveryDiscriminatorInTheGame_IsAnEnum()
     {
         var offenders = AllFields()
-            .Where(f => f.Meta.Name == "concrete_type" && f.Meta.Type != "enum")
+            .Where(f => f.Meta.Name == "MutagenObjectType" && f.Meta.Type != "enum")
             .Select(f => $"{f.Table}.{f.Path}: {f.Meta.Type}")
             .ToList();
 

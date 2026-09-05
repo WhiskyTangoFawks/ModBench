@@ -9,10 +9,10 @@ namespace MEditService.Tests.Records;
 public class FormRefPathBuilderTests
 {
     private static ColumnSpec ScalarFormKeyCol(string name) =>
-        new(name, name, "VARCHAR", _ => null, "formKey", [], [], LeafWrite.ReadOnly<IMajorRecord>("test fixture: write capability is not under test"));
+        new(name, name, "VARCHAR", "formKey", [], [], LeafWrite.ReadOnly<IMajorRecord>("test fixture: write capability is not under test"));
 
     private static ColumnSpec ArrayFormKeyCol(string name) =>
-        new(name, name, "JSON", _ => null, "array", [], [], LeafWrite.ReadOnly<IMajorRecord>("test fixture: write capability is not under test"),
+        new(name, name, "JSON", "array", [], [], LeafWrite.ReadOnly<IMajorRecord>("test fixture: write capability is not under test"),
             IsArray: true,
             ElementType: new FieldMetadata(name, "formKey", false, [], []));
 
@@ -21,15 +21,26 @@ public class FormRefPathBuilderTests
         var fields = fkSubFields
             .Select(f => new FieldMetadata(f, "formKey", false, [], []))
             .ToList<FieldMetadata>();
-        return new(name, name, "JSON", _ => null, "array", [], [], LeafWrite.ReadOnly<IMajorRecord>("test fixture: write capability is not under test"),
+        return new(name, name, "JSON", "array", [], [], LeafWrite.ReadOnly<IMajorRecord>("test fixture: write capability is not under test"),
             IsArray: true,
             ElementType: new FieldMetadata(name, "struct", false, [], [], Fields: fields));
     }
 
+    // The column's value sits in a document under the column's own name; JSON text is the
+    // document's spelling of it, a JsonElement one already parsed.
     private static List<(string Path, string Fk)> Collect(ColumnSpec col, object? value)
     {
         var results = new List<(string, string)>();
-        FormRefPathBuilder.Walk(col, _ => value, (path, fk) => results.Add((path, fk)));
+        var member = value switch
+        {
+            null => "null",
+            JsonElement je => je.GetRawText(),
+            string text when text.StartsWith('[') || text.StartsWith('{') => text,
+            string text => JsonSerializer.Serialize(text),
+            _ => JsonSerializer.Serialize(value),
+        };
+        using var root = JsonDocument.Parse($"{{\"{col.PropertyName}\": {member}}}");
+        FormRefPathBuilder.Walk(col, root.RootElement, (path, fk) => results.Add((path, fk)));
         return results;
     }
 
@@ -38,33 +49,33 @@ public class FormRefPathBuilderTests
     [Fact]
     public void Walk_ScalarFormKey_StringInput_CallsVisitor()
     {
-        var col = ScalarFormKeyCol("race");
+        var col = ScalarFormKeyCol("Race");
         var hits = Collect(col, "000001:Fallout4.esm");
         Assert.Single(hits);
-        Assert.Equal(("race", "000001:Fallout4.esm"), hits[0]);
+        Assert.Equal(("Race", "000001:Fallout4.esm"), hits[0]);
     }
 
     [Fact]
     public void Walk_ScalarFormKey_JsonElementInput_CallsVisitor()
     {
-        var col = ScalarFormKeyCol("race");
+        var col = ScalarFormKeyCol("Race");
         var je = JsonDocument.Parse("\"000002:Plugin.esp\"").RootElement.Clone();
         var hits = Collect(col, je);
         Assert.Single(hits);
-        Assert.Equal(("race", "000002:Plugin.esp"), hits[0]);
+        Assert.Equal(("Race", "000002:Plugin.esp"), hits[0]);
     }
 
     [Fact]
     public void Walk_ScalarFormKey_NullString_DoesNotCallVisitor()
     {
-        var col = ScalarFormKeyCol("race");
+        var col = ScalarFormKeyCol("Race");
         Assert.Empty(Collect(col, (string?)null));
     }
 
     [Fact]
     public void Walk_ScalarFormKey_NullLiteralString_DoesNotCallVisitor()
     {
-        var col = ScalarFormKeyCol("race");
+        var col = ScalarFormKeyCol("Race");
         Assert.Empty(Collect(col, "Null"));
     }
 
@@ -73,7 +84,7 @@ public class FormRefPathBuilderTests
     [Fact]
     public void Walk_ArrayFormKey_StringJsonInput_IndexedPaths()
     {
-        var col = ArrayFormKeyCol("keywords");
+        var col = ArrayFormKeyCol("Keywords");
         var json = "[\"000001:Fallout4.esm\",\"000002:Plugin.esp\"]";
         var hits = Collect(col, json);
         Assert.Equal(2, hits.Count);
@@ -84,7 +95,7 @@ public class FormRefPathBuilderTests
     [Fact]
     public void Walk_ArrayFormKey_JsonElementInput_IndexedPaths()
     {
-        var col = ArrayFormKeyCol("keywords");
+        var col = ArrayFormKeyCol("Keywords");
         var je = JsonDocument.Parse("[\"000001:Fallout4.esm\",\"000002:Plugin.esp\"]").RootElement.Clone();
         var hits = Collect(col, je);
         Assert.Equal(2, hits.Count);
@@ -95,7 +106,7 @@ public class FormRefPathBuilderTests
     [Fact]
     public void Walk_ArrayFormKey_NullAndNullLiteralEntriesSkipped()
     {
-        var col = ArrayFormKeyCol("keywords");
+        var col = ArrayFormKeyCol("Keywords");
         var json = "[null,\"Null\",\"000003:Plugin.esp\"]";
         var hits = Collect(col, json);
         Assert.Single(hits);
@@ -107,7 +118,7 @@ public class FormRefPathBuilderTests
     [Fact]
     public void Walk_ArrayStruct_StringJsonInput_SubFieldPaths()
     {
-        var col = ArrayStructCol("factions", "faction");
+        var col = ArrayStructCol("Factions", "Faction");
         var json = "[{\"faction\":\"000010:Plugin.esp\",\"rank\":1}]";
         var hits = Collect(col, json);
         Assert.Single(hits);
@@ -117,7 +128,7 @@ public class FormRefPathBuilderTests
     [Fact]
     public void Walk_ArrayStruct_JsonElementInput_SubFieldPaths()
     {
-        var col = ArrayStructCol("factions", "faction");
+        var col = ArrayStructCol("Factions", "Faction");
         var je = JsonDocument.Parse("[{\"faction\":\"000010:Plugin.esp\",\"rank\":1}]").RootElement.Clone();
         var hits = Collect(col, je);
         Assert.Single(hits);
@@ -127,7 +138,7 @@ public class FormRefPathBuilderTests
     [Fact]
     public void Walk_ArrayStruct_NonFormKeySubFieldsIgnored()
     {
-        var col = ArrayStructCol("factions", "faction"); // "rank" is not in fkSubFields
+        var col = ArrayStructCol("Factions", "Faction"); // "Rank" is not in fkSubFields
         var json = "[{\"faction\":\"000010:Plugin.esp\",\"rank\":1}]";
         var hits = Collect(col, json);
         Assert.Single(hits);
@@ -136,7 +147,7 @@ public class FormRefPathBuilderTests
     [Fact]
     public void Walk_ArrayStruct_NullLiteralSubFieldSkipped()
     {
-        var col = ArrayStructCol("factions", "faction");
+        var col = ArrayStructCol("Factions", "Faction");
         var json = "[{\"faction\":\"Null\"}]";
         Assert.Empty(Collect(col, json));
     }
@@ -159,7 +170,7 @@ public class FormRefPathBuilderTests
     [Fact]
     public void Walk_UnknownApiType_DoesNotCallVisitor()
     {
-        var col = new ColumnSpec("name", "Name", "VARCHAR", _ => null, "string", [], [], LeafWrite.ReadOnly<IMajorRecord>("test fixture: write capability is not under test"));
+        var col = new ColumnSpec("Name", "Name", "VARCHAR", "string", [], [], LeafWrite.ReadOnly<IMajorRecord>("test fixture: write capability is not under test"));
         Assert.Empty(Collect(col, "some value"));
     }
 
@@ -168,7 +179,7 @@ public class FormRefPathBuilderTests
     [Fact]
     public void Walk_ArrayFormKey_NonStringElementSkipped()
     {
-        var col = ArrayFormKeyCol("keywords");
+        var col = ArrayFormKeyCol("Keywords");
         var json = "[1, \"000001:Fallout4.esm\", true]";
         var hits = Collect(col, json);
         Assert.Single(hits);
@@ -180,7 +191,7 @@ public class FormRefPathBuilderTests
     [Fact]
     public void Walk_ArrayStruct_NullElementSkipped()
     {
-        var col = ArrayStructCol("factions", "faction");
+        var col = ArrayStructCol("Factions", "Faction");
         var json = "[null, {\"faction\":\"000010:Plugin.esp\"}]";
         var hits = Collect(col, json);
         Assert.Single(hits);
@@ -190,7 +201,7 @@ public class FormRefPathBuilderTests
     [Fact]
     public void Walk_ArrayStruct_NonObjectElementSkipped()
     {
-        var col = ArrayStructCol("factions", "faction");
+        var col = ArrayStructCol("Factions", "Faction");
         var json = "[\"not-an-object\", {\"faction\":\"000010:Plugin.esp\"}]";
         var hits = Collect(col, json);
         Assert.Single(hits);
@@ -200,7 +211,7 @@ public class FormRefPathBuilderTests
     [Fact]
     public void Walk_ArrayStruct_MissingSubFieldSkipped()
     {
-        var col = ArrayStructCol("factions", "faction");
+        var col = ArrayStructCol("Factions", "Faction");
         var json = "[{\"rank\":1}]";
         Assert.Empty(Collect(col, json));
     }
@@ -210,7 +221,7 @@ public class FormRefPathBuilderTests
     [Fact]
     public void Walk_ArrayWithNullElementType_DoesNotCallVisitor()
     {
-        var col = new ColumnSpec("items", "items", "JSON", _ => null, "array", [], [], LeafWrite.ReadOnly<IMajorRecord>("test fixture: write capability is not under test"),
+        var col = new ColumnSpec("items", "items", "JSON", "array", [], [], LeafWrite.ReadOnly<IMajorRecord>("test fixture: write capability is not under test"),
             IsArray: true, ElementType: null);
         var hits = Collect(col, "[\"000001:Fallout4.esm\"]");
         Assert.Empty(hits);
@@ -221,10 +232,10 @@ public class FormRefPathBuilderTests
     [Fact]
     public void Walk_ArrayStruct_NestedStructSubField_FormKeyReached()
     {
-        var innerFk = new FieldMetadata("target", "formKey", false, [], []);
+        var innerFk = new FieldMetadata("Target", "formKey", false, [], []);
         var innerStruct = new FieldMetadata("inner", "struct", false, [], [], Fields: [innerFk]);
         var elemMeta = new FieldMetadata("", "struct", false, [], [], Fields: [innerStruct]);
-        var col = new ColumnSpec("links", "links", "JSON", _ => null, "array", [], [], LeafWrite.ReadOnly<IMajorRecord>("test fixture: write capability is not under test"),
+        var col = new ColumnSpec("links", "links", "JSON", "array", [], [], LeafWrite.ReadOnly<IMajorRecord>("test fixture: write capability is not under test"),
             IsArray: true, ElementType: elemMeta);
 
         var json = "[{\"inner\":{\"target\":\"000001:Plugin.esp\"}}]";

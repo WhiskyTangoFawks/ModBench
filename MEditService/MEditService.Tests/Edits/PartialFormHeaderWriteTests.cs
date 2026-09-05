@@ -81,14 +81,14 @@ public sealed class PartialFormHeaderWriteTests : IDisposable
     {
         var service = Service();
 
-        var beforeClear = service.EditField(Plugin, PartialCell.ToString(), "water_height", Json("50.0"));
+        var beforeClear = service.EditField(Plugin, PartialCell.ToString(), "WaterHeight", Json("50.0"));
         Assert.False(beforeClear.Applied);
         Assert.Equal(RecordEditRefusal.PartialFormFieldReadOnly, beforeClear.Refusal);
 
         var clear = service.EditField(Plugin, PartialCell.ToString(), "is_partial_form", Json("false"));
         Assert.True(clear.Applied);
 
-        var afterClear = service.EditField(Plugin, PartialCell.ToString(), "water_height", Json("50.0"));
+        var afterClear = service.EditField(Plugin, PartialCell.ToString(), "WaterHeight", Json("50.0"));
         Assert.True(afterClear.Applied);
     }
 
@@ -184,7 +184,7 @@ public sealed class PartialFormHeaderWriteTests : IDisposable
         // that replaces MajorRecordFlagsRaw wholesale (LeafClassification.ReadBitmaskLong /
         // Enum.ToObject), so writing PersistentBit | PartialFormBit sets bit 14 as a side effect.
         var result = Service().EditField(
-            Plugin, PartialCell.ToString(), "major_flags",
+            Plugin, PartialCell.ToString(), "MajorFlags",
             Json((PersistentBit | PartialFormBit).ToString(CultureInfo.InvariantCulture)));
 
         Assert.False(result.Applied);
@@ -200,7 +200,7 @@ public sealed class PartialFormHeaderWriteTests : IDisposable
         var before = File.ReadAllText(path);
 
         var result = Service().EditField(
-            Plugin, PartialCell.ToString(), "fallout4_major_record_flags", Json(PartialFormBit.ToString(CultureInfo.InvariantCulture)));
+            Plugin, PartialCell.ToString(), "Fallout4MajorRecordFlags", Json(PartialFormBit.ToString(CultureInfo.InvariantCulture)));
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.PartialFormFlagIndirectWrite, result.Refusal);
@@ -215,7 +215,7 @@ public sealed class PartialFormHeaderWriteTests : IDisposable
         Assert.True(Service().EditField(Plugin, PartialCell.ToString(), "is_partial_form", Json("false")).Applied);
 
         var result = Service().EditField(
-            Plugin, PartialCell.ToString(), "major_flags", Json(PersistentBit.ToString(CultureInfo.InvariantCulture)));
+            Plugin, PartialCell.ToString(), "MajorFlags", Json(PersistentBit.ToString(CultureInfo.InvariantCulture)));
 
         Assert.True(result.Applied);
     }

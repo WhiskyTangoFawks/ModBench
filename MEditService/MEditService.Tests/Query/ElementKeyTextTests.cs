@@ -9,16 +9,16 @@ public class ElementKeyTextTests
 {
     [Theory]
     // A string member.
-    [InlineData("""{"name":"Ambush","flags":"Local"}""", "Ambush", "name")]
+    [InlineData("""{"Name":"Ambush","Flags":"Local"}""", "Ambush", "Name")]
     // A composite key, joined in the order the annotation lists the members.
-    [InlineData("""{"stage":10,"stage_index":0}""", "10 / 0", "stage", "stage_index")]
+    [InlineData("""{"Stage":10,"StageIndex":0}""", "10 / 0", "Stage", "StageIndex")]
     // A dotted member name walks into the element's own sub-struct.
-    [InlineData("""{"property":{"name":"","alias":3}}""", "3", "property.alias")]
+    [InlineData("""{"Property":{"Name":"","Alias":3}}""", "3", "property.alias")]
     [InlineData("""{"on":true}""", "true", "on")]
     // A freshly added element names its discriminator and nothing else, so its key is empty: a real
     // key, and the only handle on the row until the user names it.
-    [InlineData("""{"concrete_type":"ScriptIntProperty"}""", "", "name")]
-    [InlineData("""{"name":null}""", "", "name")]
+    [InlineData("""{"MutagenObjectType":"ScriptIntProperty"}""", "", "Name")]
+    [InlineData("""{"Name":null}""", "", "Name")]
     public void KeyText(string elementJson, string expected, params string[] keyMembers)
     {
         var element = JsonDocument.Parse(elementJson).RootElement;

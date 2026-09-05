@@ -29,7 +29,7 @@ public sealed class RecordEditServiceCreateRecordTests
         var created = service.CreateRecord(mod.Plugin, "npc_", "BrandNewNpc");
         Assert.True(created.Applied, created.Message);
 
-        var result = service.EditField(mod.Plugin, created.NewFormKey!, "editor_id", Json("\"RenamedNpc\""));
+        var result = service.EditField(mod.Plugin, created.NewFormKey!, "EditorID", Json("\"RenamedNpc\""));
 
         Assert.True(result.Applied, result.Message);
         var doc = mod.Mirror.Index!.At(RecordRef.Effective).GetDocument(created.NewFormKey!, mod.Plugin)!;

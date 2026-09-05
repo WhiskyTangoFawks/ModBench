@@ -25,7 +25,7 @@ public sealed class RecordEditServiceExternalChangeDeferralTests : IDisposable
         ExternalChangeDeferral.Set(_mod.ModFolder, TrackedModFixture.PluginName,
             "Fixture.esp (in FixtureMod) changed outside Modbench.");
 
-        var result = Service().EditField(_mod.Plugin, _mod.Npc.ToString(), "height_max", Json("0.75"));
+        var result = Service().EditField(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", Json("0.75"));
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.ExternalChangeUnanswered, result.Refusal);
@@ -38,7 +38,7 @@ public sealed class RecordEditServiceExternalChangeDeferralTests : IDisposable
         var before = File.ReadAllText(_mod.NpcSourceFile);
         ExternalChangeDeferral.Set(_mod.ModFolder, TrackedModFixture.PluginName, "unanswered");
 
-        Service().EditField(_mod.Plugin, _mod.Npc.ToString(), "height_max", Json("0.75"));
+        Service().EditField(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", Json("0.75"));
 
         Assert.Equal(before, File.ReadAllText(_mod.NpcSourceFile));
         Assert.Empty(_mod.GitStatus());
@@ -48,13 +48,13 @@ public sealed class RecordEditServiceExternalChangeDeferralTests : IDisposable
     public void EditField_Refuses_BeforeTheIndexEverLearnsOfTheAttemptedChange()
     {
         var before = _mod.Mirror.Index!.At(RecordRef.Effective).GetDocument(_mod.Npc.ToString(), _mod.Plugin)!
-            .Fields.Single(f => f.Metadata.Name == "height_max").Value;
+            .Fields.Single(f => f.Metadata.Name == "HeightMax").Value;
         ExternalChangeDeferral.Set(_mod.ModFolder, TrackedModFixture.PluginName, "unanswered");
 
-        Service().EditField(_mod.Plugin, _mod.Npc.ToString(), "height_max", Json("0.75"));
+        Service().EditField(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", Json("0.75"));
 
         var after = _mod.Mirror.Index!.At(RecordRef.Effective).GetDocument(_mod.Npc.ToString(), _mod.Plugin)!
-            .Fields.Single(f => f.Metadata.Name == "height_max").Value;
+            .Fields.Single(f => f.Metadata.Name == "HeightMax").Value;
         Assert.Equal(before, after);
     }
 
@@ -64,7 +64,7 @@ public sealed class RecordEditServiceExternalChangeDeferralTests : IDisposable
         ExternalChangeDeferral.Set(_mod.ModFolder, TrackedModFixture.PluginName, "unanswered");
         ExternalChangeDeferral.Clear(_mod.ModFolder, TrackedModFixture.PluginName);
 
-        var result = Service().EditField(_mod.Plugin, _mod.Npc.ToString(), "height_max", Json("0.75"));
+        var result = Service().EditField(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", Json("0.75"));
 
         Assert.True(result.Applied, result.Message);
     }
@@ -74,7 +74,7 @@ public sealed class RecordEditServiceExternalChangeDeferralTests : IDisposable
     {
         ExternalChangeDeferral.Set(_mod.ModFolder, "SomeOtherPlugin.esp", "unanswered");
 
-        var result = Service().EditField(_mod.Plugin, _mod.Npc.ToString(), "height_max", Json("0.75"));
+        var result = Service().EditField(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", Json("0.75"));
 
         Assert.True(result.Applied, result.Message);
     }

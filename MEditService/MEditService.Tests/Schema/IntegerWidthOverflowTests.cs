@@ -33,39 +33,39 @@ public class IntegerWidthOverflowTests
 
     [Theory]
     // byte
-    [InlineData("npc_", "energy_level", "256")]
-    [InlineData("npc_", "energy_level", "-1")]
+    [InlineData("npc_", "EnergyLevel", "256")]
+    [InlineData("npc_", "EnergyLevel", "-1")]
     // sbyte
-    [InlineData("revb", "reverb_amp", "128")]
-    [InlineData("revb", "reverb_amp", "-129")]
+    [InlineData("revb", "ReverbAmp", "128")]
+    [InlineData("revb", "ReverbAmp", "-129")]
     // short
-    [InlineData("npc_", "xp_value_offset", "32768")]
-    [InlineData("npc_", "xp_value_offset", "-32769")]
+    [InlineData("npc_", "XpValueOffset", "32768")]
+    [InlineData("npc_", "XpValueOffset", "-32769")]
     // ushort
-    [InlineData("npc_", "calculated_health", "65536")]
-    [InlineData("npc_", "calculated_health", "-1")]
+    [InlineData("npc_", "CalculatedHealth", "65536")]
+    [InlineData("npc_", "CalculatedHealth", "-1")]
     // uint
-    [InlineData("npc_", "aggro_radius_warn", "4294967296")]
-    [InlineData("npc_", "aggro_radius_warn", "-1")]
+    [InlineData("npc_", "AggroRadiusWarn", "4294967296")]
+    [InlineData("npc_", "AggroRadiusWarn", "-1")]
     // int
-    [InlineData("weap", "unknown3", "2147483648")]
-    [InlineData("weap", "unknown3", "-2147483649")]
+    [InlineData("weap", "Unknown3", "2147483648")]
+    [InlineData("weap", "Unknown3", "-2147483649")]
     // ulong
-    [InlineData("imad", "unknown", "18446744073709551616")]
-    [InlineData("imad", "unknown", "-1")]
+    [InlineData("imad", "Unknown", "18446744073709551616")]
+    [InlineData("imad", "Unknown", "-1")]
     public void OutOfRangeScalar_IsRejected(string table, string column, string value)
     {
         Assert.Equal(ApplyOutcome.ValueRejected, Writer(table, column)(Record(table), Json(value)));
     }
 
     [Theory]
-    [InlineData("npc_", "energy_level", "255")]
-    [InlineData("revb", "reverb_amp", "-128")]
-    [InlineData("npc_", "xp_value_offset", "32767")]
-    [InlineData("npc_", "calculated_health", "65535")]
-    [InlineData("npc_", "aggro_radius_warn", "4294967295")]
-    [InlineData("weap", "unknown3", "2147483647")]
-    [InlineData("imad", "unknown", "18446744073709551615")]
+    [InlineData("npc_", "EnergyLevel", "255")]
+    [InlineData("revb", "ReverbAmp", "-128")]
+    [InlineData("npc_", "XpValueOffset", "32767")]
+    [InlineData("npc_", "CalculatedHealth", "65535")]
+    [InlineData("npc_", "AggroRadiusWarn", "4294967295")]
+    [InlineData("weap", "Unknown3", "2147483647")]
+    [InlineData("imad", "Unknown", "18446744073709551615")]
     public void InRangeScalar_IsApplied(string table, string column, string value)
     {
         Assert.Equal(ApplyOutcome.Applied, Writer(table, column)(Record(table), Json(value)));
@@ -80,16 +80,16 @@ public class IntegerWidthOverflowTests
     [InlineData("[9223372036854775807, -9223372036854775808]", ApplyOutcome.Applied)]
     public void LongListElement_IsRejectedOnlyOutsideItsWidth(string value, ApplyOutcome expected)
     {
-        Assert.Equal(expected, Writer("scco", "xnams")(Record("scco"), Json(value)));
+        Assert.Equal(expected, Writer("scco", "XNAMs")(Record("scco"), Json(value)));
     }
 
     [Fact]
     public void SameOutOfRangeByte_IsRejectedAsAScalarAndAsAListElement()
     {
         Assert.Equal(ApplyOutcome.ValueRejected,
-            Writer("npc_", "energy_level")(Record("npc_"), Json("4096")));
+            Writer("npc_", "EnergyLevel")(Record("npc_"), Json("4096")));
         Assert.Equal(ApplyOutcome.ValueRejected,
-            Writer("misc", "component_display_indices")(Record("misc"), Json("[3, 4096]")));
+            Writer("misc", "ComponentDisplayIndices")(Record("misc"), Json("[3, 4096]")));
     }
 
     [Fact]
@@ -99,7 +99,7 @@ public class IntegerWidthOverflowTests
         misc.ComponentDisplayIndices = [9];
 
         Assert.Equal(ApplyOutcome.ValueRejected,
-            Writer("misc", "component_display_indices")(misc, Json("[3, 4096]")));
+            Writer("misc", "ComponentDisplayIndices")(misc, Json("[3, 4096]")));
         Assert.Equal<byte[]>([9], [.. misc.ComponentDisplayIndices!]);
     }
 }

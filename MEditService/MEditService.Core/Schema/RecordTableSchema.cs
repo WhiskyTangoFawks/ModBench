@@ -76,14 +76,16 @@ public static class LeafWrite
             : new(null, reason);
 }
 
-/// <summary>One column of a record table: how to read it, write it back, and what a generated view
-/// (ADR-0041) may do with it. <see cref="Apply"/> answers an outcome, so a silently lost edit is
-/// unrepresentable.</summary>
+/// <summary>One column of a record table: which member of the document it is, how to write it
+/// back, and what a generated view (ADR-0041) may do with it. <see cref="Apply"/> answers an
+/// outcome, so a silently lost edit is unrepresentable.</summary>
 public sealed record ColumnSpec(
+    // The document's own member name, which is the wire name and the view column name.
     string Name,
+    // The JSON path from the document root, dotted where the document nests the member (the
+    // header's "ModHeader.Author"); the same as Name for every record column.
     string PropertyName,
     string DuckDbType,
-    Func<IMajorRecordGetter, object?> Extract,
     string ApiType,
     IReadOnlyList<string> ValidFormKeyTypes,
     IReadOnlyList<EnumMember> EnumMembers,
@@ -92,30 +94,27 @@ public sealed record ColumnSpec(
     FieldMetadata? ElementType = null,
     IReadOnlyList<FieldMetadata>? SubFields = null,
     bool AllowsNull = false,
-    // A scalar widen: sibling subclasses disagree on this field's type, so it is read-only text with
-    // no single JSON path, and views omit it. Exactly two in Fallout 4: gmst.data and glob.data.
-    bool IsWidened = false,
-    // Whether the CLR enum carries [Flags], so the serializer writes a name array views join with ", ".
-    // Deliberately not IsBitmask, which is narrower and disagrees on real data (misc.major_flags).
-    bool IsFlagsEnum = false,
     // The SQL literal a view COALESCEs to when the serializer omitted a default-valued field, or null
     // when NULL is the honest answer.
     string? ViewDefaultLiteral = null,
     // For a keyed array, the element members whose values identify an element.
     IReadOnlyList<string>? KeyMembers = null,
-    string? LeafTypeName = null)
+    string? LeafTypeName = null,
+    // See FieldMetadata.Variants: a column whose shape differs across the record classes sharing
+    // this table (gmst.Data, dmgt.DamageTypes), keyed by the record's own MutagenObjectType.
+    IReadOnlyDictionary<string, FieldMetadata>? Variants = null,
+    bool IsDiscriminator = false,
+    string? DisplayLabel = null)
 {
-    /// <summary>Scalar leaves only: arrays and structs have no faithful scalar rendering, and a widened
-    /// column no consistent path. "No column" beats "a column with broken semantics".</summary>
-    public bool IsViewable => !IsArray && SubFields == null && !IsWidened;
-
-    /// <summary>See <see cref="FieldMetadata.IsBitmask"/> — the same question off the same members,
-    /// so a column and the metadata it projects into cannot answer differently.</summary>
-    public bool IsBitmask => EnumMember.IsBitmask(EnumMembers);
+    /// <summary>Scalar leaves only: arrays and structs have no faithful scalar rendering, and a
+    /// column whose type varies by record class no single DuckDB type. "No column" beats "a column
+    /// with broken semantics".</summary>
+    public bool IsViewable => !IsArray && SubFields == null && Variants == null;
 
     public FieldMetadata ToFieldMetadata() =>
         new(Name, ApiType, IsArray, ValidFormKeyTypes, EnumMembers, ElementType, SubFields,
-            AllowsNull: AllowsNull, KeyMembers: KeyMembers, LeafTypeName: LeafTypeName);
+            AllowsNull: AllowsNull, KeyMembers: KeyMembers, LeafTypeName: LeafTypeName, Variants: Variants,
+            IsDiscriminator: IsDiscriminator, DisplayLabel: DisplayLabel);
 }
 
 public sealed class RecordTableSchema
@@ -128,8 +127,8 @@ public sealed class RecordTableSchema
     /// the key everywhere else.</summary>
     public required string DisplayName { get; init; }
 
-    /// <summary>The header schema's read path, aligned with <see cref="RecordColumns"/>, since a mod
-    /// header is never an IMajorRecordGetter; null for every other schema. Non-null is how readers
-    /// recognise the header schema, not a table name.</summary>
-    public IReadOnlyList<Func<IModGetter, object?>>? HeaderColumnExtract { get; init; }
+    /// <summary>True for the plugin header, whose document is the whole mod's root RecordData.json
+    /// rather than a major record's, so its columns sit under a nested path and it carries no
+    /// record-header flags.</summary>
+    public bool IsHeader { get; init; }
 }

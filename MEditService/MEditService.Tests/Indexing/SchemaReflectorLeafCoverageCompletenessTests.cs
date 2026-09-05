@@ -65,7 +65,7 @@ public sealed class SchemaReflectorLeafCoverageCompletenessTests
     ];
 
     [Fact]
-    public void EveryCoveredAbstractUnion_ExposesNonEmptySubSchemaWithConcreteTypeDiscriminator()
+    public void EveryCoveredAbstractUnion_ExposesNonEmptySubSchemaWithADiscriminator()
     {
         var schemas = SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4);
 
@@ -92,7 +92,7 @@ public sealed class SchemaReflectorLeafCoverageCompletenessTests
                 {
                     var nestedFields = column.IsArray ? column.ElementType?.Fields : column.SubFields;
                     if (nestedFields == null) continue;
-                    var match = nestedFields.SingleOrDefault(f => f.Name == ReflectedTypes.ToSnakeCase(property));
+                    var match = nestedFields.SingleOrDefault(f => f.Name == property);
                     if (match == null) continue;
                     // Confirm this column's own nested type is really `owner`, not a same-named
                     // property on some unrelated struct — cheap enough: re-derive via NestedGetterType.
@@ -121,8 +121,8 @@ public sealed class SchemaReflectorLeafCoverageCompletenessTests
                 regressed.Add($"{label} (empty or missing sub-schema)");
                 return;
             }
-            if (fields.All(f => f.Name != "concrete_type"))
-                regressed.Add($"{label} (no concrete_type discriminator)");
+            if (fields.All(f => !f.IsDiscriminator))
+                regressed.Add($"{label} (no discriminator)");
         }
     }
 
@@ -133,9 +133,8 @@ public sealed class SchemaReflectorLeafCoverageCompletenessTests
         var gaps = new List<string>();
         foreach (var schema in schemas.Values)
         {
-            // ModHeader is never an IMajorRecordGetter (RecordTableSchema's own doc comment on
-            // HeaderColumnExtract) — no CLR getter type of its own for this sweep to walk.
-            if (schema.HeaderColumnExtract != null) continue;
+            // ModHeader is never an IMajorRecordGetter — no CLR getter type of its own for this sweep to walk.
+            if (schema.IsHeader) continue;
 
             foreach (var prop in DirectDataProperties(schema.RecordType, BaseSkip))
             {
@@ -161,7 +160,7 @@ public sealed class SchemaReflectorLeafCoverageCompletenessTests
         var gaps = new List<string>();
         foreach (var schema in schemas.Values)
         {
-            if (schema.HeaderColumnExtract != null) continue;
+            if (schema.IsHeader) continue;
 
             var ownProperties = DirectDataProperties(schema.RecordType, BaseSkip).ToList();
             foreach (var column in schema.RecordColumns)
@@ -175,8 +174,7 @@ public sealed class SchemaReflectorLeafCoverageCompletenessTests
                 {
                     if (KnownGaps.Contains((nestedType.Name, nestedProp.Name))) continue;
 
-                    var expectedName = ReflectedTypes.ToSnakeCase(nestedProp.Name);
-                    if (subFields != null && subFields.Any(f => f.Name == expectedName)) continue;
+                    if (subFields != null && subFields.Any(f => f.Name == nestedProp.Name)) continue;
 
                     gaps.Add($"{schema.RecordType.Name}.{column.PropertyName}.{nestedProp.Name} " +
                         $"(-> {nestedType.Name}, missing from '{column.Name}''s own sub-fields)");

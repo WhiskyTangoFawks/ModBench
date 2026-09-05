@@ -229,7 +229,7 @@ public sealed class SourceIngestTests
         using var mod = TrackedModFixture.Tracked();
 
         var edited = new RecordEditService(mod.Mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance)
-            .EditField(mod.Plugin, mod.Npc.ToString(), "height_max", JsonDocument.Parse("0.75").RootElement);
+            .EditField(mod.Plugin, mod.Npc.ToString(), "HeightMax", JsonDocument.Parse("0.75").RootElement);
         Assert.True(edited.Applied, edited.Message);
 
         File.WriteAllText(
@@ -241,7 +241,7 @@ public sealed class SourceIngestTests
         // The binary was never consulted: it holds the fixture's untouched height_max, and what
         // still answers is the edited 0.75 the source-derived rows already carried.
         var document = mod.Mirror.Index!.At(RecordRef.Effective).GetDocument(mod.Npc.ToString(), mod.Plugin)!;
-        Assert.Equal(0.75f, Assert.IsType<float>(document.Fields.Single(f => f.Metadata.Name == "height_max").Value));
+        Assert.Equal(0.75f, Assert.IsType<float>(document.Fields.Single(f => f.Metadata.Name == "HeightMax").Value));
 
         var failure = Assert.Single(mod.Mirror.Status.Failures);
         Assert.Equal(TrackedModFixture.PluginName, failure.Name);
@@ -288,7 +288,7 @@ public sealed class SourceIngestTests
         using var mod = TrackedModFixture.Tracked();
 
         var edit = new RecordEditService(mod.Mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance)
-            .EditField(mod.Plugin, mod.Npc.ToString(), "editor_id",
+            .EditField(mod.Plugin, mod.Npc.ToString(), "EditorID",
                 JsonDocument.Parse("\"RenamedAcrossReload\"").RootElement);
         Assert.True(edit.Applied, edit.Message);
 
@@ -313,7 +313,7 @@ public sealed class SourceIngestTests
         using var mod = TrackedModFixture.Tracked();
 
         new RecordEditService(mod.Mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance)
-            .EditField(mod.Plugin, mod.Npc.ToString(), "editor_id",
+            .EditField(mod.Plugin, mod.Npc.ToString(), "EditorID",
                 JsonDocument.Parse("\"RenamedOnce\"").RootElement);
 
         using var reloaded = Reload(mod);

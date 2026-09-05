@@ -1,5 +1,4 @@
 using System.Reflection;
-using System.Text.RegularExpressions;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Strings;
 using Noggog;
@@ -8,7 +7,7 @@ namespace MEditService.Core.Schema;
 
 /// <summary>What a CLR type reflected off a Mutagen getter interface <i>is</i>: the structural
 /// questions every leaf-kind dispatch asks. Answers only; nothing here builds a column or an applier.</summary>
-internal static partial class ReflectedTypes
+internal static class ReflectedTypes
 {
     internal static IEnumerable<PropertyInfo> GetAllInterfaceProperties(Type type) =>
         type.GetInterfaces()
@@ -101,8 +100,23 @@ internal static partial class ReflectedTypes
         typeof(int), typeof(uint), typeof(long), typeof(ulong),
     ];
 
-    internal static string ToSnakeCase(string name) =>
-        SnakeCaseBoundary().Replace(name, "_$1").ToLowerInvariant();
+    /// <summary>The name the codec writes as <c>MutagenObjectType</c> for a value of this class:
+    /// Mutagen.Bethesda.Serialization's <c>GetNameWithDeclaringType</c>, spelled here so a discriminator
+    /// domain and the document agree. <paramref name="typeArguments"/> closes an open generic without
+    /// constructing it.</summary>
+    internal static string DocumentTypeName(Type type, Type[]? typeArguments = null)
+    {
+        var name = type.Name;
+        var arity = name.IndexOf('`', StringComparison.Ordinal);
+        if (arity < 0)
+            return type.DeclaringType == null ? name : $"{type.DeclaringType.Name}+{name}";
+
+        var args = typeArguments ?? type.GetGenericArguments();
+        var prefix = type.DeclaringType == null ? "" : $"{type.DeclaringType}+";
+        return $"{prefix}{name[..arity]}<{string.Join(", ", args.Select(a => DocumentTypeName(a)))}>";
+    }
+
+    internal static bool IsModKey(Type type) => type == typeof(ModKey);
 
     /// <summary>One property's value off any instance, or null when the accessor throws. Mutagen's
     /// getters throw for a subrecord that is genuinely absent, which is a value, not a defect.</summary>
@@ -114,7 +128,4 @@ internal static partial class ReflectedTypes
 
     /// <summary><see cref="ReadOrNull"/> bound to one property, for a leaf's Extract delegate.</summary>
     internal static Func<object, object?> SubGetter(PropertyInfo prop) => obj => ReadOrNull(obj, prop);
-
-    [GeneratedRegex("(?<=[a-z0-9])([A-Z])")]
-    private static partial Regex SnakeCaseBoundary();
 }

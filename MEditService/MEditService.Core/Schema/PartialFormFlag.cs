@@ -1,3 +1,4 @@
+using System.Text.Json;
 using MEditService.Core.Source;
 using Mutagen.Bethesda.Plugins.Records;
 
@@ -17,6 +18,14 @@ public static class PartialFormFlag
 
     public static bool IsSet(IMajorRecordGetter record) =>
         IsPartialFormable(record.GetType()) && (record.MajorRecordFlagsRaw & Bit) != 0;
+
+    /// <summary>The same bit read off a stored document, whose header flags travel as
+    /// <c>MajorRecordFlagsRaw</c> (omitted when zero).</summary>
+    internal static bool IsSet(JsonElement document, Type recordType) =>
+        IsPartialFormable(recordType)
+        && document.TryGetProperty(nameof(IMajorRecordGetter.MajorRecordFlagsRaw), out var flags)
+        && flags.ValueKind == JsonValueKind.Number
+        && (flags.GetInt32() & Bit) != 0;
 
     /// <summary>Moves exactly bit 14; a whole-value overwrite would drop every other header flag.
     /// Eligibility is the caller's to check.</summary>

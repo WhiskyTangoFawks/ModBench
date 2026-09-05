@@ -21,7 +21,7 @@ public sealed class VmadCompareTests : IDisposable
     private static readonly FormKey ScriptedNpc = new(ModKey.FromFileName("Base.esm"), 0x800);
     private static readonly FormKey ScriptedQuest = new(ModKey.FromFileName("Base.esm"), 0x801);
 
-    private const string Field = "virtual_machine_adapter";
+    private const string Field = "VirtualMachineAdapter";
 
     public VmadCompareTests()
     {
@@ -94,7 +94,7 @@ public sealed class VmadCompareTests : IDisposable
     [Fact]
     public void ScriptsPresentInOneOverrideOnly_AlignByName()
     {
-        var scripts = Child(Adapter(ScriptedNpc), "scripts");
+        var scripts = Child(Adapter(ScriptedNpc), "Scripts");
 
         // Both keys are rows, in key order, and the master's own holds nothing on the override's side. A
         // positional reading would line the master's Ambush up against the override's Guard.
@@ -113,14 +113,14 @@ public sealed class VmadCompareTests : IDisposable
 
         // The alias array is keyed by the alias number its binding names; the scripts under it by
         // script name; the properties under those by property name.
-        var properties = Child(Child(Child(Child(Child(adapter, "aliases"), "0"), "scripts"), "AliasScript"), "properties");
+        var properties = Child(Child(Child(Child(Child(adapter, "Aliases"), "0"), "Scripts"), "AliasScript"), "Properties");
         var row = Child(Child(properties, "Level"), "data_int");
         Assert.Equal(ConflictThis.Override, row.CellStates["Top.esp"]);
         Assert.Equal("Top.esp", row.WinnerColumn);
 
         // Confined: the adapter's own sibling members, and the quest's other scripts, agree.
-        Assert.Equal(ConflictThis.IdenticalToMaster, Child(adapter, "scripts").CellStates["Top.esp"]);
-        Assert.Equal(ConflictThis.IdenticalToMaster, Child(adapter, "fragments").CellStates["Top.esp"]);
+        Assert.Equal(ConflictThis.IdenticalToMaster, Child(adapter, "Scripts").CellStates["Top.esp"]);
+        Assert.Equal(ConflictThis.IdenticalToMaster, Child(adapter, "Fragments").CellStates["Top.esp"]);
     }
 
     [Fact]

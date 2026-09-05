@@ -69,7 +69,7 @@ public sealed class PartialFormEditRefusalTests : IDisposable
     [Fact]
     public void EditField_NonHeaderFieldOnPartialFormRecord_IsRefused()
     {
-        var result = Service().EditField(Plugin, PartialCell.ToString(), "water_height", Json("50.0"));
+        var result = Service().EditField(Plugin, PartialCell.ToString(), "WaterHeight", Json("50.0"));
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.PartialFormFieldReadOnly, result.Refusal);
@@ -80,7 +80,7 @@ public sealed class PartialFormEditRefusalTests : IDisposable
     {
         var before = File.ReadAllText(SourcePath());
 
-        Service().EditField(Plugin, PartialCell.ToString(), "water_height", Json("50.0"));
+        Service().EditField(Plugin, PartialCell.ToString(), "WaterHeight", Json("50.0"));
 
         Assert.Equal(before, File.ReadAllText(SourcePath()));
     }
@@ -92,7 +92,7 @@ public sealed class PartialFormEditRefusalTests : IDisposable
     [Fact]
     public void EditField_EditorIdOnPartialFormRecord_Succeeds()
     {
-        var result = Service().EditField(Plugin, PartialCell.ToString(), "editor_id", Json("\"RenamedPartialCell\""));
+        var result = Service().EditField(Plugin, PartialCell.ToString(), "EditorID", Json("\"RenamedPartialCell\""));
 
         Assert.True(result.Applied);
     }
@@ -102,7 +102,7 @@ public sealed class PartialFormEditRefusalTests : IDisposable
     {
         // A non-Partial-Form record beside the fixture — the guard must not blanket-refuse the rest
         // of the plugin.
-        var result = Service().EditField(Plugin, OrdinaryNpc.ToString(), "name", Json("\"New Name\""));
+        var result = Service().EditField(Plugin, OrdinaryNpc.ToString(), "Name", Json("\"New Name\""));
 
         Assert.True(result.Applied);
     }
@@ -111,7 +111,7 @@ public sealed class PartialFormEditRefusalTests : IDisposable
     public void EditField_ChildRefInsideAPartialFormCell_IsUnaffected()
     {
         // CONTEXT.md's Partial Form entry: "children are unaffected — they are separate records".
-        var result = Service().EditField(Plugin, ChildRef.ToString(), "scale", Json("2.5"));
+        var result = Service().EditField(Plugin, ChildRef.ToString(), "Scale", Json("2.5"));
 
         Assert.True(result.Applied);
     }

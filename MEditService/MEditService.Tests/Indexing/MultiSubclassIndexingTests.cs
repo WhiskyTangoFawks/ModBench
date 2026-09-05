@@ -66,7 +66,7 @@ public class MultiSubclassIndexingTests
         repo.Index((IModGetter)mod, Registration.Participating(0), new PluginKey(mod.ModKey.FileName.ToString(), "Data"));
         repo.UpdateWinners();
 
-        var byEdid = FieldByEditorId(repo, "gmst", "data").ToDictionary(kv => kv.Key, kv => kv.Value?.ToString());
+        var byEdid = FieldByEditorId(repo, "gmst", "Data").ToDictionary(kv => kv.Key, kv => kv.Value?.ToString());
         Assert.Equal(4, byEdid.Count);
         Assert.Equal("42", byEdid["iTest"]);
         Assert.Equal("3.5", byEdid["fTest"]);
@@ -91,7 +91,7 @@ public class MultiSubclassIndexingTests
         repo.Index((IModGetter)mod, Registration.Participating(0), new PluginKey(mod.ModKey.FileName.ToString(), "Data"));
         repo.UpdateWinners();
 
-        var byEdid = FieldByEditorId(repo, "glob", "data").ToDictionary(kv => kv.Key, kv => kv.Value?.ToString());
+        var byEdid = FieldByEditorId(repo, "glob", "Data").ToDictionary(kv => kv.Key, kv => kv.Value?.ToString());
         Assert.Equal(4, byEdid.Count);
         Assert.Equal("7", byEdid["TestGlobInt"]);
         Assert.Equal("1.25", byEdid["TestGlobFloat"]);
@@ -131,7 +131,7 @@ public class MultiSubclassIndexingTests
         repo.Index((IModGetter)mod, Registration.Participating(0), new PluginKey(mod.ModKey.FileName.ToString(), "Data"));
         repo.UpdateWinners();
 
-        var byEdid = FieldByEditorId(repo, "omod", "properties").ToDictionary(kv => kv.Key, kv => kv.Value?.ToString());
+        var byEdid = FieldByEditorId(repo, "omod", "Properties").ToDictionary(kv => kv.Key, kv => kv.Value?.ToString());
         Assert.Equal(5, byEdid.Count);
         Assert.Contains("BodyPart", byEdid["ArmorMod"]);
         Assert.Contains("ForcedInventory", byEdid["NpcMod"]);

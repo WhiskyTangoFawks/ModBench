@@ -43,7 +43,7 @@ public sealed class CutDownPluginIndexTests(CutDownPluginFixture fixture) : ICla
         var document = _fixture.Repo.At(RecordRef.Effective).GetDocument("2499C4:Fallout4.esm", new PluginKey(CutDownPluginFixture.PluginFileName, "Data"));
 
         Assert.NotNull(document);
-        var adapter = Assert.Single(document!.Fields, f => f.Metadata.Name == "virtual_machine_adapter");
+        var adapter = Assert.Single(document!.Fields, f => f.Metadata.Name == "VirtualMachineAdapter");
         using var value = JsonDocument.Parse(
             adapter.Value is JsonElement json ? json.GetRawText() : (string)adapter.Value!);
         var scripts = value.RootElement.GetProperty("scripts");

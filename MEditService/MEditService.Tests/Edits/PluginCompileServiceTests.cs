@@ -28,7 +28,7 @@ public sealed class PluginCompileServiceTests : IDisposable
     [Fact]
     public void Compile_AfterAnEdit_WritesABinaryThatReparsesWithTheChangeLanded()
     {
-        EditService().EditField(_mod.Plugin, _mod.Npc.ToString(), "height_max", Json("0.75"));
+        EditService().EditField(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", Json("0.75"));
 
         var result = CompileService().Compile(_mod.Plugin, new CompileSource.WorkingTree());
 
@@ -46,7 +46,7 @@ public sealed class PluginCompileServiceTests : IDisposable
     [Fact]
     public void Compile_LeavesUntouchedRecordsUnchanged()
     {
-        EditService().EditField(_mod.Plugin, _mod.Npc.ToString(), "height_max", Json("0.75"));
+        EditService().EditField(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", Json("0.75"));
         CompileService().Compile(_mod.Plugin, new CompileSource.WorkingTree());
 
         var pluginPath = Path.Combine(_mod.ModFolder, TrackedModFixture.PluginName);
@@ -79,7 +79,7 @@ public sealed class PluginCompileServiceTests : IDisposable
         var pluginPath = Path.Combine(_mod.ModFolder, TrackedModFixture.PluginName);
         var originalBytes = File.ReadAllBytes(pluginPath);
 
-        EditService().EditField(_mod.Plugin, _mod.Npc.ToString(), "height_max", Json("0.75"));
+        EditService().EditField(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", Json("0.75"));
         var result = CompileService().Compile(_mod.Plugin, new CompileSource.WorkingTree());
         Assert.True(result.Succeeded, result.RefusalReason);
 

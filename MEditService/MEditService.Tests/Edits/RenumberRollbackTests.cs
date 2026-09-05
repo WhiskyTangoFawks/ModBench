@@ -136,7 +136,7 @@ public sealed class RenumberRollbackTests
     {
         using var fixture = new CascadeRollbackFixture();
         var racesFolder = Path.GetDirectoryName(
-            fixture.SourceFileOf(fixture.TargetPlugin, fixture.Race, "race", CascadeRollbackFixture.RaceEditorId))!;
+            fixture.SourceFileOf(fixture.TargetPlugin, fixture.Race, "Race", CascadeRollbackFixture.RaceEditorId))!;
 
         var carrier = SourceChildOrder.CarrierFor(racesFolder, parentIsRecord: false);
         var orderBefore = File.ReadAllBytes(carrier);

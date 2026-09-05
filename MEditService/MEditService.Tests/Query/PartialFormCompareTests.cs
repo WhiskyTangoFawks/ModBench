@@ -117,7 +117,7 @@ public sealed class PartialFormCompareTests : IDisposable
     public void GetCompare_CellWithPartialFormOverride_WaterHeightDiffCarriesNoCellStateForTheOverride()
     {
         var compare = _service.GetCompare(CellKey.ToString())!;
-        var waterHeight = compare.Diffs.Single(d => d.FieldName == "water_height");
+        var waterHeight = compare.Diffs.Single(d => d.FieldName == "WaterHeight");
 
         Assert.Equal(ConflictAll.NoConflict, waterHeight.ConflictAll);
         Assert.DoesNotContain("Partial.esp", waterHeight.CellStates.Keys);
@@ -132,7 +132,7 @@ public sealed class PartialFormCompareTests : IDisposable
         // effective value is the master's, and WinnerColumn must say so rather than name an excluded
         // column.
         var compare = _service.GetCompare(CellKey.ToString())!;
-        var waterHeight = compare.Diffs.Single(d => d.FieldName == "water_height");
+        var waterHeight = compare.Diffs.Single(d => d.FieldName == "WaterHeight");
 
         Assert.Equal("Base.esm", waterHeight.WinnerColumn);
         Assert.NotNull(waterHeight.WinnerValue);
@@ -167,7 +167,7 @@ public sealed class PartialFormCompareTests : IDisposable
             o.IsPartialForm,
             Fields = o.Fields.ToDictionary(f => f.Metadata.Name, f => f.Value),
         }).ToList(),
-        Diffs = r.Diffs.Where(d => d.CellStates.Count > 0 || d.FieldName == "water_height").ToList(),
+        Diffs = r.Diffs.Where(d => d.CellStates.Count > 0 || d.FieldName == "WaterHeight").ToList(),
     };
 
     [Fact]
@@ -175,8 +175,8 @@ public sealed class PartialFormCompareTests : IDisposable
     {
         var captured = new Dictionary<string, object?>
         {
-            ["cell"] = Project(_service.GetCompare(CellKey.ToString())!),
-            ["ref"] = Project(_service.GetCompare(RefKey.ToString())!),
+            ["Cell"] = Project(_service.GetCompare(CellKey.ToString())!),
+            ["Ref"] = Project(_service.GetCompare(RefKey.ToString())!),
         };
 
         Golden.Verify("compare-partial-form-cell", captured);

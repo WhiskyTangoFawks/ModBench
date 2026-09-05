@@ -126,12 +126,12 @@ public sealed class ComplexFieldElementEditTests : IDisposable
         var before = omod.Body();
 
         var result = omod.Service().EditField(omod.Plugin, omod.ArmorMod.ToString(), "properties",
-            Json("""[{"property":"BodyPart","step":1.0,"value":"5","value2":"6","function_type":"Set"}]"""));
+            Json("""[{"property":"BodyPart","step":1.0,"value":"5","value2":"6","FunctionType":"Set"}]"""));
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.ListElementTypeUnresolved, result.Refusal);
         Assert.Contains("properties", result.Message, StringComparison.Ordinal);
-        Assert.Contains("value_type", result.Message, StringComparison.Ordinal);
+        Assert.Contains("MutagenObjectType", result.Message, StringComparison.Ordinal);
         Assert.Equal(before, omod.Body());
     }
 
@@ -142,12 +142,12 @@ public sealed class ComplexFieldElementEditTests : IDisposable
         var before = omod.Body();
 
         var result = omod.Service().EditField(omod.Plugin, omod.ArmorMod.ToString(), "properties",
-            Json("""[{"property":"BodyPart","step":1.0,"value_type":"NotARealValueType","value":"5"}]"""));
+            Json("""[{"property":"BodyPart","step":1.0,"MutagenObjectType":"NotARealValueType","value":"5"}]"""));
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.ListElementTypeUnresolved, result.Refusal);
         Assert.Contains("properties", result.Message, StringComparison.Ordinal);
-        Assert.Contains("value_type", result.Message, StringComparison.Ordinal);
+        Assert.Contains("MutagenObjectType", result.Message, StringComparison.Ordinal);
         Assert.Equal(before, omod.Body());
     }
 
@@ -157,7 +157,7 @@ public sealed class ComplexFieldElementEditTests : IDisposable
         using var omod = new OmodFixture();
 
         var result = omod.Service().EditField(omod.Plugin, omod.ArmorMod.ToString(), "properties",
-            Json("""[{"property":"BodyPart","step":1.0,"value_type":"Int","value":"42","value2":"7","function_type":"Set"}]"""));
+            Json("""[{"property":"BodyPart","step":1.0,"MutagenObjectType":"Int","value":"42","value2":"7","FunctionType":"Set"}]"""));
 
         Assert.True(result.Applied, result.Message);
         var body = omod.Body();
@@ -172,7 +172,7 @@ public sealed class ComplexFieldElementEditTests : IDisposable
         using var omod = new OmodFixture();
 
         var result = omod.Service().EditField(omod.Plugin, omod.ArmorMod.ToString(), "properties",
-            Json("""[{"property":"Weight","step":2.0,"value_type":"Float","value":1.5,"value2":2.5,"function_type":"Set"}]"""));
+            Json("""[{"property":"Weight","step":2.0,"MutagenObjectType":"Float","value":1.5,"value2":2.5,"FunctionType":"Set"}]"""));
 
         Assert.True(result.Applied, result.Message);
         var body = omod.Body();
@@ -197,7 +197,7 @@ public sealed class ComplexFieldElementEditTests : IDisposable
         // Mutagen's own document spelling of the leaf class the discriminator named — OMOD's leaf
         // classes are ObjectMod<ValueType>Property, closed over the owning record's Property enum.
         Assert.StartsWith(
-            $"ObjectMod{SharedSchemaReflector.FirstArrayElementLeaf("omod", "properties", "value_type")}Property",
+            $"ObjectMod{SharedSchemaReflector.FirstArrayElementLeaf("omod", "properties", "MutagenObjectType")}Property",
             properties[1].GetProperty("MutagenObjectType").GetString(),
             StringComparison.Ordinal);
     }
@@ -208,8 +208,8 @@ public sealed class ComplexFieldElementEditTests : IDisposable
         using var omod = new OmodFixture();
         var seed = omod.Service().EditField(omod.Plugin, omod.ArmorMod.ToString(), "properties", Json("""
             [
-                {"property":"BodyPart","step":1.0,"value_type":"Int","value":"5","value2":"6","function_type":"Set"},
-                {"property":"Weight","step":2.0,"value_type":"Float","value":"1.5","value2":"2.5","function_type":"Set"}
+                {"property":"BodyPart","step":1.0,"MutagenObjectType":"Int","value":"5","value2":"6","FunctionType":"Set"},
+                {"property":"Weight","step":2.0,"MutagenObjectType":"Float","value":"1.5","value2":"2.5","FunctionType":"Set"}
             ]
             """));
         Assert.True(seed.Applied, seed.Message);
@@ -217,8 +217,8 @@ public sealed class ComplexFieldElementEditTests : IDisposable
         // Move Up on the second element == the whole array resent with the same two elements swapped.
         var result = omod.Service().EditField(omod.Plugin, omod.ArmorMod.ToString(), "properties", Json("""
             [
-                {"property":"Weight","step":2.0,"value_type":"Float","value":"1.5","value2":"2.5","function_type":"Set"},
-                {"property":"BodyPart","step":1.0,"value_type":"Int","value":"5","value2":"6","function_type":"Set"}
+                {"property":"Weight","step":2.0,"MutagenObjectType":"Float","value":"1.5","value2":"2.5","FunctionType":"Set"},
+                {"property":"BodyPart","step":1.0,"MutagenObjectType":"Int","value":"5","value2":"6","FunctionType":"Set"}
             ]
             """));
 
@@ -238,8 +238,8 @@ public sealed class ComplexFieldElementEditTests : IDisposable
 
         var result = omod.Service().EditField(omod.Plugin, omod.ArmorMod.ToString(), "properties", Json("""
             [
-                {"property":"BodyPart","step":1.0,"value_type":"Int","value":5,"value2":6,"function_type":"Set"},
-                {"property":"Value","step":3.0,"value_type":"Bool","value":true,"function_type":"Set"}
+                {"property":"BodyPart","step":1.0,"MutagenObjectType":"Int","value":5,"value2":6,"FunctionType":"Set"},
+                {"property":"Value","step":3.0,"MutagenObjectType":"Bool","value":true,"FunctionType":"Set"}
             ]
             """));
 
@@ -255,15 +255,15 @@ public sealed class ComplexFieldElementEditTests : IDisposable
         using var omod = new OmodFixture();
         var seed = omod.Service().EditField(omod.Plugin, omod.ArmorMod.ToString(), "properties", Json("""
             [
-                {"property":"BodyPart","step":1.0,"value_type":"Int","value":"5","value2":"6","function_type":"Set"},
-                {"property":"Weight","step":2.0,"value_type":"Float","value":"1.5","value2":"2.5","function_type":"Set"}
+                {"property":"BodyPart","step":1.0,"MutagenObjectType":"Int","value":"5","value2":"6","FunctionType":"Set"},
+                {"property":"Weight","step":2.0,"MutagenObjectType":"Float","value":"1.5","value2":"2.5","FunctionType":"Set"}
             ]
             """));
         Assert.True(seed.Applied, seed.Message);
 
         // Remove on the second element == the whole array resent holding only the survivor, verbatim.
         var result = omod.Service().EditField(omod.Plugin, omod.ArmorMod.ToString(), "properties",
-            Json("""[{"property":"BodyPart","step":1.0,"value_type":"Int","value":"5","value2":"6","function_type":"Set"}]"""));
+            Json("""[{"property":"BodyPart","step":1.0,"MutagenObjectType":"Int","value":"5","value2":"6","FunctionType":"Set"}]"""));
 
         Assert.True(result.Applied, result.Message);
         var body = omod.Body();

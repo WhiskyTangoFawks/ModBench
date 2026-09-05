@@ -11,17 +11,15 @@ namespace MEditService.Core.Schema;
 internal static class ObjectModPropertyLeaves
 {
     // Hardcoded: IAObjectModPropertyGetter<T> is the only base whose payload lives on sibling leaves.
-    // ValueType names are bare strings to stay game-generic, ordered by the getter list, not the
-    // enum's ordinals.
-    private static readonly (string InterfaceName, string ValueTypeName)[] LeafInterfaces =
+    private static readonly string[] LeafInterfaces =
     [
-        ("IObjectModIntPropertyGetter`1", "Int"),
-        ("IObjectModFloatPropertyGetter`1", "Float"),
-        ("IObjectModBoolPropertyGetter`1", "Bool"),
-        ("IObjectModStringPropertyGetter`1", "String"),
-        ("IObjectModEnumPropertyGetter`1", "Enum"),
-        ("IObjectModFormLinkIntPropertyGetter`1", "FormIdInt"),
-        ("IObjectModFormLinkFloatPropertyGetter`1", "FormIdFloat"),
+        "IObjectModIntPropertyGetter`1",
+        "IObjectModFloatPropertyGetter`1",
+        "IObjectModBoolPropertyGetter`1",
+        "IObjectModStringPropertyGetter`1",
+        "IObjectModEnumPropertyGetter`1",
+        "IObjectModFormLinkIntPropertyGetter`1",
+        "IObjectModFormLinkFloatPropertyGetter`1",
     ];
 
     internal static bool IsObjectModPropertyBase(Type getterInterface) =>
@@ -29,8 +27,8 @@ internal static class ObjectModPropertyLeaves
         getterInterface.GetGenericTypeDefinition().Name == "IAObjectModPropertyGetter`1";
 
     // Resolved by name off getterInterface's namespace so any game's assembly works. A member every
-    // declaring leaf types alike becomes one typed sub-field; one they disagree on becomes text via
-    // WidenedLeaf. A synthesized value_type discriminator is added last.
+    // declaring leaf types alike becomes one typed sub-field; one they disagree on becomes one
+    // sub-field with a variant per leaf. The document's own discriminator is added last.
     internal static List<SubFieldSpec> BuildObjectModPropertyLeafFields(
         Type baseGetterInterface, GameReflection game, ILogger logger)
     {
@@ -39,7 +37,7 @@ internal static class ObjectModPropertyLeaves
         var args = baseGetterInterface.GetGenericArguments();
 
         var leaves = new List<(Type LeafType, string ValueTypeName)>();
-        foreach (var (interfaceName, valueTypeName) in LeafInterfaces)
+        foreach (var interfaceName in LeafInterfaces)
         {
             var open = asm.GetType($"{ns}.{interfaceName}");
             if (open == null)
@@ -51,14 +49,17 @@ internal static class ObjectModPropertyLeaves
                     interfaceName, asm.GetName().Name);
                 continue;
             }
+            // The codec names the leaf by its closed setter class; the open one is spelled with the
+            // base's own type arguments rather than constructed.
+            var valueTypeName = ReflectedTypes.DocumentTypeName(ReflectedTypes.GetSetterType(open.MakeGenericType(args))!, args);
             leaves.Add((open.MakeGenericType(args), valueTypeName));
         }
 
         var members = leaves
             .SelectMany(leaf => leaf.LeafType.GetProperties(BindingFlags.Public | BindingFlags.Instance)
                 .Where(p => !game.Annotations.IsExcludedMember(p))
-                .Select(p => (LeafType: leaf.LeafType, Prop: p)))
-            .GroupBy(m => ReflectedTypes.ToSnakeCase(m.Prop.Name), StringComparer.OrdinalIgnoreCase);
+                .Select(p => (LeafType: leaf.LeafType, leaf.ValueTypeName, Prop: p)))
+            .GroupBy(m => m.Prop.Name, StringComparer.Ordinal);
 
         var result = new List<SubFieldSpec>();
         foreach (var group in members)
@@ -70,100 +71,86 @@ internal static class ObjectModPropertyLeaves
                 .ToList();
 
             result.Add(distinctTypes.Count == 1
-                ? BuildTypedLeafUnionField(group.Key, list, game, logger)
-                : BuildWidenedLeafUnionField(group.Key, list, logger));
+                ? BuildTypedLeafUnionField(list, game, logger)
+                : BuildVariantLeafUnionField(list, game, logger));
         }
 
-        result.Add(BuildObjectModValueTypeField(leaves));
+        result.Add(BuildObjectModDiscriminatorField(baseGetterInterface, leaves));
         return result;
     }
-
-    private const string ObjectModValueTypeDiscriminator = "value_type";
 
     // Read-only deliberately: it decides which concrete type gets constructed, so it cannot be applied
     // to an already-constructed object; ResolveObjectModPropertyConcreteType reads it off the JSON
     // before any object exists.
-    private static SubFieldSpec BuildObjectModValueTypeField(List<(Type LeafType, string ValueTypeName)> leaves)
-    {
-        object? Extract(object obj)
-        {
-            foreach (var (leafType, valueTypeName) in leaves)
-                if (leafType.IsInstanceOfType(obj)) return valueTypeName;
-            return null;
-        }
-
-        return new(ObjectModValueTypeDiscriminator, "string", LeafSpec.NoFormKeyTypes,
-            [.. leaves.Select(l => new EnumMember(l.ValueTypeName))], Extract,
+    private static SubFieldSpec BuildObjectModDiscriminatorField(
+        Type baseGetterInterface, List<(Type LeafType, string ValueTypeName)> leaves) =>
+        new(LoquiUnions.UnionTypeDiscriminator, "enum", LeafSpec.NoFormKeyTypes,
+            [.. leaves.Select(l => new EnumMember(
+                l.ValueTypeName,
+                Label: LeafLabel.For(ReflectedTypes.LeafTypeName(baseGetterInterface), LeafLabel.ClassWord(l.ValueTypeName))))],
             Apply: LeafWrite.ReadOnly<object>(SchemaRefusals.DiscriminatorReason), AllowsNull: true,
-            IsDiscriminator: true);
-    }
+            DisplayLabel: LoquiUnions.UnionTypeDiscriminatorLabel, IsDiscriminator: true);
 
     private static SubFieldSpec BuildTypedLeafUnionField(
-        string colName, List<(Type LeafType, PropertyInfo Prop)> members,
+        List<(Type LeafType, string ValueTypeName, PropertyInfo Prop)> members,
         GameReflection game, ILogger logger)
     {
         var core = Nullable.GetUnderlyingType(members[0].Prop.PropertyType) ?? members[0].Prop.PropertyType;
-        var perLeaf = members
-            .Select(m => (m.LeafType, Leaf: LeafClassification.ClassifyLeaf(m.Prop, core, game)!))
-            .ToList();
-        var rep = perLeaf[0].Leaf;
-        // Every member here shares one CLR property name, so one applier resolved off the constructed
-        // leaf covers every leaf.
-        var pName = members[0].Prop.Name;
-
-        object? Extract(object obj)
-        {
-            foreach (var (leafType, leaf) in perLeaf)
-                if (leafType.IsInstanceOfType(obj)) return leaf.Get(obj);
-            return null;
-        }
+        var rep = LeafClassification.ClassifyLeaf(members[0].Prop, core, game)!;
 
         // RouteWriter answers PropertyNotFound for a leaf that lacks this member, which ApplySubFields
-        // treats as a silent no-op.
-        var apply = LeafWriters.RouteWriter<object>(rep, core, pName, nullable: true, logger);
+        // treats as a silent no-op. Every member here shares one CLR property name, so one applier
+        // resolved off the constructed leaf covers every leaf.
+        var apply = LeafWriters.RouteWriter<object>(rep, members[0].Prop, core, nullable: true, game, logger);
 
-        return new(colName, rep.ApiType, rep.ValidFormKeyTypes, rep.EnumMembers, Extract,
+        return new(members[0].Prop.Name, rep.ApiType, rep.ValidFormKeyTypes, rep.EnumMembers,
             apply,
             AllowsNull: true);
     }
 
-    private static SubFieldSpec BuildWidenedLeafUnionField(
-        string colName, List<(Type LeafType, PropertyInfo Prop)> members, ILogger logger)
+    // These members disagree on CLR type across leaves, so no one converter fits; each leaf's own
+    // shape is its variant, and the widened applier resolves the target property's declared type at
+    // write time and converts into that.
+    private static SubFieldSpec BuildVariantLeafUnionField(
+        List<(Type LeafType, string ValueTypeName, PropertyInfo Prop)> members, GameReflection game, ILogger logger)
     {
-        var getters = members.Select(m => (m.LeafType, Get: ReflectedTypes.SubGetter(m.Prop))).ToList();
         var pName = members[0].Prop.Name;
-
-        object? Extract(object obj)
+        var variants = new Dictionary<string, SubFieldSpec>(StringComparer.Ordinal);
+        foreach (var (_, valueTypeName, prop) in members)
         {
-            foreach (var (leafType, get) in getters)
-                if (leafType.IsInstanceOfType(obj)) return WidenedLeaf.FormatWidenedValue(get(obj));
-            return null;
+            if (SubFieldReflection.GetSubFieldInfo(prop, game, SubFieldReflection.RootPath, 1, logger) is { } spec)
+                variants[valueTypeName] = spec;
         }
-
-        // These members disagree on CLR type across leaves, so no one converter fits; the widened
-        // applier resolves the target property's declared type at write time and converts into that.
-        return new(colName, "string", LeafSpec.NoFormKeyTypes, LeafSpec.NoEnumMembers, Extract, Apply: LeafWrite.Writable(WidenedLeaf.MakeWidenedApplier(pName, logger)), AllowsNull: true);
+        var rep = variants.Values.First();
+        return rep with
+        {
+            Apply = LeafWrite.Writable(WidenedLeaf.MakeWidenedApplier(pName, logger)),
+            AllowsNull = true,
+            Variants = variants,
+        };
     }
 
-    // Maps the value_type discriminator back through the same table the read side uses, then to that
+    // Maps the document's discriminator back through the same table the read side uses, then to that
     // interface's setter class closed over elemConcreteType's T. Null for any reason is the caller's
     // signal to refuse rather than guess.
     internal static Type? ResolveObjectModPropertyConcreteType(Type elemConcreteType, JsonElement elem)
     {
-        if (!elem.TryGetProperty(ObjectModValueTypeDiscriminator, out var vt) || vt.ValueKind != JsonValueKind.String)
+        if (!elem.TryGetProperty(LoquiUnions.UnionTypeDiscriminator, out var vt) || vt.ValueKind != JsonValueKind.String)
             return null;
 
-        var match = Array.Find(LeafInterfaces, l => l.ValueTypeName == vt.GetString());
-        if (match.InterfaceName == null) return null;
-
         var typeArgs = elemConcreteType.GetGenericArguments();
-        var getterOpen = elemConcreteType.Assembly.GetType($"{elemConcreteType.Namespace}.{match.InterfaceName}");
-        if (getterOpen == null) return null;
+        foreach (var interfaceName in LeafInterfaces)
+        {
+            var getterOpen = elemConcreteType.Assembly.GetType($"{elemConcreteType.Namespace}.{interfaceName}");
+            if (getterOpen == null) continue;
 
-        // GetSetterType answers with the open generic setter class even off a closed getter interface,
-        // so closing it over T is this method's job.
-        var setterType = ReflectedTypes.GetSetterType(getterOpen.MakeGenericType(typeArgs));
-        if (setterType is not { IsAbstract: false }) return null;
-        return setterType.IsGenericTypeDefinition ? setterType.MakeGenericType(typeArgs) : setterType;
+            // GetSetterType answers with the open generic setter class even off a closed getter interface,
+            // so closing it over T is this method's job.
+            var setterType = ReflectedTypes.GetSetterType(getterOpen.MakeGenericType(typeArgs));
+            if (setterType is not { IsAbstract: false }) continue;
+            if (ReflectedTypes.DocumentTypeName(setterType, typeArgs) != vt.GetString()) continue;
+            return setterType.IsGenericTypeDefinition ? setterType.MakeGenericType(typeArgs) : setterType;
+        }
+        return null;
     }
 }

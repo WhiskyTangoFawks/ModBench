@@ -29,7 +29,7 @@ public sealed class ConditionEditTests : IDisposable
     {
         var before = _fixture.Body(_fixture.Cobj);
         var value = _fixture.Field(_fixture.Cobj, "conditions");
-        value[0]!["compare_operator"] = "LessThan";
+        value[0]!["CompareOperator"] = "LessThan";
 
         var result = _fixture.Service().EditField(
             _fixture.Plugin, _fixture.Cobj.ToString(), "conditions", Json(value.ToJsonString()));
@@ -79,7 +79,7 @@ public sealed class ConditionEditTests : IDisposable
     {
         var before = _fixture.Body(_fixture.Cobj);
         var value = _fixture.Field(_fixture.Cobj, "conditions");
-        value[0]!["concrete_type"] = "ConditionGlobal";
+        value[0]!["MutagenObjectType"] = "ConditionGlobal";
         value[0]!["comparison_value_form_key"] = _fixture.Global.ToString();
 
         var result = _fixture.Service().EditField(
@@ -100,7 +100,7 @@ public sealed class ConditionEditTests : IDisposable
     public void ChangingTheFunction_ClearsTheSlotsTheNewFunctionDoesNotUse()
     {
         var seed = _fixture.Field(_fixture.Cobj, "conditions");
-        seed[0]!["data"]!["parameter_one_string"] = "bAllowRotation";
+        seed[0]!["data"]!["ParameterOneString"] = "bAllowRotation";
         var seeded = _fixture.Service().EditField(
             _fixture.Plugin, _fixture.Cobj.ToString(), "conditions", Json(seed.ToJsonString()));
         Assert.True(seeded.Applied, seeded.Message);
@@ -112,11 +112,11 @@ public sealed class ConditionEditTests : IDisposable
         var data = value[0]!["data"]!;
         // HasKeyword uses parameter_one_record alone, so every other slot is idled by the change.
         data["function"] = nameof(Condition.Function.HasKeyword);
-        data["parameter_one_number"] = 0;
-        data["parameter_one_string"] = null;
-        data["parameter_two_record"] = null;
-        data["parameter_two_number"] = 0;
-        data["parameter_two_string"] = null;
+        data["ParameterOneNumber"] = 0;
+        data["ParameterOneString"] = null;
+        data["ParameterTwoRecord"] = null;
+        data["ParameterTwoNumber"] = 0;
+        data["ParameterTwoString"] = null;
 
         var result = _fixture.Service().EditField(
             _fixture.Plugin, _fixture.Cobj.ToString(), "conditions", Json(value.ToJsonString()));
@@ -133,7 +133,7 @@ public sealed class ConditionEditTests : IDisposable
     public void ArrayAdd_AppendsOneDefaultConditionAndLeavesTheExistingOnesAlone()
     {
         var before = _fixture.Body(_fixture.Cobj);
-        var leaf = SharedSchemaReflector.FirstArrayElementLeaf("cobj", "conditions", "concrete_type");
+        var leaf = SharedSchemaReflector.FirstArrayElementLeaf("cobj", "conditions", "MutagenObjectType");
 
         var result = _fixture.Service().EditField(
             _fixture.Plugin, _fixture.Cobj.ToString(), "conditions",
@@ -146,7 +146,7 @@ public sealed class ConditionEditTests : IDisposable
         var appended = JsonNode.Parse(after)!["Conditions"]!.AsArray()[2]!;
         Assert.Equal(leaf, appended["MutagenObjectType"]!.GetValue<string>());
         Assert.Equal(
-            SharedSchemaReflector.FirstArrayElementLeafSubField("cobj", "conditions", "data", "concrete_type"),
+            SharedSchemaReflector.FirstArrayElementLeafSubField("cobj", "conditions", "data", "MutagenObjectType"),
             appended["Data"]!["MutagenObjectType"]!.GetValue<string>());
     }
 
@@ -203,11 +203,11 @@ public sealed class ConditionEditTests : IDisposable
     public void EditingAConditionNestedInsideAMessageButton_ChangesThatMemberAndNothingElse()
     {
         var before = _fixture.Body(_fixture.Message);
-        var value = _fixture.Field(_fixture.Message, "menu_buttons");
-        value[0]!["conditions"]![0]!["data"]!["run_on_type"] = "Target";
+        var value = _fixture.Field(_fixture.Message, "MenuButtons");
+        value[0]!["conditions"]![0]!["data"]!["RunOnType"] = "Target";
 
         var result = _fixture.Service().EditField(
-            _fixture.Plugin, _fixture.Message.ToString(), "menu_buttons", Json(value.ToJsonString()));
+            _fixture.Plugin, _fixture.Message.ToString(), "MenuButtons", Json(value.ToJsonString()));
 
         Assert.True(result.Applied, result.Message);
         Assert.Equal(

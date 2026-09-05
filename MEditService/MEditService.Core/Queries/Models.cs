@@ -87,16 +87,10 @@ public record RecordSummary(
 
 public record PagedResult<T>(IReadOnlyList<T> Items, int Total);
 
-/// <summary>BitValue is a decimal string so a bit above 2^53 survives JSON without IEEE 754
-/// loss, null for a plain enum. Label is null for a member that is already the game's own
-/// vocabulary.</summary>
-public record EnumMember(string Value, string? BitValue = null, string? Label = null)
-{
-    /// <summary>The one definition of "flags rather than a closed choice" — a field, a column and
-    /// the webview's flagBits all answer it this way. An enum with no members is not one.</summary>
-    public static bool IsBitmask(IReadOnlyList<EnumMember> members) =>
-        members.Count > 0 && members.All(m => m.BitValue != null);
-}
+/// <summary>BitValue is the member's own bit as a decimal string, so one above 2^53 survives JSON
+/// without IEEE 754 loss; null for a member of a plain enum. Label is null for a member that is
+/// already the game's own vocabulary.</summary>
+public record EnumMember(string Value, string? BitValue = null, string? Label = null);
 
 public record FieldMetadata(
     string Name,
@@ -116,9 +110,8 @@ public record FieldMetadata(
     // discriminator, whose name is a wire name.
     string? DisplayLabel = null,             // what to title the row, when Name is a wire name
 
-    // This field names which concrete class its object is, read off the payload before that object
-    // exists (ListLeaves.ResolveListElementType). True for concrete_type and OMOD's
-    // value_type, false for every other field.
+    // This field is the document's own MutagenObjectType member, naming which concrete class its
+    // object is; read off the payload before that object exists (ListLeaves.ResolveListElementType).
     bool IsDiscriminator = false,
 
     // For an enum whose value decides which sibling fields carry data; null when every sibling is
@@ -134,16 +127,15 @@ public record FieldMetadata(
     // For 'struct': the Loqui/CLR class the schema declares, null for every other type. Distinct
     // from a discriminator's value, which says which class an object turned out to be. Serialized
     // nulls stay on all four nullables here.
-    string? LeafTypeName = null)
-{
-    /// <summary>Derived, not stored: a member's own BitValue is the only place that fact lives.
-    /// Off the wire because the webview asks the members the same question (flagBits).</summary>
-    [JsonIgnore]
-    public bool IsBitmask => EnumMember.IsBitmask(EnumMembers);
-}
+    string? LeafTypeName = null,
 
-// Value contract: a bitmask field (Metadata.IsBitmask) carries its combined flags as a decimal
-// string, not a number — so values above 2^53 survive JSON round-tripping without IEEE 754 loss.
+    // For a member of a union whose type differs by leaf: this member's shape under each leaf,
+    // keyed by the discriminator's own values. The field's own shape is the first leaf's. Null when
+    // every leaf declaring the member agrees.
+    IReadOnlyDictionary<string, FieldMetadata>? Variants = null);
+
+/// <summary>Value is the stored document's own node for this field, verbatim, or null when the
+/// document omits the member (which the codec does for a member equal to its default).</summary>
 public record FieldValue(FieldMetadata Metadata, object? Value, string? CheckError = null);
 
 public record RecordDetail(

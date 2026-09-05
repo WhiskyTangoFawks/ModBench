@@ -7,7 +7,6 @@ internal sealed record SubFieldSpec(
     string ApiType,
     string[] ValidFormKeyTypes,
     IReadOnlyList<EnumMember> EnumMembers,
-    Func<object, object?> Extract,
     LeafWrite<object> Apply,
     IReadOnlyList<SubFieldSpec>? SubFields = null,
     SubFieldSpec? ElementSpec = null,
@@ -25,7 +24,9 @@ internal sealed record SubFieldSpec(
     // See FieldMetadata.KeyMembers.
     IReadOnlyList<string>? KeyMembers = null,
     // See FieldMetadata.LeafTypeName.
-    string? LeafTypeName = null)
+    string? LeafTypeName = null,
+    // See FieldMetadata.Variants.
+    IReadOnlyDictionary<string, SubFieldSpec>? Variants = null)
 {
     // IsArray is derived from ApiType, as ColumnSpec's is, rather than a flag that could disagree with it.
     public FieldMetadata ToFieldMetadata() =>
@@ -37,5 +38,6 @@ internal sealed record SubFieldSpec(
             IsDiscriminator: IsDiscriminator,
             SiblingsInUse: SiblingsInUse,
             KeyMembers: KeyMembers,
-            LeafTypeName: LeafTypeName);
+            LeafTypeName: LeafTypeName,
+            Variants: Variants?.ToDictionary(v => v.Key, v => v.Value.ToFieldMetadata(), StringComparer.Ordinal));
 }

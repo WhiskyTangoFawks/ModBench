@@ -17,7 +17,7 @@ internal static class ArrayOpWriter
     internal static bool IsArrayOp(string opName) => OpNames.Contains(opName);
 
     internal static FieldApplyResult Apply(
-        IMajorRecord record, ColumnSpec col, string opName, JsonElement envelope)
+        IMajorRecord record, ColumnSpec col, string opName, JsonElement envelope, JsonElement? current)
     {
         if (col.Apply.Writer is not { } apply) return FieldApplyOutcome.ReadOnly;
         if (!envelope.TryGetProperty("path", out var pathEl) || pathEl.ValueKind != JsonValueKind.Array)
@@ -33,16 +33,14 @@ internal static class ArrayOpWriter
         var arrayPath = isAdd ? path : path[..Math.Max(path.Count - 1, 0)];
         if (!isAdd && path.Count == 0) return FieldApplyOutcome.ValueShapeMismatch;
 
-        // Only array- or struct-shaped columns arrive here; a scalar column's Extract is a raw CLR value,
-        // not JSON text, and would reach JsonNode.Parse as an unparseable string.
+        // Only array- or struct-shaped columns arrive here.
         if (!col.IsArray && col.SubFields == null) return FieldApplyOutcome.ValueShapeMismatch;
 
-        // An unpopulated column extracts as null, not an empty shape (Mutagen distinguishes the two), so
+        // The document omits an unpopulated column (Mutagen distinguishes absent from empty), so
         // root is seeded with the container its first hop needs and ResolveOrCreate always has a node
         // to attach onto.
-        var currentJson = col.Extract(record) as string;
         JsonNode root;
-        if (currentJson != null) root = JsonNode.Parse(currentJson)!;
+        if (current is { } node) root = JsonNode.Parse(node.GetRawText())!;
         else if (arrayPath.Count > 0 && arrayPath[0] is MemberSegment) root = new JsonObject();
         else root = new JsonArray();
 
@@ -221,7 +219,7 @@ internal static class ArrayOpWriter
         "formKey" => "Null",
         "int" or "float" => 0,
         "bool" => false,
-        "enum" when meta.IsBitmask => new JsonArray(),
+        "flags" => new JsonArray(),
         "enum" => meta.EnumMembers.Count > 0 ? meta.EnumMembers[0].Value : "",
         "struct" => DefaultStructElement(meta),
         "array" => new JsonArray(),

@@ -70,7 +70,7 @@ public class GetDocumentsTests
         // parity above. Scoped to the race field: a bare AddNew NPC carries other unset links that flag.
         string? RaceError(string editorId) => documents
             .Single(d => d.EditorId == editorId).Fields
-            .Single(f => f.Metadata.Name.Equals("race", StringComparison.OrdinalIgnoreCase))
+            .Single(f => f.Metadata.Name.Equals("Race", StringComparison.OrdinalIgnoreCase))
             .CheckError;
         Assert.Null(RaceError("BulkNpc"));
         Assert.Contains("Could not be resolved", RaceError("BrokenNpc"));

@@ -77,7 +77,7 @@ public class TableDdlBuilderTests
         Assert.Contains("plugin", cols);
         Assert.Contains("load_order_idx", cols);
         Assert.Contains("is_winner", cols);
-        Assert.Contains("editor_id", cols);
+        Assert.Contains("EditorID", cols);
     }
 
     [Fact]

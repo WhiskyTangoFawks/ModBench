@@ -1,4 +1,3 @@
-using System.Collections;
 using System.Reflection;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
@@ -13,38 +12,43 @@ namespace MEditService.Core.Schema;
 /// its payload; unresolvable is a refusal.</summary>
 internal static class ListLeaves
 {
+    // The members a composite element is built from: a Loqui element's own sub-schema, a vector
+    // element's components (the codec spells the element as text, which the write reads back as
+    // components). Null for a scalar element.
     private static List<SubFieldSpec>? BuildListElementSubFields(
         Type elementType, bool isLoqui, bool isVector,
         GameReflection game, Type[] path, ILogger logger)
     {
         if (isLoqui) return SubFieldReflection.BuildSubSchema(elementType, game, logger, path);
-        if (isVector) return VectorStructLeaves.BuildVectorComponentSubFields(elementType, game, 0, logger);
+        if (isVector) return [.. VectorStructLeaves.ElementComponents(elementType, game, logger)];
         return null;
     }
 
     private static SubFieldSpec? BuildListElementSpec(
-        Type elementType, bool isFl, IReadOnlyList<SubFieldSpec>? elemSubFields,
+        Type elementType, bool isFl, bool isVector, IReadOnlyList<SubFieldSpec>? elemSubFields,
         GameReflection game)
     {
+        if (isVector)
+            return new("", "vector", LeafSpec.NoFormKeyTypes, LeafSpec.NoEnumMembers, Apply: LeafWrite.ReadOnly<object>(SchemaRefusals.ElementTemplateReason));
         if (elemSubFields != null)
-            return new("", "struct", LeafSpec.NoFormKeyTypes, LeafSpec.NoEnumMembers, _ => null,
+            return new("", "struct", LeafSpec.NoFormKeyTypes, LeafSpec.NoEnumMembers,
                 Apply: LeafWrite.ReadOnly<object>(SchemaRefusals.ElementTemplateReason), SubFields: elemSubFields,
                 LeafTypeName: ReflectedTypes.LeafTypeName(elementType));
         if (isFl)
         {
             return new("", "formKey", LeafClassification.GetFormLinkValidTypes(elementType, game), LeafSpec.NoEnumMembers,
-                _ => null, Apply: LeafWrite.ReadOnly<object>(SchemaRefusals.ElementTemplateReason), AllowsNull: true);
+                Apply: LeafWrite.ReadOnly<object>(SchemaRefusals.ElementTemplateReason), AllowsNull: true);
         }
 
         if (ByteSliceHex.IsByteSlice(elementType))
-            return new("", ByteSliceHex.HexApiType, LeafSpec.NoFormKeyTypes, LeafSpec.NoEnumMembers, _ => null, Apply: LeafWrite.ReadOnly<object>(SchemaRefusals.ElementTemplateReason));
+            return new("", ByteSliceHex.HexApiType, LeafSpec.NoFormKeyTypes, LeafSpec.NoEnumMembers, Apply: LeafWrite.ReadOnly<object>(SchemaRefusals.ElementTemplateReason));
         return LeafClassification.TryMapPrimitive(elementType, out _, out var elemApiType, out _)
-            ? new("", elemApiType, LeafSpec.NoFormKeyTypes, LeafSpec.NoEnumMembers, _ => null, Apply: LeafWrite.ReadOnly<object>(SchemaRefusals.ElementTemplateReason))
+            ? new("", elemApiType, LeafSpec.NoFormKeyTypes, LeafSpec.NoEnumMembers, Apply: LeafWrite.ReadOnly<object>(SchemaRefusals.ElementTemplateReason))
             : null;
     }
 
     internal static SubFieldSpec? BuildListSubField(
-        PropertyInfo prop, string colName, Type elementType,
+        PropertyInfo prop, Type elementType,
         GameReflection game, Type[] path, ILogger logger)
     {
         var isFl = ReflectedTypes.IsFormLink(elementType);
@@ -55,19 +59,17 @@ internal static class ListLeaves
 
         // Builds a SubFieldSpec directly rather than converting BuildElementMeta's FieldMetadata back,
         // since the caller needs the reflection-time shape.
-        var elementSpec = BuildListElementSpec(elementType, isFl, elemSubFields, game);
+        var elementSpec = BuildListElementSpec(elementType, isFl, isVector, elemSubFields, game);
         if (elementSpec == null)
             return SchemaRefusals.ReportUnclassified<SubFieldSpec>(game, logger, prop, elementType, "nested list element");
 
-        var g = ReflectedTypes.SubGetter(prop);
         var pName = prop.Name;
         // Unconditionally writable: BuildListElementSpec above returns non-null for exactly the
         // element shapes BuildListElement can build, so past its guard there is no unwritable case
         // left to spell. TargetingRefuses therefore keeps its false default.
-        return new(colName, "array", LeafSpec.NoFormKeyTypes, LeafSpec.NoEnumMembers,
-            obj => g(obj) is IEnumerable list ? BuildListItems(list, elementType, elemSubFields) : null,
+        return new(pName, "array", LeafSpec.NoFormKeyTypes, LeafSpec.NoEnumMembers,
             LeafWrite.Writable<object>(
-                (obj, json) => ApplyListSubFieldJson(obj, json, pName, isFl, elementType, elemSubFields)),
+                (obj, json) => ApplyListSubFieldJson(obj, json, pName, isFl, isVector, elementType, elemSubFields)),
             ElementSpec: elementSpec,
             KeyMembers: game.Annotations.KeyMembersFor(prop));
     }
@@ -77,7 +79,7 @@ internal static class ListLeaves
     // enclosing struct instance) rather than IMajorRecord.
     private static ApplyOutcome ApplyListSubFieldJson(
         object obj, JsonElement json, string pName,
-        bool isFl, Type elemCore, IReadOnlyList<SubFieldSpec>? subFields)
+        bool isFl, bool isVector, Type elemCore, IReadOnlyList<SubFieldSpec>? subFields)
     {
         if (json.ValueKind != JsonValueKind.Array) return ApplyOutcome.ValueRejected;
         var rp = obj.GetType().GetProperty(pName, BindingFlags.Public | BindingFlags.Instance);
@@ -93,7 +95,7 @@ internal static class ListLeaves
             if (ResolveListElementType(isFl, elemConcreteType, subFields, elem) is not { } concreteType)
                 return ApplyOutcome.ListElementTypeUnresolved;
 
-            var item = BuildListElement(elem, isFl, elemCore, concreteType, subFields, out var elementOutcome);
+            var item = BuildListElement(elem, isFl, isVector, elemCore, concreteType, subFields, out var elementOutcome);
             if (elementOutcome != ApplyOutcome.Applied) return elementOutcome;
             if (item != null) addMethod.Invoke(newList, [item]);
         }
@@ -101,31 +103,6 @@ internal static class ListLeaves
         if (rp.CanWrite) rp.SetValue(obj, newList);
         return ApplyOutcome.Applied;
     }
-
-    // Not serialized: a column needs a VARCHAR and serializes on top, but a struct sub-field composes
-    // under the enclosing struct's serialize pass; a pre-serialized string would re-encode as an
-    // escaped JSON string.
-    private static List<object?> BuildListItems(
-        IEnumerable items, Type elementType, IReadOnlyList<SubFieldSpec>? subFields)
-    {
-        var isFl = ReflectedTypes.IsFormLink(elementType);
-        var isBlob = ByteSliceHex.IsByteSlice(elementType);
-        var result = new List<object?>();
-        foreach (var item in items)
-        {
-            if (isFl) result.Add((item as IFormLinkGetter)?.FormKeyNullable?.ToString());
-            else if (subFields != null) result.Add(SubFieldValues.ExtractSubObject(item, subFields));
-            else if (isBlob) result.Add(ByteSliceHex.HexText(item));
-            else result.Add(item);
-        }
-        return result;
-    }
-
-    // BuildListColumn's own caller shape: a top-level array column's Extract returns a VARCHAR
-    // string (the DuckDB column type), unlike a struct sub-field's Extract (see BuildListItems above).
-    private static string? SerializeListItems(
-        IEnumerable items, Type elementType, IReadOnlyList<SubFieldSpec>? subFields) =>
-        JsonSerializer.Serialize(BuildListItems(items, elementType, subFields));
 
     internal static ColumnInfoResult? BuildListColumn(
         PropertyInfo prop, Type elementType, GameReflection game, ILogger logger)
@@ -140,26 +117,15 @@ internal static class ListLeaves
         var elemMeta = SubFieldReflection.BuildElementMeta(elementType, game, SubFieldReflection.RootPath, logger);
         if (elemMeta == null) return SchemaRefusals.ReportUnclassified<ColumnInfoResult>(game, logger, prop, elementType, "list element");
 
-        object? Extractor(IMajorRecordGetter r)
-        {
-            try // Stryker disable once Block: per-call accessor lambda stays silent per MEditService CLAUDE.md; SerializeListItems can throw on unusual record types in real game data
-            {
-                return ReflectedTypes.ReadOrNull(r, prop) is IEnumerable list
-                    ? SerializeListItems(list, elementType, elemSubFields)
-                    : null;
-            }
-            catch { return null; }
-        }
-
         var pName = prop.Name;
         // BuildListElementSpec answers for exactly the element shapes BuildListElement can build, so it
         // is the writability question too; a column got here on BuildElementMeta's wider classification.
-        var apply = BuildListElementSpec(elementType, isFl, elemSubFields, game) != null
+        var apply = BuildListElementSpec(elementType, isFl, isVector, elemSubFields, game) != null
             ? LeafWrite.Writable<IMajorRecord>(
-                (record, json) => ApplyListJson(record, json, pName, isFl, elementType, elemSubFields))
+                (record, json) => ApplyListJson(record, json, pName, isFl, isVector, elementType, elemSubFields))
             : LeafWrite.ReadOnly<IMajorRecord>(SchemaRefusals.UnconvertibleElementListReason);
 
-        return new("VARCHAR", Extractor, "array", LeafSpec.NoFormKeyTypes, LeafSpec.NoEnumMembers, apply,
+        return new("VARCHAR", "array", LeafSpec.NoFormKeyTypes, LeafSpec.NoEnumMembers, apply,
             ElementMeta: elemMeta, KeyMembers: game.Annotations.KeyMembersFor(prop));
     }
 
@@ -168,7 +134,7 @@ internal static class ListLeaves
     // built, so no partial array is ever left.
     private static ApplyOutcome ApplyListJson(
         IMajorRecord record, JsonElement json, string pName,
-        bool isFl, Type elemCore, IReadOnlyList<SubFieldSpec>? subFields)
+        bool isFl, bool isVector, Type elemCore, IReadOnlyList<SubFieldSpec>? subFields)
     {
         if (json.ValueKind != JsonValueKind.Array) return ApplyOutcome.ValueRejected;
         var rp = record.GetType()
@@ -187,7 +153,7 @@ internal static class ListLeaves
             if (ResolveListElementType(isFl, elemConcreteType, subFields, elem) is not { } concreteType)
                 return ApplyOutcome.ListElementTypeUnresolved;
 
-            var item = BuildListElement(elem, isFl, elemCore, concreteType, subFields, out var elementOutcome);
+            var item = BuildListElement(elem, isFl, isVector, elemCore, concreteType, subFields, out var elementOutcome);
             if (elementOutcome != ApplyOutcome.Applied) return elementOutcome;
             if (item != null) addMethod.Invoke(newList, [item]);
         }
@@ -196,9 +162,9 @@ internal static class ListLeaves
         return ApplyOutcome.Applied;
     }
 
-    // OMOD's Properties element has its own discriminator scheme; every other union resolves off the
-    // general concrete_type discriminator. No resolving scheme falls through to null, which the
-    // callers turn into a refusal rather than a guess.
+    // OMOD's Properties element has its own leaf table; every other union resolves off the
+    // document's MutagenObjectType through LoquiUnions. No resolving scheme falls through to null,
+    // which the callers turn into a refusal rather than a guess.
     private static Type? ResolveListElementType(
         bool isFl, Type elemConcreteType, IReadOnlyList<SubFieldSpec>? subFields, JsonElement elem)
     {
@@ -231,7 +197,7 @@ internal static class ListLeaves
     }
 
     private static object? BuildListElement(
-        JsonElement elem, bool isFl, Type elemCore, Type elemConcreteType, IReadOnlyList<SubFieldSpec>? subFields,
+        JsonElement elem, bool isFl, bool isVector, Type elemCore, Type elemConcreteType, IReadOnlyList<SubFieldSpec>? subFields,
         out ApplyOutcome outcome)
     {
         outcome = ApplyOutcome.Applied;
@@ -251,6 +217,16 @@ internal static class ListLeaves
             if (BuildScalarListElement(elem, elemCore) is { } scalar) return scalar;
             outcome = ApplyOutcome.ValueRejected;
             return null;
+        }
+
+        if (isVector)
+        {
+            if (VectorStructLeaves.AsComponents(elem) is not { } components)
+            {
+                outcome = ApplyOutcome.ValueRejected;
+                return null;
+            }
+            elem = components;
         }
 
         var elemObj = Activator.CreateInstance(elemConcreteType)!;

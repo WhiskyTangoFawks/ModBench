@@ -25,10 +25,10 @@ public sealed class ConcreteBaseUnionEditTests : IDisposable
     // The adapter under test, spelled once: only the property's leaf changes between the two
     // writes, the way the editor's own resend does — data_int rides along into the second write.
     private static JsonElement Adapter(string leaf) => Json($$"""
-        {"version": 6, "object_format": 2, "scripts": [
+        {"version": 6, "ObjectFormat": 2, "scripts": [
           {"name": "TestScript", "flags": "Local", "properties": [
-            {"concrete_type": "{{leaf}}", "name": "Switched", "flags": "Removed", "data_int": 42},
-            {"concrete_type": "ScriptStringProperty", "name": "Sibling", "flags": "Edited", "data_string": "kept"}
+            {"MutagenObjectType": "{{leaf}}", "name": "Switched", "flags": "Removed", "data_int": 42},
+            {"MutagenObjectType": "ScriptStringProperty", "name": "Sibling", "flags": "Edited", "data_string": "kept"}
           ]}
         ]}
         """);
@@ -37,14 +37,14 @@ public sealed class ConcreteBaseUnionEditTests : IDisposable
     public void SwitchingAScriptPropertyLeaf_KeepsSharedMembers_DefaultsItsOwn_AndLeavesTheSiblingAlone()
     {
         var setUp = _fixture.Service().EditField(
-            _fixture.Plugin, _fixture.Npc.ToString(), "virtual_machine_adapter", Adapter("ScriptIntProperty"));
+            _fixture.Plugin, _fixture.Npc.ToString(), "VirtualMachineAdapter", Adapter("ScriptIntProperty"));
         Assert.True(setUp.Applied, setUp.Message);
         var before = WrittenProperties(_fixture.NpcBody());
         Assert.Equal("ScriptIntProperty", before["Switched"].GetProperty("MutagenObjectType").GetString());
         Assert.Equal(42, before["Switched"].GetProperty("Data").GetInt32());
 
         var result = _fixture.Service().EditField(
-            _fixture.Plugin, _fixture.Npc.ToString(), "virtual_machine_adapter", Adapter("ScriptFloatProperty"));
+            _fixture.Plugin, _fixture.Npc.ToString(), "VirtualMachineAdapter", Adapter("ScriptFloatProperty"));
 
         Assert.True(result.Applied, result.Message);
         var after = WrittenProperties(_fixture.NpcBody());
@@ -63,7 +63,7 @@ public sealed class ConcreteBaseUnionEditTests : IDisposable
     public void SwitchingToTheBaseLeaf_BuildsABareScriptProperty()
     {
         var result = _fixture.Service().EditField(
-            _fixture.Plugin, _fixture.Npc.ToString(), "virtual_machine_adapter", Adapter("ScriptProperty"));
+            _fixture.Plugin, _fixture.Npc.ToString(), "VirtualMachineAdapter", Adapter("ScriptProperty"));
 
         Assert.True(result.Applied, result.Message);
         var written = WrittenProperties(_fixture.NpcBody())["Switched"];
@@ -77,9 +77,9 @@ public sealed class ConcreteBaseUnionEditTests : IDisposable
         var before = _fixture.NpcBody();
 
         var result = _fixture.Service().EditField(
-            _fixture.Plugin, _fixture.Npc.ToString(), "virtual_machine_adapter",
+            _fixture.Plugin, _fixture.Npc.ToString(), "VirtualMachineAdapter",
             Json("""
-                {"version": 6, "object_format": 2, "scripts": [{"name": "S", "flags": "Local",
+                {"version": 6, "ObjectFormat": 2, "scripts": [{"name": "S", "flags": "Local",
                  "properties": [{"name": "P", "flags": "Edited", "data_int": 1}]}]}
                 """));
 

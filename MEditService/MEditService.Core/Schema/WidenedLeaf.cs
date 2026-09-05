@@ -3,22 +3,11 @@ using Microsoft.Extensions.Logging;
 
 namespace MEditService.Core.Schema;
 
-/// <summary>A leaf whose siblings disagree about its CLR type, presented as text, with an applier
-/// that resolves the real type off the receiver. No JSON path has consistent semantics, so it stays
-/// out of the generated views.</summary>
+/// <summary>The applier for a member whose type differs across a union's leaves: the real type is
+/// resolved off the receiver, so one writer serves every variant.</summary>
 internal static class WidenedLeaf
 {
-    // CoerceToColumnType's VARCHAR branch is a culture-bound ToString, so a widened number must be
-    // formatted with InvariantCulture here or "3,5" leaks through under de-DE. bool keeps the
-    // JS-idiomatic lowercase spelling.
-    internal static object? FormatWidenedValue(object? value) => value switch
-    {
-        bool b => b ? "true" : "false",
-        IFormattable f => f.ToString(null, System.Globalization.CultureInfo.InvariantCulture),
-        _ => value,
-    };
-
-    /// <summary>Applies a widened OMOD leaf-union field onto an already-resolved concrete leaf.
+    /// <summary>Applies a union member onto an already-resolved concrete leaf.
     /// <see cref="ApplyOutcome.PropertyNotFound"/> and a JSON null are expected no-ops; a value the
     /// declared type cannot take is rejected, never silently dropped.</summary>
     internal static Func<object, JsonElement, ApplyOutcome> MakeWidenedApplier(string pName, ILogger logger)
@@ -36,8 +25,8 @@ internal static class WidenedLeaf
         };
     }
 
-    // The inverse of FormatWidenedValue, with no guessing: the property's declared type is known by
-    // now. A freshly added element may send a raw JSON number or bool instead of text; both are accepted.
+    // No guessing: the property's declared type is known by now. The document carries a raw JSON
+    // number or bool; text is accepted too.
     private static object? ConvertWidenedJson(JsonElement val, Type targetType, string pName, ILogger logger)
     {
         if (targetType == typeof(bool))

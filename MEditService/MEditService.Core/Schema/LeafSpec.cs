@@ -4,16 +4,15 @@ using MEditService.Core.Queries;
 namespace MEditService.Core.Schema;
 
 // The facts a leaf carries whether it becomes a column or a sub-field. Convert is null when
-// there is no generic applier: a form link gets LeafWriters.ApplyFormLinkJson at either level.
+// there is no generic applier: a form link, byte slice, color or vector gets its own writer in
+// LeafWriters.RouteWriter.
 internal sealed record LeafSpec(
     string ApiType,
     string DuckDbType,
     string[] ValidFormKeyTypes,
     IReadOnlyList<EnumMember> EnumMembers,
-    Func<object, object?> Get,
     Func<JsonElement, object?>? Convert,
     bool AllowsNull = false,
-    bool IsFlagsEnum = false,
     string? ViewDefaultLiteral = null)
 {
     /// <summary>A leaf that names no record type — every leaf but a form link.</summary>

@@ -167,7 +167,7 @@ public sealed class ArrayOpEditTests : IDisposable
     {
         using var fixture = new ContainerFixture();
         var seed = fixture.Service().EditField(fixture.Plugin, fixture.Container.ToString(), "destructible",
-            Json("""{"stages": [{"health_percent": 50}]}"""));
+            Json("""{"stages": [{"HealthPercent": 50}]}"""));
         Assert.True(seed.Applied, seed.Message);
 
         var result = fixture.Service().EditField(fixture.Plugin, fixture.Container.ToString(), "destructible",
@@ -198,7 +198,7 @@ public sealed class ArrayOpEditTests : IDisposable
     {
         using var fixture = new ContainerFixture();
         var seed = fixture.Service().EditField(fixture.Plugin, fixture.Container.ToString(), "destructible",
-            Json("""{"stages": [{"health_percent": 10}, {"health_percent": 20}]}"""));
+            Json("""{"stages": [{"HealthPercent": 10}, {"HealthPercent": 20}]}"""));
         Assert.True(seed.Applied, seed.Message);
 
         var result = fixture.Service().EditField(fixture.Plugin, fixture.Container.ToString(), "destructible",
@@ -215,7 +215,7 @@ public sealed class ArrayOpEditTests : IDisposable
     {
         using var fixture = new ContainerFixture();
         var seed = fixture.Service().EditField(fixture.Plugin, fixture.Container.ToString(), "destructible",
-            Json("""{"stages": [{"health_percent": 10}, {"health_percent": 20}]}"""));
+            Json("""{"stages": [{"HealthPercent": 10}, {"HealthPercent": 20}]}"""));
         Assert.True(seed.Applied, seed.Message);
 
         var result = fixture.Service().EditField(fixture.Plugin, fixture.Container.ToString(), "destructible",

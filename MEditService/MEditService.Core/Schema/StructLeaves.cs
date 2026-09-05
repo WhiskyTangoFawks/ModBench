@@ -14,17 +14,15 @@ internal static class StructLeaves
     // exposes no discriminator (an excluded union), can never be written, and ValueRejected would
     // blame the value's shape instead.
     internal static SubFieldSpec? BuildStructSubField(
-        PropertyInfo prop, Type core, string colName,
+        PropertyInfo prop, Type core,
         GameReflection game, Type[] path, int depth, ILogger logger)
     {
         var sub = SubFieldReflection.BuildSubSchema(core, game, logger, path, depth);
         if (sub.Count == 0) return SchemaRefusals.ReportUnclassified<SubFieldSpec>(game, logger, prop, core, "empty nested struct");
-        var g = ReflectedTypes.SubGetter(prop);
         var pName = prop.Name;
         var setterType = ReflectedTypes.GetSetterType(core);
         var writable = setterType != null && (!setterType.IsAbstract || HasDiscriminator(sub));
-        return new(colName, "struct", LeafSpec.NoFormKeyTypes, LeafSpec.NoEnumMembers,
-            obj => { var v = g(obj); return v == null ? null : SubFieldValues.ExtractSubObject(v, sub); },
+        return new(pName, "struct", LeafSpec.NoFormKeyTypes, LeafSpec.NoEnumMembers,
             Apply: writable
                 ? LeafWrite.Writable<object>((obj, val) => ApplyStructJson(obj, val, pName, setterType!, sub))
                 : LeafWrite.ReadOnly<object>(
@@ -66,8 +64,8 @@ internal static class StructLeaves
         return ApplyOutcome.Applied;
     }
 
-    // A null payload means "still absent", what Extract answers for a subrecord the record does not
-    // carry. Accepted only when the target holds none; a null over a present struct would be a
+    // A null payload means "still absent", the document's omission of a subrecord the record does
+    // not carry. Accepted only when the target holds none; a null over a present struct would be a
     // delete gesture no caller asks for.
     private static ApplyOutcome ApplyAbsentStruct(object target, string pName)
     {
@@ -83,7 +81,7 @@ internal static class StructLeaves
         setterType.IsAbstract || HasDiscriminator(subFields);
 
     private static bool HasDiscriminator(IReadOnlyList<SubFieldSpec>? subFields) =>
-        subFields?.Any(f => f.Name == LoquiUnions.UnionTypeDiscriminator) ?? false;
+        subFields?.Any(f => f.IsDiscriminator) ?? false;
 
     internal static ColumnInfoResult? BuildStructColumn(
         PropertyInfo prop, Type core, GameReflection game, ILogger logger)
@@ -92,13 +90,6 @@ internal static class StructLeaves
         if (subFields.Count == 0) return SchemaRefusals.ReportUnclassified<ColumnInfoResult>(game, logger, prop, core, "empty struct");
 
         var subFieldMetas = subFields.ConvertAll(s => s.ToFieldMetadata());
-
-        object? Extractor(IMajorRecordGetter r)
-        {
-            var obj = ReflectedTypes.ReadOrNull(r, prop);
-            return obj == null ? null
-                : JsonSerializer.Serialize(SubFieldValues.ExtractSubObject(obj, subFields));
-        }
 
         var setterType = ReflectedTypes.GetSetterType(core);
         var pName = prop.Name;
@@ -111,7 +102,7 @@ internal static class StructLeaves
                 (record, json) => ApplyStructJson(record, json, pName, setterType, subFields));
         }
 
-        return new("VARCHAR", Extractor, "struct", LeafSpec.NoFormKeyTypes, LeafSpec.NoEnumMembers, apply,
+        return new("VARCHAR", "struct", LeafSpec.NoFormKeyTypes, LeafSpec.NoEnumMembers, apply,
             SubFieldMetas: subFieldMetas, LeafTypeName: ReflectedTypes.LeafTypeName(core));
     }
 }

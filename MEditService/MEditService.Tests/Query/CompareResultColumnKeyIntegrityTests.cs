@@ -220,7 +220,7 @@ public sealed class CompareResultColumnKeyIntegrityTests
 
         // The walk below is only meaningful if it reaches non-empty struct/structList Raw and condition
         // subtrees, so a fixture regression fails loudly here rather than passing over empty objects.
-        var properties = Assert.Single(compare.Diffs, d => d.FieldName == "virtual_machine_adapter")
+        var properties = Assert.Single(compare.Diffs, d => d.FieldName == "VirtualMachineAdapter")
             .Children!.Single(c => c.FieldName == "scripts")
             .Children!.Single()
             .Children!.Single(c => c.FieldName == "properties")

@@ -138,7 +138,7 @@ public sealed class ExternalChangeWatcherTests
             watcher.Watch(mod.ModFolder, TrackedModFixture.PluginName, pluginPath);
 
             var editService = new RecordEditService(mod.Mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
-            editService.EditField(mod.Plugin, mod.Npc.ToString(), "height_max", JsonDocument.Parse("0.75").RootElement);
+            editService.EditField(mod.Plugin, mod.Npc.ToString(), "HeightMax", JsonDocument.Parse("0.75").RootElement);
             var compileService = new PluginCompileService(mod.Mirror, new PluginWriter(NullLogger<PluginWriter>.Instance), NullLogger<PluginCompileService>.Instance);
             var result = compileService.Compile(mod.Plugin, new CompileSource.WorkingTree());
             Assert.True(result.Succeeded, result.RefusalReason);

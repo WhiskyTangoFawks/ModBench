@@ -13,7 +13,7 @@ public sealed class ConditionSchemaTests
         SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4);
 
     private static FieldMetadata ConditionElement(string table = "cobj") =>
-        Schemas[table].RecordColumns.Single(c => c.Name == "conditions").ElementType!;
+        Schemas[table].RecordColumns.Single(c => c.Name == "Conditions").ElementType!;
 
     private static FieldMetadata Member(FieldMetadata owner, string name) =>
         owner.Fields!.Single(f => f.Name == name);
@@ -23,7 +23,7 @@ public sealed class ConditionSchemaTests
     [Fact]
     public void ConditionElement_CarriesADiscriminatorOverBothConcreteConditionClasses()
     {
-        var discriminator = Member(ConditionElement(), "concrete_type");
+        var discriminator = Member(ConditionElement(), "MutagenObjectType");
 
         Assert.True(discriminator.IsDiscriminator);
         Assert.Equal(
@@ -34,7 +34,7 @@ public sealed class ConditionSchemaTests
     [Fact]
     public void ConditionData_CarriesADiscriminatorOverBothConcreteConditionDataClasses()
     {
-        var discriminator = Member(Member(ConditionElement(), "data"), "concrete_type");
+        var discriminator = Member(Member(ConditionElement(), "Data"), "MutagenObjectType");
 
         Assert.True(discriminator.IsDiscriminator);
         Assert.Equal(
@@ -53,21 +53,21 @@ public sealed class ConditionSchemaTests
         // Empty, meaning "any record type": the link closes over the abstract IGlobalGetter, and GLOB's
         // schema table is keyed by its four concrete sibling getters, so the base resolves to no table.
         Assert.Empty(link.ValidFormKeyTypes);
-        Assert.DoesNotContain(element.Fields!, f => f.Name == "comparison_value");
+        Assert.DoesNotContain(element.Fields!, f => f.Name == "ComparisonValue");
     }
 
     // ── the two per-game facts ───────────────────────────────────────────────
 
     [Theory]
     [InlineData("IsSneaking")]                                                              // no slot
-    [InlineData("HasKeyword", "parameter_one_record")]                                      // Form
-    [InlineData("GetVATSValue", "parameter_one_number", "parameter_two_number")]            // Number, Number
-    [InlineData("GetStageDone", "parameter_one_record", "parameter_two_number")]            // Form, Number
-    [InlineData("GetVMQuestVariable", "parameter_one_record", "parameter_two_string")]      // Form, String
-    [InlineData("GetGraphVariableFloat", "parameter_one_string")]                           // String
+    [InlineData("HasKeyword", "ParameterOneRecord")]                                      // Form
+    [InlineData("GetVATSValue", "ParameterOneNumber", "ParameterTwoNumber")]            // Number, Number
+    [InlineData("GetStageDone", "ParameterOneRecord", "ParameterTwoNumber")]            // Form, Number
+    [InlineData("GetVMQuestVariable", "ParameterOneRecord", "ParameterTwoString")]      // Form, String
+    [InlineData("GetGraphVariableFloat", "ParameterOneString")]                           // String
     public void ConditionFunction_NamesTheParameterMembersThatFunctionUses(string function, params string[] expected)
     {
-        var slots = Member(Member(ConditionElement(), "data"), "function").SiblingsInUse;
+        var slots = Member(Member(ConditionElement(), "Data"), "Function").SiblingsInUse;
 
         Assert.NotNull(slots);
         Assert.Equal(expected, slots![function]);
@@ -76,7 +76,7 @@ public sealed class ConditionSchemaTests
     [Fact]
     public void ConditionFunction_NamesEveryFunctionTheDomainOffers()
     {
-        var function = Member(Member(ConditionElement(), "data"), "function");
+        var function = Member(Member(ConditionElement(), "Data"), "Function");
 
         Assert.Equal(
             function.EnumMembers.Select(m => m.Value).Order(StringComparer.Ordinal),
@@ -86,13 +86,13 @@ public sealed class ConditionSchemaTests
     [Fact]
     public void RunOnType_NamesTheReferenceMemberUnderExactlyTheReferenceValue()
     {
-        var runOn = Member(Member(ConditionElement(), "data"), "run_on_type");
+        var runOn = Member(Member(ConditionElement(), "Data"), "RunOnType");
 
         Assert.NotNull(runOn.SiblingsInUse);
         Assert.Equal(
             runOn.EnumMembers.Select(m => m.Value).Order(StringComparer.Ordinal),
             runOn.SiblingsInUse!.Keys.Order(StringComparer.Ordinal));
-        Assert.Equal(["reference"], runOn.SiblingsInUse[nameof(Condition.RunOnType.Reference)]);
+        Assert.Equal(["Reference"], runOn.SiblingsInUse[nameof(Condition.RunOnType.Reference)]);
         Assert.All(
             runOn.SiblingsInUse.Where(kv => kv.Key != nameof(Condition.RunOnType.Reference)),
             kv => Assert.Empty(kv.Value));
@@ -101,17 +101,17 @@ public sealed class ConditionSchemaTests
     [Fact]
     public void AnEnumThatGovernsNothing_CarriesNoMap()
     {
-        Assert.Null(Member(ConditionElement(), "compare_operator").SiblingsInUse);
-        Assert.Null(Schemas["npc_"].RecordColumns.Single(c => c.Name == "aggression").ToFieldMetadata().SiblingsInUse);
+        Assert.Null(Member(ConditionElement(), "CompareOperator").SiblingsInUse);
+        Assert.Null(Schemas["npc_"].RecordColumns.Single(c => c.Name == "Aggression").ToFieldMetadata().SiblingsInUse);
     }
 
     [Theory]
-    [InlineData("cobj", "conditions")]
-    [InlineData("qust", "dialog_conditions")]
-    [InlineData("qust", "unused_conditions")]
-    [InlineData("mesg", "menu_buttons")]
-    [InlineData("perk", "effects")]
-    [InlineData("alch", "effects")]
+    [InlineData("cobj", "Conditions")]
+    [InlineData("qust", "DialogConditions")]
+    [InlineData("qust", "UnusedConditions")]
+    [InlineData("mesg", "MenuButtons")]
+    [InlineData("Perk", "Effects")]
+    [InlineData("alch", "Effects")]
     public void EveryConditionBearingColumn_ReachesTheFunctionMemberBelowIt(string table, string column)
     {
         var found = new List<string>();
@@ -123,7 +123,7 @@ public sealed class ConditionSchemaTests
 
     private static void Walk(FieldMetadata meta, string path, List<string> found)
     {
-        if (meta.Name == "function" && meta.SiblingsInUse != null) found.Add(path);
+        if (meta.Name == "Function" && meta.SiblingsInUse != null) found.Add(path);
         if (meta.ElementType != null) Walk(meta.ElementType, path, found);
         foreach (var field in meta.Fields ?? [])
             Walk(field, $"{path}.{field.Name}", found);

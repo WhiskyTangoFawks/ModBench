@@ -23,7 +23,7 @@ public sealed class PluginCompileServiceRefusalTests : IDisposable
         // rename/hand-edit/third-party tool could), and there is no way to emit it as two binary
         // records without changing one's FormKey.
         var npcSourceText = File.ReadAllText(_mod.NpcSourceFile);
-        var collidingPath = _mod.SourceFileFor(_mod.Npc, "keyword", TrackedModFixture.NpcEditorId);
+        var collidingPath = _mod.SourceFileFor(_mod.Npc, "Keyword", TrackedModFixture.NpcEditorId);
         Directory.CreateDirectory(Path.GetDirectoryName(collidingPath)!);
         File.WriteAllText(collidingPath, npcSourceText);
 

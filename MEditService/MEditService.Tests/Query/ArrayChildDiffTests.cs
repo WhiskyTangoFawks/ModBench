@@ -142,7 +142,7 @@ public class ArrayChildDiffTests
     public void StructTypedArrayElement_ProducesSubFieldChildrenForEachArrayChild()
     {
         var meta = StructArrayMeta("Ranks",
-            new FieldMetadata("rank", "int", false, [], []));
+            new FieldMetadata("Rank", "int", false, [], []));
 
         var arrayA = JsonSerializer.Deserialize<JsonElement>("[{\"rank\":1},{\"rank\":2}]");
         var arrayB = JsonSerializer.Deserialize<JsonElement>("[{\"rank\":1},{\"rank\":9}]");
@@ -156,16 +156,16 @@ public class ArrayChildDiffTests
         Assert.NotNull(ranksDiff.Children);
         Assert.Equal(2, ranksDiff.Children!.Count);
 
-        // Each array child should have a "rank" sub-field child
+        // Each array child should have a "Rank" sub-field child
         foreach (var child in ranksDiff.Children)
         {
             Assert.NotNull(child.Children);
-            Assert.Contains(child.Children!, c => c.FieldName == "rank");
+            Assert.Contains(child.Children!, c => c.FieldName == "Rank");
         }
 
         // Second element differs — should have conflict state on B.esp
         var secondChild = ranksDiff.Children[1];
-        var rankSubField = secondChild.Children!.First(c => c.FieldName == "rank");
+        var rankSubField = secondChild.Children!.First(c => c.FieldName == "Rank");
         Assert.True(rankSubField.CellStates.ContainsKey("B.esp"));
         Assert.Equal(ConflictThis.Override, rankSubField.CellStates["B.esp"]);
     }

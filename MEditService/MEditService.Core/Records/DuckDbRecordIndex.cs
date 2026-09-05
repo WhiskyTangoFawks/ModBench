@@ -892,62 +892,36 @@ public sealed class DuckDbRecordIndex : IRecordIndex
             reader.GetString(6), schema, resolveFormKey);
 
     // The construction half of ReadDocumentFromBody, split out so the bulk read can build
-    // documents from rows it materialized before reconstituting any of them.
+    // documents from rows it materialized before reading any of them. The fields are the
+    // document's own nodes at each column's path (ADR-0032): nothing is reconstituted or projected.
     private RecordDocument DocumentFromBody(
         string formKey, string plugin, string origin, int loadOrderIndex, bool isWinner,
         string? editorId, string body, RecordTableSchema schema,
         Func<string, RecordLookupEntry?> resolveFormKey)
     {
-        var bytes = Encoding.UTF8.GetBytes(body);
-
-        // The plugin header: a real document, but a ModHeader is not an IMajorRecordGetter, so neither
-        // the per-record codec nor ColumnSpec.Extract can touch it. Read back through the whole-mod
-        // door and extracted by this schema's HeaderColumnExtract delegates.
-        if (schema.HeaderColumnExtract is { } headerExtracts)
-        {
-            var mod = HeaderDocument.Read(bytes);
-            return new RecordDocument(
-                formKey, new PluginKey(plugin, origin), loadOrderIndex, isWinner, editorId, schema.TableName,
-                body, BuildFields(schema, i => headerExtracts[i](mod), resolveFormKey, _release),
-                // A ModHeader can neither carry the Partial Form flag nor be a type that could, so both
-                // are false outright rather than probed.
-                IsPartialForm: false, IsPartialFormable: false);
-        }
-
-        var record = _codec.DeserializeFromBytesAsync(bytes, _release, schema.TableName).GetAwaiter().GetResult();
+        using var parsed = JsonDocument.Parse(body);
+        var root = parsed.RootElement;
 
         return new RecordDocument(
             formKey, new PluginKey(plugin, origin), loadOrderIndex, isWinner, editorId, schema.TableName,
-            body, BuildFields(schema, i => schema.RecordColumns[i].Extract(record), resolveFormKey, _release),
-            PartialFormFlag.IsSet(record), PartialFormFlag.IsPartialFormable(record.GetType()));
+            body, BuildFields(schema, root, resolveFormKey, _release),
+            // A ModHeader can neither carry the Partial Form flag nor be a type that could.
+            IsPartialForm: !schema.IsHeader && PartialFormFlag.IsSet(root, schema.RecordType),
+            IsPartialFormable: !schema.IsHeader && PartialFormFlag.IsPartialFormable(schema.RecordType));
     }
 
-    // The record is reconstituted and read by the same ColumnSpec.Extract delegates that fill the
-    // views, so the values are identical by construction. rawAt, not the record: the header's values
-    // come from different delegates, everything after is shared.
     private static List<FieldValue> BuildFields(
-        RecordTableSchema schema, Func<int, object?> rawAt,
+        RecordTableSchema schema, JsonElement root,
         Func<string, RecordLookupEntry?> resolveFormKey, GameRelease release)
     {
-        var fields = new List<FieldValue>();
-        for (int i = 0; i < schema.RecordColumns.Count; i++)
+        var fields = new List<FieldValue>(schema.RecordColumns.Count);
+        foreach (var col in schema.RecordColumns)
         {
-            var col = schema.RecordColumns[i];
-            var raw = CoerceToColumnType(rawAt(i), col.DuckDbType);
-
-            var isJsonText = col.IsArray || col.SubFields != null;
-            object? value = raw switch
-            {
-                null => null,
-                string text when isJsonText => JsonSerializer.Deserialize<JsonElement>(text),
-                _ => raw,
-            };
-
-            if (value != null && col.IsBitmask)
-                value = Convert.ToInt64(value, CultureInfo.InvariantCulture).ToString(CultureInfo.InvariantCulture);
-
+            var value = DocumentNodes.At(root, col.PropertyName);
             var meta = col.ToFieldMetadata();
-            fields.Add(new FieldValue(meta, value, CheckErrorBuilder.Build(meta, value, resolveFormKey, release)));
+            // The check reads the shape this record's own class gives the column; the wire keeps the
+            // column's whole metadata, variants included, so the editor can pick the same.
+            fields.Add(new FieldValue(meta, value, CheckErrorBuilder.Build(DocumentNodes.VariantFor(meta, root), value, resolveFormKey, release)));
         }
         return fields;
     }
@@ -980,23 +954,6 @@ public sealed class DuckDbRecordIndex : IRecordIndex
 
     private static int LoadOrderSortKey(DuckDBDataReader reader, int ordinal) =>
         reader.IsDBNull(ordinal) ? int.MaxValue : reader.GetInt32(ordinal);
-
-    // A column declared INTEGER must read back an int whether its extractor produced a byte, ushort
-    // or uint; without this a field's JSON would silently change numeric shape for every sub-int type.
-    private static object? CoerceToColumnType(object? value, string duckDbType)
-    {
-        if (value == null) return null;
-        return duckDbType switch
-        {
-            "BOOLEAN" => Convert.ToBoolean(value, CultureInfo.InvariantCulture),
-            "INTEGER" => Convert.ToInt32(value, CultureInfo.InvariantCulture),
-            "BIGINT" => Convert.ToInt64(value, CultureInfo.InvariantCulture),
-            "FLOAT" => Convert.ToSingle(value, CultureInfo.InvariantCulture),
-            "DOUBLE" => Convert.ToDouble(value, CultureInfo.InvariantCulture),
-            "VARCHAR" => value.ToString(),
-            _ => value,
-        };
-    }
 
     // Callers say both "NPC_" and "npc_", and as a column value the comparison is case-sensitive.
     // Schema keys are RecordType.Type.ToLowerInvariant(), so lowercasing is an exact normalization,

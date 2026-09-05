@@ -25,8 +25,8 @@ public sealed class ByteSliceArrayOpEditTests : IDisposable
     // list.
     private static readonly string[] TwoModels =
     [
-        """{"percentage": 50, "model_filename": "First.nif", "texture_file_hashes": "0x1122"}""",
-        """{"percentage": 50, "model_filename": "Second.nif", "texture_file_hashes": "0xAABBCCDD"}""",
+        """{"percentage": 50, "ModelFilename": "First.nif", "TextureFileHashes": "0x1122"}""",
+        """{"percentage": 50, "ModelFilename": "Second.nif", "TextureFileHashes": "0xAABBCCDD"}""",
     ];
 
     private string SeedDebrisWithTwoModelsCarryingBlobs()

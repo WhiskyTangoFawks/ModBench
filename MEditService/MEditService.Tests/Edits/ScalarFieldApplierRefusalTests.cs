@@ -34,11 +34,11 @@ public sealed class ScalarFieldApplierRefusalTests : IDisposable
     {
         var before = NpcBody();
 
-        var result = Service().EditField(_mod.Plugin, _mod.Npc.ToString(), "height_max", Json("\"tall\""));
+        var result = Service().EditField(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", Json("\"tall\""));
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.FieldValueShapeMismatch, result.Refusal);
-        Assert.Contains("height_max", result.Message, StringComparison.Ordinal);
+        Assert.Contains("HeightMax", result.Message, StringComparison.Ordinal);
         Assert.Equal(before, NpcBody());
     }
 
@@ -47,11 +47,11 @@ public sealed class ScalarFieldApplierRefusalTests : IDisposable
     {
         var before = NpcBody();
 
-        var result = Service().EditField(_mod.Plugin, _mod.Npc.ToString(), "flags", Json("\"NotANumber\""));
+        var result = Service().EditField(_mod.Plugin, _mod.Npc.ToString(), "Flags", Json("\"NotANumber\""));
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.FieldValueShapeMismatch, result.Refusal);
-        Assert.Contains("flags", result.Message, StringComparison.Ordinal);
+        Assert.Contains("Flags", result.Message, StringComparison.Ordinal);
         Assert.Equal(before, NpcBody());
     }
 
@@ -60,11 +60,11 @@ public sealed class ScalarFieldApplierRefusalTests : IDisposable
     {
         var before = NpcBody();
 
-        var result = Service().EditField(_mod.Plugin, _mod.Npc.ToString(), "aggression", Json("\"NotARealAggressionLevel\""));
+        var result = Service().EditField(_mod.Plugin, _mod.Npc.ToString(), "Aggression", Json("\"NotARealAggressionLevel\""));
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.FieldValueShapeMismatch, result.Refusal);
-        Assert.Contains("aggression", result.Message, StringComparison.Ordinal);
+        Assert.Contains("Aggression", result.Message, StringComparison.Ordinal);
         Assert.Equal(before, NpcBody());
     }
 
@@ -73,18 +73,18 @@ public sealed class ScalarFieldApplierRefusalTests : IDisposable
     {
         var before = NpcBody();
 
-        var result = Service().EditField(_mod.Plugin, _mod.Npc.ToString(), "energy_level", Json("4096"));
+        var result = Service().EditField(_mod.Plugin, _mod.Npc.ToString(), "EnergyLevel", Json("4096"));
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.FieldValueShapeMismatch, result.Refusal);
-        Assert.Contains("energy_level", result.Message, StringComparison.Ordinal);
+        Assert.Contains("EnergyLevel", result.Message, StringComparison.Ordinal);
         Assert.Equal(before, NpcBody());
     }
 
     [Fact]
     public void HeightMaxFloatColumn_ValidValue_StillReportsApplied()
     {
-        var result = Service().EditField(_mod.Plugin, _mod.Npc.ToString(), "height_max", Json("0.75"));
+        var result = Service().EditField(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", Json("0.75"));
 
         Assert.True(result.Applied, result.Message);
         Assert.Contains("0.75", NpcBody(), StringComparison.Ordinal);
@@ -98,7 +98,7 @@ public sealed class ScalarFieldApplierRefusalTests : IDisposable
         using var glob = new GlobFixture();
         var before = glob.Body();
 
-        var result = glob.Service().EditField(glob.Plugin, glob.GlobalShort.ToString(), "output_char", Json("true"));
+        var result = glob.Service().EditField(glob.Plugin, glob.GlobalShort.ToString(), "OutputChar", Json("true"));
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.FieldNotFound, result.Refusal);
@@ -110,7 +110,7 @@ public sealed class ScalarFieldApplierRefusalTests : IDisposable
     {
         using var glob = new GlobFixture();
 
-        var result = glob.Service().EditField(glob.Plugin, glob.GlobalFloat.ToString(), "output_char", Json("true"));
+        var result = glob.Service().EditField(glob.Plugin, glob.GlobalFloat.ToString(), "OutputChar", Json("true"));
 
         Assert.True(result.Applied, result.Message);
     }
@@ -120,7 +120,7 @@ public sealed class ScalarFieldApplierRefusalTests : IDisposable
     [Fact]
     public void RaceFormLinkColumn_MalformedString_IsRefusedAtTheEditFieldDoor()
     {
-        var result = Service().EditField(_mod.Plugin, _mod.Npc.ToString(), "race", Json("\"not-a-formkey\""));
+        var result = Service().EditField(_mod.Plugin, _mod.Npc.ToString(), "Race", Json("\"not-a-formkey\""));
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.InvalidFormLink, result.Refusal);
@@ -129,11 +129,11 @@ public sealed class ScalarFieldApplierRefusalTests : IDisposable
     [Fact]
     public void VoiceFormLinkColumn_NonStringJsonValue_IsRefusedAndWritesNothing()
     {
-        var result = Service().EditField(_mod.Plugin, _mod.Npc.ToString(), "voice", Json("42"));
+        var result = Service().EditField(_mod.Plugin, _mod.Npc.ToString(), "Voice", Json("42"));
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.FieldValueShapeMismatch, result.Refusal);
-        Assert.Contains("voice", result.Message, StringComparison.Ordinal);
+        Assert.Contains("Voice", result.Message, StringComparison.Ordinal);
     }
 
     // ── An OMOD carrying one property, for the sub-field-decline slice below ──
@@ -144,12 +144,12 @@ public sealed class ScalarFieldApplierRefusalTests : IDisposable
         using var omod = new OmodFixture();
         var before = omod.Body();
 
-        var result = omod.Service().EditField(omod.Plugin, omod.ArmorMod.ToString(), "properties",
-            Json("""[{"property":"BodyPart","step":1.0,"value_type":"Int","value":"not-a-number","value2":"7","function_type":"Set"}]"""));
+        var result = omod.Service().EditField(omod.Plugin, omod.ArmorMod.ToString(), "Properties",
+            Json("""[{"Property":"BodyPart","Step":1.0,"MutagenObjectType":"Int","Value":"not-a-number","Value2":"7","FunctionType":"Set"}]"""));
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.FieldValueShapeMismatch, result.Refusal);
-        Assert.Contains("properties", result.Message, StringComparison.Ordinal);
+        Assert.Contains("Properties", result.Message, StringComparison.Ordinal);
         Assert.Equal(before, omod.Body());
     }
 

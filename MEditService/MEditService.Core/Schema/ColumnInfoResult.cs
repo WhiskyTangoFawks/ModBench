@@ -5,7 +5,6 @@ namespace MEditService.Core.Schema;
 
 internal sealed record ColumnInfoResult(
     string DuckDbType,
-    Func<IMajorRecordGetter, object?> Extractor,
     string ApiType,
     string[] ValidFormKeyTypes,
     IReadOnlyList<EnumMember> EnumMembers,
@@ -13,7 +12,6 @@ internal sealed record ColumnInfoResult(
     FieldMetadata? ElementMeta = null,
     IReadOnlyList<FieldMetadata>? SubFieldMetas = null,
     bool AllowsNull = false,
-    bool IsFlagsEnum = false,
     string? ViewDefaultLiteral = null,
     IReadOnlyList<string>? KeyMembers = null,
     string? LeafTypeName = null);

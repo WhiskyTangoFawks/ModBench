@@ -1,3 +1,4 @@
+using System.Text.Json;
 using MEditService.Core.Records;
 using Mutagen.Bethesda;
 
@@ -9,7 +10,7 @@ public static class CheckErrorBuilder
 {
     // ADR-0031: `resolve` is the O(1) form_lookup read, not a per-table scan; the
     // not-found/wrong-type/valid-type distinction is computed here via FormKeyResolution.From.
-    public static string? Build(FieldMetadata meta, object? value, Func<string, RecordLookupEntry?> resolve, GameRelease release)
+    public static string? Build(FieldMetadata meta, JsonElement? value, Func<string, RecordLookupEntry?> resolve, GameRelease release)
     {
         var entries = new List<string>();
         FormRefPathBuilder.Walk(meta, value, "",

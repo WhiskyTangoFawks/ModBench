@@ -64,7 +64,7 @@ public sealed class RoundTripSurvey
                     var rewritten = await File.ReadAllBytesAsync(outFile);
 
                     // The same verdict TrackService.VerifyRoundTrip computes, reusing ModelIdentity rather than this
-                    // harness's bare-Equals "model" column below, which a single most-derived GetEqualsMask leaves
+                    // harness's bare-Equals "Model" column below, which a single most-derived GetEqualsMask leaves
                     // blind to base-level fields.
                     if (rewritten.AsSpan().SequenceEqual(original))
                     {
@@ -311,12 +311,12 @@ public sealed class RoundTripSurvey
             {
                 var ha24 = a.AsSpan(x.Start, 24); var hb24 = b.AsSpan(y.Start, 24);
                 var fields = new List<string>();
-                if (!ha24.Slice(4, 4).SequenceEqual(hb24.Slice(4, 4))) fields.Add("size");
+                if (!ha24.Slice(4, 4).SequenceEqual(hb24.Slice(4, 4))) fields.Add("Size");
                 if (!ha24.Slice(8, 4).SequenceEqual(hb24.Slice(8, 4))) fields.Add($"flags({BinaryPrimitives.ReadUInt32LittleEndian(ha24.Slice(8)):X8}->{BinaryPrimitives.ReadUInt32LittleEndian(hb24.Slice(8)):X8})");
                 if (!ha24.Slice(16, 4).SequenceEqual(hb24.Slice(16, 4))) fields.Add("vc-info");
                 if (!ha24.Slice(20, 2).SequenceEqual(hb24.Slice(20, 2))) fields.Add($"form-version({BinaryPrimitives.ReadUInt16LittleEndian(ha24.Slice(20))}->{BinaryPrimitives.ReadUInt16LittleEndian(hb24.Slice(20))})");
-                if (!ha24.Slice(22, 2).SequenceEqual(hb24.Slice(22, 2))) fields.Add("unknown2");
-                Add(fields.Count == 1 && fields[0] == "size" ? $"record-size-only:{x.Type}" : $"other:{x.Type}/record-header[{string.Join("+", fields)}]");
+                if (!ha24.Slice(22, 2).SequenceEqual(hb24.Slice(22, 2))) fields.Add("Unknown2");
+                Add(fields.Count == 1 && fields[0] == "Size" ? $"record-size-only:{x.Type}" : $"other:{x.Type}/record-header[{string.Join("+", fields)}]");
             }
             if (!dataA.SequenceEqual(dataB))
             {

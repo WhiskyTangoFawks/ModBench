@@ -22,7 +22,7 @@ public sealed class FormLinkValidationTests : IDisposable
     // complex-field write: the whole field, never one element. A top-level scalar FormLink column has
     // its own coverage.
     private RecordEditResult SetKeywords(params string[] formKeys) =>
-        Service().EditField(_mod.Plugin, _mod.Npc.ToString(), "keywords", Json(JsonSerializer.Serialize(formKeys)));
+        Service().EditField(_mod.Plugin, _mod.Npc.ToString(), "Keywords", Json(JsonSerializer.Serialize(formKeys)));
 
     [Fact]
     public void PointingAFormLinkAtARecordNoPluginHolds_IsRefusedAsDangling()

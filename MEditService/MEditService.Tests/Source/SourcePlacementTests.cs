@@ -26,7 +26,7 @@ public sealed class SourcePlacementTests
     [Fact]
     public void ATopLevelContainer_IsADirectoryInItsGroupFolder_ListedUnderTheGroupsOwnName()
     {
-        var placement = SourcePlacement.For(Plugin, "quest", "000800:Vendor.esp", "SomeQuest", Release);
+        var placement = SourcePlacement.For(Plugin, "Quest", "000800:Vendor.esp", "SomeQuest", Release);
 
         Assert.Equal(
             Path.Combine("source", Plugin, "Quests", "SomeQuest - 000800_Vendor.esp", "RecordData.json"),
@@ -38,7 +38,7 @@ public sealed class SourcePlacementTests
     [Fact]
     public void AnInteriorCell_NestsUnderABlockPair_ListedUnderTheSubBlocksOwnMember()
     {
-        var placement = SourcePlacement.For(Plugin, "cell", "000800:Vendor.esp", "SomeCell", Release, blockPath: ["0", "0"]);
+        var placement = SourcePlacement.For(Plugin, "Cell", "000800:Vendor.esp", "SomeCell", Release, blockPath: ["0", "0"]);
 
         Assert.Equal(
             Path.Combine("source", Plugin, "Cells", "0", "0", "SomeCell - 000800_Vendor.esp", "RecordData.json"),
@@ -101,8 +101,8 @@ public sealed class SourcePlacementTests
     [Theory]
     [InlineData("npc_", null)]
     [InlineData("weap", null)]
-    [InlineData("quest", null)]
-    [InlineData("cell", new[] { "0", "0" })]
+    [InlineData("Quest", null)]
+    [InlineData("Cell", new[] { "0", "0" })]
     public void TheCarrierAlwaysSitsAboveTheRecordItNames(string recordType, string[]? blockPath)
     {
         var placement = SourcePlacement.For(Plugin, recordType, "000800:Vendor.esp", "Anything", Release, blockPath);

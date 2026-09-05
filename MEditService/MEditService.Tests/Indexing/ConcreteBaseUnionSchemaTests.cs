@@ -2,6 +2,8 @@ using System.Reflection;
 using System.Text.Json;
 using MEditService.Core.Queries;
 using MEditService.Core.Schema;
+using MEditService.Core.Serialization;
+using Microsoft.Extensions.Logging.Abstractions;
 using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -16,7 +18,7 @@ public sealed class ConcreteBaseUnionSchemaTests
 {
     private static ColumnSpec NpcAdapterColumn(SchemaReflector reflector) =>
         reflector.GetSchemas(GameRelease.Fallout4)["npc_"].RecordColumns
-            .Single(c => c.Name == "virtual_machine_adapter");
+            .Single(c => c.Name == "VirtualMachineAdapter");
 
     [Fact]
     public void VirtualMachineAdapterColumn_IsAStructColumn_WithAScriptsSubfield()
@@ -36,7 +38,7 @@ public sealed class ConcreteBaseUnionSchemaTests
     {
         var element = ScriptPropertyElement(NpcAdapterColumn(SharedSchemaReflector.Instance));
 
-        var discriminator = element.Fields!.Single(f => f.Name == "concrete_type");
+        var discriminator = element.Fields!.Single(f => f.Name == "MutagenObjectType");
         Assert.Equal("enum", discriminator.Type);
         Assert.Equal(
             [
@@ -57,26 +59,6 @@ public sealed class ConcreteBaseUnionSchemaTests
 
         const string chain = "IScriptEntryGetter -> IScriptPropertyGetter -> IScriptStructPropertyGetter -> IScriptEntryGetter";
         Assert.True(ex.Message.Contains(chain, StringComparison.Ordinal), ex.Message);
-    }
-
-    [Fact]
-    public void ScriptProperty_DataMember_IsOneFieldPerShape()
-    {
-        var element = ScriptPropertyElement(NpcAdapterColumn(SharedSchemaReflector.Instance));
-
-        var data = element.Fields!.Where(f => f.Name.StartsWith("data", StringComparison.Ordinal))
-            .ToDictionary(f => f.Name, f => f.IsArray ? f.ElementType!.Type + "[]" : f.Type);
-        Assert.Equal(new Dictionary<string, string>
-        {
-            ["data_int"] = "int",
-            ["data_float"] = "float",
-            ["data_bool"] = "bool",
-            ["data_string"] = "string",
-            ["data_int_array"] = "int[]",
-            ["data_float_array"] = "float[]",
-            ["data_bool_array"] = "bool[]",
-            ["data_string_array"] = "string[]",
-        }, data);
     }
 
     [Fact]
@@ -102,7 +84,7 @@ public sealed class ConcreteBaseUnionSchemaTests
         var nestedElement = element.Fields!.Single(f => f.Name == structLeafList).ElementType!;
         var nestedProperty = nestedElement.Fields!.Single(f => f.Name == (structLeafList == "members" ? "properties" : "members")).ElementType!;
 
-        var kinds = nestedProperty.Fields!.Single(f => f.Name == "concrete_type")
+        var kinds = nestedProperty.Fields!.Single(f => f.Name == "MutagenObjectType")
             .EnumMembers.Select(m => m.Value).ToList();
         Assert.Equal(13, kinds.Count);
         Assert.DoesNotContain("ScriptStructProperty", kinds);
@@ -111,7 +93,7 @@ public sealed class ConcreteBaseUnionSchemaTests
     }
 
     [Fact]
-    public void LandscapeLayers_AnAlphaLayerElement_ReadsAsAlphaLayerNotAsItsBase()
+    public async Task LandscapeLayers_AnAlphaLayerElement_ReadsAsAlphaLayerNotAsItsBase()
     {
         var mod = new Fallout4Mod(ModKey.FromFileName("Layers701.esp"), Fallout4Release.Fallout4);
         var cell = new Cell(mod.GetNextFormKey("Cell701"), Fallout4Release.Fallout4)
@@ -122,14 +104,14 @@ public sealed class ConcreteBaseUnionSchemaTests
             },
         };
 
-        var column = SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4)["cell"]
-            .RecordColumns.Single(c => c.Name == "landscape");
-        var layers = JsonDocument.Parse((string)column.Extract((IMajorRecordGetter)cell)!)
-            .RootElement.GetProperty("layers");
+        var body = await new RecordTextCodec(NullLogger<RecordTextCodec>.Instance)
+            .SerializeToBytesAsync(cell, GameRelease.Fallout4);
+        using var document = JsonDocument.Parse(body);
+        var layers = document.RootElement.GetProperty("Landscape").GetProperty("Layers");
 
-        Assert.Equal("BaseLayer", layers[0].GetProperty("concrete_type").GetString());
-        Assert.Equal("AlphaLayer", layers[1].GetProperty("concrete_type").GetString());
-        Assert.Equal("0x0102", layers[1].GetProperty("alpha_layer_data").GetString());
+        Assert.Equal("BaseLayer", layers[0].GetProperty(LoquiUnions.UnionTypeDiscriminator).GetString());
+        Assert.Equal("AlphaLayer", layers[1].GetProperty(LoquiUnions.UnionTypeDiscriminator).GetString());
+        Assert.Equal("0x0102", layers[1].GetProperty("AlphaLayerData").GetString());
     }
 
     // The pin is asserted so a Mutagen bump that changes the concrete-base census fails here, where

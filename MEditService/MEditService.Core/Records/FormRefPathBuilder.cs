@@ -9,18 +9,19 @@ internal static class FormRefPathBuilder
 {
     public delegate void RefVisitor(string fieldPath, string targetFormKey);
 
-    public static void Walk(ColumnSpec col, Func<ColumnSpec, object?> getValue, RefVisitor visitor)
+    /// <summary>Every reference one column of <paramref name="root"/> holds, read off the document
+    /// itself by the column's own path.</summary>
+    public static void Walk(ColumnSpec col, JsonElement root, RefVisitor visitor)
     {
-        // A column whose metadata holds no formKey leaf never has its value extracted: for an
-        // array/struct column that extraction is a JSON serialize the walk would only parse back.
-        // Decided once per ColumnSpec; the schema is built at startup.
+        // A column whose metadata holds no formKey leaf is skipped without being read, decided once
+        // per ColumnSpec since the schema is built at startup.
         var (meta, carriesFormKeys) = Plans.GetOrAdd(col, static c =>
         {
             var m = c.ToFieldMetadata();
             return (m, CarriesFormKeys(m));
         });
         if (!carriesFormKeys) return;
-        Walk(meta, getValue(col), col.Name,
+        Walk(DocumentNodes.VariantFor(meta, root), DocumentNodes.At(root, col.PropertyName), col.Name,
             (path, raw, _, _) => { if (IsRealRef(raw)) visitor(path, raw!); });
     }
 
@@ -36,10 +37,13 @@ internal static class FormRefPathBuilder
             "struct" => meta.Fields?.Any(CarriesFormKeys) == true,
             "array" => meta.ElementType != null && CarriesFormKeys(meta.ElementType),
             _ => false,
-        };
+        }
+        || meta.Variants?.Values.Any(CarriesFormKeys) == true;
 
+    /// <summary>Visits every formKey leaf under <paramref name="meta"/>, a member the document omits
+    /// included (as null), since an unset non-nullable link is a fact about the record.</summary>
     internal static void Walk(
-        FieldMetadata meta, object? value, string path,
+        FieldMetadata meta, JsonElement? value, string path,
         Action<string, string?, bool, IReadOnlyList<string>> onFormKeyLeaf)
     {
         if (meta.Type == "formKey")
@@ -48,34 +52,21 @@ internal static class FormRefPathBuilder
             return;
         }
 
-        var walkable = meta.Type == "struct" ? meta.Fields != null : meta.Type == "array" && meta.ElementType != null;
-        if (!walkable) return;
-
-        // A struct or array *column*'s own Extract answers the serialized VARCHAR the document
-        // stores; one nested inside it answers the parsed JsonElement. Coerced once, here, so
-        // neither shape reaches the two walks below.
-        if (value is string text)
-        {
-            using var doc = JsonDocument.Parse(text);
-            Walk(meta, doc.RootElement, path, onFormKeyLeaf);
-            return;
-        }
-
-        if (meta.Type == "struct") WalkStruct(meta, value, path, onFormKeyLeaf);
-        else WalkArray(meta, value, path, onFormKeyLeaf);
+        if (meta.Type == "struct" && meta.Fields != null) WalkStruct(meta, value, path, onFormKeyLeaf);
+        else if (meta.Type == "array" && meta.ElementType != null) WalkArray(meta, value, path, onFormKeyLeaf);
     }
 
     private static void WalkStruct(
-        FieldMetadata meta, object? value, string path,
+        FieldMetadata meta, JsonElement? value, string path,
         Action<string, string?, bool, IReadOnlyList<string>> onFormKeyLeaf)
     {
-        if (value is not JsonElement { ValueKind: JsonValueKind.Object } obj) return;
+        if (value is not { ValueKind: JsonValueKind.Object } obj) return;
         var idle = IdleMembers(meta.Fields!, obj);
         foreach (var field in meta.Fields!)
         {
             if (idle?.Contains(field.Name) == true) continue;
-            if (obj.TryGetProperty(field.Name, out var prop))
-                Walk(field, prop, path.Length > 0 ? $"{path}.{field.Name}" : field.Name, onFormKeyLeaf);
+            var member = obj.TryGetProperty(field.Name, out var prop) && prop.ValueKind != JsonValueKind.Null ? prop : (JsonElement?)null;
+            Walk(DocumentNodes.VariantFor(field, obj), member, path.Length > 0 ? $"{path}.{field.Name}" : field.Name, onFormKeyLeaf);
         }
     }
 
@@ -102,11 +93,13 @@ internal static class FormRefPathBuilder
     }
 
     private static void WalkArray(
-        FieldMetadata meta, object? value, string path,
+        FieldMetadata meta, JsonElement? value, string path,
         Action<string, string?, bool, IReadOnlyList<string>> onFormKeyLeaf)
     {
-        ForEachElement(value, (idx, elem) =>
-            Walk(meta.ElementType!, elem, $"{path}[{idx}]", onFormKeyLeaf));
+        if (value is not { ValueKind: JsonValueKind.Array } array) return;
+        var idx = 0;
+        foreach (var elem in array.EnumerateArray())
+            Walk(meta.ElementType!, elem, $"{path}[{idx++}]", onFormKeyLeaf);
     }
 
     private static bool IsRealRef(string? s) => s is not null && s != "Null";
@@ -117,12 +110,4 @@ internal static class FormRefPathBuilder
         JsonElement { ValueKind: JsonValueKind.String } je => je.GetString(),
         _ => null
     };
-
-    private static void ForEachElement(object? value, Action<int, JsonElement> callback)
-    {
-        if (value is not JsonElement { ValueKind: JsonValueKind.Array } array) return;
-        var idx = 0;
-        foreach (var elem in array.EnumerateArray())
-            callback(idx++, elem);
-    }
 }

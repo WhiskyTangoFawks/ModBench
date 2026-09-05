@@ -1,4 +1,5 @@
 using System.Text.Json;
+using MEditService.Core.Records;
 using MEditService.Core.Schema;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -63,12 +64,15 @@ internal readonly record struct FieldApplyResult
 /// Complex fields are applied as one atomic value, never per-element, and the record mutated is a throwaway.</summary>
 internal static class RecordFieldWriter
 {
+    // body: the record's current document, which an array op patches rather than re-reading the
+    // live object.
     internal static FieldApplyResult TryApply(
         IMajorRecord record,
         string recordType,
         string fieldPath,
         JsonElement value,
-        IReadOnlyDictionary<string, RecordTableSchema> schemas)
+        IReadOnlyDictionary<string, RecordTableSchema> schemas,
+        string body)
     {
         if (fieldPath.Equals(EditorIdFieldPath, StringComparison.Ordinal))
             return ApplyEditorId(record, value);
@@ -85,7 +89,7 @@ internal static class RecordFieldWriter
         // An array op envelope is detected by shape (an object with an "op" member), since it only
         // ever targets an ordinary reflected column.
         if (TryGetOpName(value, out var arrayOpName) && ArrayOpWriter.IsArrayOp(arrayOpName))
-            return ArrayOpWriter.Apply(record, col, arrayOpName, value);
+            return ArrayOpWriter.Apply(record, col, arrayOpName, value, DocumentNodes.MemberOf(body, col.PropertyName));
 
         if (col.Apply.Writer is not { } apply)
             return FieldApplyOutcome.ReadOnly;

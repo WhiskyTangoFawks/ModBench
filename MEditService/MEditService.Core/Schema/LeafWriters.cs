@@ -71,19 +71,30 @@ internal static class LeafWriters
     /// because the writer resolves its property off the target's runtime type; contravariance makes
     /// one body for record and sub-field.</summary>
     internal static LeafWrite<TTarget> RouteWriter<TTarget>(
-        LeafSpec leaf, Type core, string pName, bool nullable, ILogger logger)
+        LeafSpec leaf, PropertyInfo prop, Type core, bool nullable, GameReflection game, ILogger logger)
         where TTarget : class
     {
+        var pName = prop.Name;
         Func<object, JsonElement, ApplyOutcome>? writer = leaf.Convert switch
         {
+            // The document spells a translated string as an object; its Value is what the converter takes.
+            { } c when ReflectedTypes.IsTranslatedString(core) => MakeApplier(pName, nullable, v => c(TranslatedStringValue(v)), logger),
             { } c => MakeApplier(pName, nullable, c, logger),
             null when ReflectedTypes.IsFormLink(core) => (obj, val) => ApplyFormLinkJson(obj, val, pName, logger),
             null when ByteSliceHex.IsByteSlice(core) => ByteSliceHex.MakeHexApplier(pName, nullable, logger),
+            null when ReflectedTypes.IsAtomicValueType(core) => AtomicValueLeaves.MakeColorApplier(pName, game.Annotations.HasAlphaLeaf(prop), logger),
+            null when ReflectedTypes.IsVectorStructType(core) => VectorStructLeaves.MakeVectorApplier(prop, core, game, logger),
             _ => null,
         };
         return writer is null
             ? LeafWrite.ReadOnly<TTarget>(SchemaRefusals.NoConverterReason)
             : LeafWrite.Writable<TTarget>(writer);
+    }
+
+    private static JsonElement TranslatedStringValue(JsonElement v)
+    {
+        if (v.ValueKind != JsonValueKind.Object) return v;
+        return v.TryGetProperty("Value", out var value) ? value : JsonDocument.Parse("\"\"").RootElement;
     }
 
     // Answers ApplyOutcome like MakeApplier so a malformed FormLink write is a real refusal, not a

@@ -591,7 +591,7 @@ public sealed class RecordQueryServiceTests : IDisposable
                 var conditions = Assert.Single(compare!.Diffs, d => d.FieldName == "conditions");
                 var condition = Assert.Single(conditions.Children!);
                 var data0 = Assert.Single(condition.Children!, c => c.FieldName == "data");
-                var param = Assert.Single(data0.Children!, c => c.FieldName == "parameter_one_record");
+                var param = Assert.Single(data0.Children!, c => c.FieldName == "ParameterOneRecord");
                 Assert.NotNull(param.Resolutions);
                 var paramResolution = param.Resolutions!["Base.esp"];
                 Assert.Equal(FormKeyResolutionState.ResolvedValidType, paramResolution.State);
@@ -615,7 +615,7 @@ public sealed class RecordQueryServiceTests : IDisposable
         return npc.FormKey;
     }
 
-    private const string VmadField = "virtual_machine_adapter";
+    private const string VmadField = "VirtualMachineAdapter";
 
     private static FieldDiff PowerPropertyDiff(CompareResult compare) =>
         compare.Diffs.First(d => d.FieldName == VmadField)

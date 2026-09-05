@@ -314,7 +314,7 @@ public sealed class ContainmentRederivationTests : IDisposable
         repo.Index(new Fallout4Mod(ModKey.FromFileName("FreshCreate.esp"), Fallout4Release.Fallout4), Registration.Participating(0), new PluginKey("FreshCreate.esp", "Data"));
 
         var key = new PluginKey("FreshCreate.esp", "Data");
-        repo.CreateWorkingTreeRecord(key, cell.FormKey.ToString(), "cell", Encoding.UTF8.GetString(body));
+        repo.CreateWorkingTreeRecord(key, cell.FormKey.ToString(), "Cell", Encoding.UTF8.GetString(body));
 
         // GetPlacement/GetContainerChildren read `placement`/`container_child` directly, unlike
         // GetCellReferences (which additionally joins against `records` for the placed ref's own row —
@@ -338,7 +338,7 @@ public sealed class ContainmentRederivationTests : IDisposable
         var landscapeParentBefore = index.At(RecordRef.Effective).GetContainerParent(_fixture.Plugin, _fixture.Landscape.ToString());
 
         // A field on the *owner* itself (not touching any child slot at all).
-        Assert.True(EditService().EditField(_fixture.Plugin, _fixture.EmbedCell.ToString(), "water_height", Json("55.0")).Applied);
+        Assert.True(EditService().EditField(_fixture.Plugin, _fixture.EmbedCell.ToString(), "WaterHeight", Json("55.0")).Applied);
 
         Assert.Equal(placementBefore, index.At(RecordRef.Effective).GetPlacement(_fixture.PersistentRef.ToString(), _fixture.Plugin));
         Assert.Equal(navmeshParentBefore, index.At(RecordRef.Effective).GetContainerParent(_fixture.Plugin, _fixture.Navmesh.ToString()));

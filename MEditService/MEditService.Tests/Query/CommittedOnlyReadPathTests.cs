@@ -63,7 +63,7 @@ public sealed class CommittedOnlyReadPathTests : IDisposable
         Assert.Equal("TestNPC01", only.EditorId);
         // A scalar field read straight off the index — the slot a staged value could otherwise
         // stand in for.
-        var deleted = Assert.Single(only.Fields, f => f.Metadata.Name == "is_deleted");
+        var deleted = Assert.Single(only.Fields, f => f.Metadata.Name == "IsDeleted");
         Assert.Equal("False", deleted.Value?.ToString());
     }
 }

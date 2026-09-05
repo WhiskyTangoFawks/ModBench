@@ -55,7 +55,7 @@ public sealed class EditFieldApiTests(LoadedApiFixture<TestPluginFixture> loaded
         (await _client.PostAsJsonAsync("/plugins/track", new { origin = Origin, preset = "Edits" })).EnsureSuccessStatusCode();
 
         var formKey = await FirstNpcFormKey();
-        var response = await PostEdit(formKey, "height_max", 0.75);
+        var response = await PostEdit(formKey, "HeightMax", 0.75);
 
         response.EnsureSuccessStatusCode();
         Assert.True(JsonSerializer.Deserialize<JsonElement>(await response.Content.ReadAsStringAsync())
@@ -76,11 +76,11 @@ public sealed class EditFieldApiTests(LoadedApiFixture<TestPluginFixture> loaded
         (await _client.PostAsJsonAsync("/plugins/track", new { origin = Origin, preset = "Edits" })).EnsureSuccessStatusCode();
 
         var formKey = await FirstNpcFormKey();
-        (await PostEdit(formKey, "height_max", 0.75)).EnsureSuccessStatusCode();
+        (await PostEdit(formKey, "HeightMax", 0.75)).EnsureSuccessStatusCode();
 
         var detail = await _client.GetFromJsonAsync<JsonElement>($"/records/{Uri.EscapeDataString(formKey)}");
         var field = detail.GetProperty("fields").EnumerateArray()
-            .Single(f => f.GetProperty("metadata").GetProperty("name").GetString() == "height_max");
+            .Single(f => f.GetProperty("metadata").GetProperty("name").GetString() == "HeightMax");
         Assert.Equal(0.75, field.GetProperty("value").GetDouble(), 3);
     }
 
@@ -91,7 +91,7 @@ public sealed class EditFieldApiTests(LoadedApiFixture<TestPluginFixture> loaded
         await LoadOnly(fx); // deliberately not tracked
         var formKey = await FirstNpcFormKey();
 
-        var response = await PostEdit(formKey, "height_max", 0.75);
+        var response = await PostEdit(formKey, "HeightMax", 0.75);
 
         Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
         var problem = await response.Content.ReadFromJsonAsync<JsonElement>();
@@ -138,7 +138,7 @@ public sealed class EditFieldApiTests(LoadedApiFixture<TestPluginFixture> loaded
         File.Delete(sourcePath);
         Directory.CreateDirectory(sourcePath);
 
-        var response = await PostEdit(formKey, "height_max", 0.75);
+        var response = await PostEdit(formKey, "HeightMax", 0.75);
 
         // A shaped ProblemDetails, not an empty 500: a client with no body to read cannot tell
         // that apart from the backend having died.
@@ -156,7 +156,7 @@ public sealed class EditFieldApiTests(LoadedApiFixture<TestPluginFixture> loaded
 
         var response = await _client.PostAsJsonAsync(
             $"/records/{Uri.EscapeDataString(formKey)}/field",
-            new { plugin = "", origin = Origin, fieldPath = "height_max", value = 0.75 });
+            new { plugin = "", origin = Origin, fieldPath = "HeightMax", value = 0.75 });
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }

@@ -5,8 +5,7 @@ using Noggog;
 namespace MEditService.Core.Schema;
 
 /// <summary>A byte blob as hex text in Mutagen's own grammar (<c>WriteBytes</c>): "0x" plus uppercase
-/// hex, "[]" empty, "" absent — so Extract and the generated json_extract view answer the same
-/// string.</summary>
+/// hex, "[]" empty, "" absent.</summary>
 internal static class ByteSliceHex
 {
     internal const string HexApiType = "hex";
@@ -15,18 +14,6 @@ internal static class ByteSliceHex
         core.IsGenericType
         && core.GetGenericTypeDefinition() == typeof(ReadOnlyMemorySlice<>)
         && core.GetGenericArguments()[0] == typeof(byte);
-
-    // Both slice types: a getter overlay yields ReadOnlyMemorySlice, a mutable record's SliceList<byte>
-    // yields MemorySlice, and a column's current value is read off the mutable record.
-    internal static string? HexText(object? raw) => raw switch
-    {
-        ReadOnlyMemorySlice<byte> s => HexText(s.Span),
-        MemorySlice<byte> s => HexText(s.Span),
-        _ => null,
-    };
-
-    internal static string HexText(ReadOnlySpan<byte> bytes) =>
-        bytes.Length == 0 ? "[]" : "0x" + Convert.ToHexString(bytes);
 
     /// <summary>Hex, with an optional <c>0x</c> prefix, or Mutagen's <c>"[]"</c> for an empty
     /// slice. Odd-length and non-hex text have no byte reading and decline here rather than being

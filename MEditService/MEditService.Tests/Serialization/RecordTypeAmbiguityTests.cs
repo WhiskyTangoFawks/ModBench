@@ -28,11 +28,11 @@ public sealed class RecordTypeAmbiguityTests
     [Fact]
     public void ConcreteFor_ResolvesEverySchemaTableName()
     {
-        // "header" is the one table with no document to reconstitute: a ModHeader never reaches this codec
+        // "Header" is the one table with no document to reconstitute: a ModHeader never reaches this codec
         // and its Body is null. Excluded by name rather than by predicate, so a second unresolvable name
         // cannot hide behind a rule that grew.
         var tableNames = SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4).Keys
-            .Where(n => n != "header")
+            .Where(n => n != "Header")
             .ToList();
 
         var unresolved = tableNames.Where(n => Dispatch.ConcreteFor(n) is null).ToList();
@@ -47,10 +47,10 @@ public sealed class RecordTypeAmbiguityTests
     [InlineData("gmst", true)]
     [InlineData("weap", false)]
     [InlineData("npc_", false)]
-    [InlineData("cell", false)]
+    [InlineData("Cell", false)]
     [InlineData("wrld", false)]
     [InlineData("refr", false)]
-    [InlineData("landscape", false)]
+    [InlineData("Landscape", false)]
     public void IsPathAmbiguous_MatchesTheWholeModDoorsOwnPolicy(string recordType, bool expected) =>
         Assert.Equal(expected, Dispatch.IsPathAmbiguous(recordType));
 

@@ -22,7 +22,7 @@ public class SchemaReflectorAtomicValueTests
     {
         // Light.Color is `wbByteColors('Color')` in wbDefinitionsFO4.pas:10539, so no Alpha leaf,
         // the fourth byte being wbUnused(1).
-        var color = Column("ligh", "color");
+        var color = Column("ligh", "Color");
 
         Assert.Equal("struct", color.ApiType);
         Assert.Equal(["red", "green", "blue"], SubFieldNames(color));
@@ -35,8 +35,8 @@ public class SchemaReflectorAtomicValueTests
         // Cell.Lighting -> CellLighting.AmbientColor, one level in — the nested twin of the fact
         // above, proving the atomic-value class is reached from BuildSubSchema's dispatch and not
         // only from the top-level column dispatch.
-        var lighting = Column("cell", "lighting");
-        var ambient = lighting.SubFields!.Single(f => f.Name == "ambient_color");
+        var lighting = Column("Cell", "Lighting");
+        var ambient = lighting.SubFields!.Single(f => f.Name == "AmbientColor");
 
         Assert.Equal("struct", ambient.Type);
         Assert.Equal(["red", "green", "blue"], ambient.Fields!.Select(f => f.Name).ToArray());
@@ -56,10 +56,10 @@ public class SchemaReflectorAtomicValueTests
     {
         Assert.True(xEditDefinitionLine > 0); // the citation is the point of the row, not a value under test
 
-        var color = Column(table, "color");
+        var color = Column(table, "Color");
 
         Assert.Equal("struct", color.ApiType);
-        Assert.Equal(["red", "green", "blue", "alpha"], SubFieldNames(color));
+        Assert.Equal(["red", "green", "blue", "Alpha"], SubFieldNames(color));
         Assert.All(color.SubFields!, f => Assert.Equal("int", f.Type));
     }
 
@@ -79,7 +79,7 @@ public class SchemaReflectorAtomicValueTests
 
             var column = schema.RecordColumns.SingleOrDefault(c => c.PropertyName == propertyName);
             if (column == null) { unresolved.Add($"{ownerGetterTypeName}.{propertyName} (no column)"); continue; }
-            if (!SubFieldNames(column).Contains("alpha"))
+            if (!SubFieldNames(column).Contains("Alpha"))
                 unresolved.Add($"{ownerGetterTypeName}.{propertyName} (no alpha leaf)");
         }
 

@@ -100,7 +100,7 @@ public sealed class RecordEditService(
             && PartialFormFlag.IsPartialFormable(target.GetType());
         var bit14Before = checkBit14Leak ? target.MajorRecordFlagsRaw & PartialFormFlag.Bit : 0;
 
-        var applied = RecordFieldWriter.TryApply(target, document.RecordType, fieldPath, value, schemas);
+        var applied = RecordFieldWriter.TryApply(target, document.RecordType, fieldPath, value, schemas, document.Body!);
         // A boundary array op is already satisfied: returned before every write so it leaves no
         // dirty file or history entry.
         if (applied.Outcome == FieldApplyOutcome.NoOp)
@@ -1181,7 +1181,8 @@ public sealed class RecordEditService(
                 $"{record.FormKey} in {plugin.Name} could not run. Nothing was written.");
         }
 
-        PluginIngest.CollectFormRefs(refs, record, recordType, schema);
+        using (var document = JsonDocument.Parse(SerializeToText(record, release)))
+            PluginIngest.CollectFormRefs(refs, record.FormKey.ToString(), record.EditorID, document.RootElement, recordType, schema);
         if (refs.FirstOrDefault(r => r.TargetFormKey == oldFormKey) is { TargetFormKey: not null } stale)
         {
             return RecordEditResult.Refused(

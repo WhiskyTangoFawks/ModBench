@@ -8,7 +8,7 @@ public class FormKeyResolutionTests
     [Fact]
     public void From_NullEntry_ReturnsUnresolved()
     {
-        var resolution = FormKeyResolution.From("000001:Test.esp", null, ["race"], GameRelease.Fallout4);
+        var resolution = FormKeyResolution.From("000001:Test.esp", null, ["Race"], GameRelease.Fallout4);
         Assert.Equal(FormKeyResolutionState.Unresolved, resolution.State);
         Assert.Null(resolution.RecordType);
         Assert.Null(resolution.EditorId);
@@ -18,7 +18,7 @@ public class FormKeyResolutionTests
     public void From_EntryOfWrongType_ReturnsResolvedWrongType()
     {
         var entry = new RecordLookupEntry("npc_", "SomeNpc");
-        var resolution = FormKeyResolution.From("001234:Test.esp", entry, ["race"], GameRelease.Fallout4);
+        var resolution = FormKeyResolution.From("001234:Test.esp", entry, ["Race"], GameRelease.Fallout4);
         Assert.Equal(FormKeyResolutionState.ResolvedWrongType, resolution.State);
         Assert.Equal("npc_", resolution.RecordType);
         Assert.Equal("SomeNpc", resolution.EditorId);
@@ -27,10 +27,10 @@ public class FormKeyResolutionTests
     [Fact]
     public void From_EntryOfValidType_ReturnsResolvedValidType()
     {
-        var entry = new RecordLookupEntry("race", "SomeRace");
-        var resolution = FormKeyResolution.From("001234:Test.esp", entry, ["race"], GameRelease.Fallout4);
+        var entry = new RecordLookupEntry("Race", "SomeRace");
+        var resolution = FormKeyResolution.From("001234:Test.esp", entry, ["Race"], GameRelease.Fallout4);
         Assert.Equal(FormKeyResolutionState.ResolvedValidType, resolution.State);
-        Assert.Equal("race", resolution.RecordType);
+        Assert.Equal("Race", resolution.RecordType);
         Assert.Equal("SomeRace", resolution.EditorId);
     }
 

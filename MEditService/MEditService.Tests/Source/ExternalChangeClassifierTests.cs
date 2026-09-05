@@ -20,7 +20,7 @@ public sealed class ExternalChangeClassifierTests
         try
         {
             var editService = new RecordEditService(mod.Mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
-            editService.EditField(mod.Plugin, mod.Npc.ToString(), "height_max", Json("0.75"));
+            editService.EditField(mod.Plugin, mod.Npc.ToString(), "HeightMax", Json("0.75"));
 
             var compileService = new PluginCompileService(mod.Mirror, new PluginWriter(NullLogger<PluginWriter>.Instance), NullLogger<PluginCompileService>.Instance);
             var result = compileService.Compile(mod.Plugin, new CompileSource.WorkingTree());
@@ -85,7 +85,7 @@ public sealed class ExternalChangeClassifierTests
         try
         {
             var editService = new RecordEditService(mod.Mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
-            editService.EditField(mod.Plugin, mod.Npc.ToString(), "height_max", Json("0.75"));
+            editService.EditField(mod.Plugin, mod.Npc.ToString(), "HeightMax", Json("0.75"));
             var compileService = new PluginCompileService(mod.Mirror, new PluginWriter(NullLogger<PluginWriter>.Instance), NullLogger<PluginCompileService>.Instance);
             var result = compileService.Compile(mod.Plugin, new CompileSource.WorkingTree());
             Assert.True(result.Succeeded, result.RefusalReason);

@@ -72,7 +72,7 @@ public class RecordTypeDispatchTests
             var filePath = Path.Combine(dir.FullName, "cell.json");
 
             await codec.SerializeAsync(original, filePath, GameRelease.Fallout4);
-            var roundTripped = (Cell)await codec.DeserializeAsync(filePath, GameRelease.Fallout4, "cell");
+            var roundTripped = (Cell)await codec.DeserializeAsync(filePath, GameRelease.Fallout4, "Cell");
 
             var mask = original.GetEqualsMask(roundTripped);
             var leaves = MaskInspector.CountLeaves(mask).ToList();

@@ -1,6 +1,8 @@
 using System.Text.Json;
 using MEditService.Core.Edits;
 using MEditService.Core.Schema;
+using MEditService.Core.Serialization;
+using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -57,7 +59,7 @@ public class UnionArrayAddInventoryTests
 
     [Theory]
     [MemberData(nameof(UnionArrays))]
-    public void ArrayAdd_BuildsAnElementTheWritePathAccepts(string table, string column)
+    public async Task ArrayAdd_BuildsAnElementTheWritePathAccepts(string table, string column)
     {
         var mod = new Fallout4Mod(Key, Fallout4Release.Fallout4);
         var schema = SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4)[table];
@@ -65,10 +67,13 @@ public class UnionArrayAddInventoryTests
         var record = NewRecord(mod, table);
 
         var outcome = ArrayOpWriter.Apply(record, col, "array_add",
-            JsonDocument.Parse("""{"op": "array_add", "path": []}""").RootElement);
+            JsonDocument.Parse("""{"op": "array_add", "path": []}""").RootElement, current: null);
 
         Assert.Equal(FieldApplyOutcome.Applied, outcome);
-        var written = JsonDocument.Parse((string)col.Extract(record)!).RootElement;
+        var body = await new RecordTextCodec(NullLogger<RecordTextCodec>.Instance)
+            .SerializeToBytesAsync(record, GameRelease.Fallout4);
+        using var document = JsonDocument.Parse(body);
+        var written = document.RootElement.GetProperty(col.PropertyName);
         Assert.Equal(1, written.GetArrayLength());
         // The one member the default names, and the leaf it names.
         var discriminator = col.ElementType!.Fields!.Single(f => f.IsDiscriminator);

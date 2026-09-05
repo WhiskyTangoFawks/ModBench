@@ -107,7 +107,7 @@ public sealed class HeaderFlagEditTests : IDisposable
     public void EditField_RawFlagsColumn_StillRefusesAsReadOnly()
     {
         var result = Service().EditField(
-            _fixture.Plugin, HeaderFormKey, "flags", JsonDocument.Parse("[\"Small\"]").RootElement);
+            _fixture.Plugin, HeaderFormKey, "Flags", JsonDocument.Parse("[\"Small\"]").RootElement);
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.FieldReadOnly, result.Refusal);

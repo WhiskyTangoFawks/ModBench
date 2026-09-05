@@ -30,8 +30,8 @@ public sealed class PrimitiveListEditTests : IDisposable
         Assert.Contains("\"Actors\\\\Zero\"", before, StringComparison.Ordinal);
 
         var result = EditRace("subgraphs", """
-            [{"role": "MT", "behavior_graph": "graph\\zero", "animation_paths": ["Actors\\Edited", "Actors\\Added"]},
-             {"role": "Weapon", "behavior_graph": "graph\\one", "animation_paths": ["Actors\\OneA", "Actors\\OneB"]}]
+            [{"role": "MT", "BehaviorGraph": "graph\\zero", "AnimationPaths": ["Actors\\Edited", "Actors\\Added"]},
+             {"role": "Weapon", "BehaviorGraph": "graph\\one", "AnimationPaths": ["Actors\\OneA", "Actors\\OneB"]}]
             """);
 
         Assert.True(result.Applied, result.Message);
@@ -60,8 +60,8 @@ public sealed class PrimitiveListEditTests : IDisposable
     {
         var result = EditRace("subgraphs",
             """
-            [{"role": "MT", "animation_paths": []},
-             {"role": "Weapon", "animation_paths": ["Actors\\OneA", "Actors\\OneB"]}]
+            [{"role": "MT", "AnimationPaths": []},
+             {"role": "Weapon", "AnimationPaths": ["Actors\\OneA", "Actors\\OneB"]}]
             """);
 
         Assert.True(result.Applied, result.Message);
@@ -75,7 +75,7 @@ public sealed class PrimitiveListEditTests : IDisposable
         var before = _fixture.RaceBody();
 
         var result = EditRace("subgraphs",
-            """[{"role": "MT", "animation_paths": [{"nope": 1}]}, {"role": "Weapon"}]""");
+            """[{"role": "MT", "AnimationPaths": [{"nope": 1}]}, {"role": "Weapon"}]""");
 
         Assert.False(result.Applied);
         Assert.Equal(before, _fixture.RaceBody());
@@ -84,7 +84,7 @@ public sealed class PrimitiveListEditTests : IDisposable
     [Fact]
     public void TopLevelStringListColumn_Write_Applies()
     {
-        var result = EditRace("movement_type_names", """["Sneak", "Sprint"]""");
+        var result = EditRace("MovementTypeNames", """["Sneak", "Sprint"]""");
 
         Assert.True(result.Applied, result.Message);
         var body = _fixture.RaceBody();
@@ -97,7 +97,7 @@ public sealed class PrimitiveListEditTests : IDisposable
     public void TopLevelIntListColumn_Write_Applies()
     {
         var result = _fixture.Service().EditField(
-            _fixture.Plugin, _fixture.MiscItem.ToString(), "component_display_indices", Json("[3, 7]"));
+            _fixture.Plugin, _fixture.MiscItem.ToString(), "ComponentDisplayIndices", Json("[3, 7]"));
 
         Assert.True(result.Applied, result.Message);
         Assert.Contains("\"ComponentDisplayIndices\": [\n    3,\n    7\n  ]",
@@ -110,11 +110,11 @@ public sealed class PrimitiveListEditTests : IDisposable
         var before = _fixture.MiscItemBody();
 
         var result = _fixture.Service().EditField(
-            _fixture.Plugin, _fixture.MiscItem.ToString(), "component_display_indices", Json("[3, 4096]"));
+            _fixture.Plugin, _fixture.MiscItem.ToString(), "ComponentDisplayIndices", Json("[3, 4096]"));
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.FieldValueShapeMismatch, result.Refusal);
-        Assert.Contains("component_display_indices", result.Message, StringComparison.Ordinal);
+        Assert.Contains("ComponentDisplayIndices", result.Message, StringComparison.Ordinal);
         Assert.Equal(before, _fixture.MiscItemBody());
     }
 
@@ -122,7 +122,7 @@ public sealed class PrimitiveListEditTests : IDisposable
     public void TopLevelIntListColumn_OutOfRangeElement_MessageNamesTheElementNotTheShape()
     {
         var result = _fixture.Service().EditField(
-            _fixture.Plugin, _fixture.MiscItem.ToString(), "component_display_indices", Json("[3, 4096]"));
+            _fixture.Plugin, _fixture.MiscItem.ToString(), "ComponentDisplayIndices", Json("[3, 4096]"));
 
         Assert.Contains("element that was not accepted", result.Message, StringComparison.Ordinal);
         Assert.DoesNotContain("takes the whole array", result.Message, StringComparison.Ordinal);
@@ -134,7 +134,7 @@ public sealed class PrimitiveListEditTests : IDisposable
         var before = _fixture.MiscItemBody();
 
         var result = _fixture.Service().EditField(
-            _fixture.Plugin, _fixture.MiscItem.ToString(), "component_display_indices", Json("""[3, "nope"]"""));
+            _fixture.Plugin, _fixture.MiscItem.ToString(), "ComponentDisplayIndices", Json("""[3, "nope"]"""));
 
         Assert.False(result.Applied);
         Assert.Contains("element that was not accepted", result.Message, StringComparison.Ordinal);
@@ -206,7 +206,7 @@ public sealed class PrimitiveListEditTests : IDisposable
     // ── AC 4: the ordinary array-op envelope, on a nested primitive list ──────────────────────
 
     private const string NestedListPath =
-        """{"kind": "index", "index": 0}, {"kind": "member", "name": "animation_paths"}""";
+        """{"kind": "index", "index": 0}, {"kind": "member", "name": "AnimationPaths"}""";
 
     [Fact]
     public void ArrayAdd_NestedPrimitiveList_AppendsADefaultElement()
@@ -221,7 +221,7 @@ public sealed class PrimitiveListEditTests : IDisposable
     public void ArrayRemove_NestedPrimitiveList_RemovesTheNamedElementAndKeepsTheOthers()
     {
         var result = _fixture.Service().EditField(_fixture.Plugin, _fixture.Race.ToString(), "subgraphs",
-            Json($$"""{"op": "array_remove", "path": [{"kind": "index", "index": 1}, {"kind": "member", "name": "animation_paths"}, {"kind": "index", "index": 0}]}"""));
+            Json($$"""{"op": "array_remove", "path": [{"kind": "index", "index": 1}, {"kind": "member", "name": "AnimationPaths"}, {"kind": "index", "index": 0}]}"""));
 
         Assert.True(result.Applied, result.Message);
         var body = _fixture.RaceBody();
@@ -234,7 +234,7 @@ public sealed class PrimitiveListEditTests : IDisposable
     public void ArrayMoveDown_NestedPrimitiveList_SwapsWithTheNextElement()
     {
         var result = _fixture.Service().EditField(_fixture.Plugin, _fixture.Race.ToString(), "subgraphs",
-            Json($$"""{"op": "array_move_down", "path": [{"kind": "index", "index": 1}, {"kind": "member", "name": "animation_paths"}, {"kind": "index", "index": 0}]}"""));
+            Json($$"""{"op": "array_move_down", "path": [{"kind": "index", "index": 1}, {"kind": "member", "name": "AnimationPaths"}, {"kind": "index", "index": 0}]}"""));
 
         Assert.True(result.Applied, result.Message);
         var body = _fixture.RaceBody();
@@ -248,7 +248,7 @@ public sealed class PrimitiveListEditTests : IDisposable
     public void ArrayMoveUp_NestedPrimitiveList_SwapsWithThePreviousElement()
     {
         var result = _fixture.Service().EditField(_fixture.Plugin, _fixture.Race.ToString(), "subgraphs",
-            Json($$"""{"op": "array_move_up", "path": [{"kind": "index", "index": 1}, {"kind": "member", "name": "animation_paths"}, {"kind": "index", "index": 1}]}"""));
+            Json($$"""{"op": "array_move_up", "path": [{"kind": "index", "index": 1}, {"kind": "member", "name": "AnimationPaths"}, {"kind": "index", "index": 1}]}"""));
 
         Assert.True(result.Applied, result.Message);
         var body = _fixture.RaceBody();
