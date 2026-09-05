@@ -24,12 +24,21 @@ COMMENT_CODE=$(cd "$ROOT" && git ls-files '*.cs' '*.ts' '*.tsx' \
 COMMENT_DOCS=$(cd "$ROOT" && git ls-files '*.md' \
   | grep -Ev "$EXCLUDE_RE" \
   | while read -r f; do [[ -f "$f" ]] && echo "$f"; done)
+# Ticket numbers are checked in every tracked text file, not just the ones Vale's comment styles
+# understand — comment-shape.py's ticket check runs on its own text, no comment syntax needed.
+TICKET_SCAN_ONLY=$(cd "$ROOT" && git ls-files '*.py' '*.sh' '*.yml' '*.json' \
+  | grep -Ev "$EXCLUDE_RE" \
+  | grep -v '^package-lock\.json$' \
+  | while read -r f; do [[ -f "$f" ]] && echo "$f"; done)
 COMMENT_FILES=$(printf '%s\n%s\n' "$COMMENT_CODE" "$COMMENT_DOCS" | grep -v '^$')
-if [[ -n "$COMMENT_FILES" ]]; then
+SHAPE_FILES=$(printf '%s\n%s\n' "$COMMENT_FILES" "$TICKET_SCAN_ONLY" | grep -v '^$')
+if [[ -n "$SHAPE_FILES" ]]; then
   COMMENT_OK=true
-  VALE="$(bash "$ROOT/.claude/skills/validate/install-vale.sh")" || COMMENT_OK=false
-  (cd "$ROOT" && echo "$COMMENT_FILES" | xargs -d '\n' "$VALE" --config=.vale.ini) || COMMENT_OK=false
-  (cd "$ROOT" && echo "$COMMENT_CODE" | grep -v '^$' | xargs -d '\n' -r python3 .claude/hooks/comment-shape.py) || COMMENT_OK=false
+  if [[ -n "$COMMENT_FILES" ]]; then
+    VALE="$(bash "$ROOT/.claude/skills/validate/install-vale.sh")" || COMMENT_OK=false
+    (cd "$ROOT" && echo "$COMMENT_FILES" | xargs -d '\n' "$VALE" --config=.vale.ini) || COMMENT_OK=false
+  fi
+  (cd "$ROOT" && echo "$SHAPE_FILES" | xargs -d '\n' -r python3 .claude/hooks/comment-shape.py) || COMMENT_OK=false
   $COMMENT_OK || { echo "--- COMMENT GATE FAILED ---"; FAILED=true; }
 fi
 

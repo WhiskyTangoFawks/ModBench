@@ -50,7 +50,7 @@ try
     builder.Services.AddEndpointsApiExplorer();
     // SupportNonNullableReferenceTypes stops marking every reference property nullable but does not
     // touch `required`; NullabilitySchemaFilter does that for value and reference types alike, plus
-    // the allOf wrapper a nullable $ref needs under OpenAPI 3.0 (#627).
+    // the allOf wrapper a nullable $ref needs under OpenAPI 3.0.
     builder.Services.AddSwaggerGen(o =>
     {
         o.SupportNonNullableReferenceTypes();
@@ -66,7 +66,7 @@ try
     builder.Services.AddSingleton<IModImporter, DefaultModImporter>();
     builder.Services.AddSingleton<ILoadOrderMirror, LoadOrderMirror>();
     // Resolved from the mirror rather than registered on its own, so there is exactly one write
-    // gate — a bare `AddSingleton<IndexWriteGate>()` would inject cleanly and serialize nothing (#673).
+    // gate — a bare `AddSingleton<IndexWriteGate>()` would inject cleanly and serialize nothing.
     builder.Services.AddSingleton(sp => sp.GetRequiredService<ILoadOrderMirror>().WriteGate);
     builder.Services.AddSingleton<IRecordQueryService, RecordQueryService>();
     builder.Services.AddSingleton<MalformedPluginQueryService>();
