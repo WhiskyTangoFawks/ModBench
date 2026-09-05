@@ -413,7 +413,7 @@ The extension owns the editing backend process
   own root) still deploys normally. Neither rule needs a plugin to exist alongside it — the
   whole folder is excluded unconditionally, which is what keeps an orphaned tree (its plugin
   renamed or deleted outside Modbench) from ever becoming deployable. **Purge posture**: purge
-  is manifest-exact (above), so a `.git/` that reached `Data/` under a pre-fix Modbench is
+  is manifest-exact (above), so a `.git/` that reached `Data/` by any means is
   removed by the very next purge, with no special recovery needed — the manifest never named it
   as vanilla or otherwise protected content.
 - **Deploy and Purge are explicit, and independent of launching anything.** Deployment is a

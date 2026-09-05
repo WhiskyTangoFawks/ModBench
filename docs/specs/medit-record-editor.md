@@ -137,7 +137,7 @@ better idea.
 - **Double-click a value cell** — open the same inline editor a second click/`F2` on the
   already-focused cell would: numeric and flag types inline, `string` inline too
   ([ADR-0039](../adr/0039-no-left-click-leaves-the-record-panel.md) — no left-click gesture
-  may reach the extended editor, which used to be `string`'s own double-click target). A FormKey's
+  may reach the extended editor). A FormKey's
   double click stays on the native QuickPick, same as its second click/F2 — that QuickPick is
   already its richest editor (ADR-0034's divergence #1). **Double-click the label column** —
   expand/collapse that node.
@@ -425,7 +425,7 @@ already empty: matching xEdit's own guard (`Element.EditValue` must be non-empty
 
   **Read/write symmetry is structural, not conventional** (#649). A leaf carries either a writer or
   a named read-only reason — `ColumnSpec.Apply`/`SubFieldSpec.Apply` are a two-case union, so a leaf
-  that reads but silently cannot be written is no longer representable, and an audit asserts every
+  that reads but silently cannot be written is unrepresentable, and an audit asserts every
   writable-shaped leaf has one or the other. Classification is likewise total: every property the
   reflection walk reaches lands in exactly one structural class or is a **reported anomaly**, never
   silence. Shapes with no class yet are excluded by name with their live count, so a gap is a
@@ -892,8 +892,8 @@ These apply everywhere a field value is rendered — the one compare grid and an
    implicitly-always-loaded master — resolves valid *without* appearing in the index. Such a form
    (the Player, `00000007`, and friends) exists in no plugin's data, so a lookup miss on it can
    never mean the reference is broken; type-mismatch checking simply does not apply. This follows
-   xEdit, which never reports that range as unresolved. `checkError` still drives the ⚠ icon but no longer gates
-   the link.
+   xEdit, which never reports that range as unresolved. `checkError` drives the ⚠ icon but does not
+   gate the link.
 3. **Structs and arrays are always collapsible**, default collapsed; expand state is
    per-load order, not persisted across restarts. A row's label indents one step per ancestor
    hop, so a grandchild reads as sitting inside its parent rather than beside it. Array **element values** offer the inline-edit
@@ -979,7 +979,6 @@ These apply everywhere a field value is rendered — the one compare grid and an
    read by hand-written custom binary code, `4` selecting `SceneActionStartScene` and every
    other value collapsing into `SceneActionTypicalType`, whose binary-overlay `Type` getter is
    an unimplemented `throw` upstream — wiring it would crash the first read of a real scene.
-   The full scheme is recorded on the `KnownGaps` entry.
    `AVirtualMachineAdapter` (VMAD) is genuinely `abstract` too, and is modelled by this mechanism
    like every other union — as are `Condition`/`ConditionData`; all three were once excluded by
    name and none is now.

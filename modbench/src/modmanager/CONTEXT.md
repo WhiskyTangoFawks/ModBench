@@ -89,7 +89,7 @@ The game installation Modbench reads vanilla masters from and deploys into — e
 _Avoid_: data folder (that is a subpath), install path
 
 **Stock game folder**:
-A copy of the vanilla game files kept outside Steam's management, used to pin a known-compatible version and keep the real Steam install clean.
+A copy of the vanilla game files kept outside Steam's management, to pin a known-compatible version and keep the real Steam install clean.
 _Avoid_: game copy, vanilla folder
 
 **File conflict**:

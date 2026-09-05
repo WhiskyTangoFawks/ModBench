@@ -125,8 +125,8 @@ there is no separate load-order step.
     missing file doesn't just silently show an empty list.
 15. As a user, I want installing, uninstalling or reprioritising a mod to update a loaded
     plugin's records automatically when that changes *which file* the plugin name resolves to,
-    so that I am never stuck quietly browsing records from bytes my loadout no longer points at
-    — and never have to notice or ask for it myself.
+    so that I am never stuck quietly browsing records from bytes my loadout does not currently
+    point at — and never have to notice or ask for it myself.
 
 ### Record navigation (Editing, once the backend is running)
 
@@ -324,7 +324,7 @@ end.
   the view pane as a side effect of selection alone, with no separate affordance — so there is no
   "Open Header" button here either — `PluginNode` and
   `ImplicitMasterNode` (`modmanager/PluginListProvider.ts`) each wire their own `.command` to the
-  `modbench.openHeader` bridge command that used to back the retired button, so the gesture is
+  `modbench.openHeader` bridge command, so the gesture is
   reachable identically from both plugin-bearing row kinds. A plugin's context menu exposes
   Reveal in Explorer, Track… (untracked plugins), and — on editable plugins only — Save &
   Compile, Save & Compile from main…, and Rebase onto Updated Baseline. Each is a confirmation
@@ -687,11 +687,11 @@ overflow, then native **Collapse All** last.
   lines, and CRLF/BOM survive untouched.
 - **Line endings for *newly inserted* lines** (#635). Existing lines are never rewritten, so
   byte-faithfulness does not answer what terminator a new line gets — that needs its own rule, and
-  `plugins.txt` and `modlist.txt` now share one in `mo2/lineScan.ts`: **if the file contains
-  `\r\n` anywhere, use `\r\n`; otherwise `\n`.** The two files previously disagreed, and the
-  `plugins.txt` side used a different rule — sniffing the first terminated line's own terminator —
-  which on a mixed-EOL file could pick `\n` where `modlist.txt` picked `\r\n`, and which could
-  emit a **bare `\r`** when the first line was CR-terminated. That last case decided it: a
+  `plugins.txt` and `modlist.txt` share one rule in `mo2/lineScan.ts`: **if the file contains
+  `\r\n` anywhere, use `\r\n`; otherwise `\n`.** A per-file rule — sniffing the first terminated
+  line's own terminator — is rejected: on a mixed-EOL file it could pick `\n` where the shared
+  rule picks `\r\n`, and it could emit a **bare `\r`** when the first line is CR-terminated. That
+  last case decides it: a
   bare-`\r` line is almost always a partial write or a bad tool, real consumers tolerate a
   trailing stray `\r` but can swallow a bare-`\r` line entirely, and the shared rule structurally
   cannot produce one. Known and accepted drawback: the rule is sticky toward CRLF — a mostly-LF

@@ -102,10 +102,9 @@ put it back in scope — but naming one via `--file` does, since that is an expl
 
 > ⚠️ **Run `run.sh` as a background task and poll it.** A since-scoped run outlasts the
 > 10-minute foreground command cap, so a foreground call gets killed two-thirds through and
-> looks exactly like a silent failure. This reverses the old instruction: an earlier `run.sh`
-> spawned a developer-visible terminal window, which backgrounding would kill. It no longer
-> spawns anything, so backgrounding is now both safe and required. Never `pkill dotnet` —
-> that kills VS Code's C# servers; match `dotnet-stryker` specifically.
+> looks exactly like a silent failure. `run.sh` spawns no terminal window, so backgrounding
+> is safe and required. Never `pkill dotnet` — that kills VS Code's C# servers; match
+> `dotnet-stryker` specifically.
 
 > ⚠️ **Stryker's `since` resolves against the wrong checkout inside a linked worktree.**
 > `GitInfoProvider.RepositoryPath` is `Repository.Discover(projectPath).Split(".git")[0]`;
@@ -117,11 +116,11 @@ put it back in scope — but naming one via `--file` does, since that is an expl
 > generated config unconditionally, exactly as `run-js.sh` always has. Don't hand diff
 > resolution back to Stryker.
 
-> ⚠️ **A bad diff target used to cost ~8 minutes of silence.** Stryker validates its git
-> ref only *after* building, mutating and capturing coverage, then exits leaving an output
-> directory with no report in it. Short SHAs do not resolve (`2fc21c8` fails, its full SHA
-> works). `run.sh` resolves and verifies the ref up front, and refuses an empty scope with
-> exit 3, so neither costs more than a second.
+> ⚠️ **A bad diff target costs ~8 minutes of silence if it reaches Stryker unchecked.**
+> Stryker validates its git ref only *after* building, mutating and capturing coverage, then
+> exits leaving an output directory with no report in it. Short SHAs do not resolve (`2fc21c8`
+> fails, its full SHA works). `run.sh` resolves and verifies the ref up front, and refuses an
+> empty scope with exit 3, so neither costs more than a second.
 
 > ⚠️ **Zero audited mutants is exit 2, never "No issues found."** `parse-report.py`
 > refuses to report on a run in which nothing was `Killed`/`Survived`/`Timeout`/

@@ -9,7 +9,7 @@ vocabulary ("mod", "loadout", "deploy") belongs to the sibling surfaces, not her
 
 One of the mEdit view's surfaces — see [medit.md](medit.md) for the shared load order lifecycle,
 status bar, command palette, and architecture seams. Siblings:
-[Plugins tree](plugins.md) (a record node's own context menu, no longer this tree's
+[Plugins tree](plugins.md) (a record node's own context menu is not this tree's
 entry point — see below), [Record editor panel](medit-record-editor.md) (the active record this
 tree follows, and what a referrer opens into).
 
@@ -89,10 +89,10 @@ Code surface. Zero referrers renders the tree's own empty state instead.
   one singleton panel". `showFor(undefined)` (no
   record panel open, or the active one hasn't loaded a record yet) renders `NoActiveRecordNode`
   ("Open a record to see what references it.").
-- `modbench.showReferencedBy` **still exists but no longer retargets anything** — it degrades to a
-  `modbench.referencedByTree.focus` convenience (Command Palette only). It is not on any
-  right-click menu: the record-row context-menu entry that used to invoke it is deleted outright,
-  not just left unused, because leaving it would strand a menu item with nothing left for it to
+- `modbench.showReferencedBy` **retargets nothing; it degrades to a
+  `modbench.referencedByTree.focus` convenience** (Command Palette only). It is not on any
+  right-click menu: the record-row context-menu entry for it is deleted outright,
+  not just left unused, because leaving it would strand a menu item with nothing left to
   aim.
 - It lists records holding a FormLink to this record, **grouped by FormKey** so that multiple
   plugin overrides of the same referencer collapse into one group (`ReferencedByGroupNode`). A
