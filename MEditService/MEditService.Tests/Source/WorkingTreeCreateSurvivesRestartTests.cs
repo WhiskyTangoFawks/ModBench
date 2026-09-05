@@ -31,7 +31,7 @@ public sealed class WorkingTreeCreateSurvivesRestartTests
         // A silently-failed source ingest degrades to the binary, which never held this uncompiled create,
         // so "the record is not found" reads identically whether ingest never ran or genuinely excluded
         // it.
-        Assert.Empty(((ILoadOrderMirror)reloaded).LoadOrder!.LoadFailures);
+        Assert.Empty(((ILoadOrderMirror)reloaded).LoadOrder!.Failures);
         var reread = reloaded.Index!.At(RecordRef.Effective).GetDocument(created.NewFormKey!, mod.Plugin);
         Assert.NotNull(reread);
         Assert.Equal("SurvivesRestart", reread!.EditorId);
@@ -53,7 +53,7 @@ public sealed class WorkingTreeCreateSurvivesRestartTests
             GameRelease.Fallout4);
 
         // Regression guard, same reasoning as the sibling test above.
-        Assert.Empty(((ILoadOrderMirror)reloaded).LoadOrder!.LoadFailures);
+        Assert.Empty(((ILoadOrderMirror)reloaded).LoadOrder!.Failures);
         // The rival: a sweep that inserts the row but forgets winner resweep (or runs before the
         // whole-load-order UpdateWinners() at the end of the load loop) leaves it_winner false.
         Assert.True(reloaded.Index!.At(RecordRef.Effective).GetDocument(created.NewFormKey!)!.IsWinner);

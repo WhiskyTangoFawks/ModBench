@@ -45,7 +45,7 @@ public sealed class LoadOrder : ILoadOrder
     public string? InstanceRoot { get; }
     public GameRelease GameRelease { get; }
     public IReadOnlyList<PluginMetadata> Plugins => Volatile.Read(ref _pluginsSnapshot);
-    public IReadOnlyList<PluginLoadFailure> LoadFailures => Volatile.Read(ref _loadFailuresSnapshot);
+    public IReadOnlyList<PluginLoadFailure> Failures => Volatile.Read(ref _loadFailuresSnapshot);
     public string? FilterSql { get; set; }
 
     public LoadOrder(string dataFolderPath, string? instanceRoot, GameRelease gameRelease, ILogger? logger = null)
@@ -118,7 +118,7 @@ public sealed class LoadOrder : ILoadOrder
             && p.Origin.Equals(key.Origin, StringComparison.OrdinalIgnoreCase));
 
     /// <summary>A copy that cannot be opened or parsed must not abort the whole reconcile: it is
-    /// recorded in <see cref="LoadFailures"/> and nothing is held for it. A success clears any
+    /// recorded in <see cref="Failures"/> and nothing is held for it. A success clears any
     /// earlier failure for the same copy.</summary>
     public PluginMetadata? Open(ResolvedPlugin plugin)
     {

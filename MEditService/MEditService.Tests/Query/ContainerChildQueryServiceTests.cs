@@ -80,7 +80,7 @@ public class ContainerChildQueryServiceTests
         public string? InstanceRoot => null;
         public GameRelease GameRelease => GameRelease.Fallout4;
         public IReadOnlyList<PluginMetadata> Plugins => plugins;
-        public IReadOnlyList<PluginLoadFailure> LoadFailures => [];
+        public IReadOnlyList<PluginLoadFailure> Failures => [];
         public string? FilterSql { get; set; }
         public Mutagen.Bethesda.Plugins.Records.IModGetter? GetMod(string pluginName, string origin) => null;
         public void Dispose() { }

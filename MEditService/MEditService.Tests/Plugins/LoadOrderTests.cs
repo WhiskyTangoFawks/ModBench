@@ -175,7 +175,7 @@ public sealed class LoadOrderTests
 
         Assert.Contains(loadOrder.Plugins, p => p.Name == "Present.esp");
         Assert.DoesNotContain(loadOrder.Plugins, p => p.Name == "NonExistent.esp");
-        Assert.Contains(loadOrder.LoadFailures, f => f.Name == "NonExistent.esp");
+        Assert.Contains(loadOrder.Failures, f => f.Name == "NonExistent.esp");
     }
 
     [Fact]
@@ -193,7 +193,7 @@ public sealed class LoadOrderTests
 
         Assert.Contains(loadOrder.Plugins, p => p.Name == "Good.esp");
         Assert.DoesNotContain(loadOrder.Plugins, p => p.Name == "Bad.esp");
-        var failure = Assert.Single(loadOrder.LoadFailures);
+        var failure = Assert.Single(loadOrder.Failures);
         Assert.Equal("Bad.esp", failure.Name);
     }
 
@@ -209,10 +209,10 @@ public sealed class LoadOrderTests
         var missing = resolved with { Path = Path.Combine(data.DataFolder, "Elsewhere.esp") };
 
         Assert.Null(loadOrder.Open(missing));
-        Assert.Single(loadOrder.LoadFailures);
+        Assert.Single(loadOrder.Failures);
 
         Assert.NotNull(loadOrder.Open(resolved));
-        Assert.Empty(loadOrder.LoadFailures);
+        Assert.Empty(loadOrder.Failures);
     }
 
     [Theory]

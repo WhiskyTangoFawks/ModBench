@@ -40,7 +40,7 @@ public sealed class LoadOrderLocalizedTests
 
             // Asserted directly, not just implied by GetDocument coming back null below: a
             // silently-skipped plugin is the precise shape the defect takes here.
-            Assert.Empty(manager.LoadOrder!.LoadFailures);
+            Assert.Empty(manager.LoadOrder!.Failures);
 
             var detail = manager.Reads!.GetDocument(doorFormKey.ToString(), new PluginKey("Fixture.esp", "Data"))!;
             Assert.Contains(detail.Fields, f => f.Value != null && f.Value.ToString()!.Contains("The Big Door"));

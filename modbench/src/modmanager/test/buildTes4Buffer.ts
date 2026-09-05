@@ -1,4 +1,4 @@
-// A minimal TES4 plugin header: 24-byte major-record header, HEDR, then the
+// A minimal TES4 plugin header: 24-byte TES4 header, HEDR, then the
 // MAST/DATA subrecords, laid out as masterReader.ts reads them.
 
 export function buildTes4Buffer(masters: string[], opts: { dataAfterFirstMaster?: boolean } = {}): Buffer {

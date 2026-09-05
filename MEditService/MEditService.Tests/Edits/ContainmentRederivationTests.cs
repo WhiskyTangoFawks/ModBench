@@ -233,7 +233,7 @@ public sealed class ContainmentRederivationTests : IDisposable
             _fixture.GameDirectory,
             [new LoadOrderEntry(ContainerModFixture.PluginName, Path.Combine(_fixture.ModFolder, ContainerModFixture.PluginName), ContainerModFixture.ModFolderOrigin, Slot: 0, Enabled: true, Winning: true)],
             GameRelease.Fallout4);
-        Assert.Empty(((ILoadOrderMirror)reloaded).LoadOrder!.LoadFailures);
+        Assert.Empty(((ILoadOrderMirror)reloaded).LoadOrder!.Failures);
 
         var freshlyIngested = reloaded.Index!.At(RecordRef.Effective).GetPlacement(_fixture.TemporaryRef.ToString(), _fixture.Plugin);
 
@@ -280,7 +280,7 @@ public sealed class ContainmentRederivationTests : IDisposable
             _fixture.GameDirectory,
             [new LoadOrderEntry(ContainerModFixture.PluginName, Path.Combine(_fixture.ModFolder, ContainerModFixture.PluginName), ContainerModFixture.ModFolderOrigin, Slot: 0, Enabled: true, Winning: true)],
             GameRelease.Fallout4);
-        Assert.Empty(((ILoadOrderMirror)reloaded).LoadOrder!.LoadFailures);
+        Assert.Empty(((ILoadOrderMirror)reloaded).LoadOrder!.Failures);
 
         var freshlyIngested = reloaded.Index!.At(RecordRef.Effective).GetContainerChildren(_fixture.Plugin, newFormKey)
             .OrderBy(c => c.SlotIndex).Select(c => (c.ChildFormKey, c.SlotName, c.SlotIndex)).ToList();
@@ -362,7 +362,7 @@ public sealed class ContainmentRederivationTests : IDisposable
             _fixture.GameDirectory,
             [new LoadOrderEntry(ContainerModFixture.PluginName, Path.Combine(_fixture.ModFolder, ContainerModFixture.PluginName), ContainerModFixture.ModFolderOrigin, Slot: 0, Enabled: true, Winning: true)],
             GameRelease.Fallout4);
-        Assert.Empty(((ILoadOrderMirror)reloaded).LoadOrder!.LoadFailures);
+        Assert.Empty(((ILoadOrderMirror)reloaded).LoadOrder!.Failures);
 
         var freshlyIngested = reloaded.Index!.At(RecordRef.Effective).GetContainerChildren(_fixture.Plugin, _fixture.Quest.ToString())
             .OrderBy(c => c.SlotIndex).Select(c => (c.ChildFormKey, c.SlotName, c.SlotIndex)).ToList();
@@ -403,7 +403,7 @@ public sealed class ContainmentRederivationTests : IDisposable
             _fixture.GameDirectory,
             [new LoadOrderEntry(ContainerModFixture.PluginName, Path.Combine(_fixture.ModFolder, ContainerModFixture.PluginName), ContainerModFixture.ModFolderOrigin, Slot: 0, Enabled: true, Winning: true)],
             GameRelease.Fallout4);
-        Assert.Empty(((ILoadOrderMirror)reloaded).LoadOrder!.LoadFailures);
+        Assert.Empty(((ILoadOrderMirror)reloaded).LoadOrder!.Failures);
 
         var freshlyIngested = reloaded.Index!.At(RecordRef.Effective).GetContainerChildren(_fixture.Plugin, _fixture.EmbedCell.ToString())
             .OrderBy(c => c.SlotName).ThenBy(c => c.SlotIndex)

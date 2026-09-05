@@ -102,7 +102,7 @@ public sealed class LoadOrderMirror(
             {
                 if (_loadOrder is null) return LoadOrderStatus.None;
                 var state = _conflictsComputed ? LoadOrderState.Ready : LoadOrderState.Reconciling;
-                return new LoadOrderStatus(state, _plannedCount, [.. _indexed], _conflictsComputed, _loadOrder.LoadFailures);
+                return new LoadOrderStatus(state, _plannedCount, [.. _indexed], _conflictsComputed, _loadOrder.Failures);
             }
         }
     }
