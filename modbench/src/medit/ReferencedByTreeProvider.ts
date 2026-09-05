@@ -11,7 +11,7 @@ export class ReferencedByGroupNode extends vscode.TreeItem {
     readonly formKey: string,
     readonly results: ReferenceResult[],
   ) {
-    const first = results[0];
+    const first = results.at(0);
     const recordType = first?.recordType ?? '';
     const recordLabel = first?.editorId ?? formKey;
     super(`${recordType} / ${recordLabel}`, vscode.TreeItemCollapsibleState.Collapsed);
@@ -29,7 +29,7 @@ export class ReferencedByGroupNode extends vscode.TreeItem {
 /** Informational, not a navigation target — hence no `command`. */
 export class ReferencedByFieldNode extends vscode.TreeItem {
   constructor(result: ReferenceResult) {
-    super(`${result.plugin ?? ''} · ${result.fieldPath ?? ''}`, vscode.TreeItemCollapsibleState.None);
+    super(`${result.plugin} · ${result.fieldPath}`, vscode.TreeItemCollapsibleState.None);
   }
 }
 
@@ -128,7 +128,7 @@ export class ReferencedByTreeProvider implements vscode.TreeDataProvider<Referen
 
     const groups = new Map<string, ReferenceResult[]>();
     for (const r of res.data) {
-      const key = r.formKey ?? '';
+      const key = r.formKey;
       const existing = groups.get(key);
       if (existing) existing.push(r);
       else groups.set(key, [r]);

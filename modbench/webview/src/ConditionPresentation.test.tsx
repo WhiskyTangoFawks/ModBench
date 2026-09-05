@@ -203,7 +203,7 @@ async function expandConditions() {
 function summaryOf(index: number): string {
   const td = screen.getAllByText(`[${index}]`).find(el => el.tagName === 'TD')!;
   const cells = Array.from(td.closest('tr')!.querySelectorAll('td'));
-  return cells[1].textContent ?? '';
+  return cells[1].textContent;
 }
 
 async function expandFirstConditionData() {

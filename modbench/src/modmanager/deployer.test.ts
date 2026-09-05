@@ -16,7 +16,7 @@ function fakeReporter() {
 const MANIFEST = ['mods', '.medit-manifest.json'];
 
 describe('deploy', () => {
-  let fx: DeployerFixture;
+  let fx: DeployerFixture | undefined;
   afterEach(() => fx?.cleanup());
 
   it('hardlinks one winner into an empty Data/ and writes a manifest with links + a preExisting snapshot', async () => {
@@ -333,7 +333,7 @@ describe('deploy', () => {
 
     // Reports the original rename failure directly — a non-EXDEV error must be rethrown, not
     // masked behind a second, different failure from wrongly attempting the copy+delete fallback.
-    expect(reporter.reports.some((r) => r.severity === 'warning' && r.detail?.includes('F4SE/foo.log') && r.detail?.includes('rename'))).toBe(true);
+    expect(reporter.reports.some((r) => r.severity === 'warning' && r.detail?.includes('F4SE/foo.log') && r.detail.includes('rename'))).toBe(true);
     // Still in Data/ — purge did not silently lose it.
     expect(await readFile(join(fx.gameDirectory.dataFolder, 'F4SE/foo.log'), 'utf8')).toBe('GENERATED');
   });
@@ -534,7 +534,7 @@ describe('deploy', () => {
 });
 
 describe('isDeployed', () => {
-  let fx: DeployerFixture;
+  let fx: DeployerFixture | undefined;
   afterEach(() => fx?.cleanup());
 
   it('is false before any deploy and true once a manifest exists', async () => {
@@ -548,7 +548,7 @@ describe('isDeployed', () => {
 });
 
 describe('purge', () => {
-  let fx: DeployerFixture;
+  let fx: DeployerFixture | undefined;
   afterEach(() => fx?.cleanup());
 
   it('aborts and reports (never touches Data/ or deletes the manifest) when the manifest is corrupt', async () => {

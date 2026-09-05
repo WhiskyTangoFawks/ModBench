@@ -287,11 +287,11 @@ describe('Modbench output channel', () => {
     const channel = (ext?.exports as { outputChannel?: vscode.LogOutputChannel } | undefined)?.outputChannel;
     assert.ok(channel, 'activate() should return { outputChannel }');
     // A plain vscode.OutputChannel has none of these — only { log: true } adds them.
-    assert.strictEqual(typeof channel?.debug, 'function', 'expected a .debug() method');
-    assert.strictEqual(typeof channel?.info, 'function', 'expected an .info() method');
-    assert.strictEqual(typeof channel?.warn, 'function', 'expected a .warn() method');
-    assert.strictEqual(typeof channel?.error, 'function', 'expected an .error() method');
-    assert.ok(channel && 'logLevel' in channel, "expected VS Code's native level filter to apply (logLevel)");
+    assert.strictEqual(typeof channel.debug, 'function', 'expected a .debug() method');
+    assert.strictEqual(typeof channel.info, 'function', 'expected an .info() method');
+    assert.strictEqual(typeof channel.warn, 'function', 'expected a .warn() method');
+    assert.strictEqual(typeof channel.error, 'function', 'expected an .error() method');
+    assert.ok('logLevel' in channel, "expected VS Code's native level filter to apply (logLevel)");
   });
 });
 
@@ -1343,8 +1343,8 @@ describe('Close mEdit clears the record filter\'s code lens too, not just the re
   let scriptsFile = '';
 
   const codeLensCommandFor = async (uri: vscode.Uri): Promise<string | undefined> => {
-    const lenses = await vscode.commands.executeCommand<vscode.CodeLens[]>('vscode.executeCodeLensProvider', uri);
-    return lenses?.[0]?.command?.command;
+    const lenses = await vscode.commands.executeCommand<vscode.CodeLens[] | undefined>('vscode.executeCodeLensProvider', uri);
+    return lenses?.at(0)?.command?.command;
   };
 
   before(async () => {
@@ -1412,7 +1412,7 @@ describe('Refresh never triggers a reconcile', () => {
 // Every assertion is about the window during the load POST, which is why the mock holds it open.
 
 // The tree reacts on the backend's own 500ms cadence, so a fixed sleep would be flaky or slow.
-async function waitFor<T>(label: string, read: () => Promise<T> | T, timeoutMs = 10_000): Promise<NonNullable<T>> {
+async function waitFor<T>(label: string, read: () => Promise<T | false | undefined> | T | false | undefined, timeoutMs = 10_000): Promise<T> {
   const deadline = Date.now() + timeoutMs;
   for (;;) {
     const value = await read();

@@ -128,18 +128,18 @@ export function registerModContextCommands(
   runModAction: (label: string, failMessage: string, action: () => Promise<void>) => Promise<void>,
 ): vscode.Disposable[] {
   return [
-      vscode.commands.registerCommand('modbench.modList.mod.openInExplorer', async (node: ModNode) => {
+      vscode.commands.registerCommand('modbench.modList.mod.openInExplorer', async (node: ModNode | undefined) => {
         if (node?.kind !== 'mod') return;
         const uri = vscode.Uri.file(path.join(instanceRoot, 'mods', node.mod.name));
         await vscode.commands.executeCommand('revealInExplorer', uri);
       }),
-      vscode.commands.registerCommand('modbench.modList.mod.addSeparatorBelow', async (node: ModNode) => {
+      vscode.commands.registerCommand('modbench.modList.mod.addSeparatorBelow', async (node: ModNode | undefined) => {
         if (node?.kind !== 'mod') return;
         const name = await vscode.window.showInputBox({ prompt: 'Separator name', placeHolder: 'My Group' });
         if (!name) return;
         await runModAction('addSeparatorBelow', 'Failed to add separator.', () => modlistSource.insertSeparator(name, node.mod.name));
       }),
-      vscode.commands.registerCommand('modbench.modList.mod.moveToSeparator', async (node: ModNode) => {
+      vscode.commands.registerCommand('modbench.modList.mod.moveToSeparator', async (node: ModNode | undefined) => {
         if (node?.kind !== 'mod') return;
         let separators: string[];
         try {
@@ -156,7 +156,7 @@ export function registerModContextCommands(
         if (!picked) return;
         await runModAction('moveToSeparator', 'Failed to move mod.', () => modlistSource.moveModToSeparator(node.mod.name, picked.sepName));
       }),
-      vscode.commands.registerCommand('modbench.modList.mod.uninstall', async (node: ModNode) => {
+      vscode.commands.registerCommand('modbench.modList.mod.uninstall', async (node: ModNode | undefined) => {
         if (node?.kind !== 'mod') return;
         const answer = await vscode.window.showWarningMessage(
           `Uninstall "${node.mod.name}"? This will permanently delete the mod folder from disk.`,
@@ -166,7 +166,7 @@ export function registerModContextCommands(
         if (answer !== 'Uninstall') return;
         await runModAction('uninstall', `Failed to uninstall "${node.mod.name}".`, () => modlistSource.removeMod(node.mod.name));
       }),
-      vscode.commands.registerCommand('modbench.modList.mod.viewOnNexus', async (node: ModNode) => {
+      vscode.commands.registerCommand('modbench.modList.mod.viewOnNexus', async (node: ModNode | undefined) => {
         if (node?.kind !== 'mod' || !node.mod.nexusId) return;
         const nexusId = node.mod.nexusId;
         await runModAction('viewOnNexus', 'Failed to open Nexus page.', async () => {
@@ -183,7 +183,7 @@ export function registerSeparatorCommands(
   runModAction: (label: string, failMessage: string, action: () => Promise<void>) => Promise<void>,
 ): vscode.Disposable[] {
   return [
-      vscode.commands.registerCommand('modbench.modList.separator.rename', async (node: SeparatorNode) => {
+      vscode.commands.registerCommand('modbench.modList.separator.rename', async (node: SeparatorNode | undefined) => {
         if (node?.kind !== 'separator') return;
         const newName = await vscode.window.showInputBox({
           prompt: 'Rename separator',
@@ -192,13 +192,13 @@ export function registerSeparatorCommands(
         if (!newName || newName === node.separator.name) return;
         await runModAction('renameSeparator', 'Failed to rename separator.', () => modlistSource.renameSeparator(node.separator.name, newName));
       }),
-      vscode.commands.registerCommand('modbench.modList.separator.addSeparatorBelow', async (node: SeparatorNode) => {
+      vscode.commands.registerCommand('modbench.modList.separator.addSeparatorBelow', async (node: SeparatorNode | undefined) => {
         if (node?.kind !== 'separator') return;
         const name = await vscode.window.showInputBox({ prompt: 'Separator name', placeHolder: 'My Group' });
         if (!name) return;
         await runModAction('separator.addSeparatorBelow', 'Failed to add separator.', () => modlistSource.insertSeparator(name, node.separator.name));
       }),
-      vscode.commands.registerCommand('modbench.modList.separator.delete', async (node: SeparatorNode) => {
+      vscode.commands.registerCommand('modbench.modList.separator.delete', async (node: SeparatorNode | undefined) => {
         if (node?.kind !== 'separator') return;
         await runModAction('deleteSeparator', 'Failed to delete separator.', () => modlistSource.deleteSeparator(node.separator.name));
       }),
@@ -216,7 +216,7 @@ export function registerOverwriteView(
     // Tint the pinned Overwrite row reddish. Stateless: keyed on the
     // constant overwrite/ path, which matches OverwriteNode.resourceUri.
     vscode.window.registerFileDecorationProvider(new OverwriteDecorationProvider(instanceRoot)),
-    vscode.commands.registerCommand('modbench.modList.overwrite.reveal', async (node: OverwriteNode) => {
+    vscode.commands.registerCommand('modbench.modList.overwrite.reveal', async (node: OverwriteNode | undefined) => {
       if (node?.kind !== 'overwrite') return;
       try {
         await vscode.commands.executeCommand('revealInExplorer', node.resourceUri);

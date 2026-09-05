@@ -20,7 +20,8 @@ export interface RecordResourceIdentity {
  *  about someone else's URI can guard on it. */
 export function parseRecordResourceUri(uri: vscode.Uri): RecordResourceIdentity | undefined {
   if (uri.scheme !== SCHEME) return undefined;
-  const [, plugin, origin, formKey] = uri.path.split('/').map(decodeURIComponent);
-  if (plugin === undefined || origin === undefined || formKey === undefined) return undefined;
+  const parts = uri.path.split('/').map(decodeURIComponent);
+  if (parts.length < 4) return undefined;
+  const [, plugin, origin, formKey] = parts;
   return { plugin, origin, formKey };
 }

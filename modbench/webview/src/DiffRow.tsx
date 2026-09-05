@@ -138,8 +138,8 @@ interface DiffRowProps {
   columns: Column[];
   // ADR-0036: keyed by ColumnKey, though a mapped type erases the brand — the protection is every
   // builder using columnKey(), not this declared type.
-  overrideMap: Record<string, CompareOverride>;
-  fieldMetaMap: Record<string, FieldMetadata>;
+  overrideMap: Partial<Record<string, CompareOverride>>;
+  fieldMetaMap: Partial<Record<string, FieldMetadata>>;
   // ADR-0035: a column for a copy the load order does not name. Dims every cell in the column so
   // the cue survives scrolling past the header (the grid's <thead> isn't sticky).
   notInLoadOrderSet: Set<ColumnKey>;
@@ -232,119 +232,116 @@ export function DiffRow({
         {meta.displayLabel ?? diff.fieldName}
       </td>
       {columns.map(col => {
-        if (col.kind === 'disk') {
-          const { key, override } = col;
-          // ADR-0034: no `userSelect: 'text'` — the cell is `draggable` at rest and `draggable`
-          // consumes the mousedown that would start a selection, so adding it would tell the next
-          // reader selection works here.
+        const { key, override } = col;
+        // ADR-0034: no `userSelect: 'text'` — the cell is `draggable` at rest and `draggable`
+        // consumes the mousedown that would start a selection, so adding it would tell the next
+        // reader selection works here.
 
-          // ADR-0036: every per-column lookup below is keyed by `key` (this column's ColumnKey),
-          // matching how the backend keys its own dictionaries — `[o.plugin]` would be wrong the
-          // moment a non-Data-origin column exists.
+        // ADR-0036: every per-column lookup below is keyed by `key` (this column's ColumnKey),
+        // matching how the backend keys its own dictionaries — `[o.plugin]` would be wrong the
+        // moment a non-Data-origin column exists.
 
-          // A Partial Form column dims the same way a not-in-load-order one does — read straight
-          // off the column's own override, not a separately-threaded Set.
-          const cellStyle = {
-            ...baseCell, ...getCellStyle(diff.cellStates?.[key]),
-            opacity: notInLoadOrderSet.has(key) || override.isPartialForm ? DIMMED_OPACITY : undefined,
-          };
-          if (collapsedColumns.has(key)) {
-            return <td key={`disk:${key}`} style={cellStyle} />;
-          }
-          const checkError = showActions
-            ? overrideMap[key]?.fields.find(f => f.metadata.name === rootField)?.checkError
-            : undefined;
-          const isFocused = isCellFocused(focusedCell, rowKey, key);
-          // ADR-0034: the string Ctrl+C copies for this cell, computed once so the
-          // struct/array-summary branch and the leaf branch below hand DiskCell the same value.
-          const copyText = displayValue(diff.values[key], meta, diff.resolutions?.[key]);
-          // Whether this column's plugin has an element on this row at all: an array slot within
-          // its own length, a union member its own concrete leaf declares, a struct it carries.
-          const hasElement = rowIsStructural || diff.values[key] != null;
-          // Array ops are offered only on a writable column. `arrayLength` is deliberately not
-          // threaded down, so canMoveDown reads permissive rather than gating on this plugin's own
-          // length; the underlying op still no-ops at the true boundary.
-          const arrayEditable = !!onEditCell && editableColumns.has(key) && (isArrayParentRow || isArrayElementRow);
-          const arrayOps = arrayEditable ? {
-            add: isArrayParentRow ? () => onArrayAdd?.(key) : undefined,
-            remove: isArrayElementRow ? () => onArrayRemove?.(key) : undefined,
-            moveUp: isMovableElementRow ? () => onArrayMoveUp?.(key) : undefined,
-            moveDown: isMovableElementRow ? () => onArrayMoveDown?.(key) : undefined,
-          } : undefined;
-          // Hoisted above vscodeContext because stringValueContext needs it too — a string cell's
-          // own `readOnly` is this same boolean negated, so the right-click menu and the
-          // inline-editor gate can never disagree.
-          const cellEditable = !!onEditCell && editableColumns.has(key) && !meta.readOnly;
-          // ADR-0039: a `string` cell always carries its own right-click context, mutable or
-          // immutable alike — a read-only tab is still the only way to read a long immutable
-          // value in full.
-          const vscodeContext = (arrayEditable || meta.type === 'string') ? combineVscodeContexts(
-            // `context.path` addresses the array itself here (this row *is* the array) —
-            // `[]` for a top-level array.
-            isArrayParentRow
-              ? arrayParentContext(col.override.formKey, col.override.plugin, col.override.origin, rootField, context.path)
-              : undefined,
-            // `context.path` addresses this row's own element (ends in the `index`/`key` hop that
-            // gates isArrayElementRow) — every hop from `rootField`, not just the trailing one.
-            isArrayElementRow
-              ? arrayElementContext(
-                  col.override.formKey, col.override.plugin, col.override.origin, rootField,
-                  context.path, Number.MAX_SAFE_INTEGER,
-                )
-              : undefined,
-            meta.type === 'string'
-              ? stringValueContext(
-                  col.override.formKey, col.override.plugin, col.override.origin, rootField,
-                  modelValue(diff.values[key], meta), !cellEditable, context.path, rootField,
-                )
-              : undefined,
-          ) : undefined;
-          if (hasChildren) {
-            const len = meta.type === 'array' && Array.isArray(diff.values[key])
-              ? (diff.values[key] as unknown[]).length
-              : '…';
-            // A summary is content, not a placeholder — it reads at full weight, where "[3]"/"{…}"
-            // stay dimmed to say only that something unexpanded is there.
-            const summary = collapsedSummary?.[key];
-            const collapsedLabel = summary ?? (meta.type === 'array' ? `[${len}]` : '{…}');
-            return (
-              <DiskCell
-                key={`disk:${key}`}
-                style={cellStyle}
-                isFocused={isFocused}
-                onFocusCell={() => onFocusCell(rowKey, key)}
-                onCopy={() => copyToClipboard(copyText)}
-                arrayOps={arrayOps}
-                vscodeContext={vscodeContext}
-              >
-                {!isExpanded && hasElement && (
-                  <span style={{ opacity: summary ? undefined : 0.5, display: 'inline-flex', alignItems: 'center' }}>
-                    {collapsedLabel}<CheckErrorIcon checkError={checkError} />
-                  </span>
-                )}
-              </DiskCell>
-            );
-          }
+        // A Partial Form column dims the same way a not-in-load-order one does — read straight
+        // off the column's own override, not a separately-threaded Set.
+        const cellStyle = {
+          ...baseCell, ...getCellStyle(diff.cellStates[key]),
+          opacity: notInLoadOrderSet.has(key) || override.isPartialForm ? DIMMED_OPACITY : undefined,
+        };
+        if (collapsedColumns.has(key)) {
+          return <td key={`disk:${key}`} style={cellStyle} />;
+        }
+        const checkError = showActions
+          ? overrideMap[key]?.fields.find(f => f.metadata.name === rootField)?.checkError
+          : undefined;
+        const isFocused = isCellFocused(focusedCell, rowKey, key);
+        // ADR-0034: the string Ctrl+C copies for this cell, computed once so the
+        // struct/array-summary branch and the leaf branch below hand DiskCell the same value.
+        const copyText = displayValue(diff.values[key], meta, diff.resolutions?.[key]);
+        // Whether this column's plugin has an element on this row at all: an array slot within
+        // its own length, a union member its own concrete leaf declares, a struct it carries.
+        const hasElement = rowIsStructural || diff.values[key] != null;
+        // Array ops are offered only on a writable column. `arrayLength` is deliberately not
+        // threaded down, so canMoveDown reads permissive rather than gating on this plugin's own
+        // length; the underlying op still no-ops at the true boundary.
+        const arrayEditable = !!onEditCell && editableColumns.has(key) && (isArrayParentRow || isArrayElementRow);
+        const arrayOps = arrayEditable ? {
+          add: isArrayParentRow ? () => onArrayAdd?.(key) : undefined,
+          remove: isArrayElementRow ? () => onArrayRemove?.(key) : undefined,
+          moveUp: isMovableElementRow ? () => onArrayMoveUp?.(key) : undefined,
+          moveDown: isMovableElementRow ? () => onArrayMoveDown?.(key) : undefined,
+        } : undefined;
+        // Hoisted above vscodeContext because stringValueContext needs it too — a string cell's
+        // own `readOnly` is this same boolean negated, so the right-click menu and the
+        // inline-editor gate can never disagree.
+        const cellEditable = !!onEditCell && editableColumns.has(key) && !meta.readOnly;
+        // ADR-0039: a `string` cell always carries its own right-click context, mutable or
+        // immutable alike — a read-only tab is still the only way to read a long immutable
+        // value in full.
+        const vscodeContext = (arrayEditable || meta.type === 'string') ? combineVscodeContexts(
+          // `context.path` addresses the array itself here (this row *is* the array) —
+          // `[]` for a top-level array.
+          isArrayParentRow
+            ? arrayParentContext(col.override.formKey, col.override.plugin, col.override.origin, rootField, context.path)
+            : undefined,
+          // `context.path` addresses this row's own element (ends in the `index`/`key` hop that
+          // gates isArrayElementRow) — every hop from `rootField`, not just the trailing one.
+          isArrayElementRow
+            ? arrayElementContext(
+                col.override.formKey, col.override.plugin, col.override.origin, rootField,
+                context.path, Number.MAX_SAFE_INTEGER,
+              )
+            : undefined,
+          meta.type === 'string'
+            ? stringValueContext(
+                col.override.formKey, col.override.plugin, col.override.origin, rootField,
+                modelValue(diff.values[key], meta), !cellEditable, context.path, rootField,
+              )
+            : undefined,
+        ) : undefined;
+        if (hasChildren) {
+          const len = meta.type === 'array' && Array.isArray(diff.values[key])
+            ? (diff.values[key] as unknown[]).length
+            : '…';
+          // A summary is content, not a placeholder — it reads at full weight, where "[3]"/"{…}"
+          // stay dimmed to say only that something unexpanded is there.
+          const summary = collapsedSummary?.[key];
+          const collapsedLabel = summary ?? (meta.type === 'array' ? `[${len}]` : '{…}');
           return (
             <DiskCell
-              arrayOps={arrayOps}
-              vscodeContext={vscodeContext}
               key={`disk:${key}`}
               style={cellStyle}
               isFocused={isFocused}
               onFocusCell={() => onFocusCell(rowKey, key)}
               onCopy={() => copyToClipboard(copyText)}
+              arrayOps={arrayOps}
+              vscodeContext={vscodeContext}
             >
-              {renderCell(diff.values[key], meta, isFocused, onOpen, {
-                checkError, resolution: diff.resolutions?.[key],
-                onCommit: cellEditable ? (v: unknown) => onEditCell(key, v) : undefined,
-                rowCollapsed: isFlagsRow && !rowExpanded,
-                absent: !hasElement,
-              })}
+              {!isExpanded && hasElement && (
+                <span style={{ opacity: summary ? undefined : 0.5, display: 'inline-flex', alignItems: 'center' }}>
+                  {collapsedLabel}<CheckErrorIcon checkError={checkError} />
+                </span>
+              )}
             </DiskCell>
           );
         }
-        return null;
+        return (
+          <DiskCell
+            arrayOps={arrayOps}
+            vscodeContext={vscodeContext}
+            key={`disk:${key}`}
+            style={cellStyle}
+            isFocused={isFocused}
+            onFocusCell={() => onFocusCell(rowKey, key)}
+            onCopy={() => copyToClipboard(copyText)}
+          >
+            {renderCell(diff.values[key], meta, isFocused, onOpen, {
+              checkError, resolution: diff.resolutions?.[key],
+              onCommit: cellEditable ? (v: unknown) => onEditCell(key, v) : undefined,
+              rowCollapsed: isFlagsRow && !rowExpanded,
+              absent: !hasElement,
+            })}
+          </DiskCell>
+        );
       })}
     </tr>
   );

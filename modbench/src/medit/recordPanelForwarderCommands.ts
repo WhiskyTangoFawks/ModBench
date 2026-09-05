@@ -7,11 +7,11 @@ import { broadcastToRecordPanels } from './onRecordEdited';
 
 interface ForwarderCommand {
   command: string;
-  build: (ctx: never) => ExtensionToWebview;
+  build: (ctx: unknown) => ExtensionToWebview;
 }
 
 function forwarder<Ctx>(command: string, build: (ctx: Ctx) => ExtensionToWebview): ForwarderCommand {
-  return { command, build };
+  return { command, build: (ctx) => build(ctx as Ctx) };
 }
 
 // `rootField`/`path` are forwarded verbatim, never re-derived from the context.
@@ -41,7 +41,7 @@ export const FORWARDER_COMMANDS: ForwarderCommand[] = [
  *  `formKey` (ADR-0039). */
 export function registerForwarderCommands(recordPanels: Set<vscode.WebviewPanel>): vscode.Disposable[] {
   return FORWARDER_COMMANDS.map(({ command, build }) =>
-    vscode.commands.registerCommand(command, (ctx?: never) => {
+    vscode.commands.registerCommand(command, (ctx?: unknown) => {
       if (!ctx) return;
       broadcastToRecordPanels(recordPanels, build(ctx));
     }),

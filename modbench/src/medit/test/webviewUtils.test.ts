@@ -14,10 +14,9 @@ function makeOverride(plugin: string, loadOrderIndex = 0): RecordDetail {
 }
 
 describe('buildColumns', () => {
-  it('builds one disk column per override', () => {
+  it('builds one column per override', () => {
     const cols = buildColumns([makeOverride('A', 0), { ...makeOverride('B', 5), isWinner: true }]);
     expect(cols).toHaveLength(2);
-    expect(cols.map(c => c.kind)).toEqual(['disk', 'disk']);
     expect(cols.map(c => c.override.plugin)).toEqual(['A', 'B']);
   });
 

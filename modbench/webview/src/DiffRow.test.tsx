@@ -31,7 +31,7 @@ function override(plugin: string, partial: Partial<CompareOverride> = {}): Compa
 }
 
 function diskColumn(o: CompareOverride): Column {
-  return { kind: 'disk', key: columnKey(o.plugin, o.origin), override: o };
+  return { key: columnKey(o.plugin, o.origin), override: o };
 }
 function diff(partial: Partial<FieldDiff> = {}): FieldDiff {
   return {
@@ -622,7 +622,7 @@ describe('DiffRow — a collapsed container row, per column', () => {
   }
 
   function cellText(columnIndex: number): string {
-    return screen.getByText('Location').closest('tr')!.querySelectorAll('td')[columnIndex + 1].textContent ?? '';
+    return screen.getByText('Location').closest('tr')!.querySelectorAll('td')[columnIndex + 1].textContent;
   }
 
   it('shows the placeholder only in the column that has the element', () => {

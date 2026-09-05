@@ -13,17 +13,9 @@ export default tseslint.config(
     {
         rules: {
             '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
-        },
-    },
-
-    // Extension source (tsconfig.json)
-    {
-        files: ['src/**/*.ts'],
-        languageOptions: {
-            parserOptions: {
-                project: './tsconfig.json',
-                tsconfigRootDir: import.meta.dirname,
-            },
+            // The generated schema reports nullability honestly, so a `??` or `?.` on a wire
+            // field the schema calls non-nullable is a bug, not defensive coding.
+            '@typescript-eslint/no-unnecessary-condition': 'error',
         },
     },
 

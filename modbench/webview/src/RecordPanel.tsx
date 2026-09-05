@@ -20,7 +20,7 @@ import type { RecordPanelClient } from './RecordPanelClient';
 import { recordPanelIncompleteMessage } from '../../src/medit/loadOrderProgress';
 
 const mEditWindow = window as Window & typeof globalThis & {
-  mEditFormKey: string;
+  mEditFormKey?: string;
 };
 
 const getHeaderBg = (c: ConflictThis | undefined): string | undefined => getConflictBg(c, 0.35);
@@ -135,8 +135,8 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
   // needs it, since hooks can't follow the early-return guards below.
   const isHeaderRecord = formKey.startsWith('000000:');
 
-  const fieldMetaMap = useMemo((): Record<string, FieldMetadata> => {
-    const map: Record<string, FieldMetadata> = {};
+  const fieldMetaMap = useMemo((): Partial<Record<string, FieldMetadata>> => {
+    const map: Partial<Record<string, FieldMetadata>> = {};
     for (const o of result?.overrides ?? []) {
       for (const fv of o.fields) {
         if (!map[fv.metadata.name]) map[fv.metadata.name] = fv.metadata;
@@ -252,8 +252,8 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
   // ADR-0036: keyed by ColumnKey, not the bare plugin filename — two overrides sharing a filename
   // would otherwise collide, the second silently discarding the first. Declared Record<string, …>
   // since the brand is erased on a dictionary regardless.
-  const overrideMap = useMemo((): Record<string, CompareOverride> => {
-    const map: Record<string, CompareOverride> = {};
+  const overrideMap = useMemo((): Partial<Record<string, CompareOverride>> => {
+    const map: Partial<Record<string, CompareOverride>> = {};
     for (const o of result?.overrides ?? []) map[columnKey(o.plugin, o.origin)] = o;
     return map;
   }, [result]);
@@ -295,7 +295,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
   const { overrides, diffs } = result;
 
   const winner = overrides.find(o => o.isWinner);
-  const displayId = (winner ?? overrides[0])?.editorId;
+  const displayId = (winner ?? overrides.at(0))?.editorId;
   const title = displayId ? `${displayId} [${formKey}]` : formKey;
 
   // One recursive builder for every nesting depth — including the recursion a script property's

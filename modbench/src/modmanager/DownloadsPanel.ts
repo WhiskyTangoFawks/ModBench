@@ -43,7 +43,7 @@ async function installArchive(instanceRoot: string, name: string, log: (msg: str
   const archivePath = join(instanceRoot, 'downloads', name);
   let installed = false;
   try {
-    installed = (await vscode.commands.executeCommand<boolean>(
+    installed = (await vscode.commands.executeCommand<boolean | undefined>(
       'modbench.modList.installFromArchive',
       archivePath,
     )) ?? false;

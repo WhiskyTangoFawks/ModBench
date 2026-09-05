@@ -287,7 +287,7 @@ export class ApiPluginRepository implements PluginRepository {
     const outcome: RecordFieldEditOutcome = {
       applied: false,
       refusal: problem?.refusal ?? 'Unknown',
-      message: problem?.detail ?? errorText(error) ?? `Edit failed (${response.status}).`,
+      message: problem?.detail ?? (errorText(error) || `Edit failed (${response.status}).`),
     };
     this.log(`[PluginRepository] editRecordField(${formKey}.${fieldPath}) refused: ${outcome.refusal} — ${outcome.message}`);
     return outcome;

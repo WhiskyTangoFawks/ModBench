@@ -345,7 +345,7 @@ function registerPluginListView(deps: PluginListDeps): { pluginListProvider: Plu
   session.pluginsTreeView = pluginListView; // progress and message live here
   session.pluginsNameFilter = registerPluginsNameFilter(pluginListView, pluginListProvider);
   const revealReporter = makeReporter(outputChannel, 'pluginListTree.revealInExplorer');
-  const revealInExplorerCommand = vscode.commands.registerCommand('modbench.pluginListTree.revealInExplorer', async (node: PluginListNode) => {
+  const revealInExplorerCommand = vscode.commands.registerCommand('modbench.pluginListTree.revealInExplorer', async (node: PluginListNode | undefined) => {
     if (node?.kind !== 'plugin') return;
     const name = node.plugin.name;
     const filePath = await pluginListProvider.resolvePluginPath(name);
@@ -432,7 +432,7 @@ function registerOpenHeaderCommand(): vscode.Disposable {
 function registerTrackCommand(
   session: ExtensionSession, controller: EditingController, outputChannel: vscode.LogOutputChannel, onTracked: () => Promise<void>,
 ): vscode.Disposable {
-  return vscode.commands.registerCommand('modbench.pluginListTree.track', async (node: PluginListNode) => {
+  return vscode.commands.registerCommand('modbench.pluginListTree.track', async (node: PluginListNode | undefined) => {
     if (node?.kind !== 'plugin') return;
     const name = node.plugin.name;
     const origin = await controller.resolveOrigin(name);
