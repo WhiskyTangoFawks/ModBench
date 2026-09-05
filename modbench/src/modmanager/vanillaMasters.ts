@@ -99,32 +99,22 @@ function topoSortImplicitMasters(
   const result: string[] = [];
   const visited = new Set<string>();
   const inStack = new Set<string>();
-  let cyclic = false;
-
-  function visit(name: string): void {
-    if (cyclic || visited.has(name)) return;
-    if (inStack.has(name)) {
-      cyclic = true;
-      return;
-    }
+  function visitFindsCycle(name: string): boolean {
+    if (visited.has(name)) return false;
+    if (inStack.has(name)) return true;
     inStack.add(name);
     // `?? []` guards a lookup unreachable by construction: every `dep` comes from `byLower`'s
     // values, which are exactly `edges`'s key set. Traced, not asserted away with `!`.
     for (const dep of edges.get(name) ?? []) {
-      visit(dep);
-      if (cyclic) break;
+      if (visitFindsCycle(dep)) return true;
     }
     inStack.delete(name);
     visited.add(name);
     result.push(name);
+    return false;
   }
 
-  for (const name of candidates) {
-    visit(name);
-    if (cyclic) break;
-  }
-
-  if (cyclic) {
+  if (candidates.some((name) => visitFindsCycle(name))) {
     log('[vanillaMasters] cycle detected among implicit masters — falling back to discovery order');
     return candidates;
   }

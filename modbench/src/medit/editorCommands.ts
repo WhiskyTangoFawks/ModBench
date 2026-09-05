@@ -267,7 +267,7 @@ export function recordCopyIdentity(
   arg: RecordNode | ColumnHeaderContext | undefined,
 ): { formKey: string; plugin: string; origin?: string } | undefined {
   if (!arg) return undefined;
-  if ('kind' in arg) return arg.kind === 'record' ? { formKey: arg.record.formKey, plugin: arg.record.plugin, origin: arg.origin } : undefined;
+  if ('kind' in arg) return { formKey: arg.record.formKey, plugin: arg.record.plugin, origin: arg.origin };
   return { formKey: arg.formKey, plugin: arg.plugin, origin: arg.origin };
 }
 /** Returns the picked `PluginMetadata`, not just its name, so the caller reads `.origin` off it

@@ -119,8 +119,8 @@ freshly started backend (the `/regenerate-api` skill has the exact sequence).
 
 The repo is set up to be worked on by people and coding agents alike:
 
-- [CLAUDE.md](CLAUDE.md) — the invariants that matter, the tool commands, and the rules
-  (game-generic, vocabulary boundary, never assume file ownership, xEdit decides editing UX).
+- [CLAUDE.md](CLAUDE.md) — the tool commands and the rules no gate can express; the module
+  files under `modbench/` and `MEditService/` carry each side's own.
 - [docs/specs/](docs/specs/) — one living spec per UI surface, present tense; a spec that lags the
   product is a bug.
 - [docs/adr/](docs/adr/) — decisions; [docs/out-of-scope/](docs/out-of-scope/) — the won't-do

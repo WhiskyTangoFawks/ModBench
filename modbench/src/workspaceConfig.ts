@@ -11,8 +11,8 @@ export const meditConfig = () => vscode.workspace.getConfiguration('modbench');
 export function makeDetectPaths(): DetectPaths {
   return () => {
     const c = meditConfig();
-    const dataOverride = (c.get('game.dataFolderPath') as string) ?? '';
-    const pluginsOverride = (c.get('game.pluginsTxtPath') as string) ?? '';
+    const dataOverride = c.get<string>('game.dataFolderPath', '');
+    const pluginsOverride = c.get<string>('game.pluginsTxtPath', '');
     if (dataOverride && pluginsOverride) {
       return Promise.resolve({ dataFolder: dataOverride, pluginsTxt: pluginsOverride });
     }

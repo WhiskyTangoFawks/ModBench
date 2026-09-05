@@ -65,6 +65,10 @@ class ValeRules(unittest.TestCase):
                 self.assertIn("Repo.Ticket", vale(text, ".ts", config=".vale-raw.ini"))
         self.assertIn("Repo.Ticket", vale(f"See {TICKET}.\n", ".md"))
 
+    def test_a_filed_debt_citation_is_the_one_ticket_number_allowed(self):
+        self.assertNotIn("Repo.Ticket", vale(f"// synthetic fixtures are debt {TICKET}\n", ".ts", config=".vale-raw.ini"))
+        self.assertNotIn("Repo.Ticket", vale(f"Replacing these is debt {TICKET}.\n", ".md"))
+
     def test_external_trackers_hex_colours_and_enumerations_are_not_tickets(self):
         n = "#" "688"
         for text in (f"Mutagen {n}", f"Mutagen-{n}", f"Mutagen-Modding/Mutagen{n}", f"upstream {n}/{n}",

@@ -129,4 +129,16 @@ describe('modlist.txt corpus — every entry mutation touches modlist.txt and no
     expect(added).toEqual(['DragIn Manual Extract']);
     expect(after.has('mods/DragIn Manual Extract/textures/dummy.dds')).toBe(true);
   });
+
+  // "[NODELETE] Radfall" is listed with no mods/ folder; the rival is a prune that also
+  // rewrites or deletes something for the entries it keeps.
+  it('pruneDeadEntries drops the one folderless entry, touching only modlist.txt', async () => {
+    const before = await snapshotTree(dir);
+    const pruned = await src.pruneDeadEntries();
+    const after = await snapshotTree(dir);
+    assertOnlyChanged(before, after, new Set([MODLIST]));
+
+    expect(pruned).toEqual(['[NODELETE] Radfall']);
+    expect((await src.readModlist()).some((e) => e.name === '[NODELETE] Radfall')).toBe(false);
+  });
 });

@@ -193,7 +193,7 @@ function fieldCell(field: string): HTMLTableCellElement {
 }
 
 const summaryOf = (field: string): string =>
-  fieldCell(field).closest('tr')!.querySelectorAll('td')[1].textContent ?? '';
+  fieldCell(field).closest('tr')!.querySelectorAll('td')[1].textContent;
 
 const expandRow = (field: string) =>
   fireEvent.click(fieldCell(field).closest('tr')!.querySelector('button')!);

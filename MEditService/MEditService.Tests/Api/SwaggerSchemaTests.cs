@@ -68,6 +68,48 @@ public sealed class SwaggerSchemaTests
         Assert.Equal(new HashSet<string> { "200", "400", "404", "409", "422", "500", "503" }, declared);
     }
 
+    // Swashbuckle types an undeclared response `content?: never` on the TS side and nothing
+    // flags it, so every operation must declare its success status.
+    [Fact]
+    public async Task EveryOperation_DeclaresASuccessResponse()
+    {
+        var root = await GetSchemaAsync();
+        var undeclared = Operations(root)
+            .Where(op => !op.Responses.EnumerateObject().Any(r => r.Name.StartsWith('2')))
+            .Select(op => op.Name)
+            .ToList();
+        Assert.True(undeclared.Count == 0, "No 2xx declared for:\n" + string.Join("\n", undeclared));
+    }
+
+    // An anonymous type serializes fine and reaches the TS client as an inline shape no other
+    // code can name; response bodies are named records in Queries/Models.cs.
+    [Fact]
+    public async Task EveryJsonResponseBody_IsANamedSchema()
+    {
+        var root = await GetSchemaAsync();
+        var anonymous = Operations(root)
+            .SelectMany(op => op.Responses.EnumerateObject().Select(r => (Name: $"{op.Name} {r.Name}", Response: r.Value)))
+            .Where(r => r.Response.TryGetProperty("content", out var content)
+                && content.TryGetProperty("application/json", out var json)
+                && !IsNamed(json.GetProperty("schema")))
+            .Select(r => r.Name)
+            .ToList();
+        Assert.True(anonymous.Count == 0, "Inline response schema for:\n" + string.Join("\n", anonymous));
+    }
+
+    private static bool IsNamed(JsonElement schema)
+    {
+        if (schema.TryGetProperty("$ref", out _)) return true;
+        if (schema.TryGetProperty("type", out var type) && type.GetString() == "array")
+            return IsNamed(schema.GetProperty("items"));
+        return schema.TryGetProperty("type", out type) && type.GetString() is "string" or "boolean" or "integer" or "number";
+    }
+
+    private static IEnumerable<(string Name, JsonElement Responses)> Operations(JsonElement root) =>
+        root.GetProperty("paths").EnumerateObject()
+            .SelectMany(path => path.Value.EnumerateObject()
+                .Select(method => ($"{method.Name.ToUpperInvariant()} {path.Name}", method.Value.GetProperty("responses"))));
+
     // A non-nullable object-typed property (required ref) must stay a bare $ref — the
     // filter must not wrap indiscriminately, only genuinely-nullable properties.
     [Fact]

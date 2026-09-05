@@ -186,7 +186,7 @@ export class ModListProvider
     dataTransfer: vscode.DataTransfer,
     _token: vscode.CancellationToken,
   ): void {
-    const node = source[0];
+    const node = source.at(0);
     if (!node || !isEntryNode(node)) return;
     const name = node.kind === 'mod' ? node.mod.name : node.separator.name;
     dataTransfer.set(DND_MIME, new vscode.DataTransferItem({ kind: node.kind, name }));

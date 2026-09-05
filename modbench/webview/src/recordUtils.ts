@@ -4,18 +4,20 @@ import { columnKey } from './types';
 export function toStr(v: unknown): string {
   if (v == null) return '';
   if (typeof v === 'string') return v;
-  return JSON.stringify(v) ?? '';
+  // JSON.stringify returns undefined for these two, whatever its declared type says.
+  if (typeof v === 'function' || typeof v === 'symbol') return '';
+  return JSON.stringify(v);
 }
 
 // ADR-0036: `key` is this column's compound identity, minted once here rather than re-derived, so
 // two same-filename columns stop colliding. ADR-0041/ADR-0019: one column per override — the
 // record's full in-game resolution stack.
-export type Column = { kind: 'disk'; key: ColumnKey; override: CompareOverride };
+export type Column = { key: ColumnKey; override: CompareOverride };
 
 // xEdit's own layout: load order ascending, master leftmost, winner rightmost — the wire order
 // itself (GetOverrideStack's ORDER BY load_order_idx), trusted rather than re-sorted here.
 export function buildColumns(overrides: CompareOverride[]): Column[] {
-  return overrides.map(o => ({ kind: 'disk' as const, key: columnKey(o.plugin, o.origin), override: o }));
+  return overrides.map(o => ({ key: columnKey(o.plugin, o.origin), override: o }));
 }
 
 // `immutableSet` says only that a column is immutable, which is ambiguous: a vanilla master is
@@ -126,7 +128,7 @@ import type {
 export function arrayElementContext(
   formKey: string, plugin: string, origin: string, rootField: string, path: PathSegment[], arrayLength: number,
 ): ArrayElementContext {
-  const lastSeg = path[path.length - 1];
+  const lastSeg = path.at(-1);
   const index = lastSeg?.kind === 'index' ? lastSeg.index : -1;
   const movable = isMovableElementHop(lastSeg);
   return {
