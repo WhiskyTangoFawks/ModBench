@@ -32,13 +32,15 @@ public sealed class LoadOrderDatabaseTablesTests(LoadedApiFixture<TestPluginFixt
         return names;
     }
 
-    private DuckDBConnection Connection() =>
-        ((DuckDbRecordIndex)loaded.Services.GetRequiredService<ILoadOrderMirror>().Index!).Connection;
+    private DuckDbRecordIndex Index() =>
+        (DuckDbRecordIndex)loaded.Services.GetRequiredService<ILoadOrderMirror>().Index!;
+
+    private DuckDBConnection Connection() => Index().Connection;
 
     [Fact]
     public void AHeldLoadOrder_HasNoPerTypeWideTables_OnlyViewsOverRecords()
     {
-        ((DuckDbRecordIndex)loaded.Services.GetRequiredService<ILoadOrderMirror>().Index!).CreateRecordTypeViews();
+        Index().CreateRecordTypeViews();
         var connection = Connection();
         var baseTables = BaseTableNamesOf(connection);
         var views = ViewNamesOf(connection);

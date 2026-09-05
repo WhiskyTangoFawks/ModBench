@@ -76,6 +76,7 @@ public class RegistrationScopingTests
 
         var repo = new DuckDbRecordIndex(Reflector, Ddl, NullLogger.Instance);
         repo.Initialize(GameRelease.Fallout4);
+        repo.CreateRecordTypeViews();
         repo.Index((IModGetter)alpha, Registration.Participating(0), AlphaKey);
         repo.Index((IModGetter)beta, Registration.Participating(1), BetaKey);
         repo.UpdateWinners();

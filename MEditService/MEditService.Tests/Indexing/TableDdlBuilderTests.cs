@@ -81,7 +81,7 @@ public class TableDdlBuilderTests
     }
 
     [Fact]
-    public void CreateTables_IsIdempotent()
+    public void CreateTablesAndRecordTypeViews_AreIdempotent()
     {
         using var conn = OpenMemory();
         TableDdlBuilder.CreateTables(conn);

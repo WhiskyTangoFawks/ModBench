@@ -82,8 +82,7 @@ public sealed class TableDdlBuilder(SchemaReflector reflector)
     }
 
     // ADR-0041: one json_extract VIEW over the registered `records` per record type, header included.
-    // Not part of CreateTables: these ~130 views cost more than every table together, and only user
-    // filter SQL reads them (ADR-0005).
+    // Apart from CreateTables because only user filter SQL reads them (ADR-0005).
     public void CreateRecordTypeViews(DuckDBConnection connection, GameRelease release) =>
         RecordViewBuilder.CreateViews(connection, _reflector.GetSchemas(release));
 

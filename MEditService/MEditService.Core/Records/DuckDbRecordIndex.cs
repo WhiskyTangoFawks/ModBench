@@ -51,10 +51,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
     public DuckDBConnection Connection => _indexStore.Connection;
 
     private readonly TableDdlBuilder _ddlBuilder;
-
-    // The connection the per-type views were created on: a rebuild reopens a fresh one, so the flag
-    // is the connection itself rather than a bool.
-    private DuckDBConnection? _recordTypeViewsOn;
+    private bool _recordTypeViewsCreated;
 
     public DuckDbRecordIndex(
         SchemaReflector schemaReflector,
@@ -68,13 +65,12 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         _indexStore = new IndexStore(logger, databasePath);
     }
 
-    /// <summary>The SQL door's per-type views, created on first use rather than at
-    /// <see cref="Initialize"/>: only user filter SQL reads them (ADR-0005).</summary>
-    public void CreateRecordTypeViews()
+    // The SQL door's per-type views, created on the first filter rather than at Initialize (ADR-0005).
+    internal void CreateRecordTypeViews()
     {
-        if (ReferenceEquals(_recordTypeViewsOn, Connection)) return;
+        if (_recordTypeViewsCreated) return;
         _ddlBuilder.CreateRecordTypeViews(Connection, _release);
-        _recordTypeViewsOn = Connection;
+        _recordTypeViewsCreated = true;
     }
 
     // Reading a record back out of its document needs the release it was written under, and this
