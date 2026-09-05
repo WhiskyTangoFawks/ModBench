@@ -11,6 +11,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MEditService.Tests", "MEdit
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MEditService.Bridge", "MEditService.Bridge\MEditService.Bridge.csproj", "{DDEEFF0B-BE30-4197-84B9-141817135D2B}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MEditService.Tests.ProcessEnvironment", "MEditService.Tests.ProcessEnvironment\MEditService.Tests.ProcessEnvironment.csproj", "{28B7C575-86F4-4A74-89BC-81DC7181FD22}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -36,5 +38,9 @@ Global
 		{DDEEFF0B-BE30-4197-84B9-141817135D2B}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{DDEEFF0B-BE30-4197-84B9-141817135D2B}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{DDEEFF0B-BE30-4197-84B9-141817135D2B}.Release|Any CPU.Build.0 = Release|Any CPU
+		{28B7C575-86F4-4A74-89BC-81DC7181FD22}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{28B7C575-86F4-4A74-89BC-81DC7181FD22}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{28B7C575-86F4-4A74-89BC-81DC7181FD22}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{28B7C575-86F4-4A74-89BC-81DC7181FD22}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal

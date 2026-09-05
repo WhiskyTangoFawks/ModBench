@@ -17,6 +17,7 @@ namespace MEditService.Tests.Api;
 
 /// <summary>Status code and body shape for the write handlers' error-mapping paths the endpoint
 /// suites do not reach, including the IO/UnauthorizedAccess to 500 mapping.</summary>
+[Collection(WebHostCollection.Name)]
 public sealed class WriteEndpointMappingCharacterizationTests(LoadedApiFixture<TestPluginFixture> loaded)
     : IClassFixture<LoadedApiFixture<TestPluginFixture>>
 {

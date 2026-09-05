@@ -11,6 +11,7 @@ namespace MEditService.Tests.Api;
 // ADR-0036 for the spatial routes, over a load order really holding two files of one filename.
 // Real mod-folder origins: ColumnKey.Of elides PluginOrigin.DataDirectory, so a default-origin
 // fixture passes whether or not the routes honour origin.
+[Collection(WebHostCollection.Name)]
 public sealed class SpatialRoutesOriginApiTests(LoadedApiFixture<TestPluginFixture> loaded)
     : IClassFixture<LoadedApiFixture<TestPluginFixture>>
 {
