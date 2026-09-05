@@ -21,7 +21,7 @@ EXCLUDE_RE='^(references/|modbench/src/medit/generated/|tools/)|/(node_modules|b
 COMMENT_CODE=$(cd "$ROOT" && git ls-files '*.cs' '*.ts' '*.tsx' \
   | grep -Ev "$EXCLUDE_RE" \
   | while read -r f; do [[ -f "$f" ]] && echo "$f"; done)
-COMMENT_DOCS=$(cd "$ROOT" && git diff --name-only --diff-filter=AM main -- '*.md' \
+COMMENT_DOCS=$(cd "$ROOT" && git ls-files '*.md' \
   | grep -Ev "$EXCLUDE_RE" \
   | while read -r f; do [[ -f "$f" ]] && echo "$f"; done)
 COMMENT_FILES=$(printf '%s\n%s\n' "$COMMENT_CODE" "$COMMENT_DOCS" | grep -v '^$')

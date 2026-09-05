@@ -20,7 +20,7 @@ git symbolic-ref -q HEAD && git merge-base --is-ancestor main HEAD && echo curre
 
 Both must hold — HEAD on a branch (a detached HEAD silently strands every commit made on
 it) and that branch containing `main`. Anything else: stop and say so — a manual test on a
-stale tree verifies behavior `main` no longer has.
+stale tree verifies behavior absent from `main`.
 
 ## 1 — Build the extension (if needed)
 

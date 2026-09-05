@@ -188,7 +188,7 @@ using git.
   ["vscode.git"]`; git on PATH is a product requirement — VS Code itself prompts to
   install it). One native repo group per tracked mod. Modbench contributes **no** SCM
   provider, resource groups, decorations, or diff commands of its own here — the retired
-  aggregate SCM provider (formerly `scm.md`) has no shim.
+  aggregate SCM provider has no shim.
 - Everything the panel offers is git's own: staging, commit, discard, branch switching,
   history. Commit is ungated (ADR-0041) — no closure checks, no prompts, no vocabulary of
   ours on the panel.

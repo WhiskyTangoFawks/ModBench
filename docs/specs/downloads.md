@@ -197,7 +197,7 @@ Each `.meta`-suppressed file in `downloads/` becomes one `DownloadNode` `TreeIte
 - **Tooltip** — a `MarkdownString`: filename, mod name, version, Nexus ID, size,
   filetime, game, and author — each field present only when the `.meta` (or, for
   filename/size/filetime, the filesystem) actually records it, so a metaless download
-  still gets a valid, minimal tooltip. Size and filetime, no longer columns, live here.
+  still gets a valid, minimal tooltip. Size and filetime live here rather than as columns.
 - **`resourceUri`** — `downloads/<name>` as a file `Uri`. It exists to feed
   `HiddenDownloadDecorationProvider`'s dimming lookup (below), not to derive the icon —
   `iconPath` is always explicitly set, so the file-icon theme is never consulted.
