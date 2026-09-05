@@ -71,7 +71,7 @@ internal static class Golden
 
     // xUnit's own string diff truncates long documents to an unreadable window, and these goldens
     // run to thousands of lines — report the first divergent line with its neighbours instead.
-    private static string FirstDifference(string expected, string actual)
+    internal static string FirstDifference(string expected, string actual)
     {
         var expectedLines = expected.Split('\n');
         var actualLines = actual.Split('\n');
