@@ -1,5 +1,8 @@
 import { vscode } from './vscode';
-import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION, type ExtensionToWebview, type WebviewToExtension } from './messages';
+import {
+  EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION,
+  type ExtensionToWebview, type RecordEditEnvelope, type WebviewToExtension,
+} from './messages';
 
 // The webview's bridge to native VS Code surfaces: a new native-surface gesture extends the
 // request/reply mechanism below rather than reinventing it.
@@ -72,10 +75,8 @@ export function copyToClipboard(value: string): void {
 // ADR-0041: fire-and-forget — the answer to "what does the record say now" is a re-read, never
 // this call's return. Refusals surface as a native notification, so this crosses the bridge, not
 // the backend.
-export function editField(
-  formKey: string, plugin: string, origin: string, fieldPath: string, value: unknown,
-): void {
-  vscode.postMessage({ type: WEBVIEW_TO_EXTENSION.EDIT_FIELD, formKey, plugin, origin, fieldPath, value });
+export function editField(formKey: string, plugin: string, origin: string, envelope: RecordEditEnvelope): void {
+  vscode.postMessage({ type: WEBVIEW_TO_EXTENSION.EDIT_FIELD, formKey, plugin, origin, envelope });
 }
 
 // Only the extension host can open a real editor tab. No Promise: the tab can be saved any number

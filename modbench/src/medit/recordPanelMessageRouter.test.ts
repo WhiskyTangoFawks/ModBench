@@ -173,12 +173,12 @@ describe('cross-panel copy/paste — two independently-opened panels share this 
     await routeRecordPanelMessage({
       type: WEBVIEW_TO_EXTENSION.EDIT_FIELD,
       formKey: '000800:Mod.esp', plugin: 'Mod.esp', origin: 'SomeMod',
-      fieldPath: 'linkedRef', value: 'CopiedNPC [000001:Fallout4.esm]',
+      envelope: { op: 'set', path: [{ kind: 'member', name: 'LinkedRef' }], value: 'CopiedNPC [000001:Fallout4.esm]' },
     }, panelBDeps);
 
     expect(fakeRepository.editRecord).toHaveBeenCalledWith(
       '000800:Mod.esp', 'Mod.esp', 'SomeMod',
-      { op: 'set', path: [{ kind: 'member', name: 'linkedRef' }], value: 'CopiedNPC [000001:Fallout4.esm]' });
+      { op: 'set', path: [{ kind: 'member', name: 'LinkedRef' }], value: 'CopiedNPC [000001:Fallout4.esm]' });
     expect(onRecordEdited).toHaveBeenCalledWith('000800:Mod.esp', 'Mod.esp', 'SomeMod');
     // Copying out of panel A triggers no write of its own — only panel B's later EDIT_FIELD does.
     expect(fakeRepository.editRecord).toHaveBeenCalledTimes(1);
@@ -189,13 +189,17 @@ describe('cross-panel copy/paste — two independently-opened panels share this 
 // to the backend from the webview precisely so a refusal can become a native notification — which
 // is what these cases are really pinning.
 describe('routeRecordPanelMessage — EDIT_FIELD', () => {
+  const envelope = {
+    op: 'set' as const,
+    path: [{ kind: 'member' as const, name: 'Height' }],
+    value: 0.75,
+  };
   const editMessage = {
     type: WEBVIEW_TO_EXTENSION.EDIT_FIELD,
     formKey: '000800:Mod.esp',
     plugin: 'Mod.esp',
     origin: 'SomeMod',
-    fieldPath: 'height_max',
-    value: 0.75,
+    envelope,
   };
 
   beforeEach(() => {
@@ -207,9 +211,25 @@ describe('routeRecordPanelMessage — EDIT_FIELD', () => {
   it('sends the edit through the single write path with its compound plugin identity', async () => {
     await routeRecordPanelMessage(editMessage, makeDeps());
 
-    expect(fakeRepository.editRecord).toHaveBeenCalledWith(
-      '000800:Mod.esp', 'Mod.esp', 'SomeMod',
-      { op: 'set', path: [{ kind: 'member', name: 'height_max' }], value: 0.75 });
+    expect(fakeRepository.editRecord).toHaveBeenCalledWith('000800:Mod.esp', 'Mod.esp', 'SomeMod', envelope);
+  });
+
+  // The webview spells the whole write; the host adds nothing and rebuilds nothing, so an op with
+  // no value and a path of several hops reaches the repository exactly as posted.
+  it('passes an add envelope with a nested key path through verbatim, value and all', async () => {
+    const add = {
+      op: 'add' as const,
+      path: [
+        { kind: 'member' as const, name: 'VirtualMachineAdapter' },
+        { kind: 'member' as const, name: 'Scripts' },
+        { kind: 'key' as const, key: 'Guard' },
+        { kind: 'member' as const, name: 'Properties' },
+      ],
+    };
+    await routeRecordPanelMessage({ ...editMessage, envelope: add }, makeDeps());
+
+    expect(fakeRepository.editRecord).toHaveBeenCalledWith('000800:Mod.esp', 'Mod.esp', 'SomeMod', add);
+    expect(fakeRepository.editRecord.mock.calls[0][3]).not.toHaveProperty('value');
   });
 
   it('tells the panel to re-read once the edit has landed', async () => {

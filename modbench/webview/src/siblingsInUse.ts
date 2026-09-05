@@ -1,8 +1,8 @@
 import type { FieldMetadata } from './types';
 
 // FieldMetadata.siblingsInUse: an enum member whose value decides which sibling members carry
-// data. Answers which rows to show and what an edit must clear, stated once over metadata so no
-// game is named on this side of the wire.
+// data. Answers which rows to show, over metadata alone so no game is named here; what a change
+// idles is the writer's to clear (ADR-0032).
 
 function governing(structMeta: FieldMetadata): FieldMetadata[] {
   return (structMeta.fields ?? []).filter(f => f.siblingsInUse != null);
@@ -31,31 +31,4 @@ export function idleMembers(structMeta: FieldMetadata, structValues: readonly un
     for (const name of governed(member)) if (!live.has(name)) idle.add(name);
   }
   return idle;
-}
-
-// A member the format always writes empties to its type's zero, not null — Mutagen models a
-// condition's numeric parameter as a plain `Int32`, and the write path rejects a JSON null into a
-// non-nullable column.
-function emptied(meta: FieldMetadata | undefined): unknown {
-  switch (meta?.type) {
-    case 'int': case 'float': case 'hex': return 0;
-    case 'bool': return false;
-    default: return null;
-  }
-}
-
-/** Applied where the element is assembled for commit, so a function or Run On change never leaves
- *  a stale slot behind for the writer to find. */
-export function clearIdleSiblings(
-  governingMeta: FieldMetadata, siblings: readonly FieldMetadata[], structValue: unknown,
-): unknown {
-  if (governingMeta.siblingsInUse == null || structValue == null || typeof structValue !== 'object') {
-    return structValue;
-  }
-  const live = new Set(inUse(governingMeta, structValue));
-  const next = { ...(structValue as Record<string, unknown>) };
-  for (const name of governed(governingMeta)) {
-    if (!live.has(name)) next[name] = emptied(siblings.find(f => f.name === name));
-  }
-  return next;
 }

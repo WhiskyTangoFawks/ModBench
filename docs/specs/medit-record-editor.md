@@ -216,12 +216,16 @@ The only cells that open *nothing* are struct and array summary rows, which rend
 copies the whole structure, as xEdit does when you drag by the header.
 
 The placeholder is a statement that a container is present and merely collapsed, so it is drawn
-per column, not per row: a column whose plugin has no container there — an array slot past its own
-length, an abstract-union member its concrete leaf doesn't declare, an absent struct — renders an
-empty cell. The exception is a row *no* column carries a value for, which holds nothing but its
-children and is therefore present in every column; it keeps its placeholder throughout. An absent
-*scalar* is unchanged: it renders `—`, the panel-wide reading of "no value here" its editor
-gesture already builds on.
+per column, not per row: a column whose plugin has nothing there — an array slot past its own
+length, an abstract-union member its concrete leaf doesn't declare, a member of a struct the column
+does not carry — renders an empty cell. The exception is a row *no* column carries a value for,
+which holds nothing but its children and is therefore present in every column; it keeps its
+placeholder throughout. **Absent means default** (ADR-0032): the document omits a member equal to
+its default, so a scalar the column's own owner omits reads as that default — `0`, `false`, the
+empty string, the enum default the metadata names, an empty flag set, `[0]` for a list — and its
+editor opens on it. `—` is reserved for a link that is there and unset (`FieldMetadata.AllowsNull`
+says null is a value); a byte slice, color or vector the document omits keeps it too, since the
+metadata names no default text for them.
 
 #### Why copy is uniform now
 
@@ -411,16 +415,14 @@ already empty: matching xEdit's own guard (`Element.EditValue` must be non-empty
   read-only under its own named reason; no Fallout 4 list is either, so the reason keeps the
   classification total rather than describing live data.
   **A new array element's default is the backend's, and names only the discriminator** — the
-  Add gesture posts an op envelope carrying nothing but `{op, path}`, and `ArrayOpWriter` builds the
-  element from the column's own schema. The default is the empty object: every member is left
-  absent, so the freshly constructed instance's CLR defaults stand. The one exception is a
-  discriminator (`MutagenObjectType`), which is not a member of the instance at all
-  — it is read off the payload to choose which concrete class to construct, before that object
-  exists — so an element of an abstract-element array that omits it cannot be built and is refused
-  `ListElementTypeUnresolved`. A default element therefore carries its discriminator, set to the
-  first leaf the schema lists, and the user changes it with the same `Kind` dropdown any other
-  element uses. The webview computes no element of its own: every array field is a reflected
-  column, and the backend builds its default element.
+  Add gesture posts `{op: "add", path}` with no value, and `DocumentEdit` builds the element from
+  the array's own element metadata. The default is the empty object: every member is left absent,
+  so the codec's freshly built instance's CLR defaults stand. The one exception is a discriminator
+  (`MutagenObjectType`), which the codec reads first to choose which concrete class to construct,
+  before that object exists — so an element of an abstract-element array that omits it cannot be
+  built and is refused `DiscriminatorInvalid`. A default element therefore carries its
+  discriminator, set to the first leaf the schema lists, and the user changes it with the same
+  `Kind` dropdown any other element uses. The webview computes no element of its own.
 
   **Read/write symmetry is structural, not conventional.** A leaf carries either a writer or
   a named read-only reason — `ColumnSpec.Apply`/`SubFieldSpec.Apply` are a two-case union, so a leaf
@@ -494,10 +496,10 @@ already empty: matching xEdit's own guard (`Element.EditValue` must be non-empty
   - **Commit trigger**: on save. Each `Ctrl+S` writes the tab's full current content — never on
     keystroke (would write on every character typed) and never only on close (a user who saves
     twice while still editing expects both saves written, the same as re-editing any other cell
-    twice). A string leaf nested inside a struct or array (any depth) commits through the same
-    whole-field reconstruction inline edits use, not a bare value under the subtree root's
-    path — the trigger carries the row's own path and the subtree root's field alongside the saved
-    text. A top-level string field's commit is unaffected — the same value either way.
+    twice). A string leaf nested inside a struct or array (any depth) commits the same `set`
+    envelope the inline editor posts, at the row's own path — the trigger carries the row's path
+    and the subtree root's field alongside the saved text. A top-level string field's commit is
+    the one-hop form of the same envelope.
   - **Trigger gesture**: right-click only (ADR-0039). A `string` cell's second click, `F2` and
     double click all agree with every other scalar type on the inline editor, immediately, with no
     debounce — there is no second left-click target to disambiguate against.
@@ -519,31 +521,28 @@ already empty: matching xEdit's own guard (`Element.EditValue` must be non-empty
   arrangement exactly, and required by the no-second-route rule: **there are no inline ▲▼✕
   buttons.** (Mechanism:
   a native `webview/context` menu on the element/parent cell, `Insert`/`Delete`/`Ctrl+↑`/`Ctrl+↓`
-  as DOM keydown accelerators on the focused cell, no extension-host round trip needed for the
-  keys since `onArrayEdit`/`onArrayAdd` are pure in-webview state.) Add is available regardless of
-  the array's expand state, matching xEdit. **The ops post a server-side op
-  envelope** (`{op, path}`) through the ordinary edit path; the backend reads the record's
-  own current value, computes the result, and applies it as the same atomic whole-array
-  complex-field write CONTEXT.md describes — so the write itself is unchanged, only who computes
-  it. Boundary cases (move the first element up, the last down, remove an out-of-range index)
-  are answered server-side as no-ops that commit nothing: no rewrite, no working-tree change, no
-  history entry. Only non-immutable columns offer the ops. An element-**value** edit is offered on the same cell and shares this
-  same reconstruction: the whole array (or struct-array element) is rebuilt before the write, so
-  it lands atomically rather than being silently lost. The context-menu ops' wire payload
-  carries the element's full `path` + `rootField` (the addressing contract), so ops on an
-  array nested inside a struct or another array land at the element's real depth. **A path is a
-  chain of four hop kinds**: a `member` names a struct's member; an `index` an unsorted array's
-  element by position; a `key` a keyed array's element **by key, resolved per column** — the same
-  key names a different position, or none at all, in each plugin's own array, which is exactly what
-  lets a plugin carrying fewer scripts than its master read as an absence at those keys; and a
-  `sortKey` an element of an array sorted by its own value. Add
-  resolves its default element from the nested array's own element type via `metaAtPath`, and a
-  bare element index would truncate both that and the depth. **An op's `key` hop is resolved against the record's own
-  schema, never against the payload's claim**: the key members are the ones the array declares, and
-  a key hop into an array the schema does not key is refused. There is no free
-  drag-reorder and no auto-sort.
-  Every array field takes this path, at every depth, including a script's properties and a
-  Papyrus scalar-array property's elements — there is no client-side arity computation left.
+  as DOM keydown accelerators on the focused cell, each posting the same envelope the menu entry
+  does.) Add is available regardless of the array's expand state, matching xEdit. **Every gesture
+  is one envelope** — an operation, a path and an optional value, `POST /records/{formKey}/edit`'s
+  own shape — and the webview posts what the user asked for and nothing else: `add` at the array
+  with no value; `remove` at the element; `move` at the element with the destination position as
+  its value (`Ctrl+↑` on the first element posts nothing, since the row's own hop says there is
+  nowhere to go); `set` at a leaf with its new value. The backend resolves the path against the
+  document it holds, patches, and answers with the result or a refusal naming the path — an
+  element that is not there, a move off either end, is refused by name, never landed as nothing.
+  Only non-immutable columns offer the ops. An element-**value** edit is offered on the same cell
+  and is the same `set` at the element's own hop. The context-menu ops' payload carries the row's
+  full `path` + `rootField`, so ops on an array nested inside a struct or another array land at
+  the element's real depth. **A path is a chain of three hop kinds**, each as the diff node states
+  it: a `member` names a struct's member; an `index` an unsorted array's element by its place among
+  the array's children; a `key` a keyed array's element **by the key text the backend labelled it
+  with**, which the backend resolves per column — the same key names a different position, or none
+  at all, in each plugin's own array, which is exactly what lets a plugin carrying fewer scripts
+  than its master read as an absence at those keys. An element of an array sorted by its own value
+  sits at a different position in every column too, so its `set` carries an `index` hop found in
+  the written column's own value at commit time. The webview holds no model beside the document:
+  no path setter, no mirror of the backend's key rule, no cascade, no default table (ADR-0032).
+  There is no free drag-reorder and no auto-sort.
 - **Editing writes working-tree source text directly** (ADR-0041) — there is no staged
   intermediate state. A single field's value can be **dragged between plugin columns** to copy
   just that field into the target (which must be editable; the source need not be) — or **copied
@@ -702,8 +701,8 @@ gesture — Sim Settlements 2 is a real-world example on Fallout 4.
   `ContainerChildFields` type table admits (a test holds the two equal; Mutagen's own static
   `IsPartialFormable` property doesn't cover every game's container types — FO4's own `Cell` is
   one of the gaps — so the write path can't rely on it either). A `PluginHeader` checkbox
-  (rendered only when `CompareOverride.IsPartialFormable`) is the UI trigger, dispatching the
-  existing `EDIT_FIELD` message — no new command or menu surface.
+  (rendered only when `CompareOverride.IsPartialFormable`) is the UI trigger, posting
+  `set` of `IsPartialForm` through the one envelope — no new command or menu surface.
   **Closes the pre-existing second door:** the generic reflected columns mirroring the same
   underlying flags int (`MajorFlags`, `Fallout4MajorRecordFlags` on FO4) remained a second way
   to flip bit 14 on a not-yet-flagged record even after the read half's refusal landed. A write
@@ -818,16 +817,14 @@ The editor reads the same map, for the same two halves, over metadata alone — 
   member *any* column puts in use is kept, so a losing override's own data is never hidden; a member
   no value ever names (`Unknown3`, xEdit's Parameter #3, written whatever the function is) is not
   governed at all and always shows. Filtering only ever removes a row the diff already has.
-- **A change to a governing member empties what it idles.** The cascade applies where the element
-  is assembled for commit, so the posted edit carries the emptied siblings. This is not cosmetic:
+- **A change to a governing member empties what it idles — on the writer.** The webview posts
+  the one leaf; `DocumentEdit` removes every governed sibling the new value does not put in use,
+  so the slot reads absent (its default) on every write path. This is not cosmetic:
   `ConditionBinaryWriteTranslation.CustomStringExports` writes a CIS1/CIS2 subrecord for any
   non-null `ParameterOneString`/`ParameterTwoString` without consulting the function, so a string
-  left behind by a function change reaches the plugin. "Emptied" is **per member type** — null for a
-  nullable member, the type's own zero for one the format always writes — because a JSON null into
-  a non-nullable column is rejected, and one rejected member fails the whole array write, so a
-  payload that nulled a numeric slot would land nothing at all.
+  left behind by a function change would reach the plugin.
 
-  A member the schema does not govern is never emptied by a cascade, and a stale value in one is
+  A member the schema does not govern is never emptied by the cascade, and a stale value in one is
   still the author's to see and edit. A governed member that *is* idle has no row while it is idle:
   its value is either an alias of a live slot (the same four bytes read as the other type — showing
   it would be showing the same value twice, wrongly) or data no reader consults. The one divergence
@@ -900,14 +897,13 @@ These apply everywhere a field value is rendered — the one compare grid and an
 3. **Structs and arrays are always collapsible**, default collapsed; expand state is
    per-load order, not persisted across restarts. A row's label indents one step per ancestor
    hop, so a grandchild reads as sitting inside its parent rather than beside it. Array **element values** offer the inline-edit
-   gesture everywhere (plain and struct-element arrays alike); committing one reconstructs the
-   array's (or struct-array element's) whole value before the write, per the reconstruction
-   CONTEXT.md's Complex-field entry's atomic-write model requires for a per-element gesture.
+   gesture everywhere (plain and struct-element arrays alike); committing one posts `set` at the
+   element's own hop, and the backend patches that one node of the document.
    Array **arity and order** come in the two sets *Array arity and order* defines: **unsorted**
-   arrays offer add / remove / move-up / move-down (swap-based, on non-immutable columns), **keyed**
+   arrays offer add / remove / move-up / move-down (on non-immutable columns), **keyed**
    arrays offer add / remove and no move (they are written back in key order regardless), and an
-   array sorted by its own element value offers none — these ops use the same
-   whole-array reconstruction. A list whose element's concrete type is
+   array sorted by its own element value offers none — each is its own envelope operation at the
+   array's or the element's path. A list whose element's concrete type is
    polymorphic (OMOD `Properties`' `AObjectModProperty<T>`, seven concrete leaves) resolves
    each element's own type from its `MutagenObjectType` discriminator sub-field at write time; an
    element whose discriminator is missing or unrecognized refuses naming the field, rather
@@ -989,7 +985,8 @@ These apply everywhere a field value is rendered — the one compare grid and an
    change already overlaid; there is no separate dirty visual treatment on this
    panel. Revert is a git gesture in the native Source Control panel, not a cell-level control
    here ([medit-version-control.md](medit-version-control.md)).
-5. **Null / missing fields** render as an empty cell, never "null"/"undefined".
+5. **A member the document omits** reads as its default (*By cell* above); a member of an object
+   the column does not carry renders an empty cell; nothing ever reads "null"/"undefined".
 6. **Read-only cells** in immutable plugin columns are never editable and render no input on
    click.
 7. **A signature backed by several concrete Mutagen subclasses** is one table whose document

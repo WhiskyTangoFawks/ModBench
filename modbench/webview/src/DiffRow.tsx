@@ -4,11 +4,11 @@ import { ScalarCell } from './ScalarCell';
 import { FormKeyCell } from './FormKeyCell';
 import { CheckErrorIcon } from './CheckErrorIcon';
 import { DiskCell } from './DiskCell';
-import { displayValue, flagBits, modelValue } from './modelValue';
+import { displayValue, modelValue } from './modelValue';
 import { copyToClipboard } from './nativeBridge';
 import { baseCell, toggleBtnStyle, getCellStyle, focusedRowStyle, DIMMED_OPACITY } from './gridStyles';
 import {
-  arrayElementContext, arrayParentContext, combineVscodeContexts, isArrayElementHop,
+  arrayElementContext, arrayParentContext, combineVscodeContexts, defaultOf, isArrayElementHop,
   isMovableElementHop, offersArrayAdd, stringValueContext, type Column, type PathSegment,
 } from './recordUtils';
 import type { ColumnKey, CompareOverride, ConflictAll, FieldDiff, FieldMetadata, FormKeyResolution } from './types';
@@ -34,9 +34,6 @@ interface RenderCellExtras {
   // The row's own collapse state, threaded to the one leaf that renders differently for it
   // (FlagCell's compact summary) — a row collapses as a row, all columns together.
   rowCollapsed?: boolean;
-  // This column's plugin has no element on this row at all (DiffRow's own `hasElement`). Only the
-  // two container branches consult it — a scalar leaf already renders its own null as "—".
-  absent?: boolean;
 }
 
 // ADR-0041: leaves render read-only unless the caller supplies `onCommit` — the presence of
@@ -47,12 +44,8 @@ function renderCell(
   meta: FieldMetadata,
   isFocused: boolean,
   onOpen: (fk: string) => void,
-  { checkError, resolution, onCommit, rowCollapsed, absent }: RenderCellExtras = {},
+  { checkError, resolution, onCommit, rowCollapsed }: RenderCellExtras = {},
 ): React.ReactNode {
-  // "[3]"/"{…}" say a container is present and merely unexpanded, so nothing stands in for a
-  // container this column's plugin doesn't have. Containers only: an absent scalar keeps
-  // ScalarCell's own "—".
-  if (absent && (meta.type === 'array' || meta.type === 'struct')) return null;
   if (meta.type === 'formKey') {
     return (
       <FormKeyCell
@@ -80,7 +73,7 @@ function renderCell(
       </span>
     );
   }
-  if (meta.type === 'enum' && flagBits(meta) != null) {
+  if (meta.type === 'flags') {
     return (
       <FlagCell
         value={value}
@@ -107,8 +100,8 @@ function renderCell(
 }
 
 // A row's coordinates at arbitrary nesting depth — a script property's own struct data needs more
-// than any fixed set of levels. `rootField` is the wire path staged as one atomic change for every
-// row in this subtree.
+// than any fixed set of levels. `rootField` is the record's own member; `path` the row's hops
+// below it.
 export interface RowContext {
   path: PathSegment[];
   overrideMeta?: FieldMetadata;
@@ -157,9 +150,7 @@ interface DiffRowProps {
   // The columns whose cells can be written — mutable plugin, in the load order, tracked. Computed
   // once for the whole grid so one definition of "writable" reaches every row.
   editableColumns: Set<ColumnKey>;
-  // Takes the leaf value alone — no field path. A caller-supplied path invites pairing the
-  // subtree's root wire path with one leaf's value, so the backend applier declines the shape
-  // without saying so and the edit vanishes.
+  // Takes the leaf value alone — the row builder owns the path the envelope carries.
   onEditCell?: (plugin: ColumnKey, value: unknown) => void;
   // Add on this row — present only when this row is itself a mutable, unsorted array's own row.
   onArrayAdd?: (plugin: ColumnKey) => void;
@@ -171,6 +162,13 @@ interface DiffRowProps {
   // What each column's cell reads while this row is collapsed, when the presentation table has an
   // entry for this row's own schema leaf — a condition reads as its xEdit prose rather than "{…}".
   collapsedSummary?: Record<string, string>;
+  // Whether this column holds the object this row is a member of. A member of nothing reads as
+  // nothing; a member its owner omits reads as its default (ADR-0032). Absent means every owner is
+  // present.
+  ownerPresent?: (column: ColumnKey) => boolean;
+  // Per column, the shape of a member whose type varies by the owner's leaf: the variant that
+  // column's own leaf names. Absent where the member has one shape.
+  cellMetas?: Partial<Record<string, FieldMetadata>>;
 }
 
 export function DiffRow({
@@ -178,7 +176,7 @@ export function DiffRow({
   collapsedColumns, onOpen,
   context, hasChildren, isExpanded, onToggle,
   rowKey, focusedCell, onFocusCell, editableColumns, onEditCell,
-  onArrayAdd, onArrayRemove, onArrayMoveUp, onArrayMoveDown, collapsedSummary,
+  onArrayAdd, onArrayRemove, onArrayMoveUp, onArrayMoveDown, collapsedSummary, ownerPresent, cellMetas,
 }: Readonly<DiffRowProps>) {
   // RecordPanel resolves every row's metadata itself; `fieldMetaMap` is the fallback for a caller
   // that supplies no `overrideMeta`.
@@ -191,8 +189,8 @@ export function DiffRow({
   // than DiffRow re-deriving "top-level or not."
   const rootField = context.rootField;
   // showActions (the checkError icon): every hop on this row's path is a struct member
-  // (path.length === 0 is vacuously true; a single array-index or sortKey hop, or
-  // one anywhere in a longer chain, turns it off).
+  // (path.length === 0 is vacuously true; a single element hop, or one anywhere in a longer
+  // chain, turns it off).
   const showActions = context.path.every(seg => seg.kind === 'member');
   // Which array gestures this row offers — its own array's row (Add) or one of its element rows
   // (Remove, and Move where the element's position is the user's to choose).
@@ -208,7 +206,7 @@ export function DiffRow({
 
   // A flags row is collapsible like a struct row, though its "children" are the checkbox lines
   // inside the cell, not sub-rows. It starts collapsed, sharing struct rows' default exactly.
-  const isFlagsRow = meta.type === 'enum' && flagBits(meta) != null;
+  const isFlagsRow = meta.type === 'flags';
   const rowExpanded = !!isExpanded;
   // A row no column carries a value for holds nothing but its children, so it is present in every
   // column — nothing there is absent relative to anything, and `hasElement` below stays true
@@ -254,15 +252,18 @@ export function DiffRow({
           ? overrideMap[key]?.fields.find(f => f.metadata.name === rootField)?.checkError
           : undefined;
         const isFocused = isCellFocused(focusedCell, rowKey, key);
+        const cellMeta = cellMetas?.[key] ?? meta;
+        // Whether this column has something on this row: a struct it carries, or a leaf whose
+        // owner it carries. A leaf its owner omits is the default, so it is there.
+        const hasElement = rowIsStructural
+          || ((ownerPresent?.(key) ?? true) && (cellMeta.type !== 'struct' || diff.values[key] != null));
+        const shown = hasElement ? diff.values[key] ?? defaultOf(cellMeta) : undefined;
         // ADR-0034: the string Ctrl+C copies for this cell, computed once so the
         // struct/array-summary branch and the leaf branch below hand DiskCell the same value.
-        const copyText = displayValue(diff.values[key], meta, diff.resolutions?.[key]);
-        // Whether this column's plugin has an element on this row at all: an array slot within
-        // its own length, a union member its own concrete leaf declares, a struct it carries.
-        const hasElement = rowIsStructural || diff.values[key] != null;
+        const copyText = displayValue(shown, cellMeta, diff.resolutions?.[key]);
         // Array ops are offered only on a writable column. `arrayLength` is deliberately not
-        // threaded down, so canMoveDown reads permissive rather than gating on this plugin's own
-        // length; the underlying op still no-ops at the true boundary.
+        // threaded down, so canMoveDown reads permissive; a move off the end is the backend's to
+        // refuse by name.
         const arrayEditable = !!onEditCell && editableColumns.has(key) && (isArrayParentRow || isArrayElementRow);
         const arrayOps = arrayEditable ? {
           add: isArrayParentRow ? () => onArrayAdd?.(key) : undefined,
@@ -299,9 +300,7 @@ export function DiffRow({
             : undefined,
         ) : undefined;
         if (hasChildren) {
-          const len = meta.type === 'array' && Array.isArray(diff.values[key])
-            ? (diff.values[key] as unknown[]).length
-            : '…';
+          const len = meta.type === 'array' && Array.isArray(shown) ? shown.length : '…';
           // A summary is content, not a placeholder — it reads at full weight, where "[3]"/"{…}"
           // stay dimmed to say only that something unexpanded is there.
           const summary = collapsedSummary?.[key];
@@ -334,11 +333,12 @@ export function DiffRow({
             onFocusCell={() => onFocusCell(rowKey, key)}
             onCopy={() => copyToClipboard(copyText)}
           >
-            {renderCell(diff.values[key], meta, isFocused, onOpen, {
+            {/* "[3]"/"{…}" say a container is present and merely unexpanded, and a leaf reads its
+                default, so nothing at all stands in for a column that has no such thing. */}
+            {hasElement && renderCell(shown, cellMeta, isFocused, onOpen, {
               checkError, resolution: diff.resolutions?.[key],
               onCommit: cellEditable ? (v: unknown) => onEditCell(key, v) : undefined,
               rowCollapsed: isFlagsRow && !rowExpanded,
-              absent: !hasElement,
             })}
           </DiskCell>
         );

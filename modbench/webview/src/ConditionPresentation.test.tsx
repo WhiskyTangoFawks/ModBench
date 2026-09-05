@@ -228,11 +228,17 @@ async function openMemberEditor(memberName: string): Promise<HTMLTableCellElemen
   return cell;
 }
 
-function lastEditField(): { fieldPath?: string; value?: unknown } | undefined {
+function postedEnvelopes(): unknown[] {
   const calls = (vscode.postMessage as ReturnType<typeof vi.fn>).mock.calls;
-  const call = [...calls].reverse().find(([m]) => (m as { type?: string }).type === WEBVIEW_TO_EXTENSION.EDIT_FIELD);
-  return call?.[0] as { fieldPath?: string; value?: unknown } | undefined;
+  return calls
+    .filter(([m]) => (m as { type?: string }).type === WEBVIEW_TO_EXTENSION.EDIT_FIELD)
+    .map(([m]) => (m as { envelope: unknown }).envelope);
 }
+
+const dataMember = (name: string) => [
+  { kind: 'member', name: 'Conditions' }, { kind: 'index', index: 0 },
+  { kind: 'member', name: 'Data' }, { kind: 'member', name },
+];
 
 beforeEach(() => {
   vi.stubGlobal('mEditFormKey', '000001:MyMod.esp');
@@ -342,6 +348,21 @@ describe('a collapsed condition reads as xEdit prose', () => {
 
     expect(summaryOf(0)).toBe('Subject.IsSneaking = 1.000000 OR');
     expect(summaryOf(1)).toBe('Subject.IsSneaking = 1.000000');
+  });
+
+  // "Last" is per column: the last element that column carries, not the last row of the grid.
+  it('a column with fewer conditions ends its list where its own last element is', async () => {
+    currentCompare = compareResult({
+      [PLUGIN]: [condition({}, { Function: 'IsSneaking' }), condition({}, { Function: 'IsSneaking' })],
+      'Other.esp': [condition({}, { Function: 'IsSneaking' })],
+    });
+    renderPanel();
+    await expandConditions();
+
+    const td = screen.getAllByText('[0]').find(el => el.tagName === 'TD')!;
+    const cells = Array.from(td.closest('tr')!.querySelectorAll('td'));
+    expect(cells[1].textContent).toBe('Subject.IsSneaking = 1.000000 AND');
+    expect(cells[2].textContent).toBe('Subject.IsSneaking = 1.000000');
   });
 
   it('the leaf with no function member of its own is named by its own leaf type', async () => {
@@ -465,8 +486,10 @@ describe('a condition shows one row per parameter slot in use', () => {
   });
 });
 
-describe('a governing member clears the siblings its new value idles', () => {
-  it('changing Run On away from Reference posts an edit with the reference cleared', async () => {
+// The cascade is the writer's (ADR-0032): a change to a governing member posts that one leaf, and
+// the backend clears the slots the new value idles from the document it holds.
+describe('a governing member posts its own value and nothing else', () => {
+  it('changing Run On away from Reference posts one set of Run On', async () => {
     currentCompare = oneColumn([condition({}, {
       RunOnType: 'Reference', Reference: '00000014:Fallout4.esm', Function: 'IsSneaking',
     })]);
@@ -477,17 +500,10 @@ describe('a governing member clears the siblings its new value idles', () => {
     fireEvent.change(select, { target: { value: 'Subject' } });
     fireEvent.blur(select);
 
-    const posted = lastEditField();
-    expect(posted?.fieldPath).toBe('Conditions');
-    const data = (posted?.value as Record<string, unknown>[])[0].Data as Record<string, unknown>;
-    expect(data.RunOnType).toBe('Subject');
-    expect(data.Reference).toBeNull();
+    expect(postedEnvelopes()).toEqual([{ op: 'set', path: dataMember('RunOnType'), value: 'Subject' }]);
   });
 
-  it('changing the function posts an edit with every slot the new function does not use cleared', async () => {
-    // ConditionBinaryWriteTranslation.CustomStringExports writes a CIS1/CIS2 subrecord for any
-    // non-null parameter string without consulting the function, so a stale string reaches the
-    // plugin.
+  it('changing the function posts one set of the function, no emptied slots beside it', async () => {
     currentCompare = oneColumn([condition({}, {
       Function: 'GetGraphVariableFloat', ParameterOneString: 'bAllowRotation',
     })]);
@@ -498,34 +514,10 @@ describe('a governing member clears the siblings its new value idles', () => {
     fireEvent.change(select, { target: { value: 'HasKeyword' } });
     fireEvent.blur(select);
 
-    const posted = lastEditField();
-    const data = (posted?.value as Record<string, unknown>[])[0].Data as Record<string, unknown>;
-    expect(data.Function).toBe('HasKeyword');
-    // A JSON null into ParameterOneNumber — a non-nullable Int32 — is rejected by the write path,
-    // and a rejected member fails the whole array write, so each slot empties per its own type.
-    expect(data.ParameterOneString).toBeNull();
-    expect(data.ParameterTwoRecord).toBeNull();
-    expect(data.ParameterTwoString).toBeNull();
-    expect(data.ParameterOneNumber).toBe(0);
-    expect(data.ParameterTwoNumber).toBe(0);
+    expect(postedEnvelopes()).toEqual([{ op: 'set', path: dataMember('Function'), value: 'HasKeyword' }]);
   });
 
-  it('a member the new value still uses keeps its value', async () => {
-    currentCompare = oneColumn([condition({}, {
-      Function: 'HasKeyword', ParameterOneRecord: '00AABBCC:MyMod.esp',
-    })]);
-    renderPanel();
-    const cell = await openMemberEditor('Function');
-
-    const select = cell.querySelector('select')!;
-    fireEvent.change(select, { target: { value: 'GetVMQuestVariable' } });
-    fireEvent.blur(select);
-
-    const data = (lastEditField()?.value as Record<string, unknown>[])[0].Data as Record<string, unknown>;
-    expect(data.ParameterOneRecord).toBe('00AABBCC:MyMod.esp');
-  });
-
-  it('an edit to a member that governs nothing leaves its siblings alone', async () => {
+  it('a member that governs nothing posts the same one-leaf set', async () => {
     currentCompare = oneColumn([condition({}, {
       Function: 'HasKeyword', ParameterOneRecord: '00AABBCC:MyMod.esp', Unknown3: -1,
     })]);
@@ -536,9 +528,54 @@ describe('a governing member clears the siblings its new value idles', () => {
     fireEvent.change(input, { target: { value: '7' } });
     fireEvent.blur(input);
 
-    const data = (lastEditField()?.value as Record<string, unknown>[])[0].Data as Record<string, unknown>;
-    expect(data.Unknown3).toBe(7);
-    expect(data.ParameterOneRecord).toBe('00AABBCC:MyMod.esp');
+    expect(postedEnvelopes()).toEqual([{ op: 'set', path: dataMember('Unknown3'), value: 7 }]);
+  });
+});
+
+// Use Global is an ordinary discriminator switch: the Kind row's own set, which the backend turns
+// into the leaf switch that keeps every member the two leaves share.
+describe('switching a condition\'s leaf', () => {
+  it('posts one set of the discriminator member with the chosen leaf\'s wire value', async () => {
+    currentCompare = oneColumn([condition({}, { Function: 'IsSneaking' })]);
+    renderPanel();
+    await expandConditions();
+    const element = screen.getAllByText('[0]').find(el => el.tagName === 'TD')!;
+    fireEvent.click(element.closest('tr')!.querySelector('button')!);
+    await waitFor(() => expect(labelCell('Kind')).toBeDefined());
+
+    const cell = labelCell('Kind')!.closest('tr')!.querySelectorAll('td')[1];
+    fireEvent.doubleClick(cell.querySelector('[data-open-trigger]')!);
+    const select = cell.querySelector('select')!;
+    fireEvent.change(select, { target: { value: 'ConditionGlobal' } });
+    fireEvent.blur(select);
+
+    expect(postedEnvelopes()).toEqual([{
+      op: 'set',
+      path: [{ kind: 'member', name: 'Conditions' }, { kind: 'index', index: 0 }, { kind: 'member', name: 'MutagenObjectType' }],
+      value: 'ConditionGlobal',
+    }]);
+  });
+});
+
+// ComparisonValue's shape is the leaf's: a float under ConditionFloat, a GLOB link under
+// ConditionGlobal. Each column's cell is the widget of that column's own leaf.
+describe('a type-varying member takes its cell from each column\'s own leaf', () => {
+  it('renders a number beside a resolved link on one row', async () => {
+    currentCompare = compareResult({
+      [PLUGIN]: [condition({ ComparisonValue: 2.5 }, { Function: 'IsSneaking' })],
+      'Other.esp': [condition({
+        MutagenObjectType: 'ConditionGlobal', ComparisonValue: '00000ABC:MyMod.esp',
+      }, { Function: 'IsSneaking' })],
+    }, { '00000ABC:MyMod.esp': 'MyGlobal' });
+    renderPanel();
+    await expandConditions();
+    const element = screen.getAllByText('[0]').find(el => el.tagName === 'TD')!;
+    fireEvent.click(element.closest('tr')!.querySelector('button')!);
+    await waitFor(() => expect(labelCell('ComparisonValue')).toBeDefined());
+
+    const cells = labelCell('ComparisonValue')!.closest('tr')!.querySelectorAll('td');
+    expect(cells[1].textContent).toBe('2.5');
+    expect(cells[2].textContent).toBe('MyGlobal [00000ABC:MyMod.esp]');
   });
 });
 

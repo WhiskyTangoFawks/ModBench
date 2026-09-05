@@ -60,9 +60,8 @@ export type RecordDetail = Omit<Schemas['RecordDetail'], 'fields'> & { fields: F
 
 export type CompareOverride = Omit<Schemas['CompareOverride'], 'fields'> & { fields: FieldValue[] };
 
-// A struct hop is by member name, an unsorted-array hop by position, a sorted array hop by the
-// element's own value. Lives in messages.ts so it can cross to the extension host.
-export type { PathSegment } from './messages';
+// Lives in messages.ts so it can cross to the extension host.
+export type { PathHop, PathSegment, RecordEditEnvelope } from './messages';
 
 /** `conflictAll` is required on the wire but optional here, so a fixture that states no conflict
  *  state degrades to "no background" rather than having to state one. */

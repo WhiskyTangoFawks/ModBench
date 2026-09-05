@@ -5,6 +5,7 @@ import type {
   UnansweredExternalChange, ContainerChildSummary, PluginDiagnosisReport,
 } from './ApiClient';
 import { errorText, isWriteGateTimeout, writeGateBusyMessage } from './ApiClient';
+import type { RecordEditEnvelope } from './messages';
 
 /** A refusal is an outcome, not an exception: `refusal` carries the backend's own name for it,
  *  which lets a caller offer Track for one and the patch-plugin path for another. `'Unknown'`
@@ -17,7 +18,6 @@ export type PluginRecordTypeCount = components['schemas']['PluginRecordTypeCount
 /** The one write shape (ADR-0032): an operation, a path of hops and an optional value. The
  *  backend resolves the path against the record's current document; the host posts what the
  *  user asked for and nothing else. */
-export type RecordEditEnvelope = Omit<components['schemas']['RecordEditRequest'], 'plugin' | 'origin'>;
 export type RecordPage = components['schemas']['RecordSummaryPagedResult'];
 export type CellPage = components['schemas']['CellSummaryPagedResult'];
 

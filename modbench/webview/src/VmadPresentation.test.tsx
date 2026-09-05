@@ -209,6 +209,12 @@ async function expandScripts() {
   fireEvent.click(screen.getAllByText('▶')[0]);
 }
 
+function lastEnvelope(): unknown {
+  const calls = (vscode.postMessage as ReturnType<typeof vi.fn>).mock.calls;
+  const call = [...calls].reverse().find(([m]) => (m as { type?: string }).type === WEBVIEW_TO_EXTENSION.EDIT_FIELD);
+  return (call?.[0] as { envelope?: unknown } | undefined)?.envelope;
+}
+
 function reloadWith(compare: unknown) {
   currentCompare = compare;
   window.dispatchEvent(new MessageEvent('message', {
@@ -437,6 +443,30 @@ describe('a row of a keyed array is identified by its key', () => {
   });
 });
 
+// Data's shape varies by leaf, and a leaf the variants do not name has no Data at all: that
+// column's cell is nothing, not the base shape's default.
+describe('a member the column\'s own leaf does not declare', () => {
+  it('renders nothing in that column, beside the value the other column\'s leaf holds', async () => {
+    currentCompare = compareResult({
+      [PLUGIN]: [script('Guard', [property('Owner', 'ScriptIntProperty', { Data: 3 })])],
+      'Other.esp': [script('Guard', [property('Owner', 'ScriptObjectProperty', { Object: '00000014:Fallout4.esm', Alias: -1 })])],
+    });
+    renderPanel();
+    await expandScripts();
+    await waitFor(() => screen.getByText('Guard'));
+    expandRow('Guard');
+    await waitFor(() => screen.getByText('Properties'));
+    expandRow('Properties');
+    await waitFor(() => screen.getByText('Owner'));
+    expandRow('Owner');
+    await waitFor(() => screen.getByText('Data'));
+
+    const cells = fieldCell('Data').closest('tr')!.querySelectorAll('td');
+    expect(cells[1].textContent).toBe('3');
+    expect(cells[2].textContent).toBe('');
+  });
+});
+
 describe('Add Script is the generic array gesture', () => {
   // The webview contributes no element: a new script's key is empty until the user names it,
   // so it appears first and is then nameable.
@@ -449,12 +479,7 @@ describe('Add Script is the generic array gesture', () => {
     fireEvent.click(cell);
     fireEvent.keyDown(cell, { key: 'Insert' });
 
-    const calls = (vscode.postMessage as ReturnType<typeof vi.fn>).mock.calls;
-    const posted = [...calls].reverse()
-      .find(([m]) => (m as { type?: string }).type === WEBVIEW_TO_EXTENSION.EDIT_FIELD)?.[0] as
-      { fieldPath?: string; value?: unknown } | undefined;
-    expect(posted?.fieldPath).toBe('Scripts');
-    expect(posted?.value).toEqual({ op: 'array_add', path: [] });
+    expect(lastEnvelope()).toEqual({ op: 'add', path: [{ kind: 'member', name: 'Scripts' }] });
   });
 
   it('the added script is a row of its own in that plugin’s column, and is nameable there', async () => {
@@ -473,8 +498,8 @@ describe('Add Script is the generic array gesture', () => {
     expect(added.querySelectorAll('td')[0].textContent).toBe('▶');
     expect(added.querySelectorAll('td')[1].textContent).toBe('()');
 
-    // Nameable: its own `name` cell takes an edit like any other string cell, and the whole
-    // scripts field commits with the name on the element that had none.
+    // Nameable: its own `name` cell takes an edit like any other string cell, addressed through
+    // the empty key — the only handle the element has until it is named.
     fireEvent.click(added.querySelector('button')!);
     await waitFor(() => screen.getAllByText('Name'));
     const nameCell = screen.getAllByText('Name')[0].closest('tr')!.querySelectorAll('td')[1];
@@ -483,11 +508,58 @@ describe('Add Script is the generic array gesture', () => {
     fireEvent.change(input, { target: { value: 'Ambush' } });
     fireEvent.blur(input);
 
-    const calls = (vscode.postMessage as ReturnType<typeof vi.fn>).mock.calls;
-    const edit = [...calls].reverse()
-      .find(([m]) => (m as { type?: string }).type === WEBVIEW_TO_EXTENSION.EDIT_FIELD)?.[0] as
-      { fieldPath?: string; value?: Obj[] } | undefined;
-    expect(edit?.fieldPath).toBe('Scripts');
-    expect(edit?.value?.map(e => e.Name)).toEqual(['Ambush', 'Guard']);
+    expect(lastEnvelope()).toEqual({
+      op: 'set',
+      path: [{ kind: 'member', name: 'Scripts' }, { kind: 'key', key: '' }, { kind: 'member', name: 'Name' }],
+      value: 'Ambush',
+    });
+  });
+
+  // A property lives two keyed hops down; every hop travels, each key as the diff node states it.
+  it('an edit under a nested keyed array carries the key hop at each level', async () => {
+    currentCompare = oneColumn([script('Guard', [property('Radius', 'ScriptIntProperty', { Data: 10 })])]);
+    renderPanel();
+    await expandScripts();
+    await waitFor(() => screen.getByText('Guard'));
+    expandRow('Guard');
+    await waitFor(() => screen.getByText('Properties'));
+    expandRow('Properties');
+    await waitFor(() => screen.getByText('Radius'));
+    expandRow('Radius');
+    await waitFor(() => screen.getByText('Data'));
+
+    const dataCell = fieldCell('Data').closest('tr')!.querySelectorAll('td')[1];
+    fireEvent.doubleClick(dataCell.querySelector('[data-open-trigger]')!);
+    const input = dataCell.querySelector('input')!;
+    fireEvent.change(input, { target: { value: '25' } });
+    fireEvent.blur(input);
+
+    expect(lastEnvelope()).toEqual({
+      op: 'set',
+      path: [
+        { kind: 'member', name: 'Scripts' }, { kind: 'key', key: 'Guard' },
+        { kind: 'member', name: 'Properties' }, { kind: 'key', key: 'Radius' },
+        { kind: 'member', name: 'Data' },
+      ],
+      value: 25,
+    });
+  });
+
+  it('Insert on a property list nested under a keyed script posts add through the key hop', async () => {
+    currentCompare = oneColumn([script('Guard', [property('Radius', 'ScriptIntProperty', { Data: 10 })])]);
+    renderPanel();
+    await expandScripts();
+    await waitFor(() => screen.getByText('Guard'));
+    expandRow('Guard');
+    await waitFor(() => screen.getByText('Properties'));
+
+    const cell = fieldCell('Properties').closest('tr')!.querySelectorAll('td')[1];
+    fireEvent.click(cell);
+    fireEvent.keyDown(cell, { key: 'Insert' });
+
+    expect(lastEnvelope()).toEqual({
+      op: 'add',
+      path: [{ kind: 'member', name: 'Scripts' }, { kind: 'key', key: 'Guard' }, { kind: 'member', name: 'Properties' }],
+    });
   });
 });

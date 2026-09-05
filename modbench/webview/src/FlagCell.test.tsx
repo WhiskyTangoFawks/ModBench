@@ -6,29 +6,22 @@ import { describe, it, expect, vi } from 'vitest';
 import { FlagCell } from './FlagCell';
 import type { FieldMetadata } from './types';
 
+// The codec spells a flags member as the array of the names that are set; the metadata lists the
+// members, in its own order.
 const flagMeta: FieldMetadata = {
   name: 'Flags',
-  type: 'enum',
+  type: 'flags',
   isArray: false,
   validFormKeyTypes: [],
   enumMembers: [{ value: 'A', bitValue: '1' }, { value: 'B', bitValue: '2' },
     { value: 'C', bitValue: '4' }, { value: 'D', bitValue: '8' }],
 };
 
-const sparseFlags: FieldMetadata = {
-  name: 'SparseFlags',
-  type: 'enum',
-  isArray: false,
-  validFormKeyTypes: [],
-  // non-sequential: Z is bit 4, not bit 1
-  enumMembers: [{ value: 'X', bitValue: '1' }, { value: 'Z', bitValue: '4' }],
-};
-
 // A deliberate ADR-0034 divergence, recorded there: the checkbox list is the cell — always
 // visible, one checkbox per flag, no gesture to reveal it.
 describe('FlagCell — always-visible checkbox list', () => {
-  it('renders one checkbox per flag with correct checked state, no click needed', () => {
-    render(<FlagCell value={0b0101} meta={flagMeta} editable onCommit={vi.fn()} />);
+  it('renders one checkbox per member, checked where the document names it', () => {
+    render(<FlagCell value={['A', 'C']} meta={flagMeta} editable onCommit={vi.fn()} />);
     const boxes = screen.getAllByRole('checkbox');
     expect(boxes).toHaveLength(4);
     expect(boxes[0]).toBeChecked();      // A
@@ -37,34 +30,37 @@ describe('FlagCell — always-visible checkbox list', () => {
     expect(boxes[3]).not.toBeChecked();  // D
   });
 
-  it('labels every checkbox with its flag name', () => {
-    render(<FlagCell value={0} meta={flagMeta} editable onCommit={vi.fn()} />);
+  it('labels every checkbox with its member name', () => {
+    render(<FlagCell value={[]} meta={flagMeta} editable onCommit={vi.fn()} />);
     for (const m of flagMeta.enumMembers) expect(screen.getByText(m.value)).toBeInTheDocument();
   });
 
-  it('zero renders the full list all-unchecked, not a placeholder', () => {
-    render(<FlagCell value={0} meta={flagMeta} editable onCommit={vi.fn()} />);
+  // Absent means default: no names set, so the list renders all unchecked, never a placeholder.
+  it('an absent value renders the full list all-unchecked', () => {
+    render(<FlagCell value={null} meta={flagMeta} editable={false} onCommit={vi.fn()} />);
     expect(screen.getAllByRole('checkbox')).toHaveLength(4);
+    for (const box of screen.getAllByRole('checkbox')) expect(box).not.toBeChecked();
     expect(screen.queryByText('—')).not.toBeInTheDocument();
   });
 });
 
 describe('FlagCell — collapsed row', () => {
-  it('renders the compact flag-name summary instead of checkboxes', () => {
-    render(<FlagCell value={0b0101} meta={flagMeta} editable onCommit={vi.fn()} collapsed />);
+  it('renders the names set, comma-separated, instead of checkboxes', () => {
+    render(<FlagCell value={['A', 'C']} meta={flagMeta} editable onCommit={vi.fn()} collapsed />);
     expect(screen.getByText('A, C')).toBeInTheDocument();
     expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
   });
 
-  it('renders "—" when no flags are set', () => {
-    render(<FlagCell value={0} meta={flagMeta} editable onCommit={vi.fn()} collapsed />);
-    expect(screen.getByText('—')).toBeInTheDocument();
+  it('renders nothing when no flags are set', () => {
+    const { container } = render(<FlagCell value={[]} meta={flagMeta} editable onCommit={vi.fn()} collapsed />);
+    expect(container.textContent).toBe('');
+    expect(screen.queryByText('—')).not.toBeInTheDocument();
   });
 });
 
 describe('FlagCell — read-only column', () => {
   it('renders the same checkbox list, disabled', () => {
-    render(<FlagCell value={0b0101} meta={flagMeta} editable={false} onCommit={vi.fn()} />);
+    render(<FlagCell value={['A', 'C']} meta={flagMeta} editable={false} onCommit={vi.fn()} />);
     const boxes = screen.getAllByRole('checkbox');
     expect(boxes).toHaveLength(4);
     for (const box of boxes) expect(box).toBeDisabled();
@@ -73,132 +69,41 @@ describe('FlagCell — read-only column', () => {
 
   it('clicking a disabled checkbox never commits', () => {
     const onCommit = vi.fn();
-    render(<FlagCell value={0b0101} meta={flagMeta} editable={false} onCommit={onCommit} />);
+    render(<FlagCell value={['A', 'C']} meta={flagMeta} editable={false} onCommit={onCommit} />);
     fireEvent.click(screen.getAllByRole('checkbox')[1]);
     expect(onCommit).not.toHaveBeenCalled();
   });
-
-  it('renders "—" for null value — a placeholder, not an all-unchecked list', () => {
-    render(<FlagCell value={null} meta={flagMeta} editable={false} onCommit={vi.fn()} />);
-    expect(screen.getByText('—')).toBeInTheDocument();
-    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
-  });
 });
 
-describe('FlagCell — null on a writable column', () => {
-  // A writable column's null still offers the list, all unchecked: flags can be set from null.
-  it('renders the all-unchecked list and can set the first flag', () => {
+// The commit is the document's own spelling: the names now set, as an array.
+describe('FlagCell — editing', () => {
+  it('unchecking a name commits the array without it', () => {
+    const onCommit = vi.fn();
+    render(<FlagCell value={['A', 'C']} meta={flagMeta} editable onCommit={onCommit} />);
+    fireEvent.click(screen.getAllByRole('checkbox')[0]);
+    expect(onCommit).toHaveBeenCalledWith(['C']);
+  });
+
+  it('checking a name commits the array with it appended', () => {
+    const onCommit = vi.fn();
+    render(<FlagCell value={['A', 'C']} meta={flagMeta} editable onCommit={onCommit} />);
+    fireEvent.click(screen.getAllByRole('checkbox')[1]);
+    expect(onCommit).toHaveBeenCalledWith(['A', 'C', 'B']);
+  });
+
+  it('sets the first flag from an absent value', () => {
     const onCommit = vi.fn();
     render(<FlagCell value={null} meta={flagMeta} editable onCommit={onCommit} />);
     fireEvent.click(screen.getAllByRole('checkbox')[0]);
-    expect(onCommit).toHaveBeenCalledWith('1');
+    expect(onCommit).toHaveBeenCalledWith(['A']);
   });
-});
 
-describe('FlagCell — editing', () => {
-  it('calls onCommit with bit cleared when unchecking A', () => {
+  // A name the metadata does not list (a composite the enum declares) is the document's; a
+  // toggle of another name leaves it exactly where it was.
+  it('keeps a name the metadata does not list when another is toggled', () => {
     const onCommit = vi.fn();
-    render(<FlagCell value={0b0101} meta={flagMeta} editable onCommit={onCommit} />);
-    fireEvent.click(screen.getAllByRole('checkbox')[0]);
-    expect(onCommit).toHaveBeenCalledWith(String(0b0100));
-  });
-
-  it('calls onCommit with bit set when checking B', () => {
-    const onCommit = vi.fn();
-    render(<FlagCell value={0b0101} meta={flagMeta} editable onCommit={onCommit} />);
-    fireEvent.click(screen.getAllByRole('checkbox')[1]);
-    expect(onCommit).toHaveBeenCalledWith(String(0b0111));
-  });
-});
-
-describe('FlagCell — bitless member guard (V4)', () => {
-  it('renders nothing when a member carries no bit', () => {
-    const meta = { ...flagMeta, enumMembers: flagMeta.enumMembers.map(({ value }) => ({ value })) };
-    const { container } = render(<FlagCell value={3} meta={meta} editable onCommit={vi.fn()} />);
-    expect(container).toBeEmptyDOMElement();
-  });
-});
-
-describe('FlagCell — high-bit flags (BigInt arithmetic)', () => {
-  const highMeta: FieldMetadata = {
-    ...flagMeta,
-    enumMembers: [{ value: 'Low', bitValue: '1' },
-      { value: 'LowPriorityPushable', bitValue: String(2 ** 53) }],
-  };
-
-  it('checkbox for LowPriorityPushable is checked when value is 2^53', () => {
-    render(<FlagCell value={String(2 ** 53)} meta={highMeta} editable onCommit={vi.fn()} />);
-    expect(screen.getAllByRole('checkbox')[1]).toBeChecked();
-  });
-
-  it('toggling LowPriorityPushable when it is the only flag calls onCommit with 0', () => {
-    const onCommit = vi.fn();
-    render(<FlagCell value={String(2 ** 53)} meta={highMeta} editable onCommit={onCommit} />);
-    fireEvent.click(screen.getAllByRole('checkbox')[1]);
-    expect(onCommit).toHaveBeenCalledWith('0');
-  });
-
-  const bit32Meta: FieldMetadata = {
-    ...flagMeta,
-    enumMembers: [{ value: 'Low', bitValue: '1' }, { value: 'Bit32', bitValue: String(2 ** 32) }],
-  };
-
-  it('bit-32 checkbox is checked when value equals 2^32', () => {
-    render(<FlagCell value={2 ** 32} meta={bit32Meta} editable onCommit={vi.fn()} />);
-    expect(screen.getAllByRole('checkbox')[1]).toBeChecked();
-  });
-
-  it('toggling bit-32 flag does not corrupt lower bits already set', () => {
-    const onCommit = vi.fn();
-    render(<FlagCell value={(2 ** 32) + 1} meta={bit32Meta} editable onCommit={onCommit} />);
-    fireEvent.click(screen.getAllByRole('checkbox')[1]);
-    expect(onCommit).toHaveBeenCalledWith('1');
-  });
-});
-
-describe('FlagCell — string value contract (TD-008)', () => {
-  const highMeta: FieldMetadata = {
-    ...flagMeta,
-    enumMembers: [{ value: 'Low', bitValue: '1' }, { value: 'High', bitValue: String(2 ** 53) }],
-  };
-
-  it('parses a decimal string above 2^53 without losing the low bit', () => {
-    render(<FlagCell value={(BigInt(2 ** 53) + 1n).toString()} meta={highMeta} editable onCommit={vi.fn()} />);
-    const boxes = screen.getAllByRole('checkbox');
-    expect(boxes[0]).toBeChecked();
-    expect(boxes[1]).toBeChecked();
-  });
-
-  it('onCommit receives a decimal string preserving precision above 2^53', () => {
-    const onCommit = vi.fn();
-    render(<FlagCell value={(BigInt(2 ** 53) + 1n).toString()} meta={highMeta} editable onCommit={onCommit} />);
-    fireEvent.click(screen.getAllByRole('checkbox')[0]);
-    expect(onCommit).toHaveBeenCalledWith(BigInt(2 ** 53).toString());
-  });
-
-  it('does not throw on a non-numeric string value; renders all-unchecked', () => {
-    render(<FlagCell value="not-a-number" meta={flagMeta} editable onCommit={vi.fn()} />);
-    for (const box of screen.getAllByRole('checkbox')) expect(box).not.toBeChecked();
-  });
-
-  it('does not throw on a non-numeric, non-string value; renders all-unchecked', () => {
-    render(<FlagCell value={{ weird: true }} meta={flagMeta} editable onCommit={vi.fn()} />);
-    for (const box of screen.getAllByRole('checkbox')) expect(box).not.toBeChecked();
-  });
-});
-
-describe('FlagCell — sparse bit positions (F1)', () => {
-  it('X and Z both checked for value 5 using actual bit values', () => {
-    render(<FlagCell value={5} meta={sparseFlags} editable onCommit={vi.fn()} />);
-    const boxes = screen.getAllByRole('checkbox');
-    expect(boxes[0]).toBeChecked();
-    expect(boxes[1]).toBeChecked();
-  });
-
-  it("onCommit uses the member's own bit, not 1<<i, when toggling Z", () => {
-    const onCommit = vi.fn();
-    render(<FlagCell value={5} meta={sparseFlags} editable onCommit={onCommit} />);
-    fireEvent.click(screen.getAllByRole('checkbox')[1]);
-    expect(onCommit).toHaveBeenCalledWith('1'); // 5 ^ 4
+    render(<FlagCell value={['AB', 'C']} meta={flagMeta} editable onCommit={onCommit} />);
+    fireEvent.click(screen.getAllByRole('checkbox')[3]);
+    expect(onCommit).toHaveBeenCalledWith(['AB', 'C', 'D']);
   });
 });

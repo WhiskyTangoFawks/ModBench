@@ -178,11 +178,7 @@ async function editField(
   m: Extract<WebviewToExtension, { type: typeof WEBVIEW_TO_EXTENSION.EDIT_FIELD }>,
 ): Promise<void> {
   try {
-    // The webview posts one member and its value; the host spells that as the one write shape
-    // the backend takes.
-    const outcome = await deps.repository.editRecord(m.formKey, m.plugin, m.origin, {
-      op: 'set', path: [{ kind: 'member', name: m.fieldPath }], value: m.value,
-    });
+    const outcome = await deps.repository.editRecord(m.formKey, m.plugin, m.origin, m.envelope);
     if (outcome.applied) {
       deps.onRecordEdited(m.formKey, m.plugin, m.origin);
       return;

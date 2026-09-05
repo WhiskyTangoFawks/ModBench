@@ -10,14 +10,10 @@ export function modelValue(value: unknown, meta: FieldMetadata, resolution?: For
   switch (meta.type) {
     case 'formKey':
       return typeof value === 'string' && value ? formKeyLabel(value, resolution) : '';
-    case 'enum': {
-      const flags = flagBits(meta);
-      if (flags) {
-        const num = toBigInt(value);
-        return flags.filter(f => (num & f.bit) !== 0n).map(f => f.value).join(', ');
-      }
-      return toStr(value);
-    }
+    case 'flags':
+      return flagNames(value).join(', ');
+    case 'translatedString':
+      return toStr(translatedText(value));
     case 'struct':
     case 'array':
       return JSON.stringify(value);
@@ -27,31 +23,19 @@ export function modelValue(value: unknown, meta: FieldMetadata, resolution?: For
 }
 
 // Differs from the edit value only for an enum whose values are wire tokens rather than words (an
-// abstract union's `concrete_type` carries Mutagen class names); the member's label shows instead.
+// abstract union's `MutagenObjectType` carries Mutagen class names); the member's label shows instead.
 export function displayValue(value: unknown, meta: FieldMetadata, resolution?: FormKeyResolution): string {
-  if (meta.type !== 'enum' || flagBits(meta) != null) return modelValue(value, meta, resolution);
+  if (meta.type !== 'enum') return modelValue(value, meta, resolution);
   return meta.enumMembers.find(m => m.value === String(value))?.label ?? modelValue(value, meta);
 }
 
-// Null unless every member carries a bit. The one answer to "does this render as checkboxes?", so
-// routing, flag formatting and checkbox state cannot disagree.
-export function flagBits(meta: FieldMetadata): { value: string; bit: bigint }[] | null {
-  const bits: { value: string; bit: bigint }[] = [];
-  for (const m of meta.enumMembers) {
-    if (m.bitValue == null) return null;
-    bits.push({ value: m.value, bit: BigInt(m.bitValue) });
-  }
-  return bits.length > 0 ? bits : null;
+// The codec spells a flags member as the array of the names that are set; absent means none.
+export function flagNames(value: unknown): string[] {
+  return Array.isArray(value) ? value.map(String) : [];
 }
 
-// Bitmask values arrive as decimal strings so combined flags above 2^53 survive JSON without
-// IEEE 754 loss. Anything malformed yields 0n rather than throwing on BigInt(NaN).
-export function toBigInt(value: unknown): bigint {
-  try {
-    if (typeof value === 'string') return BigInt(value);
-    if (typeof value === 'number' && Number.isFinite(value)) return BigInt(Math.trunc(value));
-  } catch {
-    /* malformed numeric string — fall through to 0n */
-  }
-  return 0n;
+// The codec spells a translated string as an object whose `Value` is the text.
+export function translatedText(value: unknown): string | undefined {
+  const text = (value as { Value?: unknown } | null | undefined)?.Value;
+  return typeof text === 'string' ? text : undefined;
 }

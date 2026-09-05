@@ -330,14 +330,14 @@ describe('DiffRow — FormKey leaf resolution is independent of the parent field
 
 describe('DiffRow — flags cell wiring', () => {
   const flagMeta: FieldMetadata = {
-    name: 'Flags', type: 'enum', isArray: false, validFormKeyTypes: [],
+    name: 'Flags', type: 'flags', isArray: false, validFormKeyTypes: [],
     enumMembers: [{ value: 'A', bitValue: '1' }, { value: 'B', bitValue: '2' }],
   };
 
   function flagsRow(overrides: Partial<React.ComponentProps<typeof DiffRow>> = {}) {
     return renderRow({
       fieldMetaMap: { Name: flagMeta },
-      diff: diff({ values: { 'Fallout4.esm': 1, 'MyMod.esp': 1 } }),
+      diff: diff({ values: { 'Fallout4.esm': ['A'], 'MyMod.esp': ['A'] } }),
       ...overrides,
     });
   }
@@ -375,15 +375,15 @@ describe('DiffRow — flags cell wiring', () => {
   });
 
   // Where the value goes is the row builder's to decide, not something a row states with it.
-  it('toggling a checkbox calls onEditCell with the column and the new bitmask', () => {
+  it('toggling a checkbox calls onEditCell with the column and the names now set', () => {
     const onEditCell = vi.fn();
     flagsRow({
       isExpanded: true,
       editableColumns: new Set([columnKey('MyMod.esp', null)]),
       onEditCell,
     });
-    fireEvent.click(screen.getAllByRole('checkbox')[3]); // MyMod.esp's B (bit 2): 1 ^ 2 = 3
-    expect(onEditCell).toHaveBeenCalledWith(columnKey('MyMod.esp', null), '3');
+    fireEvent.click(screen.getAllByRole('checkbox')[3]); // MyMod.esp's B
+    expect(onEditCell).toHaveBeenCalledWith(columnKey('MyMod.esp', null), ['A', 'B']);
   });
 });
 
@@ -637,11 +637,24 @@ describe('DiffRow — a collapsed container row, per column', () => {
     expect(cellText(1)).toBe('{…}');
   });
 
-  it('shows the element count only in the column that has the array', () => {
+  // The document omits an empty list, so a column with no array there has an empty one.
+  it('shows the element count in every column whose owner is there, an absent array as [0]', () => {
     renderRow({
       diff: diff({ fieldName: 'Items', values: { 'Fallout4.esm': [1, 2, 3], 'MyMod.esp': null } }),
       context: { path: [], rootField: 'Items', overrideMeta: arrayMeta, depth: 0 },
       hasChildren: true, isExpanded: false,
+    });
+    const cells = screen.getByText('Items').closest('tr')!.querySelectorAll('td');
+    expect(cells[1].textContent).toBe('[3]');
+    expect(cells[2].textContent).toBe('[0]');
+  });
+
+  it('shows nothing for an array whose owner the column does not carry', () => {
+    renderRow({
+      diff: diff({ fieldName: 'Items', values: { 'Fallout4.esm': [1, 2, 3], 'MyMod.esp': null } }),
+      context: { path: [{ kind: 'member', name: 'Items' }], rootField: 'Owner', overrideMeta: arrayMeta, depth: 1 },
+      hasChildren: true, isExpanded: false,
+      ownerPresent: column => column === columnKey('Fallout4.esm', null),
     });
     const cells = screen.getByText('Items').closest('tr')!.querySelectorAll('td');
     expect(cells[1].textContent).toBe('[3]');

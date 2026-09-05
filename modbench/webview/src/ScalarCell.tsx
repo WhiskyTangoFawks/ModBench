@@ -122,6 +122,8 @@ export function ScalarCell({
   function coerce(): unknown {
     if (meta.type === 'int') { const n = parseInt(draft, 10); return isNaN(n) ? value : n; }
     if (meta.type === 'float') { const n = parseFloat(draft); return isNaN(n) ? value : n; }
+    // The codec's own spelling of a translated string, with only its text changed.
+    if (meta.type === 'translatedString') return { ...(typeof value === 'object' ? value : null), Value: draft };
     return draft;
   }
 

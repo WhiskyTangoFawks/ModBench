@@ -13,8 +13,8 @@ import { vscode } from './vscode';
 import { WEBVIEW_TO_EXTENSION } from './messages';
 
 // Add on an abstract-union array: the webview contributes no element and no default. A
-// reflected array's default element belongs to ArrayOpWriter, the only place that can name a
-// leaf the write path will accept.
+// reflected array's default element belongs to the backend's DocumentEdit, the only place that can
+// name a leaf the codec will accept.
 
 const aliasesMeta: FieldMetadata = {
   name: 'aliases', type: 'array', isArray: true, validFormKeyTypes: [], enumMembers: [],
@@ -77,10 +77,10 @@ describe('RecordPanel — Add on an abstract-union array', () => {
     return render(<RecordPanel client={client} />);
   }
 
-  function lastEditField(): { fieldPath?: string; value?: unknown } | undefined {
+  function lastEnvelope(): unknown {
     const calls = (vscode.postMessage as ReturnType<typeof vi.fn>).mock.calls;
     const call = [...calls].reverse().find(([m]) => (m as { type?: string }).type === WEBVIEW_TO_EXTENSION.EDIT_FIELD);
-    return call?.[0] as { fieldPath?: string; value?: unknown } | undefined;
+    return (call?.[0] as { envelope?: unknown } | undefined)?.envelope;
   }
 
   beforeEach(() => {
@@ -89,15 +89,14 @@ describe('RecordPanel — Add on an abstract-union array', () => {
   });
   afterEach(() => vi.unstubAllGlobals());
 
-  it('posts the bare array_add envelope, carrying no element of its own', async () => {
+  it('posts add at the array, carrying no element of its own', async () => {
     renderPanel();
     await waitFor(() => screen.getByText('aliases'));
     const cell = screen.getAllByText('[1]')[0].closest('td')!;
     fireEvent.click(cell); // focus
     fireEvent.keyDown(cell, { key: 'Insert' });
 
-    expect(lastEditField()?.fieldPath).toBe('aliases');
-    expect(lastEditField()?.value).toEqual({ op: 'array_add', path: [] });
-    expect(Object.keys(lastEditField()?.value as object).sort()).toEqual(['op', 'path']);
+    expect(lastEnvelope()).toEqual({ op: 'add', path: [{ kind: 'member', name: 'aliases' }] });
+    expect(Object.keys(lastEnvelope() as object).sort()).toEqual(['op', 'path']);
   });
 });

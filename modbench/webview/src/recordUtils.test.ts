@@ -4,14 +4,11 @@ import {
   buildColumns,
   columnStatus,
   collidingFilenames,
-  parseElementIndex,
-  elementKeyText,
-  keyedElementIndex,
   elementSegment,
   isArrayElementHop,
   isMovableElementHop,
   getAtPath,
-  setAtPath,
+  wirePath,
   arrayElementContext,
   arrayParentContext,
   combineVscodeContexts,
@@ -131,61 +128,28 @@ describe('collidingFilenames', () => {
   });
 });
 
-describe('parseElementIndex', () => {
-  it('parses the numeric index out of an "[N]" field name', () => {
-    expect(parseElementIndex('[0]')).toBe(0);
-    expect(parseElementIndex('[12]')).toBe(12);
-  });
-});
-
-// A keyed array's row label is what the path has to carry, rendered the way the backend renders
-// it (Queries/ElementKey.cs), since the two texts have to agree exactly.
-describe('elementKeyText', () => {
-  it('reads a string member', () => {
-    expect(elementKeyText({ name: 'Ambush', flags: 'Local' }, ['name'])).toBe('Ambush');
-  });
-
-  it('joins a composite key with " / ", in the order the annotation lists the members', () => {
-    expect(elementKeyText({ stage: 10, stage_index: 0 }, ['stage', 'stage_index'])).toBe('10 / 0');
-  });
-
-  it('walks a dotted member name into the element\'s own sub-struct', () => {
-    expect(elementKeyText({ property: { name: '', alias: 3 } }, ['property.alias'])).toBe('3');
-  });
-
-  it('renders a bool member as the backend does', () => {
-    expect(elementKeyText({ on: true }, ['on'])).toBe('true');
-  });
-
-  // A freshly added element carries its discriminator and nothing else, so its key is empty — a
-  // real key, and the only handle on the row until the user names it.
-  it('reads an absent or null member as the empty key', () => {
-    expect(elementKeyText({ MutagenObjectType: 'ScriptIntProperty' }, ['name'])).toBe('');
-    expect(elementKeyText({ name: null }, ['name'])).toBe('');
-    expect(elementKeyText(undefined, ['name'])).toBe('');
-  });
-});
-
 // How the backend labelled a child is what says how to address it — both answers come from the
-// same array metadata.
+// same array metadata, and the key text travels exactly as the diff node states it.
 describe('elementSegment', () => {
   const element = (extra: Partial<FieldMetadata> = {}): FieldMetadata =>
     ({ name: '', type: 'struct', isArray: false, validFormKeyTypes: [], enumMembers: [], ...extra });
   const array = (extra: Partial<FieldMetadata>): FieldMetadata =>
     ({ name: 'A', type: 'array', isArray: true, validFormKeyTypes: [], enumMembers: [], ...extra });
 
-  it('addresses a keyed array\'s child by the key it is labelled with', () => {
-    expect(elementSegment(array({ keyMembers: ['name'], elementType: element() }), 'Ambush'))
-      .toEqual({ kind: 'key', key: 'Ambush', members: ['name'] });
+  it('addresses a keyed array\'s child by the key text it is labelled with, verbatim', () => {
+    expect(elementSegment(array({ keyMembers: ['stage', 'stage_index'], elementType: element() }), '10 / 0', 0))
+      .toEqual({ kind: 'key', key: '10 / 0' });
   });
 
   it('addresses a pure-FormLink array\'s child by the element value', () => {
-    expect(elementSegment(array({ elementType: element({ type: 'formKey', isSortable: true }) }), 'KwdA'))
-      .toEqual({ kind: 'sortKey', key: 'KwdA' });
+    expect(elementSegment(array({ elementType: element({ type: 'formKey', isSortable: true }) }), 'KwdA', 0))
+      .toEqual({ kind: 'value', value: 'KwdA' });
   });
 
-  it('addresses every other array\'s child by position', () => {
-    expect(elementSegment(array({ elementType: element() }), '[2]')).toEqual({ kind: 'index', index: 2 });
+  // The child's place among its siblings is its position; the "[N]" label is never read back.
+  it('addresses every other array\'s child by its place among the array\'s children', () => {
+    expect(elementSegment(array({ elementType: element() }), '[2]', 2)).toEqual({ kind: 'index', index: 2 });
+    expect(elementSegment(array({ elementType: element() }), 'anything', 5)).toEqual({ kind: 'index', index: 5 });
   });
 });
 
@@ -200,13 +164,13 @@ describe('isArrayElementHop / isMovableElementHop', () => {
   // A keyed array is stored in key order on every write (Edits/KeyedArrays.cs), so no Move there
   // could change the file.
   it('a keyed element offers Remove but no Move', () => {
-    const seg: PathSegment = { kind: 'key', key: 'Guard', members: ['name'] };
+    const seg: PathSegment = { kind: 'key', key: 'Guard' };
     expect(isArrayElementHop(seg)).toBe(true);
     expect(isMovableElementHop(seg)).toBe(false);
   });
 
   it('a sorted element and a struct member offer neither', () => {
-    for (const seg of [{ kind: 'sortKey', key: 'KwdA' }, { kind: 'member', name: 'X' }] as PathSegment[]) {
+    for (const seg of [{ kind: 'value', value: 'KwdA' }, { kind: 'member', name: 'X' }] as PathSegment[]) {
       expect(isArrayElementHop(seg)).toBe(false);
       expect(isMovableElementHop(seg)).toBe(false);
     }
@@ -214,24 +178,8 @@ describe('isArrayElementHop / isMovableElementHop', () => {
   });
 });
 
-describe('keyedElementIndex', () => {
-  const seg: PathSegment & { kind: 'key' } = { kind: 'key', key: 'Guard', members: ['name'] };
-
-  // The reason a keyed element has no index a path could carry: one path is shared by every column
-  // of the row, and the columns hold the same key in different places.
-  it('answers each column\'s own position for the same key', () => {
-    expect(keyedElementIndex([{ name: 'Ambush' }, { name: 'Guard' }], seg)).toBe(1);
-    expect(keyedElementIndex([{ name: 'Guard' }], seg)).toBe(0);
-  });
-
-  it('answers -1 where the column carries no element under that key', () => {
-    expect(keyedElementIndex([{ name: 'Ambush' }], seg)).toBe(-1);
-  });
-});
-
-
-// One recursive implementation for a row's value at any depth within the field it restages as
-// one atomic unit, rather than a hand-coded case per nesting level.
+// One recursive reader for a row's value at any depth, which the presentation table and the
+// sorted-array hop both read through.
 describe('getAtPath', () => {
   it('returns the root itself for an empty path', () => {
     expect(getAtPath({ X: 1 }, [])).toEqual({ X: 1 });
@@ -247,21 +195,22 @@ describe('getAtPath', () => {
     expect(getAtPath(['a', 'b', 'c'], path)).toBe('b');
   });
 
-  it('reads a sorted-array element (the segment key is the value itself)', () => {
-    const path: PathSegment[] = [{ kind: 'sortKey', key: 'KwdB' }];
+  it('reads a sorted-array element (the segment value is the element itself)', () => {
+    const path: PathSegment[] = [{ kind: 'value', value: 'KwdB' }];
     expect(getAtPath(['KwdA', 'KwdB'], path)).toBe('KwdB');
   });
 
   // One path serves every column, and a column that does not carry this keyword has nothing here —
   // answering the key regardless would read as if it did.
   it('reads nothing for a sorted-array element this column does not carry', () => {
-    expect(getAtPath(['KwdA'], [{ kind: 'sortKey', key: 'KwdB' }])).toBeUndefined();
+    expect(getAtPath(['KwdA'], [{ kind: 'value', value: 'KwdB' }])).toBeUndefined();
   });
 
-  it('reads a keyed-array element against whichever column\'s array it is given', () => {
-    const path: PathSegment[] = [{ kind: 'key', key: 'Guard', members: ['name'] }, { kind: 'member', name: 'flags' }];
-    expect(getAtPath([{ name: 'Ambush', flags: 'a' }, { name: 'Guard', flags: 'g' }], path)).toBe('g');
-    expect(getAtPath([{ name: 'Guard', flags: 'g2' }], path)).toBe('g2');
+  // Which element a key names is the backend's to resolve (Queries/ElementKey.cs); the webview
+  // holds no mirror of that rule, so a key hop reads nothing here.
+  it('reads nothing through a key hop', () => {
+    const path: PathSegment[] = [{ kind: 'key', key: 'Guard' }, { kind: 'member', name: 'flags' }];
+    expect(getAtPath([{ name: 'Guard', flags: 'g' }], path)).toBeUndefined();
   });
 
   // Struct-in-array-in-struct: a depth a fixed-level union could never express.
@@ -311,7 +260,7 @@ describe('arrayElementContext', () => {
   // A keyed array is stored in key order on every write, so neither Move could change the file;
   // Remove still applies, which is why the row carries this context at all.
   it('offers neither Move on a keyed element, and still offers the element itself', () => {
-    const path: PathSegment[] = [{ kind: 'key', key: 'Guard', members: ['name'] }];
+    const path: PathSegment[] = [{ kind: 'key', key: 'Guard' }];
     const context = arrayElementContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', 'Scripts', path, 3);
     expect(context.canMoveUp).toBe(false);
     expect(context.canMoveDown).toBe(false);
@@ -466,91 +415,35 @@ describe('stringValueContext', () => {
   });
 });
 
-describe('setAtPath', () => {
-  it('replaces the root itself for an empty path', () => {
-    expect(setAtPath({ X: 1 }, [], { X: 99 })).toEqual({ X: 99 });
-  });
-
-  it('sets a struct member, preserving siblings', () => {
-    const path: PathSegment[] = [{ kind: 'member', name: 'X' }];
-    expect(setAtPath({ X: 1, Y: 2 }, path, 99)).toEqual({ X: 99, Y: 2 });
-  });
-
-  it('sets a positional array element, preserving siblings', () => {
-    const path: PathSegment[] = [{ kind: 'index', index: 1 }];
-    expect(setAtPath(['a', 'b', 'c'], path, 'B')).toEqual(['a', 'B', 'c']);
-  });
-
-  it('sets a sorted-array element by matching its old value', () => {
-    const path: PathSegment[] = [{ kind: 'sortKey', key: 'KwdB' }];
-    expect(setAtPath(['KwdA', 'KwdB'], path, 'KwdZ')).toEqual(['KwdA', 'KwdZ']);
-  });
-
-  // Two plugins hold `Guard` at different positions and one path, shared by both columns, must
-  // reach it in each. Addressing by index parses NaN and posts the array unchanged.
-  it('sets a keyed-array element at each column\'s own position for that key', () => {
-    const path: PathSegment[] = [{ kind: 'key', key: 'Guard', members: ['name'] }, { kind: 'member', name: 'flags' }];
-    expect(setAtPath([{ name: 'Ambush', flags: 'a' }, { name: 'Guard', flags: 'g' }], path, 'X'))
-      .toEqual([{ name: 'Ambush', flags: 'a' }, { name: 'Guard', flags: 'X' }]);
-    expect(setAtPath([{ name: 'Guard', flags: 'g' }], path, 'X'))
-      .toEqual([{ name: 'Guard', flags: 'X' }]);
-  });
-
-  // "10 / 3" slices to "0 / " and reads as a valid index 0, so a wrong answer is a silent write
-  // to a different element. Any key whose second character is a digit behaves this way.
-  it('sets the element a composite key names, not the one that key parses to as an index', () => {
-    const fragments = [
-      { stage: 5, stage_index: 1, script_name: 'Five' },
-      { stage: 10, stage_index: 3, script_name: 'Ten' },
-    ];
+// The envelope's path is the row's hops under the record's own member; the one hop the backend
+// cannot take — a sorted array's element, named by its value — becomes that value's position in
+// the written column.
+describe('wirePath', () => {
+  it('leads with the root member and carries member, index and key hops as they are', () => {
     const path: PathSegment[] = [
-      { kind: 'key', key: '10 / 3', members: ['stage', 'stage_index'] },
-      { kind: 'member', name: 'script_name' },
+      { kind: 'member', name: 'Scripts' }, { kind: 'key', key: '10 / 0' },
+      { kind: 'member', name: 'Properties' }, { kind: 'index', index: 2 },
     ];
-    expect(setAtPath(fragments, path, 'Renamed')).toEqual([
-      { stage: 5, stage_index: 1, script_name: 'Five' },
-      { stage: 10, stage_index: 3, script_name: 'Renamed' },
+    expect(wirePath('VirtualMachineAdapter', path, undefined)).toEqual([
+      { kind: 'member', name: 'VirtualMachineAdapter' }, ...path,
     ]);
   });
 
-  // A rename must reach the write path as a real change, not as the array it started from.
-  it('posts a keyed rename that JSON.stringify actually carries', () => {
-    const scripts = [{ name: 'Ambush', flags: 'Local' }, { name: 'Guard', flags: 'Local' }];
-    const path: PathSegment[] = [{ kind: 'key', key: 'Ambush', members: ['name'] }, { kind: 'member', name: 'name' }];
-    expect(JSON.stringify(setAtPath(scripts, path, 'Renamed')))
-      .toBe('[{"name":"Renamed","flags":"Local"},{"name":"Guard","flags":"Local"}]');
+  it('is the one member hop for a top-level row', () => {
+    expect(wirePath('Level', [], 4)).toEqual([{ kind: 'member', name: 'Level' }]);
   });
 
-  it('leaves a column that carries no element under the key exactly as it is', () => {
-    const path: PathSegment[] = [{ kind: 'key', key: 'Guard', members: ['name'] }, { kind: 'member', name: 'flags' }];
-    expect(setAtPath([{ name: 'Ambush', flags: 'a' }], path, 'X')).toEqual([{ name: 'Ambush', flags: 'a' }]);
+  // Two columns hold the same keyword at different positions, so the answer is per column.
+  it('turns a sorted element into its position in the given column\'s own array', () => {
+    const path: PathSegment[] = [{ kind: 'value', value: 'KwdC' }];
+    expect(wirePath('Keywords', path, ['KwdA', 'KwdC'])).toEqual([{ kind: 'member', name: 'Keywords' }, { kind: 'index', index: 1 }]);
+    expect(wirePath('Keywords', path, ['KwdC'])).toEqual([{ kind: 'member', name: 'Keywords' }, { kind: 'index', index: 0 }]);
   });
 
-  // The empty key is the only handle a freshly added element's own rename has.
-  it('sets a freshly added element addressed by the empty key', () => {
-    const path: PathSegment[] = [{ kind: 'key', key: '', members: ['name'] }, { kind: 'member', name: 'name' }];
-    expect(setAtPath([{ name: 'Alpha' }, { flags: 'Local' }], path, 'Named'))
-      .toEqual([{ name: 'Alpha' }, { flags: 'Local', name: 'Named' }]);
-  });
-
-  it('sets through a member → index → member chain, preserving every sibling along the way', () => {
-    const path: PathSegment[] = [
-      { kind: 'member', name: 'Outer' },
-      { kind: 'index', index: 1 },
-      { kind: 'member', name: 'Inner' },
-    ];
-    const root = { Extra: 'kept', Outer: [{ Inner: 'a', Also: 'kept0' }, { Inner: 'b', Also: 'kept1' }] };
-    expect(setAtPath(root, path, 'B')).toEqual({
-      Extra: 'kept',
-      Outer: [{ Inner: 'a', Also: 'kept0' }, { Inner: 'B', Also: 'kept1' }],
-    });
-  });
-
-  it('does not mutate the source root', () => {
-    const root = { Outer: [{ Inner: 'a' }] };
-    const path: PathSegment[] = [{ kind: 'member', name: 'Outer' }, { kind: 'index', index: 0 }, { kind: 'member', name: 'Inner' }];
-    setAtPath(root, path, 'z');
-    expect(root).toEqual({ Outer: [{ Inner: 'a' }] });
+  it('resolves a sorted element nested under member hops against the node those hops reach', () => {
+    const path: PathSegment[] = [{ kind: 'member', name: 'Keywords' }, { kind: 'value', value: 'KwdB' }];
+    expect(wirePath('Data', path, { Keywords: ['KwdA', 'KwdB'] }))
+      .toEqual([{ kind: 'member', name: 'Data' }, { kind: 'member', name: 'Keywords' }, { kind: 'index', index: 1 }]);
   });
 });
 
@@ -581,12 +474,12 @@ describe('metaAtPath', () => {
     expect(metaAtPath(entriesMeta, [{ kind: 'index', index: 0 }])).toBe(entryMeta);
   });
 
-  it('descends a sortKey hop via .elementType, same as index', () => {
-    expect(metaAtPath(entriesMeta, [{ kind: 'sortKey', key: 'anything' }])).toBe(entryMeta);
+  it('descends a value hop via .elementType, same as index', () => {
+    expect(metaAtPath(entriesMeta, [{ kind: 'value', value: 'anything' }])).toBe(entryMeta);
   });
 
   it('descends a key hop via .elementType, same as index', () => {
-    expect(metaAtPath(entriesMeta, [{ kind: 'key', key: 'anything', members: ['Id'] }])).toBe(entryMeta);
+    expect(metaAtPath(entriesMeta, [{ kind: 'key', key: 'anything' }])).toBe(entryMeta);
   });
 
   // A nested array's own element type, reached through a member chain from the subtree root.
