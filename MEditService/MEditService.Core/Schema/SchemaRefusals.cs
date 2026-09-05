@@ -38,8 +38,7 @@ internal static class SchemaRefusals
         "leaf with no JSON converter and no form-link write path";
 
     /// <summary>The header's author/flags: a write reaching them is refused here, not at a gate.</summary>
-    internal const string HeaderNoWritePathReason =
-        "the header's write path was built and deliberately deleted (#633); no write exists for this column";
+    internal const string HeaderNoWritePathReason = "the header has no write path for this column";
 
     private static string TypeLabel(Type type) =>
         type.IsGenericType

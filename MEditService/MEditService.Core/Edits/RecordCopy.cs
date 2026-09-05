@@ -58,9 +58,10 @@ internal sealed class RecordCopy(ILoadOrderMirror mirror, SchemaReflector schema
             {
                 return RecordEditResult.Refused(
                     RecordEditRefusal.ContainerParentMissingInDestination,
-                    $"{destinationPlugin.Name} has no override of {cellFormKey}, the cell {formKey} belongs to, " +
-                    "and it is an exterior cell — auto-creating one needs spatial placement (worldspace " +
-                    "block/sub-block) this write path does not compute yet, tracked separately.");
+                    $"{destinationPlugin.Name} has no override of {cellFormKey}, the cell {formKey} belongs to. " +
+                    $"{cellFormKey} is an exterior cell with no worldspace grid position of its own — a " +
+                    "worldspace's persistent cell, not one of its numbered blocks — so mEdit cannot auto-create " +
+                    "an override of it here.");
             }
 
             cellDocument = CreateInteriorCellParent(sourcePlugin, cellFormKey, destinationPlugin, destinationModFolder, index, release);
