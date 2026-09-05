@@ -119,8 +119,6 @@ public sealed class GroupOrderMaintenanceTests : IDisposable
         var deleted = editService.DeleteRecord(container.Plugin, container.DialogTopic2.ToString());
         Assert.True(deleted.Applied, deleted.Message);
 
-        // Before #566 a mid-list delete left a numbering gap here and this refused outright:
-        // "does not round-trip through its own source ... Re-Track".
         var result = compileService.Compile(container.Plugin, new CompileSource.WorkingTree());
         Assert.True(result.Succeeded, result.RefusalReason);
 

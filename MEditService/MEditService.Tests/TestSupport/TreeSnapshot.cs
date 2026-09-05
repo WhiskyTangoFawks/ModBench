@@ -3,7 +3,7 @@ using System.Security.Cryptography;
 namespace MEditService.Tests.TestSupport;
 
 /// <summary>A filesystem oracle beside <c>git status</c>: git tracks files, not directories, so a stray
-/// empty record directory is invisible to status while failing the next ingest (#675).</summary>
+/// empty record directory is invisible to status while failing the next ingest.</summary>
 internal static class TreeSnapshot
 {
     internal static IReadOnlyList<string> Of(string root)

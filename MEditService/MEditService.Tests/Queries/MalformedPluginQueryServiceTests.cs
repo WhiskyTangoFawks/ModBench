@@ -24,7 +24,7 @@ public sealed class MalformedPluginQueryServiceTests
         Assert.Equal("SomeMod", r.Origin);
         Assert.Equal("fixed-size-subrecord-short", r.DefectClass);
         Assert.Equal("repairable (lossless)", r.Tail);
-        // Verbatim the refusal fragment (#569's Describe) — the Problems panel and the Track
+        // Verbatim PluginDiagnosis.Describe()'s refusal fragment — the Problems panel and the Track
         // refusal must never develop separate vocabularies.
         Assert.Equal(
             "REGN 001D2AF4 (DowntownRegion) — fixed-size-subrecord-short, repairable (lossless): RDAT is 6 bytes; a REGN RDAT is always 8",

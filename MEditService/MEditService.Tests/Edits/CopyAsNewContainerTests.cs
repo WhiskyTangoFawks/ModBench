@@ -90,8 +90,8 @@ public sealed class CopyAsNewContainerTests : IDisposable
         Assert.Equal(_fixture.Response1, copiedResponse2.PreviousDialog.FormKeyNullable);
     }
 
-    // Rule 1 of #550's Q3 resolution: an existing parent override is never touched. The new topic
-    // lands inside the quest's existing directory and the quest's document keeps its bytes and flag.
+    // An existing parent override is never touched: the new topic lands inside the quest's existing
+    // directory and the quest's document keeps its bytes and flag.
     [Fact]
     public void CopyAsNewRecord_OnADialogTopic_WhenDestinationAlreadyOverridesTheQuest_ReusesItUntouched()
     {
@@ -165,7 +165,7 @@ public sealed class CopyAsNewContainerTests : IDisposable
     }
 
     // A Quest copies as its own record only — its folder-split children (DialogTopics) never ride
-    // along with a plain Copy as New Record (deep copy is #551's gesture, not this one).
+    // along with a plain Copy as New Record (deep copy is a separate operation).
     [Fact]
     public void CopyAsNewRecord_OnAQuest_LandsANewQuestUnderAFreshFormKey_WithoutItsTopics()
     {

@@ -101,7 +101,7 @@ public sealed class SourceRecordPathTests
     [InlineData("source/Vendor.esp/Cells/GroupRecordData.json")]
     // A folder this game's schema has no group for at all.
     [InlineData("source/Vendor.esp/NotARealFolder/000800.json")]
-    // Three segments but not literally RecordData.json — must not be mistaken for the header (#661).
+    // Three segments but not literally RecordData.json — must not be mistaken for the header.
     [InlineData("source/Vendor.esp/NotRecordData.json")]
     public void TryParse_MalformedOrUnmappedPaths_FailsCleanly(string relativePath)
     {

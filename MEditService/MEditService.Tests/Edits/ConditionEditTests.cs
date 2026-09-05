@@ -94,7 +94,7 @@ public sealed class ConditionEditTests : IDisposable
             DocumentDiff(before, _fixture.Body(_fixture.Cobj)));
     }
 
-    // ── the function cascade the editor posts (#693) ─────────────────────────
+    // ── the function cascade the editor posts ─────────────────────────
 
     [Fact]
     public void ChangingTheFunction_ClearsTheSlotsTheNewFunctionDoesNotUse()

@@ -5,7 +5,7 @@ using Mutagen.Bethesda.Fallout4;
 namespace MEditService.Tests.Indexing;
 
 /// <summary>Every struct names the Loqui/CLR class it is, out of the same vocabulary a union's
-/// discriminator values come from (#717).</summary>
+/// discriminator values come from.</summary>
 public class LeafTypeNameSchemaTests
 {
     private static readonly IReadOnlyDictionary<string, Core.Schema.RecordTableSchema> Schemas =
@@ -57,7 +57,7 @@ public class LeafTypeNameSchemaTests
     }
 
     // The completeness half: naming three structs by hand proves nothing about the rest of the
-    // schema, and an element the walk builds without a name is exactly the gap #717 closes.
+    // schema, and an element the walk builds without a name is exactly the gap this closes.
     [Fact]
     public void EveryStructInTheSchema_NamesItsType() =>
         Assert.Empty(PathsWhere(m => m.Type == "struct" && string.IsNullOrEmpty(m.LeafTypeName)));

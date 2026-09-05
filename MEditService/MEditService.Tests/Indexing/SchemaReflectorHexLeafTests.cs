@@ -174,7 +174,7 @@ public sealed class SchemaReflectorHexLeafTests
         Assert.Equal(new byte[] { 0x01, 0x02, 0x03 }, grass.Unknown3.ToArray());
     }
 
-    // ── The same refusals, one level down (#690 AC #3) ──
+    // ── The same refusals, one level down ──
     //
     // A sub-field applier is a different closure from a column applier, so a length gate wired only at
     // the top level leaves every nested blob writable to any length.

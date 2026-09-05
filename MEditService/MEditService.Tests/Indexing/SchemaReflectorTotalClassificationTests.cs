@@ -38,7 +38,7 @@ public class SchemaReflectorTotalClassificationTests
         Assert.True(anomalies.Count == 0,
             $"SchemaReflector reached {anomalies.Count} propert{(anomalies.Count == 1 ? "y" : "ies")} it " +
             "could not place in any structural class. Each is a field the editor can neither see nor " +
-            "write — the defect class #641 and #642 were. Either give the shape a class, or add it to " +
+            "write — a real defect, not a benign gap. Either give the shape a class, or add it to " +
             "SchemaReflector's exclusion table with a named reason.\n  " +
             string.Join("\n  ", anomalies));
     }

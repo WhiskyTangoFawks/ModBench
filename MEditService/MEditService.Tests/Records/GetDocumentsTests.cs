@@ -89,7 +89,7 @@ public class GetDocumentsTests
         repo.Index(modA, Registration.Participating(0), new PluginKey("Shared.esp", "ModA"));
         repo.Index(modB, Registration.Participating(1), new PluginKey("Shared.esp", "ModB"));
 
-        // Records only: each copy also carries its own header document since #631, which is scoped
+        // Records only: each copy also carries its own header document, which is scoped
         // by origin exactly like the records are (asserted separately below) but says nothing about
         // the per-origin *record* scoping this test is about.
         var fromA = repo.At(RecordRef.Effective).GetDocuments(new PluginKey("Shared.esp", "ModA"));

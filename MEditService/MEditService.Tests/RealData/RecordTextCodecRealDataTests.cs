@@ -63,7 +63,7 @@ public class RecordTextCodecRealDataTests(ITestOutputHelper output)
             output.WriteLine($"AC4: serialize (overlay) {swSerializeOverlay.ElapsedMilliseconds} ms, " +
                 $"serialize (deep parse) {swSerializeDeep.ElapsedMilliseconds} ms, " +
                 $"deserialize {swDeserialize.ElapsedMilliseconds} ms " +
-                "(spike #359 measured 129 ms serialize / 55 ms deserialize on a 20 MB plugin).");
+                "(129 ms serialize / 55 ms deserialize measured on a 20 MB plugin).");
 
             var overlayText = await File.ReadAllTextAsync(overlayPath);
             var deepParsedText = await File.ReadAllTextAsync(deepParsedPath);

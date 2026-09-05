@@ -8,7 +8,7 @@ using Mutagen.Bethesda.Plugins.Records;
 namespace MEditService.Tests.Schema;
 
 /// <summary>Held at the <see cref="ColumnSpec.Apply"/> seam, where one converter table serves both
-/// a scalar column and a bare-scalar list element, so the two cannot drift apart (#707).</summary>
+/// a scalar column and a bare-scalar list element, so the two cannot drift apart.</summary>
 public class IntegerWidthOverflowTests
 {
     private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;

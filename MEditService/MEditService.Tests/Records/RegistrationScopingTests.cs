@@ -80,7 +80,7 @@ public class RegistrationScopingTests
         repo.Index((IModGetter)beta, Registration.Participating(1), BetaKey);
         repo.UpdateWinners();
 
-        // +1 for the plugin header's own row (#631): it is an ordinary `records` row but is not an
+        // +1 for the plugin header's own row: it is an ordinary `records` row but is not an
         // IMajorRecordGetter, so EnumerateMajorRecords cannot count it. This is a row count, not a
         // record count — hence the name.
         return new Fixture(repo, sharedNpcFk, betaNpc, betaRace, betaWrld, betaCell, betaPlaced, betaQuest, betaTopic,
@@ -98,7 +98,7 @@ public class RegistrationScopingTests
     private static long RowsFor(DuckDbRecordIndex repo, string relation, PluginKey key) =>
         Scalar(repo, $"SELECT COUNT(*) FROM {relation} WHERE plugin = $1 AND origin = $2", key.Name, key.Origin!);
 
-    // Every schema key, with no exclusion: #631 gave the plugin header a generated view like every
+    // Every schema key, with no exclusion: the plugin header has a generated view like every
     // other record type, so it is swept here rather than named as a relation of its own below.
     private static IEnumerable<string> GeneratedViews() =>
         Reflector.GetSchemas(GameRelease.Fallout4).Keys;

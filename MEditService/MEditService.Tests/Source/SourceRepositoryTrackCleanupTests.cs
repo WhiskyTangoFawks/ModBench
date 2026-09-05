@@ -48,7 +48,7 @@ public sealed class SourceRepositoryTrackCleanupTests
                 SourceRepository.Track(modFolder, SourcePreset.Edits, [poisonedFile], new TrackProvenance(null, null, new Dictionary<string, string>())));
 
             Assert.False(Directory.Exists(Path.Combine(modFolder, ".git")), "a failed Track must not leave a half-initialized repo behind");
-            Assert.False(File.Exists(Path.Combine(modFolder, ".gitignore")), "a failed Track must not leave an orphaned .gitignore behind (#508)");
+            Assert.False(File.Exists(Path.Combine(modFolder, ".gitignore")), "a failed Track must not leave an orphaned .gitignore behind");
         }
         finally
         {
@@ -78,10 +78,10 @@ public sealed class SourceRepositoryTrackCleanupTests
                 SourceRepository.Track(modFolder, SourcePreset.Edits, pristineFiles, new TrackProvenance(null, null, new Dictionary<string, string>())));
 
             Assert.False(Directory.Exists(Path.Combine(modFolder, ".git")), "a failed Track must not leave a half-initialized repo behind");
-            Assert.False(File.Exists(Path.Combine(modFolder, ".gitignore")), "a failed Track must not leave an orphaned .gitignore behind (#508)");
+            Assert.False(File.Exists(Path.Combine(modFolder, ".gitignore")), "a failed Track must not leave an orphaned .gitignore behind");
             Assert.False(
                 File.Exists(Path.Combine(modFolder, "source", "Test.esp", "npc_", "Test.esp", "000001.json")),
-                "a failed Track must not leave any of its partially-written source/ tree behind (#508)");
+                "a failed Track must not leave any of its partially-written source/ tree behind");
         }
         finally
         {

@@ -852,7 +852,7 @@ public class SchemaReflectorTests
         // MakeApplier's JSON-null success branch is shared live infrastructure reached by every
         // nullable scalar column, and is otherwise unexercised.
         var nullableCol = schemas["npc_"].RecordColumns.First(c => c.Name == "facial_morph_intensity");
-        Assert.NotNull(nullableCol.Apply.Writer); // the delegate, not the always-present wrapper (#649)
+        Assert.NotNull(nullableCol.Apply.Writer); // the delegate, not the always-present wrapper
         npc.FacialMorphIntensity = 1.0f;
 
         nullableCol.Apply.Writer!(npc, System.Text.Json.JsonDocument.Parse("null").RootElement);

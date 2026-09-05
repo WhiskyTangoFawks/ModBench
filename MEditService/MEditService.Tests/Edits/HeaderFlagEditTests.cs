@@ -75,7 +75,7 @@ public sealed class HeaderFlagEditTests : IDisposable
         Assert.Contains("0xFFF", result.Message, StringComparison.Ordinal);
     }
 
-    // #290's compile-time coherence gate: an ESL-flagged plugin whose content overflows the light
+    // The compile-time coherence gate: an ESL-flagged plugin whose content overflows the light
     // range refuses to compile, with the typed EslContradiction marker the frontend turns into the
     // remove-the-flag prompt.
     [Fact]

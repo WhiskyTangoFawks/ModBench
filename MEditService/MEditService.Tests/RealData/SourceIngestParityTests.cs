@@ -133,7 +133,7 @@ public sealed class SourceIngestParityTests : IDisposable
         var byTypeText = string.Join(", ", byType.OrderByDescending(kv => kv.Value).Select(kv => $"{kv.Key}={kv.Value}"));
 
         // Pinned count and type. The fixture is hermetic and checked in, so any drift here is signal.
-        Assert.True(mismatched.Count == 1, $"expected exactly the one known #369 divergence; got {mismatched.Count} ({byTypeText})");
+        Assert.True(mismatched.Count == 1, $"expected exactly the one known divergence; got {mismatched.Count} ({byTypeText})");
         Assert.Equal("cell=1", byTypeText);
 
         // ...and pinned to the *field*, so another Cell field starting to diverge cannot hide behind

@@ -33,15 +33,15 @@ public sealed class ContainerCopyFixture : IDisposable
     public const string QuestEditorId = "SourceQuest";
     public FormKey Quest { get; }
 
-    // A flat record in the source — the negative control for #550 AC7's container-only overwrite
-    // scope (a flat re-copy keeps #436's FormKeyCollision refusal).
+    // A flat record in the source — the negative control for the container-only overwrite scope
+    // (a flat re-copy keeps the FormKeyCollision refusal).
     public const string FlatNpcEditorId = "SourceFlatNpc";
     public FormKey FlatNpc { get; }
 
     public const string DialogTopicEditorId = "SourceTopic";
     public FormKey DialogTopic { get; }
 
-    // Two responses under the topic — #550 AC5's "DIAL with INFOs": each copied child draws a fresh
+    // Two responses under the topic — "DIAL with INFOs": each copied child draws a fresh
     // FormKey, and Response2's sibling link at Response1 stays pointed at the *original* (never
     // remapped onto the copies — xEdit doesn't either).
     public const string Response1EditorId = "SourceResponse1";
@@ -94,7 +94,7 @@ public sealed class ContainerCopyFixture : IDisposable
     public const string ExteriorCellEditorId = "SourceExteriorCell";
     public FormKey ExteriorCell { get; }
 
-    // Three more SubCells cells, one per #597 shape — each shares progressively more of
+    // Three more SubCells cells, one per shape — each shares progressively more of
     // ExteriorCell's spatial ancestry, so copying it *after* ExteriorCell exercises "the
     // destination already overrides the WRLD (and maybe the block, and maybe the sub-block)".
     public const int OtherBlockX = 5;
