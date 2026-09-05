@@ -1,0 +1,24 @@
+# Every hand-written applier site in the editing stack, one line each: the file and the source
+# line. HandWrittenApplierScanTests fails on a site this list does not name and on a line naming
+# no site, so a site moved onto the codec is deleted here in the same change.
+MEditService.Core/Schema/AtomicValueLeaves.cs: if (rp.CanWrite) rp.SetValue(obj, RebuildAtomicValue(box));
+MEditService.Core/Schema/LeafWriters.cs: (rp.GetValue(obj))?.GetType().GetMethod("Clear")?.Invoke(rp.GetValue(obj), []);
+MEditService.Core/Schema/LeafWriters.cs: rp.SetValue(obj, value);
+MEditService.Core/Schema/LeafWriters.cs: setTo.Invoke(link, [fk]);
+MEditService.Core/Schema/ListLeaves.cs: if (item != null) addMethod.Invoke(newList, [item]);
+MEditService.Core/Schema/ListLeaves.cs: if (item != null) addMethod.Invoke(newList, [item]);
+MEditService.Core/Schema/ListLeaves.cs: if (rp.CanWrite) rp.SetValue(obj, newList);
+MEditService.Core/Schema/ListLeaves.cs: return Activator.CreateInstance(flType, fk);
+MEditService.Core/Schema/ListLeaves.cs: rp.SetValue(record, newList);
+MEditService.Core/Schema/ListLeaves.cs: var elemObj = Activator.CreateInstance(elemConcreteType)!;
+MEditService.Core/Schema/ListLeaves.cs: var flType = typeof(FormLink<>).MakeGenericType(elemCore.GetGenericArguments()[0]);
+MEditService.Core/Schema/ListLeaves.cs: var newList = Activator.CreateInstance(listType)!;
+MEditService.Core/Schema/ListLeaves.cs: var newList = Activator.CreateInstance(listType)!;
+MEditService.Core/Schema/ObjectModPropertyLeaves.cs: leaves.Add((open.MakeGenericType(args), valueTypeName));
+MEditService.Core/Schema/ObjectModPropertyLeaves.cs: return setterType.IsGenericTypeDefinition ? setterType.MakeGenericType(typeArgs) : setterType;
+MEditService.Core/Schema/ObjectModPropertyLeaves.cs: var setterType = ReflectedTypes.GetSetterType(getterOpen.MakeGenericType(typeArgs));
+MEditService.Core/Schema/StructLeaves.cs: if (rp.CanWrite) rp.SetValue(target, obj);
+MEditService.Core/Schema/StructLeaves.cs: var obj = existing is { } same && same.GetType() == concreteType ? same : Activator.CreateInstance(concreteType)!;
+MEditService.Core/Schema/VectorStructLeaves.cs: if (rp.CanWrite) rp.SetValue(obj, current);
+MEditService.Core/Schema/VectorStructLeaves.cs: var current = rp.GetValue(obj) ?? Activator.CreateInstance(core)!;
+MEditService.Core/Schema/WidenedLeaf.cs: rp.SetValue(obj, converted);
