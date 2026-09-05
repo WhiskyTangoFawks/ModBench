@@ -56,9 +56,9 @@ public interface ILoadOrderMirror
     /// degraded to the binary.</summary>
     void ReingestPluginFromSource(PluginKey key);
 
-    /// <summary>The file is gone from disk, so its rows go with it. A no-op with no load order,
-    /// deliberately: the caller is a file-system watcher, where racing a teardown is ordinary rather
-    /// than a mistake.</summary>
+    /// <summary>The file is gone from disk, so its rows go with it. A no-op with no load order, and
+    /// while the held copy's file still exists, deliberately: the caller is a file-system watcher,
+    /// where racing a teardown or a superseding load order is ordinary rather than a mistake.</summary>
     void UnindexPlugin(PluginKey key);
 
     /// <summary>Throws <see cref="ArgumentException"/> if the SQL does not return a form_key

@@ -74,7 +74,7 @@ public sealed class ExternalChangeWatcher : IDisposable
         {
             var key = MirrorKey(origin, pluginName);
             if (_mirrors.TryGetValue(key, out var existing)) existing.Dispose();
-            var mirror = new MirrorEntry(contentHash)
+            var mirror = new MirrorEntry(contentHash, pluginPath)
             {
                 Watch = StartWatch(directory, pluginPath, () => SettleIndexed(pluginName, origin, pluginPath)),
             };
@@ -157,7 +157,8 @@ public sealed class ExternalChangeWatcher : IDisposable
         string? reportedHash;
         lock (_gate)
         {
-            if (!_mirrors.TryGetValue(key, out var mirror)) return;
+            // A superseded watch's settle names the key its successor now holds at another path.
+            if (!_mirrors.TryGetValue(key, out var mirror) || mirror.PluginPath != pluginPath) return;
             previousHash = mirror.ContentHash;
 
             if (!File.Exists(pluginPath))
@@ -233,9 +234,10 @@ public sealed class ExternalChangeWatcher : IDisposable
     }
 
     // ContentHash is null once the file's disappearance has been reported. Guarded by _gate.
-    private sealed class MirrorEntry(string contentHash) : IDisposable
+    private sealed class MirrorEntry(string contentHash, string pluginPath) : IDisposable
     {
         public string? ContentHash { get; set; } = contentHash;
+        public string PluginPath { get; } = pluginPath;
         public WatchEntry? Watch { get; init; }
         public void Dispose() => Watch?.Dispose();
     }
