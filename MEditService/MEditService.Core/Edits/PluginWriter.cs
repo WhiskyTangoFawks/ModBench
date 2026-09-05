@@ -47,7 +47,7 @@ public sealed class PluginWriter(ILogger<PluginWriter> logger)
         Directory.CreateDirectory(tmpDir);
 
         // Cleanup is catch-and-rethrow, not finally: tmpDir must survive a successful return (Commit still
-        // needs tmpPath), and a throw from WriteAsync (github.com/Mutagen-Modding/Mutagen/issues/688) leaves no
+        // needs tmpPath), and a throw from WriteAsync (Mutagen issue 688) leaves no
         // PreparedPluginSave to Dispose it.
         try
         {

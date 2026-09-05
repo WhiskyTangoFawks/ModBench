@@ -103,7 +103,7 @@ public sealed class PluginCompileService(
             catch (Exception ex) when (PluginDiagnosis.HasUnmappableFormID(ex))
             {
                 // A struct-list script property's FormLink is invisible to Mutagen's EnumerateFormLinks
-                // (github.com/Mutagen-Modding/Mutagen/issues/688), so the content-derived master pass (ADR-0038) prunes a
+                // (Mutagen issue 688), so the content-derived master pass (ADR-0038) prunes a
                 // master this write still needs. Every other write failure propagates raw.
                 writeRefusal = $"{plugin.Name} could not be compiled: {PluginDiagnosis.FromWriteException(ex).Describe()}";
                 return false;
