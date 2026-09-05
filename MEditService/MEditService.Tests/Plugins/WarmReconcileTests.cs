@@ -219,7 +219,7 @@ public sealed class WarmReconcileTests
             Assert.Equal(0, Registered(entries, plugin));
             Assert.Equal(1, Indexed(entries, plugin));
             Assert.Contains(entries, e => e.Message.Contains("from its source tree", StringComparison.Ordinal));
-            Assert.Empty(third.LoadOrder!.LoadFailures);
+            Assert.Empty(third.LoadOrder!.Failures);
         }
         finally
         {

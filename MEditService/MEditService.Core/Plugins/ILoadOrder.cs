@@ -16,7 +16,7 @@ public interface ILoadOrder : IDisposable
 
     GameRelease GameRelease { get; }
     IReadOnlyList<PluginMetadata> Plugins { get; }
-    IReadOnlyList<PluginLoadFailure> LoadFailures { get; }
+    IReadOnlyList<PluginLoadFailure> Failures { get; }
     string? FilterSql { get; set; }
     // ADR-0036: origin is required, not optional — the load order can hold two copies of one
     // filename, so the filename alone does not identify which mod to return.

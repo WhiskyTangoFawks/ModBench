@@ -29,7 +29,6 @@ describe('RecordPanelClient.load', () => {
     fetchMock = vi.fn((input: Request | string) => {
       const url = typeof input === 'string' ? input : input.url;
       if (url.includes('/compare')) return Promise.resolve(jsonResponse({ overrides: [], diffs: [], conflictAll: 'OnlyOne' }));
-      if (url.includes('/changes')) return Promise.resolve(jsonResponse([{ id: 'c1' }]));
       if (url.includes('/plugins')) return Promise.resolve(jsonResponse([{ name: 'A.esp', isImmutable: true, loadOrderIndex: 0 }]));
       // The shared happy-path fixture answers settled; the status cases override it.
       if (url.includes('/load-order/status')) return Promise.resolve(jsonResponse({ conflictsComputed: true }));
@@ -62,7 +61,6 @@ describe('RecordPanelClient.load', () => {
     fetchMock.mockImplementation((input: Request | string) => {
       const url = typeof input === 'string' ? input : input.url;
       if (url.includes('/compare')) return Promise.resolve(jsonResponse({ overrides: [], diffs: [], conflictAll: 'OnlyOne' }));
-      if (url.includes('/changes')) return Promise.resolve(jsonResponse([]));
       if (url.includes('/plugins')) {
         return Promise.resolve(jsonResponse([
           { name: 'Shared.esp', isImmutable: true, loadOrderIndex: 0, origin: 'ModA' },
@@ -85,7 +83,6 @@ describe('RecordPanelClient.load', () => {
     fetchMock.mockImplementation((input: Request | string) => {
       const url = typeof input === 'string' ? input : input.url;
       if (url.includes('/compare')) return Promise.resolve(jsonResponse({ overrides: [], diffs: [], conflictAll: 'OnlyOne' }));
-      if (url.includes('/changes')) return Promise.resolve(jsonResponse([]));
       if (url.includes('/plugins')) {
         return Promise.resolve(jsonResponse([
           { name: 'Fallout4.esm', isImmutable: true, loadOrderIndex: 0, inLoadOrder: true },
@@ -115,7 +112,7 @@ describe('RecordPanelClient.load', () => {
     expect(r).toEqual({ ok: false, error: 'HTTP 404' });
   });
 
-  it('leaves changes/plugins null when their own fetch fails but compare succeeds', async () => {
+  it('leaves plugins null when its own fetch fails but compare succeeds', async () => {
     fetchMock.mockImplementation((input: Request | string) => {
       const url = typeof input === 'string' ? input : input.url;
       if (url.includes('/compare')) return Promise.resolve(jsonResponse({ overrides: [], diffs: [], conflictAll: 'OnlyOne' }));
@@ -141,7 +138,6 @@ describe('RecordPanelClient.load', () => {
     fetchMock.mockImplementation((input: Request | string) => {
       const url = typeof input === 'string' ? input : input.url;
       if (url.includes('/compare')) return Promise.resolve(jsonResponse({ overrides: [], diffs: [], conflictAll: 'OnlyOne' }));
-      if (url.includes('/changes')) return Promise.resolve(jsonResponse([]));
       if (url.includes('/plugins')) return Promise.resolve(jsonResponse([]));
       if (url.includes('/load-order/status')) return Promise.resolve(jsonResponse({ conflictsComputed: false }));
       return Promise.resolve(jsonResponse({}, 404));
@@ -158,7 +154,6 @@ describe('RecordPanelClient.load', () => {
     fetchMock.mockImplementation((input: Request | string) => {
       const url = typeof input === 'string' ? input : input.url;
       if (url.includes('/compare')) return Promise.resolve(jsonResponse({ overrides: [], diffs: [], conflictAll: 'OnlyOne' }));
-      if (url.includes('/changes')) return Promise.resolve(jsonResponse([]));
       if (url.includes('/plugins')) return Promise.resolve(jsonResponse([]));
       if (url.includes('/load-order/status')) return Promise.resolve(jsonResponse({}, 500));
       return Promise.resolve(jsonResponse({}, 404));

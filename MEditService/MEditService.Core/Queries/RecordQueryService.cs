@@ -32,7 +32,7 @@ public sealed class RecordQueryService(
         // issues rather than inventing a third state.
         IReadOnlyDictionary<string, IReadOnlyList<MasterIssue>> masterIssues =
             _mirror.Status.State == LoadOrderState.Ready
-                ? MasterResolution.Classify(s.Plugins, s.LoadFailures)
+                ? MasterResolution.Classify(s.Plugins, s.Failures)
                 : new Dictionary<string, IReadOnlyList<MasterIssue>>();
         PluginResponse ToResponse(PluginMetadata p, bool hasMatchingRecords) =>
             PluginResponse.FromMetadata(p, masterIssues.GetValueOrDefault(p.Name), hasMatchingRecords);

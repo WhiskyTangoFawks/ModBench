@@ -1006,7 +1006,7 @@ public sealed class RecordEditService(
             }
             catch (Exception ex)
             {
-                // Already in the load order's LoadFailures (ADR-0026); named here too because "the
+                // Already in the load order's Failures (ADR-0026); named here too because "the
                 // files went back but the index did not follow" is part of this message.
                 logger.LogWarning(ex, "Could not re-derive {Plugin} after rolling back a failed renumber", affected.Name);
                 notReDerived.Add(affected.Name);

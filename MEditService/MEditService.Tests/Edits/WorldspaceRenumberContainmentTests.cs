@@ -133,7 +133,7 @@ public sealed class WorldspaceRenumberContainmentTests : IDisposable
             _gameDirectory,
             [new LoadOrderEntry(PluginName, Path.Combine(_modFolder, PluginName), Origin, Slot: 0, Enabled: true, Winning: true)],
             GameRelease.Fallout4);
-        Assert.Empty(((ILoadOrderMirror)reloaded).LoadOrder!.LoadFailures);
+        Assert.Empty(((ILoadOrderMirror)reloaded).LoadOrder!.Failures);
 
         var freshlyIngested = reloaded.Index!.At(RecordRef.Effective).GetWorldspaceCells(_plugin, newFormKey)
             .OrderBy(c => c.FormKey).ToList();

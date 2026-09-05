@@ -661,7 +661,7 @@ public sealed class VmadEditTests : IDisposable
             ((ILoadOrderMirror)_mirror).Reconcile(
                 _gameDirectory, [new LoadOrderEntry(PluginName, pluginPath, Origin, Slot: 0, Enabled: true, Winning: true)],
                 GameRelease.Fallout4);
-            Assert.Empty(_mirror.LoadOrder!.LoadFailures);
+            Assert.Empty(_mirror.LoadOrder!.Failures);
             new TrackService(NullLogger<TrackService>.Instance)
                 .TrackAsync(_mirror.LoadOrder!, Origin, SourcePreset.Edits)
                 .GetAwaiter().GetResult();

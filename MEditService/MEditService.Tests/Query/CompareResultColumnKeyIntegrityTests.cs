@@ -126,7 +126,7 @@ public sealed class CompareResultColumnKeyIntegrityTests
         public string? InstanceRoot => throw new NotSupportedException();
         public GameRelease GameRelease => GameRelease.Fallout4;
         public IReadOnlyList<PluginMetadata> Plugins { get; } = plugins;
-        public IReadOnlyList<PluginLoadFailure> LoadFailures => [];
+        public IReadOnlyList<PluginLoadFailure> Failures => [];
         public string? FilterSql { get; set; }
         public IModGetter? GetMod(string pluginName, string origin) => throw new NotSupportedException();
         public void Dispose() { }

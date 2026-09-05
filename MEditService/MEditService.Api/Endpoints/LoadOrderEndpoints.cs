@@ -130,7 +130,7 @@ public static class LoadOrderEndpoints
             // sweep; the crash-repair offers ride the response the same way Failures does.
             var crashRepairOffers = ExternalChangeLoadOrderHook.RunAfterReconcile(
                 mirror.LoadOrder, mirror.Index, externalChangeWatcher, logger);
-            return Results.Ok(new LoadOrderResponse("reconciled", mirror.LoadOrder?.LoadFailures ?? [], crashRepairOffers));
+            return Results.Ok(new LoadOrderResponse("reconciled", mirror.LoadOrder?.Failures ?? [], crashRepairOffers));
         }
         catch (OperationCanceledException ex)
         {

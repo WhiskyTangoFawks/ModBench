@@ -1,11 +1,11 @@
 // Tiny binary read of a plugin's TES4 header to extract its master list — no
-// Mutagen, no backend. Reads only the header region (24-byte major-record
+// Mutagen, no backend. Reads only the header region (24-byte TES4
 // header + its declared field-data length), never the whole plugin.
 
 import { extname } from 'node:path';
 import { open } from 'node:fs/promises';
 
-const HEADER_LENGTH = 24; // FO4 major-record header: sig(4) + size(4) + flags(4) + formID(4) + VC1(4) + formVersion(2) + VC2(2)
+const HEADER_LENGTH = 24; // FO4 TES4 header: sig(4) + size(4) + flags(4) + formID(4) + VC1(4) + formVersion(2) + VC2(2)
 const SUBRECORD_HEADER_LENGTH = 6; // sig(4) + size(2, LE uint16)
 
 /** Creation Engine plugin extensions — FO4, SSE and Starfield share these, so this is not
