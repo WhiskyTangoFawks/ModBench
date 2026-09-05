@@ -123,8 +123,7 @@ describe('package.json New Plugin / record filter reachable from the merged tree
   const titleMenus = () => pkg.contributes.menus['view/title'] as { command: string; when: string; group: string }[];
   const entryFor = (command: string) => titleMenus().find((e) => e.command === command && e.when.includes('modbench.pluginListTree'));
 
-  // Fixed slot order (modbench/CLAUDE.md rule 5): name filter, then the view's state affordance
-  // — the record filter is the merged tree's second narrowing axis — then domain actions.
+  // Rule 5 — docs/specs/containers.md.
   it('keeps modbench.pluginListTree.filter at slot 1 (unchanged by this slice)', () => {
     expect(entryFor('modbench.pluginListTree.filter')!.group).toBe('navigation@1');
   });
@@ -162,8 +161,7 @@ describe('package.json filtering is one UX (#247)', () => {
   const commandTitle = (id: string) =>
     (pkg.contributes.commands as { command: string; title: string; icon?: string }[]).find((c) => c.command === id);
 
-  // Every list view narrows by name the same way, through the same widget — one filter answer
-  // across every title bar, and a single fix site.
+  // Rule 6 — docs/specs/containers.md.
   const FILTERED_VIEWS = [
     ['modbench.modList', 'modbench.modList.filter'],
     ['modbench.pluginListTree', 'modbench.pluginListTree.filter'],
@@ -180,8 +178,6 @@ describe('package.json filtering is one UX (#247)', () => {
     expect(commandTitle(command)!.icon).toBe('$(search)');
   });
 
-  // The record filter is a different affordance and keeps the funnel: it narrows by a SQL
-  // condition, not by name. Same title bar, deliberately different icon.
   it('keeps $(filter) for the record filter, so the two never read as the same action', () => {
     expect(commandTitle('modbench.setFilter')!.icon).toBe('$(filter)');
   });
@@ -203,8 +199,6 @@ describe('package.json filtering is one UX (#247)', () => {
     expect(clearEntry!.group).toBe('navigation@1');
   });
 
-  // $(clear-all) is what VS Code's own Extensions view uses for clearing a list's text filter.
-  // $(search-stop) was rejected: it means halting a search in progress, implying results stay.
   it.each(DURABLE_FILTERS)('%s clears with $(clear-all)', (_view, _open, clearCommand) => {
     expect(commandTitle(clearCommand)!.icon).toBe('$(clear-all)');
   });
@@ -232,8 +226,6 @@ describe('package.json filtering is one UX (#247)', () => {
 describe('package.json Refresh is one command (#247)', () => {
   const titleMenus = () => pkg.contributes.menus['view/title'] as { command: string; when: string; group: string }[];
 
-  // Refresh is workspace-scope (re-read what is on disk), so it belongs to the header, once —
-  // never one Refresh per tree.
   it('declares exactly one refresh command', () => {
     const refreshCommands = (pkg.contributes.commands as { command: string; icon?: string }[])
       .filter((c) => c.icon === '$(refresh)');
@@ -255,8 +247,7 @@ describe('package.json title-bar rubric (#247)', () => {
   const viewsOf = (entries: MenuEntry[]) =>
     new Set(entries.map((e) => /view == ([\w.]+)/.exec(e.when)?.[1]).filter(Boolean) as string[]);
 
-  // Rule 1, scope first: an action not about this tree's own domain does not go on this tree.
-  // There is no Reload Load Order (ADR-0044 reconciles on every change) and no Launch/Close mEdit.
+  // Rule 1 — docs/specs/containers.md.
   const WORKSPACE_ACTIONS = [
     'modbench.modList.switchProfile',
     'modbench.modList.deploy',
@@ -268,16 +259,14 @@ describe('package.json title-bar rubric (#247)', () => {
     expect([...views].filter((v) => v !== 'modbench.loadoutHeader')).toEqual([]);
   });
 
-  // Rule 4: destructive actions never get an icon. Deploy and Purge rewrite the game
-  // directory; they sit in the header's overflow, not its navigation group.
+  // Rule 4 — docs/specs/containers.md.
   it.each(['modbench.modList.deploy', 'modbench.modList.purge'])('%s stays in overflow, never a navigation icon', (command) => {
     const entries = titleMenus().filter((e) => e.command === command);
     expect(entries.length).toBeGreaterThan(0);
     expect(entries.every((e) => !e.group.startsWith('navigation'))).toBe(true);
   });
 
-  // Rule 2, four navigation icons maximum. Not taste: VS Code collapses navigation icons into the
-  // `…` when a view is narrow, so a fifth is unreliable. A two-command toggle is one icon.
+  // Rule 2 — docs/specs/containers.md.
   it('never exposes more than four navigation icons on any view, in any state', () => {
     const navEntries = titleMenus().filter((e) => e.group.startsWith('navigation'));
     for (const view of viewsOf(navEntries)) {
@@ -299,8 +288,7 @@ describe('package.json title-bar rubric (#247)', () => {
       expect(entries.every((e) => e.when.includes('modbench.workspaceIsMo2Instance'))).toBe(true);
     });
 
-  // Rule 7: Collapse All belongs on a hierarchy and nowhere else — on a flat list it is an icon
-  // that does nothing. `showCollapseAll` is a createTreeView option, so only hierarchy is pinned.
+  // Rule 7 — docs/specs/containers.md.
   it('the Mods tree and the merged Plugins tree are the hierarchical ones', () => {
     const sidebar = (pkg.contributes.views.modbench as { id: string }[]).map((v) => v.id);
     expect(sidebar).toContain('modbench.modList');

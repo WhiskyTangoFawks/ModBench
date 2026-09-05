@@ -14,10 +14,12 @@ TypeScript VS Code extension. Root [CLAUDE.md](../CLAUDE.md) for project-wide in
 - Prefer reactive updates (`createFileSystemWatcher` → re-render) over manual Refresh; Refresh is
   a safety net, never the primary path.
 - Bounded-context import and vocabulary boundaries are pinned in
-  `src/test/contextBoundary.test.ts`; title-bar placement rules and rationale in
-  `src/test/packageJson.test.ts` — read the test before placing a command. The one untestable
-  rule: `showCollapseAll` on every hierarchical tree, never a flat list — a `createTreeView`
-  option with no test seam; check the call sites.
+  `src/test/contextBoundary.test.ts`; title-bar placement rules and rationale are in
+  [docs/specs/containers.md](../docs/specs/containers.md) — read the spec before placing a
+  command. Six of the seven rules are enforced in `src/test/packageJson.test.ts`; rule 7
+  (`showCollapseAll` on every hierarchical tree, never a flat list) has no test seam — a
+  `createTreeView` option with no declarative contribution — so it is checked by reading the
+  call sites instead.
 - `EditingController` keeps VS Code types out of its interface — chat tool handlers call it
   directly (ADR-0012).
 

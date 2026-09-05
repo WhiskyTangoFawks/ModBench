@@ -338,8 +338,8 @@ function registerPluginListView(deps: PluginListDeps): { pluginListProvider: Plu
     // Still the row provider's: a drag moves plugins.txt lines, which is a Mod-Management
     // concern whether or not the rows happen to have children today.
     dragAndDropController: pluginListProvider,
-    // Title-bar rule 7 (modbench/CLAUDE.md): hierarchical trees get Collapse All, and this one
-    // is hierarchical — plugin → record type → record.
+    // Title-bar rule 7 (docs/specs/containers.md): hierarchical trees get Collapse All, and this
+    // one is hierarchical — plugin → record type → record.
     showCollapseAll: true,
   });
   session.pluginsTreeView = pluginListView; // progress and message live here
