@@ -1,4 +1,3 @@
-using System.Globalization;
 using System.Text.Json;
 using MEditService.Core.Schema;
 
@@ -12,8 +11,7 @@ internal static class SyntheticBits
         DocumentNodes.At(root, bit.BackingPath) switch
         {
             { ValueKind: JsonValueKind.Number } raw => (raw.GetInt64() & bit.Bit) != 0,
-            { ValueKind: JsonValueKind.Array } names => names.EnumerateArray().Any(n =>
-                bit.BackingNames.Any(m => m.Value == n.GetString() && long.Parse(m.BitValue!, CultureInfo.InvariantCulture) == bit.Bit)),
+            { ValueKind: JsonValueKind.Array } names => names.EnumerateArray().Any(n => n.GetString() == bit.FlagName),
             _ => false,
         };
 }

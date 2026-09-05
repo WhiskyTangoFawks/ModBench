@@ -9,7 +9,7 @@ import { errorText, isWriteGateTimeout, writeGateBusyMessage } from './ApiClient
 /** A refusal is an outcome, not an exception: `refusal` carries the backend's own name for it,
  *  which lets a caller offer Track for one and the patch-plugin path for another. `'Unknown'`
  *  and `'WriteGateBusy'` are this side's additions. */
-export type RecordFieldEditOutcome =
+export type RecordEditOutcome =
   | { applied: true }
   | { applied: false; refusal: string; message: string };
 
@@ -17,8 +17,7 @@ export type PluginRecordTypeCount = components['schemas']['PluginRecordTypeCount
 /** The one write shape (ADR-0032): an operation, a path of hops and an optional value. The
  *  backend resolves the path against the record's current document; the host posts what the
  *  user asked for and nothing else. */
-export type RecordEditEnvelope = Omit<components['schemas']['RecordFieldEditRequest'], 'plugin' | 'origin'>;
-export type PathHop = components['schemas']['PathHop'];
+export type RecordEditEnvelope = Omit<components['schemas']['RecordEditRequest'], 'plugin' | 'origin'>;
 export type RecordPage = components['schemas']['RecordSummaryPagedResult'];
 export type CellPage = components['schemas']['CellSummaryPagedResult'];
 
@@ -62,9 +61,9 @@ export interface PluginRepository {
 
   /** ADR-0041: the single write path. A refusal (untracked plugin, a link that would dangle) is
    *  an expected answer and comes back typed; only a transport failure rejects. */
-  editRecordField(
+  editRecord(
     formKey: string, plugin: string, origin: string, envelope: RecordEditEnvelope,
-  ): Promise<RecordFieldEditOutcome>;
+  ): Promise<RecordEditOutcome>;
 
   getWorldspaces(plugin: string, origin?: string): Promise<WorldspaceSummary[]>;
   getWorldspaceBlocks(plugin: string, worldspaceFormKey: string, origin?: string): Promise<WorldspaceBlocks>;
@@ -73,11 +72,6 @@ export interface PluginRepository {
   // Quest and DialogTopic containment only, in xEdit's presentation order — never
   // Cell.NavigationMeshes/Landscape or Worldspace.TopCell/SubCells.
   getContainerChildren(plugin: string, parentFormKey: string, origin?: string): Promise<ContainerChildSummary[]>;
-}
-
-// The path as the backend spells it in a refusal, for the log line only.
-function spellPath(path: PathHop[]): string {
-  return path.map((hop) => hop.kind === 'member' ? `.${hop.name ?? ''}` : `[${hop.key ?? hop.index}]`).join('').replace(/^\./, '');
 }
 
 // No convention in ADR-0026 or docs/specs/plugins.md anchors this: 30s is an ordinary
@@ -273,11 +267,11 @@ export class ApiPluginRepository implements PluginRepository {
     return data?.sql ?? null;
   }
 
-  async editRecordField(
+  async editRecord(
     formKey: string, plugin: string, origin: string, envelope: RecordEditEnvelope,
-  ): Promise<RecordFieldEditOutcome> {
-    const spelled = spellPath(envelope.path);
-    const { data, error, response } = await this.client.POST('/records/{formKey}/field', {
+  ): Promise<RecordEditOutcome> {
+    const spelled = JSON.stringify(envelope.path);
+    const { data, error, response } = await this.client.POST('/records/{formKey}/edit', {
       params: { path: { formKey } },
       body: { plugin, origin, ...envelope },
     });
@@ -288,19 +282,19 @@ export class ApiPluginRepository implements PluginRepository {
     // gate's prose as a judgement on this edit.
     if (isWriteGateTimeout(error)) {
       const message = writeGateBusyMessage('Could not edit this record');
-      this.log(`[PluginRepository] editRecordField(${formKey} ${envelope.op} ${spelled}) hit the write gate (${response.status})`);
+      this.log(`[PluginRepository] editRecord(${formKey} ${envelope.op} ${spelled}) hit the write gate (${response.status})`);
       return { applied: false, refusal: 'WriteGateBusy', message };
     }
 
     // The backend's typed discriminator, off the ProblemDetails extension rather than re-derived
     // from the status: only it tells "not tracked" from "no folder", whose ways out differ.
     const problem = error as { refusal?: string; detail?: string } | undefined;
-    const outcome: RecordFieldEditOutcome = {
+    const outcome: RecordEditOutcome = {
       applied: false,
       refusal: problem?.refusal ?? 'Unknown',
       message: problem?.detail ?? (errorText(error) || `Edit failed (${response.status}).`),
     };
-    this.log(`[PluginRepository] editRecordField(${formKey} ${envelope.op} ${spelled}) refused: ${outcome.refusal} — ${outcome.message}`);
+    this.log(`[PluginRepository] editRecord(${formKey} ${envelope.op} ${spelled}) refused: ${outcome.refusal} — ${outcome.message}`);
     return outcome;
   }
 

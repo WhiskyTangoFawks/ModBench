@@ -2,11 +2,10 @@ using MEditService.Core.Queries;
 
 namespace MEditService.Core.Schema;
 
-/// <summary>A member the document never spells: one bit of a flags member it does, at
-/// BackingPath. BackingNames is the enum domain where that member is names; Aliases are the codec's
-/// other spellings of the same bits.</summary>
-public sealed record SyntheticBit(
-    string BackingPath, long Bit, IReadOnlyList<EnumMember> BackingNames, IReadOnlyList<string> Aliases);
+/// <summary>A member the document never spells: one bit of the flags member at BackingPath.
+/// FlagName is the bit's name where that member is an array of names; Aliases are the codec's other
+/// spellings of the bits.</summary>
+public sealed record SyntheticBit(string BackingPath, long Bit, string? FlagName, IReadOnlyList<string> Aliases);
 
 /// <summary>One column of a record table: which document member it is and what a generated view
 /// (ADR-0041) may do with it. The codec decides what a write may hold; a column refuses writes only

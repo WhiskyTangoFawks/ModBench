@@ -221,7 +221,7 @@ using git.
 ### The edit path
 
 - Every edit lands as working-tree source text — the single write path. A scalar inline
-  gesture in the grid and `POST /records/{formKey}/field` (scripts and agents) both land
+  gesture in the grid and `POST /records/{formKey}/edit` (scripts and agents) both land
   the same way.
 - The full editor gesture inventory rides that one path: the FormKey picker (native QuickPick),
   flag multi-select, the extended-field editor, and array add/remove/move (withheld on sorted

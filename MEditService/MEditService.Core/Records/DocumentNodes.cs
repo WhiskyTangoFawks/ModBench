@@ -29,24 +29,19 @@ internal static class DocumentNodes
 
     /// <summary>The shape a member has under the object holding it: its own, or the variant the
     /// object's discriminator names when the member's type varies by leaf.</summary>
-    internal static FieldMetadata VariantFor(FieldMetadata member, JsonElement? owner)
-    {
-        if (member.Variants is not { } variants || owner is not { ValueKind: JsonValueKind.Object } obj) return member;
-        return obj.TryGetProperty(Schema.LoquiUnions.UnionTypeDiscriminator, out var leaf)
+    internal static FieldMetadata VariantFor(FieldMetadata member, JsonElement? owner) =>
+        owner is { ValueKind: JsonValueKind.Object } obj
+            && obj.TryGetProperty(Schema.LoquiUnions.UnionTypeDiscriminator, out var leaf)
             && leaf.ValueKind == JsonValueKind.String
-            && variants.TryGetValue(leaf.GetString()!, out var variant)
-            ? variant
+            ? Variant(member, leaf.GetString())
             : member;
-    }
 
     /// <summary>The same question over the write path's mutable tree.</summary>
-    internal static FieldMetadata VariantFor(FieldMetadata member, JsonNode? owner)
-    {
-        if (member.Variants is not { } variants || owner is not JsonObject obj) return member;
-        return obj[Schema.LoquiUnions.UnionTypeDiscriminator] is JsonValue leaf
-            && leaf.TryGetValue<string>(out var name)
-            && variants.TryGetValue(name, out var variant)
-            ? variant
+    internal static FieldMetadata VariantFor(FieldMetadata member, JsonNode? owner) =>
+        owner is JsonObject obj && obj[Schema.LoquiUnions.UnionTypeDiscriminator] is JsonValue leaf && leaf.TryGetValue<string>(out var name)
+            ? Variant(member, name)
             : member;
-    }
+
+    private static FieldMetadata Variant(FieldMetadata member, string? leaf) =>
+        leaf != null && member.Variants is { } variants && variants.TryGetValue(leaf, out var variant) ? variant : member;
 }

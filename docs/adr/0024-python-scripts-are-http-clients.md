@@ -15,7 +15,7 @@ A script's two needs map onto the existing API:
 - **Selection** — `POST /query` runs a SQL SELECT against the generated per-type views
   (ADR-0005) and returns `{ columns, rows }`. SELECT-only; no DDL/DML.
 - **Writes** — `edit()` calls the same field-write door a manual edit uses
-  (`POST /records/{formKey}/field`), landing as a working-tree change in the tracked mod's source
+  (`POST /records/{formKey}/edit`), landing as a working-tree change in the tracked mod's source
   ([ADR-0041](0041-manual-git-tracking-compile-from-text.md)).
 
 The same model already governs the ADR-0018 record filter: humans and agents send identical SQL

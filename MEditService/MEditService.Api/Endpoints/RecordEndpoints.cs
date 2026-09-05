@@ -69,12 +69,12 @@ public static class RecordEndpoints
 
         // ADR-0041: the single write path's one door. Scripts and agents (ADR-0024) reach the same
         // RecordEditService the UI does, which is why the untracked refusal is expressible here.
-        app.MapPost("/records/{formKey}/field", (
-            string formKey, RecordFieldEditRequest request, RecordEditService edits, IndexWriteGate gate) =>
-            EditField(formKey, request, edits, gate, logger))
-        .WithName("EditRecordField")
+        app.MapPost("/records/{formKey}/edit", (
+            string formKey, RecordEditRequest request, RecordEditService edits, IndexWriteGate gate) =>
+            EditRecord(formKey, request, edits, gate, logger))
+        .WithName("EditRecord")
         .WithTags("Records")
-        .Produces<RecordFieldEditResponse>()
+        .Produces<RecordEditResponse>()
         .ProducesProblem(400)
         .ProducesProblem(404)
         .ProducesProblem(409)
@@ -85,7 +85,7 @@ public static class RecordEndpoints
         .ProducesProblem(503);
 
         // Delete-record — the source file goes away and the null-Body working-tree mechanism takes
-        // it from there. Same door, same refusals, same doctrine as EditField above.
+        // it from there. Same door, same refusals, same doctrine as EditRecord above.
         app.MapPost("/records/{formKey}/delete", (
             string formKey, RecordDeleteRequest request, RecordEditService edits, IndexWriteGate gate) =>
             DeleteRecord(formKey, request, edits, gate, logger))
@@ -177,8 +177,8 @@ public static class RecordEndpoints
     // The source file sits in a working tree Modbench does not own exclusively (root CLAUDE.md)
     // and there is no exception middleware, so I/O failures are mapped here rather than escaping
     // as a bodyless 500.
-    internal static IResult EditField(
-        string formKey, RecordFieldEditRequest request, RecordEditService edits, IndexWriteGate gate, ILogger logger)
+    internal static IResult EditRecord(
+        string formKey, RecordEditRequest request, RecordEditService edits, IndexWriteGate gate, ILogger logger)
     {
         var decoded = Uri.UnescapeDataString(formKey);
         var spelled = RecordEditEnvelope.Spell(request.Path ?? []);
@@ -189,7 +189,7 @@ public static class RecordEndpoints
                 if (logger.IsEnabled(LogLevel.Information))
                 {
                     logger.LogInformation(
-                        "Received EditRecordField {Op} {Path} for {FormKey} in {Plugin} ({Origin})",
+                        "Received EditRecord {Op} {Path} for {FormKey} in {Plugin} ({Origin})",
                         request.Op, spelled, decoded, request.Plugin, request.Origin);
                 }
             },
@@ -204,7 +204,7 @@ public static class RecordEndpoints
             execute: () => edits.Edit(
                 new PluginKey(request.Plugin, request.Origin), decoded,
                 new RecordEditEnvelope(request.Op, request.Path ?? [], request.Value)),
-            onApplied: result => Results.Ok(new RecordFieldEditResponse(true, decoded, spelled)),
+            onApplied: result => Results.Ok(new RecordEditResponse(true, decoded, spelled)),
             onWriteFailure: ex =>
             {
                 logger.LogError(ex, "Could not write the source file while editing {FormKey} at {Path}", decoded, spelled);

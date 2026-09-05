@@ -13,7 +13,7 @@ public static class PartialFormFlag
     internal const int Bit = 0x0000_4000;
 
     /// <summary>The same bit as the annotation tables spell it.</summary>
-    internal const string BitHex = "0x4000";
+    internal static readonly string BitHex = $"0x{Bit:X}";
 
     /// <summary>The one eligibility gate, shared by the read and write sides.</summary>
     internal static bool IsPartialFormable(Type recordType) =>

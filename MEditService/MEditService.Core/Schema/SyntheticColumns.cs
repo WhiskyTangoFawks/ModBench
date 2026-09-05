@@ -14,12 +14,12 @@ internal static class SyntheticColumns
         {
             var names = backingNames(backingMember);
             var bit = names.Count == 0
-                ? long.Parse(flag.AsSpan(2), NumberStyles.HexNumber, CultureInfo.InvariantCulture)
+                ? SchemaAnnotations.ParseBit(flag)
                 : long.Parse(names.Single(m => m.Value == flag).BitValue!, CultureInfo.InvariantCulture);
             var aliases = names.Count == 0 ? game.Defaults.MembersAliasing(getterType, backingMember, bit) : [];
             yield return new ColumnSpec(name, name, "BOOLEAN", "bool", LeafSpec.NoFormKeyTypes, LeafSpec.NoEnumMembers,
                 ViewDefaultLiteral: "false",
-                Synthetic: new SyntheticBit(backingPathPrefix + backingMember, bit, names, aliases));
+                Synthetic: new SyntheticBit(backingPathPrefix + backingMember, bit, names.Count == 0 ? null : flag, aliases));
         }
     }
 }

@@ -362,7 +362,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/records/{formKey}/field": {
+    "/records/{formKey}/edit": {
         parameters: {
             query?: never;
             header?: never;
@@ -371,7 +371,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        post: operations["EditRecordField"];
+        post: operations["EditRecord"];
         delete?: never;
         options?: never;
         head?: never;
@@ -744,7 +744,6 @@ export interface components {
             /** Format: int32 */
             index?: number | null;
             key?: string | null;
-            readonly isWellFormed?: boolean;
         };
         PlacedSummary: {
             formKey: string;
@@ -868,14 +867,14 @@ export interface components {
             isPartialForm: boolean;
             isPartialFormable: boolean;
         };
-        RecordFieldEditRequest: {
+        RecordEditRequest: {
             plugin: string;
             origin: string;
             op: string;
             path: components["schemas"]["PathHop"][];
             value?: unknown;
         };
-        RecordFieldEditResponse: {
+        RecordEditResponse: {
             applied: boolean;
             formKey: string;
             path: string;
@@ -1926,7 +1925,7 @@ export interface operations {
             };
         };
     };
-    EditRecordField: {
+    EditRecord: {
         parameters: {
             query?: never;
             header?: never;
@@ -1937,7 +1936,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["RecordFieldEditRequest"];
+                "application/json": components["schemas"]["RecordEditRequest"];
             };
         };
         responses: {
@@ -1947,7 +1946,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["RecordFieldEditResponse"];
+                    "application/json": components["schemas"]["RecordEditResponse"];
                 };
             };
             /** @description Bad Request */

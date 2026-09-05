@@ -85,7 +85,7 @@ public sealed class RecordEditService(
 
         Func<string, string> roundTrip = schema.IsHeader
             ? patched => Encoding.UTF8.GetString(HeaderDocument.Write(HeaderDocument.Read(Encoding.UTF8.GetBytes(patched))))
-            : patched => RoundTrip(patched, release, unit.OwnerRecordType);
+            : patched => _codec.RoundTrip(patched, release, unit.OwnerRecordType);
         var request = new DocumentEditRequest(text, prefix, schema, envelope, release, reads.Resolve, roundTrip);
         if (DocumentEdit.Apply(request, out var newText) is { } refused) return refused;
 
@@ -105,13 +105,11 @@ public sealed class RecordEditService(
         var deltas = new List<(string FormKey, string? Body)> { (unit.OwnerFormKey, SourceChildOrder.WithoutOrder(newText)) };
         if (unit.IsEmbedded)
         {
-            var child = JsonNode.Parse(newText)!;
-            foreach (var hop in prefix)
-                child = hop.Kind == PathHop.MemberKind ? child![hop.Name!]! : child![hop.Index!.Value]!;
+            var child = EmbeddedChildPath.Walk(JsonNode.Parse(newText), prefix)!;
             // An element of an abstract slot names its own type first, which only the self-describing
             // read takes; the child's own document then spells it the way its own file would.
             var selfDescribing = child is JsonObject obj && obj.ContainsKey(LoquiUnions.UnionTypeDiscriminator);
-            deltas.Add((formKey, RoundTrip(child!.ToJsonString(), release, selfDescribing ? null : document.RecordType)));
+            deltas.Add((formKey, _codec.RoundTrip(child.ToJsonString(), release, selfDescribing ? null : document.RecordType)));
         }
         index.ApplyWorkingTreeChanges(plugin, deltas);
 
@@ -125,13 +123,6 @@ public sealed class RecordEditService(
                 envelope.Op, spelled, formKey, plugin.Name, plugin.Origin, unit.RelativePath);
         }
         return RecordEditResult.Success();
-    }
-
-    // The codec is the one shape gate: what it reads and writes back is the document.
-    private string RoundTrip(string text, GameRelease release, string? recordType)
-    {
-        var record = _codec.DeserializeFromBytesAsync(Encoding.UTF8.GetBytes(text), release, recordType).GetAwaiter().GetResult();
-        return Encoding.UTF8.GetString(_codec.SerializeToBytesAsync(record, release).GetAwaiter().GetResult());
     }
 
     private static string? EditorIdOf(string text)
@@ -282,7 +273,7 @@ public sealed class RecordEditService(
 
             if (!ContainerChildFields.RemoveEmbeddedChild(record, formKey))
             {
-                // Same diagnosis as EditField's embedded lookup: states only what is observed.
+                // Same diagnosis as Edit's embedded lookup: states only what is observed.
                 return RecordEditResult.Refused(
                     RecordEditRefusal.SourceUnitNotFound,
                     $"{unit.RelativePath} is indexed as holding {formKey}, but its own text does not " +
@@ -1149,7 +1140,7 @@ public sealed class RecordEditService(
             foreach (var (embeddedFormKey, _, _) in group.Where(r => r.Unit.IsEmbedded))
             {
                 // The child's row is re-derived from the remapped owner, the same two-row shape
-                // EditField uses. A remap never moves a record's own FormKey, so the child is still
+                // Edit uses. A remap never moves a record's own FormKey, so the child is still
                 // found under the same key.
                 if (ContainerChildFields.FindEmbeddedChild(owner, embeddedFormKey)?.Child is not { } child)
                 {
@@ -1316,7 +1307,7 @@ public sealed class RecordEditService(
         if (unit.IsEmbedded)
         {
             // No file moves: an embedded record has no leaf name of its own. The owner is reserialized
-            // and the child's row replaced, the same two-row shape EditField uses.
+            // and the child's row replaced, the same two-row shape Edit uses.
             transaction.Write(
                 modFolder, unit.FullPath,
                 () => _codec.SerializeAsync(root, unit.FullPath, release).GetAwaiter().GetResult());
@@ -1637,7 +1628,7 @@ public sealed class RecordEditService(
                 // The palette entry verbatim; naming a command that does not exist is its own dead end.
                 $"Run \"{TrackCommandTitle}\" on it once to start editing.");
 
-    // Refused before any write. Not folded into ResolveEditTarget because EditField reaches the
+    // Refused before any write. Not folded into ResolveEditTarget because Edit reaches the
     // header deliberately. Without it, SourceUnit.IsDirectoryPerRecord (filename-only) answers true
     // for the header and DeleteRecord deletes the plugin's whole source root.
     private static RecordEditResult? RefuseIfHeader(string recordType) =>

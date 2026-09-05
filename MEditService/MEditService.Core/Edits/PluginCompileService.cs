@@ -54,7 +54,7 @@ public sealed class PluginCompileService(
             {
                 var flagRemovable = mod.IsSmallMaster;
                 var remedy = flagRemovable
-                    ? "Remove the ESL flag (the header's is_light field), or renumber the record(s) into the light range."
+                    ? "Remove the ESL flag (the header's IsSmallMaster member), or renumber the record(s) into the light range."
                     : "Rename the plugin off the .esl extension, or renumber the record(s) into the light range.";
                 return CompileResult.Refused(
                     $"{plugin.Name} is ESL-addressable but holds native FormID(s) outside the light range " +

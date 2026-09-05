@@ -4,11 +4,20 @@ using MEditService.Core.Source;
 namespace MEditService.Core.Edits;
 
 /// <summary>Where an embedded child sits in its parent's document: the slot member and the position
-/// of the element carrying its FormKey, descending through embedded slots only, since a folder-split
-/// child is never in the parent's text.</summary>
+/// of the element carrying its FormKey. Embedded slots only: a folder-split child is never in the
+/// parent's text.</summary>
 internal static class EmbeddedChildPath
 {
     private const string FormKeyMember = "FormKey";
+
+    /// <summary>The node the hops address, walked without metadata; null where the document has none.</summary>
+    internal static JsonNode? Walk(JsonNode? root, IReadOnlyList<PathHop> hops)
+    {
+        var node = root;
+        foreach (var hop in hops)
+            node = hop.Kind == PathHop.MemberKind ? (node as JsonObject)?[hop.Name!] : (node as JsonArray)?[hop.Index!.Value];
+        return node;
+    }
 
     internal static List<PathHop>? Find(JsonObject parent, string parentTypeName, string formKey)
     {

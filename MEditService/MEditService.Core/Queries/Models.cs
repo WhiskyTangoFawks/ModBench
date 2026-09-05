@@ -108,7 +108,7 @@ public record FieldMetadata(
     IReadOnlyList<string> ValidFormKeyTypes,
     // For 'enum': the field's members, in the order the schema lists them. That order is a
     // contract, not a rendering detail — a discriminator's first member is the leaf a new array
-    // element is built as (ArrayOpWriter).
+    // element is built as (DocumentEdit).
     IReadOnlyList<EnumMember> EnumMembers,
     FieldMetadata? ElementType = null,          // for 'array': element schema
     IReadOnlyList<FieldMetadata>? Fields = null, // for 'struct': sub-field schemas
@@ -241,7 +241,7 @@ public record HealthResponse(string Status);
 // ADR-0041: one edit on one plugin's copy, as the one envelope (ADR-0032). Value is a raw
 // JsonElement: a value is whatever its schema says, so typing it here would re-declare the
 // schema on the wire.
-public record RecordFieldEditRequest(
+public record RecordEditRequest(
     string Plugin,
     string Origin,
     string Op,
@@ -251,10 +251,10 @@ public record RecordFieldEditRequest(
 /// <summary>The success shape for an applied edit. A refusal is ProblemDetails carrying refusal
 /// and path extensions instead, so an HTTP client's ordinary success check is also the correct
 /// check (ADR-0026).</summary>
-public record RecordFieldEditResponse(bool Applied, string FormKey, string Path);
+public record RecordEditResponse(bool Applied, string FormKey, string Path);
 
 // The three lifecycle gestures' wire shapes, on the same door (Plugin/Origin as the compound
-// identity, refusals as ProblemDetails carrying the same `refusal` extension) EditField already
+// identity, refusals as ProblemDetails carrying the same `refusal` extension) Edit already
 // established.
 
 /// <summary><see cref="FormKey"/> null means auto-allocate the next free local FormID (both-refs

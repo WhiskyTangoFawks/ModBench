@@ -15,7 +15,7 @@ namespace MEditService.Tests.Edits;
 /// <summary>A non-string JSON value for a nullable FormLink column is the one malformed shape
 /// <c>ValidateFormLinks</c> lets through: <c>CheckErrorBuilder</c> reads a non-string as "no
 /// reference".</summary>
-public sealed class ScalarFieldApplierRefusalTests : IDisposable
+public sealed class ScalarValueRefusalTests : IDisposable
 {
     private readonly TrackedModFixture _mod = TrackedModFixture.Tracked();
 

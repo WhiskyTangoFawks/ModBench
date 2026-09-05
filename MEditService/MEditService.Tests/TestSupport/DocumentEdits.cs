@@ -29,11 +29,7 @@ internal static class DocumentEdits
             out written);
     }
 
-    internal static string RoundTrip(string text, string recordType)
-    {
-        var record = Codec.DeserializeFromBytesAsync(Encoding.UTF8.GetBytes(text), GameRelease.Fallout4, recordType).GetAwaiter().GetResult();
-        return Encoding.UTF8.GetString(Codec.SerializeToBytesAsync(record, GameRelease.Fallout4).GetAwaiter().GetResult());
-    }
+    internal static string RoundTrip(string text, string recordType) => Codec.RoundTrip(text, GameRelease.Fallout4, recordType);
 
     internal static string Serialize(IMajorRecordGetter record) =>
         Encoding.UTF8.GetString(Codec.SerializeToBytesAsync(record, GameRelease.Fallout4).GetAwaiter().GetResult());

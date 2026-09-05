@@ -14,21 +14,11 @@ public sealed record PathHop(string Kind, string? Name = null, int? Index = null
     public static PathHop Member(string name) => new(MemberKind, Name: name);
     public static PathHop At(int index) => new(IndexKind, Index: index);
     public static PathHop ByKey(string key) => new(KeyKind, Key: key);
-
-    /// <summary>Whether the hop names exactly what its kind needs.</summary>
-    public bool IsWellFormed => Kind switch
-    {
-        MemberKind => Name is { Length: > 0 } && Index is null && Key is null,
-        IndexKind => Index is >= 0 && Name is null && Key is null,
-        KeyKind => Key is not null && Name is null && Index is null,
-        _ => false,
-    };
 }
 
-/// <summary>The one write shape: an operation, a path of hops and an optional value (ADR-0032).
-/// <c>set</c> takes the value at the path (null clears the member); <c>add</c> appends the value, or
-/// the element type's default, to the array at the path; <c>remove</c> drops the element at the
-/// path; <c>move</c> places the element at the path at the index the value names.</summary>
+/// <summary>The one write shape (ADR-0032): set puts the value at the path (null clears); add
+/// appends the value, or the element's default; remove drops the element; move places it at the
+/// index the value names.</summary>
 public sealed record RecordEditEnvelope(string Op, IReadOnlyList<PathHop> Path, JsonElement? Value = null)
 {
     public const string Set = "set";

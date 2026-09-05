@@ -5,6 +5,7 @@ using MEditService.Core.Schema;
 using MEditService.Core.Source;
 using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
+using static MEditService.Tests.TestSupport.Envelopes;
 
 namespace MEditService.Tests.Edits;
 
@@ -129,6 +130,12 @@ public sealed class EmbeddedChildEditTests : IDisposable
 
         var topCell = service.Set(_fixture.Plugin, _fixture.Worldspace.ToString(), "TopCell", Json("null"));
         Assert.False(topCell.Applied);
+
+        // An inline reorder is the same structural gesture, refused the same way, so container_child
+        // and placement rows can only ever be re-derived from a document the codec wrote whole.
+        var reorder = service.Edit(_fixture.Plugin, _fixture.EmbedCell.ToString(), MoveTo(1, Member("NavigationMeshes"), At(0)));
+        Assert.False(reorder.Applied);
+        Assert.Equal(RecordEditRefusal.FieldReadOnly, reorder.Refusal);
         Assert.Equal(RecordEditRefusal.FieldReadOnly, topCell.Refusal);
 
         // The child records are all still exactly where they were...

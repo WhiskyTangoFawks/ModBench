@@ -25,6 +25,14 @@ public sealed class RecordTextCodec(ILogger<RecordTextCodec> logger)
     private static readonly ConcurrentDictionary<Type, MethodInfo> SerializeMethods = new();
     private static readonly ConcurrentDictionary<(Type Record, Type Reader), MethodInfo> DeserializeMethods = new();
 
+    /// <summary>A document read and written back: the one shape gate a write goes through, and the
+    /// spelling the codec gives what it kept.</summary>
+    public string RoundTrip(string text, GameRelease gameRelease, string? recordType)
+    {
+        var record = DeserializeFromBytesAsync(System.Text.Encoding.UTF8.GetBytes(text), gameRelease, recordType).GetAwaiter().GetResult();
+        return System.Text.Encoding.UTF8.GetString(SerializeToBytesAsync(record, gameRelease).GetAwaiter().GetResult());
+    }
+
     /// <summary>The same bytes <see cref="SerializeAsync"/> writes, without the filesystem: the
     /// index stores a document byte-identical to the source file (ADR-0041), and indexing produces
     /// millions, so a temp-file round trip is not an option.</summary>

@@ -175,6 +175,17 @@ internal sealed record SchemaAnnotations(
         SiblingsInUse.GetValueOrDefault(Key(prop));
     public IReadOnlyList<string>? KeyMembersFor(PropertyInfo prop) => KeyedArrays.GetValueOrDefault(Key(prop));
 
+    /// <summary>The bit a synthetic member's row spells in hex, for a backing member no enum names.</summary>
+    internal static long ParseBit(string flag) =>
+        TryParseBit(flag, out var bit) ? bit : throw new ArgumentException($"'{flag}' is not a hex bit.", nameof(flag));
+
+    internal static bool TryParseBit(string flag, out long bit)
+    {
+        bit = 0;
+        return flag.StartsWith("0x", StringComparison.Ordinal)
+            && long.TryParse(flag.AsSpan(2), System.Globalization.NumberStyles.HexNumber, null, out bit);
+    }
+
     public IEnumerable<(string Name, string BackingMember, string Flag)> SyntheticFlagMembersFor(Type getterType) =>
         SyntheticFlagMembers
             .Where(e => e.Key.TypeName == getterType.Name)
@@ -284,9 +295,7 @@ internal sealed record SchemaAnnotations(
                 if (!Enum.GetNames(core).Contains(flag, StringComparer.Ordinal))
                     yield return $"{label} names flag {flag}, which {core.Name} does not define";
             }
-            else if (!ReflectedTypes.IntegerTypes.Contains(core)
-                || !flag.StartsWith("0x", StringComparison.Ordinal)
-                || !long.TryParse(flag.AsSpan(2), System.Globalization.NumberStyles.HexNumber, null, out _))
+            else if (!ReflectedTypes.IntegerTypes.Contains(core) || !TryParseBit(flag, out _))
             {
                 yield return $"{label} backs onto {backingMember}, which is neither an enum nor an integer bit {flag} could name";
             }

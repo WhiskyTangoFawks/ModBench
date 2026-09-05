@@ -8,8 +8,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 namespace MEditService.Tests.Edits;
 
 /// <summary>A record whose document could not be produced at index time has a stub body, and a
-/// write to it is refused with the diagnosis as the reason (user story 15): nothing can be patched
-/// onto a stub.</summary>
+/// write to it is refused with the diagnosis as the reason: nothing can be patched onto a stub.</summary>
 public sealed class ParseFailedEditRefusalTests : IDisposable
 {
     private readonly TrackedModFixture _mod = TrackedModFixture.Tracked();

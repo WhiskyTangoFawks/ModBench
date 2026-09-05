@@ -23,7 +23,7 @@ export async function offerEslFlagRemoval(
     { modal: true }, accept);
   if (choice !== accept) return false;
 
-  const outcome = await repository.editRecordField(
+  const outcome = await repository.editRecord(
     headerFormKeyFor(target.name), target.name, target.origin,
     { op: 'set', path: [{ kind: 'member', name: 'IsSmallMaster' }], value: false });
   if (outcome.applied) return true;

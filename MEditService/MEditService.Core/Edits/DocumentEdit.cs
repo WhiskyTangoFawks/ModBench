@@ -6,6 +6,7 @@ using MEditService.Core.Records;
 using MEditService.Core.Schema;
 using MEditService.Core.Source;
 using Mutagen.Bethesda;
+using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Core.Edits;
 
@@ -20,13 +21,13 @@ internal sealed record DocumentEditRequest(
     Func<string, RecordLookupEntry?> Resolve,
     Func<string, string> RoundTrip);
 
-/// <summary>A write is a patch on the document (ADR-0032): resolve the path against the metadata
-/// tree, run the closed pre-check list, apply the cascade and the patch, put keyed arrays in key
-/// order, read the result through the codec and write it back, and compare what came back with what
-/// was asked. Pure: text and metadata in, text or one refusal out.</summary>
+/// <summary>A write is a patch on the document (ADR-0032): resolve, pre-check, cascade, patch, key
+/// order, codec round trip, compare what came back with what was asked. Pure: text and metadata
+/// in, text or one refusal out.</summary>
 internal static class DocumentEdit
 {
-    private const string EditorIdMember = "EditorID";
+    private const string EditorIdMember = nameof(IMajorRecordGetter.EditorID);
+    private const string FormKeyMember = nameof(IMajorRecordGetter.FormKey);
 
     /// <summary>The new document text, or the input text itself when the operation had nothing to do
     /// (an element past the end), in <paramref name="text"/>; a refusal otherwise, with nothing
@@ -84,17 +85,18 @@ internal static class DocumentEdit
         }
 
         var writtenRoot = (JsonObject)JsonNode.Parse(written)!;
-        if (!Subsumes(At(writtenRoot, chain), edited, editedMeta, spelled, out var dropped))
+        if (!SilentSkipGuard.Keeps(At(writtenRoot, chain), edited, editedMeta, spelled, out var dropped))
         {
             return RecordEditResult.RefusedAt(
                 RecordEditRefusal.CodecDroppedValue, dropped,
                 $"'{dropped}' was not kept by the codec: the record's own class has no member the document can carry it in, so nothing was written.");
         }
 
-        var after = WalkPrefix(writtenRoot, request.Prefix);
+        var after = JsonSerializer.SerializeToElement(WalkPrefix(writtenRoot, request.Prefix));
+        var was = JsonSerializer.SerializeToElement(before);
         foreach (var column in request.Schema.RecordColumns.Where(c => c.Synthetic != null && c != cursor.Column))
         {
-            if (IsBitSet(before, column.Synthetic!) != IsBitSet(after, column.Synthetic!))
+            if (SyntheticBits.IsSet(was, column.Synthetic!) != SyntheticBits.IsSet(after, column.Synthetic!))
             {
                 return RecordEditResult.RefusedAt(
                     RecordEditRefusal.SyntheticMemberIndirectWrite, spelled,
@@ -115,7 +117,7 @@ internal static class DocumentEdit
             return Malformed(spelled, $"'{envelope.Op}' is not an operation; use set, add, remove or move");
         if (envelope.Path.Count == 0 || envelope.Path[0].Kind != PathHop.MemberKind)
             return Malformed(spelled, "a path starts with a member hop");
-        if (envelope.Path.Any(hop => !hop.IsWellFormed))
+        if (envelope.Path.Any(hop => !WellFormed(hop)))
             return Malformed(spelled, "every hop is a member with a name, an index with a position, or a key with its text");
         if (envelope.Op == RecordEditEnvelope.Set && envelope.Value is null)
             return Malformed(spelled, "set takes a value (JSON null clears a member)");
@@ -125,6 +127,15 @@ internal static class DocumentEdit
             return Malformed(spelled, "move takes the destination index as its value");
         return null;
     }
+
+    // A hop names exactly what its kind needs.
+    private static bool WellFormed(PathHop hop) => hop.Kind switch
+    {
+        PathHop.MemberKind => hop.Name is { Length: > 0 } && hop.Index is null && hop.Key is null,
+        PathHop.IndexKind => hop.Index is >= 0 && hop.Name is null && hop.Key is null,
+        PathHop.KeyKind => hop.Key is not null && hop.Name is null && hop.Index is null,
+        _ => false,
+    };
 
     private static RecordEditResult Malformed(string spelled, string why) =>
         RecordEditResult.RefusedAt(RecordEditRefusal.InvalidEnvelope, spelled, $"'{spelled}': {why}.");
@@ -300,8 +311,6 @@ internal static class DocumentEdit
             "Form flag on its header first.");
     }
 
-    private const string FormKeyMember = "FormKey";
-
     // ── the operations ──────────────────────────────────────────────────────
 
     private static RecordEditResult? Set(
@@ -317,6 +326,7 @@ internal static class DocumentEdit
 
         var node = value.ValueKind == JsonValueKind.Null ? null : JsonNode.Parse(value.GetRawText());
         if (PreCheck(node, cursor.Meta, cursor.Node, spelled) is { } refused) return refused;
+        Cascade(node, cursor.Meta, cursor.Node);
         if (CheckErrorBuilder.Build(cursor.Meta, value, request.Resolve, request.Release, absentMeansNull: false) is { } linkError)
             return RecordEditResult.RefusedAt(RecordEditRefusal.InvalidFormLink, spelled, $"'{spelled}': {linkError}");
 
@@ -341,11 +351,8 @@ internal static class DocumentEdit
 
         if (field.SiblingsInUse is { } inUse)
         {
-            // Every slot the table governs is idle unless the new value puts it in use; a stale slot
-            // posted under an earlier value is cleared here, never carried.
-            var now = InUse(inUse, node, field);
-            foreach (var idle in inUse.Values.SelectMany(v => v).Distinct(StringComparer.Ordinal).Except(now, StringComparer.Ordinal))
-                owner.Remove(idle);
+            // A stale slot posted under an earlier value is cleared here, never carried.
+            foreach (var idle in Idle(inUse, node, field)) owner.Remove(idle);
             if (node == null) owner.Remove(cursor.MemberName!); else owner[cursor.MemberName!] = node;
             edited = owner;
             editedMeta = cursor.OwnerMeta!;
@@ -364,6 +371,35 @@ internal static class DocumentEdit
         return null;
     }
 
+    // The cascade over a whole value: wherever it changes a governing member from what the document
+    // holds, only the slots the new value uses stay, so a stale slot cannot ride in beside it. An
+    // unchanged member idles nothing.
+    private static void Cascade(JsonNode? value, FieldMetadata meta, JsonNode? current)
+    {
+        switch (value)
+        {
+            case JsonObject obj when meta.Fields is { } fields:
+                var was = current as JsonObject;
+                foreach (var field in fields)
+                {
+                    if (field.SiblingsInUse is { } inUse && !JsonNode.DeepEquals(obj[field.Name], was?[field.Name]))
+                        foreach (var idle in Idle(inUse, obj[field.Name], field)) obj.Remove(idle);
+                    if (obj.TryGetPropertyValue(field.Name, out var child))
+                        Cascade(child, DocumentNodes.VariantFor(field, obj), was?[field.Name]);
+                }
+                break;
+            case JsonArray array when meta.ElementType is { } elementMeta:
+                var held = current as JsonArray;
+                for (var i = 0; i < array.Count; i++)
+                    Cascade(array[i], elementMeta, held != null && i < held.Count ? held[i] : null);
+                break;
+        }
+    }
+
+    // Every slot the table governs is idle unless the value puts it in use.
+    private static IEnumerable<string> Idle(IReadOnlyDictionary<string, IReadOnlyList<string>> table, JsonNode? value, FieldMetadata field) =>
+        table.Values.SelectMany(v => v).Distinct(StringComparer.Ordinal).Except(InUse(table, value, field), StringComparer.Ordinal);
+
     // The siblings a governing member's value puts in use; an absent member reads as its declared default.
     private static IEnumerable<string> InUse(IReadOnlyDictionary<string, IReadOnlyList<string>> table, JsonNode? value, FieldMetadata field)
     {
@@ -371,9 +407,9 @@ internal static class DocumentEdit
         return name != null && table.TryGetValue(name, out var siblings) ? siblings : [];
     }
 
-    // The incoming leaf keeps every member it declares in the same shape; the outgoing leaf's own
-    // members, and any the incoming leaf shapes differently, are removed so the codec builds the new
-    // leaf from what it can hold. The discriminator leads, as the codec requires.
+    // The incoming leaf keeps every member it shapes alike; the outgoing leaf's own members, and any
+    // shaped differently, are removed so the codec builds the new leaf from what it can hold. The
+    // discriminator leads, as the codec requires.
     private static void SwitchLeaf(JsonObject owner, FieldMetadata ownerMeta, string? from, string to)
     {
         foreach (var member in ownerMeta.Fields!.Where(f => f.Variants != null && owner.ContainsKey(f.Name)))
@@ -411,6 +447,7 @@ internal static class DocumentEdit
             ? JsonNode.Parse(given.GetRawText())
             : DefaultElement(elementMeta);
         if (PreCheck(element, elementMeta, null, $"{spelled}[{array.Count}]") is { } refused) return refused;
+        Cascade(element, elementMeta, null);
         if (value is { } v && CheckErrorBuilder.Build(elementMeta, v, request.Resolve, request.Release, absentMeansNull: false) is { } linkError)
             return RecordEditResult.RefusedAt(RecordEditRefusal.InvalidFormLink, spelled, $"'{spelled}': {linkError}");
         array.Add(element);
@@ -546,7 +583,7 @@ internal static class DocumentEdit
             owner = inner;
         }
         var member = segments[^1];
-        if (bit.BackingNames.Count == 0)
+        if (bit.FlagName == null)
         {
             var raw = owner[member] is JsonValue held && held.TryGetValue<long>(out var flags) ? flags : 0;
             var next = set ? raw | bit.Bit : raw & ~bit.Bit;
@@ -555,169 +592,19 @@ internal static class DocumentEdit
         }
         else
         {
-            var name = bit.BackingNames.Single(m => long.Parse(m.BitValue!, CultureInfo.InvariantCulture) == bit.Bit).Value;
-            var names = (owner[member] as JsonArray)?.Select(n => n!.GetValue<string>()).Where(n => n != name).ToList() ?? [];
-            if (set) names.Add(name);
+            var names = (owner[member] as JsonArray)?.Select(n => n!.GetValue<string>()).Where(n => n != bit.FlagName).ToList() ?? [];
+            if (set) names.Add(bit.FlagName!);
             if (names.Count == 0) owner.Remove(member); else owner[member] = new JsonArray([.. names.Select(n => (JsonNode)n)]);
         }
         edited = owner;
         return null;
     }
 
-    private static bool IsBitSet(JsonObject record, SyntheticBit bit)
-    {
-        JsonNode? node = record;
-        foreach (var segment in bit.BackingPath.Split('.')) node = (node as JsonObject)?[segment];
-        return node switch
-        {
-            JsonValue raw when raw.TryGetValue<long>(out var flags) => (flags & bit.Bit) != 0,
-            JsonArray names => names.Any(n => bit.BackingNames.Any(m => m.Value == n!.GetValue<string>() && long.Parse(m.BitValue!, CultureInfo.InvariantCulture) == bit.Bit)),
-            _ => false,
-        };
-    }
-
-    // ── the silent-skip guard ───────────────────────────────────────────────
-
-    // What came back holds what was asked: every member the patch spelled is present, in whatever
-    // spelling the codec normalized it to, unless it was the default the codec omits. A member the
-    // codec dropped names the failure.
-    private static bool Subsumes(JsonNode? written, JsonNode? patched, FieldMetadata? meta, string path, out string dropped)
-    {
-        dropped = "";
-        if (patched is null) return true;
-        if (written is null)
-        {
-            if (IsDefaultLike(patched, meta)) return true;
-            dropped = path;
-            return false;
-        }
-        switch (patched)
-        {
-            case JsonObject po when written is JsonObject wo:
-                foreach (var (name, pv) in po)
-                {
-                    var memberMeta = meta?.Fields?.FirstOrDefault(f => f.Name == name) is { } f ? DocumentNodes.VariantFor(f, po) : null;
-                    var memberPath = path.Length == 0 ? name : $"{path}.{name}";
-                    if (!wo.TryGetPropertyValue(name, out var wv))
-                    {
-                        if (pv is null || IsDefaultLike(pv, memberMeta)) continue;
-                        dropped = memberPath;
-                        return false;
-                    }
-                    if (!Subsumes(wv, pv, memberMeta, memberPath, out dropped)) return false;
-                }
-                return true;
-            case JsonArray pa when written is JsonArray wa:
-                if (meta?.Type == "flags")
-                {
-                    if (FlagBits(wa, meta) is { } wb && FlagBits(pa, meta) is { } pb && wb == pb) return true;
-                    dropped = path;
-                    return false;
-                }
-                if (wa.Count != pa.Count)
-                {
-                    dropped = path;
-                    return false;
-                }
-                for (var i = 0; i < pa.Count; i++)
-                {
-                    if (!Subsumes(wa[i], pa[i], meta?.ElementType, $"{path}[{i}]", out dropped)) return false;
-                }
-                return true;
-            case JsonValue patchedLeaf:
-                if (written is JsonValue writtenLeaf && LeafEquivalent(writtenLeaf, patchedLeaf, meta)) return true;
-                dropped = path;
-                return false;
-            default:
-                dropped = path;
-                return false;
-        }
-    }
-
-    // What the codec may change in a leaf it kept: the spelling, never the value. Flags compare as
-    // bits, since the codec names a defined bit and spells an undefined one in hex.
-    private static bool LeafEquivalent(JsonValue written, JsonValue patched, FieldMetadata? meta)
-    {
-        var w = JsonSerializer.SerializeToElement(written);
-        var p = JsonSerializer.SerializeToElement(patched);
-        if (w.ValueKind != p.ValueKind) return false;
-        if (w.ValueKind != JsonValueKind.String) return DocumentNodes.SameValue(w, p);
-        var (ws, ps) = (w.GetString()!, p.GetString()!);
-        return meta?.Type switch
-        {
-            ByteSliceHex.HexApiType or "color" => string.Equals(ws.TrimStart('#'), ps.TrimStart('#'), StringComparison.OrdinalIgnoreCase)
-                || string.Equals(StripHexPrefix(ws), StripHexPrefix(ps), StringComparison.OrdinalIgnoreCase),
-            "formKey" => Mutagen.Bethesda.Plugins.FormKey.TryFactory(ws, out var wk) && Mutagen.Bethesda.Plugins.FormKey.TryFactory(ps, out var pk) && wk == pk,
-            "vector" => Components(ws).SequenceEqual(Components(ps)),
-            _ => string.Equals(ws, ps, StringComparison.Ordinal),
-        };
-    }
-
-    private static string StripHexPrefix(string text) =>
-        text.StartsWith("0x", StringComparison.OrdinalIgnoreCase) ? text[2..] : text;
-
-    private static IEnumerable<double> Components(string vector) =>
-        vector.Split(',').Select(c => double.TryParse(c.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var d) ? d : double.NaN);
-
-    // A flags array as the bits it names: a member by its declared bit, anything else as the
-    // number it spells (decimal or hex), which is how the codec spells a bit no member names.
-    private static long? FlagBits(JsonArray names, FieldMetadata? meta)
-    {
-        long bits = 0;
-        foreach (var name in names)
-        {
-            var text = name?.ToString() ?? "";
-            var member = meta?.EnumMembers.FirstOrDefault(m => m.Value == text);
-            if (member?.BitValue is { } declared) bits |= long.Parse(declared, CultureInfo.InvariantCulture);
-            else if (text.StartsWith("0x", StringComparison.OrdinalIgnoreCase) && long.TryParse(text.AsSpan(2), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var hex)) bits |= hex;
-            else if (long.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var number)) bits |= number;
-            else return null;
-        }
-        return bits;
-    }
-
-    private static bool IsDefaultLike(JsonNode? node, FieldMetadata? meta)
-    {
-        if (node is null) return true;
-        if (meta?.IsDiscriminator == true) return false;
-        if (meta?.Default is { } declared)
-        {
-            return declared is string[] flags && node is JsonArray names
-                ? names.Select(n => n?.ToString()).ToHashSet(StringComparer.Ordinal).SetEquals(flags)
-                : DocumentNodes.SameValue(JsonSerializer.SerializeToElement(node), JsonSerializer.SerializeToElement(declared));
-        }
-        return node switch
-        {
-            JsonValue value => IsZero(value, meta),
-            JsonArray array => array.Count == 0,
-            JsonObject obj => obj.All(p => IsDefaultLike(p.Value, meta?.Fields?.FirstOrDefault(f => f.Name == p.Key) is { } f ? DocumentNodes.VariantFor(f, obj) : null)),
-            _ => false,
-        };
-    }
-
-    private static bool IsZero(JsonValue value, FieldMetadata? meta)
-    {
-        var element = JsonSerializer.SerializeToElement(value);
-        return element.ValueKind switch
-        {
-            JsonValueKind.False => true,
-            JsonValueKind.Number => element.GetDouble().CompareTo(0d) == 0,
-            JsonValueKind.String => element.GetString() is { } s
-                && (s.Length == 0 || (s == "Null" && meta?.Type == "formKey") || (s == "[]" && meta?.Type == ByteSliceHex.HexApiType)),
-            _ => false,
-        };
-    }
-
     // ── walking ─────────────────────────────────────────────────────────────
 
-    private static JsonObject WalkPrefix(JsonObject root, IReadOnlyList<PathHop> prefix)
-    {
-        JsonNode? node = root;
-        foreach (var hop in prefix)
-            node = hop.Kind == PathHop.MemberKind ? (node as JsonObject)?[hop.Name!] : (node as JsonArray)?[hop.Index!.Value];
-        return node as JsonObject
+    private static JsonObject WalkPrefix(JsonObject root, IReadOnlyList<PathHop> prefix) =>
+        EmbeddedChildPath.Walk(root, prefix) as JsonObject
             ?? throw new InvalidOperationException($"The document has no object at {RecordEditEnvelope.Spell(prefix)}.");
-    }
 
     // The node's place from the root, by member name and by position, read after keyed arrays were
     // put in key order so the same chain addresses it in what the codec wrote back.

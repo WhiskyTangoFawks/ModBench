@@ -9,7 +9,7 @@ export interface RouteRecordPanelMessageDeps {
   // ADR-0041: the single write path, reached from the panel. Injected rather than imported so this
   // stays callable from a plain unit test. Also the FormKey picker's own search, reused by the
   // per-panel bundle below.
-  repository: Pick<PluginRepository, 'editRecordField' | 'searchRecords'>;
+  repository: Pick<PluginRepository, 'editRecord' | 'searchRecords'>;
   // A plain callback rather than a webview handle, so this router never has to know which panel
   // asked. plugin/origin ride along because a FormKey names a record, not which plugin's copy of
   // it this edit landed on.
@@ -178,9 +178,9 @@ async function editField(
   m: Extract<WebviewToExtension, { type: typeof WEBVIEW_TO_EXTENSION.EDIT_FIELD }>,
 ): Promise<void> {
   try {
-    // The webview still posts one member and its value; the host spells that as the one write
-    // shape the backend takes, until the webview posts the envelope itself.
-    const outcome = await deps.repository.editRecordField(m.formKey, m.plugin, m.origin, {
+    // The webview posts one member and its value; the host spells that as the one write shape
+    // the backend takes.
+    const outcome = await deps.repository.editRecord(m.formKey, m.plugin, m.origin, {
       op: 'set', path: [{ kind: 'member', name: m.fieldPath }], value: m.value,
     });
     if (outcome.applied) {

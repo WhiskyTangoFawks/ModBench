@@ -13,15 +13,15 @@ using static MEditService.Tests.TestSupport.Envelopes;
 
 namespace MEditService.Tests.Edits;
 
-/// <summary>Document text, envelope and metadata in; document text or one refusal out, with no
-/// index and no disk (ADR-0032). Every gesture is asserted as whole-document equality: the output
-/// is the input with exactly the edited path changed.</summary>
+/// <summary>Document text, envelope and metadata in; document text or one refusal out, no index
+/// and no disk (ADR-0032). Every gesture is asserted as whole-document equality: the output is the
+/// input with exactly the edited path changed.</summary>
 public sealed class DocumentEditTests
 {
     private static readonly IReadOnlyDictionary<string, RecordTableSchema> Schemas =
         SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4);
 
-    private readonly Fallout4Mod _mod = new(ModKey.FromFileName("DocEdit723.esp"), Fallout4Release.Fallout4);
+    private readonly Fallout4Mod _mod = new(ModKey.FromFileName("DocEdit.esp"), Fallout4Release.Fallout4);
     private readonly Dictionary<string, RecordLookupEntry> _lookup = new(StringComparer.Ordinal);
 
     private readonly Keyword _keyword;
@@ -533,7 +533,7 @@ public sealed class DocumentEditTests
     public void ChildOrderMember_IsCarriedThroughTheReserialize()
     {
         var quest = _mod.Quests.AddNew("Ordered");
-        var order = JsonNode.Parse("""{"DialogTopics": ["000801:DocEdit723.esp", "000802:DocEdit723.esp"]}""")!;
+        var order = JsonNode.Parse("""{"DialogTopics": ["000801:DocEdit.esp", "000802:DocEdit.esp"]}""")!;
         var before = SourceChildOrder.WithOrder(DocumentEdits.Serialize(quest), order);
 
         var after = Applied(before, "qust", SetAt(Json("\"Renamed\""), Member("EditorID")));
@@ -549,7 +549,7 @@ public sealed class DocumentEditTests
     {
         var before = DocumentEdits.Serialize(_quest);
 
-        var refusal = Apply(before, "qust", SetAt(Json($$"""[{"FormKey": "000900:DocEdit723.esp", "EditorID": "Topic"}]"""), Member("DialogTopics")), out var written);
+        var refusal = Apply(before, "qust", SetAt(Json($$"""[{"FormKey": "000900:DocEdit.esp", "EditorID": "Topic"}]"""), Member("DialogTopics")), out var written);
 
         // The per-record codec writes a folder-split child to its own file, never inline, so the
         // member the patch spelled comes back absent and the write is refused as dropped.
