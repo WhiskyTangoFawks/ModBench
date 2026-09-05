@@ -18,6 +18,7 @@ public class IndexAtomicityTests
     {
         var repo = new DuckDbRecordIndex(Reflector, Ddl, NullLogger.Instance);
         repo.Initialize(GameRelease.Fallout4);
+        repo.CreateRecordTypeViews();
         return repo;
     }
 

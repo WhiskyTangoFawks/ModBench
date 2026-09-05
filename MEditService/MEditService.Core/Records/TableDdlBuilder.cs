@@ -62,7 +62,7 @@ public sealed class TableDdlBuilder(SchemaReflector reflector)
               AND w.origin = {alias}.{originColumn}
         """;
 
-    public void CreateTables(DuckDBConnection connection, GameRelease release)
+    public static void CreateTables(DuckDBConnection connection)
     {
         Execute(connection, $"CREATE SCHEMA IF NOT EXISTS {MirrorSchema}");
         CreateRecordsTable(connection);
@@ -75,18 +75,16 @@ public sealed class TableDdlBuilder(SchemaReflector reflector)
         CreatePlacementTables(connection);
         CreateContainerChildTable(connection);
 
-        // ADR-0041: the reflector emits no per-type DDL; every record type, the header included, is a
-        // json_extract VIEW over `records` bearing the type's name, which keeps user filter SQL
-        // working.
-        var schemas = _reflector.GetSchemas(release);
-
-        // Views last, in dependency order: the registered views over every mirror table, then the
-        // Head views over the registered `records`/`records_committed`, then the per-type views over
-        // the registered `records` — so registration scopes all three layers through one predicate.
+        // Views after tables, in dependency order: the registered views over every mirror table, then
+        // the Head views over the registered `records`/`records_committed`.
         CreateRegisteredViews(connection);
         CreateHeadView(connection);
-        RecordViewBuilder.CreateViews(connection, schemas);
     }
+
+    // ADR-0041: one json_extract VIEW over the registered `records` per record type, header included.
+    // Apart from CreateTables because only user filter SQL reads them (ADR-0005).
+    public void CreateRecordTypeViews(DuckDBConnection connection, GameRelease release) =>
+        RecordViewBuilder.CreateViews(connection, _reflector.GetSchemas(release));
 
     // ADR-0001: the one "registered" predicate — a row answers iff a registrations row names its
     // (plugin, origin) — so C# reads and the SQL door cannot scope differently. Registered, not

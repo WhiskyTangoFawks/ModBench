@@ -7,9 +7,15 @@ namespace MEditService.Tests.Records;
 
 /// <summary>The views are the contract for user filter SQL and scripts, so they are tested by running SQL
 /// and checked against <c>ColumnSpec.Extract</c> rather than literals.</summary>
-public sealed class GeneratedViewTests(CutDownPluginFixture fixture) : IClassFixture<CutDownPluginFixture>
+public sealed class GeneratedViewTests : IClassFixture<CutDownPluginFixture>
 {
-    private readonly CutDownPluginFixture _fixture = fixture;
+    private readonly CutDownPluginFixture _fixture;
+
+    public GeneratedViewTests(CutDownPluginFixture fixture)
+    {
+        _fixture = fixture;
+        _fixture.Repo.CreateRecordTypeViews();
+    }
 
     private object? Scalar(string sql)
     {

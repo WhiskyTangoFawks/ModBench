@@ -50,6 +50,9 @@ public sealed class DuckDbRecordIndex : IRecordIndex
 
     public DuckDBConnection Connection => _indexStore.Connection;
 
+    private readonly TableDdlBuilder _ddlBuilder;
+    private bool _recordTypeViewsCreated;
+
     public DuckDbRecordIndex(
         SchemaReflector schemaReflector,
         TableDdlBuilder ddlBuilder,
@@ -57,8 +60,17 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         string? databasePath = null)
     {
         _schemaReflector = schemaReflector;
+        _ddlBuilder = ddlBuilder;
         _logger = logger;
-        _indexStore = new IndexStore(ddlBuilder, logger, databasePath);
+        _indexStore = new IndexStore(logger, databasePath);
+    }
+
+    // The SQL door's per-type views, created on the first filter rather than at Initialize (ADR-0005).
+    internal void CreateRecordTypeViews()
+    {
+        if (_recordTypeViewsCreated) return;
+        _ddlBuilder.CreateRecordTypeViews(Connection, _release);
+        _recordTypeViewsCreated = true;
     }
 
     // Reading a record back out of its document needs the release it was written under, and this
@@ -72,7 +84,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         // Before the schemas, not after: IndexStore's own version check throws away a file written
         // under a different shape *before* this process starts appending to tables it only half
         // recognizes.
-        _indexStore.Initialize(release, indexVersion);
+        _indexStore.Initialize(indexVersion);
 
         _schemas = _schemaReflector.GetSchemas(release);
         _release = release;
@@ -1187,6 +1199,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
             return;
         }
 
+        CreateRecordTypeViews();
         using var probeCmd = Connection.CreateCommand();
         probeCmd.CommandText = $"SELECT * FROM ({sql}) __probe LIMIT 0";
         using var probeReader = probeCmd.ExecuteReader();

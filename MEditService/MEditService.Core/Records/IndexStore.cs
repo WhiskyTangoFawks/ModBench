@@ -15,7 +15,6 @@ internal sealed class IndexStore
 {
     private const string FilesRelation = "mirror.files";
 
-    private readonly TableDdlBuilder _ddlBuilder;
     private readonly ILogger _logger;
     private readonly string? _databasePath;
 
@@ -26,9 +25,8 @@ internal sealed class IndexStore
 
     public DuckDBConnection Connection { get; private set; }
 
-    public IndexStore(TableDdlBuilder ddlBuilder, ILogger logger, string? databasePath)
+    public IndexStore(ILogger logger, string? databasePath)
     {
-        _ddlBuilder = ddlBuilder;
         _logger = logger;
         _databasePath = databasePath;
         Connection = Open();
@@ -80,11 +78,11 @@ internal sealed class IndexStore
 
     /// <summary>Discards a file written under another <see cref="IndexVersion"/> (whole-file rebuild,
     /// never partial), then creates the fixed tables.</summary>
-    public void Initialize(GameRelease release, string indexVersion)
+    public void Initialize(string indexVersion)
     {
         _indexVersion = indexVersion;
         DiscardFileWrittenUnderAnotherVersion();
-        _ddlBuilder.CreateTables(Connection, release);
+        TableDdlBuilder.CreateTables(Connection);
     }
 
     // ADR-0001: a codec or schema version change invalidates the whole file, and there is no
