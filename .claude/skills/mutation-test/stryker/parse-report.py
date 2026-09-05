@@ -138,11 +138,9 @@ def collect_results(data: dict, diff_only: bool, repo_root: Path | None, target:
 
 
 def audit_or_die(data: dict, report_path: Path) -> None:
-    """A report in which no mutant was tested is a mis-scope, not a pass.
-
-    A filtered-out run and a clean run both print "No issues found" otherwise, and
-    the failure reads in the reassuring direction. Zero audited mutants must
-    therefore be louder than any survivor, never quieter."""
+    """A report in which no mutant was tested is a mis-scope, not a pass: a filtered-out run would
+    print the same "No issues found" as a clean one, so zero audited mutants is louder than any
+    survivor."""
     statuses = collections.Counter()
     reasons = collections.Counter()
     for fd in data.get("files", {}).values():

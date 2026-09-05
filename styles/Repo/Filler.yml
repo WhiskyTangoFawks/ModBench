@@ -1,0 +1,12 @@
+extends: substitution
+message: "'%s' for '%s'."
+level: warning
+ignorecase: true
+scope:
+  - comment
+  - text
+action:
+  name: replace
+swap:
+  in order to: to
+  due to the fact that: because

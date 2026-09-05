@@ -8,7 +8,6 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Tests.RealData;
 
-/// <summary>One Track of the real plugin per class, shared by every fact.</summary>
 public sealed class CompileRoundTripGateFixture : IDisposable
 {
     public string ModFolder { get; } = Directory.CreateTempSubdirectory("medit-compile-roundtrip-").FullName;
