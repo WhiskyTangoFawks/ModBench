@@ -239,7 +239,7 @@ Each `.meta`-suppressed file in `downloads/` becomes one `DownloadNode` `TreeIte
   bar, and its structural-vs-flat toggle is an option on the widget, not the widget itself —
   Downloads reuses the one widget, with no toggle.
 - **No manual Refresh** — no view has one. Refresh is a single workspace-scope
-  command on the [Loadout header](loadout-header.md) that re-reads every Mod-Management source
+  command on the [Loadout header](containers.md) that re-reads every Mod-Management source
   together. It remains only a safety net for filesystems with unreliable watch events:
   `downloadsWatcher.ts` debounces filesystem events on `downloads/` and invalidates the
   provider automatically, so every mutation and every external file-manager drop is picked up
