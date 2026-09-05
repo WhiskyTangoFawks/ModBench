@@ -53,11 +53,14 @@ class ValeRules(unittest.TestCase):
         self.assertIn("Repo.Date", vale("// maintainer ruling 2026-09-01\nconst a = 1;\n", ".ts"))
         self.assertIn("Repo.Date", vale("Ruling 2026-09-01: the grid renders the stack.\n", ".md"))
 
-    def test_a_date_in_a_string_literal_is_data(self):
-        self.assertNotIn("Repo.Date", vale('const d = "2024-01-01";\n', ".ts", config=".vale-raw.ini"))
+    def test_the_raw_pass_treats_a_date_in_a_string_literal_as_data(self):
+        alerts = vale(f'const d = "{HISTORY} 2024-01-01";\n', ".ts", config=".vale-raw.ini")
+        self.assertIn("Repo.History", alerts)
+        self.assertNotIn("Repo.Date", alerts)
 
     def test_our_ticket_numbers_anywhere_in_text(self):
-        for text in (f"// see {TICKET}\n", f"// fixed ({TICKET})\n", f"x = 'issue {TICKET}'\n"):
+        for text in (f"// see {TICKET}\n", f"// fixed ({TICKET})\n", f"x = 'issue {TICKET}'\n",
+                     f"// two fixes, {TICKET} among them\n"):
             with self.subTest(text=text):
                 self.assertIn("Repo.Ticket", vale(text, ".ts", config=".vale-raw.ini"))
         self.assertIn("Repo.Ticket", vale(f"See {TICKET}.\n", ".md"))
@@ -101,6 +104,14 @@ class WriteHook(unittest.TestCase):
         run = hook("eslint.config.mjs", "// " + "word " * 41 + "\nexport default [];\n")
         self.assertEqual(run.returncode, 2, run.stderr)
         self.assertIn("40", run.stderr)
+
+    def test_checks_an_edit_by_its_new_string(self):
+        run = hook("a.ts", f"// this {HISTORY} did X\n", tool="Edit")
+        self.assertEqual(run.returncode, 2, run.stderr)
+
+    def test_refuses_a_history_string_literal_in_an_mjs_file(self):
+        run = hook("esbuild.mjs", f'const s = "{HISTORY} held";\n')
+        self.assertEqual(run.returncode, 2, run.stderr)
 
     def test_refuses_a_ticket_number_in_a_config_file(self):
         run = hook("a.yml", f"# from {TICKET}\nkey: 1\n")
