@@ -28,7 +28,26 @@ def hook(path, text, tool="Write"):
                           capture_output=True, text=True)
 
 
+class ValeRules(unittest.TestCase):
+    def test_two_crefs_in_one_doc_comment(self):
+        two = '/// <summary>See <see cref="B"/> and <see cref="C"/>.</summary>\npublic int X;\n'
+        self.assertIn("Repo.Cref", vale(two, ".cs"))
+
+    def test_two_links_in_one_ts_doc_comment(self):
+        two = "/** See {@link B} and {@link C}. */\nexport const x = 1;\n"
+        self.assertIn("Repo.Cref", vale(two, ".ts"))
+
+    def test_one_cref_passes(self):
+        one = '/// <summary>See <see cref="B"/>.</summary>\npublic int X;\n'
+        self.assertNotIn("Repo.Cref", vale(one, ".cs"))
+
+
 class WriteHook(unittest.TestCase):
+    def test_refuses_two_crefs(self):
+        run = hook("a.cs", '/// <summary>See <see cref="B"/> and <see cref="C"/>.</summary>\npublic int X;\n')
+        self.assertEqual(run.returncode, 2, run.stderr)
+
+
     def test_refuses_a_history_word_in_a_comment(self):
         run = hook("a.ts", f"// this {HISTORY} did X\nexport const a = 1;\n")
         self.assertEqual(run.returncode, 2, run.stderr)

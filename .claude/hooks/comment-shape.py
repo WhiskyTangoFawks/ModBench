@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Structural comment checks Vale cannot express: doc block over three lines, doc comment on a
-test method, on a private member, carrying more than one cref, a History token inside a string
-literal, or a ticket-number citation anywhere. Exit 1 on any hit.
+test method, on a private member, a History token inside a string literal, or a ticket-number
+citation anywhere. Exit 1 on any hit.
 
 Usage: comment-shape.py FILE...            check files
        comment-shape.py --as PATH < text   check a fragment as if it were PATH"""
@@ -13,7 +13,6 @@ TEST_FILE = re.compile(r"(Tests\.cs|\.test\.tsx?)$")
 CS_METHOD = re.compile(r"^\s*(?:public|private|internal|protected|static|async|override|virtual)\b[\w<>\[\],.?\s]*\s\w+\s*(?:<[^>]*>)?\s*\(")
 TS_TEST_METHOD = re.compile(r"^\s*(?:(?:it|test|describe)(?:\.\w+)?\s*\(|(?:export\s+)?(?:async\s+)?function\s+\w+|(?:public|private|protected|static|async|\s)*\w+\s*\([^)]*\)\s*(?::\s*[^{]+)?\{)")
 TS_TOP_LEVEL_DECL = re.compile(r"^(?:async\s+)?(?:function|const|let|class|interface|type|enum|abstract class)\s")
-CREF = re.compile(r"cref=|\{@link\s")
 HISTORY = re.compile(
     r"\b(previously|used to|no longer|originally|pre-fix|formerly)\b", re.IGNORECASE)
 
@@ -128,9 +127,6 @@ def check(path, text):
         n = end - start + 1
         if n > MAX_LINES:
             hits.append(f"{where}: doc comment is {n} lines; the cap is {MAX_LINES}")
-        block = "\n".join(lines[start:end + 1])
-        if len(CREF.findall(block)) > 1:
-            hits.append(f"{where}: more than one cref in a doc comment")
         target = next_code_line(lines, end)
         stripped = target.strip()
         if is_cs:
