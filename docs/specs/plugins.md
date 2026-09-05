@@ -512,7 +512,7 @@ touches the leading slot.** The checkbox/lock position is reserved for exactly o
 section is icon, description and tooltip only.
 
 **Load-failure decoration (ADR-0037).** A plugin that fails to open or parse is
-skipped so the rest of the load order still loads (`LoadOrder.LoadFailures`), but its row is
+skipped so the rest of the load order still loads (`LoadOrder.Failures`), but its row is
 never dropped — Mod Management builds rows from `plugins.txt`, not from which plugins the load order
 managed to index, so the row was already there. `PluginsTreeComposite` decorates it with its
 recorded failure reason ("Failed to load: `{reason}`") the same way it decorates a master issue;
@@ -751,7 +751,7 @@ overflow, then native **Collapse All** last.
   alongside or extends `statusChecker.ts`.
 - **Load-order-derived master classification** (ADR-0037): `MasterResolution.Classify`
   (`MEditService.Core/Queries/`), a pure function over data the load order already has
-  (`LoadOrder.Plugins`, `LoadOrder.LoadFailures`) — no Mutagen re-read. Consulted once per
+  (`LoadOrder.Plugins`, `LoadOrder.Failures`) — no Mutagen re-read. Consulted once per
   `GET /plugins` call and reported on `PluginResponse.MasterIssues`; distinguishes `DirectlyMissing`
   from `Unloadable` and never cascades (only a plugin's own `Masters` list is consulted).
 - **`PluginListProvider`** (`TreeDataProvider`, `modmanager/`): rows only, a
