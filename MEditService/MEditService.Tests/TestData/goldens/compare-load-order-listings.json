@@ -7,6 +7,7 @@
       "IsWinner": false,
       "LoadOrderIndex": 0,
       "Origin": "Data",
+      "ParseDiagnosis": null,
       "Plugin": "Base.esm",
       "WorkingTreeState": "None"
     },
@@ -17,6 +18,7 @@
       "IsWinner": false,
       "LoadOrderIndex": 1,
       "Origin": "Data",
+      "ParseDiagnosis": null,
       "Plugin": "Mid.esp",
       "WorkingTreeState": "None"
     },
@@ -27,6 +29,7 @@
       "IsWinner": true,
       "LoadOrderIndex": 2,
       "Origin": "Data",
+      "ParseDiagnosis": null,
       "Plugin": "Top.esp",
       "WorkingTreeState": "None"
     },
@@ -37,6 +40,7 @@
       "IsWinner": true,
       "LoadOrderIndex": 1,
       "Origin": "Data",
+      "ParseDiagnosis": null,
       "Plugin": "Mid.esp",
       "WorkingTreeState": "None"
     },
@@ -47,6 +51,7 @@
       "IsWinner": true,
       "LoadOrderIndex": 0,
       "Origin": "Data",
+      "ParseDiagnosis": null,
       "Plugin": "Base.esm",
       "WorkingTreeState": "None"
     }
@@ -56,16 +61,19 @@
       {
         "Count": 1,
         "DisplayName": "Constructible Object",
+        "HasParseFailure": false,
         "Type": "cobj"
       },
       {
         "Count": 2,
         "DisplayName": "Non-Player Character",
+        "HasParseFailure": false,
         "Type": "npc_"
       },
       {
         "Count": 1,
         "DisplayName": "Weapon",
+        "HasParseFailure": false,
         "Type": "weap"
       }
     ],
@@ -73,11 +81,13 @@
       {
         "Count": 2,
         "DisplayName": "Non-Player Character",
+        "HasParseFailure": false,
         "Type": "npc_"
       },
       {
         "Count": 1,
         "DisplayName": "Weapon",
+        "HasParseFailure": false,
         "Type": "weap"
       }
     ],
@@ -85,11 +95,13 @@
       {
         "Count": 1,
         "DisplayName": "Constructible Object",
+        "HasParseFailure": false,
         "Type": "cobj"
       },
       {
         "Count": 1,
         "DisplayName": "Non-Player Character",
+        "HasParseFailure": false,
         "Type": "npc_"
       }
     ]

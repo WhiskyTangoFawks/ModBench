@@ -43,4 +43,4 @@ public sealed record RecordQuery(
     int Offset = 0);
 
 /// <summary>One record type's row count for one plugin, from one grouped query.</summary>
-public record RecordTypeCount(string Type, int Count);
+public record RecordTypeCount(string Type, int Count, bool HasParseFailure);

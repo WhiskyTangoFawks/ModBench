@@ -122,7 +122,8 @@ public sealed class TableDdlBuilder(SchemaReflector reflector)
                 editor_id      VARCHAR,
                 "ref"          VARCHAR NOT NULL DEFAULT '{SourceRef.Committed}',
                 body           VARCHAR NOT NULL,
-                content_hash   VARCHAR NOT NULL
+                content_hash   VARCHAR NOT NULL,
+                parse_diagnosis VARCHAR
             )
             """);
 
@@ -150,7 +151,8 @@ public sealed class TableDdlBuilder(SchemaReflector reflector)
                 editor_id      VARCHAR,
                 "ref"          VARCHAR NOT NULL DEFAULT '{SourceRef.Committed}',
                 body           VARCHAR NOT NULL,
-                content_hash   VARCHAR NOT NULL
+                content_hash   VARCHAR NOT NULL,
+                parse_diagnosis VARCHAR
             )
             """);
 
@@ -173,10 +175,10 @@ public sealed class TableDdlBuilder(SchemaReflector reflector)
         // in `mirror`, where an unqualified `records` is the unscoped mirror table.
         Execute(connection, $"""
             CREATE OR REPLACE VIEW {HeadRowsRelation} AS
-            SELECT form_key, plugin, origin, record_type, editor_id, load_order_idx, "ref", body, content_hash
+            SELECT form_key, plugin, origin, record_type, editor_id, load_order_idx, "ref", body, content_hash, parse_diagnosis
             FROM main.records_committed
             UNION ALL
-            SELECT form_key, plugin, origin, record_type, editor_id, load_order_idx, "ref", body, content_hash
+            SELECT form_key, plugin, origin, record_type, editor_id, load_order_idx, "ref", body, content_hash, parse_diagnosis
             FROM main.records WHERE "ref" = '{SourceRef.Committed}'
             """);
 
@@ -187,7 +189,7 @@ public sealed class TableDdlBuilder(SchemaReflector reflector)
             CREATE OR REPLACE VIEW records_head AS
             SELECT h.form_key, h.plugin, h.origin, h.record_type, h.editor_id, h.load_order_idx,
                    (w.form_key IS NOT NULL) AS is_winner,
-                   h."ref", h.body, h.content_hash
+                   h."ref", h.body, h.content_hash, h.parse_diagnosis
             FROM {HeadRowsRelation} h
             {WinnerJoin("h", RecordRef.Head, "plugin", "origin")}
             """);

@@ -620,6 +620,34 @@ describe('PluginsTreeComposite — load-failure decoration (ADR-0037 AC7)', () =
   });
 });
 
+// A plugin that loaded but holds a record Mutagen could not read carries the same failure prefix
+// as a failed plugin, from the fact the plugin listing already answers.
+describe('parse-failure decoration', () => {
+  it('flags a plugin holding an unreadable record, and leaves every other row alone', async () => {
+    const { composite, render } = make([PLUGIN_ROW, OTHER_ROW]);
+    await render();
+
+    composite.setLoadOrder(
+      new Set(['A.esp', 'B.esp']), new Set(), new Map(), new Map(), new Set(['a.esp']));
+
+    const flagged = composite.getTreeItem(PLUGIN_ROW);
+    expect((flagged.iconPath as vscode.ThemeIcon).id).toBe('error');
+    expect(flagged.tooltip).toContain('could not be read');
+    expect(composite.getTreeItem(OTHER_ROW).iconPath).toBeUndefined();
+  });
+
+  it('clears once a later reconcile reports the plugin whole', async () => {
+    const { composite, render } = make([PLUGIN_ROW]);
+    await render();
+    composite.setLoadOrder(new Set(['A.esp']), new Set(), new Map(), new Map(), new Set(['a.esp']));
+    expect(composite.getTreeItem(PLUGIN_ROW).iconPath).toBeDefined();
+
+    composite.setLoadOrder(new Set(['A.esp']));
+
+    expect(composite.getTreeItem(PLUGIN_ROW).iconPath).toBeUndefined();
+  });
+});
+
 // The malformed-plugin diagnoses join the same backend-decoration chain at warning tier, below a
 // load failure or master issue, since a malformed plugin still loads and plays.
 describe('malformed-plugin diagnosis decoration', () => {

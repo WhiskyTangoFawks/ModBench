@@ -36,6 +36,7 @@ function mockPlugin(over: Partial<PluginMetadata> & Pick<PluginMetadata, 'name' 
     isLight: false, isMaster: false, masters: [], recordCount: 0, isImmutable: false,
     inLoadOrder: true, enabled: true, winning: true, masterIssues: [], hasMatchingRecords: true,
     isTracked: false,
+    hasParseFailure: false,
     ...over,
   };
 }

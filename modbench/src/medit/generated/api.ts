@@ -755,6 +755,7 @@ export interface components {
             /** Format: int32 */
             count: number;
             displayName: string;
+            hasParseFailure: boolean;
         };
         PluginResponse: {
             name: string;
@@ -775,6 +776,7 @@ export interface components {
             winning: boolean;
             hasMatchingRecords: boolean;
             isTracked: boolean;
+            hasParseFailure: boolean;
         };
         ProblemDetails: {
             type?: string | null;
@@ -881,6 +883,7 @@ export interface components {
             origin: string;
             workingTreeState: components["schemas"]["WorkingTreeState"];
             hasContainerChildren: boolean;
+            parseDiagnosis?: string | null;
         };
         RecordSummaryPagedResult: {
             items: components["schemas"]["RecordSummary"][];

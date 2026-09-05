@@ -518,7 +518,8 @@ public sealed class DuckDbRecordIndex : IRecordIndex
                 EXISTS (
                     SELECT 1 FROM container_child cc
                     WHERE cc.parent_form_key = r.form_key AND cc.plugin = r.plugin AND cc.origin = r.origin
-                ) AS has_container_children
+                ) AS has_container_children,
+                r.parse_diagnosis
                 """;
 
             using var countCmd = owner.Connection.CreateCommand();
@@ -552,13 +553,14 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         {
             var (where, paramValues) = BuildWhere(plugin.Name, null, owner._filterActive, plugin.Origin, recordTypes: null);
             using var cmd = owner.Connection.CreateCommand();
-            cmd.CommandText = $"SELECT record_type, COUNT(*) FROM {records}{where} GROUP BY record_type";
+            cmd.CommandText =
+                $"SELECT record_type, COUNT(*), BOOL_OR(parse_diagnosis IS NOT NULL) FROM {records}{where} GROUP BY record_type";
             AddParams(cmd, paramValues);
             using var reader = cmd.ExecuteReader();
 
             var counts = new List<RecordTypeCount>();
             while (reader.Read())
-                counts.Add(new RecordTypeCount(reader.GetString(0), (int)reader.GetInt64(1)));
+                counts.Add(new RecordTypeCount(reader.GetString(0), (int)reader.GetInt64(1), reader.GetBoolean(2)));
             return counts;
         }
 
@@ -633,6 +635,20 @@ public sealed class DuckDbRecordIndex : IRecordIndex
             var result = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             while (reader.Read())
                 result.Add(reader.GetString(0));
+            return result;
+        }
+
+        // Unfiltered, unlike GetPluginsWithMatchingRecords: a record filter narrows what the tree
+        // lists, never whether the plugin holds something unreadable.
+        public IReadOnlySet<string> GetPluginsWithParseFailures()
+        {
+            using var cmd = owner.Connection.CreateCommand();
+            cmd.CommandText = $"SELECT DISTINCT plugin, origin FROM {records} WHERE parse_diagnosis IS NOT NULL";
+            using var reader = cmd.ExecuteReader();
+
+            var result = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            while (reader.Read())
+                result.Add(ColumnKey.Of(reader.GetString(0), reader.GetString(1)));
             return result;
         }
 
@@ -798,12 +814,13 @@ public sealed class DuckDbRecordIndex : IRecordIndex
             return colon > 0 ? formKey[(colon + 1)..] : null;
         }
 
-        // Column 8 is the correlated container_child EXISTS Search's SELECT adds, read positionally
-        // like columns 6/7.
+        // Column 8 is the correlated container_child EXISTS Search's SELECT adds, column 9 the
+        // parse diagnosis, read positionally like columns 6/7.
         private static RecordSummary ReadSummary(DuckDBDataReader reader) =>
             new(reader.GetString(0), reader.GetString(1), LoadOrderSortKey(reader, 2),
                 reader.GetBoolean(3), reader.IsDBNull(4) ? null : reader.GetString(4), reader.GetString(5),
-                ReadWorkingTreeState(reader), reader.GetBoolean(8));
+                ReadWorkingTreeState(reader), reader.GetBoolean(8),
+                reader.IsDBNull(9) ? null : reader.GetString(9));
 
         // origin (ADR-0036): nullable and independent of plugin — a *filter*, not an identity field.
         // Defaults to "no constraint" so a plugin-only or filter-less call returns every origin's rows.

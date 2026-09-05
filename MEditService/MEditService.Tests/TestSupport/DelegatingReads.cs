@@ -19,6 +19,8 @@ internal abstract class DelegatingReads(IRecordReads inner) : IRecordReads
     public virtual IReadOnlyList<ReferenceResult> GetReferencedBy(string targetFormKey) => Inner.GetReferencedBy(targetFormKey);
     public virtual IReadOnlySet<string> GetPluginsWithMatchingRecords(IEnumerable<string> tableNames) =>
         Inner.GetPluginsWithMatchingRecords(tableNames);
+
+    public virtual IReadOnlySet<string> GetPluginsWithParseFailures() => Inner.GetPluginsWithParseFailures();
     public virtual IReadOnlyList<string> GetNativeFormKeys(PluginKey plugin) => Inner.GetNativeFormKeys(plugin);
     public virtual IReadOnlyList<string> GetEffectiveMasters(PluginKey plugin) => Inner.GetEffectiveMasters(plugin);
     public virtual IReadOnlyList<CellLocationSummary> GetWorldspaceCells(PluginKey plugin, string worldspaceFormKey) =>

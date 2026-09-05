@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Runtime.ExceptionServices;
 using System.Text;
+using System.Text.Json;
 using DuckDB.NET.Data;
 using MEditService.Core.Schema;
 using MEditService.Core.Serialization;
@@ -44,10 +45,10 @@ internal sealed class PluginIngest
     ];
 
     // Everything the index derives from one record, computed off the appender thread; only writing
-    // it is sequential.
+    // it is sequential. ParseDiagnosis is null for a record whose document was produced.
     private sealed record PreparedRecord(
         IMajorRecordGetter Record, byte[] Body, string ContentHash, List<FormRef> Refs,
-        List<ContainerChildRow> ChildRows);
+        List<ContainerChildRow> ChildRows, string? EditorId, string? ParseDiagnosis);
 
     private sealed class RefCounters
     {
@@ -186,7 +187,7 @@ internal sealed class PluginIngest
         var body = _codec.SerializeToBytesAsync(record, gameRelease).GetAwaiter().GetResult();
         // Hashed from the codec's own bytes rather than a string, so the hash is defined by what the
         // source file would contain.
-        return new PreparedRecord(record, body, GitBlobHash.Of(body), refs, childRows);
+        return new PreparedRecord(record, body, GitBlobHash.Of(body), refs, childRows, record.EditorID, ParseDiagnosis: null);
     }
 
     private static void AppendPrepared(
@@ -199,13 +200,17 @@ internal sealed class PluginIngest
         row.AppendValue(plugin);
         row.AppendValue(origin);
         row.AppendValue(recordType);
-        if (record.EditorID is { } editorId)
+        if (prepared.EditorId is { } editorId)
             row.AppendValue(editorId);
         else
             row.AppendNullValue();
         row.AppendValue(SourceRef.Committed);
         row.AppendValue(Encoding.UTF8.GetString(prepared.Body));
         row.AppendValue(prepared.ContentHash);
+        if (prepared.ParseDiagnosis is { } diagnosis)
+            row.AppendValue(diagnosis);
+        else
+            row.AppendNullValue();
         row.EndRow();
     }
 
@@ -267,16 +272,16 @@ internal sealed class PluginIngest
                 {
                     _logger.LogError(ex,
                         "Failed to append {RecordType} record {FormKey} ({EditorID}) from {Plugin}",
-                        tableName, record.FormKey, record.EditorID, plugin);
+                        tableName, record.FormKey, p.EditorId, plugin);
                     throw;
                 }
                 refs.AddRange(p.Refs);
                 containerChildRows.AddRange(p.ChildRows);
-                lookupRows.Add((record.FormKey.ToString(), tableName, record.EditorID));
+                lookupRows.Add((record.FormKey.ToString(), tableName, p.EditorId));
                 if (_logger.IsEnabled(LogLevel.Trace))
                 {
                     _logger.LogTrace("Appended {RecordType} record {FormKey} ({EditorID}) from {Plugin}",
-                        tableName, record.FormKey, record.EditorID, plugin);
+                        tableName, record.FormKey, p.EditorId, plugin);
                 }
             }
             counters.AppendMs += batchTimer.ElapsedMilliseconds;
@@ -296,13 +301,28 @@ internal sealed class PluginIngest
         }
         catch (Exception ex)
         {
-            // Its own message, not AppendPrepared's: nothing has been appended when this fires —
-            // the serialize, hash, ref walk or child enumeration failed for this record.
-            _logger.LogError(ex,
-                "Failed to prepare {RecordType} record {FormKey} ({EditorID}) from {Plugin}",
-                tableName, record.FormKey, record.EditorID, plugin);
-            throw;
+            var editorId = ReadEditorIdOrNull(record);
+            _logger.LogWarning(ex,
+                "Could not read {RecordType} record {FormKey} ({EditorID}) from {Plugin}; indexing it with its parse diagnosis",
+                tableName, record.FormKey, editorId, plugin);
+            return ParseFailed(record, editorId, PluginDiagnosis.FromParseException(ex).Describe());
         }
+    }
+
+    // No refs and no child rows: the walks that would produce them are the ones that just failed.
+    private static PreparedRecord ParseFailed(IMajorRecordGetter record, string? editorId, string diagnosis)
+    {
+        var body = Encoding.UTF8.GetBytes(
+            editorId == null ? "{}" : $"{{\"EditorID\":{JsonSerializer.Serialize(editorId)}}}");
+        return new PreparedRecord(record, body, GitBlobHash.Of(body), [], [], editorId, diagnosis);
+    }
+
+    // The EditorID of an unreadable record is read through the same lazy Mutagen field access that
+    // just threw, so it answers null rather than taking the plugin down with it.
+    private static string? ReadEditorIdOrNull(IMajorRecordGetter record)
+    {
+        try { return record.EditorID; }
+        catch (Exception) { return null; }
     }
 
     // ADR-0023: populate the worldspace-tree side tables from the GRUP hierarchy that

@@ -1,10 +1,10 @@
 import { describe, it, expect, vi } from 'vitest';
 import type { PluginMetadata, RecordSummary, ContainerChildSummary } from '../ApiClient';
 import type { PluginRepository, RecordPage } from '../PluginRepository';
-import { TreeItem, TreeItemCollapsibleState, EventEmitter, ThemeIcon, uriFrom } from '../../test/vscodeMock';
+import { TreeItem, TreeItemCollapsibleState, EventEmitter, ThemeIcon, ThemeColor, uriFrom } from '../../test/vscodeMock';
 
 vi.mock('vscode', () => ({
-  TreeItem, TreeItemCollapsibleState, EventEmitter, ThemeIcon, Uri: { from: uriFrom },
+  TreeItem, TreeItemCollapsibleState, EventEmitter, ThemeIcon, ThemeColor, Uri: { from: uriFrom },
 }));
 
 import {
@@ -33,6 +33,7 @@ function makePlugin(i: number): PluginMetadata {
     masterIssues: [],
     hasMatchingRecords: true,
     isTracked: false,
+    hasParseFailure: false,
   };
 }
 
@@ -54,7 +55,7 @@ function makeRecord(
 
 function makeRepository(overrides: Partial<{
   plugins: PluginMetadata[];
-  recordTypes: { type: string; count: number; displayName?: string }[];
+  recordTypes: { type: string; count: number; displayName?: string; hasParseFailure?: boolean }[];
   records: RecordPage;
 }> = {}): PluginRepository {
   return {
@@ -1160,3 +1161,35 @@ describe('PluginTreeProvider.getChildren(RecordNode) — container children', ()
   });
 });
 
+// ── the failure prefix ────────────────────────────────────────────────────────
+
+describe('the failure prefix', () => {
+  it('marks a record whose document could not be read, and only that record', async () => {
+    const unreadable = { ...makeRecord(0), parseDiagnosis: 'Perk 0000EF — unknown: bad flag' };
+    const repo = makeRepository({ records: { items: [unreadable, makeRecord(1)], total: 2 } });
+    const provider = new PluginTreeProvider(repo);
+    const [typeNode] = await provider.getPluginChildren('Plugin0.esp') as RecordTypeNode[];
+
+    const [failed, healthy] = await provider.getChildren(typeNode) as RecordNode[];
+
+    expect((failed.iconPath as ThemeIcon).id).toBe('error');
+    expect(failed.tooltip).toContain('Perk 0000EF — unknown: bad flag');
+    expect(healthy.iconPath).toBeUndefined();
+  });
+
+  it('marks the record-type node holding an unreadable record, and only that node', async () => {
+    const repo = makeRepository({
+      recordTypes: [
+        { type: 'perk', count: 2, displayName: 'Perk', hasParseFailure: true },
+        { type: 'WEAP', count: 5, displayName: 'Weapon', hasParseFailure: false },
+      ],
+    });
+    const provider = new PluginTreeProvider(repo);
+
+    const [perk, weap] = await provider.getPluginChildren('Plugin0.esp') as RecordTypeNode[];
+
+    expect((perk.iconPath as ThemeIcon).id).toBe('error');
+    expect(perk.description).toBe('2');
+    expect(weap.iconPath).toBeUndefined();
+  });
+});

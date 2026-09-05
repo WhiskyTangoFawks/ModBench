@@ -21,6 +21,13 @@ function formId(formKey: string): string {
   return formKey.split(':')[0];
 }
 
+// ADR-0037's failure prefix, the one the composite puts on a failed plugin row. The backend says
+// which nodes hold an unreadable record, so nothing here walks children.
+function markFailure(item: vscode.TreeItem, tooltip: string): void {
+  item.iconPath = new vscode.ThemeIcon('error', new vscode.ThemeColor('problemsErrorIcon.foreground'));
+  item.tooltip = tooltip;
+}
+
 // This provider deliberately has no plugin-row node — the merged tree's plugin rows are
 // modmanager/PluginListProvider's. Do not reintroduce one: reconciling a "pluginImmutable"
 // contextValue with that side's read-only-ness story is an open question.
@@ -35,13 +42,27 @@ export class RecordTypeNode extends vscode.TreeItem {
     /** ADR-0036: which copy of `plugin` this node browses, or undefined for an ordinary
      *  load-order plugin (the backend resolves that case; a filename is unambiguous there). */
     public readonly origin?: string,
+    hasParseFailure = false,
   ) {
     // Label is the xEdit-parity display name ("Activator"); recordType (the raw
     // 4-char signature, e.g. "acti") stays the internal id — cache key, contextValue, commands.
     super(displayName, vscode.TreeItemCollapsibleState.Collapsed);
     this.description = count.toLocaleString();
     this.contextValue = 'recordType';
+    if (hasParseFailure) markFailure(this, `${displayName} holds a record that could not be read.`);
   }
+}
+
+// The contextValues state, on the row, refusals the backend would otherwise reach only after
+// walking the whole gesture. FormKey shape is Mutagen's own "<hex6>:<ModKey>", so the defining
+// plugin is everything after the first colon.
+function recordContextValue(record: RecordSummary, immutable: boolean, tracked: boolean): string {
+  if (immutable) return 'recordImmutable';
+  // toLowerCase, not localeCompare: matches the backend's OrdinalIgnoreCase filename semantics
+  // without host-locale hazards, and is the comparison renumberConfirm.ts already uses.
+  const originModKey = record.formKey.slice(record.formKey.indexOf(':') + 1);
+  if (originModKey.toLowerCase() !== record.plugin.toLowerCase()) return 'recordOverride';
+  return tracked ? 'recordTracked' : 'recordUntracked';
 }
 
 export class RecordNode extends vscode.TreeItem {
@@ -69,16 +90,7 @@ export class RecordNode extends vscode.TreeItem {
     const label = record.editorId ? `${record.editorId} [${record.formKey}]` : record.formKey;
     const collapsible = containerChildType && hasContainerChildren;
     super(label, collapsible ? vscode.TreeItemCollapsibleState.Collapsed : vscode.TreeItemCollapsibleState.None);
-    // FormKey shape is Mutagen's own "<hex6>:<ModKey>", so the origin is everything after the
-    // first colon. The contextValues below state, on the row, refusals the backend would
-    // otherwise reach only after walking the whole gesture.
-    const originModKey = record.formKey.slice(record.formKey.indexOf(':') + 1);
-    // toLowerCase, not localeCompare: matches the backend's OrdinalIgnoreCase filename semantics
-    // without host-locale hazards, and is the comparison renumberConfirm.ts already uses.
-    const isNative = originModKey.toLowerCase() === record.plugin.toLowerCase();
-    if (immutable) this.contextValue = 'recordImmutable';
-    else if (!isNative) this.contextValue = 'recordOverride';
-    else this.contextValue = tracked ? 'recordTracked' : 'recordUntracked';
+    this.contextValue = recordContextValue(record, immutable, tracked);
     this.command = {
       command: 'modbench.openEditor',
       title: 'Open Record',
@@ -87,6 +99,7 @@ export class RecordNode extends vscode.TreeItem {
     // RecordDecorationProvider's keying identity — record.plugin (this row's own copy's owning
     // plugin, which an override stack row can differ from the RecordTypeNode's) paired with origin.
     this.resourceUri = recordResourceUri(record.plugin, origin, record.formKey);
+    if (record.parseDiagnosis) markFailure(this, `This record could not be read: ${record.parseDiagnosis}`);
   }
 }
 
@@ -455,7 +468,9 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
         if (typesPresent.has(type)) nodes.push(makeNode(pluginName, origin));
       }
       for (const t of types) {
-        if (!SPATIAL_TYPES.has(t.type)) nodes.push(new RecordTypeNode(pluginName, t.type, t.count, t.displayName, origin));
+        if (!SPATIAL_TYPES.has(t.type)) {
+          nodes.push(new RecordTypeNode(pluginName, t.type, t.count, t.displayName, origin, t.hasParseFailure));
+        }
       }
       return nodes;
     });

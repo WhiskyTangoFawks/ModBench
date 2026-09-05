@@ -122,25 +122,43 @@ export class PluginsTreeComposite<TRow, TChild> implements vscode.TreeDataProvid
   // Backend decorations take authority only when the backend has something to say; the map
   // lookups guard a plugin the last load order never mentioned, not the wire.
   private applyBackendDecoration(item: vscode.TreeItem, row: TRow, file: string | undefined): void {
-    // A plugin that failed to open or parse never has a MasterMetadata to derive an issue list
-    // from, so this and the master-issue decoration below are mutually exclusive per plugin.
-    const failureReason = file !== undefined ? this.loadFailures?.get(file) : undefined;
+    if (file === undefined) return;
+    const failureReason = this.loadFailures?.get(file);
     if (failureReason !== undefined) {
-      item.iconPath = new vscode.ThemeIcon('error', new vscode.ThemeColor('problemsErrorIcon.foreground'));
-      item.description = '✗ Failed to load';
-      const note = `Failed to load: ${failureReason}`;
-      item.tooltip = typeof item.tooltip === 'string' ? `${item.tooltip}\n${note}` : note;
-    } else {
-      const issues = file !== undefined ? (this.masterIssues?.get(file) ?? []) : [];
-      if (issues.length > 0) {
-        this.applyMasterIssueDecoration(item, row, issues);
-        return;
-      }
-      // Warning tier, below the two error decorations above — a Malformed plugin still loads and
-      // plays; the badge says "look", not "broken".
-      const texts = file !== undefined ? (this.diagnoses?.get(file) ?? []) : [];
-      if (texts.length > 0) this.applyDiagnosisDecoration(item, texts);
+      this.applyLoadFailureDecoration(item, failureReason);
+      return;
     }
+    const issues = this.masterIssues?.get(file) ?? [];
+    if (issues.length > 0) {
+      this.applyMasterIssueDecoration(item, row, issues);
+      return;
+    }
+    if (this.parseFailures?.has(file) ?? false) {
+      this.applyParseFailureDecoration(item);
+      return;
+    }
+    // Warning tier, below the three error decorations above — a Malformed plugin still loads and
+    // plays; the badge says "look", not "broken".
+    const texts = this.diagnoses?.get(file) ?? [];
+    if (texts.length > 0) this.applyDiagnosisDecoration(item, texts);
+  }
+
+  // A plugin that failed to open or parse never has a MasterMetadata to derive an issue list from,
+  // so this and the master-issue decoration are mutually exclusive per plugin.
+  private applyLoadFailureDecoration(item: vscode.TreeItem, failureReason: string): void {
+    item.iconPath = new vscode.ThemeIcon('error', new vscode.ThemeColor('problemsErrorIcon.foreground'));
+    item.description = '✗ Failed to load';
+    const note = `Failed to load: ${failureReason}`;
+    item.tooltip = typeof item.tooltip === 'string' ? `${item.tooltip}\n${note}` : note;
+  }
+
+  // The same prefix the record and record-type nodes carry (PluginTreeProvider): the backend
+  // answers "holds an unreadable record" per plugin, so nothing here walks children to find out.
+  private applyParseFailureDecoration(item: vscode.TreeItem): void {
+    item.iconPath = new vscode.ThemeIcon('error', new vscode.ThemeColor('problemsErrorIcon.foreground'));
+    item.description = '✗ Unreadable records';
+    const note = 'This plugin holds a record that could not be read.';
+    item.tooltip = typeof item.tooltip === 'string' ? `${item.tooltip}\n${note}` : note;
   }
 
   // Text lines are `PluginDiagnosisReport.text` verbatim — the wording the Track refusal and the
@@ -202,6 +220,7 @@ export class PluginsTreeComposite<TRow, TChild> implements vscode.TreeDataProvid
   private readOnlyFiles?: Set<string>;
   private masterIssues?: Map<string, MasterIssue[]>;
   private loadFailures?: Map<string, string>;
+  private parseFailures?: Set<string>;
   private diagnoses?: Map<string, string[]>;
 
   /** One setter, not four: these facts are a single hand-off from the same reconcile and never
@@ -212,11 +231,13 @@ export class PluginsTreeComposite<TRow, TChild> implements vscode.TreeDataProvid
     readOnlyFiles: Set<string> = new Set(),
     masterIssues: Map<string, MasterIssue[]> = new Map(),
     loadFailures: Map<string, string> = new Map(),
+    parseFailures: Set<string> = new Set(),
   ): void {
     this.heldFiles = pluginFiles && new Set([...pluginFiles].map((f) => f.toLowerCase()));
     this.readOnlyFiles = pluginFiles && new Set([...readOnlyFiles].map((f) => f.toLowerCase()));
     this.masterIssues = pluginFiles && new Map([...masterIssues].map(([name, issues]) => [name.toLowerCase(), issues]));
     this.loadFailures = pluginFiles && new Map([...loadFailures].map(([name, reason]) => [name.toLowerCase(), reason]));
+    this.parseFailures = pluginFiles && new Set([...parseFailures].map((f) => f.toLowerCase()));
     // A reconcile invalidates the last scan's diagnoses — they describe binaries the load order
     // may not hold — so they clear here and return via setDiagnoses when the new scan lands.
     this.diagnoses = undefined;

@@ -176,7 +176,7 @@ public sealed class SwaggerSchemaTests
         {
             "name", "path", "isLight", "isMaster", "masters", "recordCount", "isImmutable",
             "participates", "origin", "masterIssues", "inLoadOrder", "enabled", "winning",
-            "hasMatchingRecords", "isTracked",
+            "hasMatchingRecords", "isTracked", "hasParseFailure",
         })]
     // CellSummary: the four genuinely-nullable members (EditorId, CellX, CellY, FullName) must
     // survive as optional `| null` on the wire.

@@ -511,8 +511,22 @@ touches the leading slot.** The checkbox/lock position is reserved for exactly o
 "can you change whether this loads?" (see Row model above) — and every decoration in this
 section is icon, description and tooltip only.
 
+**Parse-failure prefix.** A record Mutagen cannot read is indexed anyway, from its own
+stored body, with its parse diagnosis on the row — it is listed by FormKey and EditorID like any
+other record and never silently absent from Search. Its row, its record-type node and its plugin
+row all carry the failure prefix: the same `error` icon at `problemsErrorIcon.foreground` the
+load-failure decoration below uses, with the diagnosis in the record row's tooltip. Nothing else
+carries it. The tree never walks children to work this out — `RecordSummary.parseDiagnosis`,
+`PluginRecordTypeCount.hasParseFailure` and `PluginResponse.hasParseFailure` are answered by the
+same listings that already carry the counts, so a partial plugin load marks the plugin, every
+affected record-type node and every affected record through one fact per page. The plugin row's
+decoration sits at error tier below a load failure and a master issue and above the
+malformed-plugin warning. The record editor's read-only handling of such a record is specced
+separately.
+
 **Load-failure decoration (ADR-0037).** A plugin that fails to open or parse is
-skipped so the rest of the load order still loads (`LoadOrder.Failures`), but its row is
+skipped so the rest of the load order still loads (`LoadOrder.Failures`) — a whole file whose
+bytes cannot be read at all has no record identity to hang a parse status on — but its row is
 never dropped — Mod Management builds rows from `plugins.txt`, not from which plugins the load order
 managed to index, so the row was already there. `PluginsTreeComposite` decorates it with its
 recorded failure reason ("Failed to load: `{reason}`") the same way it decorates a master issue;

@@ -20,7 +20,7 @@ internal sealed class WorkingTreeOverlay
     // SELECT *'d so the snapshot copy below is pinned to a column list instead of to the two tables
     // happening to stay in the same order forever.
     private const string RecordColumnList =
-        "form_key, plugin, origin, record_type, editor_id, \"ref\", body, content_hash";
+        "form_key, plugin, origin, record_type, editor_id, \"ref\", body, content_hash, parse_diagnosis";
 
     private readonly DuckDBConnection _connection;
     private readonly ILogger _logger;

@@ -110,6 +110,9 @@ interface HeldPluginFiles {
    *  appearing or vanishing is itself a `mods/**` watcher event, which is what makes tracking
    *  reach the rows without a reload. */
   tracked: Set<string>;
+  /** Which hold a record Mutagen could not read — the backend's own "has a failure below it" for
+   *  a plugin row, so the tree never expands children to find out. */
+  parseFailures: Set<string>;
 }
 
 function heldPluginFilesFrom(repository: ApiPluginRepository): () => Promise<HeldPluginFiles> {
@@ -123,6 +126,7 @@ function heldPluginFilesFrom(repository: ApiPluginRepository): () => Promise<Hel
       masterIssues: new Map(plugins.map((p) => [p.name, p.masterIssues] as const)),
       matches: new Map(plugins.map((p) => [p.name.toLowerCase(), p.hasMatchingRecords] as const)),
       tracked: new Set(plugins.filter((p) => p.isTracked).map((p) => p.name)),
+      parseFailures: new Set(plugins.filter((p) => p.hasParseFailure).map((p) => p.name)),
     };
   };
 }
@@ -959,7 +963,8 @@ async function applyLoadOrderToTree(
     // Set before setLoadOrder fires its re-render, so no row renders off a match set stale from
     // whatever reconcile preceded this one.
     session.loadOrderSync?.setMatches(held.matches);
-    session.pluginsTree?.setLoadOrder(held.files, held.readOnly, held.masterIssues, loadFailures);
+    session.pluginsTree?.setLoadOrder(
+      held.files, held.readOnly, held.masterIssues, loadFailures, held.parseFailures);
     // The same read-only set, to the record rows — theirs is contextValue (Remove hidden), the
     // plugin rows' is the tooltip note.
     session.recordBrowserProvider?.setImmutablePlugins(held.readOnly);
