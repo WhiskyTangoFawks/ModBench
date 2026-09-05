@@ -4,6 +4,7 @@ using MEditService.Core.Plugins;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
 using MEditService.Core.Source;
+using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -30,10 +31,8 @@ public sealed class GenericFieldWriteDispatchTests : IDisposable
     {
         Assert.Empty(_mod.GitStatus());
 
-        // Decimal-string encoded, per LeafClassification.ReadBitmaskLong — survives above 2^53 where a
-        // raw JSON number would lose precision. The exact bit pattern doesn't matter to this proof;
-        // that the write lands at all through EditField does.
-        var result = Service().EditField(_mod.Plugin, _mod.Npc.ToString(), "flags", Json("\"1\""));
+        // The document spells a flags value as its member names, and that is what the codec reads.
+        var result = Service().Set(_mod.Plugin, _mod.Npc.ToString(), "Flags", Json("""["Female"]"""));
 
         Assert.True(result.Applied, result.Message);
         Assert.NotEmpty(_mod.GitStatus());

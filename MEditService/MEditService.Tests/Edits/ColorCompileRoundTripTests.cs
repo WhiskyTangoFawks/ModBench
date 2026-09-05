@@ -1,6 +1,7 @@
 using System.Text.Json;
 using MEditService.Core.Edits;
 using MEditService.Core.Schema;
+using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -38,7 +39,7 @@ public sealed class ColorCompileRoundTripTests : IDisposable
 
     private void Edit(FormKey record, string field, string json)
     {
-        var result = EditService().EditField(_fixture.Plugin, record.ToString(), field, Json(json));
+        var result = EditService().Set(_fixture.Plugin, record.ToString(), field, Json(json));
         Assert.True(result.Applied, result.Message);
     }
 
@@ -47,7 +48,7 @@ public sealed class ColorCompileRoundTripTests : IDisposable
     [Fact]
     public void Light_ColorEdit_CompilesAndReparsesTheNewRgb()
     {
-        Edit(_fixture.Light, "color", """{"red": 200, "green": 100, "blue": 50}""");
+        Edit(_fixture.Light, "Color", "\"#C86432\"");
 
         var light = CompileAndReparse().Lights.Single(l => l.FormKey == _fixture.Light);
         Assert.Equal(200, light.Color.R);
@@ -55,13 +56,15 @@ public sealed class ColorCompileRoundTripTests : IDisposable
         Assert.Equal(50, light.Color.B);
     }
 
+    // The document spells a color with its alpha byte, and an edit in that spelling keeps it.
     [Fact]
-    public void Light_ColorEdit_NamingOnlyRgb_PreservesTheExistingAlphaByte()
+    public void Light_ColorEdit_InTheDocumentsOwnSpelling_KeepsTheAlphaByteItNames()
     {
-        Edit(_fixture.Light, "color", """{"red": 200, "green": 100, "blue": 50}""");
+        Edit(_fixture.Light, "Color", "\"#89C86432\"");
 
         var light = CompileAndReparse().Lights.Single(l => l.FormKey == _fixture.Light);
         Assert.Equal(ColorCompileFixture.SeededLightAlpha, light.Color.A);
+        Assert.Equal((200, 100, 50), (light.Color.R, light.Color.G, light.Color.B));
     }
 
     // ── Coordinator's addition: one compile proof per allowlist row ────────────────────────────
@@ -82,7 +85,7 @@ public sealed class ColorCompileRoundTripTests : IDisposable
             _ => throw new ArgumentOutOfRangeException(nameof(table), table, "unknown allowlist table"),
         };
 
-        Edit(record, "color", """{"red": 40, "green": 80, "blue": 120, "alpha": 160}""");
+        Edit(record, "Color", "\"#A0285078\"");
 
         var mod = CompileAndReparse();
         var actual = table switch
@@ -103,7 +106,7 @@ public sealed class ColorCompileRoundTripTests : IDisposable
     [Fact]
     public void FloatEncodedColor_Edit_CompilesAndReparsesTheExactBytes()
     {
-        Edit(_fixture.MaterialObject, "single_pass_color", """{"red": 1, "green": 254, "blue": 127}""");
+        Edit(_fixture.MaterialObject, "SinglePassColor", "\"#01FE7F\"");
 
         var materialObject = CompileAndReparse().MaterialObjects.Single(m => m.FormKey == _fixture.MaterialObject);
         Assert.Equal(1, materialObject.SinglePassColor.R);

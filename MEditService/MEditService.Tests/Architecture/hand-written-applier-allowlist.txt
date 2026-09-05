@@ -1,30 +1,3 @@
-MEditService.Core/Edits/PluginWriter.cs: var mod = ModFactory.ImportSetter(new ModPath(modKey, pluginPath), gameRelease, LocalizedStrings.ForRead(Path.GetDirectoryName(pluginPath)!));
 MEditService.Core/Edits/PluginWriter.cs: writeBuilder = writeBuilder.WithStringsWriter(new StringsWriter(
-MEditService.Core/Edits/RecordCopy.cs: var record = MajorRecordInstantiator.Activator(FormKey.Factory(formKey), release, schema.RecordType);
-MEditService.Core/Edits/RecordEditService.cs: var bare = MajorRecordInstantiator.Activator(
-MEditService.Core/Edits/RecordEditService.cs: var record = MajorRecordInstantiator.Activator(FormKey.Factory(targetFormKey), release, schema.RecordType);
 MEditService.Core/Edits/SpatialContainerMint.cs: var mod = new Fallout4Mod(ModKey.FromFileName(destinationPlugin.Name), release.ToFallout4Release());
-MEditService.Core/Schema/AtomicValueLeaves.cs: if (rp.CanWrite) rp.SetValue(obj, RebuildAtomicValue(box));
-MEditService.Core/Schema/ByteSliceHex.cs: return LeafWriters.SetOrDecline(rp, obj, new MemorySlice<byte>(bytes), pName, logger);
-MEditService.Core/Schema/LeafClassification.cs: v => new TranslatedString(Language.English, v.GetString()));
-MEditService.Core/Schema/LeafWriters.cs: (rp.GetValue(obj))?.GetType().GetMethod("Clear")?.Invoke(rp.GetValue(obj), []);
-MEditService.Core/Schema/LeafWriters.cs: rp.SetValue(obj, value);
-MEditService.Core/Schema/LeafWriters.cs: setTo.Invoke(link, [fk]);
-MEditService.Core/Schema/ListLeaves.cs: if (item != null) addMethod.Invoke(newList, [item]);
-MEditService.Core/Schema/ListLeaves.cs: if (item != null) addMethod.Invoke(newList, [item]);
-MEditService.Core/Schema/ListLeaves.cs: if (rp.CanWrite) rp.SetValue(obj, newList);
-MEditService.Core/Schema/ListLeaves.cs: return Activator.CreateInstance(flType, fk);
-MEditService.Core/Schema/ListLeaves.cs: return ByteSliceHex.TryParseHex(elem.GetString()!, out var bytes) ? new MemorySlice<byte>(bytes) : (object?)null;
-MEditService.Core/Schema/ListLeaves.cs: rp.SetValue(record, newList);
-MEditService.Core/Schema/ListLeaves.cs: var elemObj = Activator.CreateInstance(elemConcreteType)!;
-MEditService.Core/Schema/ListLeaves.cs: var flType = typeof(FormLink<>).MakeGenericType(elemCore.GetGenericArguments()[0]);
-MEditService.Core/Schema/ListLeaves.cs: var newList = Activator.CreateInstance(listType)!;
-MEditService.Core/Schema/ListLeaves.cs: var newList = Activator.CreateInstance(listType)!;
 MEditService.Core/Schema/ObjectModPropertyLeaves.cs: leaves.Add((open.MakeGenericType(args), valueTypeName));
-MEditService.Core/Schema/ObjectModPropertyLeaves.cs: return setterType.IsGenericTypeDefinition ? setterType.MakeGenericType(typeArgs) : setterType;
-MEditService.Core/Schema/ObjectModPropertyLeaves.cs: var setterType = ReflectedTypes.GetSetterType(getterOpen.MakeGenericType(typeArgs));
-MEditService.Core/Schema/StructLeaves.cs: if (rp.CanWrite) rp.SetValue(target, obj);
-MEditService.Core/Schema/StructLeaves.cs: var obj = existing is { } same && same.GetType() == concreteType ? same : Activator.CreateInstance(concreteType)!;
-MEditService.Core/Schema/VectorStructLeaves.cs: if (rp.CanWrite) rp.SetValue(obj, current);
-MEditService.Core/Schema/VectorStructLeaves.cs: var current = rp.GetValue(obj) ?? Activator.CreateInstance(core)!;
-MEditService.Core/Schema/WidenedLeaf.cs: rp.SetValue(obj, converted);

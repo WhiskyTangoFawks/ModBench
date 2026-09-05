@@ -1,3 +1,4 @@
+using System.Text.Json;
 using MEditService.Core.Source;
 using Mutagen.Bethesda.Plugins.Records;
 
@@ -11,6 +12,9 @@ public static class PartialFormFlag
     /// <summary>Internal so the write-surface guard in Edits can compare the bit without redeclaring it.</summary>
     internal const int Bit = 0x0000_4000;
 
+    /// <summary>The same bit as the annotation tables spell it.</summary>
+    internal static readonly string BitHex = $"0x{Bit:X}";
+
     /// <summary>The one eligibility gate, shared by the read and write sides.</summary>
     internal static bool IsPartialFormable(Type recordType) =>
         ContainerChildFields.EnumerateChildFieldsFor(recordType) != null;
@@ -18,10 +22,11 @@ public static class PartialFormFlag
     public static bool IsSet(IMajorRecordGetter record) =>
         IsPartialFormable(record.GetType()) && (record.MajorRecordFlagsRaw & Bit) != 0;
 
-    /// <summary>Moves exactly bit 14; a whole-value overwrite would drop every other header flag.
-    /// Eligibility is the caller's to check.</summary>
-    internal static void Set(IMajorRecord record, bool value) =>
-        record.MajorRecordFlagsRaw = value
-            ? record.MajorRecordFlagsRaw | Bit
-            : record.MajorRecordFlagsRaw & ~Bit;
+    /// <summary>The same bit read off a stored document, whose header flags travel as
+    /// <c>MajorRecordFlagsRaw</c> (omitted when zero).</summary>
+    internal static bool IsSet(JsonElement document, Type recordType) =>
+        IsPartialFormable(recordType)
+        && document.TryGetProperty(nameof(IMajorRecordGetter.MajorRecordFlagsRaw), out var flags)
+        && flags.ValueKind == JsonValueKind.Number
+        && (flags.GetInt32() & Bit) != 0;
 }

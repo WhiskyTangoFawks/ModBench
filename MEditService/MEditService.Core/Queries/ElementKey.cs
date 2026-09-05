@@ -11,13 +11,22 @@ internal readonly record struct ElementKey(IReadOnlyList<(double? Number, string
 {
     internal string Text => string.Join(" / ", Segments.Select(s => s.Text));
 
-    internal static ElementKey Of(JsonElement element, IReadOnlyList<string> keyMembers) =>
-        new([.. keyMembers.Select(path => ReadElement(element, path))]);
+    /// <summary><paramref name="elementMeta"/> lets a flags member order by its bits, as xEdit's
+    /// wbStructSK does, rather than by the names the document spells it with.</summary>
+    internal static ElementKey Of(JsonElement element, IReadOnlyList<string> keyMembers, FieldMetadata? elementMeta = null) =>
+        new([.. keyMembers.Select(path => ReadElement(element, path, MemberAt(elementMeta, path)))]);
 
     /// <summary>The write path holds a mutable JsonNode tree; one re-serialize reaches the same
     /// reader rather than a second copy of what a key reads as.</summary>
-    internal static ElementKey Of(JsonNode? node, IReadOnlyList<string> keyMembers) =>
-        Of(JsonSerializer.SerializeToElement(node), keyMembers);
+    internal static ElementKey Of(JsonNode? node, IReadOnlyList<string> keyMembers, FieldMetadata? elementMeta = null) =>
+        Of(JsonSerializer.SerializeToElement(node), keyMembers, elementMeta);
+
+    private static FieldMetadata? MemberAt(FieldMetadata? meta, string keyPath)
+    {
+        foreach (var hop in keyPath.Split('.'))
+            meta = meta?.Fields?.FirstOrDefault(f => f.Name == hop);
+        return meta;
+    }
 
     internal static ElementKey OfValue(string value) => new([(null, value)]);
 
@@ -34,23 +43,53 @@ internal readonly record struct ElementKey(IReadOnlyList<(double? Number, string
         return 0;
     }
 
-    private static (double?, string) ReadElement(JsonElement element, string keyPath)
+    private static (double?, string) ReadElement(JsonElement element, string keyPath, FieldMetadata? member)
     {
         var current = element;
         foreach (var hop in keyPath.Split('.'))
         {
             if (current.ValueKind != JsonValueKind.Object || !current.TryGetProperty(hop, out current))
-                return Absent;
+                return DefaultOf(member);
         }
+        return Read(current, member);
+    }
 
-        return current.ValueKind switch
+    private static (double?, string) Read(JsonElement current, FieldMetadata? member) =>
+        current.ValueKind switch
         {
             JsonValueKind.Number => (current.GetDouble(), current.GetDouble().ToString(CultureInfo.InvariantCulture)),
             JsonValueKind.String => (null, current.GetString()!),
             JsonValueKind.True or JsonValueKind.False => (null, current.GetRawText()),
+            // A flags member is an array of names (ScenePhaseFragment.Flags keys a fragment); its
+            // order is its bits', read off the members the schema declares.
+            JsonValueKind.Array => (FlagBits(current, member), string.Join(", ", current.EnumerateArray().Select(e => e.ToString()))),
             _ => Absent,
         };
+
+    private static double? FlagBits(JsonElement names, FieldMetadata? member)
+    {
+        if (member == null) return null;
+        double bits = 0;
+        foreach (var name in names.EnumerateArray())
+        {
+            var bit = member.EnumMembers.FirstOrDefault(m => m.Value == name.GetString())?.BitValue;
+            if (bit == null) return null;
+            bits += double.Parse(bit, CultureInfo.InvariantCulture);
+        }
+        return bits;
     }
+
+    // The codec omits a member equal to its default, so an absent key member reads as that
+    // default: what the same element spelled out would read as.
+    private static (double?, string) DefaultOf(FieldMetadata? member) => member?.Default is { } declared
+        ? Read(JsonSerializer.SerializeToElement(declared), member)
+        : member?.Type switch
+        {
+            "int" or "float" => (0, "0"),
+            "bool" => (null, "false"),
+            "flags" => (0, ""),
+            _ => Absent,
+        };
 
     private static (double?, string) Absent => (null, "");
 }

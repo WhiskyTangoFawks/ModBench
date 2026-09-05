@@ -1,4 +1,5 @@
 using System.Text;
+using System.Text.Json;
 using DuckDB.NET.Data;
 using MEditService.Core.Schema;
 using MEditService.Core.Serialization;
@@ -337,12 +338,13 @@ internal sealed class WorkingTreeOverlay
             return;
         }
 
-        var record = _codec
-            .DeserializeFromBytesAsync(Encoding.UTF8.GetBytes(body), _release, recordType)
-            .GetAwaiter().GetResult();
-
         var refs = new List<FormRef>();
-        PluginIngest.CollectFormRefs(refs, record, recordType, schema);
+        using (var document = JsonDocument.Parse(body))
+        {
+            var root = document.RootElement;
+            PluginIngest.CollectFormRefs(
+                refs, formKey, DocumentNodes.At(root, "EditorID")?.GetString(), root, recordType, schema);
+        }
 
         DeleteFormReferencesForRecord(key, formKey);
         if (refs.Count > 0)
@@ -353,7 +355,11 @@ internal sealed class WorkingTreeOverlay
         }
 
         // placement/cell_location/container_child track Effective the same way
-        // form_lookup/form_references do, rebuilt from this same deserialized record.
+        // form_lookup/form_references do, rebuilt from the record the body reads back into: a
+        // container's child slots are walked through Mutagen's own object model.
+        var record = _codec
+            .DeserializeFromBytesAsync(Encoding.UTF8.GetBytes(body), _release, recordType)
+            .GetAwaiter().GetResult();
         RederiveContainmentForRecord(key, formKey, recordType, record);
     }
 

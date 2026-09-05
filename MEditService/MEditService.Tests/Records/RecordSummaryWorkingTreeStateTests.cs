@@ -88,7 +88,7 @@ public sealed class RecordSummaryWorkingTreeStateTests : IDisposable
         Assert.Equal(WorkingTreeState.Added, SummaryFor(page, created).WorkingTreeState);
     }
 
-    // A ref-scoped Search forwarding the same reader logic without HeadRelation's "ref" column being
+    // A ref-scoped Search forwarding the same reader logic without HeadRelation's "Ref" column being
     // uniformly 'committed' would leak Effective's Modified/Added values into the Head answer, which
     // never has dirt.
     [Fact]

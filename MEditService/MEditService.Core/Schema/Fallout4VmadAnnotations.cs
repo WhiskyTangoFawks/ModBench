@@ -5,19 +5,19 @@ namespace MEditService.Core.Schema;
 internal static class Fallout4VmadAnnotations
 {
     /// <summary>Every adapter array xEdit declares <c>wbArrayS</c>, with its wbStructSK key members
-    /// as wire names, transcribed from <c>wbDefinitionsFO4.pas</c>. INFO/PACK/SCEN fragments are
+    /// as Mutagen member names, transcribed from <c>wbDefinitionsFO4.pas</c>. INFO/PACK/SCEN fragments are
     /// plain <c>wbArray</c> ("Do NOT sort") and so absent.</summary>
     public static readonly (string TypeName, string MemberName, string[] KeyMembers)[] KeyedArrays =
     [
-        ("IAVirtualMachineAdapterGetter", "Scripts", ["name"]),
-        ("IQuestFragmentAliasGetter", "Scripts", ["name"]),
-        ("IScriptEntryGetter", "Properties", ["name"]),
-        ("IScriptStructPropertyGetter", "Members", ["name"]),
-        ("IScriptEntryStructsGetter", "Members", ["name"]),
-        ("IPerkScriptFragmentsGetter", "Fragments", ["index"]),
-        ("IQuestAdapterGetter", "Fragments", ["stage", "stage_index"]),
-        ("ISceneScriptFragmentsGetter", "PhaseFragments", ["index", "flags"]),
-        ("IQuestAdapterGetter", "Aliases", ["property.alias"]),
+        ("IAVirtualMachineAdapterGetter", "Scripts", ["Name"]),
+        ("IQuestFragmentAliasGetter", "Scripts", ["Name"]),
+        ("IScriptEntryGetter", "Properties", ["Name"]),
+        ("IScriptStructPropertyGetter", "Members", ["Name"]),
+        ("IScriptEntryStructsGetter", "Members", ["Name"]),
+        ("IPerkScriptFragmentsGetter", "Fragments", ["Index"]),
+        ("IQuestAdapterGetter", "Fragments", ["Stage", "StageIndex"]),
+        ("ISceneScriptFragmentsGetter", "PhaseFragments", ["Index", "Flags"]),
+        ("IQuestAdapterGetter", "Aliases", ["Property.Alias"]),
     ];
 
     /// <summary>xEdit's <c>wbScriptPropertyObject</c> is an Alias-or-FormID union, so an alias-bound

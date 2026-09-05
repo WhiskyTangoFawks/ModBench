@@ -57,7 +57,7 @@ public class ConditionReferenceTests
             .Build();
 
         Assert.Equal(
-            ["conditions[0].data.parameter_one_record"],
+            ["Conditions[0].Data.ParameterOneRecord"],
             ConditionRefPaths(fixture, cobj, "CondRefs.esp"));
     }
 
@@ -89,13 +89,13 @@ public class ConditionReferenceTests
 
         var document = repo.At(RecordRef.Effective)
             .GetDocument(cobj.ToString(), new PluginKey("CondCheck.esp", "Data"))!;
-        var conditions = document.Fields.Single(f => f.Metadata.Name == "conditions");
+        var conditions = document.Fields.Single(f => f.Metadata.Name == "Conditions");
 
         Assert.Null(conditions.CheckError);
     }
 
     [Theory]
-    [InlineData(Condition.RunOnType.Reference, "conditions[0].data.reference")]
+    [InlineData(Condition.RunOnType.Reference, "Conditions[0].Data.Reference")]
     [InlineData(Condition.RunOnType.Subject, null)]
     public void TheRunOnReferenceIsAReferenceOnlyUnderTheReferenceRunOn(
         Condition.RunOnType runOn, string? expected)

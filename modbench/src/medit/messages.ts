@@ -1,3 +1,5 @@
+import type { components } from './generated/api';
+
 export const EXTENSION_TO_WEBVIEW = {
   LOAD_RECORD: 'loadRecord',
   // ADR-0035: the winner sweep has landed, so a panel opened mid-reconcile stops rendering a
@@ -60,8 +62,7 @@ export type WebviewToExtension =
       // ambiguous the moment the instance holds two copies of one name.
       plugin: string;
       origin: string;
-      fieldPath: string;
-      value: unknown;
+      envelope: RecordEditEnvelope;
     }
   | { type: typeof WEBVIEW_TO_EXTENSION.OPEN_FORM_KEY_PICKER; requestId: string; seed: string; validTypes: string[] }
   | {
@@ -112,14 +113,23 @@ export interface ColumnHeaderContext {
   preventDefaultContextMenuItems: true;
 }
 
-// A keyed element has no position a path could carry: one path serves every column of a row, and
-// the same key sits elsewhere in each. `members` travels with it so the hop resolves with no
-// schema in scope.
+// A row's hops under its subtree root, each as the diff node states it. A sorted array's element
+// sits at a different position per column: addressed by its value here, an index hop once the
+// envelope is built.
 export type PathSegment =
   | { kind: 'member'; name: string }
   | { kind: 'index'; index: number }
-  | { kind: 'sortKey'; key: string }
-  | { kind: 'key'; key: string; members: string[] };
+  | { kind: 'key'; key: string }
+  | { kind: 'value'; value: string };
+
+/** The wire's hop kinds (ADR-0032), narrowed to the closed set the backend resolves. */
+export type PathHop = Exclude<PathSegment, { kind: 'value' }>;
+
+/** The one write shape: an operation, a path and an optional value, spelled by the webview and
+ *  carried unchanged to `POST /records/{formKey}/edit`. */
+export type RecordEditEnvelope =
+  Omit<components['schemas']['RecordEditRequest'], 'plugin' | 'origin' | 'op' | 'path'>
+  & { op: 'set' | 'add' | 'remove' | 'move'; path: PathHop[] };
 
 // ADR-0039: right-click is the extended editor's only trigger. `value`/`readOnly` come from the
 // webview, not the host. Offered on immutable cells too: a read-only tab is the only way to read
@@ -132,9 +142,8 @@ export interface StringValueContext {
   fieldName: string;
   value: string;
   readOnly: boolean;
-  // The row's path within the field plus the subtree root's wire path — enough for commit to
-  // reconstruct the whole field exactly as an inline edit does, never committing the saved text
-  // alone under the root's path.
+  // The row's path within the field plus the subtree root's member — the save commits the same
+  // set envelope at the same path an inline edit of that row posts.
   path: PathSegment[];
   rootField: string;
   preventDefaultContextMenuItems: true;

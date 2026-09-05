@@ -79,7 +79,7 @@ function makeRepository(overrides: Partial<{
     getContainerChildren: vi.fn().mockResolvedValue([]),
     // The tree provider never edits — present only because the double implements the
     // whole PluginRepository surface.
-    editRecordField: vi.fn(),
+    editRecord: vi.fn(),
     getInteriorCells: vi.fn().mockResolvedValue({ items: [], total: 0 }),
     // The tree provider never compiles either — same "whole surface, unused here" note.
     getRecordOwner: vi.fn(),

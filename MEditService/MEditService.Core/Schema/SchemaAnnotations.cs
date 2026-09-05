@@ -24,15 +24,18 @@ internal sealed record SchemaAnnotations(
     // See FieldMetadata.SiblingsInUse. The inner map must name every enum value, since an unnamed one
     // would silently idle every member the row governs; validated in all four directions.
     Dictionary<(string TypeName, string MemberName), IReadOnlyDictionary<string, IReadOnlyList<string>>> SiblingsInUse,
-    // xEdit's wbArrayS: elements identified by key members (wire names, dotted one struct down), not
-    // by position. Aligned by key in the compare grid, written back in key order, duplicates refused.
+    // xEdit's wbArrayS: elements identified by key members (Mutagen member names, dotted one struct
+    // down), not by position. Aligned by key in the compare grid, written back in key order, duplicates refused.
     Dictionary<(string TypeName, string MemberName), IReadOnlyList<string>> KeyedArrays,
     // FormLinks Mutagen types non-nullable that the game's format leaves unset as a matter of course,
     // so an unset one is a value, not a dangling reference. The CLR type cannot answer this.
     HashSet<(string TypeName, string MemberName)> PermittedNullFormLinks,
     // The Color fields xEdit renders with an Alpha leaf (wbByteRGBA). A property of the field, not
     // the type, and every row is one Mutagen also writes the alpha byte for, so no alpha edit is lost.
-    HashSet<(string TypeName, string MemberName)> AlphaBearingColorFields)
+    HashSet<(string TypeName, string MemberName)> AlphaBearingColorFields,
+    // Members the document never spells but one bit of a flags member says: the ESL flag, the
+    // Partial Form bit. Flag names the backing enum's member, or the bit in hex for a raw integer.
+    Dictionary<(string TypeName, string MemberName), (string BackingMember, string Flag)> SyntheticFlagMembers)
 {
     // Rows every game shares are named once here; a row true of only some games is written inline
     // in each table that has it, so each table still states that game's complete facts.
@@ -104,7 +107,15 @@ internal sealed record SchemaAnnotations(
             KeyedArrays: Fallout4VmadAnnotations.KeyedArrays.ToDictionary(
                 r => (r.TypeName, r.MemberName), r => (IReadOnlyList<string>)r.KeyMembers),
             PermittedNullFormLinks: [.. Fallout4VmadAnnotations.PermittedNullFormLinks],
-            AlphaBearingColorFields: [.. RgbaColorFields]),
+            AlphaBearingColorFields: [.. RgbaColorFields],
+            SyntheticFlagMembers: new()
+            {
+                [("IFallout4ModHeaderGetter", "IsSmallMaster")] = ("Flags", "Small"),
+                [("ICellGetter", "IsPartialForm")] = ("MajorRecordFlagsRaw", PartialFormFlag.BitHex),
+                [("IWorldspaceGetter", "IsPartialForm")] = ("MajorRecordFlagsRaw", PartialFormFlag.BitHex),
+                [("IQuestGetter", "IsPartialForm")] = ("MajorRecordFlagsRaw", PartialFormFlag.BitHex),
+                [("IDialogTopicGetter", "IsPartialForm")] = ("MajorRecordFlagsRaw", PartialFormFlag.BitHex),
+            }),
 
         [GameCategory.Skyrim] = new(
             ExcludedColumns: [.. GrupTimestampColumns],
@@ -117,7 +128,8 @@ internal sealed record SchemaAnnotations(
             SiblingsInUse: [],
             KeyedArrays: [],
             PermittedNullFormLinks: [],
-            AlphaBearingColorFields: [.. RgbaColorFields]),
+            AlphaBearingColorFields: [.. RgbaColorFields],
+            SyntheticFlagMembers: []),
 
         [GameCategory.Starfield] = new(
             ExcludedColumns: [.. GrupTimestampColumns, ("IQuestGetter", "Timestamp")],
@@ -137,7 +149,8 @@ internal sealed record SchemaAnnotations(
             SiblingsInUse: [],
             KeyedArrays: [],
             PermittedNullFormLinks: [],
-            AlphaBearingColorFields: [.. RgbaColorFields]),
+            AlphaBearingColorFields: [.. RgbaColorFields],
+            SyntheticFlagMembers: []),
     };
 
     /// <summary>A game with no table is a game nobody has written the facts for — loud, not empty.</summary>
@@ -162,6 +175,22 @@ internal sealed record SchemaAnnotations(
         SiblingsInUse.GetValueOrDefault(Key(prop));
     public IReadOnlyList<string>? KeyMembersFor(PropertyInfo prop) => KeyedArrays.GetValueOrDefault(Key(prop));
 
+    /// <summary>The bit a synthetic member's row spells in hex, for a backing member no enum names.</summary>
+    internal static long ParseBit(string flag) =>
+        TryParseBit(flag, out var bit) ? bit : throw new ArgumentException($"'{flag}' is not a hex bit.", nameof(flag));
+
+    internal static bool TryParseBit(string flag, out long bit)
+    {
+        bit = 0;
+        return flag.StartsWith("0x", StringComparison.Ordinal)
+            && long.TryParse(flag.AsSpan(2), System.Globalization.NumberStyles.HexNumber, null, out bit);
+    }
+
+    public IEnumerable<(string Name, string BackingMember, string Flag)> SyntheticFlagMembersFor(Type getterType) =>
+        SyntheticFlagMembers
+            .Where(e => e.Key.TypeName == getterType.Name)
+            .Select(e => (e.Key.MemberName, e.Value.BackingMember, e.Value.Flag));
+
     private static (string, string) Key(PropertyInfo prop) => (prop.DeclaringType!.Name, prop.Name);
 
     // A row naming a value or sibling the assembly lacks would silently govern nothing; one omitting
@@ -185,8 +214,8 @@ internal sealed record SchemaAnnotations(
 
             var values = Enum.GetNames(enumType).ToHashSet(StringComparer.Ordinal);
             var members = ReflectedTypes.GetAllInterfaceProperties(declaring)
-                .Select(p => ReflectedTypes.ToSnakeCase(p.Name))
-                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+                .Select(p => p.Name)
+                .ToHashSet(StringComparer.Ordinal);
 
             foreach (var value in byValue.Keys.Where(v => !values.Contains(v)).Order(StringComparer.Ordinal))
                 yield return $"{label} names value {value}, which {enumType.Name} does not have";
@@ -229,7 +258,7 @@ internal sealed record SchemaAnnotations(
         for (var i = 0; i < segments.Length; i++)
         {
             var prop = ReflectedTypes.GetAllInterfaceProperties(owner)
-                .FirstOrDefault(p => ReflectedTypes.ToSnakeCase(p.Name).Equals(segments[i], StringComparison.OrdinalIgnoreCase));
+                .FirstOrDefault(p => p.Name.Equals(segments[i], StringComparison.Ordinal));
             if (prop == null) return $"names key {keyPath}, which {owner.Name} does not reach at {segments[i]}";
             if (i == segments.Length - 1)
             {
@@ -243,6 +272,34 @@ internal sealed record SchemaAnnotations(
             owner = prop.PropertyType;
         }
         return null;
+    }
+
+    // A row backs onto a member the type reaches, and its flag is a name that enum defines or a hex
+    // bit where the member is a raw integer.
+    private IEnumerable<string> UnresolvedSyntheticFlags(ILookup<string, Type> typesByName)
+    {
+        foreach (var (entry, (backingMember, flag)) in SyntheticFlagMembers)
+        {
+            var label = $"{nameof(SyntheticFlagMembers)}: {entry.TypeName}.{entry.MemberName}";
+            var backing = typesByName[entry.TypeName]
+                .SelectMany(ReflectedTypes.GetAllInterfaceProperties)
+                .FirstOrDefault(p => p.Name == backingMember);
+            if (backing == null)
+            {
+                yield return $"{label} backs onto {backingMember}, which {entry.TypeName} does not reach";
+                continue;
+            }
+            var core = Nullable.GetUnderlyingType(backing.PropertyType) ?? backing.PropertyType;
+            if (core.IsEnum)
+            {
+                if (!Enum.GetNames(core).Contains(flag, StringComparer.Ordinal))
+                    yield return $"{label} names flag {flag}, which {core.Name} does not define";
+            }
+            else if (!ReflectedTypes.IntegerTypes.Contains(core) || !TryParseBit(flag, out _))
+            {
+                yield return $"{label} backs onto {backingMember}, which is neither an enum nor an integer bit {flag} could name";
+            }
+        }
     }
 
     /// <summary>Resolves every entry against the assembly's types and every interface they implement,
@@ -276,6 +333,8 @@ internal sealed record SchemaAnnotations(
             .. UnresolvedSiblingRelations(typesByName),
             .. UnresolvedMembers(nameof(KeyedArrays), KeyedArrays.Keys),
             .. UnresolvedKeyMembers(typesByName),
+            .. UnresolvedTypes(nameof(SyntheticFlagMembers), SyntheticFlagMembers.Keys.Select(k => k.TypeName)),
+            .. UnresolvedSyntheticFlags(typesByName),
         ];
 
         if (missing.Length > 0)

@@ -184,11 +184,11 @@ describe('ScalarCell — a hex row', () => {
   });
 });
 
-// An abstract union's `concrete_type` holds Mutagen class names, not words: the schema labels
+// An abstract union's `MutagenObjectType` holds Mutagen class names, not words: the schema labels
 // each member, and the cell shows the label but commits the value behind it.
 describe('ScalarCell — an enum whose values are wire tokens', () => {
   const kind = meta({
-    name: 'concrete_type', type: 'enum',
+    name: 'MutagenObjectType', type: 'enum',
     enumMembers: [{ value: 'NpcLevel', label: 'Npc Level' },
       { value: 'PcLevelMult', label: 'Pc Level Mult' }],
   });
@@ -219,5 +219,40 @@ describe('ScalarCell — an enum whose values are wire tokens', () => {
     expect(screen.getByText('Alpha')).toBeInTheDocument();
     fireEvent.doubleClick(screen.getByText('Alpha'));
     expect(screen.getAllByRole('option').map(o => o.textContent)).toEqual(['Alpha', 'Beta']);
+  });
+});
+
+// The codec spells a translated string as an object whose `Value` is the text; the cell reads
+// and edits that text, and commits the object back so nothing beside `Value` is re-encoded.
+describe('ScalarCell — a translated string', () => {
+  const nameMeta = meta({ name: 'Name', type: 'translatedString' });
+  const value = { TargetLanguage: 'English', Value: 'Base name' };
+
+  it('reads the text, not the object', () => {
+    render(<ScalarCell value={value} meta={nameMeta} editable onCommit={vi.fn()} />);
+    expect(screen.getByText('Base name')).toBeInTheDocument();
+    expect(screen.queryByText(/TargetLanguage/)).toBeNull();
+  });
+
+  it('commits the object with the typed text as its Value, keeping the rest', () => {
+    const onCommit = vi.fn();
+    render(<ScalarCell value={value} meta={nameMeta} editable isFocused onCommit={onCommit} />);
+    fireEvent.click(screen.getByText('Base name'));
+    const input = screen.getByRole('textbox');
+    fireEvent.change(input, { target: { value: 'New name' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+
+    expect(onCommit).toHaveBeenCalledWith({ TargetLanguage: 'English', Value: 'New name' });
+  });
+
+  it('commits a bare object from an absent value', () => {
+    const onCommit = vi.fn();
+    const { container } = render(<ScalarCell value={null} meta={nameMeta} editable isFocused onCommit={onCommit} />);
+    fireEvent.doubleClick(container.querySelector('[data-open-trigger]')!);
+    const input = screen.getByRole('textbox');
+    fireEvent.change(input, { target: { value: 'Named' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+
+    expect(onCommit).toHaveBeenCalledWith({ Value: 'Named' });
   });
 });

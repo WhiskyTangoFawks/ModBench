@@ -3,6 +3,7 @@ using MEditService.Core.Edits;
 using MEditService.Core.Queries;
 using MEditService.Core.Records;
 using MEditService.Core.Source;
+using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda.Plugins;
 
@@ -33,12 +34,12 @@ public sealed class ReadTimeFreshnessTests : IDisposable
     private void Git(params string[] args) =>
         GitCli.Run(Path.Combine(_mod.ModFolder, ".git"), _mod.ModFolder, args);
 
-    private object? HeightMaxFromRecordEditor() =>
-        Reads().GetRecord(_mod.Npc.ToString())!.Fields.Single(f => f.Metadata.Name == "height_max").Value;
+    private float? HeightMaxFromRecordEditor() =>
+        (Reads().GetRecord(_mod.Npc.ToString())!.Fields.Single(f => f.Metadata.Name == "HeightMax").Value as JsonElement?)?.GetSingle();
 
-    private object? HeightMaxFromCompareGrid() =>
-        Reads().GetCompare(_mod.Npc.ToString())!.Overrides.Single()
-            .Fields.Single(f => f.Metadata.Name == "height_max").Value;
+    private float? HeightMaxFromCompareGrid() =>
+        (Reads().GetCompare(_mod.Npc.ToString())!.Overrides.Single()
+            .Fields.Single(f => f.Metadata.Name == "HeightMax").Value as JsonElement?)?.GetSingle();
 
     [Fact]
     public void ReadingATrackedPluginsHeader_DoesNotFoldADeletionIntoTheIndex()
@@ -80,18 +81,18 @@ public sealed class ReadTimeFreshnessTests : IDisposable
         File.WriteAllText(HeaderSourceFile, text.Replace(
             "\"ModHeader\": {", "\"ModHeader\": {\n    \"Author\": \"RenamedByHand\",", StringComparison.Ordinal));
 
-        var author = Reads().GetRecord(HeaderFormKey)!.Fields.Single(f => f.Metadata.Name == "author").Value;
+        var author = Reads().GetRecord(HeaderFormKey)!.Fields.Single(f => f.Metadata.Name == "Author").Value;
 
-        Assert.Equal("RenamedByHand", author);
+        Assert.Equal("RenamedByHand", Assert.IsType<JsonElement>(author).GetString());
     }
 
     [Fact]
     public void EditingAHeaderField_IsRefusedByTheColumnsMissingWriteDelegate_NowThatTheGateDoesNotBlockIt()
     {
-        var masters = EditService().EditField(
+        var masters = EditService().Set(
             _mod.Plugin, HeaderFormKey, HeaderIndexer.MastersFieldName, Json("[\"Other.esm\"]"));
-        var author = EditService().EditField(
-            _mod.Plugin, HeaderFormKey, "author", Json("\"Someone Else\""));
+        var author = EditService().Set(
+            _mod.Plugin, HeaderFormKey, "Author", Json("\"Someone Else\""));
 
         Assert.Equal(RecordEditRefusal.FieldReadOnly, masters.Refusal);
         // The writable-looking sibling refuses identically, which is the evidence that no
@@ -103,7 +104,7 @@ public sealed class ReadTimeFreshnessTests : IDisposable
     [Fact]
     public void RestoringASourceFileThroughGit_PutsTheCommittedValueBackInTheRecordEditor()
     {
-        EditService().EditField(_mod.Plugin, _mod.Npc.ToString(), "height_max", Json("0.75"));
+        EditService().Set(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", Json("0.75"));
         Assert.Equal(0.75f, HeightMaxFromRecordEditor());
 
         // The gesture a user makes in the Source Control panel's "Discard Changes".
@@ -116,7 +117,7 @@ public sealed class ReadTimeFreshnessTests : IDisposable
     [Fact]
     public void RestoringASourceFileThroughGit_PutsTheCommittedValueBackInTheCompareGrid()
     {
-        EditService().EditField(_mod.Plugin, _mod.Npc.ToString(), "height_max", Json("0.75"));
+        EditService().Set(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", Json("0.75"));
         Assert.Equal(0.75f, HeightMaxFromCompareGrid());
 
         Git("restore", "--", NpcRelativePath.Replace('\\', '/'));
@@ -127,7 +128,7 @@ public sealed class ReadTimeFreshnessTests : IDisposable
     [Fact]
     public void RestoringASourceFileThroughGit_LeavesTheRecordCleanAgain_NotDirtyWithIdenticalBytes()
     {
-        EditService().EditField(_mod.Plugin, _mod.Npc.ToString(), "height_max", Json("0.75"));
+        EditService().Set(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", Json("0.75"));
         Git("restore", "--", NpcRelativePath.Replace('\\', '/'));
 
         Reads().GetCompare(_mod.Npc.ToString());
@@ -192,7 +193,7 @@ public sealed class ReadTimeFreshnessTests : IDisposable
             $"SomeOtherName - {_mod.Npc.ID:X6}_{_mod.Npc.ModKey.FileName}.json");
         File.Move(originalPath, renamed);
 
-        var result = EditService().EditField(_mod.Plugin, _mod.Npc.ToString(), "height_max", Json("0.6"));
+        var result = EditService().Set(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", Json("0.6"));
 
         Assert.True(result.Applied, result.Message);
         // Written into the file that actually holds the record, not recreated at the stale computed
@@ -224,7 +225,7 @@ public sealed class ReadTimeFreshnessTests : IDisposable
     [Fact]
     public void CommittingAWorkingTreeChangeOutsideModbench_RebaselinesHeadOntoTheNewCommit()
     {
-        EditService().EditField(_mod.Plugin, _mod.Npc.ToString(), "height_max", Json("0.75"));
+        EditService().Set(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", Json("0.75"));
 
         // A terminal commit. Modbench is not told, and nothing about the file changes — only HEAD.
         Git("add", "-A");
@@ -245,14 +246,14 @@ public sealed class ReadTimeFreshnessTests : IDisposable
     [Fact]
     public void CommittingThenEditingAgainOutsideModbench_LeavesHeadOnTheNewCommit_NotThePristineOne()
     {
-        EditService().EditField(_mod.Plugin, _mod.Npc.ToString(), "height_max", Json("0.75"));
+        EditService().Set(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", Json("0.75"));
         Git("add", "-A");
         Git("commit", "-q", "-m", "committed outside Modbench");
 
         // Dirty again, against the *new* HEAD, with no read in between the commit and this edit —
         // the one case where a naive "refresh the file side only" pass leaves Head permanently
         // pinned to the pristine baseline.
-        EditService().EditField(_mod.Plugin, _mod.Npc.ToString(), "height_max", Json("0.25"));
+        EditService().Set(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", Json("0.25"));
 
         Reads().GetCompare(_mod.Npc.ToString());
 

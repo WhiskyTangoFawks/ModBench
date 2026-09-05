@@ -3,6 +3,7 @@ using MEditService.Core.Edits;
 using MEditService.Core.Queries;
 using MEditService.Core.Schema;
 using MEditService.Core.Source;
+using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace MEditService.Tests.Edits;
@@ -46,11 +47,11 @@ public sealed class ReadTimeFreshnessContainerTests : IDisposable
     {
         var file = _fixture.SourceFileContaining(ContainerModFixture.QuestEditorId);
 
-        var applied = EditService().EditField(_fixture.Plugin, _fixture.Quest.ToString(), "filter", Json("\"EditedFilter\""));
+        var applied = EditService().Set(_fixture.Plugin, _fixture.Quest.ToString(), "Filter", Json("\"EditedFilter\""));
         Assert.True(applied.Applied, applied.Message);
         Assert.Equal(
             "EditedFilter",
-            Reads().GetRecord(_fixture.Quest.ToString())!.Fields.Single(f => f.Metadata.Name == "filter").Value);
+            Reads().GetRecord(_fixture.Quest.ToString())!.Fields.Single(f => f.Metadata.Name == "Filter").Value?.ToString());
 
         // The gesture a user makes in the Source Control panel's "Discard Changes".
         Git("restore", "--", RelativePath(file).Replace('\\', '/'));
@@ -58,7 +59,7 @@ public sealed class ReadTimeFreshnessContainerTests : IDisposable
 
         Assert.NotEqual(
             "EditedFilter",
-            Reads().GetRecord(_fixture.Quest.ToString())!.Fields.Single(f => f.Metadata.Name == "filter").Value);
+            Reads().GetRecord(_fixture.Quest.ToString())!.Fields.Single(f => f.Metadata.Name == "Filter").Value?.ToString());
     }
 
     [Fact]
@@ -66,12 +67,12 @@ public sealed class ReadTimeFreshnessContainerTests : IDisposable
     {
         var file = _fixture.SourceFileContaining(ContainerModFixture.QuestEditorId);
 
-        var applied = EditService().EditField(_fixture.Plugin, _fixture.Quest.ToString(), "filter", Json("\"EditedFilter\""));
+        var applied = EditService().Set(_fixture.Plugin, _fixture.Quest.ToString(), "Filter", Json("\"EditedFilter\""));
         Assert.True(applied.Applied, applied.Message);
         Assert.Equal(
             "EditedFilter",
             Reads().GetCompare(_fixture.Quest.ToString())!.Overrides.Single()
-                .Fields.Single(f => f.Metadata.Name == "filter").Value);
+                .Fields.Single(f => f.Metadata.Name == "Filter").Value?.ToString());
 
         Git("restore", "--", RelativePath(file).Replace('\\', '/'));
         Assert.Empty(_fixture.GitStatus());
@@ -79,7 +80,7 @@ public sealed class ReadTimeFreshnessContainerTests : IDisposable
         Assert.NotEqual(
             "EditedFilter",
             Reads().GetCompare(_fixture.Quest.ToString())!.Overrides.Single()
-                .Fields.Single(f => f.Metadata.Name == "filter").Value);
+                .Fields.Single(f => f.Metadata.Name == "Filter").Value?.ToString());
     }
 
     [Fact]
@@ -87,17 +88,17 @@ public sealed class ReadTimeFreshnessContainerTests : IDisposable
     {
         var file = _fixture.SourceFileContaining(ContainerModFixture.EmbedCellEditorId);
 
-        var applied = EditService().EditField(_fixture.Plugin, _fixture.TemporaryRef.ToString(), "scale", Json("2.5"));
+        var applied = EditService().Set(_fixture.Plugin, _fixture.TemporaryRef.ToString(), "Scale", Json("2.5"));
         Assert.True(applied.Applied, applied.Message);
         Assert.Equal(
             2.5f,
-            Reads().GetRecord(_fixture.TemporaryRef.ToString())!.Fields.Single(f => f.Metadata.Name == "scale").Value);
+            Assert.IsType<JsonElement>(Reads().GetRecord(_fixture.TemporaryRef.ToString())!.Fields.Single(f => f.Metadata.Name == "Scale").Value).GetSingle());
 
         Git("restore", "--", RelativePath(file).Replace('\\', '/'));
         Assert.Empty(_fixture.GitStatus());
 
         Assert.NotEqual(
             2.5f,
-            Reads().GetRecord(_fixture.TemporaryRef.ToString())!.Fields.Single(f => f.Metadata.Name == "scale").Value);
+            (Reads().GetRecord(_fixture.TemporaryRef.ToString())!.Fields.Single(f => f.Metadata.Name == "Scale").Value as JsonElement?)?.GetSingle());
     }
 }

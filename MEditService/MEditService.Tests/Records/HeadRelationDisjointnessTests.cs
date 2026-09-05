@@ -1,9 +1,11 @@
+using System.Text.Json;
 using MEditService.Core.Edits;
 using MEditService.Core.Plugins;
 using MEditService.Core.Queries;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
 using MEditService.Tests.Edits;
+using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace MEditService.Tests.Records;
@@ -19,7 +21,7 @@ public sealed class HeadRelationDisjointnessTests
         using var mod = TrackedModFixture.Tracked();
 
         var edited = new RecordEditService(mod.Mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance)
-            .EditField(mod.Plugin, mod.Npc.ToString(), "height_max", System.Text.Json.JsonDocument.Parse("0.75").RootElement);
+            .Set(mod.Plugin, mod.Npc.ToString(), "HeightMax", System.Text.Json.JsonDocument.Parse("0.75").RootElement);
         Assert.True(edited.Applied, edited.Message);
 
         // Precondition: the record really is dirty, so a snapshot row exists to be duplicated.
@@ -33,7 +35,7 @@ public sealed class HeadRelationDisjointnessTests
         // The edit survives: Effective still serves the source's 0.75, not the binary's untouched
         // value (the binary was written by the fixture and has never been compiled since).
         var effective = mod.Mirror.Index!.At(RecordRef.Effective).GetDocument(mod.Npc.ToString(), mod.Plugin)!;
-        Assert.Equal(0.75f, Assert.IsType<float>(effective.Fields.Single(f => f.Metadata.Name == "height_max").Value));
+        Assert.Equal(0.75f, Assert.IsType<JsonElement>(effective.Fields.Single(f => f.Metadata.Name == "HeightMax").Value).GetSingle());
 
         // ...and so does the divergence it created: the record is still committed-versus-working-tree
         // dirty, so it is still diffable and revertable.
@@ -55,7 +57,7 @@ public sealed class HeadRelationDisjointnessTests
         using var mod = TrackedModFixture.Tracked();
 
         var edited = new RecordEditService(mod.Mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance)
-            .EditField(mod.Plugin, mod.Npc.ToString(), "height_max", System.Text.Json.JsonDocument.Parse("0.8").RootElement);
+            .Set(mod.Plugin, mod.Npc.ToString(), "HeightMax", System.Text.Json.JsonDocument.Parse("0.8").RootElement);
         Assert.True(edited.Applied, edited.Message);
 
         mod.Mirror.Index!.Unindex(mod.Plugin);

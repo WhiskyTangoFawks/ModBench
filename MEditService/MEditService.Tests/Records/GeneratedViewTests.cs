@@ -56,10 +56,10 @@ public sealed class GeneratedViewTests : IClassFixture<CutDownPluginFixture>
     public void ScalarColumns_ReadTheSameValuesTheExtractorProduces()
     {
         var schema = SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4)["npc_"];
-        var col = schema.RecordColumns.First(c => c.Name == "xp_value_offset");
+        var col = schema.RecordColumns.First(c => c.Name == "XpValueOffset");
 
         using var cmd = _fixture.Repo.Connection.CreateCommand();
-        cmd.CommandText = "SELECT form_key, \"xp_value_offset\" FROM \"npc_\" ORDER BY form_key";
+        cmd.CommandText = "SELECT form_key, \"XpValueOffset\" FROM \"npc_\" ORDER BY form_key";
         using var reader = cmd.ExecuteReader();
 
         var rows = 0;
@@ -76,9 +76,9 @@ public sealed class GeneratedViewTests : IClassFixture<CutDownPluginFixture>
     public void OmittedDefaults_ReadAsTheDefault_NotNull()
     {
         var zeros = Convert.ToInt64(
-            Scalar("SELECT COUNT(*) FROM \"npc_\" WHERE \"calc_min_level\" = 0"), CultureInfo.InvariantCulture);
+            Scalar("SELECT COUNT(*) FROM \"npc_\" WHERE \"CalcMinLevel\" = 0"), CultureInfo.InvariantCulture);
         var nulls = Convert.ToInt64(
-            Scalar("SELECT COUNT(*) FROM \"npc_\" WHERE \"calc_min_level\" IS NULL"), CultureInfo.InvariantCulture);
+            Scalar("SELECT COUNT(*) FROM \"npc_\" WHERE \"CalcMinLevel\" IS NULL"), CultureInfo.InvariantCulture);
         var absent = Convert.ToInt64(
             Scalar("SELECT COUNT(*) FROM records WHERE record_type = 'npc_' AND json_extract(body, '$.CalcMinLevel') IS NULL"),
             CultureInfo.InvariantCulture);
@@ -91,7 +91,7 @@ public sealed class GeneratedViewTests : IClassFixture<CutDownPluginFixture>
     [Fact]
     public void TranslatedStrings_ReadTheirValue_NotTheEnvelope()
     {
-        var name = Scalar("SELECT \"name\" FROM \"acti\" WHERE \"name\" IS NOT NULL LIMIT 1") as string;
+        var name = Scalar("SELECT \"Name\" FROM \"acti\" WHERE \"Name\" IS NOT NULL LIMIT 1") as string;
 
         Assert.NotNull(name);
         Assert.DoesNotContain("TargetLanguage", name, StringComparison.Ordinal);
@@ -100,12 +100,12 @@ public sealed class GeneratedViewTests : IClassFixture<CutDownPluginFixture>
     [Fact]
     public void FlagsEnums_ReadAsJoinedNames()
     {
-        var flags = Scalar("SELECT \"flags\" FROM \"cell\" WHERE \"flags\" <> '' LIMIT 1") as string;
+        var flags = Scalar("SELECT \"Flags\" FROM \"cell\" WHERE \"Flags\" <> '' LIMIT 1") as string;
 
         Assert.NotNull(flags);
         Assert.DoesNotContain("[", flags, StringComparison.Ordinal);
         var matching = Convert.ToInt64(
-            Scalar($"SELECT COUNT(*) FROM \"cell\" WHERE \"flags\" LIKE '%{flags.Split(',')[0].Trim()}%'"),
+            Scalar($"SELECT COUNT(*) FROM \"cell\" WHERE \"Flags\" LIKE '%{flags.Split(',')[0].Trim()}%'"),
             CultureInfo.InvariantCulture);
         Assert.True(matching > 0, "A flag name must be matchable with LIKE — that is the capability this rendering exists to keep.");
     }
@@ -135,7 +135,7 @@ public sealed class GeneratedViewTests : IClassFixture<CutDownPluginFixture>
     public void GrupTimestamps_AreAbsentFromSchemaAndViewsAlike()
     {
         var schemas = SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4);
-        string[] timestamps = ["timestamp", "temporary_timestamp", "persistent_timestamp"];
+        string[] timestamps = ["timestamp", "TemporaryTimestamp", "PersistentTimestamp"];
 
         foreach (var table in (string[])["cell", "dial", "qust"])
         {

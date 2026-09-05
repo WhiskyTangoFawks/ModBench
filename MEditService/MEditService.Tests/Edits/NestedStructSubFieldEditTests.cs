@@ -4,10 +4,12 @@ using MEditService.Core.Plugins;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
 using MEditService.Core.Source;
+using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
+using static MEditService.Tests.TestSupport.Envelopes;
 
 namespace MEditService.Tests.Edits;
 
@@ -26,9 +28,9 @@ public sealed class NestedStructSubFieldEditTests : IDisposable
     [Fact]
     public void VendorLocationTarget_NamedInPayload_RoundTrips()
     {
-        var result = _fixture.Service().EditField(_fixture.Plugin, _fixture.Faction.ToString(), "vendor_location",
+        var result = _fixture.Service().Set(_fixture.Plugin, _fixture.Faction.ToString(), "VendorLocation",
             Json("""
-            {"radius": 99, "target": {"concrete_type": "LocationFallback", "type": "NearSelf", "data": 3}}
+            {"Radius": 99, "Target": {"MutagenObjectType": "LocationFallback", "Type": "NearSelf", "Data": 3}}
             """));
 
         Assert.True(result.Applied, result.Message);
@@ -37,16 +39,17 @@ public sealed class NestedStructSubFieldEditTests : IDisposable
         Assert.Contains("\"Data\": 3", body, StringComparison.Ordinal);
     }
 
+    // One leaf, one change: the siblings the gesture never named stay as they were.
     [Fact]
-    public void VendorLocationTarget_SecondEditSameLeaf_ReusesAndKeepsUnnamedMembers()
+    public void VendorLocationTarget_SecondEditOfOneLeaf_KeepsUnnamedMembers()
     {
         var service = _fixture.Service();
-        var first = service.EditField(_fixture.Plugin, _fixture.Faction.ToString(), "vendor_location",
-            Json("""{"target": {"concrete_type": "LocationFallback", "type": "NearSelf", "data": 3}}"""));
+        var first = service.Set(_fixture.Plugin, _fixture.Faction.ToString(), "VendorLocation",
+            Json("""{"Target": {"MutagenObjectType": "LocationFallback", "Type": "NearSelf", "Data": 3}}"""));
         Assert.True(first.Applied, first.Message);
 
-        var second = service.EditField(_fixture.Plugin, _fixture.Faction.ToString(), "vendor_location",
-            Json("""{"target": {"concrete_type": "LocationFallback", "data": 5}}"""));
+        var second = service.Edit(_fixture.Plugin, _fixture.Faction.ToString(),
+            SetAt(Json("5"), Member("VendorLocation"), Member("Target"), Member("Data")));
 
         Assert.True(second.Applied, second.Message);
         var body = _fixture.Body();
@@ -59,13 +62,13 @@ public sealed class NestedStructSubFieldEditTests : IDisposable
     {
         var before = _fixture.Body();
 
-        var result = _fixture.Service().EditField(_fixture.Plugin, _fixture.Faction.ToString(), "vendor_location",
+        var result = _fixture.Service().Set(_fixture.Plugin, _fixture.Faction.ToString(), "VendorLocation",
             Json("""
-            {"radius": 99, "target": {"concrete_type": "LocationFallback", "type": "NearSelf", "data": "not-a-number"}}
+            {"Radius": 99, "Target": {"MutagenObjectType": "LocationFallback", "Type": "NearSelf", "Data": "not-a-number"}}
             """));
 
         Assert.False(result.Applied);
-        Assert.Equal(RecordEditRefusal.FieldValueShapeMismatch, result.Refusal);
+        Assert.Equal(RecordEditRefusal.CodecRejected, result.Refusal);
         Assert.Equal(before, _fixture.Body());
         Assert.Contains("\"Radius\": 1", _fixture.Body(), StringComparison.Ordinal);
     }
@@ -75,8 +78,8 @@ public sealed class NestedStructSubFieldEditTests : IDisposable
     {
         var before = _fixture.Body();
 
-        var result = _fixture.Service().EditField(_fixture.Plugin, _fixture.Faction.ToString(), "vendor_location",
-            Json("""{"radius": 99, "target": {"type": "NearSelf", "data": 3}}"""));
+        var result = _fixture.Service().Set(_fixture.Plugin, _fixture.Faction.ToString(), "VendorLocation",
+            Json("""{"Radius": 99, "Target": {"Type": "NearSelf", "Data": 3}}"""));
 
         Assert.False(result.Applied);
         Assert.Equal(before, _fixture.Body());
@@ -85,8 +88,8 @@ public sealed class NestedStructSubFieldEditTests : IDisposable
     [Fact]
     public void VendorLocation_PayloadOmittingTarget_StillAppliesBothWritableSiblings()
     {
-        var result = _fixture.Service().EditField(_fixture.Plugin, _fixture.Faction.ToString(), "vendor_location",
-            Json("""{"radius": 99, "collection_index": 2}"""));
+        var result = _fixture.Service().Set(_fixture.Plugin, _fixture.Faction.ToString(), "VendorLocation",
+            Json("""{"Radius": 99, "CollectionIndex": 2}"""));
 
         Assert.True(result.Applied, result.Message);
         var body = _fixture.Body();

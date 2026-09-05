@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { modelValue, toBigInt } from './modelValue';
+import { modelValue } from './modelValue';
 import type { FieldMetadata, FormKeyResolution } from './types';
 
 // ADR-0034: modelValue is the single definition of the string a cell's editor shows for every
@@ -14,7 +14,7 @@ const enumMeta: FieldMetadata = {
   enumMembers: [{ value: 'Male' }, { value: 'Female' }, { value: 'None' }],
 };
 const flagMeta: FieldMetadata = {
-  name: 'Flags', type: 'enum', isArray: false, validFormKeyTypes: [],
+  name: 'Flags', type: 'flags', isArray: false, validFormKeyTypes: [],
   enumMembers: [{ value: 'A', bitValue: '1' }, { value: 'B', bitValue: '2' },
     { value: 'C', bitValue: '4' }, { value: 'D', bitValue: '8' }],
 };
@@ -65,42 +65,18 @@ describe('modelValue — scalar types', () => {
 });
 
 describe('modelValue — flags', () => {
-  it('active flag names, comma-separated — never the bitmask integer', () => {
-    expect(modelValue(0b0101, flagMeta)).toBe('A, C');
+  it('the names set, comma-separated, in the document\'s own order', () => {
+    expect(modelValue(['C', 'A'], flagMeta)).toBe('C, A');
   });
 
-  it('no active bits: empty string, same as null', () => {
-    expect(modelValue(0, flagMeta)).toBe('');
+  it('no names set: empty string, same as absent', () => {
+    expect(modelValue([], flagMeta)).toBe('');
     expect(modelValue(null, flagMeta)).toBe('');
   });
 
-  it('a decimal-string bitmask above 2^53 resolves with BigInt precision', () => {
-    const highBit: FieldMetadata = {
-      name: 'RaceFlags', type: 'enum', isArray: false, validFormKeyTypes: [],
-      enumMembers: [{ value: 'Playable', bitValue: '1' },
-        { value: 'LowPriorityPushable', bitValue: '9007199254740992' }],
-    };
-    expect(modelValue('9007199254740993', highBit)).toBe('Playable, LowPriorityPushable');
-  });
-
-  it('a bitless member falls back to toStr rather than throwing', () => {
-    const broken: FieldMetadata = { name: 'X', type: 'enum', isArray: false, validFormKeyTypes: [], enumMembers: [{ value: 'A' }] };
-    expect(() => modelValue(3, broken)).not.toThrow();
-  });
-
-  // "every member carries a bit" is vacuously true of no members at all, so an enum with an empty
-  // domain would render as a (permanently empty) flag list where a plain value belongs.
-  it('an enum with no members at all is not a flag list', () => {
-    const empty: FieldMetadata = { name: 'X', type: 'enum', isArray: false, validFormKeyTypes: [], enumMembers: [] };
-    expect(modelValue('Whatever', empty)).toBe('Whatever');
-  });
-
-  it('a partly-bitless member list is not a flag list', () => {
-    const mixed: FieldMetadata = {
-      name: 'X', type: 'enum', isArray: false, validFormKeyTypes: [],
-      enumMembers: [{ value: 'A', bitValue: '1' }, { value: 'B' }],
-    };
-    expect(modelValue('3', mixed)).toBe('3');
+  // A name the metadata does not list is still what the document says.
+  it('a name outside the metadata\'s members reads as itself', () => {
+    expect(modelValue(['AB'], flagMeta)).toBe('AB');
   });
 });
 
@@ -146,20 +122,5 @@ describe('modelValue — struct/array summary rows (JSON, not a prose summary)',
   it('null struct/array: empty string, not "null"', () => {
     expect(modelValue(null, structMeta)).toBe('');
     expect(modelValue(null, arrayMeta)).toBe('');
-  });
-});
-
-describe('toBigInt (shared with FlagCell)', () => {
-  it('parses a decimal string', () => {
-    expect(toBigInt('12')).toBe(12n);
-  });
-
-  it('parses a small number', () => {
-    expect(toBigInt(12)).toBe(12n);
-  });
-
-  it('falls back to 0n on malformed input', () => {
-    expect(toBigInt('abc')).toBe(0n);
-    expect(toBigInt({})).toBe(0n);
   });
 });

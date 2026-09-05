@@ -21,15 +21,15 @@ internal static class Fallout4ConditionAnnotations
         Enum.GetNames<Condition.RunOnType>().ToDictionary(
             name => name,
             name => name == nameof(Condition.RunOnType.Reference)
-                ? (IReadOnlyList<string>)["reference"]
+                ? (IReadOnlyList<string>)[nameof(ConditionData.Reference)]
                 : []);
 
     private static List<string> SlotsUsedBy(Condition.Function function)
     {
         var (one, two, _) = Condition.GetParameterTypes(function);
         List<string> used = [];
-        if (MemberFor(one) is { } first) used.Add($"parameter_one_{first}");
-        if (MemberFor(two) is { } second) used.Add($"parameter_two_{second}");
+        if (MemberFor(one) is { } first) used.Add($"ParameterOne{first}");
+        if (MemberFor(two) is { } second) used.Add($"ParameterTwo{second}");
         return used;
     }
 
@@ -37,9 +37,9 @@ internal static class Fallout4ConditionAnnotations
     // unused slot is None and names no member at all.
     private static string? MemberFor(Condition.ParameterType type) => type.GetCategory() switch
     {
-        Condition.ParameterCategory.Number => "number",
-        Condition.ParameterCategory.Form => "record",
-        Condition.ParameterCategory.String => "string",
+        Condition.ParameterCategory.Number => "Number",
+        Condition.ParameterCategory.Form => "Record",
+        Condition.ParameterCategory.String => "String",
         _ => null,
     };
 }

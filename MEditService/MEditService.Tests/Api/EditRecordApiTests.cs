@@ -9,7 +9,7 @@ namespace MEditService.Tests.Api;
 /// <summary>"Typed" is the load-bearing word: an agent must branch on which refusal it got without
 /// matching on prose, so the refusal travels as a ProblemDetails extension (ADR-0026).</summary>
 [Collection(WebHostCollection.Name)]
-public sealed class EditFieldApiTests(LoadedApiFixture<TestPluginFixture> loaded)
+public sealed class EditRecordApiTests(LoadedApiFixture<TestPluginFixture> loaded)
     : IClassFixture<LoadedApiFixture<TestPluginFixture>>
 {
     private readonly HttpClient _client = loaded.Client;
@@ -41,13 +41,14 @@ public sealed class EditFieldApiTests(LoadedApiFixture<TestPluginFixture> loaded
         return records.GetProperty("items")[0].GetProperty("formKey").GetString()!;
     }
 
-    private Task<HttpResponseMessage> PostEdit(string formKey, string fieldPath, object value) =>
+    // The one envelope: an operation, a path of hops and a value (ADR-0032).
+    private Task<HttpResponseMessage> PostEdit(string formKey, string member, object value) =>
         _client.PostAsJsonAsync(
-            $"/records/{Uri.EscapeDataString(formKey)}/field",
-            new { plugin = Plugin, origin = Origin, fieldPath, value });
+            $"/records/{Uri.EscapeDataString(formKey)}/edit",
+            new { plugin = Plugin, origin = Origin, op = "set", path = new[] { new { kind = "member", name = member } }, value });
 
     [Fact]
-    public async Task EditField_OnATrackedPlugin_LandsAsAWorkingTreeChange()
+    public async Task EditRecord_OnATrackedPlugin_LandsAsAWorkingTreeChange()
     {
         using var fx = BuildOneModOnePlugin();
         await LoadOnly(fx);
@@ -55,7 +56,7 @@ public sealed class EditFieldApiTests(LoadedApiFixture<TestPluginFixture> loaded
         (await _client.PostAsJsonAsync("/plugins/track", new { origin = Origin, preset = "Edits" })).EnsureSuccessStatusCode();
 
         var formKey = await FirstNpcFormKey();
-        var response = await PostEdit(formKey, "height_max", 0.75);
+        var response = await PostEdit(formKey, "HeightMax", 0.75);
 
         response.EnsureSuccessStatusCode();
         Assert.True(JsonSerializer.Deserialize<JsonElement>(await response.Content.ReadAsStringAsync())
@@ -69,29 +70,29 @@ public sealed class EditFieldApiTests(LoadedApiFixture<TestPluginFixture> loaded
     }
 
     [Fact]
-    public async Task EditField_OnATrackedPlugin_IsVisibleToTheNextRead()
+    public async Task EditRecord_OnATrackedPlugin_IsVisibleToTheNextRead()
     {
         using var fx = BuildOneModOnePlugin();
         await LoadOnly(fx);
         (await _client.PostAsJsonAsync("/plugins/track", new { origin = Origin, preset = "Edits" })).EnsureSuccessStatusCode();
 
         var formKey = await FirstNpcFormKey();
-        (await PostEdit(formKey, "height_max", 0.75)).EnsureSuccessStatusCode();
+        (await PostEdit(formKey, "HeightMax", 0.75)).EnsureSuccessStatusCode();
 
         var detail = await _client.GetFromJsonAsync<JsonElement>($"/records/{Uri.EscapeDataString(formKey)}");
         var field = detail.GetProperty("fields").EnumerateArray()
-            .Single(f => f.GetProperty("metadata").GetProperty("name").GetString() == "height_max");
+            .Single(f => f.GetProperty("metadata").GetProperty("name").GetString() == "HeightMax");
         Assert.Equal(0.75, field.GetProperty("value").GetDouble(), 3);
     }
 
     [Fact]
-    public async Task EditField_OnAnUntrackedPlugin_IsRefusedWithATypedRefusal()
+    public async Task EditRecord_OnAnUntrackedPlugin_IsRefusedWithATypedRefusal()
     {
         using var fx = BuildOneModOnePlugin();
         await LoadOnly(fx); // deliberately not tracked
         var formKey = await FirstNpcFormKey();
 
-        var response = await PostEdit(formKey, "height_max", 0.75);
+        var response = await PostEdit(formKey, "HeightMax", 0.75);
 
         Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
         var problem = await response.Content.ReadFromJsonAsync<JsonElement>();
@@ -100,8 +101,28 @@ public sealed class EditFieldApiTests(LoadedApiFixture<TestPluginFixture> loaded
         Assert.Contains("Track", problem.GetProperty("detail").GetString()!, StringComparison.Ordinal);
     }
 
+    // The envelope itself could not be read as a write: malformed, so a 400 that still names the
+    // refusal an agent branches on.
     [Fact]
-    public async Task EditField_WithAnUnknownField_Is404_WithItsOwnRefusal()
+    public async Task EditRecord_WithAnUnknownOperation_Is400_WithItsOwnRefusal()
+    {
+        using var fx = BuildOneModOnePlugin();
+        await LoadOnly(fx);
+        (await _client.PostAsJsonAsync("/plugins/track", new { origin = Origin, preset = "Edits" })).EnsureSuccessStatusCode();
+        var formKey = await FirstNpcFormKey();
+
+        var response = await _client.PostAsJsonAsync(
+            $"/records/{Uri.EscapeDataString(formKey)}/edit",
+            new { plugin = Plugin, origin = Origin, op = "frobnicate", path = new[] { new { kind = "member", name = "HeightMax" } }, value = 1 });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var problem = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("InvalidEnvelope", problem.GetProperty("refusal").GetString());
+        Assert.Equal("HeightMax", problem.GetProperty("path").GetString());
+    }
+
+    [Fact]
+    public async Task EditRecord_WithAnUnknownField_Is404_WithItsOwnRefusal()
     {
         using var fx = BuildOneModOnePlugin();
         await LoadOnly(fx);
@@ -116,7 +137,7 @@ public sealed class EditFieldApiTests(LoadedApiFixture<TestPluginFixture> loaded
     }
 
     [Fact]
-    public async Task EditField_WhenTheSourceFileCannotBeWritten_IsAShapedProblem_NotAnUnhandled500()
+    public async Task EditRecord_WhenTheSourceFileCannotBeWritten_IsAShapedProblem_NotAnUnhandled500()
     {
         using var fx = BuildOneModOnePlugin();
         await LoadOnly(fx);
@@ -138,7 +159,7 @@ public sealed class EditFieldApiTests(LoadedApiFixture<TestPluginFixture> loaded
         File.Delete(sourcePath);
         Directory.CreateDirectory(sourcePath);
 
-        var response = await PostEdit(formKey, "height_max", 0.75);
+        var response = await PostEdit(formKey, "HeightMax", 0.75);
 
         // A shaped ProblemDetails, not an empty 500: a client with no body to read cannot tell
         // that apart from the backend having died.
@@ -148,15 +169,15 @@ public sealed class EditFieldApiTests(LoadedApiFixture<TestPluginFixture> loaded
     }
 
     [Fact]
-    public async Task EditField_WithoutAPlugin_Is400()
+    public async Task EditRecord_WithoutAPlugin_Is400()
     {
         using var fx = BuildOneModOnePlugin();
         await LoadOnly(fx);
         var formKey = await FirstNpcFormKey();
 
         var response = await _client.PostAsJsonAsync(
-            $"/records/{Uri.EscapeDataString(formKey)}/field",
-            new { plugin = "", origin = Origin, fieldPath = "height_max", value = 0.75 });
+            $"/records/{Uri.EscapeDataString(formKey)}/edit",
+            new { plugin = "", origin = Origin, fieldPath = "HeightMax", value = 0.75 });
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }

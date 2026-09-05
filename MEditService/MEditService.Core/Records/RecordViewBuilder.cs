@@ -39,11 +39,11 @@ internal static class RecordViewBuilder
     {
         var path = $"'$.{col.PropertyName}'";
         string raw;
-        if (col.IsFlagsEnum)
+        if (col.ApiType == "flags")
         {
             // A [Flags] enum is written as an array of member names. Joining them keeps the column
             // text and keeps `LIKE '%SomeFlag%'` working, which is how record flags are actually
-            // filtered on. Deliberately no BIGINT bit value.
+            // filtered on.
             raw = $"array_to_string(CAST(json_extract(body, {path}) AS VARCHAR[]), ', ')";
         }
         else if (col.DuckDbType == "VARCHAR")

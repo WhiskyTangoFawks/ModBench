@@ -1,4 +1,5 @@
 using MEditService.Core.Schema;
+using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -56,28 +57,23 @@ public class PartialFormFlagTests
         Assert.False(PartialFormFlag.IsPartialFormable(typeof(Npc)));
     }
 
-    // The rival, at the unit level: a full-overwrite implementation of Set
-    // (`MajorRecordFlagsRaw = value ? Bit : 0`) would silently drop this pre-existing, unrelated bit
-    // (Persistent, 0x0400) — the correct implementation only ever touches bit 14.
+    // The write door and the read gate name the same types: a container type IsPartialFormable
+    // admits carries the annotated IsPartialForm member, and no other type does.
     [Fact]
-    public void Set_True_OnlyFlipsBit14_PreservesOtherBits()
+    public void TheAnnotatedPartialFormMembers_AreExactlyThePartialFormableTypes()
     {
-        var mod = MakeMod();
-        var cell = new Cell(mod) { EditorID = "SomeCell", MajorRecordFlagsRaw = 0x0000_0400 };
+        var schemas = SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4);
 
-        PartialFormFlag.Set(cell, true);
+        var annotated = schemas.Values
+            .Where(s => s.RecordColumns.Any(c => c.Synthetic is { Bit: PartialFormFlag.Bit }))
+            .Select(s => s.TableName)
+            .Order(StringComparer.Ordinal);
+        var partialFormable = schemas.Values
+            .Where(s => !s.IsHeader && PartialFormFlag.IsPartialFormable(s.RecordType))
+            .Select(s => s.TableName)
+            .Order(StringComparer.Ordinal);
 
-        Assert.Equal(0x0000_0400 | PartialFormBit, cell.MajorRecordFlagsRaw);
-    }
-
-    [Fact]
-    public void Set_False_OnlyFlipsBit14_PreservesOtherBits()
-    {
-        var mod = MakeMod();
-        var cell = new Cell(mod) { EditorID = "SomeCell", MajorRecordFlagsRaw = 0x0000_0400 | PartialFormBit };
-
-        PartialFormFlag.Set(cell, false);
-
-        Assert.Equal(0x0000_0400, cell.MajorRecordFlagsRaw);
+        Assert.Equal(partialFormable, annotated);
+        Assert.NotEmpty(annotated);
     }
 }

@@ -1,6 +1,7 @@
 using System.Text.Json;
 using MEditService.Core.Edits;
 using MEditService.Core.Schema;
+using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -8,8 +9,8 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Tests.Edits;
 
-/// <summary><see cref="ArrayOpWriter"/> is called on an in-memory record, no plugin on disk: whether
-/// the default element names a constructible leaf is settled before anything is written.</summary>
+/// <summary>The document-edit seam on an in-memory record's document, no plugin on disk: whether
+/// the default element names a leaf the codec builds is settled before anything is written.</summary>
 public class UnionArrayAddInventoryTests
 {
     private static readonly ModKey Key = ModKey.FromFileName("UnionArrayAdd710.esp");
@@ -34,7 +35,9 @@ public class UnionArrayAddInventoryTests
         // cobj.conditions and every other condition-bearing column
         "ConditionFloat|ConditionGlobal",
         // omod.properties
-        "Int|Float|Bool|String|Enum|FormIdInt|FormIdFloat",
+        "ObjectModIntProperty<Armor+Property>|ObjectModFloatProperty<Armor+Property>|ObjectModBoolProperty<Armor+Property>|"
+        + "ObjectModStringProperty<Armor+Property>|ObjectModEnumProperty<Armor+Property>|"
+        + "ObjectModFormLinkIntProperty<Armor+Property>|ObjectModFormLinkFloatProperty<Armor+Property>",
         // perk.effects
         "PerkEntryPointModifyActorValue|PerkEntryPointModifyValue|PerkQuestEffect|PerkAbilityEffect|" +
         "PerkEntryPointAddRangeToValue|PerkEntryPointAbsoluteValue|PerkEntryPointAddLeveledItem|" +
@@ -48,27 +51,27 @@ public class UnionArrayAddInventoryTests
 
     public static TheoryData<string, string> UnionArrays() => new()
     {
-        { "cobj", "conditions" },
-        { "qust", "aliases" },
-        { "perk", "effects" },
-        { "aech", "effects" },
-        { "omod", "properties" },
+        { "cobj", "Conditions" },
+        { "qust", "Aliases" },
+        { "perk", "Effects" },
+        { "aech", "Effects" },
+        { "omod", "Properties" },
     };
 
     [Theory]
     [MemberData(nameof(UnionArrays))]
-    public void ArrayAdd_BuildsAnElementTheWritePathAccepts(string table, string column)
+    public void ArrayAdd_BuildsAnElementTheCodecAccepts(string table, string column)
     {
         var mod = new Fallout4Mod(Key, Fallout4Release.Fallout4);
         var schema = SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4)[table];
         var col = schema.RecordColumns.Single(c => c.Name == column);
-        var record = NewRecord(mod, table);
+        var text = DocumentEdits.Serialize(NewRecord(mod, table));
 
-        var outcome = ArrayOpWriter.Apply(record, col, "array_add",
-            JsonDocument.Parse("""{"op": "array_add", "path": []}""").RootElement);
+        var refusal = DocumentEdits.Apply(text, schema, Envelopes.AddAt(Envelopes.Member(column)), out var body);
 
-        Assert.Equal(FieldApplyOutcome.Applied, outcome);
-        var written = JsonDocument.Parse((string)col.Extract(record)!).RootElement;
+        Assert.Null(refusal);
+        using var document = JsonDocument.Parse(body);
+        var written = document.RootElement.GetProperty(col.PropertyName);
         Assert.Equal(1, written.GetArrayLength());
         // The one member the default names, and the leaf it names.
         var discriminator = col.ElementType!.Fields!.Single(f => f.IsDiscriminator);

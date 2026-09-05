@@ -49,7 +49,7 @@ public class ContainerSingleFileTests
         cell.Temporary.Add(new PlacedObject(Mod) { EditorID = "TemporaryRef" });
         cell.NavigationMeshes.Add(new NavigationMesh(Mod));
         cell.Landscape = new Landscape(Mod);
-        yield return [cell, typeof(Cell), "cell"];
+        yield return [cell, typeof(Cell), "Cell"];
 
         // Worldspace — TopCell is embedded; SubCells is the type most likely to look "fine" for the
         // wrong reason, since Worldspace_Serialization drops it under FilePerRecord by design.

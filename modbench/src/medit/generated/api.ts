@@ -362,7 +362,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/records/{formKey}/field": {
+    "/records/{formKey}/edit": {
         parameters: {
             query?: never;
             header?: never;
@@ -371,7 +371,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        post: operations["EditRecordField"];
+        post: operations["EditRecord"];
         delete?: never;
         options?: never;
         head?: never;
@@ -672,6 +672,10 @@ export interface components {
             } | null;
             keyMembers?: string[] | null;
             leafTypeName?: string | null;
+            variants?: {
+                [key: string]: components["schemas"]["FieldMetadata"];
+            } | null;
+            default?: unknown;
         };
         FieldValue: {
             metadata: components["schemas"]["FieldMetadata"];
@@ -733,6 +737,13 @@ export interface components {
         MasterIssueKind: "DirectlyMissing" | "Unloadable";
         NextFreeFormKeyResponse: {
             formKey: string;
+        };
+        PathHop: {
+            kind: string;
+            name?: string | null;
+            /** Format: int32 */
+            index?: number | null;
+            key?: string | null;
         };
         PlacedSummary: {
             formKey: string;
@@ -856,16 +867,17 @@ export interface components {
             isPartialForm: boolean;
             isPartialFormable: boolean;
         };
-        RecordFieldEditRequest: {
+        RecordEditRequest: {
             plugin: string;
             origin: string;
-            fieldPath: string;
-            value: unknown;
+            op: string;
+            path: components["schemas"]["PathHop"][];
+            value?: unknown;
         };
-        RecordFieldEditResponse: {
+        RecordEditResponse: {
             applied: boolean;
             formKey: string;
-            fieldPath: string;
+            path: string;
         };
         RecordRenumberRequest: {
             plugin: string;
@@ -1913,7 +1925,7 @@ export interface operations {
             };
         };
     };
-    EditRecordField: {
+    EditRecord: {
         parameters: {
             query?: never;
             header?: never;
@@ -1924,7 +1936,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["RecordFieldEditRequest"];
+                "application/json": components["schemas"]["RecordEditRequest"];
             };
         };
         responses: {
@@ -1934,7 +1946,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["RecordFieldEditResponse"];
+                    "application/json": components["schemas"]["RecordEditResponse"];
                 };
             };
             /** @description Bad Request */

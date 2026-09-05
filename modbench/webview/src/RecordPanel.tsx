@@ -2,16 +2,18 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { PluginHeader } from './PluginHeader';
 import { DiffRow, type FocusedCell } from './DiffRow';
 import {
-  buildColumns, keyedElementIndex, elementSegment, collidingFilenames,
+  buildColumns, elementSegment, collidingFilenames,
   isArrayElementHop, isMovableElementHop, offersArrayAdd,
-  getAtPath, setAtPath, metaAtPath,
+  wirePath, variantFor, declaresMember,
   headerCellContext, combineVscodeContexts,
 } from './recordUtils';
 import type { PathSegment } from './recordUtils';
 import { mono, fg, headerCell, getConflictBg, DIMMED_OPACITY } from './gridStyles';
 import { collapsedSummaries } from './presentation';
-import { clearIdleSiblings, idleMembers } from './siblingsInUse';
-import type { ColumnKey, CompareOverride, CompareResult, ConflictThis, FieldDiff, FieldMetadata } from './types';
+import { idleMembers } from './siblingsInUse';
+import type {
+  ColumnKey, CompareOverride, CompareResult, ConflictThis, FieldDiff, FieldMetadata, RecordEditEnvelope,
+} from './types';
 import { columnKey } from './types';
 import { vscode } from './vscode';
 import { editField, openExtendedFieldEditor } from './nativeBridge';
@@ -27,11 +29,6 @@ const getHeaderBg = (c: ConflictThis | undefined): string | undefined => getConf
 
 type ArrayOpKind = 'add' | 'remove' | 'moveUp' | 'moveDown';
 
-// The op-envelope name each arity op sends under an ordinary reflected field's own fieldPath —
-// ArrayOpWriter's own vocabulary.
-const ARRAY_OP_NAMES = {
-  add: 'array_add', remove: 'array_remove', moveUp: 'array_move_up', moveDown: 'array_move_down',
-} as const;
 
 // ── RecordPanel ───────────────────────────────────────────────────────────────
 
@@ -78,13 +75,20 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
   // Nothing is applied optimistically — the panel re-reads once the host reports the edit landed.
   // An optimistic patch would show a value the write path had not accepted, which for a refused
   // edit is a lie never corrected.
-  const handleEditCell = useCallback((plugin: ColumnKey, fieldPath: string, value: unknown) => {
+  const post = useCallback((plugin: ColumnKey, envelope: RecordEditEnvelope) => {
     // The override carries the compound identity the write path needs; the column key alone is a
     // rendering key, not something the backend can resolve (ADR-0036).
     const override = (result?.overrides ?? []).find(o => columnKey(o.plugin, o.origin) === plugin);
     if (!override) return;
-    editField(formKey, override.plugin, override.origin, fieldPath, value);
+    editField(formKey, override.plugin, override.origin, envelope);
   }, [result, formKey]);
+
+  // The hops from the record's own member down to the row, resolved against this column's value
+  // where a hop needs the document (an element of a sorted array).
+  const hopsTo = useCallback((plugin: ColumnKey, rootField: string, path: PathSegment[]) => {
+    const rootDiff = (result?.diffs ?? []).find(d => d.fieldName === rootField);
+    return wirePath(rootField, path, rootDiff?.values[plugin]);
+  }, [result]);
 
   const refresh = useCallback(async (fk: string) => {
     if (!fk) return;
@@ -144,9 +148,9 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
     }
     // ADR-0038: the header record's masters field displays but is never directly editable —
     // stamped readOnly here rather than gated a second way, so every consumer sees one answer.
-    const mastersMeta = map.masters;
+    const mastersMeta = map.MasterReferences;
     if (isHeaderRecord && mastersMeta) {
-      map.masters = {
+      map.MasterReferences = {
         ...mastersMeta, readOnly: true,
         elementType: mastersMeta.elementType ? { ...mastersMeta.elementType, readOnly: true } : mastersMeta.elementType,
       };
@@ -154,36 +158,27 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
     return map;
   }, [result, isHeaderRecord]);
 
+  // `path` addresses the array for add and the element for the rest; a move's value is the
+  // position the element goes to. The backend resolves each against the document it holds.
   const handleArrayOp = useCallback((
     plugin: ColumnKey, path: PathSegment[], rootField: string, op: ArrayOpKind,
   ) => {
-    handleEditCell(plugin, rootField, { op: ARRAY_OP_NAMES[op], path });
-  }, [handleEditCell]);
+    const hops = hopsTo(plugin, rootField, path);
+    const last = hops[hops.length - 1];
+    if (op === 'add') post(plugin, { op: 'add', path: hops });
+    else if (op === 'remove') post(plugin, { op: 'remove', path: hops });
+    else if (last.kind === 'index') post(plugin, { op: 'move', path: hops, value: last.index + (op === 'moveUp' ? -1 : 1) });
+  }, [post, hopsTo]);
 
-  // CONTEXT.md: a complex field is always edited as one atomic value — a field-level write, never
-  // per-element — so a leaf inside an array/struct must never send its bare value under the root's
-  // field path.
-
-  // A member that declares which siblings its value keeps in use carries a cascade, and this is
-  // where the element is assembled, so this is where the cascade applies — for the inline editor
-  // and the extended one alike.
-  const handleCellCommit = useCallback((
-    plugin: ColumnKey, path: PathSegment[], rootField: string, rootDiff: FieldDiff, value: unknown,
-  ) => {
-    const next = path.length === 0 ? value : setAtPath(rootDiff.values[plugin], path, value);
-    const meta = metaAtPath(fieldMetaMap[rootField], path);
-    const owner = path.slice(0, -1);
-    const ownerMeta = metaAtPath(fieldMetaMap[rootField], owner);
-    handleEditCell(plugin, rootField, meta?.siblingsInUse && path.length > 0
-      ? setAtPath(next, owner, clearIdleSiblings(meta, ownerMeta?.fields ?? [], getAtPath(next, owner)))
-      : next);
-  }, [handleEditCell, fieldMetaMap]);
+  // One leaf, one set: the writer applies whatever a governing member's change idles (ADR-0032).
+  const handleCellCommit = useCallback((plugin: ColumnKey, path: PathSegment[], rootField: string, value: unknown) => {
+    post(plugin, { op: 'set', path: hopsTo(plugin, rootField, path), value });
+  }, [post, hopsTo]);
 
   // ADR-0039: a string cell's value in a real editor tab, reached only from the cell's right-click
-  // menu. Commits through the whole-field reconstruction an inline edit uses, never the saved text
-  // under the root path.
+  // menu. Its save is the same leaf commit as the inline editor's.
   const handleOpenExtended = useCallback((
-    plugin: ColumnKey, fieldPath: string, path: PathSegment[], rootField: string, value: string, readOnly: boolean,
+    plugin: ColumnKey, fieldName: string, path: PathSegment[], rootField: string, value: string, readOnly: boolean,
   ) => {
     const override = (result?.overrides ?? []).find(o => columnKey(o.plugin, o.origin) === plugin);
     if (!override) return;
@@ -192,10 +187,9 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
     // every other identity-bearing surface here already does.
     const displayId = (result?.overrides.find(o => o.isWinner) ?? result?.overrides[0])?.editorId;
     const recordLabel = displayId ? `${displayId} [${formKey}]` : formKey;
-    const rootDiff = (result?.diffs ?? []).find(d => d.fieldName === rootField);
     openExtendedFieldEditor(
-      { value, recordLabel, fieldName: fieldPath, plugin: override.plugin, origin: override.origin, readOnly },
-      (v: string) => { if (rootDiff) handleCellCommit(plugin, path, rootField, rootDiff, v); },
+      { value, recordLabel, fieldName, plugin: override.plugin, origin: override.origin, readOnly },
+      (v: string) => handleCellCommit(plugin, path, rootField, v),
     );
   }, [result, formKey, handleCellCommit]);
 
@@ -247,7 +241,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
     };
     window.addEventListener('message', handler);
     return () => window.removeEventListener('message', handler);
-  }, [refresh, handleArrayOp, handleEditCell, handleOpenExtended, fieldMetaMap]);
+  }, [refresh, handleArrayOp, handleOpenExtended]);
 
   // ADR-0036: keyed by ColumnKey, not the bare plugin filename — two overrides sharing a filename
   // would otherwise collide, the second silently discarding the first. Declared Record<string, …>
@@ -299,18 +293,18 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
   const title = displayId ? `${displayId} [${formKey}]` : formKey;
 
   // One recursive builder for every nesting depth — including the recursion a script property's
-  // struct members need. `meta` is undefined only for a malformed diff tree; `rootDiff` is the top
-  // of this subtree.
+  // struct members need. `meta` is undefined only for a malformed diff tree; `present` says which
+  // columns carry the object this row is a member of.
   function buildRows(
     diff: FieldDiff, meta: FieldMetadata | undefined, path: PathSegment[],
-    rootField: string, rootDiff: FieldDiff, rowKey: string, depth = 0,
-    collapsedSummary?: Record<string, string>,
+    rootField: string, rowKey: string, present: (column: ColumnKey) => boolean, depth = 0,
+    collapsedSummary?: Record<string, string>, cellMetas?: Partial<Record<string, FieldMetadata>>,
   ): React.ReactNode[] {
     const hasChildren = (diff.children?.length ?? 0) > 0;
     const isExpanded = expandedStructs.has(rowKey);
     // A row's own last hop says what it is and which gestures it offers — the same question
     // DiffRow's own cell menu and the native one both ask, of the same path (recordUtils.ts).
-    const elementHop = path[path.length - 1];
+    const elementHop = path.at(-1);
 
     const rows: React.ReactNode[] = [
       <DiffRow
@@ -321,7 +315,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
         fieldMetaMap={fieldMetaMap}
         notInLoadOrderSet={notInLoadOrderSet}
         editableColumns={editableColumns}
-        onEditCell={(plugin: ColumnKey, value: unknown) => handleCellCommit(plugin, path, rootField, rootDiff, value)}
+        onEditCell={(plugin: ColumnKey, value: unknown) => handleCellCommit(plugin, path, rootField, value)}
         onArrayAdd={offersArrayAdd(meta) ? (plugin: ColumnKey) => handleArrayOp(plugin, path, rootField, 'add') : undefined}
         onArrayRemove={isArrayElementHop(elementHop) ? (plugin: ColumnKey) => handleArrayOp(plugin, path, rootField, 'remove') : undefined}
         onArrayMoveUp={isMovableElementHop(elementHop) ? (plugin: ColumnKey) => handleArrayOp(plugin, path, rootField, 'moveUp') : undefined}
@@ -335,6 +329,8 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
         hasChildren={hasChildren}
         isExpanded={isExpanded}
         collapsedSummary={collapsedSummary}
+        ownerPresent={present}
+        cellMetas={cellMetas}
         onToggle={() => setExpandedStructs(prev => {
           const next = new Set(prev);
           if (next.has(rowKey)) next.delete(rowKey); else next.add(rowKey);
@@ -350,42 +346,36 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
     // removes only rows the diff already has.
     const idle = meta.type === 'struct' ? idleMembers(meta, columns.map(c => diff.values[c.key])) : undefined;
 
-    for (const child of diff.children ?? []) {
+    const children = diff.children ?? [];
+    for (const [ordinal, child] of children.entries()) {
       if (idle?.has(child.fieldName)) continue;
       const childRowKey = `${rowKey}.${child.fieldName}`;
       if (meta.type === 'array' && meta.elementType) {
-        rows.push(...buildArrayElementRows(
-          child, meta, meta.elementType, path, rootField, rootDiff, childRowKey, depth, diff.values));
+        // The presentation table's unit is one element of a list, and "the last one in this
+        // column" is the last child that column carries a value for.
+        const collapsedSummary = collapsedSummaries(child, meta.elementType, column =>
+          children.filter(c => c.values[column] != null).at(-1) === child);
+        // An element is spelled in full, so a column has it exactly where its value is.
+        rows.push(...buildRows(
+          child, meta.elementType, [...path, elementSegment(meta, child.fieldName, ordinal)],
+          rootField, childRowKey, column => child.values[column] != null, depth + 1, collapsedSummary));
       } else if (meta.type === 'struct') {
-        const memberMeta = meta.fields?.find(f => f.name === child.fieldName);
+        // A union member's shape is the leaf's the row's own values name; the row takes the first
+        // column's leaf for its structure, and each cell the shape its own column's leaf gives it.
+        const member = meta.fields?.find(f => f.name === child.fieldName);
+        const owner = columns.map(c => diff.values[c.key]).find(v => v != null);
+        const memberMeta = member && variantFor(member, owner, meta);
+        const cellMetas = member?.variants
+          ? Object.fromEntries(columns.map(c => [c.key, variantFor(member, diff.values[c.key], meta)]))
+          : undefined;
         rows.push(...buildRows(
           child, memberMeta, [...path, { kind: 'member', name: child.fieldName }],
-          rootField, rootDiff, childRowKey, depth + 1));
+          rootField, childRowKey,
+          column => present(column) && diff.values[column] != null && (!member || declaresMember(member, diff.values[column], meta)),
+          depth + 1, undefined, cellMetas));
       }
     }
     return rows;
-  }
-
-  function buildArrayElementRows(
-    child: FieldDiff, arrayMeta: FieldMetadata, elementMeta: FieldMetadata, arrayPath: PathSegment[],
-    rootField: string, rootDiff: FieldDiff, childRowKey: string, depth: number,
-    listValues: Record<string, unknown>,
-  ): React.ReactNode[] {
-    const seg = elementSegment(arrayMeta, child.fieldName);
-    // The presentation table's unit is one element of a list, and "is this the last one" is a
-    // question about the list — which only this frame, the one that descended into it, can answer.
-    const collapsedSummary = collapsedSummaries(child, elementMeta, column => {
-      const list = listValues[column];
-      if (!Array.isArray(list)) return true;
-      if (seg.kind === 'index') return seg.index === list.length - 1;
-      // A keyed element sits at a different position in each column, so this is asked of that
-      // column's own array rather than answered once for the row.
-      if (seg.kind === 'key') return keyedElementIndex(list, seg) === list.length - 1;
-      return true;
-    });
-    return buildRows(
-      child, elementMeta, [...arrayPath, seg], rootField, rootDiff, childRowKey,
-      depth + 1, collapsedSummary);
   }
 
   return (
@@ -448,10 +438,12 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
                         vscodeContext={combineVscodeContexts(
                           headerCellContext(col.override.formKey, col.override.plugin, col.override.origin),
                         )}
-                        // The one sanctioned header-flag write — is_partial_form is exempt from
-                        // the backend's Partial Form read-only guard, so it lands regardless of
-                        // the column's current state.
-                        onTogglePartialForm={next => handleEditCell(col.key, 'is_partial_form', next)}
+                        // The annotated synthetic member is the one sanctioned header-flag write —
+                        // exempt from the backend's Partial Form read-only guard, so it lands
+                        // regardless of the column's current state.
+                        onTogglePartialForm={next => post(col.key, {
+                          op: 'set', path: [{ kind: 'member', name: 'IsPartialForm' }], value: next,
+                        })}
                       />
                     </th>
                   );
@@ -460,8 +452,12 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
             </tr>
           </thead>
           <tbody>
+            {/* A Partial Form column's own fields are nulled by the classifier: none is absent by
+                default, since the record's own fields are not there to be members of. */}
             {diffs.flatMap(
-              diff => buildRows(diff, fieldMetaMap[diff.fieldName], [], diff.fieldName, diff, diff.fieldName),
+              diff => buildRows(
+                diff, fieldMetaMap[diff.fieldName], [], diff.fieldName, diff.fieldName,
+                column => !overrideMap[column]?.isPartialForm),
             )}
           </tbody>
         </table>

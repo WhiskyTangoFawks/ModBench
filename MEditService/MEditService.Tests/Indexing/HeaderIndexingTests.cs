@@ -100,7 +100,7 @@ public class HeaderIndexingTests
     }
 
     // The three fields the record editor renders for a header, read back through the ordinary document
-    // path: HeaderColumnExtract runs over the mod the body reads back into.
+    // path: each is the root document's own node at the column's path.
     [Fact]
     public void GetDocument_Header_AuthorField_MatchesModHeaderAuthor()
     {
@@ -111,7 +111,7 @@ public class HeaderIndexingTests
 
         var doc = repo.At(RecordRef.Effective).GetDocument(HeaderIndexer.FormKeyFor(mod.ModKey), new PluginKey("AuthorTest.esp", "Data"));
         Assert.NotNull(doc);
-        Assert.Equal("Vault Dweller", FieldValueOf(doc, "author"));
+        Assert.Equal("Vault Dweller", Assert.IsType<JsonElement>(FieldValueOf(doc, "Author")).GetString());
     }
 
     [Fact]
@@ -124,11 +124,10 @@ public class HeaderIndexingTests
 
         var doc = repo.At(RecordRef.Effective).GetDocument(HeaderIndexer.FormKeyFor(mod.ModKey), new PluginKey("EslTest.esp", "Data"));
         Assert.NotNull(doc);
-        // A bitmask column renders as a decimal string, exactly as it did when read off the wide
-        // table's INTEGER column — the shared normalization in DuckDbRecordIndex.BuildFields.
+        // The document spells the flags by Mutagen's member names.
         Assert.Equal(
-            ((long)Fallout4ModHeader.HeaderFlag.Small).ToString(CultureInfo.InvariantCulture),
-            FieldValueOf(doc, "flags"));
+            [nameof(Fallout4ModHeader.HeaderFlag.Small)],
+            Assert.IsType<JsonElement>(FieldValueOf(doc, "Flags")).EnumerateArray().Select(e => e.GetString()));
     }
 
     [Fact]
@@ -142,21 +141,20 @@ public class HeaderIndexingTests
 
         var doc = repo.At(RecordRef.Effective).GetDocument(HeaderIndexer.FormKeyFor(mod.ModKey), new PluginKey("MastersTest.esp", "Data"));
         Assert.NotNull(doc);
-        // An array column surfaces as a JsonElement of bare filename strings — deliberately NOT the
-        // document's own [{ "Master": ... }] shape, which is what the masters extractor flattens.
-        var masters = Assert.IsType<JsonElement>(FieldValueOf(doc, "masters"));
+        // The document's own shape: one object per master, naming it.
+        var masters = Assert.IsType<JsonElement>(FieldValueOf(doc, HeaderIndexer.MastersFieldName));
         Assert.Equal(
             ["Fallout4.esm", "DLCRobot.esm"],
-            masters.EnumerateArray().Select(e => e.GetString() ?? "").ToList());
+            masters.EnumerateArray().Select(e => e.GetProperty("Master").GetString() ?? "").ToList());
     }
 
     [Fact]
-    public void HeaderSchema_MastersColumn_CarriesNoWriteDelegate()
+    public void HeaderSchema_MastersColumn_IsReadOnlyWithAReason()
     {
         var masters = Reflector.GetSchemas(GameRelease.Fallout4)[HeaderIndexer.RecordType]
             .RecordColumns.Single(c => c.Name == HeaderIndexer.MastersFieldName);
 
-        Assert.Null(masters.Apply.Writer);
+        Assert.False(string.IsNullOrWhiteSpace(masters.ReadOnlyReason));
     }
 
     [Fact]
@@ -241,8 +239,8 @@ public class HeaderIndexingTests
 
         // ...and each carries its own author through, which is the fact a filename-scoped delete
         // would destroy.
-        Assert.Equal("Author A", FieldValueOf(overrides.Single(o => o.Plugin.Origin == "ModA").Effective, "author"));
-        Assert.Equal("Author B", FieldValueOf(overrides.Single(o => o.Plugin.Origin == "ModB").Effective, "author"));
+        Assert.Equal("Author A", Assert.IsType<JsonElement>(FieldValueOf(overrides.Single(o => o.Plugin.Origin == "ModA").Effective, "Author")).GetString());
+        Assert.Equal("Author B", Assert.IsType<JsonElement>(FieldValueOf(overrides.Single(o => o.Plugin.Origin == "ModB").Effective, "Author")).GetString());
     }
 
 }

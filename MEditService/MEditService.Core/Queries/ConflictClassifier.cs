@@ -1,4 +1,6 @@
+using System.Text.Json;
 using MEditService.Core.Records;
+using MEditService.Core.Schema;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
@@ -125,6 +127,11 @@ public sealed class ConflictClassifier(ILogger<ConflictClassifier>? logger = nul
         var recordWinnerColumn = ColumnKey.Of(winner.Plugin, winner.Origin);
         var masterFieldMeta = records[0].Fields
             .ToDictionary(f => f.Metadata.Name, f => f.Metadata);
+        // A table of several record classes carries the document's discriminator as a column, and a
+        // column whose type varies by class reads through that column's value.
+        var recordClass = records.ToDictionary(
+            o => ColumnKey.Of(o.Plugin, o.Origin),
+            o => o.Fields.FirstOrDefault(f => f.Metadata.Name == LoquiUnions.UnionTypeDiscriminator)?.Value);
         return [.. fieldNames
             .Select(fieldName =>
             {
@@ -140,35 +147,53 @@ public sealed class ConflictClassifier(ILogger<ConflictClassifier>? logger = nul
                     .MaxBy(r => r.LoadOrderIndex);
                 var winnerColumn = fieldWinner != null ? ColumnKey.Of(fieldWinner.Plugin, fieldWinner.Origin) : recordWinnerColumn;
                 var winnerValue = values.GetValueOrDefault(winnerColumn);
-                var cellStates = ComputeCellStates(fieldName, values, ctx.MasterColumn, records, sortedArrays);
                 var meta = masterFieldMeta.GetValueOrDefault(fieldName);
+                var metaByColumn = meta == null
+                    ? null
+                    : values.Keys.ToDictionary(column => column, column => VariantFor(meta, recordClass.GetValueOrDefault(column)));
+                var cellStates = ComputeCellStates(fieldName, values, ctx.MasterColumn, records, sortedArrays, meta);
+                var shape = metaByColumn == null ? null : metaByColumn[winnerColumn];
                 List<FieldDiff>? children = null;
-                if (meta?.Fields != null)
-                    children = BuildStructChildren(meta.Fields, values, ctx);
-                else if (meta?.ElementType != null)
-                    children = BuildArrayChildren(meta, values, ctx, MaxArrayChildCount, fieldName);
-                var resolutions = BuildResolutions(meta, values, ctx.ResolveFormKey, ctx.Release);
+                if (shape?.Fields != null)
+                    children = BuildStructChildren(shape.Fields, values, ctx);
+                else if (shape?.ElementType != null)
+                    children = BuildArrayChildren(shape, values, ctx, MaxArrayChildCount, fieldName);
+                var resolutions = BuildResolutions(metaByColumn, values, ctx.ResolveFormKey, ctx.Release);
                 var conflictAll = AggregateConflictAll(cellStates, children);
                 return new FieldDiff(fieldName, values, winnerColumn, winnerValue, cellStates, conflictAll, children, resolutions);
             })
             .Where(d => d.Values.Values.Any(v => v != null))];
     }
 
+    // The shape a member has in one column: its own, or the variant that column's leaf names.
+    private static FieldMetadata VariantFor(FieldMetadata member, object? leaf) =>
+        member.Variants is { } variants
+        && FormRefPathBuilder.ExtractString(leaf) is { } name
+        && variants.TryGetValue(name, out var variant)
+            ? variant
+            : member;
+
+    private static FieldMetadata VariantWithin(FieldMetadata member, object? owner) =>
+        member.Variants == null
+            ? member
+            : VariantFor(member, ExtractSubFieldValue(owner, LoquiUnions.UnionTypeDiscriminator));
+
     // Only a scalar formKey-typed field carries Resolutions — struct/array fields' own Values
     // aren't FormKey strings, and this is never propagated from Children (ADR-0031: no aggregation).
+    // Per column, since a union member's leaf can differ across plugins.
     private static Dictionary<string, FormKeyResolution>? BuildResolutions(
-        FieldMetadata? meta,
+        Dictionary<string, FieldMetadata>? metaByColumn,
         Dictionary<string, object?> values,
         Func<string, RecordLookupEntry?>? resolveFormKey,
         GameRelease release)
     {
-        if (resolveFormKey == null || meta?.Type != "formKey") return null;
+        if (resolveFormKey == null || metaByColumn == null) return null;
 
         var resolutions = new Dictionary<string, FormKeyResolution>();
         foreach (var (plugin, value) in values)
         {
-            // Top-level scalar formKey fields carry a raw string; struct sub-fields and array
-            // elements carry a JsonElement — ExtractString handles both.
+            var meta = metaByColumn[plugin];
+            if (meta.Type != "formKey") continue;
             var fk = FormRefPathBuilder.ExtractString(value);
             if (string.IsNullOrEmpty(fk) || fk == "Null") continue;
             resolutions[plugin] = FormKeyResolution.From(fk, resolveFormKey(fk), meta.ValidFormKeyTypes, release);
@@ -216,7 +241,7 @@ public sealed class ConflictClassifier(ILogger<ConflictClassifier>? logger = nul
         /// than a shift of everything after it. Rows come out in key order, the order the write
         /// path stores them.</summary>
         public List<FieldDiff>? BuildKeyed(IReadOnlyList<string> keyMembers) =>
-            BuildAligned(e => ElementKey.Of(e, keyMembers), (a, b) => a.CompareTo(b));
+            BuildAligned(e => ElementKey.Of(e, keyMembers, elementMeta), (a, b) => a.CompareTo(b));
 
         /// <summary>The element is its own key. A non-string element (the JSON null of a never-set
         /// slot) is not a row. Rows stay in first-seen order across the load order.</summary>
@@ -306,7 +331,8 @@ public sealed class ConflictClassifier(ILogger<ConflictClassifier>? logger = nul
             var childChildren = elementMeta.Fields != null
                 ? BuildStructChildren(elementMeta.Fields, subValues, ctx)
                 : null;
-            var resolutions = BuildResolutions(elementMeta, subValues, ctx.ResolveFormKey, ctx.Release);
+            var resolutions = BuildResolutions(
+                subValues.Keys.ToDictionary(column => column, _ => elementMeta), subValues, ctx.ResolveFormKey, ctx.Release);
             var conflictAll = AggregateConflictAll(cellStates, childChildren);
             return new FieldDiff(label, subValues, winnerColumn, winnerValue, cellStates, conflictAll, childChildren, resolutions);
         }
@@ -330,33 +356,38 @@ public sealed class ConflictClassifier(ILogger<ConflictClassifier>? logger = nul
 
             if (subValues.Values.All(v => v == null)) continue;
 
-            List<FieldDiff>? subChildren = null;
-            if (subField.IsArray && subField.ElementType != null)
-                subChildren = BuildArrayChildren(subField, subValues, ctx, MaxArrayChildCount, subField.Name);
-            else if (subField.Fields != null)
-                subChildren = BuildStructChildren(subField.Fields, subValues, ctx);
-
             var fieldWinner = ctx.Records
                 .Where(r => subValues.GetValueOrDefault(ColumnKey.Of(r.Plugin, r.Origin)) != null)
                 .MaxBy(r => r.LoadOrderIndex)!;
 
             var winnerColumn = ColumnKey.Of(fieldWinner.Plugin, fieldWinner.Origin);
             var winnerValue = subValues[winnerColumn];
-            var cellStates = ComputeCellStates(subField.Name, subValues, ctx.MasterColumn, ctx.Records, []);
-            var resolutions = BuildResolutions(subField, subValues, ctx.ResolveFormKey, ctx.Release);
+            // A member whose type varies by leaf takes each column's own leaf's shape; its children
+            // follow the winner's.
+            var metaByColumn = parentValues.ToDictionary(kv => kv.Key, kv => VariantWithin(subField, kv.Value));
+            var shape = metaByColumn[winnerColumn];
+
+            List<FieldDiff>? subChildren = null;
+            if (shape.IsArray && shape.ElementType != null)
+                subChildren = BuildArrayChildren(shape, subValues, ctx, MaxArrayChildCount, subField.Name);
+            else if (shape.Fields != null)
+                subChildren = BuildStructChildren(shape.Fields, subValues, ctx);
+
+            var cellStates = ComputeCellStates(subField.Name, subValues, ctx.MasterColumn, ctx.Records, [], shape);
+            var resolutions = BuildResolutions(metaByColumn, subValues, ctx.ResolveFormKey, ctx.Release);
             var conflictAll = AggregateConflictAll(cellStates, subChildren);
             children.Add(new FieldDiff(subField.Name, subValues, winnerColumn, winnerValue, cellStates, conflictAll, subChildren, resolutions));
         }
         return children.Count > 0 ? children : null;
     }
 
-    private static System.Text.Json.JsonElement? ExtractSubFieldValue(object? structValue, string subFieldName)
+    private static JsonElement? ExtractSubFieldValue(object? structValue, string subFieldName)
     {
-        static System.Text.Json.JsonElement? NonNull(System.Text.Json.JsonElement e) =>
-            e.ValueKind == System.Text.Json.JsonValueKind.Null ? null : e;
+        static JsonElement? NonNull(JsonElement e) =>
+            e.ValueKind == JsonValueKind.Null ? null : e;
 
-        return structValue is System.Text.Json.JsonElement je &&
-            je.ValueKind == System.Text.Json.JsonValueKind.Object &&
+        return structValue is JsonElement je &&
+            je.ValueKind == JsonValueKind.Object &&
             je.TryGetProperty(subFieldName, out var sub)
             ? NonNull(sub)
             : null;
@@ -379,22 +410,24 @@ public sealed class ConflictClassifier(ILogger<ConflictClassifier>? logger = nul
         Dictionary<string, object?> values,
         string masterColumn,
         IReadOnlyList<RecordDetail> records,
-        HashSet<string> sortedArrays)
+        HashSet<string> sortedArrays,
+        FieldMetadata? meta = null)
     {
         var isSorted = sortedArrays.Contains(fieldName);
         var columnOrder = records.Select(r => (ColumnKey.Of(r.Plugin, r.Origin), r.LoadOrderIndex)).ToList();
-        return ConflictRules.ComputeCellStates(values, masterColumn, columnOrder, (a, b) => ValuesEqual(a, b, isSorted));
+        return ConflictRules.ComputeCellStates(values, masterColumn, columnOrder, (a, b) => ValuesEqual(a, b, isSorted, meta));
     }
 
-    // JsonElement doesn't override Equals() — compare by raw JSON text to handle array/struct fields.
-    // For sorted arrays, sort elements before comparing so insertion-order differences don't register as conflicts.
-    private static bool ValuesEqual(object? a, object? b, bool isSortedArray = false)
+    // JsonElement doesn't override Equals(), so compare by raw JSON text; a sorted array compares
+    // sorted. The codec omits a member equal to its default, so an omitted member and one spelled
+    // as the default are the same value.
+    private static bool ValuesEqual(object? a, object? b, bool isSortedArray = false, FieldMetadata? meta = null)
     {
-        if (a is System.Text.Json.JsonElement ja && b is System.Text.Json.JsonElement jb)
+        if (a is JsonElement ja && b is JsonElement jb)
         {
             if (isSortedArray &&
-                ja.ValueKind == System.Text.Json.JsonValueKind.Array &&
-                jb.ValueKind == System.Text.Json.JsonValueKind.Array)
+                ja.ValueKind == JsonValueKind.Array &&
+                jb.ValueKind == JsonValueKind.Array)
             {
                 if (ja.GetArrayLength() != jb.GetArrayLength()) return false;
                 var sortedA = ja.EnumerateArray().Select(e => e.GetRawText()).Order();
@@ -403,6 +436,22 @@ public sealed class ConflictClassifier(ILogger<ConflictClassifier>? logger = nul
             }
             return ja.GetRawText() == jb.GetRawText();
         }
+        if (a is null && b is JsonElement onlyB) return IsDefault(onlyB, meta);
+        if (b is null && a is JsonElement onlyA) return IsDefault(onlyA, meta);
         return Equals(a, b);
     }
+
+    // What the codec omits: the declared default where the metadata spells one, else a zero number,
+    // false, an empty list or object, and a link to nothing.
+    private static bool IsDefault(JsonElement value, FieldMetadata? meta) => meta?.Default is { } declared
+        ? DocumentNodes.SameValue(value, JsonSerializer.SerializeToElement(declared))
+        : value.ValueKind switch
+        {
+            JsonValueKind.Number => value.GetRawText().Trim('-', '0', '.') is "" or "e0",
+            JsonValueKind.False => true,
+            JsonValueKind.String => meta?.Type == "formKey" && value.GetString() == "Null",
+            JsonValueKind.Array => value.GetArrayLength() == 0,
+            JsonValueKind.Object => !value.EnumerateObject().Any(),
+            _ => false,
+        };
 }

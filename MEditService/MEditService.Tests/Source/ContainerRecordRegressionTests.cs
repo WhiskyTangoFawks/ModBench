@@ -60,7 +60,7 @@ public sealed class ContainerRecordRegressionTests : IDisposable
         var before = File.ReadAllText(file);
         Assert.Contains("\"WaterHeight\": 100.0", before, StringComparison.Ordinal);
 
-        var result = EditService().EditField(_fixture.Plugin, _fixture.Cell.ToString(), "water_height", Json("250.0"));
+        var result = EditService().Set(_fixture.Plugin, _fixture.Cell.ToString(), "WaterHeight", Json("250.0"));
 
         Assert.True(result.Applied, result.Message);
         // Every untouched byte is compared, which makes "only that field's lines diff" a measurement
@@ -94,7 +94,7 @@ public sealed class ContainerRecordRegressionTests : IDisposable
         var oldDirectory = Path.GetDirectoryName(CellSourceFile)!;
         Assert.EndsWith(ContainerModFixture.CellEditorId + " - " + FilesafeCellKey, oldDirectory, StringComparison.Ordinal);
 
-        var result = EditService().EditField(_fixture.Plugin, _fixture.Cell.ToString(), "editor_id", Json("\"RenamedCell\""));
+        var result = EditService().Set(_fixture.Plugin, _fixture.Cell.ToString(), "EditorID", Json("\"RenamedCell\""));
 
         Assert.True(result.Applied, result.Message);
         Assert.False(Directory.Exists(oldDirectory));
@@ -261,7 +261,7 @@ public sealed class ContainerRecordRegressionTests : IDisposable
     public void KeepingAnExternalChange_CollidingWithACellsOwnWorkingTreeEdit_RefusesTheWholeGesture()
     {
         var pluginPath = Path.Combine(_fixture.ModFolder, ContainerModFixture.PluginName);
-        var editResult = EditService().EditField(_fixture.Plugin, _fixture.Cell.ToString(), "water_height", Json("500.0"));
+        var editResult = EditService().Set(_fixture.Plugin, _fixture.Cell.ToString(), "WaterHeight", Json("500.0"));
         Assert.True(editResult.Applied, editResult.Message);
         var myOwnEditText = File.ReadAllText(CellSourceFile);
 

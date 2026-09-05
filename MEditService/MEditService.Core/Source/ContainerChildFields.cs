@@ -23,13 +23,19 @@ internal static class ContainerChildFields
 
     private const string OverlaySuffix = "BinaryOverlay";
 
-    /// <summary>A binary overlay's runtime type is <c>"&lt;Name&gt;BinaryOverlay"</c>; normalized once so
-    /// every caller keys off the same name whether handed an overlay (ingest) or a deep-parsed setter
-    /// (Track).</summary>
+    private const string GetterPrefix = "I";
+    private const string GetterSuffix = "Getter";
+
+    /// <summary>A binary overlay's runtime type is "NameBinaryOverlay" and a schema's record type
+    /// its "INameGetter" interface; normalized once so ingest, Track and a document read key off the
+    /// same name.</summary>
     internal static string NormalizedTypeName(Type recordType)
     {
         var name = recordType.Name;
-        return name.EndsWith(OverlaySuffix, StringComparison.Ordinal) ? name[..^OverlaySuffix.Length] : name;
+        if (name.EndsWith(OverlaySuffix, StringComparison.Ordinal)) return name[..^OverlaySuffix.Length];
+        return recordType.IsInterface && name.StartsWith(GetterPrefix, StringComparison.Ordinal) && name.EndsWith(GetterSuffix, StringComparison.Ordinal)
+            ? name[GetterPrefix.Length..^GetterSuffix.Length]
+            : name;
     }
 
     /// <summary><see cref="Child"/> is the real object hanging off the parent, not a copy: mutating it and
@@ -161,7 +167,7 @@ internal static class ContainerChildFields
     // The slots that serialize inline into the parent's document — the runtime shadow of
     // CellEmbedCustomization and WorldspaceEmbedCustomization. A strict subset of ByTypeName: Quest and
     // DialogTopic children stay folder-split. Keep in step with the two customizations.
-    private static readonly HashSet<(string ParentType, string Slot)> EmbeddedSlots =
+    internal static readonly HashSet<(string ParentType, string Slot)> EmbeddedSlots =
     [
         ("Cell", "Persistent"), ("Cell", "Temporary"), ("Cell", "Landscape"), ("Cell", "NavigationMeshes"),
         ("Worldspace", "TopCell"),

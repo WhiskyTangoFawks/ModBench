@@ -1,5 +1,5 @@
 import React from 'react';
-import { flagBits, modelValue, toBigInt } from './modelValue';
+import { flagNames } from './modelValue';
 import type { FieldMetadata } from './types';
 
 interface FlagCellProps {
@@ -8,49 +8,38 @@ interface FlagCellProps {
   // Whether this cell's column can be written — presence of somewhere to write is the
   // editability signal (see ScalarCell's identical contract).
   editable?: boolean;
-  // A decimal string, per modelValue's own flags convention, so precision above 2^53 survives the
-  // wire. Optional: a caller with nowhere to write renders read-only rather than crashing.
+  // The names now set, as the document spells a flags member. Optional: a caller with nowhere to
+  // write renders read-only rather than crashing.
   onCommit?: (v: unknown) => void;
   // The row's collapse state (the grid's chevron/double-click gesture, owned by the row —
-  // all columns collapse together): collapsed shows the compact active-flag-name summary,
-  // xEdit's own at-rest render.
+  // all columns collapse together): collapsed shows the compact set-name summary, xEdit's own
+  // at-rest render.
   collapsed?: boolean;
 }
 
-/** A bitmask `enum` column renders as an always-visible checkbox list — a deliberate ADR-0034
+/** A `flags` member renders as an always-visible checkbox list — a deliberate ADR-0034
  *  divergence from xEdit, whose `etCheckComboBox` appears only on the edit gesture. There is no
  *  text state and nothing to open, so F2 is inert. */
 export function FlagCell({ value, meta, editable, onCommit, collapsed }: FlagCellProps) {
-  const bits = flagBits(meta);
-  if (bits == null) return null;
+  // Absent means default: no names set.
+  const names = flagNames(value);
 
-  if (collapsed) {
-    // modelValue collapses null and no-bits-set alike to '' — both render the placeholder.
-    const names = modelValue(value, meta);
-    return names === ''
-      ? <span style={{ opacity: 0.35 }}>—</span>
-      : <span>{names}</span>;
-  }
+  if (collapsed) return <span>{names.join(', ')}</span>;
 
-  // Null is a column that doesn't hold the field — a placeholder, not an all-unchecked value
-  // (ADR-0034), except on a writable column, where the all-unchecked list lets a click set flags
-  // starting from null.
   const writable = editable && onCommit != null;
-  if (value == null && !writable) return <span style={{ opacity: 0.35 }}>—</span>;
-
-  // BigInt arithmetic avoids ToInt32 truncation for flags at bit 32+ and keeps full precision
-  // for high bits. onCommit emits a decimal string so the toggled value round-trips losslessly.
-  const num = toBigInt(value);
+  // A name the metadata does not list stays where the document put it; only the toggled name moves.
+  const toggle = (name: string) =>
+    onCommit?.(names.includes(name) ? names.filter(n => n !== name) : [...names, name]);
 
   return (
     <span style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-      {bits.map(({ value: name, bit }) => (
+      {meta.enumMembers.map(({ value: name }) => (
         <label key={name} style={{ display: 'inline-flex', alignItems: 'center', gap: 2 }}>
           <input
             type="checkbox"
-            checked={(num & bit) !== 0n}
+            checked={names.includes(name)}
             disabled={!writable}
-            onChange={writable ? () => onCommit(String(num ^ bit)) : undefined}
+            onChange={writable ? () => toggle(name) : undefined}
           />
           {name}
         </label>

@@ -24,7 +24,7 @@ internal static class SubFieldReflection
 
         var grouped = ReflectedTypes.GetAllInterfaceProperties(getterInterface)
             .Where(p => !game.Annotations.IsExcludedMember(p))
-            .GroupBy(p => ReflectedTypes.ToSnakeCase(p.Name), StringComparer.OrdinalIgnoreCase);
+            .GroupBy(p => p.Name, StringComparer.Ordinal);
 
         var result = new List<SubFieldSpec>();
         foreach (var group in grouped)
@@ -81,18 +81,15 @@ internal static class SubFieldReflection
         if (ReflectedTypes.IsLoquiInterface(core))
             return StructElementMeta(BuildSubSchema(core, game, logger, path), core);
 
-        // Without this arm a vector-element list falls through to null and is dropped, and worse,
-        // BuildListItems' scalar fallback would hand a raw vector struct to JsonSerializer, which
-        // recurses forever over its self-referencing Point property.
-        if (ReflectedTypes.IsVectorStructType(core))
-            return StructElementMeta(VectorStructLeaves.BuildVectorComponentSubFields(core, game, 0, logger), core);
-
         return core switch
         {
             _ when core == typeof(float) => new("", "float", false, LeafSpec.NoFormKeyTypes, LeafSpec.NoEnumMembers),
-            _ when core == typeof(string) || ReflectedTypes.IsTranslatedString(core) => new("", "string", false, LeafSpec.NoFormKeyTypes, LeafSpec.NoEnumMembers),
+            _ when core == typeof(string) => new("", "string", false, LeafSpec.NoFormKeyTypes, LeafSpec.NoEnumMembers),
+            _ when ReflectedTypes.IsTranslatedString(core) => new("", "translatedString", false, LeafSpec.NoFormKeyTypes, LeafSpec.NoEnumMembers),
             _ when ReflectedTypes.IntegerTypes.Contains(core) => new("", "int", false, LeafSpec.NoFormKeyTypes, LeafSpec.NoEnumMembers),
+            _ when core == typeof(bool) => new("", "bool", false, LeafSpec.NoFormKeyTypes, LeafSpec.NoEnumMembers),
             _ when ByteSliceHex.IsByteSlice(core) => new("", ByteSliceHex.HexApiType, false, LeafSpec.NoFormKeyTypes, LeafSpec.NoEnumMembers),
+            _ when ReflectedTypes.IsVectorStructType(core) => new("", "vector", false, LeafSpec.NoFormKeyTypes, LeafSpec.NoEnumMembers),
             _ => null,
         };
     }
@@ -118,29 +115,22 @@ internal static class SubFieldReflection
         var type = prop.PropertyType;
         var core = Nullable.GetUnderlyingType(type) ?? type;
         var nullable = Nullable.GetUnderlyingType(type) != null || !type.IsValueType;
-        var colName = ReflectedTypes.ToSnakeCase(prop.Name);
 
         return LeafClassification.ClassifyLeaf(prop, core, game) switch
         {
-            { } leaf => ProjectSubField(prop, colName, core, nullable, leaf, game, logger),
-            null when ReflectedTypes.IsAtomicValueType(core) => AtomicValueLeaves.BuildAtomicValueSubField(prop, core, colName, game, logger),
-            null when ReflectedTypes.IsVectorStructType(core) => VectorStructLeaves.BuildVectorSubField(prop, core, colName, game, depth, logger),
+            { } leaf => ProjectSubField(prop, nullable, leaf, game),
             null when ReflectedTypes.IsListType(core, out var elementType) =>
-                ListLeaves.BuildListSubField(prop, colName, elementType, game, path, logger),
-            null when ReflectedTypes.IsLoquiInterface(core) => StructLeaves.BuildStructSubField(prop, core, colName, game, path, depth, logger),
+                ListLeaves.BuildListSubField(prop, elementType, game, path, logger),
+            null when ReflectedTypes.IsLoquiInterface(core) => StructLeaves.BuildStructSubField(prop, core, game, path, depth, logger),
             _ => SchemaRefusals.ReportUnclassified<SubFieldSpec>(game, logger, prop, core, "sub-field"),
         };
     }
 
-    // Routed through the same writer as a top-level column, so every leaf shape has one write path.
-    private static SubFieldSpec ProjectSubField(
-        PropertyInfo prop, string colName, Type core, bool nullable, LeafSpec leaf,
-        GameReflection game, ILogger logger)
+    private static SubFieldSpec ProjectSubField(PropertyInfo prop, bool nullable, LeafSpec leaf, GameReflection game)
     {
-        var apply = LeafWriters.RouteWriter<object>(leaf, core, prop.Name, nullable, logger);
-        return new(colName, leaf.ApiType, leaf.ValidFormKeyTypes, leaf.EnumMembers,
-            leaf.Get, apply,
+        return new(prop.Name, leaf.ApiType, leaf.ValidFormKeyTypes, leaf.EnumMembers,
             AllowsNull: leaf.AllowsNull,
-            SiblingsInUse: game.Annotations.SiblingsInUseFor(prop));
+            SiblingsInUse: game.Annotations.SiblingsInUseFor(prop),
+            Default: nullable ? null : leaf.Default);
     }
 }

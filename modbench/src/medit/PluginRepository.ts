@@ -5,15 +5,19 @@ import type {
   UnansweredExternalChange, ContainerChildSummary, PluginDiagnosisReport,
 } from './ApiClient';
 import { errorText, isWriteGateTimeout, writeGateBusyMessage } from './ApiClient';
+import type { RecordEditEnvelope } from './messages';
 
 /** A refusal is an outcome, not an exception: `refusal` carries the backend's own name for it,
  *  which lets a caller offer Track for one and the patch-plugin path for another. `'Unknown'`
  *  and `'WriteGateBusy'` are this side's additions. */
-export type RecordFieldEditOutcome =
+export type RecordEditOutcome =
   | { applied: true }
   | { applied: false; refusal: string; message: string };
 
 export type PluginRecordTypeCount = components['schemas']['PluginRecordTypeCount'];
+/** The one write shape (ADR-0032): an operation, a path of hops and an optional value. The
+ *  backend resolves the path against the record's current document; the host posts what the
+ *  user asked for and nothing else. */
 export type RecordPage = components['schemas']['RecordSummaryPagedResult'];
 export type CellPage = components['schemas']['CellSummaryPagedResult'];
 
@@ -57,9 +61,9 @@ export interface PluginRepository {
 
   /** ADR-0041: the single write path. A refusal (untracked plugin, a link that would dangle) is
    *  an expected answer and comes back typed; only a transport failure rejects. */
-  editRecordField(
-    formKey: string, plugin: string, origin: string, fieldPath: string, value: unknown,
-  ): Promise<RecordFieldEditOutcome>;
+  editRecord(
+    formKey: string, plugin: string, origin: string, envelope: RecordEditEnvelope,
+  ): Promise<RecordEditOutcome>;
 
   getWorldspaces(plugin: string, origin?: string): Promise<WorldspaceSummary[]>;
   getWorldspaceBlocks(plugin: string, worldspaceFormKey: string, origin?: string): Promise<WorldspaceBlocks>;
@@ -263,12 +267,13 @@ export class ApiPluginRepository implements PluginRepository {
     return data?.sql ?? null;
   }
 
-  async editRecordField(
-    formKey: string, plugin: string, origin: string, fieldPath: string, value: unknown,
-  ): Promise<RecordFieldEditOutcome> {
-    const { data, error, response } = await this.client.POST('/records/{formKey}/field', {
+  async editRecord(
+    formKey: string, plugin: string, origin: string, envelope: RecordEditEnvelope,
+  ): Promise<RecordEditOutcome> {
+    const spelled = JSON.stringify(envelope.path);
+    const { data, error, response } = await this.client.POST('/records/{formKey}/edit', {
       params: { path: { formKey } },
-      body: { plugin, origin, fieldPath, value },
+      body: { plugin, origin, ...envelope },
     });
     if (response.ok && data?.applied) return { applied: true };
 
@@ -277,19 +282,19 @@ export class ApiPluginRepository implements PluginRepository {
     // gate's prose as a judgement on this edit.
     if (isWriteGateTimeout(error)) {
       const message = writeGateBusyMessage('Could not edit this record');
-      this.log(`[PluginRepository] editRecordField(${formKey}.${fieldPath}) hit the write gate (${response.status})`);
+      this.log(`[PluginRepository] editRecord(${formKey} ${envelope.op} ${spelled}) hit the write gate (${response.status})`);
       return { applied: false, refusal: 'WriteGateBusy', message };
     }
 
     // The backend's typed discriminator, off the ProblemDetails extension rather than re-derived
     // from the status: only it tells "not tracked" from "no folder", whose ways out differ.
     const problem = error as { refusal?: string; detail?: string } | undefined;
-    const outcome: RecordFieldEditOutcome = {
+    const outcome: RecordEditOutcome = {
       applied: false,
       refusal: problem?.refusal ?? 'Unknown',
       message: problem?.detail ?? (errorText(error) || `Edit failed (${response.status}).`),
     };
-    this.log(`[PluginRepository] editRecordField(${formKey}.${fieldPath}) refused: ${outcome.refusal} — ${outcome.message}`);
+    this.log(`[PluginRepository] editRecord(${formKey} ${envelope.op} ${spelled}) refused: ${outcome.refusal} — ${outcome.message}`);
     return outcome;
   }
 

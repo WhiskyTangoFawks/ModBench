@@ -91,7 +91,7 @@ public sealed class RecordQueryServiceTests : IDisposable
         var detail = svc.GetRecord(npcFormKey.ToString());
 
         Assert.NotNull(detail);
-        var raceField = Assert.Single(detail.Fields, f => f.Metadata.Name == "race");
+        var raceField = Assert.Single(detail.Fields, f => f.Metadata.Name == "Race");
         Assert.NotNull(raceField.Value);
         Assert.Contains("Ghost.esm", raceField.Value!.ToString());
         Assert.Contains("Could not be resolved", raceField.CheckError);
@@ -220,7 +220,11 @@ public sealed class RecordQueryServiceTests : IDisposable
         Assert.All(detail.Fields, f =>
         {
             Assert.NotEmpty(f.Metadata.Name);
-            Assert.Contains(f.Metadata.Type, new[] { "string", "int", "float", "bool", "enum", "formKey", "array", "struct", "hex" });
+            Assert.Contains(f.Metadata.Type, new[]
+            {
+                "string", "translatedString", "int", "float", "bool", "enum", "flags", "formKey", "array", "struct",
+                "hex", "color", "vector",
+            });
         });
     }
 
@@ -515,7 +519,7 @@ public sealed class RecordQueryServiceTests : IDisposable
             WithCompareService(data, svc =>
             {
                 var compare = svc.GetCompare(npcKey.ToString())!;
-                var fieldStates = compare.Diffs.First(d => d.FieldName == "aggression").CellStates;
+                var fieldStates = compare.Diffs.First(d => d.FieldName == "Aggression").CellStates;
                 var vmadStates = PowerPropertyDiff(compare).CellStates;
 
                 Assert.Equal(ConflictThis.ConflictLoses, fieldStates["Mid.esp"]);
@@ -550,10 +554,10 @@ public sealed class RecordQueryServiceTests : IDisposable
                 var compare = svc.GetCompare(cobjKey.ToString());
 
                 Assert.NotNull(compare);
-                var conditions = Assert.Single(compare!.Diffs, d => d.FieldName == "conditions");
+                var conditions = Assert.Single(compare!.Diffs, d => d.FieldName == "Conditions");
                 var condition = Assert.Single(conditions.Children!);
-                var data0 = Assert.Single(condition.Children!, c => c.FieldName == "data");
-                var function = Assert.Single(data0.Children!, c => c.FieldName == "function");
+                var data0 = Assert.Single(condition.Children!, c => c.FieldName == "Data");
+                var function = Assert.Single(data0.Children!, c => c.FieldName == "Function");
                 Assert.Equal("GetIsID", function.Values["Base.esp"]?.ToString());
                 Assert.Equal("Base.esp", conditions.WinnerColumn);
             });
@@ -588,10 +592,10 @@ public sealed class RecordQueryServiceTests : IDisposable
             {
                 var compare = svc.GetCompare(cobjKey.ToString());
 
-                var conditions = Assert.Single(compare!.Diffs, d => d.FieldName == "conditions");
+                var conditions = Assert.Single(compare!.Diffs, d => d.FieldName == "Conditions");
                 var condition = Assert.Single(conditions.Children!);
-                var data0 = Assert.Single(condition.Children!, c => c.FieldName == "data");
-                var param = Assert.Single(data0.Children!, c => c.FieldName == "parameter_one_record");
+                var data0 = Assert.Single(condition.Children!, c => c.FieldName == "Data");
+                var param = Assert.Single(data0.Children!, c => c.FieldName == "ParameterOneRecord");
                 Assert.NotNull(param.Resolutions);
                 var paramResolution = param.Resolutions!["Base.esp"];
                 Assert.Equal(FormKeyResolutionState.ResolvedValidType, paramResolution.State);
@@ -615,13 +619,13 @@ public sealed class RecordQueryServiceTests : IDisposable
         return npc.FormKey;
     }
 
-    private const string VmadField = "virtual_machine_adapter";
+    private const string VmadField = "VirtualMachineAdapter";
 
     private static FieldDiff PowerPropertyDiff(CompareResult compare) =>
         compare.Diffs.First(d => d.FieldName == VmadField)
-            .Children!.First(c => c.FieldName == "scripts")
+            .Children!.First(c => c.FieldName == "Scripts")
             .Children!.First(c => c.FieldName == "S")
-            .Children!.First(c => c.FieldName == "properties")
+            .Children!.First(c => c.FieldName == "Properties")
             .Children!.First(c => c.FieldName == "Power");
 
     private static VirtualMachineAdapter ScriptVmad(int power)
@@ -774,13 +778,13 @@ public sealed class RecordQueryServiceTests : IDisposable
             var detail = svc.GetRecord("000000:HeaderQuery.esp");
 
             Assert.NotNull(detail);
-            var author = detail.Fields.Single(f => f.Metadata.Name == "author");
-            Assert.Equal("Test Author", author.Value);
+            var author = detail.Fields.Single(f => f.Metadata.Name == "Author");
+            Assert.Equal("Test Author", Assert.IsType<JsonElement>(author.Value).GetString());
 
-            var flags = detail.Fields.Single(f => f.Metadata.Name == "flags");
-            Assert.Equal(((long)Fallout4ModHeader.HeaderFlag.Small).ToString(System.Globalization.CultureInfo.InvariantCulture), flags.Value);
+            var flags = detail.Fields.Single(f => f.Metadata.Name == "Flags");
+            Assert.Equal([nameof(Fallout4ModHeader.HeaderFlag.Small)], Assert.IsType<JsonElement>(flags.Value).EnumerateArray().Select(e => e.GetString()));
 
-            var masters = detail.Fields.Single(f => f.Metadata.Name == "masters");
+            var masters = detail.Fields.Single(f => f.Metadata.Name == "MasterReferences");
             Assert.Contains("Fallout4.esm", masters.Value!.ToString());
         }
     }

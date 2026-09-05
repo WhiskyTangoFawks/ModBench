@@ -31,6 +31,17 @@ internal static partial class LeafLabel
         return string.Join(' ', distinguishing.Count > 0 ? distinguishing : leafWords);
     }
 
+    /// <summary>The class's own word in a document type name: a nested class's declaring type and a
+    /// generic's arguments (<c>Outer+Inner</c>, <c>ObjectModIntProperty&lt;Armor+Property&gt;</c>)
+    /// distinguish nothing a label needs.</summary>
+    public static string ClassWord(string documentTypeName)
+    {
+        var generic = documentTypeName.IndexOf('<', StringComparison.Ordinal);
+        var name = generic < 0 ? documentTypeName : documentTypeName[..generic];
+        var nested = name.LastIndexOf('+');
+        return nested < 0 ? name : name[(nested + 1)..];
+    }
+
     // Mutagen's own "A<Name>" spelling for an abstract Loqui base (ANpcLevel, AQuestAlias). A base
     // not spelled that way keeps its whole name, and the comparison above finds less in common.
     private static string StripLoquiAbstractPrefix(string name) =>
@@ -39,9 +50,7 @@ internal static partial class LeafLabel
     private static List<string> Words(string name) =>
         [.. WordBoundary().Split(name).Where(w => w.Length > 0)];
 
-    // Splits PascalCase without touching case, so an acronym survives: "NPCData" is "NPC Data". Not
-    // ReflectedTypes.ToSnakeCase's boundary, which lowercases a run of capitals into one word and is
-    // lossy to read back.
+    // Splits PascalCase without touching case, so an acronym survives: "NPCData" is "NPC Data".
     [GeneratedRegex("(?<=[a-z0-9])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])")]
     private static partial Regex WordBoundary();
 }

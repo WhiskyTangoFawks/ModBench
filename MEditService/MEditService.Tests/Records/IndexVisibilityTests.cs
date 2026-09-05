@@ -13,7 +13,9 @@ namespace MEditService.Tests.Records;
 /// genuinely holds 412.</summary>
 public sealed class IndexVisibilityTests
 {
-    private const int NpcCount = 2000;
+    // Ingest reads no live object per column any more, so the window a read can land in is the
+    // codec serialize alone; enough records keep it long enough to sample.
+    private const int NpcCount = 4000;
 
     private static (Fallout4Mod Mod, ModPath Path, string Dir) BuildBigPlugin(string name)
     {

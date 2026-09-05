@@ -9,7 +9,6 @@ using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
-using Mutagen.Bethesda.Plugins.Utility;
 
 namespace MEditService.Core.Edits;
 
@@ -258,13 +257,8 @@ internal sealed class RecordCopy(ILoadOrderMirror mirror, SchemaReflector schema
     private static string SlotNameFor(PlacementRow placement) =>
         placement.PlacementGroup.Equals("persistent", StringComparison.Ordinal) ? "Persistent" : "Temporary";
 
-    private IMajorRecord BarePartialFormAncestor(string formKey, string schemaKey, GameRelease release)
-    {
-        var schema = schemaReflector.GetSchemas(release)[schemaKey];
-        var record = MajorRecordInstantiator.Activator(FormKey.Factory(formKey), release, schema.RecordType);
-        PartialFormFlag.Set(record, true);
-        return record;
-    }
+    private IMajorRecord BarePartialFormAncestor(string formKey, string schemaKey, GameRelease release) =>
+        RecordEditService.BareRecord(codec, schemaReflector.GetSchemas(release)[schemaKey], release, formKey, editorId: null, partialForm: true);
 
     // Bare fields, no EditorID is xEdit parity (AddIfMissingInternal's Assign() runs only under
     // `if aDeepCopy`, hardcoded False for ancestors). Partial Form is a deliberate divergence: xEdit

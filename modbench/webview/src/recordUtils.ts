@@ -1,4 +1,4 @@
-import type { ColumnKey, CompareOverride, FieldMetadata, PathSegment } from './types';
+import type { ColumnKey, CompareOverride, FieldMetadata, PathHop, PathSegment } from './types';
 import { columnKey } from './types';
 
 export function toStr(v: unknown): string {
@@ -46,38 +46,6 @@ export function collidingFilenames(overrides: CompareOverride[]): Set<string> {
 
 // ── Array child helpers ───────────────────────────────────────────────────────
 
-// An unsorted array's child is labelled "[N]" by the backend; a keyed array's child is labelled by
-// its key instead.
-export function parseElementIndex(fieldName: string): number {
-  return Number.parseInt(fieldName.slice(1, -1), 10);
-}
-
-// Read the way the backend reads it (Queries/ElementKey.cs) — a dotted member name walks into a
-// sub-struct. The backend's own text labels the row a key comes from, so the two renderings are
-// one contract.
-export function elementKeyText(element: unknown, members: readonly string[]): string {
-  return members.map(member => memberKeyText(element, member)).join(' / ');
-}
-
-function memberKeyText(element: unknown, member: string): string {
-  let cur = element;
-  for (const hop of member.split('.')) {
-    if (cur == null || typeof cur !== 'object' || Array.isArray(cur)) return '';
-    cur = (cur as Record<string, unknown>)[hop];
-  }
-  if (typeof cur === 'string') return cur;
-  if (typeof cur === 'number' || typeof cur === 'boolean') return String(cur);
-  return '';
-}
-
-// Per column by construction: the same key is a different position in every plugin that carries
-// it, and the caller always passes the array it is about to read or write.
-export function keyedElementIndex(list: readonly unknown[], seg: KeySegment): number {
-  return list.findIndex(element => elementKeyText(element, seg.members) === seg.key);
-}
-
-type KeySegment = Extract<PathSegment, { kind: 'key' }>;
-
 // A keyed array is stored in key order on every write, so no Move there could change the file; a
 // pure-FormLink array's order is its sort key, so it offers nothing at all.
 export function isArrayElementHop(seg: PathSegment | undefined): boolean {
@@ -94,13 +62,12 @@ export function offersArrayAdd(meta: FieldMetadata | undefined): boolean {
   return meta?.type === 'array' && !!meta.elementType && !meta.elementType.isSortable;
 }
 
-// How the backend labelled an array's child is what says how to address it: a keyed array's
-// children are named by key, a pure-FormLink array's by the element value, every other array's
-// by "[N]".
-export function elementSegment(arrayMeta: FieldMetadata, fieldName: string): PathSegment {
-  if (arrayMeta.keyMembers) return { kind: 'key', key: fieldName, members: arrayMeta.keyMembers };
-  if (arrayMeta.elementType?.isSortable) return { kind: 'sortKey', key: fieldName };
-  return { kind: 'index', index: parseElementIndex(fieldName) };
+// A keyed array's child is addressed by the key text as the backend labelled it, a pure-FormLink
+// array's by the element value, every other array's by the child's place among its siblings.
+export function elementSegment(arrayMeta: FieldMetadata, fieldName: string, ordinal: number): PathSegment {
+  if (arrayMeta.keyMembers) return { kind: 'key', key: fieldName };
+  if (arrayMeta.elementType?.isSortable) return { kind: 'value', value: fieldName };
+  return { kind: 'index', index: ordinal };
 }
 
 // A row's index comes from the union-aligned tree across every plugin's column, not from this one
@@ -183,10 +150,7 @@ export function combineVscodeContexts(...contexts: (object | undefined)[]): stri
   return JSON.stringify({ ...merged, webviewSection: sections.join(' ') });
 }
 
-// ── Generic path-based node access ────────────────────────────────────────────
-//
-// A complex field is written as one atomic unit (CONTEXT.md), so an edit anywhere in a struct or
-// array writes the whole thing.
+// ── Reading the document along a row's path ──────────────────────────────────
 export type { PathSegment };
 
 export function getAtPath(root: unknown, path: readonly PathSegment[]): unknown {
@@ -194,52 +158,78 @@ export function getAtPath(root: unknown, path: readonly PathSegment[]): unknown 
   for (const seg of path) {
     if (seg.kind === 'member') cur = (cur as Record<string, unknown> | undefined)?.[seg.name];
     else if (seg.kind === 'index') cur = Array.isArray(cur) ? (cur as unknown[])[seg.index] : undefined;
-    else if (seg.kind === 'key') cur = Array.isArray(cur) ? cur[keyedElementIndex(cur, seg)] : undefined;
-    // sortKey: the element is its own value, so the key is what is there — where the array holds it.
-    else cur = Array.isArray(cur) && cur.includes(seg.key) ? seg.key : undefined;
+    else if (seg.kind === 'key') cur = undefined;
+    // value: the element is its own value, so the key is what is there — where the array holds it.
+    else cur = Array.isArray(cur) && cur.includes(seg.value) ? seg.value : undefined;
   }
   return cur;
 }
 
-// ADR-0041: the whole subtree commits as one atomic source write. Never mutates its input: each
-// hop copies its own level before recursing, so a caller can compare the result against the
-// original root by reference.
-export function setAtPath(root: unknown, path: readonly PathSegment[], value: unknown): unknown {
-  if (path.length === 0) return value;
-  const [seg, ...rest] = path;
-  if (seg.kind === 'member') {
-    const obj: Record<string, unknown> = { ...(root as Record<string, unknown> | undefined) };
-    obj[seg.name] = setAtPath(obj[seg.name], rest, value);
-    return obj;
+/** The hops an envelope carries for a row under `rootField`: the row's own, with an element of a
+ *  sorted array turned into its position in `document`, this column's own value of the root. */
+export function wirePath(rootField: string, path: readonly PathSegment[], document: unknown): PathHop[] {
+  const hops: PathHop[] = [{ kind: 'member', name: rootField }];
+  let node = document;
+  for (const seg of path) {
+    hops.push(seg.kind === 'value'
+      ? { kind: 'index', index: Array.isArray(node) ? node.indexOf(seg.value) : -1 }
+      : seg);
+    node = getAtPath(node, [seg]);
   }
-  if (seg.kind === 'index') {
-    const arr = Array.isArray(root) ? [...(root as unknown[])] : [];
-    arr[seg.index] = setAtPath(arr[seg.index], rest, value);
-    return arr;
-  }
-  if (seg.kind === 'key') {
-    // A column that carries no element under this key is left exactly as it is — there is no
-    // element there to write, and inventing one at a position would be the mistake the key hop
-    // exists to prevent.
-    const arr = Array.isArray(root) ? [...(root as unknown[])] : [];
-    const at = keyedElementIndex(arr, seg);
-    if (at >= 0) arr[at] = setAtPath(arr[at], rest, value);
-    return arr;
-  }
-  // sortKey: always the final segment — replace the element whose current value matches the
-  // segment's own key.
-  const arr = Array.isArray(root) ? [...(root as unknown[])] : [];
-  return arr.map(e => (e === seg.key ? value : e));
+  return hops;
 }
 
-// Reading `fieldMetaMap[rootField].elementType` finds the right element type only when the array
-// itself is the subtree root; for a nested array it names the wrong node's. `?? undefined`
-// collapses the wire's `T | null` at this one boundary.
-export function metaAtPath(meta: FieldMetadata | undefined, path: readonly PathSegment[]): FieldMetadata | undefined {
+// Absent means default (ADR-0032): the metadata names the default where it is not the type's
+// zero. A link, a struct and the text-encoded leaves have no default here, so they keep the
+// grid's "no value" rendering.
+export function defaultOf(meta: FieldMetadata): unknown {
+  if (meta.default != null) return meta.default;
+  switch (meta.type) {
+    case 'int': case 'float': return 0;
+    case 'bool': return false;
+    case 'string': case 'translatedString': return '';
+    case 'flags': case 'array': return [];
+    default: return undefined;
+  }
+}
+
+// A member whose shape varies by leaf exists only under the leaves its variants name; every other
+// member is every leaf's.
+export function declaresMember(meta: FieldMetadata, owner: unknown, ownerMeta: FieldMetadata | undefined): boolean {
+  const discriminator = discriminatorOf(ownerMeta);
+  if (!meta.variants || discriminator == null || owner == null || typeof owner !== 'object') return true;
+  const leaf = (owner as Record<string, unknown>)[discriminator];
+  return typeof leaf !== 'string' || leaf in meta.variants;
+}
+
+// The member of a struct that names the concrete class its object is, as the metadata marks it.
+export const discriminatorOf = (meta: FieldMetadata | undefined): string | undefined =>
+  meta?.fields?.find(f => f.isDiscriminator)?.name;
+
+/** The shape a member has under the object holding it: its own, or the variant the object's
+ *  discriminator names when the member's type varies by leaf. */
+export function variantFor(meta: FieldMetadata, owner: unknown, ownerMeta: FieldMetadata | undefined): FieldMetadata {
+  const discriminator = discriminatorOf(ownerMeta);
+  if (!meta.variants || discriminator == null || owner == null || typeof owner !== 'object') return meta;
+  const leaf = (owner as Record<string, unknown>)[discriminator];
+  return typeof leaf === 'string' && leaf in meta.variants ? meta.variants[leaf] : meta;
+}
+
+// `fieldMetaMap[rootField].elementType` is the right element type only when the array is the
+// subtree root, never a nested array's. `?? undefined` collapses the wire's `T | null` here; `root`
+// picks a union member's variant at each hop.
+export function metaAtPath(
+  meta: FieldMetadata | undefined, path: readonly PathSegment[], root?: unknown,
+): FieldMetadata | undefined {
   let cur: FieldMetadata | null | undefined = meta;
+  let value: unknown = root;
   for (const seg of path) {
     if (!cur) return undefined;
+    const owner = value;
+    const ownerMeta = cur;
+    value = getAtPath(value, [seg]);
     cur = seg.kind === 'member' ? cur.fields?.find(f => f.name === seg.name) : cur.elementType;
+    if (cur && seg.kind === 'member' && root !== undefined) cur = variantFor(cur, owner, ownerMeta);
   }
   return cur ?? undefined;
 }

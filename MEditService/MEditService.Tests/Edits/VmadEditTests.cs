@@ -5,10 +5,12 @@ using MEditService.Core.Plugins;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
 using MEditService.Core.Source;
+using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
+using static MEditService.Tests.TestSupport.Envelopes;
 
 namespace MEditService.Tests.Edits;
 
@@ -21,20 +23,26 @@ public sealed class VmadEditTests : IDisposable
 
     public void Dispose() => _fixture.Dispose();
 
-    private const string Field = "virtual_machine_adapter";
+    private const string Field = "VirtualMachineAdapter";
 
     private static JsonElement Json(JsonNode value) => JsonDocument.Parse(value.ToJsonString()).RootElement;
 
     private RecordEditResult Edit(FormKey record, JsonNode value) =>
-        _fixture.Service().EditField(_fixture.Plugin, record.ToString(), Field, Json(value));
+        _fixture.Service().Set(_fixture.Plugin, record.ToString(), Field, Json(value));
 
-    private static JsonArray Scripts(JsonNode adapter) => adapter["scripts"]!.AsArray();
+    private RecordEditResult Edit(FormKey record, RecordEditEnvelope envelope) =>
+        _fixture.Service().Edit(_fixture.Plugin, record.ToString(), envelope);
+
+    // Every gesture here sits under the adapter column.
+    private static PathHop[] Under(params PathHop[] hops) => [Member(Field), .. hops];
+
+    private static JsonArray Scripts(JsonNode adapter) => adapter["Scripts"]!.AsArray();
 
     private static JsonNode ScriptNamed(JsonNode adapter, string name) =>
-        Scripts(adapter).First(s => s!["name"]!.GetValue<string>() == name)!;
+        Scripts(adapter).First(s => s!["Name"]!.GetValue<string>() == name)!;
 
     private static JsonNode PropertyNamed(JsonNode script, string name) =>
-        script["properties"]!.AsArray().First(p => p!["name"]!.GetValue<string>() == name)!;
+        script["Properties"]!.AsArray().First(p => p!["Name"]!.GetValue<string>() == name)!;
 
     private static List<string> WrittenScriptNames(string body) =>
         [.. JsonNode.Parse(body)!["VirtualMachineAdapter"]!["Scripts"]!.AsArray()
@@ -48,7 +56,7 @@ public sealed class VmadEditTests : IDisposable
         _fixture.Normalize(_fixture.Npc);
         var before = _fixture.Body(_fixture.Npc);
         var adapter = _fixture.Adapter(_fixture.Npc);
-        Scripts(adapter).Add(new JsonObject { ["name"] = "Aardvark", ["flags"] = "Local", ["properties"] = new JsonArray() });
+        Scripts(adapter).Add(new JsonObject { ["Name"] = "Aardvark", ["Flags"] = "Local", ["Properties"] = new JsonArray() });
 
         var result = Edit(_fixture.Npc, adapter);
 
@@ -71,7 +79,7 @@ public sealed class VmadEditTests : IDisposable
         var before = _fixture.Body(_fixture.Npc);
         var adapter = _fixture.Adapter(_fixture.Npc);
         var kept = ScriptNamed(adapter, "Alpha").ToJsonString();
-        adapter["scripts"] = new JsonArray(JsonNode.Parse(kept));
+        adapter["Scripts"] = new JsonArray(JsonNode.Parse(kept));
 
         var result = Edit(_fixture.Npc, adapter);
 
@@ -91,7 +99,7 @@ public sealed class VmadEditTests : IDisposable
         _fixture.Normalize(_fixture.Npc);
         var before = _fixture.Body(_fixture.Npc);
         var adapter = _fixture.Adapter(_fixture.Npc);
-        ScriptNamed(adapter, "Alpha")["name"] = "Zulu";
+        ScriptNamed(adapter, "Alpha")["Name"] = "Zulu";
 
         var result = Edit(_fixture.Npc, adapter);
 
@@ -113,12 +121,12 @@ public sealed class VmadEditTests : IDisposable
     {
         _fixture.Normalize(_fixture.Npc);
         var adapter = _fixture.Adapter(_fixture.Npc);
-        ScriptNamed(adapter, "Alpha")["properties"]!.AsArray().Add(new JsonObject
+        ScriptNamed(adapter, "Alpha")["Properties"]!.AsArray().Add(new JsonObject
         {
-            ["concrete_type"] = "ScriptFloatProperty",
-            ["name"] = "Amount",
-            ["flags"] = "Edited",
-            ["data_float"] = 2.5,
+            ["MutagenObjectType"] = "ScriptFloatProperty",
+            ["Name"] = "Amount",
+            ["Flags"] = "Edited",
+            ["Data"] = 2.5,
         });
 
         var result = Edit(_fixture.Npc, adapter);
@@ -136,8 +144,8 @@ public sealed class VmadEditTests : IDisposable
         var before = _fixture.Body(_fixture.Npc);
         var adapter = _fixture.Adapter(_fixture.Npc);
         var count = PropertyNamed(ScriptNamed(adapter, "Alpha"), "Count");
-        count["concrete_type"] = "ScriptStringProperty";
-        count["data_string"] = "one";
+        count["MutagenObjectType"] = "ScriptStringProperty";
+        count["Data"] = "one";
 
         var result = Edit(_fixture.Npc, adapter);
 
@@ -156,7 +164,7 @@ public sealed class VmadEditTests : IDisposable
         _fixture.Normalize(_fixture.Npc);
         var before = _fixture.Body(_fixture.Npc);
         var adapter = _fixture.Adapter(_fixture.Npc);
-        PropertyNamed(ScriptNamed(adapter, "Alpha"), "Count")["data_int"] = 42;
+        PropertyNamed(ScriptNamed(adapter, "Alpha"), "Count")["Data"] = 42;
 
         var result = Edit(_fixture.Npc, adapter);
 
@@ -169,23 +177,23 @@ public sealed class VmadEditTests : IDisposable
     // ── a scalar-array property's own elements ───────────────────────────────
 
     [Theory]
-    [InlineData("array_add", new[] { "a", "b", "" })]
-    [InlineData("array_remove", new[] { "a" })]
-    [InlineData("array_move_up", new[] { "b", "a" })]
+    [InlineData(RecordEditEnvelope.Add, new[] { "a", "b", "" })]
+    [InlineData(RecordEditEnvelope.Remove, new[] { "a" })]
+    [InlineData(RecordEditEnvelope.Move, new[] { "b", "a" })]
     public void ScalarArrayPropertyElementOps_RewriteThatArrayAlone(string op, string[] expected)
     {
         _fixture.Normalize(_fixture.Npc);
         var before = _fixture.Body(_fixture.Npc);
-        // 'array_add' addresses the array; the other two address one of its elements.
-        var path = new JsonArray(
-            new JsonObject { ["kind"] = "member", ["name"] = "scripts" },
-            new JsonObject { ["kind"] = "index", ["index"] = 0 },
-            new JsonObject { ["kind"] = "member", ["name"] = "properties" },
-            new JsonObject { ["kind"] = "index", ["index"] = 3 },
-            new JsonObject { ["kind"] = "member", ["name"] = "data_string_array" });
-        if (op != "array_add") path.Add(new JsonObject { ["kind"] = "index", ["index"] = 1 });
+        // add addresses the array; the other two address one of its elements.
+        var array = Under(Member("Scripts"), At(0), Member("Properties"), At(3), Member("Data"));
+        var envelope = op switch
+        {
+            RecordEditEnvelope.Add => AddAt(array),
+            RecordEditEnvelope.Remove => RemoveAt([.. array, At(1)]),
+            _ => MoveTo(0, [.. array, At(1)]),
+        };
 
-        var result = Edit(_fixture.Npc, new JsonObject { ["op"] = op, ["path"] = path });
+        var result = Edit(_fixture.Npc, envelope);
 
         Assert.True(result.Applied, result.Message);
         var tags = WrittenProperty(_fixture.Body(_fixture.Npc), "Alpha", "Tags");
@@ -204,7 +212,7 @@ public sealed class VmadEditTests : IDisposable
         var before = _fixture.Body(_fixture.Npc);
         var adapter = _fixture.Adapter(_fixture.Npc);
         var config = PropertyNamed(ScriptNamed(adapter, "Alpha"), "Config");
-        config["members"]![0]!["properties"]![0]!["data_int"] = 9;
+        config["Members"]![0]!["Properties"]![0]!["Data"] = 9;
 
         var result = Edit(_fixture.Npc, adapter);
 
@@ -221,14 +229,14 @@ public sealed class VmadEditTests : IDisposable
         var before = _fixture.Body(_fixture.Npc);
         var adapter = _fixture.Adapter(_fixture.Npc);
         var parts = PropertyNamed(ScriptNamed(adapter, "Alpha"), "Parts");
-        parts["structs"]!.AsArray().Add(new JsonObject
+        parts["Structs"]!.AsArray().Add(new JsonObject
         {
-            ["members"] = new JsonArray(new JsonObject
+            ["Members"] = new JsonArray(new JsonObject
             {
-                ["concrete_type"] = "ScriptFloatProperty",
-                ["name"] = "Weight",
-                ["flags"] = "Edited",
-                ["data_float"] = 4,
+                ["MutagenObjectType"] = "ScriptFloatProperty",
+                ["Name"] = "Weight",
+                ["Flags"] = "Edited",
+                ["Data"] = 4,
             }),
         });
 
@@ -251,7 +259,7 @@ public sealed class VmadEditTests : IDisposable
         _fixture.Normalize(_fixture.Quest);
         var before = _fixture.Body(_fixture.Quest);
         var adapter = _fixture.Adapter(_fixture.Quest);
-        PropertyNamed(adapter["aliases"]![0]!["scripts"]!.AsArray()[0]!, "Level")["data_int"] = 7;
+        PropertyNamed(adapter["Aliases"]![0]!["Scripts"]!.AsArray()[0]!, "Level")["Data"] = 7;
 
         var result = Edit(_fixture.Quest, adapter);
 
@@ -266,7 +274,7 @@ public sealed class VmadEditTests : IDisposable
     {
         var before = _fixture.Body(_fixture.Quest);
         var adapter = _fixture.Adapter(_fixture.Quest);
-        adapter["fragments"]!.AsArray().First(f => f!["stage"]!.GetValue<int>() == 10)!["script_name"] = "Renamed";
+        adapter["Fragments"]!.AsArray().First(f => f!["Stage"]!.GetValue<int>() == 10)!["ScriptName"] = "Renamed";
 
         var result = Edit(_fixture.Quest, adapter);
 
@@ -288,8 +296,8 @@ public sealed class VmadEditTests : IDisposable
     {
         var before = _fixture.Body(_fixture.Perk);
         var adapter = _fixture.Adapter(_fixture.Perk);
-        adapter["script_fragments"]!["fragments"]!.AsArray()
-            .First(f => f!["index"]!.GetValue<int>() == 2)!["script_name"] = "Renamed";
+        adapter["ScriptFragments"]!["Fragments"]!.AsArray()
+            .First(f => f!["Index"]!.GetValue<int>() == 2)!["ScriptName"] = "Renamed";
 
         var result = Edit(_fixture.Perk, adapter);
 
@@ -310,8 +318,8 @@ public sealed class VmadEditTests : IDisposable
     {
         var before = _fixture.Body(_fixture.Scene);
         var adapter = _fixture.Adapter(_fixture.Scene);
-        adapter["script_fragments"]!["phase_fragments"]!.AsArray()
-            .First(f => f!["script_name"]!.GetValue<string>() == "OneStart")!["fragment_name"] = "Renamed";
+        adapter["ScriptFragments"]!["PhaseFragments"]!.AsArray()
+            .First(f => f!["ScriptName"]!.GetValue<string>() == "OneStart")!["FragmentName"] = "Renamed";
 
         var result = Edit(_fixture.Scene, adapter);
 
@@ -341,27 +349,29 @@ public sealed class VmadEditTests : IDisposable
         // the one to compare against: from there a resend is the identity, null member included.
         _fixture.Normalize(_fixture.Scene);
         var before = _fixture.Body(_fixture.Scene);
-        Assert.Null(_fixture.Adapter(_fixture.Scene)["script_fragments"]!["on_begin"]);
+        Assert.Null(_fixture.Adapter(_fixture.Scene)["ScriptFragments"]!["OnBegin"]);
 
         _fixture.Normalize(_fixture.Scene);
 
-        Assert.Null(_fixture.Adapter(_fixture.Scene)["script_fragments"]!["on_begin"]);
+        Assert.Null(_fixture.Adapter(_fixture.Scene)["ScriptFragments"]!["OnBegin"]);
         Assert.Equal(before, _fixture.Body(_fixture.Scene));
     }
 
+    // Absent means default (ADR-0032): a null set clears the member, and the document loses it.
     [Fact]
-    public void NullingAStructTheRecordCarries_IsRefusedAndWritesNothing()
+    public void NullingAStructTheRecordCarries_ClearsItAndTouchesNothingElse()
     {
+        _fixture.Normalize(_fixture.Quest);
         var before = _fixture.Body(_fixture.Quest);
-        var adapter = _fixture.Adapter(_fixture.Quest);
-        Assert.NotNull(adapter["script"]);
-        adapter["script"] = null;
+        Assert.NotNull(_fixture.Adapter(_fixture.Quest)["Script"]);
 
-        var result = Edit(_fixture.Quest, adapter);
+        var result = Edit(_fixture.Quest, Clear(Under(Member("Script"))));
 
-        Assert.False(result.Applied);
-        Assert.Equal(RecordEditRefusal.FieldValueShapeMismatch, result.Refusal);
-        Assert.Equal(before, _fixture.Body(_fixture.Quest));
+        Assert.True(result.Applied, result.Message);
+        var after = _fixture.Body(_fixture.Quest);
+        Assert.All(
+            ConditionEditTests.DocumentDiff(before, after),
+            d => Assert.StartsWith("VirtualMachineAdapter.Script", d, StringComparison.Ordinal));
     }
 
     // ── the duplicate key ────────────────────────────────────────────────────
@@ -372,7 +382,7 @@ public sealed class VmadEditTests : IDisposable
         _fixture.Normalize(_fixture.Npc);
         var before = _fixture.Body(_fixture.Npc);
         var adapter = _fixture.Adapter(_fixture.Npc);
-        Scripts(adapter).Add(new JsonObject { ["name"] = "Alpha", ["flags"] = "Local", ["properties"] = new JsonArray() });
+        Scripts(adapter).Add(new JsonObject { ["Name"] = "Alpha", ["Flags"] = "Local", ["Properties"] = new JsonArray() });
 
         var result = Edit(_fixture.Npc, adapter);
 
@@ -386,14 +396,14 @@ public sealed class VmadEditTests : IDisposable
     public void TwoQuestFragmentsOnOneStage_AreRefusedNamingTheCompositeKey()
     {
         var adapter = _fixture.Adapter(_fixture.Quest);
-        adapter["fragments"]!.AsArray().Add(new JsonObject
+        adapter["Fragments"]!.AsArray().Add(new JsonObject
         {
-            ["stage"] = 10,
-            ["stage_index"] = 0,
-            ["unknown"] = 0,
-            ["unknown2"] = 0,
-            ["script_name"] = "Other",
-            ["fragment_name"] = "Other",
+            ["Stage"] = 10,
+            ["StageIndex"] = 0,
+            ["Unknown"] = 0,
+            ["Unknown2"] = 0,
+            ["ScriptName"] = "Other",
+            ["FragmentName"] = "Other",
         });
 
         var result = Edit(_fixture.Quest, adapter);
@@ -404,13 +414,8 @@ public sealed class VmadEditTests : IDisposable
     }
 
     // A keyed array's rows are labelled by key, not by position, so an array op names its element with
-    // a "key" hop. Each test reads the document back, since a payload addressing the wrong element
+    // a key hop. Each test reads the document back, since a payload addressing the wrong element
     // still applies cleanly.
-
-    private static JsonObject KeyHop(string key, params string[] members) =>
-        new() { ["kind"] = "key", ["key"] = key, ["members"] = new JsonArray([.. members.Select(m => (JsonNode)m!)]) };
-
-    private static JsonObject MemberHop(string name) => new() { ["kind"] = "member", ["name"] = name };
 
     [Fact]
     public void RemovingAQuestFragmentByItsCompositeKey_RemovesThatFragment_NotTheOneAtTheIndexTheKeyParsesTo()
@@ -424,11 +429,7 @@ public sealed class VmadEditTests : IDisposable
         Assert.Equal([5, 10], JsonNode.Parse(before)!["VirtualMachineAdapter"]!["Fragments"]!
             .AsArray().Select(f => f!["Stage"]!.GetValue<int>()));
 
-        var result = Edit(_fixture.Quest, new JsonObject
-        {
-            ["op"] = "array_remove",
-            ["path"] = new JsonArray(MemberHop("fragments"), KeyHop("10 / 0", "stage", "stage_index")),
-        });
+        var result = Edit(_fixture.Quest, RemoveAt(Under(Member("Fragments"), Key("10 / 0"))));
 
         Assert.True(result.Applied, result.Message);
         var written = JsonNode.Parse(_fixture.Body(_fixture.Quest))!["VirtualMachineAdapter"]!["Fragments"]!.AsArray();
@@ -442,15 +443,8 @@ public sealed class VmadEditTests : IDisposable
         _fixture.Normalize(_fixture.Npc);
         var before = _fixture.Body(_fixture.Npc);
 
-        var result = Edit(_fixture.Npc, new JsonObject
-        {
-            ["op"] = "array_move_up",
-            ["path"] = new JsonArray(
-                MemberHop("scripts"), KeyHop("Alpha", "name"),
-                MemberHop("properties"), KeyHop("Tags", "name"),
-                MemberHop("data_string_array"),
-                new JsonObject { ["kind"] = "index", ["index"] = 1 }),
-        });
+        var result = Edit(_fixture.Npc, MoveTo(0, Under(
+            Member("Scripts"), Key("Alpha"), Member("Properties"), Key("Tags"), Member("Data"), At(1))));
 
         Assert.True(result.Applied, result.Message);
         var after = _fixture.Body(_fixture.Npc);
@@ -468,14 +462,8 @@ public sealed class VmadEditTests : IDisposable
         _fixture.Normalize(_fixture.Quest);
         var before = _fixture.Body(_fixture.Quest);
 
-        var result = Edit(_fixture.Quest, new JsonObject
-        {
-            ["op"] = "array_remove",
-            ["path"] = new JsonArray(
-                MemberHop("aliases"), KeyHop("0", "property.alias"),
-                MemberHop("scripts"), KeyHop("AliasScript", "name"),
-                MemberHop("properties"), KeyHop("Level", "name")),
-        });
+        var result = Edit(_fixture.Quest, RemoveAt(Under(
+            Member("Aliases"), Key("0"), Member("Scripts"), Key("AliasScript"), Member("Properties"), Key("Level"))));
 
         Assert.True(result.Applied, result.Message);
         var after = _fixture.Body(_fixture.Quest);
@@ -495,20 +483,12 @@ public sealed class VmadEditTests : IDisposable
         _fixture.Normalize(_fixture.Npc);
         var before = _fixture.Body(_fixture.Npc);
 
-        var added = Edit(_fixture.Npc, new JsonObject
-        {
-            ["op"] = "array_add",
-            ["path"] = new JsonArray(MemberHop("scripts")),
-        });
+        var added = Edit(_fixture.Npc, AddAt(Under(Member("Scripts"))));
         Assert.True(added.Applied, added.Message);
         // The unnamed script sorts first: the empty key precedes every other.
         Assert.Equal(["", "Alpha", "Beta"], WrittenScriptNames(_fixture.Body(_fixture.Npc)));
 
-        var removed = Edit(_fixture.Npc, new JsonObject
-        {
-            ["op"] = "array_remove",
-            ["path"] = new JsonArray(MemberHop("scripts"), KeyHop("", "name")),
-        });
+        var removed = Edit(_fixture.Npc, RemoveAt(Under(Member("Scripts"), Key(""))));
 
         Assert.True(removed.Applied, removed.Message);
         Assert.Equal(before, _fixture.Body(_fixture.Npc));
@@ -520,11 +500,7 @@ public sealed class VmadEditTests : IDisposable
         _fixture.Normalize(_fixture.Npc);
         var before = _fixture.Body(_fixture.Npc);
 
-        var result = Edit(_fixture.Npc, new JsonObject
-        {
-            ["op"] = "array_move_down",
-            ["path"] = new JsonArray(MemberHop("scripts"), KeyHop("Alpha", "name")),
-        });
+        var result = Edit(_fixture.Npc, MoveTo(1, Under(Member("Scripts"), Key("Alpha"))));
 
         Assert.True(result.Applied, result.Message);
         Assert.Equal(["Alpha", "Beta"], WrittenScriptNames(_fixture.Body(_fixture.Npc)));
@@ -537,33 +513,25 @@ public sealed class VmadEditTests : IDisposable
         _fixture.Normalize(_fixture.Npc);
         var before = _fixture.Body(_fixture.Npc);
 
-        var result = Edit(_fixture.Npc, new JsonObject
-        {
-            ["op"] = "array_remove",
-            ["path"] = new JsonArray(
-                MemberHop("scripts"), KeyHop("Alpha", "name"),
-                MemberHop("properties"), KeyHop("Tags", "name"),
-                MemberHop("data_string_array"), KeyHop("b", "name")),
-        });
+        var result = Edit(_fixture.Npc, RemoveAt(Under(
+            Member("Scripts"), Key("Alpha"), Member("Properties"), Key("Tags"), Member("Data"), Key("b"))));
 
         Assert.False(result.Applied);
-        Assert.Equal(RecordEditRefusal.FieldValueShapeMismatch, result.Refusal);
+        Assert.Equal(RecordEditRefusal.InvalidEnvelope, result.Refusal);
         Assert.Equal(before, _fixture.Body(_fixture.Npc));
     }
 
     [Fact]
-    public void RemovingByAKeyNoElementCarries_WritesNothing()
+    public void RemovingByAKeyNoElementCarries_IsRefusedByName_AndWritesNothing()
     {
         _fixture.Normalize(_fixture.Npc);
         var before = _fixture.Body(_fixture.Npc);
 
-        var result = Edit(_fixture.Npc, new JsonObject
-        {
-            ["op"] = "array_remove",
-            ["path"] = new JsonArray(MemberHop("scripts"), KeyHop("Gamma", "name")),
-        });
+        var result = Edit(_fixture.Npc, RemoveAt(Under(Member("Scripts"), Key("Gamma"))));
 
-        Assert.True(result.Applied, result.Message);
+        Assert.False(result.Applied);
+        Assert.Equal(RecordEditRefusal.FieldNotFound, result.Refusal);
+        Assert.Equal("VirtualMachineAdapter.Scripts[Gamma]", result.Path);
         Assert.Equal(before, _fixture.Body(_fixture.Npc));
     }
 
@@ -710,7 +678,7 @@ public sealed class VmadEditTests : IDisposable
 
         public void Normalize(FormKey formKey)
         {
-            var result = Service().EditField(Plugin, formKey.ToString(), Field, Json(Adapter(formKey)));
+            var result = Service().Set(Plugin, formKey.ToString(), Field, Json(Adapter(formKey)));
             Assert.True(result.Applied, result.Message);
         }
 

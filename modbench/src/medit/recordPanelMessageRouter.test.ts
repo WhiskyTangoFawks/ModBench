@@ -37,7 +37,7 @@ const fakeReporter = { report: vi.fn() };
 
 // searchRecords goes unused by the edit tests, but the field is required: the router's one
 // `repository` covers both editField and the picker's search.
-const fakeRepository = { editRecordField: vi.fn(), searchRecords: vi.fn() };
+const fakeRepository = { editRecord: vi.fn(), searchRecords: vi.fn() };
 const onRecordEdited = vi.fn();
 
 function makeDeps(overrides: Partial<RouteRecordPanelMessageDeps> = {}): RouteRecordPanelMessageDeps {
@@ -98,7 +98,7 @@ describe('routeRecordPanelMessage', () => {
     writeText.mockReset();
     createQuickPick.mockReset();
     fakeReporter.report.mockReset();
-    fakeRepository.editRecordField.mockReset().mockResolvedValue({ applied: true });
+    fakeRepository.editRecord.mockReset().mockResolvedValue({ applied: true });
     onRecordEdited.mockReset();
   });
 
@@ -154,7 +154,7 @@ describe('routeRecordPanelMessage', () => {
 describe('cross-panel copy/paste — two independently-opened panels share this router unmodified', () => {
   beforeEach(() => {
     writeText.mockReset();
-    fakeRepository.editRecordField.mockReset().mockResolvedValue({ applied: true });
+    fakeRepository.editRecord.mockReset().mockResolvedValue({ applied: true });
     onRecordEdited.mockReset();
   });
 
@@ -173,14 +173,15 @@ describe('cross-panel copy/paste — two independently-opened panels share this 
     await routeRecordPanelMessage({
       type: WEBVIEW_TO_EXTENSION.EDIT_FIELD,
       formKey: '000800:Mod.esp', plugin: 'Mod.esp', origin: 'SomeMod',
-      fieldPath: 'linkedRef', value: 'CopiedNPC [000001:Fallout4.esm]',
+      envelope: { op: 'set', path: [{ kind: 'member', name: 'LinkedRef' }], value: 'CopiedNPC [000001:Fallout4.esm]' },
     }, panelBDeps);
 
-    expect(fakeRepository.editRecordField).toHaveBeenCalledWith(
-      '000800:Mod.esp', 'Mod.esp', 'SomeMod', 'linkedRef', 'CopiedNPC [000001:Fallout4.esm]');
+    expect(fakeRepository.editRecord).toHaveBeenCalledWith(
+      '000800:Mod.esp', 'Mod.esp', 'SomeMod',
+      { op: 'set', path: [{ kind: 'member', name: 'LinkedRef' }], value: 'CopiedNPC [000001:Fallout4.esm]' });
     expect(onRecordEdited).toHaveBeenCalledWith('000800:Mod.esp', 'Mod.esp', 'SomeMod');
     // Copying out of panel A triggers no write of its own — only panel B's later EDIT_FIELD does.
-    expect(fakeRepository.editRecordField).toHaveBeenCalledTimes(1);
+    expect(fakeRepository.editRecord).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -188,26 +189,47 @@ describe('cross-panel copy/paste — two independently-opened panels share this 
 // to the backend from the webview precisely so a refusal can become a native notification — which
 // is what these cases are really pinning.
 describe('routeRecordPanelMessage — EDIT_FIELD', () => {
+  const envelope = {
+    op: 'set' as const,
+    path: [{ kind: 'member' as const, name: 'Height' }],
+    value: 0.75,
+  };
   const editMessage = {
     type: WEBVIEW_TO_EXTENSION.EDIT_FIELD,
     formKey: '000800:Mod.esp',
     plugin: 'Mod.esp',
     origin: 'SomeMod',
-    fieldPath: 'height_max',
-    value: 0.75,
+    envelope,
   };
 
   beforeEach(() => {
     fakeReporter.report.mockReset();
-    fakeRepository.editRecordField.mockReset().mockResolvedValue({ applied: true });
+    fakeRepository.editRecord.mockReset().mockResolvedValue({ applied: true });
     onRecordEdited.mockReset();
   });
 
   it('sends the edit through the single write path with its compound plugin identity', async () => {
     await routeRecordPanelMessage(editMessage, makeDeps());
 
-    expect(fakeRepository.editRecordField)
-      .toHaveBeenCalledWith('000800:Mod.esp', 'Mod.esp', 'SomeMod', 'height_max', 0.75);
+    expect(fakeRepository.editRecord).toHaveBeenCalledWith('000800:Mod.esp', 'Mod.esp', 'SomeMod', envelope);
+  });
+
+  // The webview spells the whole write; the host adds nothing and rebuilds nothing, so an op with
+  // no value and a path of several hops reaches the repository exactly as posted.
+  it('passes an add envelope with a nested key path through verbatim, value and all', async () => {
+    const add = {
+      op: 'add' as const,
+      path: [
+        { kind: 'member' as const, name: 'VirtualMachineAdapter' },
+        { kind: 'member' as const, name: 'Scripts' },
+        { kind: 'key' as const, key: 'Guard' },
+        { kind: 'member' as const, name: 'Properties' },
+      ],
+    };
+    await routeRecordPanelMessage({ ...editMessage, envelope: add }, makeDeps());
+
+    expect(fakeRepository.editRecord).toHaveBeenCalledWith('000800:Mod.esp', 'Mod.esp', 'SomeMod', add);
+    expect(fakeRepository.editRecord.mock.calls[0][3]).not.toHaveProperty('value');
   });
 
   it('tells the panel to re-read once the edit has landed', async () => {
@@ -218,7 +240,7 @@ describe('routeRecordPanelMessage — EDIT_FIELD', () => {
   });
 
   it('surfaces a refusal with the message that names the way out, and does not re-read', async () => {
-    fakeRepository.editRecordField.mockResolvedValue({
+    fakeRepository.editRecord.mockResolvedValue({
       applied: false,
       refusal: 'PluginNotTracked',
       message: 'Mod.esp is not tracked, so it is read-only. Run "Modbench: Track\u2026" on it once to start editing.',
@@ -235,7 +257,7 @@ describe('routeRecordPanelMessage — EDIT_FIELD', () => {
   });
 
   it('a refusal is a warning, not an error — the user got a clear answer with a next step', async () => {
-    fakeRepository.editRecordField.mockResolvedValue({
+    fakeRepository.editRecord.mockResolvedValue({
       applied: false, refusal: 'PluginHasNoModFolder', message: 'Author a patch plugin and edit the override there.',
     });
 
@@ -245,7 +267,7 @@ describe('routeRecordPanelMessage — EDIT_FIELD', () => {
   });
 
   it('a transport failure is an error — nothing answered at all', async () => {
-    fakeRepository.editRecordField.mockRejectedValue(new Error('ECONNREFUSED'));
+    fakeRepository.editRecord.mockRejectedValue(new Error('ECONNREFUSED'));
 
     await routeRecordPanelMessage(editMessage, makeDeps());
 

@@ -13,9 +13,9 @@ internal static class WriteEndpointMapping
     internal static PluginKey PluginKeyOf(string routePlugin, string origin) =>
         new(Uri.UnescapeDataString(routePlugin), origin);
 
-    /// <summary>The status code tells an ordinary HTTP client the kind of problem; the refusal
-    /// extension tells an agent exactly which one, so nobody matches on prose (ADR-0026).
-    /// eslContradiction marks the one refusal a header edit can resolve.</summary>
+    /// <summary>The status code says what kind of problem; the refusal and path extensions say
+    /// exactly which, so nobody matches on prose (ADR-0026). eslContradiction marks the one
+    /// refusal a header edit can resolve.</summary>
     internal static IResult Refusal(RecordEditResult result) => Results.Problem(
         detail: result.Message,
         statusCode: result.Refusal switch
@@ -24,12 +24,15 @@ internal static class WriteEndpointMapping
             // "not while this plugin is untracked".
             RecordEditRefusal.PluginNotTracked or RecordEditRefusal.PluginHasNoModFolder => 409,
             RecordEditRefusal.RecordNotFound or RecordEditRefusal.FieldNotFound => 404,
+            // The envelope itself could not be read as a write: the request is malformed.
+            RecordEditRefusal.InvalidEnvelope => 400,
             // Well-formed, addressed at something real, and still not something we will write.
             _ => 422,
         },
         extensions: new Dictionary<string, object?>
         {
             ["refusal"] = result.Refusal.ToString(),
+            ["path"] = result.Path,
             ["eslContradiction"] = result.EslContradiction,
         });
 

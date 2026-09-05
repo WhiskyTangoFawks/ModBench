@@ -252,18 +252,18 @@ describe('RecordPanel — array child rows (sorted)', () => {
     expect(screen.getAllByText('KwdC').length).toBeGreaterThan(0);
   });
 
-  it('KwdB child row has dimmed em-dash for MyMod.esp (null value)', async () => {
+  // An element the column does not carry is nothing there — not a null link, which reads "—".
+  it('KwdB child row is empty for MyMod.esp, whose array has no such element', async () => {
     renderPanel();
     await waitFor(() => screen.getByText('▶'));
     fireEvent.click(screen.getByText('▶'));
     await waitFor(() => screen.getAllByText('KwdB').length > 0);
     const kwdBTd = screen.getAllByText('KwdB').find(el => el.tagName === 'TD');
     expect(kwdBTd).toBeTruthy();
-    const kwdBRow = kwdBTd!.closest('tr')!;
-    const dimSpan = Array.from(kwdBRow.querySelectorAll('span')).find(
-      s => s.textContent === '—' && s.style.opacity === '0.35',
-    );
-    expect(dimSpan).toBeTruthy();
+    const cells = kwdBTd!.closest('tr')!.querySelectorAll('td');
+    expect(cells[1].textContent).toBe('KwdB');
+    expect(cells[2].textContent).toBe('');
+    expect(cells[2].querySelector('[data-open-trigger]')).toBeNull();
   });
 });
 
@@ -341,6 +341,21 @@ describe('RecordPanel — a struct member that is itself an array of structs', (
 
 });
 
+// Every gesture posts one envelope: an operation, the hops from the record's own member down to
+// the row, and a value where the operation takes one. The backend resolves the hops against the
+// document it holds.
+type Envelope = { op: string; path: unknown[]; value?: unknown };
+
+function lastEnvelope(): Envelope | undefined {
+  const calls = (vscode.postMessage as ReturnType<typeof vi.fn>).mock.calls;
+  const call = [...calls].reverse().find(([m]) => (m as { type?: string }).type === WEBVIEW_TO_EXTENSION.EDIT_FIELD);
+  return (call?.[0] as { envelope?: Envelope } | undefined)?.envelope;
+}
+
+const member = (name: string) => ({ kind: 'member', name });
+const at = (index: number) => ({ kind: 'index', index });
+const keyed = (key: string) => ({ kind: 'key', key });
+
 describe('RecordPanel — array editing (unsorted)', () => {
   const intArrayMeta: FieldMetadata = {
     name: 'Values', type: 'array', isArray: true, validFormKeyTypes: [], enumMembers: [],
@@ -387,12 +402,6 @@ describe('RecordPanel — array editing (unsorted)', () => {
     return { client, ...render(<RecordPanel client={client} />) };
   }
 
-  function lastEditField(): { fieldPath?: string; value?: unknown } | undefined {
-    const calls = (vscode.postMessage as ReturnType<typeof vi.fn>).mock.calls;
-    const call = [...calls].reverse().find(([m]) => (m as { type?: string }).type === WEBVIEW_TO_EXTENSION.EDIT_FIELD);
-    return call?.[0] as { fieldPath?: string; value?: unknown } | undefined;
-  }
-
   beforeEach(() => {
     vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
     currentCompare = intArrayCompareResult;
@@ -400,21 +409,18 @@ describe('RecordPanel — array editing (unsorted)', () => {
   });
   afterEach(() => vi.unstubAllGlobals());
 
-  // The next array is computed server-side from the record's own value and schema; the
-  // accelerators own only which op envelope is posted under the field's fieldPath.
-
-  it('Insert on the focused array-parent cell posts an array_add envelope', async () => {
+  it('Insert on the focused array-parent cell posts add at the array, carrying no value', async () => {
     renderEditablePanel();
     await waitFor(() => screen.getByText('Values'));
     const cell = screen.getAllByText('[3]')[0].closest('td')!;
     fireEvent.click(cell); // focus
     fireEvent.keyDown(cell, { key: 'Insert' });
 
-    expect(lastEditField()?.fieldPath).toBe('Values');
-    expect(lastEditField()?.value).toEqual({ op: 'array_add', path: [] });
+    expect(lastEnvelope()).toEqual({ op: 'add', path: [member('Values')] });
+    expect(lastEnvelope()).not.toHaveProperty('value');
   });
 
-  it('Delete on a focused array-element cell posts an array_remove envelope at its own index', async () => {
+  it('Delete on a focused array-element cell posts remove at its own index', async () => {
     renderEditablePanel();
     await waitFor(() => screen.getByText('Values'));
     fireEvent.click(screen.getAllByText('▶')[0]); // expand
@@ -423,11 +429,10 @@ describe('RecordPanel — array editing (unsorted)', () => {
     fireEvent.click(cell);
     fireEvent.keyDown(cell, { key: 'Delete' });
 
-    expect(lastEditField()?.fieldPath).toBe('Values');
-    expect(lastEditField()?.value).toEqual({ op: 'array_remove', path: [{ kind: 'index', index: 1 }] });
+    expect(lastEnvelope()).toEqual({ op: 'remove', path: [member('Values'), at(1)] });
   });
 
-  it('Ctrl+ArrowDown on a focused array-element cell posts an array_move_down envelope at its own index', async () => {
+  it('Ctrl+ArrowDown on a focused element posts move with the next position as its value', async () => {
     renderEditablePanel();
     await waitFor(() => screen.getByText('Values'));
     fireEvent.click(screen.getAllByText('▶')[0]);
@@ -436,11 +441,36 @@ describe('RecordPanel — array editing (unsorted)', () => {
     fireEvent.click(cell);
     fireEvent.keyDown(cell, { key: 'ArrowDown', ctrlKey: true });
 
-    expect(lastEditField()?.fieldPath).toBe('Values');
-    expect(lastEditField()?.value).toEqual({ op: 'array_move_down', path: [{ kind: 'index', index: 0 }] });
+    expect(lastEnvelope()).toEqual({ op: 'move', path: [member('Values'), at(0)], value: 1 });
   });
 
-  it('an ARRAY_STRUCTURAL_OP broadcast for this open record posts the op envelope via EDIT_FIELD', async () => {
+  it('Ctrl+ArrowUp on a focused element posts move with the previous position as its value', async () => {
+    renderEditablePanel();
+    await waitFor(() => screen.getByText('Values'));
+    fireEvent.click(screen.getAllByText('▶')[0]);
+    await waitFor(() => screen.getByText('[2]'));
+    const cell = screen.getByText('3').closest('td')!;
+    fireEvent.click(cell);
+    fireEvent.keyDown(cell, { key: 'ArrowUp', ctrlKey: true });
+
+    expect(lastEnvelope()).toEqual({ op: 'move', path: [member('Values'), at(2)], value: 1 });
+  });
+
+  // The webview posts what the user asked for; a move off either end is the backend's to refuse
+  // by name (ADR-0032), not a boundary this side answers.
+  it('Ctrl+ArrowUp on the first element still posts the move, to the position before it', async () => {
+    renderEditablePanel();
+    await waitFor(() => screen.getByText('Values'));
+    fireEvent.click(screen.getAllByText('▶')[0]);
+    await waitFor(() => screen.getByText('[0]'));
+    const cell = screen.getByText('1').closest('td')!;
+    fireEvent.click(cell);
+    fireEvent.keyDown(cell, { key: 'ArrowUp', ctrlKey: true });
+
+    expect(lastEnvelope()).toEqual({ op: 'move', path: [member('Values'), at(0)], value: -1 });
+  });
+
+  it('an ARRAY_STRUCTURAL_OP broadcast for this open record posts the envelope via EDIT_FIELD', async () => {
     renderEditablePanel();
     await waitFor(() => screen.getByText('Values'));
 
@@ -451,8 +481,7 @@ describe('RecordPanel — array editing (unsorted)', () => {
       },
       '*',
     );
-    await waitFor(() => expect(lastEditField()?.fieldPath).toBe('Values'));
-    expect(lastEditField()?.value).toEqual({ op: 'array_remove', path: [{ kind: 'index', index: 1 }] });
+    await waitFor(() => expect(lastEnvelope()).toEqual({ op: 'remove', path: [member('Values'), at(1)] }));
   });
 
   it('an ARRAY_STRUCTURAL_OP broadcast for a different open record is ignored', async () => {
@@ -468,8 +497,7 @@ describe('RecordPanel — array editing (unsorted)', () => {
     );
     // Give the (synchronous) handler a turn; nothing should have posted.
     await new Promise(r => setTimeout(r, 0));
-    expect((vscode.postMessage as ReturnType<typeof vi.fn>).mock.calls
-      .some(([m]) => (m as { type?: string }).type === WEBVIEW_TO_EXTENSION.EDIT_FIELD)).toBe(false);
+    expect(lastEnvelope()).toBeUndefined();
   });
 });
 
@@ -522,49 +550,41 @@ const scalarResult = {
   }],
 };
 
-// A complex field is always edited as one atomic value: a leaf committing its own bare value
-// under the array's or struct's field name is silently declined by the backend applier.
-describe('RecordPanel — a value edit inside a complex field commits the whole field', () => {
-  function renderEditablePanel() {
-    const client: RecordPanelClient = {
-      load: vi.fn().mockImplementation(() => Promise.resolve({
-        ok: true,
-        result: currentCompare,
-        immutableSet: new Set(pluginsResponse.filter(p => p.isImmutable).map(p => columnKey(p.name, null))),
-        notInLoadOrderSet: new Set(),
-        trackedSet: new Set([columnKey('MyMod.esp', null)]),
-        conflictsComputed: true,
-      } as unknown as LoadResult)),
-    };
-    return { client, ...render(<RecordPanel client={client} />) };
-  }
+function renderEditablePanel() {
+  const client: RecordPanelClient = {
+    load: vi.fn().mockImplementation(() => Promise.resolve({
+      ok: true,
+      result: currentCompare,
+      immutableSet: new Set(pluginsResponse.filter(p => p.isImmutable).map(p => columnKey(p.name, null))),
+      notInLoadOrderSet: new Set(),
+      trackedSet: new Set([columnKey('MyMod.esp', null)]),
+      conflictsComputed: true,
+    } as unknown as LoadResult)),
+  };
+  return { client, ...render(<RecordPanel client={client} />) };
+}
 
-  function lastEditField(): { fieldPath?: string; value?: unknown } | undefined {
-    const calls = (vscode.postMessage as ReturnType<typeof vi.fn>).mock.calls;
-    const call = [...calls].reverse().find(([m]) => (m as { type?: string }).type === WEBVIEW_TO_EXTENSION.EDIT_FIELD);
-    return call?.[0] as { fieldPath?: string; value?: unknown } | undefined;
-  }
+// The same number can appear in more than one column, so the editable last cell is addressed
+// by row rather than by value text.
+function editLastCellOfRow(rowLabel: string, shownValue: string, typed: string) {
+  const row = screen.getByText(rowLabel).closest('tr')!;
+  const cells = row.querySelectorAll('td');
+  const cell = cells[cells.length - 1];
+  // xEdit's own gesture (ADR-0034): a double click opens the editor on a resting cell.
+  fireEvent.doubleClick(within(cell as HTMLElement).getByText(shownValue));
+  const input = (cell as HTMLElement).querySelector('input')!;
+  fireEvent.change(input, { target: { value: typed } });
+  fireEvent.keyDown(input, { key: 'Enter' });
+}
 
-  // The same number can appear in more than one column, so the editable last cell is addressed
-  // by row rather than by value text.
-  function editLastCellOfRow(rowLabel: string, shownValue: string, typed: string) {
-    const row = screen.getByText(rowLabel).closest('tr')!;
-    const cells = row.querySelectorAll('td');
-    const cell = cells[cells.length - 1];
-    // xEdit's own gesture (ADR-0034): a double click opens the editor on a resting cell.
-    fireEvent.doubleClick(within(cell as HTMLElement).getByText(shownValue));
-    const input = (cell as HTMLElement).querySelector('input')!;
-    fireEvent.change(input, { target: { value: typed } });
-    fireEvent.keyDown(input, { key: 'Enter' });
-  }
-
+describe('RecordPanel — a value edit posts one set envelope addressing the leaf', () => {
   beforeEach(() => {
     vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
     (vscode.postMessage as ReturnType<typeof vi.fn>).mockClear();
   });
   afterEach(() => vi.unstubAllGlobals());
 
-  it('editing one element of an array commits the whole array under the array\'s own field path', async () => {
+  it('an array element: the array member, then the element by position', async () => {
     currentCompare = editableIntArrayResult;
     renderEditablePanel();
     await waitFor(() => screen.getByText('Values'));
@@ -573,11 +593,10 @@ describe('RecordPanel — a value edit inside a complex field commits the whole 
 
     editLastCellOfRow('[1]', '22', '99');
 
-    expect(lastEditField()?.fieldPath).toBe('Values');
-    expect(lastEditField()?.value).toEqual([11, 99, 33]);
+    expect(lastEnvelope()).toEqual({ op: 'set', path: [member('Values'), at(1)], value: 99 });
   });
 
-  it('editing one member of a struct commits the whole struct', async () => {
+  it('a struct member: the struct, then the member by name', async () => {
     currentCompare = structCollapseExpandResult;
     renderEditablePanel();
     await waitFor(() => screen.getByText('ObjectBounds'));
@@ -586,12 +605,11 @@ describe('RecordPanel — a value edit inside a complex field commits the whole 
 
     editLastCellOfRow('X1', '5', '7');
 
-    expect(lastEditField()?.fieldPath).toBe('ObjectBounds');
-    expect(lastEditField()?.value).toEqual({ X1: 7, X2: 100 });
+    expect(lastEnvelope()).toEqual({ op: 'set', path: [member('ObjectBounds'), member('X1')], value: 7 });
   });
 
-  // OMOD `Properties[i].step` shape: the leaf sits two hops deep, so reconstruction runs twice.
-  it('editing a sub-field of a struct-element array commits the whole root value', async () => {
+  // OMOD `Properties[i].step` shape: the leaf sits two hops deep, and every hop travels.
+  it('a member of a struct element inside a struct: every hop from the record down', async () => {
     currentCompare = nestedStructArrayResult;
     renderEditablePanel();
     await waitFor(() => screen.getByText('Container'));
@@ -604,47 +622,77 @@ describe('RecordPanel — a value edit inside a complex field commits the whole 
 
     editLastCellOfRow('Weight', '1', '7');
 
-    expect(lastEditField()?.fieldPath).toBe('Container');
-    expect(lastEditField()?.value).toEqual({ Entries: [{ Id: 'A', Weight: 7 }] });
+    expect(lastEnvelope()).toEqual({
+      op: 'set', path: [member('Container'), member('Entries'), at(0), member('Weight')], value: 7,
+    });
   });
 
-  // The other half of the same rule: a top-level row *is* the whole field, so its commit is the bare
-  // value — nothing to reconstruct, and wrapping it would corrupt every scalar edit in the grid.
-  it('editing a top-level scalar still commits the bare value', async () => {
+  it('Delete on an element nested inside a struct posts remove with every hop', async () => {
+    currentCompare = nestedStructArrayResult;
+    renderEditablePanel();
+    await waitFor(() => screen.getByText('Container'));
+    fireEvent.click(screen.getAllByText('▶')[0]);
+    await waitFor(() => screen.getByText('Entries'));
+    fireEvent.click(screen.getAllByText('▶')[0]);
+    await waitFor(() => screen.getAllByText('[0]').find(el => el.tagName === 'TD'));
+
+    const row = screen.getAllByText('[0]').find(el => el.tagName === 'TD')!.closest('tr')!;
+    const cells = row.querySelectorAll('td');
+    const cell = cells[cells.length - 1] as HTMLElement;
+    fireEvent.click(cell);
+    fireEvent.keyDown(cell, { key: 'Delete' });
+
+    expect(lastEnvelope()).toEqual({ op: 'remove', path: [member('Container'), member('Entries'), at(0)] });
+  });
+
+  it('Ctrl+ArrowDown on an element nested inside a struct posts move with every hop', async () => {
+    currentCompare = nestedStructArrayResult;
+    renderEditablePanel();
+    await waitFor(() => screen.getByText('Container'));
+    fireEvent.click(screen.getAllByText('▶')[0]);
+    await waitFor(() => screen.getByText('Entries'));
+    fireEvent.click(screen.getAllByText('▶')[0]);
+    await waitFor(() => screen.getAllByText('[0]').find(el => el.tagName === 'TD'));
+
+    const row = screen.getAllByText('[0]').find(el => el.tagName === 'TD')!.closest('tr')!;
+    const cells = row.querySelectorAll('td');
+    const cell = cells[cells.length - 1] as HTMLElement;
+    fireEvent.click(cell);
+    fireEvent.keyDown(cell, { key: 'ArrowDown', ctrlKey: true });
+
+    expect(lastEnvelope()).toEqual({ op: 'move', path: [member('Container'), member('Entries'), at(0)], value: 1 });
+  });
+
+  it('a top-level scalar: the one member hop', async () => {
     currentCompare = scalarResult;
     renderEditablePanel();
     await waitFor(() => screen.getByText('Level'));
 
     editLastCellOfRow('Level', '4', '6');
 
-    expect(lastEditField()?.fieldPath).toBe('Level');
-    expect(lastEditField()?.value).toBe(6);
+    expect(lastEnvelope()).toEqual({ op: 'set', path: [member('Level')], value: 6 });
+  });
+
+  // The message carries the column's compound identity beside the envelope, nothing else.
+  it('the message names the record and the column, and carries the envelope alone', async () => {
+    currentCompare = scalarResult;
+    renderEditablePanel();
+    await waitFor(() => screen.getByText('Level'));
+
+    editLastCellOfRow('Level', '4', '6');
+
+    const calls = (vscode.postMessage as ReturnType<typeof vi.fn>).mock.calls;
+    const posted = [...calls].reverse().find(([m]) => (m as { type?: string }).type === WEBVIEW_TO_EXTENSION.EDIT_FIELD)![0];
+    expect(posted).toEqual({
+      type: WEBVIEW_TO_EXTENSION.EDIT_FIELD, formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'Data',
+      envelope: { op: 'set', path: [member('Level')], value: 6 },
+    });
   });
 });
 
-// Committing the saved text alone under the subtree root's own field path would be refused by
-// the backend's shape guards.
-describe('RecordPanel — the extended editor commits the whole field, at any depth', () => {
-  function renderEditablePanel() {
-    const client: RecordPanelClient = {
-      load: vi.fn().mockImplementation(() => Promise.resolve({
-        ok: true,
-        result: currentCompare,
-        immutableSet: new Set(pluginsResponse.filter(p => p.isImmutable).map(p => columnKey(p.name, null))),
-        notInLoadOrderSet: new Set(),
-        trackedSet: new Set([columnKey('MyMod.esp', null)]),
-        conflictsComputed: true,
-      } as unknown as LoadResult)),
-    };
-    return { client, ...render(<RecordPanel client={client} />) };
-  }
-
-  function lastEditField(): { fieldPath?: string; value?: unknown } | undefined {
-    const calls = (vscode.postMessage as ReturnType<typeof vi.fn>).mock.calls;
-    const call = [...calls].reverse().find(([m]) => (m as { type?: string }).type === WEBVIEW_TO_EXTENSION.EDIT_FIELD);
-    return call?.[0] as { fieldPath?: string; value?: unknown } | undefined;
-  }
-
+// The extended editor's save is the same leaf commit as the inline editor's, so it posts the same
+// envelope at the same path.
+describe('RecordPanel — the extended editor posts the set envelope of the row it was opened on', () => {
   function lastOpenExtendedEditorRequestId(): string {
     const calls = (vscode.postMessage as ReturnType<typeof vi.fn>).mock.calls;
     const call = [...calls].reverse().find(([m]) => (m as { type?: string }).type === WEBVIEW_TO_EXTENSION.OPEN_EXTENDED_EDITOR);
@@ -677,30 +725,27 @@ describe('RecordPanel — the extended editor commits the whole field, at any de
   });
   afterEach(() => vi.unstubAllGlobals());
 
-  it('saving an array element commits the whole array under the array\'s own field path', async () => {
+  it('saving an array element posts set at the element', async () => {
     currentCompare = editableIntArrayResult;
     renderEditablePanel();
     await waitFor(() => screen.getByText('Values'));
 
     saveThroughExtendedEditor('Values', [{ kind: 'index', index: 1 }], 'Values', '99');
 
-    expect(lastEditField()?.fieldPath).toBe('Values');
-    expect(lastEditField()?.value).toEqual([11, '99', 33]);
+    expect(lastEnvelope()).toEqual({ op: 'set', path: [member('Values'), at(1)], value: '99' });
   });
 
-  it('saving a struct member commits the whole struct', async () => {
+  it('saving a struct member posts set at the member', async () => {
     currentCompare = structCollapseExpandResult;
     renderEditablePanel();
     await waitFor(() => screen.getByText('ObjectBounds'));
 
     saveThroughExtendedEditor('ObjectBounds', [{ kind: 'member', name: 'X1' }], 'ObjectBounds', '7');
 
-    expect(lastEditField()?.fieldPath).toBe('ObjectBounds');
-    expect(lastEditField()?.value).toEqual({ X1: '7', X2: 100 });
+    expect(lastEnvelope()).toEqual({ op: 'set', path: [member('ObjectBounds'), member('X1')], value: '7' });
   });
 
-  // OMOD `Properties[i].step` shape: the leaf sits two hops deep.
-  it('saving a sub-field of a struct-element array commits the whole root value', async () => {
+  it('saving a member of a struct element posts every hop', async () => {
     currentCompare = nestedStructArrayResult;
     renderEditablePanel();
     await waitFor(() => screen.getByText('Container'));
@@ -711,27 +756,25 @@ describe('RecordPanel — the extended editor commits the whole field, at any de
       'Container', 'Z',
     );
 
-    expect(lastEditField()?.fieldPath).toBe('Container');
-    expect(lastEditField()?.value).toEqual({ Entries: [{ Id: 'Z', Weight: 1 }] });
+    expect(lastEnvelope()).toEqual({
+      op: 'set', path: [member('Container'), member('Entries'), at(0), member('Id')], value: 'Z',
+    });
   });
 
-  // The other half of the same rule: a top-level row *is* the
-  // whole field, so its commit stays the bare value — no double-wrap.
-  it('saving a top-level field still commits the bare value', async () => {
+  it('saving a top-level field posts the one member hop', async () => {
     currentCompare = scalarResult;
     renderEditablePanel();
     await waitFor(() => screen.getByText('Level'));
 
     saveThroughExtendedEditor('Level', [], 'Level', '6');
 
-    expect(lastEditField()?.fieldPath).toBe('Level');
-    expect(lastEditField()?.value).toBe('6');
+    expect(lastEnvelope()).toEqual({ op: 'set', path: [member('Level')], value: '6' });
   });
 });
 
-// One row's path is shared by every column, so a keyed array's path addresses the element by
-// key and each column resolves it against its own array — the same key, two positions.
-describe('RecordPanel — a keyed array\'s element is addressed by key, per column', () => {
+// One row's path is shared by every column, so a keyed array's element is addressed by the key
+// text the diff node states, and the backend finds it in each column's own array.
+describe('RecordPanel — a keyed array\'s element is addressed by key', () => {
   const scriptMeta: FieldMetadata = {
     name: 'Scripts', type: 'array', isArray: true, validFormKeyTypes: [], enumMembers: [],
     keyMembers: ['name'],
@@ -789,7 +832,7 @@ describe('RecordPanel — a keyed array\'s element is addressed by key, per colu
     }],
   };
 
-  function renderEditablePanel() {
+  function renderKeyedPanel() {
     const client: RecordPanelClient = {
       load: vi.fn().mockImplementation(() => Promise.resolve({
         ok: true,
@@ -803,12 +846,6 @@ describe('RecordPanel — a keyed array\'s element is addressed by key, per colu
     return render(<RecordPanel client={client} />);
   }
 
-  function lastEditField(): { fieldPath?: string; value?: unknown } | undefined {
-    const calls = (vscode.postMessage as ReturnType<typeof vi.fn>).mock.calls;
-    const call = [...calls].reverse().find(([m]) => (m as { type?: string }).type === WEBVIEW_TO_EXTENSION.EDIT_FIELD);
-    return call?.[0] as { fieldPath?: string; value?: unknown } | undefined;
-  }
-
   beforeEach(() => {
     vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
     (vscode.postMessage as ReturnType<typeof vi.fn>).mockClear();
@@ -816,7 +853,7 @@ describe('RecordPanel — a keyed array\'s element is addressed by key, per colu
   afterEach(() => vi.unstubAllGlobals());
 
   async function expandTo(label: string) {
-    renderEditablePanel();
+    renderKeyedPanel();
     await waitFor(() => screen.getByText('Scripts'));
     fireEvent.click(screen.getByText('Scripts').closest('tr')!.querySelector('button')!);
     await waitFor(() => screen.getByText(label));
@@ -826,9 +863,9 @@ describe('RecordPanel — a keyed array\'s element is addressed by key, per colu
     await waitFor(() => screen.getAllByText('flags'));
   }
 
-  // `Guard` is element 1 in the column being written and element 0 in the master. Addressing it
-  // by index parses NaN, and JSON.stringify drops that property, posting the array unchanged.
-  it('a value edit on a keyed element writes that element, at its own position in this column', async () => {
+  // `Guard` is element 1 in the column being written and element 0 in the master; the key names
+  // it in both, where a position could name only one.
+  it('a value edit on a keyed element posts set through the key hop', async () => {
     await expandTo('Guard');
     const row = screen.getAllByText('flags')[0].closest('tr')!;
     const cells = row.querySelectorAll('td');
@@ -838,13 +875,12 @@ describe('RecordPanel — a keyed array\'s element is addressed by key, per colu
     fireEvent.change(input, { target: { value: 'EDITED' } });
     fireEvent.keyDown(input, { key: 'Enter' });
 
-    expect(lastEditField()?.fieldPath).toBe('Scripts');
-    expect(lastEditField()?.value).toEqual([{ name: 'Ambush', flags: 'a' }, { name: 'Guard', flags: 'EDITED' }]);
+    expect(lastEnvelope()).toEqual({
+      op: 'set', path: [member('Scripts'), keyed('Guard'), member('flags')], value: 'EDITED',
+    });
   });
 
-  // Delete on the focused element cell posts the op envelope naming the element by key — an index
-  // could not name it, since the two columns hold it in different places.
-  it('Delete on a keyed element posts an array_remove naming the key', async () => {
+  it('Delete on a keyed element posts remove naming the key', async () => {
     await expandTo('Guard');
     const row = screen.getAllByText('Guard')[0].closest('tr')!;
     const cells = row.querySelectorAll('td');
@@ -852,9 +888,125 @@ describe('RecordPanel — a keyed array\'s element is addressed by key, per colu
     fireEvent.click(cell);
     fireEvent.keyDown(cell, { key: 'Delete' });
 
-    expect(lastEditField()?.value).toEqual({
-      op: 'array_remove',
-      path: [{ kind: 'key', key: 'Guard', members: ['name'] }],
+    expect(lastEnvelope()).toEqual({ op: 'remove', path: [member('Scripts'), keyed('Guard')] });
+  });
+
+  // The backend spells a key from the element's declared defaults, so an element omitting a key
+  // member is labelled "10 / 0"; the row posts that text as stated, never a respelling of its own.
+  it('posts the key text the diff node states, not one read off the element', async () => {
+    const fragmentsMeta: FieldMetadata = {
+      name: 'Fragments', type: 'array', isArray: true, validFormKeyTypes: [], enumMembers: [],
+      keyMembers: ['Stage', 'StageIndex'],
+      elementType: {
+        name: '', type: 'struct', isArray: false, validFormKeyTypes: [], enumMembers: [],
+        fields: [
+          { name: 'Stage', type: 'int', isArray: false, validFormKeyTypes: [], enumMembers: [] },
+          { name: 'StageIndex', type: 'int', isArray: false, validFormKeyTypes: [], enumMembers: [] },
+        ],
+      },
+    };
+    const element = { Stage: 10 };
+    const client: RecordPanelClient = {
+      load: vi.fn().mockImplementation(() => Promise.resolve({
+        ok: true,
+        result: {
+          conflictAll: 'OnlyOne',
+          overrides: [{
+            formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'Data', loadOrderIndex: 1, isWinner: true,
+            editorId: 'TestNPC', fields: [{ metadata: fragmentsMeta, value: [element] }], conflictThis: 'OnlyOne',
+          }],
+          diffs: [{
+            fieldName: 'Fragments', values: { 'MyMod.esp': [element] }, winnerColumn: 'MyMod.esp', winnerValue: [element],
+            cellStates: {},
+            children: [{
+              fieldName: '10 / 0', values: { 'MyMod.esp': element }, winnerColumn: 'MyMod.esp', winnerValue: element,
+              cellStates: {},
+              children: [{ fieldName: 'Stage', values: { 'MyMod.esp': 10 }, winnerColumn: 'MyMod.esp', winnerValue: 10, cellStates: {} }],
+            }],
+          }],
+        },
+        immutableSet: new Set(), notInLoadOrderSet: new Set(),
+        trackedSet: new Set([columnKey('MyMod.esp', null)]), conflictsComputed: true,
+      } as unknown as LoadResult)),
+    };
+    render(<RecordPanel client={client} />);
+    await waitFor(() => screen.getByText('Fragments'));
+    fireEvent.click(screen.getByText('Fragments').closest('tr')!.querySelector('button')!);
+    await waitFor(() => screen.getByText('10 / 0'));
+    const cell = screen.getByText('10 / 0').closest('tr')!.querySelectorAll('td')[1] as HTMLElement;
+    fireEvent.click(cell);
+    fireEvent.keyDown(cell, { key: 'Delete' });
+
+    expect(lastEnvelope()).toEqual({ op: 'remove', path: [member('Fragments'), keyed('10 / 0')] });
+  });
+
+  // A keyed array is stored in key order, so no Move could change the file: the accelerator is
+  // inert on its rows.
+  it('Ctrl+ArrowDown on a keyed element posts nothing', async () => {
+    await expandTo('Guard');
+    const row = screen.getAllByText('Guard')[0].closest('tr')!;
+    const cells = row.querySelectorAll('td');
+    const cell = cells[cells.length - 1] as HTMLElement;
+    fireEvent.click(cell);
+    fireEvent.keyDown(cell, { key: 'ArrowDown', ctrlKey: true });
+
+    expect(lastEnvelope()).toBeUndefined();
+  });
+});
+
+// A pure-FormLink array is sorted by its own values, so an element sits at a different position in
+// every column; the hop is that position in the column being written.
+describe('RecordPanel — an element of a sorted array is addressed at its position in this column', () => {
+  const sortedPlugins = [
+    { name: 'Fallout4.esm', isImmutable: true, loadOrderIndex: 0 },
+    { name: 'MyMod.esp', isImmutable: false, loadOrderIndex: 1 },
+  ];
+
+  function renderSortedPanel() {
+    const client: RecordPanelClient = {
+      load: vi.fn().mockImplementation(() => Promise.resolve({
+        ok: true,
+        result: sortedArrayCompareResult,
+        immutableSet: new Set(sortedPlugins.filter(p => p.isImmutable).map(p => columnKey(p.name, null))),
+        notInLoadOrderSet: new Set(),
+        trackedSet: new Set([columnKey('MyMod.esp', null)]),
+        conflictsComputed: true,
+      } as unknown as LoadResult)),
+    };
+    return render(<RecordPanel client={client} />);
+  }
+
+  beforeEach(() => {
+    vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
+    (vscode.postMessage as ReturnType<typeof vi.fn>).mockClear();
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('a picked replacement posts set at the value\'s own index in the written column', async () => {
+    renderSortedPanel();
+    await waitFor(() => screen.getByText('Keywords'));
+    fireEvent.click(screen.getByText('▶'));
+    await waitFor(() => screen.getAllByText('KwdC').length > 0);
+
+    // KwdC is element 1 of MyMod.esp's own ['KwdA', 'KwdC'].
+    const row = screen.getAllByText('KwdC').find(el => el.tagName === 'TD')!.closest('tr')!;
+    const cells = row.querySelectorAll('td');
+    const cell = cells[cells.length - 1] as HTMLElement;
+    fireEvent.click(cell);
+    fireEvent.doubleClick(within(cell).getByText('KwdC'));
+
+    // The native QuickPick answers through the bridge; this is its reply.
+    const calls = (vscode.postMessage as ReturnType<typeof vi.fn>).mock.calls;
+    const request = [...calls].reverse()
+      .find(([m]) => (m as { type?: string }).type === WEBVIEW_TO_EXTENSION.OPEN_FORM_KEY_PICKER)![0] as { requestId: string };
+    act(() => {
+      window.dispatchEvent(new MessageEvent('message', {
+        data: { type: EXTENSION_TO_WEBVIEW.FORM_KEY_PICKED, requestId: request.requestId, formKey: '000123:Fallout4.esm' },
+      }));
     });
+
+    await waitFor(() => expect(lastEnvelope()).toEqual({
+      op: 'set', path: [member('Keywords'), at(1)], value: '000123:Fallout4.esm',
+    }));
   });
 });

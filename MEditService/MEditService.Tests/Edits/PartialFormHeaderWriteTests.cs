@@ -4,6 +4,7 @@ using MEditService.Core.Plugins;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
 using MEditService.Core.Source;
+using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -81,14 +82,14 @@ public sealed class PartialFormHeaderWriteTests : IDisposable
     {
         var service = Service();
 
-        var beforeClear = service.EditField(Plugin, PartialCell.ToString(), "water_height", Json("50.0"));
+        var beforeClear = service.Set(Plugin, PartialCell.ToString(), "WaterHeight", Json("50.0"));
         Assert.False(beforeClear.Applied);
         Assert.Equal(RecordEditRefusal.PartialFormFieldReadOnly, beforeClear.Refusal);
 
-        var clear = service.EditField(Plugin, PartialCell.ToString(), "is_partial_form", Json("false"));
+        var clear = service.Set(Plugin, PartialCell.ToString(), "IsPartialForm", Json("false"));
         Assert.True(clear.Applied);
 
-        var afterClear = service.EditField(Plugin, PartialCell.ToString(), "water_height", Json("50.0"));
+        var afterClear = service.Set(Plugin, PartialCell.ToString(), "WaterHeight", Json("50.0"));
         Assert.True(afterClear.Applied);
     }
 
@@ -99,9 +100,9 @@ public sealed class PartialFormHeaderWriteTests : IDisposable
         // OrdinaryNpc isn't eligible; use a fresh, unflagged Cell-shaped fixture instead by clearing
         // the seeded flag first, then setting it again — proves the write is a genuine toggle, not
         // just a one-way clear.
-        Assert.True(service.EditField(Plugin, PartialCell.ToString(), "is_partial_form", Json("false")).Applied);
+        Assert.True(service.Set(Plugin, PartialCell.ToString(), "IsPartialForm", Json("false")).Applied);
 
-        var result = service.EditField(Plugin, PartialCell.ToString(), "is_partial_form", Json("true"));
+        var result = service.Set(Plugin, PartialCell.ToString(), "IsPartialForm", Json("true"));
 
         Assert.True(result.Applied);
     }
@@ -109,7 +110,7 @@ public sealed class PartialFormHeaderWriteTests : IDisposable
     [Fact]
     public void EditField_IsPartialForm_OnNonPartialFormableType_IsRefused()
     {
-        var result = Service().EditField(Plugin, OrdinaryNpc.ToString(), "is_partial_form", Json("true"));
+        var result = Service().Set(Plugin, OrdinaryNpc.ToString(), "IsPartialForm", Json("true"));
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.FieldNotFound, result.Refusal);
@@ -123,7 +124,7 @@ public sealed class PartialFormHeaderWriteTests : IDisposable
         var path = SourcePath();
         var before = File.ReadAllText(path);
 
-        var result = Service().EditField(Plugin, PartialCell.ToString(), "is_partial_form", Json("false"));
+        var result = Service().Set(Plugin, PartialCell.ToString(), "IsPartialForm", Json("false"));
         Assert.True(result.Applied);
 
         var after = File.ReadAllText(path);
@@ -134,11 +135,11 @@ public sealed class PartialFormHeaderWriteTests : IDisposable
     public void EditField_SettingIsPartialForm_ChangesOnlyBit14InSourceFile()
     {
         // Start from a cleared cell so this test exercises the opposite direction from the one above.
-        Assert.True(Service().EditField(Plugin, PartialCell.ToString(), "is_partial_form", Json("false")).Applied);
+        Assert.True(Service().Set(Plugin, PartialCell.ToString(), "IsPartialForm", Json("false")).Applied);
         var path = SourcePath();
         var before = File.ReadAllText(path);
 
-        var result = Service().EditField(Plugin, PartialCell.ToString(), "is_partial_form", Json("true"));
+        var result = Service().Set(Plugin, PartialCell.ToString(), "IsPartialForm", Json("true"));
         Assert.True(result.Applied);
 
         var after = File.ReadAllText(path);
@@ -176,34 +177,39 @@ public sealed class PartialFormHeaderWriteTests : IDisposable
     [Fact]
     public void EditField_MajorFlags_AttemptingToSetBit14OnUnflaggedRecord_IsRefused()
     {
-        Assert.True(Service().EditField(Plugin, PartialCell.ToString(), "is_partial_form", Json("false")).Applied);
+        Assert.True(Service().Set(Plugin, PartialCell.ToString(), "IsPartialForm", Json("false")).Applied);
         var path = SourcePath();
         var before = File.ReadAllText(path);
 
-        // major_flags is Cell.MajorFlags's own reflected bitmask column — a plain decimal BIGINT
-        // that replaces MajorRecordFlagsRaw wholesale (LeafClassification.ReadBitmaskLong /
-        // Enum.ToObject), so writing PersistentBit | PartialFormBit sets bit 14 as a side effect.
-        var result = Service().EditField(
-            Plugin, PartialCell.ToString(), "major_flags",
-            Json((PersistentBit | PartialFormBit).ToString(CultureInfo.InvariantCulture)));
+        // MajorFlags is Cell.MajorFlags's own reflected flags column, an array of names that the
+        // codec reads back over MajorRecordFlagsRaw wholesale, so a bit no name spells rides in as
+        // its number and sets bit 14 as a side effect.
+        var result = Service().Set(
+            Plugin, PartialCell.ToString(), "MajorFlags",
+            Json($"[\"Persistent\", \"{PartialFormBit.ToString(CultureInfo.InvariantCulture)}\"]"));
 
         Assert.False(result.Applied);
-        Assert.Equal(RecordEditRefusal.PartialFormFlagIndirectWrite, result.Refusal);
+        Assert.Equal(RecordEditRefusal.SyntheticMemberIndirectWrite, result.Refusal);
         Assert.Equal(before, File.ReadAllText(path));
     }
 
+    // Mutagen spells the same flags again under Fallout4MajorRecordFlags, ahead of MajorFlags, and
+    // its reader takes the last spelling: a write to the earlier one cannot land and is refused,
+    // never silently overridden.
     [Fact]
-    public void EditField_FallOut4MajorRecordFlags_AttemptingToSetBit14OnUnflaggedRecord_IsRefused()
+    public void EditField_FallOut4MajorRecordFlags_OverriddenByTheLaterAlias_IsRefusedNotSilentlyLost()
     {
-        Assert.True(Service().EditField(Plugin, PartialCell.ToString(), "is_partial_form", Json("false")).Applied);
+        Assert.True(Service().Set(Plugin, PartialCell.ToString(), "IsPartialForm", Json("false")).Applied);
         var path = SourcePath();
         var before = File.ReadAllText(path);
 
-        var result = Service().EditField(
-            Plugin, PartialCell.ToString(), "fallout4_major_record_flags", Json(PartialFormBit.ToString(CultureInfo.InvariantCulture)));
+        var result = Service().Set(
+            Plugin, PartialCell.ToString(), "Fallout4MajorRecordFlags",
+            Json($"[\"{PartialFormBit.ToString(CultureInfo.InvariantCulture)}\"]"));
 
         Assert.False(result.Applied);
-        Assert.Equal(RecordEditRefusal.PartialFormFlagIndirectWrite, result.Refusal);
+        Assert.Equal(RecordEditRefusal.CodecDroppedValue, result.Refusal);
+        Assert.Equal("Fallout4MajorRecordFlags", result.Path);
         Assert.Equal(before, File.ReadAllText(path));
     }
 
@@ -212,10 +218,9 @@ public sealed class PartialFormHeaderWriteTests : IDisposable
     [Fact]
     public void EditField_MajorFlags_NotTouchingBit14_Succeeds()
     {
-        Assert.True(Service().EditField(Plugin, PartialCell.ToString(), "is_partial_form", Json("false")).Applied);
+        Assert.True(Service().Set(Plugin, PartialCell.ToString(), "IsPartialForm", Json("false")).Applied);
 
-        var result = Service().EditField(
-            Plugin, PartialCell.ToString(), "major_flags", Json(PersistentBit.ToString(CultureInfo.InvariantCulture)));
+        var result = Service().Set(Plugin, PartialCell.ToString(), "MajorFlags", Json("[\"Persistent\"]"));
 
         Assert.True(result.Applied);
     }

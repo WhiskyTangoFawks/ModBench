@@ -139,9 +139,9 @@ public class DuckDbRecordIndexTests(TestPluginFixture fixture)
         var record = repo.At(RecordRef.Effective).GetDocument(npcFormKey.ToString());
 
         Assert.NotNull(record);
-        var raceField = record.Fields.FirstOrDefault(f => f.Metadata.Name == "race");
+        var raceField = record.Fields.FirstOrDefault(f => f.Metadata.Name == "Race");
         Assert.NotNull(raceField);
-        Assert.Equal(raceFormKey.ToString(), raceField.Value);
+        Assert.Equal(raceFormKey.ToString(), Assert.IsType<JsonElement>(raceField.Value).GetString());
     }
 
     // ADR-0036: two origins loading the same physical file under different origin values —
@@ -209,9 +209,11 @@ public class DuckDbRecordIndexTests(TestPluginFixture fixture)
             var record = repo.At(RecordRef.Effective).GetDocument(formKey);
 
             Assert.NotNull(record);
-            var flags = record.Fields.Single(f => f.Metadata.Name == "flags");
-            Assert.True(flags.Metadata.IsBitmask);
-            Assert.Equal("9007199254740993", flags.Value);
+            var flags = record.Fields.Single(f => f.Metadata.Name == "Flags");
+            Assert.Equal("flags", flags.Metadata.Type);
+            // The document's own spelling: the contained members by name, whatever their bit.
+            var names = Assert.IsType<JsonElement>(flags.Value).EnumerateArray().Select(e => e.GetString()).ToList();
+            Assert.Equal([nameof(Race.Flag.Playable), nameof(Race.Flag.LowPriorityPushable)], names);
         }
         finally
         {
@@ -411,7 +413,7 @@ public class DuckDbRecordIndexTests(TestPluginFixture fixture)
         var record = repo.At(RecordRef.Effective).GetDocument(npcFormKey.ToString());
 
         Assert.NotNull(record);
-        var keywordsField = record.Fields.FirstOrDefault(f => f.Metadata.Name == "keywords");
+        var keywordsField = record.Fields.FirstOrDefault(f => f.Metadata.Name == "Keywords");
         Assert.NotNull(keywordsField);
         var element = Assert.IsType<JsonElement>(keywordsField.Value);
         Assert.Equal(JsonValueKind.Array, element.ValueKind);
@@ -552,19 +554,6 @@ public class DuckDbRecordIndexTests(TestPluginFixture fixture)
         Assert.NotNull(linkField); // NPC has unset FormLink fields → null in DuckDB
     }
 
-    [Fact]
-    public void GetRecord_FloatField_ReturnsNonNullValue()
-    {
-        // Float fields (height, weight) are value types — always non-null in DuckDB
-        using var repo = LoadedRepository();
-        var formKey = _fixture.Npc1FormKey.ToString();
-        var record = repo.At(RecordRef.Effective).GetDocument(formKey);
-        Assert.NotNull(record);
-        var floatField = record.Fields.FirstOrDefault(f => f.Metadata.Type == "float");
-        Assert.NotNull(floatField);
-        Assert.NotNull(floatField.Value); // float value type is never null
-    }
-
     // --- CheckError ---
 
     [Fact]
@@ -592,7 +581,7 @@ public class DuckDbRecordIndexTests(TestPluginFixture fixture)
 
         var record = repo.At(RecordRef.Effective).GetDocument(npcFormKey.ToString());
         Assert.NotNull(record);
-        var keywordsField = record.Fields.FirstOrDefault(f => f.Metadata.Name == "keywords");
+        var keywordsField = record.Fields.FirstOrDefault(f => f.Metadata.Name == "Keywords");
         Assert.NotNull(keywordsField);
         Assert.Equal("[0]: [FFFFFF:Dangling.esm] <Error: Could not be resolved>", keywordsField.CheckError);
     }
@@ -623,7 +612,7 @@ public class DuckDbRecordIndexTests(TestPluginFixture fixture)
 
         var record = repo.At(RecordRef.Effective).GetDocument(npcFormKey.ToString());
         Assert.NotNull(record);
-        var keywordsField = record.Fields.FirstOrDefault(f => f.Metadata.Name == "keywords");
+        var keywordsField = record.Fields.FirstOrDefault(f => f.Metadata.Name == "Keywords");
         Assert.NotNull(keywordsField);
         Assert.Null(keywordsField.CheckError);
     }
@@ -663,8 +652,8 @@ public class DuckDbRecordIndexTests(TestPluginFixture fixture)
         var overrides = repo.At(RecordRef.Effective).GetOverrideStack(npcFormKey.ToString())!.Entries;
 
         Assert.Equal(2, overrides.Count);
-        var baseKw = overrides[0].Effective.Fields.FirstOrDefault(f => f.Metadata.Name == "keywords");
-        var patchKw = overrides[1].Effective.Fields.FirstOrDefault(f => f.Metadata.Name == "keywords");
+        var baseKw = overrides[0].Effective.Fields.FirstOrDefault(f => f.Metadata.Name == "Keywords");
+        var patchKw = overrides[1].Effective.Fields.FirstOrDefault(f => f.Metadata.Name == "Keywords");
         Assert.NotNull(baseKw);
         Assert.NotNull(patchKw);
         Assert.Null(baseKw.CheckError);

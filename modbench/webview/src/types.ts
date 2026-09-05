@@ -11,20 +11,25 @@ export type FormKeyResolution = Schemas['FormKeyResolution'];
 export type ConflictAll = Schemas['ConflictAll'];
 export type ConflictThis = Schemas['ConflictThis'];
 export type EnumMember = Schemas['EnumMember'];
-/** The backend's own `type` string, narrowed to the closed set this side switches on exhaustively. */
+/** The backend's own `type` string, narrowed to the closed set this side switches on. Each names
+ *  the codec's spelling: a translated string is an object, a color "#AARRGGBB", a vector
+ *  "x, y, z", flags an array of names. */
 export type FieldType =
-  | 'string' | 'int' | 'float' | 'bool' | 'enum' | 'formKey' | 'struct' | 'array' | 'hex';
+  | 'string' | 'translatedString' | 'int' | 'float' | 'bool' | 'enum' | 'flags' | 'formKey'
+  | 'struct' | 'array' | 'hex' | 'color' | 'vector';
 
 /** `readOnly` is a per-row stamp the panel applies regardless of the column's own mutability;
  *  every other field's editability comes purely from the column — "per column, never a mode". */
 export type FieldMetadata =
-  // `isDiscriminator` says which member of a struct names the concrete class its object is —
-  // `concrete_type` for a Loqui union, OMOD's `value_type` for its own.
+  // `isDiscriminator` says which member of a struct names the concrete class its object is — the
+  // document's own `MutagenObjectType`. `variants` is a union member's shape per leaf, keyed by
+  // that discriminator's values.
   Omit<Schemas['FieldMetadata'],
-    'type' | 'elementType' | 'fields' | 'isSortable' | 'allowsNull' | 'isDiscriminator'> & {
+    'type' | 'elementType' | 'fields' | 'isSortable' | 'allowsNull' | 'isDiscriminator' | 'variants'> & {
     type: FieldType;
     elementType?: FieldMetadata | null;   // present when type === 'array'
     fields?: FieldMetadata[] | null;      // present when type === 'struct'
+    variants?: Record<string, FieldMetadata> | null;
     readOnly?: boolean;
     // Required non-nullable booleans on the wire, optional here so a test fixture can leave a
     // question that does not apply to its row unanswered rather than fabricating `false` for it.
@@ -55,9 +60,8 @@ export type RecordDetail = Omit<Schemas['RecordDetail'], 'fields'> & { fields: F
 
 export type CompareOverride = Omit<Schemas['CompareOverride'], 'fields'> & { fields: FieldValue[] };
 
-// A struct hop is by member name, an unsorted-array hop by position, a sorted array hop by the
-// element's own value. Lives in messages.ts so it can cross to the extension host.
-export type { PathSegment } from './messages';
+// Lives in messages.ts so it can cross to the extension host.
+export type { PathHop, PathSegment, RecordEditEnvelope } from './messages';
 
 /** `conflictAll` is required on the wire but optional here, so a fixture that states no conflict
  *  state degrades to "no background" rather than having to state one. */

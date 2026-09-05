@@ -82,7 +82,7 @@ public sealed class SourceRepositoryTrackGitignoreTests
         try
         {
             Directory.CreateDirectory(Path.Combine(modFolder, "MySource"));
-            File.WriteAllText(Path.Combine(modFolder, "MySource", "notes.txt"), "notes");
+            File.WriteAllText(Path.Combine(modFolder, "MySource", "notes.txt"), "Notes");
 
             SourceRepository.Track(modFolder, SourcePreset.Edits, [SourceFile()], new TrackProvenance(null, null, new Dictionary<string, string>()));
 
@@ -109,7 +109,7 @@ public sealed class SourceRepositoryTrackGitignoreTests
             WritePluginBinaryBesideTheSource(modFolder);
             File.WriteAllText(Path.Combine(modFolder, "texture.dds"), "not really a texture");
             Directory.CreateDirectory(Path.Combine(modFolder, "MySource"));
-            File.WriteAllText(Path.Combine(modFolder, "MySource", "notes.txt"), "notes");
+            File.WriteAllText(Path.Combine(modFolder, "MySource", "notes.txt"), "Notes");
 
             var otherPluginFile = new PristineFile(
                 Path.Combine("source", "Other.esp", "npc_", "Other.esp", "000002.json"), "{}"u8.ToArray());

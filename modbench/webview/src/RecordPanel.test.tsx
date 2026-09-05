@@ -211,9 +211,9 @@ const partialFormCompareResult = {
   ],
 };
 
-// Value '3' (0b11) sets both A and B, so the resting label reads "A, B".
+// The document names both A and B, so the resting label reads "A, B".
 const flagsFieldMeta: FieldMetadata = {
-  name: 'Flags', type: 'enum', isArray: false, validFormKeyTypes: [],
+  name: 'Flags', type: 'flags', isArray: false, validFormKeyTypes: [],
   enumMembers: [{ value: 'A', bitValue: '1' }, { value: 'B', bitValue: '2' }],
 };
 
@@ -225,7 +225,7 @@ const flagsCompareResult = {
       editorId: 'TestNPC',
       fields: [
         { metadata: strMeta, value: 'Original Name' },
-        { metadata: flagsFieldMeta, value: '3' },
+        { metadata: flagsFieldMeta, value: ['A', 'B'] },
       ],
       conflictThis: 'Master',
     },
@@ -234,7 +234,7 @@ const flagsCompareResult = {
       editorId: 'TestNPC',
       fields: [
         { metadata: strMeta, value: 'Override Name' },
-        { metadata: flagsFieldMeta, value: '3' },
+        { metadata: flagsFieldMeta, value: ['A', 'B'] },
       ],
       conflictThis: 'IdenticalToMaster',
     },
@@ -248,8 +248,8 @@ const flagsCompareResult = {
     },
     {
       fieldName: 'Flags',
-      values: { 'Fallout4.esm': '3', 'MyMod.esp': '3' },
-      winnerColumn: 'MyMod.esp', winnerValue: '3',
+      values: { 'Fallout4.esm': ['A', 'B'], 'MyMod.esp': ['A', 'B'] },
+      winnerColumn: 'MyMod.esp', winnerValue: ['A', 'B'],
       cellStates: {},
     },
   ],
@@ -522,7 +522,8 @@ describe('RecordPanel — Partial Form header toggle', () => {
 
   afterEach(() => vi.unstubAllGlobals());
 
-  it('posts EDIT_FIELD with fieldPath is_partial_form when the checkbox is unchecked', async () => {
+  // The flag is the annotated synthetic member `IsPartialForm`, written through the one envelope.
+  it('unchecking the checkbox posts set of IsPartialForm to false', async () => {
     renderPanel(partialFormCompareResult, { plugins: partialFormTrackedPluginsResponse });
     await waitFor(() => expect(screen.getByText('MyMod.esp')).toBeInTheDocument());
     vi.mocked(vscode.postMessage).mockClear();
@@ -534,8 +535,7 @@ describe('RecordPanel — Partial Form header toggle', () => {
       type: WEBVIEW_TO_EXTENSION.EDIT_FIELD,
       formKey: '000001:Fallout4.esm',
       plugin: 'MyMod.esp',
-      fieldPath: 'is_partial_form',
-      value: false,
+      envelope: { op: 'set', path: [{ kind: 'member', name: 'IsPartialForm' }], value: false },
     }));
   });
 });
@@ -576,22 +576,21 @@ describe('RecordPanel — flags cell editing through real message plumbing', () 
     expect(screen.getAllByText('A, B')).toHaveLength(2);
   });
 
-  it('toggling a flag posts EDIT_FIELD with the toggled bitmask — working-tree dirt', async () => {
+  it('toggling a flag posts set of the member with the names now set', async () => {
     renderPanel(flagsCompareResult, { plugins: flagsTrackedPluginsResponse });
     await waitFor(() => expect(screen.getAllByText('A, B')).toHaveLength(2));
     fireEvent.click(screen.getByRole('button', { name: '▶' }));
     vi.mocked(vscode.postMessage).mockClear();
 
-    // uncheck A (bit 1) in the tracked column: 3 ^ 1 = 2 — the first *enabled* box, since the
-    // master column's disabled checkboxes render first in column order.
+    // uncheck A in the tracked column — the first *enabled* box, since the master column's
+    // disabled checkboxes render first in column order.
     fireEvent.click(screen.getAllByRole('checkbox').filter(b => !(b as HTMLInputElement).disabled)[0]);
 
     expect(vscode.postMessage).toHaveBeenCalledWith(expect.objectContaining({
       type: WEBVIEW_TO_EXTENSION.EDIT_FIELD,
       formKey: '000001:Fallout4.esm',
       plugin: 'MyMod.esp',
-      fieldPath: 'Flags',
-      value: '2',
+      envelope: { op: 'set', path: [{ kind: 'member', name: 'Flags' }], value: ['B'] },
     }));
   });
 });
@@ -1130,7 +1129,7 @@ const unionFieldMeta: FieldMetadata = {
   fields: [
     { name: 'level', type: 'int', isArray: false, validFormKeyTypes: [], enumMembers: [] },
     {
-      name: 'concrete_type', type: 'enum', isArray: false, validFormKeyTypes: [],
+      name: 'MutagenObjectType', type: 'enum', isArray: false, validFormKeyTypes: [],
       enumMembers: [{ value: 'NpcLevel', label: 'Npc Level' },
         { value: 'PcLevelMult', label: 'Pc Level Mult' }],
       displayLabel: 'Kind',
@@ -1138,7 +1137,7 @@ const unionFieldMeta: FieldMetadata = {
   ],
 };
 
-const unionValue = { level: 5, concrete_type: 'NpcLevel' };
+const unionValue = { level: 5, MutagenObjectType: 'NpcLevel' };
 
 const unionCompareResult = {
   conflictAll: 'OnlyOne',
@@ -1160,7 +1159,7 @@ const unionCompareResult = {
           winnerColumn: 'MyMod.esp', winnerValue: 5, cellStates: {},
         },
         {
-          fieldName: 'concrete_type', values: { 'MyMod.esp': 'NpcLevel' },
+          fieldName: 'MutagenObjectType', values: { 'MyMod.esp': 'NpcLevel' },
           winnerColumn: 'MyMod.esp', winnerValue: 'NpcLevel', cellStates: {},
         },
       ],
@@ -1189,7 +1188,7 @@ describe('RecordPanel — an abstract union\'s leaf is an editable field', () =>
   it('labels the row from the schema and never shows the class name it holds', async () => {
     await expandLevel();
 
-    expect(screen.queryByText('concrete_type')).not.toBeInTheDocument();
+    expect(screen.queryByText('MutagenObjectType')).not.toBeInTheDocument();
     expect(screen.getByText('Npc Level')).toBeInTheDocument();
     expect(screen.queryByText('NpcLevel')).not.toBeInTheDocument();
   });
@@ -1203,7 +1202,8 @@ describe('RecordPanel — an abstract union\'s leaf is an editable field', () =>
     expect(options.map(o => o.textContent)).toEqual(['Npc Level', 'Pc Level Mult']);
   });
 
-  it('posts an ordinary field edit carrying the chosen leaf\'s own wire value, not its label', async () => {
+  // A discriminator switch is the Kind row's own set; the backend switches the leaf.
+  it('posts set of the discriminator member carrying the chosen leaf\'s own wire value, not its label', async () => {
     await expandLevel();
     fireEvent.doubleClick(screen.getByText('Npc Level'));
     vi.mocked(vscode.postMessage).mockClear();
@@ -1216,8 +1216,204 @@ describe('RecordPanel — an abstract union\'s leaf is an editable field', () =>
       type: WEBVIEW_TO_EXTENSION.EDIT_FIELD,
       formKey: '000001:Fallout4.esm',
       plugin: 'MyMod.esp',
-      fieldPath: 'Level',
-      value: { level: 5, concrete_type: 'PcLevelMult' },
+      envelope: {
+        op: 'set',
+        path: [{ kind: 'member', name: 'Level' }, { kind: 'member', name: 'MutagenObjectType' }],
+        value: 'PcLevelMult',
+      },
     }));
   });
 });
+
+// Absent means default (ADR-0032): the document omits a member equal to its default, and the grid
+// reads it back as that default. "—" is kept for a member whose metadata says null is a value.
+describe('RecordPanel — an absent member reads as its default', () => {
+  const statsMeta: FieldMetadata = {
+    name: 'Stats', type: 'struct', isArray: false, validFormKeyTypes: [], enumMembers: [],
+    fields: [
+      { name: 'Weight', type: 'int', isArray: false, validFormKeyTypes: [], enumMembers: [] },
+      { name: 'Essential', type: 'bool', isArray: false, validFormKeyTypes: [], enumMembers: [] },
+      { name: 'Prefix', type: 'string', isArray: false, validFormKeyTypes: [], enumMembers: [] },
+      {
+        name: 'RunOn', type: 'enum', isArray: false, validFormKeyTypes: [], default: 'Subject',
+        enumMembers: [{ value: 'Subject' }, { value: 'Target' }],
+      },
+      { name: 'Count', type: 'int', isArray: false, validFormKeyTypes: [], enumMembers: [], default: 100 },
+      { name: 'Owner', type: 'formKey', isArray: false, validFormKeyTypes: ['NPC_'], enumMembers: [], allowsNull: true },
+    ],
+  };
+  const full = { Weight: 3, Essential: true, Prefix: 'x', RunOn: 'Target', Count: 7, Owner: '000019:Fallout4.esm' };
+  const sparse = {};
+
+  const compare = {
+    conflictAll: 'Conflict',
+    overrides: [
+      { formKey: '000001:Fallout4.esm', plugin: 'Fallout4.esm', loadOrderIndex: 0, isWinner: false,
+        editorId: 'TestNPC', fields: [{ metadata: statsMeta, value: full }], conflictThis: 'Master' },
+      { formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', loadOrderIndex: 1, isWinner: true,
+        editorId: 'TestNPC', fields: [{ metadata: statsMeta, value: sparse }], conflictThis: 'ConflictWins' },
+    ],
+    diffs: [{
+      fieldName: 'Stats', values: { 'Fallout4.esm': full, 'MyMod.esp': sparse },
+      winnerColumn: 'MyMod.esp', winnerValue: sparse, cellStates: {},
+      children: Object.entries(full).map(([name, v]) => ({
+        fieldName: name, values: { 'Fallout4.esm': v, 'MyMod.esp': null },
+        winnerColumn: 'Fallout4.esm', winnerValue: v, cellStates: {},
+      })),
+    }],
+  };
+
+  const rows = () => within(screen.getByRole('table').querySelector('tbody')!);
+  const cellsOf = (label: string) => rows().getByText(label).closest('tr')!.querySelectorAll('td');
+
+  beforeEach(() => vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm'));
+  afterEach(() => vi.unstubAllGlobals());
+
+  async function renderExpanded() {
+    renderPanel(compare, { plugins: flagsTrackedPluginsResponse });
+    await waitFor(() => rows().getByText('Stats'));
+    fireEvent.click(rows().getByText('Stats').closest('td')!.querySelector('button')!);
+    await waitFor(() => rows().getByText('Weight'));
+  }
+
+  it('an absent int reads 0, an absent bool false, an absent string empty', async () => {
+    await renderExpanded();
+    expect(cellsOf('Weight')[2].textContent).toBe('0');
+    expect(cellsOf('Essential')[2].textContent).toBe('false');
+    expect(cellsOf('Prefix')[2].textContent).toBe('');
+    expect(rows().queryAllByText('—')).toHaveLength(1);
+  });
+
+  it('an absent enum reads the default the metadata names', async () => {
+    await renderExpanded();
+    expect(cellsOf('RunOn')[2].textContent).toBe('Subject');
+  });
+
+  it('an absent scalar with a declared default reads that default', async () => {
+    await renderExpanded();
+    expect(cellsOf('Count')[2].textContent).toBe('100');
+  });
+
+  it('an unset nullable link reads as empty', async () => {
+    await renderExpanded();
+    expect(cellsOf('Owner')[2].textContent).toBe('—');
+  });
+
+  // The default is what the editor opens on, so a value equal to it is no edit at all.
+  it('editing an absent int from its default posts one set with the typed value', async () => {
+    await renderExpanded();
+    vi.mocked(vscode.postMessage).mockClear();
+    const cell = cellsOf('Weight')[2] as HTMLElement;
+    fireEvent.doubleClick(within(cell).getByText('0'));
+    const input = cell.querySelector('input')!;
+    fireEvent.change(input, { target: { value: '5' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+
+    expect(vscode.postMessage).toHaveBeenCalledWith(expect.objectContaining({
+      envelope: { op: 'set', path: [{ kind: 'member', name: 'Stats' }, { kind: 'member', name: 'Weight' }], value: 5 },
+    }));
+  });
+});
+
+// A member whose owner is not there in a column is not absent-by-default: there is nothing for it
+// to be a member of, so it reads as nothing, not as zero.
+describe('RecordPanel — a member of an absent owner reads as nothing', () => {
+  const boundsMeta: FieldMetadata = {
+    name: 'Bounds', type: 'struct', isArray: false, validFormKeyTypes: [], enumMembers: [],
+    fields: [{ name: 'X', type: 'int', isArray: false, validFormKeyTypes: [], enumMembers: [] }],
+  };
+  const valuesMeta: FieldMetadata = {
+    name: 'Values', type: 'array', isArray: true, validFormKeyTypes: [], enumMembers: [],
+    elementType: { name: '', type: 'int', isArray: false, validFormKeyTypes: [], enumMembers: [] },
+  };
+  const compare = {
+    conflictAll: 'Conflict',
+    overrides: [
+      { formKey: '000001:Fallout4.esm', plugin: 'Fallout4.esm', loadOrderIndex: 0, isWinner: false, editorId: 'TestNPC',
+        fields: [{ metadata: boundsMeta, value: { X: 10 } }, { metadata: valuesMeta, value: [1, 2] }], conflictThis: 'Master' },
+      { formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', loadOrderIndex: 1, isWinner: true, editorId: 'TestNPC',
+        fields: [{ metadata: boundsMeta, value: null }, { metadata: valuesMeta, value: [1] }], conflictThis: 'ConflictWins' },
+    ],
+    diffs: [
+      {
+        fieldName: 'Bounds', values: { 'Fallout4.esm': { X: 10 }, 'MyMod.esp': null },
+        winnerColumn: 'Fallout4.esm', winnerValue: { X: 10 }, cellStates: {},
+        children: [{ fieldName: 'X', values: { 'Fallout4.esm': 10, 'MyMod.esp': null }, winnerColumn: 'Fallout4.esm', winnerValue: 10, cellStates: {} }],
+      },
+      {
+        fieldName: 'Values', values: { 'Fallout4.esm': [1, 2], 'MyMod.esp': [1] },
+        winnerColumn: 'MyMod.esp', winnerValue: [1], cellStates: {},
+        children: [
+          { fieldName: '[0]', values: { 'Fallout4.esm': 1, 'MyMod.esp': 1 }, winnerColumn: 'MyMod.esp', winnerValue: 1, cellStates: {} },
+          { fieldName: '[1]', values: { 'Fallout4.esm': 2, 'MyMod.esp': null }, winnerColumn: 'Fallout4.esm', winnerValue: 2, cellStates: {} },
+        ],
+      },
+    ],
+  };
+
+  const rows = () => within(screen.getByRole('table').querySelector('tbody')!);
+  const cellsOf = (label: string) => rows().getByText(label).closest('tr')!.querySelectorAll('td');
+
+  beforeEach(() => vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm'));
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('a member of a struct the column does not carry reads as nothing, not zero', async () => {
+    renderPanel(compare, { plugins: flagsTrackedPluginsResponse });
+    await waitFor(() => rows().getByText('Bounds'));
+    fireEvent.click(rows().getByText('Bounds').closest('td')!.querySelector('button')!);
+    await waitFor(() => rows().getByText('X'));
+
+    expect(cellsOf('X')[1].textContent).toBe('10');
+    expect(cellsOf('X')[2].textContent).toBe('');
+  });
+
+  it('an element past the column\'s own length reads as nothing, not zero', async () => {
+    renderPanel(compare, { plugins: flagsTrackedPluginsResponse });
+    await waitFor(() => rows().getByText('Values'));
+    fireEvent.click(rows().getByText('Values').closest('td')!.querySelector('button')!);
+    await waitFor(() => rows().getByText('[1]'));
+
+    expect(cellsOf('[1]')[1].textContent).toBe('2');
+    expect(cellsOf('[1]')[2].textContent).toBe('');
+  });
+
+  // The classifier nulls every field of a Partial Form column: none of them is absent-by-default.
+  it('a Partial Form column\'s fields read as nothing', async () => {
+    renderPanel(partialFormCompareResult, { plugins: partialFormTrackedPluginsResponse });
+    await waitFor(() => rows().getByText('Name'));
+    expect(cellsOf('Name')[1].textContent).toBe('Original Name');
+    expect(cellsOf('Name')[2].textContent).toBe('');
+  });
+});
+
+// A translated string is one leaf whose document spelling is an object; its set carries that
+// object, so the codec receives what it wrote.
+describe('RecordPanel — a translated string leaf posts its object', () => {
+  const nameMeta: FieldMetadata = { name: 'Name', type: 'translatedString', isArray: false, validFormKeyTypes: [], enumMembers: [] };
+  const value = { TargetLanguage: 'English', Value: 'Base name' };
+  const compare = {
+    conflictAll: 'OnlyOne',
+    overrides: [{ formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', loadOrderIndex: 0, isWinner: true,
+      editorId: 'TestNPC', fields: [{ metadata: nameMeta, value }], conflictThis: 'OnlyOne' }],
+    diffs: [{ fieldName: 'Name', values: { 'MyMod.esp': value }, winnerColumn: 'MyMod.esp', winnerValue: value, cellStates: {} }],
+  };
+
+  beforeEach(() => vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm'));
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('reads the text and posts set of the whole object with the new Value', async () => {
+    renderPanel(compare, { plugins: unionTrackedPluginsResponse });
+    await waitFor(() => screen.getByText('Base name'));
+    vi.mocked(vscode.postMessage).mockClear();
+
+    fireEvent.doubleClick(screen.getByText('Base name'));
+    const input = screen.getByRole('textbox');
+    fireEvent.change(input, { target: { value: 'New name' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+
+    expect(vscode.postMessage).toHaveBeenCalledWith(expect.objectContaining({
+      envelope: { op: 'set', path: [{ kind: 'member', name: 'Name' }], value: { TargetLanguage: 'English', Value: 'New name' } },
+    }));
+  });
+});
+

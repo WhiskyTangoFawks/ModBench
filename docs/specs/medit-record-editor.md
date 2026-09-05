@@ -216,12 +216,16 @@ The only cells that open *nothing* are struct and array summary rows, which rend
 copies the whole structure, as xEdit does when you drag by the header.
 
 The placeholder is a statement that a container is present and merely collapsed, so it is drawn
-per column, not per row: a column whose plugin has no container there — an array slot past its own
-length, an abstract-union member its concrete leaf doesn't declare, an absent struct — renders an
-empty cell. The exception is a row *no* column carries a value for, which holds nothing but its
-children and is therefore present in every column; it keeps its placeholder throughout. An absent
-*scalar* is unchanged: it renders `—`, the panel-wide reading of "no value here" its editor
-gesture already builds on.
+per column, not per row: a column whose plugin has nothing there — an array slot past its own
+length, an abstract-union member its concrete leaf doesn't declare, a member of a struct the column
+does not carry — renders an empty cell. The exception is a row *no* column carries a value for,
+which holds nothing but its children and is therefore present in every column; it keeps its
+placeholder throughout. **Absent means default** (ADR-0032): the document omits a member equal to
+its default, so a scalar the column's own owner omits reads as that default — `0`, `false`, the
+empty string, the enum default the metadata names, an empty flag set, `[0]` for a list — and its
+editor opens on it. `—` is reserved for a link that is there and unset (`FieldMetadata.AllowsNull`
+says null is a value); a byte slice, color or vector the document omits keeps it too, since the
+metadata names no default text for them.
 
 #### Why copy is uniform now
 
@@ -237,7 +241,7 @@ flags render their active names, comma-separated, never the bitmask; a FormKey r
 is the one place that turns that into what the cell *reads out*, and is what both the copy path and
 a leaf's own resting text ask — so what the user sees and what `Ctrl+C` hands over cannot drift.
 The two differ for exactly one shape: an enum whose values are wire tokens rather than words (an
-abstract union's `concrete_type`), where the schema labels each value and the label is what
+abstract union's `MutagenObjectType`), where the schema labels each value and the label is what
 is displayed and copied. The editor still holds, and a payload still carries, the value itself.
 
 **Struct and array summary rows are the one exception to "the same string the editor shows"** —
@@ -258,7 +262,7 @@ are Fallout 4's two `Condition` leaves (*Conditions* below) and its `ScriptEntry
 and `ScriptObjectProperty` (*Scripts* below).
 
 **The key is the leaf a value turned out to be, not the one its schema promised**: the value of
-whichever member the schema marks as the discriminator (`concrete_type`, OMOD's `value_type`) where
+whichever member the schema marks as the discriminator (`MutagenObjectType`) where
 the element has one, and `FieldMetadata.LeafTypeName` — the reflected type name, which the backend
 sets on every `struct` and on nothing else — where it does not. A union is exactly where the two
 disagree, so the discriminator answers alone: a union whose value names no leaf reads as nothing
@@ -282,9 +286,9 @@ Three rules complete the lookup:
 
 `Ctrl+X` copies the focused cell's displayed value, then attempts to clear it by running `''` through
 the same coercion `Ctrl+V` uses for a pasted string — there is no separate, per-type "default
-value" table. `''` coerces cleanly for `string` (the empty string itself), bitmask `flags` (no
-active bits), and `formKey` (no reference), so those three types are the ones Ctrl+X visibly
-clears. It does **not** coerce for `bool`, `int`, `float`, or a plain (non-bitmask) `enum` — none
+value" table. `''` coerces cleanly for `string` (the empty string itself), `flags` (no names
+set), and `formKey` (no reference), so those three types are the ones Ctrl+X visibly
+clears. It does **not** coerce for `bool`, `int`, `float`, or `enum` — none
 of those has an empty representation — so on those types Ctrl+X only copies; the value on screen is
 left exactly as it would be by pasting a clipboard string that fails to coerce (the general
 "cannot coerce, leave the field unchanged" rule above, applied to Cut's own internal `''` paste).
@@ -393,7 +397,7 @@ already empty: matching xEdit's own guard (`Element.EditValue` must be non-empty
   **Nested Loqui struct sub-fields write through the same one path** — a struct member one
   or more levels inside another struct column, or inside an array element, applies with the exact
   semantics the top-level struct column has (one shared applier): unions resolve their
-  concrete leaf from the payload's own `concrete_type`, refusing when it can't be resolved; the
+  concrete leaf from the payload's own `MutagenObjectType`, refusing when it can't be resolved; the
   existing value object is reused only when it is already the same concrete type; and a write with
   one bad member anywhere in the nested tree refuses the whole write before anything is written,
   leaving the working tree byte-identical.
@@ -411,16 +415,14 @@ already empty: matching xEdit's own guard (`Element.EditValue` must be non-empty
   read-only under its own named reason; no Fallout 4 list is either, so the reason keeps the
   classification total rather than describing live data.
   **A new array element's default is the backend's, and names only the discriminator** — the
-  Add gesture posts an op envelope carrying nothing but `{op, path}`, and `ArrayOpWriter` builds the
-  element from the column's own schema. The default is the empty object: every member is left
-  absent, so the freshly constructed instance's CLR defaults stand. The one exception is a
-  discriminator (`concrete_type`, OMOD's `value_type`), which is not a member of the instance at all
-  — it is read off the payload to choose which concrete class to construct, before that object
-  exists — so an element of an abstract-element array that omits it cannot be built and is refused
-  `ListElementTypeUnresolved`. A default element therefore carries its discriminator, set to the
-  first leaf the schema lists, and the user changes it with the same `Kind` dropdown any other
-  element uses. The webview computes no element of its own: every array field is a reflected
-  column, and the backend builds its default element.
+  Add gesture posts `{op: "add", path}` with no value, and `DocumentEdit` builds the element from
+  the array's own element metadata. The default is the empty object: every member is left absent,
+  so the codec's freshly built instance's CLR defaults stand. The one exception is a discriminator
+  (`MutagenObjectType`), which the codec reads first to choose which concrete class to construct,
+  before that object exists — so an element of an abstract-element array that omits it cannot be
+  built and is refused `DiscriminatorInvalid`. A default element therefore carries its
+  discriminator, set to the first leaf the schema lists, and the user changes it with the same
+  `Kind` dropdown any other element uses. The webview computes no element of its own.
 
   **Read/write symmetry is structural, not conventional.** A leaf carries either a writer or
   a named read-only reason — `ColumnSpec.Apply`/`SubFieldSpec.Apply` are a two-case union, so a leaf
@@ -454,7 +456,7 @@ already empty: matching xEdit's own guard (`Element.EditValue` must be non-empty
   refuses the whole write, and the message says the sub-field is not editable rather than implying
   the value was invalid.
   Three cases stay distinct and must not be collapsed: a sub-field **absent** from the payload is
-  skipped (absence is not targeting); the `value_type` and `concrete_type` **discriminators** are
+  skipped (absence is not targeting); the `MutagenObjectType` **discriminator** is
   read off the raw JSON to decide which concrete type to construct, before the object any member
   could be applied to exists — so naming one is a silent skip at the member level, and the edit it
   carries has already been honoured by the enclosing object's own construction; only a
@@ -494,10 +496,10 @@ already empty: matching xEdit's own guard (`Element.EditValue` must be non-empty
   - **Commit trigger**: on save. Each `Ctrl+S` writes the tab's full current content — never on
     keystroke (would write on every character typed) and never only on close (a user who saves
     twice while still editing expects both saves written, the same as re-editing any other cell
-    twice). A string leaf nested inside a struct or array (any depth) commits through the same
-    whole-field reconstruction inline edits use, not a bare value under the subtree root's
-    path — the trigger carries the row's own path and the subtree root's field alongside the saved
-    text. A top-level string field's commit is unaffected — the same value either way.
+    twice). A string leaf nested inside a struct or array (any depth) commits the same `set`
+    envelope the inline editor posts, at the row's own path — the trigger carries the row's path
+    and the subtree root's field alongside the saved text. A top-level string field's commit is
+    the one-hop form of the same envelope.
   - **Trigger gesture**: right-click only (ADR-0039). A `string` cell's second click, `F2` and
     double click all agree with every other scalar type on the inline editor, immediately, with no
     debounce — there is no second left-click target to disambiguate against.
@@ -519,31 +521,27 @@ already empty: matching xEdit's own guard (`Element.EditValue` must be non-empty
   arrangement exactly, and required by the no-second-route rule: **there are no inline ▲▼✕
   buttons.** (Mechanism:
   a native `webview/context` menu on the element/parent cell, `Insert`/`Delete`/`Ctrl+↑`/`Ctrl+↓`
-  as DOM keydown accelerators on the focused cell, no extension-host round trip needed for the
-  keys since `onArrayEdit`/`onArrayAdd` are pure in-webview state.) Add is available regardless of
-  the array's expand state, matching xEdit. **The ops post a server-side op
-  envelope** (`{op, path}`) through the ordinary edit path; the backend reads the record's
-  own current value, computes the result, and applies it as the same atomic whole-array
-  complex-field write CONTEXT.md describes — so the write itself is unchanged, only who computes
-  it. Boundary cases (move the first element up, the last down, remove an out-of-range index)
-  are answered server-side as no-ops that commit nothing: no rewrite, no working-tree change, no
-  history entry. Only non-immutable columns offer the ops. An element-**value** edit is offered on the same cell and shares this
-  same reconstruction: the whole array (or struct-array element) is rebuilt before the write, so
-  it lands atomically rather than being silently lost. The context-menu ops' wire payload
-  carries the element's full `path` + `rootField` (the addressing contract), so ops on an
-  array nested inside a struct or another array land at the element's real depth. **A path is a
-  chain of four hop kinds**: a `member` names a struct's member; an `index` an unsorted array's
-  element by position; a `key` a keyed array's element **by key, resolved per column** — the same
-  key names a different position, or none at all, in each plugin's own array, which is exactly what
-  lets a plugin carrying fewer scripts than its master read as an absence at those keys; and a
-  `sortKey` an element of an array sorted by its own value. Add
-  resolves its default element from the nested array's own element type via `metaAtPath`, and a
-  bare element index would truncate both that and the depth. **An op's `key` hop is resolved against the record's own
-  schema, never against the payload's claim**: the key members are the ones the array declares, and
-  a key hop into an array the schema does not key is refused. There is no free
-  drag-reorder and no auto-sort.
-  Every array field takes this path, at every depth, including a script's properties and a
-  Papyrus scalar-array property's elements — there is no client-side arity computation left.
+  as DOM keydown accelerators on the focused cell, each posting the same envelope the menu entry
+  does.) Add is available regardless of the array's expand state, matching xEdit. **Every gesture
+  is one envelope** — an operation, a path and an optional value, `POST /records/{formKey}/edit`'s
+  own shape — and the webview posts what the user asked for and nothing else: `add` at the array
+  with no value; `remove` at the element; `move` at the element with the destination position as
+  its value; `set` at a leaf with its new value. The backend resolves the path against the
+  document it holds, patches, and answers with the result or a refusal naming the path — an
+  element that is not there, a move off either end, is refused by name, never landed as nothing.
+  Only non-immutable columns offer the ops. An element-**value** edit is offered on the same cell
+  and is the same `set` at the element's own hop. The context-menu ops' payload carries the row's
+  full `path` + `rootField`, so ops on an array nested inside a struct or another array land at
+  the element's real depth. **A path is a chain of three hop kinds**, each as the diff node states
+  it: a `member` names a struct's member; an `index` an unsorted array's element by its place among
+  the array's children; a `key` a keyed array's element **by the key text the backend labelled it
+  with**, which the backend resolves per column — the same key names a different position, or none
+  at all, in each plugin's own array, which is exactly what lets a plugin carrying fewer scripts
+  than its master read as an absence at those keys. An element of an array sorted by its own value
+  sits at a different position in every column too, so its `set` carries an `index` hop found in
+  the written column's own value at commit time. The webview holds no model beside the document:
+  no path setter, no mirror of the backend's key rule, no cascade, no default table (ADR-0032).
+  There is no free drag-reorder and no auto-sort.
 - **Editing writes working-tree source text directly** (ADR-0041) — there is no staged
   intermediate state. A single field's value can be **dragged between plugin columns** to copy
   just that field into the target (which must be editable; the source need not be) — or **copied
@@ -692,34 +690,38 @@ gesture — Sim Settlements 2 is a real-world example on Fallout 4.
   already-writable field rather than part of the header's own flag-write surface, so the exemption
   needed no header write path to exist first. The record header itself — including clearing the
   flag, which restores full editability — is its own write surface (below).
-- **Header write path clears the flag, restoring full editability.** A synthetic field
-  path, `is_partial_form`, dispatched in `RecordFieldWriter.TryApply` the same way `editor_id`
-  already is — the one sanctioned door, no second write surface. Flips bit 14 only (a byte-diff
-  assertion checks no other bit or field moves) and is exempt from `PartialFormFieldReadOnly` so
-  clearing is reachable while the flag is still set. **The generic-container gate, not a bare
-  reflection check:** gated by the same `PartialFormFlag`/`ContainerChildFields` type table the
-  read half uses (Mutagen's own static `IsPartialFormable` property doesn't cover every game's
-  container types — FO4's own `Cell` is one of the gaps — so the write path can't rely on it
-  either). A `PluginHeader` checkbox (rendered only when `CompareOverride.IsPartialFormable`) is
-  the UI trigger, dispatching the existing `EDIT_FIELD` message — no new command or menu surface.
+- **Header write path clears the flag, restoring full editability.** The flag is an annotated
+  synthetic member, `IsPartialForm` (`SchemaAnnotations.SyntheticFlagMembers`): one bit of the
+  record's `MajorRecordFlagsRaw`, written through the one envelope like every other member and
+  patched by `DocumentEdit` onto the document itself. Flips bit 14 only (a byte-diff assertion
+  checks no other bit or field moves) and is exempt from `PartialFormFieldReadOnly` so clearing
+  is reachable while the flag is still set. **The generic-container gate, not a bare reflection
+  check:** the annotation names exactly the container types the `PartialFormFlag`/
+  `ContainerChildFields` type table admits (a test holds the two equal; Mutagen's own static
+  `IsPartialFormable` property doesn't cover every game's container types — FO4's own `Cell` is
+  one of the gaps — so the write path can't rely on it either). A `PluginHeader` checkbox
+  (rendered only when `CompareOverride.IsPartialFormable`) is the UI trigger, posting
+  `set` of `IsPartialForm` through the one envelope — no new command or menu surface.
   **Closes the pre-existing second door:** the generic reflected columns mirroring the same
-  underlying flags int (`major_flags`, `fallout4_major_record_flags` on FO4) remained a second way
-  to flip bit 14 on a not-yet-flagged record even after the read half's refusal landed. `EditField`
-  now refuses (`RecordEditRefusal.PartialFormFlagIndirectWrite`) any write through another field
-  path that would move bit 14 as a side effect — a structural invariant, not a per-column name
-  check, so it holds for any game's equivalent generic flags column without needing its own entry.
+  underlying flags int (`MajorFlags`, `Fallout4MajorRecordFlags` on FO4) remained a second way
+  to flip bit 14 on a not-yet-flagged record even after the read half's refusal landed. A write
+  through any other path that would move a synthetic member's bit as a side effect is refused
+  (`RecordEditRefusal.SyntheticMemberIndirectWrite`) — a structural invariant read off the
+  document before and after the codec round trip, not a per-column name check, so it holds for
+  any game's equivalent generic flags column without needing its own entry.
 - **Out of scope here:** setting the flag (a container an editing gesture auto-creates carries it
   from creation) and a lightbulb offering it on an identical-to-master container (separate
   follow-up work).
 
 ### Scripts are an ordinary reflected field
 
-A record's virtual-machine adapter is a reflected **struct column**, `virtual_machine_adapter`,
+A record's virtual-machine adapter is a reflected **struct column**, `VirtualMachineAdapter`,
 like any other — no section, adapter, codec, wire path, or command of its own. Its scripts are an
 array of structs; each script's properties are an array whose element is the `ScriptProperty`
-union, so a property carries a `concrete_type` discriminator over its fifteen leaves and the
-sparse union of their members, with a member whose shape disagrees across leaves split one field
-per shape (`data_int`, `data_float_array`, …). Struct properties, arrays of structs, arrays of
+union, so a property carries a `MutagenObjectType` discriminator over its fifteen leaves and the
+sparse union of their members, with a member whose shape disagrees across leaves one field whose
+metadata carries a `Variants` map keyed by leaf (`Data`: an int under `ScriptIntProperty`, a float
+array under `ScriptFloatListProperty`, …). Struct properties, arrays of structs, arrays of
 scalars, quest fragments and quest alias scripts are all reached the same way. Every gesture —
 cell edit, discriminator switch, add/remove/move — is the gesture that field kind already had.
 
@@ -790,9 +792,9 @@ otherwise re-enter `ScriptEntry -> ScriptProperty -> ScriptStructProperty` witho
 A condition list is an **ordinary reflected array-of-struct field**, at whatever depth it sits
 (`Perk.Effects[i].Conditions[j].Conditions`, `Message.MenuButtons[i].Conditions`), with no section,
 adapter, codec, wire path, or command of its own. `Condition` and `ConditionData` are each Loqui
-unions, so each condition element carries a `concrete_type` discriminator over its concrete classes
-and the sparse union of their members; `ComparisonValue`, a float on one leaf and a GLOB link on the
-other, is one field per shape (`comparison_value_float`/`comparison_value_form_key`), which is what
+unions, so each condition element carries a `MutagenObjectType` discriminator over its concrete
+classes and the sparse union of their members; `ComparisonValue`, a float on one leaf and a GLOB link
+on the other, is one field with a `Variants` map keyed by leaf, which is what
 makes "Use Global" an ordinary discriminator switch that keeps every member the two leaves agree on.
 Every gesture — cell edit, discriminator switch, add/remove/move — is the gesture that field kind
 already had.
@@ -814,16 +816,14 @@ The editor reads the same map, for the same two halves, over metadata alone — 
   member *any* column puts in use is kept, so a losing override's own data is never hidden; a member
   no value ever names (`Unknown3`, xEdit's Parameter #3, written whatever the function is) is not
   governed at all and always shows. Filtering only ever removes a row the diff already has.
-- **A change to a governing member empties what it idles.** The cascade applies where the element
-  is assembled for commit, so the posted edit carries the emptied siblings. This is not cosmetic:
+- **A change to a governing member empties what it idles — on the writer.** The webview posts
+  the one leaf; `DocumentEdit` removes every governed sibling the new value does not put in use,
+  so the slot reads absent (its default) on every write path. This is not cosmetic:
   `ConditionBinaryWriteTranslation.CustomStringExports` writes a CIS1/CIS2 subrecord for any
   non-null `ParameterOneString`/`ParameterTwoString` without consulting the function, so a string
-  left behind by a function change reaches the plugin. "Emptied" is **per member type** — null for a
-  nullable member, the type's own zero for one the format always writes — because a JSON null into
-  a non-nullable column is rejected, and one rejected member fails the whole array write, so a
-  payload that nulled a numeric slot would land nothing at all.
+  left behind by a function change would reach the plugin.
 
-  A member the schema does not govern is never emptied by a cascade, and a stale value in one is
+  A member the schema does not govern is never emptied by the cascade, and a stale value in one is
   still the author's to see and edit. A governed member that *is* idle has no row while it is idle:
   its value is either an alias of a live slot (the same four bytes read as the other type — showing
   it would be showing the same value twice, wrongly) or data no reader consults. The one divergence
@@ -839,9 +839,9 @@ carries as a string reads on its own row rather than in the call, exactly as in 
 whose first slot is left out has no parentheses at all. An operator outside the schema's own six
 reads as no operator: the condition still reads, missing only the sign.
 
-**The function picker is the schema's own enum.** On Fallout 4 that is the `function` member's
+**The function picker is the schema's own enum.** On Fallout 4 that is the `Function` member's
 479-member enum, rendered by the ordinary enum cell; on a shape whose `ConditionData` is one class
-per function it is the `concrete_type` discriminator dropdown, rendered by the same cell. No
+per function it is the `MutagenObjectType` discriminator dropdown, rendered by the same cell. No
 picker command, and no catalog endpoint, exists on either shape.
 
 Skyrim and Starfield are not built or tested in this repo; multi-game verification was descoped
@@ -896,16 +896,15 @@ These apply everywhere a field value is rendered — the one compare grid and an
 3. **Structs and arrays are always collapsible**, default collapsed; expand state is
    per-load order, not persisted across restarts. A row's label indents one step per ancestor
    hop, so a grandchild reads as sitting inside its parent rather than beside it. Array **element values** offer the inline-edit
-   gesture everywhere (plain and struct-element arrays alike); committing one reconstructs the
-   array's (or struct-array element's) whole value before the write, per the reconstruction
-   CONTEXT.md's Complex-field entry's atomic-write model requires for a per-element gesture.
+   gesture everywhere (plain and struct-element arrays alike); committing one posts `set` at the
+   element's own hop, and the backend patches that one node of the document.
    Array **arity and order** come in the two sets *Array arity and order* defines: **unsorted**
-   arrays offer add / remove / move-up / move-down (swap-based, on non-immutable columns), **keyed**
+   arrays offer add / remove / move-up / move-down (on non-immutable columns), **keyed**
    arrays offer add / remove and no move (they are written back in key order regardless), and an
-   array sorted by its own element value offers none — these ops use the same
-   whole-array reconstruction. A list whose element's concrete type is
-   polymorphic (OMOD `properties`' `AObjectModProperty<T>`, seven concrete leaves) resolves
-   each element's own type from a `value_type` discriminator sub-field at write time; an
+   array sorted by its own element value offers none — each is its own envelope operation at the
+   array's or the element's path. A list whose element's concrete type is
+   polymorphic (OMOD `Properties`' `AObjectModProperty<T>`, seven concrete leaves) resolves
+   each element's own type from its `MutagenObjectType` discriminator sub-field at write time; an
    element whose discriminator is missing or unrecognized refuses naming the field, rather
    than guessing or crashing — the same polymorphism applies read-side.
 
@@ -915,10 +914,10 @@ These apply everywhere a field value is rendered — the one compare grid and an
    sibling interfaces the base never inherits from, each needing its own hand-verified value-type
    table). The same discriminator pattern generalizes reflectively — `SchemaReflector` finds
    every concrete subclass of an abstract base in the same Mutagen assembly, exposes each leaf's own
-   members as a sparse union keyed by a synthesized `concrete_type` sub-field (the leaf's own class
-   name, e.g. `"NpcLevel"`/`"PcLevelMult"`, `"QuestReferenceAlias"`/`"QuestLocationAlias"`/
-   `"QuestCollectionAlias"`), and writes back by resolving `concrete_type` the same way OMOD's
-   `value_type` resolves — no per-type table, and OMOD's own `BuildObjectModPropertyLeafFields`
+   members as a sparse union keyed by the document's own `MutagenObjectType` sub-field (the leaf's
+   own class name as the codec spells it, e.g. `"NpcLevel"`/`"PcLevelMult"`, `"QuestReferenceAlias"`/
+   `"QuestLocationAlias"`/`"QuestCollectionAlias"`), and writes back by resolving `MutagenObjectType`
+   the same way OMOD's does — no per-type table, and OMOD's own `BuildObjectModPropertyLeafFields`
    stays alongside it unmerged, since OMOD's leaf discovery is a genuinely different mechanism (a
    generic base with no reflectively-enumerable subclasses of its own), not a special case of this
    one.
@@ -926,7 +925,7 @@ These apply everywhere a field value is rendered — the one compare grid and an
    reflected type name on every `struct` and is null on every other type. The discriminator is a
    different claim — the schema's name says which class was *promised*, the discriminator's value
    which one a value *turned out to be*, and a union is exactly where the two disagree.
-   **Which leaf an element is, is itself an editable field.** `concrete_type` is an `enum`
+   **Which leaf an element is, is itself an editable field.** `MutagenObjectType` is an `enum`
    over the union's leaves, so switching one is an ordinary edit of the enclosing struct/array:
    the editor resends the element with that one member changed, the write path builds the named
    leaf, applies every member the payload also names that the new leaf declares, and leaves the
@@ -958,9 +957,9 @@ These apply everywhere a field value is rendered — the one compare grid and an
    the case that matters, `Landscape.Layers`' `BaseLayer`/`AlphaLayer` the other one the shipped
    schema reaches. Where leaves declare a same-named member of *different* shape (a script
    property's `Data` is an int, a float, a bool, a string or a list of each, by leaf), the name
-   is split into one field per shape, suffixed by it (`data_int`, `data_float`,
-   `data_string_array`), each written only onto a leaf of that shape. On write, a concrete-base
-   union resolves its leaf from `concrete_type` exactly as an abstract one does — an element
+   stays one field whose metadata carries a `Variants` map, one shape per leaf, each written only
+   onto a leaf of that shape. On write, a concrete-base
+   union resolves its leaf from `MutagenObjectType` exactly as an abstract one does — an element
    sent without it is refused, never quietly built as the base. Expanding the struct
    leaf is what lets the walk reach `ScriptStructProperty.Members` -> `ScriptEntry.Properties`
    -> `ScriptProperty` again, so the walk keeps the getter types it is inside on its stack: a
@@ -985,28 +984,18 @@ These apply everywhere a field value is rendered — the one compare grid and an
    change already overlaid; there is no separate dirty visual treatment on this
    panel. Revert is a git gesture in the native Source Control panel, not a cell-level control
    here ([medit-version-control.md](medit-version-control.md)).
-5. **Null / missing fields** render as an empty cell, never "null"/"undefined".
+5. **A member the document omits** reads as its default (*By cell* above); a member of an object
+   the column does not carry renders an empty cell; nothing ever reads "null"/"undefined".
 6. **Read-only cells** in immutable plugin columns are never editable and render no input on
    click.
-7. **A signature backed by several concrete Mutagen subclasses that declare the same list/struct
-   field with genuinely conflicting element shapes** gets one of two treatments, both replacing
-   "one column silently reads null for every subclass but the schema's discovery winner":
-   - **Structurally different shapes** (no field names in common) get **one column per shape** —
-     e.g. `dmgt`'s `damage_types` (struct elements) and `actor_value_indices` (scalar elements) are
-     two separate columns; a given record's row is populated in whichever one matches its own
-     subclass and empty in the other.
-   - **Structurally identical shapes that disagree only on which member names a shared enum leaf
-     allows** get **one merged column**, whose enum leaf's allowed values become the *union* across
-     every subclass — e.g. `omod`'s `properties` column's `property` sub-field lists
-     `ArmorModification`'s, `NpcModification`'s and `WeaponModification`'s member names together, so
-     an `ArmorModification` row's own `property` metadata includes values (e.g. `ForcedInventory`,
-     `AmmoCapacity`) that are not valid for that record's own subclass. This is a deliberate
-     trade-off, not a display bug: `FieldMetadata` is column-wide (see below), so widening the
-     allowed-value list is the only way every subclass's own values validate against it.
-
-   Both differ from the *identical*-shape case, where a member declared on a shared ancestor
-   already reads correctly off every sibling and needs no special handling at all. `FieldMetadata`
-   itself stays column-wide in every case — there is no per-row element shape.
+7. **A signature backed by several concrete Mutagen subclasses** is one table whose document
+   names the record's class first, carried as a `MutagenObjectType` discriminator column. A member
+   every class shapes alike is one column; one they shape differently in any way — `dmgt`'s
+   `DamageTypes` (struct elements on `DamageTypeIndexed`, scalar elements on `DamageType`),
+   `omod`'s `Properties` (a different `Property` enum domain per modification class) — is one
+   column whose metadata carries a `Variants` map keyed by record class, so a row reads and
+   validates against its own class's shape. A member declared on a shared ancestor reads
+   correctly off every sibling and needs no variant at all.
 
 ### Action logging
 

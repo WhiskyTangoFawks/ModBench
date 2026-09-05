@@ -25,6 +25,14 @@ public sealed class RecordTextCodec(ILogger<RecordTextCodec> logger)
     private static readonly ConcurrentDictionary<Type, MethodInfo> SerializeMethods = new();
     private static readonly ConcurrentDictionary<(Type Record, Type Reader), MethodInfo> DeserializeMethods = new();
 
+    /// <summary>A document read and written back: the one shape gate a write goes through, and the
+    /// spelling the codec gives what it kept.</summary>
+    public string RoundTrip(string text, GameRelease gameRelease, string? recordType)
+    {
+        var record = DeserializeFromBytesAsync(System.Text.Encoding.UTF8.GetBytes(text), gameRelease, recordType).GetAwaiter().GetResult();
+        return System.Text.Encoding.UTF8.GetString(SerializeToBytesAsync(record, gameRelease).GetAwaiter().GetResult());
+    }
+
     /// <summary>The same bytes <see cref="SerializeAsync"/> writes, without the filesystem: the
     /// index stores a document byte-identical to the source file (ADR-0041), and indexing produces
     /// millions, so a temp-file round trip is not an option.</summary>
@@ -134,20 +142,47 @@ public sealed class RecordTextCodec(ILogger<RecordTextCodec> logger)
         return record;
     }
 
+    /// <summary>The instance the codec builds for an empty document of a Loqui class: every member
+    /// at its declared default. A major record's empty document is its FormKey alone, the identity
+    /// the codec requires first.</summary>
+    public static Task<object> DeserializeEmptyAsync(Type loquiType, GameRelease gameRelease) =>
+        DeserializeTextAsync(loquiType, typeof(IMajorRecordGetter).IsAssignableFrom(loquiType) ? EmptyMajorRecord : "{}", gameRelease);
+
+    /// <summary>The empty document of a major record: the identity the codec requires first.</summary>
+    public const string EmptyMajorRecord = "{\"FormKey\":\"Null\"}";
+
+    /// <summary>The instance the codec builds for <paramref name="json"/> read as a Loqui class,
+    /// which is how a fact about the class is asked of the codec rather than of reflection.</summary>
+    public static async Task<object> DeserializeTextAsync(Type loquiType, string json, GameRelease gameRelease)
+    {
+        using var stream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(json), writable: false);
+        return await DeserializeObjectAsync(stream, string.Empty, gameRelease,
+            readerType => ResolveConcreteDeserializeMethod(loquiType, readerType), CancellationToken.None).ConfigureAwait(false);
+    }
+
     private static async Task<IMajorRecord> DeserializeCoreAsync(
         Stream stream, string directory, GameRelease gameRelease, string? recordType, CancellationToken cancel)
+    {
+        // The mirror of SerializeCoreAsync's dispatch, driven by the same RecordTypeDispatch fact so
+        // the two directions cannot disagree. An unknown recordType reads as ambiguous, so it takes
+        // the self-describing path and fails loudly rather than constructing a guessed type.
+        var dispatch = RecordTypeDispatch.For(gameRelease);
+        var record = await DeserializeObjectAsync(stream, directory, gameRelease,
+            readerType => recordType is null || dispatch.IsPathAmbiguous(recordType)
+                ? ResolveCheckedDeserializeMethod(gameRelease, readerType)
+                : ResolveConcreteDeserializeMethod(dispatch.ConcreteFor(recordType)!, readerType),
+            cancel).ConfigureAwait(false);
+        return (IMajorRecord)record;
+    }
+
+    private static async Task<object> DeserializeObjectAsync(
+        Stream stream, string directory, GameRelease gameRelease, Func<Type, MethodInfo> resolve, CancellationToken cancel)
     {
         var streamPackage = new StreamPackage(stream, directory);
         var reader = ReaderKernel.GetNewObject(streamPackage);
         var metaData = new SerializationMetaData(gameRelease, null, null, null, cancel);
 
-        // The mirror of SerializeCoreAsync's dispatch, driven by the same RecordTypeDispatch fact so
-        // the two directions cannot disagree. An unknown recordType reads as ambiguous, so it takes
-        // the self-describing path and fails loudly rather than constructing a guessed type.
-        var dispatch = RecordTypeDispatch.For(gameRelease);
-        var deserialize = recordType is null || dispatch.IsPathAmbiguous(recordType)
-            ? ResolveCheckedDeserializeMethod(gameRelease, reader.GetType())
-            : ResolveConcreteDeserializeMethod(dispatch.ConcreteFor(recordType)!, reader.GetType());
+        var deserialize = resolve(reader.GetType());
         var task = (Task)deserialize.Invoke(null, [reader, ReaderKernel, metaData])!;
         try
         {
@@ -162,7 +197,7 @@ public sealed class RecordTextCodec(ILogger<RecordTextCodec> logger)
                 $"No record type in this game's schema matches the document's MutagenObjectType. {ex.Message}", ex);
         }
 
-        return (IMajorRecord)task.GetType().GetProperty(nameof(Task<object>.Result))!.GetValue(task)!;
+        return task.GetType().GetProperty(nameof(Task<object>.Result))!.GetValue(task)!;
     }
 
     // SerializeWithCheck writes MutagenObjectType ahead of the fields and DeserializeWithCheck

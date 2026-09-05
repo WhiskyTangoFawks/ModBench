@@ -1,0 +1,25 @@
+using System.Globalization;
+using MEditService.Core.Queries;
+
+namespace MEditService.Core.Schema;
+
+/// <summary>The annotated members a document never spells (<see cref="SchemaAnnotations.SyntheticFlagMembers"/>):
+/// a bool column that is one bit of a flags member the document does spell.</summary>
+internal static class SyntheticColumns
+{
+    internal static IEnumerable<ColumnSpec> For(
+        Type getterType, GameReflection game, string backingPathPrefix, Func<string, IReadOnlyList<EnumMember>> backingNames)
+    {
+        foreach (var (name, backingMember, flag) in game.Annotations.SyntheticFlagMembersFor(getterType))
+        {
+            var names = backingNames(backingMember);
+            var bit = names.Count == 0
+                ? SchemaAnnotations.ParseBit(flag)
+                : long.Parse(names.Single(m => m.Value == flag).BitValue!, CultureInfo.InvariantCulture);
+            var aliases = names.Count == 0 ? game.Defaults.MembersAliasing(getterType, backingMember, bit) : [];
+            yield return new ColumnSpec(name, name, "BOOLEAN", "bool", LeafSpec.NoFormKeyTypes, LeafSpec.NoEnumMembers,
+                ViewDefaultLiteral: "false",
+                Synthetic: new SyntheticBit(backingPathPrefix + backingMember, bit, names.Count == 0 ? null : flag, aliases));
+        }
+    }
+}

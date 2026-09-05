@@ -2,6 +2,7 @@ using System.Text.Json;
 using MEditService.Core.Edits;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
+using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
@@ -9,7 +10,7 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Tests.Edits;
 
-/// <summary>The ESL flag's one sanctioned write door is the synthetic <c>is_light</c> header field;
+/// <summary>The ESL flag's one sanctioned write door is the synthetic <c>IsSmallMaster</c> header field;
 /// the raw <c>flags</c> column stays read-only.</summary>
 public sealed class HeaderFlagEditTests : IDisposable
 {
@@ -27,7 +28,7 @@ public sealed class HeaderFlagEditTests : IDisposable
     [Fact]
     public void EditField_IsLightTrue_SetsTheSmallFlag_AndCompilesItIntoTheBinary()
     {
-        var result = Service().EditField(_fixture.Plugin, HeaderFormKey, "is_light", Json(true));
+        var result = Service().Set(_fixture.Plugin, HeaderFormKey, "IsSmallMaster", Json(true));
 
         Assert.True(result.Applied, result.Message);
 
@@ -51,9 +52,9 @@ public sealed class HeaderFlagEditTests : IDisposable
     public void EditField_IsLightFalse_ClearsTheSmallFlag()
     {
         var service = Service();
-        Assert.True(service.EditField(_fixture.Plugin, HeaderFormKey, "is_light", Json(true)).Applied);
+        Assert.True(service.Set(_fixture.Plugin, HeaderFormKey, "IsSmallMaster", Json(true)).Applied);
 
-        var result = service.EditField(_fixture.Plugin, HeaderFormKey, "is_light", Json(false));
+        var result = service.Set(_fixture.Plugin, HeaderFormKey, "IsSmallMaster", Json(false));
 
         Assert.True(result.Applied, result.Message);
         var headerDoc = _fixture.Mirror.Index!.At(RecordRef.Effective).GetDocument(HeaderFormKey, _fixture.Plugin);
@@ -66,7 +67,7 @@ public sealed class HeaderFlagEditTests : IDisposable
     public void AfterSettingIsLight_ATypedTargetOutsideTheLightRange_IsRefusedImmediately()
     {
         var service = Service();
-        Assert.True(service.EditField(_fixture.Plugin, HeaderFormKey, "is_light", Json(true)).Applied);
+        Assert.True(service.Set(_fixture.Plugin, HeaderFormKey, "IsSmallMaster", Json(true)).Applied);
 
         var result = service.CreateRecord(
             _fixture.Plugin, "npc_", "OutOfRange", $"001000:{TrackedModFixture.PluginName}");
@@ -84,7 +85,7 @@ public sealed class HeaderFlagEditTests : IDisposable
         var service = Service();
         Assert.True(service.CreateRecord(
             _fixture.Plugin, "npc_", "BigId", $"001000:{TrackedModFixture.PluginName}").Applied);
-        Assert.True(service.EditField(_fixture.Plugin, HeaderFormKey, "is_light", Json(true)).Applied);
+        Assert.True(service.Set(_fixture.Plugin, HeaderFormKey, "IsSmallMaster", Json(true)).Applied);
 
         var compile = CompileService().Compile(_fixture.Plugin, new CompileSource.WorkingTree());
 
@@ -93,7 +94,7 @@ public sealed class HeaderFlagEditTests : IDisposable
         Assert.Contains("001000", compile.RefusalReason, StringComparison.Ordinal);
 
         // The accepted prompt's own path: clear the flag, compile again — clean.
-        Assert.True(service.EditField(_fixture.Plugin, HeaderFormKey, "is_light", Json(false)).Applied);
+        Assert.True(service.Set(_fixture.Plugin, HeaderFormKey, "IsSmallMaster", Json(false)).Applied);
         var second = CompileService().Compile(_fixture.Plugin, new CompileSource.WorkingTree());
         Assert.True(second.Succeeded, second.RefusalReason);
         Assert.False(second.EslContradiction);
@@ -102,12 +103,12 @@ public sealed class HeaderFlagEditTests : IDisposable
     private PluginCompileService CompileService() =>
         new(_fixture.Mirror, new PluginWriter(NullLogger<PluginWriter>.Instance), NullLogger<PluginCompileService>.Instance);
 
-    // The raw flags column stays exactly as read-only as it was — is_light is the one door.
+    // The raw flags column stays exactly as read-only as it was — IsSmallMaster is the one door.
     [Fact]
     public void EditField_RawFlagsColumn_StillRefusesAsReadOnly()
     {
-        var result = Service().EditField(
-            _fixture.Plugin, HeaderFormKey, "flags", JsonDocument.Parse("[\"Small\"]").RootElement);
+        var result = Service().Set(
+            _fixture.Plugin, HeaderFormKey, "Flags", JsonDocument.Parse("[\"Small\"]").RootElement);
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.FieldReadOnly, result.Refusal);

@@ -25,9 +25,9 @@ export function DiskCell({
   // ADR-0034: Ctrl+C on the focused cell. A plain thunk, not a value: the cell doesn't need to
   // know *what* it copies, only *when*.
   onCopy: () => void;
-  // Insert/Delete/Ctrl+↑/Ctrl+↓ accelerators onto the same ops the right-click menu
-  // offers — pure in-webview state (the array's own new value writes through the ordinary
-  // onEditCell path), no extension-host round trip needed for the keys themselves.
+  // Insert/Delete/Ctrl+↑/Ctrl+↓ accelerators onto the same ops the right-click menu offers,
+  // each posting the same envelope the menu entry does, with no extension-host round trip for
+  // the keys themselves.
   arrayOps?: ArrayOps;
   // The already-combined `data-vscode-context` JSON string VS Code's own
   // `contributes.menus["webview/context"]` gates on — undefined when this cell carries no

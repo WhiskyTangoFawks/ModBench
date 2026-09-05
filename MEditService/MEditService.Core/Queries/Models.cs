@@ -96,16 +96,10 @@ public record RecordSummary(
 
 public record PagedResult<T>(IReadOnlyList<T> Items, int Total);
 
-/// <summary>BitValue is a decimal string so a bit above 2^53 survives JSON without IEEE 754
-/// loss, null for a plain enum. Label is null for a member that is already the game's own
+/// <summary>BitValue is the member's bit as a decimal string, so one above 2^53 survives JSON;
+/// null for a plain enum's member. Label is null when the value is already the game's own
 /// vocabulary.</summary>
-public record EnumMember(string Value, string? BitValue = null, string? Label = null)
-{
-    /// <summary>The one definition of "flags rather than a closed choice" — a field, a column and
-    /// the webview's flagBits all answer it this way. An enum with no members is not one.</summary>
-    public static bool IsBitmask(IReadOnlyList<EnumMember> members) =>
-        members.Count > 0 && members.All(m => m.BitValue != null);
-}
+public record EnumMember(string Value, string? BitValue = null, string? Label = null);
 
 public record FieldMetadata(
     string Name,
@@ -114,7 +108,7 @@ public record FieldMetadata(
     IReadOnlyList<string> ValidFormKeyTypes,
     // For 'enum': the field's members, in the order the schema lists them. That order is a
     // contract, not a rendering detail — a discriminator's first member is the leaf a new array
-    // element is built as (ArrayOpWriter).
+    // element is built as (DocumentEdit).
     IReadOnlyList<EnumMember> EnumMembers,
     FieldMetadata? ElementType = null,          // for 'array': element schema
     IReadOnlyList<FieldMetadata>? Fields = null, // for 'struct': sub-field schemas
@@ -125,9 +119,8 @@ public record FieldMetadata(
     // discriminator, whose name is a wire name.
     string? DisplayLabel = null,             // what to title the row, when Name is a wire name
 
-    // This field names which concrete class its object is, read off the payload before that object
-    // exists (ListLeaves.ResolveListElementType). True for concrete_type and OMOD's
-    // value_type, false for every other field.
+    // This field is the document's own MutagenObjectType member, naming which concrete class its
+    // object is; read off the payload before that object exists (ListLeaves.ResolveListElementType).
     bool IsDiscriminator = false,
 
     // For an enum whose value decides which sibling fields carry data; null when every sibling is
@@ -143,16 +136,19 @@ public record FieldMetadata(
     // For 'struct': the Loqui/CLR class the schema declares, null for every other type. Distinct
     // from a discriminator's value, which says which class an object turned out to be. Serialized
     // nulls stay on all four nullables here.
-    string? LeafTypeName = null)
-{
-    /// <summary>Derived, not stored: a member's own BitValue is the only place that fact lives.
-    /// Off the wire because the webview asks the members the same question (flagBits).</summary>
-    [JsonIgnore]
-    public bool IsBitmask => EnumMember.IsBitmask(EnumMembers);
-}
+    string? LeafTypeName = null,
 
-// Value contract: a bitmask field (Metadata.IsBitmask) carries its combined flags as a decimal
-// string, not a number — so values above 2^53 survive JSON round-tripping without IEEE 754 loss.
+    // A union member whose type differs by leaf: its shape under each leaf, keyed by the
+    // discriminator's values. The field's own shape is the first leaf's. Null when every leaf agrees.
+    IReadOnlyDictionary<string, FieldMetadata>? Variants = null,
+
+    // What an absent member reads as: the declared default the codec omits on write. Null where
+    // that is the wire's own zero (0, false, []); an enum always names it, since its members alone
+    // cannot say which is zero.
+    object? Default = null);
+
+/// <summary>Value is the stored document's own node for this field, verbatim, or null when the
+/// document omits the member (which the codec does for a member equal to its default).</summary>
 public record FieldValue(FieldMetadata Metadata, object? Value, string? CheckError = null);
 
 public record RecordDetail(
@@ -242,22 +238,23 @@ public record ReferenceResult(string FormKey, string Plugin, string FieldPath, s
 
 public record HealthResponse(string Status);
 
-// ADR-0041: one field edit on one plugin's copy. Value is a raw JsonElement: a value is whatever
-// its schema says (a complex field's whole JSON), so typing it here would re-declare the schema
-// on the wire.
-public record RecordFieldEditRequest(
+// ADR-0041: one edit on one plugin's copy, as the one envelope (ADR-0032). Value is a raw
+// JsonElement: a value is whatever its schema says, so typing it here would re-declare the
+// schema on the wire.
+public record RecordEditRequest(
     string Plugin,
     string Origin,
-    string FieldPath,
-    JsonElement Value);
+    string Op,
+    IReadOnlyList<PathHop> Path,
+    JsonElement? Value = null);
 
-/// <summary>The success shape for an applied edit. Refusals never come back through this record —
-/// they are ProblemDetails carrying a <c>refusal</c> extension, so an HTTP client's ordinary
-/// success check is also the correct check (ADR-0026).</summary>
-public record RecordFieldEditResponse(bool Applied, string FormKey, string FieldPath);
+/// <summary>The success shape for an applied edit. A refusal is ProblemDetails carrying refusal
+/// and path extensions instead, so an HTTP client's ordinary success check is also the correct
+/// check (ADR-0026).</summary>
+public record RecordEditResponse(bool Applied, string FormKey, string Path);
 
 // The three lifecycle gestures' wire shapes, on the same door (Plugin/Origin as the compound
-// identity, refusals as ProblemDetails carrying the same `refusal` extension) EditField already
+// identity, refusals as ProblemDetails carrying the same `refusal` extension) Edit already
 // established.
 
 /// <summary><see cref="FormKey"/> null means auto-allocate the next free local FormID (both-refs

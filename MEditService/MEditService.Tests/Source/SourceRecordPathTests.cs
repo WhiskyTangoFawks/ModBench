@@ -19,7 +19,7 @@ public sealed class SourceRecordPathTests
     // A plugin name with its own internal dot must round-trip as one whole segment (SourceRecordPath
     // never splits a plugin name on its own dots) — a patch-plugin-shaped filename proves this for
     // real rather than by argument.
-    [InlineData("Vendor.patch.esp", "keyword", "0012AB:Vendor.patch.esp", "SomeKeyword")]
+    [InlineData("Vendor.patch.esp", "Keyword", "0012AB:Vendor.patch.esp", "SomeKeyword")]
     // The record's origin ModKey legitimately differs from the plugin holding it (an override edited
     // through a patch plugin) — the two segments must recombine into the *origin's* FormKey, not the
     // target plugin's.
@@ -63,7 +63,7 @@ public sealed class SourceRecordPathTests
     }
 
     [Theory]
-    [InlineData("Cell")]
+    [InlineData("cell")]
     [InlineData("Worldspace")]
     [InlineData("Quest")]
     public void For_ForADirectoryPerRecordType_ThrowsNamedException(string recordType)

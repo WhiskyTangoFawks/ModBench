@@ -6,6 +6,7 @@ using MEditService.Core.Records;
 using MEditService.Core.Schema;
 using MEditService.Core.Serialization;
 using MEditService.Core.Source;
+using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -200,7 +201,7 @@ public sealed class CompileRoundTripGateTests(CompileRoundTripGateFixture fixtur
         Assert.Contains(expectedPath, before.Keys);
 
         var edit = new RecordEditService(scope.Mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance)
-            .EditField(scope.Plugin, npc.FormKey, "height_max", JsonDocument.Parse("0.75").RootElement);
+            .Set(scope.Plugin, npc.FormKey, "HeightMax", JsonDocument.Parse("0.75").RootElement);
         Assert.True(edit.Applied, edit.Message);
 
         var result = scope.CompileService().Compile(scope.Plugin, new CompileSource.WorkingTree());
@@ -236,7 +237,7 @@ public sealed class CompileRoundTripGateTests(CompileRoundTripGateFixture fixtur
         using var scope = new MutationScope(fixture);
 
         var edit = new RecordEditService(scope.Mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance)
-            .EditField(scope.Plugin, responseToRename.FormKey.ToString(), "editor_id",
+            .Set(scope.Plugin, responseToRename.FormKey.ToString(), "EditorID",
                 JsonDocument.Parse($"\"{responseToRename.EditorID}Renamed\"").RootElement);
         Assert.True(edit.Applied, edit.Message);
 

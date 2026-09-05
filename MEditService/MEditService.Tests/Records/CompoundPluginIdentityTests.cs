@@ -195,7 +195,7 @@ public class CompoundPluginIdentityTests
         Assert.Equal(2L, Count(repo, "placement", "form_key", placedKeyA.ToString()));
 
         using var refCmd = repo.Connection.CreateCommand();
-        refCmd.CommandText = "SELECT COUNT(*) FROM form_references WHERE source_form_key = $1 AND field_path = 'race'";
+        refCmd.CommandText = "SELECT COUNT(*) FROM form_references WHERE source_form_key = $1 AND field_path = 'Race'";
         refCmd.Parameters.Add(new DuckDBParameter { Value = npcKeyA.ToString() });
         Assert.Equal(2L, (long)refCmd.ExecuteScalar()!);
     }

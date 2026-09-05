@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using MEditService.Core.Plugins;
 using MEditService.Core.Queries;
 using MEditService.Core.Records;
@@ -11,7 +12,6 @@ using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
-using Mutagen.Bethesda.Plugins.Utility;
 
 namespace MEditService.Core.Edits;
 
@@ -31,36 +31,46 @@ public sealed class RecordEditService(
     private readonly RecordCopy _recordCopy = new(
         mirror, schemaReflector, logger, new RecordTextCodec(Microsoft.Extensions.Logging.Abstractions.NullLogger<RecordTextCodec>.Instance));
 
-    /// <summary>Complex fields arrive as one whole value (CONTEXT.md's atomic field-level write);
-    /// <see cref="RecordFieldWriter"/> dispatches.</summary>
-    public RecordEditResult EditField(PluginKey plugin, string formKey, string fieldPath, JsonElement value)
+    /// <summary>The single write path (ADR-0041): one envelope, patched onto the record's document
+    /// by <see cref="DocumentEdit"/>, landed here as a working-tree change. This method owns only
+    /// the IO around that.</summary>
+    public RecordEditResult Edit(PluginKey plugin, string formKey, RecordEditEnvelope envelope)
     {
         if (ResolveEditTarget(plugin, formKey, out var editTarget) is { } blocked) return blocked;
         var (index, _, release, document, unit) = editTarget;
-        var schemas = schemaReflector.GetSchemas(release);
+        var spelled = RecordEditEnvelope.Spell(envelope.Path);
 
-        // A ModHeader is not an IMajorRecord, so it cannot flow through the generic per-record
-        // pipeline below; answered off the schema alone.
-        if (document.RecordType == HeaderIndexer.RecordType)
+        if (document.ParseDiagnosis is { } diagnosis)
         {
-            // The ESL flag's one sanctioned door, the same pattern is_partial_form uses. Every real
-            // header column still refuses.
-            if (fieldPath.Equals(IsLightFieldPath, StringComparison.Ordinal))
-                return EditHeaderIsLight(index, plugin, unit, formKey, value);
-            return RefuseHeaderFieldEdit(fieldPath, schemas);
+            return RecordEditResult.RefusedAt(
+                RecordEditRefusal.RecordParseFailed, spelled,
+                $"{formKey} could not be read when it was indexed, so its document is a stub and nothing can be " +
+                $"written to it: {diagnosis}");
         }
+
+        var schemas = schemaReflector.GetSchemas(release);
+        if (!schemas.TryGetValue(document.RecordType, out var schema))
+        {
+            return RecordEditResult.RefusedAt(
+                RecordEditRefusal.FieldNotFound, spelled, $"'{document.RecordType}' is not an editable record type.");
+        }
+        if (RefuseIfContainmentField(document.RecordType, envelope.Path, schemas, release) is { } containmentRefusal)
+            return containmentRefusal;
 
         var reads = index.At(RecordRef.Effective);
         var owner = reads.GetDocument(unit.OwnerFormKey, plugin)!;
-        var record = ReadRecordFromSource(_codec, logger, unit.FullPath, owner, release);
+        var text = ReadSourceText(unit.FullPath, owner);
 
-        // The target may be inside `record` (an embedded child). Locating it in the parent's object
-        // graph keeps it on the same machinery: reserializing the parent writes it back with every
-        // untouched byte intact.
-        var target = record;
+        // An embedded child is patched inside its parent's document: the parent is what the file
+        // holds and what the codec reads, so every untouched byte of it comes back intact.
+        IReadOnlyList<PathHop> prefix = [];
         if (unit.IsEmbedded)
         {
-            if (ContainerChildFields.FindEmbeddedChild(record, formKey) is not { } found)
+            var parentType = RecordTypeDispatch.For(release).ConcreteFor(unit.OwnerRecordType);
+            var found = parentType == null
+                ? null
+                : EmbeddedChildPath.Find((JsonObject)JsonNode.Parse(text)!, ContainerChildFields.NormalizedTypeName(parentType), formKey);
+            if (found == null)
             {
                 return RecordEditResult.Refused(
                     RecordEditRefusal.SourceUnitNotFound,
@@ -70,71 +80,37 @@ public sealed class RecordEditService(
                     "carry it. If nothing outside Modbench changed that file, this is a defect — please " +
                     "report it; otherwise relaunch mEdit so the index re-reads the tree.");
             }
-            target = found.Child;
+            prefix = found;
         }
 
-        if (RefuseIfContainmentField(document.RecordType, fieldPath, schemas, release) is { } containmentRefusal)
-            return containmentRefusal;
+        Func<string, string> roundTrip = schema.IsHeader
+            ? patched => Encoding.UTF8.GetString(HeaderDocument.Write(HeaderDocument.Read(Encoding.UTF8.GetBytes(patched))))
+            : patched => _codec.RoundTrip(patched, release, unit.OwnerRecordType);
+        var request = new DocumentEditRequest(text, prefix, schema, envelope, release, reads.Resolve, roundTrip);
+        if (DocumentEdit.Apply(request, out var newText) is { } refused) return refused;
 
-        // Checked against `target`, not `record`, so an embedded child of a Partial Form override is
-        // unaffected (CONTEXT.md). EditorID is exempt: xEdit's CanAssignInternal allows it (ADR-0034).
-        // is_partial_form is exempt: clearing it is the only way out.
-        if (PartialFormFlag.IsSet(target)
-            && !fieldPath.Equals(RecordFieldWriter.EditorIdFieldPath, StringComparison.Ordinal)
-            && !fieldPath.Equals(RecordFieldWriter.IsPartialFormFieldPath, StringComparison.Ordinal))
-        {
-            return RecordEditResult.Refused(
-                RecordEditRefusal.PartialFormFieldReadOnly,
-                $"{formKey} is a Partial Form override — its own fields are ignored for conflict " +
-                "resolution and read-only here. Editing this record requires clearing the Partial " +
-                "Form flag on its header first.");
-        }
+        // The document already said this (a value set to itself): nothing to commit, so no dirty file
+        // or history entry.
+        if (string.Equals(newText, text, StringComparison.Ordinal)) return RecordEditResult.Success();
 
-        if (ValidateFormLinks(reads, schemas, document.RecordType, fieldPath, value, release) is { } linkError)
-            return RecordEditResult.Refused(RecordEditRefusal.InvalidFormLink, linkError);
-
-        // Reflected flag columns alias the MajorRecordFlagsRaw int bit 14 lives in. Checked
-        // structurally rather than by column name, which would miss the next game's alias; the
-        // mutated record is a throwaway, so a caught leak leaves the tree untouched.
-        var checkBit14Leak = !fieldPath.Equals(RecordFieldWriter.IsPartialFormFieldPath, StringComparison.Ordinal)
-            && PartialFormFlag.IsPartialFormable(target.GetType());
-        var bit14Before = checkBit14Leak ? target.MajorRecordFlagsRaw & PartialFormFlag.Bit : 0;
-
-        var applied = RecordFieldWriter.TryApply(target, document.RecordType, fieldPath, value, schemas);
-        // A boundary array op is already satisfied: returned before every write so it leaves no
-        // dirty file or history entry.
-        if (applied.Outcome == FieldApplyOutcome.NoOp)
-            return RecordEditResult.Success();
-        if (applied.Outcome != FieldApplyOutcome.Applied)
-            return RefuseFieldOutcome(applied, fieldPath, document.RecordType, schemas, value.ValueKind);
-
-        if (checkBit14Leak && (target.MajorRecordFlagsRaw & PartialFormFlag.Bit) != bit14Before)
-        {
-            return RecordEditResult.Refused(
-                RecordEditRefusal.PartialFormFlagIndirectWrite,
-                $"'{fieldPath}' would change record header flag bit 14 (Partial Form) as a side " +
-                "effect of writing an unrelated column. That bit is only writable through " +
-                "'is_partial_form' — nothing was written.");
-        }
-
-        // The file name carries the EditorID, so an EditorID edit is a rename too. Done before the
-        // write.
-        var sourcePath = RenameSourceUnit(unit, target, document);
+        // The file name carries the EditorID, so an EditorID edit is a rename too. Done before the write.
+        var newEditorId = unit.IsEmbedded ? document.EditorId : EditorIdOf(newText);
+        var sourcePath = RenameSourceUnit(unit, FormKey.Factory(unit.OwnerFormKey), newEditorId, document);
 
         // The atomic write matters here: the file is inside a live git working tree the SCM panel may
         // read at any moment.
-        var newBody = SerializeAndWrite(_codec, record, sourcePath, release);
+        WriteBodyAtomic(sourcePath, newText);
 
         // An embedded edit dirties two rows, the parent unit and the child's own document, landed in
-        // one transaction.
-        var deltas = new List<(string FormKey, string? Body)>
-        {
-            (unit.OwnerFormKey, newBody),
-        };
+        // one transaction. The index holds the record's own fields, never the tree-layout member.
+        var deltas = new List<(string FormKey, string? Body)> { (unit.OwnerFormKey, SourceChildOrder.WithoutOrder(newText)) };
         if (unit.IsEmbedded)
         {
-            deltas.Add((formKey, Encoding.UTF8.GetString(
-                _codec.SerializeToBytesAsync(target, release).GetAwaiter().GetResult())));
+            var child = EmbeddedChildPath.Walk(JsonNode.Parse(newText), prefix)!;
+            // An element of an abstract slot names its own type first, which only the self-describing
+            // read takes; the child's own document then spells it the way its own file would.
+            var selfDescribing = child is JsonObject obj && obj.ContainsKey(LoquiUnions.UnionTypeDiscriminator);
+            deltas.Add((formKey, _codec.RoundTrip(child.ToJsonString(), release, selfDescribing ? null : document.RecordType)));
         }
         index.ApplyWorkingTreeChanges(plugin, deltas);
 
@@ -144,18 +120,58 @@ public sealed class RecordEditService(
         if (logger.IsEnabled(LogLevel.Information))
         {
             logger.LogInformation(
-                "Edited {FieldPath} on {FormKey} in {Plugin} ({Origin}) — working-tree change written to {SourcePath}",
-                fieldPath, formKey, plugin.Name, plugin.Origin, unit.RelativePath);
+                "Edited {Op} {Path} on {FormKey} in {Plugin} ({Origin}) — working-tree change written to {SourcePath}",
+                envelope.Op, spelled, formKey, plugin.Name, plugin.Origin, unit.RelativePath);
         }
         return RecordEditResult.Success();
+    }
+
+    private static string? EditorIdOf(string text)
+    {
+        using var document = JsonDocument.Parse(text);
+        return document.RootElement.TryGetProperty(nameof(IMajorRecordGetter.EditorID), out var editorId)
+            && editorId.ValueKind == JsonValueKind.String
+            ? editorId.GetString()
+            : null;
+    }
+
+    // Falls back to the indexed body only when the file is missing (never assume exclusive
+    // ownership): refusing would strand the user with no way to put the record back.
+    private string ReadSourceText(string sourcePath, RecordDocument document)
+    {
+        if (File.Exists(sourcePath)) return File.ReadAllText(sourcePath);
+        logger.LogWarning(
+            "Source file {SourcePath} is missing; editing from the indexed document and rewriting it", sourcePath);
+        return document.Body!;
+    }
+
+    /// <summary>The codec is the one constructor: a record begins as the document naming its identity,
+    /// read back through the door every edit goes through. <paramref name="partialForm"/> sets the
+    /// header bit a bare container ancestor carries.</summary>
+    internal static IMajorRecord BareRecord(
+        RecordTextCodec codec, RecordTableSchema schema, GameRelease release, string formKey, string? editorId, bool partialForm)
+    {
+        var members = new JsonObject();
+        // ADR-0041's discriminator policy: a path-ambiguous document leads with its concrete type.
+        if (RecordTypeDispatch.For(release).IsPathAmbiguous(schema.TableName)
+            && ReflectedTypes.GetSetterType(schema.RecordType) is { } concrete)
+        {
+            members[LoquiUnions.UnionTypeDiscriminator] = ReflectedTypes.DocumentTypeName(concrete);
+        }
+        members[nameof(IMajorRecordGetter.FormKey)] = formKey;
+        if (editorId != null) members[nameof(IMajorRecordGetter.EditorID)] = editorId;
+        if (partialForm) members[nameof(IMajorRecordGetter.MajorRecordFlagsRaw)] = PartialFormFlag.Bit;
+        return codec.DeserializeFromBytesAsync(Encoding.UTF8.GetBytes(members.ToJsonString()), release, schema.TableName)
+            .GetAwaiter().GetResult();
     }
 
     // Reflection makes child slots, Cell.Grid and placed Position ordinary writable columns; writing
     // one would desynchronize the side tables, which nothing here re-derives. Refusing is why no
     // SetPlacement-style write-back exists; containment is the path (ADR-0041).
     private static RecordEditResult? RefuseIfContainmentField(
-        string recordType, string fieldPath, IReadOnlyDictionary<string, RecordTableSchema> schemas, GameRelease release)
+        string recordType, IReadOnlyList<PathHop> path, IReadOnlyDictionary<string, RecordTableSchema> schemas, GameRelease release)
     {
+        var fieldPath = path.Count > 0 ? path[0].Name : null;
         if (!schemas.TryGetValue(recordType, out var schema)) return null;
         if (schema.RecordColumns.FirstOrDefault(c => c.Name == fieldPath) is not { } column) return null;
         if (RecordTypeDispatch.For(release).ConcreteFor(recordType) is not { } concrete) return null;
@@ -200,19 +216,19 @@ public sealed class RecordEditService(
     // Move first, then write: a crash between leaves the file at its new name with old content, valid
     // and still findable via FlatSourcePath's FormKey-suffix fallback. The reverse order leaves two
     // files claiming one FormKey, which AmbiguousSourceUnitException refuses.
-    private string RenameSourceUnit(SourceUnit unit, IMajorRecord edited, RecordDocument document)
+    private string RenameSourceUnit(SourceUnit unit, FormKey formKey, string? editorId, RecordDocument document)
     {
         // An embedded child's EditorID appears in no path: the file belongs to its parent, whose own
         // EditorID this edit did not touch. Nothing to move.
         if (unit.IsEmbedded) return unit.FullPath;
-        if (string.Equals(edited.EditorID, document.EditorId, StringComparison.Ordinal)) return unit.FullPath;
+        if (string.Equals(editorId, document.EditorId, StringComparison.Ordinal)) return unit.FullPath;
 
         var isDirectoryPerRecord = unit.IsDirectoryPerRecord;
         var oldLeafPath = isDirectoryPerRecord ? Path.GetDirectoryName(unit.FullPath)! : unit.FullPath;
 
         // Order lives in the parent's ordered child list keyed by FormKey (ADR-0042 decision 4), which
         // a rename does not change, so no sibling or parent document is touched.
-        var newLeafName = SourceUnitResolver.LeafNameFor(edited.FormKey, edited.EditorID, isDirectoryPerRecord);
+        var newLeafName = SourceUnitResolver.LeafNameFor(formKey, editorId, isDirectoryPerRecord);
         var newLeafPath = Path.Combine(Path.GetDirectoryName(oldLeafPath)!, newLeafName);
 
         if (string.Equals(oldLeafPath, newLeafPath, StringComparison.Ordinal)) return unit.FullPath;
@@ -224,7 +240,7 @@ public sealed class RecordEditService(
             {
                 logger.LogInformation(
                     "EditorID changed on {FormKey}; moved its source directory {Old} to {New}",
-                    edited.FormKey, Path.GetFileName(oldLeafPath), Path.GetFileName(newLeafPath));
+                    formKey, Path.GetFileName(oldLeafPath), Path.GetFileName(newLeafPath));
             }
             return Path.Combine(newLeafPath, SourceUnitResolver.RecordDataFileName);
         }
@@ -234,7 +250,7 @@ public sealed class RecordEditService(
         {
             logger.LogInformation(
                 "EditorID changed on {FormKey}; moved its source file {Old} to {New}",
-                edited.FormKey, Path.GetFileName(oldLeafPath), Path.GetFileName(newLeafPath));
+                formKey, Path.GetFileName(oldLeafPath), Path.GetFileName(newLeafPath));
         }
         return newLeafPath;
     }
@@ -258,7 +274,7 @@ public sealed class RecordEditService(
 
             if (!ContainerChildFields.RemoveEmbeddedChild(record, formKey))
             {
-                // Same diagnosis as EditField's embedded lookup: states only what is observed.
+                // Same diagnosis as Edit's embedded lookup: states only what is observed.
                 return RecordEditResult.Refused(
                     RecordEditRefusal.SourceUnitNotFound,
                     $"{unit.RelativePath} is indexed as holding {formKey}, but its own text does not " +
@@ -373,10 +389,8 @@ public sealed class RecordEditService(
 
         if (ResolveTargetFormKey(index, plugin, requestedFormKey, out var targetFormKey) is { } refusedTarget) return refusedTarget;
 
-        // Mutagen's generic factory: every generated major-record type's (FormKey, GameRelease)
-        // constructor is private precisely so this is the supported way in.
-        var record = MajorRecordInstantiator.Activator(FormKey.Factory(targetFormKey), release, schema.RecordType);
-        if (!string.IsNullOrWhiteSpace(editorId)) record.EditorID = editorId;
+        var record = BareRecord(
+            _codec, schema, release, targetFormKey, string.IsNullOrWhiteSpace(editorId) ? null : editorId, partialForm: false);
 
         // RefuseIfContainerType guarantees a flat record, so no block path. The group folder is minted
         // by the write itself when the plugin has never held this type.
@@ -581,7 +595,7 @@ public sealed class RecordEditService(
         var destinationRecord = ReadRecordFromSource(_codec, logger, unit.FullPath, existingTarget, release);
         ContainerChildFields.TransplantChildSlots(destinationRecord, replacement);
 
-        var writePath = RenameSourceUnit(unit, replacement, existingTarget);
+        var writePath = RenameSourceUnit(unit, replacement.FormKey, replacement.EditorID, existingTarget);
         var newBody = SerializeAndWrite(_codec, replacement, writePath, release);
         index.ApplyWorkingTreeChanges(destinationPlugin, [(formKey, newBody)]);
         mirror.ReapplyFilter();
@@ -754,9 +768,8 @@ public sealed class RecordEditService(
             return Path.GetDirectoryName(unit.FullPath)!;
         }
 
-        var bare = MajorRecordInstantiator.Activator(
-            FormKey.Factory(ancestorFormKey), release, schemaReflector.GetSchemas(release)[ancestorRecordType].RecordType);
-        PartialFormFlag.Set(bare, true);
+        var bare = BareRecord(
+            _codec, schemaReflector.GetSchemas(release)[ancestorRecordType], release, ancestorFormKey, editorId: null, partialForm: true);
 
         SourcePlacement placement;
         ContainerChildRow? ownParent = null;
@@ -1128,7 +1141,7 @@ public sealed class RecordEditService(
             foreach (var (embeddedFormKey, _, _) in group.Where(r => r.Unit.IsEmbedded))
             {
                 // The child's row is re-derived from the remapped owner, the same two-row shape
-                // EditField uses. A remap never moves a record's own FormKey, so the child is still
+                // Edit uses. A remap never moves a record's own FormKey, so the child is still
                 // found under the same key.
                 if (ContainerChildFields.FindEmbeddedChild(owner, embeddedFormKey)?.Child is not { } child)
                 {
@@ -1181,7 +1194,8 @@ public sealed class RecordEditService(
                 $"{record.FormKey} in {plugin.Name} could not run. Nothing was written.");
         }
 
-        PluginIngest.CollectFormRefs(refs, record, recordType, schema);
+        using (var document = JsonDocument.Parse(SerializeToText(record, release)))
+            PluginIngest.CollectFormRefs(refs, record.FormKey.ToString(), record.EditorID, document.RootElement, recordType, schema);
         if (refs.FirstOrDefault(r => r.TargetFormKey == oldFormKey) is { TargetFormKey: not null } stale)
         {
             return RecordEditResult.Refused(
@@ -1294,7 +1308,7 @@ public sealed class RecordEditService(
         if (unit.IsEmbedded)
         {
             // No file moves: an embedded record has no leaf name of its own. The owner is reserialized
-            // and the child's row replaced, the same two-row shape EditField uses.
+            // and the child's row replaced, the same two-row shape Edit uses.
             transaction.Write(
                 modFolder, unit.FullPath,
                 () => _codec.SerializeAsync(root, unit.FullPath, release).GetAwaiter().GetResult());
@@ -1509,26 +1523,6 @@ public sealed class RecordEditService(
                 RecordEditRefusal.FormKeySpaceExhausted, FormKeySpaceExhaustedMessage(plugin, isLight));
     }
 
-    // Resolves against Effective: a record the working tree deleted still exists at Head. Not this
-    // call's choice: form_lookup has no ref dimension; ApplyWorkingTreeChanges keeps it in step.
-    // Scope is the reflected columns; VMAD/condition FormKeys are not checked.
-    private static string? ValidateFormLinks(
-        IRecordReads reads,
-        IReadOnlyDictionary<string, RecordTableSchema> schemas,
-        string recordType,
-        string fieldPath,
-        JsonElement value,
-        GameRelease release)
-    {
-        if (!schemas.TryGetValue(recordType, out var schema)) return null;
-        var col = schema.RecordColumns.FirstOrDefault(c => c.Name == fieldPath);
-        if (col == null) return null;
-
-        // The same builder the read model renders check errors from, so the two definitions of a
-        // broken link cannot drift.
-        return CheckErrorBuilder.Build(col.ToFieldMetadata(), value, reads.Resolve, release);
-    }
-
     /// <summary>The palette title verbatim (package.json's "Track…" under category "Modbench"); a signpost
     /// naming a command the user cannot find is worse than none.</summary>
     internal const string TrackCommandTitle = "Modbench: Track\u2026";
@@ -1635,7 +1629,7 @@ public sealed class RecordEditService(
                 // The palette entry verbatim; naming a command that does not exist is its own dead end.
                 $"Run \"{TrackCommandTitle}\" on it once to start editing.");
 
-    // Refused before any write. Not folded into ResolveEditTarget because EditField reaches the
+    // Refused before any write. Not folded into ResolveEditTarget because Edit reaches the
     // header deliberately. Without it, SourceUnit.IsDirectoryPerRecord (filename-only) answers true
     // for the header and DeleteRecord deletes the plugin's whole source root.
     private static RecordEditResult? RefuseIfHeader(string recordType) =>
@@ -1644,129 +1638,6 @@ public sealed class RecordEditService(
                 RecordEditRefusal.HeaderDeleteOrRenumberNotSupported,
                 "The plugin header cannot be deleted or renumbered — it is not an ordinary record.")
             : null;
-
-    /// <summary>The synthetic header field the ESL flag is written through (<see cref="EditHeaderIsLight"/>).</summary>
-    internal const string IsLightFieldPath = "is_light";
-
-    // Transforms the header's current document (HeaderDocument.WithLightFlag), no in-memory mod
-    // consulted, so a stale loaded-plugin object can never leak other header values into the write.
-    private RecordEditResult EditHeaderIsLight(
-        IRecordIndex index, PluginKey plugin, SourceUnit unit, string formKey, JsonElement value)
-    {
-        if (value.ValueKind is not (JsonValueKind.True or JsonValueKind.False))
-        {
-            return RecordEditResult.Refused(
-                RecordEditRefusal.FieldValueShapeMismatch, $"'{IsLightFieldPath}' takes a JSON boolean.");
-        }
-
-        var currentBody = File.Exists(unit.FullPath)
-            ? File.ReadAllBytes(unit.FullPath)
-            : Encoding.UTF8.GetBytes(index.At(RecordRef.Effective).GetDocument(formKey, plugin)!.Body!);
-        var newBody = HeaderDocument.WithLightFlag(currentBody, value.GetBoolean());
-        var newText = Encoding.UTF8.GetString(newBody);
-
-        WriteBodyAtomic(unit.FullPath, newText);
-        index.ApplyWorkingTreeChanges(plugin, [(formKey, newText)]);
-        mirror.ReapplyFilter();
-
-        // Warn, not info: flipping this flag shifts load-order behavior downstream, so the log keeps a
-        // visible record.
-        logger.LogWarning(
-            "ESL flag on {Plugin} ({Origin}) set to {IsLight} via {Field}",
-            plugin.Name, plugin.Origin, value.GetBoolean(), IsLightFieldPath);
-        return RecordEditResult.Success();
-    }
-
-    private static RecordEditResult RefuseHeaderFieldEdit(
-        string fieldPath, IReadOnlyDictionary<string, RecordTableSchema> schemas)
-    {
-        if (!schemas.TryGetValue(HeaderIndexer.RecordType, out var schema))
-            return RefuseFieldOutcome(FieldApplyOutcome.NotFound, fieldPath, HeaderIndexer.RecordType, schemas);
-
-        var column = schema.RecordColumns.FirstOrDefault(c => c.Name == fieldPath);
-        if (column == null)
-            return RefuseFieldOutcome(FieldApplyOutcome.NotFound, fieldPath, HeaderIndexer.RecordType, schemas);
-
-        // A loud failure rather than a refusal, so a column gaining a delegate cannot quietly keep
-        // reading as read-only.
-        if (column.Apply.Writer != null)
-        {
-            throw new NotSupportedException(
-                $"Header column '{fieldPath}' now carries a write delegate, but RecordEditService has " +
-                "no header write path — EditField's header branch only knows how to refuse. Build one " +
-                "before giving any header column an Apply delegate.");
-        }
-
-        return RefuseFieldOutcome(FieldApplyOutcome.ReadOnly, fieldPath, HeaderIndexer.RecordType, schemas);
-    }
-
-    private static RecordEditResult RefuseFieldOutcome(
-        FieldApplyResult applied, string fieldPath, string recordType,
-        IReadOnlyDictionary<string, RecordTableSchema> schemas, JsonValueKind sentKind = default)
-    {
-        var outcome = applied.Outcome;
-        // The key identifies the element, so the refusal names it — a caller told only that
-        // something collided would have to diff the array itself to find out what.
-        if (outcome == FieldApplyOutcome.DuplicateKeyInKeyedArray)
-        {
-            return RecordEditResult.Refused(
-                RecordEditRefusal.DuplicateKeyInKeyedArray,
-                $"'{fieldPath}' has two entries keyed '{applied.DuplicateKey}'. Entries there are " +
-                "identified by that key rather than by position, so rename or remove one of the two.");
-        }
-
-        if (outcome == FieldApplyOutcome.ReadOnly)
-            return RecordEditResult.Refused(RecordEditRefusal.FieldReadOnly, $"'{fieldPath}' is read-only.");
-
-        // Answered directly from the applier: a well-typed element's declined sub-field reaches the
-        // same "rejected, value is an array" shape, which a heuristic could not tell apart.
-        if (outcome == FieldApplyOutcome.ListElementTypeUnresolved)
-        {
-            return RecordEditResult.Refused(
-                RecordEditRefusal.ListElementTypeUnresolved,
-                $"'{fieldPath}' has an element whose concrete type could not be determined from " +
-                "its own payload — include that element's own type discriminator (e.g. " +
-                "'value_type') to say which one it is.");
-        }
-
-        if (outcome == FieldApplyOutcome.ValueShapeMismatch)
-        {
-            var apiType = schemas.TryGetValue(recordType, out var schema)
-                ? schema.RecordColumns.FirstOrDefault(c => c.Name == fieldPath)?.ApiType
-                : null;
-
-            return RecordEditResult.Refused(
-                RecordEditRefusal.FieldValueShapeMismatch, ComplexFieldShapeMessage(fieldPath, apiType, sentKind));
-        }
-
-        // The shape was fine; the named sub-field has no write door, so ValueShapeMismatch's message
-        // would be false.
-        if (outcome == FieldApplyOutcome.NestedFieldReadOnly)
-        {
-            return RecordEditResult.Refused(
-                RecordEditRefusal.NestedFieldReadOnly,
-                $"'{fieldPath}' contains a nested field that is not editable — that sub-field has " +
-                "no write support; omit it from the payload to apply the rest.");
-        }
-
-        return RecordEditResult.Refused(RecordEditRefusal.FieldNotFound, $"'{recordType}' has no field '{fieldPath}'.");
-    }
-
-    // A complex field is written as one atomic value (CONTEXT.md): a bare element or member is told
-    // to send the whole array or struct.
-    private static string ComplexFieldShapeMessage(string fieldPath, string? apiType, JsonValueKind sentKind) =>
-        (apiType, sentKind) switch
-        {
-            ("array", JsonValueKind.Array) => $"'{fieldPath}' has an element that was not accepted; " +
-                                              "every element must be a value the array's element type takes.",
-            ("array", _) => $"'{fieldPath}' is an array field: it takes the whole array as one value " +
-                            "(a JSON array), not a single element.",
-            ("struct", JsonValueKind.Object) => $"'{fieldPath}' has a member that was not accepted; " +
-                                                "every member must be a value that member's type takes.",
-            ("struct", _) => $"'{fieldPath}' is a struct field: it takes the whole struct as one value " +
-                             "(a JSON object), not a single member.",
-            _ => $"'{fieldPath}' did not accept a value of this JSON shape.",
-        };
 
     // Create only: a brand-new record has no containment to resolve to, and choosing one is a UX
     // decision. FolderNameFor is also null for every record with no top-level group of its own,

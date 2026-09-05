@@ -611,7 +611,7 @@ public sealed class TrackServiceTests
             Assert.True(SourceRepository.IsTracked(modFolder));
 
             var sourceFile = SourceUnitResolver.FlatSourcePath(
-                modFolder, "Fixture.esp", "door", door.FormKey.ToString(), "MainDoor", GameRelease.Fallout4);
+                modFolder, "Fixture.esp", "Door", door.FormKey.ToString(), "MainDoor", GameRelease.Fallout4);
             Assert.True(File.Exists(sourceFile), $"expected {sourceFile}");
             var sourceText = await File.ReadAllTextAsync(sourceFile);
             Assert.Contains("The Big Door", sourceText);

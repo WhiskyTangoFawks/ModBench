@@ -220,21 +220,21 @@ public sealed class CompareResultColumnKeyIntegrityTests
 
         // The walk below is only meaningful if it reaches non-empty struct/structList Raw and condition
         // subtrees, so a fixture regression fails loudly here rather than passing over empty objects.
-        var properties = Assert.Single(compare.Diffs, d => d.FieldName == "virtual_machine_adapter")
-            .Children!.Single(c => c.FieldName == "scripts")
+        var properties = Assert.Single(compare.Diffs, d => d.FieldName == "VirtualMachineAdapter")
+            .Children!.Single(c => c.FieldName == "Scripts")
             .Children!.Single()
-            .Children!.Single(c => c.FieldName == "properties")
+            .Children!.Single(c => c.FieldName == "Properties")
             .Children!;
-        Assert.NotEmpty(properties.Single(p => p.FieldName == "Config").Children!.Single(c => c.FieldName == "members").Children!);
-        Assert.NotEmpty(properties.Single(p => p.FieldName == "Items").Children!.Single(c => c.FieldName == "structs").Children!);
+        Assert.NotEmpty(properties.Single(p => p.FieldName == "Config").Children!.Single(c => c.FieldName == "Members").Children!);
+        Assert.NotEmpty(properties.Single(p => p.FieldName == "Items").Children!.Single(c => c.FieldName == "Structs").Children!);
 
         // Conditions reach the grid as an ordinary reflected array column, so the walk's condition coverage
         // is a nested FieldDiff subtree with per-column Values/CellStates.
-        var conditions = Assert.Single(compare.Diffs, d => d.FieldName == "conditions");
+        var conditions = Assert.Single(compare.Diffs, d => d.FieldName == "Conditions");
         var conditionRow = Assert.Single(conditions.Children!);
         Assert.NotEmpty(conditionRow.CellStates);
-        var conditionData = Assert.Single(conditionRow.Children!, c => c.FieldName == "data");
-        var runOnReference = Assert.Single(conditionData.Children!, c => c.FieldName == "reference");
+        var conditionData = Assert.Single(conditionRow.Children!, c => c.FieldName == "Data");
+        var runOnReference = Assert.Single(conditionData.Children!, c => c.FieldName == "Reference");
         Assert.NotEmpty(runOnReference.Resolutions ?? new Dictionary<string, FormKeyResolution>());
 
         var json = JsonSerializer.SerializeToElement(compare, WireOptions);

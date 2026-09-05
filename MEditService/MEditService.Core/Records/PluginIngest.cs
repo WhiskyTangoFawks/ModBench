@@ -196,13 +196,17 @@ internal sealed class PluginIngest
                 child.FormKey.ToString(), record.FormKey.ToString(), recordType, slotName, slotIndex));
         }
 
-        var refs = new List<FormRef>();
-        CollectFormRefs(refs, record, recordType, schema);
-
         // ADR-0041: a container's document carries its embedded children, as its source file does.
         // Do not add a reconciliation pass between inline copies and separate child files; that is
         // the shape the ADR's amendment exists to delete.
         var body = _codec.SerializeToBytesAsync(record, gameRelease).GetAwaiter().GetResult();
+
+        // References are read off the document just written, never the live object: the document is
+        // the model, and what Referenced-By answers is what the source file holds.
+        var refs = new List<FormRef>();
+        using (var document = JsonDocument.Parse(body))
+            CollectFormRefs(refs, record.FormKey.ToString(), record.EditorID, document.RootElement, recordType, schema);
+
         // Hashed from the codec's own bytes rather than a string, so the hash is defined by what the
         // source file would contain.
         return new PreparedRecord(
@@ -366,15 +370,15 @@ internal sealed class PluginIngest
 
     internal static void CollectFormRefs(
         List<FormRef> refs,
-        IMajorRecordGetter record,
+        string sourceFormKey,
+        string? sourceEditorId,
+        JsonElement document,
         string tableName,
         RecordTableSchema schema)
     {
-        var sourceFormKey = record.FormKey.ToString();
-        var sourceEditorId = record.EditorID;
         foreach (var col in schema.RecordColumns)
         {
-            FormRefPathBuilder.Walk(col, c => c.Extract(record), (path, fk) =>
+            FormRefPathBuilder.Walk(col, document, (path, fk) =>
                 refs.Add(new FormRef(sourceFormKey, fk, path, tableName, sourceEditorId)));
         }
     }

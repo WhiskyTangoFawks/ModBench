@@ -19,7 +19,7 @@ public sealed class SourceTreeMergeTests : IDisposable
     public void MergeAdditively_CopiesEveryScratchFile_IntoAPreexistingDestinationTree_WithoutTouchingUnrelatedFiles()
     {
         var scratch = NewDir("scratch");
-        var destination = NewDir("destination");
+        var destination = NewDir("Destination");
 
         // Pre-existing, unrelated tracked content the merge must not touch.
         var unrelatedDir = Path.Combine(destination, "Quests", "SomeQuest");

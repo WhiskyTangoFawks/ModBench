@@ -1,7 +1,9 @@
 using System.Text.Json;
 using MEditService.Core.Edits;
 using MEditService.Core.Schema;
+using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
+using static MEditService.Tests.TestSupport.Envelopes;
 
 namespace MEditService.Tests.Edits;
 
@@ -25,8 +27,8 @@ public sealed class ByteSliceArrayOpEditTests : IDisposable
     // list.
     private static readonly string[] TwoModels =
     [
-        """{"percentage": 50, "model_filename": "First.nif", "texture_file_hashes": "0x1122"}""",
-        """{"percentage": 50, "model_filename": "Second.nif", "texture_file_hashes": "0xAABBCCDD"}""",
+        """{"Percentage": 50, "ModelFilename": "First.nif", "TextureFileHashes": "0x1122"}""",
+        """{"Percentage": 50, "ModelFilename": "Second.nif", "TextureFileHashes": "0xAABBCCDD"}""",
     ];
 
     private string SeedDebrisWithTwoModelsCarryingBlobs()
@@ -34,7 +36,7 @@ public sealed class ByteSliceArrayOpEditTests : IDisposable
         var created = Service().CreateRecord(_mod.Plugin, "debr", DebrisEditorId);
         Assert.True(created.Applied, created.Message);
 
-        var seed = Service().EditField(_mod.Plugin, created.NewFormKey!, "models",
+        var seed = Service().Set(_mod.Plugin, created.NewFormKey!, "Models",
             Json("[" + string.Join(",", TwoModels) + "]"));
         Assert.True(seed.Applied, seed.Message);
         return created.NewFormKey!;
@@ -49,8 +51,7 @@ public sealed class ByteSliceArrayOpEditTests : IDisposable
         var debris = SeedDebrisWithTwoModelsCarryingBlobs();
         Assert.Contains("0xAABBCCDD", DebrisBody(debris), StringComparison.Ordinal);
 
-        var result = Service().EditField(_mod.Plugin, debris, "models",
-            Json("""{"op": "array_remove", "path": [{"kind": "index", "index": 0}]}"""));
+        var result = Service().Edit(_mod.Plugin, debris, RemoveAt(Member("Models"), At(0)));
 
         Assert.True(result.Applied, result.Message);
         var body = DebrisBody(debris);
@@ -63,8 +64,7 @@ public sealed class ByteSliceArrayOpEditTests : IDisposable
     {
         var debris = SeedDebrisWithTwoModelsCarryingBlobs();
 
-        var result = Service().EditField(_mod.Plugin, debris, "models",
-            Json("""{"op": "array_move_up", "path": [{"kind": "index", "index": 1}]}"""));
+        var result = Service().Edit(_mod.Plugin, debris, MoveTo(0, Member("Models"), At(1)));
 
         Assert.True(result.Applied, result.Message);
         var body = DebrisBody(debris);

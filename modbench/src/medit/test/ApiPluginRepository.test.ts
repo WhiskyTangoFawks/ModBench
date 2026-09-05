@@ -785,7 +785,7 @@ describe('ApiPluginRepository origin threading', () => {
 // The field edit is the one gate-wrapped write that does not reach the user through
 // `EditingController.mutate`, so it shapes its own outcome; without this branch the user gets
 // the backend's implementation prose, with no retry cue.
-describe('ApiPluginRepository.editRecordField write-gate contention', () => {
+describe('ApiPluginRepository.editRecord write-gate contention', () => {
   function busyClient() {
     return {
       POST: vi.fn().mockResolvedValue({
@@ -802,7 +802,7 @@ describe('ApiPluginRepository.editRecordField write-gate contention', () => {
   it('reports the gate timeout as busy-and-retryable, in the same words every other write uses', async () => {
     const repo = new ApiPluginRepository(busyClient());
 
-    const outcome = await repo.editRecordField('000800:MyPatch.esp', 'MyPatch.esp', 'ModA', 'EDID', 'x');
+    const outcome = await repo.editRecord('000800:MyPatch.esp', 'MyPatch.esp', 'ModA', { op: 'set', path: [{ kind: 'member', name: 'EditorID' }], value: 'x' });
 
     expect(outcome).toEqual({
       applied: false,
@@ -823,7 +823,7 @@ describe('ApiPluginRepository.editRecordField write-gate contention', () => {
     } as any;
     const repo = new ApiPluginRepository(client);
 
-    const outcome = await repo.editRecordField('000800:MyPatch.esp', 'MyPatch.esp', 'ModA', 'EDID', 'x');
+    const outcome = await repo.editRecord('000800:MyPatch.esp', 'MyPatch.esp', 'ModA', { op: 'set', path: [{ kind: 'member', name: 'EditorID' }], value: 'x' });
 
     expect(outcome).toEqual({
       applied: false,
@@ -843,7 +843,7 @@ describe('ApiPluginRepository.editRecordField write-gate contention', () => {
     } as any;
     const repo = new ApiPluginRepository(client);
 
-    const outcome = await repo.editRecordField('000800:MyPatch.esp', 'MyPatch.esp', 'ModA', 'EDID', 'x');
+    const outcome = await repo.editRecord('000800:MyPatch.esp', 'MyPatch.esp', 'ModA', { op: 'set', path: [{ kind: 'member', name: 'EditorID' }], value: 'x' });
 
     expect(outcome).toEqual({
       applied: false,

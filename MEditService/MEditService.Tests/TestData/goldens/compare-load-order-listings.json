@@ -163,7 +163,7 @@
   "References": [
     {
       "EditorId": "ConflictedNPC",
-      "FieldPath": "race",
+      "FieldPath": "Race",
       "FormKey": "000800:Base.esm",
       "Origin": "Data",
       "Plugin": "Base.esm",
@@ -171,7 +171,7 @@
     },
     {
       "EditorId": "ConflictedNPC",
-      "FieldPath": "race",
+      "FieldPath": "Race",
       "FormKey": "000800:Base.esm",
       "Origin": "Data",
       "Plugin": "Mid.esp",
