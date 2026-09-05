@@ -16,7 +16,7 @@ public sealed class RecordFieldWriterTests
     private static readonly IReadOnlyDictionary<string, RecordTableSchema> NoSchemas =
         new Dictionary<string, RecordTableSchema>();
 
-    // is_partial_form dispatches ahead of the reflected columns, same tier as editor_id —
+    // is_partial_form dispatches ahead of the reflected columns, same tier as EditorID —
     // MajorRecordHeaderMembers excludes MajorRecordFlagsRaw from the reflected schema entirely, so NoSchemas here
     // proves the dispatch never needs a schema lookup to reach it.
     [Fact]

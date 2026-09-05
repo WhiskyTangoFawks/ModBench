@@ -693,7 +693,7 @@ gesture — Sim Settlements 2 is a real-world example on Fallout 4.
   needed no header write path to exist first. The record header itself — including clearing the
   flag, which restores full editability — is its own write surface (below).
 - **Header write path clears the flag, restoring full editability.** A synthetic field
-  path, `is_partial_form`, dispatched in `RecordFieldWriter.TryApply` the same way `editor_id`
+  path, `is_partial_form`, dispatched in `RecordFieldWriter.TryApply` the same way `EditorID`
   already is — the one sanctioned door, no second write surface. Flips bit 14 only (a byte-diff
   assertion checks no other bit or field moves) and is exempt from `PartialFormFieldReadOnly` so
   clearing is reachable while the flag is still set. **The generic-container gate, not a bare
@@ -989,25 +989,14 @@ These apply everywhere a field value is rendered — the one compare grid and an
 5. **Null / missing fields** render as an empty cell, never "null"/"undefined".
 6. **Read-only cells** in immutable plugin columns are never editable and render no input on
    click.
-7. **A signature backed by several concrete Mutagen subclasses that declare the same list/struct
-   field with genuinely conflicting element shapes** gets one of two treatments, both replacing
-   "one column silently reads null for every subclass but the schema's discovery winner":
-   - **Structurally different shapes** (no field names in common) get **one column per shape** —
-     e.g. `dmgt`'s `damage_types` (struct elements) and `actor_value_indices` (scalar elements) are
-     two separate columns; a given record's row is populated in whichever one matches its own
-     subclass and empty in the other.
-   - **Structurally identical shapes that disagree only on which member names a shared enum leaf
-     allows** get **one merged column**, whose enum leaf's allowed values become the *union* across
-     every subclass — e.g. `omod`'s `properties` column's `property` sub-field lists
-     `ArmorModification`'s, `NpcModification`'s and `WeaponModification`'s member names together, so
-     an `ArmorModification` row's own `property` metadata includes values (e.g. `ForcedInventory`,
-     `AmmoCapacity`) that are not valid for that record's own subclass. This is a deliberate
-     trade-off, not a display bug: `FieldMetadata` is column-wide (see below), so widening the
-     allowed-value list is the only way every subclass's own values validate against it.
-
-   Both differ from the *identical*-shape case, where a member declared on a shared ancestor
-   already reads correctly off every sibling and needs no special handling at all. `FieldMetadata`
-   itself stays column-wide in every case — there is no per-row element shape.
+7. **A signature backed by several concrete Mutagen subclasses** is one table whose document
+   names the record's class first, carried as a `MutagenObjectType` discriminator column. A member
+   every class shapes alike is one column; one they shape differently in any way — `dmgt`'s
+   `DamageTypes` (struct elements on `DamageTypeIndexed`, scalar elements on `DamageType`),
+   `omod`'s `Properties` (a different `Property` enum domain per modification class) — is one
+   column whose metadata carries a `Variants` map keyed by record class, so a row reads and
+   validates against its own class's shape. A member declared on a shared ancestor reads
+   correctly off every sibling and needs no variant at all.
 
 ### Action logging
 

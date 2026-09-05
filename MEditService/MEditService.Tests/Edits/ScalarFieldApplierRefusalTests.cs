@@ -43,7 +43,7 @@ public sealed class ScalarFieldApplierRefusalTests : IDisposable
     }
 
     [Fact]
-    public void FlagsBitmaskColumn_NonNumericString_IsRefusedAndWritesNothing()
+    public void FlagsColumn_ArbitraryString_IsRefusedAndWritesNothing()
     {
         var before = NpcBody();
 

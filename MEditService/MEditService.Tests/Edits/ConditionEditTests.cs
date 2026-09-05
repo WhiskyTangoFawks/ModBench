@@ -110,7 +110,7 @@ public sealed class ConditionEditTests : IDisposable
 
         var value = _fixture.Field(_fixture.Cobj, "Conditions");
         var data = value[0]!["Data"]!;
-        // HasKeyword uses parameter_one_record alone, so every other slot is idled by the change.
+        // HasKeyword uses ParameterOneRecord alone, so every other slot is idled by the change.
         data["Function"] = nameof(Condition.Function.HasKeyword);
         data["ParameterOneNumber"] = 0;
         data["ParameterOneString"] = null;

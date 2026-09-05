@@ -23,7 +23,7 @@ public sealed class ConcreteBaseUnionEditTests : IDisposable
     private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
 
     // The adapter under test, spelled once: only the property's leaf changes between the two
-    // writes, the way the editor's own resend does — data_int rides along into the second write.
+    // writes, the way the editor's own resend does — Data rides along into the second write.
     private static JsonElement Adapter(string leaf) => Json($$"""
         {"Version": 6, "ObjectFormat": 2, "Scripts": [
           {"Name": "TestScript", "Flags": "Local", "Properties": [

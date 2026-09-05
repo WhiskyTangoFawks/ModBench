@@ -120,7 +120,7 @@ public sealed class ComplexFieldElementEditTests : IDisposable
     // ── write-side polymorphism — OMOD properties' element type is abstract ──────────────────
 
     [Fact]
-    public void OmodPropertiesArray_MissingValueTypeDiscriminator_IsRefusedAndWritesNothing()
+    public void OmodPropertiesArray_MissingDiscriminator_IsRefusedAndWritesNothing()
     {
         using var omod = new OmodFixture();
         var before = omod.Body();
@@ -136,13 +136,13 @@ public sealed class ComplexFieldElementEditTests : IDisposable
     }
 
     [Fact]
-    public void OmodPropertiesArray_UnrecognizedValueTypeDiscriminator_IsRefusedAndWritesNothing()
+    public void OmodPropertiesArray_UnrecognizedDiscriminator_IsRefusedAndWritesNothing()
     {
         using var omod = new OmodFixture();
         var before = omod.Body();
 
         var result = omod.Service().EditField(omod.Plugin, omod.ArmorMod.ToString(), "Properties",
-            Json("""[{"Property":"BodyPart","Step":1.0,"MutagenObjectType":"NotARealValueType","Value":"5"}]"""));
+            Json("""[{"Property":"BodyPart","Step":1.0,"MutagenObjectType":"NotARealLeaf","Value":"5"}]"""));
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.ListElementTypeUnresolved, result.Refusal);

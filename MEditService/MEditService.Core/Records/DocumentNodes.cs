@@ -19,12 +19,6 @@ internal static class DocumentNodes
         return current.ValueKind == JsonValueKind.Null ? null : current.Clone();
     }
 
-    internal static JsonElement? MemberOf(string body, string dottedPath)
-    {
-        using var parsed = JsonDocument.Parse(body);
-        return At(parsed.RootElement, dottedPath);
-    }
-
     /// <summary>The shape a member has under the object holding it: its own, or the variant the
     /// object's discriminator names when the member's type varies by leaf.</summary>
     internal static FieldMetadata VariantFor(FieldMetadata member, JsonElement? owner)

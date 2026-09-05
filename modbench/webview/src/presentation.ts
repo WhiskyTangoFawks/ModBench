@@ -1,5 +1,5 @@
 import { displayValue } from './modelValue';
-import { getAtPath, metaAtPath, toStr } from './recordUtils';
+import { discriminatorOf, getAtPath, metaAtPath, toStr } from './recordUtils';
 import { siblingsInUseFor } from './siblingsInUse';
 import type { FieldDiff, FieldMetadata, PathSegment } from './types';
 
@@ -164,9 +164,6 @@ const PRESENTATION_TABLE: Record<string, Summarizer | undefined> = {
 };
 
 // ── The lookup the grid uses ─────────────────────────────────────────────────
-
-const discriminatorOf = (meta: FieldMetadata | undefined): string | undefined =>
-  meta?.fields?.find(f => f.isDiscriminator)?.name;
 
 // The leaf a discriminator names is what the value turned out to be, where the declared type name
 // says only what the schema promised — a union is exactly where the two disagree.

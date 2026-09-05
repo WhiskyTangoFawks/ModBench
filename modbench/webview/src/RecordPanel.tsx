@@ -361,7 +361,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
         // on the leaf, the first that carries the member decides the row's cell.
         const member = meta.fields?.find(f => f.name === child.fieldName);
         const owner = columns.map(c => diff.values[c.key]).find(v => v != null);
-        const memberMeta = member && variantFor(member, owner);
+        const memberMeta = member && variantFor(member, owner, meta);
         rows.push(...buildRows(
           child, memberMeta, [...path, { kind: 'member', name: child.fieldName }],
           rootField, rootDiff, childRowKey, depth + 1));

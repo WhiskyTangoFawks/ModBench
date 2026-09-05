@@ -124,7 +124,4 @@ internal static class ReflectedTypes
         try { return prop.GetValue(obj); }
         catch { return null; } // Stryker disable once Block: silent accessor — per-call lambdas stay silent to avoid log noise (see MEditService CLAUDE.md)
     }
-
-    /// <summary><see cref="ReadOrNull"/> bound to one property, for a leaf's Extract delegate.</summary>
-    internal static Func<object, object?> SubGetter(PropertyInfo prop) => obj => ReadOrNull(obj, prop);
 }

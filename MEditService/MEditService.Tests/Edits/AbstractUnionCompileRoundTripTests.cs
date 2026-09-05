@@ -264,9 +264,6 @@ public sealed class AbstractUnionCompileRoundTripTests : IDisposable
     [Fact]
     public void Effects_WholeArrayWrite_OverdriveToStateVariableFilter_CompilesAndReparsesAsTheNewConcreteType()
     {
-        // "QValue", not "q_value" — ReflectedTypes.ToSnakeCase only inserts an underscore before an
-        // uppercase letter preceded by a lowercase/digit ((?<=[a-z0-9])([A-Z])); "QValue"'s two
-        // adjacent capitals never trip that lookbehind, so it lowercases straight through.
         var result = EditService().EditField(
             _fixture.Plugin, _fixture.AudioEffectChain.ToString(), "Effects",
             Json("""

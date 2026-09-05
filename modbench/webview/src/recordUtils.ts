@@ -234,14 +234,16 @@ export function setAtPath(root: unknown, path: readonly PathSegment[], value: un
   return arr.map(e => (e === seg.key ? value : e));
 }
 
-// The document's own discriminator member, the first key of every union element the codec writes.
-export const DISCRIMINATOR = 'MutagenObjectType';
+// The member of a struct that names the concrete class its object is, as the metadata marks it.
+export const discriminatorOf = (meta: FieldMetadata | undefined): string | undefined =>
+  meta?.fields?.find(f => f.isDiscriminator)?.name;
 
 /** The shape a member has under the object holding it: its own, or the variant the object's
  *  discriminator names when the member's type varies by leaf. */
-export function variantFor(meta: FieldMetadata, owner: unknown): FieldMetadata {
-  if (!meta.variants || owner == null || typeof owner !== 'object') return meta;
-  const leaf = (owner as Record<string, unknown>)[DISCRIMINATOR];
+export function variantFor(meta: FieldMetadata, owner: unknown, ownerMeta: FieldMetadata | undefined): FieldMetadata {
+  const discriminator = discriminatorOf(ownerMeta);
+  if (!meta.variants || discriminator == null || owner == null || typeof owner !== 'object') return meta;
+  const leaf = (owner as Record<string, unknown>)[discriminator];
   return typeof leaf === 'string' && leaf in meta.variants ? meta.variants[leaf] : meta;
 }
 
@@ -256,9 +258,10 @@ export function metaAtPath(
   for (const seg of path) {
     if (!cur) return undefined;
     const owner = value;
+    const ownerMeta = cur;
     value = getAtPath(value, [seg]);
     cur = seg.kind === 'member' ? cur.fields?.find(f => f.name === seg.name) : cur.elementType;
-    if (cur && seg.kind === 'member' && root !== undefined) cur = variantFor(cur, owner);
+    if (cur && seg.kind === 'member' && root !== undefined) cur = variantFor(cur, owner, ownerMeta);
   }
   return cur ?? undefined;
 }

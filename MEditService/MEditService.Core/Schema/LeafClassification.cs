@@ -31,7 +31,7 @@ internal static class LeafClassification
         [typeof(int)] = ("INTEGER", "int", v => (object)v.GetInt32()),
         [typeof(uint)] = ("INTEGER", "int", v => (object)v.GetUInt32()),
         // A 64-bit width presents as "int" like every other integer: the wire vocabulary has no wider
-        // member, and a value past 2^53 would need the decimal-string carriage a bitmask uses.
+        // member, and a JSON number past 2^53 loses precision.
         [typeof(long)] = ("BIGINT", "int", v => (object)v.GetInt64()),
         [typeof(ulong)] = ("BIGINT", "int", v => (object)v.GetUInt64()),
         [typeof(float)] = ("FLOAT", "float", v => (object)v.GetSingle()),

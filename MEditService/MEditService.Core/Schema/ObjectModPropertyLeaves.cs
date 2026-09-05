@@ -44,7 +44,7 @@ internal static class ObjectModPropertyLeaves
         var asm = baseGetterInterface.Assembly;
         var args = baseGetterInterface.GetGenericArguments();
 
-        var leaves = new List<(Type LeafType, string ValueTypeName)>();
+        var leaves = new List<(Type LeafType, string LeafName)>();
         foreach (var interfaceName in LeafInterfaces)
         {
             var open = asm.GetType($"{ns}.{interfaceName}");
@@ -75,7 +75,7 @@ internal static class ObjectModPropertyLeaves
         var members = leaves
             .SelectMany(leaf => leaf.LeafType.GetProperties(BindingFlags.Public | BindingFlags.Instance)
                 .Where(p => !game.Annotations.IsExcludedMember(p))
-                .Select(p => (LeafType: leaf.LeafType, leaf.ValueTypeName, Prop: p)))
+                .Select(p => (LeafType: leaf.LeafType, leaf.LeafName, Prop: p)))
             .GroupBy(m => m.Prop.Name, StringComparer.Ordinal);
 
         var result = new List<SubFieldSpec>();
@@ -100,16 +100,16 @@ internal static class ObjectModPropertyLeaves
     // to an already-constructed object; ResolveObjectModPropertyConcreteType reads it off the JSON
     // before any object exists.
     private static SubFieldSpec BuildObjectModDiscriminatorField(
-        Type baseGetterInterface, List<(Type LeafType, string ValueTypeName)> leaves) =>
+        Type baseGetterInterface, List<(Type LeafType, string LeafName)> leaves) =>
         new(LoquiUnions.UnionTypeDiscriminator, "enum", LeafSpec.NoFormKeyTypes,
             [.. leaves.Select(l => new EnumMember(
-                l.ValueTypeName,
-                Label: LeafLabel.For(ReflectedTypes.LeafTypeName(baseGetterInterface), LeafLabel.ClassWord(l.ValueTypeName))))],
+                l.LeafName,
+                Label: LeafLabel.For(ReflectedTypes.LeafTypeName(baseGetterInterface), LeafLabel.ClassWord(l.LeafName))))],
             Apply: LeafWrite.ReadOnly<object>(SchemaRefusals.DiscriminatorReason), AllowsNull: true,
             DisplayLabel: LoquiUnions.UnionTypeDiscriminatorLabel, IsDiscriminator: true);
 
     private static SubFieldSpec BuildTypedLeafUnionField(
-        List<(Type LeafType, string ValueTypeName, PropertyInfo Prop)> members,
+        List<(Type LeafType, string LeafName, PropertyInfo Prop)> members,
         GameReflection game, ILogger logger)
     {
         var core = Nullable.GetUnderlyingType(members[0].Prop.PropertyType) ?? members[0].Prop.PropertyType;
@@ -129,7 +129,7 @@ internal static class ObjectModPropertyLeaves
     // shape is its variant, and the widened applier resolves the target property's declared type at
     // write time and converts into that.
     private static SubFieldSpec BuildVariantLeafUnionField(
-        List<(Type LeafType, string ValueTypeName, PropertyInfo Prop)> members, GameReflection game, ILogger logger)
+        List<(Type LeafType, string LeafName, PropertyInfo Prop)> members, GameReflection game, ILogger logger)
     {
         var pName = members[0].Prop.Name;
         var variants = new Dictionary<string, SubFieldSpec>(StringComparer.Ordinal);

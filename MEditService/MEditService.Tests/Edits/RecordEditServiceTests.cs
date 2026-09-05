@@ -21,7 +21,7 @@ public sealed class RecordEditServiceTests : IDisposable
 
     private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
 
-    // ---- an editor_id edit is a rename as well as a content change ----
+    // ---- an EditorID edit is a rename as well as a content change ----
 
     [Fact]
     public void EditingEditorId_MovesTheSourceFileToItsNewName()
