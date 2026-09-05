@@ -84,7 +84,7 @@ structure from the tree. The generated whole-mod serializer is the designated do
 ingest and compile (always with a sequential dropoff); the per-record codec serves untracked
 ingest, typed reads and point writes, byte-identical to the whole-mod door by test.
 
-**The mod header is an ordinary record row, and the whole-mod door is its codec** (#631
+**The mod header is an ordinary record row, and the whole-mod door is its codec** (a later
 amendment). The header's body is the root `RecordData.json` this decision already names as part of
 the source, so it is a `records` row like any other — `record_type`, `ref`, `body`, and a
 `content_hash` that is a real git object name. A `ModHeader` is not an `IMajorRecordGetter`, so the
@@ -101,11 +101,11 @@ for a full walk (measured per plugin on the 3,940-record cut-down fixture). `Hea
 pins that byte equality against a real full walk, so the shortcut cannot quietly stop being faithful.
 Both directions are in-memory: neither reads nor writes a file.
 
-One consequence is deliberate, and one deferred consequence has since landed (#661). **Deliberate**:
+One consequence is deliberate, and one deferred consequence has since landed. **Deliberate**:
 the header participates in Head/Effective, winner selection and `form_lookup` like every other
 record, instead of being the one recordless special case; and the two ingest paths are one producer
 over two readers, so "the read model never sees a dialect" holds for the header by construction
-rather than by coincidence. **#661**: the header is now a genuine *source unit* too —
+rather than by coincidence. **Landed since**: the header is now a genuine *source unit* too —
 `SourceRecordPath`/`SourceUnitResolver` locate the root `RecordData.json` directly (its own path
 shape, one segment shallower than a flat record's own), so `SourceFreshness` validates it like any
 other record and an external edit to that file is detected the same way. `SourceIngest.ReconcileHead`
