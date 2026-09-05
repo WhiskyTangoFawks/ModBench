@@ -155,7 +155,7 @@ internal static class LoquiUnions
         spec.ElementSpec is { } element ? $"{ReflectedTypes.ToSnakeCase(element.ApiType)}_array" : ReflectedTypes.ToSnakeCase(spec.ApiType);
 
     // Read off whichever declaring leaf the object is, and written only onto one of them, any other
-    // answering PropertyNotFound, so a resend after a leaf switch, #688, drops the outgoing leaf's
+    // answering PropertyNotFound, so a resend after a leaf switch drops the outgoing leaf's
     // member.
     private static SubFieldSpec BuildUnionShapeField(
         string name,

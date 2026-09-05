@@ -7,7 +7,7 @@ using MEditService.Core.Source;
 
 namespace MEditService.Core.Queries;
 
-// One Kind B diagnosis (#570). Text is PluginDiagnosis.Describe()'s exact refusal fragment, so the
+// One Kind B diagnosis. Text is PluginDiagnosis.Describe()'s exact refusal fragment, so the
 // Problems panel and the Track refusal share one vocabulary; Anchor/DefectClass/Tail ride
 // separately so the frontend can route a repair without re-parsing prose.
 public record PluginDiagnosisReport(
@@ -81,7 +81,7 @@ public record RecordSummary(
     // the only real producer of a non-None value; see DuckDbRecordIndex.Search.
     WorkingTreeState WorkingTreeState = WorkingTreeState.None,
     // Whether at least one container_child row names this FormKey as parent — the Plugins tree's
-    // expand chevron for a qust/dial row (#560). Search() is the only producer of true; every
+    // expand chevron for a qust/dial row. Search() is the only producer of true; every
     // other construction site has nothing to report.
     bool HasContainerChildren = false);
 
@@ -123,7 +123,7 @@ public record FieldMetadata(
 
     // For an enum whose value decides which sibling fields carry data; null when every sibling is
     // always in use. Keyed by value, not aligned positionally with EnumMembers, so a reordering
-    // can never re-point a row (#709).
+    // can never re-point a row.
     IReadOnlyDictionary<string, IReadOnlyList<string>>? SiblingsInUse = null,
 
     // The element member(s) identifying an element (xEdit's wbArrayS); null for a positional
@@ -133,7 +133,7 @@ public record FieldMetadata(
 
     // For 'struct': the Loqui/CLR class the schema declares, null for every other type. Distinct
     // from a discriminator's value, which says which class an object turned out to be. Serialized
-    // nulls stay on all four nullables here (#715).
+    // nulls stay on all four nullables here.
     string? LeafTypeName = null)
 {
     /// <summary>Derived, not stored: a member's own BitValue is the only place that fact lives.

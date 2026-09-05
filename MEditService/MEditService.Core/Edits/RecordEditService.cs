@@ -540,7 +540,7 @@ public sealed class RecordEditService(
         }
 
         // Own-record-only, like Copy as Override: folder-split children never ride along (deep copy
-        // is #551's gesture).
+        // is a separate operation).
         var placement = SourcePlacement.For(
             destinationPlugin.Name, document.RecordType, targetFormKey, newRecord.EditorID, release);
         var relativePath = placement.RelativePath;
@@ -597,7 +597,7 @@ public sealed class RecordEditService(
     }
 
     // Links between copied siblings are deliberately not remapped: a copied response naming its
-    // sibling keeps naming the original, xEdit's own behavior (#440).
+    // sibling keeps naming the original, xEdit's own behavior.
     private RecordEditResult CopyDialogTopicAsNewRecord(
         IRecordIndex index, PluginKey sourcePlugin, string formKey, RecordDocument document,
         PluginKey destinationPlugin, string destinationModFolder, GameRelease release, string? requestedFormKey)
@@ -617,7 +617,7 @@ public sealed class RecordEditService(
             destinationPlugin, destinationModFolder, release);
 
         // The slot folder is minted by the topic's own write, so it is unminted with it if that
-        // write fails (#675).
+        // write fails.
         var topicRecord = ReadCopySourceRecord(sourcePlugin, formKey, document, release)
             .Duplicate(FormKey.Factory(targetFormKey));
         if (topicRecord is IFormLinkContainer selfLinking)
@@ -715,7 +715,7 @@ public sealed class RecordEditService(
             selfLinking.RemapLinks(new Dictionary<FormKey, FormKey> { [FormKey.Factory(formKey)] = FormKey.Factory(targetFormKey) });
         }
 
-        // The slot folder is minted by the response's own write, not ahead of it (#675).
+        // The slot folder is minted by the response's own write, not ahead of it.
         var placement = SourcePlacement.ForSlotChild(
             destinationModFolder, topicDirectory, parentTopic.SlotName, targetFormKey, newRecord.EditorID, isDirectory: false);
         var newBody = WritePlaced(
@@ -803,7 +803,7 @@ public sealed class RecordEditService(
         index.ReplaceContainerChildSlot(destinationPlugin, parentFormKey, parentRecordType, slotName, children);
     }
 
-    // A destination loading before the origin would be an underride (#439's own operation), silently
+    // A destination loading before the origin would be an underride, silently
     // beaten at runtime. A plugin the load order does not place passes.
     private RecordEditResult? RefuseIfUnderride(string formKey, PluginKey destinationPlugin)
     {
@@ -1196,7 +1196,7 @@ public sealed class RecordEditService(
     }
 
     // The transaction holds the pre-image and wraps the write in InMintedDirectory like every other
-    // source-tree write (#675).
+    // source-tree write.
     private void WriteComputedRewrite(
         IRecordIndex index, SourceWriteTransaction transaction, ComputedRewrite rewrite, GameRelease release)
     {
@@ -1330,7 +1330,7 @@ public sealed class RecordEditService(
             writePath = newLeafPath;
         }
         // Nothing is normally minted here (the move or the resolved unit already put the directory in
-        // place); the transaction's InMintedDirectory wrapper keeps that true rather than assumed (#675).
+        // place); the transaction's InMintedDirectory wrapper keeps that true rather than assumed.
         transaction.Write(
             modFolder, writePath,
             () => _codec.SerializeAsync(record, writePath, release).GetAwaiter().GetResult());
@@ -1346,7 +1346,7 @@ public sealed class RecordEditService(
                 () => SourceChildOrder.Rename(slot.Carrier, slot.Key, oldFormKey, newFormKey));
         }
 
-        // The whole index side in one call, and therefore one transaction (#677): a fault part-way
+        // The whole index side in one call, and therefore one transaction: a fault part-way
         // must not leave an index naming a FormKey no source file backs. Last act, to keep the
         // disk/index disagreement window smallest.
         index.ApplyRenumber(plugin, new RenumberedRecord(oldFormKey, newFormKey, document.RecordType, rootBody));
@@ -1694,7 +1694,7 @@ public sealed class RecordEditService(
             throw new NotSupportedException(
                 $"Header column '{fieldPath}' now carries a write delegate, but RecordEditService has " +
                 "no header write path — EditField's header branch only knows how to refuse. Build one " +
-                "(#290) before giving any header column an Apply delegate.");
+                "before giving any header column an Apply delegate.");
         }
 
         return RefuseFieldOutcome(FieldApplyOutcome.ReadOnly, fieldPath, HeaderIndexer.RecordType, schemas);

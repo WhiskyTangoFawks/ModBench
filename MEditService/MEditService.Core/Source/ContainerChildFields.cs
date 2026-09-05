@@ -109,7 +109,7 @@ internal static class ContainerChildFields
         ((dynamic)property.GetValue(parent)!).Add((dynamic)child);
     }
 
-    /// <summary>The own-fields-replace half of #550 AC7: the replacing record arrives child-stripped, and
+    /// <summary>The own-fields-replace half: the replacing record arrives child-stripped, and
     /// the destination's embedded children are re-attached so an own-fields copy can never silently
     /// delete them.</summary>
     internal static void TransplantChildSlots(IMajorRecordGetter from, IMajorRecordGetter to)
@@ -127,7 +127,7 @@ internal static class ContainerChildFields
         }
     }
 
-    /// <summary>In-place swap (#550 AC7): the child must keep its exact position — an append-after-remove
+    /// <summary>In-place swap: the child must keep its exact position — an append-after-remove
     /// would silently reorder the cell's GRUP.</summary>
     internal static void ReplaceInSlot(IMajorRecordGetter parent, string slotName, int slotIndex, IMajorRecord child)
     {

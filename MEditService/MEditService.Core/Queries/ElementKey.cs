@@ -6,7 +6,7 @@ namespace MEditService.Core.Queries;
 
 /// <summary>Identified by its key members (xEdit's wbStructSK sort key). A numeric member
 /// compares by value so stage 10 sorts after 9; an absent member is the empty key, a real key a
-/// freshly added element carries (#710).</summary>
+/// freshly added element carries.</summary>
 internal readonly record struct ElementKey(IReadOnlyList<(double? Number, string Text)> Segments)
 {
     internal string Text => string.Join(" / ", Segments.Select(s => s.Text));
