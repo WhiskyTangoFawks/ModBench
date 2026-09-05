@@ -245,7 +245,7 @@ public sealed class EmbeddedChildEditTests : IDisposable
     }
 
     [Fact]
-    public void EditingAnEmbeddedChildTheParentsTextNoLongerCarries_RefusesAsSourceUnitNotFound()
+    public void EditingAnEmbeddedChildAbsentFromItsParentsSourceText_RefusesAsSourceUnitNotFound()
     {
         // Branch two: the resolver finds the parent's file, but the child is not inside it any more —
         // the index still has the placement row while the file has been edited out from under it.

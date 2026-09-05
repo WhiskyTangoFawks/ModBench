@@ -10,7 +10,7 @@ import { ImplicitMasterDecorationProvider } from './ImplicitMasterDecorationProv
 
 // MO2 grays a `forceLoaded` row's name (`pluginlist.cpp`) — the one piece of its
 // forced-master presentation the platform lets this surface adopt verbatim.
-describe('ImplicitMasterDecorationProvider (#276)', () => {
+describe('ImplicitMasterDecorationProvider', () => {
   const dataFolder = '/game/Data';
   const dataUri = (name: string) => ({ fsPath: join(dataFolder, name) } as never);
 
@@ -38,7 +38,7 @@ describe('ImplicitMasterDecorationProvider (#276)', () => {
   // slice fails to match anyway and the second guard masks the bug.
   const permissive = () => ({ has: () => true }) as unknown as ReadonlySet<string>;
 
-  it('returns undefined for a sibling folder whose name is Data-prefixed (#318)', async () => {
+  it('returns undefined for a sibling folder whose name is Data-prefixed', async () => {
     // VS Code calls this provider for every workspace URI, not just ones under
     // Data — a sibling folder like Data2/ or DataBackup/ is a real filesystem
     // layout the missing-'/'-join bug would wrongly match via startsWith.
@@ -48,7 +48,7 @@ describe('ImplicitMasterDecorationProvider (#276)', () => {
     ).toBeUndefined();
   });
 
-  it('returns undefined for a URI outside the Data folder even if implicitMasterNames would match anything (#318)', async () => {
+  it('returns undefined for a URI outside the Data folder even if implicitMasterNames would match anything', async () => {
     // Isolates the first guard (dataFolder && startsWith) from the second
     // (implicitMasterNames().has(name)) — a real bug in the first guard's
     // short-circuit would otherwise hide behind the second one filtering the

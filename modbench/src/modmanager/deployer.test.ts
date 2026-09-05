@@ -105,7 +105,7 @@ describe('deploy', () => {
     expect(pluginBytesAfter).toBe(pluginBytesBefore);
   });
 
-  it('reports the cross-volume-specific message (and does not throw, and never the "already exists" message) when a winner\'s link fails with EXDEV — e.g. a symlinked file resolving onto another volume (#322)', async () => {
+  it('reports the cross-volume-specific message (and does not throw, and never the "already exists" message) when a winner\'s link fails with EXDEV — e.g. a symlinked file resolving onto another volume', async () => {
     fx = await makeDeployerFixture();
     const source = await fx.writeModFile('ModA', 'mod.esp', 'MOD');
     const exdevError = Object.assign(new Error('cross-device link'), { code: 'EXDEV' });
@@ -153,7 +153,7 @@ describe('deploy', () => {
     expect(manifest.links).toEqual(['textures/foo.dds']);
   });
 
-  it('deploys a mod file literally named "root" (no slash) normally into Data/root — #324', async () => {
+  it('deploys a mod file literally named "root" (no slash) normally into Data/root', async () => {
     fx = await makeDeployerFixture();
     const rootFile = await fx.writeModFile('ModA', 'root', 'ROOTFILE');
     const index = makeIndex({ root: rootFile });
@@ -260,7 +260,7 @@ describe('deploy', () => {
     expect(await readFile(join(fx.gameDirectory.dataFolder, 'p.dds'), 'utf8')).toBe('B');
   });
 
-  it('re-deploy removes a prior link whose path is no longer a winner (mod disabled)', async () => {
+  it('re-deploy removes a link for a mod that disabling has dropped from the index', async () => {
     fx = await makeDeployerFixture();
     const a = await fx.writeModFile('ModA', 'a.esp', 'A');
     const b = await fx.writeModFile('ModB', 'b.esp', 'B');

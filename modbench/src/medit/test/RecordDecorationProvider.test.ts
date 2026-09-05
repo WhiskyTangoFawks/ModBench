@@ -17,7 +17,7 @@ import * as vscode from 'vscode';
 import { RecordDecorationProvider } from '../RecordDecorationProvider';
 import { recordResourceUri } from '../recordResourceUri';
 
-describe('RecordDecorationProvider (#428)', () => {
+describe('RecordDecorationProvider', () => {
   const uri = recordResourceUri('Fallout4.esm', 'ModA', '000001:Fallout4.esm');
 
   it('returns undefined when the lookup reports no working-tree change', () => {

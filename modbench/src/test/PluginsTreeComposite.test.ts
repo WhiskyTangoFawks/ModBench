@@ -175,7 +175,7 @@ describe('PluginsTreeComposite when a mEdit starts', () => {
 
 // ADR-0035 §Filters: while a record filter is active, a plugin with zero matching records is
 // hidden entirely, not merely left unexpandable — a visible-but-inert row is still noise.
-describe('PluginsTreeComposite — a record filter hides a plugin with no matches (#396 / ADR-0035)', () => {
+describe('PluginsTreeComposite — a record filter hides a plugin with no matches (ADR-0035)', () => {
   it('omits a plugin with no matching records from the row set entirely', async () => {
     const { composite, render } = make([PLUGIN_ROW, OTHER_ROW], new FakeChildren(), (file) => file !== 'A.esp');
     composite.setLoadOrder(new Set(['A.esp', 'B.esp']));
@@ -374,7 +374,7 @@ describe('PluginsTreeComposite.hasLoadOrder', () => {
 
 // ADR-0035: read-only-for-editing is decided and rendered here, the one place exempt from
 // contextBoundary.test.ts's import scan, so neither provider learns the other's vocabulary.
-describe('PluginsTreeComposite — read-only tooltip (#276 AC4/AC5)', () => {
+describe('PluginsTreeComposite — read-only tooltip', () => {
   it('tags a read-only plugin\'s tooltip once the load order says so', async () => {
     const { composite, render } = make([PLUGIN_ROW]);
     await render();
@@ -451,7 +451,7 @@ describe('PluginsTreeComposite — read-only tooltip (#276 AC4/AC5)', () => {
 // ADR-0037: a plugin declaring a master absent from the load order is flagged and stays fully
 // browsable — never deactivated, excluded or hidden. The wording distinguishes a directly-missing
 // master from one that is itself unloadable.
-describe('PluginsTreeComposite — master-issue decoration (#277 / ADR-0037 AC1/AC2/AC4)', () => {
+describe('PluginsTreeComposite — master-issue decoration (ADR-0037 AC1/AC2/AC4)', () => {
   it('flags a row with a directly-missing master', async () => {
     const { composite, render } = make([PLUGIN_ROW]);
     await render();
@@ -558,7 +558,7 @@ describe('PluginsTreeComposite — master-issue decoration (#277 / ADR-0037 AC1/
 // ADR-0037: a plugin that fails to open or parse still has a row — Mod Management builds rows
 // from plugins.txt, not from the load order — so this decorates an existing row with its
 // recorded reason rather than synthesising one.
-describe('PluginsTreeComposite — load-failure decoration (#277 / ADR-0037 AC7)', () => {
+describe('PluginsTreeComposite — load-failure decoration (ADR-0037 AC7)', () => {
   it('flags a row whose plugin failed to load, with the reason', async () => {
     const { composite, render } = make([PLUGIN_ROW]);
     await render();
@@ -595,7 +595,7 @@ describe('PluginsTreeComposite — load-failure decoration (#277 / ADR-0037 AC7)
     expect(composite.getTreeItem(PLUGIN_ROW).tooltip).toContain('Failed to load');
   });
 
-  it('clears once the plugin is no longer reported failed', async () => {
+  it('clears the failed-tooltip once a later reconcile reports the plugin loaded', async () => {
     const { composite, render } = make([PLUGIN_ROW]);
     await render();
     composite.setLoadOrder(new Set(), new Set(), new Map(), new Map([['a.esp', 'Malformed record']]));
@@ -675,7 +675,7 @@ describe('malformed-plugin diagnosis decoration', () => {
 // ADR-0037: the order-aware missing-master badge (Mod Management, no
 // load order needed) and this load-order-derived state are one concept in the merged tree, never two
 // decorations that can disagree.
-describe('PluginsTreeComposite — reconciling the order-aware badge with load order state (#277 AC8)', () => {
+describe('PluginsTreeComposite — reconciling the order-aware badge with load order state', () => {
   it('reports a master both signals flag only once, in the backend\'s richer wording', async () => {
     const row: FakeRow = { file: 'A.esp', kind: 'plugin', orderIssueMasters: ['Ghost.esm'] };
     const { composite, render } = make([row]);

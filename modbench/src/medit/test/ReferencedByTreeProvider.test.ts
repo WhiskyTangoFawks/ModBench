@@ -153,7 +153,7 @@ describe('ReferencedByTreeProvider — group children (field rows)', () => {
   });
 });
 
-describe('ReferencedByTreeProvider — referrer count (#282, view-title badge)', () => {
+describe('ReferencedByTreeProvider — referrer count (view-title badge)', () => {
   it('reports undefined when there is no active record', async () => {
     const onCountChanged = vi.fn();
     const provider = new ReferencedByTreeProvider(makeClient({}), undefined, onCountChanged);
@@ -193,7 +193,7 @@ describe('ReferencedByTreeProvider — referrer count (#282, view-title badge)',
   });
 });
 
-describe('referencedByCopyText — the clipboard copy command\'s text (#282)', () => {
+describe('referencedByCopyText — the clipboard copy command\'s text', () => {
   it('returns empty text for an empty selection', () => {
     expect(referencedByCopyText([])).toBe('');
   });

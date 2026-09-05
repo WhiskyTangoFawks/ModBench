@@ -123,7 +123,7 @@ describe('modelValue — formKey', () => {
   });
 });
 
-describe('modelValue — struct/array summary rows (#224 decision: JSON, not a prose summary)', () => {
+describe('modelValue — struct/array summary rows (JSON, not a prose summary)', () => {
   it('struct: JSON-serializes the whole value, not the "{…}" placeholder', () => {
     const value = { Faction: '000123:Fallout4.esm', Rank: 2 };
     expect(modelValue(value, structMeta)).toBe(JSON.stringify(value));

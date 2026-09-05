@@ -142,7 +142,7 @@ describe('computeModStatuses', () => {
     }
   });
 
-  it('skips separator entries entirely — no status map entry (#318)', async () => {
+  it('skips separator entries entirely — no status map entry', async () => {
     // A separator has no mods/<name> folder on disk, so an unskipped one surfaces as missingMod.
     const withSeparator: ModlistEntry[] = [{ kind: 'separator', name: 'WEAPONS', enabled: true }, ...entries];
     const index = await buildFileConflictIndex(withSeparator, instanceRoot, () => {});
@@ -151,7 +151,7 @@ describe('computeModStatuses', () => {
   });
 });
 
-describe('computeModStatuses — non-plugin files are never read for masters (#318)', () => {
+describe('computeModStatuses — non-plugin files are never read for masters', () => {
   it('does not attempt to read masters from a mod-shipped non-plugin file', async () => {
     // Every real mod archive ships non-plugin files (readmes, changelogs,
     // textures) alongside its .esp/.esm — a real producer of a dotted,
@@ -176,7 +176,7 @@ describe('computeModStatuses — non-plugin files are never read for masters (#3
   });
 });
 
-describe('computeModStatuses — non-ENOENT stat failures propagate (#318)', () => {
+describe('computeModStatuses — non-ENOENT stat failures propagate', () => {
   // modFolderExists's own contract: "false on ENOENT. Other stat errors
   // propagate." A permission-denied mod folder (real: a restrictively-mounted
   // or externally-managed mods/ subtree) must reject, not silently degrade to
@@ -210,7 +210,7 @@ describe('computeModStatuses — non-ENOENT stat failures propagate (#318)', () 
   });
 });
 
-describe('computeModStatuses — case-insensitive conflicts (#128)', () => {
+describe('computeModStatuses — case-insensitive conflicts', () => {
   // Proton/Wine resolves paths case-insensitively over ext4, so Textures/Foo.dds and
   // textures/foo.dds are one file. The fold belongs in the index, since statusChecker looks
   // paths up exactly as the walk wrote them.
@@ -269,7 +269,7 @@ describe('checkMasterOrder', () => {
     });
   });
 
-  it('flags a master positioned at exactly this plugin\'s own index — the documented "at" boundary (#318)', () => {
+  it('flags a master positioned at exactly this plugin\'s own index — the documented "at" boundary', () => {
     // A plugin declaring itself as its own master is malformed data no real editor writes, but
     // it is the "at" boundary of this utility's contract.
     expect(checkMasterOrder(['Self.esp'], ['Self.esp', 'Other.esp'], 0)).toEqual({

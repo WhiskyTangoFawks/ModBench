@@ -115,7 +115,7 @@ public sealed class PluginCompileServiceMastersTests : IDisposable
     // Exercised through the real edit door rather than pre-baked into the tracked baseline. DeltaName
     // is loaded but never referenced at Track time, so it provably is not yet a master.
     [Fact]
-    public void Compile_AfterAnEditIntroducesAReferenceToAPreviouslyUnreferencedPlugin_AddsItAsAMaster()
+    public void Compile_AfterAnEditIntroducesAReferenceToAnUnreferencedPlugin_AddsItAsAMaster()
     {
         var editResult = new RecordEditService(_mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance)
             .EditField(_plugin, _npc.ToString(), "keywords",

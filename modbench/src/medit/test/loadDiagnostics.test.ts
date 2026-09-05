@@ -28,7 +28,7 @@ function fakeCollection() {
   };
 }
 
-describe('publishLoadDiagnoses (#570)', () => {
+describe('publishLoadDiagnoses', () => {
   it('targets the plugin binary itself (pre-Track) and carries the refusal wording verbatim', () => {
     const collection = fakeCollection();
 
@@ -63,7 +63,7 @@ describe('publishLoadDiagnoses (#570)', () => {
   });
 });
 
-describe('groupDiagnosesByPlugin (#570)', () => {
+describe('groupDiagnosesByPlugin', () => {
   it('keys texts by plugin filename for the tree decoration hand-off', () => {
     const grouped = groupDiagnosesByPlugin([
       report('A.esp', 'M', 'first'), report('A.esp', 'M', 'second'), report('B.esp', 'N', 'third'),

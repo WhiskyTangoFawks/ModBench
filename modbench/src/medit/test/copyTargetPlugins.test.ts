@@ -13,7 +13,7 @@ function plugin(name: string, isImmutable = false): PluginMetadata {
   };
 }
 
-describe('copyTargetPlugins (#347 / #494)', () => {
+describe('copyTargetPlugins', () => {
   const allPlugins = [plugin('Source.esp'), plugin('Other.esp'), plugin('ThirdOverride.esp'), plugin('Base.esm', true)];
 
   it('copy-as-new keeps the source plugin as a candidate — a new record gets its own FormID and coexists with the source', () => {

@@ -914,7 +914,7 @@ describe('EditingController.createRecord', () => {
   // ADR-0026: the write gate answers a contended write with 503 + `writeGateTimeout`, the same
   // shape 503 "no load order held" arrives in. Retry versus reload, so the surface reads the
   // extension, never the prose.
-  describe('#673 write-gate contention', () => {
+  describe('write-gate contention', () => {
     it('says the write is retryable, not that the load order went away', async () => {
       const client = makeClient();
       client.POST = vi.fn().mockResolvedValue({
@@ -972,7 +972,7 @@ describe('EditingController.createRecord', () => {
   // The ESL-exhaustion refusal carries the same typed marker compile's own
   // eslContradiction does, wired through mutate()'s onEslContradiction hook rather than the
   // ordinary toast-and-fail — declining leaves the refusal exactly as untouched as any other.
-  describe('#290 eslContradiction', () => {
+  describe('eslContradiction', () => {
     it('an ordinary refusal (no eslContradiction extension) never invokes the hook', async () => {
       const client = makeClient();
       client.POST = vi.fn().mockResolvedValue(drainedError(422, 'RecordTypeNotFound'));

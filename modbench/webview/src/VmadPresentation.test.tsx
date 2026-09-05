@@ -216,7 +216,7 @@ beforeEach(() => {
 });
 afterEach(() => vi.unstubAllGlobals());
 
-describe('#695 — a collapsed script reads as xEdit prose', () => {
+describe('a collapsed script reads as xEdit prose', () => {
   it('a script reads under its own name with every property passed through, not counted', async () => {
     currentCompare = oneColumn([script('Guard', [
       property('Awake', 'ScriptBoolProperty', { data_bool: true }),
@@ -350,7 +350,7 @@ describe('#695 — a collapsed script reads as xEdit prose', () => {
   });
 });
 
-describe('#695 — the alias slot of an object binding', () => {
+describe('the alias slot of an object binding', () => {
   const withAlias = (alias: number) => oneColumn(
     [script('Guard', [property('Owner', 'ScriptObjectProperty', {
       object: '00000014:Fallout4.esm', alias,
@@ -369,7 +369,7 @@ describe('#695 — the alias slot of an object binding', () => {
     });
 });
 
-describe('#695 — a row of a keyed array is identified by its key', () => {
+describe('a row of a keyed array is identified by its key', () => {
   it('expanding one script and then losing an earlier sibling leaves that script expanded', async () => {
     currentCompare = oneColumn([
       script('Ambush', [property('Radius', 'ScriptIntProperty', { data_int: 10 })]),
@@ -431,7 +431,7 @@ describe('#695 — a row of a keyed array is identified by its key', () => {
   });
 });
 
-describe('#695 — Add Script is the generic array gesture', () => {
+describe('Add Script is the generic array gesture', () => {
   // The webview contributes no element: a new script's key is empty until the user names it,
   // so it appears first and is then nameable.
   it('posts the array op and no element of its own', async () => {

@@ -11,7 +11,7 @@ const meta = (over: Partial<FieldMetadata> = {}): FieldMetadata => ({
   name: 'value', type: 'string', isArray: false, validFormKeyTypes: [], enumMembers: [], ...over,
 });
 
-describe('ScalarCell — the xEdit open gesture (#415)', () => {
+describe('ScalarCell — the xEdit open gesture', () => {
   it('a first click on an unfocused cell focuses it and does not open an editor', () => {
     render(<ScalarCell value="before" meta={meta()} editable isFocused={false} onCommit={vi.fn()} />);
 
@@ -48,7 +48,7 @@ describe('ScalarCell — the xEdit open gesture (#415)', () => {
   });
 });
 
-describe('ScalarCell — a column with nowhere to write (#415 AC4)', () => {
+describe('ScalarCell — a column with nowhere to write', () => {
   it('opens nothing under any of the three triggers', () => {
     const { container } = render(
       <ScalarCell value="before" meta={meta()} editable={false} isFocused onCommit={vi.fn()} />);
@@ -72,7 +72,7 @@ describe('ScalarCell — a column with nowhere to write (#415 AC4)', () => {
   });
 });
 
-describe('ScalarCell — committing (#415 AC1)', () => {
+describe('ScalarCell — committing', () => {
   it('commits the typed value on Enter', () => {
     const onCommit = vi.fn();
     render(<ScalarCell value="before" meta={meta()} editable isFocused onCommit={onCommit} />);
@@ -123,7 +123,7 @@ describe('ScalarCell — committing (#415 AC1)', () => {
 
 // ADR-0039: a genuine mouse click on an already-focused string cell opens the inline editor
 // synchronously — no left click may cost latency waiting to see whether a second is coming.
-describe('ScalarCell — string cell has no debounce (#258 / ADR-0039)', () => {
+describe('ScalarCell — string cell has no debounce (ADR-0039)', () => {
   it('a genuine second click on an already-focused string cell opens the inline editor immediately', () => {
     render(<ScalarCell value="Dogmeat" meta={meta()} editable isFocused onCommit={vi.fn()} />);
     fireEvent.click(screen.getByText('Dogmeat'), { detail: 1 });
@@ -139,7 +139,7 @@ describe('ScalarCell — string cell has no debounce (#258 / ADR-0039)', () => {
 
 // ADR-0039: an immutable string cell is unaffected by any left-click gesture; its only read
 // path for a long value is the right-click menu.
-describe('ScalarCell — immutable string cell (#258 / ADR-0039)', () => {
+describe('ScalarCell — immutable string cell (ADR-0039)', () => {
   it('opens nothing on double click', () => {
     render(<ScalarCell value="Dogmeat" meta={meta()} editable={false} isFocused={false} onCommit={vi.fn()} />);
     fireEvent.doubleClick(screen.getByText('Dogmeat'));
@@ -154,7 +154,7 @@ describe('ScalarCell — immutable string cell (#258 / ADR-0039)', () => {
 
 // A hex row edits as text because the schema says the field is hex, never because the value
 // looks like hex; the wrong-length and non-hex refusals are the writer's.
-describe('ScalarCell — a hex row (#690)', () => {
+describe('ScalarCell — a hex row', () => {
   const hexMeta = meta({ name: 'unknown3', type: 'hex' });
 
   it('edits as text and commits the typed hex verbatim', () => {
@@ -186,7 +186,7 @@ describe('ScalarCell — a hex row (#690)', () => {
 
 // An abstract union's `concrete_type` holds Mutagen class names, not words: the schema labels
 // each member, and the cell shows the label but commits the value behind it.
-describe('ScalarCell — an enum whose values are wire tokens (#688)', () => {
+describe('ScalarCell — an enum whose values are wire tokens', () => {
   const kind = meta({
     name: 'concrete_type', type: 'enum',
     enumMembers: [{ value: 'NpcLevel', label: 'Npc Level' },

@@ -29,7 +29,7 @@ public sealed class GeneratedViewTests(CutDownPluginFixture fixture) : IClassFix
     }
 
     [Fact]
-    public void EveryRecordType_HasAView_NamedAsItsTableWas()
+    public void EveryRecordType_HasAView_SharingItsTableName()
     {
         // The plugin header has a document, so it has a view like every other type — no exclusion:
         // that view is what keeps a `header` relation at the SQL door (#631).

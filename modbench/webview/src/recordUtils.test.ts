@@ -265,7 +265,7 @@ describe('getAtPath', () => {
   });
 
   // Struct-in-array-in-struct: a depth a fixed-level union could never express.
-  it('reads through a member → index → member chain (depth previously unrepresentable)', () => {
+  it('reads through a member → index → member chain (struct-in-array-in-struct depth)', () => {
     const path: PathSegment[] = [
       { kind: 'member', name: 'Outer' },
       { kind: 'index', index: 1 },

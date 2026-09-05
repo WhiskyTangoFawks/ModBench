@@ -19,7 +19,7 @@ public sealed class ConcreteBaseUnionSchemaTests
             .Single(c => c.Name == "virtual_machine_adapter");
 
     [Fact]
-    public void VmadExclusionLifted_AdapterIsAnOrdinaryStructColumn()
+    public void VirtualMachineAdapterColumn_IsAStructColumn_WithAScriptsSubfield()
     {
         var column = NpcAdapterColumn(SharedSchemaReflector.Instance);
 

@@ -202,7 +202,7 @@ describe('PluginTreeProvider.getChildren(RecordTypeNode)', () => {
 // A per-row `getContainerChildren` fan-out was rejected on cost: up to ~1,300 concurrent round
 // trips for one "expand all Quests" on Fallout4.esm. Presence travels inside the single
 // getRecords response instead, so no extra repository calls.
-describe('PluginTreeProvider.getChildren(RecordTypeNode) — no per-row fan-out for container presence (#560)', () => {
+describe('PluginTreeProvider.getChildren(RecordTypeNode) — no per-row fan-out for container presence', () => {
   it('listing ~1,300 Quests issues exactly one getRecords call and zero getContainerChildren calls', async () => {
     const count = 1_300; // Fallout4.esm's own approximate QUST count
     const records = Array.from(
@@ -389,7 +389,7 @@ describe('RecordNode', () => {
 // ── a field edit flips a cached row's badge without a refetch ─────────────────
 // A rival that calls refreshTree() wholesale fails the no-refetch assertion.
 
-describe('#428 markWorkingTreeState / workingTreeStateOf (scoped, no refetch)', () => {
+describe('markWorkingTreeState / workingTreeStateOf (scoped, no refetch)', () => {
   it('flips a cached clean record to Modified without calling getRecords again', async () => {
     const record = makeRecord(0, 'None');
     const repo = makeRepository({ records: { items: [record], total: 1 } });
@@ -442,7 +442,7 @@ describe('#428 markWorkingTreeState / workingTreeStateOf (scoped, no refetch)', 
 // A record-scoped command acts on the clicked row's own copy, so the row says which copy it is
 // ((plugin, origin), ADR-0036); rows whose plugin cannot be edited hide Remove.
 
-describe('#281 record rows carry their copy identity', () => {
+describe('record rows carry their copy identity', () => {
   it('RecordNode carries the browsed origin, threaded from its RecordTypeNode', async () => {
     const repo = makeRepository();
     const provider = new PluginTreeProvider(repo);
@@ -640,7 +640,7 @@ describe('PluginTreeProvider worldspace tree', () => {
   // xEdit's TwbMainRecord.GetDisplayName checks GetFullName unconditionally, before any
   // signature-specific branch — including the CELL branch's persistent-cell / grid-coordinate
   // logic. A FULL name wins over both.
-  it('#497: an exterior cell with a FULL name shows it, not the grid coordinates', () => {
+  it('an exterior cell with a FULL name shows it, not the grid coordinates', () => {
     const node = new CellNode('M.esp', {
       formKey: 'c:M.esp', editorId: 'TheCell', cellX: 12, cellY: -5,
       isPersistentWorldspaceCell: false, fullName: 'Sanctuary Hills',
@@ -648,7 +648,7 @@ describe('PluginTreeProvider worldspace tree', () => {
     expect(node.label).toBe('Sanctuary Hills');
   });
 
-  it('#497: an exterior cell with no FULL name still shows the padded grid coordinates (#251, unchanged)', () => {
+  it('an exterior cell with no FULL name still shows the padded grid coordinates', () => {
     const node = new CellNode('M.esp', {
       formKey: 'c:M.esp', editorId: 'TheCell', cellX: 12, cellY: -5,
       isPersistentWorldspaceCell: false, fullName: null,
@@ -659,7 +659,7 @@ describe('PluginTreeProvider worldspace tree', () => {
   // xEdit's GetDisplayName checks GetFullName first, unconditionally, and only reaches the
   // GroupType=1 (persistent) check when FULL is empty (wbImplementation.pas). The rival that
   // checks isPersistentWorldspaceCell first fails here.
-  it('#497: the persistent worldspace cell with a FULL name shows the FULL name, not the placeholder', () => {
+  it('the persistent worldspace cell with a FULL name shows the FULL name, not the placeholder', () => {
     const node = new CellNode('M.esp', {
       formKey: 'top:M.esp', editorId: 'TopCell', cellX: null, cellY: null,
       isPersistentWorldspaceCell: true, fullName: 'Sanctuary Hills',
@@ -667,7 +667,7 @@ describe('PluginTreeProvider worldspace tree', () => {
     expect(node.label).toBe('Sanctuary Hills');
   });
 
-  it('surfaces every block-less cell row under a worldspace, not just the first (#251)', async () => {
+  it('surfaces every block-less cell row under a worldspace, not just the first', async () => {
     const repo = makeRepository({ recordTypes: [{ type: 'wrld', count: 1 }] });
     (repo.getWorldspaces as ReturnType<typeof vi.fn>).mockResolvedValue([{ formKey: 'wrld:M.esp', editorId: 'World' }]);
     (repo.getWorldspaceBlocks as ReturnType<typeof vi.fn>).mockResolvedValue({
@@ -839,7 +839,7 @@ describe('headerFormKeyFor', () => {
 // Every node in the chain must carry the origin its row was built with, or a deep node silently
 // reverts to browsing the load-order winner instead of the copy the user opened.
 
-describe('PluginTreeProvider spatial origin threading (#305)', () => {
+describe('PluginTreeProvider spatial origin threading', () => {
   it('fetchWorldspaces: asks the repository for the node\'s own copy, and the WorldspaceNodes it builds carry that origin forward', async () => {
     const repo = makeRepository();
     (repo.getWorldspaces as ReturnType<typeof vi.fn>).mockResolvedValue([{ formKey: 'wrld:M.esp', editorId: 'World' }]);
@@ -1034,7 +1034,7 @@ function makeContainerChild(
   };
 }
 
-describe('RecordNode collapsibility for container types (#424, #560)', () => {
+describe('RecordNode collapsibility for container types', () => {
   // Rival named: a RecordNode that always constructs CollapsibleState.None regardless of
   // record type — this pins the behaviour against exactly that rival.
   it('is Collapsed when built as a "qust" row that actually has container children', () => {
@@ -1065,7 +1065,7 @@ describe('RecordNode collapsibility for container types (#424, #560)', () => {
   });
 });
 
-describe('PluginTreeProvider.getChildren(RecordNode) — container children (#424)', () => {
+describe('PluginTreeProvider.getChildren(RecordNode) — container children', () => {
   it('a "qust" RecordNode expands via repository.getContainerChildren into ordinary RecordNodes', async () => {
     const repo = makeRepository();
     repo.getContainerChildren = vi.fn().mockResolvedValue([

@@ -8,7 +8,7 @@ vi.mock('vscode', () => ({
 
 import { OverwriteDecorationProvider } from './OverwriteDecorationProvider';
 
-describe('OverwriteDecorationProvider (#83)', () => {
+describe('OverwriteDecorationProvider', () => {
   const instanceRoot = '/instance';
   const overwriteDir = join(instanceRoot, 'overwrite');
 

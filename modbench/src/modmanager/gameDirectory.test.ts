@@ -129,7 +129,7 @@ describe('resolveGameDirectory', () => {
     expect(resolved).toEqual({ root: gameRoot, dataFolder: join(gameRoot, 'Data') });
   });
 
-  it("normalizes a C: drive-mapped ini gamePath into the Proton prefix's drive_c (#187)", async () => {
+  it("normalizes a C: drive-mapped ini gamePath into the Proton prefix's drive_c", async () => {
     dir = await mkdtemp(join(tmpdir(), 'medit-gamedir-'));
     const prefixDir = await mkdtemp(join(tmpdir(), 'medit-prefix-'));
     const gameRoot = join(prefixDir, 'drive_c', 'Games', 'Fallout4');

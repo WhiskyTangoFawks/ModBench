@@ -46,7 +46,7 @@ describe('makeOnRecordEdited — record-filter-match refresh', () => {
     expect(refreshMatchingPlugins).toHaveBeenCalledTimes(1);
   });
 
-  it('still refreshes the M/A badge decoration (#428)', () => {
+  it('still refreshes the M/A badge decoration', () => {
     const decorationProvider = fakeDecorationProvider();
     const onRecordEdited = makeOnRecordEdited(fakeTreeProvider(true), decorationProvider, new Set(), vi.fn(), vi.fn());
 
@@ -67,7 +67,7 @@ describe('makeOnRecordEdited — record-filter-match refresh', () => {
 
 // The native Source Control panel does not pick up a field edit's working-tree dirt on its own;
 // this is the wiring that closes that gap.
-describe('makeOnRecordEdited — Source Control refresh (#557)', () => {
+describe('makeOnRecordEdited — Source Control refresh', () => {
   it('calls the injected refreshSourceControl with the edited plugin filename on every edit', () => {
     const refreshSourceControl = vi.fn();
     const onRecordEdited = makeOnRecordEdited(

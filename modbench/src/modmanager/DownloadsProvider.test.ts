@@ -211,7 +211,7 @@ describe('DownloadsProvider', () => {
     expect(rowNames(children)).toEqual(['visible.zip']);
   });
 
-  describe('setShowHidden (#238)', () => {
+  describe('setShowHidden', () => {
     it('includes hidden rows alongside visible ones when turned on', async () => {
       const root = await makeInstanceRoot();
       await writeArchive(root, 'hidden.zip', '[General]\r\nremoved=true\r\n');
@@ -247,7 +247,7 @@ describe('DownloadsProvider', () => {
     });
   });
 
-  describe('setSort (#238)', () => {
+  describe('setSort', () => {
     it('re-sorts by name ascending, overriding the default Filetime-descending order', async () => {
       const root = await makeInstanceRoot();
       await writeArchive(root, 'banana.zip');
@@ -270,7 +270,7 @@ describe('DownloadsProvider', () => {
     });
   });
 
-  describe('hiddenNames (#238)', () => {
+  describe('hiddenNames', () => {
     it('is empty before any render', async () => {
       const root = await makeInstanceRoot();
       const provider = new DownloadsProvider(root);

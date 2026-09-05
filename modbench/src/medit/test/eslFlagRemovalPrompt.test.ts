@@ -8,7 +8,7 @@ function repositoryWith(editRecordField: PluginRepository['editRecordField']): P
 
 const TARGET = { name: 'MyPatch.esp', origin: 'ModA' };
 
-describe('offerEslFlagRemoval (#290)', () => {
+describe('offerEslFlagRemoval', () => {
   it('declining the modal (Esc/Cancel) does not edit the flag and returns false', async () => {
     const editRecordField = vi.fn();
     const showWarning = vi.fn().mockResolvedValue(undefined);

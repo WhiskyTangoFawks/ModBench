@@ -62,7 +62,7 @@ const aliasesCompareResult = {
   }],
 };
 
-describe('RecordPanel — Add on an abstract-union array (#710)', () => {
+describe('RecordPanel — Add on an abstract-union array', () => {
   function renderPanel() {
     const client: RecordPanelClient = {
       load: vi.fn().mockImplementation(() => Promise.resolve({

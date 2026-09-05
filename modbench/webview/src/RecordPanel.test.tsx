@@ -418,7 +418,7 @@ describe('RecordPanel', () => {
 // ADR-0036: two columns sharing a filename but differing in origin — display never changes, so
 // only the compound (plugin, origin) identity can tell them apart.
 
-describe('RecordPanel — same-filename, different-origin columns (#272 AC5)', () => {
+describe('RecordPanel — same-filename, different-origin columns', () => {
   afterEach(() => vi.unstubAllGlobals());
 
   // ADR-0036: filename in the header, origin inline only on collision. The rule is
@@ -442,7 +442,7 @@ describe('RecordPanel — same-filename, different-origin columns (#272 AC5)', (
   });
 });
 
-describe('RecordPanel — column header native right-click menu (#494)', () => {
+describe('RecordPanel — column header native right-click menu', () => {
   afterEach(() => vi.unstubAllGlobals());
 
   it('the header cell carries the recordHeader context, naming this column\'s own record identity', async () => {
@@ -471,7 +471,7 @@ describe('RecordPanel — column header native right-click menu (#494)', () => {
   });
 });
 
-describe('RecordPanel — a copy the load order does not name (#304 / ADR-0035)', () => {
+describe('RecordPanel — a copy the load order does not name (ADR-0035)', () => {
   afterEach(() => vi.unstubAllGlobals());
 
   it('renders the column header dimmed and labeled distinctly from a vanilla master', async () => {
@@ -501,7 +501,7 @@ describe('RecordPanel — a copy the load order does not name (#304 / ADR-0035)'
   });
 });
 
-describe('RecordPanel — a Partial Form column (#491)', () => {
+describe('RecordPanel — a Partial Form column', () => {
   afterEach(() => vi.unstubAllGlobals());
 
   it('renders the column header dimmed, matching xEdit-style marking rather than a full competing override', async () => {
@@ -515,7 +515,7 @@ describe('RecordPanel — a Partial Form column (#491)', () => {
 
 });
 
-describe('RecordPanel — Partial Form header toggle (#539)', () => {
+describe('RecordPanel — Partial Form header toggle', () => {
   beforeEach(() => {
     vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
   });
@@ -542,7 +542,7 @@ describe('RecordPanel — Partial Form header toggle (#539)', () => {
 
 // Drives the gesture through the real editableColumns computation rather than a hand-fed set,
 // with a scalar cell and a flags cell on the identical column so only the field type differs.
-describe('RecordPanel — flags cell editing through real message plumbing (#622)', () => {
+describe('RecordPanel — flags cell editing through real message plumbing', () => {
   beforeEach(() => {
     vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
   });
@@ -806,7 +806,7 @@ describe('RecordPanel — struct sub-rows', () => {
   });
 });
 
-describe('RecordPanel — incomplete-comparison banner (#308 / ADR-0035)', () => {
+describe('RecordPanel — incomplete-comparison banner (ADR-0035)', () => {
   beforeEach(() => {
     vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
   });
@@ -1172,7 +1172,7 @@ const unionTrackedPluginsResponse = [
   { name: 'MyMod.esp', isImmutable: false, loadOrderIndex: 0, isTracked: true },
 ];
 
-describe('RecordPanel — an abstract union\'s leaf is an editable field (#688)', () => {
+describe('RecordPanel — an abstract union\'s leaf is an editable field', () => {
   beforeEach(() => {
     vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
   });

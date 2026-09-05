@@ -148,7 +148,7 @@ describe('PluginHeader', () => {
 
 // ADR-0041: an untracked plugin is visibly read-only with the way out named — visibly, before
 // the user attempts an edit, so it lives on the header, not only in the backend's refusal.
-describe('PluginHeader — untracked signposting (#415)', () => {
+describe('PluginHeader — untracked signposting', () => {
   it('marks an untracked column read-only on screen, not only in a tooltip', () => {
     render(<PluginHeader {...baseProps()} isTracked={false} />);
 
@@ -183,7 +183,7 @@ describe('PluginHeader — untracked signposting (#415)', () => {
   });
 });
 
-describe('PluginHeader — Partial Form toggle (#539)', () => {
+describe('PluginHeader — Partial Form toggle', () => {
   it('does not render the toggle for a column whose record type can never carry the flag', () => {
     render(<PluginHeader {...baseProps()} override={override({ isPartialFormable: false })} />);
 

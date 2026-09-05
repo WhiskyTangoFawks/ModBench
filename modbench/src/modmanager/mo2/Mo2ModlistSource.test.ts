@@ -86,13 +86,13 @@ describe('Mo2ModlistSource — writes (against a tmp copy)', () => {
     await rm(dir, { recursive: true, force: true });
   });
 
-  it('readModlist rejects when a mod\'s meta.ini exists but is unreadable — not silently "no metadata" (#317)', async () => {
+  it('readModlist rejects when a mod\'s meta.ini exists but is unreadable — not silently "no metadata"', async () => {
     await rm(join(dir, 'mods', 'Harder VATS', 'meta.ini'), { force: true });
     await mkdir(join(dir, 'mods', 'Harder VATS', 'meta.ini')); // present but unreadable (EISDIR, not ENOENT)
     await expect(src.readModlist()).rejects.toThrow();
   });
 
-  it('a separator entry never carries meta fields, even if a same-named mod folder exists (#317)', async () => {
+  it('a separator entry never carries meta fields, even if a same-named mod folder exists', async () => {
     // A real mod folder can share a separator's bare display name, and must never
     // leak meta.ini fields onto the separator entry.
     await mkdir(join(dir, 'mods', 'Unassigned (Modlist Development)'), { recursive: true });
@@ -236,7 +236,7 @@ describe('Mo2ModlistSource — writes (against a tmp copy)', () => {
     expect(entries[idx - 1].name).toBe('Unofficial Fallout 4 Patch');
   });
 
-  it('insertSeparator after a mod not immediately followed by a separator lands right after it (#317)', async () => {
+  it('insertSeparator after a mod not immediately followed by a separator lands right after it', async () => {
     // ENBoost is followed by two more mods (Harder VATS, Cracked) with no
     // separator until end of file — the walk-to-next-separator branch must not
     // fire for a mod afterEntryName.
@@ -247,7 +247,7 @@ describe('Mo2ModlistSource — writes (against a tmp copy)', () => {
     expect(entries[idx + 1].name).toBe('Harder VATS');
   });
 
-  it('insertSeparator after the last separator, whose block runs to true EOF, lands after the last mod (#317)', async () => {
+  it('insertSeparator after the last separator, whose block runs to true EOF, lands after the last mod', async () => {
     // Radfall's separator has no separator after it — the last-child walk must
     // run all the way to the real end of the entries array without an off-by-one.
     await src.insertSeparator('Tail Group', 'Radfall - All-In-One Survival Overhaul');
@@ -273,7 +273,7 @@ describe('Mo2ModlistSource — writes (against a tmp copy)', () => {
     expect(entries.some((e) => e.name === 'Unofficial Fallout 4 Patch')).toBe(true);
   });
 
-  it('moveModToSeparator moves a mod to the end of the target separator section (immediately before its line — #107)', async () => {
+  it('moveModToSeparator moves a mod to the end of the target separator section (immediately before its line)', async () => {
     // SKK precedes the Unassigned separator; moving it into Radfall's section
     // makes it Radfall's LAST (most recent) member — immediately above Radfall's
     // own line — not appended at the true file tail.
@@ -304,7 +304,7 @@ describe('Mo2ModlistSource — writes (against a tmp copy)', () => {
   // The symmetric half of Install's writeback — uninstalling a mod
   // whose meta.ini names an installationFile present in downloads/ marks
   // that download uninstalled=true, without ever failing the uninstall itself.
-  describe('removeMod — Downloads writeback (#240)', () => {
+  describe('removeMod — Downloads writeback', () => {
     const downloadMetaPath = () =>
       join(dir, 'downloads', 'Unofficial Fallout 4 Patch-4598-2-1-5-1679096028.7z.meta');
 
@@ -379,7 +379,7 @@ describe('Mo2ModlistSource — writes (against a tmp copy)', () => {
       expect(log).toHaveBeenCalledWith(expect.stringContaining('Unofficial Fallout 4 Patch'));
     });
 
-    it('creates a fresh .meta silently when the archive has none yet (#317 — MO2 itself creates .meta lazily, see downloadmanager.cpp openMetaFile)', async () => {
+    it('creates a fresh .meta silently when the archive has none yet (MO2 itself creates .meta lazily, see downloadmanager.cpp openMetaFile)', async () => {
       await rm(downloadMetaPath(), { force: true });
       const log = vi.fn();
       const flagged = new Mo2ModlistSource(dir, log);
@@ -390,7 +390,7 @@ describe('Mo2ModlistSource — writes (against a tmp copy)', () => {
       expect(log).not.toHaveBeenCalled();
     });
 
-    it('propagates and logs when the existing .meta cannot be read — not silently "no metadata" (#317)', async () => {
+    it('propagates and logs when the existing .meta cannot be read — not silently "no metadata"', async () => {
       const before = await readFile(downloadMetaPath(), 'utf8');
       const log = vi.fn();
       const flagged = new Mo2ModlistSource(dir, log);
@@ -436,7 +436,7 @@ describe('Mo2ModlistSource — writes (against a tmp copy)', () => {
     expect(log).toHaveBeenCalledWith(expect.stringContaining('Harder VATS'));
   });
 
-  it('removeMod completes without a reporter when folder deletion fails — reporter is optional (#317)', async () => {
+  it('removeMod completes without a reporter when folder deletion fails — reporter is optional', async () => {
     const failingRm = vi.fn().mockRejectedValue(new Error('EBUSY: resource busy or locked'));
     const noReporter = new Mo2ModlistSource(dir, undefined, undefined, failingRm);
 
@@ -528,13 +528,13 @@ describe('Mo2ModlistSource — writes (against a tmp copy)', () => {
     expect(entries.slice(0, 2).map((e) => e.name)).toEqual(['Alpha Mod', 'Zeta Mod']);
   });
 
-  it('registerUnlistedMods returns [] when mods/ does not exist yet — a fresh instance before its first install (#317)', async () => {
+  it('registerUnlistedMods returns [] when mods/ does not exist yet — a fresh instance before its first install', async () => {
     await rm(join(dir, 'mods'), { recursive: true, force: true });
     const added = await src.registerUnlistedMods();
     expect(added).toEqual([]);
   });
 
-  it('registerUnlistedMods rejects when mods/ exists but is not a directory — not silently "no mods yet" (#317)', async () => {
+  it('registerUnlistedMods rejects when mods/ exists but is not a directory — not silently "no mods yet"', async () => {
     // Mirrors the readMeta/writebackUninstalledOnDownload "present but broken is a
     // real failure, not absent" pattern elsewhere in this file: only ENOENT means
     // "no mods/ folder yet"; any other readdir error (here ENOTDIR) must propagate.
@@ -543,13 +543,13 @@ describe('Mo2ModlistSource — writes (against a tmp copy)', () => {
     await expect(src.registerUnlistedMods()).rejects.toThrow();
   });
 
-  it('registerUnlistedMods ignores a stray file directly in mods/, not just directories (#317)', async () => {
+  it('registerUnlistedMods ignores a stray file directly in mods/, not just directories', async () => {
     await writeFile(join(dir, 'mods', 'Thumbs.db'), '');
     const added = await src.registerUnlistedMods();
     expect(added).toEqual([]);
   });
 
-  describe('pruneDeadEntries (#93)', () => {
+  describe('pruneDeadEntries', () => {
     beforeEach(async () => {
       // The shared fixture ships one listed-but-folderless entry ("[NODELETE] Radfall") —
       // exactly the state prune exists to clean up, which would drown out each test's own
@@ -557,7 +557,7 @@ describe('Mo2ModlistSource — writes (against a tmp copy)', () => {
       await mkdir(join(dir, 'mods', '[NODELETE] Radfall'));
     });
 
-  it('pruneDeadEntries removes the entry of a mod whose folder was deleted, byte-faithfully (#93)', async () => {
+  it('pruneDeadEntries removes the entry of a mod whose folder was deleted, byte-faithfully', async () => {
     const before = await readFile(modlistPath(), 'utf8');
     await rm(join(dir, 'mods', 'Harder VATS'), { recursive: true, force: true });
 
@@ -569,14 +569,14 @@ describe('Mo2ModlistSource — writes (against a tmp copy)', () => {
     expect(await readFile(modlistPath(), 'utf8')).toBe(before.replace('-Harder VATS\r\n', ''));
   });
 
-  it('pruneDeadEntries removes nothing when every entry still has its folder (#93)', async () => {
+  it('pruneDeadEntries removes nothing when every entry still has its folder', async () => {
     const before = await readFile(modlistPath(), 'utf8');
     const pruned = await src.pruneDeadEntries();
     expect(pruned).toEqual([]);
     expect(await readFile(modlistPath(), 'utf8')).toBe(before);
   });
 
-  it('pruneDeadEntries never touches a separator entry, whose folder is the _separator marker (#93)', async () => {
+  it('pruneDeadEntries never touches a separator entry, whose folder is the _separator marker', async () => {
     // A dead separator is not a dead mod: prune is scoped to mods, so deleting a
     // separator's marker folder must not remove the separator entry.
     await rm(join(dir, 'mods', 'Unassigned (Modlist Development)_separator'), { recursive: true, force: true });
@@ -585,7 +585,7 @@ describe('Mo2ModlistSource — writes (against a tmp copy)', () => {
     expect(await readFile(modlistPath(), 'utf8')).toContain('Unassigned (Modlist Development)_separator');
   });
 
-  it('pruneDeadEntries prunes nothing when mods/ itself is missing — a malformed workspace, not a mass delete (#93)', async () => {
+  it('pruneDeadEntries prunes nothing when mods/ itself is missing — a malformed workspace, not a mass delete', async () => {
     // Same ENOENT posture as registerUnlistedMods: only a listing that actually answered
     // can say a folder is gone. A missing mods/ dir must not wipe the whole modlist.
     const before = await readFile(modlistPath(), 'utf8');
@@ -595,14 +595,14 @@ describe('Mo2ModlistSource — writes (against a tmp copy)', () => {
     expect(await readFile(modlistPath(), 'utf8')).toBe(before);
   });
 
-  it('pruneDeadEntries rejects when mods/ exists but is not a directory — not silently "nothing dead" (#93)', async () => {
+  it('pruneDeadEntries rejects when mods/ exists but is not a directory — not silently "nothing dead"', async () => {
     await rm(join(dir, 'mods'), { recursive: true, force: true });
     await writeFile(join(dir, 'mods'), 'not a directory');
     await expect(src.pruneDeadEntries()).rejects.toThrow();
   });
   });
 
-  it('listProfiles ignores a stray file directly in profiles/, not just directories (#317)', async () => {
+  it('listProfiles ignores a stray file directly in profiles/, not just directories', async () => {
     await writeFile(join(dir, 'profiles', 'profiles.txt'), '');
     const profiles = (await src.listProfiles()).sort((a, b) => a.localeCompare(b));
     expect(profiles).toEqual(['Default', 'Secondary']);

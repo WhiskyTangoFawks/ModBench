@@ -345,7 +345,7 @@ describe('BackendManager crash-restart / stop', () => {
     expect(lines).toEqual(['[08:30:50 INF] back up']);
   });
 
-  it('stop() kills the child, suppresses restart, and does not report "stopped" until exit is confirmed (#562)', async () => {
+  it('stop() kills the child, suppresses restart, and does not report "stopped" until exit is confirmed', async () => {
     const state = { healthy: false };
     makeToggleableHttpGet(state);
     const child = makeChild();
@@ -369,7 +369,7 @@ describe('BackendManager crash-restart / stop', () => {
     expect(mgr.isHealthy).toBe(false);
   });
 
-  it('escalates to SIGKILL if the child never exits within the grace period, then confirms exit (#562 AC2)', async () => {
+  it('escalates to SIGKILL if the child never exits within the grace period, then confirms exit', async () => {
     vi.useFakeTimers();
     const state = { healthy: false };
     makeToggleableHttpGet(state);
@@ -400,7 +400,7 @@ describe('BackendManager crash-restart / stop', () => {
     expect(statuses).toEqual(['stopped']);
   });
 
-  it('dispose() awaits confirmed child exit before resolving (exercises the deactivate() path, #562 AC2)', async () => {
+  it('dispose() awaits confirmed child exit before resolving (exercises the deactivate() path)', async () => {
     const state = { healthy: false };
     makeToggleableHttpGet(state);
     const child = makeChild();
@@ -419,7 +419,7 @@ describe('BackendManager crash-restart / stop', () => {
     expect(statusBar.disposed).toBe(true);
   });
 
-  it('dispose() escalates to SIGKILL if the child never exits within the grace period, then confirms exit (#562 AC2 via deactivate())', async () => {
+  it('dispose() escalates to SIGKILL if the child never exits within the grace period, then confirms exit (via deactivate())', async () => {
     vi.useFakeTimers();
     const state = { healthy: false };
     makeToggleableHttpGet(state);

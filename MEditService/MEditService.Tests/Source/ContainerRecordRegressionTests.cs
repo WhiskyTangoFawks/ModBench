@@ -126,7 +126,7 @@ public sealed class ContainerRecordRegressionTests : IDisposable
         System.Text.Json.JsonDocument.Parse(raw).RootElement;
 
     [Fact]
-    public void DeletingACell_Succeeds_NoLongerRefusesWithTheContainerRefusal()
+    public void DeletingACell_Succeeds()
     {
         var result = EditService().DeleteRecord(_fixture.Plugin, _fixture.Cell.ToString());
 
@@ -144,7 +144,7 @@ public sealed class ContainerRecordRegressionTests : IDisposable
     }
 
     [Fact]
-    public void CreatingANewCell_RefusalMessage_NoLongerNamesDeleteOrRenumberAsUnsupported()
+    public void CreatingANewCell_RefusalMessage_NamesOnlyCreationAsUnsupported()
     {
         var result = EditService().CreateRecord(_fixture.Plugin, "cell", "BrandNewCell");
 
@@ -155,7 +155,7 @@ public sealed class ContainerRecordRegressionTests : IDisposable
     }
 
     [Fact]
-    public void RenumberingACell_Succeeds_NoLongerRefusesWithTheContainerRefusal()
+    public void RenumberingACell_Succeeds()
     {
         var result = EditService().RenumberRecord(_fixture.Plugin, _fixture.Cell.ToString());
 

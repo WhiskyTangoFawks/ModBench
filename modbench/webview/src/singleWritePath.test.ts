@@ -5,7 +5,7 @@ import * as path from 'path';
 // ADR-0041: the webview writes through exactly one message, EDIT_FIELD, from one module — an
 // edit travels through the extension host so a refusal can become a native notification, a
 // surface only the host has.
-describe('the record editor webview writes through exactly one path (#415)', () => {
+describe('the record editor webview writes through exactly one path', () => {
   const dir = __dirname;
   const clientSrc = fs.readFileSync(path.join(dir, 'RecordPanelClient.ts'), 'utf8');
   const memberNames = [...clientSrc.matchAll(/^ {2}(\w+)\s*[(:]/gm)].map((m) => m[1]);
