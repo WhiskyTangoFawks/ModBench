@@ -6,6 +6,8 @@ vi.mock('vscode', () => ({ TreeItem, ThemeIcon, ThemeColor, TreeItemCollapsibleS
 import * as vscode from 'vscode';
 import { PluginsTreeComposite } from '../PluginsTreeComposite';
 
+type MasterIssue = { masterName: string; kind: 'DirectlyMissing' | 'Unloadable' };
+
 // The composite is the one place the two bounded contexts touch, so its tests speak in neither
 // context's vocabulary: a "row" is whatever the load-order provider hands out, a "child"
 // whatever the record provider hands back.
@@ -248,8 +250,8 @@ describe('PluginsTreeComposite — a record filter hides a plugin with no matche
   // with an ordinary one. A deliberate call.
   it('hides a plugin with a missing-master flag while the filter matches none of its records', async () => {
     const { composite, render } = make([PLUGIN_ROW], new FakeChildren(), () => false);
-    composite.setLoadOrder(new Set(['A.esp']), new Set(), new Map([
-      ['a.esp', [{ masterName: 'Ghost.esm', kind: 'DirectlyMissing' as const }]],
+    composite.setLoadOrder(new Set(['A.esp']), new Map([
+      ['a.esp', { masterIssues: [{ masterName: 'Ghost.esm', kind: 'DirectlyMissing' as const }] }],
     ]));
 
     expect(await render()).toEqual([]);
@@ -257,7 +259,7 @@ describe('PluginsTreeComposite — a record filter hides a plugin with no matche
 
   it('hides a plugin that failed to load while the filter matches none of its records', async () => {
     const { composite, render } = make([PLUGIN_ROW], new FakeChildren(), () => false);
-    composite.setLoadOrder(new Set(), new Set(), new Map(), new Map([['a.esp', 'Malformed record']]));
+    composite.setLoadOrder(new Set(), new Map([['a.esp', { loadFailure: 'Malformed record' }]]));
 
     expect(await render()).toEqual([]);
   });
@@ -379,7 +381,7 @@ describe('PluginsTreeComposite — read-only tooltip', () => {
     const { composite, render } = make([PLUGIN_ROW]);
     await render();
 
-    composite.setLoadOrder(new Set(['A.esp']), new Set(['A.esp']));
+    composite.setLoadOrder(new Set(['A.esp']), new Map([['A.esp', { readOnly: true }]]));
 
     expect(composite.getTreeItem(PLUGIN_ROW).tooltip).toContain('read-only');
   });
@@ -388,7 +390,7 @@ describe('PluginsTreeComposite — read-only tooltip', () => {
     const { composite, render } = make([PLUGIN_ROW]);
     await render();
 
-    composite.setLoadOrder(new Set(['A.esp']), new Set(['a.ESP']));
+    composite.setLoadOrder(new Set(['A.esp']), new Map([['a.ESP', { readOnly: true }]]));
 
     expect(composite.getTreeItem(PLUGIN_ROW).tooltip).toContain('read-only');
   });
@@ -397,7 +399,7 @@ describe('PluginsTreeComposite — read-only tooltip', () => {
     const { composite, render } = make([PLUGIN_ROW]);
     await render();
 
-    composite.setLoadOrder(new Set(['A.esp']), new Set());
+    composite.setLoadOrder(new Set(['A.esp']));
 
     expect(composite.getTreeItem(PLUGIN_ROW).tooltip).toBeUndefined();
   });
@@ -417,7 +419,7 @@ describe('PluginsTreeComposite — read-only tooltip', () => {
     // catches accumulate-instead-of-reset.
     const { composite, render } = make([PLUGIN_ROW]);
     await render();
-    composite.setLoadOrder(new Set(['A.esp']), new Set(['A.esp']));
+    composite.setLoadOrder(new Set(['A.esp']), new Map([['A.esp', { readOnly: true }]]));
     expect(composite.getTreeItem(PLUGIN_ROW).tooltip).toContain('read-only');
 
     composite.setLoadOrder(undefined);
@@ -434,7 +436,7 @@ describe('PluginsTreeComposite — read-only tooltip', () => {
     });
     await composite.getChildren();
 
-    composite.setLoadOrder(new Set(['A.esp']), new Set(['A.esp']));
+    composite.setLoadOrder(new Set(['A.esp']), new Map([['A.esp', { readOnly: true }]]));
 
     const tooltip = composite.getTreeItem(PLUGIN_ROW).tooltip as string;
     expect(tooltip).toContain('Master A.esp is not loaded before this plugin');
@@ -442,7 +444,7 @@ describe('PluginsTreeComposite — read-only tooltip', () => {
 
     // Going read-only → editable on the same (reused) row object must restore exactly the row
     // provider's own tooltip, not leave the read-only note stuck on top of it.
-    composite.setLoadOrder(new Set(['A.esp']), new Set());
+    composite.setLoadOrder(new Set(['A.esp']));
 
     expect(composite.getTreeItem(PLUGIN_ROW).tooltip).toBe('Master A.esp is not loaded before this plugin');
   });
@@ -456,8 +458,8 @@ describe('PluginsTreeComposite — master-issue decoration (ADR-0037 AC1/AC2/AC4
     const { composite, render } = make([PLUGIN_ROW]);
     await render();
 
-    composite.setLoadOrder(new Set(['A.esp']), new Set(), new Map([
-      ['a.esp', [{ masterName: 'Ghost.esm', kind: 'DirectlyMissing' as const }]],
+    composite.setLoadOrder(new Set(['A.esp']), new Map([
+      ['a.esp', { masterIssues: [{ masterName: 'Ghost.esm', kind: 'DirectlyMissing' as const }] }],
     ]));
 
     const item = composite.getTreeItem(PLUGIN_ROW);
@@ -472,8 +474,8 @@ describe('PluginsTreeComposite — master-issue decoration (ADR-0037 AC1/AC2/AC4
     const { composite, render } = make([PLUGIN_ROW]);
     await render();
 
-    composite.setLoadOrder(new Set(['A.esp']), new Set(), new Map([
-      ['a.esp', [{ masterName: 'Broken.esm', kind: 'Unloadable' as const }]],
+    composite.setLoadOrder(new Set(['A.esp']), new Map([
+      ['a.esp', { masterIssues: [{ masterName: 'Broken.esm', kind: 'Unloadable' as const }] }],
     ]));
 
     const tooltip = composite.getTreeItem(PLUGIN_ROW).tooltip as string;
@@ -485,8 +487,8 @@ describe('PluginsTreeComposite — master-issue decoration (ADR-0037 AC1/AC2/AC4
     const { composite, render } = make([PLUGIN_ROW]);
     await render();
 
-    composite.setLoadOrder(new Set(['A.esp']), new Set(), new Map([
-      ['A.ESP', [{ masterName: 'Ghost.esm', kind: 'DirectlyMissing' as const }]],
+    composite.setLoadOrder(new Set(['A.esp']), new Map([
+      ['A.ESP', { masterIssues: [{ masterName: 'Ghost.esm', kind: 'DirectlyMissing' as const }] }],
     ]));
 
     expect(composite.getTreeItem(PLUGIN_ROW).tooltip).toContain('Missing master');
@@ -497,8 +499,8 @@ describe('PluginsTreeComposite — master-issue decoration (ADR-0037 AC1/AC2/AC4
   it('never touches collapsibleState — AC2, and the leading slot stays the checkbox\'s alone', async () => {
     const { composite, render } = make([PLUGIN_ROW]);
     await render();
-    composite.setLoadOrder(new Set(['A.esp']), new Set(), new Map([
-      ['a.esp', [{ masterName: 'Ghost.esm', kind: 'DirectlyMissing' as const }]],
+    composite.setLoadOrder(new Set(['A.esp']), new Map([
+      ['a.esp', { masterIssues: [{ masterName: 'Ghost.esm', kind: 'DirectlyMissing' as const }] }],
     ]));
 
     const item = composite.getTreeItem(PLUGIN_ROW);
@@ -511,8 +513,8 @@ describe('PluginsTreeComposite — master-issue decoration (ADR-0037 AC1/AC2/AC4
     const { composite, render } = make([PLUGIN_ROW, OTHER_ROW]);
     await render();
 
-    composite.setLoadOrder(new Set(['A.esp', 'B.esp']), new Set(), new Map([
-      ['a.esp', [{ masterName: 'Ghost.esm', kind: 'DirectlyMissing' as const }]],
+    composite.setLoadOrder(new Set(['A.esp', 'B.esp']), new Map([
+      ['a.esp', { masterIssues: [{ masterName: 'Ghost.esm', kind: 'DirectlyMissing' as const }] }],
     ]));
 
     const item = composite.getTreeItem(OTHER_ROW);
@@ -525,12 +527,12 @@ describe('PluginsTreeComposite — master-issue decoration (ADR-0037 AC1/AC2/AC4
   it('clears icon, description and tooltip once the master resolves (reused-row hazard)', async () => {
     const { composite, render } = make([PLUGIN_ROW]);
     await render();
-    composite.setLoadOrder(new Set(['A.esp']), new Set(), new Map([
-      ['a.esp', [{ masterName: 'Ghost.esm', kind: 'DirectlyMissing' as const }]],
+    composite.setLoadOrder(new Set(['A.esp']), new Map([
+      ['a.esp', { masterIssues: [{ masterName: 'Ghost.esm', kind: 'DirectlyMissing' as const }] }],
     ]));
     expect(composite.getTreeItem(PLUGIN_ROW).tooltip).toContain('Missing master');
 
-    composite.setLoadOrder(new Set(['A.esp']), new Set(), new Map());
+    composite.setLoadOrder(new Set(['A.esp']));
 
     const item = composite.getTreeItem(PLUGIN_ROW);
     expect(item.tooltip).toBeUndefined();
@@ -545,8 +547,8 @@ describe('PluginsTreeComposite — master-issue decoration (ADR-0037 AC1/AC2/AC4
     const { composite, render } = make([PLUGIN_ROW]);
     await render();
 
-    expect(() => composite.setLoadOrder(new Set(['A.esp']), new Set(), new Map([
-      ['a.esp', undefined as unknown as { masterName: string; kind: 'DirectlyMissing' | 'Unloadable' }[]],
+    expect(() => composite.setLoadOrder(new Set(['A.esp']), new Map([
+      ['a.esp', { masterIssues: undefined as unknown as MasterIssue[] }],
     ]))).not.toThrow();
 
     const item = composite.getTreeItem(PLUGIN_ROW);
@@ -566,7 +568,7 @@ describe('PluginsTreeComposite — load-failure decoration (ADR-0037 AC7)', () =
     // The reason can be a multi-line exception-chain summary (LoadOrder.PluginLoadFailure
     // joins outer through innermost message) — the tooltip must carry every line, readably.
     const reason = 'InvalidOperationException: Malformed record\nFormatException: bad subrecord at offset 12';
-    composite.setLoadOrder(new Set(), new Set(), new Map(), new Map([['a.esp', reason]]));
+    composite.setLoadOrder(new Set(), new Map([['a.esp', { loadFailure: reason }]]));
 
     const item = composite.getTreeItem(PLUGIN_ROW);
     expect(item.iconPath).toBeInstanceOf(vscode.ThemeIcon);
@@ -581,7 +583,7 @@ describe('PluginsTreeComposite — load-failure decoration (ADR-0037 AC7)', () =
     const { composite, render } = make([PLUGIN_ROW]);
     await render();
 
-    composite.setLoadOrder(new Set(), new Set(), new Map(), new Map([['a.esp', 'Malformed record']]));
+    composite.setLoadOrder(new Set(), new Map([['a.esp', { loadFailure: 'Malformed record' }]]));
 
     expect(composite.getTreeItem(PLUGIN_ROW).collapsibleState).toBe(vscode.TreeItemCollapsibleState.None);
   });
@@ -590,7 +592,7 @@ describe('PluginsTreeComposite — load-failure decoration (ADR-0037 AC7)', () =
     const { composite, render } = make([PLUGIN_ROW]);
     await render();
 
-    composite.setLoadOrder(new Set(), new Set(), new Map(), new Map([['A.ESP', 'Malformed record']]));
+    composite.setLoadOrder(new Set(), new Map([['A.ESP', { loadFailure: 'Malformed record' }]]));
 
     expect(composite.getTreeItem(PLUGIN_ROW).tooltip).toContain('Failed to load');
   });
@@ -598,10 +600,10 @@ describe('PluginsTreeComposite — load-failure decoration (ADR-0037 AC7)', () =
   it('clears the failed-tooltip once a later reconcile reports the plugin loaded', async () => {
     const { composite, render } = make([PLUGIN_ROW]);
     await render();
-    composite.setLoadOrder(new Set(), new Set(), new Map(), new Map([['a.esp', 'Malformed record']]));
+    composite.setLoadOrder(new Set(), new Map([['a.esp', { loadFailure: 'Malformed record' }]]));
     expect(composite.getTreeItem(PLUGIN_ROW).tooltip).toContain('Failed to load');
 
-    composite.setLoadOrder(new Set(['A.esp']), new Set(), new Map(), new Map());
+    composite.setLoadOrder(new Set(['A.esp']));
 
     const item = composite.getTreeItem(PLUGIN_ROW);
     expect(item.tooltip).toBeUndefined();
@@ -612,11 +614,39 @@ describe('PluginsTreeComposite — load-failure decoration (ADR-0037 AC7)', () =
     const { composite, render } = make([PLUGIN_ROW, OTHER_ROW]);
     await render();
 
-    composite.setLoadOrder(new Set(['B.esp']), new Set(), new Map(), new Map([['a.esp', 'Malformed record']]));
+    composite.setLoadOrder(new Set(['B.esp']), new Map([['a.esp', { loadFailure: 'Malformed record' }]]));
 
     const item = composite.getTreeItem(OTHER_ROW);
     expect(item.tooltip).toBeUndefined();
     expect(item.iconPath).toBeUndefined();
+  });
+});
+
+// A plugin that loaded but holds a record Mutagen could not read carries the same failure prefix
+// as a failed plugin, from the fact the plugin listing already answers.
+describe('parse-failure decoration', () => {
+  it('flags a plugin holding an unreadable record, and leaves every other row alone', async () => {
+    const { composite, render } = make([PLUGIN_ROW, OTHER_ROW]);
+    await render();
+
+    composite.setLoadOrder(
+      new Set(['A.esp', 'B.esp']), new Map([['a.esp', { parseFailure: true }]]));
+
+    const flagged = composite.getTreeItem(PLUGIN_ROW);
+    expect((flagged.iconPath as vscode.ThemeIcon).id).toBe('error');
+    expect(flagged.tooltip).toContain('could not be read');
+    expect(composite.getTreeItem(OTHER_ROW).iconPath).toBeUndefined();
+  });
+
+  it('clears once a later reconcile reports the plugin whole', async () => {
+    const { composite, render } = make([PLUGIN_ROW]);
+    await render();
+    composite.setLoadOrder(new Set(['A.esp']), new Map([['a.esp', { parseFailure: true }]]));
+    expect(composite.getTreeItem(PLUGIN_ROW).iconPath).toBeDefined();
+
+    composite.setLoadOrder(new Set(['A.esp']));
+
+    expect(composite.getTreeItem(PLUGIN_ROW).iconPath).toBeUndefined();
   });
 });
 
@@ -638,7 +668,7 @@ describe('malformed-plugin diagnosis decoration', () => {
   it('a load failure keeps decoration authority over a diagnosis on the same row', async () => {
     const { composite, render } = make([PLUGIN_ROW]);
     await render();
-    composite.setLoadOrder(new Set(), new Set(), new Map(), new Map([['a.esp', 'Malformed record']]));
+    composite.setLoadOrder(new Set(), new Map([['a.esp', { loadFailure: 'Malformed record' }]]));
 
     composite.setDiagnoses(new Map([['a.esp', ['some diagnosis']]]));
 
@@ -681,8 +711,8 @@ describe('PluginsTreeComposite — reconciling the order-aware badge with load o
     const { composite, render } = make([row]);
     await render();
 
-    composite.setLoadOrder(new Set(['A.esp']), new Set(), new Map([
-      ['a.esp', [{ masterName: 'Ghost.esm', kind: 'DirectlyMissing' as const }]],
+    composite.setLoadOrder(new Set(['A.esp']), new Map([
+      ['a.esp', { masterIssues: [{ masterName: 'Ghost.esm', kind: 'DirectlyMissing' as const }] }],
     ]));
 
     const tooltip = composite.getTreeItem(row).tooltip as string;
@@ -698,8 +728,8 @@ describe('PluginsTreeComposite — reconciling the order-aware badge with load o
     const { composite, render } = make([row]);
     await render();
 
-    composite.setLoadOrder(new Set(['A.esp']), new Set(), new Map([
-      ['a.esp', [{ masterName: 'Ghost.esm', kind: 'DirectlyMissing' as const }]],
+    composite.setLoadOrder(new Set(['A.esp']), new Map([
+      ['a.esp', { masterIssues: [{ masterName: 'Ghost.esm', kind: 'DirectlyMissing' as const }] }],
     ]));
 
     const tooltip = composite.getTreeItem(row).tooltip as string;
@@ -718,7 +748,7 @@ describe('PluginsTreeComposite — reconciling the order-aware badge with load o
     });
     await composite.getChildren();
 
-    composite.setLoadOrder(new Set(['A.esp']), new Set(), new Map());
+    composite.setLoadOrder(new Set(['A.esp']));
 
     const item = composite.getTreeItem(PLUGIN_ROW);
     expect(item.tooltip).toBe('A.esp\nMaster Ghost.esm is not loaded before this plugin');
@@ -732,8 +762,8 @@ describe('PluginsTreeComposite — reconciling the order-aware badge with load o
     });
     await composite.getChildren();
 
-    composite.setLoadOrder(new Set(['A.esp']), new Set(), new Map([
-      ['a.esp', [{ masterName: 'Ghost.esm', kind: 'DirectlyMissing' as const }]],
+    composite.setLoadOrder(new Set(['A.esp']), new Map([
+      ['a.esp', { masterIssues: [{ masterName: 'Ghost.esm', kind: 'DirectlyMissing' as const }] }],
     ]));
 
     expect(composite.getTreeItem(PLUGIN_ROW).tooltip).toContain('Missing master: Ghost.esm');

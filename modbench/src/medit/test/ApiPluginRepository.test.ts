@@ -17,6 +17,7 @@ function makePlugin(i: number): PluginMetadata {
     masterIssues: [],
     hasMatchingRecords: true,
     isTracked: false,
+    hasParseFailure: false,
   };
 }
 
@@ -46,6 +47,7 @@ function makeRecord(i: number): RecordSummary {
     origin: 'Data',
     workingTreeState: 'None',
     hasContainerChildren: false,
+    hasParseFailure: false,
   };
 }
 

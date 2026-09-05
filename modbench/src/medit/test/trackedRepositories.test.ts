@@ -18,6 +18,7 @@ function makePlugin(overrides: Partial<PluginMetadata> & { path: string; origin:
     masterIssues: [],
     hasMatchingRecords: true,
     isTracked: false,
+    hasParseFailure: false,
     ...overrides,
   };
 }

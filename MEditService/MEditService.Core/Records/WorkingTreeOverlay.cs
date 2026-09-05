@@ -16,11 +16,10 @@ internal sealed class WorkingTreeOverlay
 {
     private const string HeadRelation = "records_head";
 
-    // The columns `records` and `records_committed` share, in declaration order — named rather than
-    // SELECT *'d so the snapshot copy below is pinned to a column list instead of to the two tables
-    // happening to stay in the same order forever.
-    private const string RecordColumnList =
-        "form_key, plugin, origin, record_type, editor_id, \"ref\", body, content_hash";
+    // The columns `records` and `records_committed` share, in declaration order. Every read, copy
+    // and insert here names it, so no column is silently dropped from a row.
+    internal const string RecordColumnList =
+        "form_key, plugin, origin, record_type, editor_id, \"ref\", body, content_hash, parse_diagnosis";
 
     private readonly DuckDBConnection _connection;
     private readonly ILogger _logger;
@@ -135,20 +134,22 @@ internal sealed class WorkingTreeOverlay
         if (!IsRegisteredPlugin(key))
             throw new InvalidOperationException($"{key.Name} ({key.Origin}) is not an indexed plugin.");
 
-        InsertRecordRow(key, "mirror.records", SourceRef.WorkingTree, formKey, recordType, body);
+        InsertRecordRow(key, "mirror.records", SourceRef.WorkingTree, formKey, recordType, body, parseDiagnosis: null);
 
         // form_lookup's insert-if-absent branch in RederiveIndexRowsForRecord below reads this row
         // back out of `records`, which is why the insert above must land first.
     }
 
-    // Both InsertNewWorkingTreeRow and SeedOneCommittedOnly need the same eight columns in the same
-    // $-binding order; extracted so the two cannot drift into different column orders.
-    private void InsertRecordRow(PluginKey key, string table, string refValue, string formKey, string recordType, string body)
+    // Both InsertNewWorkingTreeRow and SeedOneCommittedOnly write through this one column list in
+    // one $-binding order, so the two cannot drift apart or leave a column off a row.
+    private void InsertRecordRow(
+        PluginKey key, string table, string refValue, string formKey, string recordType, string body,
+        string? parseDiagnosis)
     {
         using var cmd = _connection.CreateCommand();
         cmd.CommandText = $"""
-            INSERT INTO {table} (form_key, plugin, origin, record_type, editor_id, "ref", body, content_hash)
-            VALUES ($1, $2, $3, $4, json_extract_string($5, '$.EditorID'), '{refValue}', $5, $6)
+            INSERT INTO {table} ({RecordColumnList})
+            VALUES ($1, $2, $3, $4, json_extract_string($5, '$.EditorID'), '{refValue}', $5, $6, $7)
             """;
         cmd.Parameters.Add(new DuckDBParameter { Value = formKey });
         cmd.Parameters.Add(new DuckDBParameter { Value = key.Name });
@@ -156,6 +157,7 @@ internal sealed class WorkingTreeOverlay
         cmd.Parameters.Add(new DuckDBParameter { Value = recordType });
         cmd.Parameters.Add(new DuckDBParameter { Value = body });
         cmd.Parameters.Add(new DuckDBParameter { Value = GitBlobHash.Of(Encoding.UTF8.GetBytes(body)) });
+        cmd.Parameters.Add(new DuckDBParameter { Value = (object?)parseDiagnosis ?? DBNull.Value });
         cmd.ExecuteNonQuery();
     }
 
@@ -240,7 +242,7 @@ internal sealed class WorkingTreeOverlay
         // Straight into records_committed with no `records` counterpart — the inverse of
         // InsertNewWorkingTreeRow — which falls out of records_head's definition with no change to
         // that view.
-        InsertRecordRow(key, "mirror.records_committed", SourceRef.Committed, formKey, recordType, body);
+        InsertRecordRow(key, "mirror.records_committed", SourceRef.Committed, formKey, recordType, body, parseDiagnosis: null);
     }
 
     // Copies the still-clean Effective row aside the first time a record diverges, and does nothing

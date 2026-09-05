@@ -511,8 +511,35 @@ touches the leading slot.** The checkbox/lock position is reserved for exactly o
 "can you change whether this loads?" (see Row model above) — and every decoration in this
 section is icon, description and tooltip only.
 
+**Parse-failure prefix.** A record ingest cannot turn into its document — Mutagen refuses the
+read, the reference walk throws, or the codec write fails — is indexed anyway rather than dropped,
+and so is the rest of its plugin. Its stored body is the members the codec reads before any field:
+the discriminator for a path-ambiguous type, its FormKey and its EditorID, so the record is listed
+under its own name, opens in the compare grid, and is never silently absent from Search. The row
+carries the diagnosis.
+
+**The prefix is the same `error` icon at `problemsErrorIcon.foreground` the load-failure decoration
+below uses, and the rule is one line: anything with an error on it, or on anything the tree shows
+beneath it, carries it.** That reaches the record row (diagnosis in the tooltip), its record-type
+node, a Quest or Dialog Topic row whose child failed and that child's own row, the whole worldspace
+chain above a failed cell or placed reference — placed group, cell, sub-block, block, worldspace,
+Worldspaces — the interior-cell listing and its group node, and the plugin row. Nothing else
+carries it. **The tree never walks children to work this out.** Every listing that already carries
+counts also carries the fact: `RecordSummary` and `ContainerChildSummary` carry `parseDiagnosis`
+plus `hasParseFailure`, and `PluginRecordTypeCount`, `PluginResponse`, `WorldspaceSummary`,
+`CellSummary`, `PlacedSummary` and the block/sub-block DTOs carry `hasParseFailure` alone, so a
+node renders its prefix from the page it already holds.
+
+**A record type whose enumeration cannot be finished marks that type, not the plugin.** Mutagen's
+group walk throws out of its own enumerator and cannot be resumed, so ingest keeps every record it
+yielded first and records the diagnosis against the record type. Such a type stays in the tree with
+the prefix on it even when nothing of it could be read at all, which is what keeps a whole missing
+subtree from reading as "this plugin has no NPCs". The plugin still opens and its other types index
+normally. The record editor's read-only handling of a parse-failed record is specced separately.
+
 **Load-failure decoration (ADR-0037).** A plugin that fails to open or parse is
-skipped so the rest of the load order still loads (`LoadOrder.Failures`), but its row is
+skipped so the rest of the load order still loads (`LoadOrder.Failures`) — a whole file whose
+bytes cannot be read at all has no record identity to hang a parse status on — but its row is
 never dropped — Mod Management builds rows from `plugins.txt`, not from which plugins the load order
 managed to index, so the row was already there. `PluginsTreeComposite` decorates it with its
 recorded failure reason ("Failed to load: `{reason}`") the same way it decorates a master issue;

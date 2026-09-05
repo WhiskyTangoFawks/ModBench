@@ -6,6 +6,7 @@ import type {
 } from './ApiClient';
 import type { PluginRepository } from './PluginRepository';
 import { recordResourceUri } from './recordResourceUri';
+import { failurePrefixIcon } from '../failurePrefixIcon';
 export { headerFormKeyFor } from './formKeyIdentity';
 
 // Interior-cell listing is the only surface that pages — record-type children (below) load in
@@ -19,6 +20,20 @@ const UNLIMITED_RECORDS = 2147483647;
 
 function formId(formKey: string): string {
   return formKey.split(':')[0];
+}
+
+// "Could not be read into its document" rather than "Mutagen could not parse it": ingest's one
+// catch spans the read, the reference walk and the codec write, and only the diagnosis knows which.
+function failureNote(subject: string, diagnosis: string | null | undefined): string {
+  return diagnosis
+    ? `${subject} could not be read into its document: ${diagnosis}`
+    : `${subject} holds a record that could not be read into its document.`;
+}
+
+// The backend says which nodes hold an unreadable record, so nothing here walks children.
+function markFailure(item: vscode.TreeItem, tooltip: string): void {
+  item.iconPath = failurePrefixIcon();
+  item.tooltip = tooltip;
 }
 
 // This provider deliberately has no plugin-row node — the merged tree's plugin rows are
@@ -35,13 +50,27 @@ export class RecordTypeNode extends vscode.TreeItem {
     /** ADR-0036: which copy of `plugin` this node browses, or undefined for an ordinary
      *  load-order plugin (the backend resolves that case; a filename is unambiguous there). */
     public readonly origin?: string,
+    hasParseFailure = false,
   ) {
     // Label is the xEdit-parity display name ("Activator"); recordType (the raw
     // 4-char signature, e.g. "acti") stays the internal id — cache key, contextValue, commands.
     super(displayName, vscode.TreeItemCollapsibleState.Collapsed);
     this.description = count.toLocaleString();
     this.contextValue = 'recordType';
+    if (hasParseFailure) markFailure(this, failureNote(displayName, null));
   }
+}
+
+// The contextValues state, on the row, refusals the backend would otherwise reach only after
+// walking the whole gesture. FormKey shape is Mutagen's own "<hex6>:<ModKey>", so the defining
+// plugin is everything after the first colon.
+function recordContextValue(record: RecordSummary, immutable: boolean, tracked: boolean): string {
+  if (immutable) return 'recordImmutable';
+  // toLowerCase, not localeCompare: matches the backend's OrdinalIgnoreCase filename semantics
+  // without host-locale hazards, and is the comparison renumberConfirm.ts already uses.
+  const originModKey = record.formKey.slice(record.formKey.indexOf(':') + 1);
+  if (originModKey.toLowerCase() !== record.plugin.toLowerCase()) return 'recordOverride';
+  return tracked ? 'recordTracked' : 'recordUntracked';
 }
 
 export class RecordNode extends vscode.TreeItem {
@@ -69,16 +98,7 @@ export class RecordNode extends vscode.TreeItem {
     const label = record.editorId ? `${record.editorId} [${record.formKey}]` : record.formKey;
     const collapsible = containerChildType && hasContainerChildren;
     super(label, collapsible ? vscode.TreeItemCollapsibleState.Collapsed : vscode.TreeItemCollapsibleState.None);
-    // FormKey shape is Mutagen's own "<hex6>:<ModKey>", so the origin is everything after the
-    // first colon. The contextValues below state, on the row, refusals the backend would
-    // otherwise reach only after walking the whole gesture.
-    const originModKey = record.formKey.slice(record.formKey.indexOf(':') + 1);
-    // toLowerCase, not localeCompare: matches the backend's OrdinalIgnoreCase filename semantics
-    // without host-locale hazards, and is the comparison renumberConfirm.ts already uses.
-    const isNative = originModKey.toLowerCase() === record.plugin.toLowerCase();
-    if (immutable) this.contextValue = 'recordImmutable';
-    else if (!isNative) this.contextValue = 'recordOverride';
-    else this.contextValue = tracked ? 'recordTracked' : 'recordUntracked';
+    this.contextValue = recordContextValue(record, immutable, tracked);
     this.command = {
       command: 'modbench.openEditor',
       title: 'Open Record',
@@ -87,6 +107,7 @@ export class RecordNode extends vscode.TreeItem {
     // RecordDecorationProvider's keying identity — record.plugin (this row's own copy's owning
     // plugin, which an override stack row can differ from the RecordTypeNode's) paired with origin.
     this.resourceUri = recordResourceUri(record.plugin, origin, record.formKey);
+    if (record.hasParseFailure) markFailure(this, failureNote('This record', record.parseDiagnosis));
   }
 }
 
@@ -97,9 +118,10 @@ export class RecordNode extends vscode.TreeItem {
 // needs it too.
 export class WorldspacesNode extends vscode.TreeItem {
   readonly kind = 'worldspaces' as const;
-  constructor(public readonly plugin: string, public readonly origin?: string) {
+  constructor(public readonly plugin: string, public readonly origin?: string, hasParseFailure = false) {
     super('Worldspaces', vscode.TreeItemCollapsibleState.Collapsed);
     this.contextValue = 'worldspaces';
+    if (hasParseFailure) markFailure(this, failureNote('Worldspaces', null));
   }
 }
 
@@ -110,6 +132,7 @@ export class WorldspaceNode extends vscode.TreeItem {
     super(`${label} [WRLD:${formId(worldspace.formKey)}]`, vscode.TreeItemCollapsibleState.Collapsed);
     this.contextValue = 'worldspace';
     this.command = { command: 'modbench.openEditor', title: 'Open Record', arguments: [{ formKey: worldspace.formKey, label }] };
+    if (worldspace.hasParseFailure) markFailure(this, failureNote(label, null));
   }
 }
 
@@ -120,6 +143,7 @@ export class BlockNode extends vscode.TreeItem {
   constructor(public readonly plugin: string, public readonly block: WorldspaceBlock, public readonly origin?: string) {
     super(`Block ${block.x}, ${block.y}`, vscode.TreeItemCollapsibleState.Collapsed);
     this.contextValue = 'block';
+    if (block.hasParseFailure) markFailure(this, failureNote('This block', null));
   }
 }
 
@@ -128,6 +152,7 @@ export class SubBlockNode extends vscode.TreeItem {
   constructor(public readonly plugin: string, public readonly subBlock: WorldspaceSubBlock, public readonly origin?: string) {
     super(`Sub-Block ${subBlock.x}, ${subBlock.y}`, vscode.TreeItemCollapsibleState.Collapsed);
     this.contextValue = 'subBlock';
+    if (subBlock.hasParseFailure) markFailure(this, failureNote('This sub-block', null));
   }
 }
 
@@ -154,6 +179,7 @@ export class CellNode extends vscode.TreeItem {
     super(label, vscode.TreeItemCollapsibleState.Collapsed);
     this.contextValue = 'cell';
     this.command = { command: 'modbench.openEditor', title: 'Open Record', arguments: [{ formKey: cell.formKey, label }] };
+    if (cell.hasParseFailure) markFailure(this, failureNote(label, null));
   }
 }
 
@@ -169,6 +195,9 @@ export class PlacedGroupNode extends vscode.TreeItem {
     super(group === 'persistent' ? 'Persistent' : 'Temporary', vscode.TreeItemCollapsibleState.Collapsed);
     this.description = placed.length.toLocaleString();
     this.contextValue = `placedGroup-${group}`;
+    // A group node has no record of its own, so its fact is exactly its rows', read from the
+    // listing this node was built from.
+    if (placed.some(p => p.hasParseFailure)) markFailure(this, failureNote('This group', null));
   }
 }
 
@@ -186,14 +215,16 @@ export class PlacedNode extends vscode.TreeItem {
     super(label, vscode.TreeItemCollapsibleState.None);
     this.contextValue = immutable ? 'refrImmutable' : 'refr';
     this.command = { command: 'modbench.openEditor', title: 'Open Record', arguments: [{ formKey: placed.formKey, label }] };
+    if (placed.hasParseFailure) markFailure(this, failureNote(label, null));
   }
 }
 
 export class InteriorCellsNode extends vscode.TreeItem {
   readonly kind = 'interiorCells' as const;
-  constructor(public readonly plugin: string, public readonly origin?: string) {
+  constructor(public readonly plugin: string, public readonly origin?: string, hasParseFailure = false) {
     super('cell - Interior', vscode.TreeItemCollapsibleState.Collapsed);
     this.contextValue = 'interiorCells';
+    if (hasParseFailure) markFailure(this, failureNote('Interior cells', null));
   }
 }
 
@@ -227,9 +258,11 @@ export type PluginTreeNode =
 // Record types that get their own dedicated node in the worldspace tree, keyed by raw signature —
 // one source of truth, since a set membership check and a separate per-type equality check could
 // drift.
-const SPATIAL_NODE_FACTORIES: Record<string, (pluginName: string, origin?: string) => PluginTreeNode> = {
-  wrld: (pluginName, origin) => new WorldspacesNode(pluginName, origin),
-  cell: (pluginName, origin) => new InteriorCellsNode(pluginName, origin),
+const SPATIAL_NODE_FACTORIES: Record<
+  string, (pluginName: string, origin: string | undefined, hasParseFailure: boolean) => PluginTreeNode
+> = {
+  wrld: (pluginName, origin, hasParseFailure) => new WorldspacesNode(pluginName, origin, hasParseFailure),
+  cell: (pluginName, origin, hasParseFailure) => new InteriorCellsNode(pluginName, origin, hasParseFailure),
 };
 
 // Record types represented spatially in the worldspace tree — hidden from the flat type
@@ -451,11 +484,14 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
       // The spatial endpoints take the same optional origin the flat record routes do
       // (RecordTypeNode below), so a copy the load order does not name browses its own worldspaces
       // and cells instead of having them omitted entirely.
+      const failureOf = new Map(types.map(t => [t.type, t.hasParseFailure] as const));
       for (const [type, makeNode] of Object.entries(SPATIAL_NODE_FACTORIES)) {
-        if (typesPresent.has(type)) nodes.push(makeNode(pluginName, origin));
+        if (typesPresent.has(type)) nodes.push(makeNode(pluginName, origin, failureOf.get(type) ?? false));
       }
       for (const t of types) {
-        if (!SPATIAL_TYPES.has(t.type)) nodes.push(new RecordTypeNode(pluginName, t.type, t.count, t.displayName, origin));
+        if (!SPATIAL_TYPES.has(t.type)) {
+          nodes.push(new RecordTypeNode(pluginName, t.type, t.count, t.displayName, origin, t.hasParseFailure));
+        }
       }
       return nodes;
     });

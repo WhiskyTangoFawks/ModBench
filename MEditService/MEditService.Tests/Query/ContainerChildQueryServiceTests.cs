@@ -41,6 +41,8 @@ public class ContainerChildQueryServiceTests
         public IReadOnlyList<RecordTypeCount> GetRecordTypeCounts(PluginKey plugin) => [];
         public RecordLookupEntry? Resolve(string formKey) => null;
         public IReadOnlySet<string> GetPluginsWithMatchingRecords(IEnumerable<string> t) => new HashSet<string>();
+        public IReadOnlySet<string> GetPluginsWithParseFailures() => new HashSet<string>();
+        public IReadOnlySet<string> GetWorldspacesWithFailuresBelow(PluginKey p) => new HashSet<string>();
         public IReadOnlyList<ReferenceResult> GetReferencedBy(string targetFormKey) => [];
         public IReadOnlyList<string> GetNativeFormKeys(PluginKey plugin) => [];
         public IReadOnlyList<string> GetEffectiveMasters(PluginKey plugin) => [];

@@ -65,6 +65,22 @@ public class TableDdlBuilderTests
         Assert.Equal(["plugin", "origin", "file_path", "content_hash", "index_version"], cols);
     }
 
+    // WorkingTreeOverlay writes and copies rows through one named column list; a column the DDL
+    // adds and that list omits is dropped from every row it writes, silently.
+    [Theory]
+    [InlineData("records")]
+    [InlineData("records_committed")]
+    public void TheSharedRecordColumnList_NamesEveryColumnOfBothRecordTables_InOrder(string tableName)
+    {
+        using var conn = OpenMemory();
+        TableDdlBuilder.CreateTables(conn);
+
+        var listed = WorkingTreeOverlay.RecordColumnList
+            .Split(',').Select(c => c.Trim().Trim('"')).ToList();
+
+        Assert.Equal(GetColumns(conn, tableName, "mirror"), listed);
+    }
+
     [Fact]
     public void CreateRecordTypeViews_CreatesNpcView_WithBaseColumns()
     {

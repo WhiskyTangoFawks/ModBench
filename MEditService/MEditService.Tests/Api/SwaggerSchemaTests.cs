@@ -176,11 +176,11 @@ public sealed class SwaggerSchemaTests
         {
             "name", "path", "isLight", "isMaster", "masters", "recordCount", "isImmutable",
             "participates", "origin", "masterIssues", "inLoadOrder", "enabled", "winning",
-            "hasMatchingRecords", "isTracked",
+            "hasMatchingRecords", "isTracked", "hasParseFailure",
         })]
     // CellSummary: the four genuinely-nullable members (EditorId, CellX, CellY, FullName) must
     // survive as optional `| null` on the wire.
-    [InlineData("CellSummary", new[] { "formKey", "isPersistentWorldspaceCell" })]
+    [InlineData("CellSummary", new[] { "formKey", "isPersistentWorldspaceCell", "hasParseFailure" })]
     public async Task NonNullableProperties_AreRequired_AndNullableOnesAreNot(
         string schemaName, string[] expectedRequired)
     {

@@ -32,8 +32,12 @@ public sealed class WorldspaceQueryService(ILoadOrderMirror loadOrder, ILogger<W
         // Without an origin filter, two same-filename plugins' worldspace lists silently merge
         // into one under this plugin name.
         var query = new RecordQuery(RecordTypes: ["wrld"], Plugin: new PluginKey(plugin, origin), Limit: WorldspaceListLimit, Offset: 0);
+        // Search answers "on it or below it" through the container relation, which a worldspace's
+        // cells are not part of, so the cell side is a second read rather than a walk from here.
+        var failedBelow = repo.GetWorldspacesWithFailuresBelow(new PluginKey(plugin, origin));
         return [.. repo.Search(query)
-            .Items.Select(r => new WorldspaceSummary(r.FormKey, r.EditorId))];
+            .Items.Select(r => new WorldspaceSummary(
+                r.FormKey, r.EditorId, r.HasParseFailure || failedBelow.Contains(r.FormKey)))];
     }
 
     public WorldspaceBlocks GetWorldspaceBlocks(string plugin, string worldspaceFormKey, string? origin = null)
@@ -53,21 +57,32 @@ public sealed class WorldspaceQueryService(ILoadOrderMirror loadOrder, ILogger<W
                 worldspaceFormKey, plugin, origin, topCellRows.Count);
         }
         var topCells = topCellRows
-            .Select((c, i) => new CellSummary(c.FormKey, c.EditorId, c.CellX, c.CellY, IsPersistentWorldspaceCell: i == 0, FullName: c.FullName))
+            .Select((c, i) => new CellSummary(
+                c.FormKey, c.EditorId, c.CellX, c.CellY, IsPersistentWorldspaceCell: i == 0,
+                FullName: c.FullName, HasParseFailure: c.HasParseFailure))
             .ToList();
 
+        // A block and a sub-block are grouping nodes with no record of their own, so their failure
+        // fact is exactly their cells' — folded here, from the rows this response already holds.
         var blocks = cells
             .Where(c => c.BlockX != null)
             .GroupBy(c => (X: c.BlockX!.Value, Y: c.BlockY ?? 0))
             .OrderBy(g => g.Key.X).ThenBy(g => g.Key.Y)
-            .Select(blockGroup => new WorldspaceBlockDto(
-                blockGroup.Key.X, blockGroup.Key.Y,
-                [.. blockGroup
+            .Select(blockGroup =>
+            {
+                var subBlocks = blockGroup
                     .GroupBy(c => (X: c.SubX ?? 0, Y: c.SubY ?? 0))
                     .OrderBy(g => g.Key.X).ThenBy(g => g.Key.Y)
                     .Select(subGroup => new WorldspaceSubBlockDto(
                         subGroup.Key.X, subGroup.Key.Y,
-                        [.. subGroup.Select(c => new CellSummary(c.FormKey, c.EditorId, c.CellX, c.CellY, FullName: c.FullName))]))]))
+                        [.. subGroup.Select(c => new CellSummary(
+                            c.FormKey, c.EditorId, c.CellX, c.CellY,
+                            FullName: c.FullName, HasParseFailure: c.HasParseFailure))],
+                        subGroup.Any(c => c.HasParseFailure)))
+                    .ToList();
+                return new WorldspaceBlockDto(
+                    blockGroup.Key.X, blockGroup.Key.Y, subBlocks, subBlocks.Exists(b => b.HasParseFailure));
+            })
             .ToList();
 
         return new WorldspaceBlocks(blocks, topCells);
