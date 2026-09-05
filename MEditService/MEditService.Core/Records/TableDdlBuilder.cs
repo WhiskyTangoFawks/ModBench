@@ -35,6 +35,7 @@ public sealed class TableDdlBuilder(SchemaReflector reflector)
         new("placement", "plugin", "origin", DerivesLoadOrder: false, DerivesWinner: false),
         new("cell_location", "plugin", "origin", DerivesLoadOrder: false, DerivesWinner: false),
         new("container_child", "plugin", "origin", DerivesLoadOrder: false, DerivesWinner: false),
+        new("record_type_failure", "plugin", "origin", DerivesLoadOrder: false, DerivesWinner: false),
     ];
 
     /// <summary>The winners relation, bare — no schema prefix — because it is load-order-derived
@@ -74,6 +75,7 @@ public sealed class TableDdlBuilder(SchemaReflector reflector)
         CreateFormLookupTable(connection);
         CreatePlacementTables(connection);
         CreateContainerChildTable(connection);
+        CreateRecordTypeFailureTable(connection);
 
         // Views after tables, in dependency order: the registered views over every mirror table, then
         // the Head views over the registered `records`/`records_committed`.
@@ -115,14 +117,14 @@ public sealed class TableDdlBuilder(SchemaReflector reflector)
     {
         Execute(connection, $"""
             CREATE TABLE IF NOT EXISTS {MirrorSchema}.records (
-                form_key       VARCHAR NOT NULL,
-                plugin         VARCHAR NOT NULL,
-                origin         VARCHAR NOT NULL DEFAULT '{PluginOrigin.DataDirectory}',
-                record_type    VARCHAR NOT NULL,
-                editor_id      VARCHAR,
-                "ref"          VARCHAR NOT NULL DEFAULT '{SourceRef.Committed}',
-                body           VARCHAR NOT NULL,
-                content_hash   VARCHAR NOT NULL,
+                form_key        VARCHAR NOT NULL,
+                plugin          VARCHAR NOT NULL,
+                origin          VARCHAR NOT NULL DEFAULT '{PluginOrigin.DataDirectory}',
+                record_type     VARCHAR NOT NULL,
+                editor_id       VARCHAR,
+                "ref"           VARCHAR NOT NULL DEFAULT '{SourceRef.Committed}',
+                body            VARCHAR NOT NULL,
+                content_hash    VARCHAR NOT NULL,
                 parse_diagnosis VARCHAR
             )
             """);
@@ -144,14 +146,14 @@ public sealed class TableDdlBuilder(SchemaReflector reflector)
     {
         Execute(connection, $"""
             CREATE TABLE IF NOT EXISTS {MirrorSchema}.records_committed (
-                form_key       VARCHAR NOT NULL,
-                plugin         VARCHAR NOT NULL,
-                origin         VARCHAR NOT NULL DEFAULT '{PluginOrigin.DataDirectory}',
-                record_type    VARCHAR NOT NULL,
-                editor_id      VARCHAR,
-                "ref"          VARCHAR NOT NULL DEFAULT '{SourceRef.Committed}',
-                body           VARCHAR NOT NULL,
-                content_hash   VARCHAR NOT NULL,
+                form_key        VARCHAR NOT NULL,
+                plugin          VARCHAR NOT NULL,
+                origin          VARCHAR NOT NULL DEFAULT '{PluginOrigin.DataDirectory}',
+                record_type     VARCHAR NOT NULL,
+                editor_id       VARCHAR,
+                "ref"           VARCHAR NOT NULL DEFAULT '{SourceRef.Committed}',
+                body            VARCHAR NOT NULL,
+                content_hash    VARCHAR NOT NULL,
                 parse_diagnosis VARCHAR
             )
             """);
@@ -342,6 +344,20 @@ public sealed class TableDdlBuilder(SchemaReflector reflector)
         Execute(connection, $"""
             CREATE INDEX IF NOT EXISTS idx_container_child_parent
                 ON {MirrorSchema}.container_child(parent_form_key, plugin)
+            """);
+    }
+
+    // A whole record type Mutagen could not finish enumerating: there is no record row to carry the
+    // status, because the records it would have carried are the ones that never arrived.
+    internal static void CreateRecordTypeFailureTable(DuckDBConnection connection)
+    {
+        Execute(connection, $"""
+            CREATE TABLE IF NOT EXISTS {MirrorSchema}.record_type_failure (
+                plugin          VARCHAR NOT NULL,
+                origin          VARCHAR NOT NULL DEFAULT '{PluginOrigin.DataDirectory}',
+                record_type     VARCHAR NOT NULL,
+                parse_diagnosis VARCHAR NOT NULL
+            )
             """);
     }
 

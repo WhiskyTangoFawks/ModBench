@@ -88,10 +88,11 @@ public record RecordSummary(
     // expand chevron for a qust/dial row. Search() is the only producer of true; every
     // other construction site has nothing to report.
     bool HasContainerChildren = false,
-    // Non-null exactly when Mutagen could not read this record at ingest, carrying the diagnosis
-    // (PluginDiagnosis.Describe()). A record that fails to parse is indexed with this rather than
-    // dropped, so Search can never omit one silently.
-    string? ParseDiagnosis = null);
+    // Non-null when ingest could not turn this record into its document — the Mutagen read, the
+    // reference walk or the codec write — so Search can never omit one silently.
+    string? ParseDiagnosis = null,
+    // The same fact widened to this row's subtree, so the tree never walks children to aggregate.
+    bool HasParseFailure = false);
 
 public record PagedResult<T>(IReadOnlyList<T> Items, int Total);
 

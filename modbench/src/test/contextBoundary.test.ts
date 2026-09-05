@@ -24,7 +24,13 @@ describe('bounded-context boundary in the merged Plugins tree', () => {
   it('the composite imports from neither context', () => {
     const imports = importsOf(read('PluginsTreeComposite.ts'));
     expect(imports.filter((s) => s.includes('medit') || s.includes('modmanager'))).toEqual([]);
-    expect(imports).toEqual(['vscode']);
+    expect(imports).toEqual(['vscode', './failurePrefixIcon']);
+  });
+
+  // The one shared presentation primitive both trees decorate with. It belongs to neither context
+  // and must stay that way, or importing it would carry one context into the other.
+  it('the shared failure prefix icon imports nothing but vscode', () => {
+    expect(importsOf(read('failurePrefixIcon.ts'))).toEqual(['vscode']);
   });
 
   // The name filter serves views from both contexts, so like the composite it belongs to neither

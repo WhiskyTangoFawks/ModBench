@@ -555,6 +555,7 @@ export interface components {
             cellY?: number | null;
             isPersistentWorldspaceCell: boolean;
             fullName?: string | null;
+            hasParseFailure: boolean;
         };
         CellSummaryPagedResult: {
             items: components["schemas"]["CellSummary"][];
@@ -611,6 +612,8 @@ export interface components {
             workingTreeState: components["schemas"]["WorkingTreeState"];
             recordType: string;
             hasContainerChildren: boolean;
+            parseDiagnosis?: string | null;
+            hasParseFailure: boolean;
         };
         CrashRepairOffer: {
             plugin: string;
@@ -736,6 +739,7 @@ export interface components {
             editorId?: string | null;
             baseFormKey?: string | null;
             recordType: string;
+            hasParseFailure: boolean;
         };
         PluginDiagnosisReport: {
             plugin: string;
@@ -884,6 +888,7 @@ export interface components {
             workingTreeState: components["schemas"]["WorkingTreeState"];
             hasContainerChildren: boolean;
             parseDiagnosis?: string | null;
+            hasParseFailure: boolean;
         };
         RecordSummaryPagedResult: {
             items: components["schemas"]["RecordSummary"][];
@@ -930,6 +935,7 @@ export interface components {
             /** Format: int32 */
             y: number;
             subBlocks: components["schemas"]["WorldspaceSubBlockDto"][];
+            hasParseFailure: boolean;
         };
         WorldspaceBlocks: {
             blocks: components["schemas"]["WorldspaceBlockDto"][];
@@ -941,10 +947,12 @@ export interface components {
             /** Format: int32 */
             y: number;
             cells: components["schemas"]["CellSummary"][];
+            hasParseFailure: boolean;
         };
         WorldspaceSummary: {
             formKey: string;
             editorId?: string | null;
+            hasParseFailure: boolean;
         };
     };
     responses: never;

@@ -47,6 +47,7 @@ function makeRecord(i: number): RecordSummary {
     origin: 'Data',
     workingTreeState: 'None',
     hasContainerChildren: false,
+    hasParseFailure: false,
   };
 }
 

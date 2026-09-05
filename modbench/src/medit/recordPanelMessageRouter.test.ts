@@ -57,6 +57,7 @@ function makeRecord(i: number, editorId: string | null = `Record${i}`): RecordSu
     origin: 'Data',
     workingTreeState: 'None',
     hasContainerChildren: false,
+  hasParseFailure: false,
   };
 }
 

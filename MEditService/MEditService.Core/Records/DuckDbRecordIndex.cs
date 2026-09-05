@@ -509,7 +509,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
             // Modified is ref='working-tree' with a committed snapshot; Added is the same ref with no
             // snapshot (a create writes nothing into records_committed). has_container_children is the
             // same correlated-EXISTS shape against container_child, which is never duplicated per ref.
-            const string cols = """
+            var cols = $"""
                 form_key, plugin, load_order_idx, is_winner, editor_id, origin, r."ref",
                 EXISTS (
                     SELECT 1 FROM records_committed rc
@@ -519,7 +519,13 @@ public sealed class DuckDbRecordIndex : IRecordIndex
                     SELECT 1 FROM container_child cc
                     WHERE cc.parent_form_key = r.form_key AND cc.plugin = r.plugin AND cc.origin = r.origin
                 ) AS has_container_children,
-                r.parse_diagnosis
+                r.parse_diagnosis,
+                r.parse_diagnosis IS NOT NULL OR EXISTS (
+                    SELECT 1 FROM container_child cc
+                    JOIN {records} cr ON cr.form_key = cc.child_form_key AND cr.plugin = cc.plugin AND cr.origin = cc.origin
+                    WHERE cc.parent_form_key = r.form_key AND cc.plugin = r.plugin AND cc.origin = r.origin
+                      AND cr.parse_diagnosis IS NOT NULL
+                ) AS has_parse_failure
                 """;
 
             using var countCmd = owner.Connection.CreateCommand();
@@ -556,12 +562,38 @@ public sealed class DuckDbRecordIndex : IRecordIndex
             cmd.CommandText =
                 $"SELECT record_type, COUNT(*), BOOL_OR(parse_diagnosis IS NOT NULL) FROM {records}{where} GROUP BY record_type";
             AddParams(cmd, paramValues);
+            var counts = new List<RecordTypeCount>();
+            using (var reader = cmd.ExecuteReader())
+            {
+                while (reader.Read())
+                    counts.Add(new RecordTypeCount(reader.GetString(0), (int)reader.GetInt64(1), reader.GetBoolean(2)));
+            }
+
+            // Merged in C# rather than joined: a type whose enumeration failed can have no rows
+            // at all, so it is absent from the GROUP BY above and would vanish from the tree.
+            var failedTypes = FailedRecordTypes(plugin);
+            for (var i = 0; i < counts.Count; i++)
+            {
+                if (failedTypes.Contains(counts[i].Type)) counts[i] = counts[i] with { HasParseFailure = true };
+            }
+            counts.AddRange(failedTypes
+                .Where(t => !counts.Exists(c => string.Equals(c.Type, t, StringComparison.OrdinalIgnoreCase)))
+                .Select(t => new RecordTypeCount(t, 0, HasParseFailure: true)));
+            return counts;
+        }
+
+        // Unfiltered: a record filter narrows what is listed, never whether a type could be read.
+        private HashSet<string> FailedRecordTypes(PluginKey plugin)
+        {
+            using var cmd = owner.Connection.CreateCommand();
+            cmd.CommandText =
+                "SELECT DISTINCT record_type FROM record_type_failure WHERE plugin = $1 AND origin = $2";
+            AddParams(cmd, [plugin.Name, plugin.Origin ?? PluginOrigin.DataDirectory]);
             using var reader = cmd.ExecuteReader();
 
-            var counts = new List<RecordTypeCount>();
-            while (reader.Read())
-                counts.Add(new RecordTypeCount(reader.GetString(0), (int)reader.GetInt64(1), reader.GetBoolean(2)));
-            return counts;
+            var types = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            while (reader.Read()) types.Add(reader.GetString(0));
+            return types;
         }
 
         public RecordLookupEntry? Resolve(string formKey) => owner.ResolveFormKey(formKey);
@@ -638,17 +670,45 @@ public sealed class DuckDbRecordIndex : IRecordIndex
             return result;
         }
 
-        // Unfiltered, unlike GetPluginsWithMatchingRecords: a record filter narrows what the tree
-        // lists, never whether the plugin holds something unreadable.
+        /// <summary>Both halves of "could not be read": a record whose own document failed, and a
+        /// record type whose enumeration did. Keyed by <c>ColumnKey.Of</c> rather than a bare
+        /// filename, which two loaded copies can share.</summary>
         public IReadOnlySet<string> GetPluginsWithParseFailures()
         {
             using var cmd = owner.Connection.CreateCommand();
-            cmd.CommandText = $"SELECT DISTINCT plugin, origin FROM {records} WHERE parse_diagnosis IS NOT NULL";
+            cmd.CommandText = $"""
+                SELECT DISTINCT plugin, origin FROM {records} WHERE parse_diagnosis IS NOT NULL
+                UNION
+                SELECT DISTINCT plugin, origin FROM record_type_failure
+                """;
             using var reader = cmd.ExecuteReader();
 
             var result = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             while (reader.Read())
                 result.Add(ColumnKey.Of(reader.GetString(0), reader.GetString(1)));
+            return result;
+        }
+
+        public IReadOnlySet<string> GetWorldspacesWithFailuresBelow(PluginKey plugin)
+        {
+            using var cmd = owner.Connection.CreateCommand();
+            cmd.CommandText = $"""
+                SELECT DISTINCT cl.parent_worldspace
+                FROM cell_location cl
+                LEFT JOIN {records} c
+                  ON c.form_key = cl.cell_form_key AND c.plugin = cl.plugin AND c.origin = cl.origin
+                WHERE cl.parent_worldspace IS NOT NULL AND cl.plugin = $1 AND cl.origin = $2
+                  AND (c.parse_diagnosis IS NOT NULL OR EXISTS (
+                    SELECT 1 FROM placement p
+                    JOIN {records} pr ON pr.form_key = p.form_key AND pr.plugin = p.plugin AND pr.origin = p.origin
+                    WHERE p.parent_cell = cl.cell_form_key AND p.plugin = cl.plugin AND p.origin = cl.origin
+                      AND pr.parse_diagnosis IS NOT NULL))
+                """;
+            AddParams(cmd, [plugin.Name, plugin.Origin ?? PluginOrigin.DataDirectory]);
+            using var reader = cmd.ExecuteReader();
+
+            var result = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            while (reader.Read()) result.Add(reader.GetString(0));
             return result;
         }
 
@@ -684,7 +744,13 @@ public sealed class DuckDbRecordIndex : IRecordIndex
             // this misses, falling back to the grid/EditorID label.
             cmd.CommandText = $"""
                 SELECT cl.cell_form_key, c.editor_id, cl.block_x, cl.block_y, cl.sub_x, cl.sub_y, cl.grid_x, cl.grid_y,
-                       json_extract_string(c.body, '$.Name.Value')
+                       json_extract_string(c.body, '$.Name.Value'),
+                       c.parse_diagnosis IS NOT NULL OR EXISTS (
+                           SELECT 1 FROM placement p
+                           JOIN {records} pr ON pr.form_key = p.form_key AND pr.plugin = p.plugin AND pr.origin = p.origin
+                           WHERE p.parent_cell = cl.cell_form_key AND p.plugin = cl.plugin AND p.origin = cl.origin
+                             AND pr.parse_diagnosis IS NOT NULL
+                       )
                 FROM cell_location cl
                 LEFT JOIN {records} c ON c.form_key = cl.cell_form_key AND c.plugin = cl.plugin AND c.origin = cl.origin
                 WHERE cl.parent_worldspace = $1 AND cl.plugin = $2 AND cl.origin = $3
@@ -705,7 +771,8 @@ public sealed class DuckDbRecordIndex : IRecordIndex
                     reader.IsDBNull(5) ? null : reader.GetInt32(5),
                     reader.IsDBNull(6) ? null : reader.GetInt32(6),
                     reader.IsDBNull(7) ? null : reader.GetInt32(7),
-                    reader.IsDBNull(8) ? null : reader.GetString(8)));
+                    reader.IsDBNull(8) ? null : reader.GetString(8),
+                    reader.GetBoolean(9)));
             }
 
             return rows;
@@ -724,7 +791,13 @@ public sealed class DuckDbRecordIndex : IRecordIndex
             // a sufficient tiebreak.
             using var cmd = owner.Connection.CreateCommand();
             cmd.CommandText = $"""
-                SELECT cl.cell_form_key, c.editor_id, cl.grid_x, cl.grid_y
+                SELECT cl.cell_form_key, c.editor_id, cl.grid_x, cl.grid_y,
+                       c.parse_diagnosis IS NOT NULL OR EXISTS (
+                           SELECT 1 FROM placement p
+                           JOIN {records} pr ON pr.form_key = p.form_key AND pr.plugin = p.plugin AND pr.origin = p.origin
+                           WHERE p.parent_cell = cl.cell_form_key AND p.plugin = cl.plugin AND p.origin = cl.origin
+                             AND pr.parse_diagnosis IS NOT NULL
+                       )
                 FROM cell_location cl
                 LEFT JOIN {records} c ON c.form_key = cl.cell_form_key AND c.plugin = cl.plugin AND c.origin = cl.origin
                 WHERE cl.is_interior AND cl.plugin = $1 AND cl.origin = $2
@@ -742,7 +815,8 @@ public sealed class DuckDbRecordIndex : IRecordIndex
                     reader.GetString(0),
                     reader.IsDBNull(1) ? null : reader.GetString(1),
                     reader.IsDBNull(2) ? null : reader.GetInt32(2),
-                    reader.IsDBNull(3) ? null : reader.GetInt32(3)));
+                    reader.IsDBNull(3) ? null : reader.GetInt32(3),
+                    HasParseFailure: reader.GetBoolean(4)));
             }
 
             return new PagedResult<CellSummary>(items, (int)total);
@@ -763,7 +837,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
             using var cmd = owner.Connection.CreateCommand();
             cmd.CommandText = $"""
                 SELECT p.placement_group, r.record_type, p.form_key, r.editor_id,
-                       json_extract_string(r.body, '$.Base')
+                       json_extract_string(r.body, '$.Base'), r.parse_diagnosis IS NOT NULL
                 FROM placement p
                 JOIN {records} r ON r.form_key = p.form_key AND r.plugin = p.plugin AND r.origin = p.origin
                 WHERE p.parent_cell = $1 AND p.plugin = $2 AND p.origin = $3
@@ -782,7 +856,8 @@ public sealed class DuckDbRecordIndex : IRecordIndex
                     reader.GetString(2),
                     reader.IsDBNull(3) ? null : reader.GetString(3),
                     reader.IsDBNull(4) ? null : reader.GetString(4),
-                    reader.GetString(1));
+                    reader.GetString(1),
+                    reader.GetBoolean(5));
                 (group == "persistent" ? persistent : temporary).Add(summary);
             }
             return new CellReferences(persistent, temporary);
@@ -814,13 +889,13 @@ public sealed class DuckDbRecordIndex : IRecordIndex
             return colon > 0 ? formKey[(colon + 1)..] : null;
         }
 
-        // Column 8 is the correlated container_child EXISTS Search's SELECT adds, column 9 the
-        // parse diagnosis, read positionally like columns 6/7.
+        // Column 8 is the correlated container_child EXISTS Search's SELECT adds, 9 this record's
+        // own diagnosis and 10 the same fact widened to its children, read positionally like 6/7.
         private static RecordSummary ReadSummary(DuckDBDataReader reader) =>
             new(reader.GetString(0), reader.GetString(1), LoadOrderSortKey(reader, 2),
                 reader.GetBoolean(3), reader.IsDBNull(4) ? null : reader.GetString(4), reader.GetString(5),
                 ReadWorkingTreeState(reader), reader.GetBoolean(8),
-                reader.IsDBNull(9) ? null : reader.GetString(9));
+                reader.IsDBNull(9) ? null : reader.GetString(9), reader.GetBoolean(10));
 
         // origin (ADR-0036): nullable and independent of plugin — a *filter*, not an identity field.
         // Defaults to "no constraint" so a plugin-only or filter-less call returns every origin's rows.

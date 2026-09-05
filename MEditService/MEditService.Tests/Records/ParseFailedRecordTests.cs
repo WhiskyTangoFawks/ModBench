@@ -2,6 +2,8 @@ using MEditService.Core.Plugins;
 using MEditService.Core.Queries;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
+using MEditService.Core.Serialization;
+using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -94,11 +96,96 @@ public sealed class ParseFailedRecordTests
     }
 
     [Fact]
+    public void GetOverrideStack_ReadsTheUnreadableRecordBackFromItsStoredBody()
+    {
+        using var scratch = new Scratch(Fixture);
+
+        var stack = scratch.Reads.GetOverrideStack(UnreadablePerk);
+
+        var document = Assert.Single(stack!.Entries).Effective;
+        Assert.Equal(UnreadablePerk, document.FormKey);
+        Assert.Equal("T6M_QuickReload_ReloadVATs", document.EditorId);
+    }
+
+    [Theory]
+    [InlineData("npc_")]
+    [InlineData("glob")]
+    public async Task ParseFailedDocument_IsReadableByTheCodec_ForAPathAmbiguousTypeAsWell(string recordType)
+    {
+        var mod = new Fallout4Mod(ModKey.FromFileName("Stub.esp"), Fallout4Release.Fallout4);
+        IMajorRecordGetter record = recordType == "glob"
+            ? mod.Globals.AddNewFloat("StubGlobal")
+            : mod.Npcs.AddNew("StubNpc");
+        var codec = new RecordTextCodec(NullLogger<RecordTextCodec>.Instance);
+
+        var body = ParseFailedDocument.For(record, record.EditorID, GameRelease.Fallout4);
+        var read = await codec.DeserializeFromBytesAsync(body, GameRelease.Fallout4, recordType);
+
+        Assert.Equal(record.FormKey, read.FormKey);
+        Assert.Equal(record.EditorID, read.EditorID);
+    }
+
+    // Corrupting a major record's signature inside its GRUP makes Mutagen's location scan throw
+    // before it yields anything of that type, so nothing of that type is reachable.
+    [Fact]
+    public void Reconcile_OfAPluginWhoseGroupCannotBeEnumerated_KeepsItsOtherRecordTypes()
+    {
+        using var scratch = new Scratch(CorruptGroupFixture.Build(), CorruptGroupFixture.PluginName);
+
+        var counts = scratch.Query.GetPluginRecordTypes(CorruptGroupFixture.PluginName, Origin);
+
+        Assert.Equal(1, counts.Single(t => t.Type == "weap").Count);
+        Assert.DoesNotContain(scratch.Mirror.LoadOrder!.Failures, f => f.Name == CorruptGroupFixture.PluginName);
+    }
+
+    [Fact]
+    public void Reconcile_OfAPluginWhoseGroupCannotBeEnumerated_MarksThatRecordTypeAndItsPlugin()
+    {
+        using var scratch = new Scratch(CorruptGroupFixture.Build(), CorruptGroupFixture.PluginName);
+
+        var counts = scratch.Query.GetPluginRecordTypes(CorruptGroupFixture.PluginName, Origin);
+        var plugins = scratch.Query.GetPlugins();
+
+        Assert.True(counts.Single(t => t.Type == "npc_").HasParseFailure);
+        Assert.False(counts.Single(t => t.Type == "weap").HasParseFailure);
+        Assert.True(plugins.Single(p => p.Name == CorruptGroupFixture.PluginName).HasParseFailure);
+    }
+
+    [Fact]
     public void Reconcile_OfAPluginThatCannotBeOpenedAtAllStillReportsAPluginLoadFailure()
     {
         using var scratch = new Scratch(Fixture, corruptWholeFile: true);
 
         Assert.Contains(scratch.Mirror.LoadOrder!.Failures, f => f.Name == Fixture);
+    }
+
+    // One NPC whose signature inside the NPC_ GRUP is mangled, plus one readable WEAP, so
+    // "the rest of the plugin still indexes" has something to be true of.
+    private static class CorruptGroupFixture
+    {
+        internal const string PluginName = "CorruptGroup.esp";
+
+        internal static string Build()
+        {
+            var path = Path.Combine(Directory.CreateTempSubdirectory("medit-corruptgroup-").FullName, PluginName);
+            var mod = new Fallout4Mod(ModKey.FromFileName(PluginName), Fallout4Release.Fallout4);
+            mod.Npcs.AddNew("TheNpc");
+            mod.Weapons.AddNew("TheWeapon");
+            mod.WriteToBinary(path);
+
+            var bytes = File.ReadAllBytes(path);
+            // The first occurrence is the GRUP header's contained-type field; the second is the
+            // record itself, and only that one is mangled.
+            var occurrences = new List<int>();
+            for (var i = 0; i + 4 <= bytes.Length; i++)
+            {
+                if (bytes[i] == 'N' && bytes[i + 1] == 'P' && bytes[i + 2] == 'C' && bytes[i + 3] == '_')
+                    occurrences.Add(i);
+            }
+            bytes[occurrences[1]] = (byte)'X';
+            File.WriteAllBytes(path, bytes);
+            return path;
+        }
     }
 
     // Stub masters come from the fixture's own declared list: the mirror needs the names present,
@@ -115,10 +202,15 @@ public sealed class ParseFailedRecordTests
         public string PluginPath { get; }
 
         public Scratch(string fixtureFileName, bool corruptWholeFile = false)
+            : this(Path.Combine(AppContext.BaseDirectory, "TestData", fixtureFileName), fixtureFileName, corruptWholeFile)
+        {
+        }
+
+        public Scratch(string sourcePath, string fixtureFileName, bool corruptWholeFile = false)
         {
             Plugin = new PluginKey(fixtureFileName, Origin);
             var pluginPath = PluginPath = Path.Combine(_modFolder, fixtureFileName);
-            File.Copy(Path.Combine(AppContext.BaseDirectory, "TestData", fixtureFileName), pluginPath);
+            File.Copy(sourcePath, pluginPath);
 
             var inputs = new List<LoadOrderEntry>();
             using (var overlay = Fallout4Mod.CreateFromBinaryOverlay(

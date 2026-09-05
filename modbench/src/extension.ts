@@ -6,7 +6,7 @@ import * as cp from 'child_process';
 import { Agent, fetch as undiciFetch } from 'undici';
 import { BackendManager } from './medit/BackendManager';
 import { backendLogLevelArgs, makeBackendLogForwarder } from './medit/backendLog';
-import { createApiClient, type MasterIssue, type CrashRepairOffer } from './medit/ApiClient';
+import { createApiClient, type CrashRepairOffer } from './medit/ApiClient';
 import { detectWinePrefix } from './medit/GamePathDetector';
 import { EditingController, type LoadOrderProgress } from './medit/EditingController';
 import { makeReconcileProgressHandler } from './medit/loadOrderProgress';
@@ -28,7 +28,7 @@ import { createModsWatcher } from './modmanager/modsWatcher';
 import { createModlistWatcher } from './modmanager/modlistWatcher';
 import { createPluginsTxtWatcher } from './modmanager/pluginsTxtWatcher';
 import { PluginListProvider, pluginFileOf, orderIssueMastersOf, type PluginListNode } from './modmanager/PluginListProvider';
-import { PluginsTreeComposite } from './PluginsTreeComposite';
+import { PluginsTreeComposite, type PluginFacts } from './PluginsTreeComposite';
 import { createLoadOrderSync, type LoadOrderSync } from './loadOrderReconcile';
 import { wirePluginListInvalidation } from './wirePluginListInvalidation';
 import { createGameDirectoryResolver, dataFolderFrom, type GameDirectoryResolver } from './modmanager/gameDirectoryResolver';
@@ -101,7 +101,8 @@ function withPluginsViewProgress(session: ExtensionSession, work: () => Promise<
 interface HeldPluginFiles {
   files: Set<string>;
   readOnly: Set<string>;
-  masterIssues: Map<string, MasterIssue[]>;
+  /** What the composite decorates each row from, keyed by filename — see `PluginFacts`. */
+  facts: Map<string, PluginFacts>;
   /** Lowercased filename → does this plugin own a record the *current* record filter matches.
    *  Carried in this hand-off because every reconcile reaches it downstream of `syncFilterState()`,
    *  so the map never outlives the filter state it describes. */
@@ -110,9 +111,6 @@ interface HeldPluginFiles {
    *  appearing or vanishing is itself a `mods/**` watcher event, which is what makes tracking
    *  reach the rows without a reload. */
   tracked: Set<string>;
-  /** Which hold a record Mutagen could not read — the backend's own "has a failure below it" for
-   *  a plugin row, so the tree never expands children to find out. */
-  parseFailures: Set<string>;
 }
 
 function heldPluginFilesFrom(repository: ApiPluginRepository): () => Promise<HeldPluginFiles> {
@@ -123,10 +121,13 @@ function heldPluginFilesFrom(repository: ApiPluginRepository): () => Promise<Hel
       readOnly: new Set(plugins.filter((p) => p.isImmutable).map((p) => p.name)),
       // ADR-0037: `masterIssues` is a required, non-nullable array on the wire, so it is read
       // straight through — a `??` default here would compensate for nothing the backend can do.
-      masterIssues: new Map(plugins.map((p) => [p.name, p.masterIssues] as const)),
+      facts: new Map(plugins.map((p) => [p.name, {
+        readOnly: p.isImmutable,
+        masterIssues: p.masterIssues,
+        parseFailure: p.hasParseFailure,
+      }] as const)),
       matches: new Map(plugins.map((p) => [p.name.toLowerCase(), p.hasMatchingRecords] as const)),
       tracked: new Set(plugins.filter((p) => p.isTracked).map((p) => p.name)),
-      parseFailures: new Set(plugins.filter((p) => p.hasParseFailure).map((p) => p.name)),
     };
   };
 }
@@ -937,6 +938,20 @@ function registerLoadoutHeaderView(session: ExtensionSession, deps: LoadoutHeade
 }
 
 
+// ADR-0037: the same failures the toast inside putLoadOrder already consumed — folded in here, not
+// re-derived, so one plugin's row carries one value describing every fact about it.
+function withLoadFailures(
+  facts: Map<string, PluginFacts>,
+  failures: { name?: string | null; reason?: string | null }[],
+): Map<string, PluginFacts> {
+  const merged = new Map(facts);
+  for (const f of failures) {
+    const name = f.name ?? '?';
+    merged.set(name, { ...merged.get(name), loadFailure: f.reason ?? 'Unknown error' });
+  }
+  return merged;
+}
+
 // ADR-0035: rows gain chevrons here — and *finish* gaining them here. A progressive reconcile's
 // ticks carry only the indexed set, because read-only state and master issues are
 // whole-load-order derivations a partial tick cannot answer.
@@ -957,14 +972,10 @@ async function applyLoadOrderToTree(
     outputChannel.info(
       `[extension] applying reconciled load order to tree: ${held.files.size} in the load order, ${failures.length} failed, of ${totalPlugins} copies`,
     );
-    // ADR-0037: the same failures the toast inside putLoadOrder already consumed — held here, not
-    // re-derived, and handed to the tree through the same setLoadOrder bundle.
-    const loadFailures = new Map(failures.map((f) => [f.name ?? '?', f.reason ?? 'Unknown error'] as const));
     // Set before setLoadOrder fires its re-render, so no row renders off a match set stale from
     // whatever reconcile preceded this one.
     session.loadOrderSync?.setMatches(held.matches);
-    session.pluginsTree?.setLoadOrder(
-      held.files, held.readOnly, held.masterIssues, loadFailures, held.parseFailures);
+    session.pluginsTree?.setLoadOrder(held.files, withLoadFailures(held.facts, failures));
     // The same read-only set, to the record rows — theirs is contextValue (Remove hidden), the
     // plugin rows' is the tooltip note.
     session.recordBrowserProvider?.setImmutablePlugins(held.readOnly);
@@ -1001,9 +1012,7 @@ function makeTreeProgressHandler(
   const applyTick = makeReconcileProgressHandler({
     applyLoadOrder: (indexedPlugins, failures) => session.pluginsTree?.setLoadOrder(
       new Set(indexedPlugins),
-      new Set(),
-      new Map(),
-      new Map(failures.map((f) => [f.name, f.reason] as const)),
+      new Map(failures.map((f) => [f.name, { loadFailure: f.reason }] as const)),
     ),
   });
   return {

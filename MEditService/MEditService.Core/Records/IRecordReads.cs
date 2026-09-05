@@ -45,6 +45,11 @@ public interface IRecordReads
     /// row, answered from the page it already has.</summary>
     IReadOnlySet<string> GetPluginsWithParseFailures();
 
+    /// <summary>Worldspace FormKeys with an unreadable cell, or an unreadable placed reference
+    /// in one, somewhere below them: the worldspace row's "has a failure below it", which the
+    /// container relation cannot answer.</summary>
+    IReadOnlySet<string> GetWorldspacesWithFailuresBelow(PluginKey plugin);
+
     /// <summary>FormKeys native to <paramref name="plugin"/> (the FormKey's own ModKey is this
     /// plugin) — ESL-eligibility validation.</summary>
     IReadOnlyList<string> GetNativeFormKeys(PluginKey plugin);

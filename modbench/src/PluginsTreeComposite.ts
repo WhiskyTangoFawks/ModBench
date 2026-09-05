@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { failurePrefixIcon } from './failurePrefixIcon';
 
 /** ADR-0035: one Plugins tree. Mod Management owns the rows, the record repository owns their
  *  children. At the composition root because it spans both bounded contexts, importing from
@@ -31,6 +32,17 @@ export interface PluginsTreeCompositeDeps<TRow, TChild> {
 
 // Structurally matches ApiClient's `MasterIssue`; the composite imports from neither context.
 type MasterIssue = { masterName: string; kind: 'DirectlyMissing' | 'Unloadable' };
+
+/** Everything one reconcile knows about one plugin file. One value rather than four parallel
+ *  collections: they arrive together, change together, and are keyed the same way, so the
+ *  composite lowercases that key once and every decoration reads the same record. */
+export interface PluginFacts {
+  readOnly?: boolean;
+  masterIssues?: MasterIssue[];
+  loadFailure?: string;
+  /** Whether this plugin holds a record that could not be read into its document. */
+  parseFailure?: boolean;
+}
 
 export class PluginsTreeComposite<TRow, TChild> implements vscode.TreeDataProvider<TRow | TChild> {
   private readonly emitter = new vscode.EventEmitter<TRow | TChild | undefined | null>();
@@ -111,8 +123,7 @@ export class PluginsTreeComposite<TRow, TChild> implements vscode.TreeDataProvid
 
   // ADR-0035: appended, never replacing, so a row's own badge survives.
   private applyReadOnlyNote(item: vscode.TreeItem, file: string | undefined): void {
-    const readOnly = file !== undefined && (this.readOnlyFiles?.has(file) ?? false);
-    if (!readOnly) return;
+    if (file === undefined || this.facts?.get(file)?.readOnly !== true) return;
     const note = `This plugin is read-only — its records can't be edited.`;
     // A MarkdownString base would be replaced here, not appended to — no row provider produces
     // one today, so this is a documented assumption, not a bug to handle.
@@ -123,17 +134,17 @@ export class PluginsTreeComposite<TRow, TChild> implements vscode.TreeDataProvid
   // lookups guard a plugin the last load order never mentioned, not the wire.
   private applyBackendDecoration(item: vscode.TreeItem, row: TRow, file: string | undefined): void {
     if (file === undefined) return;
-    const failureReason = this.loadFailures?.get(file);
-    if (failureReason !== undefined) {
-      this.applyLoadFailureDecoration(item, failureReason);
+    const facts = this.facts?.get(file);
+    if (facts?.loadFailure !== undefined) {
+      this.applyLoadFailureDecoration(item, facts.loadFailure);
       return;
     }
-    const issues = this.masterIssues?.get(file) ?? [];
+    const issues = facts?.masterIssues ?? [];
     if (issues.length > 0) {
       this.applyMasterIssueDecoration(item, row, issues);
       return;
     }
-    if (this.parseFailures?.has(file) ?? false) {
+    if (facts?.parseFailure === true) {
       this.applyParseFailureDecoration(item);
       return;
     }
@@ -146,7 +157,7 @@ export class PluginsTreeComposite<TRow, TChild> implements vscode.TreeDataProvid
   // A plugin that failed to open or parse never has a MasterMetadata to derive an issue list from,
   // so this and the master-issue decoration are mutually exclusive per plugin.
   private applyLoadFailureDecoration(item: vscode.TreeItem, failureReason: string): void {
-    item.iconPath = new vscode.ThemeIcon('error', new vscode.ThemeColor('problemsErrorIcon.foreground'));
+    item.iconPath = failurePrefixIcon();
     item.description = '✗ Failed to load';
     const note = `Failed to load: ${failureReason}`;
     item.tooltip = typeof item.tooltip === 'string' ? `${item.tooltip}\n${note}` : note;
@@ -155,9 +166,9 @@ export class PluginsTreeComposite<TRow, TChild> implements vscode.TreeDataProvid
   // The same prefix the record and record-type nodes carry (PluginTreeProvider): the backend
   // answers "holds an unreadable record" per plugin, so nothing here walks children to find out.
   private applyParseFailureDecoration(item: vscode.TreeItem): void {
-    item.iconPath = new vscode.ThemeIcon('error', new vscode.ThemeColor('problemsErrorIcon.foreground'));
+    item.iconPath = failurePrefixIcon();
     item.description = '✗ Unreadable records';
-    const note = 'This plugin holds a record that could not be read.';
+    const note = 'This plugin holds a record that could not be read into its document.';
     item.tooltip = typeof item.tooltip === 'string' ? `${item.tooltip}\n${note}` : note;
   }
 
@@ -179,7 +190,7 @@ export class PluginsTreeComposite<TRow, TChild> implements vscode.TreeDataProvid
       ...issues.map((i) => i.kind === 'DirectlyMissing' ? `Missing master: ${i.masterName}` : `Master ${i.masterName} cannot be loaded`),
       ...orderOnly.map((m) => `Master ${m} is not loaded before this plugin`),
     ];
-    item.iconPath = new vscode.ThemeIcon('error', new vscode.ThemeColor('problemsErrorIcon.foreground'));
+    item.iconPath = failurePrefixIcon();
     item.description = lines.length === 1 ? '✗ Master issue' : `✗ ${lines.length} master issues`;
     const note = lines.join('\n');
     item.tooltip = typeof item.tooltip === 'string' ? `${item.tooltip}\n${note}` : note;
@@ -217,27 +228,15 @@ export class PluginsTreeComposite<TRow, TChild> implements vscode.TreeDataProvid
   }
 
   private heldFiles?: Set<string>;
-  private readOnlyFiles?: Set<string>;
-  private masterIssues?: Map<string, MasterIssue[]>;
-  private loadFailures?: Map<string, string>;
-  private parseFailures?: Set<string>;
+  private facts?: Map<string, PluginFacts>;
   private diagnoses?: Map<string, string[]>;
 
-  /** One setter, not four: these facts are a single hand-off from the same reconcile and never
-   *  change independently. Chevrons appearing and disappearing is the entire "editing is available
-   *  now" signal (ADR-0035) — no banner, no mode. */
-  setLoadOrder(
-    pluginFiles: Set<string> | undefined,
-    readOnlyFiles: Set<string> = new Set(),
-    masterIssues: Map<string, MasterIssue[]> = new Map(),
-    loadFailures: Map<string, string> = new Map(),
-    parseFailures: Set<string> = new Set(),
-  ): void {
+  /** One setter and one value: the load order's held set plus what the same reconcile knows about
+   *  each file. Chevrons appearing and disappearing is the entire "editing is available now" signal
+   *  (ADR-0035) — no banner, no mode. */
+  setLoadOrder(pluginFiles: Set<string> | undefined, facts: Map<string, PluginFacts> = new Map()): void {
     this.heldFiles = pluginFiles && new Set([...pluginFiles].map((f) => f.toLowerCase()));
-    this.readOnlyFiles = pluginFiles && new Set([...readOnlyFiles].map((f) => f.toLowerCase()));
-    this.masterIssues = pluginFiles && new Map([...masterIssues].map(([name, issues]) => [name.toLowerCase(), issues]));
-    this.loadFailures = pluginFiles && new Map([...loadFailures].map(([name, reason]) => [name.toLowerCase(), reason]));
-    this.parseFailures = pluginFiles && new Set([...parseFailures].map((f) => f.toLowerCase()));
+    this.facts = pluginFiles && new Map([...facts].map(([name, f]) => [name.toLowerCase(), f]));
     // A reconcile invalidates the last scan's diagnoses — they describe binaries the load order
     // may not hold — so they clear here and return via setDiagnoses when the new scan lands.
     this.diagnoses = undefined;

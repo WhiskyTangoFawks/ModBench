@@ -50,6 +50,7 @@ function makeRecord(
     origin: 'Data',
     workingTreeState,
     hasContainerChildren,
+    hasParseFailure: false,
   };
 }
 
@@ -537,7 +538,7 @@ describe('record rows carry their copy identity', () => {
   it('placed rows follow the same rule: refrImmutable under an immutable plugin, else refr', async () => {
     const repo = makeRepository();
     const provider = new PluginTreeProvider(repo);
-    const placed = { formKey: '000001:Plugin0.esp', editorId: 'ref', baseFormKey: null, recordType: 'refr' };
+    const placed = { formKey: '000001:Plugin0.esp', editorId: 'ref', baseFormKey: null, recordType: 'refr', hasParseFailure: false };
     provider.setImmutablePlugins(new Set(['Plugin0.esp']));
 
     const group = new PlacedGroupNode('Plugin0.esp', 'cell:fk', 'persistent', [placed], undefined);
@@ -549,7 +550,7 @@ describe('record rows carry their copy identity', () => {
   it('placed rows of a shadowed copy are refrImmutable even when the plugin is not listed immutable', async () => {
     const repo = makeRepository();
     const provider = new PluginTreeProvider(repo);
-    const placed = { formKey: '000001:Plugin0.esp', editorId: 'ref', baseFormKey: null, recordType: 'refr' };
+    const placed = { formKey: '000001:Plugin0.esp', editorId: 'ref', baseFormKey: null, recordType: 'refr', hasParseFailure: false };
 
     const group = new PlacedGroupNode('Plugin0.esp', 'cell:fk', 'persistent', [placed], 'ModA');
     const [row] = await provider.getChildren(group) as PlacedNode[];
@@ -613,7 +614,7 @@ describe('PluginTreeProvider worldspace tree', () => {
 
   it('expands a worldspace into its persistent cell and blocks, labeled the way xEdit does', async () => {
     const repo = makeRepository({ recordTypes: [{ type: 'wrld', count: 1 }] });
-    (repo.getWorldspaces as ReturnType<typeof vi.fn>).mockResolvedValue([{ formKey: 'wrld:M.esp', editorId: 'World' }]);
+    (repo.getWorldspaces as ReturnType<typeof vi.fn>).mockResolvedValue([{ formKey: 'wrld:M.esp', editorId: 'World', hasParseFailure: false }]);
     (repo.getWorldspaceBlocks as ReturnType<typeof vi.fn>).mockResolvedValue({
       topCells: [{ formKey: 'top:M.esp', editorId: 'TopCell', cellX: null, cellY: null, isPersistentWorldspaceCell: true }],
       blocks: [{ x: 0, y: 0, subBlocks: [{ x: 0, y: 0, cells: [{ formKey: 'c:M.esp', editorId: null, cellX: 12, cellY: -5, isPersistentWorldspaceCell: false }] }] }],
@@ -642,7 +643,7 @@ describe('PluginTreeProvider worldspace tree', () => {
   it('an exterior cell with a FULL name shows it, not the grid coordinates', () => {
     const node = new CellNode('M.esp', {
       formKey: 'c:M.esp', editorId: 'TheCell', cellX: 12, cellY: -5,
-      isPersistentWorldspaceCell: false, fullName: 'Sanctuary Hills',
+      isPersistentWorldspaceCell: false, fullName: 'Sanctuary Hills', hasParseFailure: false,
     });
     expect(node.label).toBe('Sanctuary Hills');
   });
@@ -650,7 +651,7 @@ describe('PluginTreeProvider worldspace tree', () => {
   it('an exterior cell with no FULL name still shows the padded grid coordinates', () => {
     const node = new CellNode('M.esp', {
       formKey: 'c:M.esp', editorId: 'TheCell', cellX: 12, cellY: -5,
-      isPersistentWorldspaceCell: false, fullName: null,
+      isPersistentWorldspaceCell: false, fullName: null, hasParseFailure: false,
     });
     expect(node.label).toBe('< 12,  -5>');
   });
@@ -661,14 +662,14 @@ describe('PluginTreeProvider worldspace tree', () => {
   it('the persistent worldspace cell with a FULL name shows the FULL name, not the placeholder', () => {
     const node = new CellNode('M.esp', {
       formKey: 'top:M.esp', editorId: 'TopCell', cellX: null, cellY: null,
-      isPersistentWorldspaceCell: true, fullName: 'Sanctuary Hills',
+      isPersistentWorldspaceCell: true, fullName: 'Sanctuary Hills', hasParseFailure: false,
     });
     expect(node.label).toBe('Sanctuary Hills');
   });
 
   it('surfaces every block-less cell row under a worldspace, not just the first', async () => {
     const repo = makeRepository({ recordTypes: [{ type: 'wrld', count: 1 }] });
-    (repo.getWorldspaces as ReturnType<typeof vi.fn>).mockResolvedValue([{ formKey: 'wrld:M.esp', editorId: 'World' }]);
+    (repo.getWorldspaces as ReturnType<typeof vi.fn>).mockResolvedValue([{ formKey: 'wrld:M.esp', editorId: 'World', hasParseFailure: false }]);
     (repo.getWorldspaceBlocks as ReturnType<typeof vi.fn>).mockResolvedValue({
       topCells: [
         { formKey: 'top:M.esp', editorId: 'TopCell', cellX: null, cellY: null, isPersistentWorldspaceCell: true },
@@ -690,11 +691,11 @@ describe('PluginTreeProvider worldspace tree', () => {
   it('expands a cell into non-empty persistent/temporary groups and placed leaves', async () => {
     const repo = makeRepository();
     (repo.getCellReferences as ReturnType<typeof vi.fn>).mockResolvedValue({
-      persistent: [{ formKey: 'b:M.esp', editorId: 'barrelRef', baseFormKey: null, recordType: 'refr' }],
+      persistent: [{ formKey: 'b:M.esp', editorId: 'barrelRef', baseFormKey: null, recordType: 'refr', hasParseFailure: false }],
       temporary: [],
     });
     const provider = new PluginTreeProvider(repo);
-    const cellNode = new CellNode('M.esp', { formKey: 'c:M.esp', editorId: 'TheCell', cellX: 0, cellY: 0, isPersistentWorldspaceCell: false, fullName: null });
+    const cellNode = new CellNode('M.esp', { formKey: 'c:M.esp', editorId: 'TheCell', cellX: 0, cellY: 0, isPersistentWorldspaceCell: false, fullName: null, hasParseFailure: false });
 
     const groups = await provider.getChildren(cellNode);
     expect(groups).toHaveLength(1); // only persistent (temporary empty)
@@ -791,7 +792,7 @@ describe('PluginTreeProvider fetch failures', () => {
   it('fetchWorldspaceChildren: renders an error node when getWorldspaceBlocks fails', async () => {
     const repo = { ...makeRepository(), getWorldspaceBlocks: vi.fn().mockRejectedValue(new Error('boom')) };
     const provider = new PluginTreeProvider(repo);
-    const node = new WorldspaceNode('Plugin0.esp', { formKey: 'wrld:M.esp', editorId: 'World' });
+    const node = new WorldspaceNode('Plugin0.esp', { formKey: 'wrld:M.esp', editorId: 'World', hasParseFailure: false });
 
     const children = await provider.getChildren(node);
 
@@ -802,7 +803,7 @@ describe('PluginTreeProvider fetch failures', () => {
   it('fetchCellGroups: renders an error node when getCellReferences fails', async () => {
     const repo = { ...makeRepository(), getCellReferences: vi.fn().mockRejectedValue(new Error('boom')) };
     const provider = new PluginTreeProvider(repo);
-    const node = new CellNode('M.esp', { formKey: 'c:M.esp', editorId: 'TheCell', cellX: 0, cellY: 0, isPersistentWorldspaceCell: false, fullName: null });
+    const node = new CellNode('M.esp', { formKey: 'c:M.esp', editorId: 'TheCell', cellX: 0, cellY: 0, isPersistentWorldspaceCell: false, fullName: null, hasParseFailure: false });
 
     const children = await provider.getChildren(node);
 
@@ -841,7 +842,7 @@ describe('headerFormKeyFor', () => {
 describe('PluginTreeProvider spatial origin threading', () => {
   it('fetchWorldspaces: asks the repository for the node\'s own copy, and the WorldspaceNodes it builds carry that origin forward', async () => {
     const repo = makeRepository();
-    (repo.getWorldspaces as ReturnType<typeof vi.fn>).mockResolvedValue([{ formKey: 'wrld:M.esp', editorId: 'World' }]);
+    (repo.getWorldspaces as ReturnType<typeof vi.fn>).mockResolvedValue([{ formKey: 'wrld:M.esp', editorId: 'World', hasParseFailure: false }]);
     const provider = new PluginTreeProvider(repo);
     const node = new WorldspacesNode('Shared.esp', 'ModB');
 
@@ -858,7 +859,7 @@ describe('PluginTreeProvider spatial origin threading', () => {
       blocks: [{ x: 0, y: 0, subBlocks: [{ x: 0, y: 0, cells: [{ formKey: 'c:M.esp', editorId: 'Cell', cellX: 12, cellY: -5, isPersistentWorldspaceCell: false }] }] }],
     });
     const provider = new PluginTreeProvider(repo);
-    const node = new WorldspaceNode('Shared.esp', { formKey: 'wrld:M.esp', editorId: 'World' }, 'ModB');
+    const node = new WorldspaceNode('Shared.esp', { formKey: 'wrld:M.esp', editorId: 'World', hasParseFailure: false }, 'ModB');
 
     const [topCellNode, blockNode] = await provider.getChildren(node) as [CellNode, PluginTreeNode];
 
@@ -874,11 +875,11 @@ describe('PluginTreeProvider spatial origin threading', () => {
   it('fetchCellGroups: asks the repository for the node\'s own copy, and its PlacedGroup/Placed children carry that origin forward', async () => {
     const repo = makeRepository();
     (repo.getCellReferences as ReturnType<typeof vi.fn>).mockResolvedValue({
-      persistent: [{ formKey: 'b:M.esp', editorId: 'barrelRef', baseFormKey: null, recordType: 'refr' }],
+      persistent: [{ formKey: 'b:M.esp', editorId: 'barrelRef', baseFormKey: null, recordType: 'refr', hasParseFailure: false }],
       temporary: [],
     });
     const provider = new PluginTreeProvider(repo);
-    const node = new CellNode('Shared.esp', { formKey: 'c:M.esp', editorId: 'TheCell', cellX: 0, cellY: 0, isPersistentWorldspaceCell: false, fullName: null }, 'ModB');
+    const node = new CellNode('Shared.esp', { formKey: 'c:M.esp', editorId: 'TheCell', cellX: 0, cellY: 0, isPersistentWorldspaceCell: false, fullName: null, hasParseFailure: false }, 'ModB');
 
     const [groupNode] = await provider.getChildren(node) as PlacedGroupNode[];
     expect(repo.getCellReferences).toHaveBeenCalledWith('Shared.esp', 'c:M.esp', 'ModB');
@@ -908,7 +909,7 @@ describe('PluginTreeProvider spatial origin threading', () => {
   it('refCache: caches each copy\'s cell references separately, so one copy\'s page is never served for the other', async () => {
     const repo = makeRepository();
     const provider = new PluginTreeProvider(repo);
-    const cell = { formKey: 'c:M.esp', editorId: 'TheCell', cellX: 0, cellY: 0, isPersistentWorldspaceCell: false, fullName: null };
+    const cell = { formKey: 'c:M.esp', editorId: 'TheCell', cellX: 0, cellY: 0, isPersistentWorldspaceCell: false, fullName: null, hasParseFailure: false };
     const fromA = new CellNode('Shared.esp', cell, 'ModA');
     const fromB = new CellNode('Shared.esp', cell, 'ModB');
 
@@ -1030,6 +1031,7 @@ function makeContainerChild(
   return {
     formKey, editorId, plugin: 'Fallout4.esm', origin: 'Data',
     loadOrderIndex: 0, isWinner: true, workingTreeState: 'None', recordType, hasContainerChildren,
+    hasParseFailure: false,
   };
 }
 
@@ -1165,7 +1167,7 @@ describe('PluginTreeProvider.getChildren(RecordNode) — container children', ()
 
 describe('the failure prefix', () => {
   it('marks a record whose document could not be read, and only that record', async () => {
-    const unreadable = { ...makeRecord(0), parseDiagnosis: 'Perk 0000EF — unknown: bad flag' };
+    const unreadable = { ...makeRecord(0), parseDiagnosis: 'Perk 0000EF — unknown: bad flag', hasParseFailure: true };
     const repo = makeRepository({ records: { items: [unreadable, makeRecord(1)], total: 2 } });
     const provider = new PluginTreeProvider(repo);
     const [typeNode] = await provider.getPluginChildren('Plugin0.esp') as RecordTypeNode[];
@@ -1192,4 +1194,75 @@ describe('the failure prefix', () => {
     expect(perk.description).toBe('2');
     expect(weap.iconPath).toBeUndefined();
   });
+
+  it('marks the whole worldspace chain a failure sits under, and nothing beside it', async () => {
+    const repo = makeRepository({ recordTypes: [{ type: 'wrld', count: 1, hasParseFailure: true }] });
+    (repo.getWorldspaces as ReturnType<typeof vi.fn>).mockResolvedValue([
+      { formKey: 'wrld:M.esp', editorId: 'World', hasParseFailure: true },
+      { formKey: 'other:M.esp', editorId: 'Other', hasParseFailure: false },
+    ]);
+    (repo.getWorldspaceBlocks as ReturnType<typeof vi.fn>).mockResolvedValue({
+      topCells: [],
+      blocks: [{ x: 0, y: 0, hasParseFailure: true, subBlocks: [{ x: 0, y: 0, hasParseFailure: true,
+        cells: [{ formKey: 'c:M.esp', editorId: null, cellX: 1, cellY: 1, isPersistentWorldspaceCell: false, hasParseFailure: true }] }] }],
+    });
+    (repo.getCellReferences as ReturnType<typeof vi.fn>).mockResolvedValue({
+      persistent: [{ formKey: 'p:M.esp', editorId: 'Ref', baseFormKey: null, recordType: 'refr', hasParseFailure: true }],
+      temporary: [],
+    });
+    const provider = new PluginTreeProvider(repo);
+
+    const [wsRoot] = await provider.getPluginChildren('Plugin0.esp');
+    const [failing, healthy] = await provider.getChildren(wsRoot);
+    const [blockNode] = await provider.getChildren(failing);
+    const [subBlock] = await provider.getChildren(blockNode);
+    const [cellNode] = await provider.getChildren(subBlock);
+    const [persistentGroup] = await provider.getChildren(cellNode);
+    const [placedNode] = await provider.getChildren(persistentGroup);
+
+    for (const node of [wsRoot, failing, blockNode, subBlock, cellNode, persistentGroup, placedNode]) {
+      expect((node.iconPath as ThemeIcon | undefined)?.id).toBe('error');
+    }
+    expect(healthy.iconPath).toBeUndefined();
+  });
+
+  it('marks an interior cell that cannot be read, and its group node', async () => {
+    const repo = makeRepository({ recordTypes: [{ type: 'cell', count: 2, hasParseFailure: true }] });
+    (repo.getInteriorCells as ReturnType<typeof vi.fn>).mockResolvedValue({
+      items: [
+        { formKey: 'bad:M.esp', editorId: 'Bad', cellX: null, cellY: null, isPersistentWorldspaceCell: false, hasParseFailure: true },
+        { formKey: 'ok:M.esp', editorId: 'Ok', cellX: null, cellY: null, isPersistentWorldspaceCell: false, hasParseFailure: false },
+      ],
+      total: 2,
+    });
+    const provider = new PluginTreeProvider(repo);
+
+    const [interiorRoot] = await provider.getPluginChildren('Plugin0.esp');
+    const [bad, ok] = await provider.getChildren(interiorRoot);
+
+    expect((interiorRoot.iconPath as ThemeIcon).id).toBe('error');
+    expect((bad.iconPath as ThemeIcon).id).toBe('error');
+    expect(ok.iconPath).toBeUndefined();
+  });
+
+  it('marks a container child that cannot be read, and the container row above it', async () => {
+    const repo = makeRepository({
+      recordTypes: [{ type: 'qust', count: 1 }],
+      records: { items: [{ ...makeRecord(0, 'None', true), hasParseFailure: true }], total: 1 },
+    });
+    (repo.getContainerChildren as ReturnType<typeof vi.fn>).mockResolvedValue([
+      { ...makeRecord(1), recordType: 'info', hasContainerChildren: false,
+        parseDiagnosis: 'INFO 12 — unknown: bad', hasParseFailure: true },
+    ]);
+    const provider = new PluginTreeProvider(repo);
+    const [typeNode] = await provider.getPluginChildren('Plugin0.esp') as RecordTypeNode[];
+    const [questRow] = await provider.getChildren(typeNode);
+
+    const [childRow] = await provider.getChildren(questRow);
+
+    expect((questRow.iconPath as ThemeIcon).id).toBe('error');
+    expect((childRow.iconPath as ThemeIcon).id).toBe('error');
+    expect(childRow.tooltip).toContain('INFO 12');
+  });
 });
+

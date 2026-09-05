@@ -275,7 +275,7 @@ public sealed class LoadOrder : ILoadOrder
         }
     }
 
-    private static PluginMetadata BuildPluginMetadata(IModGetter mod, ResolvedPlugin plugin)
+    private PluginMetadata BuildPluginMetadata(IModGetter mod, ResolvedPlugin plugin)
     {
         var masters = mod.MasterReferences
             .Select(r => r.Master.FileName.ToString())
@@ -288,11 +288,31 @@ public sealed class LoadOrder : ILoadOrder
             IsLight: PluginFlagPredicates.IsLight(mod, plugin.Name),
             IsMaster: PluginFlagPredicates.IsMaster(mod, plugin.Name),
             Masters: masters,
-            RecordCount: mod.EnumerateMajorRecords().Count(),
+            RecordCount: ReachableRecordCount(mod, plugin.Name),
             IsForced: plugin.IsForced,
             Origin: plugin.Origin,
             Enabled: plugin.Registration.Enabled,
             Winning: plugin.Registration.Winning);
+    }
+
+    // A group whose location scan Mutagen refuses stops the walk, and the count is a readout, not a
+    // gate: the plugin opens on what was reachable and the ingest reports the type that was not.
+    private int ReachableRecordCount(IModGetter mod, string plugin)
+    {
+        var count = 0;
+        try
+        {
+            foreach (var _ in mod.EnumerateMajorRecords()) count++;
+        }
+        catch (Exception ex)
+        {
+            // The ingest walks the same records per type and reports the one it could not finish,
+            // so this only keeps a readout from becoming a refusal to open the plugin.
+            _logger.LogWarning(ex,
+                "Could not walk all of {Plugin}'s records for its count; reporting the {Count} that were reachable",
+                plugin, count);
+        }
+        return count;
     }
 
     /// <summary>Idempotent: a cancelled reconcile and the mirror's own teardown can both reach here

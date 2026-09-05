@@ -47,7 +47,7 @@ internal sealed class PluginIngest
     // Everything the index derives from one record, computed off the appender thread; only writing
     // it is sequential. ParseDiagnosis is null for a record whose document was produced.
     private sealed record PreparedRecord(
-        IMajorRecordGetter Record, byte[] Body, string ContentHash, List<FormRef> Refs,
+        string FormKey, byte[] Body, string ContentHash, List<FormRef> Refs,
         List<ContainerChildRow> ChildRows, string? EditorId, string? ParseDiagnosis);
 
     private sealed class RefCounters
@@ -61,6 +61,7 @@ internal sealed class PluginIngest
     // about how an appender behaves relative to a later delete.
     public void DeletePriorDocuments(string plugin, string origin)
     {
+        DeleteExistingForOrigin("record_type_failure", plugin, origin);
         DeleteExistingForOrigin("records", plugin, origin);
         // The Head snapshots go too: records_head is records_committed UNION ALL the still-clean
         // records rows, and the halves must stay disjoint. Deleting here rather than at each caller
@@ -78,6 +79,7 @@ internal sealed class PluginIngest
         var refs = new List<FormRef>();
         var lookupRows = new List<(string FormKey, string RecordType, string? EditorId)>();
         var containerChildRows = new List<ContainerChildRow>();
+        var typeFailures = new List<(string RecordType, string Diagnosis)>();
 
         var phaseTimer = Stopwatch.StartNew();
         var counters = new RefCounters();
@@ -88,7 +90,7 @@ internal sealed class PluginIngest
             if (tableName == HeaderIndexer.RecordType) continue;
             IndexRecordTable(
                 tableName, schema, pluginMod, plugin, origin, refs, lookupRows,
-                containerChildRows, documentAppender, pluginMod.GameRelease, counters);
+                containerChildRows, typeFailures, documentAppender, pluginMod.GameRelease, counters);
         }
         var documentsMs = phaseTimer.ElapsedMilliseconds;
 
@@ -141,6 +143,21 @@ internal sealed class PluginIngest
                 AppendContainerChildRow(containerChildAppender, row, plugin, origin);
         }
 
+        DeleteExistingForOrigin("record_type_failure", plugin, origin);
+        if (typeFailures.Count > 0)
+        {
+            using var failureAppender = _connection.CreateAppender("mirror", "record_type_failure");
+            foreach (var (recordType, diagnosis) in typeFailures)
+            {
+                var row = failureAppender.CreateRow();
+                row.AppendValue(plugin);
+                row.AppendValue(origin);
+                row.AppendValue(recordType);
+                row.AppendValue(diagnosis);
+                row.EndRow();
+            }
+        }
+
         var extractedMs = phaseTimer.ElapsedMilliseconds;
         return new IndexTiming(documentsMs, counters.PrepareMs, counters.AppendMs, extractedMs);
     }
@@ -158,6 +175,7 @@ internal sealed class PluginIngest
         DeleteExistingForOrigin("placement", plugin, origin);
         DeleteExistingForOrigin("cell_location", plugin, origin);
         DeleteExistingForOrigin("container_child", plugin, origin);
+        DeleteExistingForOrigin("record_type_failure", plugin, origin);
     }
 
     // Blocking on the codec's async path is deliberate: serialization runs over a MemoryStream with
@@ -187,16 +205,16 @@ internal sealed class PluginIngest
         var body = _codec.SerializeToBytesAsync(record, gameRelease).GetAwaiter().GetResult();
         // Hashed from the codec's own bytes rather than a string, so the hash is defined by what the
         // source file would contain.
-        return new PreparedRecord(record, body, GitBlobHash.Of(body), refs, childRows, record.EditorID, ParseDiagnosis: null);
+        return new PreparedRecord(
+            record.FormKey.ToString(), body, GitBlobHash.Of(body), refs, childRows, record.EditorID, ParseDiagnosis: null);
     }
 
     private static void AppendPrepared(
         DuckDBAppender documentAppender, PreparedRecord prepared, string recordType,
         string plugin, string origin)
     {
-        var record = prepared.Record;
         var row = documentAppender.CreateRow();
-        row.AppendValue(record.FormKey.ToString());
+        row.AppendValue(prepared.FormKey);
         row.AppendValue(plugin);
         row.AppendValue(origin);
         row.AppendValue(recordType);
@@ -219,17 +237,24 @@ internal sealed class PluginIngest
         string plugin, string origin, List<FormRef> refs,
         List<(string FormKey, string RecordType, string? EditorId)> lookupRows,
         List<ContainerChildRow> containerChildRows,
+        List<(string RecordType, string Diagnosis)> typeFailures,
         DuckDBAppender documentAppender, GameRelease gameRelease, RefCounters counters)
     {
-        List<IMajorRecordGetter> records;
+        // Enumerated one at a time rather than materialized in one shot: Mutagen's group enumerator
+        // throws out of MoveNext and cannot be resumed, so everything it yielded first is kept and
+        // the type carries the diagnosis for what never arrived.
+        var records = new List<IMajorRecordGetter>();
         try
         {
-            records = [.. pluginMod.EnumerateMajorRecords(schema.RecordType, throwIfUnknown: false)];
+            foreach (var record in pluginMod.EnumerateMajorRecords(schema.RecordType, throwIfUnknown: false))
+                records.Add(record);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to enumerate {RecordType} records from {Plugin}", tableName, plugin);
-            throw;
+            _logger.LogWarning(ex,
+                "Could not finish enumerating {RecordType} records from {Plugin}; indexing the {Count} that were reachable",
+                tableName, plugin, records.Count);
+            typeFailures.Add((tableName, PluginDiagnosis.FromParseException(ex).Describe()));
         }
 
         if (records.Count == 0) return;
@@ -263,7 +288,6 @@ internal sealed class PluginIngest
 
             foreach (var p in prepared)
             {
-                var record = p.Record;
                 try
                 {
                     AppendPrepared(documentAppender, p, tableName, plugin, origin);
@@ -272,16 +296,16 @@ internal sealed class PluginIngest
                 {
                     _logger.LogError(ex,
                         "Failed to append {RecordType} record {FormKey} ({EditorID}) from {Plugin}",
-                        tableName, record.FormKey, p.EditorId, plugin);
+                        tableName, p.FormKey, p.EditorId, plugin);
                     throw;
                 }
                 refs.AddRange(p.Refs);
                 containerChildRows.AddRange(p.ChildRows);
-                lookupRows.Add((record.FormKey.ToString(), tableName, p.EditorId));
+                lookupRows.Add((p.FormKey, tableName, p.EditorId));
                 if (_logger.IsEnabled(LogLevel.Trace))
                 {
                     _logger.LogTrace("Appended {RecordType} record {FormKey} ({EditorID}) from {Plugin}",
-                        tableName, record.FormKey, p.EditorId, plugin);
+                        tableName, p.FormKey, p.EditorId, plugin);
                 }
             }
             counters.AppendMs += batchTimer.ElapsedMilliseconds;
@@ -305,16 +329,16 @@ internal sealed class PluginIngest
             _logger.LogWarning(ex,
                 "Could not read {RecordType} record {FormKey} ({EditorID}) from {Plugin}; indexing it with its parse diagnosis",
                 tableName, record.FormKey, editorId, plugin);
-            return ParseFailed(record, editorId, PluginDiagnosis.FromParseException(ex).Describe());
+            return ParseFailed(record, editorId, PluginDiagnosis.FromParseException(ex).Describe(), gameRelease);
         }
     }
 
     // No refs and no child rows: the walks that would produce them are the ones that just failed.
-    private static PreparedRecord ParseFailed(IMajorRecordGetter record, string? editorId, string diagnosis)
+    private static PreparedRecord ParseFailed(
+        IMajorRecordGetter record, string? editorId, string diagnosis, GameRelease gameRelease)
     {
-        var body = Encoding.UTF8.GetBytes(
-            editorId == null ? "{}" : $"{{\"EditorID\":{JsonSerializer.Serialize(editorId)}}}");
-        return new PreparedRecord(record, body, GitBlobHash.Of(body), [], [], editorId, diagnosis);
+        var body = ParseFailedDocument.For(record, editorId, gameRelease);
+        return new PreparedRecord(record.FormKey.ToString(), body, GitBlobHash.Of(body), [], [], editorId, diagnosis);
     }
 
     // The EditorID of an unreadable record is read through the same lazy Mutagen field access that
