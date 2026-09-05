@@ -56,6 +56,19 @@ class ValeRules(unittest.TestCase):
     def test_a_date_in_a_string_literal_is_data(self):
         self.assertNotIn("Repo.Date", vale('const d = "2024-01-01";\n', ".ts", config=".vale-raw.ini"))
 
+    def test_our_ticket_numbers_anywhere_in_text(self):
+        for text in (f"// see {TICKET}\n", f"// fixed ({TICKET})\n", f"x = 'issue {TICKET}'\n"):
+            with self.subTest(text=text):
+                self.assertIn("Repo.Ticket", vale(text, ".ts", config=".vale-raw.ini"))
+        self.assertIn("Repo.Ticket", vale(f"See {TICKET}.\n", ".md"))
+
+    def test_external_trackers_hex_colours_and_enumerations_are_not_tickets(self):
+        n = "#" "688"
+        for text in (f"Mutagen {n}", f"Mutagen-{n}", f"Mutagen-Modding/Mutagen{n}", f"upstream {n}/{n}",
+                     f"VS Code {n}", "color: '#123456'", "var(--x, #123)", "divergence #2, AC #4"):
+            with self.subTest(text=text):
+                self.assertNotIn("Repo.Ticket", vale(f"// {text}\n", ".ts", config=".vale-raw.ini"))
+
     def test_one_cref_passes(self):
         one = '/// <summary>See <see cref="B"/>.</summary>\npublic int X;\n'
         self.assertNotIn("Repo.Cref", vale(one, ".cs"))
@@ -85,6 +98,11 @@ class WriteHook(unittest.TestCase):
         run = hook("eslint.config.mjs", "// " + "word " * 41 + "\nexport default [];\n")
         self.assertEqual(run.returncode, 2, run.stderr)
         self.assertIn("40", run.stderr)
+
+    def test_refuses_a_ticket_number_in_a_config_file(self):
+        run = hook("a.yml", f"# from {TICKET}\nkey: 1\n")
+        self.assertEqual(run.returncode, 2, run.stderr)
+        self.assertIn("commit message", run.stderr)
 
     def test_accepts_a_present_tense_comment(self):
         run = hook("a.ts", "// the cap is a constraint from the format\nexport const a = 1;\n")

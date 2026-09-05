@@ -46,9 +46,7 @@ text = tool_input.get("new_string") if data.get("tool_name") == "Edit" else tool
 text = text or ""
 hits = [h.replace(path + ":", "line ") for h in comment_shape.check(path, text)] + vale_hits(path, text)
 if hits:
-    if any("ticket number" in h for h in hits):
-        print("A ticket number belongs in the commit message, never in the code.", file=sys.stderr)
-    else:
+    if not all("Ticket number" in h for h in hits):
         print("A comment states a constraint from outside the code; a string states the current "
               "state.", file=sys.stderr)
         print("Delete it, or cut it to one present-tense sentence.", file=sys.stderr)

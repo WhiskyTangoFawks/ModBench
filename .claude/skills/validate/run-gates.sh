@@ -26,8 +26,7 @@ MJS=$(tracked '*.mjs')
 # Vale has no .mjs format and no alias into one, so each goes through stdin as JavaScript.
 # Raw text (string literals, config prose) is scanned in every tracked text file.
 RAW_FILES=$(printf '%s\n%s\n%s\n%s\n' "$COMMENT_CODE" "$MJS" "$SH_FILES" "$(tracked '*.yml' '*.json' '*.csproj' '*.props')" | grep -v '^$')
-SHAPE_FILES=$(printf '%s\n%s\n' "$RAW_FILES" "$COMMENT_DOCS" | grep -v '^$')
-if [[ -n "$SHAPE_FILES" ]]; then
+if [[ -n "$RAW_FILES$COMMENT_DOCS" ]]; then
   COMMENT_OK=true
   VALE="$(bash "$ROOT/.claude/skills/validate/install-vale.sh")" || COMMENT_OK=false
   (cd "$ROOT" && echo "$COMMENT_DOCS" | xargs -d '\n' -r "$VALE" --config=.vale.ini) || COMMENT_OK=false
@@ -37,7 +36,7 @@ if [[ -n "$SHAPE_FILES" ]]; then
     (cd "$ROOT" && "$VALE" --config=.vale.ini --filter='.Name!="Repo.History"' --output=line --ext=.js < "$f" | sed "s|^stdin\.js|$f|"; exit "${PIPESTATUS[0]}") || COMMENT_OK=false
   done
   (cd "$ROOT" && echo "$RAW_FILES" | xargs -d '\n' -r "$VALE" --config=.vale-raw.ini) || COMMENT_OK=false
-  (cd "$ROOT" && echo "$SHAPE_FILES" | xargs -d '\n' -r python3 .claude/hooks/comment-shape.py) || COMMENT_OK=false
+  (cd "$ROOT" && echo "$COMMENT_CODE" | xargs -d '\n' -r python3 .claude/hooks/comment-shape.py) || COMMENT_OK=false
   (cd "$ROOT" && python3 -m unittest discover -q -s .claude/hooks -p 'test_*.py') || COMMENT_OK=false
   $COMMENT_OK || { echo "--- COMMENT GATE FAILED ---"; FAILED=true; }
 fi

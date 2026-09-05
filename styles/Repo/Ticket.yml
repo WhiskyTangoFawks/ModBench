@@ -1,0 +1,9 @@
+extends: existence
+message: "Ticket number '%s' belongs in the commit message, never in the code."
+level: error
+nonword: true
+scope:
+  - comment
+  - text
+raw:
+  - '(?<!\b(?:Mutagen|upstream|VS ?Code)\b[\w ./#-]{0,24})(?<![\w.-]/[\w.-]{1,40})(?<![''"`])(?<!,\s{0,3})#\d{2,}\b'
