@@ -22,11 +22,13 @@ stored on it — they are load-order-derived, joined into the registered view fr
 the `winners` table respectively (ADR-0001). The index is a persistent per-instance cache
 (ADR-0001) — deleting it costs one cold index and loses nothing.
 
-**Reflection over Mutagen's record types generates, at startup, three things — never DDL:**
+**Reflection over Mutagen's record types generates three things — never DDL:**
 
 - **One `json_extract` view per record type**, named after the type (`npc`, `weap`, …), carrying
   scalar leaves only. This is what keeps user filter SQL (ADR-0018) working unchanged against the
-  documents table. Arrays, structs and other non-scalar fields are not view columns.
+  documents table. Arrays, structs and other non-scalar fields are not view columns. The views are
+  created on the first filter, not when the index opens: only user SQL reads them, and creating
+  ~130 of them costs more than every table together.
 - **Editor field metadata** — the `ColumnSpec` tree the record editor renders and edits from.
 - **The record codec** (ADR-0042) — the serializer that produces the documents in the first
   place.

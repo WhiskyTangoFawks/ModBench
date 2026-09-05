@@ -44,7 +44,7 @@ public class TableDdlBuilderTests
     public void CreateTables_CreatesRegistrationsTable()
     {
         using var conn = OpenMemory();
-        _builder.CreateTables(conn, GameRelease.Fallout4);
+        TableDdlBuilder.CreateTables(conn);
 
         var cols = GetColumns(conn, "registrations");
         // ADR-0044: the three facts a registration carries, and no `participates`, which is derived
@@ -59,17 +59,18 @@ public class TableDdlBuilderTests
     public void CreateTables_CreatesFilesTable()
     {
         using var conn = OpenMemory();
-        _builder.CreateTables(conn, GameRelease.Fallout4);
+        TableDdlBuilder.CreateTables(conn);
 
         var cols = GetColumns(conn, "files", "mirror");
         Assert.Equal(["plugin", "origin", "file_path", "content_hash", "index_version"], cols);
     }
 
     [Fact]
-    public void CreateTables_CreatesNpcTable_WithBaseColumns()
+    public void CreateRecordTypeViews_CreatesNpcView_WithBaseColumns()
     {
         using var conn = OpenMemory();
-        _builder.CreateTables(conn, GameRelease.Fallout4);
+        TableDdlBuilder.CreateTables(conn);
+        _builder.CreateRecordTypeViews(conn, GameRelease.Fallout4);
 
         var cols = GetColumns(conn, "npc_");
         Assert.Contains("form_key", cols);
@@ -83,9 +84,14 @@ public class TableDdlBuilderTests
     public void CreateTables_IsIdempotent()
     {
         using var conn = OpenMemory();
-        _builder.CreateTables(conn, GameRelease.Fallout4);
+        TableDdlBuilder.CreateTables(conn);
+        _builder.CreateRecordTypeViews(conn, GameRelease.Fallout4);
 
-        var ex = Record.Exception(() => _builder.CreateTables(conn, GameRelease.Fallout4));
+        var ex = Record.Exception(() =>
+        {
+            TableDdlBuilder.CreateTables(conn);
+            _builder.CreateRecordTypeViews(conn, GameRelease.Fallout4);
+        });
 
         Assert.Null(ex);
         // Positive control: the second call left a working schema behind rather than an empty one —
@@ -105,7 +111,7 @@ public class TableDdlBuilderTests
     public void MirrorRecordShapedTables_CarryNoLoadOrderColumn(string tableName)
     {
         using var conn = OpenMemory();
-        _builder.CreateTables(conn, GameRelease.Fallout4);
+        TableDdlBuilder.CreateTables(conn);
 
         var cols = GetColumns(conn, tableName, schema: "mirror");
         Assert.NotEmpty(cols); // premise: the mirror table actually exists
@@ -122,7 +128,7 @@ public class TableDdlBuilderTests
     public void RegisteredViews_StillExposeLoadOrderIndex_DerivedFromRegistrations(string tableName)
     {
         using var conn = OpenMemory();
-        _builder.CreateTables(conn, GameRelease.Fallout4);
+        TableDdlBuilder.CreateTables(conn);
 
         var cols = GetColumns(conn, tableName, schema: "main");
         Assert.Contains("load_order_idx", cols);
@@ -136,7 +142,7 @@ public class TableDdlBuilderTests
     public void MirrorRecordShapedTables_CarryNoWinnerColumn(string tableName)
     {
         using var conn = OpenMemory();
-        _builder.CreateTables(conn, GameRelease.Fallout4);
+        TableDdlBuilder.CreateTables(conn);
 
         var cols = GetColumns(conn, tableName, schema: "mirror");
         Assert.NotEmpty(cols); // premise: the mirror table actually exists
@@ -154,7 +160,7 @@ public class TableDdlBuilderTests
     public void RegisteredViews_ExposeWinner_OnlyWhereAReaderAsksForIt(string relation, bool exposesWinner)
     {
         using var conn = OpenMemory();
-        _builder.CreateTables(conn, GameRelease.Fallout4);
+        TableDdlBuilder.CreateTables(conn);
 
         var cols = GetColumns(conn, relation, schema: "main");
         Assert.NotEmpty(cols); // premise: the view actually exists
@@ -168,7 +174,7 @@ public class TableDdlBuilderTests
     public void CreateTables_CreatesWinnersTable_MappingARefAndFormKeyToOnePlugin()
     {
         using var conn = OpenMemory();
-        _builder.CreateTables(conn, GameRelease.Fallout4);
+        TableDdlBuilder.CreateTables(conn);
 
         var cols = GetColumns(conn, "winners", schema: "main");
         Assert.Equal(["record_ref", "form_key", "plugin", "origin"], cols);
@@ -180,7 +186,7 @@ public class TableDdlBuilderTests
         using var conn = OpenMemory();
         // Through CreateTables rather than the per-table helper — the helper writes into the
         // `mirror` schema, which only CreateTables creates.
-        _builder.CreateTables(conn, GameRelease.Fallout4);
+        TableDdlBuilder.CreateTables(conn);
 
         using var cmd = conn.CreateCommand();
         cmd.CommandText = "SELECT COUNT(*) FROM duckdb_indexes() WHERE index_name = 'idx_form_references_target'";

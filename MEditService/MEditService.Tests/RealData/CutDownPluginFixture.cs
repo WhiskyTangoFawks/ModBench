@@ -34,6 +34,7 @@ public sealed class CutDownPluginFixture : IDisposable
         Repo.Initialize(GameRelease.Fallout4);
         Repo.Index(_overlay, Registration.Participating(0), new PluginKey(_overlay.ModKey.FileName.ToString(), "Data"));
         Repo.UpdateWinners();
+        Repo.CreateRecordTypeViews();
     }
 
     public void Dispose()

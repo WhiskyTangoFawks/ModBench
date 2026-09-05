@@ -38,6 +38,7 @@ public sealed class LoadOrderDatabaseTablesTests(LoadedApiFixture<TestPluginFixt
     [Fact]
     public void AHeldLoadOrder_HasNoPerTypeWideTables_OnlyViewsOverRecords()
     {
+        ((DuckDbRecordIndex)loaded.Services.GetRequiredService<ILoadOrderMirror>().Index!).CreateRecordTypeViews();
         var connection = Connection();
         var baseTables = BaseTableNamesOf(connection);
         var views = ViewNamesOf(connection);
