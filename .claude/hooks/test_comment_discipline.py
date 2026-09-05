@@ -69,6 +69,9 @@ class ValeRules(unittest.TestCase):
             with self.subTest(text=text):
                 self.assertNotIn("Repo.Ticket", vale(f"// {text}\n", ".ts", config=".vale-raw.ini"))
 
+    def test_filler_gets_a_quick_fix(self):
+        self.assertIn("Repo.Filler", vale("// in order to load the plugin\n", ".ts"))
+
     def test_one_cref_passes(self):
         one = '/// <summary>See <see cref="B"/>.</summary>\npublic int X;\n'
         self.assertNotIn("Repo.Cref", vale(one, ".cs"))
@@ -103,6 +106,10 @@ class WriteHook(unittest.TestCase):
         run = hook("a.yml", f"# from {TICKET}\nkey: 1\n")
         self.assertEqual(run.returncode, 2, run.stderr)
         self.assertIn("commit message", run.stderr)
+
+    def test_a_warning_does_not_block_the_write(self):
+        run = hook("a.ts", "// sorted in order to match the file\nexport const a = 1;\n")
+        self.assertEqual(run.returncode, 0, run.stderr)
 
     def test_accepts_a_present_tense_comment(self):
         run = hook("a.ts", "// the cap is a constraint from the format\nexport const a = 1;\n")
