@@ -458,8 +458,9 @@ public sealed class RecordEditService(
         {
             return RecordEditResult.Refused(
                 RecordEditRefusal.ContainerParentMissingInDestination,
-                $"{formKey} is an exterior cell — copying it as override needs spatial placement " +
-                "(worldspace block/sub-block) this write path does not compute yet, tracked separately.");
+                $"{formKey} is an exterior cell with no worldspace grid position of its own — a worldspace's " +
+                $"persistent cell, not one of its numbered blocks — so Copy as Override cannot create it in " +
+                $"{destinationPlugin.Name}.");
         }
 
         var body = ReadCopySourceBody(sourcePlugin, formKey, document, release);
@@ -1779,7 +1780,7 @@ public sealed class RecordEditService(
             $"'{recordType}' has no source file of its own — it is a container record (Cell, Worldspace, " +
             "Quest) or a record embedded in one (a placed reference, landscape, navmesh, dialog topic, " +
             "scene). Editing its fields works, and so do deleting and renumbering it; creating one from " +
-            "scratch does not yet — a brand-new record has no containment for anything to place " +
+            "scratch is not supported — a brand-new record has no containment for anything to place " +
             "it into.");
     }
 

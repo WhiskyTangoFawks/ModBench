@@ -833,7 +833,7 @@ function registerLoadoutView(session: ExtensionSession, deps: LoadoutViewDeps): 
       if (isFomod)
         void vscode.window.showWarningMessage(
           `Modbench: "${name}" is a FOMOD installer — its files were copied as-is and need manual ` +
-            `arrangement (the scripted installer is coming later).`,
+            `arrangement; Modbench does not run the installer's own install steps.`,
         );
     };
     const enterEditing = makeEnterEditing(session, outputChannel, revealLog);

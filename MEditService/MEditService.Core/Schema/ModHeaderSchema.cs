@@ -82,8 +82,7 @@ internal static class ModHeaderSchema
         var mastersElement = new FieldMetadata("", "string", false, LeafSpec.NoFormKeyTypes, LeafSpec.NoEnumMembers);
         columns.Add(new ColumnSpec(HeaderIndexer.MastersFieldName, $"{modHeaderProp.Name}.MasterReferences", "VARCHAR", _ => null, "array",
             LeafSpec.NoFormKeyTypes, LeafSpec.NoEnumMembers,
-            Apply: LeafWrite.ReadOnly<IMajorRecord>(
-                "masters are wholly content-derived at compile time (#335/ADR-0038)"),
+            Apply: LeafWrite.ReadOnly<IMajorRecord>("masters are wholly content-derived at compile time"),
             IsArray: true, ElementType: mastersElement));
         extracts.Add(mod => JsonSerializer.Serialize(mod.MasterReferences.Select(r => r.Master.FileName.ToString()).ToList()));
 

@@ -435,9 +435,9 @@ export function registerLaunchCommand(outputChannel: vscode.LogOutputChannel): v
   return vscode.commands.registerCommand('modbench.launch', async () => {
     const tasks = await vscode.tasks.fetchTasks({ type: LAUNCH_TASK_TYPE });
     if (tasks.length === 0) {
-      outputChannel.info('[extension] Launch…: no launchable tasks contributed yet');
+      outputChannel.info('[extension] Launch…: no launchable tasks contributed');
       void vscode.window.showInformationMessage(
-        'Modbench: No launch targets yet — the executables you configured in MO2 appear here once tool launching lands.',
+        'Modbench: No launch targets — add an executable to MO2\'s executables list and it appears here.',
       );
       return;
     }
