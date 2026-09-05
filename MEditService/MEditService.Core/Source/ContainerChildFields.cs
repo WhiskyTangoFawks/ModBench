@@ -167,7 +167,7 @@ internal static class ContainerChildFields
     // The slots that serialize inline into the parent's document — the runtime shadow of
     // CellEmbedCustomization and WorldspaceEmbedCustomization. A strict subset of ByTypeName: Quest and
     // DialogTopic children stay folder-split. Keep in step with the two customizations.
-    private static readonly HashSet<(string ParentType, string Slot)> EmbeddedSlots =
+    internal static readonly HashSet<(string ParentType, string Slot)> EmbeddedSlots =
     [
         ("Cell", "Persistent"), ("Cell", "Temporary"), ("Cell", "Landscape"), ("Cell", "NavigationMeshes"),
         ("Worldspace", "TopCell"),

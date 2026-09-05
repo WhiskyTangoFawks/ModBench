@@ -3,6 +3,7 @@ using MEditService.Core.Edits;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
 using MEditService.Core.Serialization;
+using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -21,11 +22,11 @@ public sealed class SpatialContainerMintBuilderTests
     {
         var worldspace = (IMajorRecord)MajorRecordInstantiator.Activator(
             FormKey.Factory("000801:Source.esm"), GameRelease.Fallout4, typeof(Worldspace));
-        PartialFormFlag.Set(worldspace, true);
+        worldspace.MajorRecordFlagsRaw |= PartialFormFlag.Bit;
 
         var cell = (IMajorRecord)MajorRecordInstantiator.Activator(
             FormKey.Factory("000802:Source.esm"), GameRelease.Fallout4, typeof(Cell));
-        PartialFormFlag.Set(cell, true);
+        cell.MajorRecordFlagsRaw |= PartialFormFlag.Bit;
 
         // Deliberately not derivable from a naive floor(grid/N)-style formula for this grid point —
         // a rival that recomputed block/sub-block instead of copying CellLocationRow's own numbers

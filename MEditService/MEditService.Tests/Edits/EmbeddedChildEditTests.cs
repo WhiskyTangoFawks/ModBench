@@ -3,6 +3,7 @@ using MEditService.Core.Edits;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
 using MEditService.Core.Source;
+using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace MEditService.Tests.Edits;
@@ -33,7 +34,7 @@ public sealed class EmbeddedChildEditTests : IDisposable
         // wrong reason.
         Assert.Empty(_fixture.GitStatus());
 
-        var result = EditService().EditField(_fixture.Plugin, _fixture.TemporaryRef.ToString(), "Scale", Json("2.5"));
+        var result = EditService().Set(_fixture.Plugin, _fixture.TemporaryRef.ToString(), "Scale", Json("2.5"));
 
         Assert.True(result.Applied, result.Message);
         Assert.NotEmpty(_fixture.GitStatus());
@@ -47,7 +48,7 @@ public sealed class EmbeddedChildEditTests : IDisposable
     {
         var file = _fixture.SourceFileContaining(ContainerModFixture.EmbedCellEditorId);
 
-        Assert.True(EditService().EditField(_fixture.Plugin, _fixture.TemporaryRef.ToString(), "Scale", Json("7.0")).Applied);
+        Assert.True(EditService().Set(_fixture.Plugin, _fixture.TemporaryRef.ToString(), "Scale", Json("7.0")).Applied);
 
         // The cell's own WaterHeight is a field of the parent, not of the child. A read-modify-write that
         // reserialized the parent from anything other than its own text would be free to move it.
@@ -61,7 +62,7 @@ public sealed class EmbeddedChildEditTests : IDisposable
     [Fact]
     public void AfterAnEmbeddedEdit_TheChildsOwnRowCarriesTheNewValue()
     {
-        Assert.True(EditService().EditField(_fixture.Plugin, _fixture.TemporaryRef.ToString(), "Scale", Json("3.5")).Applied);
+        Assert.True(EditService().Set(_fixture.Plugin, _fixture.TemporaryRef.ToString(), "Scale", Json("3.5")).Applied);
 
         var child = _fixture.Mirror.Index!.At(RecordRef.Effective).GetDocument(_fixture.TemporaryRef.ToString(), _fixture.Plugin);
         Assert.NotNull(child);
@@ -77,7 +78,7 @@ public sealed class EmbeddedChildEditTests : IDisposable
             index.At(RecordRef.Effective).GetDocument(_fixture.EmbedCell.ToString(), _fixture.Plugin)!.Body,
             index.At(RecordRef.Head).GetDocument(_fixture.EmbedCell.ToString(), _fixture.Plugin)!.Body);
 
-        Assert.True(EditService().EditField(_fixture.Plugin, _fixture.TemporaryRef.ToString(), "Scale", Json("4.5")).Applied);
+        Assert.True(EditService().Set(_fixture.Plugin, _fixture.TemporaryRef.ToString(), "Scale", Json("4.5")).Applied);
 
         // The parent is the source unit, so the parent is what went dirty, which is what makes the edit
         // visible as a working-tree change on the record the file actually belongs to.
@@ -99,7 +100,7 @@ public sealed class EmbeddedChildEditTests : IDisposable
         var index = _fixture.Mirror.Index!;
         Assert.Equal(11f, index.At(RecordRef.Effective).GetPlacement(_fixture.TemporaryRef.ToString(), _fixture.Plugin)!.Value.PosX);
 
-        var result = EditService().EditField(
+        var result = EditService().Set(
             _fixture.Plugin, _fixture.TemporaryRef.ToString(), "Position", Json("""{"X": 99.0, "Y": 88.0, "Z": 77.0}"""));
 
         Assert.False(result.Applied);
@@ -117,16 +118,16 @@ public sealed class EmbeddedChildEditTests : IDisposable
         // children with rows and parentage but no parent: silent index corruption, not an edit.
         var service = EditService();
 
-        var navmeshes = service.EditField(_fixture.Plugin, _fixture.EmbedCell.ToString(), "NavigationMeshes", Json("[]"));
+        var navmeshes = service.Set(_fixture.Plugin, _fixture.EmbedCell.ToString(), "NavigationMeshes", Json("[]"));
         Assert.False(navmeshes.Applied);
         Assert.Equal(RecordEditRefusal.FieldReadOnly, navmeshes.Refusal);
         Assert.Contains("structural gesture", navmeshes.Message, StringComparison.Ordinal);
 
-        var landscape = service.EditField(_fixture.Plugin, _fixture.EmbedCell.ToString(), "Landscape", Json("null"));
+        var landscape = service.Set(_fixture.Plugin, _fixture.EmbedCell.ToString(), "Landscape", Json("null"));
         Assert.False(landscape.Applied);
         Assert.Equal(RecordEditRefusal.FieldReadOnly, landscape.Refusal);
 
-        var topCell = service.EditField(_fixture.Plugin, _fixture.Worldspace.ToString(), "TopCell", Json("null"));
+        var topCell = service.Set(_fixture.Plugin, _fixture.Worldspace.ToString(), "TopCell", Json("null"));
         Assert.False(topCell.Applied);
         Assert.Equal(RecordEditRefusal.FieldReadOnly, topCell.Refusal);
 
@@ -147,7 +148,7 @@ public sealed class EmbeddedChildEditTests : IDisposable
         // An exterior cell's grid coordinates *are* its source directory, so moving them restructures
         // the tree rather than rewriting a file — and the same two numbers are mirrored in
         // cell_location, which nothing on the write path re-derives.
-        var result = EditService().EditField(
+        var result = EditService().Set(
             _fixture.Plugin, _fixture.EmbedCell.ToString(), "Grid", Json("""{"Point": {"X": 9, "Y": 9}}"""));
 
         Assert.False(result.Applied);
@@ -168,11 +169,11 @@ public sealed class EmbeddedChildEditTests : IDisposable
         // field on either to write.
         var service = EditService();
 
-        Assert.True(service.EditField(_fixture.Plugin, _fixture.PersistentRef.ToString(), "Scale", Json("2.0")).Applied);
-        Assert.True(service.EditField(_fixture.Plugin, _fixture.TemporaryRef.ToString(), "Scale", Json("3.0")).Applied);
+        Assert.True(service.Set(_fixture.Plugin, _fixture.PersistentRef.ToString(), "Scale", Json("2.0")).Applied);
+        Assert.True(service.Set(_fixture.Plugin, _fixture.TemporaryRef.ToString(), "Scale", Json("3.0")).Applied);
         // TopCell is embedded in the *worldspace's* document, so its source unit is a different file
         // from the two above — the case that falls through a resolver built only for cells.
-        Assert.True(service.EditField(_fixture.Plugin, _fixture.TopCell.ToString(), "WaterHeight", Json("42.0")).Applied);
+        Assert.True(service.Set(_fixture.Plugin, _fixture.TopCell.ToString(), "WaterHeight", Json("42.0")).Applied);
 
         var cellFile = File.ReadAllText(_fixture.SourceFileContaining(ContainerModFixture.EmbedCellEditorId));
         Assert.Contains("\"Scale\": 2.0", cellFile, StringComparison.Ordinal);
@@ -196,7 +197,7 @@ public sealed class EmbeddedChildEditTests : IDisposable
         var file = _fixture.SourceFileContaining(ContainerModFixture.WorldspaceEditorId);
         var before = File.ReadAllText(file);
 
-        var result = EditService().EditField(_fixture.Plugin, _fixture.TopCellRef.ToString(), "Scale", Json("9.5"));
+        var result = EditService().Set(_fixture.Plugin, _fixture.TopCellRef.ToString(), "Scale", Json("9.5"));
 
         Assert.True(result.Applied, result.Message);
         Assert.Equal(
@@ -219,7 +220,7 @@ public sealed class EmbeddedChildEditTests : IDisposable
         Assert.NotEqual(questFile, topicFile);
 
         var questBefore = File.ReadAllText(questFile);
-        Assert.True(EditService().EditField(_fixture.Plugin, _fixture.DialogTopic.ToString(), "EditorID", Json("\"RenamedTopic\"")).Applied);
+        Assert.True(EditService().Set(_fixture.Plugin, _fixture.DialogTopic.ToString(), "EditorID", Json("\"RenamedTopic\"")).Applied);
 
         Assert.Equal(questBefore, File.ReadAllText(questFile));
         Assert.Contains(
@@ -237,7 +238,7 @@ public sealed class EmbeddedChildEditTests : IDisposable
         // An interior cell removed from disk by something outside Modbench is exactly that.
         Directory.Delete(Path.GetDirectoryName(_fixture.SourceFileContaining(ContainerModFixture.EmbedCellEditorId))!, recursive: true);
 
-        var result = EditService().EditField(_fixture.Plugin, _fixture.EmbedCell.ToString(), "WaterHeight", Json("77.0"));
+        var result = EditService().Set(_fixture.Plugin, _fixture.EmbedCell.ToString(), "WaterHeight", Json("77.0"));
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.SourceUnitNotFound, result.Refusal);
@@ -256,7 +257,7 @@ public sealed class EmbeddedChildEditTests : IDisposable
         Assert.DoesNotContain(ContainerModFixture.TemporaryRefEditorId, withoutTheRef, StringComparison.Ordinal);
         File.WriteAllText(file, withoutTheRef);
 
-        var result = EditService().EditField(_fixture.Plugin, _fixture.TemporaryRef.ToString(), "Scale", Json("5.0"));
+        var result = EditService().Set(_fixture.Plugin, _fixture.TemporaryRef.ToString(), "Scale", Json("5.0"));
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.SourceUnitNotFound, result.Refusal);
@@ -272,7 +273,7 @@ public sealed class EmbeddedChildEditTests : IDisposable
     {
         // The one child-slot column the guard covers that nothing else here exercises. Writing it would
         // replace a worldspace's entire exterior cell tree through a JSON blob.
-        var result = EditService().EditField(_fixture.Plugin, _fixture.Worldspace.ToString(), "SubCells", Json("[]"));
+        var result = EditService().Set(_fixture.Plugin, _fixture.Worldspace.ToString(), "SubCells", Json("[]"));
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.FieldReadOnly, result.Refusal);
@@ -287,7 +288,7 @@ public sealed class EmbeddedChildEditTests : IDisposable
     {
         var oldDirectory = Path.GetDirectoryName(_fixture.SourceFileContaining(ContainerModFixture.WorldspaceEditorId))!;
 
-        Assert.True(EditService().EditField(_fixture.Plugin, _fixture.Worldspace.ToString(), "EditorID", Json("\"RenamedWorld\"")).Applied);
+        Assert.True(EditService().Set(_fixture.Plugin, _fixture.Worldspace.ToString(), "EditorID", Json("\"RenamedWorld\"")).Applied);
 
         Assert.False(Directory.Exists(oldDirectory));
         Assert.Contains(
@@ -304,7 +305,7 @@ public sealed class EmbeddedChildEditTests : IDisposable
         var oldDirectory = Path.GetDirectoryName(_fixture.SourceFileContaining(ContainerModFixture.QuestEditorId))!;
         Assert.StartsWith(oldDirectory, _fixture.SourceFileContaining(ContainerModFixture.DialogTopicEditorId), StringComparison.Ordinal);
 
-        Assert.True(EditService().EditField(_fixture.Plugin, _fixture.Quest.ToString(), "EditorID", Json("\"RenamedQuest\"")).Applied);
+        Assert.True(EditService().Set(_fixture.Plugin, _fixture.Quest.ToString(), "EditorID", Json("\"RenamedQuest\"")).Applied);
 
         Assert.False(Directory.Exists(oldDirectory));
         var newDirectory = Path.GetDirectoryName(_fixture.SourceFileContaining("RenamedQuest"))!;

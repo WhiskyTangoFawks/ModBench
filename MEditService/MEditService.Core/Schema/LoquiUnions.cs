@@ -1,6 +1,5 @@
 using System.Collections.Concurrent;
 using System.Reflection;
-using System.Text.Json;
 using MEditService.Core.Queries;
 using Microsoft.Extensions.Logging;
 
@@ -114,7 +113,7 @@ internal static class LoquiUnions
                 .Where(d => d.Spec != null)
                 .Select(d => (d.Leaf, Spec: d.Spec!))
                 .ToList();
-            if (declaring.Count > 0) result.Add(BuildUnionMemberField(declaring));
+            if (declaring.Count > 0) result.Add(BuildUnionMemberField(declaring, leaves.Count));
         }
 
         result.Add(BuildUnionDiscriminatorField(union));
@@ -129,29 +128,17 @@ internal static class LoquiUnions
     private static (string, string?, int, int) ShapeKey(SubFieldSpec spec) =>
         (spec.ApiType, spec.ElementSpec?.ApiType, spec.SubFields?.Count ?? -1, spec.ElementSpec?.SubFields?.Count ?? -1);
 
-    // One field shaped as the first declaring leaf's; when the leaves disagree, each leaf's shape
-    // is its variant. Written through the object's own leaf, any other answering PropertyNotFound,
-    // so a leaf switch drops the outgoing member.
-    private static SubFieldSpec BuildUnionMemberField(List<(UnionLeafWalk Leaf, SubFieldSpec Spec)> declaring)
+    // One field shaped as the first declaring leaf's. The variant map records each declaring leaf's
+    // shape whenever the leaves disagree or one lacks the member, so a leaf switch knows what the
+    // incoming leaf keeps.
+    private static SubFieldSpec BuildUnionMemberField(
+        List<(UnionLeafWalk Leaf, SubFieldSpec Spec)> declaring, int leafCount)
     {
         var rep = declaring[0].Spec;
-        var variants = declaring.Select(d => ShapeKey(d.Spec)).Distinct().Count() > 1
+        var variants = declaring.Count < leafCount || declaring.Select(d => ShapeKey(d.Spec)).Distinct().Count() > 1
             ? declaring.ToDictionary(d => d.Leaf.ClassName, d => d.Spec, StringComparer.Ordinal)
             : null;
-
-        var apply = rep.Apply.Writer == null
-            ? rep.Apply
-            : LeafWrite.Writable<object>((obj, val) =>
-            {
-                foreach (var (leaf, spec) in declaring)
-                {
-                    if (!leaf.GetterType.IsInstanceOfType(obj)) continue;
-                    return spec.Apply.Writer is { } write ? write(obj, val) : ApplyOutcome.SubFieldReadOnly;
-                }
-                return ApplyOutcome.PropertyNotFound;
-            });
-
-        return rep with { Apply = apply, AllowsNull = true, Variants = variants };
+        return rep with { AllowsNull = true, Variants = variants };
     }
 
     /// <summary>The document's own discriminator member: the first key of every union element the
@@ -159,32 +146,12 @@ internal static class LoquiUnions
     internal const string UnionTypeDiscriminator = "MutagenObjectType";
 
     // An enum, so the editor's enum-leaf rule renders it and the class names stay wire tokens
-    // LeafLabel labels. Changing it is an ordinary edit of the enclosing object; see
-    // docs/specs/medit-record-editor.md.
+    // LeafLabel labels. Setting it switches the object's leaf; see docs/specs/medit-record-editor.md.
     internal static SubFieldSpec BuildUnionDiscriminatorField(LoquiUnion union) =>
         new(UnionTypeDiscriminator, "enum", LeafSpec.NoFormKeyTypes,
             [.. union.Leaves.Select(l => new EnumMember(
                 l.ClassName, Label: LeafLabel.For(union.SetterType.Name, LeafLabel.ClassWord(l.ClassName))))],
-            Apply: LeafWrite.ReadOnly<object>(SchemaRefusals.DiscriminatorReason), AllowsNull: true,
-            DisplayLabel: UnionTypeDiscriminatorLabel, IsDiscriminator: true);
+            AllowsNull: true, DisplayLabel: UnionTypeDiscriminatorLabel, IsDiscriminator: true);
 
     internal const string UnionTypeDiscriminatorLabel = "Kind";
-
-    // Null is the caller's signal to refuse rather than guess. An O(1) namespace lookup, not an
-    // IndexLeavesByBase-style scan of 12,914 types: this is the write path, called per element,
-    // uncached. IsAssignableFrom still refuses an unrelated type.
-    internal static Type? ResolveUnionConcreteType(Type setterType, JsonElement json)
-    {
-        if (json.ValueKind != JsonValueKind.Object) return null;
-        if (!json.TryGetProperty(UnionTypeDiscriminator, out var dt) || dt.ValueKind != JsonValueKind.String)
-            return null;
-
-        var name = dt.GetString();
-        if (string.IsNullOrEmpty(name)) return null;
-
-        var candidate = setterType.Assembly.GetType($"{setterType.Namespace}.{name}");
-        return candidate is { IsAbstract: false } && setterType.IsAssignableFrom(candidate)
-            ? candidate
-            : null;
-    }
 }

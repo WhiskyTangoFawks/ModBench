@@ -1,6 +1,7 @@
 using System.Text.Json;
 using MEditService.Core.Edits;
 using MEditService.Core.Schema;
+using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -38,7 +39,7 @@ public sealed class ColorCompileRoundTripTests : IDisposable
 
     private void Edit(FormKey record, string field, string json)
     {
-        var result = EditService().EditField(_fixture.Plugin, record.ToString(), field, Json(json));
+        var result = EditService().Set(_fixture.Plugin, record.ToString(), field, Json(json));
         Assert.True(result.Applied, result.Message);
     }
 
@@ -55,13 +56,15 @@ public sealed class ColorCompileRoundTripTests : IDisposable
         Assert.Equal(50, light.Color.B);
     }
 
+    // The document spells a color with its alpha byte, and an edit in that spelling keeps it.
     [Fact]
-    public void Light_ColorEdit_NamingOnlyRgb_PreservesTheExistingAlphaByte()
+    public void Light_ColorEdit_InTheDocumentsOwnSpelling_KeepsTheAlphaByteItNames()
     {
-        Edit(_fixture.Light, "Color", "\"#C86432\"");
+        Edit(_fixture.Light, "Color", "\"#89C86432\"");
 
         var light = CompileAndReparse().Lights.Single(l => l.FormKey == _fixture.Light);
         Assert.Equal(ColorCompileFixture.SeededLightAlpha, light.Color.A);
+        Assert.Equal((200, 100, 50), (light.Color.R, light.Color.G, light.Color.B));
     }
 
     // ── Coordinator's addition: one compile proof per allowlist row ────────────────────────────

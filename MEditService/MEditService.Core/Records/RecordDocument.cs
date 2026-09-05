@@ -14,7 +14,10 @@ public record RecordDocument(
     string? Body,
     IReadOnlyList<FieldValue> Fields,
     bool IsPartialForm = false,
-    bool IsPartialFormable = false);
+    bool IsPartialFormable = false,
+    // Non-null when ingest could not produce this record's own document; the body is then the stub
+    // ParseFailedDocument wrote, and no write may land on it.
+    string? ParseDiagnosis = null);
 
 /// <summary>For a record with no working-tree change, <see cref="Effective"/> and Head are the same
 /// instance (an identity, not merely equal values); for a dirty one, Head is resolved separately

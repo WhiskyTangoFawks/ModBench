@@ -98,7 +98,7 @@ public sealed class ExternalChangeEndpointsTests : IDisposable
     {
         var editService = new MEditService.Core.Edits.RecordEditService(
             _mod.Mirror, SharedSchemaReflector.Instance, Microsoft.Extensions.Logging.Abstractions.NullLogger<MEditService.Core.Edits.RecordEditService>.Instance);
-        editService.EditField(_mod.Plugin, _mod.Npc.ToString(), "HeightMax",
+        editService.Set(_mod.Plugin, _mod.Npc.ToString(), "HeightMax",
             System.Text.Json.JsonDocument.Parse("0.5").RootElement);
         WriteExternalBinaryChange(0.9f);
         var (loggerFactory, _) = CapturingLoggerFactory();

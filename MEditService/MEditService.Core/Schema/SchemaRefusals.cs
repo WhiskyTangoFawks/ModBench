@@ -16,27 +16,6 @@ internal static class SchemaRefusals
     // loud in a real run.
     internal const string UnclassifiedAnomalyPrefix = "SchemaReflector: unclassified";
 
-    /// <summary>A discriminator is consumed off the raw JSON to choose a concrete type, before the
-    /// object it would apply to exists, so naming it stays a silent skip.</summary>
-    internal const string DiscriminatorReason =
-        "discriminator: read off the payload to choose a concrete type, before that object exists";
-
-    /// <summary>An element-shape template carried by a list's metadata. A list is written as one whole
-    /// value through its owning field, so the template itself is never a write target.</summary>
-    internal const string ElementTemplateReason =
-        "list element template: a list is written as one whole value through its owning field";
-
-    /// <summary>A list whose element type classifies for reading but has no build arm: a translated
-    /// string, or an integer width <see cref="LeafClassification.PrimitiveMap"/> lacks. No Fallout 4
-    /// leaf is either; this keeps the classification total.</summary>
-    internal const string UnconvertibleElementListReason =
-        "list element: the element type has no JSON converter, so no element can be built from a payload";
-
-    /// <summary>Not reachable for any shape ClassifyLeaf returns today — every one has a converter or
-    /// is a form link or byte slice — so this names a branch that exists to keep the choice total.</summary>
-    internal const string NoConverterReason =
-        "leaf with no JSON converter and no form-link write path";
-
     /// <summary>The header's author/flags: a write reaching them is refused here, not at a gate.</summary>
     internal const string HeaderNoWritePathReason = "the header has no write path for this column";
 

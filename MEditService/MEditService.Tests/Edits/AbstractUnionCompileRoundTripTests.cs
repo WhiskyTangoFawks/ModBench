@@ -4,6 +4,7 @@ using MEditService.Core.Plugins;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
 using MEditService.Core.Source;
+using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -43,9 +44,9 @@ public sealed class AbstractUnionCompileRoundTripTests : IDisposable
     [Fact]
     public void Level_EditingWithinSameConcreteType_CompilesAndReparsesTheNewValue()
     {
-        var result = EditService().EditField(
+        var result = EditService().Set(
             _fixture.Plugin, _fixture.Npc.ToString(), "Level",
-            Json("""{"Level": 20, "MutagenObjectType": "NpcLevel"}"""));
+            Json("""{"MutagenObjectType": "NpcLevel", "Level": 20}"""));
         Assert.True(result.Applied, result.Message);
 
         var npc = CompileAndReparse().Npcs.Single(n => n.FormKey == _fixture.Npc);
@@ -56,9 +57,9 @@ public sealed class AbstractUnionCompileRoundTripTests : IDisposable
     [Fact]
     public void Level_SwitchingConcreteType_NpcLevelToPcLevelMult_CompilesAndReparsesAsTheNewConcreteType()
     {
-        var result = EditService().EditField(
+        var result = EditService().Set(
             _fixture.Plugin, _fixture.Npc.ToString(), "Level",
-            Json("""{"LevelMult": 1.5, "MutagenObjectType": "PcLevelMult"}"""));
+            Json("""{"MutagenObjectType": "PcLevelMult", "LevelMult": 1.5}"""));
         Assert.True(result.Applied, result.Message);
 
         var npc = CompileAndReparse().Npcs.Single(n => n.FormKey == _fixture.Npc);
@@ -71,7 +72,7 @@ public sealed class AbstractUnionCompileRoundTripTests : IDisposable
     [Fact]
     public void Aliases_WholeArrayWrite_QuestReferenceAliasElement_CompilesAndReparsesTheNewElement()
     {
-        var result = EditService().EditField(
+        var result = EditService().Set(
             _fixture.Plugin, _fixture.Quest.ToString(), "Aliases",
             Json("""[{"MutagenObjectType": "QuestReferenceAlias", "Name": "NewRef", "ClosestToAlias": 4}]"""));
         Assert.True(result.Applied, result.Message);
@@ -91,7 +92,7 @@ public sealed class AbstractUnionCompileRoundTripTests : IDisposable
     [Fact]
     public void Teaches_SwitchingConcreteType_SpellToPerk_CompilesAndReparsesAsTheNewConcreteType()
     {
-        var result = EditService().EditField(
+        var result = EditService().Set(
             _fixture.Plugin, _fixture.Book.ToString(), "Teaches",
             Json($$"""{"MutagenObjectType": "BookPerk", "Perk": "{{_fixture.Perk}}"}"""));
         Assert.True(result.Applied, result.Message);
@@ -106,7 +107,7 @@ public sealed class AbstractUnionCompileRoundTripTests : IDisposable
     [Fact]
     public void Data_EditingWithinSameConcreteType_IndexEdit_CompilesAndReparsesTheNewIndex()
     {
-        var result = EditService().EditField(
+        var result = EditService().Set(
             _fixture.Plugin, _fixture.ColorRecord.ToString(), "Data",
             Json("""{"MutagenObjectType": "ColorRemappingIndex", "Index": 7.5}"""));
         Assert.True(result.Applied, result.Message);
@@ -119,7 +120,7 @@ public sealed class AbstractUnionCompileRoundTripTests : IDisposable
     [Fact]
     public void Data_SwitchingConcreteType_IndexToColorData_CompilesAndReparsesTheNewColorValue()
     {
-        var result = EditService().EditField(
+        var result = EditService().Set(
             _fixture.Plugin, _fixture.ColorRecord.ToString(), "Data",
             Json("""{"MutagenObjectType": "ColorData", "Color": "#112233"}"""));
         Assert.True(result.Applied, result.Message);
@@ -134,7 +135,7 @@ public sealed class AbstractUnionCompileRoundTripTests : IDisposable
     [Fact]
     public void Data_SwitchingConcreteType_ProgramToSound_CompilesAndReparsesAsTheNewConcreteType()
     {
-        var result = EditService().EditField(
+        var result = EditService().Set(
             _fixture.Plugin, _fixture.Holotape.ToString(), "Data",
             Json($$"""{"MutagenObjectType": "HolotapeSound", "Sound": "{{_fixture.SoundDescriptor}}"}"""));
         Assert.True(result.Applied, result.Message);
@@ -149,7 +150,7 @@ public sealed class AbstractUnionCompileRoundTripTests : IDisposable
     [Fact]
     public void Data_EditingWithinSameConcreteType_StandardDataFields_CompileAndReparse()
     {
-        var result = EditService().EditField(
+        var result = EditService().Set(
             _fixture.Plugin, _fixture.SoundDescriptor.ToString(), "Data",
             Json("""
             {"MutagenObjectType": "SoundDescriptorStandardData", "PercentFrequencyShift": 5,
@@ -170,7 +171,7 @@ public sealed class AbstractUnionCompileRoundTripTests : IDisposable
     [Fact]
     public void Data_SwitchingConcreteType_StandardToCompound_CompilesAndReparsesAsTheDegenerateLeaf()
     {
-        var result = EditService().EditField(
+        var result = EditService().Set(
             _fixture.Plugin, _fixture.SoundDescriptor.ToString(), "Data",
             Json("""{"MutagenObjectType": "SoundDescriptorCompoundData"}"""));
         Assert.True(result.Applied, result.Message);
@@ -184,7 +185,7 @@ public sealed class AbstractUnionCompileRoundTripTests : IDisposable
     [Fact]
     public void Effects_WholeArrayWrite_QuestEffectToAbilityEffect_CompilesAndReparsesAsTheNewConcreteType()
     {
-        var result = EditService().EditField(
+        var result = EditService().Set(
             _fixture.Plugin, _fixture.Perk.ToString(), "Effects",
             Json($$"""[{"MutagenObjectType": "PerkAbilityEffect", "Ability": "{{_fixture.Spell}}"}]"""));
         Assert.True(result.Applied, result.Message);
@@ -198,7 +199,7 @@ public sealed class AbstractUnionCompileRoundTripTests : IDisposable
     [Fact]
     public void Effects_WholeArrayWrite_ToTwoLevelEntryPointChainLeaf_CompilesAndReparsesAsTheNewConcreteType()
     {
-        var result = EditService().EditField(
+        var result = EditService().Set(
             _fixture.Plugin, _fixture.Perk.ToString(), "Effects",
             Json("""[{"MutagenObjectType": "PerkEntryPointAddRangeToValue", "From": 1.5, "To": 9.5}]"""));
         Assert.True(result.Applied, result.Message);
@@ -215,7 +216,7 @@ public sealed class AbstractUnionCompileRoundTripTests : IDisposable
     [Fact]
     public void Archetype_SwitchingConcreteType_LightToPeakValueMod_CompilesAndReparsesTheNewAssociation()
     {
-        var result = EditService().EditField(
+        var result = EditService().Set(
             _fixture.Plugin, _fixture.MagicEffect.ToString(), "Archetype",
             Json($$"""{"MutagenObjectType": "MagicEffectPeakValueModArchetype", "Association": "{{_fixture.Keyword}}"}"""));
         Assert.True(result.Applied, result.Message);
@@ -228,7 +229,7 @@ public sealed class AbstractUnionCompileRoundTripTests : IDisposable
     [Fact]
     public void Archetype_BaseActorValueField_SurvivesAConcreteTypeSwitch_AndCompilesAndReparses()
     {
-        var result = EditService().EditField(
+        var result = EditService().Set(
             _fixture.Plugin, _fixture.MagicEffect.ToString(), "Archetype",
             Json($$"""
             {"MutagenObjectType": "MagicEffectPeakValueModArchetype", "Association": "{{_fixture.Keyword}}",
@@ -246,7 +247,7 @@ public sealed class AbstractUnionCompileRoundTripTests : IDisposable
     [Fact]
     public void Archetype_SwitchingToTheBaseLeaf_ItsOwnRealTypeFieldCompilesAndReparses()
     {
-        var result = EditService().EditField(
+        var result = EditService().Set(
             _fixture.Plugin, _fixture.MagicEffect.ToString(), "Archetype",
             Json($$"""
             {"MutagenObjectType": "MagicEffectArchetype", "Type": "ValueModifier",
@@ -264,7 +265,7 @@ public sealed class AbstractUnionCompileRoundTripTests : IDisposable
     [Fact]
     public void Effects_WholeArrayWrite_OverdriveToStateVariableFilter_CompilesAndReparsesAsTheNewConcreteType()
     {
-        var result = EditService().EditField(
+        var result = EditService().Set(
             _fixture.Plugin, _fixture.AudioEffectChain.ToString(), "Effects",
             Json("""
             [{"MutagenObjectType": "StateVariableFilterAudioEffect", "Enabled": true,
@@ -291,7 +292,7 @@ public sealed class AbstractUnionCompileRoundTripTests : IDisposable
     [Fact]
     public void VendorLocationTarget_NestedStructEdit_CompilesAndReparsesTheNewValue()
     {
-        var result = EditService().EditField(
+        var result = EditService().Set(
             _fixture.Plugin, _fixture.Faction.ToString(), "VendorLocation",
             Json("""
             {"Radius": 99, "Target": {"MutagenObjectType": "LocationFallback", "Type": "NearSelf", "Data": 3}}
@@ -308,7 +309,7 @@ public sealed class AbstractUnionCompileRoundTripTests : IDisposable
     [Fact]
     public void NavmeshGeometryParent_SwitchingConcreteType_WorldspaceToCell_CompilesAndReparsesAsTheNewLeaf()
     {
-        var result = EditService().EditField(
+        var result = EditService().Set(
             _fixture.Plugin, _fixture.Static.ToString(), "NavmeshGeometry",
             Json("""{"Parent": {"MutagenObjectType": "CellNavmeshParent"}}"""));
         Assert.True(result.Applied, result.Message);

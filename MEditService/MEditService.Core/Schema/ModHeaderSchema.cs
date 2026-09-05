@@ -3,7 +3,6 @@ using MEditService.Core.Queries;
 using MEditService.Core.Records;
 using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
-using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Core.Schema;
 
@@ -43,8 +42,8 @@ internal static class ModHeaderSchema
             // NULL is the honest rendering.
             columns.Add(new ColumnSpec(authorProp.Name, HeaderDocumentPath(modHeaderProp, authorProp), authorLeaf.DuckDbType,
                 authorLeaf.ApiType, authorLeaf.ValidFormKeyTypes, authorLeaf.EnumMembers,
-                Apply: LeafWrite.ReadOnly<IMajorRecord>(SchemaRefusals.HeaderNoWritePathReason),
-                ViewDefaultLiteral: authorLeaf.ViewDefaultLiteral));
+                ViewDefaultLiteral: authorLeaf.ViewDefaultLiteral,
+                ReadOnlyReason: SchemaRefusals.HeaderNoWritePathReason));
         }
         else
         {
@@ -63,8 +62,8 @@ internal static class ModHeaderSchema
                 .ToArray();
             columns.Add(new ColumnSpec(flagsProp.Name, HeaderDocumentPath(modHeaderProp, flagsProp), flagsLeaf.DuckDbType,
                 flagsLeaf.ApiType, flagsLeaf.ValidFormKeyTypes, labelled,
-                Apply: LeafWrite.ReadOnly<IMajorRecord>(SchemaRefusals.HeaderNoWritePathReason),
-                ViewDefaultLiteral: flagsLeaf.ViewDefaultLiteral));
+                ViewDefaultLiteral: flagsLeaf.ViewDefaultLiteral,
+                ReadOnlyReason: SchemaRefusals.HeaderNoWritePathReason));
         }
         else
         {
@@ -80,13 +79,19 @@ internal static class ModHeaderSchema
         {
             columns.Add(new ColumnSpec(mastersProp.Name, HeaderDocumentPath(modHeaderProp, mastersProp), "VARCHAR", "array",
                 LeafSpec.NoFormKeyTypes, LeafSpec.NoEnumMembers,
-                Apply: LeafWrite.ReadOnly<IMajorRecord>("masters are wholly content-derived at compile time"),
-                IsArray: true, ElementType: masterElement));
+                IsArray: true, ElementType: masterElement,
+                ReadOnlyReason: "masters are wholly content-derived at compile time"));
         }
         else
         {
             logger.LogWarning("No MasterReferences list found on {HeaderType}; header masters column omitted", headerGetterType);
         }
+
+        // The ESL flag's door: a synthetic bit of the flags column, spelled in the document as that
+        // column's own member names.
+        columns.AddRange(SyntheticColumns.For(
+            headerGetterType, game, backingPathPrefix: modHeaderProp.Name + ".",
+            backingNames: member => columns.FirstOrDefault(c => c.Name == member)?.EnumMembers ?? LeafSpec.NoEnumMembers));
 
         return new RecordTableSchema
         {

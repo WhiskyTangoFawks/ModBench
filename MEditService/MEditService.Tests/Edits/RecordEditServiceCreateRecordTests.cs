@@ -7,6 +7,7 @@ using MEditService.Core.Records;
 using MEditService.Core.Schema;
 using MEditService.Core.Serialization;
 using MEditService.Core.Source;
+using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -29,7 +30,7 @@ public sealed class RecordEditServiceCreateRecordTests
         var created = service.CreateRecord(mod.Plugin, "npc_", "BrandNewNpc");
         Assert.True(created.Applied, created.Message);
 
-        var result = service.EditField(mod.Plugin, created.NewFormKey!, "EditorID", Json("\"RenamedNpc\""));
+        var result = service.Set(mod.Plugin, created.NewFormKey!, "EditorID", Json("\"RenamedNpc\""));
 
         Assert.True(result.Applied, result.Message);
         var doc = mod.Mirror.Index!.At(RecordRef.Effective).GetDocument(created.NewFormKey!, mod.Plugin)!;

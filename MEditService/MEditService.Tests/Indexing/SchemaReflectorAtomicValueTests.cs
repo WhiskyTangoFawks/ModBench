@@ -45,39 +45,6 @@ public class SchemaReflectorAtomicValueTests
     // ── The alpha byte is written only where xEdit shows one (wbByteRGBA) ──────────────────────
 
     [Fact]
-    public void Color_OnANonAllowlistedField_KeepsItsAlphaByteWhateverTheEditNames()
-    {
-        var light = new Light(FormKey.Factory("000001:Test.esp"), Fallout4Release.Fallout4)
-        {
-            Color = System.Drawing.Color.FromArgb(0x7F, 1, 2, 3),
-        };
-
-        Assert.Equal(ApplyOutcome.Applied, Column("ligh", "Color").Apply.Writer!(light, Json("\"#A0C86432\"")));
-
-        Assert.Equal((0x7F, 200, 100, 50), (light.Color.A, light.Color.R, light.Color.G, light.Color.B));
-    }
-
-    [Theory]
-    // Every row is a `wbByteRGBA(CNAM)` definition cited by line, and every one is
-    // ColorBinaryType.Alpha on the Mutagen side, so an alpha edit here can never be silently
-    // discarded.
-    [InlineData("kywd", 7028)]  // KYWD — Keyword_Generated.cs:1875
-    [InlineData("lcrt", 7040)]  // LCRT — LocationReferenceType_Generated.cs:1510
-    [InlineData("aact", 7051)]  // AACT — ActionRecord_Generated.cs:1766
-    [InlineData("lctn", 8256)]  // LCTN — Location_Generated.cs:5435
-    public void Color_OnAnAllowlistedField_TakesTheAlphaByteTheEditNames(string table, int xEditDefinitionLine)
-    {
-        Assert.True(xEditDefinitionLine > 0); // the citation is the point of the row, not a value under test
-
-        var color = Column(table, "Color");
-        Assert.Equal("color", color.ApiType);
-
-        var keyword = new Keyword(FormKey.Factory("000001:Test.esp"), Fallout4Release.Fallout4);
-        Assert.Equal(ApplyOutcome.Applied, Column("kywd", "Color").Apply.Writer!(keyword, Json("\"#A0285078\"")));
-        Assert.Equal((0xA0, 40, 80, 120), (keyword.Color!.Value.A, keyword.Color.Value.R, keyword.Color.Value.G, keyword.Color.Value.B));
-    }
-
-    [Fact]
     public void AlphaAllowlist_EveryEntryResolvesToARealColorColumn()
     {
         // The completeness guard on a hand-transcribed table: a typo, or a Mutagen rename of the

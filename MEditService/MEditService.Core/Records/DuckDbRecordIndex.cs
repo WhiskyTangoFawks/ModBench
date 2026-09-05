@@ -418,7 +418,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
             var schemas = owner.RequireSchemas();
             using var cmd = owner.Connection.CreateCommand();
             cmd.CommandText = $"""
-                SELECT form_key, plugin, origin, load_order_idx, is_winner, editor_id, body, record_type
+                SELECT form_key, plugin, origin, load_order_idx, is_winner, editor_id, body, record_type, parse_diagnosis
                 FROM {records}
                 WHERE plugin = $1 AND origin = $2
                 """;
@@ -426,13 +426,13 @@ public sealed class DuckDbRecordIndex : IRecordIndex
             using var reader = cmd.ExecuteReader();
 
             var rows = new List<(string FormKey, string Plugin, string Origin, int LoadOrderIndex,
-                bool IsWinner, string? EditorId, string Body, string RecordType)>();
+                bool IsWinner, string? EditorId, string Body, string RecordType, string? ParseDiagnosis)>();
             while (reader.Read())
             {
                 rows.Add((reader.GetString(0), reader.GetString(1), reader.GetString(2),
                     LoadOrderSortKey(reader, 3), reader.GetBoolean(4),
                     reader.IsDBNull(5) ? null : reader.GetString(5),
-                    reader.GetString(6), reader.GetString(7)));
+                    reader.GetString(6), reader.GetString(7), reader.IsDBNull(8) ? null : reader.GetString(8)));
             }
             reader.Close();
 
@@ -449,7 +449,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
                 if (!schemas.TryGetValue(row.RecordType, out var schema)) continue;
                 documents.Add(owner.DocumentFromBody(
                     row.FormKey, row.Plugin, row.Origin, row.LoadOrderIndex, row.IsWinner,
-                    row.EditorId, row.Body, schema, resolve));
+                    row.EditorId, row.Body, schema, resolve, row.ParseDiagnosis));
             }
             return documents;
         }
@@ -462,7 +462,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
             var schema = owner.RequireSchemas()[tableName];
             using var cmd = owner.Connection.CreateCommand();
             cmd.CommandText = $"""
-                SELECT form_key, plugin, origin, load_order_idx, is_winner, editor_id, body, "ref"
+                SELECT form_key, plugin, origin, load_order_idx, is_winner, editor_id, body, parse_diagnosis, "ref"
                 FROM {records}
                 WHERE form_key = $1 AND record_type = $2
                 ORDER BY load_order_idx
@@ -482,7 +482,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
                 var doc = owner.ReadDocumentFromBody(reader, schema, resolve);
                 // On a Head-scoped read every row is committed by construction, so this reads false
                 // for all of them without needing to know which relation it is on.
-                var isDirty = reader.GetString(7) == SourceRef.WorkingTree;
+                var isDirty = reader.GetString(8) == SourceRef.WorkingTree;
                 rows.Add((doc, isDirty));
             }
             reader.Close();
@@ -965,7 +965,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
 
         using var cmd = Connection.CreateCommand();
         cmd.CommandText = $"""
-            SELECT form_key, plugin, origin, load_order_idx, is_winner, editor_id, body
+            SELECT form_key, plugin, origin, load_order_idx, is_winner, editor_id, body, parse_diagnosis
             FROM {records} WHERE {string.Join(" AND ", conditions)}
             LIMIT 1
             """;
@@ -981,7 +981,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         DocumentFromBody(
             reader.GetString(0), reader.GetString(1), reader.GetString(2), LoadOrderSortKey(reader, 3),
             reader.GetBoolean(4), reader.IsDBNull(5) ? null : reader.GetString(5),
-            reader.GetString(6), schema, resolveFormKey);
+            reader.GetString(6), schema, resolveFormKey, reader.IsDBNull(7) ? null : reader.GetString(7));
 
     // The construction half of ReadDocumentFromBody, split out so the bulk read can build documents
     // from rows materialized before reading any. The fields are the document's own nodes at each
@@ -989,7 +989,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
     private RecordDocument DocumentFromBody(
         string formKey, string plugin, string origin, int loadOrderIndex, bool isWinner,
         string? editorId, string body, RecordTableSchema schema,
-        Func<string, RecordLookupEntry?> resolveFormKey)
+        Func<string, RecordLookupEntry?> resolveFormKey, string? parseDiagnosis)
     {
         using var parsed = JsonDocument.Parse(body);
         var root = parsed.RootElement;
@@ -999,7 +999,8 @@ public sealed class DuckDbRecordIndex : IRecordIndex
             body, BuildFields(schema, root, resolveFormKey, _release),
             // A ModHeader can neither carry the Partial Form flag nor be a type that could.
             IsPartialForm: !schema.IsHeader && PartialFormFlag.IsSet(root, schema.RecordType),
-            IsPartialFormable: !schema.IsHeader && PartialFormFlag.IsPartialFormable(schema.RecordType));
+            IsPartialFormable: !schema.IsHeader && PartialFormFlag.IsPartialFormable(schema.RecordType),
+            ParseDiagnosis: parseDiagnosis);
     }
 
     private static List<FieldValue> BuildFields(
@@ -1009,7 +1010,10 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         var fields = new List<FieldValue>(schema.RecordColumns.Count);
         foreach (var col in schema.RecordColumns)
         {
-            var value = DocumentNodes.At(root, col.PropertyName);
+            // A synthetic member is the bit it stands for, read off the member the document spells.
+            var value = col.Synthetic is { } bit
+                ? JsonSerializer.SerializeToElement(SyntheticBits.IsSet(root, bit))
+                : DocumentNodes.At(root, col.PropertyName);
             var meta = col.ToFieldMetadata();
             // The check reads the shape this record's own class gives the column; the wire keeps the
             // column's whole metadata, variants included, so the editor can pick the same.

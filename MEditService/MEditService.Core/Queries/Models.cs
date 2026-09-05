@@ -238,19 +238,20 @@ public record ReferenceResult(string FormKey, string Plugin, string FieldPath, s
 
 public record HealthResponse(string Status);
 
-// ADR-0041: one field edit on one plugin's copy. Value is a raw JsonElement: a value is whatever
-// its schema says (a complex field's whole JSON), so typing it here would re-declare the schema
-// on the wire.
+// ADR-0041: one edit on one plugin's copy, as the one envelope (ADR-0032). Value is a raw
+// JsonElement: a value is whatever its schema says, so typing it here would re-declare the
+// schema on the wire.
 public record RecordFieldEditRequest(
     string Plugin,
     string Origin,
-    string FieldPath,
-    JsonElement Value);
+    string Op,
+    IReadOnlyList<PathHop> Path,
+    JsonElement? Value = null);
 
-/// <summary>The success shape for an applied edit. Refusals never come back through this record —
-/// they are ProblemDetails carrying a <c>refusal</c> extension, so an HTTP client's ordinary
-/// success check is also the correct check (ADR-0026).</summary>
-public record RecordFieldEditResponse(bool Applied, string FormKey, string FieldPath);
+/// <summary>The success shape for an applied edit. A refusal is ProblemDetails carrying refusal
+/// and path extensions instead, so an HTTP client's ordinary success check is also the correct
+/// check (ADR-0026).</summary>
+public record RecordFieldEditResponse(bool Applied, string FormKey, string Path);
 
 // The three lifecycle gestures' wire shapes, on the same door (Plugin/Origin as the compound
 // identity, refusals as ProblemDetails carrying the same `refusal` extension) EditField already

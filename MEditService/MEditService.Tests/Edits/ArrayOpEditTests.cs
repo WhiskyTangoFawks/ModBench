@@ -4,10 +4,12 @@ using MEditService.Core.Plugins;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
 using MEditService.Core.Source;
+using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
+using static MEditService.Tests.TestSupport.Envelopes;
 
 namespace MEditService.Tests.Edits;
 
@@ -38,12 +40,11 @@ public sealed class ArrayOpEditTests : IDisposable
     public void ArrayRemove_TopLevelArray_RemovesTheNamedElementAndKeepsTheOthers()
     {
         var second = SecondKeyword();
-        var seed = Service().EditField(_mod.Plugin, _mod.Npc.ToString(), "Keywords",
+        var seed = Service().Set(_mod.Plugin, _mod.Npc.ToString(), "Keywords",
             Json($"[\"{_mod.Keyword}\", \"{second}\"]"));
         Assert.True(seed.Applied, seed.Message);
 
-        var result = Service().EditField(_mod.Plugin, _mod.Npc.ToString(), "Keywords",
-            Json("""{"op": "array_remove", "path": [{"kind": "index", "index": 0}]}"""));
+        var result = Service().Edit(_mod.Plugin, _mod.Npc.ToString(), RemoveAt(Member("Keywords"), At(0)));
 
         Assert.True(result.Applied, result.Message);
         var body = NpcBody();
@@ -56,8 +57,7 @@ public sealed class ArrayOpEditTests : IDisposable
     [Fact]
     public void ArrayRemove_IndexPastTheEnd_IsANoOpThatCommitsNothing()
     {
-        var result = Service().EditField(_mod.Plugin, _mod.Npc.ToString(), "Keywords",
-            Json("""{"op": "array_remove", "path": [{"kind": "index", "index": 0}]}"""));
+        var result = Service().Edit(_mod.Plugin, _mod.Npc.ToString(), RemoveAt(Member("Keywords"), At(0)));
 
         Assert.True(result.Applied, result.Message);
         Assert.Empty(_mod.GitStatus());
@@ -69,12 +69,11 @@ public sealed class ArrayOpEditTests : IDisposable
     public void ArrayRemove_IndexPastTheEndOfANonEmptyArray_IsANoOpThatKeepsEveryElement()
     {
         var second = SecondKeyword();
-        var seed = Service().EditField(_mod.Plugin, _mod.Npc.ToString(), "Keywords",
+        var seed = Service().Set(_mod.Plugin, _mod.Npc.ToString(), "Keywords",
             Json($"[\"{_mod.Keyword}\", \"{second}\"]"));
         Assert.True(seed.Applied, seed.Message);
 
-        var result = Service().EditField(_mod.Plugin, _mod.Npc.ToString(), "Keywords",
-            Json("""{"op": "array_remove", "path": [{"kind": "index", "index": 5}]}"""));
+        var result = Service().Edit(_mod.Plugin, _mod.Npc.ToString(), RemoveAt(Member("Keywords"), At(5)));
 
         Assert.True(result.Applied, result.Message);
         var body = NpcBody();
@@ -88,12 +87,11 @@ public sealed class ArrayOpEditTests : IDisposable
     public void ArrayMoveDown_TopLevelArray_SwapsWithTheNextElement()
     {
         var second = SecondKeyword();
-        var seed = Service().EditField(_mod.Plugin, _mod.Npc.ToString(), "Keywords",
+        var seed = Service().Set(_mod.Plugin, _mod.Npc.ToString(), "Keywords",
             Json($"[\"{_mod.Keyword}\", \"{second}\"]"));
         Assert.True(seed.Applied, seed.Message);
 
-        var result = Service().EditField(_mod.Plugin, _mod.Npc.ToString(), "Keywords",
-            Json("""{"op": "array_move_down", "path": [{"kind": "index", "index": 0}]}"""));
+        var result = Service().Edit(_mod.Plugin, _mod.Npc.ToString(), MoveTo(1, Member("Keywords"), At(0)));
 
         Assert.True(result.Applied, result.Message);
         var body = NpcBody();
@@ -107,12 +105,11 @@ public sealed class ArrayOpEditTests : IDisposable
     public void ArrayMoveUp_TopLevelArray_SwapsWithThePreviousElement()
     {
         var second = SecondKeyword();
-        var seed = Service().EditField(_mod.Plugin, _mod.Npc.ToString(), "Keywords",
+        var seed = Service().Set(_mod.Plugin, _mod.Npc.ToString(), "Keywords",
             Json($"[\"{_mod.Keyword}\", \"{second}\"]"));
         Assert.True(seed.Applied, seed.Message);
 
-        var result = Service().EditField(_mod.Plugin, _mod.Npc.ToString(), "Keywords",
-            Json("""{"op": "array_move_up", "path": [{"kind": "index", "index": 1}]}"""));
+        var result = Service().Edit(_mod.Plugin, _mod.Npc.ToString(), MoveTo(0, Member("Keywords"), At(1)));
 
         Assert.True(result.Applied, result.Message);
         var body = NpcBody();
@@ -126,12 +123,11 @@ public sealed class ArrayOpEditTests : IDisposable
     public void ArrayMoveUp_FirstElement_IsANoOpThatCommitsNothing()
     {
         var second = SecondKeyword();
-        var seed = Service().EditField(_mod.Plugin, _mod.Npc.ToString(), "Keywords",
+        var seed = Service().Set(_mod.Plugin, _mod.Npc.ToString(), "Keywords",
             Json($"[\"{_mod.Keyword}\", \"{second}\"]"));
         Assert.True(seed.Applied, seed.Message);
 
-        var result = Service().EditField(_mod.Plugin, _mod.Npc.ToString(), "Keywords",
-            Json("""{"op": "array_move_up", "path": [{"kind": "index", "index": 0}]}"""));
+        var result = Service().Edit(_mod.Plugin, _mod.Npc.ToString(), MoveTo(-1, Member("Keywords"), At(0)));
 
         Assert.True(result.Applied, result.Message);
         var body = NpcBody();
@@ -144,12 +140,11 @@ public sealed class ArrayOpEditTests : IDisposable
     public void ArrayMoveDown_LastElement_IsANoOpThatCommitsNothing()
     {
         var second = SecondKeyword();
-        var seed = Service().EditField(_mod.Plugin, _mod.Npc.ToString(), "Keywords",
+        var seed = Service().Set(_mod.Plugin, _mod.Npc.ToString(), "Keywords",
             Json($"[\"{_mod.Keyword}\", \"{second}\"]"));
         Assert.True(seed.Applied, seed.Message);
 
-        var result = Service().EditField(_mod.Plugin, _mod.Npc.ToString(), "Keywords",
-            Json("""{"op": "array_move_down", "path": [{"kind": "index", "index": 1}]}"""));
+        var result = Service().Edit(_mod.Plugin, _mod.Npc.ToString(), MoveTo(2, Member("Keywords"), At(1)));
 
         Assert.True(result.Applied, result.Message);
         var body = NpcBody();
@@ -166,12 +161,11 @@ public sealed class ArrayOpEditTests : IDisposable
     public void ArrayAdd_StructElementArray_AppendsADefaultElement()
     {
         using var fixture = new ContainerFixture();
-        var seed = fixture.Service().EditField(fixture.Plugin, fixture.Container.ToString(), "Destructible",
+        var seed = fixture.Service().Set(fixture.Plugin, fixture.Container.ToString(), "Destructible",
             Json("""{"Stages": [{"HealthPercent": 50}]}"""));
         Assert.True(seed.Applied, seed.Message);
 
-        var result = fixture.Service().EditField(fixture.Plugin, fixture.Container.ToString(), "Destructible",
-            Json("""{"op": "array_add", "path": [{"kind": "member", "name": "Stages"}]}"""));
+        var result = fixture.Service().Edit(fixture.Plugin, fixture.Container.ToString(), AddAt(Member("Destructible"), Member("Stages")));
 
         Assert.True(result.Applied, result.Message);
         var stages = fixture.ExtractStages();
@@ -186,8 +180,7 @@ public sealed class ArrayOpEditTests : IDisposable
     {
         using var fixture = new ContainerFixture();
 
-        var result = fixture.Service().EditField(fixture.Plugin, fixture.Container.ToString(), "Destructible",
-            Json("""{"op": "array_add", "path": [{"kind": "member", "name": "Stages"}]}"""));
+        var result = fixture.Service().Edit(fixture.Plugin, fixture.Container.ToString(), AddAt(Member("Destructible"), Member("Stages")));
 
         Assert.True(result.Applied, result.Message);
         Assert.Equal(1, fixture.ExtractStages().GetArrayLength());
@@ -197,12 +190,11 @@ public sealed class ArrayOpEditTests : IDisposable
     public void ArrayRemove_NestedArrayElement_RemovesAtTheRealPath()
     {
         using var fixture = new ContainerFixture();
-        var seed = fixture.Service().EditField(fixture.Plugin, fixture.Container.ToString(), "Destructible",
+        var seed = fixture.Service().Set(fixture.Plugin, fixture.Container.ToString(), "Destructible",
             Json("""{"Stages": [{"HealthPercent": 10}, {"HealthPercent": 20}]}"""));
         Assert.True(seed.Applied, seed.Message);
 
-        var result = fixture.Service().EditField(fixture.Plugin, fixture.Container.ToString(), "Destructible",
-            Json("""{"op": "array_remove", "path": [{"kind": "member", "name": "Stages"}, {"kind": "index", "index": 0}]}"""));
+        var result = fixture.Service().Edit(fixture.Plugin, fixture.Container.ToString(), RemoveAt(Member("Destructible"), Member("Stages"), At(0)));
 
         Assert.True(result.Applied, result.Message);
         var stages = fixture.ExtractStages();
@@ -214,12 +206,11 @@ public sealed class ArrayOpEditTests : IDisposable
     public void ArrayMoveDown_NestedArrayElement_MovesAtTheRealPath()
     {
         using var fixture = new ContainerFixture();
-        var seed = fixture.Service().EditField(fixture.Plugin, fixture.Container.ToString(), "Destructible",
+        var seed = fixture.Service().Set(fixture.Plugin, fixture.Container.ToString(), "Destructible",
             Json("""{"Stages": [{"HealthPercent": 10}, {"HealthPercent": 20}]}"""));
         Assert.True(seed.Applied, seed.Message);
 
-        var result = fixture.Service().EditField(fixture.Plugin, fixture.Container.ToString(), "Destructible",
-            Json("""{"op": "array_move_down", "path": [{"kind": "member", "name": "Stages"}, {"kind": "index", "index": 0}]}"""));
+        var result = fixture.Service().Edit(fixture.Plugin, fixture.Container.ToString(), MoveTo(1, Member("Destructible"), Member("Stages"), At(0)));
 
         Assert.True(result.Applied, result.Message);
         var stages = fixture.ExtractStages();
@@ -236,8 +227,7 @@ public sealed class ArrayOpEditTests : IDisposable
     {
         using var fixture = new QuestFixture(); // seeds [QuestLocationAlias, QuestReferenceAlias(Location: null)]
 
-        var result = fixture.Service().EditField(fixture.Plugin, fixture.Quest.ToString(), "Aliases",
-            Json("""{"op": "array_move_down", "path": [{"kind": "index", "index": 0}]}"""));
+        var result = fixture.Service().Edit(fixture.Plugin, fixture.Quest.ToString(), MoveTo(1, Member("Aliases"), At(0)));
 
         Assert.True(result.Applied, result.Message);
         var body = fixture.Body();
@@ -252,8 +242,7 @@ public sealed class ArrayOpEditTests : IDisposable
     {
         using var fixture = new QuestFixture(withLocation: true); // Location: { AliasID: 9 }
 
-        var result = fixture.Service().EditField(fixture.Plugin, fixture.Quest.ToString(), "Aliases",
-            Json("""{"op": "array_move_down", "path": [{"kind": "index", "index": 0}]}"""));
+        var result = fixture.Service().Edit(fixture.Plugin, fixture.Quest.ToString(), MoveTo(1, Member("Aliases"), At(0)));
 
         Assert.True(result.Applied, result.Message);
         var body = fixture.Body();

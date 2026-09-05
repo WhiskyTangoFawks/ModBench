@@ -8,9 +8,9 @@ export interface EslFlagRemovalTarget {
   origin: string;
 }
 
-/** Accept performs an ordinary `is_light` header edit — the flag's one sanctioned door — and
- *  the caller retries its gesture; decline, or a refused edit, leaves the typed refusal
- *  standing. `verb` names that gesture in the prompt's words. */
+/** Accept clears the header's `IsSmallMaster` member, the flag's one door, and the caller
+ *  retries its gesture; decline, or a refused edit, leaves the typed refusal standing. `verb`
+ *  names that gesture in the prompt's words. */
 export async function offerEslFlagRemoval(
   target: EslFlagRemovalTarget, refusalReason: string, verb: string,
   repository: PluginRepository,
@@ -24,7 +24,8 @@ export async function offerEslFlagRemoval(
   if (choice !== accept) return false;
 
   const outcome = await repository.editRecordField(
-    headerFormKeyFor(target.name), target.name, target.origin, 'is_light', false);
+    headerFormKeyFor(target.name), target.name, target.origin,
+    { op: 'set', path: [{ kind: 'member', name: 'IsSmallMaster' }], value: false });
   if (outcome.applied) return true;
   showError(`Modbench: Could not remove the ESL flag on "${target.name}" — ${outcome.message}`);
   return false;

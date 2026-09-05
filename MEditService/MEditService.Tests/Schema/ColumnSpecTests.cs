@@ -13,7 +13,7 @@ public class ColumnSpecTests
         string[]? validFormKeyTypes = null,
         EnumMember[]? enumMembers = null) =>
         new(name, name, "VARCHAR", apiType,
-            validFormKeyTypes ?? [], enumMembers ?? [], LeafWrite.ReadOnly<IMajorRecord>("test fixture: write capability is not under test"), isArray);
+            validFormKeyTypes ?? [], enumMembers ?? [], isArray);
 
     [Fact]
     public void ToFieldMetadata_MapsAllFields()

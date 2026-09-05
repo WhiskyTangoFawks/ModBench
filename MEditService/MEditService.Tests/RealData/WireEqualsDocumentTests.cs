@@ -69,7 +69,12 @@ public sealed class WireEqualsDocumentTests(CutDownPluginCompareFixture fixture)
             // The metadata says how an array's children are labelled: by key for a keyed array, by
             // value for a sorted one, by position otherwise.
             var metadata = compare!.Overrides[0].Fields.ToDictionary(f => f.Metadata.Name, f => f.Metadata);
-            foreach (var diff in compare.Diffs) Collect(diff, stored, null, metadata.GetValueOrDefault(diff.FieldName), formKey, mismatches);
+            // A synthetic member is one bit of a member the document spells, never a node of its own
+            // (SchemaAnnotations.SyntheticFlagMembers); its value is that bit, read off the document.
+            var synthetic = SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4)[document.RecordType]
+                .RecordColumns.Where(c => c.Synthetic != null).Select(c => c.Name).ToHashSet(StringComparer.Ordinal);
+            foreach (var diff in compare.Diffs.Where(d => !synthetic.Contains(d.FieldName)))
+                Collect(diff, stored, null, metadata.GetValueOrDefault(diff.FieldName), formKey, mismatches);
 
             // A column the compare drops leaves no diff at all, so its absence is checked from the
             // document's side: every member the document spells under a column's name is on the wire.

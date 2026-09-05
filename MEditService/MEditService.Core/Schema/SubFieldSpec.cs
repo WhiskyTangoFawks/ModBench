@@ -7,14 +7,9 @@ internal sealed record SubFieldSpec(
     string ApiType,
     string[] ValidFormKeyTypes,
     IReadOnlyList<EnumMember> EnumMembers,
-    LeafWrite<object> Apply,
     IReadOnlyList<SubFieldSpec>? SubFields = null,
     SubFieldSpec? ElementSpec = null,
     bool AllowsNull = false,
-    // True for a leaf with no write door, so a payload naming it is refused. A discriminator stays
-    // false: it is consumed before its object exists, so naming
-    // it is a silent skip.
-    bool TargetingRefuses = false,
     // The row's title when Name is a wire token; see FieldMetadata.DisplayLabel.
     string? DisplayLabel = null,
     // See FieldMetadata.IsDiscriminator.

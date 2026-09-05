@@ -14,6 +14,11 @@ export type RecordFieldEditOutcome =
   | { applied: false; refusal: string; message: string };
 
 export type PluginRecordTypeCount = components['schemas']['PluginRecordTypeCount'];
+/** The one write shape (ADR-0032): an operation, a path of hops and an optional value. The
+ *  backend resolves the path against the record's current document; the host posts what the
+ *  user asked for and nothing else. */
+export type RecordEditEnvelope = Omit<components['schemas']['RecordFieldEditRequest'], 'plugin' | 'origin'>;
+export type PathHop = components['schemas']['PathHop'];
 export type RecordPage = components['schemas']['RecordSummaryPagedResult'];
 export type CellPage = components['schemas']['CellSummaryPagedResult'];
 
@@ -58,7 +63,7 @@ export interface PluginRepository {
   /** ADR-0041: the single write path. A refusal (untracked plugin, a link that would dangle) is
    *  an expected answer and comes back typed; only a transport failure rejects. */
   editRecordField(
-    formKey: string, plugin: string, origin: string, fieldPath: string, value: unknown,
+    formKey: string, plugin: string, origin: string, envelope: RecordEditEnvelope,
   ): Promise<RecordFieldEditOutcome>;
 
   getWorldspaces(plugin: string, origin?: string): Promise<WorldspaceSummary[]>;
@@ -68,6 +73,11 @@ export interface PluginRepository {
   // Quest and DialogTopic containment only, in xEdit's presentation order — never
   // Cell.NavigationMeshes/Landscape or Worldspace.TopCell/SubCells.
   getContainerChildren(plugin: string, parentFormKey: string, origin?: string): Promise<ContainerChildSummary[]>;
+}
+
+// The path as the backend spells it in a refusal, for the log line only.
+function spellPath(path: PathHop[]): string {
+  return path.map((hop) => hop.kind === 'member' ? `.${hop.name ?? ''}` : `[${hop.key ?? hop.index}]`).join('').replace(/^\./, '');
 }
 
 // No convention in ADR-0026 or docs/specs/plugins.md anchors this: 30s is an ordinary
@@ -264,11 +274,12 @@ export class ApiPluginRepository implements PluginRepository {
   }
 
   async editRecordField(
-    formKey: string, plugin: string, origin: string, fieldPath: string, value: unknown,
+    formKey: string, plugin: string, origin: string, envelope: RecordEditEnvelope,
   ): Promise<RecordFieldEditOutcome> {
+    const spelled = spellPath(envelope.path);
     const { data, error, response } = await this.client.POST('/records/{formKey}/field', {
       params: { path: { formKey } },
-      body: { plugin, origin, fieldPath, value },
+      body: { plugin, origin, ...envelope },
     });
     if (response.ok && data?.applied) return { applied: true };
 
@@ -277,7 +288,7 @@ export class ApiPluginRepository implements PluginRepository {
     // gate's prose as a judgement on this edit.
     if (isWriteGateTimeout(error)) {
       const message = writeGateBusyMessage('Could not edit this record');
-      this.log(`[PluginRepository] editRecordField(${formKey}.${fieldPath}) hit the write gate (${response.status})`);
+      this.log(`[PluginRepository] editRecordField(${formKey} ${envelope.op} ${spelled}) hit the write gate (${response.status})`);
       return { applied: false, refusal: 'WriteGateBusy', message };
     }
 
@@ -289,7 +300,7 @@ export class ApiPluginRepository implements PluginRepository {
       refusal: problem?.refusal ?? 'Unknown',
       message: problem?.detail ?? (errorText(error) || `Edit failed (${response.status}).`),
     };
-    this.log(`[PluginRepository] editRecordField(${formKey}.${fieldPath}) refused: ${outcome.refusal} — ${outcome.message}`);
+    this.log(`[PluginRepository] editRecordField(${formKey} ${envelope.op} ${spelled}) refused: ${outcome.refusal} — ${outcome.message}`);
     return outcome;
   }
 

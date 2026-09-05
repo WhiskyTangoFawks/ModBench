@@ -25,10 +25,9 @@ public sealed class PluginWriter(ILogger<PluginWriter> logger)
         GameRelease gameRelease,
         IReadOnlyList<string>? loadOrder = null)
     {
-        var modKey = ModKey.FromFileName(Path.GetFileName(pluginPath));
         // No load order concept here, so no origin to distinguish a mod folder from the game Data folder:
-        // the single-argument ForRead overload applies.
-        var mod = ModFactory.ImportSetter(new ModPath(modKey, pluginPath), gameRelease, LocalizedStrings.ForRead(Path.GetDirectoryName(pluginPath)!));
+        // the single-argument ForRead overload applies. The path names its own ModKey.
+        var mod = ModFactory.ImportSetter(pluginPath, gameRelease, LocalizedStrings.ForRead(Path.GetDirectoryName(pluginPath)!));
         return PrepareFromModAsync(mod, pluginPath, loadOrder);
     }
 

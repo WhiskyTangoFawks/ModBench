@@ -5,6 +5,7 @@ using MEditService.Core.Records;
 using MEditService.Core.Schema;
 using MEditService.Core.Source;
 using MEditService.Tests.Edits;
+using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -65,7 +66,7 @@ public sealed class SourceRepositoryRebaseTests : IDisposable
     [Fact]
     public void RebaseEditBranch_Refuses_OverUncommittedDirt()
     {
-        EditService().EditField(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", Json("0.3"));
+        EditService().Set(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", Json("0.3"));
         // Never committed — plain working-tree dirt.
         AbsorbUpstreamNewRecord();
 
@@ -82,7 +83,7 @@ public sealed class SourceRepositoryRebaseTests : IDisposable
     [Fact]
     public void RebaseEditBranch_ReplaysCleanly_WhenNothingOverlaps()
     {
-        EditService().EditField(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", Json("0.3"));
+        EditService().Set(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", Json("0.3"));
         CommitOnEditBranch("my own edit");
         AbsorbUpstreamNewRecord();
 
@@ -100,7 +101,7 @@ public sealed class SourceRepositoryRebaseTests : IDisposable
     [Fact]
     public void RebaseEditBranch_ThenAReload_StillIngestsThePluginFromItsSourceTree()
     {
-        EditService().EditField(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", Json("0.3"));
+        EditService().Set(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", Json("0.3"));
         CommitOnEditBranch("my own edit");
         AbsorbUpstreamNewRecord();
 
@@ -123,7 +124,7 @@ public sealed class SourceRepositoryRebaseTests : IDisposable
     [Fact]
     public void RebaseEditBranch_Conflicts_OnOverlappingRecordEdits_AndTheResolvedResultCompiles()
     {
-        EditService().EditField(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", Json("0.3"));
+        EditService().Set(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", Json("0.3"));
         CommitOnEditBranch("my own edit");
         AbsorbUpstreamHeightMaxChange(0.7f);
 
@@ -153,7 +154,7 @@ public sealed class SourceRepositoryRebaseTests : IDisposable
     [Fact]
     public void RebaseEditBranch_CalledAgainAfterAConflictIsResolved_ResumesRatherThanRefusing()
     {
-        EditService().EditField(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", Json("0.3"));
+        EditService().Set(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", Json("0.3"));
         CommitOnEditBranch("my own edit");
         AbsorbUpstreamHeightMaxChange(0.7f);
 

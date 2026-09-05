@@ -3,6 +3,7 @@ using MEditService.Core.Edits;
 using MEditService.Core.Records;
 using MEditService.Core.Serialization;
 using MEditService.Core.Source;
+using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 
@@ -32,7 +33,7 @@ public sealed class RecordEditServiceTests : IDisposable
         var orderBefore = SourceChildOrder.ListAt(carrier, "Npcs");
         Assert.True(File.Exists(Path.Combine(_mod.ModFolder, oldRelative)));
 
-        var result = Service().EditField(_mod.Plugin, _mod.Npc.ToString(), "EditorID", Json("\"RenamedNpc\""));
+        var result = Service().Set(_mod.Plugin, _mod.Npc.ToString(), "EditorID", Json("\"RenamedNpc\""));
 
         Assert.True(result.Applied, result.Message);
         Assert.False(File.Exists(Path.Combine(_mod.ModFolder, oldRelative)));
@@ -54,7 +55,7 @@ public sealed class RecordEditServiceTests : IDisposable
         var oldRelative = _mod.RelativeSourcePath(_mod.Npc, "npc_", TrackedModFixture.NpcEditorId)
             .Replace('\\', '/');
 
-        Assert.True(Service().EditField(_mod.Plugin, _mod.Npc.ToString(), "EditorID", Json("\"RenamedNpc\"")).Applied);
+        Assert.True(Service().Set(_mod.Plugin, _mod.Npc.ToString(), "EditorID", Json("\"RenamedNpc\"")).Applied);
 
         // Resolved after the rename: resolving both paths up front would have them collide on the
         // same still-old file and make the assertions below pass without checking anything.
@@ -85,7 +86,7 @@ public sealed class RecordEditServiceTests : IDisposable
         // is this edit's own doing — the positive control for every status assertion below.
         Assert.Empty(_mod.GitStatus());
 
-        var result = Service().EditField(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", Json("0.75"));
+        var result = Service().Set(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", Json("0.75"));
 
         Assert.True(result.Applied, result.Message);
         var relative = _mod.RelativeSourcePath(_mod.Npc, "npc_", TrackedModFixture.NpcEditorId).Replace('\\', '/');
@@ -95,7 +96,7 @@ public sealed class RecordEditServiceTests : IDisposable
     [Fact]
     public async Task EditField_WritesTheNewValueIntoTheSourceFile_AsRealCodecText()
     {
-        Service().EditField(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", Json("0.75"));
+        Service().Set(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", Json("0.75"));
 
         // Re-parsed through the codec rather than string-matched: the file has to remain a document
         // the source can round-trip, not merely text that happens to contain the right number.
@@ -113,7 +114,7 @@ public sealed class RecordEditServiceTests : IDisposable
     [Fact]
     public void EditField_ChangesOnlyTheEditedRecordsFile()
     {
-        Service().EditField(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", Json("0.75"));
+        Service().Set(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", Json("0.75"));
 
         var status = _mod.GitStatus();
         Assert.Single(status);
@@ -123,7 +124,7 @@ public sealed class RecordEditServiceTests : IDisposable
     [Fact]
     public void EditField_MakesTheReadModelServeTheNewValueAtEffective_AndTheCommittedOneAtHead()
     {
-        Service().EditField(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", Json("0.75"));
+        Service().Set(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", Json("0.75"));
 
         // The file write and the index update are one gesture: a write path that produced dirt on
         // disk but left the editor showing the old value, or vice versa, is half a write path.
@@ -140,8 +141,8 @@ public sealed class RecordEditServiceTests : IDisposable
     public void EditField_TwiceOnTheSameRecord_KeepsTheCommittedStateAsTheBaseline()
     {
         var service = Service();
-        service.EditField(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", Json("0.75"));
-        service.EditField(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", Json("0.5"));
+        service.Set(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", Json("0.75"));
+        service.Set(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", Json("0.5"));
 
         // The second edit must not re-baseline against the first: Head is what the last commit
         // holds, not "the value before the most recent keystroke".
@@ -155,7 +156,7 @@ public sealed class RecordEditServiceTests : IDisposable
     [Fact]
     public void EditField_WithAnUnknownFieldName_RefusesAndLeavesTheWorkingTreeClean()
     {
-        var result = Service().EditField(_mod.Plugin, _mod.Npc.ToString(), "NoSuchField", Json("1"));
+        var result = Service().Set(_mod.Plugin, _mod.Npc.ToString(), "NoSuchField", Json("1"));
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.FieldNotFound, result.Refusal);
@@ -165,7 +166,7 @@ public sealed class RecordEditServiceTests : IDisposable
     [Fact]
     public void EditField_ForAFormKeyThePluginDoesNotHold_RefusesAndLeavesTheWorkingTreeClean()
     {
-        var result = Service().EditField(_mod.Plugin, "ABCDEF:NotHere.esp", "HeightMax", Json("0.75"));
+        var result = Service().Set(_mod.Plugin, "ABCDEF:NotHere.esp", "HeightMax", Json("0.75"));
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.RecordNotFound, result.Refusal);
@@ -180,7 +181,7 @@ public sealed class RecordEditServiceTests : IDisposable
         _mod.Mirror.SetFilter("SELECT form_key FROM npc_ WHERE HeightMax = 0.75");
         Assert.Equal(0, _mod.Mirror.Reads!.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0)).Total);
 
-        Service().EditField(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", Json("0.75"));
+        Service().Set(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", Json("0.75"));
 
         var result = _mod.Mirror.Reads!.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0));
         Assert.Equal(1, result.Total);

@@ -41,7 +41,7 @@ internal static class ColumnReflection
 
             columns.Add(new ColumnSpec(
                 prop.Name, prop.Name, info.DuckDbType, info.ApiType,
-                info.ValidFormKeyTypes, info.EnumMembers, info.Apply,
+                info.ValidFormKeyTypes, info.EnumMembers,
                 IsArray: info.ApiType == "array",
                 ElementType: info.ElementMeta,
                 SubFields: info.SubFieldMetas,
@@ -52,6 +52,7 @@ internal static class ColumnReflection
                 Default: info.Default));
         }
 
+        columns.AddRange(SyntheticColumns.For(getterType, game, backingPathPrefix: "", backingNames: _ => LeafSpec.NoEnumMembers));
         return columns;
     }
 
@@ -64,21 +65,16 @@ internal static class ColumnReflection
 
         return LeafClassification.ClassifyLeaf(prop, core, game) switch
         {
-            { } leaf => ProjectColumn(prop, core, nullable, leaf, game, logger),
+            { } leaf => ProjectColumn(nullable, leaf),
             null when ReflectedTypes.IsListType(core, out var elementType) => ListLeaves.BuildListColumn(prop, elementType, game, logger),
             null when ReflectedTypes.IsLoquiInterface(core) => StructLeaves.BuildStructColumn(prop, core, game, logger),
             _ => SchemaRefusals.ReportUnclassified<ColumnInfoResult>(game, logger, prop, core, "column"),
         };
     }
 
-    // Routed through the same writer as a sub-field, so every leaf shape has one write path.
-    private static ColumnInfoResult ProjectColumn(
-        PropertyInfo prop, Type core, bool nullable, LeafSpec leaf, GameReflection game, ILogger logger)
+    private static ColumnInfoResult ProjectColumn(bool nullable, LeafSpec leaf)
     {
-        // A column's ApplyOutcome is the routed writer's own, carried straight through.
-        var apply = LeafWriters.RouteWriter<IMajorRecord>(leaf, prop, core, nullable, game, logger);
         return new(leaf.DuckDbType, leaf.ApiType, leaf.ValidFormKeyTypes, leaf.EnumMembers,
-            apply,
             AllowsNull: leaf.AllowsNull,
             // A nullable property genuinely can be absent-meaning-null, so it keeps NULL rather than
             // being coalesced to a default it never had.

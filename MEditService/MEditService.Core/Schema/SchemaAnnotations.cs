@@ -32,7 +32,10 @@ internal sealed record SchemaAnnotations(
     HashSet<(string TypeName, string MemberName)> PermittedNullFormLinks,
     // The Color fields xEdit renders with an Alpha leaf (wbByteRGBA). A property of the field, not
     // the type, and every row is one Mutagen also writes the alpha byte for, so no alpha edit is lost.
-    HashSet<(string TypeName, string MemberName)> AlphaBearingColorFields)
+    HashSet<(string TypeName, string MemberName)> AlphaBearingColorFields,
+    // Members the document never spells but one bit of a flags member says: the ESL flag, the
+    // Partial Form bit. Flag names the backing enum's member, or the bit in hex for a raw integer.
+    Dictionary<(string TypeName, string MemberName), (string BackingMember, string Flag)> SyntheticFlagMembers)
 {
     // Rows every game shares are named once here; a row true of only some games is written inline
     // in each table that has it, so each table still states that game's complete facts.
@@ -104,7 +107,15 @@ internal sealed record SchemaAnnotations(
             KeyedArrays: Fallout4VmadAnnotations.KeyedArrays.ToDictionary(
                 r => (r.TypeName, r.MemberName), r => (IReadOnlyList<string>)r.KeyMembers),
             PermittedNullFormLinks: [.. Fallout4VmadAnnotations.PermittedNullFormLinks],
-            AlphaBearingColorFields: [.. RgbaColorFields]),
+            AlphaBearingColorFields: [.. RgbaColorFields],
+            SyntheticFlagMembers: new()
+            {
+                [("IFallout4ModHeaderGetter", "IsSmallMaster")] = ("Flags", "Small"),
+                [("ICellGetter", "IsPartialForm")] = ("MajorRecordFlagsRaw", PartialFormFlag.BitHex),
+                [("IWorldspaceGetter", "IsPartialForm")] = ("MajorRecordFlagsRaw", PartialFormFlag.BitHex),
+                [("IQuestGetter", "IsPartialForm")] = ("MajorRecordFlagsRaw", PartialFormFlag.BitHex),
+                [("IDialogTopicGetter", "IsPartialForm")] = ("MajorRecordFlagsRaw", PartialFormFlag.BitHex),
+            }),
 
         [GameCategory.Skyrim] = new(
             ExcludedColumns: [.. GrupTimestampColumns],
@@ -117,7 +128,8 @@ internal sealed record SchemaAnnotations(
             SiblingsInUse: [],
             KeyedArrays: [],
             PermittedNullFormLinks: [],
-            AlphaBearingColorFields: [.. RgbaColorFields]),
+            AlphaBearingColorFields: [.. RgbaColorFields],
+            SyntheticFlagMembers: []),
 
         [GameCategory.Starfield] = new(
             ExcludedColumns: [.. GrupTimestampColumns, ("IQuestGetter", "Timestamp")],
@@ -137,7 +149,8 @@ internal sealed record SchemaAnnotations(
             SiblingsInUse: [],
             KeyedArrays: [],
             PermittedNullFormLinks: [],
-            AlphaBearingColorFields: [.. RgbaColorFields]),
+            AlphaBearingColorFields: [.. RgbaColorFields],
+            SyntheticFlagMembers: []),
     };
 
     /// <summary>A game with no table is a game nobody has written the facts for — loud, not empty.</summary>
@@ -161,6 +174,11 @@ internal sealed record SchemaAnnotations(
     public IReadOnlyDictionary<string, IReadOnlyList<string>>? SiblingsInUseFor(PropertyInfo prop) =>
         SiblingsInUse.GetValueOrDefault(Key(prop));
     public IReadOnlyList<string>? KeyMembersFor(PropertyInfo prop) => KeyedArrays.GetValueOrDefault(Key(prop));
+
+    public IEnumerable<(string Name, string BackingMember, string Flag)> SyntheticFlagMembersFor(Type getterType) =>
+        SyntheticFlagMembers
+            .Where(e => e.Key.TypeName == getterType.Name)
+            .Select(e => (e.Key.MemberName, e.Value.BackingMember, e.Value.Flag));
 
     private static (string, string) Key(PropertyInfo prop) => (prop.DeclaringType!.Name, prop.Name);
 
@@ -245,6 +263,36 @@ internal sealed record SchemaAnnotations(
         return null;
     }
 
+    // A row backs onto a member the type reaches, and its flag is a name that enum defines or a hex
+    // bit where the member is a raw integer.
+    private IEnumerable<string> UnresolvedSyntheticFlags(ILookup<string, Type> typesByName)
+    {
+        foreach (var (entry, (backingMember, flag)) in SyntheticFlagMembers)
+        {
+            var label = $"{nameof(SyntheticFlagMembers)}: {entry.TypeName}.{entry.MemberName}";
+            var backing = typesByName[entry.TypeName]
+                .SelectMany(ReflectedTypes.GetAllInterfaceProperties)
+                .FirstOrDefault(p => p.Name == backingMember);
+            if (backing == null)
+            {
+                yield return $"{label} backs onto {backingMember}, which {entry.TypeName} does not reach";
+                continue;
+            }
+            var core = Nullable.GetUnderlyingType(backing.PropertyType) ?? backing.PropertyType;
+            if (core.IsEnum)
+            {
+                if (!Enum.GetNames(core).Contains(flag, StringComparer.Ordinal))
+                    yield return $"{label} names flag {flag}, which {core.Name} does not define";
+            }
+            else if (!ReflectedTypes.IntegerTypes.Contains(core)
+                || !flag.StartsWith("0x", StringComparison.Ordinal)
+                || !long.TryParse(flag.AsSpan(2), System.Globalization.NumberStyles.HexNumber, null, out _))
+            {
+                yield return $"{label} backs onto {backingMember}, which is neither an enum nor an integer bit {flag} could name";
+            }
+        }
+    }
+
     /// <summary>Resolves every entry against the assembly's types and every interface they implement,
     /// which is where Loqui's plumbing interfaces come from. Throws naming each unresolved entry.</summary>
     public void Validate(Assembly gameAssembly)
@@ -276,6 +324,8 @@ internal sealed record SchemaAnnotations(
             .. UnresolvedSiblingRelations(typesByName),
             .. UnresolvedMembers(nameof(KeyedArrays), KeyedArrays.Keys),
             .. UnresolvedKeyMembers(typesByName),
+            .. UnresolvedTypes(nameof(SyntheticFlagMembers), SyntheticFlagMembers.Keys.Select(k => k.TypeName)),
+            .. UnresolvedSyntheticFlags(typesByName),
         ];
 
         if (missing.Length > 0)

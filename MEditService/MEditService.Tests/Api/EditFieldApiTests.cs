@@ -41,10 +41,11 @@ public sealed class EditFieldApiTests(LoadedApiFixture<TestPluginFixture> loaded
         return records.GetProperty("items")[0].GetProperty("formKey").GetString()!;
     }
 
-    private Task<HttpResponseMessage> PostEdit(string formKey, string fieldPath, object value) =>
+    // The one envelope: an operation, a path of hops and a value (ADR-0032).
+    private Task<HttpResponseMessage> PostEdit(string formKey, string member, object value) =>
         _client.PostAsJsonAsync(
             $"/records/{Uri.EscapeDataString(formKey)}/field",
-            new { plugin = Plugin, origin = Origin, fieldPath, value });
+            new { plugin = Plugin, origin = Origin, op = "set", path = new[] { new { kind = "member", name = member } }, value });
 
     [Fact]
     public async Task EditField_OnATrackedPlugin_LandsAsAWorkingTreeChange()
@@ -98,6 +99,26 @@ public sealed class EditFieldApiTests(LoadedApiFixture<TestPluginFixture> loaded
         // The discriminator an agent branches on, beside the prose a human reads.
         Assert.Equal("PluginNotTracked", problem.GetProperty("refusal").GetString());
         Assert.Contains("Track", problem.GetProperty("detail").GetString()!, StringComparison.Ordinal);
+    }
+
+    // The envelope itself could not be read as a write: malformed, so a 400 that still names the
+    // refusal an agent branches on.
+    [Fact]
+    public async Task EditField_WithAnUnknownOperation_Is400_WithItsOwnRefusal()
+    {
+        using var fx = BuildOneModOnePlugin();
+        await LoadOnly(fx);
+        (await _client.PostAsJsonAsync("/plugins/track", new { origin = Origin, preset = "Edits" })).EnsureSuccessStatusCode();
+        var formKey = await FirstNpcFormKey();
+
+        var response = await _client.PostAsJsonAsync(
+            $"/records/{Uri.EscapeDataString(formKey)}/field",
+            new { plugin = Plugin, origin = Origin, op = "frobnicate", path = new[] { new { kind = "member", name = "HeightMax" } }, value = 1 });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var problem = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("InvalidEnvelope", problem.GetProperty("refusal").GetString());
+        Assert.Equal("HeightMax", problem.GetProperty("path").GetString());
     }
 
     [Fact]

@@ -3,6 +3,7 @@ using System.Text.Json;
 using MEditService.Core.Edits;
 using MEditService.Core.Schema;
 using MEditService.Core.Source;
+using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 
@@ -36,7 +37,7 @@ public sealed class PluginCompileServiceParkedRefTests : IDisposable
     {
         var baselineParked = RunGit("rev-parse", ParkedRef).Trim();
 
-        EditService().EditField(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", Json("0.75"));
+        EditService().Set(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", Json("0.75"));
         var result = CompileService().Compile(_mod.Plugin, new CompileSource.WorkingTree());
         Assert.True(result.Succeeded, result.RefusalReason);
 
@@ -51,7 +52,7 @@ public sealed class PluginCompileServiceParkedRefTests : IDisposable
     [Fact]
     public void Compile_AtMain_AdvancesTheParkedRef_AndTouchesNeitherTheEditBranchsWorkingTreeNorHead()
     {
-        EditService().EditField(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", Json("0.75"));
+        EditService().Set(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", Json("0.75"));
         var dirtBefore = _mod.GitStatus();
         var headBefore = RunGit("rev-parse", "HEAD").Trim();
         var branchBefore = RunGit("rev-parse", "--abbrev-ref", "HEAD").Trim();

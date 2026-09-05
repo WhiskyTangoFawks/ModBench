@@ -3,6 +3,7 @@ using MEditService.Core.Edits;
 using MEditService.Core.Queries;
 using MEditService.Core.Schema;
 using MEditService.Core.Source;
+using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace MEditService.Tests.Edits;
@@ -46,7 +47,7 @@ public sealed class ReadTimeFreshnessContainerTests : IDisposable
     {
         var file = _fixture.SourceFileContaining(ContainerModFixture.QuestEditorId);
 
-        var applied = EditService().EditField(_fixture.Plugin, _fixture.Quest.ToString(), "Filter", Json("\"EditedFilter\""));
+        var applied = EditService().Set(_fixture.Plugin, _fixture.Quest.ToString(), "Filter", Json("\"EditedFilter\""));
         Assert.True(applied.Applied, applied.Message);
         Assert.Equal(
             "EditedFilter",
@@ -66,7 +67,7 @@ public sealed class ReadTimeFreshnessContainerTests : IDisposable
     {
         var file = _fixture.SourceFileContaining(ContainerModFixture.QuestEditorId);
 
-        var applied = EditService().EditField(_fixture.Plugin, _fixture.Quest.ToString(), "Filter", Json("\"EditedFilter\""));
+        var applied = EditService().Set(_fixture.Plugin, _fixture.Quest.ToString(), "Filter", Json("\"EditedFilter\""));
         Assert.True(applied.Applied, applied.Message);
         Assert.Equal(
             "EditedFilter",
@@ -87,7 +88,7 @@ public sealed class ReadTimeFreshnessContainerTests : IDisposable
     {
         var file = _fixture.SourceFileContaining(ContainerModFixture.EmbedCellEditorId);
 
-        var applied = EditService().EditField(_fixture.Plugin, _fixture.TemporaryRef.ToString(), "Scale", Json("2.5"));
+        var applied = EditService().Set(_fixture.Plugin, _fixture.TemporaryRef.ToString(), "Scale", Json("2.5"));
         Assert.True(applied.Applied, applied.Message);
         Assert.Equal(
             2.5f,

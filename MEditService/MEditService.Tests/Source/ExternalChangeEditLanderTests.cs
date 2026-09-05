@@ -3,6 +3,7 @@ using MEditService.Core.Edits;
 using MEditService.Core.Records;
 using MEditService.Core.Source;
 using MEditService.Tests.Edits;
+using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -72,7 +73,7 @@ public sealed class ExternalChangeEditLanderTests : IDisposable
     public void Keep_Refuses_WhenTheSameRecordAlreadyHasUncommittedDirtThatDisagreesWithTheIncomingValue()
     {
         var editService = new RecordEditService(_mod.Mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
-        var applyResult = editService.EditField(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", JsonDocument.Parse("0.5").RootElement);
+        var applyResult = editService.Set(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", JsonDocument.Parse("0.5").RootElement);
         Assert.True(applyResult.Applied, applyResult.Message);
         var myOwnEditText = File.ReadAllText(_mod.NpcSourceFile);
 
@@ -180,7 +181,7 @@ public sealed class ExternalChangeEditLanderTests : IDisposable
         // Not a real collision: the user happened to make the exact same edit the external tool made
         // — nothing to lose by landing it.
         var editService = new RecordEditService(_mod.Mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
-        editService.EditField(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", JsonDocument.Parse("0.9").RootElement);
+        editService.Set(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", JsonDocument.Parse("0.9").RootElement);
 
         WriteExternalBinaryChange(0.9f);
 

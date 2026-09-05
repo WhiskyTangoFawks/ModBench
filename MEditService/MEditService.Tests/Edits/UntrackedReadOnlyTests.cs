@@ -4,6 +4,7 @@ using MEditService.Core.Plugins;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
 using MEditService.Core.Source;
+using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -26,7 +27,7 @@ public sealed class UntrackedReadOnlyTests
         using var mod = TrackedModFixture.Untracked();
         Assert.False(SourceRepository.IsTracked(mod.ModFolder)); // the whole of "untracked": no .git
 
-        var result = ServiceFor(mod.Mirror).EditField(mod.Plugin, mod.Npc.ToString(), "HeightMax", Json("0.75"));
+        var result = ServiceFor(mod.Mirror).Set(mod.Plugin, mod.Npc.ToString(), "HeightMax", Json("0.75"));
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.PluginNotTracked, result.Refusal);
@@ -44,7 +45,7 @@ public sealed class UntrackedReadOnlyTests
     {
         using var mod = TrackedModFixture.Untracked();
 
-        var result = ServiceFor(mod.Mirror).EditField(mod.Plugin, $"ABCDEF:{TrackedModFixture.PluginName}", "HeightMax", Json("0.75"));
+        var result = ServiceFor(mod.Mirror).Set(mod.Plugin, $"ABCDEF:{TrackedModFixture.PluginName}", "HeightMax", Json("0.75"));
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.PluginNotTracked, result.Refusal);
@@ -55,7 +56,7 @@ public sealed class UntrackedReadOnlyTests
     {
         using var mod = TrackedModFixture.Untracked();
 
-        ServiceFor(mod.Mirror).EditField(mod.Plugin, mod.Npc.ToString(), "HeightMax", Json("0.75"));
+        ServiceFor(mod.Mirror).Set(mod.Plugin, mod.Npc.ToString(), "HeightMax", Json("0.75"));
 
         // Not merely "no dirt" — there is no repo to have dirt in. Hard read-only means the refusal
         // did not quietly create the source tree on its way out.
@@ -69,7 +70,7 @@ public sealed class UntrackedReadOnlyTests
         using var vanilla = new DataDirectoryFixture();
 
         var result = ServiceFor(vanilla.Mirror)
-            .EditField(vanilla.Plugin, vanilla.Npc.ToString(), "HeightMax", Json("0.75"));
+            .Set(vanilla.Plugin, vanilla.Npc.ToString(), "HeightMax", Json("0.75"));
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.PluginHasNoModFolder, result.Refusal);
@@ -83,9 +84,9 @@ public sealed class UntrackedReadOnlyTests
         using var vanilla = new DataDirectoryFixture();
 
         var trackable = ServiceFor(untracked.Mirror)
-            .EditField(untracked.Plugin, untracked.Npc.ToString(), "HeightMax", Json("0.75"));
+            .Set(untracked.Plugin, untracked.Npc.ToString(), "HeightMax", Json("0.75"));
         var notTrackable = ServiceFor(vanilla.Mirror)
-            .EditField(vanilla.Plugin, vanilla.Npc.ToString(), "HeightMax", Json("0.75"));
+            .Set(vanilla.Plugin, vanilla.Npc.ToString(), "HeightMax", Json("0.75"));
 
         // Collapsing these into one refusal would leave half the users following advice that cannot work:
         // Track does not apply to a Data-directory master, and authoring a patch is not the answer for an
@@ -103,7 +104,7 @@ public sealed class UntrackedReadOnlyTests
         // is one command, once, per mod. Same plugin, same record, same field — only .git differs.
         using var mod = TrackedModFixture.Tracked();
 
-        var result = ServiceFor(mod.Mirror).EditField(mod.Plugin, mod.Npc.ToString(), "HeightMax", Json("0.75"));
+        var result = ServiceFor(mod.Mirror).Set(mod.Plugin, mod.Npc.ToString(), "HeightMax", Json("0.75"));
 
         Assert.True(result.Applied, result.Message);
         Assert.Equal(RecordEditRefusal.None, result.Refusal);

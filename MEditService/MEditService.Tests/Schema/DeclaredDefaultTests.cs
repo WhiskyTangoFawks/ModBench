@@ -8,8 +8,8 @@ using Mutagen.Bethesda;
 namespace MEditService.Tests.Schema;
 
 /// <summary>The codec omits a member equal to the default Mutagen declares, not the CLR zero
-/// (VirtualMachineAdapter.ObjectFormat is 2 when absent), so the metadata spells that default as
-/// the codec would and every absent-member rule reads it (ADR-0032).</summary>
+/// (VirtualMachineAdapter.ObjectFormat is 2 when absent), so the metadata spells that default and
+/// every absent-member rule reads it (ADR-0032).</summary>
 public sealed class DeclaredDefaultTests
 {
     private static readonly IReadOnlyDictionary<string, RecordTableSchema> Schemas =

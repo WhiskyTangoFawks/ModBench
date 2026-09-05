@@ -738,6 +738,14 @@ export interface components {
         NextFreeFormKeyResponse: {
             formKey: string;
         };
+        PathHop: {
+            kind: string;
+            name?: string | null;
+            /** Format: int32 */
+            index?: number | null;
+            key?: string | null;
+            readonly isWellFormed?: boolean;
+        };
         PlacedSummary: {
             formKey: string;
             editorId?: string | null;
@@ -863,13 +871,14 @@ export interface components {
         RecordFieldEditRequest: {
             plugin: string;
             origin: string;
-            fieldPath: string;
-            value: unknown;
+            op: string;
+            path: components["schemas"]["PathHop"][];
+            value?: unknown;
         };
         RecordFieldEditResponse: {
             applied: boolean;
             formKey: string;
-            fieldPath: string;
+            path: string;
         };
         RecordRenumberRequest: {
             plugin: string;

@@ -9,6 +9,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
+using static MEditService.Tests.TestSupport.Envelopes;
 
 namespace MEditService.Tests.Edits;
 
@@ -36,14 +37,14 @@ public sealed class ConcreteBaseUnionEditTests : IDisposable
     [Fact]
     public void SwitchingAScriptPropertyLeaf_KeepsSharedMembers_DefaultsItsOwn_AndLeavesTheSiblingAlone()
     {
-        var setUp = _fixture.Service().EditField(
+        var setUp = _fixture.Service().Set(
             _fixture.Plugin, _fixture.Npc.ToString(), "VirtualMachineAdapter", Adapter("ScriptIntProperty"));
         Assert.True(setUp.Applied, setUp.Message);
         var before = WrittenProperties(_fixture.NpcBody());
         Assert.Equal("ScriptIntProperty", before["Switched"].GetProperty("MutagenObjectType").GetString());
         Assert.Equal(42, before["Switched"].GetProperty("Data").GetInt32());
 
-        var result = _fixture.Service().EditField(
+        var result = _fixture.Service().Set(
             _fixture.Plugin, _fixture.Npc.ToString(), "VirtualMachineAdapter", Adapter("ScriptFloatProperty"));
 
         Assert.True(result.Applied, result.Message);
@@ -58,16 +59,24 @@ public sealed class ConcreteBaseUnionEditTests : IDisposable
         Assert.Equal(before["Sibling"].GetRawText(), after["Sibling"].GetRawText());
     }
 
+    // The base leaf declares no Data, so the discriminator gesture's cascade drops it.
     [Fact]
     public void SwitchingToTheBaseLeaf_BuildsABareScriptProperty()
     {
-        var result = _fixture.Service().EditField(
-            _fixture.Plugin, _fixture.Npc.ToString(), "VirtualMachineAdapter", Adapter("ScriptProperty"));
+        var setUp = _fixture.Service().Set(
+            _fixture.Plugin, _fixture.Npc.ToString(), "VirtualMachineAdapter", Adapter("ScriptIntProperty"));
+        Assert.True(setUp.Applied, setUp.Message);
+
+        var result = _fixture.Service().Edit(
+            _fixture.Plugin, _fixture.Npc.ToString(),
+            SetAt(Json("\"ScriptProperty\""),
+                Member("VirtualMachineAdapter"), Member("Scripts"), Key("TestScript"), Member("Properties"), Key("Switched"), Member("MutagenObjectType")));
 
         Assert.True(result.Applied, result.Message);
         var written = WrittenProperties(_fixture.NpcBody())["Switched"];
         Assert.Equal("ScriptProperty", written.GetProperty("MutagenObjectType").GetString());
         Assert.Equal("Switched", written.GetProperty("Name").GetString());
+        Assert.False(written.TryGetProperty("Data", out _));
     }
 
     [Fact]
@@ -75,7 +84,7 @@ public sealed class ConcreteBaseUnionEditTests : IDisposable
     {
         var before = _fixture.NpcBody();
 
-        var result = _fixture.Service().EditField(
+        var result = _fixture.Service().Set(
             _fixture.Plugin, _fixture.Npc.ToString(), "VirtualMachineAdapter",
             Json("""
                 {"Version": 6, "ObjectFormat": 2, "Scripts": [{"Name": "S", "Flags": "Local",
@@ -83,7 +92,7 @@ public sealed class ConcreteBaseUnionEditTests : IDisposable
                 """));
 
         Assert.False(result.Applied);
-        Assert.Equal(RecordEditRefusal.ListElementTypeUnresolved, result.Refusal);
+        Assert.Equal(RecordEditRefusal.DiscriminatorInvalid, result.Refusal);
         Assert.Equal(before, _fixture.NpcBody());
     }
 

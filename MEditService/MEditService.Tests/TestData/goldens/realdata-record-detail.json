@@ -1793,6 +1793,7 @@
         "ImageSpace": null,
         "InPreVisFileOf": "00DB61:Fallout4.esm",
         "IsDeleted": null,
+        "IsPartialForm": false,
         "Landscape": {
           "DATA": "0x1D000000",
           "Fallout4MajorRecordFlags": [
@@ -12227,6 +12228,7 @@
         "ImageSpace": null,
         "InPreVisFileOf": "00DB61:Fallout4.esm",
         "IsDeleted": null,
+        "IsPartialForm": false,
         "Landscape": {
           "DATA": "0x1D000000",
           "Fallout4MajorRecordFlags": [
@@ -26286,6 +26288,7 @@
         "ImageSpace": null,
         "InPreVisFileOf": "00DB61:Fallout4.esm",
         "IsDeleted": null,
+        "IsPartialForm": false,
         "Landscape": {
           "DATA": "0x1D000000",
           "Fallout4MajorRecordFlags": [
@@ -40920,6 +40923,7 @@
         "Category": "Misc",
         "Fallout4MajorRecordFlags": null,
         "IsDeleted": null,
+        "IsPartialForm": false,
         "Keyword": null,
         "Name": null,
         "Priority": null,
@@ -40945,6 +40949,7 @@
         "Category": "Misc",
         "Fallout4MajorRecordFlags": null,
         "IsDeleted": null,
+        "IsPartialForm": false,
         "Keyword": null,
         "Name": null,
         "Priority": null,
@@ -40970,6 +40975,7 @@
         "Category": "Misc",
         "Fallout4MajorRecordFlags": null,
         "IsDeleted": null,
+        "IsPartialForm": false,
         "Keyword": null,
         "Name": null,
         "Priority": null,
@@ -42917,6 +42923,7 @@
         "Fallout4MajorRecordFlags": null,
         "Filter": "Dialogue\\Diamond City\\",
         "IsDeleted": null,
+        "IsPartialForm": false,
         "Location": "002CEF:Fallout4.esm",
         "MajorFlags": null,
         "Name": null,
@@ -43721,6 +43728,7 @@
         "Fallout4MajorRecordFlags": null,
         "Filter": "Dialogue\\Generic\\",
         "IsDeleted": null,
+        "IsPartialForm": false,
         "Location": null,
         "MajorFlags": null,
         "Name": null,
@@ -43947,6 +43955,7 @@
         "Fallout4MajorRecordFlags": null,
         "Filter": "Dialogue\\Concord\\",
         "IsDeleted": null,
+        "IsPartialForm": false,
         "Location": null,
         "MajorFlags": null,
         "Name": null,
@@ -46882,6 +46891,7 @@
         "HdLodNormalTexture": null,
         "InteriorLighting": null,
         "IsDeleted": null,
+        "IsPartialForm": false,
         "LandDefaults": null,
         "LargeReferences": null,
         "Location": null,

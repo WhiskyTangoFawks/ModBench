@@ -149,12 +149,12 @@ public class HeaderIndexingTests
     }
 
     [Fact]
-    public void HeaderSchema_MastersColumn_CarriesNoWriteDelegate()
+    public void HeaderSchema_MastersColumn_IsReadOnlyWithAReason()
     {
         var masters = Reflector.GetSchemas(GameRelease.Fallout4)[HeaderIndexer.RecordType]
             .RecordColumns.Single(c => c.Name == HeaderIndexer.MastersFieldName);
 
-        Assert.Null(masters.Apply.Writer);
+        Assert.False(string.IsNullOrWhiteSpace(masters.ReadOnlyReason));
     }
 
     [Fact]

@@ -50,7 +50,6 @@ public class SchemaReflectorTests
 
         var adapter = Assert.Single(columns, c => c.Name == "VirtualMachineAdapter");
         Assert.Equal("struct", adapter.ApiType);
-        Assert.NotNull(adapter.Apply.Writer);
     }
 
     [Fact]
@@ -128,16 +127,20 @@ public class SchemaReflectorTests
         var enumIntValue = fields.Single(f => f.Name == "EnumIntValue");
 
         // Value/Value2/FunctionType collide in CLR type across the seven leaves, so each carries a
-        // variant per leaf. Record and EnumIntValue do not collide across the leaves that declare
-        // them, so they stay one typed member.
+        // variant per leaf. Record and EnumIntValue are typed alike by the leaves declaring them,
+        // and the variant map names exactly those leaves.
         Assert.Equal("int", value.Variants!["ObjectModIntProperty<Armor+Property>"].Type);
         Assert.Equal("float", value.Variants["ObjectModFloatProperty<Armor+Property>"].Type);
         Assert.Equal("bool", value.Variants["ObjectModBoolProperty<Armor+Property>"].Type);
         Assert.NotNull(value2.Variants);
         Assert.NotNull(functionType.Variants);
         Assert.Equal("formKey", record.Type);
-        Assert.Null(record.Variants);
+        Assert.Equal(
+            ["ObjectModFormLinkFloatProperty<Armor+Property>", "ObjectModFormLinkIntProperty<Armor+Property>"],
+            record.Variants!.Keys.Order(StringComparer.Ordinal));
+        Assert.All(record.Variants.Values, v => Assert.Equal("formKey", v.Type));
         Assert.Equal("int", enumIntValue.Type);
+        Assert.Equal(["ObjectModEnumProperty<Armor+Property>"], enumIntValue.Variants!.Keys);
 
         // Every one of these is sparse — declared by some leaves, not all — so every row of a
         // non-declaring leaf's type legitimately reads null through it.
@@ -155,23 +158,18 @@ public class SchemaReflectorTests
 
 
     [Fact]
-    public void GetSchemas_Glob_OutputCharColumn_ExclusiveToGlobalFloat_NullOnOtherSubclasses()
+    public void GetSchemas_Glob_OutputCharColumn_ExclusiveToGlobalFloat_NamesThatOneClassAsItsVariant()
     {
-        // The "not present on every sibling" branch of MergeSiblingColumn is real today, not a
-        // hypothetical kept for a future third subclass: the column belongs to GlobalFloat alone, so
-        // it writes onto one and declines a GlobalBool by name.
-        var mod = new Fallout4Mod(ModKey.FromFileName("GlobOutputChar263.esp"), Fallout4Release.Fallout4);
-        var f = new GlobalFloat(mod.GetNextFormKey("TestGlobFloat"), Fallout4Release.Fallout4) { EditorID = "TestGlobFloat", Data = 1.25f, OutputChar = true };
-        var b = new GlobalBool(mod.GetNextFormKey("TestGlobBool"), Fallout4Release.Fallout4) { EditorID = "TestGlobBool", Data = true };
-
+        // The "not present on every sibling" branch of the fold is real today: the column belongs
+        // to GlobalFloat alone, so the variant map names that class and a write to a GlobalBool is
+        // refused by name.
         var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
         var outputChar = schemas["glob"].RecordColumns.Single(c => c.Name == "OutputChar");
 
         Assert.True(outputChar.AllowsNull);
-        Assert.Null(outputChar.Variants);
-        Assert.Equal(ApplyOutcome.Applied, outputChar.Apply.Writer!(f, JsonDocument.Parse("false").RootElement));
-        Assert.False(f.OutputChar);
-        Assert.Equal(ApplyOutcome.PropertyNotFound, outputChar.Apply.Writer!(b, JsonDocument.Parse("false").RootElement));
+        Assert.Equal([nameof(GlobalFloat)], outputChar.Variants!.Keys);
+        Assert.Equal("bool", outputChar.Variants[nameof(GlobalFloat)].Type);
+        Assert.True(outputChar.IsViewable);
     }
 
     [Fact]
@@ -211,24 +209,6 @@ public class SchemaReflectorTests
     }
 
     [Fact]
-    public void GetSchemas_Npc_EnumColumn_Apply_SetsEnumValue()
-    {
-        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
-        var col = schemas["npc_"].RecordColumns.First(c => c.Name == "Aggression");
-        Assert.NotNull(col.Apply.Writer);
-        var npc = new Mutagen.Bethesda.Fallout4.Npc(
-            Mutagen.Bethesda.Plugins.FormKey.Factory("000001:Fallout4.esm"),
-            Mutagen.Bethesda.Fallout4.Fallout4Release.Fallout4);
-
-        col.Apply.Writer!(npc, System.Text.Json.JsonDocument.Parse("\"Unaggressive\"").RootElement);
-        Assert.Equal(Npc.AggressionType.Unaggressive, npc.Aggression);
-
-        // confirm ignoreCase: true
-        col.Apply.Writer!(npc, System.Text.Json.JsonDocument.Parse("\"aggressive\"").RootElement);
-        Assert.Equal(Npc.AggressionType.Aggressive, npc.Aggression);
-    }
-
-    [Fact]
     public void GetSchemas_Npc_FormLinkColumn_MapsToFormKeyTypeWithValidTypes()
     {
         var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
@@ -237,22 +217,6 @@ public class SchemaReflectorTests
         Assert.Equal("VARCHAR", col.DuckDbType);
         Assert.Equal("formKey", col.ApiType);
         Assert.Contains("race", col.ValidFormKeyTypes);
-    }
-
-    [Fact]
-    public void GetSchemas_Npc_FormLinkColumn_Apply_MalformedFormKeyString_IsRejected()
-    {
-        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
-        var col = schemas["npc_"].RecordColumns.First(c => c.Name == "Race");
-        var npc = new Mutagen.Bethesda.Fallout4.Npc(
-            Mutagen.Bethesda.Plugins.FormKey.Factory("000001:Fallout4.esm"),
-            Mutagen.Bethesda.Fallout4.Fallout4Release.Fallout4);
-        var originalRace = npc.Race.FormKeyNullable;
-
-        var outcome = col.Apply.Writer!(npc, System.Text.Json.JsonDocument.Parse("\"not-a-formkey\"").RootElement);
-
-        Assert.Equal(ApplyOutcome.ValueRejected, outcome);
-        Assert.Equal(originalRace, npc.Race.FormKeyNullable);
     }
 
     [Fact]
@@ -285,19 +249,6 @@ public class SchemaReflectorTests
         var faction = col!.ElementType?.Fields?.FirstOrDefault(f => f.Name == "Faction");
         Assert.NotNull(faction);
         Assert.False(faction!.AllowsNull);
-    }
-
-    [Fact]
-    public void GetSchemas_Npc_FormLinkColumn_HasApply()
-    {
-        // A top-level FormLink column carries the same ApplyFormLinkJson write delegate as its
-        // struct/array sub-field sibling — not a null-Apply read-only column.
-        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
-        var col = schemas["npc_"].RecordColumns.FirstOrDefault(c => c.Name == "Race");
-        Assert.NotNull(col);
-        // The delegate, not the LeafWrite wrapper: asserting the wrapper is unconditionally true now that
-        // Apply is non-nullable, which would leave this fact proving nothing at all.
-        Assert.NotNull(col!.Apply.Writer);
     }
 
     [Fact]
@@ -372,102 +323,9 @@ public class SchemaReflectorTests
         Assert.Equal("float", col.ApiType);
     }
 
-    [Fact]
-    public void GetSchemas_Npc_FloatColumn_Apply_ChangesValue()
-    {
-        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
-        var col = schemas["npc_"].RecordColumns.FirstOrDefault(c => c.Name == "HeightMin");
-        Assert.NotNull(col);
-        Assert.NotNull(col.Apply.Writer);
-
-        var npc = new Mutagen.Bethesda.Fallout4.Npc(
-            Mutagen.Bethesda.Plugins.FormKey.Factory("000001:Fallout4.esm"),
-            Mutagen.Bethesda.Fallout4.Fallout4Release.Fallout4)
-        {
-            HeightMin = 1.0f
-        };
-
-        col.Apply.Writer!(npc, System.Text.Json.JsonDocument.Parse("2.5").RootElement);
-
-        Assert.Equal(2.5f, npc.HeightMin, precision: 3);
-
-        // MakeApplier's JSON-null success branch is shared live infrastructure reached by every
-        // nullable scalar column, and is otherwise unexercised.
-        var nullableCol = schemas["npc_"].RecordColumns.First(c => c.Name == "FacialMorphIntensity");
-        Assert.NotNull(nullableCol.Apply.Writer); // the delegate, not the always-present wrapper
-        npc.FacialMorphIntensity = 1.0f;
-
-        nullableCol.Apply.Writer!(npc, System.Text.Json.JsonDocument.Parse("null").RootElement);
-
-        Assert.Null(npc.FacialMorphIntensity);
-    }
-
     // ── Array Apply ───────────────────────────────────────────────────────────
 
-    [Fact]
-    public void GetSchemas_Npc_Keywords_Apply_ReplacesKeywordList()
-    {
-        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
-        var col = schemas["npc_"].RecordColumns.FirstOrDefault(c => c.Name == "Keywords");
-        Assert.NotNull(col);
-        Assert.NotNull(col.Apply.Writer);
-
-        var npc = new Mutagen.Bethesda.Fallout4.Npc(
-            Mutagen.Bethesda.Plugins.FormKey.Factory("000001:Fallout4.esm"),
-            Mutagen.Bethesda.Fallout4.Fallout4Release.Fallout4);
-        var kw1 = Mutagen.Bethesda.Plugins.FormKey.Factory("000010:Fallout4.esm");
-        var kw2 = Mutagen.Bethesda.Plugins.FormKey.Factory("000020:Fallout4.esm");
-
-        var json = $"[\"{kw1}\",\"{kw2}\"]";
-        // An array-shaped payload is written, and says so — the other side of the shape guard.
-        Assert.Equal(ApplyOutcome.Applied, col.Apply.Writer!(npc, System.Text.Json.JsonDocument.Parse(json).RootElement));
-
-        Assert.NotNull(npc.Keywords);
-        Assert.Equal(2, npc.Keywords!.Count);
-        var appliedKeys = npc.Keywords.Select(k => ((Mutagen.Bethesda.Plugins.IFormLinkGetter)k).FormKey).ToList();
-        Assert.Contains(kw1, appliedKeys);
-        Assert.Contains(kw2, appliedKeys);
-    }
-
-    [Fact]
-    public void GetSchemas_Npc_Factions_Apply_UpdatesFactionList()
-    {
-        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
-        var col = schemas["npc_"].RecordColumns.FirstOrDefault(c => c.Name == "Factions");
-        Assert.NotNull(col);
-        Assert.NotNull(col.Apply.Writer);
-
-        var npc = new Mutagen.Bethesda.Fallout4.Npc(
-            Mutagen.Bethesda.Plugins.FormKey.Factory("000001:Fallout4.esm"),
-            Mutagen.Bethesda.Fallout4.Fallout4Release.Fallout4);
-        var factionKey = Mutagen.Bethesda.Plugins.FormKey.Factory("000003:Fallout4.esm");
-        var json = $"[{{\"Faction\":\"{factionKey}\",\"Rank\":7}}]";
-
-        col.Apply.Writer!(npc, System.Text.Json.JsonDocument.Parse(json).RootElement);
-
-        Assert.Single(npc.Factions);
-        Assert.Equal(7, npc.Factions[0].Rank);
-        Assert.Equal(factionKey, npc.Factions[0].Faction.FormKey);
-    }
-
     // ── IsFormLink requires both IsInterface AND IsGenericType ─────────────────
-
-    [Fact]
-    public void GetSchemas_Npc_Factions_Apply_NonArrayJson_DoesNothing()
-    {
-        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
-        var col = schemas["npc_"].RecordColumns.First(c => c.Name == "Factions");
-        var npc = new Mutagen.Bethesda.Fallout4.Npc(
-            Mutagen.Bethesda.Plugins.FormKey.Factory("000001:Fallout4.esm"),
-            Mutagen.Bethesda.Fallout4.Fallout4Release.Fallout4);
-
-        // "Does nothing" is only half of it — the applier has to *say* it wrote nothing, or the
-        // write path reports the edit as applied and the user's change vanishes silently.
-        var applied = col.Apply.Writer!(npc, System.Text.Json.JsonDocument.Parse("\"notanarray\"").RootElement);
-
-        Assert.Equal(ApplyOutcome.ValueRejected, applied);
-        Assert.Empty(npc.Factions);
-    }
 
     [Fact]
     public void GetSchemas_Npc_Weight_IsStructNotFormkey()
@@ -481,70 +339,6 @@ public class SchemaReflectorTests
     }
 
     // ── Loqui scalar Apply: applies JSON object to struct sub-field ───────────────
-
-    [Fact]
-    public void GetSchemas_Npc_Weight_Apply_UpdatesSubFields()
-    {
-        // The weight column holds INpcWeightGetter (a Loqui scalar). Apply should
-        // deserialise a JSON object and write each primitive sub-field back via
-        // the sub-field Apply delegates (the Loqui scalar Apply path).
-        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
-        var col = schemas["npc_"].RecordColumns.FirstOrDefault(c => c.Name == "Weight");
-        Assert.NotNull(col);
-        Assert.NotNull(col.Apply.Writer);
-
-        var npc = new Mutagen.Bethesda.Fallout4.Npc(
-            Mutagen.Bethesda.Plugins.FormKey.Factory("000001:Fallout4.esm"),
-            Mutagen.Bethesda.Fallout4.Fallout4Release.Fallout4);
-
-        var json = """{"Thin":0.5,"Fat":0.8,"Muscular":0.3}""";
-        // An object-shaped payload is written, and says so — the other side of the shape guard.
-        Assert.Equal(ApplyOutcome.Applied, col.Apply.Writer!(npc, System.Text.Json.JsonDocument.Parse(json).RootElement));
-
-        Assert.NotNull(npc.Weight);
-        Assert.Equal(0.5f, npc.Weight!.Thin, precision: 3);
-        Assert.Equal(0.8f, npc.Weight.Fat, precision: 3);
-        Assert.Equal(0.3f, npc.Weight.Muscular, precision: 3);
-    }
-
-    [Fact]
-    public void GetSchemas_Npc_Weight_Apply_NonObjectJson_DoesNothing()
-    {
-        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
-        var col = schemas["npc_"].RecordColumns.First(c => c.Name == "Weight");
-        var npc = new Mutagen.Bethesda.Fallout4.Npc(
-            Mutagen.Bethesda.Plugins.FormKey.Factory("000001:Fallout4.esm"),
-            Mutagen.Bethesda.Fallout4.Fallout4Release.Fallout4);
-        var originalWeight = npc.Weight;
-
-        // The struct half of the same rule: a non-object payload is reported as not written.
-        var applied = col.Apply.Writer!(npc, System.Text.Json.JsonDocument.Parse("[1,2,3]").RootElement);
-
-        Assert.Equal(ApplyOutcome.ValueRejected, applied);
-        Assert.Equal(originalWeight, npc.Weight);
-    }
-
-    [Fact]
-    public void GetSchemas_Npc_Weight_Apply_PreservesExistingSubFieldValues()
-    {
-        // When Weight is non-null, Apply must use the existing instance (rp.GetValue),
-        // not a fresh CreateInstance — so non-applied sub-fields keep their original values.
-        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
-        var col = schemas["npc_"].RecordColumns.First(c => c.Name == "Weight");
-        var npc = new Mutagen.Bethesda.Fallout4.Npc(
-            Mutagen.Bethesda.Plugins.FormKey.Factory("000001:Fallout4.esm"),
-            Mutagen.Bethesda.Fallout4.Fallout4Release.Fallout4)
-        {
-            Weight = new Mutagen.Bethesda.Fallout4.NpcWeight { Thin = 0.9f, Fat = 0.1f, Muscular = 0.2f }
-        };
-
-        col.Apply.Writer!(npc, System.Text.Json.JsonDocument.Parse("{\"Thin\":0.5}").RootElement);
-
-        Assert.NotNull(npc.Weight);
-        Assert.Equal(0.5f, npc.Weight!.Thin, precision: 3);
-        Assert.Equal(0.1f, npc.Weight.Fat, precision: 3);
-        Assert.Equal(0.2f, npc.Weight.Muscular, precision: 3);
-    }
 
     // ── ulong column: TryMapPrimitive BIGINT path ────────────────────────────────
 
@@ -657,42 +451,6 @@ public class SchemaReflectorTests
         Assert.Contains("9007199254740992", bits);   // LowPriorityPushable = 2^53
         Assert.Contains("18014398509481984", bits);  // CannotUsePlayableItems = 2^54
         Assert.Contains("1", bits);                   // Playable (low-bit sanity check)
-    }
-
-    [Fact]
-    public void GetSchemas_Race_FlagColumn_Apply_AcceptsHighBitDecimalString()
-    {
-        // Bitmask edits arrive from the frontend as decimal strings so values above 2^53
-        // survive JSON. Apply must parse the string token, not throw on it (GetInt64 would).
-        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
-        var col = schemas["race"].RecordColumns.Single(c => c.Name == "Flags");
-        Assert.NotNull(col.Apply.Writer);
-
-        var race = new Mutagen.Bethesda.Fallout4.Race(
-            Mutagen.Bethesda.Plugins.FormKey.Factory("000001:Fallout4.esm"),
-            Mutagen.Bethesda.Fallout4.Fallout4Release.Fallout4);
-
-        col.Apply.Writer!(race, System.Text.Json.JsonDocument.Parse("\"9007199254740993\"").RootElement);
-
-        Assert.Equal(9007199254740993UL, (ulong)race.Flags);
-    }
-
-    [Fact]
-    public void GetSchemas_Npc_FlagColumn_Apply_AcceptsNumberToken()
-    {
-        // Legacy numeric tokens (values below 2^53) must still apply.
-        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
-        var col = schemas["npc_"].RecordColumns.Single(c => c.Name == "Flags");
-        Assert.NotNull(col.Apply.Writer);
-
-        var npc = new Mutagen.Bethesda.Fallout4.Npc(
-            Mutagen.Bethesda.Plugins.FormKey.Factory("000001:Fallout4.esm"),
-            Mutagen.Bethesda.Fallout4.Fallout4Release.Fallout4);
-        var bit = long.Parse(col.EnumMembers[0].BitValue!, System.Globalization.CultureInfo.InvariantCulture);
-
-        col.Apply.Writer!(npc, System.Text.Json.JsonDocument.Parse(bit.ToString(System.Globalization.CultureInfo.InvariantCulture)).RootElement);
-
-        Assert.Equal((ulong)bit, (ulong)npc.Flags);
     }
 
     [Fact]
@@ -842,43 +600,6 @@ public class SchemaReflectorTests
         Assert.Equal("vector", col.SubFields?.FirstOrDefault(f => f.Name == "Second")?.Type);
     }
 
-    [Fact]
-    public void GetSchemas_Container_ObjectBounds_Apply_WritesFirstSecondXyz()
-    {
-        // The rival this defeats: a vector sub-field built with a null Apply makes ApplySubFields
-        // silently skip First/Second, so the whole ObjectBounds Apply still reports Applied
-        // while ObjectBounds never changed.
-        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
-        var col = schemas["cont"].RecordColumns.First(c => c.Name == "ObjectBounds");
-        var container = new Container(FormKey.Factory("000001:Test.esp"), Fallout4Release.Fallout4);
-
-        var json = """{"First":"1, 2, 3","Second":"4, 5, 6"}""";
-        var outcome = col.Apply.Writer!(container, JsonDocument.Parse(json).RootElement);
-
-        Assert.Equal(ApplyOutcome.Applied, outcome);
-        Assert.Equal((short)1, container.ObjectBounds.First.X);
-        Assert.Equal((short)2, container.ObjectBounds.First.Y);
-        Assert.Equal((short)3, container.ObjectBounds.First.Z);
-        Assert.Equal((short)4, container.ObjectBounds.Second.X);
-        Assert.Equal((short)5, container.ObjectBounds.Second.Y);
-        Assert.Equal((short)6, container.ObjectBounds.Second.Z);
-    }
-
-    [Fact]
-    public void GetSchemas_Container_ObjectBounds_Apply_NonObjectJson_DoesNothing()
-    {
-        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
-        var col = schemas["cont"].RecordColumns.First(c => c.Name == "ObjectBounds");
-        var container = new Container(FormKey.Factory("000001:Test.esp"), Fallout4Release.Fallout4);
-        var original = container.ObjectBounds;
-
-        var outcome = col.Apply.Writer!(container, JsonDocument.Parse("[1,2,3]").RootElement);
-
-        Assert.Equal(ApplyOutcome.ValueRejected, outcome);
-        Assert.Equal(original.First, container.ObjectBounds.First);
-        Assert.Equal(original.Second, container.ObjectBounds.Second);
-    }
-
     // ── Nested list inside a struct (Destructible.Resistances/Stages) ──────────
 
     [Fact]
@@ -902,22 +623,6 @@ public class SchemaReflectorTests
         Assert.Contains(stages.ElementType!.Fields!, f => f.Name == "HealthPercent");
     }
 
-    [Fact]
-    public void GetSchemas_Container_Destructible_Apply_WritesStagesArray()
-    {
-        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
-        var col = schemas["cont"].RecordColumns.First(c => c.Name == "Destructible");
-        var container = new Container(FormKey.Factory("000001:Test.esp"), Fallout4Release.Fallout4);
-
-        var json = """{"Stages":[{"HealthPercent":50}]}""";
-        var outcome = col.Apply.Writer!(container, JsonDocument.Parse(json).RootElement);
-
-        Assert.Equal(ApplyOutcome.Applied, outcome);
-        Assert.NotNull(container.Destructible);
-        Assert.Single(container.Destructible!.Stages);
-        Assert.Equal(50, container.Destructible.Stages[0].HealthPercent);
-    }
-
     // ── P3Float, both dispatch paths, on fixtures with no side-table mirror ────────────────────
 
     [Fact]
@@ -931,21 +636,6 @@ public class SchemaReflectorTests
         Assert.NotNull(col);
         Assert.Equal("vector", col!.ApiType);
         Assert.Null(col.SubFields);
-    }
-
-    [Fact]
-    public void GetSchemas_MaterialObject_ProjectionVector_Apply_WritesXyz()
-    {
-        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
-        var col = schemas["mato"].RecordColumns.First(c => c.Name == "ProjectionVector");
-        var mato = new MaterialObject(FormKey.Factory("000001:Test.esp"), Fallout4Release.Fallout4);
-
-        var outcome = col.Apply.Writer!(mato, JsonDocument.Parse("\"1.5, 2.5, 3.5\"").RootElement);
-
-        Assert.Equal(ApplyOutcome.Applied, outcome);
-        Assert.Equal(1.5f, mato.ProjectionVector.X, precision: 3);
-        Assert.Equal(2.5f, mato.ProjectionVector.Y, precision: 3);
-        Assert.Equal(3.5f, mato.ProjectionVector.Z, precision: 3);
     }
 
     [Fact]

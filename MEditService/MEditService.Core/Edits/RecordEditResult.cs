@@ -16,7 +16,8 @@ public enum RecordEditRefusal
 
     RecordNotFound,
 
-    /// <summary>Also a schema column this record's own runtime subclass lacks (a sibling-merge column).</summary>
+    /// <summary>The path resolves to no member of the schema, or to one the record's own class lacks
+    /// (a sibling-merge column, a union member of another leaf).</summary>
     FieldNotFound,
 
     /// <summary>Permanently unwritable (masters are compile-derived, ADR-0038), unlike the state-dependent Partial Form refusal.</summary>
@@ -55,25 +56,17 @@ public enum RecordEditRefusal
     /// a computed path: a container's path lives in the tree, not in a formula.</summary>
     SourceUnitNotFound,
 
-    /// <summary>Its own refusal because the alternative is the applier returning without writing while
-    /// the edit reports success. Every case here has the same fix: send a value the field accepts.</summary>
-    FieldValueShapeMismatch,
-
     /// <summary>A light plugin's slot addresses local IDs only up to 0xFFF; native space is not exhausted,
     /// so the way out differs from <see cref="FormKeySpaceExhausted"/>.</summary>
     LightPluginFormIdOutOfRange,
-
-    /// <summary>The way out is naming the element's type discriminator, not a differently shaped value,
-    /// so a caller branching on the enum (ADR-0026) can tell it from <see cref="FieldValueShapeMismatch"/>.</summary>
-    ListElementTypeUnresolved,
 
     /// <summary>A Partial Form record's own fields are never seen by the game; the way out is clearing the
     /// flag. EditorID is exempt: xEdit's <c>CanAssignInternal</c> allows EDID on a Partial Form (ADR-0034).</summary>
     PartialFormFieldReadOnly,
 
-    /// <summary>Header flag bit 14 reached through a reflected column aliasing <c>MajorRecordFlagsRaw</c>;
-    /// <c>is_partial_form</c> is the one sanctioned door onto that bit, so nothing is written.</summary>
-    PartialFormFlagIndirectWrite,
+    /// <summary>A reflected column aliasing the flags a synthetic member is one bit of would flip that bit
+    /// as a side effect; the synthetic member is the one door onto it, so nothing is written.</summary>
+    SyntheticMemberIndirectWrite,
 
     /// <summary>The missing ancestor is exterior with no spatial placement to mint from (a TopCell, or no
     /// parent worldspace); an interior Cell auto-creates instead, since its placement carries no meaning.</summary>
@@ -90,10 +83,6 @@ public enum RecordEditRefusal
     /// Typed rather than a raw exception (ADR-0026) so the message names the reviewable working-tree file.</summary>
     ContainerCopyIndexUpdateFailedAfterWrite,
 
-    /// <summary>The payload names a sub-field with no write delegate; the shape was never the problem, so
-    /// <see cref="FieldValueShapeMismatch"/>'s message would be false.</summary>
-    NestedFieldReadOnly,
-
     /// <summary>Entries in a keyed array are identified by key, not position, so a second one is a
     /// collision; the message names the key.</summary>
     DuplicateKeyInKeyedArray,
@@ -102,13 +91,37 @@ public enum RecordEditRefusal
     /// its FormKey is synthetic. Refused before <c>SourceUnit.IsDirectoryPerRecord</c>, whose filename-only
     /// test would delete the whole source root.</summary>
     HeaderDeleteOrRenumberNotSupported,
+
+    /// <summary>The envelope itself is malformed: an unknown operation, a hop naming nothing, a value
+    /// missing where the operation needs one, or an operation aimed at a shape it cannot act on.</summary>
+    InvalidEnvelope,
+
+    /// <summary>A union element must lead with its discriminator, naming a leaf of the union; the codec
+    /// takes the first key as the type and cannot build an object from anything else.</summary>
+    DiscriminatorInvalid,
+
+    /// <summary>A byte slice keeps the length the document already holds: nothing here can know which
+    /// bytes a resize would move.</summary>
+    HexLengthMismatch,
+
+    /// <summary>Mutagen's reader refused the patched document; the message is its own, verbatim.</summary>
+    CodecRejected,
+
+    /// <summary>The codec read the patched document but wrote it back without the value: the schema
+    /// named a member the codec has no home for. Never reported as success.</summary>
+    CodecDroppedValue,
+
+    /// <summary>The record's own document could not be produced at index time; the diagnosis is the
+    /// reason, and repairing it is not a field edit.</summary>
+    RecordParseFailed,
 }
 
 /// <summary><see cref="Message"/> names the way out; a refusal the user cannot act on is dead UI.
-/// <c>EslContradiction</c> marks a FormKeySpaceExhausted caused only by the removable ESL flag, so
-/// the frontend can prompt.</summary>
+/// Path is the edited path. EslContradiction marks a FormKeySpaceExhausted the removable ESL flag
+/// alone causes, so the frontend can prompt.</summary>
 public sealed record RecordEditResult(
-    bool Applied, RecordEditRefusal Refusal, string Message, string? NewFormKey = null, bool EslContradiction = false)
+    bool Applied, RecordEditRefusal Refusal, string Message, string? NewFormKey = null, bool EslContradiction = false,
+    string? Path = null)
 {
     public static RecordEditResult Success() => new(true, RecordEditRefusal.None, "");
 
@@ -119,4 +132,7 @@ public sealed record RecordEditResult(
 
     public static RecordEditResult Refused(RecordEditRefusal refusal, string message, bool eslContradiction) =>
         new(false, refusal, message, EslContradiction: eslContradiction);
+
+    public static RecordEditResult RefusedAt(RecordEditRefusal refusal, string path, string message) =>
+        new(false, refusal, message, Path: path);
 }

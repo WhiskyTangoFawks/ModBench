@@ -181,6 +181,7 @@ public static class RecordEndpoints
         string formKey, RecordFieldEditRequest request, RecordEditService edits, IndexWriteGate gate, ILogger logger)
     {
         var decoded = Uri.UnescapeDataString(formKey);
+        var spelled = RecordEditEnvelope.Spell(request.Path ?? []);
         return WriteEndpointMapping.Execute(
             gate,
             logReceived: () =>
@@ -188,25 +189,25 @@ public static class RecordEndpoints
                 if (logger.IsEnabled(LogLevel.Information))
                 {
                     logger.LogInformation(
-                        "Received EditRecordField for {FormKey}.{FieldPath} in {Plugin} ({Origin})",
-                        decoded, request.FieldPath, request.Plugin, request.Origin);
+                        "Received EditRecordField {Op} {Path} for {FormKey} in {Plugin} ({Origin})",
+                        request.Op, spelled, decoded, request.Plugin, request.Origin);
                 }
             },
             validate: () =>
             {
                 if (string.IsNullOrWhiteSpace(request.Plugin) || string.IsNullOrWhiteSpace(request.Origin))
                     return Results.Problem("Plugin name and origin are required.", statusCode: 400);
-                if (string.IsNullOrWhiteSpace(request.FieldPath))
-                    return Results.Problem("A field path is required.", statusCode: 400);
+                if (string.IsNullOrWhiteSpace(request.Op) || request.Path is not { Count: > 0 })
+                    return Results.Problem("An operation and a path are required.", statusCode: 400);
                 return null;
             },
-            execute: () => edits.EditField(
-                new PluginKey(request.Plugin, request.Origin), decoded, request.FieldPath, request.Value),
-            onApplied: result => Results.Ok(new RecordFieldEditResponse(true, decoded, request.FieldPath)),
+            execute: () => edits.Edit(
+                new PluginKey(request.Plugin, request.Origin), decoded,
+                new RecordEditEnvelope(request.Op, request.Path ?? [], request.Value)),
+            onApplied: result => Results.Ok(new RecordFieldEditResponse(true, decoded, spelled)),
             onWriteFailure: ex =>
             {
-                logger.LogError(ex, "Could not write the source file while editing {FormKey}.{FieldPath}",
-                    decoded, request.FieldPath);
+                logger.LogError(ex, "Could not write the source file while editing {FormKey} at {Path}", decoded, spelled);
                 return WriteEndpointMapping.WriteFailure($"Could not write the source file for {decoded}: {ex.Message}");
             },
             onMalformedFormKey: null,
@@ -214,7 +215,7 @@ public static class RecordEndpoints
             {
                 // 503, matching every sibling's own mapping for it: the load order went away
                 // underneath the request, which is a "not right now", never a bad request.
-                logger.LogError(ex, "No usable loadOrder while editing {FormKey}.{FieldPath}", decoded, request.FieldPath);
+                logger.LogError(ex, "No usable loadOrder while editing {FormKey} at {Path}", decoded, spelled);
                 return WriteEndpointMapping.NoLoadOrder(ex);
             });
     }

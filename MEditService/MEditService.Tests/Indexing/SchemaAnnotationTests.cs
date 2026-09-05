@@ -34,6 +34,21 @@ public sealed class SchemaAnnotationTests
     }
 
     [Theory]
+    [InlineData("INoSuchGetter", "IsPartialForm", "MajorRecordFlagsRaw", "0x4000", "INoSuchGetter")]
+    [InlineData("ICellGetter", "IsPartialForm", "NoSuchMember", "0x4000", "backs onto NoSuchMember")]
+    [InlineData("IFallout4ModHeaderGetter", "IsSmallMaster", "Flags", "NoSuchFlag", "names flag NoSuchFlag")]
+    [InlineData("ICellGetter", "IsPartialForm", "MajorRecordFlagsRaw", "Small", "neither an enum nor an integer bit Small")]
+    public void SyntheticFlagMember_ReflectionCannotBackOrTheEnumDoesNotDefine_FailsSchemaGenerationNamingTheEntry(
+        string type, string member, string backing, string flag, string named)
+    {
+        var reflector = AmendedSchemaReflector.Fallout4With(a => a with
+        {
+            SyntheticFlagMembers = new(a.SyntheticFlagMembers) { [(type, member)] = (backing, flag) },
+        });
+        AssertFailsNaming(reflector, named);
+    }
+
+    [Theory]
     [InlineData("IKeywordGetter", "NoSuchMember")]
     [InlineData("INoSuchGetter", "Color")]
     public void AlphaBearingColorField_ReflectionDidNotFind_FailsSchemaGenerationNamingTheEntry(string type, string member)

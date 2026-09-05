@@ -169,6 +169,15 @@ internal static class SourceChildOrder
         return Encoding.UTF8.GetBytes(document.ToJsonString(CarrierOptions));
     }
 
+    /// <summary>The same merge over text a caller already holds: a document edit reads the file, so
+    /// the lists it carried travel back in through here rather than a second read of the disk.</summary>
+    internal static string WithOrder(string documentText, JsonNode order)
+    {
+        var document = JsonNode.Parse(documentText) as JsonObject ?? new JsonObject();
+        document[OrderMember] = order.DeepClone();
+        return document.ToJsonString(CarrierOptions);
+    }
+
     /// <summary>The record's own fields alone, which is what the index holds as a body — for read-side
     /// compares that would otherwise read every container with children as changed.</summary>
     internal static string WithoutOrder(string documentText)

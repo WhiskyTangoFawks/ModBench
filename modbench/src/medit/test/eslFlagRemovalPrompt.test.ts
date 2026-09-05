@@ -23,7 +23,7 @@ describe('offerEslFlagRemoval', () => {
     expect(showError).not.toHaveBeenCalled();
   });
 
-  it('accepting removes the header is_light flag and returns true', async () => {
+  it('accepting clears the header IsSmallMaster member through the one envelope and returns true', async () => {
     const editRecordField = vi.fn().mockResolvedValue({ applied: true });
     const showWarning = vi.fn().mockResolvedValue('Remove ESL Flag and Create the Record');
     const showError = vi.fn();
@@ -34,7 +34,8 @@ describe('offerEslFlagRemoval', () => {
 
     expect(accepted).toBe(true);
     expect(editRecordField).toHaveBeenCalledWith(
-      '000000:MyPatch.esp', 'MyPatch.esp', 'ModA', 'is_light', false,
+      '000000:MyPatch.esp', 'MyPatch.esp', 'ModA',
+      { op: 'set', path: [{ kind: 'member', name: 'IsSmallMaster' }], value: false },
     );
     expect(showError).not.toHaveBeenCalled();
   });

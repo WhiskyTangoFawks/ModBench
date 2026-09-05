@@ -1,8 +1,7 @@
 using System.Text.Json;
 using MEditService.Core.Edits;
 using MEditService.Core.Schema;
-using MEditService.Core.Serialization;
-using Microsoft.Extensions.Logging.Abstractions;
+using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -10,8 +9,8 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Tests.Edits;
 
-/// <summary><see cref="ArrayOpWriter"/> is called on an in-memory record, no plugin on disk: whether
-/// the default element names a constructible leaf is settled before anything is written.</summary>
+/// <summary>The document-edit seam on an in-memory record's document, no plugin on disk: whether
+/// the default element names a leaf the codec builds is settled before anything is written.</summary>
 public class UnionArrayAddInventoryTests
 {
     private static readonly ModKey Key = ModKey.FromFileName("UnionArrayAdd710.esp");
@@ -61,19 +60,16 @@ public class UnionArrayAddInventoryTests
 
     [Theory]
     [MemberData(nameof(UnionArrays))]
-    public async Task ArrayAdd_BuildsAnElementTheWritePathAccepts(string table, string column)
+    public void ArrayAdd_BuildsAnElementTheCodecAccepts(string table, string column)
     {
         var mod = new Fallout4Mod(Key, Fallout4Release.Fallout4);
         var schema = SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4)[table];
         var col = schema.RecordColumns.Single(c => c.Name == column);
-        var record = NewRecord(mod, table);
+        var text = DocumentEdits.Serialize(NewRecord(mod, table));
 
-        var outcome = ArrayOpWriter.Apply(record, col, col.ToFieldMetadata(), "array_add",
-            JsonDocument.Parse("""{"op": "array_add", "path": []}""").RootElement, current: null);
+        var refusal = DocumentEdits.Apply(text, schema, Envelopes.AddAt(Envelopes.Member(column)), out var body);
 
-        Assert.Equal(FieldApplyOutcome.Applied, outcome);
-        var body = await new RecordTextCodec(NullLogger<RecordTextCodec>.Instance)
-            .SerializeToBytesAsync(record, GameRelease.Fallout4);
+        Assert.Null(refusal);
         using var document = JsonDocument.Parse(body);
         var written = document.RootElement.GetProperty(col.PropertyName);
         Assert.Equal(1, written.GetArrayLength());

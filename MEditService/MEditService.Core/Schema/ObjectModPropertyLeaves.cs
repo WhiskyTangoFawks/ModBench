@@ -1,5 +1,4 @@
 using System.Reflection;
-using System.Text.Json;
 using MEditService.Core.Queries;
 using Microsoft.Extensions.Logging;
 
@@ -80,94 +79,45 @@ internal static class ObjectModPropertyLeaves
 
         var result = new List<SubFieldSpec>();
         foreach (var group in members)
-        {
-            var list = group.ToList();
-            var distinctTypes = list
-                .Select(m => Nullable.GetUnderlyingType(m.Prop.PropertyType) ?? m.Prop.PropertyType)
-                .Distinct()
-                .ToList();
-
-            result.Add(distinctTypes.Count == 1
-                ? BuildTypedLeafUnionField(list, game, logger)
-                : BuildVariantLeafUnionField(list, game, logger));
-        }
+            result.Add(BuildLeafUnionField([.. group], leaves.Count, game, logger));
 
         result.Add(BuildObjectModDiscriminatorField(baseGetterInterface, leaves));
         return result;
     }
 
-    // Read-only deliberately: it decides which concrete type gets constructed, so it cannot be applied
-    // to an already-constructed object; ResolveObjectModPropertyConcreteType reads it off the JSON
-    // before any object exists.
+    // The discriminator decides which concrete type the codec builds; setting it switches the leaf.
     private static SubFieldSpec BuildObjectModDiscriminatorField(
         Type baseGetterInterface, List<(Type LeafType, string LeafName)> leaves) =>
         new(LoquiUnions.UnionTypeDiscriminator, "enum", LeafSpec.NoFormKeyTypes,
             [.. leaves.Select(l => new EnumMember(
                 l.LeafName,
                 Label: LeafLabel.For(ReflectedTypes.LeafTypeName(baseGetterInterface), LeafLabel.ClassWord(l.LeafName))))],
-            Apply: LeafWrite.ReadOnly<object>(SchemaRefusals.DiscriminatorReason), AllowsNull: true,
-            DisplayLabel: LoquiUnions.UnionTypeDiscriminatorLabel, IsDiscriminator: true);
+            AllowsNull: true, DisplayLabel: LoquiUnions.UnionTypeDiscriminatorLabel, IsDiscriminator: true);
 
-    private static SubFieldSpec BuildTypedLeafUnionField(
-        List<(Type LeafType, string LeafName, PropertyInfo Prop)> members,
+    // One member across the leaves declaring it, shaped as the first's. The variant map records each
+    // declaring leaf's shape whenever the leaves disagree or one lacks the member, so a leaf switch
+    // knows what the incoming leaf keeps.
+    private static SubFieldSpec BuildLeafUnionField(
+        List<(Type LeafType, string LeafName, PropertyInfo Prop)> members, int leafCount,
         GameReflection game, ILogger logger)
     {
-        var core = Nullable.GetUnderlyingType(members[0].Prop.PropertyType) ?? members[0].Prop.PropertyType;
-        var rep = LeafClassification.ClassifyLeaf(members[0].Prop, core, game)!;
+        var distinctTypes = members
+            .Select(m => Nullable.GetUnderlyingType(m.Prop.PropertyType) ?? m.Prop.PropertyType)
+            .Distinct()
+            .Count();
+        if (distinctTypes == 1 && members.Count == leafCount)
+        {
+            var core = Nullable.GetUnderlyingType(members[0].Prop.PropertyType) ?? members[0].Prop.PropertyType;
+            var rep = LeafClassification.ClassifyLeaf(members[0].Prop, core, game)!;
+            return new(members[0].Prop.Name, rep.ApiType, rep.ValidFormKeyTypes, rep.EnumMembers, AllowsNull: true);
+        }
 
-        // RouteWriter answers PropertyNotFound for a leaf that lacks this member, which ApplySubFields
-        // treats as a silent no-op. Every member here shares one CLR property name, so one applier
-        // resolved off the constructed leaf covers every leaf.
-        var apply = LeafWriters.RouteWriter<object>(rep, members[0].Prop, core, nullable: true, game, logger);
-
-        return new(members[0].Prop.Name, rep.ApiType, rep.ValidFormKeyTypes, rep.EnumMembers,
-            apply,
-            AllowsNull: true);
-    }
-
-    // These members disagree on CLR type across leaves, so no one converter fits; each leaf's own
-    // shape is its variant, and the widened applier resolves the target property's declared type at
-    // write time and converts into that.
-    private static SubFieldSpec BuildVariantLeafUnionField(
-        List<(Type LeafType, string LeafName, PropertyInfo Prop)> members, GameReflection game, ILogger logger)
-    {
-        var pName = members[0].Prop.Name;
         var variants = new Dictionary<string, SubFieldSpec>(StringComparer.Ordinal);
         foreach (var (_, valueTypeName, prop) in members)
         {
             if (SubFieldReflection.GetSubFieldInfo(prop, game, SubFieldReflection.RootPath, 1, logger) is { } spec)
                 variants[valueTypeName] = spec;
         }
-        var rep = variants.Values.First();
-        return rep with
-        {
-            Apply = LeafWrite.Writable(WidenedLeaf.MakeWidenedApplier(pName, logger)),
-            AllowsNull = true,
-            Variants = variants,
-        };
-    }
-
-    // Maps the document's discriminator back through the same table the read side uses, then to that
-    // interface's setter class closed over elemConcreteType's T. Null for any reason is the caller's
-    // signal to refuse rather than guess.
-    internal static Type? ResolveObjectModPropertyConcreteType(Type elemConcreteType, JsonElement elem)
-    {
-        if (!elem.TryGetProperty(LoquiUnions.UnionTypeDiscriminator, out var vt) || vt.ValueKind != JsonValueKind.String)
-            return null;
-
-        var typeArgs = elemConcreteType.GetGenericArguments();
-        foreach (var interfaceName in LeafInterfaces)
-        {
-            var getterOpen = elemConcreteType.Assembly.GetType($"{elemConcreteType.Namespace}.{interfaceName}");
-            if (getterOpen == null) continue;
-
-            // GetSetterType answers with the open generic setter class even off a closed getter interface,
-            // so closing it over T is this method's job.
-            var setterType = ReflectedTypes.GetSetterType(getterOpen.MakeGenericType(typeArgs));
-            if (setterType is not { IsAbstract: false }) continue;
-            if (ReflectedTypes.DocumentTypeName(setterType, typeArgs) != vt.GetString()) continue;
-            return setterType.IsGenericTypeDefinition ? setterType.MakeGenericType(typeArgs) : setterType;
-        }
-        return null;
+        return variants.Values.First() with { AllowsNull = true, Variants = variants };
     }
 }

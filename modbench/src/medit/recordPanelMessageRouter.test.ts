@@ -177,7 +177,8 @@ describe('cross-panel copy/paste — two independently-opened panels share this 
     }, panelBDeps);
 
     expect(fakeRepository.editRecordField).toHaveBeenCalledWith(
-      '000800:Mod.esp', 'Mod.esp', 'SomeMod', 'linkedRef', 'CopiedNPC [000001:Fallout4.esm]');
+      '000800:Mod.esp', 'Mod.esp', 'SomeMod',
+      { op: 'set', path: [{ kind: 'member', name: 'linkedRef' }], value: 'CopiedNPC [000001:Fallout4.esm]' });
     expect(onRecordEdited).toHaveBeenCalledWith('000800:Mod.esp', 'Mod.esp', 'SomeMod');
     // Copying out of panel A triggers no write of its own — only panel B's later EDIT_FIELD does.
     expect(fakeRepository.editRecordField).toHaveBeenCalledTimes(1);
@@ -206,8 +207,9 @@ describe('routeRecordPanelMessage — EDIT_FIELD', () => {
   it('sends the edit through the single write path with its compound plugin identity', async () => {
     await routeRecordPanelMessage(editMessage, makeDeps());
 
-    expect(fakeRepository.editRecordField)
-      .toHaveBeenCalledWith('000800:Mod.esp', 'Mod.esp', 'SomeMod', 'height_max', 0.75);
+    expect(fakeRepository.editRecordField).toHaveBeenCalledWith(
+      '000800:Mod.esp', 'Mod.esp', 'SomeMod',
+      { op: 'set', path: [{ kind: 'member', name: 'height_max' }], value: 0.75 });
   });
 
   it('tells the panel to re-read once the edit has landed', async () => {

@@ -137,10 +137,17 @@ public sealed class RecordTextCodec(ILogger<RecordTextCodec> logger)
     /// <summary>The instance the codec builds for an empty document of a Loqui class: every member
     /// at its declared default. A major record's empty document is its FormKey alone, the identity
     /// the codec requires first.</summary>
-    public static async Task<object> DeserializeEmptyAsync(Type loquiType, GameRelease gameRelease)
+    public static Task<object> DeserializeEmptyAsync(Type loquiType, GameRelease gameRelease) =>
+        DeserializeTextAsync(loquiType, typeof(IMajorRecordGetter).IsAssignableFrom(loquiType) ? EmptyMajorRecord : "{}", gameRelease);
+
+    /// <summary>The empty document of a major record: the identity the codec requires first.</summary>
+    public const string EmptyMajorRecord = "{\"FormKey\":\"Null\"}";
+
+    /// <summary>The instance the codec builds for <paramref name="json"/> read as a Loqui class,
+    /// which is how a fact about the class is asked of the codec rather than of reflection.</summary>
+    public static async Task<object> DeserializeTextAsync(Type loquiType, string json, GameRelease gameRelease)
     {
-        var empty = typeof(IMajorRecordGetter).IsAssignableFrom(loquiType) ? "{\"FormKey\":\"Null\"}"u8 : "{}"u8;
-        using var stream = new MemoryStream(empty.ToArray(), writable: false);
+        using var stream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(json), writable: false);
         return await DeserializeObjectAsync(stream, string.Empty, gameRelease,
             readerType => ResolveConcreteDeserializeMethod(loquiType, readerType), CancellationToken.None).ConfigureAwait(false);
     }

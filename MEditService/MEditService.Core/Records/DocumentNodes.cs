@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using MEditService.Core.Queries;
 
 namespace MEditService.Core.Records;
@@ -34,6 +35,17 @@ internal static class DocumentNodes
         return obj.TryGetProperty(Schema.LoquiUnions.UnionTypeDiscriminator, out var leaf)
             && leaf.ValueKind == JsonValueKind.String
             && variants.TryGetValue(leaf.GetString()!, out var variant)
+            ? variant
+            : member;
+    }
+
+    /// <summary>The same question over the write path's mutable tree.</summary>
+    internal static FieldMetadata VariantFor(FieldMetadata member, JsonNode? owner)
+    {
+        if (member.Variants is not { } variants || owner is not JsonObject obj) return member;
+        return obj[Schema.LoquiUnions.UnionTypeDiscriminator] is JsonValue leaf
+            && leaf.TryGetValue<string>(out var name)
+            && variants.TryGetValue(name, out var variant)
             ? variant
             : member;
     }

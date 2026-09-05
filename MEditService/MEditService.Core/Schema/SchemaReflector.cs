@@ -4,7 +4,6 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
-using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Core.Schema;
 
@@ -171,23 +170,15 @@ public sealed class SchemaReflector
         {
             var union = LoquiUnions.RecordUnion(siblingGetterTypes);
             var classNames = union.Leaves.ToDictionary(l => l.GetterType, l => l.ClassName);
-            var writersByColumn = new Dictionary<string, List<SiblingColumns.WriterByClass>>();
-            foreach (var sibling in siblingGetterTypes)
-            {
-                if (sibling == getterType) continue;
-                var siblingColumns = ColumnReflection.ReflectColumns(sibling, game, logger);
-                foreach (var siblingSpec in siblingColumns)
-                {
-                    SiblingColumns.MergeSiblingColumn(
-                        columns, writersByColumn, getterType, classNames[getterType], sibling, classNames[sibling], siblingSpec);
-                }
-            }
+            columns = SiblingColumns.Fold(
+                [.. siblingGetterTypes
+                    .OrderBy(s => s != getterType)
+                    .Select(s => (classNames[s], s == getterType ? columns : ColumnReflection.ReflectColumns(s, game, logger)))]);
 
             var discriminator = LoquiUnions.BuildUnionDiscriminatorField(union);
             columns.Insert(0, new ColumnSpec(
                 discriminator.Name, discriminator.Name, "VARCHAR", discriminator.ApiType,
                 discriminator.ValidFormKeyTypes, discriminator.EnumMembers,
-                LeafWrite.ReadOnly<IMajorRecord>(SchemaRefusals.DiscriminatorReason),
                 IsDiscriminator: true, DisplayLabel: discriminator.DisplayLabel));
         }
 
@@ -199,54 +190,6 @@ public sealed class SchemaReflector
             RecordColumns = columns,
         };
     }
-
-    /// <summary>Facts only, for the read/write symmetry audit — deliberately silent on whether the
-    /// leaf ought to be writable, which the audit re-derives from Mutagen itself.</summary>
-    internal sealed record LeafWriteFact(string Path, Type? StructGetterType, string? ReadOnlyReason);
-
-    /// <summary>Re-invokes the real production builders rather than re-deriving anything, so
-    /// reverting a write path changes what this reports and the audit stays non-vacuous.</summary>
-    internal IReadOnlyList<LeafWriteFact> EnumerateWriteCapability(GameRelease release)
-    {
-        var category = release.ToCategory();
-        var assembly = ResolveAssembly(release, category)
-            ?? throw new UnsupportedGameReleaseException(release, AssemblyNameFor(category));
-        var cache = GetCache(category, assembly);
-
-        var facts = new List<LeafWriteFact>();
-        foreach (var (table, schema) in cache.Schemas)
-        {
-            foreach (var column in schema.RecordColumns)
-            {
-                facts.Add(new($"{table}.{column.Name}", null, column.Apply.ReadOnlyReason));
-
-                // Only this schema's own properties: a sibling-merged column belongs to another
-                // getter type and is walked on that type's own table instead.
-                var prop = ReflectedTypes.GetAllInterfaceProperties(schema.RecordType)
-                    .FirstOrDefault(p => p.Name == column.PropertyName);
-                if (prop == null) continue;
-
-                var core = Nullable.GetUnderlyingType(prop.PropertyType) ?? prop.PropertyType;
-                if (ReflectedTypes.IsListType(core, out var element)) core = element;
-                if (!ReflectedTypes.IsLoquiInterface(core) || ReflectedTypes.IsFormLink(core)) continue;
-
-                foreach (var member in ReflectedTypes.GetAllInterfaceProperties(core)
-                             .Where(p => !cache.Game.Annotations.IsExcludedMember(p)))
-                {
-                    if (SubFieldReflection.GetSubFieldInfo(member, cache.Game, [core], 1, _logger) is not { } spec) continue;
-
-                    // The LEAF's own shape, not its enclosing struct's: an unconvertible-element list
-                    // or an excluded VMAD struct inside a perfectly writable struct is not itself
-                    // writable-shaped, and reporting the parent here would accuse it of lying.
-                    var leaf = Nullable.GetUnderlyingType(member.PropertyType) ?? member.PropertyType;
-                    var leafStruct = ReflectedTypes.IsLoquiInterface(leaf) && !ReflectedTypes.IsFormLink(leaf) ? leaf : null;
-                    facts.Add(new($"{table}.{column.Name}.{spec.Name}", leafStruct, spec.Apply.ReadOnlyReason));
-                }
-            }
-        }
-        return facts;
-    }
-
 }
 
 /// <summary>A game release whose Mutagen record-type assembly is not referenced by this build. Its

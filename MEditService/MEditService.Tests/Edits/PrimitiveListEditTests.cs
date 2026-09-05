@@ -4,11 +4,13 @@ using MEditService.Core.Plugins;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
 using MEditService.Core.Source;
+using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 using Noggog;
+using static MEditService.Tests.TestSupport.Envelopes;
 
 namespace MEditService.Tests.Edits;
 
@@ -21,7 +23,7 @@ public sealed class PrimitiveListEditTests : IDisposable
     private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
 
     private RecordEditResult EditRace(string field, string value) =>
-        _fixture.Service().EditField(_fixture.Plugin, _fixture.Race.ToString(), field, Json(value));
+        _fixture.Service().Set(_fixture.Plugin, _fixture.Race.ToString(), field, Json(value));
 
     [Fact]
     public void NestedAnimationPaths_Write_AppliesAndLeavesEveryOtherByteIdentical()
@@ -96,7 +98,7 @@ public sealed class PrimitiveListEditTests : IDisposable
     [Fact]
     public void TopLevelIntListColumn_Write_Applies()
     {
-        var result = _fixture.Service().EditField(
+        var result = _fixture.Service().Set(
             _fixture.Plugin, _fixture.MiscItem.ToString(), "ComponentDisplayIndices", Json("[3, 7]"));
 
         Assert.True(result.Applied, result.Message);
@@ -109,23 +111,26 @@ public sealed class PrimitiveListEditTests : IDisposable
     {
         var before = _fixture.MiscItemBody();
 
-        var result = _fixture.Service().EditField(
+        var result = _fixture.Service().Set(
             _fixture.Plugin, _fixture.MiscItem.ToString(), "ComponentDisplayIndices", Json("[3, 4096]"));
 
         Assert.False(result.Applied);
-        Assert.Equal(RecordEditRefusal.FieldValueShapeMismatch, result.Refusal);
+        Assert.Equal(RecordEditRefusal.CodecRejected, result.Refusal);
         Assert.Contains("ComponentDisplayIndices", result.Message, StringComparison.Ordinal);
         Assert.Equal(before, _fixture.MiscItemBody());
     }
 
+    // The refusal names the path that was edited and quotes the codec: no translation table sits
+    // over Mutagen's own message.
     [Fact]
-    public void TopLevelIntListColumn_OutOfRangeElement_MessageNamesTheElementNotTheShape()
+    public void TopLevelIntListColumn_OutOfRangeElement_NamesThePathAndQuotesTheCodec()
     {
-        var result = _fixture.Service().EditField(
+        var result = _fixture.Service().Set(
             _fixture.Plugin, _fixture.MiscItem.ToString(), "ComponentDisplayIndices", Json("[3, 4096]"));
 
-        Assert.Contains("element that was not accepted", result.Message, StringComparison.Ordinal);
-        Assert.DoesNotContain("takes the whole array", result.Message, StringComparison.Ordinal);
+        Assert.Equal("ComponentDisplayIndices", result.Path);
+        Assert.Contains("the codec rejected", result.Message, StringComparison.Ordinal);
+        Assert.Contains("overflow", result.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -133,18 +138,17 @@ public sealed class PrimitiveListEditTests : IDisposable
     {
         var before = _fixture.MiscItemBody();
 
-        var result = _fixture.Service().EditField(
+        var result = _fixture.Service().Set(
             _fixture.Plugin, _fixture.MiscItem.ToString(), "ComponentDisplayIndices", Json("""[3, "nope"]"""));
 
         Assert.False(result.Applied);
-        Assert.Contains("element that was not accepted", result.Message, StringComparison.Ordinal);
         Assert.Equal(before, _fixture.MiscItemBody());
     }
 
     [Fact]
     public void TopLevelLongListColumn_Write_AppliesAndReadsBack()
     {
-        var result = _fixture.Service().EditField(
+        var result = _fixture.Service().Set(
             _fixture.Plugin, _fixture.SceneCollection.ToString(), "XNAMs",
             Json("[8589934591, -4294967296]"));
 
@@ -158,12 +162,12 @@ public sealed class PrimitiveListEditTests : IDisposable
     {
         var before = _fixture.SceneCollectionBody();
 
-        var result = _fixture.Service().EditField(
+        var result = _fixture.Service().Set(
             _fixture.Plugin, _fixture.SceneCollection.ToString(), "XNAMs",
             Json("[7, 9223372036854775808]"));
 
         Assert.False(result.Applied);
-        Assert.Equal(RecordEditRefusal.FieldValueShapeMismatch, result.Refusal);
+        Assert.Equal(RecordEditRefusal.CodecRejected, result.Refusal);
         Assert.Contains("XNAMs", result.Message, StringComparison.Ordinal);
         Assert.Equal(before, _fixture.SceneCollectionBody());
     }
@@ -171,7 +175,7 @@ public sealed class PrimitiveListEditTests : IDisposable
     [Fact]
     public void TopLevelByteSliceListColumn_Write_Applies()
     {
-        var result = _fixture.Service().EditField(
+        var result = _fixture.Service().Set(
             _fixture.Plugin, _fixture.MaterialObject.ToString(), "DNAMs", Json("""["0xAABB", "[]"]"""));
 
         Assert.True(result.Applied, result.Message);
@@ -185,7 +189,7 @@ public sealed class PrimitiveListEditTests : IDisposable
     {
         var before = _fixture.MaterialObjectBody();
 
-        var result = _fixture.Service().EditField(
+        var result = _fixture.Service().Set(
             _fixture.Plugin, _fixture.MaterialObject.ToString(), "DNAMs", Json("""["0xAAZZ"]"""));
 
         Assert.False(result.Applied);
@@ -195,9 +199,7 @@ public sealed class PrimitiveListEditTests : IDisposable
     [Fact]
     public void ArrayAdd_TopLevelByteSliceListColumn_AppendsAnEmptySlice()
     {
-        var result = _fixture.Service().EditField(
-            _fixture.Plugin, _fixture.MaterialObject.ToString(), "DNAMs",
-            Json("""{"op": "array_add", "path": []}"""));
+        var result = _fixture.Service().Edit(_fixture.Plugin, _fixture.MaterialObject.ToString(), AddAt(Member("DNAMs")));
 
         Assert.True(result.Applied, result.Message);
         Assert.Contains("\"0x0102\",\n    \"[]\"", _fixture.MaterialObjectBody(), StringComparison.Ordinal);
@@ -205,13 +207,11 @@ public sealed class PrimitiveListEditTests : IDisposable
 
     // ── AC 4: the ordinary array-op envelope, on a nested primitive list ──────────────────────
 
-    private const string NestedListPath =
-        """{"kind": "index", "index": 0}, {"kind": "member", "name": "AnimationPaths"}""";
-
     [Fact]
     public void ArrayAdd_NestedPrimitiveList_AppendsADefaultElement()
     {
-        var result = EditRace("Subgraphs", $$"""{"op": "array_add", "path": [{{NestedListPath}}]}""");
+        var result = _fixture.Service().Edit(
+            _fixture.Plugin, _fixture.Race.ToString(), AddAt(Member("Subgraphs"), At(0), Member("AnimationPaths")));
 
         Assert.True(result.Applied, result.Message);
         Assert.Contains("\"Actors\\\\Zero\",\n        \"\"", _fixture.RaceBody(), StringComparison.Ordinal);
@@ -220,8 +220,7 @@ public sealed class PrimitiveListEditTests : IDisposable
     [Fact]
     public void ArrayRemove_NestedPrimitiveList_RemovesTheNamedElementAndKeepsTheOthers()
     {
-        var result = _fixture.Service().EditField(_fixture.Plugin, _fixture.Race.ToString(), "Subgraphs",
-            Json($$"""{"op": "array_remove", "path": [{"kind": "index", "index": 1}, {"kind": "member", "name": "AnimationPaths"}, {"kind": "index", "index": 0}]}"""));
+        var result = _fixture.Service().Edit(_fixture.Plugin, _fixture.Race.ToString(), RemoveAt(Member("Subgraphs"), At(1), Member("AnimationPaths"), At(0)));
 
         Assert.True(result.Applied, result.Message);
         var body = _fixture.RaceBody();
@@ -233,8 +232,7 @@ public sealed class PrimitiveListEditTests : IDisposable
     [Fact]
     public void ArrayMoveDown_NestedPrimitiveList_SwapsWithTheNextElement()
     {
-        var result = _fixture.Service().EditField(_fixture.Plugin, _fixture.Race.ToString(), "Subgraphs",
-            Json($$"""{"op": "array_move_down", "path": [{"kind": "index", "index": 1}, {"kind": "member", "name": "AnimationPaths"}, {"kind": "index", "index": 0}]}"""));
+        var result = _fixture.Service().Edit(_fixture.Plugin, _fixture.Race.ToString(), MoveTo(1, Member("Subgraphs"), At(1), Member("AnimationPaths"), At(0)));
 
         Assert.True(result.Applied, result.Message);
         var body = _fixture.RaceBody();
@@ -247,8 +245,7 @@ public sealed class PrimitiveListEditTests : IDisposable
     [Fact]
     public void ArrayMoveUp_NestedPrimitiveList_SwapsWithThePreviousElement()
     {
-        var result = _fixture.Service().EditField(_fixture.Plugin, _fixture.Race.ToString(), "Subgraphs",
-            Json($$"""{"op": "array_move_up", "path": [{"kind": "index", "index": 1}, {"kind": "member", "name": "AnimationPaths"}, {"kind": "index", "index": 1}]}"""));
+        var result = _fixture.Service().Edit(_fixture.Plugin, _fixture.Race.ToString(), MoveTo(0, Member("Subgraphs"), At(1), Member("AnimationPaths"), At(1)));
 
         Assert.True(result.Applied, result.Message);
         var body = _fixture.RaceBody();

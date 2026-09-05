@@ -2,6 +2,7 @@ using System.Text.Json;
 using MEditService.Core.Edits;
 using MEditService.Core.Source;
 using MEditService.Tests.Edits;
+using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace MEditService.Tests.Source;
@@ -20,7 +21,7 @@ public sealed class ExternalChangeClassifierTests
         try
         {
             var editService = new RecordEditService(mod.Mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
-            editService.EditField(mod.Plugin, mod.Npc.ToString(), "HeightMax", Json("0.75"));
+            editService.Set(mod.Plugin, mod.Npc.ToString(), "HeightMax", Json("0.75"));
 
             var compileService = new PluginCompileService(mod.Mirror, new PluginWriter(NullLogger<PluginWriter>.Instance), NullLogger<PluginCompileService>.Instance);
             var result = compileService.Compile(mod.Plugin, new CompileSource.WorkingTree());
@@ -85,7 +86,7 @@ public sealed class ExternalChangeClassifierTests
         try
         {
             var editService = new RecordEditService(mod.Mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
-            editService.EditField(mod.Plugin, mod.Npc.ToString(), "HeightMax", Json("0.75"));
+            editService.Set(mod.Plugin, mod.Npc.ToString(), "HeightMax", Json("0.75"));
             var compileService = new PluginCompileService(mod.Mirror, new PluginWriter(NullLogger<PluginWriter>.Instance), NullLogger<PluginCompileService>.Instance);
             var result = compileService.Compile(mod.Plugin, new CompileSource.WorkingTree());
             Assert.True(result.Succeeded, result.RefusalReason);

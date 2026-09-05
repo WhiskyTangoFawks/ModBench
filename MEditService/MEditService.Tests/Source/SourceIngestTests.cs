@@ -7,6 +7,7 @@ using MEditService.Core.Records;
 using MEditService.Core.Schema;
 using MEditService.Core.Source;
 using MEditService.Tests.Edits;
+using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -229,7 +230,7 @@ public sealed class SourceIngestTests
         using var mod = TrackedModFixture.Tracked();
 
         var edited = new RecordEditService(mod.Mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance)
-            .EditField(mod.Plugin, mod.Npc.ToString(), "HeightMax", JsonDocument.Parse("0.75").RootElement);
+            .Set(mod.Plugin, mod.Npc.ToString(), "HeightMax", JsonDocument.Parse("0.75").RootElement);
         Assert.True(edited.Applied, edited.Message);
 
         File.WriteAllText(
@@ -288,7 +289,7 @@ public sealed class SourceIngestTests
         using var mod = TrackedModFixture.Tracked();
 
         var edit = new RecordEditService(mod.Mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance)
-            .EditField(mod.Plugin, mod.Npc.ToString(), "EditorID",
+            .Set(mod.Plugin, mod.Npc.ToString(), "EditorID",
                 JsonDocument.Parse("\"RenamedAcrossReload\"").RootElement);
         Assert.True(edit.Applied, edit.Message);
 
@@ -313,7 +314,7 @@ public sealed class SourceIngestTests
         using var mod = TrackedModFixture.Tracked();
 
         new RecordEditService(mod.Mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance)
-            .EditField(mod.Plugin, mod.Npc.ToString(), "EditorID",
+            .Set(mod.Plugin, mod.Npc.ToString(), "EditorID",
                 JsonDocument.Parse("\"RenamedOnce\"").RootElement);
 
         using var reloaded = Reload(mod);

@@ -118,7 +118,7 @@ internal static class SubFieldReflection
 
         return LeafClassification.ClassifyLeaf(prop, core, game) switch
         {
-            { } leaf => ProjectSubField(prop, core, nullable, leaf, game, logger),
+            { } leaf => ProjectSubField(prop, nullable, leaf, game),
             null when ReflectedTypes.IsListType(core, out var elementType) =>
                 ListLeaves.BuildListSubField(prop, elementType, game, path, logger),
             null when ReflectedTypes.IsLoquiInterface(core) => StructLeaves.BuildStructSubField(prop, core, game, path, depth, logger),
@@ -126,14 +126,9 @@ internal static class SubFieldReflection
         };
     }
 
-    // Routed through the same writer as a top-level column, so every leaf shape has one write path.
-    private static SubFieldSpec ProjectSubField(
-        PropertyInfo prop, Type core, bool nullable, LeafSpec leaf,
-        GameReflection game, ILogger logger)
+    private static SubFieldSpec ProjectSubField(PropertyInfo prop, bool nullable, LeafSpec leaf, GameReflection game)
     {
-        var apply = LeafWriters.RouteWriter<object>(leaf, prop, core, nullable, game, logger);
         return new(prop.Name, leaf.ApiType, leaf.ValidFormKeyTypes, leaf.EnumMembers,
-            apply,
             AllowsNull: leaf.AllowsNull,
             SiblingsInUse: game.Annotations.SiblingsInUseFor(prop),
             Default: nullable ? null : leaf.Default);

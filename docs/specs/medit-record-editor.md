@@ -692,22 +692,25 @@ gesture — Sim Settlements 2 is a real-world example on Fallout 4.
   already-writable field rather than part of the header's own flag-write surface, so the exemption
   needed no header write path to exist first. The record header itself — including clearing the
   flag, which restores full editability — is its own write surface (below).
-- **Header write path clears the flag, restoring full editability.** A synthetic field
-  path, `is_partial_form`, dispatched in `RecordFieldWriter.TryApply` the same way `EditorID`
-  already is — the one sanctioned door, no second write surface. Flips bit 14 only (a byte-diff
-  assertion checks no other bit or field moves) and is exempt from `PartialFormFieldReadOnly` so
-  clearing is reachable while the flag is still set. **The generic-container gate, not a bare
-  reflection check:** gated by the same `PartialFormFlag`/`ContainerChildFields` type table the
-  read half uses (Mutagen's own static `IsPartialFormable` property doesn't cover every game's
-  container types — FO4's own `Cell` is one of the gaps — so the write path can't rely on it
-  either). A `PluginHeader` checkbox (rendered only when `CompareOverride.IsPartialFormable`) is
-  the UI trigger, dispatching the existing `EDIT_FIELD` message — no new command or menu surface.
+- **Header write path clears the flag, restoring full editability.** The flag is an annotated
+  synthetic member, `IsPartialForm` (`SchemaAnnotations.SyntheticFlagMembers`): one bit of the
+  record's `MajorRecordFlagsRaw`, written through the one envelope like every other member and
+  patched by `DocumentEdit` onto the document itself. Flips bit 14 only (a byte-diff assertion
+  checks no other bit or field moves) and is exempt from `PartialFormFieldReadOnly` so clearing
+  is reachable while the flag is still set. **The generic-container gate, not a bare reflection
+  check:** the annotation names exactly the container types the `PartialFormFlag`/
+  `ContainerChildFields` type table admits (a test holds the two equal; Mutagen's own static
+  `IsPartialFormable` property doesn't cover every game's container types — FO4's own `Cell` is
+  one of the gaps — so the write path can't rely on it either). A `PluginHeader` checkbox
+  (rendered only when `CompareOverride.IsPartialFormable`) is the UI trigger, dispatching the
+  existing `EDIT_FIELD` message — no new command or menu surface.
   **Closes the pre-existing second door:** the generic reflected columns mirroring the same
-  underlying flags int (`major_flags`, `fallout4_major_record_flags` on FO4) remained a second way
-  to flip bit 14 on a not-yet-flagged record even after the read half's refusal landed. `EditField`
-  now refuses (`RecordEditRefusal.PartialFormFlagIndirectWrite`) any write through another field
-  path that would move bit 14 as a side effect — a structural invariant, not a per-column name
-  check, so it holds for any game's equivalent generic flags column without needing its own entry.
+  underlying flags int (`MajorFlags`, `Fallout4MajorRecordFlags` on FO4) remained a second way
+  to flip bit 14 on a not-yet-flagged record even after the read half's refusal landed. A write
+  through any other path that would move a synthetic member's bit as a side effect is refused
+  (`RecordEditRefusal.SyntheticMemberIndirectWrite`) — a structural invariant read off the
+  document before and after the codec round trip, not a per-column name check, so it holds for
+  any game's equivalent generic flags column without needing its own entry.
 - **Out of scope here:** setting the flag (a container an editing gesture auto-creates carries it
   from creation) and a lightbulb offering it on an identical-to-master container (separate
   follow-up work).

@@ -1,17 +1,13 @@
-using System.Text.Json;
 using MEditService.Core.Queries;
 
 namespace MEditService.Core.Schema;
 
-// The facts a leaf carries whether it becomes a column or a sub-field. Convert is null when
-// there is no generic applier: a form link, byte slice, color or vector gets its own writer in
-// LeafWriters.RouteWriter.
+// The facts a leaf carries whether it becomes a column or a sub-field.
 internal sealed record LeafSpec(
     string ApiType,
     string DuckDbType,
     string[] ValidFormKeyTypes,
     IReadOnlyList<EnumMember> EnumMembers,
-    Func<JsonElement, object?>? Convert,
     bool AllowsNull = false,
     string? ViewDefaultLiteral = null,
     // See FieldMetadata.Default.

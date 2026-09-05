@@ -12,6 +12,9 @@ public static class PartialFormFlag
     /// <summary>Internal so the write-surface guard in Edits can compare the bit without redeclaring it.</summary>
     internal const int Bit = 0x0000_4000;
 
+    /// <summary>The same bit as the annotation tables spell it.</summary>
+    internal const string BitHex = "0x4000";
+
     /// <summary>The one eligibility gate, shared by the read and write sides.</summary>
     internal static bool IsPartialFormable(Type recordType) =>
         ContainerChildFields.EnumerateChildFieldsFor(recordType) != null;
@@ -26,11 +29,4 @@ public static class PartialFormFlag
         && document.TryGetProperty(nameof(IMajorRecordGetter.MajorRecordFlagsRaw), out var flags)
         && flags.ValueKind == JsonValueKind.Number
         && (flags.GetInt32() & Bit) != 0;
-
-    /// <summary>Moves exactly bit 14; a whole-value overwrite would drop every other header flag.
-    /// Eligibility is the caller's to check.</summary>
-    internal static void Set(IMajorRecord record, bool value) =>
-        record.MajorRecordFlagsRaw = value
-            ? record.MajorRecordFlagsRaw | Bit
-            : record.MajorRecordFlagsRaw & ~Bit;
 }

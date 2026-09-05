@@ -3,17 +3,44 @@ using System.Reflection;
 using MEditService.Core.Serialization;
 using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
+using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Core.Schema;
 
-/// <summary>The value a member has in the instance the codec builds from an empty document: the
-/// default Mutagen declares, which the codec omits on write, so a document's absent member reads
-/// as this. Asked through the codec, never by constructing a Mutagen class by hand.</summary>
+/// <summary>What a member holds in the instance the codec builds from an empty document: the
+/// declared default the codec omits on write, so an absent member reads as this. Asked of the
+/// codec, never a hand-built object.</summary>
 internal sealed class DeclaredDefaults(GameRelease release, ILogger logger)
 {
     internal const string RefusalPrefix = "SchemaReflector: declared defaults unavailable";
 
     private readonly ConcurrentDictionary<Type, object?> _instances = new();
+
+    private static readonly RecordTextCodec Codec = new(Microsoft.Extensions.Logging.Abstractions.NullLogger<RecordTextCodec>.Instance);
+
+    /// <summary>The other members the codec spells the bit under: Mutagen's flag views over one raw
+    /// integer, cleared by a patch so the reader takes the raw alone. Asked by writing the bit and
+    /// reading back.</summary>
+    internal IReadOnlyList<string> MembersAliasing(Type getterInterface, string backingMember, long bit)
+    {
+        if (ReflectedTypes.GetSetterType(getterInterface) is not { } setter
+            || LoquiUnions.ConcreteUnder(setter) is not { IsGenericTypeDefinition: false } concrete
+            || !typeof(IMajorRecordGetter).IsAssignableFrom(concrete))
+        {
+            return [];
+        }
+        var flagged = TopLevelMembers(concrete, $"{{\"FormKey\":\"Null\",\"{backingMember}\":{bit}}}");
+        var empty = TopLevelMembers(concrete, RecordTextCodec.EmptyMajorRecord);
+        return [.. flagged.Except(empty, StringComparer.Ordinal).Where(m => m != backingMember)];
+    }
+
+    private HashSet<string> TopLevelMembers(Type concrete, string json)
+    {
+        var instance = (IMajorRecordGetter)RecordTextCodec.DeserializeTextAsync(concrete, json, release).GetAwaiter().GetResult();
+        var bytes = Codec.SerializeToBytesAsync(instance, release).GetAwaiter().GetResult();
+        using var document = System.Text.Json.JsonDocument.Parse(bytes);
+        return [.. document.RootElement.EnumerateObject().Select(p => p.Name)];
+    }
 
     internal object? Of(PropertyInfo prop)
     {

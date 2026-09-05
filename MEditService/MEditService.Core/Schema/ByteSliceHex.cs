@@ -1,5 +1,3 @@
-using System.Text.Json;
-using Microsoft.Extensions.Logging;
 using Noggog;
 
 namespace MEditService.Core.Schema;
@@ -34,37 +32,5 @@ internal static class ByteSliceHex
             bytes = [];
             return false;
         }
-    }
-
-    // Null and "" both spell "no slice" in Mutagen's byte-text grammar.
-    private static bool IsAbsentSlice(JsonElement val) =>
-        val.ValueKind == JsonValueKind.Null || (val.ValueKind == JsonValueKind.String && val.GetString()!.Length == 0);
-
-    // Nothing here can know which bytes a resize would move, so a size change is refused; an absent or
-    // empty slice has no established size and accepts any.
-    private static bool ResizeRefused(object? existing, int newLength) => existing switch
-    {
-        null => false,
-        MemorySlice<byte> slice => slice.Length > 0 && slice.Length != newLength,
-        _ => true,
-    };
-
-    internal static Func<object, JsonElement, ApplyOutcome> MakeHexApplier(string pName, bool nullable, ILogger logger)
-    {
-        var resolve = LeafWriters.ResolveProperty(pName);
-        return (obj, val) =>
-        {
-            var rp = resolve(obj.GetType());
-            if (rp == null) return ApplyOutcome.PropertyNotFound;
-
-            if (IsAbsentSlice(val))
-                return nullable ? LeafWriters.SetOrDecline(rp, obj, null, pName, logger) : ApplyOutcome.ValueRejected;
-
-            if (val.ValueKind != JsonValueKind.String) return ApplyOutcome.ValueRejected;
-            if (!TryParseHex(val.GetString()!, out var bytes)) return ApplyOutcome.ValueRejected;
-            if (ResizeRefused(rp.GetValue(obj), bytes.Length)) return ApplyOutcome.ValueRejected;
-
-            return LeafWriters.SetOrDecline(rp, obj, new MemorySlice<byte>(bytes), pName, logger);
-        };
     }
 }
