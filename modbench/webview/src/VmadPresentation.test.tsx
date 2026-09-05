@@ -545,6 +545,29 @@ describe('Add Script is the generic array gesture', () => {
     });
   });
 
+  it('Delete on a property under a keyed script posts remove through both key hops', async () => {
+    currentCompare = oneColumn([script('Guard', [property('Radius', 'ScriptIntProperty', { Data: 10 })])]);
+    renderPanel();
+    await expandScripts();
+    await waitFor(() => screen.getByText('Guard'));
+    expandRow('Guard');
+    await waitFor(() => screen.getByText('Properties'));
+    expandRow('Properties');
+    await waitFor(() => screen.getByText('Radius'));
+
+    const cell = fieldCell('Radius').closest('tr')!.querySelectorAll('td')[1];
+    fireEvent.click(cell);
+    fireEvent.keyDown(cell, { key: 'Delete' });
+
+    expect(lastEnvelope()).toEqual({
+      op: 'remove',
+      path: [
+        { kind: 'member', name: 'Scripts' }, { kind: 'key', key: 'Guard' },
+        { kind: 'member', name: 'Properties' }, { kind: 'key', key: 'Radius' },
+      ],
+    });
+  });
+
   it('Insert on a property list nested under a keyed script posts add through the key hop', async () => {
     currentCompare = oneColumn([script('Guard', [property('Radius', 'ScriptIntProperty', { Data: 10 })])]);
     renderPanel();

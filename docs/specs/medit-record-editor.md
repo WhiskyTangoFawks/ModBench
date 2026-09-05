@@ -286,9 +286,9 @@ Three rules complete the lookup:
 
 `Ctrl+X` copies the focused cell's displayed value, then attempts to clear it by running `''` through
 the same coercion `Ctrl+V` uses for a pasted string — there is no separate, per-type "default
-value" table. `''` coerces cleanly for `string` (the empty string itself), bitmask `flags` (no
-active bits), and `formKey` (no reference), so those three types are the ones Ctrl+X visibly
-clears. It does **not** coerce for `bool`, `int`, `float`, or a plain (non-bitmask) `enum` — none
+value" table. `''` coerces cleanly for `string` (the empty string itself), `flags` (no names
+set), and `formKey` (no reference), so those three types are the ones Ctrl+X visibly
+clears. It does **not** coerce for `bool`, `int`, `float`, or `enum` — none
 of those has an empty representation — so on those types Ctrl+X only copies; the value on screen is
 left exactly as it would be by pasting a clipboard string that fails to coerce (the general
 "cannot coerce, leave the field unchanged" rule above, applied to Cut's own internal `''` paste).
@@ -526,8 +526,7 @@ already empty: matching xEdit's own guard (`Element.EditValue` must be non-empty
   is one envelope** — an operation, a path and an optional value, `POST /records/{formKey}/edit`'s
   own shape — and the webview posts what the user asked for and nothing else: `add` at the array
   with no value; `remove` at the element; `move` at the element with the destination position as
-  its value (`Ctrl+↑` on the first element posts nothing, since the row's own hop says there is
-  nowhere to go); `set` at a leaf with its new value. The backend resolves the path against the
+  its value; `set` at a leaf with its new value. The backend resolves the path against the
   document it holds, patches, and answers with the result or a refusal naming the path — an
   element that is not there, a move off either end, is refused by name, never landed as nothing.
   Only non-immutable columns offer the ops. An element-**value** edit is offered on the same cell

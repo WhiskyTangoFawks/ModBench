@@ -40,9 +40,11 @@ the model: it changes no edit value and no copy value.
   use — is a property on that tree, so a new concern needs no new wire.
 
 - **Widgets come from metadata alone, and the backend refusal is the one gate.** The webview picks
-  a cell from `FieldMetadata` and names no game. It owns no reflected default and no per-type table
-  of what a value may be; it posts what the user asked for, and an unrepresentable write is refused
-  server-side, naming the field. One gate, on the side that holds the assembly — never a client-side
+  a cell from `FieldMetadata` and names no game. It owns no table of what a value may be, and no
+  default beyond what the document's omission means: an absent member reads as the default the
+  metadata names, or its type's own zero where the metadata names none, since the codec omits both.
+  It posts what the user asked for, and an unrepresentable write is refused server-side, naming
+  the field. One gate, on the side that holds the assembly — never a client-side
   guess that has to agree with it.
 
 - **The document carries data plus the discriminator, and Modbench never adds to it.** The member

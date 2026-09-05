@@ -394,8 +394,8 @@ describe('stringValueContext', () => {
     expect(stringValueContext('000001:Fallout4.esm', 'Fallout4.esm', 'Data', 'Name', 'Dogmeat', true, [], 'Name').readOnly).toBe(true);
   });
 
-  // A nested string leaf carries its own path within the field and the subtree root's wire path
-  // — the two coordinates whole-field reconstruction needs, distinct from the display `fieldName`.
+  // A nested string leaf carries its own path within the field and the subtree root's member —
+  // the two coordinates its set envelope needs, distinct from the display `fieldName`.
   it('carries the row\'s own path and the subtree root\'s wire path for a nested string leaf', () => {
     const path: PathSegment[] = [{ kind: 'member', name: 'Entries' }, { kind: 'index', index: 0 }, { kind: 'member', name: 'Id' }];
     const ctx = stringValueContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', 'Container', 'A', false, path, 'Container');

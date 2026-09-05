@@ -456,8 +456,9 @@ describe('RecordPanel — array editing (unsorted)', () => {
     expect(lastEnvelope()).toEqual({ op: 'move', path: [member('Values'), at(2)], value: 1 });
   });
 
-  // The first element has nowhere to move up to, which the row's own hop already says.
-  it('Ctrl+ArrowUp on the first element posts nothing', async () => {
+  // The webview posts what the user asked for; a move off either end is the backend's to refuse
+  // by name (ADR-0032), not a boundary this side answers.
+  it('Ctrl+ArrowUp on the first element still posts the move, to the position before it', async () => {
     renderEditablePanel();
     await waitFor(() => screen.getByText('Values'));
     fireEvent.click(screen.getAllByText('▶')[0]);
@@ -466,7 +467,7 @@ describe('RecordPanel — array editing (unsorted)', () => {
     fireEvent.click(cell);
     fireEvent.keyDown(cell, { key: 'ArrowUp', ctrlKey: true });
 
-    expect(lastEnvelope()).toBeUndefined();
+    expect(lastEnvelope()).toEqual({ op: 'move', path: [member('Values'), at(0)], value: -1 });
   });
 
   it('an ARRAY_STRUCTURAL_OP broadcast for this open record posts the envelope via EDIT_FIELD', async () => {
@@ -624,6 +625,42 @@ describe('RecordPanel — a value edit posts one set envelope addressing the lea
     expect(lastEnvelope()).toEqual({
       op: 'set', path: [member('Container'), member('Entries'), at(0), member('Weight')], value: 7,
     });
+  });
+
+  it('Delete on an element nested inside a struct posts remove with every hop', async () => {
+    currentCompare = nestedStructArrayResult;
+    renderEditablePanel();
+    await waitFor(() => screen.getByText('Container'));
+    fireEvent.click(screen.getAllByText('▶')[0]);
+    await waitFor(() => screen.getByText('Entries'));
+    fireEvent.click(screen.getAllByText('▶')[0]);
+    await waitFor(() => screen.getAllByText('[0]').find(el => el.tagName === 'TD'));
+
+    const row = screen.getAllByText('[0]').find(el => el.tagName === 'TD')!.closest('tr')!;
+    const cells = row.querySelectorAll('td');
+    const cell = cells[cells.length - 1] as HTMLElement;
+    fireEvent.click(cell);
+    fireEvent.keyDown(cell, { key: 'Delete' });
+
+    expect(lastEnvelope()).toEqual({ op: 'remove', path: [member('Container'), member('Entries'), at(0)] });
+  });
+
+  it('Ctrl+ArrowDown on an element nested inside a struct posts move with every hop', async () => {
+    currentCompare = nestedStructArrayResult;
+    renderEditablePanel();
+    await waitFor(() => screen.getByText('Container'));
+    fireEvent.click(screen.getAllByText('▶')[0]);
+    await waitFor(() => screen.getByText('Entries'));
+    fireEvent.click(screen.getAllByText('▶')[0]);
+    await waitFor(() => screen.getAllByText('[0]').find(el => el.tagName === 'TD'));
+
+    const row = screen.getAllByText('[0]').find(el => el.tagName === 'TD')!.closest('tr')!;
+    const cells = row.querySelectorAll('td');
+    const cell = cells[cells.length - 1] as HTMLElement;
+    fireEvent.click(cell);
+    fireEvent.keyDown(cell, { key: 'ArrowDown', ctrlKey: true });
+
+    expect(lastEnvelope()).toEqual({ op: 'move', path: [member('Container'), member('Entries'), at(0)], value: 1 });
   });
 
   it('a top-level scalar: the one member hop', async () => {

@@ -29,8 +29,6 @@ const getHeaderBg = (c: ConflictThis | undefined): string | undefined => getConf
 
 type ArrayOpKind = 'add' | 'remove' | 'moveUp' | 'moveDown';
 
-// The header's Partial Form bit is an annotated synthetic member, written like any other.
-const PARTIAL_FORM_MEMBER = 'IsPartialForm';
 
 // ── RecordPanel ───────────────────────────────────────────────────────────────
 
@@ -320,7 +318,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
         onEditCell={(plugin: ColumnKey, value: unknown) => handleCellCommit(plugin, path, rootField, value)}
         onArrayAdd={offersArrayAdd(meta) ? (plugin: ColumnKey) => handleArrayOp(plugin, path, rootField, 'add') : undefined}
         onArrayRemove={isArrayElementHop(elementHop) ? (plugin: ColumnKey) => handleArrayOp(plugin, path, rootField, 'remove') : undefined}
-        onArrayMoveUp={elementHop?.kind === 'index' && elementHop.index > 0 ? (plugin: ColumnKey) => handleArrayOp(plugin, path, rootField, 'moveUp') : undefined}
+        onArrayMoveUp={isMovableElementHop(elementHop) ? (plugin: ColumnKey) => handleArrayOp(plugin, path, rootField, 'moveUp') : undefined}
         onArrayMoveDown={isMovableElementHop(elementHop) ? (plugin: ColumnKey) => handleArrayOp(plugin, path, rootField, 'moveDown') : undefined}
         collapsedColumns={collapsedColumns}
         onOpen={handleOpen}
@@ -440,11 +438,11 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
                         vscodeContext={combineVscodeContexts(
                           headerCellContext(col.override.formKey, col.override.plugin, col.override.origin),
                         )}
-                        // The one sanctioned header-flag write — exempt from the backend's Partial
-                        // Form read-only guard, so it lands regardless of the column's current
-                        // state.
+                        // The annotated synthetic member is the one sanctioned header-flag write —
+                        // exempt from the backend's Partial Form read-only guard, so it lands
+                        // regardless of the column's current state.
                         onTogglePartialForm={next => post(col.key, {
-                          op: 'set', path: [{ kind: 'member', name: PARTIAL_FORM_MEMBER }], value: next,
+                          op: 'set', path: [{ kind: 'member', name: 'IsPartialForm' }], value: next,
                         })}
                       />
                     </th>

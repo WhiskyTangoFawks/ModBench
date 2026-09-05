@@ -468,7 +468,7 @@ describe('DiffRow — string cell right-click menu (ADR-0039)', () => {
   });
 
   // Without its own path within the field, a nested leaf's context reads identically to a
-  // top-level field's and the commit has nothing to reconstruct with.
+  // top-level field's, and its save would land on the root.
   it('a nested string cell carries the row\'s own path and the subtree root\'s wire path, not just the root', () => {
     const path: PathSegment[] = [{ kind: 'member', name: 'Sub' }];
     renderRow({
