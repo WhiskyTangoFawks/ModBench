@@ -19,8 +19,9 @@ path = tool_input.get("file_path", "")
 text = tool_input.get("new_string") if data.get("tool_name") == "Edit" else tool_input.get("content")
 hits = comment_shape.check(path, text or "")
 if hits:
-    print("Blocked by comment discipline (CLAUDE.md § Comment Discipline):", file=sys.stderr)
+    print("A comment states a constraint from outside the code; a string states the current "
+          "state.", file=sys.stderr)
+    print("Delete it, or cut it to one present-tense sentence.", file=sys.stderr)
     for h in hits:
         print("  " + h.replace(path + ":", "line "), file=sys.stderr)
-    print("Delete the comment or cut it to one sentence that states a why.", file=sys.stderr)
     sys.exit(2)

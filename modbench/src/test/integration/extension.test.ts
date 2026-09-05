@@ -1321,7 +1321,7 @@ describe('The record-filter readout does not outlive its load order', () => {
     exitEditing();
 
     assert.ok(!(description() ?? '').includes('records:'),
-      'a load order that no longer exists must not leave the view still claiming a record filter');
+      'a load order that does not exist must not leave the view still claiming a record filter');
   });
 });
 
@@ -1386,7 +1386,7 @@ describe('Close mEdit clears the record filter\'s code lens too, not just the re
     exitEditing();
 
     assert.strictEqual(await codeLensCommandFor(doc.uri), 'modbench.setFilterFromDocument',
-      'a load order that no longer exists must not leave the code lens still claiming its SQL is active');
+      'a load order that does not exist must not leave the code lens still claiming its SQL is active');
   });
 });
 
@@ -1539,7 +1539,7 @@ describe('Progressive load', () => {
     assert.strictEqual(
       (ext?.exports as { pluginListView?: { message?: string } } | undefined)?.pluginListView?.message,
       undefined,
-      'the view must stop claiming a load that is no longer running',
+      'the view must stop claiming a load that is not running',
     );
   });
 

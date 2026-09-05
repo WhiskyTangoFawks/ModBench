@@ -19,7 +19,7 @@ export async function offerEslFlagRemoval(
 ): Promise<boolean> {
   const accept = `Remove ESL Flag and ${verb}`;
   const choice = await showWarning(
-    `"${target.name}" no longer fits ESL. Remove the ESL flag and ${verb.toLowerCase()}?\n\n${refusalReason}`,
+    `"${target.name}" does not fit ESL. Remove the ESL flag and ${verb.toLowerCase()}?\n\n${refusalReason}`,
     { modal: true }, accept);
   if (choice !== accept) return false;
 

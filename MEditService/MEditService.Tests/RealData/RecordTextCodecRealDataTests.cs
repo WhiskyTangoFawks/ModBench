@@ -43,7 +43,7 @@ public class RecordTextCodecRealDataTests(ITestOutputHelper output)
             output.WriteLine($"Overlay ObjectTemplates: {overlayTemplateCount}, deep-parse ObjectTemplates: {deepParsedTemplateCount}");
             Assert.Equal(deepParsedTemplateCount, overlayTemplateCount);
             Assert.True(deepParsedTemplateCount > 0,
-                "Expected this fixture weapon to carry ObjectTemplates content; pick a different affected weapon if it no longer does.");
+                "Expected this fixture weapon to carry ObjectTemplates content; pick a different affected weapon if it does not.");
 
             var overlayPath = Path.Combine(dir.FullName, "overlay.json");
             var deepParsedPath = Path.Combine(dir.FullName, "deep-parsed.json");
