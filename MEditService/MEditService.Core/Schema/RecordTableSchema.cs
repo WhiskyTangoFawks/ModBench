@@ -104,7 +104,9 @@ public sealed record ColumnSpec(
     // this table (gmst.Data, dmgt.DamageTypes), keyed by the record's own MutagenObjectType.
     IReadOnlyDictionary<string, FieldMetadata>? Variants = null,
     bool IsDiscriminator = false,
-    string? DisplayLabel = null)
+    string? DisplayLabel = null,
+    // See FieldMetadata.Default.
+    object? Default = null)
 {
     /// <summary>Scalar leaves only: arrays and structs have no faithful scalar rendering, and a
     /// column whose type varies by record class no single DuckDB type. "No column" beats "a column
@@ -114,7 +116,7 @@ public sealed record ColumnSpec(
     public FieldMetadata ToFieldMetadata() =>
         new(Name, ApiType, IsArray, ValidFormKeyTypes, EnumMembers, ElementType, SubFields,
             AllowsNull: AllowsNull, KeyMembers: KeyMembers, LeafTypeName: LeafTypeName, Variants: Variants,
-            IsDiscriminator: IsDiscriminator, DisplayLabel: DisplayLabel);
+            IsDiscriminator: IsDiscriminator, DisplayLabel: DisplayLabel, Default: Default);
 }
 
 public sealed class RecordTableSchema

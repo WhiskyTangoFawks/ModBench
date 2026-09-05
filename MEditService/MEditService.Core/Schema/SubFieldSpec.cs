@@ -26,7 +26,9 @@ internal sealed record SubFieldSpec(
     // See FieldMetadata.LeafTypeName.
     string? LeafTypeName = null,
     // See FieldMetadata.Variants.
-    IReadOnlyDictionary<string, SubFieldSpec>? Variants = null)
+    IReadOnlyDictionary<string, SubFieldSpec>? Variants = null,
+    // See FieldMetadata.Default.
+    object? Default = null)
 {
     // IsArray is derived from ApiType, as ColumnSpec's is, rather than a flag that could disagree with it.
     public FieldMetadata ToFieldMetadata() =>
@@ -39,5 +41,6 @@ internal sealed record SubFieldSpec(
             SiblingsInUse: SiblingsInUse,
             KeyMembers: KeyMembers,
             LeafTypeName: LeafTypeName,
-            Variants: Variants?.ToDictionary(v => v.Key, v => v.Value.ToFieldMetadata(), StringComparer.Ordinal));
+            Variants: Variants?.ToDictionary(v => v.Key, v => v.Value.ToFieldMetadata(), StringComparer.Ordinal),
+            Default: Default);
 }

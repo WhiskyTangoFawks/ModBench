@@ -441,14 +441,17 @@ public sealed class ConflictClassifier(ILogger<ConflictClassifier>? logger = nul
         return Equals(a, b);
     }
 
-    // What the codec omits: a zero number, false, an empty list or object, and a link to nothing.
-    private static bool IsDefault(JsonElement value, FieldMetadata? meta) => value.ValueKind switch
-    {
-        JsonValueKind.Number => value.GetRawText().Trim('-', '0', '.') is "" or "e0",
-        JsonValueKind.False => true,
-        JsonValueKind.String => meta?.Type == "formKey" && value.GetString() == "Null",
-        JsonValueKind.Array => value.GetArrayLength() == 0,
-        JsonValueKind.Object => !value.EnumerateObject().Any(),
-        _ => false,
-    };
+    // What the codec omits: the declared default where the metadata spells one, else a zero number,
+    // false, an empty list or object, and a link to nothing.
+    private static bool IsDefault(JsonElement value, FieldMetadata? meta) => meta?.Default is { } declared
+        ? DocumentNodes.SameValue(value, JsonSerializer.SerializeToElement(declared))
+        : value.ValueKind switch
+        {
+            JsonValueKind.Number => value.GetRawText().Trim('-', '0', '.') is "" or "e0",
+            JsonValueKind.False => true,
+            JsonValueKind.String => meta?.Type == "formKey" && value.GetString() == "Null",
+            JsonValueKind.Array => value.GetArrayLength() == 0,
+            JsonValueKind.Object => !value.EnumerateObject().Any(),
+            _ => false,
+        };
 }

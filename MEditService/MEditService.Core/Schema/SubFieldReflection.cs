@@ -135,6 +135,7 @@ internal static class SubFieldReflection
         return new(prop.Name, leaf.ApiType, leaf.ValidFormKeyTypes, leaf.EnumMembers,
             apply,
             AllowsNull: leaf.AllowsNull,
-            SiblingsInUse: game.Annotations.SiblingsInUseFor(prop));
+            SiblingsInUse: game.Annotations.SiblingsInUseFor(prop),
+            Default: nullable ? null : leaf.Default);
     }
 }

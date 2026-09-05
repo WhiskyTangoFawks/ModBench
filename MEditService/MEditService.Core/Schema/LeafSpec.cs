@@ -13,7 +13,9 @@ internal sealed record LeafSpec(
     IReadOnlyList<EnumMember> EnumMembers,
     Func<JsonElement, object?>? Convert,
     bool AllowsNull = false,
-    string? ViewDefaultLiteral = null)
+    string? ViewDefaultLiteral = null,
+    // See FieldMetadata.Default.
+    object? Default = null)
 {
     /// <summary>A leaf that names no record type — every leaf but a form link.</summary>
     internal static readonly string[] NoFormKeyTypes = [];

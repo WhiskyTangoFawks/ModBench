@@ -66,6 +66,24 @@ public class ConflictClassifierTests
         Assert.Equal(equal ? ConflictThis.IdenticalToMaster : ConflictThis.Override, diff.CellStates["B.esp"]);
     }
 
+    // Mutagen declares some defaults above zero (VirtualMachineAdapter.ObjectFormat = 2), and the
+    // codec omits exactly those, so the declared value is the one an omission equals.
+    [Theory]
+    [InlineData("2", true)]
+    [InlineData("2.0", true)]
+    [InlineData("0", false)]
+    public void Classify_AbsentAgainstAnExplicitValue_EqualsTheDeclaredDefault_NotZero(string json, bool equal)
+    {
+        var meta = new FieldMetadata("ObjectFormat", "int", false, [], [], Default: 2);
+        var master = new RecordDetail("000001:Test.esp", "A.esp", 0, false, null, [new FieldValue(meta, null)], "Data");
+        var spelled = new RecordDetail("000001:Test.esp", "B.esp", 1, true, null,
+            [new FieldValue(meta, JsonSerializer.Deserialize<JsonElement>(json))], "Data");
+
+        var diff = Assert.Single(Classify([master, spelled]).Diffs);
+
+        Assert.Equal(equal ? ConflictThis.IdenticalToMaster : ConflictThis.Override, diff.CellStates["B.esp"]);
+    }
+
     // --- OnlyOne ---
 
     [Fact]

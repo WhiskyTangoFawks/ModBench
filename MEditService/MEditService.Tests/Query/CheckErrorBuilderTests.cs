@@ -90,6 +90,19 @@ public class CheckErrorBuilderTests
         Assert.Null(CheckErrorBuilder.Build(meta, value, _ => null, GameRelease.Fallout4, absentMeansNull: false));
     }
 
+    // An absent member with a declared default is checked as that default, not as nothing.
+    [Fact]
+    public void Build_AbsentMemberWithADeclaredDefault_IsCheckedAsThatDefault()
+    {
+        var link = new FieldMetadata("Link", "formKey", false, ["npc_"], [], AllowsNull: false, Default: "000001:Test.esp");
+        var meta = new FieldMetadata("Owner", "struct", false, [], [], Fields: [link]);
+        var asked = new List<string>();
+
+        CheckErrorBuilder.Build(meta, J("{}"), key => { asked.Add(key); return Entry("npc_"); }, GameRelease.Fallout4);
+
+        Assert.Equal(["000001:Test.esp"], asked);
+    }
+
     [Fact]
     public void Build_EmptyValidTypes_AnyResolvedTypeAccepted()
     {

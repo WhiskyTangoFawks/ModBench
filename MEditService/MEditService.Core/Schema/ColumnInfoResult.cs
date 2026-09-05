@@ -14,4 +14,5 @@ internal sealed record ColumnInfoResult(
     bool AllowsNull = false,
     string? ViewDefaultLiteral = null,
     IReadOnlyList<string>? KeyMembers = null,
-    string? LeafTypeName = null);
+    string? LeafTypeName = null,
+    object? Default = null);

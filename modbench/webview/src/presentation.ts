@@ -64,10 +64,13 @@ function conditionSummary(row: SummaryRow, comparison: (row: SummaryRow) => stri
 function runOn(row: SummaryRow): string {
   const runOnType = row.member('Data', 'RunOnType');
   if (runOnType.value === 'Reference') return `(${row.member('Data', 'Reference').shortName})`;
-  // An absent Run On is the codec's omission of the default: xEdit's first value, Subject.
-  const label = runOnType.value == null ? 'Subject' : runOnType.label;
+  // An absent Run On is the codec's omission of the default the metadata names.
+  const label = runOnType.value == null ? enumLabel(runOnType.meta, runOnType.meta?.default) : runOnType.label;
   return label.replace(/ /g, '');
 }
+
+const enumLabel = (meta: FieldMetadata | undefined, value: unknown): string =>
+  meta?.enumMembers.find(m => m.value === value)?.label ?? toStr(value);
 
 // The function member's own value, or — on the leaf that declares no function member because it
 // *is* one function (Fallout 4's GetEventData) — that leaf's own type name, which is the

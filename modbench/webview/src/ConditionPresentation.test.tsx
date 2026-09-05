@@ -37,6 +37,7 @@ const dataMeta: FieldMetadata = {
   leafTypeName: 'ConditionData',
   fields: [
     leaf('RunOnType', 'enum', {
+      default: 'Subject',
       enumMembers: RUN_ON_VALUES.map(value => ({ value, bitValue: null, label: null })),
       siblingsInUse: Object.fromEntries(RUN_ON_VALUES.map(v => [v, v === 'Reference' ? ['Reference'] : []])),
     }),

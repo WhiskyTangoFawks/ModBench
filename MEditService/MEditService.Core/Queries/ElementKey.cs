@@ -51,8 +51,11 @@ internal readonly record struct ElementKey(IReadOnlyList<(double? Number, string
             if (current.ValueKind != JsonValueKind.Object || !current.TryGetProperty(hop, out current))
                 return DefaultOf(member);
         }
+        return Read(current, member);
+    }
 
-        return current.ValueKind switch
+    private static (double?, string) Read(JsonElement current, FieldMetadata? member) =>
+        current.ValueKind switch
         {
             JsonValueKind.Number => (current.GetDouble(), current.GetDouble().ToString(CultureInfo.InvariantCulture)),
             JsonValueKind.String => (null, current.GetString()!),
@@ -62,7 +65,6 @@ internal readonly record struct ElementKey(IReadOnlyList<(double? Number, string
             JsonValueKind.Array => (FlagBits(current, member), string.Join(", ", current.EnumerateArray().Select(e => e.ToString()))),
             _ => Absent,
         };
-    }
 
     private static double? FlagBits(JsonElement names, FieldMetadata? member)
     {
@@ -79,13 +81,15 @@ internal readonly record struct ElementKey(IReadOnlyList<(double? Number, string
 
     // The codec omits a member equal to its default, so an absent key member reads as that
     // default: what the same element spelled out would read as.
-    private static (double?, string) DefaultOf(FieldMetadata? member) => member?.Type switch
-    {
-        "int" or "float" => (0, "0"),
-        "bool" => (null, "false"),
-        "flags" => (0, ""),
-        _ => Absent,
-    };
+    private static (double?, string) DefaultOf(FieldMetadata? member) => member?.Default is { } declared
+        ? Read(JsonSerializer.SerializeToElement(declared), member)
+        : member?.Type switch
+        {
+            "int" or "float" => (0, "0"),
+            "bool" => (null, "false"),
+            "flags" => (0, ""),
+            _ => Absent,
+        };
 
     private static (double?, string) Absent => (null, "");
 }

@@ -140,7 +140,12 @@ public record FieldMetadata(
 
     // A union member whose type differs by leaf: its shape under each leaf, keyed by the
     // discriminator's values. The field's own shape is the first leaf's. Null when every leaf agrees.
-    IReadOnlyDictionary<string, FieldMetadata>? Variants = null);
+    IReadOnlyDictionary<string, FieldMetadata>? Variants = null,
+
+    // What an absent member reads as: the declared default the codec omits on write. Null where
+    // that is the wire's own zero (0, false, []); an enum always names it, since its members alone
+    // cannot say which is zero.
+    object? Default = null);
 
 /// <summary>Value is the stored document's own node for this field, verbatim, or null when the
 /// document omits the member (which the codec does for a member equal to its default).</summary>

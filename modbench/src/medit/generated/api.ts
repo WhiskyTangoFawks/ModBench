@@ -675,6 +675,7 @@ export interface components {
             variants?: {
                 [key: string]: components["schemas"]["FieldMetadata"];
             } | null;
+            default?: unknown;
         };
         FieldValue: {
             metadata: components["schemas"]["FieldMetadata"];

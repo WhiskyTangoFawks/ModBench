@@ -69,7 +69,9 @@ internal static class FormRefPathBuilder
             if (idle?.Contains(field.Name) == true) continue;
             var present = obj.TryGetProperty(field.Name, out var prop);
             if (!present && !absentMeansNull) continue;
-            var member = present && prop.ValueKind != JsonValueKind.Null ? prop : (JsonElement?)null;
+            JsonElement? member = null;
+            if (present && prop.ValueKind != JsonValueKind.Null) member = prop;
+            else if (field.Default is { } declared) member = JsonSerializer.SerializeToElement(declared);
             Walk(DocumentNodes.VariantFor(field, obj), member, path.Length > 0 ? $"{path}.{field.Name}" : field.Name, onFormKeyLeaf, absentMeansNull);
         }
     }

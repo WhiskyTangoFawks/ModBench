@@ -100,13 +100,16 @@ internal static class LeafClassification
     {
         if (TryMapPrimitive(core, out var duckDb, out var apiType, out var conv))
         {
-            // A value-type primitive is omitted from the document when it equals its CLR default, so a
-            // view puts the default back; a string has no such default and null is honest.
-            string? defaultLiteral;
-            if (core == typeof(string)) defaultLiteral = null;
-            else if (core == typeof(bool)) defaultLiteral = "false";
-            else defaultLiteral = "0";
-            return new(apiType, duckDb, LeafSpec.NoFormKeyTypes, LeafSpec.NoEnumMembers, conv, ViewDefaultLiteral: defaultLiteral);
+            // A string has no default the codec omits, so null is honest; a value type's view puts
+            // the declared default back.
+            if (core == typeof(string))
+                return new(apiType, duckDb, LeafSpec.NoFormKeyTypes, LeafSpec.NoEnumMembers, conv);
+            var declared = NonZero(game.Defaults.Of(prop));
+            var zero = core == typeof(bool) ? "false" : "0";
+            var literal = declared == null ? zero
+                : System.Convert.ToString(declared, System.Globalization.CultureInfo.InvariantCulture)!.ToLowerInvariant();
+            return new(apiType, duckDb, LeafSpec.NoFormKeyTypes, LeafSpec.NoEnumMembers, conv,
+                ViewDefaultLiteral: literal, Default: declared);
         }
 
         if (ReflectedTypes.IsTranslatedString(core))
@@ -128,7 +131,7 @@ internal static class LeafClassification
             return new("string", "VARCHAR", LeafSpec.NoFormKeyTypes, LeafSpec.NoEnumMembers, v => ModKey.FromFileName(v.GetString()!));
 
         if (core.IsEnum)
-            return ClassifyEnumLeaf(core);
+            return ClassifyEnumLeaf(core, game.Defaults.Of(prop));
 
         if (ReflectedTypes.IsFormLink(core))
         {
@@ -140,9 +143,10 @@ internal static class LeafClassification
         return null;
     }
 
-    // Enum leaf, shared by both projections. A [Flags] enum is written by the codec as an array of
-    // member names ("flags"); a plain enum stores its name as VARCHAR.
-    internal static LeafSpec ClassifyEnumLeaf(Type core)
+    // Enum leaf, shared by both projections. The codec writes a [Flags] enum as an array of member
+    // names ("flags"), a plain enum as its name. `declared` is null where the leaf has no owner (a
+    // list element, the mod header).
+    internal static LeafSpec ClassifyEnumLeaf(Type core, object? declared = null)
     {
         var members = GetEnumMembers(core);
 
@@ -151,16 +155,28 @@ internal static class LeafClassification
         if (core.GetCustomAttribute<FlagsAttribute>() != null)
         {
             // A flags enum renders as a joined name list in a view, so its default is the empty string.
+            var set = NonZero(declared) is { } bits ? bits.ToString()!.Split(", ") : null;
             return new("flags", "VARCHAR", LeafSpec.NoFormKeyTypes, members,
                 v => Enum.ToObject(core, ReadFlags(v, core)),
-                ViewDefaultLiteral: "''");
+                ViewDefaultLiteral: "''", Default: set);
         }
 
-        var defaultLiteral = Enum.IsDefined(core, Enum.ToObject(core, 0))
-            ? $"'{Enum.GetName(core, Enum.ToObject(core, 0))}'"
-            : null;
+        // An absent plain enum is its declared default, which the wire cannot derive from the
+        // members alone, so the name always travels: the zero member's where nothing is declared.
+        var name = Enum.GetName(core, declared ?? Enum.ToObject(core, 0));
         return new("enum", "VARCHAR", LeafSpec.NoFormKeyTypes, members,
             v => Enum.Parse(core, v.GetString()!, ignoreCase: true),
-            ViewDefaultLiteral: defaultLiteral);
+            ViewDefaultLiteral: name == null ? null : $"'{name}'", Default: name);
     }
+
+    // A declared default the CLR zero already stands for is not worth a wire member.
+    private static object? NonZero(object? declared) =>
+        declared switch
+        {
+            null => null,
+            bool b => b ? b : null,
+            Enum e => System.Convert.ToInt64(e, System.Globalization.CultureInfo.InvariantCulture) == 0 ? null : e,
+            IConvertible c => System.Convert.ToDouble(c, System.Globalization.CultureInfo.InvariantCulture).CompareTo(0d) == 0 ? null : declared,
+            _ => null,
+        };
 }

@@ -45,6 +45,16 @@ public class ElementKeyTextTests
             ElementKey.Of(spelled, ["Stage", "StageIndex"], FragmentElement)));
     }
 
+    // A key member with a declared default above zero reads as that default when absent.
+    [Fact]
+    public void AnAbsentKeyMember_ReadsAsItsDeclaredDefault()
+    {
+        var element = new FieldMetadata("", "struct", false, [], [], Fields: [new("Version", "int", false, [], [], Default: 6)]);
+        var omitted = JsonDocument.Parse("{}").RootElement;
+
+        Assert.Equal("6", ElementKey.Of(omitted, ["Version"], element).Text);
+    }
+
     // A flags member keys by the names the document carries and orders by their bits, as xEdit's
     // wbStructSK does, so OnStart (1) precedes OnCompletion (2) whatever the names' own order.
     [Fact]

@@ -45,6 +45,15 @@ internal static class LoquiUnions
         return IsUnionBase(setterType, leaves) ? new LoquiUnion(setterType, leaves) : null;
     }
 
+    /// <summary>The class itself when concrete, else the first concrete class under it; null when
+    /// nothing concrete exists.</summary>
+    internal static Type? ConcreteUnder(Type setterType) =>
+        !setterType.IsAbstract
+            ? setterType
+            : LeavesByBase.GetOrAdd(setterType.Assembly, IndexLeavesByBase)[setterType]
+                .Select(l => ReflectedTypes.GetSetterType(l.GetterType))
+                .FirstOrDefault(t => t is { IsAbstract: false });
+
     /// <summary>A base and the concrete classes under it. The base travels with the leaves because
     /// the discriminator's labels are the leaf names read relative to it (<see cref="LeafLabel"/>).</summary>
     internal sealed record LoquiUnion(Type SetterType, List<(Type GetterType, string ClassName)> Leaves);

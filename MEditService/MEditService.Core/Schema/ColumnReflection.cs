@@ -48,7 +48,8 @@ internal static class ColumnReflection
                 AllowsNull: info.AllowsNull,
                 ViewDefaultLiteral: info.ViewDefaultLiteral,
                 KeyMembers: info.KeyMembers,
-                LeafTypeName: info.LeafTypeName));
+                LeafTypeName: info.LeafTypeName,
+                Default: info.Default));
         }
 
         return columns;
@@ -81,6 +82,7 @@ internal static class ColumnReflection
             AllowsNull: leaf.AllowsNull,
             // A nullable property genuinely can be absent-meaning-null, so it keeps NULL rather than
             // being coalesced to a default it never had.
-            ViewDefaultLiteral: nullable ? null : leaf.ViewDefaultLiteral);
+            ViewDefaultLiteral: nullable ? null : leaf.ViewDefaultLiteral,
+            Default: nullable ? null : leaf.Default);
     }
 }

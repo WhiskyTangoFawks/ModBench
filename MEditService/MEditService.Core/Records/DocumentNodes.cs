@@ -19,6 +19,13 @@ internal static class DocumentNodes
         return current.ValueKind == JsonValueKind.Null ? null : current.Clone();
     }
 
+    /// <summary>Two nodes spelling one value: numbers by magnitude, since the codec and a default's
+    /// own spelling may differ in form (2 and 2.0), everything else by text.</summary>
+    internal static bool SameValue(JsonElement a, JsonElement b) =>
+        a.ValueKind == JsonValueKind.Number && b.ValueKind == JsonValueKind.Number
+            ? a.GetDouble().CompareTo(b.GetDouble()) == 0
+            : a.GetRawText() == b.GetRawText();
+
     /// <summary>The shape a member has under the object holding it: its own, or the variant the
     /// object's discriminator names when the member's type varies by leaf.</summary>
     internal static FieldMetadata VariantFor(FieldMetadata member, JsonElement? owner)
