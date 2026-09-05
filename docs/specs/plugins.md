@@ -114,7 +114,7 @@ there is no separate load-order step.
     what I type, so that I can find one without scrolling a 100+-entry load order.
 11. As a user, I want one Refresh, in one place, that re-reads every list at once if any of
     them looks stale, so that I never have to remember which tree owns which refresh (it
-    lives on the [Loadout header](loadout-header.md)). An external MO2 edit is *not* the case
+    lives on the [Loadout header](containers.md)). An external MO2 edit is *not* the case
     this exists for — that reaches the tab on its own (#653, see *Toolbar*).
 12. As a user, I want to right-click a plugin and Reveal it in my OS file manager, so that I
     can go inspect the actual file behind a badge without hunting for it myself.
@@ -595,7 +595,7 @@ Control panel shows that `D` for free. Full contract:
 
 ### Toolbar / title bar
 
-Fixed slot order (`modbench/CLAUDE.md` rule 5): name filter, then the view's state affordance
+Fixed slot order ([containers.md](containers.md) rule 5): name filter, then the view's state affordance
 (here, the record filter — a second, independent narrowing axis), then domain actions, then
 overflow, then native **Collapse All** last.
 
@@ -629,7 +629,7 @@ overflow, then native **Collapse All** last.
 - **Native Collapse All** — the merge made this the deepest tree in the product
   (plugin → record type → record), so it earns the affordance.
 - **No Refresh of its own.** Re-reading `plugins.txt` is part of the single
-  workspace-scope Refresh on the [Loadout header](loadout-header.md), which re-reads every
+  workspace-scope Refresh on the [Loadout header](containers.md), which re-reads every
   Mod-Management source together. There is no reload of the editing backend to offer: the load
   order it holds is reconciled on every change (ADR-0044).
 - **Refresh is not how the tab recovers from an external edit** (#653). The `mods/**`,
@@ -813,7 +813,7 @@ overflow, then native **Collapse All** last.
   open** so the assertions land in the window that actually matters.
 - **The view-header progress indicator (AC2) has no automated test.** `withProgress` returns
   nothing readable and leaves no observable state in the extension host — the same absence of a
-  seam as `showCollapseAll` (modbench/CLAUDE.md title-bar rule 7). It is verified by reading the
+  seam as `showCollapseAll` ([containers.md](containers.md) title-bar rule 7). It is verified by reading the
   call sites (`makeEnterEditing`'s and `makeLoadOrderSync`'s `withPluginsViewProgress`, and that
   `modbench.modList.launchMedit` does not wrap the launch in a second indicator) and by
   `/manual-test` against a real load order. Recorded here as a known untested

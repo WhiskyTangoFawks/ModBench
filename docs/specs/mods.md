@@ -295,7 +295,7 @@ The extension owns the editing backend process
 - **Header**: title "MODS"; description = current profile name; a first non-interactive
   count node ("N active / M installed"); title-bar icon buttons for Filter, Sort Direction
   and Collapse All — three, and nothing else. Switch Profile, Refresh, Deploy
-  and Purge live on the [Loadout header](loadout-header.md): none of them are
+  and Purge live on the [Loadout header](containers.md): none of them are
   about *this tree*, and nine icons is past the point where VS Code
   keeps them visible in a narrow sidebar. Launch Game does not exist (see
   *Deploy / purge* below).
@@ -343,7 +343,7 @@ The extension owns the editing backend process
     Plugins tree the record filter axis. **Consequence, deliberate**: because slot 1 is the Clear
     button while filtered, *editing* an active term is reached by `ctrl+F` (or clear and retype),
     not by a third title-bar icon. That is the cost of the toggle template, weighed and accepted —
-    a third slot-1-adjacent icon is what rule 2 of `modbench/CLAUDE.md` exists to prevent.
+    a third slot-1-adjacent icon is what rule 2 of [containers.md](containers.md) exists to prevent.
   - **No matches** shows a message naming the term rather than a bare empty tree, which reads as
     "there is nothing here". Rows that survive filtering by design — an ADR-0026 error row, this
     tree's pinned Overwrite row — are content: the message asks the provider what is *showing*,
@@ -352,7 +352,7 @@ The extension owns the editing backend process
     not persisted across window reloads. It is a lens, not a setting.
   - **Icon note**: `$(clear-all)` matches VS Code's own "Clear Extensions Search Results";
     the choice is recorded here rather than silently inherited.
-- **Profile selector**: reached from the [Loadout header](loadout-header.md)'s Profile row,
+- **Profile selector**: reached from the [Loadout header](containers.md)'s Profile row,
   not this tree — switching profile swaps the modlist *and* `plugins.txt` *and* invalidates
   any running editing backend's load order, so its scope is the workspace. It opens a quick pick
   of directories under `profiles/`; selecting one persists `selected_profile`, refreshes the tree
@@ -421,7 +421,7 @@ The extension owns the editing backend process
   because usvfs is a live VFS it holds up across however many tool runs; physical hardlinks
   have no such lifetime, so "deployed" is a mode the user is in.
 - **There is no Launch Game action** (deploy, run, purge-on-exit). The affordance is the
-  [Loadout header](loadout-header.md)'s
+  [Loadout header](containers.md)'s
   **Launch…**, a task picker over the executables registry — one affordance that launches and
   nothing else. Deploy-run-purge coupling was
   rejected for three reasons, none of them cost: (1) *the launched process is not the game* — a script
@@ -439,7 +439,7 @@ The extension owns the editing backend process
 ### Launching executables as tasks (*specced, not yet implemented*)
 
 Everything in this section is a decision, not current behavior: today the
-[Loadout header](loadout-header.md)'s Launch… affordance is placed but unwired.
+[Loadout header](containers.md)'s Launch… affordance is placed but unwired.
 
 Launching is a **VS Code task**, not a button. Tasks are the native "run a program" mechanism
 — a picker, user-editable configuration, terminal output, exit codes — and per

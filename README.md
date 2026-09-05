@@ -39,7 +39,7 @@ and [ADR-0042](docs/adr/0042-plugin-is-the-source-of-truth-lossless-source.md).
 | **Record editor** — xEdit-style compare grid across the whole load order, conflict coloring (ConflictAll/ConflictThis), in-place editing, copy-as-override / new record, VMAD | [medit-record-editor.md](docs/specs/medit-record-editor.md) | Implemented |
 | **Version control** — Track, edit branch, Save & Compile, native SCM integration, external-change handling, crash recovery | [medit-version-control.md](docs/specs/medit-version-control.md) | Implemented |
 | **Referenced By** — what points at a record | [medit-referenced-by.md](docs/specs/medit-referenced-by.md) | Implemented |
-| **Loadout header** — profile, load order, deployment readout | [loadout-header.md](docs/specs/loadout-header.md) | Implemented |
+| **Loadout view** — profile and deployment readout, the container's settings view | [containers.md](docs/specs/containers.md) | Implemented |
 | **Record filter** — plain `.sql` files against the record index, applied with a Code Lens | [plugins.md](docs/specs/plugins.md) | Implemented |
 | **Repair** — byte-level repair of malformed plugins the Creation Kit wouldn't have written | [medit-repair.md](docs/specs/medit-repair.md) | Specced |
 | **Downloads** — Nexus download queue and tree (`nxm://` handler still pending) | [downloads.md](docs/specs/downloads.md) | Implemented |

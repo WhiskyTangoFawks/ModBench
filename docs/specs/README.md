@@ -4,7 +4,7 @@ One living spec per Modbench UI surface. A **surface** is a top-level UI unit th
 
 | Spec | Surface | Status |
 |---|---|---|
-| [loadout-header.md](loadout-header.md) | Loadout header — workspace-scope readout and action home (profile, load order, deployment) | Implemented; Launch… wiring deferred |
+| [containers.md](containers.md) | Modbench containers — the activity-bar entry and the Referenced By panel, their views in default order, and the title-bar placement rules every view carries. Not a surface | Implemented; Launch… wiring deferred |
 | [mods.md](mods.md) | Mods (Loadout) — install, order, enable, deploy | Implemented; executables-as-tasks specced |
 | [plugins.md](plugins.md) | Plugins — the one Plugins tree: enable/reorder `plugins.txt` (Mod Management), plus record navigation and the SQL record filter whenever the backend is running (Editing) | Implemented |
 | [downloads.md](downloads.md) | Downloads — Nexus integration, download queue | Implemented; `nxm://` handler pending |
