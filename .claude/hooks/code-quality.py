@@ -34,11 +34,8 @@ CS_PROJECTS = {
     "MEditService/MEditService.Api": "MEditService.Api",
     "MEditService/MEditService.Tests": "MEditService.Tests",
 }
-# Rules that never show up in the build+SARIF pass below even at configured
-# 'suggestion' severity (verified empirically: absent from a from-clean build
-# with -p:ErrorLog, present under `dotnet format`) — every other note-level
-# style/analyzer rule in this repo *is* caught by build_sarif. Scanned
-# separately, restricted to just these IDs so the extra pass stays cheap.
+# These two never reach the SARIF log even at 'suggestion' severity; only `dotnet format`
+# reports them.
 FORMAT_ONLY_DIAGNOSTICS = ("IDE1006", "RCS1226")
 # --- Frontend: extension package that carries the ESLint config. --------------
 TS_PACKAGE = "modbench"
@@ -107,17 +104,9 @@ def _last_prompt_index(entries: list[dict]) -> int:
 
 
 def turn_edited_files(transcript_path: str | None) -> set[str] | None:
-    """Absolute paths touched by Edit/Write/NotebookEdit calls this turn.
-
-    `git diff --name-only HEAD` reports the whole working-tree diff, which
-    includes anything left uncommitted by earlier turns or other sessions —
-    not just what happened just now. Scope to this turn by reading the
-    transcript and collecting tool_use file_paths after the most recent real
-    user prompt.
-
-    Returns None if the transcript can't be read, so the caller can fall back
-    to the unscoped diff rather than silently under-report.
-    """
+    """Paths touched by Edit/Write/NotebookEdit calls since the last user prompt, read from the
+    transcript because `git diff HEAD` carries earlier turns' dirt. None when the transcript is
+    unreadable, so the caller falls back to the unscoped diff."""
     entries = _read_transcript(transcript_path)
     if entries is None:
         return None
@@ -135,16 +124,9 @@ def turn_edited_files(transcript_path: str | None) -> set[str] | None:
 
 # ---------------------------------------------------------------- backend (C#)
 def build_sarif(root: str, csproj: str, sarif_path: str) -> None:
-    """Compile one project in isolation, emitting a SARIF error log.
-
-    Every flag is load-bearing for reliably capturing diagnostics:
-      --no-incremental        an up-to-date build is a no-op and emits no SARIF.
-      UseSharedCompilation=false  the persistent Roslyn build server caches
-                              analyzer results, so even --no-incremental hands
-                              back an empty log; a fresh out-of-process csc
-                              re-runs analyzers and populates the SARIF.
-      --no-dependencies       keep the compile to just this project.
-    """
+    """Compile one project into a SARIF log. --no-incremental: an up-to-date build emits none.
+    UseSharedCompilation=false: the Roslyn build server caches analyzer results and returns an
+    empty log. --no-dependencies: this project only."""
     subprocess.run(
         ["dotnet", "build", os.path.join(root, csproj),
          "--no-dependencies", "--no-incremental",
@@ -186,13 +168,8 @@ def read_sarif(sarif_path: str) -> list[dict]:
 
 
 def format_findings(root: str, csproj: str, changed_rel: list[str], report_dir: str) -> list[dict]:
-    """Catch FORMAT_ONLY_DIAGNOSTICS, which build_sarif never sees.
-
-    --include scopes analysis to just the changed files (cheap, mirrors the
-    changed_abs filtering done for SARIF) and --diagnostics restricts the
-    analyzer run to the two known blind-spot rules instead of re-running the
-    full suite build_sarif already covers.
-    """
+    """Catch FORMAT_ONLY_DIAGNOSTICS, which build_sarif never sees; --include scopes it to the
+    changed files and --diagnostics to those two rules, so the pass stays cheap."""
     subprocess.run(
         ["dotnet", "format", os.path.join(root, csproj),
          "--severity", "info", "--verify-no-changes",

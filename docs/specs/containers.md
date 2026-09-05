@@ -83,10 +83,10 @@ stays quiet rather than repeating it.
 
 ### mEdit has no lifecycle affordance
 
-The backend launches with the extension (maintainer ruling 2026-09-01: the DB-file-backed
-session made startup cheap enough that lifecycle stopped being a user decision); the former
-Launch mEdit / Close mEdit toggle on the [Plugins view](plugins.md) is gone. This header
-carries no mEdit row of any kind, running or not, and reads no backend/load order state —
+The backend launches with the extension (the DB-file-backed session makes startup cheap enough
+that lifecycle is not a user decision); the [Plugins view](plugins.md) carries no Launch mEdit /
+Close mEdit toggle. This header carries no mEdit row of any kind, running or not, and reads no
+backend/load order state —
 `LoadoutHeaderProvider` only ever reads Mod-Management state. (The earlier ruling that placed
 the pair — "launch mEdit should be an option on the plugins view" — is superseded by there
 being no pair to place.)
