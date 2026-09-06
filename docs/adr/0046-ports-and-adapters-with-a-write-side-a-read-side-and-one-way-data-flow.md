@@ -11,6 +11,10 @@ an implementing agent can answer structural questions from the document rather t
 maintainer. Vocabulary is the industry's: ports and adapters for the shape, command query
 responsibility segregation for the two sides.
 
+The full data-flow view, every arrow labelled with what moves and which way, is
+[docs/architecture/target-architecture.drawio](../architecture/target-architecture.drawio);
+the sketch below is its module skeleton.
+
 ```mermaid
 flowchart TB
   subgraph L1["Front end"]
