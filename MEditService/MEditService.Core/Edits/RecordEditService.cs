@@ -279,10 +279,6 @@ public sealed class RecordEditService(
         }
         else
         {
-            // Captured before anything moves: SlotIndex mirrors the parent's ordered list, and the
-            // survivors are re-based the same way the list closes up below. Null for a top-level record.
-            var parentLink = reads.GetContainerParent(plugin, formKey);
-
             // The unit may already be gone (another tool, a hand delete): that is the state this call
             // is trying to reach, not a failure.
             var groupDirectory = unit.IsDirectoryPerRecord
@@ -300,21 +296,8 @@ public sealed class RecordEditService(
             }
 
             // One line leaves one document (ADR-0042 decision 4): no sibling is renamed, so a mid-list
-            // delete stages as one deletion plus one changed parent.
+            // delete stages as one deletion plus one changed group document.
             SourceChildOrder.RemoveByIdentity(groupDirectory, formKey);
-
-            // container_child's copy of the same renumbering: the deleted row simply is not among the
-            // survivors.
-            if (parentLink is { } parent)
-            {
-                var survivors = reads.GetContainerChildren(plugin, parent.ParentFormKey)
-                    .Where(c => c.SlotName == parent.SlotName && c.ChildFormKey != formKey)
-                    .OrderBy(c => c.SlotIndex)
-                    .Select((c, i) => (c.ChildFormKey, SlotIndex: i))
-                    .ToList();
-                index.ReplaceContainerChildSlot(
-                    plugin, parent.ParentFormKey, parent.ParentRecordType, parent.SlotName, survivors);
-            }
 
             delta = (formKey, null);
         }
@@ -387,7 +370,8 @@ public sealed class RecordEditService(
         var reads = index.At(RecordRef.Effective);
 
         // A record a container's document carries lands inside the destination's copy of that
-        // document; the folder-split children the refusal below still names have no such document.
+        // document (the container rule); the refusal below is for a record with no group of its own
+        // that no readable container document carries.
         if (RecordTypeDispatch.For(release).GroupFolderNameFor(document.RecordType) is null
             && _recordCopy.EmbeddedContainerOf(reads, sourcePlugin, formKey, release) is { } embedding)
         {
@@ -397,13 +381,13 @@ public sealed class RecordEditService(
 
         if (RefuseIfCopySourceHasNoContainerOfItsOwn(document.RecordType, release) is { } containerRefusal) return containerRefusal;
 
-        var isFlat = RecordTypeDispatch.For(release).FolderNameFor(document.RecordType) is not null;
+        var isContainer = IsContainerType(document.RecordType, release);
         if (!IsFreeAtBothRefs(index, destinationPlugin, formKey))
         {
             // A destination already overriding the explicitly-selected container record gets it
-            // replaced, own-fields-only (xEdit's copy-into behavior). Flat records still refuse, as
-            // does a record held only at Head.
-            if (!isFlat && reads.GetDocument(formKey, destinationPlugin) is { } existingTarget)
+            // replaced, own-fields-only (xEdit's copy-into behavior). Every other record still
+            // refuses, as does a record held only at Head.
+            if (isContainer && reads.GetDocument(formKey, destinationPlugin) is { } existingTarget)
             {
                 return ReplaceExplicitContainerCopyTarget(
                     index, sourcePlugin, formKey, document, existingTarget, destinationPlugin, destinationModFolder, release);
@@ -444,12 +428,8 @@ public sealed class RecordEditService(
 
         var body = ReadCopySourceBody(sourcePlugin, formKey, document, release);
 
-        if (!isFlat)
-        {
-            // A plain Copy as Override is own-fields-only, so a container's inline children are
-            // stripped. A no-op for Quest, whose children are folder-split.
-            body = StripEmbeddedChildrenForShallowCopy(body, document.RecordType, release);
-        }
+        // A plain Copy as Override is own-fields-only, so a container's inline children are stripped.
+        if (isContainer) body = StripEmbeddedChildrenForShallowCopy(body, document.RecordType, release);
 
         // A Cell's block bucket is the one thing resolved first, because it is chosen (or minted)
         // rather than derived.
@@ -488,24 +468,16 @@ public sealed class RecordEditService(
         var (index, destinationModFolder, release, document) = source;
         if (RefuseIfDisallowedForCopyAsNewRecord(document.RecordType) is { } disallowedRefusal) return disallowedRefusal;
 
-        // The QUST/DIAL/INFO family copies as new (xEdit allows exactly these); everything else
-        // non-flat still refuses.
-        var isFlat = RecordTypeDispatch.For(release).FolderNameFor(document.RecordType) is not null;
-        var concreteName = CopyAsNewContainerFamilyName(document.RecordType, release);
-        if (!isFlat && concreteName is "DialogTopic")
+        // A record with no group of its own copies into its container's document (a topic into its
+        // quest, a response into its topic); a placed reference has no such container and refuses.
+        if (RecordTypeDispatch.For(release).FolderNameFor(document.RecordType) is null)
         {
-            return CopyDialogTopicAsNewRecord(
-                index, sourcePlugin, formKey, document, destinationPlugin, destinationModFolder, release, requestedFormKey);
-        }
-        if (!isFlat && concreteName is "DialogResponses")
-        {
-            return CopyDialogResponseAsNewRecord(
-                index, sourcePlugin, formKey, document, destinationPlugin, destinationModFolder, release, requestedFormKey);
-        }
-        if (!isFlat && concreteName is not "Quest"
-            && RefuseIfContainerType(document.RecordType, release) is { } containerRefusal)
-        {
-            return containerRefusal;
+            if (index.At(RecordRef.Effective).GetContainerParent(sourcePlugin, formKey) is { } parent)
+            {
+                return CopyEmbeddedChildAsNewRecord(
+                    index, sourcePlugin, formKey, document, parent, destinationPlugin, destinationModFolder, release, requestedFormKey);
+            }
+            if (RefuseIfContainerType(document.RecordType, release) is { } containerRefusal) return containerRefusal;
         }
 
         if (ResolveTargetFormKey(index, destinationPlugin, requestedFormKey, out var targetFormKey) is { } refusedTarget)
@@ -513,13 +485,11 @@ public sealed class RecordEditService(
 
         var sourceRecord = ReadCopySourceRecord(sourcePlugin, formKey, document, release);
         var newRecord = sourceRecord.Duplicate(FormKey.Factory(targetFormKey));
-        if (newRecord is IFormLinkContainer selfLinking)
-        {
-            selfLinking.RemapLinks(new Dictionary<FormKey, FormKey> { [FormKey.Factory(formKey)] = FormKey.Factory(targetFormKey) });
-        }
+        RemapSelfLink(newRecord, formKey, targetFormKey);
 
-        // Own-record-only, like Copy as Override: folder-split children never ride along (deep copy
+        // Own-record-only, like Copy as Override: a container's children never ride along (deep copy
         // is a separate operation).
+        ContainerChildFields.ClearAllChildSlots(newRecord);
         var placement = SourcePlacement.For(
             destinationPlugin.Name, document.RecordType, targetFormKey, newRecord.EditorID, release);
         var relativePath = placement.RelativePath;
@@ -542,8 +512,8 @@ public sealed class RecordEditService(
     }
 
     // The destination's embedded children are transplanted onto the replacing record so the copy
-    // cannot delete them; folder-split children have their own files. An EditorID difference renames
-    // the unit, since the round-trip gate regenerates canonical names.
+    // cannot delete them. An EditorID difference renames the unit, since the round-trip gate
+    // regenerates canonical names.
     private RecordEditResult ReplaceExplicitContainerCopyTarget(
         IRecordIndex index, PluginKey sourcePlugin, string formKey, RecordDocument sourceDocument,
         RecordDocument existingTarget, PluginKey destinationPlugin, string destinationModFolder, GameRelease release)
@@ -575,126 +545,84 @@ public sealed class RecordEditService(
         return RecordEditResult.Success();
     }
 
-    // Links between copied siblings are deliberately not remapped: a copied response naming its
-    // sibling keeps naming the original, xEdit's own behavior.
-    private RecordEditResult CopyDialogTopicAsNewRecord(
-        IRecordIndex index, PluginKey sourcePlugin, string formKey, RecordDocument document,
+    // The embedded subtree rides along, each record under a fresh key drawn before anything is written.
+    // Links between copied siblings are not remapped, xEdit's own behavior. A missing container chain
+    // auto-creates bare and Partial Form.
+    private RecordEditResult CopyEmbeddedChildAsNewRecord(
+        IRecordIndex index, PluginKey sourcePlugin, string formKey, RecordDocument document, ContainerChildRow parent,
         PluginKey destinationPlugin, string destinationModFolder, GameRelease release, string? requestedFormKey)
     {
         var reads = index.At(RecordRef.Effective);
-        var parentQuest = reads.GetContainerParent(sourcePlugin, formKey)
-            ?? throw new InvalidOperationException(
-                $"{sourcePlugin.Name}'s index names no parent quest for dialog topic {formKey} — " +
-                "container_child resolved every other read of this record.");
-
-        // Every response is copied too, so an unreadable one is refused here, before the topic or
-        // its quest is written.
-        foreach (var childFormKey in reads.GetContainerChildren(sourcePlugin, formKey).Select(c => c.ChildFormKey))
-        {
-            if (reads.GetDocument(childFormKey, sourcePlugin) is { } childDocument
-                && RefuseIfParseFailed(childFormKey, childDocument) is { } childRefusal)
-            {
-                return childRefusal;
-            }
-        }
+        if (RefuseIfAnyDescendantParseFailed(reads, sourcePlugin, formKey) is { } descendantRefusal) return descendantRefusal;
 
         if (ResolveTargetFormKey(index, destinationPlugin, requestedFormKey, out var targetFormKey) is { } refusedTarget)
             return refusedTarget;
 
-        // The topic's embedded children ride along, each under a fresh key of its own. One document
-        // lands, so every key is drawn before anything is written and the allocator is told which
-        // keys this copy has already taken.
-        var topicRecord = ReadCopySourceRecord(sourcePlugin, formKey, document, release)
-            .Duplicate(FormKey.Factory(targetFormKey));
-        var children = ContainerChildFields.EnumerateChildren(topicRecord).Select(c => (c.SlotName, c.Child)).ToList();
-        ContainerChildFields.ClearAllChildSlots(topicRecord);
-        if (topicRecord is IFormLinkContainer selfLinking)
-        {
-            selfLinking.RemapLinks(new Dictionary<FormKey, FormKey> { [FormKey.Factory(formKey)] = FormKey.Factory(targetFormKey) });
-        }
+        var newRecord = ReadCopySourceRecord(sourcePlugin, formKey, document, release).Duplicate(FormKey.Factory(targetFormKey));
+        RemapSelfLink(newRecord, formKey, targetFormKey);
 
         var taken = new HashSet<string>(StringComparer.Ordinal) { targetFormKey };
-        foreach (var (slotName, child) in children)
-        {
-            if (ResolveTargetFormKey(index, destinationPlugin, requestedFormKey: null, out var childFormKey, taken) is { } childRefused)
-                return childRefused;
-            taken.Add(childFormKey);
-
-            var childRecord = child.Duplicate(FormKey.Factory(childFormKey));
-            if (childRecord is IFormLinkContainer childSelfLinking)
-            {
-                childSelfLinking.RemapLinks(new Dictionary<FormKey, FormKey> { [child.FormKey] = FormKey.Factory(childFormKey) });
-            }
-            ContainerChildFields.AddChildToSlot(topicRecord, slotName, childRecord);
-        }
-
-        // The parent quest override, found or minted — resolved to its own directory either way.
-        var questDirectory = _recordCopy.EnsureContainerAncestorDirectory(
-            index, reads, sourcePlugin, parentQuest.ParentFormKey, parentQuest.ParentRecordType,
-            destinationPlugin, destinationModFolder, release);
-
-        var topicPlacement = SourcePlacement.ForSlotChild(
-            destinationModFolder, questDirectory, parentQuest.SlotName, targetFormKey, topicRecord.EditorID,
-            isDirectory: ContainerChildFields.HasFolderSplitChildren(topicRecord.GetType()));
-        var topicBody = WritePlaced(
-            destinationModFolder, topicPlacement, targetFormKey, path => SerializeAndWrite(_codec, topicRecord, path, release));
-        // Every embedded child's row is the index's derivation from this one document.
-        index.CreateWorkingTreeRecord(destinationPlugin, targetFormKey, document.RecordType, topicBody);
-
-        // The topic's own membership in the quest's slot, appended at the end.
-        RecordCopy.AppendChildToSlot(
-            index, reads, destinationPlugin, parentQuest.ParentFormKey, parentQuest.ParentRecordType,
-            parentQuest.SlotName, targetFormKey);
-
-        mirror.ReapplyFilter();
-
-        if (logger.IsEnabled(LogLevel.Information))
-        {
-            logger.LogInformation(
-                "Copied {FormKey} from {SourcePlugin} ({SourceOrigin}) as new dialog topic {NewFormKey} into " +
-                "{DestinationPlugin} ({DestinationOrigin}) with {ChildCount} response(s), each under a fresh FormKey",
-                formKey, sourcePlugin.Name, sourcePlugin.Origin, targetFormKey, destinationPlugin.Name,
-                destinationPlugin.Origin, children.Count);
-        }
-        return RecordEditResult.Success(targetFormKey);
-    }
-
-    // The missing ancestor chain (topic, then its quest) auto-creates bare and Partial Form, with
-    // the new response inline in the topic's document.
-    private RecordEditResult CopyDialogResponseAsNewRecord(
-        IRecordIndex index, PluginKey sourcePlugin, string formKey, RecordDocument document,
-        PluginKey destinationPlugin, string destinationModFolder, GameRelease release, string? requestedFormKey)
-    {
-        var reads = index.At(RecordRef.Effective);
-        var parentTopic = reads.GetContainerParent(sourcePlugin, formKey)
-            ?? throw new InvalidOperationException(
-                $"{sourcePlugin.Name}'s index names no parent topic for dialog response {formKey} — " +
-                "container_child resolved every other read of this record.");
-
-        if (ResolveTargetFormKey(index, destinationPlugin, requestedFormKey, out var targetFormKey) is { } refusedTarget)
-            return refusedTarget;
-
-        var newRecord = ReadCopySourceRecord(sourcePlugin, formKey, document, release)
-            .Duplicate(FormKey.Factory(targetFormKey));
-        if (newRecord is IFormLinkContainer selfLinking)
-        {
-            selfLinking.RemapLinks(new Dictionary<FormKey, FormKey> { [FormKey.Factory(formKey)] = FormKey.Factory(targetFormKey) });
-        }
+        if (RekeyEmbeddedDescendants(index, destinationPlugin, newRecord, taken) is { } childRefused) return childRefused;
 
         var appended = _recordCopy.AppendEmbeddedChild(
-            sourcePlugin, parentTopic.ParentFormKey, parentTopic.ParentRecordType, parentTopic.SlotName, newRecord,
+            sourcePlugin, parent.ParentFormKey, parent.ParentRecordType, parent.SlotName, newRecord,
             destinationPlugin, destinationModFolder, index, release);
         if (!appended.Applied) return appended;
 
         if (logger.IsEnabled(LogLevel.Information))
         {
             logger.LogInformation(
-                "Copied {FormKey} from {SourcePlugin} ({SourceOrigin}) as new dialog response {NewFormKey} into " +
-                "{DestinationPlugin} ({DestinationOrigin})",
+                "Copied {FormKey} from {SourcePlugin} ({SourceOrigin}) as new record {NewFormKey} into " +
+                "{DestinationPlugin} ({DestinationOrigin}) — inside {ContainerFormKey}'s {SlotName} slot, " +
+                "with {DescendantCount} embedded descendant(s) each under a fresh FormKey",
                 formKey, sourcePlugin.Name, sourcePlugin.Origin, targetFormKey, destinationPlugin.Name,
-                destinationPlugin.Origin);
+                destinationPlugin.Origin, parent.ParentFormKey, parent.SlotName, taken.Count - 1);
         }
         return RecordEditResult.Success(targetFormKey);
+    }
+
+    // Every embedded descendant is copied too, so an unreadable one is refused before anything is
+    // written. A stub is all a parse-failed record has.
+    private static RecordEditResult? RefuseIfAnyDescendantParseFailed(IRecordReads reads, PluginKey plugin, string containerFormKey)
+    {
+        foreach (var childFormKey in reads.GetContainerChildren(plugin, containerFormKey).Select(c => c.ChildFormKey))
+        {
+            if (reads.GetDocument(childFormKey, plugin) is { } childDocument
+                && RefuseIfParseFailed(childFormKey, childDocument) is { } childRefusal)
+            {
+                return childRefusal;
+            }
+            if (RefuseIfAnyDescendantParseFailed(reads, plugin, childFormKey) is { } deeper) return deeper;
+        }
+        return null;
+    }
+
+    // In place, on the duplicate's own graph: the list order is untouched, and a child's own
+    // embedded children are re-keyed the same way one level down.
+    private RecordEditResult? RekeyEmbeddedDescendants(
+        IRecordIndex index, PluginKey destinationPlugin, IMajorRecordGetter container, HashSet<string> taken)
+    {
+        var containerType = ContainerChildFields.NormalizedTypeName(container.GetType());
+        foreach (var (slotName, _, child) in ContainerChildFields.EnumerateChildren(container).ToList())
+        {
+            if (!ContainerChildFields.EmbeddedSlots.Contains((containerType, slotName))) continue;
+            if (ResolveTargetFormKey(index, destinationPlugin, requestedFormKey: null, out var childFormKey, taken) is { } refused)
+                return refused;
+            taken.Add(childFormKey);
+
+            var oldFormKey = child.FormKey.ToString();
+            ((IMajorRecordInternal)child).FormKey = FormKey.Factory(childFormKey);
+            RemapSelfLink(child, oldFormKey, childFormKey);
+            if (RekeyEmbeddedDescendants(index, destinationPlugin, child, taken) is { } deeper) return deeper;
+        }
+        return null;
+    }
+
+    // A self-link is remapped onto the new FormKey, as xEdit does.
+    private static void RemapSelfLink(IMajorRecordGetter record, string oldFormKey, string newFormKey)
+    {
+        if (record is IFormLinkContainer links)
+            links.RemapLinks(new Dictionary<FormKey, FormKey> { [FormKey.Factory(oldFormKey)] = FormKey.Factory(newFormKey) });
     }
 
     // A destination loading before the origin would be an underride, silently
@@ -722,12 +650,11 @@ public sealed class RecordEditService(
             "Pick a destination that loads after the origin.");
     }
 
-    // The container types Copy as New Record supports are xEdit's DIAL/INFO/QUST allowance.
-    private static string? CopyAsNewContainerFamilyName(string recordType, GameRelease release)
-    {
-        var name = RecordTypeDispatch.For(release).ConcreteFor(recordType)?.Name;
-        return name is "Quest" or "DialogTopic" or "DialogResponses" ? name : null;
-    }
+    // A record with child slots: the copy gestures land it own-fields-only, and replace an existing
+    // override in place rather than refusing.
+    private static bool IsContainerType(string recordType, GameRelease release) =>
+        RecordTypeDispatch.For(release).ConcreteFor(recordType) is { } concrete
+        && ContainerChildFields.EnumerateChildFieldsFor(concrete) != null;
 
     // Verbatim source text, no deserialization; an untracked source falls back to the indexed body,
     // the only representation that exists for it.
@@ -1217,8 +1144,8 @@ public sealed class RecordEditService(
         string writePath;
         if (isDirectoryPerRecord)
         {
-            // Moved whole, not recreated from scratch: a container's nested folder-split children (a
-            // Quest's own DialogTopics subtree) travel with it rather than being orphaned.
+            // Moved whole, not recreated from scratch: a worldspace's block subtree travels with it
+            // rather than being orphaned.
             transaction.Move(modFolder, oldLeafPath, newLeafPath);
             writePath = Path.Combine(newLeafPath, SourceUnitResolver.RecordDataFileName);
         }
@@ -1546,11 +1473,11 @@ public sealed class RecordEditService(
 
         return RecordEditResult.Refused(
             RecordEditRefusal.ContainerRecordNotYetSupported,
-            $"'{recordType}' has no source file of its own — it is a container record (Cell, Worldspace, " +
-            "Quest) or a record embedded in one (a placed reference, landscape, navmesh, dialog topic, " +
-            "scene). Editing its fields works, and so do deleting and renumbering it; creating one from " +
-            "scratch is not supported — a brand-new record has no containment for anything to place " +
-            "it into.");
+            $"'{recordType}' has no source file of its own — it is a container record (Cell, Worldspace) " +
+            "or a record embedded in one (a placed reference, landscape, navmesh, dialog topic, branch, " +
+            "scene, response). Editing its fields works, and so do deleting and renumbering it; creating " +
+            "one from scratch is not supported — a brand-new record has no containment for anything to " +
+            "place it into.");
     }
 
     // xEdit refuses CELL/WRLD/LAND/NAVM/PGRD/ROAD/NAVI: a fresh FormKey leaves the copy with no group
@@ -1575,8 +1502,8 @@ public sealed class RecordEditService(
 
         return RecordEditResult.Refused(
             RecordEditRefusal.ContainerRecordNotYetSupported,
-            $"'{recordType}' has no container of its own anywhere in the tree — it is a folder-split child " +
-            "with no independent top-level existence (a dialog topic, a scene).");
+            $"'{recordType}' lives inside a container's document (a dialog topic, a scene), and no readable " +
+            "container document in the source plugin carries this record.");
     }
 
     /// <summary>Interior placement carries no gameplay meaning (PlacementWalker records null block/sub

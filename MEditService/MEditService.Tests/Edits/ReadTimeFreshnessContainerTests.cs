@@ -30,7 +30,7 @@ public sealed class ReadTimeFreshnessContainerTests : IDisposable
     private string RelativePath(string absolutePath) => Path.GetRelativePath(_fixture.ModFolder, absolutePath);
 
     [Fact]
-    public void ReadingAQuestWithFolderSplitChildren_LeavesItsIndexedBodyClean()
+    public void ReadingAQuestWithChildren_LeavesItsIndexedBodyClean()
     {
         Assert.NotNull(Reads().GetRecord(_fixture.Quest.ToString()));
 

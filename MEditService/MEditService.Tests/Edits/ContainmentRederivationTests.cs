@@ -150,7 +150,7 @@ public sealed class ContainmentRederivationTests : IDisposable
         Assert.Equal(topCellBefore, index.At(RecordRef.Effective).GetCellLocation(_fixture.Plugin, _fixture.TopCell.ToString()));
     }
 
-    // ---- delete a folder-split container child (and slot-reindex the survivors) ----
+    // ---- delete an embedded quest child (and slot-reindex the survivors) ----
 
     [Fact]
     public void DeletingTheMiddleOfThreeDialogTopics_ReflectsTheRemoval_AndReindexesTheSurvivor_SameLoadOrder()
@@ -159,21 +159,21 @@ public sealed class ContainmentRederivationTests : IDisposable
         var before = index.At(RecordRef.Effective).GetContainerChildren(_fixture.Plugin, _fixture.Quest.ToString());
         Assert.Equal(
             [(_fixture.DialogTopic.ToString(), 0), (_fixture.DialogTopic2.ToString(), 1), (_fixture.DialogTopic3.ToString(), 2)],
-            before.OrderBy(c => c.SlotIndex).Select(c => (c.ChildFormKey, c.SlotIndex)));
+            before.Where(c => c.SlotName == "DialogTopics").OrderBy(c => c.SlotIndex).Select(c => (c.ChildFormKey, c.SlotIndex)));
 
         var result = EditService().DeleteRecord(_fixture.Plugin, _fixture.DialogTopic2.ToString());
         Assert.True(result.Applied, result.Message);
 
         var after = index.At(RecordRef.Effective).GetContainerChildren(_fixture.Plugin, _fixture.Quest.ToString());
         Assert.DoesNotContain(after, c => c.ChildFormKey == _fixture.DialogTopic2.ToString());
-        // The survivor after the deleted slot renumbers down by one — exactly what the delete just
-        // did to the parent document's own ordered child list (SourceChildOrder.RemoveByIdentity).
+        // The survivor after the deleted slot renumbers down by one: its row is re-derived from the
+        // quest's document, whose DialogTopics array just closed up.
         Assert.Equal(
             [(_fixture.DialogTopic.ToString(), 0), (_fixture.DialogTopic3.ToString(), 1)],
-            after.OrderBy(c => c.SlotIndex).Select(c => (c.ChildFormKey, c.SlotIndex)));
+            after.Where(c => c.SlotName == "DialogTopics").OrderBy(c => c.SlotIndex).Select(c => (c.ChildFormKey, c.SlotIndex)));
     }
 
-    // ---- Regression: renumbering a folder-split container that itself owns folder-split children ----
+    // ---- Regression: renumbering an embedded container that itself owns embedded children ----
 
     [Fact]
     public void RenumberingADialogTopic_RepointsItsResponsesContainerChildRows_ToTheNewParentFormKey_SameLoadOrder()
@@ -384,7 +384,7 @@ public sealed class ContainmentRederivationTests : IDisposable
     // ---- parity against a fresh reconcile ingest of the mutated tree ----
 
     [Fact]
-    public void AfterDeletingAFolderSplitChild_AFreshReopen_AgreesWithTheLive()
+    public void AfterDeletingAQuestChild_AFreshReopen_AgreesWithTheLive()
     {
         var deleted = EditService().DeleteRecord(_fixture.Plugin, _fixture.DialogTopic2.ToString());
         Assert.True(deleted.Applied, deleted.Message);

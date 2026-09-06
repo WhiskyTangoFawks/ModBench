@@ -1183,29 +1183,6 @@ public sealed class DuckDbRecordIndex : IRecordIndex
             : null;
     }
 
-    public void ReplaceContainerChildSlot(
-        PluginKey key, string parentFormKey, string parentRecordType, string slotName,
-        IReadOnlyList<(string ChildFormKey, int SlotIndex)> children)
-    {
-        DuckDbSql.ExecuteFor(Connection,
-            """
-            DELETE FROM mirror.container_child
-            WHERE parent_form_key = $1 AND slot_name = $2 AND plugin = $3 AND origin = $4
-            """,
-            parentFormKey, slotName, key.Name, key.Origin!);
-
-        if (children.Count == 0) return;
-
-        using var appender = Connection.CreateAppender("mirror", "container_child");
-        foreach (var (childFormKey, slotIndex) in children)
-        {
-            PluginIngest.AppendContainerChildRow(
-                appender,
-                new ContainerChildRow(childFormKey, parentFormKey, parentRecordType, slotName, slotIndex),
-                key.Name, key.Origin!);
-        }
-    }
-
     // An UPDATE, not a delete-then-rebuild: the children did not move, only the identity they name.
     // A child the new document already re-derived is left for the old identity's teardown, or it
     // would count twice.

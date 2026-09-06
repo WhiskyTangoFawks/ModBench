@@ -3,9 +3,8 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Tests.Source;
 
-/// <summary>The three shapes are the whole taxonomy: a flat record is a file in its group
-/// folder, a top-level container a directory there, an interior Cell one under a block
-/// pair.</summary>
+/// <summary>The whole taxonomy: a flat record (a quest included) is a file in its group folder, a
+/// container a directory there, an interior Cell one under a block pair.</summary>
 public sealed class SourcePlacementTests
 {
     private const GameRelease Release = GameRelease.Fallout4;
@@ -24,15 +23,27 @@ public sealed class SourcePlacementTests
     }
 
     [Fact]
-    public void ATopLevelContainer_IsADirectoryInItsGroupFolder_ListedUnderTheGroupsOwnName()
+    public void AQuest_IsAFileInItsGroupFolder_ListedUnderTheGroupsOwnName()
     {
         var placement = SourcePlacement.For(Plugin, "Quest", "000800:Vendor.esp", "SomeQuest", Release);
 
         Assert.Equal(
-            Path.Combine("source", Plugin, "Quests", "SomeQuest - 000800_Vendor.esp", "RecordData.json"),
+            Path.Combine("source", Plugin, "Quests", "SomeQuest - 000800_Vendor.esp.json"),
             placement.RelativePath);
         Assert.Equal(Path.Combine("source", Plugin, "Quests", "GroupRecordData.json"), placement.CarrierRelativePath);
         Assert.Equal("Quests", placement.Key);
+    }
+
+    [Fact]
+    public void ADirectoryPerRecordContainer_IsADirectoryInItsGroupFolder_ListedUnderTheGroupsOwnName()
+    {
+        var placement = SourcePlacement.For(Plugin, "wrld", "000800:Vendor.esp", "SomeWorld", Release);
+
+        Assert.Equal(
+            Path.Combine("source", Plugin, "Worldspaces", "SomeWorld - 000800_Vendor.esp", "RecordData.json"),
+            placement.RelativePath);
+        Assert.Equal(Path.Combine("source", Plugin, "Worldspaces", "GroupRecordData.json"), placement.CarrierRelativePath);
+        Assert.Equal("Worldspaces", placement.Key);
     }
 
     [Fact]
@@ -50,41 +61,12 @@ public sealed class SourcePlacementTests
     }
 
     [Fact]
-    public void AFolderSplitChildWithFolderSplitChildrenOfItsOwn_IsADirectoryInItsParentsSlot_ListedInTheParentsOwnDocument()
+    public void AnEmbeddedChild_HasNoPlacementOfItsOwn()
     {
-        var modFolder = Path.Combine(Path.GetTempPath(), "some-mod");
-        var questDirectory = Path.Combine(modFolder, "source", Plugin, "Quests", "SomeQuest - 000800_Vendor.esp");
+        var refused = Assert.Throws<NotSupportedException>(
+            () => SourcePlacement.For(Plugin, "dial", "000801:Vendor.esp", "SomeTopic", Release));
 
-        var placement = SourcePlacement.ForSlotChild(
-            modFolder, questDirectory, "DialogTopics", "000801:Vendor.esp", "SomeTopic", isDirectory: true);
-
-        Assert.Equal(
-            Path.Combine("source", Plugin, "Quests", "SomeQuest - 000800_Vendor.esp", "DialogTopics",
-                "SomeTopic - 000801_Vendor.esp", "RecordData.json"),
-            placement.RelativePath);
-        Assert.Equal(
-            Path.Combine("source", Plugin, "Quests", "SomeQuest - 000800_Vendor.esp", "RecordData.json"),
-            placement.CarrierRelativePath);
-        Assert.Equal("DialogTopics", placement.Key);
-    }
-
-    // A dialog topic: its responses are inline, so it has no folder-split children and needs no directory.
-    [Fact]
-    public void AFolderSplitLeafChild_IsAFileInItsParentsSlot_ListedInTheParentsOwnDocument()
-    {
-        var modFolder = Path.Combine(Path.GetTempPath(), "some-mod");
-        var questDirectory = Path.Combine(modFolder, "source", Plugin, "Quests", "SomeQuest - 000800_Vendor.esp");
-
-        var placement = SourcePlacement.ForSlotChild(
-            modFolder, questDirectory, "DialogTopics", "000801:Vendor.esp", editorId: null, isDirectory: false);
-
-        Assert.Equal(
-            Path.Combine("source", Plugin, "Quests", "SomeQuest - 000800_Vendor.esp", "DialogTopics", "000801_Vendor.esp.json"),
-            placement.RelativePath);
-        Assert.Equal(
-            Path.Combine("source", Plugin, "Quests", "SomeQuest - 000800_Vendor.esp", "RecordData.json"),
-            placement.CarrierRelativePath);
-        Assert.Equal("DialogTopics", placement.Key);
+        Assert.Contains("embedded child", refused.Message, StringComparison.Ordinal);
     }
 
     [Fact]

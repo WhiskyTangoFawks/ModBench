@@ -74,16 +74,9 @@ public interface IRecordIndex : IDisposable
     /// held at either ref.</summary>
     void SeedCommittedOnly(PluginKey key, IReadOnlyList<(string FormKey, string RecordType, string Body)> records);
 
-    /// <summary>Replaces every <c>container_child</c> row for one folder-split slot with
-    /// <paramref name="children"/>. A folder-split child has no parent document that embeds it, so
-    /// its position must be told here rather than re-derived.</summary>
-    void ReplaceContainerChildSlot(
-        PluginKey key, string parentFormKey, string parentRecordType, string slotName,
-        IReadOnlyList<(string ChildFormKey, int SlotIndex)> children);
-
     /// <summary>One transaction for a record with a file of its own: materialize the new identity,
-    /// re-point folder-split children and exterior cells, tear the old down. An embedded record
-    /// renumbers through its owner's document.</summary>
+    /// re-point exterior cells, tear the old down. An embedded record renumbers through its owner's
+    /// document.</summary>
     void ApplyRenumber(PluginKey key, RenumberedRecord renumbered);
 
     /// <summary>Gives a cell a <c>cell_location</c> row copied from wherever the caller has it — never

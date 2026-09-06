@@ -113,7 +113,9 @@ public sealed class CopyOverwriteTests : IDisposable
         var questDoc = reads.GetDocument(_fixture.Quest.ToString(), _fixture.DestinationPlugin);
         Assert.Equal(ContainerCopyFixture.QuestEditorId, questDoc!.EditorId);
 
-        // Replaced in place: still exactly one quest directory, one document row.
-        Assert.Single(Directory.EnumerateDirectories(Path.Combine(_fixture.DestinationSourceRoot, "Quests")));
+        // Replaced in place: still exactly one quest file, one document row.
+        Assert.Single(
+            Directory.EnumerateFiles(Path.Combine(_fixture.DestinationSourceRoot, "Quests")),
+            f => Path.GetFileName(f) != "GroupRecordData.json");
     }
 }

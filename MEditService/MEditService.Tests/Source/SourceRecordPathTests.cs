@@ -62,10 +62,18 @@ public sealed class SourceRecordPathTests
         Assert.Equal(expectedFileName, Path.GetFileName(path));
     }
 
+    // A quest is a flat file: every child slot it has is inside its document.
+    [Fact]
+    public void For_ForAQuest_IsAFileInTheQuestsFolder()
+    {
+        var path = SourceRecordPath.For("Vendor.esp", "Quest", "000800:Vendor.esp", "SomeQuest", Release);
+
+        Assert.Equal(Path.Combine("source", "Vendor.esp", "Quests", "SomeQuest - 000800_Vendor.esp.json"), path);
+    }
+
     [Theory]
     [InlineData("cell")]
     [InlineData("Worldspace")]
-    [InlineData("Quest")]
     public void For_ForADirectoryPerRecordType_ThrowsNamedException(string recordType)
     {
         var ex = Assert.Throws<NotSupportedException>(

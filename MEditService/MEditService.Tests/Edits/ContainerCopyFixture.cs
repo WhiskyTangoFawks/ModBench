@@ -50,6 +50,12 @@ public sealed class ContainerCopyFixture : IDisposable
     public const string Response2EditorId = "SourceResponse2";
     public FormKey Response2 { get; }
 
+    public const string SceneEditorId = "SourceScene";
+    public FormKey Scene { get; }
+
+    public const string DialogBranchEditorId = "SourceBranch";
+    public FormKey DialogBranch { get; }
+
     // Interior — the non-spatial case: a real block/sub-block pair, but one whose
     // number carries no gameplay meaning (PlacementWalker.Walk's own interior branch, verified: block/
     // sub/grid are always null for an interior cell_location row).
@@ -137,6 +143,10 @@ public sealed class ContainerCopyFixture : IDisposable
         dialogTopic.Responses.Add(response1);
         dialogTopic.Responses.Add(response2);
         quest.DialogTopics.Add(dialogTopic);
+        var scene = new Scene(sourceMod) { EditorID = SceneEditorId };
+        quest.Scenes.Add(scene);
+        var dialogBranch = new DialogBranch(sourceMod) { EditorID = DialogBranchEditorId };
+        quest.DialogBranches.Add(dialogBranch);
         sourceMod.Quests.Add(quest);
 
         var interiorCell = new Cell(sourceMod) { EditorID = InteriorCellEditorId, WaterHeight = InteriorCellWaterHeight };
@@ -228,6 +238,7 @@ public sealed class ContainerCopyFixture : IDisposable
         sourceMod.WriteToBinary(sourcePath);
         (Quest, DialogTopic) = (quest.FormKey, dialogTopic.FormKey);
         (Response1, Response2) = (response1.FormKey, response2.FormKey);
+        (Scene, DialogBranch) = (scene.FormKey, dialogBranch.FormKey);
         FlatNpc = flatNpc.FormKey;
         InteriorCell = interiorCell.FormKey;
         (PersistentRef, TemporaryRef) = (persistentRef.FormKey, temporaryRef.FormKey);

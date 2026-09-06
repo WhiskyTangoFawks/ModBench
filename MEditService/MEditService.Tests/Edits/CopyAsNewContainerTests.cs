@@ -95,10 +95,10 @@ public sealed class CopyAsNewContainerTests : IDisposable
         Assert.Equal(_fixture.Response1, copiedResponse2.PreviousDialog.FormKeyNullable);
     }
 
-    // An existing parent override is never touched: the new topic lands inside the quest's existing
-    // directory and the quest's document keeps its bytes and flag.
+    // An existing parent override keeps its own fields and flag: the new topic lands in its
+    // DialogTopics slot and nothing else in the document changes.
     [Fact]
-    public void CopyAsNewRecord_OnADialogTopic_WhenDestinationAlreadyOverridesTheQuest_ReusesItUntouched()
+    public void CopyAsNewRecord_OnADialogTopic_WhenDestinationAlreadyOverridesTheQuest_AddsToItsDialogTopicsAndNothingElse()
     {
         var service = EditService();
         Assert.True(service.CopyRecordAsOverride(
@@ -111,30 +111,29 @@ public sealed class CopyAsNewContainerTests : IDisposable
 
         Assert.True(result.Applied, result.Message);
 
-        // "Untouched" means the quest's own fields, not its file: a parent's document is where its
-        // children's order lives (ADR-0042 decision 4), so exactly one thing may differ.
+        // The plain override landed with empty child lists, so the slot is new; every other member
+        // is byte-for-byte what it was.
+        Assert.False(questBefore.RootElement.TryGetProperty(nameof(Quest.DialogTopics), out _));
         var questAfter = JsonDocument.Parse(File.ReadAllText(questFile));
         foreach (var property in questBefore.RootElement.EnumerateObject())
         {
-            if (property.NameEquals("MEditChildOrder")) continue;
             Assert.True(
                 questAfter.RootElement.TryGetProperty(property.Name, out var now),
                 $"quest document lost '{property.Name}'");
             Assert.Equal(property.Value.GetRawText(), now.GetRawText());
         }
-        Assert.Equal(
-            questBefore.RootElement.EnumerateObject().Count(),
-            questAfter.RootElement.EnumerateObject().Count(p => !p.NameEquals("MEditChildOrder"))
-                + (questBefore.RootElement.TryGetProperty("MEditChildOrder", out _) ? 1 : 0));
+        Assert.Equal(questBefore.RootElement.EnumerateObject().Count() + 1, questAfter.RootElement.EnumerateObject().Count());
+        var landed = Assert.Single(questAfter.RootElement.GetProperty(nameof(Quest.DialogTopics)).EnumerateArray());
+        Assert.Equal(result.NewFormKey, landed.GetProperty("FormKey").GetString());
 
         var reads = _fixture.Mirror.Index!.At(RecordRef.Effective);
         var questDoc = reads.GetDocument(_fixture.Quest.ToString(), _fixture.DestinationPlugin);
         Assert.False(questDoc!.IsPartialForm);
 
-        // One quest directory total; the topic's file sits inside it.
+        // One quest file total, and no directory: the topic is inside it.
         var questsDir = Path.Combine(_fixture.DestinationSourceRoot, "Quests");
-        var questDir = Assert.Single(Directory.EnumerateDirectories(questsDir));
-        Assert.Single(Directory.EnumerateFiles(Path.Combine(questDir, "DialogTopics")));
+        Assert.Empty(Directory.EnumerateDirectories(questsDir));
+        Assert.Single(Directory.EnumerateFiles(questsDir), f => Path.GetFileName(f) != "GroupRecordData.json");
 
         var compiledQuest = ImportCompiled().Quests.Single(q => q.FormKey == _fixture.Quest);
         Assert.Equal(ContainerCopyFixture.QuestEditorId, compiledQuest.EditorID);
@@ -173,8 +172,8 @@ public sealed class CopyAsNewContainerTests : IDisposable
         Assert.Equal(ContainerCopyFixture.Response1EditorId, compiledResponse.EditorID);
     }
 
-    // A Quest copies as its own record only — its folder-split children (DialogTopics) never ride
-    // along with a plain Copy as New Record (deep copy is a separate operation).
+    // A Quest copies as its own record only — its children never ride along with a plain Copy as
+    // New Record (deep copy is a separate operation).
     [Fact]
     public void CopyAsNewRecord_OnAQuest_LandsANewQuestUnderAFreshFormKey_WithoutItsTopics()
     {
@@ -190,8 +189,16 @@ public sealed class CopyAsNewContainerTests : IDisposable
         Assert.NotNull(doc);
         Assert.Equal(ContainerCopyFixture.QuestEditorId, doc!.EditorId);
 
+        // Empty child lists in the document itself, not just in the binary.
+        var questText = File.ReadAllText(_fixture.DestinationSourceFileContaining(ContainerCopyFixture.QuestEditorId));
+        Assert.DoesNotContain(ContainerCopyFixture.DialogTopicEditorId, questText, StringComparison.Ordinal);
+        Assert.DoesNotContain(ContainerCopyFixture.SceneEditorId, questText, StringComparison.Ordinal);
+        Assert.DoesNotContain(ContainerCopyFixture.DialogBranchEditorId, questText, StringComparison.Ordinal);
+
         var compiledQuest = ImportCompiled().Quests.Single(q => q.FormKey.ToString() == newFormKey);
         Assert.Equal(ContainerCopyFixture.QuestEditorId, compiledQuest.EditorID);
         Assert.Empty(compiledQuest.DialogTopics);
+        Assert.Empty(compiledQuest.DialogBranches);
+        Assert.Empty(compiledQuest.Scenes);
     }
 }

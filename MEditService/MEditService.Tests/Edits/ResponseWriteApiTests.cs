@@ -12,8 +12,8 @@ using Mutagen.Bethesda.Plugins.Records;
 namespace MEditService.Tests.Edits;
 
 /// <summary>A response lives inline in its topic's document, so every gesture on one patches that
-/// document at the response's element and nothing else, the index re-derives from it, and the next
-/// compile reproduces the plugin's model with the responses in the document's order.</summary>
+/// document at the response's element only, the index re-derives from it, and compile keeps the
+/// document's order.</summary>
 public sealed class ResponseWriteApiTests : IDisposable
 {
     private readonly ContainerModFixture _fixture = new();

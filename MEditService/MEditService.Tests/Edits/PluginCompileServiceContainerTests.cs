@@ -12,7 +12,7 @@ using Noggog;
 
 namespace MEditService.Tests.Edits;
 
-/// <summary>The folder-split spike's three container shapes, compiled and re-imported. Nothing
+/// <summary>The container spike's three container shapes, compiled and re-imported. Nothing
 /// here asserts child ordering, on purpose: the real-fixture gates cover it, and this fixture only
 /// ever needed the child set.</summary>
 public sealed class PluginCompileServiceContainerTests : IDisposable
@@ -96,7 +96,7 @@ public sealed class PluginCompileServiceContainerTests : IDisposable
         worldspace.SubCells.Add(worldBlock);
         mod.Worldspaces.Add(worldspace);
 
-        // ── The spike's third probe: two quests, each with its own dialogue, all folder-split.
+        // ── The spike's third probe: two quests, each with its own dialogue, all inline.
         var questA = new Quest(mod) { EditorID = "QuestA" };
         var topicA = new DialogTopic(mod) { EditorID = "TopicA" };
         topicA.Responses.Add(new DialogResponses(mod) { EditorID = "ResponseA" });

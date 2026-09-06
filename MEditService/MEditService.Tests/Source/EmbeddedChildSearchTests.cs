@@ -4,8 +4,8 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Tests.Source;
 
-/// <summary>The search's upper bound is invisible from the integration suite: a dialog topic has its own
-/// file, so <c>FindEmbeddedChild</c> is never called for one.</summary>
+/// <summary>The search descends every embedded slot at every level, and hands back the direct
+/// parent of what it finds.</summary>
 public sealed class EmbeddedChildSearchTests
 {
     private static Fallout4Mod NewMod() =>
@@ -46,9 +46,8 @@ public sealed class EmbeddedChildSearchTests
     }
 
     [Fact]
-    public void DoesNotDescendIntoFolderSplitChildren()
+    public void FindsAResponseThroughItsTopic_InsideTheQuest_NamingTheTopicAsItsParent()
     {
-        // A quest's dialog topic is a folder-split child with its own source file.
         var mod = NewMod();
         var quest = new Quest(mod) { EditorID = "Quest" };
         var topic = new DialogTopic(mod) { EditorID = "Topic" };
@@ -56,12 +55,12 @@ public sealed class EmbeddedChildSearchTests
         topic.Responses.Add(response);
         quest.DialogTopics.Add(topic);
 
-        // The topic itself is a direct child, so it is found — that is the search doing its job, and
-        // it is harmless because the resolver never asks about a record that has its own file.
-        Assert.NotNull(ContainerChildFields.FindEmbeddedChild(quest, topic.FormKey.ToString()));
+        var found = ContainerChildFields.FindEmbeddedChild(quest, response.FormKey.ToString());
 
-        // Its response is one level further, behind a folder-split slot, and must not be reached.
-        Assert.Null(ContainerChildFields.FindEmbeddedChild(quest, response.FormKey.ToString()));
+        Assert.NotNull(found);
+        Assert.Same(response, found!.Value.Child);
+        Assert.Same(topic, found.Value.Parent);
+        Assert.Equal((nameof(DialogTopic.Responses), 0), (found.Value.SlotName, found.Value.SlotIndex));
     }
 
     [Fact]

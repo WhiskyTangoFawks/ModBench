@@ -4,8 +4,7 @@ using MEditService.Core.Source;
 namespace MEditService.Core.Edits;
 
 /// <summary>Where an embedded child sits in its parent's document: the slot member and the position
-/// of the element carrying its FormKey. Embedded slots only: a folder-split child is never in the
-/// parent's text.</summary>
+/// of the element carrying its FormKey, at any depth of embedding.</summary>
 internal static class EmbeddedChildPath
 {
     private const string FormKeyMember = "FormKey";

@@ -58,11 +58,12 @@ public class ContainerSingleFileTests
         worldspace.SubCells.Add(new WorldspaceBlock());
         yield return [worldspace, typeof(Worldspace), "wrld"];
 
-        // Quest — the folder-split half: nothing embeds these children, so here the suppressions
-        // are the only thing keeping the count at one file.
+        // Quest — every child slot embedded, transitively: the topic below carries a response.
         var quest = new Quest(Mod) { EditorID = "TestQuest" };
         quest.DialogBranches.Add(new DialogBranch(Mod));
-        quest.DialogTopics.Add(new DialogTopic(Mod));
+        var questTopic = new DialogTopic(Mod);
+        questTopic.Responses.Add(new DialogResponses(Mod));
+        quest.DialogTopics.Add(questTopic);
         quest.Scenes.Add(new Scene(Mod));
         yield return [quest, typeof(Quest), "qust"];
 

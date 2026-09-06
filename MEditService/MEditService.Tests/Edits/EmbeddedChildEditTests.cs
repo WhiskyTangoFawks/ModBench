@@ -216,26 +216,6 @@ public sealed class EmbeddedChildEditTests : IDisposable
             StringComparison.Ordinal);
     }
 
-    [Fact]
-    public void AQuestsDialogTopic_IsNotReachedThroughTheQuestsDocument()
-    {
-        // A dialog topic is a child of the quest but folder-split, with its own RecordData.json, so
-        // a search descending into every child slot would write the change into the quest's document
-        // and lose it.
-        var questFile = _fixture.SourceFileContaining(ContainerModFixture.QuestEditorId);
-        var topicFile = _fixture.SourceFileContaining(ContainerModFixture.DialogTopicEditorId);
-        Assert.NotEqual(questFile, topicFile);
-
-        var questBefore = File.ReadAllText(questFile);
-        Assert.True(EditService().Set(_fixture.Plugin, _fixture.DialogTopic.ToString(), "EditorID", Json("\"RenamedTopic\"")).Applied);
-
-        Assert.Equal(questBefore, File.ReadAllText(questFile));
-        Assert.Contains(
-            "\"EditorID\": \"RenamedTopic\"",
-            File.ReadAllText(_fixture.SourceFileContaining("RenamedTopic")),
-            StringComparison.Ordinal);
-    }
-
     // ---- SourceUnitNotFound, both branches ----
 
     [Fact]
@@ -305,18 +285,18 @@ public sealed class EmbeddedChildEditTests : IDisposable
     }
 
     [Fact]
-    public void EditingAQuestsEditorId_MovesItsDirectory_AndItsFolderSplitChildrenTravelWithIt()
+    public void EditingAQuestsEditorId_RenamesItsFile_AndItsChildrenStayInsideIt()
     {
-        // Only a Quest can demonstrate it: moving the directory carries the folder-split children inside
-        // it, rather than orphaning them under a directory that has gone.
-        var oldDirectory = Path.GetDirectoryName(_fixture.SourceFileContaining(ContainerModFixture.QuestEditorId))!;
-        Assert.StartsWith(oldDirectory, _fixture.SourceFileContaining(ContainerModFixture.DialogTopicEditorId), StringComparison.Ordinal);
+        var oldFile = _fixture.SourceFileContaining(ContainerModFixture.QuestEditorId);
+        Assert.Equal(oldFile, _fixture.SourceFileContaining(ContainerModFixture.DialogTopicEditorId));
 
         Assert.True(EditService().Set(_fixture.Plugin, _fixture.Quest.ToString(), "EditorID", Json("\"RenamedQuest\"")).Applied);
 
-        Assert.False(Directory.Exists(oldDirectory));
-        var newDirectory = Path.GetDirectoryName(_fixture.SourceFileContaining("RenamedQuest"))!;
-        // The dialog topic is still inside its quest, under the quest's new name.
-        Assert.StartsWith(newDirectory, _fixture.SourceFileContaining(ContainerModFixture.DialogTopicEditorId), StringComparison.Ordinal);
+        Assert.False(File.Exists(oldFile));
+        var newFile = _fixture.SourceFileContaining("RenamedQuest");
+        Assert.Equal(Path.GetDirectoryName(oldFile), Path.GetDirectoryName(newFile));
+        // Every child is still inside its quest, under the quest's new name.
+        foreach (var child in new[] { ContainerModFixture.DialogTopicEditorId, ContainerModFixture.ResponseEditorId, ContainerModFixture.DialogBranchEditorId, ContainerModFixture.SceneEditorId })
+            Assert.Equal(newFile, _fixture.SourceFileContaining(child));
     }
 }

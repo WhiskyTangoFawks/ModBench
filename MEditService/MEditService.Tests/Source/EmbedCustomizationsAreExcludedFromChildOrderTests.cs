@@ -16,6 +16,9 @@ public sealed class EmbedCustomizationsAreExcludedFromChildOrderTests
         { typeof(Cell), nameof(Cell.Temporary) },
         { typeof(Cell), nameof(Cell.Persistent) },
         { typeof(Cell), nameof(Cell.NavigationMeshes) },
+        { typeof(Quest), nameof(Quest.DialogTopics) },
+        { typeof(Quest), nameof(Quest.DialogBranches) },
+        { typeof(Quest), nameof(Quest.Scenes) },
         { typeof(DialogTopic), nameof(DialogTopic.Responses) },
     };
 

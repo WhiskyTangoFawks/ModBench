@@ -68,18 +68,19 @@ internal static class SourceUnitResolver
         if (reads.GetPlacement(formKey, plugin) is { } placement)
             return ResolveOwner(reads, plugin, modFolder, placement.ParentCell, release, cache);
 
-        // Everything else may still have a file of its own — a Cell, a Worldspace, a Quest, a dialog
-        // topic, a scene. Look for it before assuming it is embedded.
+        // Only a directory-per-record type (Cell, Worldspace) can have a file of its own; a type with
+        // no group of its own is always embedded, so nothing is scanned for it.
         var root = Path.Combine(modFolder, SourceRecordPath.RootFor(plugin.Name));
-        if (FindOwnUnit(reads, plugin, root, formKey, recordType, release, cache) is { } own)
+        if (RecordTypeDispatch.For(release).GroupFolderNameFor(recordType) is { } groupFolder
+            && FindOwnUnit(reads, plugin, root, groupFolder, formKey, recordType, release, cache) is { } own)
         {
             return new SourceUnit(
                 own, Path.GetRelativePath(modFolder, own), formKey, recordType, IsEmbedded: false);
         }
 
-        // No file of its own, so it is embedded in a parent's document. Landscape and NavigationMeshes
-        // arrive through container_child; a Worldspace's TopCell has no directory and arrives through
-        // cell_location's own parent link.
+        // No file of its own, so it is embedded in a parent's document: container_child names the parent
+        // of a quest's child, a response, a Landscape or a NavigationMesh; cell_location names a TopCell's
+        // worldspace.
         var parent = reads.GetContainerParent(plugin, formKey)?.ParentFormKey
                      ?? reads.GetCellLocation(plugin, formKey)?.ParentWorldspace;
 
@@ -192,10 +193,10 @@ internal static class SourceUnitResolver
 
     // Matches the FormKey alone, never the EditorID, which the index's copy may hold stale mid-rename.
     private static string? FindOwnUnit(
-        IRecordReads reads, PluginKey plugin, string sourceRoot, string formKey, string recordType, GameRelease release,
-        SourceUnitResolutionCache? cache)
+        IRecordReads reads, PluginKey plugin, string sourceRoot, string groupFolder, string formKey, string recordType,
+        GameRelease release, SourceUnitResolutionCache? cache)
     {
-        var scanRoot = Path.Combine(sourceRoot, ScanSubtree(reads, plugin, formKey, recordType, release) ?? string.Empty);
+        var scanRoot = Path.Combine(sourceRoot, ScanSubtree(reads, plugin, groupFolder, formKey, recordType, release) ?? string.Empty);
         if (!Directory.Exists(scanRoot)) return null;
 
         var suffix = FilesafeFormKey(formKey);
@@ -299,17 +300,9 @@ internal static class SourceUnitResolver
     // The narrowing that keeps a point write off the full-tree walk. A Cell's subtree is not a property
     // of its type: interior under Cells, exterior under its worldspace, per the index's cell_location row.
     private static string? ScanSubtree(
-        IRecordReads reads, PluginKey plugin, string formKey, string recordType, GameRelease release)
+        IRecordReads reads, PluginKey plugin, string groupFolder, string formKey, string recordType, GameRelease release)
     {
         var dispatch = RecordTypeDispatch.For(release);
-        if (dispatch.GroupFolderNameFor(recordType) is not { } folder)
-        {
-            // No group of its own: found under whatever holds its parent, so borrow the parent's subtree.
-            var parent = reads.GetContainerParent(plugin, formKey);
-            return parent == null
-                ? null
-                : ScanSubtree(reads, plugin, parent.Value.ParentFormKey, parent.Value.ParentRecordType, release);
-        }
 
         // A cell lives under Cells or under its worldspace, never both; an absent row leaves the choice open.
         if (dispatch.ConcreteFor(recordType)?.Name == "Cell")
@@ -317,10 +310,10 @@ internal static class SourceUnitResolver
             if (reads.GetCellLocation(plugin, formKey) is not { } location) return null;
             // The worldspace folder through the same dispatch table rather than a second literal, so
             // there is one place that knows what that directory is called.
-            return location.ParentWorldspace == null ? folder : dispatch.GroupFolderNameFor("Worldspace");
+            return location.ParentWorldspace == null ? groupFolder : dispatch.GroupFolderNameFor("Worldspace");
         }
 
-        return folder;
+        return groupFolder;
     }
 
     /// <summary><c>[&lt;EditorID&gt; - ]&lt;hex6&gt;_&lt;originModKey&gt;</c>, with <c>.json</c> for a flat

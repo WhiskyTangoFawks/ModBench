@@ -98,20 +98,6 @@ public sealed class RecordEditServiceCopyRecordAsOverrideTests
         Assert.Equal(RecordEditRefusal.FormKeyCollision, result.Refusal);
     }
 
-    // What refuses is a record with no top-level group of its own: a DialogTopic has no independent
-    // existence outside its owning Quest, unlike a placed reference or a container's own top-level
-    // record.
-    [Fact]
-    public void CopyRecordAsOverride_Refuses_WhenTheSourceHasNoContainerOfItsOwnAnywhere()
-    {
-        using var fixture = new ContainerModFixture();
-
-        var result = ServiceFor(fixture.Mirror).CopyRecordAsOverride(fixture.Plugin, fixture.DialogTopic.ToString(), fixture.Plugin);
-
-        Assert.False(result.Applied);
-        Assert.Equal(RecordEditRefusal.ContainerRecordNotYetSupported, result.Refusal);
-    }
-
     [Fact]
     public void CopyRecordAsOverride_Refuses_WhenTheSourcePluginDoesNotHoldTheRecord()
     {

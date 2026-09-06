@@ -26,8 +26,7 @@ public sealed class HeaderDocumentTests
         mod.ModHeader.SetOverriddenForms([new FormKey(ModKey.FromFileName("Fallout4.esm"), 0x123)]);
 
         // Real records, so the "the clone drops the groups" shortcut below is actually exercised
-        // against a mod that has groups to drop — including a folder-split container, the shape that
-        // makes the whole-mod door write child files at all.
+        // against a mod that has groups to drop — including a container holding nested records.
         mod.Weapons.AddNew().EditorID = "SomeWeapon";
         mod.Npcs.AddNew().EditorID = "SomeNpc";
         var quest = new Quest(mod) { EditorID = "SomeQuest" };

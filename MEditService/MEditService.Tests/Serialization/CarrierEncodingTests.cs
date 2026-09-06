@@ -13,25 +13,25 @@ namespace MEditService.Tests.Serialization;
 public sealed class CarrierEncodingTests
 {
     // Every character class System.Text.Json's default encoder escapes and Newtonsoft does not.
-    private const string AwkwardEditorId = "Bob's Quest & Co <tag> café";
+    private const string AwkwardEditorId = "Bob's World & Co <tag> café";
 
     [Fact]
-    public async Task AQuestWhoseTextNeedsEscaping_IsNotReEncodedByGainingAnOrderedChildList()
+    public async Task AWorldspaceWhoseTextNeedsEscaping_IsNotReEncodedByGainingAnOrderedChildList()
     {
         var scratch = Directory.CreateTempSubdirectory("medit-carrier-encoding-").FullName;
         try
         {
             var mod = new Fallout4Mod(ModKey.FromFileName("Encoding.esp"), Fallout4Release.Fallout4);
-            var quest = mod.Quests.AddNew();
-            quest.EditorID = AwkwardEditorId;
-            // A folder-split child, so the quest's own document becomes a carrier.
-            quest.DialogTopics.Add(new DialogTopic(mod) { EditorID = AwkwardEditorId });
+            var worldspace = mod.Worldspaces.AddNew();
+            worldspace.EditorID = AwkwardEditorId;
+            // A block is a directory, so the worldspace's own document becomes a carrier.
+            worldspace.SubCells.Add(new WorldspaceBlock { BlockNumberX = 1, BlockNumberY = -2 });
 
             await RecordTextCodecGeneratorSeed.SerializeWholeMod(
                 mod, scratch, InlineWorkDropoff.Instance, CancellationToken.None);
 
-            var questDirectory = Directory.EnumerateDirectories(Path.Combine(scratch, "Quests")).Single();
-            var carrier = SourceChildOrder.CarrierFor(questDirectory, parentIsRecord: true);
+            var worldspaceDirectory = Directory.EnumerateDirectories(Path.Combine(scratch, "Worldspaces")).Single();
+            var carrier = SourceChildOrder.CarrierFor(worldspaceDirectory, parentIsRecord: true);
             var beforeSplice = await File.ReadAllTextAsync(carrier);
 
             SourceChildOrder.SpliceInto(scratch, mod);
@@ -40,7 +40,7 @@ public sealed class CarrierEncodingTests
 
             // The document really did gain the list — otherwise this test proves nothing.
             Assert.Contains(SourceChildOrder.OrderMember, afterSplice, StringComparison.Ordinal);
-            Assert.Single(SourceChildOrder.ListAt(carrier, nameof(Quest.DialogTopics)));
+            Assert.Single(SourceChildOrder.ListAt(carrier, nameof(Worldspace.SubCells)));
 
             // ...and every awkward character survived it verbatim, in the spelling the whole-mod
             // writer chose, with nothing escaped behind its back.

@@ -10,8 +10,8 @@ namespace MEditService.Core.Source;
 internal readonly record struct SourcePlacement(string RelativePath, string CarrierRelativePath, string Key)
 {
     /// <summary>The three shapes with a group folder: flat file, container directory, and an interior
-    /// Cell nested under block/sub-block — the only reason <paramref name="blockPath"/> exists. A
-    /// folder-split child is <see cref="ForSlotChild"/>'s.</summary>
+    /// Cell nested under block/sub-block, the only reason <paramref name="blockPath"/> exists. An
+    /// embedded child lands inside its container's document instead.</summary>
     internal static SourcePlacement For(
         string pluginFileName,
         string recordType,
@@ -34,8 +34,8 @@ internal readonly record struct SourcePlacement(string RelativePath, string Carr
 
         var groupFolder = dispatch.GroupFolderNameFor(recordType)
             ?? throw new NotSupportedException(
-                $"'{recordType}' has no group folder at all — it is a folder-split child, whose directory " +
-                $"belongs to its own parent's slot rather than to a group; use {nameof(ForSlotChild)}.");
+                $"'{recordType}' has no group folder at all — it is an embedded child, which lands inside " +
+                "its container's document rather than at a path of its own.");
 
         var leaf = SourceUnitResolver.LeafNameFor(FormKey.Factory(formKeyString), editorId, isDirectory: true);
 
@@ -47,22 +47,5 @@ internal readonly record struct SourcePlacement(string RelativePath, string Carr
             Path.Combine(carrierDirectory, leaf, SourceUnitResolver.RecordDataFileName),
             Path.Combine(carrierDirectory, SourceUnitResolver.GroupRecordDataFileName),
             blockPath is { Count: > 0 } ? RecordTypeDispatch.SubBlockChildMember : groupFolder);
-    }
-
-    /// <summary>No group folder: the child sits in a slot under its parent's directory, named by the
-    /// parent's own document. <paramref name="parentDirectory"/> is absolute because a missing parent is
-    /// minted by the caller first.</summary>
-    internal static SourcePlacement ForSlotChild(
-        string modFolder, string parentDirectory, string slotName, string formKeyString, string? editorId, bool isDirectory)
-    {
-        var leaf = SourceUnitResolver.LeafNameFor(FormKey.Factory(formKeyString), editorId, isDirectory);
-        var own = isDirectory
-            ? Path.Combine(parentDirectory, slotName, leaf, SourceUnitResolver.RecordDataFileName)
-            : Path.Combine(parentDirectory, slotName, leaf);
-
-        return new SourcePlacement(
-            Path.GetRelativePath(modFolder, own),
-            Path.GetRelativePath(modFolder, SourceChildOrder.CarrierFor(parentDirectory, parentIsRecord: true)),
-            slotName);
     }
 }
