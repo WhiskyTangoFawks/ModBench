@@ -9,24 +9,22 @@ public class ColumnSpecTests
     private static ColumnSpec MakeColumn(
         string name = "my_field",
         string apiType = "string",
-        bool isArray = false,
         string[]? validFormKeyTypes = null,
         EnumMember[]? enumMembers = null) =>
-        new(name, name, "VARCHAR", apiType,
-            validFormKeyTypes ?? [], enumMembers ?? [], isArray);
+        new(new SubFieldSpec(name, apiType, validFormKeyTypes ?? [], enumMembers ?? []), name, "VARCHAR");
 
     [Fact]
     public void ToFieldMetadata_MapsAllFields()
     {
         var enums = new EnumMember[] { new("Alpha"), new("Beta"), new("Gamma") };
         var formKeyTypes = new[] { "Race" };
-        var col = MakeColumn(name: "some_field", apiType: "enum", isArray: true,
+        var col = MakeColumn(name: "some_field", apiType: "array",
             validFormKeyTypes: formKeyTypes, enumMembers: enums);
 
         var meta = col.ToFieldMetadata();
 
         Assert.Equal("some_field", meta.Name);
-        Assert.Equal("enum", meta.Type);
+        Assert.Equal("array", meta.Type);
         Assert.True(meta.IsArray);
         Assert.Equal(enums, meta.EnumMembers);
         Assert.Equal(formKeyTypes, meta.ValidFormKeyTypes);

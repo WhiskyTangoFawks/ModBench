@@ -34,14 +34,14 @@ public sealed class DeclaredDefaultTests
         var script = Member(Vmad, "Scripts").ElementType!;
 
         Assert.Null(Member(script, "Name").Default);
-        Assert.Null(Schemas["npc_"].RecordColumns.Single(c => c.Name == "HeightMin").Default);
+        Assert.Null(Schemas["npc_"].RecordColumns.Single(c => c.Name == "HeightMin").Field.Default);
     }
 
     [Fact]
     public void AnEnumMember_AlwaysNamesItsDefault_DeclaredOrZero()
     {
         var property = Member(Member(Vmad, "Scripts").ElementType!, "Properties").ElementType!;
-        var data = Schemas["cobj"].RecordColumns.Single(c => c.Name == "Conditions").ElementType!.Fields!.Single(f => f.Name == "Data");
+        var data = Schemas["cobj"].RecordColumns.Single(c => c.Name == "Conditions").Field.ElementSpec!.ToFieldMetadata().Fields!.Single(f => f.Name == "Data");
 
         Assert.Equal("Edited", Member(property, "Flags").Default);
         Assert.Equal("Subject", Member(data, "RunOnType").Default);
@@ -53,8 +53,36 @@ public sealed class DeclaredDefaultTests
     {
         var priority = Schemas["dial"].RecordColumns.Single(c => c.Name == "Priority");
 
-        Assert.Equal(50, AsLong(priority.Default));
+        Assert.Equal(50, AsLong(priority.Field.Default));
         Assert.Equal("50", priority.ViewDefaultLiteral);
+    }
+
+    // A colour, vector or hex member has no wire zero of its own — 0 is not "#00000000" — so the
+    // metadata names the codec's own spelling of it, as an enum names its zero member.
+    [Theory]
+    [InlineData("ligh", "Color", "#00000000")]
+    [InlineData("mato", "ProjectionVector", "0, 0, 0")]
+    [InlineData("race", "Unknown", "0x0000000000000000")]
+    public void AColorVectorOrHexMember_NamesTheCodecsSpellingOfItsZero(string table, string column, string zero)
+    {
+        Assert.Equal(zero, Schemas[table].RecordColumns.Single(c => c.Name == column).Field.Default);
+    }
+
+    // The codec writes each component in English; the vector types are not IFormattable, so
+    // formatting one whole would take the current culture and spell 1.5 as "1,5" wherever the
+    // decimal separator is a comma.
+    [Fact]
+    public void AVectorSpellsItsComponentsInTheCodecsCulture()
+    {
+        string? spelled = null;
+        var thread = new Thread(() => spelled = ReflectedTypes.VectorText(new Noggog.P3Float(1.5f, 2f, 3f)))
+        {
+            CurrentCulture = new System.Globalization.CultureInfo("de-DE"),
+        };
+        thread.Start();
+        thread.Join();
+
+        Assert.Equal("1.5, 2, 3", spelled);
     }
 
     [Fact]

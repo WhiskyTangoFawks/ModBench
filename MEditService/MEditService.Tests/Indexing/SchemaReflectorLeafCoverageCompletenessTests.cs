@@ -77,7 +77,7 @@ public sealed class SchemaReflectorLeafCoverageCompletenessTests
 
             var column = schema.RecordColumns.SingleOrDefault(c => c.PropertyName == property);
             AssertCovered(regressed, $"{owner}.{property}",
-                column == null ? null : column.IsArray ? column.ElementType?.Fields : column.SubFields);
+                column == null ? null : column.Field.IsArray ? column.Field.ElementSpec?.SubFields : column.Field.SubFields);
         }
 
         // The nested set: found one level inside whichever record's own column reaches this getter
@@ -85,12 +85,12 @@ public sealed class SchemaReflectorLeafCoverageCompletenessTests
         // second, bespoke lookup.
         foreach (var (owner, property) in CoveredNestedAbstractUnions)
         {
-            IReadOnlyList<FieldMetadata>? found = null;
+            IReadOnlyList<SubFieldSpec>? found = null;
             foreach (var schema in schemas.Values)
             {
                 foreach (var column in schema.RecordColumns)
                 {
-                    var nestedFields = column.IsArray ? column.ElementType?.Fields : column.SubFields;
+                    var nestedFields = column.Field.IsArray ? column.Field.ElementSpec?.SubFields : column.Field.SubFields;
                     if (nestedFields == null) continue;
                     var match = nestedFields.SingleOrDefault(f => f.Name == property);
                     if (match == null) continue;
@@ -99,7 +99,7 @@ public sealed class SchemaReflectorLeafCoverageCompletenessTests
                     var ownProp = DirectDataProperties(schema.RecordType, BaseSkip)
                         .FirstOrDefault(p => p.Name == column.PropertyName);
                     if (ownProp == null || NestedGetterType(ownProp.PropertyType)?.Name != owner) continue;
-                    found = match.Fields;
+                    found = match.SubFields;
                     break;
                 }
                 if (found != null) break;
@@ -114,7 +114,7 @@ public sealed class SchemaReflectorLeafCoverageCompletenessTests
             "longer reaches it, or it was never actually covered and this list is wrong — " +
             "investigate, don't just remove it.");
 
-        static void AssertCovered(List<string> regressed, string label, IReadOnlyList<FieldMetadata>? fields)
+        static void AssertCovered(List<string> regressed, string label, IReadOnlyList<SubFieldSpec>? fields)
         {
             if (fields == null || fields.Count == 0)
             {
@@ -171,7 +171,7 @@ public sealed class SchemaReflectorLeafCoverageCompletenessTests
                 // A vector is one text leaf the codec spells itself ("x, y, z"), so it has no members to reach.
                 if (IsVectorStructType(nestedType)) continue;
 
-                var subFields = column.IsArray ? column.ElementType?.Fields : column.SubFields;
+                var subFields = column.Field.IsArray ? column.Field.ElementSpec?.SubFields : column.Field.SubFields;
                 foreach (var nestedProp in DirectDataProperties(nestedType, LoquiSkipProps))
                 {
                     if (KnownGaps.Contains((nestedType.Name, nestedProp.Name))) continue;

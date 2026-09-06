@@ -8,23 +8,18 @@ namespace MEditService.Tests.Records;
 
 public class FormRefPathBuilderTests
 {
+    private static ColumnSpec Column(SubFieldSpec field) => new(field, field.Name, "JSON");
+
     private static ColumnSpec ScalarFormKeyCol(string name) =>
-        new(name, name, "VARCHAR", "formKey", [], []);
+        new(new SubFieldSpec(name, "formKey", [], []), name, "VARCHAR");
 
     private static ColumnSpec ArrayFormKeyCol(string name) =>
-        new(name, name, "JSON", "array", [], [],
-            IsArray: true,
-            ElementType: new FieldMetadata(name, "formKey", false, [], []));
+        Column(new SubFieldSpec(name, "array", [], [], ElementSpec: new SubFieldSpec(name, "formKey", [], [])));
 
-    private static ColumnSpec ArrayStructCol(string name, params string[] fkSubFields)
-    {
-        var fields = fkSubFields
-            .Select(f => new FieldMetadata(f, "formKey", false, [], []))
-            .ToList<FieldMetadata>();
-        return new(name, name, "JSON", "array", [], [],
-            IsArray: true,
-            ElementType: new FieldMetadata(name, "struct", false, [], [], Fields: fields));
-    }
+    private static ColumnSpec ArrayStructCol(string name, params string[] fkSubFields) =>
+        Column(new SubFieldSpec(name, "array", [], [],
+            ElementSpec: new SubFieldSpec(name, "struct", [], [],
+                SubFields: [.. fkSubFields.Select(f => new SubFieldSpec(f, "formKey", [], []))])));
 
     // The column's value sits in a document under the column's own name; JSON text is the
     // document's spelling of it, a JsonElement one already parsed.
@@ -170,7 +165,7 @@ public class FormRefPathBuilderTests
     [Fact]
     public void Walk_UnknownApiType_DoesNotCallVisitor()
     {
-        var col = new ColumnSpec("Name", "Name", "VARCHAR", "string", [], []);
+        var col = new ColumnSpec(new SubFieldSpec("Name", "string", [], []), "Name", "VARCHAR");
         Assert.Empty(Collect(col, "some value"));
     }
 
@@ -221,8 +216,7 @@ public class FormRefPathBuilderTests
     [Fact]
     public void Walk_ArrayWithNullElementType_DoesNotCallVisitor()
     {
-        var col = new ColumnSpec("items", "items", "JSON", "array", [], [],
-            IsArray: true, ElementType: null);
+        var col = Column(new SubFieldSpec("items", "array", [], [], ElementSpec: null));
         var hits = Collect(col, "[\"000001:Fallout4.esm\"]");
         Assert.Empty(hits);
     }
@@ -232,11 +226,10 @@ public class FormRefPathBuilderTests
     [Fact]
     public void Walk_ArrayStruct_NestedStructSubField_FormKeyReached()
     {
-        var innerFk = new FieldMetadata("Target", "formKey", false, [], []);
-        var innerStruct = new FieldMetadata("inner", "struct", false, [], [], Fields: [innerFk]);
-        var elemMeta = new FieldMetadata("", "struct", false, [], [], Fields: [innerStruct]);
-        var col = new ColumnSpec("links", "links", "JSON", "array", [], [],
-            IsArray: true, ElementType: elemMeta);
+        var innerFk = new SubFieldSpec("Target", "formKey", [], []);
+        var innerStruct = new SubFieldSpec("inner", "struct", [], [], SubFields: [innerFk]);
+        var elemSpec = new SubFieldSpec("", "struct", [], [], SubFields: [innerStruct]);
+        var col = Column(new SubFieldSpec("links", "array", [], [], ElementSpec: elemSpec));
 
         var json = "[{\"inner\":{\"Target\":\"000001:Plugin.esp\"}}]";
         var hits = Collect(col, json);

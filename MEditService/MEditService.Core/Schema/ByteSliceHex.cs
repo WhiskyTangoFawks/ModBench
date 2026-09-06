@@ -8,6 +8,11 @@ internal static class ByteSliceHex
 {
     internal const string HexApiType = "hex";
 
+    /// <summary>Mutagen's own <c>WriteBytes</c> spelling of a slice: <c>"[]"</c> when empty, else
+    /// "0x" and uppercase hex.</summary>
+    internal static string ToHex(ReadOnlySpan<byte> bytes) =>
+        bytes.IsEmpty ? "[]" : "0x" + Convert.ToHexString(bytes);
+
     internal static bool IsByteSlice(Type core) =>
         core.IsGenericType
         && core.GetGenericTypeDefinition() == typeof(ReadOnlyMemorySlice<>)

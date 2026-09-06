@@ -13,7 +13,7 @@ public sealed class ConditionSchemaTests
         SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4);
 
     private static FieldMetadata ConditionElement(string table = "cobj") =>
-        Schemas[table].RecordColumns.Single(c => c.Name == "Conditions").ElementType!;
+        Schemas[table].RecordColumns.Single(c => c.Name == "Conditions").Field.ElementSpec!.ToFieldMetadata();
 
     private static FieldMetadata Member(FieldMetadata owner, string name) =>
         owner.Fields!.Single(f => f.Name == name);
