@@ -6,7 +6,10 @@ import * as cp from 'child_process';
 import { Agent, fetch as undiciFetch } from 'undici';
 import { BackendManager } from './medit/BackendManager';
 import { backendLogLevelArgs, makeBackendLogForwarder } from './medit/backendLog';
-import { createApiClient, type CrashRepairOffer } from './medit/ApiClient';
+import { createApiClient, openNotificationStream, type CrashRepairOffer } from './medit/ApiClient';
+import {
+  SseNotificationSubscriber, subscribeTreeToNotifications, subscribeRecordPanelsToNotifications,
+} from './medit/NotificationSubscriber';
 import { detectWinePrefix } from './medit/GamePathDetector';
 import { EditingController, type LoadOrderProgress } from './medit/EditingController';
 import { makeReconcileProgressHandler } from './medit/loadOrderProgress';
@@ -82,6 +85,9 @@ interface ExtensionSession {
   refreshDiagnoses?: () => void;
   /** Held on the session so the teardown writers can clear it alongside the tree badge. */
   loadDiagnostics?: vscode.DiagnosticCollection;
+  /** ADR-0046 invariant 12's stream adapter — started on every successful reconcile, stopped by
+   *  `clearTreeWhenBackendDies` (loadoutTeardown.ts) wherever the backend goes unhealthy. */
+  notificationSubscriber?: SseNotificationSubscriber;
 }
 
 
@@ -202,6 +208,17 @@ export function activate(context: vscode.ExtensionContext) {
   const activeRecordTracker = new ActiveRecordTracker<vscode.WebviewPanel>();
   const { scriptsPath, filterProvider } = setupScripts(meditConfig());
 
+  // ADR-0046 invariant 12: one subscription for the whole session, `start()`ed on every
+  // successful reconcile and `stop()`ped by loadoutTeardown wherever the backend goes unhealthy.
+  session.notificationSubscriber = new SseNotificationSubscriber({
+    openStream: (signal) => openNotificationStream(client, signal),
+    log: (msg) => outputChannel.debug(msg),
+  });
+  context.subscriptions.push(
+    { dispose: subscribeTreeToNotifications(session.notificationSubscriber, treeProvider) },
+    { dispose: subscribeRecordPanelsToNotifications(session.notificationSubscriber, recordPanels, activeRecordTracker) },
+  );
+
   session.setFilterActive = makeSetFilterActive(session, filterProvider);
 
   const controller = new EditingController({
@@ -221,6 +238,9 @@ export function activate(context: vscode.ExtensionContext) {
       // ADR-0041: the load order just settled — the one reliable point to (re-)register every
       // tracked mod's repo with vscode.git.
       void registerHeldTrackedRepositories(repository, outputChannel, (repos) => { session.pluginRepositories = repos; });
+      // ADR-0046 invariant 12: the load order is now sent — start() is a no-op past the first
+      // reconcile.
+      session.notificationSubscriber?.start();
     },
   });
   // Retargets on `activeRecordTracker`'s active-record changes rather than an explicit command.
