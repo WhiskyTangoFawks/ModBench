@@ -204,11 +204,6 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
         // open must still re-load (the effect never fires, formKey didn't change) — the
         // skipNextRefreshEffect guard above is what keeps a *changed* formKey from loading twice.
         void refresh(msg.formKey);
-      } else if (msg.type === EXTENSION_TO_WEBVIEW.RECORD_EDITED) {
-        // The edit landed as a working-tree change. Re-read rather than patch: the write
-        // path re-serialized the record through the codec, and this record's conflict picture
-        // across every other column may have moved with it.
-        if (msg.formKey === prevFormKeyRef.current) void refresh(msg.formKey);
       } else if (msg.type === EXTENSION_TO_WEBVIEW.CONFLICTS_COMPUTED) {
         // ADR-0035: a panel already open when the sweep lands must reflect the settled data, not
         // just clear its banner over stale content. Load-order-wide, not record-specific, so no

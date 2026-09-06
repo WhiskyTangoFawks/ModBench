@@ -50,13 +50,13 @@ describe('nativeBridge shared request/reply mechanism (exercised via pickFormKey
   });
 
   it('ignores a reply for the right requestId but the wrong reply type', async () => {
-    // The shared listener must not resolve on requestId alone; RECORD_EDITED stands in for
+    // The shared listener must not resolve on requestId alone; LOAD_RECORD stands in for
     // another reply type carrying the same requestId shape.
     const resultPromise = pickFormKey('', []);
     const requestId = postedRequestId();
 
     window.dispatchEvent(new MessageEvent('message', {
-      data: { type: EXTENSION_TO_WEBVIEW.RECORD_EDITED, requestId, formKey: 'wrong-type' },
+      data: { type: EXTENSION_TO_WEBVIEW.LOAD_RECORD, requestId, formKey: 'wrong-type' },
     }));
     window.dispatchEvent(new MessageEvent('message', {
       data: { type: EXTENSION_TO_WEBVIEW.FORM_KEY_PICKED, requestId, formKey: 'right-type' },

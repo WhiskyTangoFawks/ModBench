@@ -200,7 +200,7 @@ const lastEnvelope = () => lastPostedEnvelope(vscode.postMessage);
 function reloadWith(compare: unknown) {
   currentCompare = compare;
   window.dispatchEvent(new MessageEvent('message', {
-    data: { type: EXTENSION_TO_WEBVIEW.RECORD_EDITED, formKey: '000001:MyMod.esp' },
+    data: { type: EXTENSION_TO_WEBVIEW.LOAD_RECORD, formKey: '000001:MyMod.esp' },
   }));
 }
 
