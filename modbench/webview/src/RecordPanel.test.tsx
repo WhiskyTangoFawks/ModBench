@@ -874,7 +874,7 @@ describe('RecordPanel — column collapse (issue #3)', () => {
 });
 
 // Two plugins can disagree on which leaf of an abstract union an element is, so the element's
-// rows are the union of both leaves' members, each rendered only in the columns that have it.
+// rows are the union of both leaves' members. A member one leaf lacks is a nullable slot.
 const intSubMeta = (name: string): FieldMetadata =>
   (fieldMeta({ name, type: 'int' }));
 
@@ -885,10 +885,10 @@ const aliasesMeta: FieldMetadata = fieldMeta({
     fields: [
       fieldMeta({ name: 'name', type: 'string' }),
       fieldMeta({
-        name: 'location', type: 'struct',
+        name: 'location', type: 'struct', allowsNull: true,
         fields: [intSubMeta('alias_id')]}),
       fieldMeta({
-        name: 'external', type: 'struct',
+        name: 'external', type: 'struct', allowsNull: true,
         fields: [intSubMeta('alias_id')]}),
     ]})});
 
@@ -1229,7 +1229,7 @@ describe('RecordPanel — an absent member reads as its default', () => {
 // to be a member of, so it reads as nothing, not as zero.
 describe('RecordPanel — a member of an absent owner reads as nothing', () => {
   const boundsMeta: FieldMetadata = fieldMeta({
-    name: 'Bounds', type: 'struct',
+    name: 'Bounds', type: 'struct', allowsNull: true,
     fields: [fieldMeta({ name: 'X', type: 'int' })]});
   const valuesMeta: FieldMetadata = fieldMeta({
     name: 'Values', type: 'array', isArray: true,
@@ -1265,9 +1265,10 @@ describe('RecordPanel — a member of an absent owner reads as nothing', () => {
   beforeEach(() => vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm'));
   afterEach(() => vi.unstubAllGlobals());
 
-  it('a member of a struct the column does not carry reads as nothing, not zero', async () => {
+  it('an unset nullable struct reads as empty, and its member as nothing rather than zero', async () => {
     renderPanel(compare, { plugins: flagsTrackedPluginsResponse });
     await waitFor(() => rows().getByText('Bounds'));
+    expect(cellsOf('Bounds')[2].textContent).toBe('');
     fireEvent.click(rows().getByText('Bounds').closest('td')!.querySelector('button')!);
     await waitFor(() => rows().getByText('X'));
 
@@ -1291,6 +1292,62 @@ describe('RecordPanel — a member of an absent owner reads as nothing', () => {
     await waitFor(() => rows().getByText('Name'));
     expect(cellsOf('Name')[1].textContent).toBe('Original Name');
     expect(cellsOf('Name')[2].textContent).toBe('');
+  });
+});
+
+// ADR-0032: absent means default. A non-nullable struct has no "unset", so the column that omits
+// it holds that struct at its defaults, member by member.
+describe('RecordPanel — an absent non-nullable struct reads as its default members', () => {
+  const sizeMeta: FieldMetadata = fieldMeta({
+    name: 'Size', type: 'struct',
+    fields: [
+      fieldMeta({ name: 'Width', type: 'int' }),
+      fieldMeta({ name: 'Label', type: 'string' }),
+      fieldMeta({ name: 'Depth', type: 'int', default: 12 }),
+    ]});
+  const full = { Width: 3, Label: 'x', Depth: 7 };
+  const compare = {
+    conflictAll: 'Conflict',
+    overrides: [
+      { formKey: '000001:Fallout4.esm', plugin: 'Fallout4.esm', loadOrderIndex: 0, isWinner: false, editorId: 'TestNPC',
+        fields: [{ metadata: sizeMeta, value: full }], conflictThis: 'Master' },
+      { formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', loadOrderIndex: 1, isWinner: true, editorId: 'TestNPC',
+        fields: [{ metadata: sizeMeta, value: null }], conflictThis: 'ConflictWins' },
+    ],
+    diffs: [{
+      fieldName: 'Size', values: { 'Fallout4.esm': full, 'MyMod.esp': null },
+      winnerColumn: 'Fallout4.esm', cellStates: {},
+      children: Object.entries(full).map(([name, v]) => ({
+        fieldName: name, values: { 'Fallout4.esm': v, 'MyMod.esp': null },
+        winnerColumn: 'Fallout4.esm', cellStates: {},
+      })),
+    }],
+  };
+
+  const rows = () => within(screen.getByRole('table').querySelector('tbody')!);
+  const cellsOf = (label: string) => rows().getByText(label).closest('tr')!.querySelectorAll('td');
+
+  beforeEach(() => vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm'));
+  afterEach(() => vi.unstubAllGlobals());
+
+  async function renderExpanded() {
+    renderPanel(compare, { plugins: flagsTrackedPluginsResponse });
+    await waitFor(() => rows().getByText('Size'));
+    fireEvent.click(rows().getByText('Size').closest('td')!.querySelector('button')!);
+    await waitFor(() => rows().getByText('Width'));
+  }
+
+  it('the struct the column omits reads as a struct, not as nothing', async () => {
+    renderPanel(compare, { plugins: flagsTrackedPluginsResponse });
+    await waitFor(() => rows().getByText('Size'));
+    expect(cellsOf('Size')[2].textContent).toBe('{…}');
+  });
+
+  it('each member of the omitted struct reads its own default', async () => {
+    await renderExpanded();
+    expect(cellsOf('Width')[2].textContent).toBe('0');
+    expect(cellsOf('Label')[2].textContent).toBe('');
+    expect(cellsOf('Depth')[2].textContent).toBe('12');
   });
 });
 

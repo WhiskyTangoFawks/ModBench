@@ -9,7 +9,8 @@ import { copyToClipboard } from './nativeBridge';
 import { baseCell, toggleBtnStyle, getCellStyle, focusedRowStyle, DIMMED_OPACITY } from './gridStyles';
 import {
   arrayElementContext, arrayParentContext, combineVscodeContexts, defaultOf, isArrayElementHop,
-  isMovableElementHop, offersArrayAdd, rootFieldOf, stringValueContext, wirePath, type Column, type PathSegment,
+  isMovableElementHop, nodeIsThere, offersArrayAdd, rootFieldOf, stringValueContext, wirePath,
+  type Column, type PathSegment,
 } from './recordUtils';
 import type { ColumnKey, ConflictAll, FieldDiff, FieldMetadata, FormKeyResolution } from './types';
 
@@ -186,10 +187,6 @@ export function DiffRow({
   const rootField = context.rootField;
   // What the label column shows for this row, reused as the extended-editor tab's own title.
   const label = meta.displayLabel ?? diff.fieldName;
-  // showActions (the checkError icon): every hop on this row's path is a struct member
-  // (path.length === 0 is vacuously true; a single element hop, or one anywhere in a longer
-  // chain, turns it off).
-  const showActions = context.path.every(seg => seg.kind === 'member');
   // Which array gestures this row offers — its own array's row (Add) or one of its element rows
   // (Remove, and Move where the element's position is the user's to choose).
   const isArrayParentRow = offersArrayAdd(meta);
@@ -245,13 +242,14 @@ export function DiffRow({
           return <td key={key} style={cellStyle} />;
         }
         const rootValue = rootFieldOf(override, rootField);
-        const checkError = showActions ? rootValue?.checkError : undefined;
+        // The node's own error for this column, computed at whatever depth this row sits at.
+        const checkError = diff.checkErrors?.[key];
         const isFocused = isCellFocused(focusedCell, rowKey, key);
         const cellMeta = cellMetas?.[key] ?? meta;
-        // Whether this column has something on this row: a struct it carries, or a leaf whose
-        // owner it carries. A leaf its owner omits is the default, so it is there.
+        // Whether this column has something on this row: this row's own node, and the object it
+        // is a member of. A leaf its owner omits is the default, so it is there.
         const hasElement = rowIsStructural
-          || ((ownerPresent?.(key) ?? true) && (cellMeta.type !== 'struct' || diff.values[key] != null));
+          || ((ownerPresent?.(key) ?? true) && nodeIsThere(cellMeta, diff.values[key]));
         const shown = hasElement ? diff.values[key] ?? defaultOf(cellMeta) : undefined;
         // ADR-0034: the string Ctrl+C copies for this cell, computed once so the
         // struct/array-summary branch and the leaf branch below hand DiskCell the same value.
