@@ -4,10 +4,8 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Core.Source;
 
-/// <summary>A record's place and the ordered child list naming it, derived together: derived apart, a
-/// record can land in a directory whose list never names it, which the next read refuses
-/// (ADR-0042 decision 4).</summary>
-internal readonly record struct SourcePlacement(string RelativePath, string CarrierRelativePath, string Key)
+/// <summary>Where a record with a file of its own lands in the tree.</summary>
+internal readonly record struct SourcePlacement(string RelativePath)
 {
     /// <summary>The three shapes with a group folder: flat file, container directory, and an interior
     /// Cell nested under block/sub-block, the only reason <paramref name="blockPath"/> exists. An
@@ -21,16 +19,10 @@ internal readonly record struct SourcePlacement(string RelativePath, string Carr
         IReadOnlyList<string>? blockPath = null)
     {
         var dispatch = RecordTypeDispatch.For(gameRelease);
-        var root = SourceRecordPath.RootFor(pluginFileName);
 
         // A flat record has a top-level group folder of its own and needs no directory.
-        if (dispatch.FolderNameFor(recordType) is { } flatFolder)
-        {
-            return new SourcePlacement(
-                SourceRecordPath.For(pluginFileName, recordType, formKeyString, editorId, gameRelease),
-                Path.Combine(root, flatFolder, SourceUnitResolver.GroupRecordDataFileName),
-                flatFolder);
-        }
+        if (dispatch.FolderNameFor(recordType) is not null)
+            return new SourcePlacement(SourceRecordPath.For(pluginFileName, recordType, formKeyString, editorId, gameRelease));
 
         var groupFolder = dispatch.GroupFolderNameFor(recordType)
             ?? throw new NotSupportedException(
@@ -39,13 +31,7 @@ internal readonly record struct SourcePlacement(string RelativePath, string Carr
 
         var leaf = SourceUnitResolver.LeafNameFor(FormKey.Factory(formKeyString), editorId, isDirectory: true);
 
-        // Every block level the record nests under, if any. Only an interior Cell has them, and its
-        // list belongs to the deepest one rather than to the group folder above them all.
-        var carrierDirectory = Path.Combine([root, groupFolder, .. blockPath ?? []]);
-
-        return new SourcePlacement(
-            Path.Combine(carrierDirectory, leaf, SourceUnitResolver.RecordDataFileName),
-            Path.Combine(carrierDirectory, SourceUnitResolver.GroupRecordDataFileName),
-            blockPath is { Count: > 0 } ? RecordTypeDispatch.SubBlockChildMember : groupFolder);
+        return new SourcePlacement(Path.Combine(
+            [SourceRecordPath.RootFor(pluginFileName), groupFolder, .. blockPath ?? [], leaf, SourceUnitResolver.RecordDataFileName]));
     }
 }

@@ -238,10 +238,6 @@ public sealed class TrackService(ILogger<TrackService> logger)
                 InlineWorkDropoff.Instance,
                 cancel);
 
-            // Order is parent data (ADR-0042 decision 4): spliced here, the one door Track and Absorb share,
-            // so the serializers stay untouched.
-            SourceChildOrder.SpliceInto(scratchDir, mod);
-
             // Newtonsoft's JsonTextWriter has no reachable NewLine to pin, so line endings are canonicalized
             // after the write, as the per-record codec does.
             var pristineFiles = new List<PristineFile>();

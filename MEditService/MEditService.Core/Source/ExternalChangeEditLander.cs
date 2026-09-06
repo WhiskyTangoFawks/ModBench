@@ -124,11 +124,6 @@ public static class ExternalChangeEditLander
             File.WriteAllText(t.FullPath, t.IncomingText);
         }
 
-        // Order is parent data (ADR-0042 decision 4) and the changed binary says what it now is; rewriting
-        // every carrier from the parsed binary lands adds, deletes and reorders the same way.
-        SourceChildOrder.SpliceInto(
-            Path.Combine(modFolder, SourceRecordPath.RootFor(pluginName)), deepParsed);
-
         // The working tree now corresponds to this binary — atRef: null snapshots it as it stands, as
         // Save & Compile parks.
         var binarySha256 = Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(pluginPath)));
@@ -146,15 +141,11 @@ public static class ExternalChangeEditLander
     {
         var incomingText = Encoding.UTF8.GetString(codec.SerializeToBytesAsync(record, gameRelease).GetAwaiter().GetResult());
 
-        // Compared as the record's own fields: a container's document also carries its children's ordered
-        // list, which the codec's text never does.
-        var baselineText = baselineByPath.TryGetValue(ToGitPath(relativePath), out var baseline)
-            ? SourceChildOrder.WithoutOrder(baseline)
-            : null;
+        var baselineText = baselineByPath.TryGetValue(ToGitPath(relativePath), out var baseline) ? baseline : null;
         if (string.Equals(incomingText, baselineText, StringComparison.Ordinal))
             return null; // the external change never actually touched this record
 
-        var currentText = File.Exists(existingPath) ? SourceChildOrder.WithoutOrder(File.ReadAllText(existingPath)) : null;
+        var currentText = File.Exists(existingPath) ? File.ReadAllText(existingPath) : null;
         return new TouchedRecord(formKey, relativePath, fullPath, existingPath, incomingText, currentText, baselineText);
     }
 

@@ -205,16 +205,17 @@ public sealed class PluginCompileService(
         }
     }
 
-    // ADR-0042: the generated deserializer skips an unrecognized property and defaults a missing one
-    // without throwing, so a successful parse proves nothing. With no independent original here, the
-    // check is self-consistency: regenerate and byte-compare.
+    // ADR-0042: the generated deserializer skips an unrecognized property or file without throwing,
+    // so a successful parse proves nothing. The check is self-consistency in both directions: a
+    // document the regeneration does not produce is content the parse dropped.
 
     // No live subrecord-inventory gate here, deliberately: that loss class arises only when Track
     // parses an external binary, never from Compile.
     private static string? RefuseIfSourceDoesNotRoundTrip(IMod mod, string pluginName, string resolverRoot)
     {
         var regeneratedFiles = TrackService.SerializeToPristineFiles(mod, pluginName).GetAwaiter().GetResult();
-        var rootHeaderPath = Path.Combine(SourceRecordPath.RootFor(pluginName), SourceUnitResolver.RecordDataFileName);
+        var treeRoot = SourceRecordPath.RootFor(pluginName);
+        var rootHeaderPath = Path.Combine(treeRoot, SourceUnitResolver.RecordDataFileName);
 
         foreach (var file in regeneratedFiles)
         {
@@ -225,6 +226,20 @@ public sealed class PluginCompileService(
             var offender = file.RelativePath == rootHeaderPath ? "the plugin header" : file.RelativePath;
             return $"{pluginName} does not round-trip through its own source: {offender} does not match " +
                 "what the current codec would produce from it. Re-Track to regenerate the source.";
+        }
+
+        var regeneratedPaths = regeneratedFiles.Select(f => f.RelativePath).ToHashSet(StringComparer.Ordinal);
+        var unproduced = Directory
+            .EnumerateFiles(Path.Combine(resolverRoot, treeRoot), "*.json", SearchOption.AllDirectories)
+            .Select(f => Path.GetRelativePath(resolverRoot, f))
+            .Where(relativePath => !regeneratedPaths.Contains(relativePath))
+            .Order(StringComparer.Ordinal)
+            .FirstOrDefault();
+        if (unproduced != null)
+        {
+            return $"{pluginName} does not round-trip through its own source: {unproduced} is in the source, " +
+                "but the current codec produces no such file from it, so nothing it holds reaches the plugin " +
+                "(a document left over from an earlier source layout, or a stray file). Re-Track to regenerate the source.";
         }
 
         return null;

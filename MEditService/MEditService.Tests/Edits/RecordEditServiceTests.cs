@@ -28,22 +28,16 @@ public sealed class RecordEditServiceTests : IDisposable
     public void EditingEditorId_MovesTheSourceFileToItsNewName()
     {
         var oldRelative = _mod.RelativeSourcePath(_mod.Npc, "npc_", TrackedModFixture.NpcEditorId);
-        var groupDirectory = Path.GetDirectoryName(Path.Combine(_mod.ModFolder, oldRelative))!;
-        var carrier = SourceChildOrder.CarrierFor(groupDirectory, parentIsRecord: false);
-        var orderBefore = SourceChildOrder.ListAt(carrier, "Npcs");
         Assert.True(File.Exists(Path.Combine(_mod.ModFolder, oldRelative)));
 
         var result = Service().Set(_mod.Plugin, _mod.Npc.ToString(), "EditorID", Json("\"RenamedNpc\""));
 
         Assert.True(result.Applied, result.Message);
         Assert.False(File.Exists(Path.Combine(_mod.ModFolder, oldRelative)));
-        // Resolved after the rename: RelativeSourcePath answers where the record is right now. A rename
-        // must not disturb the record's position among its siblings, which lives in the parent's ordered
-        // child list keyed by FormKey.
+        // Resolved after the rename: RelativeSourcePath answers where the record is right now.
         var newRelative = _mod.RelativeSourcePath(_mod.Npc, "npc_", "RenamedNpc");
         var moved = Path.Combine(_mod.ModFolder, newRelative);
         Assert.True(File.Exists(moved));
-        Assert.Equal(orderBefore, SourceChildOrder.ListAt(carrier, "Npcs"));
         Assert.DoesNotContain("[", Path.GetFileName(newRelative), StringComparison.Ordinal);
         Assert.Contains("\"EditorID\": \"RenamedNpc\"", File.ReadAllText(moved), StringComparison.Ordinal);
         Assert.Equal("RenamedNpc", _mod.Mirror.Index!.At(RecordRef.Effective).GetDocument(_mod.Npc.ToString(), _mod.Plugin)!.EditorId);

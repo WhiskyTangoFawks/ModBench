@@ -3,14 +3,11 @@ using MEditService.Tests.TestSupport;
 
 namespace MEditService.Tests.Architecture;
 
-/// <summary>The source order carrier is being deleted in favour of children embedded in their
-/// container's document. Until it is gone, every reference to it is counted, and the count only
-/// goes down.</summary>
+/// <summary>The source order carrier is gone: children live inline in their container's document
+/// and no list carries order. Every reference to it is counted, and the allowlist is empty.</summary>
 public sealed class CarrierScanTests
 {
-    // The carrier's own name reaches all of its members, the post-deserialize reorder and the
-    // group-level carrier document among them. The other two are the drift rule and the member the
-    // carrier mints into a document.
+    // The carrier's own name, its drift rule, and the member it minted into a document.
     private static readonly string[] Symbols =
         ["SourceChildOrder", "SourceChildOrderDriftException", "MEditChildOrder"];
 

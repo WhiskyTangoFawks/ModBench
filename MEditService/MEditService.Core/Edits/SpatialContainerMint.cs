@@ -82,31 +82,20 @@ internal static class SpatialContainerMint
             var cellFile = Directory.EnumerateFiles(scratchWorldspaces, recordDataFileName, SearchOption.AllDirectories)
                 .Single(f => !string.Equals(f, worldspaceHeaderFile, StringComparison.Ordinal));
 
-            // Captured before the ordered child lists are spliced in: a worldspace's index document
-            // must be what the codec round-trips, not that plus a tree-layout member.
             var result = new SpatialMintResult(
                 await File.ReadAllBytesAsync(worldspaceHeaderFile), await File.ReadAllBytesAsync(cellFile));
 
-            // Order is parent data (ADR-0042 decision 4); a subtree merged in without it is drift the
-            // next compile refuses.
-            SourceChildOrder.SpliceInto(scratchDir, syntheticMod);
-
             if (existingWorldspaceDirectory != null)
             {
-                // Merged before the scratch header is removed: that file carries the SubCells order the
-                // destination's list needs. The merge walks directories only, so the header never travels.
+                // The merge walks directories only, so the scratch worldspace's own document never
+                // overwrites the real one.
                 MergeIntoExistingWorldspace(worldspaceOwnDir, existingWorldspaceDirectory);
-                File.Delete(worldspaceHeaderFile);
             }
             else
             {
                 var destinationWorldspaces = Path.Combine(
                     destinationModFolder, SourceRecordPath.RootFor(destinationPluginName), worldspacesFolder);
                 SourceTreeMerge.MergeAdditively(scratchWorldspaces, destinationWorldspaces);
-
-                // MergeAdditively never overwrites, so an existing Worldspaces/GroupRecordData.json would
-                // keep a list that does not name the new worldspace.
-                SourceChildOrder.MergeCarrierInto(scratchWorldspaces, destinationWorldspaces);
             }
 
             return result;
@@ -117,9 +106,9 @@ internal static class SpatialContainerMint
         }
     }
 
-    // Descends by matching name to the first level with no match, merging the ordered child list at
-    // every level so the pass is idempotent against a destination that half-holds the subtree.
-    // Terminates: MintExteriorCell refuses a FormKey the destination holds.
+    // Descends by matching name to the first level with no match, so the pass is idempotent against a
+    // destination that half-holds the subtree. Terminates: MintExteriorCell refuses a FormKey the
+    // destination holds.
     private static void MergeIntoExistingWorldspace(string scratchWorldspaceDir, string existingWorldspaceDir)
     {
         var scratchLevel = scratchWorldspaceDir;
@@ -130,8 +119,6 @@ internal static class SpatialContainerMint
             var identity = Path.GetFileName(scratchChild);
             var existing = Directory.EnumerateDirectories(destinationLevel)
                 .SingleOrDefault(d => Path.GetFileName(d).Equals(identity, StringComparison.Ordinal));
-
-            SourceChildOrder.MergeCarrierInto(scratchLevel, destinationLevel);
 
             if (existing == null)
             {

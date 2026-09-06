@@ -105,26 +105,24 @@ public static class PluginBinaryWalk
             .GroupBy(sub => sub.Sig, StringComparer.Ordinal)
             .ToDictionary(g => g.Key, g => g.Count(), StringComparer.Ordinal);
 
-    /// <summary>The first record whose subrecord inventory shows a drop, or null (also when the records
-    /// diverge). TES4's MAST/DATA are exempt: every write re-derives the master list (ADR-0038), so that
-    /// decrease is sanctioned pruning.</summary>
+    /// <summary>The first record whose subrecord inventory shows a drop, or null. Paired by type and
+    /// FormID, never by position: a rewrite carries no group order. TES4's MAST/DATA are exempt
+    /// (ADR-0038 re-derives the master list).</summary>
     public static SubrecordLoss? FindFirstSubrecordLoss(byte[] originalPluginBytes, byte[] rewrittenPluginBytes)
     {
-        var originalRecords = WalkRecords(originalPluginBytes).Where(r => !r.IsGrup).ToList();
-        var rewrittenRecords = WalkRecords(rewrittenPluginBytes).Where(r => !r.IsGrup).ToList();
-        var n = Math.Min(originalRecords.Count, rewrittenRecords.Count);
+        var rewrittenByIdentity = new Dictionary<(string Type, uint FormId), RecordSpan>();
+        foreach (var record in WalkRecords(rewrittenPluginBytes).Where(r => !r.IsGrup))
+            rewrittenByIdentity.TryAdd((record.Type, record.FormId), record);
 
-        for (int i = 0; i < n; i++)
+        foreach (var original in WalkRecords(originalPluginBytes).Where(r => !r.IsGrup))
         {
-            var original = originalRecords[i];
-            var rewritten = rewrittenRecords[i];
-            if (original.Type != rewritten.Type || original.FormId != rewritten.FormId)
-                return null;
+            if (!rewrittenByIdentity.TryGetValue((original.Type, original.FormId), out var rewritten))
+                continue;
 
             var originalCompressed = (original.Flags & CompressedFlag) != 0;
             var rewrittenCompressed = (rewritten.Flags & CompressedFlag) != 0;
             if (originalCompressed != rewrittenCompressed)
-                return null;
+                continue;
 
             byte[] originalData, rewrittenData;
             try

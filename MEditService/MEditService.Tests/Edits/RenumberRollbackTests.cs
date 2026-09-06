@@ -132,15 +132,11 @@ public sealed class RenumberRollbackTests
     // ---- ordering, containers, and the index ----
 
     [Fact]
-    public void TheParentsOrderedChildList_ReturnsToItsPreActionValue()
+    public void TheGroupFolder_ReturnsToItsPreActionEntries()
     {
         using var fixture = new CascadeRollbackFixture();
         var racesFolder = Path.GetDirectoryName(
             fixture.SourceFileOf(fixture.TargetPlugin, fixture.Race, "race", CascadeRollbackFixture.RaceEditorId))!;
-
-        var carrier = SourceChildOrder.CarrierFor(racesFolder, parentIsRecord: false);
-        var orderBefore = File.ReadAllBytes(carrier);
-        Assert.Contains(fixture.Race.ToString(), SourceChildOrder.ListAt(carrier, "Races"), StringComparer.Ordinal);
 
         var entriesBefore = Directory.GetFileSystemEntries(racesFolder)
             .Select(Path.GetFileName).Order(StringComparer.Ordinal).ToList();
@@ -150,9 +146,6 @@ public sealed class RenumberRollbackTests
             ServiceFor(new IndexOverridingMirror(fixture.Mirror, failing))
                 .RenumberRecord(fixture.TargetPlugin, fixture.Race.ToString()));
 
-        Assert.True(
-            orderBefore.AsSpan().SequenceEqual(File.ReadAllBytes(carrier)),
-            "the parent's ordered child list did not return to its pre-action bytes");
         Assert.Equal(
             entriesBefore,
             Directory.GetFileSystemEntries(racesFolder).Select(Path.GetFileName).Order(StringComparer.Ordinal).ToList());

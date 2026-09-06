@@ -88,6 +88,85 @@ public sealed class ModelIdentityTests
         Assert.Null(divergence);
     }
 
+    // Block, sub-block and cell order under a worldspace is encoding: the tree carries none, so the
+    // reader's directory enumeration decides it (ADR-0042 decision 4).
+    [Fact]
+    public void FindFirst_WhenAWorldspacesBlockLevelsAreInAnotherOrder_ReturnsNull()
+    {
+        var mod = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
+        var ws = mod.Worldspaces.AddNew("TestWs");
+        var cellA = new Cell(mod) { EditorID = "CellA", Grid = new CellGrid { Point = new Noggog.P2Int(0, 0) } };
+        var cellB = new Cell(mod) { EditorID = "CellB", Grid = new CellGrid { Point = new Noggog.P2Int(1, 0) } };
+        var cellC = new Cell(mod) { EditorID = "CellC", Grid = new CellGrid { Point = new Noggog.P2Int(8, 8) } };
+        ws.SubCells.Add(Block(0, 0, SubBlock(0, 0, cellA, cellB)));
+        ws.SubCells.Add(Block(1, 1, SubBlock(2, 2, cellC)));
+
+        var recompiled = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
+        var recompiledWs = new Worldspace(ws.FormKey, Fallout4Release.Fallout4) { EditorID = "TestWs" };
+        recompiledWs.SubCells.Add(Block(1, 1, SubBlock(2, 2, cellC.DeepCopy())));
+        recompiledWs.SubCells.Add(Block(0, 0, SubBlock(0, 0, cellB.DeepCopy(), cellA.DeepCopy())));
+        recompiled.Worldspaces.Add(recompiledWs);
+
+        Assert.Null(ModelIdentity.FindFirst(mod, recompiled));
+    }
+
+    [Fact]
+    public void FindFirst_WhenACellUnderAWorldspaceBlockGenuinelyDiffers_NamesIt()
+    {
+        var mod = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
+        var ws = mod.Worldspaces.AddNew("TestWs");
+        var cell = new Cell(mod) { EditorID = "CellA", Grid = new CellGrid { Point = new Noggog.P2Int(0, 0) } };
+        ws.SubCells.Add(Block(0, 0, SubBlock(0, 0, cell)));
+
+        var recompiled = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
+        var recompiledWs = new Worldspace(ws.FormKey, Fallout4Release.Fallout4) { EditorID = "TestWs" };
+        var changed = cell.DeepCopy();
+        changed.Grid!.Point = new Noggog.P2Int(0, 1);
+        recompiledWs.SubCells.Add(Block(0, 0, SubBlock(0, 0, changed)));
+        recompiled.Worldspaces.Add(recompiledWs);
+
+        var divergence = ModelIdentity.FindFirst(mod, recompiled);
+
+        Assert.NotNull(divergence);
+        Assert.Contains("Point", divergence!.Description);
+    }
+
+    // The one thing the worldspace's own comparison guards that the per-record walk does not: which
+    // block a cell sits under.
+    [Fact]
+    public void FindFirst_WhenACellSitsUnderAnotherBlockCoordinate_NamesIt()
+    {
+        var mod = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
+        var ws = mod.Worldspaces.AddNew("TestWs");
+        var cell = new Cell(mod) { EditorID = "CellA", Grid = new CellGrid { Point = new Noggog.P2Int(0, 0) } };
+        ws.SubCells.Add(Block(0, 0, SubBlock(0, 0, cell)));
+
+        var recompiled = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
+        var recompiledWs = new Worldspace(ws.FormKey, Fallout4Release.Fallout4) { EditorID = "TestWs" };
+        recompiledWs.SubCells.Add(Block(5, 0, SubBlock(0, 0, cell.DeepCopy())));
+        recompiled.Worldspaces.Add(recompiledWs);
+
+        var divergence = ModelIdentity.FindFirst(mod, recompiled);
+
+        Assert.NotNull(divergence);
+        Assert.Equal("Worldspace", divergence!.RecordType);
+        Assert.Contains("BlockNumberX", divergence.Description);
+    }
+
+    private static WorldspaceBlock Block(short x, short y, params WorldspaceSubBlock[] subBlocks)
+    {
+        var block = new WorldspaceBlock { BlockNumberX = x, BlockNumberY = y };
+        block.Items.AddRange(subBlocks);
+        return block;
+    }
+
+    private static WorldspaceSubBlock SubBlock(short x, short y, params Cell[] cells)
+    {
+        var subBlock = new WorldspaceSubBlock { BlockNumberX = x, BlockNumberY = y };
+        subBlock.Items.AddRange(cells);
+        return subBlock;
+    }
+
     [Fact]
     public void FindFirst_WhenOnlyASubCellsBlocksGroupHeaderDerivedFieldsDiffer_ReturnsNull()
     {

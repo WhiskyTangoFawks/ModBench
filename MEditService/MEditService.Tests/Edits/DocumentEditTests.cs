@@ -4,7 +4,6 @@ using System.Text.Json.Nodes;
 using MEditService.Core.Edits;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
-using MEditService.Core.Source;
 using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -585,20 +584,5 @@ public sealed class DocumentEditTests
 
         Assert.Null(refusal);
         Assert.Equal(["Temporary[0].Scale: 1.0 -> 2.5"], ConditionEditTests.DocumentDiff(before, after));
-    }
-
-    [Fact]
-    public void ChildOrderMember_IsCarriedThroughTheReserialize()
-    {
-        var quest = _mod.Quests.AddNew("Ordered");
-        var order = JsonNode.Parse("""{"DialogTopics": ["000801:DocEdit.esp", "000802:DocEdit.esp"]}""")!;
-        var before = SourceChildOrder.WithOrder(DocumentEdits.Serialize(quest), order);
-
-        var after = Applied(before, "qust", SetAt(Json("\"Renamed\""), Member("EditorID")));
-
-        Assert.Equal(
-            JsonNode.Parse(before)![SourceChildOrder.OrderMember]!.ToJsonString(),
-            JsonNode.Parse(after)![SourceChildOrder.OrderMember]!.ToJsonString());
-        Assert.Equal(["EditorID: \"Ordered\" -> \"Renamed\""], ConditionEditTests.DocumentDiff(before, after));
     }
 }

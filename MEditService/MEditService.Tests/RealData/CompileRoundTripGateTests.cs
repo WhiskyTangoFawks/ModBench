@@ -22,8 +22,8 @@ namespace MEditService.Tests.RealData;
 public sealed class CompileRoundTripGateTests(CompileRoundTripGateFixture fixture)
     : IClassFixture<CompileRoundTripGateFixture>
 {
-    // Composed from serializer plus splice rather than delegating to TrackService's own writer: that
-    // would put identical production code on both sides, so a splice defect would agree with itself.
+    // The library's whole-mod writer alone, not TrackService's own door: identical production code on
+    // both sides would agree with itself about any file Track added.
     private static Dictionary<string, byte[]> DeriveSourceTreeFromBinary(string pluginPath, GameRelease release)
     {
         var pluginFileName = Path.GetFileName(pluginPath);
@@ -39,7 +39,6 @@ public sealed class CompileRoundTripGateTests(CompileRoundTripGateFixture fixtur
             RecordTextCodecGeneratorSeed
                 .SerializeWholeMod((IFallout4ModGetter)mod, scratch, InlineWorkDropoff.Instance, CancellationToken.None)
                 .GetAwaiter().GetResult();
-            SourceChildOrder.SpliceInto(scratch, mod);
 
             return Directory.EnumerateFiles(scratch, "*.json", SearchOption.AllDirectories)
                 .ToDictionary(
@@ -78,8 +77,8 @@ public sealed class CompileRoundTripGateTests(CompileRoundTripGateFixture fixtur
     }
 
     // Order is the document's list order, transitively: a quest's document holds its topics, branches
-    // and scenes in the binary's order, each topic its responses, and none has a file, a directory or a
-    // carrier entry anywhere.
+    // and scenes in the binary's order, each topic its responses, and none has a file or a directory
+    // anywhere.
     [Fact]
     public void Track_OfTheRealFixture_WritesEveryQuestDescendantInlineInItsQuestsDocument_InTheBinarysOrder()
     {
@@ -103,7 +102,6 @@ public sealed class CompileRoundTripGateTests(CompileRoundTripGateFixture fixtur
         foreach (var quest in quests)
         {
             var root = JsonNode.Parse(File.ReadAllText(SourceDocumentOf(documents, quest.FormKey.ToString())))!.AsObject();
-            Assert.Null(root[SourceChildOrder.OrderMember]);
 
             foreach (var (slot, children) in new (string, IEnumerable<IMajorRecordGetter>)[]
                      {
@@ -131,12 +129,44 @@ public sealed class CompileRoundTripGateTests(CompileRoundTripGateFixture fixtur
                     Assert.DoesNotContain(documents, f => SourceUnitResolver.NameCarriesFormKey(Path.GetFileName(f), response.FormKey.ToString()));
                 var inline = root[nameof(Quest.DialogTopics)]!.AsArray()
                     .Single(t => t![nameof(IMajorRecordGetter.FormKey)]!.GetValue<string>() == topic.FormKey.ToString())!;
-                Assert.Null(inline[SourceChildOrder.OrderMember]);
                 Assert.Equal(
                     topic.Responses.Select(r => r.FormKey.ToString()),
                     inline[nameof(DialogTopic.Responses)]?.AsArray().Select(r => r![nameof(IMajorRecordGetter.FormKey)]!.GetValue<string>()) ?? []);
             }
         }
+    }
+
+    // The member Modbench once minted into a document to carry a folder-split list's order. Nothing
+    // carries order now: a flat group's order is encoding, decided by directory enumeration.
+    [Fact]
+    public void Track_OfTheRealFixture_WritesNoDocumentCarryingAnOrderMember()
+    {
+        var carrying = Directory.EnumerateFiles(fixture.SourceRoot, "*.json", SearchOption.AllDirectories)
+            .Where(f => File.ReadAllText(f).Contains("\"MEditChildOrder\"", StringComparison.Ordinal))
+            .Select(f => Path.GetRelativePath(fixture.SourceRoot, f))
+            .ToList();
+
+        Assert.Empty(carrying);
+    }
+
+    // GroupRecordData.json is the library's own metadata file for a group or block level, written
+    // only for non-default metadata. None is minted for a flat group to carry its order.
+    [Fact]
+    public void Track_OfTheRealFixture_WritesOnlyTheGroupDocumentsTheLibraryWrites()
+    {
+        var libraryTree = DeriveSourceTreeFromBinary(CutDownPluginFixture.PluginPath, GameRelease.Fallout4);
+        var libraryGroupDocuments = libraryTree
+            .Where(kv => Path.GetFileName(kv.Key) == SourceUnitResolver.GroupRecordDataFileName)
+            .ToDictionary(kv => kv.Key, kv => kv.Value);
+        Assert.NotEmpty(libraryGroupDocuments);
+
+        var trackedGroupDocuments = fixture.ReadSourceTree()
+            .Where(kv => Path.GetFileName(kv.Key) == SourceUnitResolver.GroupRecordDataFileName)
+            .ToDictionary(kv => kv.Key, kv => kv.Value);
+
+        Assert.Equal(libraryGroupDocuments.Keys.Order(), trackedGroupDocuments.Keys.Order());
+        foreach (var (path, bytes) in libraryGroupDocuments)
+            Assert.True(bytes.AsSpan().SequenceEqual(trackedGroupDocuments[path]), $"{path} is not the library's own document.");
     }
 
     // A record's document is the file carrying its FormKey, or the RecordData.json of the directory

@@ -1,5 +1,4 @@
 using System.IO.Abstractions;
-using MEditService.Core.Source;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Serialization.Newtonsoft;
 using Noggog.IO;
@@ -35,17 +34,9 @@ internal static class RecordTextCodecGeneratorSeed
     /// <summary>Argument 0 is the folder, not a mod, so this call site emits no mixin and cannot
     /// collide (CS8785). An in-memory read needs both fileSystem and streamCreator: the reader checks
     /// File.Exists before consulting the stream creator.</summary>
-    internal static async Task<IFallout4Mod> DeserializeWholeMod(
+    internal static Task<IFallout4Mod> DeserializeWholeMod(
         string folder, Noggog.WorkEngine.IWorkDropoff workDropoff, CancellationToken cancel,
         IFileSystem? fileSystem = null, ICreateStream? streamCreator = null)
-    {
-        var mod = await MutagenJsonConverter.Instance.Deserialize(
+        => MutagenJsonConverter.Instance.Deserialize(
             folder, workDropoff: workDropoff, fileSystem: fileSystem, streamCreator: streamCreator, cancel: cancel);
-
-        // Order is parent data (ADR-0042 decision 4): directory enumeration order is undefined, so
-        // each collection is restored from its parent's ordered child list at the door, so no reader
-        // can obtain an unordered mod by forgetting to ask.
-        SourceChildOrder.ApplyTo(folder, mod, fileSystem);
-        return mod;
-    }
 }

@@ -1,15 +1,4 @@
-# Every reference in the C# stack to the source order carrier, to the order member it mints into a
-# document and to its drift rule, as file, symbol and count. Embedding children deletes all three,
-# so this list only ever shrinks; a line here is not permission, it is the remaining work.
-MEditService.Core/Edits/DocumentEdit.cs: SourceChildOrder: 3
-MEditService.Core/Edits/RecordEditService.cs: SourceChildOrder: 7
-MEditService.Core/Edits/SpatialContainerMint.cs: SourceChildOrder: 3
-MEditService.Core/Serialization/RecordTextCodec.cs: SourceChildOrder: 1
-MEditService.Core/Serialization/RecordTextCodecGeneratorSeed.cs: SourceChildOrder: 1
-MEditService.Core/Source/ExternalChangeEditLander.cs: SourceChildOrder: 3
-MEditService.Core/Source/SourceChildOrder.cs: MEditChildOrder: 1
-MEditService.Core/Source/SourceChildOrder.cs: SourceChildOrder: 2
-MEditService.Core/Source/SourceChildOrder.cs: SourceChildOrderDriftException: 5
-MEditService.Core/Source/SourceFreshness.cs: SourceChildOrder: 2
-MEditService.Core/Source/SourceUnitResolver.cs: SourceChildOrder: 1
-MEditService.Core/Source/TrackService.cs: SourceChildOrder: 1
+# Every reference in the C# stack to the retired source order carrier, to the order member it minted
+# into a document and to its drift rule, as file, symbol and count. Children live inline in their
+# container's document and no list carries order, so this list is empty and stays empty: a line here
+# is a reference that needs the maintainer's ruling, not permission.
