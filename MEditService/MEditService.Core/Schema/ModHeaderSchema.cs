@@ -57,7 +57,7 @@ internal static class ModHeaderSchema
 
             // A member the builder declines has already said so through SchemaRefusals.
             if (ColumnReflection.BuildColumn(prop, $"{modHeaderProp.Name}.{prop.Name}", game, logger) is { } column)
-                columns.Add(column with { ReadOnlyReason = readOnlyReason, Field = XEditLabelled(column.Field) });
+                columns.Add(column with { Field = column.Field with { ReadOnlyReason = readOnlyReason } });
         }
 
         // The ESL flag's door: a synthetic bit of the flags column, spelled in the document as that
@@ -74,29 +74,5 @@ internal static class ModHeaderSchema
             RecordColumns = columns,
             IsHeader = true,
         };
-    }
-
-    // The document carries Mutagen's member names; a header column with a closed domain is labelled
-    // with xEdit's, and a name xEdit spells the same carries no label (ADR-0034).
-    private static SubFieldSpec XEditLabelled(SubFieldSpec field) =>
-        field.EnumMembers.Count == 0
-            ? field
-            : field with
-            {
-                EnumMembers = [.. field.EnumMembers.Select(m =>
-                    m with { Label = MapToXEditFlagName(m.Value) is var label && label != m.Value ? label : null })],
-            };
-
-    // Member names Mutagen uses for the light-master ("ESL") flag across games.
-    private static readonly HashSet<string> LightMasterFlagNames =
-        new(StringComparer.OrdinalIgnoreCase) { "Small", "LightMaster", "Light" };
-
-    // Keyed off the Mutagen member name, never a bit position, which differs across games.
-    // Optimized/Localized/Update already match xEdit's spelling; a member with no xEdit counterpart
-    // (Overlay, Medium) falls through unchanged.
-    internal static string MapToXEditFlagName(string mutagenName)
-    {
-        if (mutagenName.Equals("Master", StringComparison.OrdinalIgnoreCase)) return "ESM";
-        return LightMasterFlagNames.Contains(mutagenName) ? "ESL" : mutagenName;
     }
 }

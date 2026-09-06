@@ -55,14 +55,20 @@ the model: it changes no edit value and no copy value.
   beside "reflected" and "annotated" — never silently dropped.
 
 - **Per-game knowledge enters the reflector only as validated annotation tables.** The facts
-  reflection cannot see — a member that is GRUP metadata rather than record data, padding xEdit
-  never renders, which Color fields carry an alpha byte, which arrays are keyed and by what, which
-  parameter members a condition function uses, a point the type walk must stop at — are
-  `SchemaAnnotations` rows: one table per concern per game, keyed by Mutagen type and member name,
-  overlaid on reflection and validated before the game's schema is built. An entry naming a type or
-  member reflection did not find fails schema generation and names the entry. Adding a game is
-  additive in one place. A fact reflection *can* read is never written down, because a table that
-  duplicated the assembly would drift from it silently.
+  reflection cannot see — a member that is GRUP metadata rather than record data, a signature no
+  table is built for, padding xEdit never renders, which Color fields carry an alpha byte, which
+  arrays are keyed and by what, which parameter members a condition function uses, which shapes
+  have no decided presentation, xEdit's own name for a flag, a point the type walk must stop at, a
+  member a known upstream Mutagen defect governs — are `SchemaAnnotations` rows: one table per
+  concern per game, keyed by Mutagen type and member name, overlaid on reflection and validated
+  before the game's schema is built. A row that does not resolve, or is not the kind of thing its
+  table says it is, or claims a walk that did not happen, fails schema generation and names itself.
+  Adding a game is additive in one place. A fact reflection *can* read is never written down,
+  because a table that duplicated the assembly would drift from it silently.
+
+- **The type walk truncates nothing in silence.** Its only bound is path-based cycle detection and
+  the truncation rows that name where a game's own format cannot nest further; there is no depth
+  cap. A member the walk cannot place is reported through the anomaly channel, never dropped.
 
 ## Why conditions are reflected rather than coded
 

@@ -148,7 +148,11 @@ public record FieldMetadata(
     // What an absent member reads as: the declared default the codec omits on write. Null where
     // that is the wire's own zero (0, false, []); an enum always names it, since its members alone
     // cannot say which is zero.
-    object? Default = null);
+    object? Default = null,
+
+    // Why this member is never written: a known upstream defect, or a member the header has no
+    // write path for. Null for an ordinary member, which the write path patches.
+    string? ReadOnlyReason = null);
 
 /// <summary>Value is the stored document's own node for this field, verbatim, or null when the
 /// document omits the member (which the codec does for a member equal to its default).</summary>

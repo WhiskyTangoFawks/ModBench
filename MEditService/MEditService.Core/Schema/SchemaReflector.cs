@@ -25,23 +25,6 @@ public sealed class SchemaReflector
         _logger = logger ?? NullLogger<SchemaReflector>.Instance;
     }
 
-    // Placed refr/achr are indexed as normal records, with cell parentage in the placement side
-    // table; land/navm/navi get no such treatment.
-    private static readonly HashSet<string> NonEditableRefTypes = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "land", "navm", "navi",
-    };
-
-    // xEdit-signature-variant collapsing: rare REFR-flavor placement types (projectile/hazard/
-    // etc. placements) that mEdit doesn't surface as distinct record types.
-    private static readonly HashSet<string> XEditRefSignatureVariants = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "pgre", "pmis", "parw", "pbar", "pbea", "pcon", "pfla", "phzd",
-    };
-
-    private static readonly HashSet<string> ExcludedTables =
-        new(NonEditableRefTypes.Concat(XEditRefSignatureVariants), StringComparer.OrdinalIgnoreCase);
-
     private sealed record GameSchemaCache(
         IReadOnlyDictionary<string, RecordTableSchema> Schemas,
         GameReflection Game);
@@ -97,10 +80,11 @@ public sealed class SchemaReflector
     private static GameSchemaCache BuildForCategory(
         GameCategory category, Assembly assembly, SchemaAnnotations annotations, ILogger logger)
     {
-        annotations.Validate(assembly);
-
         var majorRecordGetterType =
             assembly.GetType($"Mutagen.Bethesda.{category}.I{category}MajorRecordGetter")!;
+        var grups = GrupRecordTypes(assembly, majorRecordGetterType, category).ToList();
+
+        annotations.Validate(assembly, grups.Select(g => g.TableName));
 
         // One GRUP signature can be backed by several concrete subclasses (GMST, GLOB, DMGT) because
         // the discriminant lives on the record, not the table. One winner per table keeps RecordType
@@ -109,20 +93,9 @@ public sealed class SchemaReflector
         var discovered = new List<(string tableName, Type getterType)>();
         var siblingsByTable = new Dictionary<string, List<Type>>(StringComparer.OrdinalIgnoreCase);
 
-        foreach (var type in assembly.GetTypes())
+        foreach (var (tableName, getterInterface) in grups)
         {
-            if (type.IsAbstract || type.IsInterface) continue;
-            if (!majorRecordGetterType.IsAssignableFrom(type)) continue;
-
-            var grupField = type.GetField("GrupRecordType", BindingFlags.Public | BindingFlags.Static);
-            if (grupField == null) continue;
-
-            var recordType = (RecordType)grupField.GetValue(null)!;
-            var tableName = recordType.Type.ToLowerInvariant();
-
-            if (ExcludedTables.Contains(tableName)) continue;
-
-            var getterInterface = assembly.GetType($"Mutagen.Bethesda.{category}.I{type.Name}Getter")!;
+            if (annotations.IsExcludedSignature(tableName)) continue;
 
             if (!siblingsByTable.TryGetValue(tableName, out var siblings))
                 siblingsByTable[tableName] = siblings = [];
@@ -151,7 +124,38 @@ public sealed class SchemaReflector
 
         ModHeaderSchema.AddHeaderSchemaIfAvailable(schemas, category, assembly, game, logger);
 
+        annotations.ValidateObserved(assembly.GetName().Name ?? category.ToString(), game.Observed);
+
         return new GameSchemaCache(schemas, game);
+    }
+
+    // Every concrete record class the assembly registers under a GRUP, paired with its own getter
+    // interface. The annotation table's signature rows are checked against this before it is read.
+    private static IEnumerable<(string TableName, Type GetterInterface)> GrupRecordTypes(
+        Assembly assembly, Type majorRecordGetterType, GameCategory category)
+    {
+        foreach (var type in assembly.GetTypes())
+        {
+            if (type.IsAbstract || type.IsInterface) continue;
+            if (!majorRecordGetterType.IsAssignableFrom(type)) continue;
+
+            var grupField = type.GetField("GrupRecordType", BindingFlags.Public | BindingFlags.Static);
+            if (grupField == null) continue;
+
+            yield return (
+                ((RecordType)grupField.GetValue(null)!).Type.ToLowerInvariant(),
+                assembly.GetType($"Mutagen.Bethesda.{category}.I{type.Name}Getter")!);
+        }
+    }
+
+    /// <summary>The known Mutagen defects with one effect, for the gesture that has to honour
+    /// them. Building the schema is what validates the rows.</summary>
+    internal IReadOnlyList<KnownDefect> DefectsWith(GameRelease release, KnownDefectEffect effect)
+    {
+        var category = release.ToCategory();
+        var assembly = ResolveAssembly(release, category)
+            ?? throw new UnsupportedGameReleaseException(release, AssemblyNameFor(category));
+        return GetCache(category, assembly).Game.Annotations.DefectsWith(effect);
     }
 
     // RecordType stays bound to the discovery winner even though the columns are unioned: Mutagen's

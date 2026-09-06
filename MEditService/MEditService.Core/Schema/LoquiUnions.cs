@@ -35,6 +35,10 @@ internal static class LoquiUnions
     private static bool IsUnionBase(Type setterType, int leafCount) =>
         leafCount > (setterType.IsAbstract ? 0 : 1);
 
+    /// <summary>Whether this base expands to leaves at all, asked of an annotation that claims it
+    /// does. Blind to the exclusion table, which is what such a row would set.</summary>
+    internal static bool IsUnionBase(Type setterType) => IsUnionBase(setterType, LeavesUnder(setterType).Count());
+
     // ExcludedUnions gates here, not only in IsExcludedUnionColumn: BuildSubSchema's recursive walk
     // reaches a type with no memory of which field led to it.
     internal static LoquiUnion? TryGetUnion(Type getterInterface, GameReflection game)
@@ -82,7 +86,6 @@ internal static class LoquiUnions
         LoquiUnion union,
         GameReflection game,
         Type[] path,
-        int depth,
         ILogger logger)
     {
         var baseMemberNames = ReflectedTypes.GetAllInterfaceProperties(getterInterface)
@@ -102,7 +105,7 @@ internal static class LoquiUnions
                 .Where(p => !game.Annotations.IsExcludedMember(p) && !baseMemberNames.Contains(p.Name))
                 .GroupBy(p => p.Name, StringComparer.Ordinal)
                 .Select(ReflectedTypes.MostDerived)
-                .Select(p => SubFieldReflection.GetSubFieldInfo(p, game, leafPath, depth, logger))
+                .Select(p => SubFieldReflection.GetSubFieldInfo(p, game, leafPath, logger))
                 .OfType<SubFieldSpec>()
                 .ToList();
             reached.Add((getterType, className));

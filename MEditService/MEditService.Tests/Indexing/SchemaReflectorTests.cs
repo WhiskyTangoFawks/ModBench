@@ -32,13 +32,16 @@ public class SchemaReflectorTests
     }
 
     [Fact]
-    public void GetSchemas_StillExcludesNonReferenceCellChildren()
+    public void GetSchemas_BuildsNoTableForAnExcludedSignature()
     {
-        // Landscape and navmesh live in cell children too but aren't standard refs.
+        // Landscape and navmesh live in cell children too but aren't standard refs; the REFR-flavour
+        // placement variants collapse into refr. Both groups are SchemaAnnotations.ExcludedSignatures.
         var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
-        Assert.False(schemas.ContainsKey("Land"));
+        Assert.False(schemas.ContainsKey("land"));
         Assert.False(schemas.ContainsKey("navm"));
         Assert.False(schemas.ContainsKey("navi"));
+        Assert.False(schemas.ContainsKey("pgre"));
+        Assert.False(schemas.ContainsKey("phzd"));
     }
 
     // ── the virtual-machine adapter is an ordinary reflected column ───────────
@@ -501,21 +504,6 @@ public class SchemaReflectorTests
         Assert.Equal("ESL", col.Field.EnumMembers.Single(m => m.Value == "Small").Label);
         Assert.Null(col.Field.EnumMembers.Single(m => m.Value == "Localized").Label);
         Assert.DoesNotContain(col.Field.EnumMembers, m => m.Value is "ESM" or "ESL");
-    }
-
-    [Theory]
-    [InlineData("LightMaster", "ESL")]
-    [InlineData("Light", "ESL")]
-    [InlineData("Small", "ESL")]
-    [InlineData("Master", "ESM")]
-    [InlineData("Overlay", "Overlay")]
-    [InlineData("Localized", "Localized")]
-    public void MapToXEditFlagName_KeysOffMutagenMemberName_NotBitPosition(string mutagenName, string expected)
-    {
-        // Only Fallout4 is referenced here, so a live second-game schema is not reflectable: this exercises
-        // the mapping against every Mutagen member name it keys off, proving it is keyed by name rather
-        // than bit position.
-        Assert.Equal(expected, ModHeaderSchema.MapToXEditFlagName(mutagenName));
     }
 
     [Fact]

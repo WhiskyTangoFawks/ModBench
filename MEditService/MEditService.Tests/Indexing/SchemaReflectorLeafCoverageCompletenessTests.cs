@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using System.Reflection;
 using MEditService.Core.Queries;
 using MEditService.Core.Schema;
@@ -11,7 +12,7 @@ using Noggog;
 namespace MEditService.Tests.Indexing;
 
 /// <summary>Re-derives "is this property in the schema" from Mutagen's reflection rather than the
-/// reflector's classification, depth-capped at two levels to avoid a tautology.</summary>
+/// reflector's classification, to whatever depth the record graph goes, and accepts no gap.</summary>
 public sealed class SchemaReflectorLeafCoverageCompletenessTests
 {
     private const GameCategory Category = GameCategory.Fallout4;
@@ -25,22 +26,6 @@ public sealed class SchemaReflectorLeafCoverageCompletenessTests
     };
 
     private static readonly HashSet<string> LoquiSkipProps = new(StringComparer.OrdinalIgnoreCase) { "Registration" };
-
-    // Known, accepted gaps, keyed (OwnerType.Name, PropertyName) at whichever depth the pair is
-    // walked — every one named and explained, never passed over silently.
-    private static readonly HashSet<(string Owner, string Property)> KnownGaps = new()
-    {
-        // ASceneActionType is the one union base Mutagen leaves non-abstract on purpose: expanding
-        // it would crash on SceneActionTypicalType's throwing overlay getter
-        // (docs/specs/medit-record-editor.md).
-        ("ISceneActionGetter", "Type"),
-
-        // A false positive of this test's own column-name matching. DamageType and
-        // DamageTypeIndexed declare `DamageTypes` with different shapes, and MergeSiblingColumn resolves
-        // the disagreement by renaming, which a PropertyName-based lookup does not account for.
-        ("IDamageTypeItemGetter", "ActorValue"),
-        ("IDamageTypeItemGetter", "Spell"),
-    };
 
     // Named here rather than left as an incidental byproduct, so a byproduct type quietly changing
     // shape does not go unnoticed. Owner is a schema-registered getter interface name; the nested list
@@ -138,7 +123,6 @@ public sealed class SchemaReflectorLeafCoverageCompletenessTests
 
             foreach (var prop in DirectDataProperties(schema.RecordType, BaseSkip))
             {
-                if (KnownGaps.Contains((schema.RecordType.Name, prop.Name))) continue;
                 if (prop.Name == "VirtualMachineAdapter"
                     && typeof(IHaveVirtualMachineAdapterGetter).IsAssignableFrom(schema.RecordType))
                     continue;
@@ -149,11 +133,11 @@ public sealed class SchemaReflectorLeafCoverageCompletenessTests
 
         Assert.True(gaps.Count == 0,
             $"SchemaReflector silently drops: {string.Join(", ", gaps)}. " +
-            "Either give it a ColumnSpec mapping, or add a named, commented exclusion to KnownGaps.");
+            "Every member is represented, so a gap here is a defect, not a deferral.");
     }
 
     [Fact]
-    public void EveryStructOrArrayColumns_OwnDirectProperties_AreRepresentedOrExplicitlyExcluded()
+    public void EveryPropertyBelowEveryColumn_IsRepresentedOrExplicitlyExcluded()
     {
         var schemas = SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4);
 
@@ -166,27 +150,49 @@ public sealed class SchemaReflectorLeafCoverageCompletenessTests
             foreach (var column in schema.RecordColumns)
             {
                 var ownerProp = ownProperties.FirstOrDefault(p => p.Name == column.PropertyName);
-                if (ownerProp == null) continue; // not this schema's own property (e.g. sibling-shape merge) — depth-0 test covers it on its own type
-                if (NestedGetterType(ownerProp.PropertyType) is not { } nestedType) continue;
-                // A vector is one text leaf the codec spells itself ("x, y, z"), so it has no members to reach.
-                if (IsVectorStructType(nestedType)) continue;
-
-                var subFields = column.Field.IsArray ? column.Field.ElementSpec?.SubFields : column.Field.SubFields;
-                foreach (var nestedProp in DirectDataProperties(nestedType, LoquiSkipProps))
-                {
-                    if (KnownGaps.Contains((nestedType.Name, nestedProp.Name))) continue;
-
-                    if (subFields != null && subFields.Any(f => f.Name == nestedProp.Name)) continue;
-
-                    gaps.Add($"{schema.RecordType.Name}.{column.PropertyName}.{nestedProp.Name} " +
-                        $"(-> {nestedType.Name}, missing from '{column.Name}''s own sub-fields)");
-                }
+                if (ownerProp == null) continue; // not this schema's own property — the depth-0 test covers it on its own type
+                Descend(gaps, $"{schema.RecordType.Name}.{column.PropertyName}", ownerProp.PropertyType, column.Field, []);
             }
         }
 
         Assert.True(gaps.Count == 0,
-            $"SchemaReflector silently drops, one level inside an existing column: {string.Join(", ", gaps)}. " +
-            "Either give it a sub-field mapping, or add a named, commented exclusion to KnownGaps.");
+            $"SchemaReflector silently drops, below an existing column: {string.Join(", ", gaps)}. " +
+            "Every member is represented, so a gap here is a defect, not a deferral.");
+    }
+
+    // Every member of every type reachable below one column, to whatever depth the record graph
+    // goes. Stops on re-entering a type, which is this test's own cycle rule.
+    private static void Descend(
+        List<string> gaps, string path, Type propertyType, SubFieldSpec field, ImmutableHashSet<Type> visited)
+    {
+        // A member a known defect governs is named and deliberately not expanded; naming it is what
+        // this sweep asks of the schema.
+        if (field.ReadOnlyReason != null) return;
+        if (NestedGetterType(propertyType) is not { } nestedType) return;
+        // A vector is one text leaf the codec spells itself ("x, y, z"), so it has no members to reach.
+        if (IsVectorStructType(nestedType) || visited.Contains(nestedType)) return;
+
+        var subFields = SubFieldsOf(field);
+        foreach (var nestedProp in DirectDataProperties(nestedType, LoquiSkipProps))
+        {
+            var reached = subFields.Where(f => f.Name == nestedProp.Name).ToList();
+            if (reached.Count == 0)
+            {
+                gaps.Add($"{path}.{nestedProp.Name} (-> {nestedType.Name}, missing from '{field.Name}''s own sub-fields)");
+                continue;
+            }
+
+            foreach (var child in reached)
+                Descend(gaps, $"{path}.{nestedProp.Name}", nestedProp.PropertyType, child, visited.Add(nestedType));
+        }
+    }
+
+    // A field's members wherever it carries them: its own, its element's, and each leaf variant's,
+    // since a member the leaves shape differently has no single sub-field list.
+    private static IReadOnlyList<SubFieldSpec> SubFieldsOf(SubFieldSpec field)
+    {
+        var shapes = field.Variants?.Values.Prepend(field) ?? [field];
+        return [.. shapes.SelectMany(s => s.SubFields ?? s.ElementSpec?.SubFields ?? [])];
     }
 
     // The same interface-hierarchy walk SchemaReflector's GetAllInterfaceProperties does, re-derived

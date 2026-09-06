@@ -677,6 +677,7 @@ export interface components {
                 [key: string]: components["schemas"]["FieldMetadata"];
             } | null;
             default?: unknown;
+            readOnlyReason?: string | null;
         };
         FieldValue: {
             metadata: components["schemas"]["FieldMetadata"];

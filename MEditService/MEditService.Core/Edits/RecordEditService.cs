@@ -1177,12 +1177,14 @@ public sealed class RecordEditService(
     private string SerializeToText(IMajorRecordGetter record, GameRelease release) =>
         Encoding.UTF8.GetString(_codec.SerializeToBytesAsync(record, release).GetAwaiter().GetResult());
 
-    // Mutagen's generated RemapLinks never descends into ScriptStructListProperty.Structs
-    // (upstream-mutagen-issue.md); delete this guard when the upstream fix ships. Asked of
-    // PluginIngest.CollectFormRefs, not the text: text cannot tell a link from an EditorID or string.
+    // A KnownDefects row is why this guard exists; with no row there is nothing to guard. Asked of
+    // PluginIngest.CollectFormRefs: text cannot tell a link from an EditorID or string.
     private RecordEditResult? RefuseIfRemapIncomplete(
         IMajorRecordGetter record, string recordType, string oldFormKey, PluginKey plugin, GameRelease release)
     {
+        var defects = schemaReflector.DefectsWith(release, KnownDefectEffect.RenumberRemapIncomplete);
+        if (defects.Count == 0) return null;
+
         var refs = new List<FormRef>();
         if (!schemaReflector.GetSchemas(release).TryGetValue(recordType, out var schema))
         {
@@ -1201,9 +1203,9 @@ public sealed class RecordEditService(
             return RecordEditResult.Refused(
                 RecordEditRefusal.ReferenceRemapIncomplete,
                 $"{record.FormKey} in {plugin.Name} still links {oldFormKey} at {stale.FieldPath} after the " +
-                "typed link remap, so renumbering would leave that reference dangling. The cause is a script " +
-                "property holding an array of structs, which Mutagen's generated remap does not walk " +
-                "(see upstream-mutagen-issue.md). Nothing was written.");
+                "typed link remap, so renumbering would leave that reference dangling. " +
+                string.Join(" ", defects.Select(d => $"{d.TypeName}.{d.MemberName}: {d.Reason}.")) +
+                " Nothing was written.");
         }
 
         return null;

@@ -178,8 +178,7 @@ internal static class DocumentEdit
                     RecordEditRefusal.FieldNotFound, spelled, $"'{schema.TableName}' has no field '{name}'.");
             }
         }
-        if (column.ReadOnlyReason is { } reason)
-            return RecordEditResult.RefusedAt(RecordEditRefusal.FieldReadOnly, spelled, $"'{name}' is read-only: {reason}.");
+        if (column.ReadOnlyReason is { } reason) return ReadOnlyRefusal(spelled, name, reason);
         if (column.Synthetic != null && path.Count > 1)
             return RecordEditResult.RefusedAt(RecordEditRefusal.FieldNotFound, spelled, $"'{name}' has no members.");
 
@@ -230,6 +229,8 @@ internal static class DocumentEdit
                 var field = fields.FirstOrDefault(f => f.Name == hop.Name);
                 if (field == null)
                     return RecordEditResult.RefusedAt(RecordEditRefusal.FieldNotFound, sofar, $"'{cursor.Meta.LeafTypeName ?? RecordEditEnvelope.Spell(path.Take(i))}' has no member '{hop.Name}'.");
+                if (field.ReadOnlyReason is { } memberReason)
+                    return ReadOnlyRefusal(sofar, hop.Name!, memberReason);
                 if (LeafOf(obj) is { } leaf && field.Variants is { } variants && !variants.ContainsKey(leaf))
                     return RecordEditResult.RefusedAt(RecordEditRefusal.FieldNotFound, sofar, $"'{leaf}' has no member '{hop.Name}'.");
 
@@ -285,6 +286,9 @@ internal static class DocumentEdit
         }
         return null;
     }
+
+    private static RecordEditResult ReadOnlyRefusal(string path, string name, string reason) =>
+        RecordEditResult.RefusedAt(RecordEditRefusal.FieldReadOnly, path, $"'{name}' is read-only: {reason}.");
 
     private static RecordEditResult NoElement(string spelled, int count) =>
         RecordEditResult.RefusedAt(
@@ -524,8 +528,8 @@ internal static class DocumentEdit
 
     // ── the closed pre-check list ───────────────────────────────────────────
 
-    // Discriminator present and first on a union element, hex length where the document establishes
-    // one; walked over the value with the metadata beside it, the current node where the document has one.
+    // Discriminator first on a union element, a member a known-defect row marks read-only, hex
+    // length where the document establishes one; walked over the value with the metadata beside it.
     private static RecordEditResult? PreCheck(JsonNode? value, FieldMetadata meta, JsonNode? current, string path)
     {
         switch (value)
@@ -545,6 +549,8 @@ internal static class DocumentEdit
                 foreach (var (name, child) in obj)
                 {
                     if (fields.FirstOrDefault(f => f.Name == name) is not { } field) continue;
+                    // A whole-subtree set reaches a read-only member the same way a path to it does.
+                    if (field.ReadOnlyReason is { } reason) return ReadOnlyRefusal($"{path}.{name}", name, reason);
                     if (PreCheck(child, DocumentNodes.VariantFor(field, obj), currentObj?[name], $"{path}.{name}") is { } refused) return refused;
                 }
                 return null;

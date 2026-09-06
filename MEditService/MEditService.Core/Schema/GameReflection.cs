@@ -6,4 +6,8 @@ namespace MEditService.Core.Schema;
 internal sealed record GameReflection(
     IReadOnlyDictionary<Type, string> GetterTypeToTable,
     SchemaAnnotations Annotations,
-    DeclaredDefaults Defaults);
+    DeclaredDefaults Defaults)
+{
+    // Read once the whole schema is built, by the annotations that claim something about the walk.
+    internal WalkObservations Observed { get; } = new();
+}

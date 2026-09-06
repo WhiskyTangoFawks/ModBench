@@ -3,10 +3,28 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Core.Schema;
 
-/// <summary>Hand-written per-game facts overlaid on what reflection finds, keyed by Mutagen type and
-/// member name. <see cref="Validate"/> fails schema generation naming any entry reflection cannot
-/// find, so a rename never idles a row.</summary>
+/// <summary>What one known Mutagen defect does to the schema and to a gesture: the member it is
+/// keyed to, and the reason the user is shown.</summary>
+internal sealed record KnownDefect(string TypeName, string MemberName, KnownDefectEffect Effect, string Reason);
+
+internal enum KnownDefectEffect
+{
+    /// <summary>The schema names the member and carries the reason; the write path refuses any
+    /// path reaching it.</summary>
+    MemberReadOnly,
+
+    /// <summary>Mutagen's generated <c>RemapLinks</c> does not walk the member, so a renumber whose
+    /// links pass through it is refused rather than written half-remapped.</summary>
+    RenumberRemapIncomplete,
+}
+
+/// <summary>Hand-written per-game facts overlaid on reflection, keyed by Mutagen type and member
+/// name. <see cref="Validate"/> fails schema generation naming any row the assembly does not bear
+/// out.</summary>
 internal sealed record SchemaAnnotations(
+    // GRUP signatures the schema builds no table for, and why: data the editor has no surface for,
+    // and xEdit's REFR-flavour placement variants this repo collapses into refr.
+    Dictionary<string, string> ExcludedSignatures,
     // Top-level properties that are not record data: GRUP timestamps. The serializer still writes
     // them (ADR-0042); a reflected column and a source-document field are different promises.
     HashSet<(string TypeName, string MemberName)> ExcludedColumns,
@@ -21,6 +39,18 @@ internal sealed record SchemaAnnotations(
     HashSet<string> CycleTruncations,
     // Sub-schemas known to come out empty.
     HashSet<string> EmptySubSchemaTypes,
+    // The small structs the codec spells as one comma-joined text leaf, by CLR full name. A closed
+    // set: an "any struct with X/Y/Z" rule would recurse through their own Point property.
+    HashSet<string> VectorStructTypes,
+    // Shapes the walk reaches and could present, but nobody has decided a presentation for, by CLR
+    // name (a generic by its definition's). Each reason says what a future ticket would decide.
+    Dictionary<string, string> RefusedShapes,
+    // xEdit's own name for an enum member the document spells with Mutagen's (ADR-0034). A label,
+    // never a value: the document is the model, so nothing here changes what is written.
+    Dictionary<(string TypeName, string MemberName), IReadOnlyDictionary<string, string>> EnumMemberLabels,
+    // Upstream Mutagen defects, each with an effect the schema and the write path honour. A defect
+    // identified only by an exception message is a plugin diagnosis, not a row here.
+    IReadOnlyList<KnownDefect> KnownDefects,
     // See FieldMetadata.SiblingsInUse. The inner map must name every enum value, since an unnamed one
     // would silently idle every member the row governs; validated in all four directions.
     Dictionary<(string TypeName, string MemberName), IReadOnlyDictionary<string, IReadOnlyList<string>>> SiblingsInUse,
@@ -46,6 +76,20 @@ internal sealed record SchemaAnnotations(
         ("IDialogTopicGetter", "Timestamp"),
     ];
 
+    // Placed refr/achr are indexed as normal records with cell parentage in the placement side table
+    // (ADR-0023); landscape and navmesh data get no such treatment.
+    private const string NoEditorSurface = "no editor surface: landscape and navmesh data are record fields in no game";
+
+    // Rare REFR-flavour placement types: projectile, hazard and the rest of xEdit's variants.
+    private const string CollapsedIntoRefr = "an xEdit REFR-flavour placement variant, collapsed into refr rather than given its own table";
+
+    private static readonly KeyValuePair<string, string>[] ExcludedSignaturesInEveryGame =
+    [
+        .. new[] { "land", "navm", "navi" }.Select(s => KeyValuePair.Create(s, NoEditorSurface)),
+        .. new[] { "pgre", "pmis", "parw", "pbar", "pbea", "pcon", "pfla", "phzd" }
+            .Select(s => KeyValuePair.Create(s, CollapsedIntoRefr)),
+    ];
+
     // Not editor surface in any game: Mutagen.Bethesda.Core / Loqui plumbing, and one generated alias.
     private static readonly (string, string)[] PlumbingMembers =
     [
@@ -59,10 +103,40 @@ internal sealed record SchemaAnnotations(
     private static readonly string[] EmptySubSchemaTypesInEveryGame =
     [
         "IPlacedGetter",                     // abstract placed-record base, no members of its own
-        // A script and a fragment's script binding, several hops in through a list element, where the
-        // sub-schema comes out empty; shallower positions reflect both in full.
-        "IScriptFragmentGetter",
-        "IScriptEntryGetter",
+    ];
+
+    // The siblings left out (P2Double, P3Double, P3Int, the wrapper types) are the shape of no
+    // member in these games' record graphs, which is what the validation below proves.
+    private static readonly string[] VectorStructTypesInEveryGame =
+    [
+        "Noggog.P3Int16", "Noggog.P3Float",
+        "Noggog.P2Int", "Noggog.P2UInt8", "Noggog.P2Int16",
+        "Noggog.P3UInt8", "Noggog.P3UInt16", "Noggog.P2Float",
+    ];
+
+    // Counts are live, from the audit's enumeration over Fallout 4.
+    private static readonly KeyValuePair<string, string>[] RefusedShapesInEveryGame =
+    [
+        // Real modding content: Race height, head data, models and voices per sex, ArmorAddon models,
+        // faction rank titles. Presenting a gendered pair is a maintainer's shape decision.
+        KeyValuePair.Create("IGenderedItemGetter`1",
+            "gendered Male/Female pair — 20 fields; real data, deferred pending a presentation decision"),
+        // Only a byte slice has a hex reading, and ByteSliceHex classifies one as a leaf long before
+        // this table is asked.
+        KeyValuePair.Create("ReadOnlyMemorySlice`1",
+            "non-byte element slice — 2 fields; an array of typed elements, not a hex blob"),
+        // LandscapeVertexHeightMap-style grids. Real data, tiny population, no grid shape.
+        KeyValuePair.Create("IReadOnlyArray2d`1", "2D array grid — 4 fields; no grid presentation exists"),
+        // Race.BipedObjects (keyed by BipedObject) and Package.Data (keyed by SByte). Real data; a
+        // keyed map is a shape neither the schema's array nor its struct model covers.
+        KeyValuePair.Create("IReadOnlyDictionary`2",
+            "keyed map — 2 fields; neither the array nor the struct model covers a dictionary"),
+        // Candidate atomic values, each a new rendered leaf: Percent is a raw float in xEdit,
+        // TimeOnly a byte in 10-minute increments, RecordType a 4-character signature.
+        KeyValuePair.Create("Percent", "Noggog Percent — 25 fields; candidate atomic value, presentation undecided"),
+        KeyValuePair.Create("TimeOnly", "TimeOnly — 4 fields; candidate atomic value, presentation undecided"),
+        KeyValuePair.Create("RecordType",
+            "Mutagen RecordType signature — 7 fields; candidate atomic value, presentation undecided"),
     ];
 
     // wbByteRGBA at KYWD, LCRT, AACT and LCTN in wbDefinitionsFO4.pas, likewise in Skyrim and
@@ -75,9 +149,18 @@ internal sealed record SchemaAnnotations(
         ("ILocationGetter", "Color"),
     ];
 
+    // wbFileHeader in wbDefinitionsFO4.pas spells the master and light-master bits ESM and ESL.
+    // Localized is already xEdit's own spelling, so it carries no label.
+    private static readonly Dictionary<string, string> XEditModHeaderFlagNames = new(StringComparer.Ordinal)
+    {
+        ["Master"] = "ESM",
+        ["Small"] = "ESL",
+    };
+
     private static readonly Dictionary<GameCategory, SchemaAnnotations> Tables = new()
     {
         [GameCategory.Fallout4] = new(
+            ExcludedSignatures: new(ExcludedSignaturesInEveryGame, StringComparer.OrdinalIgnoreCase),
             ExcludedColumns: [.. GrupTimestampColumns, ("IQuestGetter", "Timestamp")],
             ExcludedMembers:
             [
@@ -90,14 +173,29 @@ internal sealed record SchemaAnnotations(
             ExcludedUnions:
             [
                 // A concrete base with two leaves, one of whose binary-overlay Type getter is an
-                // unimplemented throw upstream.
+                // unimplemented throw upstream; the member it sits on is a KnownDefects row below.
                 "ASceneActionType",
             ],
             CycleTruncations: ["IScriptStructPropertyGetter", "IScriptStructListPropertyGetter"],
             EmptySubSchemaTypes:
             [
                 .. EmptySubSchemaTypesInEveryGame,
-                "IASceneActionTypeGetter",      // deliberately not abstract upstream; see KnownGaps
+                "IASceneActionTypeGetter",      // deliberately not abstract upstream; see KnownDefects
+            ],
+            VectorStructTypes: [.. VectorStructTypesInEveryGame],
+            RefusedShapes: new(RefusedShapesInEveryGame, StringComparer.Ordinal),
+            EnumMemberLabels: new()
+            {
+                [("IFallout4ModHeaderGetter", "Flags")] = XEditModHeaderFlagNames,
+            },
+            KnownDefects:
+            [
+                new("ISceneActionGetter", "Type", KnownDefectEffect.MemberReadOnly,
+                    "SceneActionTypicalType's binary-overlay Type getter is an unimplemented throw upstream, so the "
+                    + "leaves under ASceneActionType cannot be read; the member is named as the document holds it and never written"),
+                new("IScriptStructListPropertyGetter", "Structs", KnownDefectEffect.RenumberRemapIncomplete,
+                    "Mutagen's generated RemapLinks does not descend into ScriptStructListProperty.Structs, so a link "
+                    + "held there survives a renumber and would be left dangling"),
             ],
             SiblingsInUse: new()
             {
@@ -118,13 +216,19 @@ internal sealed record SchemaAnnotations(
             }),
 
         [GameCategory.Skyrim] = new(
+            ExcludedSignatures: new(ExcludedSignaturesInEveryGame, StringComparer.OrdinalIgnoreCase),
             ExcludedColumns: [.. GrupTimestampColumns],
             ExcludedMembers: [.. PlumbingMembers, ("IGlobalGetter", "TypeChar")],
             ExcludedUnions: [],
             CycleTruncations: [],
             EmptySubSchemaTypes: [.. EmptySubSchemaTypesInEveryGame],
-            // This repo builds no Skyrim schema, so a condition or keyed-array row written here could
-            // not be validated against the assembly it describes. Empty until one can be built.
+            VectorStructTypes: [.. VectorStructTypesInEveryGame],
+            RefusedShapes: new(RefusedShapesInEveryGame, StringComparer.Ordinal),
+            // This repo builds no Skyrim schema, so a label, defect, condition or keyed-array row
+            // written here could not be validated against the assembly it describes. Empty until one
+            // can be built.
+            EnumMemberLabels: [],
+            KnownDefects: [],
             SiblingsInUse: [],
             KeyedArrays: [],
             PermittedNullFormLinks: [],
@@ -132,6 +236,7 @@ internal sealed record SchemaAnnotations(
             SyntheticFlagMembers: []),
 
         [GameCategory.Starfield] = new(
+            ExcludedSignatures: new(ExcludedSignaturesInEveryGame, StringComparer.OrdinalIgnoreCase),
             ExcludedColumns: [.. GrupTimestampColumns, ("IQuestGetter", "Timestamp")],
             ExcludedMembers:
             [
@@ -145,7 +250,11 @@ internal sealed record SchemaAnnotations(
             // lifted VMAD exclusion fails generation naming the chain rather than truncating silently.
             CycleTruncations: [],
             EmptySubSchemaTypes: [.. EmptySubSchemaTypesInEveryGame],
+            VectorStructTypes: [.. VectorStructTypesInEveryGame],
+            RefusedShapes: new(RefusedShapesInEveryGame, StringComparer.Ordinal),
             // Empty for the same reason as Skyrim's above.
+            EnumMemberLabels: [],
+            KnownDefects: [],
             SiblingsInUse: [],
             KeyedArrays: [],
             PermittedNullFormLinks: [],
@@ -159,6 +268,7 @@ internal sealed record SchemaAnnotations(
             ? annotations
             : throw new InvalidOperationException($"No schema annotation table for {category}");
 
+    public bool IsExcludedSignature(string signature) => ExcludedSignatures.ContainsKey(signature);
     public bool IsExcludedColumn(PropertyInfo prop) => ExcludedColumns.Contains(Key(prop));
     public bool IsExcludedMember(PropertyInfo prop) => ExcludedMembers.Contains(Key(prop));
     public bool IsExcludedUnion(Type setterType)
@@ -169,11 +279,27 @@ internal sealed record SchemaAnnotations(
     }
     public bool IsCycleTruncation(Type getterInterface) => CycleTruncations.Contains(getterInterface.Name);
     public bool IsEmptySubSchemaType(Type getterInterface) => EmptySubSchemaTypes.Contains(getterInterface.Name);
+    public bool IsVectorStructType(Type type) => VectorStructTypes.Contains(type.FullName ?? type.Name);
+    public string? RefusedShapeReason(Type shape) => RefusedShapes.GetValueOrDefault(ShapeName(shape));
     public bool HasAlphaLeaf(PropertyInfo prop) => AlphaBearingColorFields.Contains(Key(prop));
     public bool IsPermittedNullFormLink(PropertyInfo prop) => PermittedNullFormLinks.Contains(Key(prop));
+    public IReadOnlyDictionary<string, string>? EnumLabelsFor(PropertyInfo prop) =>
+        EnumMemberLabels.GetValueOrDefault(Key(prop));
     public IReadOnlyDictionary<string, IReadOnlyList<string>>? SiblingsInUseFor(PropertyInfo prop) =>
         SiblingsInUse.GetValueOrDefault(Key(prop));
     public IReadOnlyList<string>? KeyMembersFor(PropertyInfo prop) => KeyedArrays.GetValueOrDefault(Key(prop));
+
+    /// <summary>The defect keyed to this member, or null: a member with no row is an ordinary one.</summary>
+    public KnownDefect? DefectFor(PropertyInfo prop) =>
+        KnownDefects.FirstOrDefault(d => d.TypeName == prop.DeclaringType!.Name && d.MemberName == prop.Name);
+
+    /// <summary>Why a defect keeps this member out of every write, or null.</summary>
+    public string? ReadOnlyReasonFor(PropertyInfo prop) =>
+        DefectFor(prop) is { Effect: KnownDefectEffect.MemberReadOnly } defect ? defect.Reason : null;
+
+    /// <summary>Every defect with one effect, for the gesture that has to honour it.</summary>
+    public IReadOnlyList<KnownDefect> DefectsWith(KnownDefectEffect effect) =>
+        [.. KnownDefects.Where(d => d.Effect == effect)];
 
     /// <summary>The bit a synthetic member's row spells in hex, for a backing member no enum names.</summary>
     internal static long ParseBit(string flag) =>
@@ -192,6 +318,10 @@ internal sealed record SchemaAnnotations(
             .Select(e => (e.Key.MemberName, e.Value.BackingMember, e.Value.Flag));
 
     private static (string, string) Key(PropertyInfo prop) => (prop.DeclaringType!.Name, prop.Name);
+
+    // A generic by its definition's name, so one row reaches every closing of one open generic.
+    private static string ShapeName(Type shape) =>
+        (shape.IsGenericType ? shape.GetGenericTypeDefinition() : shape).Name;
 
     // A row naming a value or sibling the assembly lacks would silently govern nothing; one omitting
     // a value would silently idle everything under it.
@@ -281,10 +411,7 @@ internal sealed record SchemaAnnotations(
         foreach (var (entry, (backingMember, flag)) in SyntheticFlagMembers)
         {
             var label = $"{nameof(SyntheticFlagMembers)}: {entry.TypeName}.{entry.MemberName}";
-            var backing = typesByName[entry.TypeName]
-                .SelectMany(ReflectedTypes.GetAllInterfaceProperties)
-                .FirstOrDefault(p => p.Name == backingMember);
-            if (backing == null)
+            if (Property(typesByName, (entry.TypeName, backingMember)) is not { } backing)
             {
                 yield return $"{label} backs onto {backingMember}, which {entry.TypeName} does not reach";
                 continue;
@@ -302,36 +429,132 @@ internal sealed record SchemaAnnotations(
         }
     }
 
-    /// <summary>Resolves every entry against the assembly's types and every interface they implement,
-    /// which is where Loqui's plumbing interfaces come from. Throws naming each unresolved entry.</summary>
-    public void Validate(Assembly gameAssembly)
+    // A label row on a member that is no enum, or naming a member that enum lacks, is a label
+    // nothing ever shows.
+    private IEnumerable<string> UnresolvedEnumLabels(ILookup<string, Type> typesByName)
     {
-        var typesByName = gameAssembly.GetTypes()
+        foreach (var (entry, labels) in EnumMemberLabels)
+        {
+            if (Property(typesByName, entry) is not { } prop) continue;   // already reported by UnresolvedMembers
+
+            var label = $"{nameof(EnumMemberLabels)}: {entry.TypeName}.{entry.MemberName}";
+            var core = Nullable.GetUnderlyingType(prop.PropertyType) ?? prop.PropertyType;
+            if (!core.IsEnum)
+            {
+                yield return $"{label} labels members of {core.Name}, which is not an enum";
+                continue;
+            }
+            var names = Enum.GetNames(core).ToHashSet(StringComparer.Ordinal);
+            foreach (var member in labels.Keys.Where(m => !names.Contains(m)).Order(StringComparer.Ordinal))
+                yield return $"{label} labels member {member}, which {core.Name} does not define";
+        }
+    }
+
+    // An excluded union that is no union base excludes nothing: the expansion it forbids would never
+    // have happened.
+    private IEnumerable<string> UnresolvedExcludedUnions(ILookup<string, Type> typesByName)
+    {
+        foreach (var name in ExcludedUnions.Order(StringComparer.Ordinal))
+        {
+            if (typesByName[name].FirstOrDefault(t => t.IsClass) is not { } setterType) continue;
+            if (!LoquiUnions.IsUnionBase(setterType))
+                yield return $"{nameof(ExcludedUnions)}: {name} is no union base, so it expands to nothing to exclude";
+        }
+    }
+
+    // The row says the game leaves a link Mutagen types non-nullable unset. On a link Mutagen
+    // already types nullable, or on something that is no link, it says nothing.
+    private IEnumerable<string> UnresolvedPermittedNullLinks(ILookup<string, Type> typesByName)
+    {
+        foreach (var entry in PermittedNullFormLinks.Order())
+        {
+            if (Property(typesByName, entry) is not { } prop) continue;
+            var label = $"{nameof(PermittedNullFormLinks)}: {entry.TypeName}.{entry.MemberName}";
+            if (!ReflectedTypes.IsFormLink(prop.PropertyType))
+                yield return $"{label} is no form link ({prop.PropertyType.Name})";
+            else if (ReflectedTypes.IsNullableFormLink(prop.PropertyType))
+                yield return $"{label} is already a nullable form link, so the row permits nothing";
+        }
+    }
+
+    // An alpha leaf is a leaf of a Color; on anything else the row names a leaf nothing builds.
+    private IEnumerable<string> UnresolvedAlphaFields(ILookup<string, Type> typesByName)
+    {
+        foreach (var entry in AlphaBearingColorFields.Order())
+        {
+            if (Property(typesByName, entry) is not { } prop) continue;
+            var core = Nullable.GetUnderlyingType(prop.PropertyType) ?? prop.PropertyType;
+            if (core != typeof(System.Drawing.Color))
+                yield return $"{nameof(AlphaBearingColorFields)}: {entry.TypeName}.{entry.MemberName} is no Color ({core.Name})";
+        }
+    }
+
+    private static PropertyInfo? Property(ILookup<string, Type> typesByName, (string TypeName, string MemberName) entry) =>
+        typesByName[entry.TypeName]
+            .SelectMany(ReflectedTypes.GetAllInterfaceProperties)
+            .FirstOrDefault(p => p.Name == entry.MemberName);
+
+    private static IEnumerable<string> UnresolvedMembers(
+        ILookup<string, Type> typesByName, string concern, IEnumerable<(string TypeName, string MemberName)> entries) =>
+        entries
+            .Where(e => !typesByName[e.TypeName]
+                .Any(t => t.GetProperties(BindingFlags.Public | BindingFlags.Instance).Any(p => p.Name == e.MemberName)))
+            .Select(e => $"{concern}: {e.TypeName}.{e.MemberName}");
+
+    // Every shape a member holds, a list by its element shape too, each generic by its definition.
+    private static IEnumerable<Type> MemberShapes(IEnumerable<Type> types) =>
+        types
+            .SelectMany(t => t.GetProperties(BindingFlags.Public | BindingFlags.Instance))
+            .SelectMany(p =>
+            {
+                var core = Nullable.GetUnderlyingType(p.PropertyType) ?? p.PropertyType;
+                return ReflectedTypes.IsListType(core, out var element) ? [core, element] : new[] { core };
+            })
+            .Select(t => t.IsGenericType ? t.GetGenericTypeDefinition() : t)
+            .Distinct();
+
+    /// <summary>Resolves every row against the assembly's types, its GRUP signatures and the shapes
+    /// its members hold, and throws naming each row that does not resolve or is not the kind of
+    /// thing its table says it is.</summary>
+    public void Validate(Assembly gameAssembly, IEnumerable<string> grupSignatures)
+    {
+        var allTypes = gameAssembly.GetTypes()
             .SelectMany(t => t.GetInterfaces().Append(t))
             .Distinct()
-            .ToLookup(t => t.Name, StringComparer.Ordinal);
+            .ToList();
+        var typesByName = allTypes.ToLookup(t => t.Name, StringComparer.Ordinal);
+        var shapes = MemberShapes(allTypes).ToList();
+        var shapeNames = shapes.Select(t => t.Name).ToHashSet(StringComparer.Ordinal);
+        var shapeFullNames = shapes.Select(t => t.FullName ?? t.Name).ToHashSet(StringComparer.Ordinal);
+        var signatures = grupSignatures.ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-        bool TypeFound(string typeName) => typesByName[typeName].Any();
-        bool MemberFound((string TypeName, string MemberName) entry) => typesByName[entry.TypeName]
-            .Any(t => t.GetProperties(BindingFlags.Public | BindingFlags.Instance).Any(p => p.Name == entry.MemberName));
-
-        IEnumerable<string> UnresolvedMembers(string concern, IEnumerable<(string TypeName, string MemberName)> entries) =>
-            entries.Where(e => !MemberFound(e)).Select(e => $"{concern}: {e.TypeName}.{e.MemberName}");
         IEnumerable<string> UnresolvedTypes(string concern, IEnumerable<string> entries) =>
-            entries.Where(t => !TypeFound(t)).Select(t => $"{concern}: {t}");
+            entries.Where(t => !typesByName[t].Any()).Select(t => $"{concern}: {t}");
 
         string[] missing =
         [
-            .. UnresolvedMembers(nameof(ExcludedColumns), ExcludedColumns),
-            .. UnresolvedMembers(nameof(ExcludedMembers), ExcludedMembers),
+            .. ExcludedSignatures.Keys.Where(s => !signatures.Contains(s)).Order(StringComparer.Ordinal)
+                .Select(s => $"{nameof(ExcludedSignatures)}: {s} is no GRUP signature this game declares"),
+            .. UnresolvedMembers(typesByName, nameof(ExcludedColumns), ExcludedColumns),
+            .. UnresolvedMembers(typesByName, nameof(ExcludedMembers), ExcludedMembers),
             .. UnresolvedTypes(nameof(ExcludedUnions), ExcludedUnions),
+            .. UnresolvedExcludedUnions(typesByName),
             .. UnresolvedTypes(nameof(CycleTruncations), CycleTruncations),
             .. UnresolvedTypes(nameof(EmptySubSchemaTypes), EmptySubSchemaTypes),
-            .. UnresolvedMembers(nameof(AlphaBearingColorFields), AlphaBearingColorFields),
-            .. UnresolvedMembers(nameof(PermittedNullFormLinks), PermittedNullFormLinks),
-            .. UnresolvedMembers(nameof(SiblingsInUse), SiblingsInUse.Keys),
+            .. VectorStructTypes.Where(t => !shapeFullNames.Contains(t)).Order(StringComparer.Ordinal)
+                .Select(t => $"{nameof(VectorStructTypes)}: {t} is the shape of no member of this game"),
+            .. RefusedShapes.Keys.Where(t => !shapeNames.Contains(t)).Order(StringComparer.Ordinal)
+                .Select(t => $"{nameof(RefusedShapes)}: {t} is the shape of no member of this game"),
+            .. UnresolvedMembers(typesByName, nameof(EnumMemberLabels), EnumMemberLabels.Keys),
+            .. UnresolvedEnumLabels(typesByName),
+            .. UnresolvedMembers(typesByName, nameof(KnownDefects), KnownDefects.Select(d => (d.TypeName, d.MemberName))),
+            .. UnresolvedMembers(typesByName, nameof(AlphaBearingColorFields), AlphaBearingColorFields),
+            .. UnresolvedAlphaFields(typesByName),
+            .. UnresolvedMembers(typesByName, nameof(PermittedNullFormLinks), PermittedNullFormLinks),
+            .. UnresolvedPermittedNullLinks(typesByName),
+            .. UnresolvedMembers(typesByName, nameof(SiblingsInUse), SiblingsInUse.Keys),
             .. UnresolvedSiblingRelations(typesByName),
-            .. UnresolvedMembers(nameof(KeyedArrays), KeyedArrays.Keys),
+            .. UnresolvedMembers(typesByName, nameof(KeyedArrays), KeyedArrays.Keys),
             .. UnresolvedKeyMembers(typesByName),
             .. UnresolvedTypes(nameof(SyntheticFlagMembers), SyntheticFlagMembers.Keys.Select(k => k.TypeName)),
             .. UnresolvedSyntheticFlags(typesByName),
@@ -344,4 +567,38 @@ internal sealed record SchemaAnnotations(
                 $"— fix or delete each entry: {string.Join("; ", missing)}");
         }
     }
+
+    /// <summary>Throws naming each row that claims something about the walk the walk never did.
+    /// Neither fact exists before the whole schema is built.</summary>
+    public void ValidateObserved(string gameAssemblyName, WalkObservations observed)
+    {
+        string[] idle =
+        [
+            .. CycleTruncations.Where(t => !observed.ReEnteredTruncations.Contains(t)).Order(StringComparer.Ordinal)
+                .Select(t => $"{nameof(CycleTruncations)}: {t} is never re-entered by the walk"),
+            .. EmptySubSchemaTypes.Where(t => !observed.EmptySubSchemas.Contains(t)).Order(StringComparer.Ordinal)
+                .Select(t => $"{nameof(EmptySubSchemaTypes)}: {t} never comes out empty in the walk"),
+        ];
+
+        if (idle.Length > 0)
+        {
+            throw new InvalidOperationException(
+                $"Schema annotations for {gameAssemblyName} claim a walk that did not happen " +
+                $"— fix or delete each entry: {string.Join("; ", idle)}");
+        }
+    }
+}
+
+/// <summary>What the walk did with the rows that claim something about the walk itself. The walk
+/// records; <see cref="SchemaAnnotations.ValidateObserved"/> reads, once the schema is built.</summary>
+internal sealed class WalkObservations
+{
+    private readonly HashSet<string> _reEnteredTruncations = new(StringComparer.Ordinal);
+    private readonly HashSet<string> _emptySubSchemas = new(StringComparer.Ordinal);
+
+    internal IReadOnlySet<string> ReEnteredTruncations => _reEnteredTruncations;
+    internal IReadOnlySet<string> EmptySubSchemas => _emptySubSchemas;
+
+    internal void ReEnteredTruncation(string getterInterfaceName) => _reEnteredTruncations.Add(getterInterfaceName);
+    internal void CameOutEmpty(string getterInterfaceName) => _emptySubSchemas.Add(getterInterfaceName);
 }

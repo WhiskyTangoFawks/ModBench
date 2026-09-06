@@ -97,14 +97,14 @@ internal static class LeafClassification
         if (ReflectedTypes.IsAtomicValueType(core))
             return TextLeaf("color", declared is Color c ? c.ToHexString() : null);
 
-        if (ReflectedTypes.IsVectorStructType(core))
+        if (game.Annotations.IsVectorStructType(core))
             return TextLeaf("vector", declared == null ? null : ReflectedTypes.VectorText(declared));
 
         if (ReflectedTypes.IsModKey(core))
             return new("string", "VARCHAR", LeafSpec.NoFormKeyTypes, LeafSpec.NoEnumMembers);
 
         if (core.IsEnum)
-            return ClassifyEnumLeaf(core, declared);
+            return ClassifyEnumLeaf(core, declared, prop == null ? null : game.Annotations.EnumLabelsFor(prop));
 
         if (ReflectedTypes.IsFormLink(core))
         {
@@ -124,9 +124,10 @@ internal static class LeafClassification
     // Enum leaf, shared by every projection. The codec writes a [Flags] enum as an array of member
     // names ("flags"), a plain enum as its name. `declared` is null where the leaf has no owner (a
     // list element, the mod header).
-    internal static LeafSpec ClassifyEnumLeaf(Type core, object? declared = null)
+    internal static LeafSpec ClassifyEnumLeaf(
+        Type core, object? declared = null, IReadOnlyDictionary<string, string>? labels = null)
     {
-        var members = GetEnumMembers(core);
+        var members = Labelled(GetEnumMembers(core), labels);
 
         // Whether the serializer writes this enum as a name array is a question about the Flags
         // attribute alone, since a flags enum with no power-of-two members still serializes as an array.
@@ -143,6 +144,10 @@ internal static class LeafClassification
         return new("enum", "VARCHAR", LeafSpec.NoFormKeyTypes, members,
             ViewDefaultLiteral: name == null ? null : $"'{name}'", Default: name);
     }
+
+    // xEdit's name for a member the document spells with Mutagen's, and no label where the two agree.
+    private static EnumMember[] Labelled(EnumMember[] members, IReadOnlyDictionary<string, string>? labels) =>
+        labels == null ? members : [.. members.Select(m => m with { Label = labels.GetValueOrDefault(m.Value) })];
 
     // A declared default the CLR zero already stands for is not worth a wire member.
     private static object? NonZero(object? declared) =>

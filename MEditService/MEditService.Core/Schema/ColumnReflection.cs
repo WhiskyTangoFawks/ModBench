@@ -56,7 +56,7 @@ internal static class ColumnReflection
                 ViewDefaultLiteral: nullable ? null : leaf.ViewDefaultLiteral);
         }
 
-        return SubFieldReflection.GetSubFieldInfo(prop, game, SubFieldReflection.RootPath, depth: 0, logger) is { } spec
+        return SubFieldReflection.GetSubFieldInfo(prop, game, SubFieldReflection.RootPath, logger) is { } spec
             ? new ColumnSpec(spec, propertyName, "VARCHAR")
             : null;
     }

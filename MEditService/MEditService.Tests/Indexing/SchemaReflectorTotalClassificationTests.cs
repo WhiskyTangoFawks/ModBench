@@ -46,7 +46,7 @@ public class SchemaReflectorTotalClassificationTests
     [Fact]
     public void EveryExcludedShape_CarriesANamedReason()
     {
-        var reasons = SchemaRefusals.ExcludedShapeLabels;
+        var reasons = SchemaAnnotations.For(GameCategory.Fallout4).RefusedShapes.Values;
 
         Assert.NotEmpty(reasons);
         Assert.All(reasons, r => Assert.False(string.IsNullOrWhiteSpace(r)));
