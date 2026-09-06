@@ -265,6 +265,9 @@ and every text posted to another project is signed off by the maintainer first.
   reviewer's diff) still sees them, and the model stays denormalized either way. Superseded by
   decision 4 rather than kept as a fallback: no list carries order at all under decision 4, so there
   is nothing left to collapse.
+- **An ordered child list minted into the parent's own document, reconciled against the file tree
+  on every read and write.** The scheme decision 4 replaced. Rejected: a second structural model
+  the plugin does not have, preserving an order observable nowhere the gate looks.
 - **Order keys inside each child's own document** (the original "dominated" verdict). That verdict leaned on
   stock Spriggit silently dropping an unrecognized key, which decision 6 made irrelevant by abandoning
   Spriggit compatibility — no foreign reader exists. Still rejected, but now on its own merits: a

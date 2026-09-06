@@ -36,7 +36,7 @@ public sealed class CarrierScanTests
     {
         var repoRoot = Directory.GetParent(ArchitectureTests.SolutionDirectory())!.FullName;
 
-        var hits = Directory.EnumerateFiles(Path.Combine(repoRoot, "docs"), "*.md", SearchOption.AllDirectories)
+        var hits = SourceTree.MarkdownFiles(Path.Combine(repoRoot, "docs"))
             .Append(Path.Combine(repoRoot, "CONTEXT.md"))
             .SelectMany(file => ProseNeedles
                 .Where(needle => Regex.IsMatch(File.ReadAllText(file), $@"\b{Regex.Escape(needle)}\b", RegexOptions.IgnoreCase))
