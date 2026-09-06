@@ -3,8 +3,8 @@ using MEditService.Tests.TestSupport;
 
 namespace MEditService.Tests.Architecture;
 
-/// <summary>The source order carrier is gone: children live inline in their container's document
-/// and no list carries order. Every reference to it is counted, and the allowlist is empty.</summary>
+/// <summary>The source order carrier is gone. C# references to it are counted against an allowlist
+/// that stays empty; "folder-split" and the carrier's name are refused outright in docs prose.</summary>
 public sealed class CarrierScanTests
 {
     // The carrier's own name, its drift rule, and the member it minted into a document.
@@ -16,6 +16,10 @@ public sealed class CarrierScanTests
 
     private const string AllowlistPath = "MEditService.Tests/Architecture/carrier-allowlist.txt";
 
+    // Prose has no allowlist: unlike the C# scan, nothing legitimately names these in docs, so any
+    // hit is a straight failure.
+    private static readonly string[] ProseNeedles = ["folder-split", "SourceChildOrder"];
+
     [Fact]
     public void TheEditingAndSourceStack_ReferencesTheCarrier_OnlyAsOftenAsTheAllowlistSays()
     {
@@ -25,6 +29,22 @@ public sealed class CarrierScanTests
             Counts(root, ScannedRoots),
             SourceTree.ReadAllowlist(Path.Combine(root, AllowlistPath.Replace('/', Path.DirectorySeparatorChar))),
             AllowlistPath);
+    }
+
+    [Fact]
+    public void TheDocs_NeverMentionFolderSplitOrTheCarrierInProse()
+    {
+        var repoRoot = Directory.GetParent(ArchitectureTests.SolutionDirectory())!.FullName;
+
+        var hits = Directory.EnumerateFiles(Path.Combine(repoRoot, "docs"), "*.md", SearchOption.AllDirectories)
+            .Append(Path.Combine(repoRoot, "CONTEXT.md"))
+            .SelectMany(file => ProseNeedles
+                .Where(needle => Regex.IsMatch(File.ReadAllText(file), $@"\b{Regex.Escape(needle)}\b", RegexOptions.IgnoreCase))
+                .Select(needle => $"{Path.GetRelativePath(repoRoot, file).Replace(Path.DirectorySeparatorChar, '/')}: {needle}"))
+            .Order(StringComparer.Ordinal)
+            .ToList();
+
+        Assert.Empty(hits);
     }
 
     [Fact]

@@ -66,9 +66,9 @@ public sealed class CompileRoundTripGateTests(CompileRoundTripGateFixture fixtur
             .ToList();
         Assert.NotEmpty(allFiles);
 
-        // Block and sub-block GRUP directories are folder-split too, so each numeric segment carries an
-        // optional "[N] " prefix ahead of the block number. That prefix is what the pattern allows for,
-        // not a coordinate.
+        // Block and sub-block GRUP directories are the library's own directory layout too, so each
+        // numeric segment carries an optional "[N] " prefix ahead of the block number. That prefix is
+        // what the pattern allows for, not a coordinate.
         Assert.Contains(allFiles, f => System.Text.RegularExpressions.Regex.IsMatch(
             f, @"^Cells/(\[\d+\] )?-?\d+/(\[\d+\] )?-?\d+/[^/]+/RecordData\.json$"));
 
@@ -136,8 +136,8 @@ public sealed class CompileRoundTripGateTests(CompileRoundTripGateFixture fixtur
         }
     }
 
-    // The member Modbench once minted into a document to carry a folder-split list's order. Nothing
-    // carries order now: a flat group's order is encoding, decided by directory enumeration.
+    // The member Modbench once minted into a document to carry a child list's order. Nothing carries
+    // order now: a flat group's order is encoding, decided by directory enumeration.
     [Fact]
     public void Track_OfTheRealFixture_WritesNoDocumentCarryingAnOrderMember()
     {
