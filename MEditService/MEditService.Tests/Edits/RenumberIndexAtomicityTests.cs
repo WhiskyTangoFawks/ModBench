@@ -37,30 +37,6 @@ public sealed class RenumberIndexAtomicityTests : IDisposable
         Assert.Equal(before, Snapshot(quest));
     }
 
-    [Fact]
-    public void AFaultInsideRenumbersCreateStep_AlsoUndoesTheOwnerRowWrittenBeforeIt()
-    {
-        var placedRef = _fixture.TemporaryRef.ToString();
-        var owner = _fixture.EmbedCell.ToString();
-        var ownerBefore = Effective.GetDocument(owner, _fixture.Plugin)!.Body!;
-
-        // A different but still parseable owner document, so "the owner's row did not move" is a
-        // claim with something to distinguish it from "the owner's row was never asked to move".
-        var ownerAfter = ownerBefore.Replace(
-            ContainerModFixture.TemporaryRefEditorId, "TempRefRenamed", StringComparison.Ordinal);
-        Assert.NotEqual(ownerBefore, ownerAfter);
-
-        Assert.ThrowsAny<Exception>(() => Index.ApplyRenumber(
-            _fixture.Plugin,
-            new RenumberedRecord(
-                placedRef, NewFormKey, RecordTypeOf(placedRef), UnparseableBody,
-                new EmbeddingOwner(owner, ownerAfter))));
-
-        Assert.Equal(ownerBefore, Effective.GetDocument(owner, _fixture.Plugin)!.Body);
-        Assert.Null(Effective.GetDocument(NewFormKey, _fixture.Plugin));
-        Assert.NotNull(Effective.GetDocument(placedRef, _fixture.Plugin));
-    }
-
     private string RecordTypeOf(string formKey) =>
         Effective.GetDocument(formKey, _fixture.Plugin)!.RecordType;
 

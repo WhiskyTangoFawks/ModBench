@@ -132,7 +132,7 @@ public sealed class RecordEditServiceContainerCopyTests
     }
 
     // Copying the TopCell itself hits its own check (the isCell branch in CopyRecordAsOverride, not
-    // CopyPlacedReferenceAsOverride), so the placed-reference variant cannot stand in for it.
+    // the embedded-child path), so the placed-reference variant cannot stand in for it.
     [Fact]
     public void CopyRecordAsOverride_OnATopCellItself_Refuses()
     {

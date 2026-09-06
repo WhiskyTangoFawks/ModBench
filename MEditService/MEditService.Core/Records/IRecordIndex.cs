@@ -81,9 +81,9 @@ public interface IRecordIndex : IDisposable
         PluginKey key, string parentFormKey, string parentRecordType, string slotName,
         IReadOnlyList<(string ChildFormKey, int SlotIndex)> children);
 
-    /// <summary>One transaction: materialize the new identity, re-point folder-split children and
-    /// exterior cells, tear the old down. The TopCell re-derivation keys on cell_form_key, so the
-    /// re-point cannot hit it twice.</summary>
+    /// <summary>One transaction for a record with a file of its own: materialize the new identity,
+    /// re-point folder-split children and exterior cells, tear the old down. An embedded record
+    /// renumbers through its owner's document.</summary>
     void ApplyRenumber(PluginKey key, RenumberedRecord renumbered);
 
     /// <summary>Gives a cell a <c>cell_location</c> row copied from wherever the caller has it — never
@@ -97,15 +97,5 @@ public interface IRecordIndex : IDisposable
     void SetFilter(string? sql);
 }
 
-/// <summary>What <see cref="IRecordIndex.ApplyRenumber"/> needs. One nullable <c>Owner</c> rather than
-/// a nullable FormKey plus body, so "both or neither" is the type's shape.</summary>
-public sealed record RenumberedRecord(
-    string OldFormKey,
-    string NewFormKey,
-    string RecordType,
-    string Body,
-    EmbeddingOwner? Owner = null);
-
-/// <summary>The reserialized document an embedded renumbered record lives inside, and the FormKey
-/// whose row carries it.</summary>
-public sealed record EmbeddingOwner(string FormKey, string Body);
+/// <summary>What <see cref="IRecordIndex.ApplyRenumber"/> needs.</summary>
+public sealed record RenumberedRecord(string OldFormKey, string NewFormKey, string RecordType, string Body);

@@ -298,27 +298,18 @@ public sealed class DuckDbRecordIndex : IRecordIndex
     /// all.</summary>
     public void ApplyRenumber(PluginKey key, RenumberedRecord renumbered)
     {
-        var (oldFormKey, newFormKey, recordType, body, owner) = renumbered;
+        var (oldFormKey, newFormKey, recordType, body) = renumbered;
         ThrowIfHeldAtEitherRef(key, newFormKey, nameof(ApplyRenumber), nameof(renumbered));
 
         using var tx = Connection.BeginTransaction();
 
-        // An embedded record's owner was reserialized around the child's new FormKey; picking those
-        // bytes up also re-derives the child's containment, so that shape needs no re-point. First,
-        // matching the order the source write uses.
-        if (owner is { } embedding)
-            _workingTreeOverlay.ApplyWorkingTreeChanges(key, [(embedding.FormKey, embedding.Body)]);
-
         _workingTreeOverlay.CreateWorkingTreeRecord(key, newFormKey, recordType, body);
 
-        if (owner is null)
-        {
-            // Before the old identity's rows are torn down below, so the children re-pointed here are
-            // never left naming a parent that does not exist. Re-deriving the new document cannot
-            // reach either of these.
-            RepointContainerChildParent(key, oldFormKey, newFormKey);
-            RepointCellLocationParent(key, oldFormKey, newFormKey);
-        }
+        // Before the old identity's rows are torn down below, so the children re-pointed here are
+        // never left naming a parent that does not exist. Re-deriving the new document cannot
+        // reach either of these.
+        RepointContainerChildParent(key, oldFormKey, newFormKey);
+        RepointCellLocationParent(key, oldFormKey, newFormKey);
 
         _workingTreeOverlay.ApplyWorkingTreeChanges(key, [(oldFormKey, null)]);
 
@@ -1216,12 +1207,16 @@ public sealed class DuckDbRecordIndex : IRecordIndex
     }
 
     // An UPDATE, not a delete-then-rebuild: the children did not move, only the identity they name.
-    // Runs unwrapped, inside ApplyRenumber's transaction.
+    // A child the new document already re-derived is left for the old identity's teardown, or it
+    // would count twice.
     private void RepointContainerChildParent(PluginKey key, string oldParentFormKey, string newParentFormKey) =>
         DuckDbSql.ExecuteFor(Connection,
             """
             UPDATE mirror.container_child SET parent_form_key = $1
             WHERE parent_form_key = $2 AND plugin = $3 AND origin = $4
+              AND child_form_key NOT IN (
+                SELECT child_form_key FROM mirror.container_child
+                WHERE parent_form_key = $1 AND plugin = $3 AND origin = $4)
             """,
             newParentFormKey, oldParentFormKey, key.Name, key.Origin!);
 

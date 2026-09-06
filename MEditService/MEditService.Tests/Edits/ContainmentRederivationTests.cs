@@ -221,6 +221,41 @@ public sealed class ContainmentRederivationTests : IDisposable
     }
 
     [Fact]
+    public void RenumberingAContainersOwnRecord_LeavesOneContainerChildRowPerEmbeddedChild()
+    {
+        var result = EditService().RenumberRecord(_fixture.Plugin, _fixture.EmbedCell.ToString());
+        Assert.True(result.Applied, result.Message);
+
+        var rows = _fixture.Mirror.Index!.At(RecordRef.Effective).GetContainerChildren(_fixture.Plugin, result.NewFormKey!)
+            .Select(c => (c.ChildFormKey, c.SlotName)).OrderBy(r => r.ChildFormKey, StringComparer.Ordinal).ToList();
+        Assert.Equal(
+            [(_fixture.Navmesh.ToString(), "NavigationMeshes"), (_fixture.Landscape.ToString(), "Landscape")],
+            rows);
+    }
+
+    // The child's live document must be what a fresh ingest of the written tree reads: the index
+    // derives it from the owner's document by the same codec ingest uses.
+    [Fact]
+    public void AfterAnEmbeddedFieldEdit_AFreshReopen_AgreesWithTheLiveChildDocument()
+    {
+        Assert.True(EditService().Set(_fixture.Plugin, _fixture.TemporaryRef.ToString(), "Scale", Json("6.5")).Applied);
+        var live = _fixture.Mirror.Index!.At(RecordRef.Effective).GetDocument(_fixture.TemporaryRef.ToString(), _fixture.Plugin)!.Body;
+        Assert.Contains("\"Scale\": 6.5", live!, StringComparison.Ordinal);
+
+        using var reloaded = new LoadOrderMirror(
+            new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
+        ((ILoadOrderMirror)reloaded).Reconcile(
+            _fixture.GameDirectory,
+            [new LoadOrderEntry(ContainerModFixture.PluginName, Path.Combine(_fixture.ModFolder, ContainerModFixture.PluginName), ContainerModFixture.ModFolderOrigin, Slot: 0, Enabled: true, Winning: true)],
+            GameRelease.Fallout4);
+        Assert.Empty(((ILoadOrderMirror)reloaded).LoadOrder!.Failures);
+
+        Assert.Equal(
+            reloaded.Index!.At(RecordRef.Effective).GetDocument(_fixture.TemporaryRef.ToString(), _fixture.Plugin)!.Body,
+            live);
+    }
+
+    [Fact]
     public void AfterRenumberingAContainersOwnRecord_AFreshReopen_AgreesWithTheLivePlacementRow()
     {
         var result = EditService().RenumberRecord(_fixture.Plugin, _fixture.EmbedCell.ToString());
