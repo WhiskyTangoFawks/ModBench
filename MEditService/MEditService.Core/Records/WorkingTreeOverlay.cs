@@ -82,6 +82,14 @@ internal sealed class WorkingTreeOverlay
 
         if (body == null)
         {
+            // A container's file goes with everything under it, so its children go first, each
+            // cascading in turn; a child another container still holds stays.
+            foreach (var child in ChildrenRecorded(key, formKey, embeddedIn: null))
+            {
+                if (RowExistsAtEffective(key, child) && !HeldByAnotherContainer(key, child, formKey))
+                    ApplyOneWorkingTreeChange(key, child, null);
+            }
+
             // Deleted in the working tree: gone at Effective — document, lookup row and outgoing
             // references alike — while still answered at Head out of the snapshot. Dropping only the
             // document would leave the record resolvable and in the reference graph.
@@ -360,12 +368,95 @@ internal sealed class WorkingTreeOverlay
         var record = _codec
             .DeserializeFromBytesAsync(Encoding.UTF8.GetBytes(body), _release, recordType)
             .GetAwaiter().GetResult();
+        var containerType = ContainerChildFields.NormalizedTypeName(record.GetType());
+        var recordedBefore = ChildrenRecorded(key, formKey, embeddedIn: containerType);
+        DeriveEmbeddedChildRows(key, record);
         RederiveContainmentForRecord(key, formKey, recordType, record);
+
+        // A child absent from the document is gone at Effective, unless another container's document
+        // holds it (a renumbered container re-derives its children under the new identity first).
+        var carriedNow = ContainerChildFields.EnumerateChildren(record)
+            .Where(c => ContainerChildFields.EmbeddedSlots.Contains((containerType, c.SlotName)))
+            .Select(c => c.Child.FormKey.ToString())
+            .ToHashSet(StringComparer.Ordinal);
+        foreach (var gone in recordedBefore.Where(fk => !carriedNow.Contains(fk)))
+        {
+            if (RowExistsAtEffective(key, gone) && !HeldByAnotherContainer(key, gone, formKey))
+                ApplyOneWorkingTreeChange(key, gone, null);
+        }
     }
 
+    // The children last recorded under this container. embeddedIn names the container's type and
+    // keeps only the children its document carries; null takes every child, the set a deleted
+    // directory held.
+    private List<string> ChildrenRecorded(PluginKey key, string parentFormKey, string? embeddedIn)
+    {
+        var recorded = new List<string>();
+        using var cmd = _connection.CreateCommand();
+        cmd.CommandText = """
+            SELECT form_key, NULL, NULL FROM mirror.placement WHERE parent_cell = $1 AND plugin = $2 AND origin = $3
+            UNION ALL
+            SELECT cell_form_key, NULL, block_x FROM mirror.cell_location
+            WHERE parent_worldspace = $1 AND plugin = $2 AND origin = $3
+            UNION ALL
+            SELECT child_form_key, slot_name, NULL FROM mirror.container_child
+            WHERE parent_form_key = $1 AND plugin = $2 AND origin = $3
+            """;
+        DuckDbSql.AddParams(cmd, [parentFormKey, key.Name, key.Origin!]);
+        using var reader = cmd.ExecuteReader();
+        while (reader.Read())
+        {
+            var embedded = embeddedIn == null
+                || (reader.IsDBNull(1) || ContainerChildFields.EmbeddedSlots.Contains((embeddedIn, reader.GetString(1))))
+                    && reader.IsDBNull(2);
+            if (embedded) recorded.Add(reader.GetString(0));
+        }
+        return recorded;
+    }
+
+    private bool HeldByAnotherContainer(PluginKey key, string childFormKey, string thisParentFormKey) =>
+        DuckDbSql.ScalarString(_connection, """
+            SELECT form_key FROM mirror.placement
+            WHERE form_key = $1 AND parent_cell <> $2 AND plugin = $3 AND origin = $4
+            UNION ALL
+            SELECT cell_form_key FROM mirror.cell_location
+            WHERE cell_form_key = $1 AND parent_worldspace <> $2 AND plugin = $3 AND origin = $4
+            UNION ALL
+            SELECT child_form_key FROM mirror.container_child
+            WHERE child_form_key = $1 AND parent_form_key <> $2 AND plugin = $3 AND origin = $4
+            LIMIT 1
+            """, childFormKey, thisParentFormKey, key.Name, key.Origin!) != null;
+
+    // An embedded child's own row is a projection of its container's document, like its placement
+    // row: serialized out of the container's graph through the codec ingest uses. No schema, no
+    // row, as at ingest.
+    private void DeriveEmbeddedChildRows(PluginKey key, IMajorRecordGetter container)
+    {
+        var containerType = ContainerChildFields.NormalizedTypeName(container.GetType());
+        foreach (var (slotName, _, child) in ContainerChildFields.EnumerateChildren(container))
+        {
+            if (!ContainerChildFields.EmbeddedSlots.Contains((containerType, slotName))) continue;
+            var childType = SourceRecordType.Resolve(child, _schemas);
+            if (!_schemas.ContainsKey(childType)) continue;
+
+            var childFormKey = child.FormKey.ToString();
+            var childBody = Encoding.UTF8.GetString(_codec.SerializeToBytesAsync(child, _release).GetAwaiter().GetResult());
+            if (string.Equals(childBody, EffectiveBody(key, childFormKey), StringComparison.Ordinal)) continue;
+
+            if (RowExistsAtEffective(key, childFormKey) || RowExistsAtHead(key, childFormKey))
+                ApplyOneWorkingTreeChange(key, childFormKey, childBody);
+            else
+                CreateWorkingTreeRecord(key, childFormKey, childType, childBody);
+        }
+    }
+
+    private string? EffectiveBody(PluginKey key, string formKey) =>
+        DuckDbSql.ScalarString(_connection, "SELECT body FROM records WHERE form_key = $1 AND plugin = $2 AND origin = $3",
+            formKey, key.Name, key.Origin!);
+
     // A container's child set and slot order live in its body, so a delete-then-insert per (parent,
-    // table) is correct by construction. Recurses one level, into a Worldspace.TopCell; nothing else
-    // embeds a container in a container.
+    // table) is correct by construction. An embedded child that is itself a container derives its
+    // own containment through its own row.
     private void RederiveContainmentForRecord(PluginKey key, string formKey, string recordType, IMajorRecordGetter record)
     {
         // Two spellings of the type: the CLR name (Cell) is what CoveredByPlacementTables and
@@ -375,7 +466,6 @@ internal sealed class WorkingTreeOverlay
         var containerChildRows = new List<ContainerChildRow>();
         var placementRows = new List<PlacementRow>();
         CellLocationRow? topCellRow = null;
-        IMajorRecordGetter? topCellRecord = null;
 
         foreach (var (slotName, slotIndex, child) in ContainerChildFields.EnumerateChildren(record))
         {
@@ -399,7 +489,6 @@ internal sealed class WorkingTreeOverlay
                     // not part of any exterior grid.
                     topCellRow = _placementWalker.EmitCellLocationRow(
                         child, formKey, blockX: null, blockY: null, subX: null, subY: null, isInterior: false);
-                    topCellRecord = child;
                     break;
                     // "SubCells": never yielded here — its items are WorldspaceBlock, which is not
                     // IMajorRecordGetter.
@@ -424,16 +513,12 @@ internal sealed class WorkingTreeOverlay
                 PluginIngest.AppendPlacementRow(appender, row, key.Name, key.Origin!);
         }
 
-        if (topCellRow is not { } cellRow || topCellRecord == null) return;
+        if (topCellRow is not { } cellRow) return;
 
         DuckDbSql.ExecuteFor(_connection, "DELETE FROM mirror.cell_location WHERE cell_form_key = $1 AND plugin = $2 AND origin = $3",
             cellRow.CellFormKey, key.Name, key.Origin!);
-        using (var appender = _connection.CreateAppender("mirror", "cell_location"))
-            PluginIngest.AppendCellLocationRow(appender, cellRow, key.Name, key.Origin!);
-
-        // The top cell is itself a container, one level deeper in the same document. A TopCell slot
-        // can only hold a Cell, whose schema table name is always "cell", so this is not a guess.
-        RederiveContainmentForRecord(key, cellRow.CellFormKey, "cell", topCellRecord);
+        using var cellLocationAppender = _connection.CreateAppender("mirror", "cell_location");
+        PluginIngest.AppendCellLocationRow(cellLocationAppender, cellRow, key.Name, key.Origin!);
     }
 
     private void DeleteDerivationsForRecord(PluginKey key, string formKey)

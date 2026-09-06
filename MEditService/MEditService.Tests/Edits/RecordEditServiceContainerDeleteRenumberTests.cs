@@ -63,49 +63,23 @@ public sealed class RecordEditServiceContainerDeleteRenumberTests : IDisposable
         Assert.Null(Index.At(RecordRef.Effective).GetDocument(_fixture.TopCellRef.ToString(), _fixture.Plugin));
     }
 
+    // A worldspace's directory holds its block-placed cells' files too, so its delete takes every cell
+    // the index records under it, not only the embedded top cell.
     [Fact]
-    public void DeletingAWorldspace_WithTwoBlocklessCellRows_CascadesIntoBothCellsDescendants()
+    public void DeletingAWorldspace_CascadesIntoEveryCellRecordedUnderIt_BlockPlacedIncluded()
     {
-        var realRows = Index.At(RecordRef.Effective).GetWorldspaceCells(_fixture.Plugin, _fixture.Worldspace.ToString());
-        var extraRow = new CellLocationSummary(
-            _fixture.EmbedCell.ToString(), ContainerModFixture.EmbedCellEditorId,
-            BlockX: null, BlockY: null, SubX: null, SubY: null, CellX: null, CellY: null);
+        Index.CreateCellLocation(_fixture.Plugin, new CellLocationRow(
+            _fixture.EmbedCell.ToString(), _fixture.Worldspace.ToString(),
+            BlockX: 1, BlockY: 1, SubX: 0, SubY: 0, GridX: 3, GridY: 3, IsInterior: false));
 
-        var injectingIndex = new WorldspaceCellInjectingIndex(
-            Index, _fixture.Worldspace.ToString(), [.. realRows, extraRow]);
-        var mirror = new IndexOverridingMirror(_fixture.Mirror, injectingIndex);
-        var service = new RecordEditService(mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
-
-        var result = service.DeleteRecord(_fixture.Plugin, _fixture.Worldspace.ToString());
+        var result = EditService().DeleteRecord(_fixture.Plugin, _fixture.Worldspace.ToString());
 
         Assert.True(result.Applied, result.Message);
-        // The real TopCell's own descendants — unaffected by the second row's presence, proving the
-        // existing single-block-less-row behavior is unchanged.
         Assert.Null(Index.At(RecordRef.Effective).GetDocument(_fixture.TopCell.ToString(), _fixture.Plugin));
         Assert.Null(Index.At(RecordRef.Effective).GetDocument(_fixture.TopCellRef.ToString(), _fixture.Plugin));
-        // The injected second block-less row's own descendants — exactly what a FirstOrDefault
-        // implementation drops, since it stops at the first (real) row above.
         Assert.Null(Index.At(RecordRef.Effective).GetDocument(_fixture.EmbedCell.ToString(), _fixture.Plugin));
         Assert.Null(Index.At(RecordRef.Effective).GetDocument(_fixture.TemporaryRef.ToString(), _fixture.Plugin));
         Assert.Null(Index.At(RecordRef.Effective).GetDocument(_fixture.PersistentRef.ToString(), _fixture.Plugin));
-    }
-
-    // Overrides At to hand out a DelegatingReads intercepting one member; IRecordIndex itself declares
-    // no reads to override.
-    private sealed class WorldspaceCellInjectingIndex(
-        IRecordIndex inner, string worldspaceFormKey, IReadOnlyList<CellLocationSummary> rows)
-        : DelegatingRecordIndex(inner)
-    {
-        public override IRecordReads At(RecordRef recordRef) =>
-            new WorldspaceCellInjectingReads(base.At(recordRef), worldspaceFormKey, rows);
-
-        private sealed class WorldspaceCellInjectingReads(
-            IRecordReads inner, string worldspaceFormKey, IReadOnlyList<CellLocationSummary> rows)
-            : DelegatingReads(inner)
-        {
-            public override IReadOnlyList<CellLocationSummary> GetWorldspaceCells(PluginKey plugin, string worldspaceFormKeyArg) =>
-                worldspaceFormKeyArg == worldspaceFormKey ? rows : base.GetWorldspaceCells(plugin, worldspaceFormKeyArg);
-        }
     }
 
     // ---- an embedded child ----

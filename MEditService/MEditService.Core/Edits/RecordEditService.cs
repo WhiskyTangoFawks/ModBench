@@ -101,18 +101,9 @@ public sealed class RecordEditService(
         // read at any moment.
         WriteBodyAtomic(sourcePath, newText);
 
-        // An embedded edit dirties two rows, the parent unit and the child's own document, landed in
-        // one transaction. The index holds the record's own fields, never the tree-layout member.
-        var deltas = new List<(string FormKey, string? Body)> { (unit.OwnerFormKey, SourceChildOrder.WithoutOrder(newText)) };
-        if (unit.IsEmbedded)
-        {
-            var child = EmbeddedChildPath.Walk(JsonNode.Parse(newText), prefix)!;
-            // An element of an abstract slot names its own type first, which only the self-describing
-            // read takes; the child's own document then spells it the way its own file would.
-            var selfDescribing = child is JsonObject obj && obj.ContainsKey(LoquiUnions.UnionTypeDiscriminator);
-            deltas.Add((formKey, _codec.RoundTrip(child.ToJsonString(), release, selfDescribing ? null : document.RecordType)));
-        }
-        index.ApplyWorkingTreeChanges(plugin, deltas);
+        // The unit's document is what changed; an embedded child's own row is the index's derivation
+        // from it. The index holds the record's own fields, never the tree-layout member.
+        index.ApplyWorkingTreeChanges(plugin, [(unit.OwnerFormKey, SourceChildOrder.WithoutOrder(newText))]);
 
         // The new value can flip filter membership either way.
         mirror.ReapplyFilter();
@@ -265,7 +256,9 @@ public sealed class RecordEditService(
         if (RefuseIfHeader(document.RecordType) is { } headerRefusal) return headerRefusal;
         var reads = index.At(RecordRef.Effective);
 
-        var deltas = new List<(string FormKey, string? Body)>();
+        // One changed document either way: the owner without the child, or the record's own gone.
+        // Every descendant's row follows from that in the index.
+        (string FormKey, string? Body) delta;
 
         if (unit.IsEmbedded)
         {
@@ -282,7 +275,7 @@ public sealed class RecordEditService(
                     "report it; otherwise relaunch mEdit so the index re-reads the tree.");
             }
 
-            deltas.Add((unit.OwnerFormKey, SerializeAndWrite(_codec, record, unit.FullPath, release)));
+            delta = (unit.OwnerFormKey, SerializeAndWrite(_codec, record, unit.FullPath, release));
         }
         else
         {
@@ -322,50 +315,22 @@ public sealed class RecordEditService(
                 index.ReplaceContainerChildSlot(
                     plugin, parent.ParentFormKey, parent.ParentRecordType, parent.SlotName, survivors);
             }
+
+            delta = (formKey, null);
         }
 
-        // A container's delete removes its directory whole and an embedded child can have descendants
-        // of its own; every descendant's row is nulled in the one batch.
-        deltas.Add((formKey, null));
-        foreach (var descendant in EnumerateDescendantFormKeys(reads, plugin, formKey))
-            deltas.Add((descendant, null));
-
-        index.ApplyWorkingTreeChanges(plugin, deltas);
+        index.ApplyWorkingTreeChanges(plugin, [delta]);
         // A deleted row cannot match an active filter.
         mirror.ReapplyFilter();
 
         if (logger.IsEnabled(LogLevel.Information))
         {
             logger.LogInformation(
-                "Deleted {FormKey} from {Plugin} ({Origin}) — working-tree deletion of {SourcePath} ({Count} index row(s) removed)",
-                formKey, plugin.Name, plugin.Origin, unit.RelativePath, deltas.Count);
+                "Deleted {FormKey} from {Plugin} ({Origin}) — working-tree deletion of {SourcePath}",
+                formKey, plugin.Name, plugin.Origin, unit.RelativePath);
         }
         return RecordEditResult.Success();
     }
-
-    // Index-derived, not object-graph-derived: the per-record codec never populates a folder-split
-    // child onto the parent it reads; only the whole-mod door does. Answers empty for a childless
-    // FormKey.
-    private static IEnumerable<string> EnumerateDescendantFormKeys(IRecordReads reads, PluginKey plugin, string formKey)
-    {
-        var refs = reads.GetCellReferences(plugin, formKey);
-        var placedDescendants = refs.Persistent.Concat(refs.Temporary)
-            .SelectMany(placed => WithDescendants(reads, plugin, placed.FormKey));
-
-        // Every block-less row, not just the first: a worldspace should carry one TopCell, but the
-        // data cannot rule out a second, and stopping at the first would orphan its descendants.
-        var topCellDescendants = reads.GetWorldspaceCells(plugin, formKey)
-            .Where(c => c.BlockX == null)
-            .SelectMany(topCell => WithDescendants(reads, plugin, topCell.FormKey));
-
-        var childDescendants = reads.GetContainerChildren(plugin, formKey)
-            .SelectMany(child => WithDescendants(reads, plugin, child.ChildFormKey));
-
-        return placedDescendants.Concat(topCellDescendants).Concat(childDescendants);
-    }
-
-    private static IEnumerable<string> WithDescendants(IRecordReads reads, PluginKey plugin, string formKey) =>
-        new[] { formKey }.Concat(EnumerateDescendantFormKeys(reads, plugin, formKey));
 
     /// <summary>The FormKey is <paramref name="requestedFormKey"/> (xEdit's typed-FormID path) or the next
     /// free local ID, collision-checked at both refs so an uncompiled create or a working-tree-deleted
@@ -421,13 +386,13 @@ public sealed class RecordEditService(
         if (RefuseIfUnderride(formKey, destinationPlugin) is { } underrideRefusal) return underrideRefusal;
         var reads = index.At(RecordRef.Effective);
 
-        // A placed reference has parent-chain-aware handling; GetPlacement answering is what
-        // distinguishes it from the embedded types the blanket refusal below still refuses.
+        // A record a container's document carries lands inside the destination's copy of that
+        // document; the folder-split children the refusal below still names have no such document.
         if (RecordTypeDispatch.For(release).GroupFolderNameFor(document.RecordType) is null
-            && reads.GetPlacement(formKey, sourcePlugin) is { } placement)
+            && _recordCopy.EmbeddedContainerOf(reads, sourcePlugin, formKey, release) is { } embedding)
         {
-            return _recordCopy.CopyPlacedReferenceAsOverride(
-                sourcePlugin, formKey, document, placement, destinationPlugin, destinationModFolder, index, release);
+            return _recordCopy.CopyEmbeddedChildAsOverride(
+                sourcePlugin, formKey, document, embedding, destinationPlugin, destinationModFolder, index, release);
         }
 
         if (RefuseIfCopySourceHasNoContainerOfItsOwn(document.RecordType, release) is { } containerRefusal) return containerRefusal;
@@ -637,7 +602,7 @@ public sealed class RecordEditService(
             return refusedTarget;
 
         // The parent quest override, found or minted — resolved to its own directory either way.
-        var questDirectory = EnsureContainerAncestorDirectory(
+        var questDirectory = _recordCopy.EnsureContainerAncestorDirectory(
             index, reads, sourcePlugin, parentQuest.ParentFormKey, parentQuest.ParentRecordType,
             destinationPlugin, destinationModFolder, release);
 
@@ -657,7 +622,7 @@ public sealed class RecordEditService(
         index.CreateWorkingTreeRecord(destinationPlugin, targetFormKey, document.RecordType, topicBody);
 
         // The topic's own membership in the quest's slot, appended at the end.
-        AppendChildToSlot(
+        RecordCopy.AppendChildToSlot(
             index, reads, destinationPlugin, parentQuest.ParentFormKey, parentQuest.ParentRecordType,
             parentQuest.SlotName, targetFormKey);
 
@@ -729,7 +694,7 @@ public sealed class RecordEditService(
         if (ResolveTargetFormKey(index, destinationPlugin, requestedFormKey, out var targetFormKey) is { } refusedTarget)
             return refusedTarget;
 
-        var topicDirectory = EnsureContainerAncestorDirectory(
+        var topicDirectory = _recordCopy.EnsureContainerAncestorDirectory(
             index, reads, sourcePlugin, parentTopic.ParentFormKey, parentTopic.ParentRecordType,
             destinationPlugin, destinationModFolder, release);
 
@@ -746,7 +711,7 @@ public sealed class RecordEditService(
         var newBody = WritePlaced(
             destinationModFolder, placement, targetFormKey, path => SerializeAndWrite(_codec, newRecord, path, release));
         index.CreateWorkingTreeRecord(destinationPlugin, targetFormKey, document.RecordType, newBody);
-        AppendChildToSlot(
+        RecordCopy.AppendChildToSlot(
             index, reads, destinationPlugin, parentTopic.ParentFormKey, parentTopic.ParentRecordType,
             parentTopic.SlotName, targetFormKey);
 
@@ -761,70 +726,6 @@ public sealed class RecordEditService(
                 destinationPlugin.Origin);
         }
         return RecordEditResult.Success(targetFormKey);
-    }
-
-    // A missing ancestor auto-creates bare and Partial Form, recursing for a folder-split ancestor's
-    // own parent. Overrides keep their original FormKeys; only the copied record draws a fresh one.
-    private string EnsureContainerAncestorDirectory(
-        IRecordIndex index, IRecordReads reads, PluginKey sourcePlugin, string ancestorFormKey,
-        string ancestorRecordType, PluginKey destinationPlugin, string destinationModFolder, GameRelease release)
-    {
-        if (reads.GetDocument(ancestorFormKey, destinationPlugin) is { } existing)
-        {
-            var unit = SourceUnitResolver.Resolve(
-                    reads, destinationPlugin, destinationModFolder, ancestorFormKey,
-                    existing.RecordType, existing.EditorId, release)
-                ?? throw new InvalidOperationException(
-                    $"{ancestorFormKey} is indexed in {destinationPlugin.Name} but SourceUnitResolver cannot find its source unit.");
-            return Path.GetDirectoryName(unit.FullPath)!;
-        }
-
-        var bare = BareRecord(
-            _codec, schemaReflector.GetSchemas(release)[ancestorRecordType], release, ancestorFormKey, editorId: null, partialForm: true);
-
-        SourcePlacement placement;
-        ContainerChildRow? ownParent = null;
-        if (RecordTypeDispatch.For(release).GroupFolderNameFor(ancestorRecordType) is not null)
-        {
-            // A top-level container (Quest): its own directory in the group folder, listed by the group.
-            placement = SourcePlacement.For(destinationPlugin.Name, ancestorRecordType, ancestorFormKey, editorId: null, release);
-        }
-        else
-        {
-            // A folder-split container (DialogTopic): under its own parent's slot, ensured first.
-            ownParent = reads.GetContainerParent(sourcePlugin, ancestorFormKey)
-                ?? throw new InvalidOperationException(
-                    $"{sourcePlugin.Name}'s index names no parent for folder-split container {ancestorFormKey}.");
-            var parentDirectory = EnsureContainerAncestorDirectory(
-                index, reads, sourcePlugin, ownParent.Value.ParentFormKey, ownParent.Value.ParentRecordType,
-                destinationPlugin, destinationModFolder, release);
-            placement = SourcePlacement.ForSlotChild(
-                destinationModFolder, parentDirectory, ownParent.Value.SlotName, ancestorFormKey, editorId: null, isDirectory: true);
-        }
-
-        var recordDataPath = Path.Combine(destinationModFolder, placement.RelativePath);
-        var body = WritePlaced(destinationModFolder, placement, ancestorFormKey, path => SerializeAndWrite(_codec, bare, path, release));
-        index.CreateWorkingTreeRecord(destinationPlugin, ancestorFormKey, ancestorRecordType, body);
-        if (ownParent is { } parentSlot)
-        {
-            AppendChildToSlot(
-                index, reads, destinationPlugin, parentSlot.ParentFormKey, parentSlot.ParentRecordType,
-                parentSlot.SlotName, ancestorFormKey);
-        }
-        return Path.GetDirectoryName(recordDataPath)!;
-    }
-
-    private static void AppendChildToSlot(
-        IRecordIndex index, IRecordReads reads, PluginKey destinationPlugin,
-        string parentFormKey, string parentRecordType, string slotName, string childFormKey)
-    {
-        var children = reads.GetContainerChildren(destinationPlugin, parentFormKey)
-            .Where(c => c.SlotName.Equals(slotName, StringComparison.Ordinal))
-            .OrderBy(c => c.SlotIndex)
-            .Select((c, i) => (c.ChildFormKey, i))
-            .ToList();
-        children.Add((childFormKey, children.Count));
-        index.ReplaceContainerChildSlot(destinationPlugin, parentFormKey, parentRecordType, slotName, children);
     }
 
     // A destination loading before the origin would be an underride, silently
@@ -1148,12 +1049,10 @@ public sealed class RecordEditService(
             if (RefuseIfRemapIncomplete(owner, ownerDoc.RecordType, oldFormKey, referencerPlugin, release) is { } incomplete)
                 return incomplete;
 
-            var changes = new List<(string FormKey, string? Body)> { (unit.OwnerFormKey, ownerBody) };
             foreach (var (embeddedFormKey, _, _) in group.Where(r => r.Unit.IsEmbedded))
             {
-                // The child's row is re-derived from the remapped owner, the same two-row shape
-                // Edit uses. A remap never moves a record's own FormKey, so the child is still
-                // found under the same key.
+                // A remap never moves a record's own FormKey, so the child is still found under the
+                // same key; its row is the index's derivation from the remapped owner.
                 if (ContainerChildFields.FindEmbeddedChild(owner, embeddedFormKey)?.Child is not { } child)
                 {
                     return RecordEditResult.Refused(
@@ -1168,15 +1067,13 @@ public sealed class RecordEditService(
                 if (RefuseIfRemapIncomplete(
                         child, childDoc?.RecordType ?? unit.OwnerRecordType, oldFormKey, referencerPlugin, release)
                     is { } childIncomplete) return childIncomplete;
-
-                changes.Add((embeddedFormKey, SerializeToText(child, release)));
             }
 
             // Carried rather than recomputed at write time: the transaction names unrestored paths
             // relative to this folder.
             rewrites.Add(new ComputedRewrite(
                 referencerPlugin, ModFolders.TrackedOf(mirror.LoadOrder, referencerPlugin)!,
-                filePath, owner, changes));
+                filePath, owner, [(unit.OwnerFormKey, ownerBody)]));
         }
 
         return null;
@@ -1243,10 +1140,8 @@ public sealed class RecordEditService(
         index.ApplyWorkingTreeChanges(rewrite.Plugin, rewrite.IndexChanges);
     }
 
-    // Root is the record serialized at Unit.FullPath (the owner when embedded); ChildBody is the
-    // embedded child's own body, null otherwise.
-    private sealed record ComputedTarget(
-        SourceUnit Unit, RecordDocument Document, IMajorRecord Root, string RootBody, string? ChildBody);
+    // Root is the record serialized at Unit.FullPath: the owner when embedded.
+    private sealed record ComputedTarget(SourceUnit Unit, RecordDocument Document, IMajorRecord Root, string RootBody);
 
     // The referencer pass skips the target, so this is the only place a self-link is remapped.
     // Nothing here writes; both failure modes are typed refusals.
@@ -1305,8 +1200,7 @@ public sealed class RecordEditService(
 
             ((IMajorRecordInternal)found.Child).FormKey = FormKey.Factory(newFormKey);
 
-            target = new ComputedTarget(
-                unit, document, owner, SerializeToText(owner, release), SerializeToText(found.Child, release));
+            target = new ComputedTarget(unit, document, owner, SerializeToText(owner, release));
             return null;
         }
 
@@ -1318,7 +1212,7 @@ public sealed class RecordEditService(
 
         ((IMajorRecordInternal)record).FormKey = FormKey.Factory(newFormKey);
 
-        target = new ComputedTarget(unit, document, record, SerializeToText(record, release), ChildBody: null);
+        target = new ComputedTarget(unit, document, record, SerializeToText(record, release));
         return null;
     }
 
@@ -1326,17 +1220,16 @@ public sealed class RecordEditService(
         IRecordIndex index, SourceWriteTransaction transaction, PluginKey plugin, string modFolder,
         ComputedTarget target, string oldFormKey, string newFormKey, GameRelease release)
     {
-        var (unit, document, root, rootBody, childBody) = target;
+        var (unit, document, root, rootBody) = target;
         if (unit.IsEmbedded)
         {
             // No file moves: an embedded record has no leaf name of its own. The owner is reserialized
-            // and the child's row replaced, the same two-row shape Edit uses.
+            // around the child's new FormKey, and the index derives the new identity and the old one's
+            // absence from that one document.
             transaction.Write(
                 modFolder, unit.FullPath,
                 () => _codec.SerializeAsync(root, unit.FullPath, release).GetAwaiter().GetResult());
-            index.ApplyRenumber(plugin, new RenumberedRecord(
-                oldFormKey, newFormKey, document.RecordType, childBody!,
-                new EmbeddingOwner(unit.OwnerFormKey, rootBody)));
+            index.ApplyWorkingTreeChanges(plugin, [(unit.OwnerFormKey, rootBody)]);
             return;
         }
 
