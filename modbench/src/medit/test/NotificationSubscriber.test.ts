@@ -13,6 +13,9 @@ import {
   subscribeTreeToNotifications, subscribeRecordPanelsToNotifications,
 } from '../NotificationSubscriber';
 import { ActiveRecordTracker } from '../ActiveRecordTracker';
+import { makeOnRecordEdited } from '../onRecordEdited';
+import type { PluginTreeProvider } from '../PluginTreeProvider';
+import type { RecordDecorationProvider } from '../RecordDecorationProvider';
 import type { NotificationEvent } from '../ApiClient';
 
 function rowsChanged(keys: string[], overrides: Partial<NotificationEvent> = {}): NotificationEvent {
@@ -79,6 +82,31 @@ describe('subscribeRecordPanelsToNotifications', () => {
     notifications.emit(rowsChanged(['000001:Test.esp']));
 
     expect(panel.webview.postMessage).not.toHaveBeenCalled();
+  });
+});
+
+// ADR-0046 invariant 5: makeOnRecordEdited (the write's own callback) is silent; the stream is
+// the panel's only re-read trigger.
+describe('a write and the stream, together (ADR-0046 invariant 5)', () => {
+  it('after a write, the panel re-reads exactly once, on rows-changed', () => {
+    const notifications = new FakeNotificationSubscriber();
+    const panel = fakePanel();
+    const recordPanels = new Set([panel]) as unknown as Set<import('vscode').WebviewPanel>;
+    const tracker = new ActiveRecordTracker<import('vscode').WebviewPanel>();
+    tracker.setFormKey(panel as unknown as import('vscode').WebviewPanel, '000001:Test.esp');
+    subscribeRecordPanelsToNotifications(notifications, recordPanels, tracker);
+
+    const treeProvider = { markWorkingTreeState: vi.fn().mockReturnValue(false) } as unknown as PluginTreeProvider;
+    const decorationProvider = { refresh: vi.fn() } as unknown as RecordDecorationProvider;
+    const onRecordEdited = makeOnRecordEdited(treeProvider, decorationProvider, vi.fn(), vi.fn());
+
+    onRecordEdited('000001:Test.esp', 'Test.esp', 'ModA');
+    expect(panel.webview.postMessage).not.toHaveBeenCalled();
+
+    notifications.emit(rowsChanged(['000001:Test.esp']));
+
+    expect(panel.webview.postMessage).toHaveBeenCalledTimes(1);
+    expect(panel.webview.postMessage).toHaveBeenCalledWith({ type: 'loadRecord', formKey: '000001:Test.esp' });
   });
 });
 

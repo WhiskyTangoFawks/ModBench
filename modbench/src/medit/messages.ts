@@ -5,9 +5,6 @@ export const EXTENSION_TO_WEBVIEW = {
   // ADR-0035: the winner sweep has landed, so a panel opened mid-reconcile stops rendering a
   // settled-looking grid over unsettled data. Load-order-wide: no self-filter, every panel reacts.
   CONFLICTS_COMPUTED: 'conflictsComputed',
-  // The webview never patches its own grid from the value it sent: the write path re-serializes
-  // through the codec, and the record's conflict picture across other columns can move with it.
-  RECORD_EDITED: 'recordEdited',
   // A reply to the one panel that asked (`requestId`), never a broadcast: the QuickPick existed
   // only for that request. `formKey: null` is a dismissal, leaving the field unchanged.
   FORM_KEY_PICKED: 'formKeyPicked',
@@ -134,5 +131,4 @@ export interface StringValueContext {
 export type ExtensionToWebview =
   | { type: typeof EXTENSION_TO_WEBVIEW.LOAD_RECORD; formKey: string }
   | { type: typeof EXTENSION_TO_WEBVIEW.CONFLICTS_COMPUTED }
-  | { type: typeof EXTENSION_TO_WEBVIEW.RECORD_EDITED; formKey: string }
   | { type: typeof EXTENSION_TO_WEBVIEW.FORM_KEY_PICKED; requestId: string; formKey: string | null };

@@ -7,7 +7,7 @@ vi.mock('vscode', () => ({
   },
 }));
 
-import { makeOnRecordEdited, broadcastToRecordPanels } from '../onRecordEdited';
+import { makeOnRecordEdited } from '../onRecordEdited';
 import type { PluginTreeProvider } from '../PluginTreeProvider';
 import type { RecordDecorationProvider } from '../RecordDecorationProvider';
 
@@ -25,7 +25,7 @@ describe('makeOnRecordEdited — record-filter-match refresh', () => {
   it('calls the injected refreshMatchingPlugins on every edit', () => {
     const refreshMatchingPlugins = vi.fn();
     const onRecordEdited = makeOnRecordEdited(
-      fakeTreeProvider(), fakeDecorationProvider(), new Set(), refreshMatchingPlugins, vi.fn(),
+      fakeTreeProvider(), fakeDecorationProvider(), refreshMatchingPlugins, vi.fn(),
     );
 
     onRecordEdited('000001:Test.esp', 'Test.esp', 'SomeMod');
@@ -38,7 +38,7 @@ describe('makeOnRecordEdited — record-filter-match refresh', () => {
     // edit already landed server-side, so the re-derive must not be gated on the record-row cache.
     const refreshMatchingPlugins = vi.fn();
     const onRecordEdited = makeOnRecordEdited(
-      fakeTreeProvider(false), fakeDecorationProvider(), new Set(), refreshMatchingPlugins, vi.fn(),
+      fakeTreeProvider(false), fakeDecorationProvider(), refreshMatchingPlugins, vi.fn(),
     );
 
     onRecordEdited('000001:Test.esp', 'Test.esp', 'SomeMod');
@@ -48,20 +48,11 @@ describe('makeOnRecordEdited — record-filter-match refresh', () => {
 
   it('still refreshes the M/A badge decoration', () => {
     const decorationProvider = fakeDecorationProvider();
-    const onRecordEdited = makeOnRecordEdited(fakeTreeProvider(true), decorationProvider, new Set(), vi.fn(), vi.fn());
+    const onRecordEdited = makeOnRecordEdited(fakeTreeProvider(true), decorationProvider, vi.fn(), vi.fn());
 
     onRecordEdited('000001:Test.esp', 'Test.esp', 'SomeMod');
 
     expect(decorationProvider.refresh).toHaveBeenCalledTimes(1);
-  });
-
-  it('broadcasts RECORD_EDITED to every open record panel', () => {
-    const panels = new Set([{ webview: { postMessage: vi.fn() } }, { webview: { postMessage: vi.fn() } }]) as unknown as Set<{
-      webview: { postMessage: (m: unknown) => void };
-    }>;
-    broadcastToRecordPanels(panels as unknown as Set<import('vscode').WebviewPanel>, { type: 'recordEdited', formKey: 'x' } as never);
-
-    for (const panel of panels) expect(panel.webview.postMessage).toHaveBeenCalledWith({ type: 'recordEdited', formKey: 'x' });
   });
 });
 
@@ -71,7 +62,7 @@ describe('makeOnRecordEdited — Source Control refresh', () => {
   it('calls the injected refreshSourceControl with the edited plugin filename on every edit', () => {
     const refreshSourceControl = vi.fn();
     const onRecordEdited = makeOnRecordEdited(
-      fakeTreeProvider(), fakeDecorationProvider(), new Set(), vi.fn(), refreshSourceControl,
+      fakeTreeProvider(), fakeDecorationProvider(), vi.fn(), refreshSourceControl,
     );
 
     onRecordEdited('000001:Test.esp', 'Test.esp', 'SomeMod');
@@ -86,7 +77,7 @@ describe('makeOnRecordEdited — Source Control refresh', () => {
     // cache's own hit/miss either.
     const refreshSourceControl = vi.fn();
     const onRecordEdited = makeOnRecordEdited(
-      fakeTreeProvider(false), fakeDecorationProvider(), new Set(), vi.fn(), refreshSourceControl,
+      fakeTreeProvider(false), fakeDecorationProvider(), vi.fn(), refreshSourceControl,
     );
 
     onRecordEdited('000001:Test.esp', 'Test.esp', 'SomeMod');

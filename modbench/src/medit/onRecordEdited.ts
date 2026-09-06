@@ -2,7 +2,7 @@ import type * as vscode from 'vscode';
 import type { PluginTreeProvider } from './PluginTreeProvider';
 import type { RecordDecorationProvider } from './RecordDecorationProvider';
 import { recordResourceUri } from './recordResourceUri';
-import { EXTENSION_TO_WEBVIEW, type ExtensionToWebview } from './messages';
+import type { ExtensionToWebview } from './messages';
 
 /** Broadcasts one message to every open record panel (`'modbench'` viewType). */
 export function broadcastToRecordPanels(recordPanels: Set<vscode.WebviewPanel>, msg: ExtensionToWebview): void {
@@ -15,12 +15,10 @@ export function broadcastToRecordPanels(recordPanels: Set<vscode.WebviewPanel>, 
 export function makeOnRecordEdited(
   treeProvider: PluginTreeProvider,
   recordDecorationProvider: RecordDecorationProvider,
-  recordPanels: Set<vscode.WebviewPanel>,
   refreshMatchingPlugins: () => void,
   refreshSourceControl: (plugin: string) => void,
 ): (formKey: string, plugin: string, origin: string) => void {
   return (formKey, plugin, origin) => {
-    broadcastToRecordPanels(recordPanels, { type: EXTENSION_TO_WEBVIEW.RECORD_EDITED, formKey });
     if (treeProvider.markWorkingTreeState(plugin, origin, formKey, 'Modified')) {
       recordDecorationProvider.refresh(recordResourceUri(plugin, origin, formKey));
     }
