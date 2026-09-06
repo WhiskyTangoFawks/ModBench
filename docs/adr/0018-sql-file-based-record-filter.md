@@ -31,8 +31,9 @@ in.
 ## Consequences
 
 - Filter SQL runs against the generated per-type `json_extract` views (ADR-0005): view names
-  match Mutagen record type names, column names match `ColumnSpec` field names from
-  `SchemaReflector`, and only scalar leaves are columns. Users must know that schema.
+  match Mutagen record type names, column names match the document's own member names
+  ([ADR-0032](0032-the-document-is-the-model.md)), and only scalar leaves are columns. Users must
+  know that schema.
 - Scripts inherit `modbench.scriptsPath` and the Code Lens infrastructure rather than building
   their own.
 - A plugin-scoped conflict endpoint is still not built. The reason originally given here — plugin

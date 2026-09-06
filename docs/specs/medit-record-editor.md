@@ -395,33 +395,29 @@ already empty: matching xEdit's own guard (`Element.EditValue` must be non-empty
   and are themselves drag sources for their whole value via that summary row, the same as a
   scalar leaf, collapsed or expanded alike.
 - **A declined write is always a refusal, never a silent no-op reported as success**:
-  a scalar or FormLink cell edit that the backend can't honor — a converter rejecting the typed
-  value, an unparseable FormKey string, a property absent from the record's own concrete
-  subclass — refuses naming the field, the same contract complex-field writes already had.
-  A declined member inside an otherwise-valid struct/array write fails the whole
-  write, not just that member; a member legitimately absent from a record's own subclass (the
-  sparse leaf-union case, e.g. some OMOD property members) stays a silent no-op, since that's
-  correct round-tripping, not a defect.
-  **Nested Loqui struct sub-fields write through the same one path** — a struct member one
-  or more levels inside another struct column, or inside an array element, applies with the exact
-  semantics the top-level struct column has (one shared applier): unions resolve their
-  concrete leaf from the payload's own `MutagenObjectType`, refusing when it can't be resolved; the
-  existing value object is reused only when it is already the same concrete type; and a write with
-  one bad member anywhere in the nested tree refuses the whole write before anything is written,
-  leaving the working tree byte-identical.
+  a scalar or FormLink cell edit the backend can't honor — the codec rejecting the typed value, an
+  unparseable FormKey string — refuses naming the field, the same contract complex-field writes
+  already had. A declined member inside an otherwise-valid struct/array write fails the whole
+  write, not just that member: `DocumentEdit` patches the whole value into the document at its own
+  path and only then round-trips the document through the codec, so one bad member anywhere in a
+  nested write is refused before anything lands, leaving the working tree byte-identical; a member
+  legitimately absent from a record's own subclass (the sparse leaf-union case, e.g. some OMOD
+  property members) stays a silent no-op, since that's correct round-tripping, not a defect.
+  **Nested Loqui struct sub-fields write through the same one path** — a struct member one or more
+  levels inside another struct column, or inside an array element, is patched with the exact
+  semantics the top-level struct column has, because it is the same path: the pre-check walks the
+  patched value recursively alongside its metadata, resolving each union member's own concrete leaf
+  from the payload's own `MutagenObjectType` and refusing when it can't be resolved, at whatever
+  depth that member sits.
   **A list of bare scalars writes through the same one path** — a string/number/hex-element
   list at the record's own top level (`race.movement_type_names`, `sndr.sound_files`,
   `mato.dnams`) and one nested inside a struct or array element
-  (`race.subgraphs[].animation_paths`, `scen.actions[].npc_headtracking_actor_ids`) take the whole
-  array as one value, and the ordinary array-op envelope (add/remove/move), exactly as a FormLink or
-  struct-element list does. The element is built by the same `PrimitiveMap` converter its
-  scalar-column twin uses, so an element the converter declines refuses the whole array before
-  anything is attached. There is no length gate on a hex *element*, unlike a hex column: replacing
-  the list gives an element no predecessor at its own position whose size it could have established,
-  so a wrong-width element is caught by the compile that follows, if at all. A list whose element type
-  reads but has no converter — a translated string, or an integer width `PrimitiveMap` lacks — is
-  read-only under its own named reason; no Fallout 4 list is either, so the reason keeps the
-  classification total rather than describing live data.
+  (`race.subgraphs[].animation_paths`, `scen.actions[].npc_headtracking_actor_ids`) take one element
+  at a time through the ordinary array-op envelope (add/remove/move), exactly as a FormLink or
+  struct-element list does. There is no length gate on a hex *element* an `add` appends: the new
+  element has no predecessor at its own position to compare against, so a wrong-width element is
+  caught by the codec at compile, if at all; a `remove` or `move` never constructs a new element
+  value, so neither reaches the pre-check at all.
   **A new array element's default is the backend's, and names only the discriminator** — the
   Add gesture posts `{op: "add", path}` with no value, and `DocumentEdit` builds the element from
   the array's own element metadata. The default is the empty object: every member is left absent,
@@ -432,24 +428,31 @@ already empty: matching xEdit's own guard (`Element.EditValue` must be non-empty
   discriminator, set to the first leaf the schema lists, and the user changes it with the same
   `Kind` dropdown any other element uses. The webview computes no element of its own.
 
-  **Read/write symmetry is structural, not conventional.** A leaf carries either a writer or
-  a named read-only reason — `ColumnSpec.Apply`/`SubFieldSpec.Apply` are a two-case union, so a leaf
-  that reads but silently cannot be written is unrepresentable, and an audit asserts every
-  writable-shaped leaf has one or the other. Classification is likewise total: every property the
-  reflection walk reaches lands in exactly one structural class or is a **reported anomaly**, never
-  silence. Shapes with no class yet are excluded by name with their live count, so a gap is a
-  written-down decision rather than an absence — `IGenderedItemGetter<T>` (20 fields across Race,
-  ArmorAddon, Armor, AssociationType and Rank), `Percent`, `TimeOnly`, `RecordType`,
-  `IReadOnlyArray2d`, `IReadOnlyDictionary`.
+  **Read/write symmetry is structural, not conventional.** A leaf's writability is one fact on its
+  own metadata, `FieldMetadata.ReadOnlyReason`, never a second table the write path consults:
+  `DocumentEdit`'s pre-check walks the patched value alongside the metadata tree and refuses by
+  name the moment it reaches a member carrying a reason, at whatever depth that member sits, so a
+  read-only reason on a nested struct member refuses the whole write exactly as one on a top-level
+  column does. A reason is written down, never guessed at write time: for an ordinary record
+  column, only where a `SchemaAnnotations.KnownDefects` row names one — a validated fact about a
+  specific Mutagen type and member (`ISceneActionGetter.Type`'s upstream crash is Fallout 4's one
+  member-read-only row); the header schema, which is not a major record and builds its columns from
+  its own presented-members table rather than a walk, carries its own three reasons the same way
+  (`Author`, `Flags`, and `Masters`' compile-derived content, ADR-0038). Classification
+  is likewise total: every property the reflection walk reaches lands in exactly one structural class
+  or is a **reported anomaly**, never silence. Shapes with no class yet are excluded by name with
+  their live count, so a gap is a written-down decision rather than an absence —
+  `IGenderedItemGetter<T>` (20 fields across Race, ArmorAddon, Armor, AssociationType and Rank),
+  `Percent`, `TimeOnly`, `RecordType`, `IReadOnlyArray2d`, `IReadOnlyDictionary`.
   **A byte slice is a hex leaf.** `ReadOnlyMemorySlice<byte>` reads and writes as `"0x"` followed by
   uppercase hex — Mutagen's own document spelling, so the reflected column and the `json_extract`
-  view over `records.body` agree on the text. The writer refuses a non-hex value, and refuses any
-  length change to a slice that already has one, which is what holds fixed-size subrecords to their
-  size without a hand-written table. The exclusion survives only for the two slices whose elements
-  are not bytes — `Weather.CloudTextures` (`<String>`) and `Weather.NAM4` (`<Single>`) — which are
-  list shapes rather than blobs. A byte slice appearing as a *list element* (`dlvw.tnams`,
-  `mato.dnams`, `pack.procedure_tree[].unknown`) reads and writes in the same grammar, through the
-  list's own applier.
+  view over `records.body` agree on the text. A length change to a slice that already has one is
+  refused (`HexLengthMismatch`) ahead of the codec, which is what holds fixed-size subrecords to
+  their size without a hand-written table; a non-hex value is left to the codec to refuse. The
+  exclusion survives only for the two slices whose elements are not bytes — `Weather.CloudTextures`
+  (`<String>`) and `Weather.NAM4` (`<Single>`) — which are list shapes rather than blobs. A byte
+  slice appearing as a *list element* (`dlvw.tnams`, `mato.dnams`, `pack.procedure_tree[].unknown`)
+  reads and writes in the same grammar, patched through the same one path.
   **Atomic values are a table, not a handler branch.** `System.Drawing.Color` is its first entry,
   presented as xEdit presents it (`wbByteColors`): `red`/`green`/`blue` byte sub-fields, editable
   through the one write path like any struct member. Four fields — `ActionRecord.Color`,
@@ -457,18 +460,13 @@ already empty: matching xEdit's own guard (`Element.EditValue` must be non-empty
   matching the exact four xEdit renders with `wbByteRGBA`; the distinction is per *field*, not per
   type, and is not reflectable from Mutagen, so it is a transcribed allowlist in the same idiom as
   the vector-struct list. Editing a Color leaf preserves any existing alpha byte it does not name.
-  **Naming a sub-field that genuinely has no write path is itself a refusal**
-  (`RecordEditRefusal.NestedFieldReadOnly`). The residue is a nested
-  struct with no usable write door — a getter type with no resolvable Loqui setter class, or an
-  excluded union whose discriminator can never appear in a payload. Naming one
-  refuses the whole write, and the message says the sub-field is not editable rather than implying
-  the value was invalid.
   Three cases stay distinct and must not be collapsed: a sub-field **absent** from the payload is
-  skipped (absence is not targeting); the `MutagenObjectType` **discriminator** is
-  read off the raw JSON to decide which concrete type to construct, before the object any member
-  could be applied to exists — so naming one is a silent skip at the member level, and the edit it
-  carries has already been honoured by the enclosing object's own construction; only a
-  sub-field the schema exposes with no write delegate refuses.
+  skipped (absence is not targeting); the `MutagenObjectType` **discriminator** is read off the raw
+  JSON to decide which concrete type to construct, before the object any member could be applied to
+  exists — so naming one is a check on the payload's shape, not a member write, and the edit it
+  carries has already been honoured by the enclosing object's own construction; only a sub-field a
+  `KnownDefects` row marks read-only refuses (`FieldReadOnly`), naming the field and the row's own
+  reason rather than implying the value was invalid.
 - **A `string` cell's right-click menu opens the extended editor** — **Open in Editor…**
   ([ADR-0039](../adr/0039-no-left-click-leaves-the-record-panel.md); ADR-0034
   divergence #2). xEdit's own answer for this surface is `TfrmViewElements`, a separate modeless
@@ -554,6 +552,14 @@ already empty: matching xEdit's own guard (`Element.EditValue` must be non-empty
   the written column's own value. The webview holds no model beside the document:
   no path setter, no mirror of the backend's key rule, no cascade, no default table (ADR-0032).
   There is no free drag-reorder and no auto-sort.
+- **A container's children keep their positions across every edit.** A parent record's document
+  holds its own fields, its embedded child slots inline, and, for a folder-split collection, the
+  non-Mutagen child-order member the source tree also carries
+  ([ADR-0042](../adr/0042-plugin-is-the-source-of-truth-lossless-source.md) decision 4).
+  `DocumentEdit` strips that member before patching and re-attaches it verbatim afterwards, so an
+  ordinary field edit never reorders or drops a sibling and never inlines a folder-split child into
+  its parent — the same byte parity the whole-plugin writer holds survives an edit through this
+  path too.
 - **Editing writes working-tree source text directly** (ADR-0041) — there is no staged
   intermediate state. A single field's value can be **dragged between plugin columns** to copy
   just that field into the target (which must be editable; the source need not be) — or **copied
@@ -1055,8 +1061,8 @@ new value, so a large array or struct edit can't flood the panel.
   key, and the array is written back in key order regardless, so no reorder control could change
   the file. A **keyed** array still has add and remove; an array sorted by its own element value
   has neither, its elements having no identity apart from their values. Unsorted (`wbArray`) arrays
-  have all four field-grid arity/order controls (arity changes write the whole array as one field
-  edit).
+  have all four field-grid arity/order controls, each its own envelope at the array's or the
+  element's own path (*Array arity and order* above).
 
 ## Further Notes
 
