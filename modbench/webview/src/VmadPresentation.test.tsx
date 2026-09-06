@@ -7,16 +7,15 @@ vi.mock('./vscode', () => ({ vscode: { postMessage: vi.fn() } }));
 
 import { RecordPanel } from './RecordPanel';
 import type { FieldDiff, FieldMetadata } from './types';
-import { columnKey } from './types';
-import type { LoadResult, RecordPanelClient } from './RecordPanelClient';
 import { vscode } from './vscode';
-import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION } from './messages';
+import { EXTENSION_TO_WEBVIEW } from './messages';
+import { diffNode, fieldMeta, lastPostedEnvelope, panelClient } from './test/fixtures';
 
 // The metadata below is the Fallout 4 schema's own shape, trimmed to the leaves these cases
 // name; the keyed arrays and their key members are Fallout4VmadAnnotations.KeyedArrays.
 
 const field = (name: string, type: string, extra: Partial<FieldMetadata> = {}): FieldMetadata =>
-  ({ name, type: type as FieldMetadata['type'], isArray: false, validFormKeyTypes: [], enumMembers: [], ...extra });
+  fieldMeta({ name, type: type as FieldMetadata['type'], ...extra });
 
 // LeafLabel.For('ScriptProperty', leaf) — the base's own words dropped from head and tail.
 const PROPERTY_LEAVES: Record<string, string> = {
@@ -31,8 +30,8 @@ const PROPERTY_LEAVES: Record<string, string> = {
   ScriptVariableProperty: 'Variable',
 };
 
-const objectBindingMeta = (name: string, extra: Partial<FieldMetadata> = {}): FieldMetadata => ({
-  name, type: 'struct', isArray: false, validFormKeyTypes: [], enumMembers: [],
+const objectBindingMeta = (name: string, extra: Partial<FieldMetadata> = {}): FieldMetadata => fieldMeta({
+  name, type: 'struct',
   leafTypeName: 'ScriptObjectProperty',
   fields: [field('Object', 'formKey'), field('Alias', 'int')],
   ...extra,
@@ -50,8 +49,8 @@ const dataMeta: FieldMetadata = field('Data', 'bool', {
   },
 });
 
-const propertyMeta: FieldMetadata = {
-  name: '', type: 'struct', isArray: false, validFormKeyTypes: [], enumMembers: [],
+const propertyMeta = fieldMeta({
+  name: '', type: 'struct',
   leafTypeName: 'ScriptProperty',
   fields: [
     field('Name', 'string'),
@@ -65,33 +64,33 @@ const propertyMeta: FieldMetadata = {
       enumMembers: Object.entries(PROPERTY_LEAVES).map(([value, label]) => ({ value, bitValue: null, label })),
     }),
   ],
-};
+});
 
-const scriptsMeta: FieldMetadata = {
-  name: 'Scripts', type: 'array', isArray: true, validFormKeyTypes: [], enumMembers: [],
+const scriptsMeta = fieldMeta({
+  name: 'Scripts', type: 'array', isArray: true,
   keyMembers: ['Name'],
-  elementType: {
-    name: '', type: 'struct', isArray: false, validFormKeyTypes: [], enumMembers: [],
+  elementType: fieldMeta({
+    name: '', type: 'struct',
     leafTypeName: 'ScriptEntry',
     fields: [
       field('Name', 'string'),
       field('Flags', 'enum', { enumMembers: [{ value: 'Local', bitValue: null, label: null }] }),
       field('Properties', 'array', { isArray: true, keyMembers: ['Name'], elementType: propertyMeta }),
     ],
-  },
-};
+  }),
+});
 
 // Fallout4VmadAnnotations keys alias bindings by the dotted `Property.Alias`, where a script is
 // keyed by the plain `Name`; the webview receives either as one opaque key string.
-const aliasesMeta: FieldMetadata = {
-  name: 'Aliases', type: 'array', isArray: true, validFormKeyTypes: [], enumMembers: [],
+const aliasesMeta = fieldMeta({
+  name: 'Aliases', type: 'array', isArray: true,
   keyMembers: ['Property.Alias'],
-  elementType: {
-    name: '', type: 'struct', isArray: false, validFormKeyTypes: [], enumMembers: [],
+  elementType: fieldMeta({
+    name: '', type: 'struct',
     leafTypeName: 'QuestFragmentAlias',
     fields: [objectBindingMeta('Property'), scriptsMeta],
-  },
-};
+  }),
+});
 
 type Obj = Record<string, unknown>;
 
@@ -139,12 +138,11 @@ function buildDiff(
     children.map(([name, childMeta, pick]) => buildDiff(
       name, childMeta, Object.fromEntries(columns.map(c => [c, pick(c) ?? null])), editorIds));
 
-  return {
+  return diffNode({
     fieldName,
     values,
     winnerColumn: columns[0],
     winnerValue: values[columns[0]],
-    cellStates: {},
     resolutions: resolved.length === 0 ? undefined : Object.fromEntries(resolved.map(c => [c, {
       state: 'ResolvedValidType' as const, recordType: null, editorId: editorIds[values[c] as string],
     }])),
@@ -155,7 +153,7 @@ function buildDiff(
         : meta.type === 'struct'
           ? each((meta.fields ?? []).map(f => [f.name, f, (c: string) => (values[c] as Obj | null)?.[f.name]]))
           : undefined,
-  };
+  });
 }
 
 function compareResult(
@@ -179,17 +177,9 @@ const oneColumn = (scripts: Obj[], editorIds: Record<string, string> = {}, meta:
 let currentCompare: unknown = null;
 
 function renderPanel() {
-  const client: RecordPanelClient = {
-    load: vi.fn().mockImplementation(() => Promise.resolve({
-      ok: true,
-      result: currentCompare,
-      immutableSet: new Set(),
-      notInLoadOrderSet: new Set(),
-      trackedSet: new Set([columnKey(PLUGIN, null)]),
-      conflictsComputed: true,
-    } as unknown as LoadResult)),
-  };
-  return render(<RecordPanel client={client} />);
+  return render(<RecordPanel client={panelClient(() => currentCompare, {
+    plugins: [{ name: PLUGIN, isTracked: true }],
+  })} />);
 }
 
 function fieldCell(field: string): HTMLTableCellElement {
@@ -209,11 +199,7 @@ async function expandScripts() {
   fireEvent.click(screen.getAllByText('▶')[0]);
 }
 
-function lastEnvelope(): unknown {
-  const calls = (vscode.postMessage as ReturnType<typeof vi.fn>).mock.calls;
-  const call = [...calls].reverse().find(([m]) => (m as { type?: string }).type === WEBVIEW_TO_EXTENSION.EDIT_FIELD);
-  return (call?.[0] as { envelope?: unknown } | undefined)?.envelope;
-}
+const lastEnvelope = () => lastPostedEnvelope(vscode.postMessage);
 
 function reloadWith(compare: unknown) {
   currentCompare = compare;

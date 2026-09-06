@@ -9,11 +9,10 @@ const pickFormKey = vi.fn().mockResolvedValue(null);
 vi.mock('./nativeBridge', () => ({ pickFormKey: (...args: unknown[]) => pickFormKey(...args) }));
 
 import { FormKeyCell } from './FormKeyCell';
-import type { FieldMetadata, FormKeyResolution } from './types';
+import type { FormKeyResolution } from './types';
+import { fieldMeta } from './test/fixtures';
 
-const fkMeta: FieldMetadata = {
-  name: 'Race', type: 'formKey', isArray: false, validFormKeyTypes: ['race'], enumMembers: [],
-};
+const fkMeta = fieldMeta({ name: 'Race', type: 'formKey', validFormKeyTypes: ['race'] });
 
 // Navigation requires the leaf's own resolution to say the reference is followable.
 const resolvedFixture: FormKeyResolution = { state: 'ResolvedValidType', recordType: 'race', editorId: null };

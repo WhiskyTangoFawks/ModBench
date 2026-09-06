@@ -19,6 +19,7 @@ import {
   type PathSegment,
 } from './recordUtils';
 import type { CompareOverride, FieldMetadata } from './types';
+import { at, diffNode, fieldMeta, keyed, member } from './test/fixtures';
 
 function makeOverride(plugin: string, extra: Partial<CompareOverride> = {}): CompareOverride {
   return {
@@ -133,9 +134,9 @@ describe('collidingFilenames', () => {
 // same array metadata, and the key text travels exactly as the diff node states it.
 describe('elementSegment', () => {
   const element = (extra: Partial<FieldMetadata> = {}): FieldMetadata =>
-    ({ name: '', type: 'struct', isArray: false, validFormKeyTypes: [], enumMembers: [], ...extra });
+    fieldMeta({ name: '', type: 'struct', ...extra });
   const array = (extra: Partial<FieldMetadata>): FieldMetadata =>
-    ({ name: 'A', type: 'array', isArray: true, validFormKeyTypes: [], enumMembers: [], ...extra });
+    fieldMeta({ name: 'A', type: 'array', isArray: true, ...extra });
 
   it('addresses a keyed array\'s child by the key text it is labelled with, verbatim', () => {
     expect(elementSegment(array({ keyMembers: ['stage', 'stage_index'], elementType: element() }), '10 / 0', 0))
@@ -231,60 +232,43 @@ describe('getAtPath', () => {
 });
 
 // `path` is the envelope's own wire path, never a bare scalar index: an array nested inside a
-// struct needs every hop. `canMoveUp`/`canMoveDown` read the last hop.
+// struct needs every hop. `canMoveUp` reads the last hop.
 describe('arrayElementContext', () => {
-  it('produces the data-vscode-context object for a middle element (can move either way)', () => {
+  it('produces the data-vscode-context object for a middle element', () => {
     const path: PathHop[] = [{ kind: 'member', name: 'Items' }, { kind: 'index', index: 1 }];
-    expect(arrayElementContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', path, 3)).toEqual({
+    expect(arrayElementContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', path)).toEqual({
       webviewSection: 'arrayElement',
       formKey: '000001:Fallout4.esm',
       plugin: 'MyMod.esp',
       origin: 'ModA',
       path,
       canMoveUp: true,
-      canMoveDown: true,
       preventDefaultContextMenuItems: true,
     });
   });
 
   it('canMoveUp is false for the first element', () => {
     const path: PathHop[] = [{ kind: 'member', name: 'Items' }, { kind: 'index', index: 0 }];
-    expect(arrayElementContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', path, 3).canMoveUp).toBe(false);
-  });
-
-  it('canMoveDown is false for the last element', () => {
-    const path: PathHop[] = [{ kind: 'member', name: 'Items' }, { kind: 'index', index: 2 }];
-    expect(arrayElementContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', path, 3).canMoveDown).toBe(false);
+    expect(arrayElementContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', path).canMoveUp).toBe(false);
   });
 
   // A keyed array is stored in key order on every write, so neither Move could change the file;
   // Remove still applies, which is why the row carries this context at all.
-  it('offers neither Move on a keyed element, and still offers the element itself', () => {
+  it('offers no Move Up on a keyed element, and still offers the element itself', () => {
     const path: PathHop[] = [{ kind: 'member', name: 'Scripts' }, { kind: 'key', key: 'Guard' }];
-    const context = arrayElementContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', path, 3);
+    const context = arrayElementContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', path);
     expect(context.canMoveUp).toBe(false);
-    expect(context.canMoveDown).toBe(false);
     expect(context.webviewSection).toBe('arrayElement');
     expect(context.path).toBe(path);
   });
 
-  it('canMoveUp is false when index is at or past this plugin\'s own array length', () => {
-    expect(arrayElementContext(
-      '000001:Fallout4.esm', 'MyMod.esp', 'ModA', [{ kind: 'member', name: 'Items' }, { kind: 'index', index: 1 }], 1,
-    ).canMoveUp).toBe(false);
-    expect(arrayElementContext(
-      '000001:Fallout4.esm', 'MyMod.esp', 'ModA', [{ kind: 'member', name: 'Items' }, { kind: 'index', index: 2 }], 1,
-    ).canMoveUp).toBe(false);
-  });
-
-  // canMoveUp/canMoveDown must key off the last hop, not path.length, and the full chain must
-  // survive onto the payload rather than collapse to the trailing index.
-  it('a nested element carries every hop of its own path, and canMoveUp/canMoveDown read the last one', () => {
+  // canMoveUp must key off the last hop, not path.length, and the full chain must survive onto
+  // the payload rather than collapse to the trailing index.
+  it('a nested element carries every hop of its own path, and canMoveUp reads the last one', () => {
     const path: PathHop[] = [{ kind: 'member', name: 'Container' }, { kind: 'member', name: 'Sub' }, { kind: 'index', index: 0 }];
-    const ctx = arrayElementContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', path, 2);
+    const ctx = arrayElementContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', path);
     expect(ctx.path).toEqual(path);
     expect(ctx.canMoveUp).toBe(false); // last hop's index is 0
-    expect(ctx.canMoveDown).toBe(true);
   });
 });
 
@@ -334,7 +318,7 @@ describe('combineVscodeContexts', () => {
 
   it('combines two contexts\' webviewSection into one space-separated token list', () => {
     const result = combineVscodeContexts(
-      arrayElementContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', TAGS_PATH, 2),
+      arrayElementContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', TAGS_PATH),
       stringValueContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', 'Dogmeat [000001:Fallout4.esm]', 'tags', 'a', false, TAGS_PATH),
     );
     const parsed = JSON.parse(result!);
@@ -343,11 +327,11 @@ describe('combineVscodeContexts', () => {
 
   it('merges every other key from both contexts (so package.json\'s when clauses can read either)', () => {
     const result = combineVscodeContexts(
-      arrayElementContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', TAGS_PATH, 2),
+      arrayElementContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', TAGS_PATH),
       stringValueContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', 'Dogmeat [000001:Fallout4.esm]', 'tags', 'a', false, TAGS_PATH),
     );
     const parsed = JSON.parse(result!);
-    expect(parsed.canMoveDown).toBe(true);
+    expect(parsed.canMoveUp).toBe(false);
     expect(parsed.value).toBe('a');
     expect(parsed.path).toEqual(TAGS_PATH);
   });
@@ -457,17 +441,11 @@ describe('wirePath', () => {
 // A collapsed row's prose summary has only a path, never a render-time `overrideMeta`, so it
 // descends FieldMetadata itself to reach a nested array's element type.
 describe('metaAtPath', () => {
-  const idMeta: FieldMetadata = { name: 'Id', type: 'string', isArray: false, validFormKeyTypes: [], enumMembers: [] };
-  const weightMeta: FieldMetadata = { name: 'Weight', type: 'int', isArray: false, validFormKeyTypes: [], enumMembers: [] };
-  const entryMeta: FieldMetadata = {
-    name: '', type: 'struct', isArray: false, validFormKeyTypes: [], enumMembers: [], fields: [idMeta, weightMeta],
-  };
-  const entriesMeta: FieldMetadata = {
-    name: 'Entries', type: 'array', isArray: true, validFormKeyTypes: [], enumMembers: [], elementType: entryMeta,
-  };
-  const containerMeta: FieldMetadata = {
-    name: 'Container', type: 'struct', isArray: false, validFormKeyTypes: [], enumMembers: [], fields: [entriesMeta],
-  };
+  const idMeta = fieldMeta({ name: 'Id', type: 'string' });
+  const weightMeta = fieldMeta({ name: 'Weight', type: 'int' });
+  const entryMeta = fieldMeta({ name: '', type: 'struct', fields: [idMeta, weightMeta] });
+  const entriesMeta = fieldMeta({ name: 'Entries', type: 'array', isArray: true, elementType: entryMeta });
+  const containerMeta = fieldMeta({ name: 'Container', type: 'struct', fields: [entriesMeta] });
 
   it('returns the root meta itself for an empty path', () => {
     expect(metaAtPath(entriesMeta, [])).toBe(entriesMeta);

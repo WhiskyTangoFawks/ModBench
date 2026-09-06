@@ -11,19 +11,16 @@ import {
   arrayElementContext, arrayParentContext, combineVscodeContexts, defaultOf, isArrayElementHop,
   isMovableElementHop, offersArrayAdd, rootFieldOf, stringValueContext, wirePath, type Column, type PathSegment,
 } from './recordUtils';
-import type { ColumnKey, CompareOverride, ConflictAll, FieldDiff, FieldMetadata, FormKeyResolution } from './types';
+import type { ColumnKey, ConflictAll, FieldDiff, FieldMetadata, FormKeyResolution } from './types';
 
 
+// NoConflict and OnlyOne are deliberately absent: they paint no background, so an expanded row
+// deferring to its children (`undefined` below) reads the same way they do.
 const ROW_BG: Partial<Record<ConflictAll, string>> = {
   Override:        'rgba(76,175,80,0.20)',
   Conflict:        'rgba(255,152,0,0.20)',
   ConflictCritical: 'rgba(244,67,54,0.20)',
 };
-
-// Undefined (an adapter that hasn't populated FieldDiff.conflictAll yet) degrades to
-// "no background" rather than throwing — the same safe default a genuinely NoConflict/OnlyOne
-// node already gets, since ROW_BG has no entry for either.
-const getRowBg = (c: ConflictAll | undefined): string | undefined => (c ? ROW_BG[c] : undefined);
 
 interface RenderCellExtras {
   checkError?: string | null;
@@ -104,7 +101,6 @@ function renderCell(
 // below it.
 export interface RowContext {
   path: PathSegment[];
-  overrideMeta?: FieldMetadata;
   rootField: string;
   // True ancestor-hop count, tracked independently of `path` so indentation stays a property of
   // where a row sits in the tree rather than of how far into a value it addresses.
@@ -126,23 +122,26 @@ function isCellFocused(focusedCell: FocusedCell | null, rowKey: string, plugin: 
 // One step of label indentation per ancestor hop, so a row's indent reads as its real depth.
 const INDENT_PER_LEVEL = 24;
 
+/** Every array gesture a row can offer. Which of them *this* row offers is the row's own
+ *  question, answered once from its metadata and its last path hop. */
+export type ArrayOp = 'add' | 'remove' | 'moveUp' | 'moveDown';
+
 interface DiffRowProps {
   diff: FieldDiff;
+  // This row's own schema leaf. The panel resolves it at every depth, so the row never looks one
+  // up and can never render against a shape the panel did not choose.
+  meta: FieldMetadata;
   columns: Column[];
-  // ADR-0036: keyed by ColumnKey, though a mapped type erases the brand — the protection is every
-  // builder using columnKey(), not this declared type.
-  overrideMap: Partial<Record<string, CompareOverride>>;
-  fieldMetaMap: Partial<Record<string, FieldMetadata>>;
-  // ADR-0035: a column for a copy the load order does not name. Dims every cell in the column so
-  // the cue survives scrolling past the header (the grid's <thead> isn't sticky).
-  notInLoadOrderSet: Set<ColumnKey>;
+  // ADR-0035/ADR-0036: the columns that render at reduced weight — a copy the load order does not
+  // name, or a Partial Form record. One set, computed beside editableColumns, so the header and
+  // every cell under it can never disagree; the cue survives scrolling past the non-sticky header.
+  dimmedColumns: Set<ColumnKey>;
   collapsedColumns: Set<ColumnKey>;
   onOpen: (fk: string) => void;
   // "EditorID [FormKey]", the composite the panel's own title uses — the extended editor's temp
   // file is filed under it, and only the panel knows it.
   recordLabel: string;
   context: RowContext;
-  hasChildren?: boolean;
   isExpanded?: boolean;
   onToggle?: () => void;
   // onFocusCell takes rowKey explicitly rather than closing over it here, so RecordPanel stays
@@ -155,13 +154,9 @@ interface DiffRowProps {
   editableColumns: Set<ColumnKey>;
   // Takes the leaf value alone — the row builder owns the path the envelope carries.
   onEditCell?: (plugin: ColumnKey, value: unknown) => void;
-  // Add on this row — present only when this row is itself a mutable, unsorted array's own row.
-  onArrayAdd?: (plugin: ColumnKey) => void;
-  // Remove/Move Up/Move Down — present only when this row is itself a mutable, unsorted array's
-  // element row.
-  onArrayRemove?: (plugin: ColumnKey) => void;
-  onArrayMoveUp?: (plugin: ColumnKey) => void;
-  onArrayMoveDown?: (plugin: ColumnKey) => void;
+  // Every array gesture, through one callback: the panel offers it to every row and this row
+  // decides which ops it has, so availability is stated once rather than agreed on twice.
+  onArrayOp?: (plugin: ColumnKey, op: ArrayOp) => void;
   // What each column's cell reads while this row is collapsed, when the presentation table has an
   // entry for this row's own schema leaf — a condition reads as its xEdit prose rather than "{…}".
   collapsedSummary?: Record<string, string>;
@@ -175,16 +170,15 @@ interface DiffRowProps {
 }
 
 export function DiffRow({
-  diff, columns, overrideMap, fieldMetaMap, notInLoadOrderSet,
+  diff, meta, columns, dimmedColumns,
   collapsedColumns, onOpen,
-  recordLabel, context, hasChildren, isExpanded, onToggle,
+  recordLabel, context, isExpanded, onToggle,
   rowKey, focusedCell, onFocusCell, editableColumns, onEditCell,
-  onArrayAdd, onArrayRemove, onArrayMoveUp, onArrayMoveDown, collapsedSummary, ownerPresent, cellMetas,
+  onArrayOp, collapsedSummary, ownerPresent, cellMetas,
 }: Readonly<DiffRowProps>) {
-  // RecordPanel resolves every row's metadata itself; `fieldMetaMap` is the fallback for a caller
-  // that supplies no `overrideMeta`.
-  const meta = context.overrideMeta ?? fieldMetaMap[diff.fieldName];
-  if (!meta) return null;
+  // The children the diff node itself carries — the row and the panel can never disagree about
+  // whether this node has any.
+  const hasChildren = (diff.children?.length ?? 0) > 0;
 
   // Every row in
   // one subtree (root, struct-child, array-element, and any deeper hop) shares the
@@ -207,7 +201,7 @@ export function DiffRow({
   // This row paints its own node's conflict state, not a record-wide value. An expanded row with
   // children defers to its children's tints — painting both would duplicate the signal — and
   // shows the subtree's aggregate only while collapsed.
-  const rowConflictAll = hasChildren && isExpanded ? undefined : diff.conflictAll;
+  const rowConflictAll = hasChildren && isExpanded ? undefined : ROW_BG[diff.conflictAll];
 
   // A flags row is collapsible like a struct row, though its "children" are the checkbox lines
   // inside the cell, not sub-rows. It starts collapsed, sharing struct rows' default exactly.
@@ -219,7 +213,7 @@ export function DiffRow({
   const rowIsStructural = Object.values(diff.values).every(v => v == null);
 
   return (
-    <tr style={{ backgroundColor: getRowBg(rowConflictAll), ...(isRowFocused ? focusedRowStyle : undefined) }}>
+    <tr style={{ backgroundColor: rowConflictAll, ...(isRowFocused ? focusedRowStyle : undefined) }}>
       {/* ADR-0034: double-clicking the label column expands/collapses the node, the same action
           the toggle button performs. For a row with no children the flip lands in
           expandedStructs, an entry nothing reads. */}
@@ -244,16 +238,14 @@ export function DiffRow({
         // matching how the backend keys its own dictionaries — `[o.plugin]` would be wrong the
         // moment a non-Data-origin column exists.
 
-        // A Partial Form column dims the same way a not-in-load-order one does — read straight
-        // off the column's own override, not a separately-threaded Set.
         const cellStyle = {
           ...baseCell, ...getCellStyle(diff.cellStates[key]),
-          opacity: notInLoadOrderSet.has(key) || override.isPartialForm ? DIMMED_OPACITY : undefined,
+          opacity: dimmedColumns.has(key) ? DIMMED_OPACITY : undefined,
         };
         if (collapsedColumns.has(key)) {
           return <td key={`disk:${key}`} style={cellStyle} />;
         }
-        const rootValue = rootFieldOf(overrideMap[key], rootField);
+        const rootValue = rootFieldOf(override, rootField);
         const checkError = showActions ? rootValue?.checkError : undefined;
         const isFocused = isCellFocused(focusedCell, rowKey, key);
         const cellMeta = cellMetas?.[key] ?? meta;
@@ -265,19 +257,17 @@ export function DiffRow({
         // ADR-0034: the string Ctrl+C copies for this cell, computed once so the
         // struct/array-summary branch and the leaf branch below hand DiskCell the same value.
         const copyText = displayValue(shown, cellMeta, diff.resolutions?.[key]);
-        // Array ops are offered only on a writable column. `arrayLength` is deliberately not
-        // threaded down, so canMoveDown reads permissive; a move off the end is the backend's to
-        // refuse by name.
-        const arrayEditable = !!onEditCell && editableColumns.has(key) && (isArrayParentRow || isArrayElementRow);
+        // Array ops are offered only on a writable column.
+        const arrayEditable = !!onArrayOp && editableColumns.has(key) && (isArrayParentRow || isArrayElementRow);
         // ADR-0039: a `string` cell always carries its own right-click context, mutable or
         // immutable alike — a read-only tab is still the only way to read a long immutable
         // value in full.
         const offersMenu = arrayEditable || meta.type === 'string';
         const arrayOps = arrayEditable ? {
-          add: isArrayParentRow ? () => onArrayAdd?.(key) : undefined,
-          remove: isArrayElementRow ? () => onArrayRemove?.(key) : undefined,
-          moveUp: isMovableElementRow ? () => onArrayMoveUp?.(key) : undefined,
-          moveDown: isMovableElementRow ? () => onArrayMoveDown?.(key) : undefined,
+          add: isArrayParentRow ? () => onArrayOp?.(key, 'add') : undefined,
+          remove: isArrayElementRow ? () => onArrayOp?.(key, 'remove') : undefined,
+          moveUp: isMovableElementRow ? () => onArrayOp?.(key, 'moveUp') : undefined,
+          moveDown: isMovableElementRow ? () => onArrayOp?.(key, 'moveDown') : undefined,
         } : undefined;
         // Hoisted above vscodeContext because stringValueContext needs it too — a string cell's
         // own `readOnly` is this same boolean negated, so the right-click menu and the
@@ -294,9 +284,7 @@ export function DiffRow({
           // `hops` ends in the `index`/`key` hop that gates isArrayElementRow, and carries every
           // hop above it rather than just that one.
           isArrayElementRow
-            ? arrayElementContext(
-                col.override.formKey, col.override.plugin, col.override.origin, hops, Number.MAX_SAFE_INTEGER,
-              )
+            ? arrayElementContext(col.override.formKey, col.override.plugin, col.override.origin, hops)
             : undefined,
           meta.type === 'string'
             ? stringValueContext(

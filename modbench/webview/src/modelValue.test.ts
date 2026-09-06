@@ -1,35 +1,36 @@
 import { describe, it, expect } from 'vitest';
 import { modelValue } from './modelValue';
-import type { FieldMetadata, FormKeyResolution } from './types';
+import type { FormKeyResolution } from './types';
+import { fieldMeta } from './test/fixtures';
 
 // ADR-0034: modelValue is the single definition of the string a cell's editor shows for every
 // field type, checked here independently of the leaf components' own logic.
 
-const strMeta: FieldMetadata = { name: 'Name', type: 'string', isArray: false, validFormKeyTypes: [], enumMembers: [] };
-const intMeta: FieldMetadata = { name: 'Level', type: 'int', isArray: false, validFormKeyTypes: [], enumMembers: [] };
-const floatMeta: FieldMetadata = { name: 'Weight', type: 'float', isArray: false, validFormKeyTypes: [], enumMembers: [] };
-const boolMeta: FieldMetadata = { name: 'Female', type: 'bool', isArray: false, validFormKeyTypes: [], enumMembers: [] };
-const enumMeta: FieldMetadata = {
-  name: 'Gender', type: 'enum', isArray: false, validFormKeyTypes: [],
+const strMeta = fieldMeta({ name: 'Name', type: 'string' });
+const intMeta = fieldMeta({ name: 'Level', type: 'int' });
+const floatMeta = fieldMeta({ name: 'Weight', type: 'float' });
+const boolMeta = fieldMeta({ name: 'Female', type: 'bool' });
+const enumMeta = fieldMeta({
+  name: 'Gender', type: 'enum',
   enumMembers: [{ value: 'Male' }, { value: 'Female' }, { value: 'None' }],
-};
-const flagMeta: FieldMetadata = {
-  name: 'Flags', type: 'flags', isArray: false, validFormKeyTypes: [],
+});
+const flagMeta = fieldMeta({
+  name: 'Flags', type: 'flags',
   enumMembers: [{ value: 'A', bitValue: '1' }, { value: 'B', bitValue: '2' },
     { value: 'C', bitValue: '4' }, { value: 'D', bitValue: '8' }],
-};
-const fkMeta: FieldMetadata = { name: 'Owner', type: 'formKey', isArray: false, validFormKeyTypes: ['NPC_'], enumMembers: [] };
-const structMeta: FieldMetadata = {
-  name: 'Faction', type: 'struct', isArray: false, validFormKeyTypes: [], enumMembers: [],
+});
+const fkMeta = fieldMeta({ name: 'Owner', type: 'formKey', validFormKeyTypes: ['NPC_'] });
+const structMeta = fieldMeta({
+  name: 'Faction', type: 'struct',
   fields: [
-    { name: 'Faction', type: 'formKey', isArray: false, validFormKeyTypes: ['FACT'], enumMembers: [] },
-    { name: 'Rank', type: 'int', isArray: false, validFormKeyTypes: [], enumMembers: [] },
+    fieldMeta({ name: 'Faction', type: 'formKey', validFormKeyTypes: ['FACT'] }),
+    fieldMeta({ name: 'Rank', type: 'int' }),
   ],
-};
-const arrayMeta: FieldMetadata = {
-  name: 'Factions', type: 'array', isArray: true, validFormKeyTypes: [], enumMembers: [],
-  elementType: { name: 'Factions', type: 'int', isArray: false, validFormKeyTypes: [], enumMembers: [] },
-};
+});
+const arrayMeta = fieldMeta({
+  name: 'Factions', type: 'array', isArray: true,
+  elementType: fieldMeta({ name: 'Factions', type: 'int' }),
+});
 
 const resolved: FormKeyResolution = { state: 'ResolvedValidType', recordType: 'NPC_', editorId: 'Dogmeat' };
 const unresolved: FormKeyResolution = { state: 'Unresolved', recordType: null, editorId: null };

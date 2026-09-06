@@ -56,7 +56,7 @@ function stringContext(overrides: Partial<StringValueContext> = {}): StringValue
 function elementContext(path: ArrayElementContext['path']): ArrayElementContext {
   return {
     webviewSection: 'arrayElement', ...IDENTITY, path,
-    canMoveUp: true, canMoveDown: true, preventDefaultContextMenuItems: true,
+    canMoveUp: true, preventDefaultContextMenuItems: true,
   };
 }
 

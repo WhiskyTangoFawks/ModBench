@@ -878,7 +878,7 @@
         },
         {
           "command": "modbench.array.moveDown",
-          "when": "webviewId == 'modbench' && webviewSection =~ /\\barrayElement\\b/ && canMoveDown",
+          "when": "webviewId == 'modbench' && webviewSection =~ /\\barrayElement\\b/",
           "group": "modbench@4"
         },
         {

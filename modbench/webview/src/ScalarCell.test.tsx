@@ -4,12 +4,12 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { ScalarCell } from './ScalarCell';
 import type { FieldMetadata } from './types';
+import { fieldMeta } from './test/fixtures';
 
 // ADR-0034: a click focuses, it does not edit, and a column that cannot be written stays inert
 // under every open trigger — nothing opens that has nowhere to write.
-const meta = (over: Partial<FieldMetadata> = {}): FieldMetadata => ({
-  name: 'value', type: 'string', isArray: false, validFormKeyTypes: [], enumMembers: [], ...over,
-});
+const meta = (over: Partial<FieldMetadata> = {}): FieldMetadata =>
+  fieldMeta({ name: 'value', type: 'string', ...over });
 
 describe('ScalarCell — the xEdit open gesture', () => {
   it('a first click on an unfocused cell focuses it and does not open an editor', () => {

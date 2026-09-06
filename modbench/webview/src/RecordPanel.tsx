@@ -1,9 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { PluginHeader } from './PluginHeader';
-import { DiffRow, type FocusedCell } from './DiffRow';
+import { DiffRow, type ArrayOp, type FocusedCell } from './DiffRow';
 import {
-  buildColumns, elementSegment, collidingFilenames,
-  isArrayElementHop, isMovableElementHop, offersArrayAdd, rootFieldOf,
+  buildColumns, elementSegment, collidingFilenames, rootFieldOf,
   wirePath, variantFor, declaresMember,
   headerCellContext, combineVscodeContexts,
 } from './recordUtils';
@@ -12,7 +11,7 @@ import { mono, fg, headerCell, getConflictBg, DIMMED_OPACITY } from './gridStyle
 import { collapsedSummaries } from './presentation';
 import { idleMembers } from './siblingsInUse';
 import type {
-  ColumnKey, CompareOverride, CompareResult, ConflictThis, FieldDiff, FieldMetadata, RecordEditEnvelope,
+  ColumnKey, CompareResult, ConflictThis, FieldDiff, FieldMetadata, RecordEditEnvelope,
 } from './types';
 import { columnKey } from './types';
 import { vscode } from './vscode';
@@ -68,6 +67,18 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
     }
     return writable;
   }, [result, immutableSet, notInLoadOrderSet, trackedSet]);
+
+  // ADR-0035/ADR-0036: the one definition of "this column renders at reduced weight" — a copy the
+  // load order does not name, or a Partial Form record — computed beside editableColumns so the
+  // header and every cell beneath it can never disagree about which columns are dimmed.
+  const dimmedColumns = useMemo(() => {
+    const dimmed = new Set<ColumnKey>();
+    for (const o of result?.overrides ?? []) {
+      const key = columnKey(o.plugin, o.origin);
+      if (notInLoadOrderSet.has(key) || o.isPartialForm) dimmed.add(key);
+    }
+    return dimmed;
+  }, [result, notInLoadOrderSet]);
 
   // ADR-0036: the column key alone is a rendering key; the override carries the compound identity
   // the write path needs and the values a wire path resolves against.
@@ -158,20 +169,15 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
     return map;
   }, [result, isHeaderRecord]);
 
-  // `path` addresses the array itself for add and the element for remove; the backend resolves it
-  // against the document it holds.
-  const handleArrayArity = useCallback((
-    plugin: ColumnKey, path: PathSegment[], rootField: string, op: 'add' | 'remove',
+  // `path` addresses the array itself for add and the element for the rest; the backend resolves
+  // it against the document it holds. A move off either end is the backend's to refuse by name, so
+  // the direction the row asked for is posted as it stands.
+  const handleArrayOp = useCallback((
+    plugin: ColumnKey, path: PathSegment[], rootField: string, op: ArrayOp,
   ) => {
-    post(plugin, { op, path: hopsTo(plugin, rootField, path) });
-  }, [post, hopsTo]);
-
-  // `delta` is the direction the accelerator asked for; a move off either end is the backend's to
-  // refuse by name, so it is posted as it stands.
-  const handleArrayMove = useCallback((
-    plugin: ColumnKey, path: PathSegment[], rootField: string, delta: -1 | 1,
-  ) => {
-    const envelope = moveEnvelope(hopsTo(plugin, rootField, path), delta);
+    const hops = hopsTo(plugin, rootField, path);
+    if (op === 'add' || op === 'remove') { post(plugin, { op, path: hops }); return; }
+    const envelope = moveEnvelope(hops, op === 'moveUp' ? -1 : 1);
     if (envelope) post(plugin, envelope);
   }, [post, hopsTo]);
 
@@ -213,15 +219,6 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
     window.addEventListener('message', handler);
     return () => window.removeEventListener('message', handler);
   }, [refresh]);
-
-  // ADR-0036: keyed by ColumnKey, not the bare plugin filename — two overrides sharing a filename
-  // would otherwise collide, the second silently discarding the first. Declared Record<string, …>
-  // since the brand is erased on a dictionary regardless.
-  const overrideMap = useMemo((): Partial<Record<string, CompareOverride>> => {
-    const map: Partial<Record<string, CompareOverride>> = {};
-    for (const o of result?.overrides ?? []) map[columnKey(o.plugin, o.origin)] = o;
-    return map;
-  }, [result]);
 
   const columns = useMemo(
     () => result ? buildColumns(result.overrides) : [],
@@ -271,34 +268,29 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
     rootField: string, rowKey: string, present: (column: ColumnKey) => boolean, depth = 0,
     collapsedSummary?: Record<string, string>, cellMetas?: Partial<Record<string, FieldMetadata>>,
   ): React.ReactNode[] {
+    // A diff node naming a member no override's schema declares has no shape to render against, so
+    // it and its subtree are dropped rather than rendered against a guessed one.
+    if (!meta) return [];
     const hasChildren = (diff.children?.length ?? 0) > 0;
     const isExpanded = expandedStructs.has(rowKey);
-    // A row's own last hop says what it is and which gestures it offers — the same question
-    // DiffRow's own cell menu and the native one both ask, of the same path (recordUtils.ts).
-    const elementHop = path.at(-1);
 
     const rows: React.ReactNode[] = [
       <DiffRow
         key={rowKey}
         diff={diff}
+        meta={meta}
         columns={columns}
-        overrideMap={overrideMap}
-        fieldMetaMap={fieldMetaMap}
-        notInLoadOrderSet={notInLoadOrderSet}
+        dimmedColumns={dimmedColumns}
         editableColumns={editableColumns}
         onEditCell={(plugin: ColumnKey, value: unknown) => handleCellCommit(plugin, path, rootField, value)}
-        onArrayAdd={offersArrayAdd(meta) ? (plugin: ColumnKey) => handleArrayArity(plugin, path, rootField, 'add') : undefined}
-        onArrayRemove={isArrayElementHop(elementHop) ? (plugin: ColumnKey) => handleArrayArity(plugin, path, rootField, 'remove') : undefined}
-        onArrayMoveUp={isMovableElementHop(elementHop) ? (plugin: ColumnKey) => handleArrayMove(plugin, path, rootField, -1) : undefined}
-        onArrayMoveDown={isMovableElementHop(elementHop) ? (plugin: ColumnKey) => handleArrayMove(plugin, path, rootField, 1) : undefined}
+        onArrayOp={(plugin: ColumnKey, op: ArrayOp) => handleArrayOp(plugin, path, rootField, op)}
         collapsedColumns={collapsedColumns}
         onOpen={handleOpen}
         recordLabel={title}
-        context={{ path, overrideMeta: meta, rootField, depth }}
+        context={{ path, rootField, depth }}
         rowKey={rowKey}
         focusedCell={focusedCell}
         onFocusCell={handleFocusCell}
-        hasChildren={hasChildren}
         isExpanded={isExpanded}
         collapsedSummary={collapsedSummary}
         ownerPresent={present}
@@ -311,7 +303,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
       />,
     ];
 
-    if (!hasChildren || !isExpanded || !meta) return rows;
+    if (!hasChildren || !isExpanded) return rows;
 
     // Mutagen aliases a condition's parameter slots onto the same bytes, so the idle twin of a
     // live slot would render the same four bytes a second time as a different type. Filtering
@@ -382,17 +374,13 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
                   // reason wording and the dimming that carries down through every cell in this
                   // column — "non-participating copies render dimmed".
                   const inLoadOrder = !notInLoadOrderSet.has(col.key);
-                  // A Partial Form column dims the same way a not-in-load-order one does —
-                  // xEdit's own answer ("shown as such, not as a full competing override") applied
-                  // to a never-hide-data posture.
-                  const dimmed = !inLoadOrder || col.override.isPartialForm;
                   return (
                     <th
                       key={`disk:${col.key}`}
                       style={{
                         ...headerCell, textAlign: 'left', minWidth: isCollapsed ? '48px' : '200px',
                         backgroundColor: getHeaderBg(col.override.conflictThis),
-                        opacity: dimmed ? DIMMED_OPACITY : undefined,
+                        opacity: dimmedColumns.has(col.key) ? DIMMED_OPACITY : undefined,
                       }}
                     >
                       <PluginHeader
@@ -429,7 +417,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
             {diffs.flatMap(
               diff => buildRows(
                 diff, fieldMetaMap[diff.fieldName], [], diff.fieldName, diff.fieldName,
-                column => !overrideMap[column]?.isPartialForm),
+                column => !overrideFor(column)?.isPartialForm),
             )}
           </tbody>
         </table>
