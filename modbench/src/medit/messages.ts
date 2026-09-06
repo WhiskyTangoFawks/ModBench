@@ -102,6 +102,13 @@ export type RecordEditEnvelope =
   Omit<components['schemas']['RecordEditRequest'], 'plugin' | 'origin' | 'op' | 'path'>
   & { op: 'set' | 'add' | 'remove' | 'move'; path: PathHop[] };
 
+/** A move's destination is the neighbour's position, so only an element addressed by index has
+ *  one; the menu entry and the keyboard accelerator both build the move here. */
+export function moveEnvelope(path: PathHop[], delta: -1 | 1): RecordEditEnvelope | undefined {
+  const element = path.at(-1);
+  return element?.kind === 'index' ? { op: 'move', path, value: element.index + delta } : undefined;
+}
+
 // ADR-0039: right-click is the extended editor's only trigger. `value`/`readOnly` come from the
 // webview, not the host. Offered on immutable cells too: a read-only tab is the only way to read
 // a long value in full.

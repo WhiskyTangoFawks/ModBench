@@ -3,7 +3,7 @@ import { PluginHeader } from './PluginHeader';
 import { DiffRow, type FocusedCell } from './DiffRow';
 import {
   buildColumns, elementSegment, collidingFilenames,
-  isArrayElementHop, isMovableElementHop, offersArrayAdd,
+  isArrayElementHop, isMovableElementHop, offersArrayAdd, rootFieldOf,
   wirePath, variantFor, declaresMember,
   headerCellContext, combineVscodeContexts,
 } from './recordUtils';
@@ -17,7 +17,7 @@ import type {
 import { columnKey } from './types';
 import { vscode } from './vscode';
 import { editField } from './nativeBridge';
-import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION, type ExtensionToWebview } from './messages';
+import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION, moveEnvelope, type ExtensionToWebview } from './messages';
 import type { RecordPanelClient } from './RecordPanelClient';
 import { recordPanelIncompleteMessage } from '../../src/medit/loadOrderProgress';
 
@@ -69,23 +69,26 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
     return writable;
   }, [result, immutableSet, notInLoadOrderSet, trackedSet]);
 
+  // ADR-0036: the column key alone is a rendering key; the override carries the compound identity
+  // the write path needs and the values a wire path resolves against.
+  const overrideFor = useCallback(
+    (plugin: ColumnKey) => (result?.overrides ?? []).find(o => columnKey(o.plugin, o.origin) === plugin),
+    [result]);
+
   // Nothing is applied optimistically — the panel re-reads once the host reports the edit landed.
   // An optimistic patch would show a value the write path had not accepted, which for a refused
   // edit is a lie never corrected.
   const post = useCallback((plugin: ColumnKey, envelope: RecordEditEnvelope) => {
-    // The override carries the compound identity the write path needs; the column key alone is a
-    // rendering key, not something the backend can resolve (ADR-0036).
-    const override = (result?.overrides ?? []).find(o => columnKey(o.plugin, o.origin) === plugin);
+    const override = overrideFor(plugin);
     if (!override) return;
     editField(formKey, override.plugin, override.origin, envelope);
-  }, [result, formKey]);
+  }, [overrideFor, formKey]);
 
   // The hops from the record's own member down to the row, resolved against this column's value
   // where a hop needs the document (an element of a sorted array).
-  const hopsTo = useCallback((plugin: ColumnKey, rootField: string, path: PathSegment[]) => {
-    const rootDiff = (result?.diffs ?? []).find(d => d.fieldName === rootField);
-    return wirePath(rootField, path, rootDiff?.values[plugin]);
-  }, [result]);
+  const hopsTo = useCallback((plugin: ColumnKey, rootField: string, path: PathSegment[]) =>
+    wirePath(rootField, path, rootFieldOf(overrideFor(plugin), rootField)?.value),
+    [overrideFor]);
 
   const refresh = useCallback(async (fk: string) => {
     if (!fk) return;
@@ -155,23 +158,21 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
     return map;
   }, [result, isHeaderRecord]);
 
-  // `path` addresses the array itself here; the backend resolves it against the document it holds.
-  const handleArrayAdd = useCallback((plugin: ColumnKey, path: PathSegment[], rootField: string) => {
-    post(plugin, { op: 'add', path: hopsTo(plugin, rootField, path) });
+  // `path` addresses the array itself for add and the element for remove; the backend resolves it
+  // against the document it holds.
+  const handleArrayArity = useCallback((
+    plugin: ColumnKey, path: PathSegment[], rootField: string, op: 'add' | 'remove',
+  ) => {
+    post(plugin, { op, path: hopsTo(plugin, rootField, path) });
   }, [post, hopsTo]);
 
-  const handleArrayRemove = useCallback((plugin: ColumnKey, path: PathSegment[], rootField: string) => {
-    post(plugin, { op: 'remove', path: hopsTo(plugin, rootField, path) });
-  }, [post, hopsTo]);
-
-  // A move's value is the position the element goes to: its neighbour's. `delta` is the direction
-  // the accelerator asked for, and a move off either end is the backend's to refuse by name.
+  // `delta` is the direction the accelerator asked for; a move off either end is the backend's to
+  // refuse by name, so it is posted as it stands.
   const handleArrayMove = useCallback((
     plugin: ColumnKey, path: PathSegment[], rootField: string, delta: -1 | 1,
   ) => {
-    const hops = hopsTo(plugin, rootField, path);
-    const element = hops[hops.length - 1];
-    if (element.kind === 'index') post(plugin, { op: 'move', path: hops, value: element.index + delta });
+    const envelope = moveEnvelope(hopsTo(plugin, rootField, path), delta);
+    if (envelope) post(plugin, envelope);
   }, [post, hopsTo]);
 
   // One leaf, one set: the writer applies whatever a governing member's change idles (ADR-0032).
@@ -286,8 +287,8 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
         notInLoadOrderSet={notInLoadOrderSet}
         editableColumns={editableColumns}
         onEditCell={(plugin: ColumnKey, value: unknown) => handleCellCommit(plugin, path, rootField, value)}
-        onArrayAdd={offersArrayAdd(meta) ? (plugin: ColumnKey) => handleArrayAdd(plugin, path, rootField) : undefined}
-        onArrayRemove={isArrayElementHop(elementHop) ? (plugin: ColumnKey) => handleArrayRemove(plugin, path, rootField) : undefined}
+        onArrayAdd={offersArrayAdd(meta) ? (plugin: ColumnKey) => handleArrayArity(plugin, path, rootField, 'add') : undefined}
+        onArrayRemove={isArrayElementHop(elementHop) ? (plugin: ColumnKey) => handleArrayArity(plugin, path, rootField, 'remove') : undefined}
         onArrayMoveUp={isMovableElementHop(elementHop) ? (plugin: ColumnKey) => handleArrayMove(plugin, path, rootField, -1) : undefined}
         onArrayMoveDown={isMovableElementHop(elementHop) ? (plugin: ColumnKey) => handleArrayMove(plugin, path, rootField, 1) : undefined}
         collapsedColumns={collapsedColumns}

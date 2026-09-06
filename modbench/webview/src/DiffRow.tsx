@@ -9,7 +9,7 @@ import { copyToClipboard } from './nativeBridge';
 import { baseCell, toggleBtnStyle, getCellStyle, focusedRowStyle, DIMMED_OPACITY } from './gridStyles';
 import {
   arrayElementContext, arrayParentContext, combineVscodeContexts, defaultOf, isArrayElementHop,
-  isMovableElementHop, offersArrayAdd, stringValueContext, wirePath, type Column, type PathSegment,
+  isMovableElementHop, offersArrayAdd, rootFieldOf, stringValueContext, wirePath, type Column, type PathSegment,
 } from './recordUtils';
 import type { ColumnKey, CompareOverride, ConflictAll, FieldDiff, FieldMetadata, FormKeyResolution } from './types';
 
@@ -253,7 +253,7 @@ export function DiffRow({
         if (collapsedColumns.has(key)) {
           return <td key={`disk:${key}`} style={cellStyle} />;
         }
-        const rootValue = overrideMap[key]?.fields.find(f => f.metadata.name === rootField);
+        const rootValue = rootFieldOf(overrideMap[key], rootField);
         const checkError = showActions ? rootValue?.checkError : undefined;
         const isFocused = isCellFocused(focusedCell, rowKey, key);
         const cellMeta = cellMetas?.[key] ?? meta;
@@ -269,6 +269,10 @@ export function DiffRow({
         // threaded down, so canMoveDown reads permissive; a move off the end is the backend's to
         // refuse by name.
         const arrayEditable = !!onEditCell && editableColumns.has(key) && (isArrayParentRow || isArrayElementRow);
+        // ADR-0039: a `string` cell always carries its own right-click context, mutable or
+        // immutable alike — a read-only tab is still the only way to read a long immutable
+        // value in full.
+        const offersMenu = arrayEditable || meta.type === 'string';
         const arrayOps = arrayEditable ? {
           add: isArrayParentRow ? () => onArrayAdd?.(key) : undefined,
           remove: isArrayElementRow ? () => onArrayRemove?.(key) : undefined,
@@ -281,13 +285,8 @@ export function DiffRow({
         const cellEditable = !!onEditCell && editableColumns.has(key) && !meta.readOnly;
         // The host that invokes these commands holds no document, so it is handed the envelope's
         // own path, resolved here against this column's own value of the root.
-        const hops = (arrayEditable || meta.type === 'string')
-          ? wirePath(rootField, context.path, rootValue?.value)
-          : [];
-        // ADR-0039: a `string` cell always carries its own right-click context, mutable or
-        // immutable alike — a read-only tab is still the only way to read a long immutable
-        // value in full.
-        const vscodeContext = (arrayEditable || meta.type === 'string') ? combineVscodeContexts(
+        const hops = offersMenu ? wirePath(rootField, context.path, rootValue?.value) : [];
+        const vscodeContext = offersMenu ? combineVscodeContexts(
           // `hops` addresses the array itself here — this row *is* the array.
           isArrayParentRow
             ? arrayParentContext(col.override.formKey, col.override.plugin, col.override.origin, hops)

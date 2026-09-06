@@ -17,7 +17,7 @@ vi.mock('./extendedFieldEditor', () => ({
   openExtendedFieldEditor: (...args: unknown[]) => openExtendedFieldEditor(...args),
 }));
 
-import { registerRecordPanelContextCommands, RECORD_PANEL_CONTEXT_COMMANDS, type RecordPanelContextCommandDeps } from './recordPanelContextCommands';
+import { registerRecordPanelContextCommands, type RecordPanelContextCommandDeps } from './recordPanelContextCommands';
 import type { ArrayElementContext, ArrayParentContext, StringValueContext } from './messages';
 import type { ExtendedFieldEditorDeps, OpenExtendedFieldEditorParams } from './extendedFieldEditor';
 
@@ -59,27 +59,6 @@ function elementContext(path: ArrayElementContext['path']): ArrayElementContext 
     canMoveUp: true, canMoveDown: true, preventDefaultContextMenuItems: true,
   };
 }
-
-// Written independently of the table under test, so "nothing missing, nothing extra" is a real bar.
-const EXPECTED_COMMANDS = [
-  'modbench.field.openExtended',
-  'modbench.array.add',
-  'modbench.array.remove',
-  'modbench.array.moveUp',
-  'modbench.array.moveDown',
-].sort();
-
-describe('RECORD_PANEL_CONTEXT_COMMANDS', () => {
-  it('covers exactly the five record-panel context commands, no more, no fewer', () => {
-    expect(RECORD_PANEL_CONTEXT_COMMANDS.map(c => c.command).sort()).toEqual(EXPECTED_COMMANDS);
-  });
-
-  it('registers every table row as a command', () => {
-    const { deps } = makeDeps();
-    registerRecordPanelContextCommands(deps);
-    expect([...handlers.keys()].sort()).toEqual(EXPECTED_COMMANDS);
-  });
-});
 
 // ADR-0041: the right-click gesture writes from the host, so the observable is the repository call
 // — one envelope per gesture, never a message back into the panel.

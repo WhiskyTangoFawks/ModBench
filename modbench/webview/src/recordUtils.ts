@@ -1,4 +1,4 @@
-import type { ColumnKey, CompareOverride, FieldMetadata, PathHop, PathSegment } from './types';
+import type { ColumnKey, CompareOverride, FieldMetadata, FieldValue, PathHop, PathSegment } from './types';
 import { columnKey } from './types';
 
 export function toStr(v: unknown): string {
@@ -151,6 +151,12 @@ export function combineVscodeContexts(...contexts: (object | undefined)[]): stri
 
 // ── Reading the document along a row's path ──────────────────────────────────
 export type { PathHop, PathSegment };
+
+/** This column's own entry for the record member a row's subtree is rooted at: the document a wire
+ *  path resolves against, and where a check error on that member lives. */
+export function rootFieldOf(override: CompareOverride | undefined, rootField: string): FieldValue | undefined {
+  return override?.fields.find(f => f.metadata.name === rootField);
+}
 
 export function getAtPath(root: unknown, path: readonly PathSegment[]): unknown {
   let cur = root;

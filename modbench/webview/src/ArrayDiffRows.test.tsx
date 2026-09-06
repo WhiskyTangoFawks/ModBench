@@ -29,6 +29,12 @@ const sortedArrayMeta: FieldMetadata = {
   },
 };
 
+// A decoy ahead of the array in every column's field list: the wire path has to be resolved
+// against the root field's own value, which "the first field" would only accidentally be.
+const decoyMeta: FieldMetadata = {
+  name: 'Level', type: 'int', isArray: false, validFormKeyTypes: [], enumMembers: [],
+};
+
 const pluginsResponse = [
   { name: 'Fallout4.esm', isImmutable: true,  loadOrderIndex: 0 },
   { name: 'MyMod.esp',    isImmutable: false, loadOrderIndex: 1 },
@@ -40,12 +46,14 @@ const sortedArrayCompareResult = {
     {
       formKey: '000001:Fallout4.esm', plugin: 'Fallout4.esm',
       loadOrderIndex: 0, isWinner: false, editorId: 'TestNPC',
-      fields: [{ metadata: sortedArrayMeta, value: ['KwdA', 'KwdB'] }], conflictThis: 'Master',
+      fields: [{ metadata: decoyMeta, value: 4 }, { metadata: sortedArrayMeta, value: ['KwdA', 'KwdB'] }],
+      conflictThis: 'Master',
     },
     {
       formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp',
       loadOrderIndex: 1, isWinner: true, editorId: 'TestNPC',
-      fields: [{ metadata: sortedArrayMeta, value: ['KwdA', 'KwdC'] }], conflictThis: 'Override',
+      fields: [{ metadata: decoyMeta, value: 4 }, { metadata: sortedArrayMeta, value: ['KwdA', 'KwdC'] }],
+      conflictThis: 'Override',
     },
   ],
   diffs: [{
