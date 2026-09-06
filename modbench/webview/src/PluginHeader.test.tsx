@@ -269,3 +269,46 @@ describe('PluginHeader — Partial Form toggle', () => {
     expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
   });
 });
+
+// Parse failure is the fifth column state and wins over the four tracking states: nothing the
+// user does about tracking makes an unreadable record editable, so a way out named here would be
+// the wrong one.
+describe('PluginHeader — parse failure', () => {
+  const DIAGNOSIS = 'the PERK entry point did not have expected parameter type flag';
+  const broken = () => override({ parseDiagnosis: DIAGNOSIS });
+
+  it('shows "(parse failure)" for a column whose record could not be read', () => {
+    render(<PluginHeader {...baseProps()} override={broken()} />);
+
+    expect(screen.getByText('(parse failure)')).toBeInTheDocument();
+  });
+
+  it('names the diagnosis as the reason, so the label says why and not only that', () => {
+    render(<PluginHeader {...baseProps()} override={broken()} />);
+
+    expect(screen.getByText('(parse failure)')).toHaveAttribute('title', expect.stringContaining(DIAGNOSIS));
+  });
+
+  it.each([
+    ['a vanilla master', { isImmutable: true }, '(read-only)'],
+    ['a copy the load order does not name', { isImmutable: true, inLoadOrder: false }, '(not loaded)'],
+    ['an untracked column', { isTracked: false }, '(untracked)'],
+    ['a tracked column', { isTracked: true }, '(tracked)'],
+  ])('takes precedence over %s', (_case, props, displaced) => {
+    render(<PluginHeader {...baseProps()} {...props} override={broken()} />);
+
+    expect(screen.queryByText(displaced)).toBeNull();
+    expect(screen.getByText('(parse failure)')).toBeInTheDocument();
+  });
+
+  it('disables the Partial Form toggle — no write to this column can land', () => {
+    render(
+      <PluginHeader
+        {...baseProps()}
+        override={override({ isPartialFormable: true, parseDiagnosis: DIAGNOSIS })}
+      />,
+    );
+
+    expect(screen.getByRole('checkbox')).toBeDisabled();
+  });
+});

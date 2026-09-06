@@ -33,6 +33,14 @@ interface PluginHeaderProps {
 // A column marked `!inLoadOrder` may be shadowed *or* be a plugin file `plugins.txt` never lists;
 // the wire carries no signal telling them apart, so the wording must be true for both.
 const STATUS_TEXT: Record<ColumnStatus, { label: string; title: string }> = {
+  // The record's own diagnosis is appended as the rest of this reason, so the sentence has to end
+  // where the diagnosis begins. No way out is named: repairing the record is not offered anywhere.
+  parseFailure: {
+    label: '(parse failure)',
+    title:
+      'This record could not be read when its plugin was indexed, so this column shows only what '
+      + 'could be stored of it and nothing in it can be edited. The reason it could not be read:',
+  },
   vanillaMaster: {
     label: '(read-only)',
     title:
@@ -74,11 +82,14 @@ export function PluginHeader({
   override: o, isImmutable, inLoadOrder, isTracked, showOriginInline, collapsed, onToggleCollapse,
   vscodeContext, onTogglePartialForm,
 }: PluginHeaderProps) {
-  const status = columnStatus(isImmutable, inLoadOrder, isTracked);
-  // An immutable, not-in-load-order or untracked column offers no affordance that could land, so
-  // the checkbox is disabled (never hidden — the current state must stay visible) rather than a
-  // silent dead control.
-  const canWrite = !isImmutable && inLoadOrder && isTracked;
+  const status = columnStatus(isImmutable, inLoadOrder, isTracked, o.parseDiagnosis);
+  // Parse failure's reason ends with this column's own diagnosis, so it is composed rather than
+  // tabled. Every other state's reason is the table's alone.
+  const title = STATUS_TEXT[status].title + (o.parseDiagnosis == null ? '' : ` ${o.parseDiagnosis}`);
+  // A column that is not plainly tracked and in the load order offers no write that could land,
+  // so the checkbox is disabled (never hidden — the current state must stay visible) rather than
+  // a silent dead control.
+  const canWrite = status === 'tracked' && inLoadOrder;
   return (
     <div data-vscode-context={vscodeContext}>
       {/* Left-click the plugin-name chip collapses/expands this column. ADR-0036:
@@ -98,7 +109,7 @@ export function PluginHeader({
           </div>
           <div
             style={{ marginTop: 3, fontSize: '10px', opacity: 0.55, fontStyle: 'italic' }}
-            title={STATUS_TEXT[status].title}
+            title={title}
           >
             {STATUS_TEXT[status].label}
           </div>

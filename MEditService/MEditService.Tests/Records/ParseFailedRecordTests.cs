@@ -107,6 +107,32 @@ public sealed class ParseFailedRecordTests
         Assert.Equal("T6M_QuickReload_ReloadVATs", document.EditorId);
     }
 
+    // The record editor renders the column read-only from this member alone, so the compare wire
+    // has to carry the diagnosis rather than only the tree's listings.
+    [Fact]
+    public void GetCompare_CarriesTheDiagnosisOnTheUnreadableRecordsColumn()
+    {
+        using var scratch = new Scratch(Fixture);
+
+        var column = Assert.Single(scratch.Query.GetCompare(UnreadablePerk)!.Overrides);
+
+        Assert.NotNull(column.ParseDiagnosis);
+        Assert.Contains("did not have expected parameter type flag", column.ParseDiagnosis);
+    }
+
+    [Fact]
+    public void GetCompare_LeavesAReadableRecordsColumnWithoutADiagnosis()
+    {
+        using var scratch = new Scratch(Fixture);
+        var readable = scratch.Reads
+            .Search(new RecordQuery(RecordTypes: ["perk"], Plugin: scratch.Plugin, Search: null, Limit: 1000, Offset: 0))
+            .Items.First(r => r.FormKey != UnreadablePerk);
+
+        var column = Assert.Single(scratch.Query.GetCompare(readable.FormKey)!.Overrides);
+
+        Assert.Null(column.ParseDiagnosis);
+    }
+
     [Theory]
     [InlineData("npc_")]
     [InlineData("glob")]

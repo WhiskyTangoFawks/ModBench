@@ -195,7 +195,7 @@ Drop in and all mutating operations (`Ctrl+V`, `Ctrl+X`, `F2`, `Insert`, `Delete
 editing of any kind) are **mutable columns only** — an immutable cell simply refuses, showing no
 distinct affordance beforehand, exactly as xEdit does. A `string` cell's right-click menu is the
 one exception offered on **both** column kinds — **Open in Editor…** opens the extended editor,
-read-only on an immutable/untracked/not-in-load-order column (ADR-0039).
+read-only on an immutable/untracked/not-in-load-order/parse-failed column (ADR-0039).
 
 #### By cell
 
@@ -319,11 +319,19 @@ already empty: matching xEdit's own guard (`Element.EditValue` must be non-empty
   the plugin name as a chip, filename only — origin (the
   mod folder that provided this copy, or a reserved value) lives in the chip's tooltip always, and
   renders inline in the label only when a second loaded copy shares this filename (ADR-0036).
-  An immutable chip carries a `(read-only)` note beneath it, worded by *why*: a vanilla/
-  DLC/CC master reads `(read-only)`; a copy the effective load order does not name (ADR-0035)
-  reads `(not loaded)` instead, and the whole column — header and every cell — renders dimmed, the
-  one cue distinguishing it from a participating column once scrolled past the header. Both
-  notes' tooltips name the reason. `(not loaded)`'s tooltip deliberately does not prescribe a
+  Every chip carries a status note beneath it, one of five, worded by *why* the column reads the
+  way it does: a vanilla/DLC/CC master reads `(read-only)`; a copy the effective load order does
+  not name (ADR-0035) reads `(not loaded)` instead; such a copy also renders dimmed throughout —
+  header and every cell — whichever note it ends up showing, that being the one cue distinguishing
+  it from a participating column once scrolled past the header. A mutable copy whose mod is not
+  tracked reads `(untracked)` and a tracked one `(tracked)` (ADR-0041); and a record the codec
+  could not read at index time reads `(parse failure)`, with the stored diagnosis as the rest of
+  its tooltip. Parse failure wins over the other four — nothing the user can do about tracking or
+  the load order makes such a record editable, so naming a way out would name the wrong one, and
+  none is named because repairing the record is not offered. Such a column shows what could be
+  stored of the record rather than vanishing from the grid, and renders read-only exactly as an
+  immutable column does; the backend refuses every write to it with the same diagnosis. Every
+  note's tooltip names the reason. `(not loaded)`'s tooltip deliberately does not prescribe a
   single fix: `!InLoadOrder` covers two distinct causes the backend does not currently
   distinguish — a copy shadowed by another mod (a **file** conflict, decided by the Mod override
   order) and a plugin `plugins.txt` never lists at all (decided by the Plugin load order) — so the
