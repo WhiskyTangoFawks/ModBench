@@ -18,24 +18,9 @@ interface InFlight {
 let counter = 0;
 const inFlight = new Map<string, InFlight>();
 
-// An editor tab can be saved many times while open, so its commit callback is not the one-shot
-// reply `InFlight` models; it stays registered until EXTENDED_EDITOR_CLOSED. A second map keeps
-// requestReply's resolve-once contract true.
-const extendedEditors = new Map<string, (value: string) => void>();
-
 window.addEventListener('message', (event: MessageEvent<unknown>) => {
   const msg = event.data as ExtensionToWebview | undefined;
   if (!msg || !('requestId' in msg)) return;
-  if (msg.type === EXTENSION_TO_WEBVIEW.EXTENDED_EDITOR_COMMITTED) {
-    extendedEditors.get(msg.requestId)?.(msg.value);
-    return;
-  }
-  if (msg.type === EXTENSION_TO_WEBVIEW.EXTENDED_EDITOR_CLOSED) {
-    // Deleted here, not left to accumulate: a stale entry holds a closure over that tab's
-    // onCommit and everything it captured.
-    extendedEditors.delete(msg.requestId);
-    return;
-  }
   const entry = inFlight.get(msg.requestId);
   if (!entry || msg.type !== entry.replyType) return;
   inFlight.delete(msg.requestId);
@@ -77,22 +62,4 @@ export function copyToClipboard(value: string): void {
 // the backend.
 export function editField(formKey: string, plugin: string, origin: string, envelope: RecordEditEnvelope): void {
   vscode.postMessage({ type: WEBVIEW_TO_EXTENSION.EDIT_FIELD, formKey, plugin, origin, envelope });
-}
-
-// Only the extension host can open a real editor tab. No Promise: the tab can be saved any number
-// of times before closing, or never. `onCommit` runs once per save, on the same commit path as
-// the inline editor.
-export function openExtendedFieldEditor(
-  params: {
-    value: string; recordLabel: string; fieldName: string; plugin: string;
-    // ADR-0036: required alongside `plugin` — folded into the temp-file path so two
-    // same-filename columns never alias onto one file.
-    origin: string;
-    readOnly: boolean;
-  },
-  onCommit: (value: string) => void,
-): void {
-  const requestId = `nb-${++counter}`;
-  extendedEditors.set(requestId, onCommit);
-  vscode.postMessage({ type: WEBVIEW_TO_EXTENSION.OPEN_EXTENDED_EDITOR, requestId, ...params });
 }

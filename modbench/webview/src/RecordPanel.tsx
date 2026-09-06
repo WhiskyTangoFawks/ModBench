@@ -3,7 +3,7 @@ import { PluginHeader } from './PluginHeader';
 import { DiffRow, type FocusedCell } from './DiffRow';
 import {
   buildColumns, elementSegment, collidingFilenames,
-  isArrayElementHop, isMovableElementHop, offersArrayAdd,
+  isArrayElementHop, isMovableElementHop, offersArrayAdd, rootFieldOf,
   wirePath, variantFor, declaresMember,
   headerCellContext, combineVscodeContexts,
 } from './recordUtils';
@@ -16,8 +16,8 @@ import type {
 } from './types';
 import { columnKey } from './types';
 import { vscode } from './vscode';
-import { editField, openExtendedFieldEditor } from './nativeBridge';
-import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION, type ExtensionToWebview } from './messages';
+import { editField } from './nativeBridge';
+import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION, moveEnvelope, type ExtensionToWebview } from './messages';
 import type { RecordPanelClient } from './RecordPanelClient';
 import { recordPanelIncompleteMessage } from '../../src/medit/loadOrderProgress';
 
@@ -26,9 +26,6 @@ const mEditWindow = window as Window & typeof globalThis & {
 };
 
 const getHeaderBg = (c: ConflictThis | undefined): string | undefined => getConflictBg(c, 0.35);
-
-type ArrayOpKind = 'add' | 'remove' | 'moveUp' | 'moveDown';
-
 
 // ── RecordPanel ───────────────────────────────────────────────────────────────
 
@@ -72,23 +69,26 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
     return writable;
   }, [result, immutableSet, notInLoadOrderSet, trackedSet]);
 
+  // ADR-0036: the column key alone is a rendering key; the override carries the compound identity
+  // the write path needs and the values a wire path resolves against.
+  const overrideFor = useCallback(
+    (plugin: ColumnKey) => (result?.overrides ?? []).find(o => columnKey(o.plugin, o.origin) === plugin),
+    [result]);
+
   // Nothing is applied optimistically — the panel re-reads once the host reports the edit landed.
   // An optimistic patch would show a value the write path had not accepted, which for a refused
   // edit is a lie never corrected.
   const post = useCallback((plugin: ColumnKey, envelope: RecordEditEnvelope) => {
-    // The override carries the compound identity the write path needs; the column key alone is a
-    // rendering key, not something the backend can resolve (ADR-0036).
-    const override = (result?.overrides ?? []).find(o => columnKey(o.plugin, o.origin) === plugin);
+    const override = overrideFor(plugin);
     if (!override) return;
     editField(formKey, override.plugin, override.origin, envelope);
-  }, [result, formKey]);
+  }, [overrideFor, formKey]);
 
   // The hops from the record's own member down to the row, resolved against this column's value
   // where a hop needs the document (an element of a sorted array).
-  const hopsTo = useCallback((plugin: ColumnKey, rootField: string, path: PathSegment[]) => {
-    const rootDiff = (result?.diffs ?? []).find(d => d.fieldName === rootField);
-    return wirePath(rootField, path, rootDiff?.values[plugin]);
-  }, [result]);
+  const hopsTo = useCallback((plugin: ColumnKey, rootField: string, path: PathSegment[]) =>
+    wirePath(rootField, path, rootFieldOf(overrideFor(plugin), rootField)?.value),
+    [overrideFor]);
 
   const refresh = useCallback(async (fk: string) => {
     if (!fk) return;
@@ -158,16 +158,21 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
     return map;
   }, [result, isHeaderRecord]);
 
-  // `path` addresses the array for add and the element for the rest; a move's value is the
-  // position the element goes to. The backend resolves each against the document it holds.
-  const handleArrayOp = useCallback((
-    plugin: ColumnKey, path: PathSegment[], rootField: string, op: ArrayOpKind,
+  // `path` addresses the array itself for add and the element for remove; the backend resolves it
+  // against the document it holds.
+  const handleArrayArity = useCallback((
+    plugin: ColumnKey, path: PathSegment[], rootField: string, op: 'add' | 'remove',
   ) => {
-    const hops = hopsTo(plugin, rootField, path);
-    const last = hops[hops.length - 1];
-    if (op === 'add') post(plugin, { op: 'add', path: hops });
-    else if (op === 'remove') post(plugin, { op: 'remove', path: hops });
-    else if (last.kind === 'index') post(plugin, { op: 'move', path: hops, value: last.index + (op === 'moveUp' ? -1 : 1) });
+    post(plugin, { op, path: hopsTo(plugin, rootField, path) });
+  }, [post, hopsTo]);
+
+  // `delta` is the direction the accelerator asked for; a move off either end is the backend's to
+  // refuse by name, so it is posted as it stands.
+  const handleArrayMove = useCallback((
+    plugin: ColumnKey, path: PathSegment[], rootField: string, delta: -1 | 1,
+  ) => {
+    const envelope = moveEnvelope(hopsTo(plugin, rootField, path), delta);
+    if (envelope) post(plugin, envelope);
   }, [post, hopsTo]);
 
   // One leaf, one set: the writer applies whatever a governing member's change idles (ADR-0032).
@@ -175,27 +180,8 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
     post(plugin, { op: 'set', path: hopsTo(plugin, rootField, path), value });
   }, [post, hopsTo]);
 
-  // ADR-0039: a string cell's value in a real editor tab, reached only from the cell's right-click
-  // menu. Its save is the same leaf commit as the inline editor's.
-  const handleOpenExtended = useCallback((
-    plugin: ColumnKey, fieldName: string, path: PathSegment[], rootField: string, value: string, readOnly: boolean,
-  ) => {
-    const override = (result?.overrides ?? []).find(o => columnKey(o.plugin, o.origin) === plugin);
-    if (!override) return;
-    // The composite label — the same "EditorID [FormKey]" string the FormKey picker
-    // seeds with and the header displays, so the tab's directory names the record the same way
-    // every other identity-bearing surface here already does.
-    const displayId = (result?.overrides.find(o => o.isWinner) ?? result?.overrides[0])?.editorId;
-    const recordLabel = displayId ? `${displayId} [${formKey}]` : formKey;
-    openExtendedFieldEditor(
-      { value, recordLabel, fieldName, plugin: override.plugin, origin: override.origin, readOnly },
-      (v: string) => handleCellCommit(plugin, path, rootField, v),
-    );
-  }, [result, formKey, handleCellCommit]);
-
-  // The broadcast-and-self-filter shape: the extension host has no live reference into this
-  // panel's React state, which alone holds the record's current values. Depends on the handlers it
-  // calls, so it re-subscribes when they change.
+  // Every message here is a broadcast: the extension host has no live reference into this panel's
+  // React state, so it says what happened and each open panel decides whether it applies.
   useEffect(() => {
     const handler = (event: MessageEvent) => {
       const msg = event.data as ExtensionToWebview;
@@ -222,26 +208,11 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
         // just clear its banner over stale content. Load-order-wide, not record-specific, so no
         // self-filter — every open panel reacts.
         void refresh(prevFormKeyRef.current);
-      } else if (msg.type === EXTENSION_TO_WEBVIEW.ARRAY_STRUCTURAL_OP) {
-        // Self-filter on formKey — a changeId-less broadcast (there is no per-change id here).
-        // Only reachable while this exact record is open, so a
-        // stale/background panel showing a different record ignores it.
-        if (msg.formKey !== prevFormKeyRef.current) return;
-        const plugin = columnKey(msg.plugin, msg.origin);
-        handleArrayOp(plugin, msg.path, msg.rootField, msg.op);
-      } else if (msg.type === EXTENSION_TO_WEBVIEW.FIELD_OPEN_EXTENDED_EDITOR) {
-        // ADR-0039: the string-cell right-click command's own broadcast — self-filter on
-        // formKey, same convention as every other right-click op above, then hand off to the
-        // bridge call.
-        if (msg.formKey !== prevFormKeyRef.current) return;
-        handleOpenExtended(
-          columnKey(msg.plugin, msg.origin), msg.fieldName, msg.path, msg.rootField, msg.value, msg.readOnly,
-        );
       }
     };
     window.addEventListener('message', handler);
     return () => window.removeEventListener('message', handler);
-  }, [refresh, handleArrayOp, handleOpenExtended]);
+  }, [refresh]);
 
   // ADR-0036: keyed by ColumnKey, not the bare plugin filename — two overrides sharing a filename
   // would otherwise collide, the second silently discarding the first. Declared Record<string, …>
@@ -316,12 +287,13 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
         notInLoadOrderSet={notInLoadOrderSet}
         editableColumns={editableColumns}
         onEditCell={(plugin: ColumnKey, value: unknown) => handleCellCommit(plugin, path, rootField, value)}
-        onArrayAdd={offersArrayAdd(meta) ? (plugin: ColumnKey) => handleArrayOp(plugin, path, rootField, 'add') : undefined}
-        onArrayRemove={isArrayElementHop(elementHop) ? (plugin: ColumnKey) => handleArrayOp(plugin, path, rootField, 'remove') : undefined}
-        onArrayMoveUp={isMovableElementHop(elementHop) ? (plugin: ColumnKey) => handleArrayOp(plugin, path, rootField, 'moveUp') : undefined}
-        onArrayMoveDown={isMovableElementHop(elementHop) ? (plugin: ColumnKey) => handleArrayOp(plugin, path, rootField, 'moveDown') : undefined}
+        onArrayAdd={offersArrayAdd(meta) ? (plugin: ColumnKey) => handleArrayArity(plugin, path, rootField, 'add') : undefined}
+        onArrayRemove={isArrayElementHop(elementHop) ? (plugin: ColumnKey) => handleArrayArity(plugin, path, rootField, 'remove') : undefined}
+        onArrayMoveUp={isMovableElementHop(elementHop) ? (plugin: ColumnKey) => handleArrayMove(plugin, path, rootField, -1) : undefined}
+        onArrayMoveDown={isMovableElementHop(elementHop) ? (plugin: ColumnKey) => handleArrayMove(plugin, path, rootField, 1) : undefined}
         collapsedColumns={collapsedColumns}
         onOpen={handleOpen}
+        recordLabel={title}
         context={{ path, overrideMeta: meta, rootField, depth }}
         rowKey={rowKey}
         focusedCell={focusedCell}

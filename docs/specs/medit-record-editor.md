@@ -490,16 +490,18 @@ already empty: matching xEdit's own guard (`Element.EditValue` must be non-empty
     read-only tab is still the only way to read a long value in full. Path is deterministic (keyed
     by record + field + plugin, not random), so re-invoking the command on the same cell reveals
     the already-open tab rather than opening a duplicate — VS Code's own per-URI reuse. The tab's
-    own filename is what its title shows: `⟨Field⟩ [⟨Plugin⟩].txt` inside a directory named for the
-    record (`⟨EditorID⟩ [⟨FormKey⟩]`, the same composite the header uses), so both which field and
-    which record a tab belongs to are legible without opening it.
+    own filename is what its title shows: `⟨Row label⟩ [⟨Plugin⟩].txt` — the row's own label, so a
+    nested leaf names itself rather than the member it sits under — inside a directory named for
+    the record (`⟨EditorID⟩ [⟨FormKey⟩]`, the same composite the header uses), so both which field
+    and which record a tab belongs to are legible without opening it. Both travel on the cell's
+    `stringValue` context: only the webview knows either.
   - **Commit trigger**: on save. Each `Ctrl+S` writes the tab's full current content — never on
     keystroke (would write on every character typed) and never only on close (a user who saves
     twice while still editing expects both saves written, the same as re-editing any other cell
     twice). A string leaf nested inside a struct or array (any depth) commits the same `set`
-    envelope the inline editor posts, at the row's own path — the trigger carries the row's path
-    and the subtree root's field alongside the saved text. A top-level string field's commit is
-    the one-hop form of the same envelope.
+    envelope the inline editor posts, at the row's own path — the cell's context carries that path,
+    and the extension host commits the saved text against it directly, with no round trip back
+    through the panel. A top-level string field's commit is the one-hop form of the same envelope.
   - **Trigger gesture**: right-click only (ADR-0039). A `string` cell's second click, `F2` and
     double click all agree with every other scalar type on the inline editor, immediately, with no
     debounce — there is no second left-click target to disambiguate against.
@@ -521,8 +523,9 @@ already empty: matching xEdit's own guard (`Element.EditValue` must be non-empty
   arrangement exactly, and required by the no-second-route rule: **there are no inline ▲▼✕
   buttons.** (Mechanism:
   a native `webview/context` menu on the element/parent cell, `Insert`/`Delete`/`Ctrl+↑`/`Ctrl+↓`
-  as DOM keydown accelerators on the focused cell, each posting the same envelope the menu entry
-  does.) Add is available regardless of the array's expand state, matching xEdit. **Every gesture
+  as DOM keydown accelerators on the focused cell. A menu entry is a command the extension host
+  runs against the cell's own context; an accelerator posts the identical envelope up from the
+  webview.) Add is available regardless of the array's expand state, matching xEdit. **Every gesture
   is one envelope** — an operation, a path and an optional value, `POST /records/{formKey}/edit`'s
   own shape — and the webview posts what the user asked for and nothing else: `add` at the array
   with no value; `remove` at the element; `move` at the element with the destination position as
@@ -530,16 +533,17 @@ already empty: matching xEdit's own guard (`Element.EditValue` must be non-empty
   document it holds, patches, and answers with the result or a refusal naming the path — an
   element that is not there, a move off either end, is refused by name, never landed as nothing.
   Only non-immutable columns offer the ops. An element-**value** edit is offered on the same cell
-  and is the same `set` at the element's own hop. The context-menu ops' payload carries the row's
-  full `path` + `rootField`, so ops on an array nested inside a struct or another array land at
-  the element's real depth. **A path is a chain of three hop kinds**, each as the diff node states
+  and is the same `set` at the element's own hop. The context-menu ops' payload is the envelope's
+  own `path`, resolved cell-side when the menu is offered, so ops on an array nested inside a
+  struct or another array land at the element's real depth and the host needs no document of its
+  own. **A path is a chain of three hop kinds**, each as the diff node states
   it: a `member` names a struct's member; an `index` an unsorted array's element by its place among
   the array's children; a `key` a keyed array's element **by the key text the backend labelled it
   with**, which the backend resolves per column — the same key names a different position, or none
   at all, in each plugin's own array, which is exactly what lets a plugin carrying fewer scripts
   than its master read as an absence at those keys. An element of an array sorted by its own value
   sits at a different position in every column too, so its `set` carries an `index` hop found in
-  the written column's own value at commit time. The webview holds no model beside the document:
+  the written column's own value. The webview holds no model beside the document:
   no path setter, no mirror of the backend's key rule, no cascade, no default table (ADR-0032).
   There is no free drag-reorder and no auto-sort.
 - **Editing writes working-tree source text directly** (ADR-0041) — there is no staged

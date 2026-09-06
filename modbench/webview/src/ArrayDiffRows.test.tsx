@@ -29,6 +29,12 @@ const sortedArrayMeta: FieldMetadata = {
   },
 };
 
+// A decoy ahead of the array in every column's field list: the wire path has to be resolved
+// against the root field's own value, which "the first field" would only accidentally be.
+const decoyMeta: FieldMetadata = {
+  name: 'Level', type: 'int', isArray: false, validFormKeyTypes: [], enumMembers: [],
+};
+
 const pluginsResponse = [
   { name: 'Fallout4.esm', isImmutable: true,  loadOrderIndex: 0 },
   { name: 'MyMod.esp',    isImmutable: false, loadOrderIndex: 1 },
@@ -40,12 +46,14 @@ const sortedArrayCompareResult = {
     {
       formKey: '000001:Fallout4.esm', plugin: 'Fallout4.esm',
       loadOrderIndex: 0, isWinner: false, editorId: 'TestNPC',
-      fields: [{ metadata: sortedArrayMeta, value: ['KwdA', 'KwdB'] }], conflictThis: 'Master',
+      fields: [{ metadata: decoyMeta, value: 4 }, { metadata: sortedArrayMeta, value: ['KwdA', 'KwdB'] }],
+      conflictThis: 'Master',
     },
     {
       formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp',
       loadOrderIndex: 1, isWinner: true, editorId: 'TestNPC',
-      fields: [{ metadata: sortedArrayMeta, value: ['KwdA', 'KwdC'] }], conflictThis: 'Override',
+      fields: [{ metadata: decoyMeta, value: 4 }, { metadata: sortedArrayMeta, value: ['KwdA', 'KwdC'] }],
+      conflictThis: 'Override',
     },
   ],
   diffs: [{
@@ -470,38 +478,9 @@ describe('RecordPanel — array editing (unsorted)', () => {
     expect(lastEnvelope()).toEqual({ op: 'move', path: [member('Values'), at(0)], value: -1 });
   });
 
-  it('an ARRAY_STRUCTURAL_OP broadcast for this open record posts the envelope via EDIT_FIELD', async () => {
-    renderEditablePanel();
-    await waitFor(() => screen.getByText('Values'));
-
-    window.postMessage(
-      {
-        type: EXTENSION_TO_WEBVIEW.ARRAY_STRUCTURAL_OP, formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'Data',
-        rootField: 'Values', path: [{ kind: 'index', index: 1 }], op: 'remove',
-      },
-      '*',
-    );
-    await waitFor(() => expect(lastEnvelope()).toEqual({ op: 'remove', path: [member('Values'), at(1)] }));
-  });
-
-  it('an ARRAY_STRUCTURAL_OP broadcast for a different open record is ignored', async () => {
-    renderEditablePanel();
-    await waitFor(() => screen.getByText('Values'));
-
-    window.postMessage(
-      {
-        type: EXTENSION_TO_WEBVIEW.ARRAY_STRUCTURAL_OP, formKey: '999999:Other.esp', plugin: 'MyMod.esp', origin: 'Data',
-        rootField: 'Values', path: [{ kind: 'index', index: 1 }], op: 'remove',
-      },
-      '*',
-    );
-    // Give the (synchronous) handler a turn; nothing should have posted.
-    await new Promise(r => setTimeout(r, 0));
-    expect(lastEnvelope()).toBeUndefined();
-  });
 });
 
-// Module scope: the inline-edit and extended-editor blocks below share these fixtures.
+// Module scope: the inline-edit blocks below share these fixtures.
 const editableIntArrayMeta: FieldMetadata = {
   name: 'Values', type: 'array', isArray: true, validFormKeyTypes: [], enumMembers: [],
   elementType: { name: '', type: 'int', isArray: false, validFormKeyTypes: [], enumMembers: [] },
@@ -687,88 +666,6 @@ describe('RecordPanel — a value edit posts one set envelope addressing the lea
       type: WEBVIEW_TO_EXTENSION.EDIT_FIELD, formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'Data',
       envelope: { op: 'set', path: [member('Level')], value: 6 },
     });
-  });
-});
-
-// The extended editor's save is the same leaf commit as the inline editor's, so it posts the same
-// envelope at the same path.
-describe('RecordPanel — the extended editor posts the set envelope of the row it was opened on', () => {
-  function lastOpenExtendedEditorRequestId(): string {
-    const calls = (vscode.postMessage as ReturnType<typeof vi.fn>).mock.calls;
-    const call = [...calls].reverse().find(([m]) => (m as { type?: string }).type === WEBVIEW_TO_EXTENSION.OPEN_EXTENDED_EDITOR);
-    return (call?.[0] as { requestId: string }).requestId;
-  }
-
-  function saveThroughExtendedEditor(
-    fieldName: string, path: { kind: string; name?: string; index?: number }[], rootField: string, value: string,
-  ) {
-    act(() => {
-      window.dispatchEvent(new MessageEvent('message', {
-        data: {
-          type: EXTENSION_TO_WEBVIEW.FIELD_OPEN_EXTENDED_EDITOR,
-          formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'Data',
-          fieldName, value: 'irrelevant seed value', readOnly: false, path, rootField,
-        },
-      }));
-    });
-    const requestId = lastOpenExtendedEditorRequestId();
-    act(() => {
-      window.dispatchEvent(new MessageEvent('message', {
-        data: { type: EXTENSION_TO_WEBVIEW.EXTENDED_EDITOR_COMMITTED, requestId, value },
-      }));
-    });
-  }
-
-  beforeEach(() => {
-    vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
-    (vscode.postMessage as ReturnType<typeof vi.fn>).mockClear();
-  });
-  afterEach(() => vi.unstubAllGlobals());
-
-  it('saving an array element posts set at the element', async () => {
-    currentCompare = editableIntArrayResult;
-    renderEditablePanel();
-    await waitFor(() => screen.getByText('Values'));
-
-    saveThroughExtendedEditor('Values', [{ kind: 'index', index: 1 }], 'Values', '99');
-
-    expect(lastEnvelope()).toEqual({ op: 'set', path: [member('Values'), at(1)], value: '99' });
-  });
-
-  it('saving a struct member posts set at the member', async () => {
-    currentCompare = structCollapseExpandResult;
-    renderEditablePanel();
-    await waitFor(() => screen.getByText('ObjectBounds'));
-
-    saveThroughExtendedEditor('ObjectBounds', [{ kind: 'member', name: 'X1' }], 'ObjectBounds', '7');
-
-    expect(lastEnvelope()).toEqual({ op: 'set', path: [member('ObjectBounds'), member('X1')], value: '7' });
-  });
-
-  it('saving a member of a struct element posts every hop', async () => {
-    currentCompare = nestedStructArrayResult;
-    renderEditablePanel();
-    await waitFor(() => screen.getByText('Container'));
-
-    saveThroughExtendedEditor(
-      'Container',
-      [{ kind: 'member', name: 'Entries' }, { kind: 'index', index: 0 }, { kind: 'member', name: 'Id' }],
-      'Container', 'Z',
-    );
-
-    expect(lastEnvelope()).toEqual({
-      op: 'set', path: [member('Container'), member('Entries'), at(0), member('Id')], value: 'Z',
-    });
-  });
-
-  it('saving a top-level field posts the one member hop', async () => {
-    currentCompare = scalarResult;
-    renderEditablePanel();
-    await waitFor(() => screen.getByText('Level'));
-
-    saveThroughExtendedEditor('Level', [], 'Level', '6');
-
-    expect(lastEnvelope()).toEqual({ op: 'set', path: [member('Level')], value: '6' });
   });
 });
 

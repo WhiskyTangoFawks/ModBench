@@ -14,13 +14,6 @@ vi.mock('vscode', () => ({
   },
 }));
 
-// Mocked rather than real: only the dispatch matters here, and the real one would drag its whole
-// vscode surface into this file's mock.
-const openExtendedFieldEditorMock = vi.fn();
-vi.mock('./extendedFieldEditor', () => ({
-  openExtendedFieldEditor: (...args: unknown[]) => openExtendedFieldEditorMock(...args),
-}));
-
 import {
   routeRecordPanelMessage, pickFormKeyViaQuickPick, normalizeFormKeyQuery,
   type FormKeyPickerDeps, type RouteRecordPanelMessageDeps,
@@ -28,7 +21,7 @@ import {
 import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION } from './messages';
 import type { RecordSummary } from './ApiClient';
 
-beforeEach(() => { createQuickPick.mockClear(); showQuickPick.mockClear(); openExtendedFieldEditorMock.mockClear(); });
+beforeEach(() => { createQuickPick.mockClear(); showQuickPick.mockClear(); });
 
 function fakeChannel() {
   return { debug: vi.fn(), info: vi.fn(), warn: vi.fn() };
@@ -46,7 +39,6 @@ function makeDeps(overrides: Partial<RouteRecordPanelMessageDeps> = {}): RouteRe
     repository: fakeRepository, onRecordEdited,
     // Undefined by default: a message arriving with no deps wired is a no-op, not a crash.
     formKeyPicker: undefined,
-    extendedFieldEditor: undefined,
     ...overrides,
   };
 }
@@ -538,47 +530,5 @@ describe('routeRecordPanelMessage — OPEN_FORM_KEY_PICKER', () => {
     await dispatchPromise;
 
     expect(reply).toHaveBeenCalledWith({ type: EXTENSION_TO_WEBVIEW.FORM_KEY_PICKED, requestId: 'r2', formKey: null });
-  });
-});
-
-describe('routeRecordPanelMessage — OPEN_EXTENDED_EDITOR', () => {
-  it('with extendedFieldEditor deps undefined is a no-op', async () => {
-    await expect(routeRecordPanelMessage(
-      { type: WEBVIEW_TO_EXTENSION.OPEN_EXTENDED_EDITOR, requestId: 'r1', value: 'x', recordLabel: 'Deacon', fieldName: 'Description', plugin: 'MyMod.esp', origin: 'Data', readOnly: false },
-      makeDeps(),
-    )).resolves.toBeUndefined();
-    expect(openExtendedFieldEditorMock).not.toHaveBeenCalled();
-  });
-
-  it('forwards the message identity/value/readOnly and the deps bundle to openExtendedFieldEditor', async () => {
-    const reply = vi.fn();
-    const extendedFieldEditorDeps = { tempRoot: '/tmp/x', reply, log: vi.fn(), reporter: fakeReporter };
-
-    await routeRecordPanelMessage(
-      { type: WEBVIEW_TO_EXTENSION.OPEN_EXTENDED_EDITOR, requestId: 'r1', value: 'a long description', recordLabel: 'Deacon [000123:Fallout4.esm]', fieldName: 'Description', plugin: 'MyMod.esp', origin: 'ModA', readOnly: true },
-      makeDeps({ extendedFieldEditor: extendedFieldEditorDeps }),
-    );
-
-    expect(openExtendedFieldEditorMock).toHaveBeenCalledWith(
-      { requestId: 'r1', value: 'a long description', recordLabel: 'Deacon [000123:Fallout4.esm]', fieldName: 'Description', plugin: 'MyMod.esp', origin: 'ModA', readOnly: true },
-      extendedFieldEditorDeps,
-    );
-  });
-
-  // ADR-0036: origin is forwarded faithfully — the router's own job is just forwarding;
-  // extendedEditorPath folds it into the temp-file path.
-  it('forwards origin through to openExtendedFieldEditor', async () => {
-    const reply = vi.fn();
-    const extendedFieldEditorDeps = { tempRoot: '/tmp/x', reply, log: vi.fn(), reporter: fakeReporter };
-
-    await routeRecordPanelMessage(
-      { type: WEBVIEW_TO_EXTENSION.OPEN_EXTENDED_EDITOR, requestId: 'r1', value: 'x', recordLabel: 'Deacon', fieldName: 'Description', plugin: 'Shared.esp', origin: 'ModB', readOnly: false },
-      makeDeps({ extendedFieldEditor: extendedFieldEditorDeps }),
-    );
-
-    expect(openExtendedFieldEditorMock).toHaveBeenCalledWith(
-      expect.objectContaining({ plugin: 'Shared.esp', origin: 'ModB' }),
-      extendedFieldEditorDeps,
-    );
   });
 });
