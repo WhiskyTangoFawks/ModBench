@@ -21,8 +21,8 @@ public sealed class HandWrittenApplierScanTests
     private const string AllowlistPath = "MEditService.Tests/Architecture/hand-written-applier-allowlist.txt";
 
     // The name is captured dotted and matched on its last segment, so a fully qualified
-    // construction cannot slip past a scan that only ever saw simple names; a name ending the line
-    // is an object initializer whose brace opens on the next.
+    // construction cannot slip past; a name ending the line is an object initializer whose brace
+    // opens on the next.
     private static readonly Regex Construction = new(@"\bnew\s+([A-Za-z_][A-Za-z0-9_.]*)\s*(?:[(<{]|$)", RegexOptions.Compiled);
 
     private static readonly IReadOnlySet<string> MutagenTypeNames = MutagenAndNoggogTypeNames();

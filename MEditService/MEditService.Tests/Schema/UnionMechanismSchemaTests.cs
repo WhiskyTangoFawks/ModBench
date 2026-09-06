@@ -5,10 +5,9 @@ using Mutagen.Bethesda.Fallout4;
 
 namespace MEditService.Tests.Schema;
 
-/// <summary>Every base with concrete leaves under it — a record signature backed by several
-/// classes, OMOD's generic-closed properties, an abstract union, a concrete base with subclasses —
-/// is one sparse union: the document's discriminator beside the members, and a member the leaves
-/// shape differently one field with a variant per leaf (ADR-0032).</summary>
+/// <summary>Record classes sharing a signature, OMOD's generic-closed properties, abstract and
+/// concrete unions: every base with leaves is one sparse union, the document's discriminator
+/// beside members carrying a variant per leaf wherever leaves differ (ADR-0032).</summary>
 public sealed class UnionMechanismSchemaTests
 {
     private static readonly IReadOnlyDictionary<string, RecordTableSchema> Schemas =

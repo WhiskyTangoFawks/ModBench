@@ -93,10 +93,9 @@ internal static class ReflectedTypes
         typeof(int), typeof(uint), typeof(long), typeof(ulong),
     ];
 
-    /// <summary>The name the codec writes as <c>MutagenObjectType</c> for a value of this class
-    /// (Mutagen.Bethesda.Serialization's <c>GetNameWithDeclaringType</c>), so a discriminator domain
-    /// and the document agree. <paramref name="typeArguments"/> close an open generic by name, since
-    /// the closed type is a construction the codec, not the reflector, owns.</summary>
+    /// <summary>The name the codec writes as <c>MutagenObjectType</c> for this class (the
+    /// serializer's <c>GetNameWithDeclaringType</c>); <paramref name="typeArguments"/> close an open
+    /// generic by name, never by constructing the closed type.</summary>
     internal static string DocumentTypeName(Type type, Type[]? typeArguments = null)
     {
         var name = type.DeclaringType == null ? type.Name : $"{type.DeclaringType.Name}+{type.Name}";

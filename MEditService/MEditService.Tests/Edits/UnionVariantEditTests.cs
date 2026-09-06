@@ -9,9 +9,9 @@ using static MEditService.Tests.TestSupport.Envelopes;
 
 namespace MEditService.Tests.Edits;
 
-/// <summary>A member the leaves of a union shape differently is written through the leaf the
-/// document names — a record-level sibling's scalar and an OMOD property's value alike — and the
-/// written document is the codec's own for the edited record (ADR-0032).</summary>
+/// <summary>A member the union's leaves shape differently is written through the leaf the
+/// document names, a record-level scalar and an OMOD property value alike; the result is the
+/// codec's own document (ADR-0032).</summary>
 public sealed class UnionVariantEditTests
 {
     private static readonly IReadOnlyDictionary<string, RecordTableSchema> Schemas =

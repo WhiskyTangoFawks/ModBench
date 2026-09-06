@@ -110,7 +110,7 @@ public class SchemaReflectorTests
     // ── OMOD's Properties element must surface the property's actual Value ──
     //
     // IAObjectModPropertyGetter<T> declares only Property/Step; the payload lives on the seven generic
-    // leaves under the base, each named as the codec closes it with the owner's type argument.
+    // leaves under it, named as the codec closes them.
 
     [Fact]
     public void GetSchemas_Omod_PropertiesElement_ExposesSevenLeafUnionFields()

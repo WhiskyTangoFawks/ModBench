@@ -7,16 +7,14 @@ using Microsoft.Extensions.Logging;
 
 namespace MEditService.Core.Schema;
 
-/// <summary>A Loqui base whose per-subclass data lives on the classes under it: the union of each
-/// leaf's members plus the document's own discriminator. A concrete base is its last leaf. The one
-/// mechanism for a base with leaves, whether the base is reached inside a record, is generic and
-/// closed by its owner (OMOD's properties), or is the record class itself (GMST, GLOB, DMGT).</summary>
+/// <summary>The one mechanism for a Loqui base with concrete leaves under it, inside a record,
+/// generic (OMOD) or the record class itself (GMST, GLOB, DMGT): each leaf's members unioned,
+/// plus the document's own discriminator.</summary>
 internal static class LoquiUnions
 {
-    // Every class Loqui registers under a base, filed under its whole base chain so a two-level
-    // chain is found like a one-level one; scanned once per schema build. A generic base is keyed by
-    // its definition, since a generic leaf derives from the open form. A subclass Loqui does not
-    // register (DeletedObjectModification) is no leaf: the codec has no serializer for it either.
+    // Every class Loqui registers, filed under its whole base chain so a two-level chain is found
+    // too, a generic base by its definition. An unregistered subclass (DeletedObjectModification)
+    // is no leaf: the codec cannot build it either.
     private static readonly ConcurrentDictionary<Assembly, ILookup<Type, (Type Class, Type Getter)>> LeavesByBase = new();
 
     private static ILookup<Type, (Type Class, Type Getter)> IndexLeavesByBase(Assembly assembly) =>
@@ -43,14 +41,14 @@ internal static class LoquiUnions
     {
         if (ReflectedTypes.GetSetterType(getterInterface) is not { } setterType) return null;
         if (game.Annotations.IsExcludedUnion(setterType)) return null;
+        // A generic leaf's getter is open, its own members never mentioning the type argument; its
+        // name is the codec's, closed by the arguments the owner's base carries.
+        var typeArguments = getterInterface.GetGenericArguments();
         // A concrete base is its own last leaf: a leaf is recognised by IsInstanceOfType, first
         // match wins, and the base would otherwise claim every object of its subclasses.
-        // A generic leaf's getter is open, and the members it declares beyond the base's never
-        // mention the type argument; its name is the codec's, closed by the arguments the owner's
-        // base carries.
         var leaves = LeavesUnder(setterType)
             .OrderBy(leaf => leaf.Class == setterType)
-            .Select(leaf => (leaf.Getter, ReflectedTypes.DocumentTypeName(leaf.Class, getterInterface.GetGenericArguments())))
+            .Select(leaf => (leaf.Getter, ReflectedTypes.DocumentTypeName(leaf.Class, typeArguments)))
             .ToList();
         return IsUnionBase(setterType, leaves) ? new LoquiUnion(setterType, leaves) : null;
     }
@@ -119,8 +117,8 @@ internal static class LoquiUnions
     }
 
     /// <summary>The record classes sharing one table as one union: the base's columns, then the
-    /// leaves' own through the same fold, the discriminator first. The table is a union at the
-    /// record level: its document names its class first, and the discriminator column carries it.</summary>
+    /// leaves' own through the same fold, and first the discriminator column, since the table's
+    /// document names its class first.</summary>
     internal static List<ColumnSpec> BuildUnionColumns(LoquiUnion union, GameReflection game, ILogger logger)
     {
         var columns = ColumnReflection.ReflectColumns(ReflectedTypes.GetOwnGetterType(union.SetterType)!, game, logger);
@@ -144,11 +142,9 @@ internal static class LoquiUnions
         return columns;
     }
 
-    // One field per member name, shaped as the first declaring leaf's. The variant map records each
-    // declaring leaf's own shape whenever the leaves disagree on it or one lacks the member, so a
-    // leaf switch knows what the incoming leaf keeps. Shape is the whole wire description — an enum's
-    // domain and a link's targets included — compared structurally, since FieldMetadata's
-    // collections compare by reference.
+    // One field per member name, shaped as its first leaf's, with a variant per leaf wherever the
+    // leaves disagree or one lacks it. Shape is the whole wire description, compared as JSON since
+    // FieldMetadata's collections compare by reference.
     private static IEnumerable<(T First, IReadOnlyDictionary<string, T>? Variants)> UnionMembers<T>(
         IReadOnlyList<(string ClassName, IReadOnlyList<T> Members)> leaves, Func<T, string> name, Func<T, FieldMetadata> shape)
     {

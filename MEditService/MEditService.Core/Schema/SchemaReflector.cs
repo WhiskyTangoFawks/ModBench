@@ -156,12 +156,13 @@ public sealed class SchemaReflector
 
     // RecordType stays bound to the discovery winner even though the columns are unioned: Mutagen's
     // EnumerateMajorRecords falls back to the abstract group base and returns every sibling's records
-    // anyway, so pointing at the base would gain nothing. Decided by sibling count, never table or
-    // signature name, so another game's multi-subclass signature needs no change.
+    // anyway, so pointing at the base would gain nothing.
     private static RecordTableSchema BuildSchema(
         string tableName, Type getterType, List<Type> siblingGetterTypes,
         GameReflection game, ILogger logger)
     {
+        // Decided by sibling count, never table or signature name, so another game's multi-subclass
+        // signature needs no change.
         var columns = siblingGetterTypes.Count > 1
             ? LoquiUnions.BuildUnionColumns(LoquiUnions.RecordUnion(siblingGetterTypes), game, logger)
             : ColumnReflection.ReflectColumns(getterType, game, logger);
