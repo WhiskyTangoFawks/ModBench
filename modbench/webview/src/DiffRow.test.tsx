@@ -1,6 +1,6 @@
 import '@testing-library/jest-dom';
 import React from 'react';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, within } from '@testing-library/react';
 import { describe, it, expect, vi, afterEach } from 'vitest';
 
 // FormKeyCell's pickFormKey import touches vscode.ts's acquireVsCodeApi() at module load.
@@ -317,26 +317,87 @@ describe('DiffRow — FormKey leaf resolution is independent of the parent field
   });
 });
 
-// Every other fixture here carries one field, where `fields[0]` would be right by accident; the
-// decoy ahead of Location is what forbids that reading.
-describe('DiffRow — the check error is the row\'s own root field\'s', () => {
+// Every `checkError` on the override document below is a decoy, so a lookup back into it — the
+// row's own root field or the column's first field alike — fails.
+describe('DiffRow — the check error is the diff node\'s own, per column', () => {
   const locationMeta = fieldMeta({ name: 'Location', type: 'struct', fields: [fieldMeta({ name: 'aliasId', type: 'int' })] });
+  const fkMeta = fieldMeta({ name: 'Reference', type: 'formKey', validFormKeyTypes: ['REFR'] });
 
-  it('shows the warning from the row\'s own root field, not from the first field in the column', () => {
-    const master = override('Fallout4.esm', {
-      fields: [
-        { metadata: fieldMeta({ name: 'Level', type: 'int' }), value: 4, checkError: 'decoy: a different field is dangling' },
-        { metadata: locationMeta, value: {}, checkError: 'Location: its reference is dangling' },
-      ],
-    });
+  const decoyed = (plugin: string) => override(plugin, {
+    fields: [
+      { metadata: fieldMeta({ name: 'Level', type: 'int' }), value: 4, checkError: 'decoy: a different field is dangling' },
+      { metadata: locationMeta, value: {}, checkError: 'decoy: the root field\'s own error' },
+    ],
+  });
+
+  it('shows the warning from the row\'s own diff node, not from any field in the column', () => {
     renderRow({
-      diff: diff({ fieldName: 'Location', values: { 'Fallout4.esm': {} } }),
+      diff: diff({
+        fieldName: 'Location', values: { 'Fallout4.esm': {} },
+        checkErrors: { 'Fallout4.esm': 'Location: its reference is dangling' },
+      }),
       meta: locationMeta,
-      columns: [diskColumn(master)],
+      columns: [diskColumn(decoyed('Fallout4.esm'))],
       context: { path: [], rootField: 'Location', depth: 0 },
     });
     expect(screen.getByTitle('Location: its reference is dangling')).toBeInTheDocument();
     expect(screen.queryByTitle('decoy: a different field is dangling')).not.toBeInTheDocument();
+    expect(screen.queryByTitle('decoy: the root field\'s own error')).not.toBeInTheDocument();
+  });
+
+  it('warns only in the column whose entry the node carries', () => {
+    renderRow({
+      diff: diff({
+        fieldName: 'Location', values: { 'Fallout4.esm': {}, 'MyMod.esp': {} },
+        checkErrors: { 'MyMod.esp': 'Location: its reference is dangling' },
+      }),
+      meta: locationMeta,
+      columns: [diskColumn(decoyed('Fallout4.esm')), diskColumn(decoyed('MyMod.esp'))],
+      context: { path: [], rootField: 'Location', depth: 0 },
+    });
+    const cells = screen.getAllByText('{…}').map(s => s.closest('td')!);
+    expect(within(cells[0]).queryByTitle('Location: its reference is dangling')).not.toBeInTheDocument();
+    expect(within(cells[1]).getByTitle('Location: its reference is dangling')).toBeInTheDocument();
+  });
+
+  // A nested row is a diff node like any other, so its error is its own, not its root field's.
+  const nested = {
+    meta: fkMeta,
+    columns: [diskColumn(decoyed('Fallout4.esm'))],
+    context: { path: [{ kind: 'member', name: 'Reference' }] as PathSegment[], rootField: 'Location', depth: 1 },
+  };
+
+  it('a struct-member row shows the error its own node carries', () => {
+    renderRow({
+      ...nested,
+      diff: diff({
+        fieldName: 'Reference', values: { 'Fallout4.esm': 'FFFFFF:Dangling.esm' },
+        checkErrors: { 'Fallout4.esm': 'Reference: [FFFFFF:Dangling.esm] <Error: Could not be resolved>' },
+      }),
+    });
+    expect(screen.getByTitle('Reference: [FFFFFF:Dangling.esm] <Error: Could not be resolved>')).toBeInTheDocument();
+  });
+
+  it('a struct-member row whose node carries none shows none', () => {
+    renderRow({
+      ...nested,
+      diff: diff({ fieldName: 'Reference', values: { 'Fallout4.esm': '000019:Fallout4.esm' } }),
+    });
+    expect(screen.queryByText('⚠')).not.toBeInTheDocument();
+  });
+
+  // An array element's error is the element's own, so an element hop does not suppress it.
+  it('an array-element row shows its own error', () => {
+    renderRow({
+      diff: diff({
+        fieldName: '[1]', values: { 'Fallout4.esm': 'FFFFFF:Dangling.esm' },
+        checkErrors: { 'Fallout4.esm': '[FFFFFF:Dangling.esm] <Error: Could not be resolved>' },
+      }),
+      meta: fieldMeta({ name: '', type: 'formKey' }),
+      columns: [diskColumn(decoyed('Fallout4.esm'))],
+      context: { path: [{ kind: 'index', index: 1 }], rootField: 'Keywords', depth: 1 },
+    });
+    expect(screen.getByTitle('[FFFFFF:Dangling.esm] <Error: Could not be resolved>')).toBeInTheDocument();
   });
 });
 
@@ -611,11 +672,11 @@ describe('DiffRow — label indentation', () => {
   });
 });
 
-// `{…}`/`[n]` states that something is present but collapsed. A column whose plugin has no
-// element there has nothing to collapse, so its cell stays empty.
+// `{…}`/`[n]` states that something is present but collapsed. A column with nothing there — an
+// unset nullable struct, an owner it does not carry — has nothing to collapse.
 describe('DiffRow — a collapsed container row, per column', () => {
   const structMeta = fieldMeta({
-    name: 'Location', type: 'struct',
+    name: 'Location', type: 'struct', allowsNull: true,
     fields: [fieldMeta({ name: 'aliasId', type: 'int' })],
   });
   const arrayMeta = fieldMeta({
@@ -636,10 +697,19 @@ describe('DiffRow — a collapsed container row, per column', () => {
     return screen.getByText('Location').closest('tr')!.querySelectorAll('td')[columnIndex + 1].textContent;
   }
 
-  it('shows the placeholder only in the column that has the element', () => {
+  it('shows the placeholder only in the column that has a nullable struct', () => {
     renderContainer({ 'Fallout4.esm': { aliasId: 5 }, 'MyMod.esp': null });
     expect(cellText(0)).toBe('{…}');
     expect(cellText(1)).toBe('');
+  });
+
+  // ADR-0032: a non-nullable struct has no unset, so the column omitting it holds its default.
+  it('shows the placeholder in every column for a non-nullable struct one column omits', () => {
+    renderContainer(
+      { 'Fallout4.esm': { aliasId: 5 }, 'MyMod.esp': null },
+      fieldMeta({ ...structMeta, allowsNull: false }));
+    expect(cellText(0)).toBe('{…}');
+    expect(cellText(1)).toBe('{…}');
   });
 
   it('shows the placeholder in every column when both plugins have the element', () => {

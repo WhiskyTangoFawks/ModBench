@@ -196,6 +196,12 @@ export function defaultOf(meta: FieldMetadata): unknown {
   }
 }
 
+/** Whether a column holds this node. Absent means default (ADR-0032), and a non-nullable
+ *  struct's default is that struct; a nullable one has an "unset" for its absence to mean. */
+export function columnHasNode(meta: FieldMetadata, value: unknown): boolean {
+  return value != null || !(meta.type === 'struct' && meta.allowsNull);
+}
+
 // A member whose shape varies by leaf exists only under the leaves its variants name; every other
 // member is every leaf's.
 export function declaresMember(meta: FieldMetadata, owner: unknown, ownerMeta: FieldMetadata | undefined): boolean {

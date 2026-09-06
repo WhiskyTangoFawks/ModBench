@@ -217,9 +217,11 @@ copies the whole structure, as xEdit does when you drag by the header.
 
 The placeholder is a statement that a container is present and merely collapsed, so it is drawn
 per column, not per row: a column whose plugin has nothing there — an array slot past its own
-length, an abstract-union member its concrete leaf doesn't declare, a member of a struct the column
-does not carry — renders an empty cell. The exception is a row *no* column carries a value for,
-which holds nothing but its children and is therefore present in every column; it keeps its
+length, an abstract-union member its concrete leaf doesn't declare, an unset nullable struct or a
+member of one — renders an empty cell. A non-nullable struct has no unset, so a column that omits
+one holds that struct: the placeholder stays and each member reads its own default. The exception
+is a row *no* column carries a value for, which holds nothing but its children and is therefore
+present in every column; it keeps its
 placeholder throughout. **Absent means default** (ADR-0032): the document omits a member equal to
 its default, so a scalar the column's own owner omits reads as that default — `0`, `false`, the
 empty string, the enum default the metadata names, an empty flag set, `[0]` for a list — and its
@@ -910,8 +912,8 @@ These apply everywhere a field value is rendered — the one compare grid and an
    implicitly-always-loaded master — resolves valid *without* appearing in the index. Such a form
    (the Player, `00000007`, and friends) exists in no plugin's data, so a lookup miss on it can
    never mean the reference is broken; type-mismatch checking simply does not apply. This follows
-   xEdit, which never reports that range as unresolved. `checkError` drives the ⚠ icon but does not
-   gate the link.
+   xEdit, which never reports that range as unresolved. `FieldDiff.CheckErrors` carries one error
+   per column at every depth, so each row's ⚠ icon is its own node's; it does not gate the link.
 3. **Structs and arrays are always collapsible**, default collapsed; expand state is
    per-load order, not persisted across restarts. A row's label indents one step per ancestor
    hop, so a grandchild reads as sitting inside its parent rather than beside it. Array **element values** offer the inline-edit
@@ -1003,8 +1005,10 @@ These apply everywhere a field value is rendered — the one compare grid and an
    change already overlaid; there is no separate dirty visual treatment on this
    panel. Revert is a git gesture in the native Source Control panel, not a cell-level control
    here ([medit-version-control.md](medit-version-control.md)).
-5. **A member the document omits** reads as its default (*By cell* above); a member of an object
-   the column does not carry renders an empty cell; nothing ever reads "null"/"undefined".
+5. **A member the document omits** reads as its default (*By cell* above), an omitted non-nullable
+   struct member by member; a member of an object the column does not carry — an unset nullable
+   struct, an array slot past its length — renders an empty cell; nothing ever reads
+   "null"/"undefined".
 6. **Read-only cells** in immutable plugin columns are never editable and render no input on
    click.
 7. **A signature backed by several concrete Mutagen subclasses** is one table whose document
