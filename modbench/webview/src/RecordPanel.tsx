@@ -68,8 +68,8 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
   // Deliberately not reset by LOAD_RECORD: collapse state persists across record navigation.
   const [collapsedColumns, setCollapsedColumns] = useState<Set<ColumnKey>>(new Set());
   // ADR-0041: one definition of "this column can be written", computed for the whole grid at
-  // once, since per cell it would lag. A stub document (ADR-0032) takes no patch, so a diagnosis
-  // vetoes the column too.
+  // once, since per cell it would lag. The backend refuses every write to a parse-failed record,
+  // so a diagnosis vetoes it too.
   const editableColumns = useMemo(() => columnKeysWhere(result?.overrides, (o, key) =>
     !immutableSet.has(key) && !notInLoadOrderSet.has(key) && trackedSet.has(key)
     && !o.isPartialForm && o.parseDiagnosis == null),

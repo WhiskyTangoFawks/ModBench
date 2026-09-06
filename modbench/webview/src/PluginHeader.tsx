@@ -83,14 +83,13 @@ export function PluginHeader({
   vscodeContext, onTogglePartialForm,
 }: PluginHeaderProps) {
   const status = columnStatus(isImmutable, inLoadOrder, isTracked, o.parseDiagnosis);
-  // The diagnosis is this column's own, so parse failure's reason is composed rather than tabled.
-  // `columnStatus` returns 'parseFailure' for exactly the columns carrying one, so the two cannot
-  // disagree about which reason is given.
-  const title = [STATUS_TEXT[status].title, o.parseDiagnosis].filter(Boolean).join(' ');
-  // An immutable, not-in-load-order, untracked or parse-failed column offers no affordance that
-  // could land, so the checkbox is disabled (never hidden — the current state must stay visible)
-  // rather than a silent dead control.
-  const canWrite = !isImmutable && inLoadOrder && isTracked && o.parseDiagnosis == null;
+  // Parse failure's reason ends with this column's own diagnosis, so it is composed rather than
+  // tabled. Every other state's reason is the table's alone.
+  const title = STATUS_TEXT[status].title + (o.parseDiagnosis == null ? '' : ` ${o.parseDiagnosis}`);
+  // A column that is not plainly tracked and in the load order offers no write that could land,
+  // so the checkbox is disabled (never hidden — the current state must stay visible) rather than
+  // a silent dead control.
+  const canWrite = status === 'tracked' && inLoadOrder;
   return (
     <div data-vscode-context={vscodeContext}>
       {/* Left-click the plugin-name chip collapses/expands this column. ADR-0036:
