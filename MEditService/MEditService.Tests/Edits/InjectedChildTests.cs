@@ -20,9 +20,10 @@ namespace MEditService.Tests.Edits;
 public sealed class InjectedChildTests
 {
     public static TheoryData<string> Injections =>
-        [TopicUnderQuest, SceneUnderQuest, ResponseUnderTopic];
+        [TopicUnderQuest, BranchUnderQuest, SceneUnderQuest, ResponseUnderTopic];
 
     private const string TopicUnderQuest = "a topic under a quest";
+    private const string BranchUnderQuest = "a dialog branch under a quest";
     private const string SceneUnderQuest = "a scene under a quest";
     private const string ResponseUnderTopic = "a response under a dialog topic";
 
@@ -130,8 +131,8 @@ public sealed class InjectedChildTests
         mod.EnumerateMajorRecords().Single(r => r.FormKey == container)
             .EnumerateMajorRecords().Select(r => r.FormKey);
 
-    // A base plugin owning a quest, a topic, a response and a scene; a later plugin whose overrides
-    // of the quest and the topic hold only the children it adds itself.
+    // A base plugin owning a quest, a topic, a response, a branch and a scene; a later plugin
+    // whose overrides of the quest and the topic hold only the children it adds itself.
     private sealed class TwoPlugins : IDisposable
     {
         public const string BasePluginName = "InjectionBase.esm";
@@ -150,6 +151,7 @@ public sealed class InjectedChildTests
         public FormKey Quest { get; }
         public FormKey BaseTopic { get; }
         public FormKey InjectedTopic { get; }
+        public FormKey InjectedBranch { get; }
         public FormKey InjectedScene { get; }
         public FormKey InjectedResponse { get; }
 
@@ -165,6 +167,7 @@ public sealed class InjectedChildTests
             var baseTopic = new DialogTopic(baseMod) { EditorID = "BaseTopic" };
             baseTopic.Responses.Add(new DialogResponses(baseMod) { EditorID = "BaseResponse" });
             baseQuest.DialogTopics.Add(baseTopic);
+            baseQuest.DialogBranches.Add(new DialogBranch(baseMod) { EditorID = "BaseBranch" });
             baseQuest.Scenes.Add(new Scene(baseMod) { EditorID = "BaseScene" });
             baseMod.Quests.Add(baseQuest);
             baseMod.WriteToBinary(basePath);
@@ -178,15 +181,17 @@ public sealed class InjectedChildTests
             var topicOverride = new DialogTopic(BaseTopic, Fallout4Release.Fallout4) { EditorID = "BaseTopic" };
             var injectedResponse = new DialogResponses(injectorMod) { EditorID = "InjectedResponse" };
             var injectedTopic = new DialogTopic(injectorMod) { EditorID = "InjectedTopic" };
+            var injectedBranch = new DialogBranch(injectorMod) { EditorID = "InjectedBranch" };
             var injectedScene = new Scene(injectorMod) { EditorID = "InjectedScene" };
             topicOverride.Responses.Add(injectedResponse);
             questOverride.DialogTopics.Add(topicOverride);
             questOverride.DialogTopics.Add(injectedTopic);
+            questOverride.DialogBranches.Add(injectedBranch);
             questOverride.Scenes.Add(injectedScene);
             injectorMod.Quests.Add(questOverride);
             injectorMod.WriteToBinary(injectorPath);
-            (InjectedTopic, InjectedScene, InjectedResponse) =
-                (injectedTopic.FormKey, injectedScene.FormKey, injectedResponse.FormKey);
+            (InjectedTopic, InjectedBranch, InjectedScene, InjectedResponse) =
+                (injectedTopic.FormKey, injectedBranch.FormKey, injectedScene.FormKey, injectedResponse.FormKey);
 
             Mirror = new LoadOrderMirror(
                 new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
@@ -202,6 +207,7 @@ public sealed class InjectedChildTests
         public (FormKey Container, FormKey Child, string RecordType) Case(string injection) => injection switch
         {
             TopicUnderQuest => (Quest, InjectedTopic, "dial"),
+            BranchUnderQuest => (Quest, InjectedBranch, "dlbr"),
             SceneUnderQuest => (Quest, InjectedScene, "scen"),
             ResponseUnderTopic => (BaseTopic, InjectedResponse, "info"),
             _ => throw new ArgumentOutOfRangeException(nameof(injection), injection, "No such injection case."),
