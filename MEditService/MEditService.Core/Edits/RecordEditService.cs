@@ -217,8 +217,8 @@ public sealed class RecordEditService(
         var isDirectoryPerRecord = unit.IsDirectoryPerRecord;
         var oldLeafPath = isDirectoryPerRecord ? Path.GetDirectoryName(unit.FullPath)! : unit.FullPath;
 
-        // Order lives in the parent's ordered child list keyed by FormKey (ADR-0042 decision 4), which
-        // a rename does not change, so no sibling or parent document is touched.
+        // A leaf is named by identity alone (ADR-0042 decision 4), so a rename touches no sibling or
+        // parent document.
         var newLeafName = SourceUnitResolver.LeafNameFor(formKey, editorId, isDirectoryPerRecord);
         var newLeafPath = Path.Combine(Path.GetDirectoryName(oldLeafPath)!, newLeafName);
 

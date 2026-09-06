@@ -4,7 +4,6 @@ using System.Text.Json.Nodes;
 using MEditService.Core.Queries;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
-using MEditService.Core.Source;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins.Records;
 
