@@ -14,6 +14,11 @@ public interface IRecordIndex : IDisposable
 
     void Initialize(GameRelease release);
 
+    /// <summary>ADR-0046: one monotonic counter, advanced in the same transaction as any row
+    /// change — ingest, a working-tree push, a registration or a winner sweep. Zero until the
+    /// first change lands.</summary>
+    long Sequence { get; }
+
     /// <summary>Indexes one plugin file, replacing whatever <paramref name="key"/> held. ADR-0001:
     /// <paramref name="filePath"/> is stamped with its content hash so the rows are validatable at
     /// the next open; omitting it claims no file backs them.</summary>

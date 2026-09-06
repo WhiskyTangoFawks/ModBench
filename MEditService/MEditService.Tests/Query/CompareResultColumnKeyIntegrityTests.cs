@@ -141,6 +141,8 @@ public sealed class CompareResultColumnKeyIntegrityTests
         public IndexWriteGate WriteGate { get; } = new();
         // These stubs never load, so they are always in the no-load-order state.
         public LoadOrderStatus Status => LoadOrderStatus.None;
+        public long Sequence => 0;
+        public Task<bool> AwaitSequenceAsync(long atLeast, TimeSpan timeout) => throw new NotSupportedException();
         public (ILoadOrder LoadOrder, IRecordReads Reads) RequireScope() => (loadOrder, reads);
         public void Reconcile(string gameDirectory, IReadOnlyList<LoadOrderEntry> plugins, GameRelease gameRelease, string? instanceRoot = null) => throw new NotSupportedException();
         public void Close() => throw new NotSupportedException();

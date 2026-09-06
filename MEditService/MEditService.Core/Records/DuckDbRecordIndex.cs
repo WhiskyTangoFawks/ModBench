@@ -107,6 +107,9 @@ public sealed class DuckDbRecordIndex : IRecordIndex
     /// <summary>See <see cref="IRecordIndex.IndexedContentHash"/>.</summary>
     public string? IndexedContentHash(PluginKey key) => _indexStore.IndexedContentHash(key);
 
+    /// <summary>See <see cref="IRecordIndex.Sequence"/>.</summary>
+    public long Sequence => _indexStore.CurrentSequence();
+
     // ADR-0036: origin is threaded into every per-plugin delete/upsert/append so a plugin is
     // identified by (origin, plugin) together, never filename alone.
     private void Index(IModGetter pluginMod, Registration registration, string origin, string? filePath)
@@ -132,6 +135,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         // tx.Commit() below: tx declared first, appender second, both disposed LIFO after the commit.
         using var documentAppender = Connection.CreateAppender("mirror", "records");
         var timing = _pluginIngest.IndexPlugin(pluginMod, plugin, origin, schemas, documentAppender);
+        _indexStore.BumpSequence();
 
         var commitTimer = Stopwatch.StartNew();
         tx.Commit();
@@ -163,6 +167,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         // it behind would leave the mirror asserting rows the index does not hold.
         _indexStore.DeleteIndexedFile(plugin, origin);
         DeleteRegistration(plugin, origin);
+        _indexStore.BumpSequence();
 
         tx.Commit();
     }
@@ -185,8 +190,13 @@ public sealed class DuckDbRecordIndex : IRecordIndex
     // ADR-0001: registration is visibility. Every public relation is a view over its `mirror.` table
     // joined to this row, so writing or deleting the row makes a plugin's rows answer or fall
     // silent; neither verb touches a data row.
-    public void Register(PluginKey key, Registration registration) =>
+    public void Register(PluginKey key, Registration registration)
+    {
+        using var tx = Connection.BeginTransaction();
         UpsertRegistration(key.Name, key.Origin!, registration);
+        _indexStore.BumpSequence();
+        tx.Commit();
+    }
 
     public void Unregister(PluginKey key)
     {
@@ -194,7 +204,10 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         {
             _logger.LogInformation("Unregistering {Plugin} from {Origin}", key.Name, key.Origin);
         }
+        using var tx = Connection.BeginTransaction();
         DeleteRegistration(key.Name, key.Origin!);
+        _indexStore.BumpSequence();
+        tx.Commit();
     }
 
     /// <summary>See <see cref="IRecordIndex.RegisteredPlugins"/>.</summary>
@@ -222,6 +235,17 @@ public sealed class DuckDbRecordIndex : IRecordIndex
     /// registering a plugin can move the winner of every FormKey it holds. Measured at ~75 ms for
     /// both refs on a 48,000-record, 60-plugin fixture.</summary>
     public void UpdateWinners()
+    {
+        using var tx = Connection.BeginTransaction();
+        UpdateWinnersCore();
+        _indexStore.BumpSequence();
+        tx.Commit();
+    }
+
+    // The sweep itself, unwrapped: a caller already inside a transaction (ApplyWorkingTreeChanges
+    // and its neighbours below) calls this directly, since DuckDB refuses a second BeginTransaction
+    // on one connection.
+    private void UpdateWinnersCore()
     {
         Execute($"DELETE FROM {TableDdlBuilder.WinnersRelation}");
 
@@ -264,7 +288,8 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         // Only a delta that added or removed a row can move winner status. Re-swept for the whole
         // load order rather than per FormKey because UpdateWinners is the one definition of winning
         // (measured at 18 ms over 48k records).
-        if (_workingTreeOverlay.ApplyWorkingTreeChanges(key, deltas)) UpdateWinners();
+        if (_workingTreeOverlay.ApplyWorkingTreeChanges(key, deltas)) UpdateWinnersCore();
+        _indexStore.BumpSequence();
         tx.Commit();
     }
 
@@ -277,7 +302,8 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         _workingTreeOverlay.CreateWorkingTreeRecord(key, formKey, recordType, body);
         // A create is always structural — a row that did not exist at Effective now does — so this
         // always resweeps, the same trigger ApplyWorkingTreeChanges's own structural deltas use.
-        UpdateWinners();
+        UpdateWinnersCore();
+        _indexStore.BumpSequence();
         tx.Commit();
     }
 
@@ -315,7 +341,8 @@ public sealed class DuckDbRecordIndex : IRecordIndex
 
         // Once, at the end: the sequence both creates an Effective row and removes one, so it is
         // structural either way, and UpdateWinners re-sweeps the whole load order regardless.
-        UpdateWinners();
+        UpdateWinnersCore();
+        _indexStore.BumpSequence();
         tx.Commit();
     }
 
@@ -326,6 +353,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
 
         using var tx = Connection.BeginTransaction();
         _workingTreeOverlay.SetCommittedBaseline(key, baselines);
+        _indexStore.BumpSequence();
         tx.Commit();
     }
 
@@ -338,7 +366,8 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         _workingTreeOverlay.MarkWorkingTreeOnly(key, formKeys);
         // Effective is untouched, but Head just lost a row per FormKey, which can promote the next
         // plugin down at that ref; Head's winners are swept, not derived per read (ADR-0001).
-        UpdateWinners();
+        UpdateWinnersCore();
+        _indexStore.BumpSequence();
         tx.Commit();
     }
 
@@ -353,7 +382,8 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         _workingTreeOverlay.SeedCommittedOnly(key, records);
         // The mirror of MarkWorkingTreeOnly's sweep: Head just gained a row per FormKey, which can
         // demote whoever was winning it at that ref. Effective is untouched either way.
-        UpdateWinners();
+        UpdateWinnersCore();
+        _indexStore.BumpSequence();
         tx.Commit();
     }
 

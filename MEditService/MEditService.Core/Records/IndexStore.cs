@@ -14,6 +14,7 @@ namespace MEditService.Core.Records;
 internal sealed class IndexStore
 {
     private const string FilesRelation = "mirror.files";
+    private const string SequenceRelation = "mirror.sequence";
 
     private readonly ILogger _logger;
     private readonly string? _databasePath;
@@ -232,4 +233,16 @@ internal sealed class IndexStore
 
     public void DeleteIndexedFile(string plugin, string origin) =>
         DuckDbSql.ExecuteFor(Connection, $"DELETE FROM {FilesRelation} WHERE plugin = $1 AND origin = $2", plugin, origin);
+
+    // Joins whichever transaction is active on Connection, same as every other write here — the
+    // caller's tx.Commit()/rollback decides this counter's fate along with the rows it describes.
+    public void BumpSequence() =>
+        DuckDbSql.ExecuteFor(Connection, $"UPDATE {SequenceRelation} SET value = value + 1");
+
+    public long CurrentSequence()
+    {
+        using var cmd = Connection.CreateCommand();
+        cmd.CommandText = $"SELECT value FROM {SequenceRelation}";
+        return Convert.ToInt64(cmd.ExecuteScalar(), CultureInfo.InvariantCulture);
+    }
 }

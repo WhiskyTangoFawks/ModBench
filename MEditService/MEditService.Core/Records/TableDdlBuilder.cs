@@ -76,11 +76,27 @@ public sealed class TableDdlBuilder(SchemaReflector reflector)
         CreatePlacementTables(connection);
         CreateContainerChildTable(connection);
         CreateRecordTypeFailureTable(connection);
+        CreateSequenceTable(connection);
 
         // Views after tables, in dependency order: the registered views over every mirror table, then
         // the Head views over the registered `records`/`records_committed`.
         CreateRegisteredViews(connection);
         CreateHeadView(connection);
+    }
+
+    // ADR-0046: a plain table, not DuckDB's SEQUENCE — nextval() is not transactional, and this
+    // count must roll back with the rows it describes. The seed is a no-op past the first open.
+    private static void CreateSequenceTable(DuckDBConnection connection)
+    {
+        Execute(connection, $"""
+            CREATE TABLE IF NOT EXISTS {MirrorSchema}.sequence (
+                value BIGINT NOT NULL
+            )
+            """);
+        Execute(connection, $"""
+            INSERT INTO {MirrorSchema}.sequence (value)
+            SELECT 0 WHERE NOT EXISTS (SELECT 1 FROM {MirrorSchema}.sequence)
+            """);
     }
 
     // ADR-0041: one json_extract VIEW over the registered `records` per record type, header included.
