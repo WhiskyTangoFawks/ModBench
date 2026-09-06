@@ -64,9 +64,7 @@ internal static class SubFieldReflection
     {
         if (depth > 3) return null;
 
-        var type = prop.PropertyType;
-        var core = Nullable.GetUnderlyingType(type) ?? type;
-        var nullable = Nullable.GetUnderlyingType(type) != null || !type.IsValueType;
+        var (core, nullable) = ReflectedTypes.CoreOf(prop);
 
         return LeafClassification.ClassifyLeaf(prop, core, game) switch
         {
@@ -74,7 +72,7 @@ internal static class SubFieldReflection
             null when ReflectedTypes.IsListType(core, out var elementType) =>
                 ListLeaves.BuildList(prop, elementType, game, path, logger),
             null when ReflectedTypes.IsLoquiInterface(core) => StructLeaves.BuildStruct(prop, core, game, path, depth, logger),
-            _ => SchemaRefusals.ReportUnclassified<SubFieldSpec>(game, logger, prop, core, "sub-field"),
+            _ => SchemaRefusals.ReportUnclassified<SubFieldSpec>(game, logger, prop, core, "member"),
         };
     }
 
@@ -83,7 +81,9 @@ internal static class SubFieldReflection
     internal static SubFieldSpec ProjectSubField(PropertyInfo prop, bool nullable, LeafSpec leaf, GameReflection game)
     {
         return new(prop.Name, leaf.ApiType, leaf.ValidFormKeyTypes, leaf.EnumMembers,
-            AllowsNull: leaf.AllowsNull,
+            // The leaf answers for a form link, whose getter type says nothing; every other kind is
+            // the getter's own annotation, which is what tells an unset member from a defaulted one.
+            AllowsNull: leaf.AllowsNull || ReflectedTypes.IsNullableMember(prop),
             SiblingsInUse: game.Annotations.SiblingsInUseFor(prop),
             Default: nullable ? null : leaf.Default);
     }

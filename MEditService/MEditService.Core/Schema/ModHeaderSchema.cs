@@ -49,14 +49,15 @@ internal static class ModHeaderSchema
         foreach (var (member, readOnlyReason) in PresentedMembers)
         {
             var prop = headerGetterType.GetProperty(member, BindingFlags.Public | BindingFlags.Instance);
-            if (prop == null
-                || ColumnReflection.BuildColumn(prop, $"{modHeaderProp.Name}.{prop.Name}", game, logger) is not { } column)
+            if (prop == null)
             {
                 logger.LogWarning("No {Member} found on {HeaderType}; that header column is omitted", member, headerGetterType);
                 continue;
             }
 
-            columns.Add(column with { ReadOnlyReason = readOnlyReason, Field = XEditLabelled(column.Field) });
+            // A member the builder declines has already said so through SchemaRefusals.
+            if (ColumnReflection.BuildColumn(prop, $"{modHeaderProp.Name}.{prop.Name}", game, logger) is { } column)
+                columns.Add(column with { ReadOnlyReason = readOnlyReason, Field = XEditLabelled(column.Field) });
         }
 
         // The ESL flag's door: a synthetic bit of the flags column, spelled in the document as that
@@ -75,8 +76,8 @@ internal static class ModHeaderSchema
         };
     }
 
-    // The document carries Mutagen's member names; only the header's flags are labelled with
-    // xEdit's, and a name xEdit spells the same carries no label (ADR-0034).
+    // The document carries Mutagen's member names; a header column with a closed domain is labelled
+    // with xEdit's, and a name xEdit spells the same carries no label (ADR-0034).
     private static SubFieldSpec XEditLabelled(SubFieldSpec field) =>
         field.EnumMembers.Count == 0
             ? field

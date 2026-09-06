@@ -45,9 +45,7 @@ internal static class ColumnReflection
     internal static ColumnSpec? BuildColumn(
         PropertyInfo prop, string propertyName, GameReflection game, ILogger logger)
     {
-        var type = prop.PropertyType;
-        var core = Nullable.GetUnderlyingType(type) ?? type;
-        var nullable = Nullable.GetUnderlyingType(type) != null || !type.IsValueType;
+        var (core, nullable) = ReflectedTypes.CoreOf(prop);
 
         if (LeafClassification.ClassifyLeaf(prop, core, game) is { } leaf)
         {

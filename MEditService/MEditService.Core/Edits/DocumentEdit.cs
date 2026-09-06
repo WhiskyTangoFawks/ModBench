@@ -437,6 +437,7 @@ internal static class DocumentEdit
             ? a is null && b is null
             : a.Type == b.Type && a.LeafTypeName == b.LeafTypeName
               && a.EnumMembers.Select(m => m.Value).SequenceEqual(b.EnumMembers.Select(m => m.Value), StringComparer.Ordinal)
+              && a.ValidFormKeyTypes.SequenceEqual(b.ValidFormKeyTypes, StringComparer.Ordinal)
               && SameShape(a.ElementType, b.ElementType);
 
     private static RecordEditResult? Add(

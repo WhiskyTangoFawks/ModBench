@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Reflection;
 using Loqui;
 using Mutagen.Bethesda.Plugins;
@@ -18,6 +19,14 @@ internal static class ReflectedTypes
     /// <summary>Of one member declared along an interface chain, the declaration nearest the leaf.</summary>
     internal static PropertyInfo MostDerived(IEnumerable<PropertyInfo> declarations) =>
         declarations.Aggregate((best, candidate) => best.DeclaringType!.IsAssignableFrom(candidate.DeclaringType!) ? candidate : best);
+
+    /// <summary>A member's type with its <c>Nullable&lt;T&gt;</c> wrapper off, and whether that
+    /// wrapper was there — the two questions every leaf dispatch opens with.</summary>
+    internal static (Type Core, bool Nullable) CoreOf(PropertyInfo prop)
+    {
+        var underlying = Nullable.GetUnderlyingType(prop.PropertyType);
+        return (underlying ?? prop.PropertyType, underlying != null || !prop.PropertyType.IsValueType);
+    }
 
     internal static bool IsTranslatedString(Type type) =>
         typeof(ITranslatedStringGetter).IsAssignableFrom(type);
@@ -58,6 +67,18 @@ internal static class ReflectedTypes
     ];
 
     internal static bool IsVectorStructType(Type type) => VectorStructTypes.Contains(type);
+
+    // The codec writes a vector as its components in English, comma-separated
+    // (NewtonsoftJsonSerializationWriterKernel.WriteP3Float). None of these types is IFormattable,
+    // so formatting the whole would silently fall back to the current culture; the components are.
+    private static readonly string[] VectorComponents = ["X", "Y", "Z"];
+
+    /// <summary>One vector value spelled as the codec spells it, at either arity.</summary>
+    internal static string VectorText(object value) =>
+        string.Join(", ", VectorComponents
+            .Select(value.GetType().GetProperty)
+            .OfType<PropertyInfo>()
+            .Select(p => Convert.ToString(p.GetValue(value), CultureInfo.InvariantCulture)));
 
     internal static bool IsAtomicValueType(Type core) => core == typeof(System.Drawing.Color);
 

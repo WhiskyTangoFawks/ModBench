@@ -92,13 +92,13 @@ internal static class LeafClassification
         // A hex blob, a colour and a vector each have a zero the wire's own 0 does not stand for and
         // the type name alone cannot say, so the leaf carries the codec's own spelling of it.
         if (ByteSliceHex.IsByteSlice(core))
-            return Spelled(ByteSliceHex.HexApiType, declared is ReadOnlyMemorySlice<byte> s ? ByteSliceHex.ToHex(s.Span) : null);
+            return TextLeaf(ByteSliceHex.HexApiType, declared is ReadOnlyMemorySlice<byte> s ? ByteSliceHex.ToHex(s.Span) : null);
 
         if (ReflectedTypes.IsAtomicValueType(core))
-            return Spelled("color", declared is Color c ? c.ToHexString() : null);
+            return TextLeaf("color", declared is Color c ? c.ToHexString() : null);
 
         if (ReflectedTypes.IsVectorStructType(core))
-            return Spelled("vector", declared == null ? null : Convert.ToString(declared, CultureInfo.InvariantCulture));
+            return TextLeaf("vector", declared == null ? null : ReflectedTypes.VectorText(declared));
 
         if (ReflectedTypes.IsModKey(core))
             return new("string", "VARCHAR", LeafSpec.NoFormKeyTypes, LeafSpec.NoEnumMembers);
@@ -116,9 +116,8 @@ internal static class LeafClassification
         return null;
     }
 
-    // One text leaf whose zero, where the codec named one, the schema spells for the wire and for a
-    // view alike.
-    private static LeafSpec Spelled(string apiType, string? zero) =>
+    // One VARCHAR leaf, carrying the zero the codec named for the wire and, SQL-quoted, for a view.
+    private static LeafSpec TextLeaf(string apiType, string? zero) =>
         new(apiType, "VARCHAR", LeafSpec.NoFormKeyTypes, LeafSpec.NoEnumMembers,
             ViewDefaultLiteral: zero == null ? null : $"'{zero}'", Default: zero);
 

@@ -167,6 +167,32 @@ public sealed class DocumentEditTests
         Assert.Equal("GreaterThan", Node(after, "Conditions")[0]!["CompareOperator"]!.GetValue<string>());
     }
 
+    // Association is a form link on every archetype leaf, over that leaf's own target type: a cloak
+    // effect names a spell, a light effect a light. The switch drops it.
+    [Fact]
+    public void Set_Discriminator_DropsALinkWhoseTargetTypeTheIncomingLeafDoesNotName()
+    {
+        const string before = """
+            {
+              "FormKey": "000801:DocEdit.esp",
+              "Archetype": {
+                "MutagenObjectType": "MagicEffectCloakArchetype",
+                "Association": "000802:DocEdit.esp"
+              }
+            }
+            """;
+
+        var after = Applied(before, "mgef",
+            SetAt(Json("\"MagicEffectLightArchetype\""), Member("Archetype"), Member("MutagenObjectType")));
+
+        Assert.Equal(
+            [
+                "Archetype.MutagenObjectType: \"MagicEffectCloakArchetype\" -> \"MagicEffectLightArchetype\"",
+                "Archetype.Association: \"000802:DocEdit.esp\" -> <absent>",
+            ],
+            ConditionEditTests.DocumentDiff(before, after));
+    }
+
     [Fact]
     public void Set_Discriminator_ToALeafTheUnionLacks_IsRefusedByName()
     {

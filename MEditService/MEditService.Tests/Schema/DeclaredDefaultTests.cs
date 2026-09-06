@@ -59,11 +59,30 @@ public sealed class DeclaredDefaultTests
 
     // A colour, vector or hex member has no wire zero of its own — 0 is not "#00000000" — so the
     // metadata names the codec's own spelling of it, as an enum names its zero member.
-    [Fact]
-    public void AColorOrVectorMember_NamesTheCodecsSpellingOfItsZero()
+    [Theory]
+    [InlineData("ligh", "Color", "#00000000")]
+    [InlineData("mato", "ProjectionVector", "0, 0, 0")]
+    [InlineData("race", "Unknown", "0x0000000000000000")]
+    public void AColorVectorOrHexMember_NamesTheCodecsSpellingOfItsZero(string table, string column, string zero)
     {
-        Assert.Equal("#00000000", Schemas["ligh"].RecordColumns.Single(c => c.Name == "Color").Field.Default);
-        Assert.Equal("0, 0, 0", Schemas["mato"].RecordColumns.Single(c => c.Name == "ProjectionVector").Field.Default);
+        Assert.Equal(zero, Schemas[table].RecordColumns.Single(c => c.Name == column).Field.Default);
+    }
+
+    // The codec writes each component in English; the vector types are not IFormattable, so
+    // formatting one whole would take the current culture and spell 1.5 as "1,5" wherever the
+    // decimal separator is a comma.
+    [Fact]
+    public void AVectorSpellsItsComponentsInTheCodecsCulture()
+    {
+        string? spelled = null;
+        var thread = new Thread(() => spelled = ReflectedTypes.VectorText(new Noggog.P3Float(1.5f, 2f, 3f)))
+        {
+            CurrentCulture = new System.Globalization.CultureInfo("de-DE"),
+        };
+        thread.Start();
+        thread.Join();
+
+        Assert.Equal("1.5, 2, 3", spelled);
     }
 
     [Fact]

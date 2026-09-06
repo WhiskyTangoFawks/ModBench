@@ -43,40 +43,38 @@ public sealed class OneLeafBuilderTests
         Assert.Contains(arrays, x => x.Depth > 0);
     }
 
+    private static string ArraysWhoseElement(Func<FieldMetadata, bool> lacks) =>
+        string.Join("\n", FormLinkArrays()
+            .Where(x => lacks(x.Meta.ElementType!))
+            .Select(x => x.Path)
+            .Distinct(StringComparer.Ordinal));
+
     [Fact]
     public void EveryFormLinkArrayElement_IsSortable_HoweverDeepTheWalkReachedIt()
     {
-        var unsorted = FormLinkArrays()
-            .Where(x => !x.Meta.ElementType!.IsSortable)
-            .Select(x => x.Path)
-            .Distinct(StringComparer.Ordinal)
-            .ToList();
+        var unsorted = ArraysWhoseElement(e => !e.IsSortable);
 
-        Assert.True(unsorted.Count == 0, string.Join("\n", unsorted));
+        Assert.True(unsorted.Length == 0, unsorted);
     }
 
-    // A struct's nullability is the getter's own annotation and nothing else: the CLR type is a
-    // reference type either way, so without it an omitted Destructible and an omitted ObjectBounds
-    // read alike.
-    [Fact]
-    public void AStructMember_SaysWhetherAbsenceIsAValue()
+    // Absence is a value or it is a default, and only the getter's own annotation says which: the
+    // CLR type is a reference type either way for a struct, and carries no default for a string.
+    [Theory]
+    [InlineData("cont", "Destructible", true)]
+    [InlineData("cont", "ObjectBounds", false)]
+    [InlineData("npc_", "Name", true)]
+    [InlineData("npc_", "HeightMin", false)]
+    public void AMember_SaysWhetherAbsenceIsAValue(string table, string column, bool allowsNull)
     {
-        var container = Schemas["cont"].RecordColumns;
-
-        Assert.True(container.Single(c => c.Name == "Destructible").Field.AllowsNull);
-        Assert.False(container.Single(c => c.Name == "ObjectBounds").Field.AllowsNull);
+        Assert.Equal(allowsNull, Schemas[table].RecordColumns.Single(c => c.Name == column).Field.AllowsNull);
     }
 
     // A "Null" slot is a tolerated placeholder in any form-link array, not a dangling reference.
     [Fact]
     public void EveryFormLinkArrayElement_AllowsNull_HoweverDeepTheWalkReachedIt()
     {
-        var strict = FormLinkArrays()
-            .Where(x => !x.Meta.ElementType!.AllowsNull)
-            .Select(x => x.Path)
-            .Distinct(StringComparer.Ordinal)
-            .ToList();
+        var strict = ArraysWhoseElement(e => !e.AllowsNull);
 
-        Assert.True(strict.Count == 0, string.Join("\n", strict));
+        Assert.True(strict.Length == 0, strict);
     }
 }
