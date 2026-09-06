@@ -102,9 +102,7 @@ public sealed class SourceFreshness(ILoadOrderMirror mirror, ILogger<SourceFresh
         // mismatch the codec's BOM-free text on every read forever, since the self-heal never converges.
         ownerBytes = StripUtf8Bom(ownerBytes);
 
-        // A container's own file carries its children's ordered list as well as its fields (ADR-0042
-        // decision 4); the body the index holds is the fields alone, so the compare sees the same.
-        if (!unit.IsEmbedded) return SourceChildOrder.WithoutOrder(Encoding.UTF8.GetString(ownerBytes));
+        if (!unit.IsEmbedded) return Encoding.UTF8.GetString(ownerBytes);
 
         var owner = _codec.DeserializeFromBytesAsync(ownerBytes, release, unit.OwnerRecordType).GetAwaiter().GetResult();
         if (ContainerChildFields.FindEmbeddedChild(owner, formKey) is not { } found) return null;
@@ -149,7 +147,7 @@ public sealed class SourceFreshness(ILoadOrderMirror mirror, ILogger<SourceFresh
         // does not carry this child, which leaves the committed baseline alone (fail closed).
         var headText = unit.IsEmbedded
             ? RecordBodyFromOwnerBytes(Encoding.UTF8.GetBytes(headOwnerText), unit, formKey, release)
-            : SourceChildOrder.WithoutOrder(headOwnerText);
+            : headOwnerText;
         if (headText is not { } resolvedHeadText) return;
         if (string.Equals(resolvedHeadText, committedBody, StringComparison.Ordinal)) return;
 

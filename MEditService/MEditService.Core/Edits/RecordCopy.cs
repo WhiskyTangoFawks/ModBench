@@ -216,8 +216,8 @@ internal sealed class RecordCopy(ILoadOrderMirror mirror, SchemaReflector schema
         var placement = SourcePlacement.For(
             destinationPlugin.Name, recordType, formKey, record.EditorID, release,
             cellLocation != null ? RecordEditService.EnsureInteriorCellBlockPath(destinationModFolder, destinationPlugin.Name, release) : null);
-        var body = RecordEditService.WritePlaced(
-            destinationModFolder, placement, formKey, path => RecordEditService.SerializeAndWrite(codec, record, path, release));
+        var body = RecordEditService.WriteAt(
+            destinationModFolder, placement, path => RecordEditService.SerializeAndWrite(codec, record, path, release));
         index.CreateWorkingTreeRecord(destinationPlugin, formKey, recordType, body);
         mirror.ReapplyFilter();
 

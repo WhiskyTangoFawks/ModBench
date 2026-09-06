@@ -372,19 +372,15 @@ plugins are never probed at all.
 - **`meta.ini` is a source, never content**: read for trailer values at baseline moments,
   never committed (ADR-0041 — never track a file that changes for non-content
   reasons).
-- **Order is parent data, and drift in it is asymmetric** (ADR-0042 decision 4). A
-  folder-split child's file name carries identity and never position; the parent's own
-  document carries the ordered list. Hand editing the tree therefore has two different
-  outcomes, on purpose: **deleting a child file is honoured as a deletion** (it is how a
-  record is deleted by hand, and the git-native model above makes that first-class), while
-  **adding a child the parent's list does not name is refused**, naming the parent and the
-  children — nothing can say where an unlisted child belongs, and an invented position is a
-  change to the compiled plugin. Re-Track is the recovery, the same uniform
-  answer every other format break gets. The tree is authoritative for whether a child
-  exists; the parent's list for the order of the ones that do. A hand delete is honoured at *read* but
-  still refuses at *compile*, until the author removes the stale entry or re-Tracks — Modbench does
-  not repair a tree changed behind its back. The superseded scheme had the same limit in the same
-  place, so this is ported rather than introduced.
+- **No list carries order, and hand edits are ordinary edits** (ADR-0042 decision 4). A
+  flat group's or block level's child is a file or directory named by identity and never
+  position, and nothing records the order: the reader's directory enumeration decides it.
+  **Deleting a child file is a deletion** and **adding one is an addition**; the git-native
+  model above makes both first-class. A document the codec cannot reproduce — a hand edit
+  in a spelling the codec would not write, or a document left over from a superseded layout —
+  is refused at *compile*, naming the path, in both directions of the codec fixed point.
+  Re-Track is the recovery, the same uniform answer every other format break gets —
+  Modbench does not repair a tree changed behind its back.
 - **Refusal posture is git's**: refuse and the user fixes it — rebase-over-dirt,
   deserialize-over-dirt, renumber-forcing compiles. Automation on top may come later;
   none of it is in this milestone.

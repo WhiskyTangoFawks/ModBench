@@ -83,12 +83,6 @@ public sealed class RecordEditServiceCreateRecordTests
         Assert.Equal(2, names.Count);
         Assert.Contains(names, n => n.StartsWith("UntouchedNpc", StringComparison.Ordinal));
         Assert.Contains(names, n => n.StartsWith("AfterTheGap", StringComparison.Ordinal));
-
-        // The group's own ordered child list is the survivor followed by the newcomer, with the
-        // deleted record's entry gone.
-        Assert.Equal(
-            [mod.OtherNpc.ToString(), created.NewFormKey!],
-            SourceChildOrder.ListAt(SourceChildOrder.CarrierFor(npcsDir, parentIsRecord: false), "Npcs"));
     }
 
     [Fact]

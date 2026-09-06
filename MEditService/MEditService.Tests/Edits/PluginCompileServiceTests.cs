@@ -1,6 +1,7 @@
 using System.Text.Json;
 using MEditService.Core.Edits;
 using MEditService.Core.Schema;
+using MEditService.Core.Source;
 using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
@@ -25,6 +26,24 @@ public sealed class PluginCompileServiceTests : IDisposable
         new(_mod.Mirror, new PluginWriter(NullLogger<PluginWriter>.Instance), NullLogger<PluginCompileService>.Instance);
 
     private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
+
+    private IFallout4ModGetter CompileAndReimport(out IDisposable handle)
+    {
+        var result = CompileService().Compile(_mod.Plugin, new CompileSource.WorkingTree());
+        Assert.True(result.Succeeded, result.RefusalReason);
+
+        var pluginPath = Path.Combine(_mod.ModFolder, TrackedModFixture.PluginName);
+        var overlay = ModFactory.ImportGetter(
+            new ModPath(ModKey.FromFileName(TrackedModFixture.PluginName), pluginPath), GameRelease.Fallout4);
+        handle = overlay;
+        return (IFallout4ModGetter)overlay;
+    }
+
+    private List<string> NpcFiles() =>
+        [.. Directory.GetFiles(Path.Combine(_mod.ModFolder, SourceRecordPath.RootFor(TrackedModFixture.PluginName), "Npcs"))
+            .Select(Path.GetFileName)
+            .Select(n => n!)
+            .Order(StringComparer.Ordinal)];
 
     [Fact]
     public void Compile_AfterAnEdit_WritesABinaryThatReparsesWithTheChangeLanded()
@@ -70,6 +89,113 @@ public sealed class PluginCompileServiceTests : IDisposable
 
         Assert.True(result.Succeeded, result.RefusalReason);
         Assert.Contains(result.Diagnostics, d => d.FormKey == _mod.Race.ToString());
+    }
+
+    [Fact]
+    public void Compile_AfterDeletingTheFirstOfTwoSameTypeRecords_Succeeds_AndTheBinaryReflectsTheDelete()
+    {
+        var survivorNameBefore = NpcFiles()
+            .Single(n => n.StartsWith(TrackedModFixture.OtherNpcEditorId, StringComparison.Ordinal));
+
+        var deleted = EditService().DeleteRecord(_mod.Plugin, _mod.Npc.ToString());
+        Assert.True(deleted.Applied, deleted.Message);
+
+        // The survivor's file was not renamed for its sibling's departure.
+        Assert.Equal([survivorNameBefore], NpcFiles());
+
+        var mod = CompileAndReimport(out var handle);
+        using (handle)
+        {
+            var survivor = Assert.Single(mod.Npcs);
+            Assert.Equal(_mod.OtherNpc, survivor.FormKey);
+            Assert.Equal(TrackedModFixture.OtherNpcEditorId, survivor.EditorID);
+        }
+    }
+
+    [Fact]
+    public void Compile_AfterRenumberingTheFirstOfTwo_Succeeds_WithBothRecordsPresent()
+    {
+        var result = EditService().RenumberRecord(_mod.Plugin, _mod.Npc.ToString());
+        Assert.True(result.Applied, result.Message);
+        Assert.Equal(2, NpcFiles().Count);
+
+        var mod = CompileAndReimport(out var handle);
+        using (handle)
+        {
+            Assert.DoesNotContain(mod.Npcs, n => n.FormKey == _mod.Npc);
+            Assert.Contains(mod.Npcs, n => n.FormKey.ToString() == result.NewFormKey);
+            Assert.Contains(mod.Npcs, n => n.FormKey == _mod.OtherNpc);
+        }
+    }
+
+    [Fact]
+    public void Compile_AfterDeletingTheMiddleOfThreeDialogTopics_Succeeds_KeepingSurvivorsInOrder()
+    {
+        using var container = new ContainerModFixture();
+        var editService = new RecordEditService(container.Mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
+        var compileService = new PluginCompileService(
+            container.Mirror, new PluginWriter(NullLogger<PluginWriter>.Instance), NullLogger<PluginCompileService>.Instance);
+
+        var deleted = editService.DeleteRecord(container.Plugin, container.DialogTopic2.ToString());
+        Assert.True(deleted.Applied, deleted.Message);
+
+        var result = compileService.Compile(container.Plugin, new CompileSource.WorkingTree());
+        Assert.True(result.Succeeded, result.RefusalReason);
+
+        var pluginPath = Path.Combine(container.ModFolder, ContainerModFixture.PluginName);
+        using var overlay = ModFactory.ImportGetter(
+            new ModPath(ModKey.FromFileName(ContainerModFixture.PluginName), pluginPath), GameRelease.Fallout4);
+        var quest = ((IFallout4ModGetter)overlay).Quests.Single(q => q.FormKey == container.Quest);
+        Assert.Equal(
+            [ContainerModFixture.DialogTopicEditorId, ContainerModFixture.DialogTopic3EditorId],
+            quest.DialogTopics.Select(t => t.EditorID!).ToArray());
+    }
+
+    [Fact]
+    public void Compile_AfterStackedDeletesCreatesAndARenumber_Succeeds_WithExactlyTheSurvivors()
+    {
+        var service = EditService();
+
+        var created1 = service.CreateRecord(_mod.Plugin, "npc_", "Created1");
+        var created2 = service.CreateRecord(_mod.Plugin, "npc_", "Created2");
+        Assert.True(created1.Applied, created1.Message);
+        Assert.True(created2.Applied, created2.Message);
+
+        var deleted1 = service.DeleteRecord(_mod.Plugin, _mod.Npc.ToString());
+        Assert.True(deleted1.Applied, deleted1.Message);
+
+        var renumbered = service.RenumberRecord(_mod.Plugin, _mod.OtherNpc.ToString());
+        Assert.True(renumbered.Applied, renumbered.Message);
+
+        var deleted2 = service.DeleteRecord(_mod.Plugin, FormKey.Factory(created1.NewFormKey!).ToString());
+        Assert.True(deleted2.Applied, deleted2.Message);
+
+        var mod = CompileAndReimport(out var handle);
+        using (handle)
+        {
+            Assert.Equal(2, mod.Npcs.Count);
+            Assert.Contains(mod.Npcs, n => n.FormKey.ToString() == renumbered.NewFormKey);
+            Assert.Contains(mod.Npcs, n => n.EditorID == "Created2");
+            Assert.DoesNotContain(mod.Npcs, n => n.FormKey == _mod.Npc);
+            Assert.DoesNotContain(mod.Npcs, n => n.FormKey.ToString() == created1.NewFormKey);
+        }
+    }
+
+    // The previous layout minted a group document the reader now skips silently. A file the codec
+    // would not regenerate is a divergence named by path; re-Track is the recovery (ADR-0042).
+    [Fact]
+    public void Compile_OfATreeInThePreviousLayout_RefusesNamingTheLeftoverAndReTrack()
+    {
+        var leftover = Path.Combine(
+            _mod.ModFolder, SourceRecordPath.RootFor(TrackedModFixture.PluginName), "Npcs", "GroupRecordData.json");
+        Assert.False(File.Exists(leftover));
+        File.WriteAllText(leftover, "{\"MEditChildOrder\": {\"Npcs\": [\"" + _mod.Npc + "\", \"" + _mod.OtherNpc + "\"]}}");
+
+        var result = CompileService().Compile(_mod.Plugin, new CompileSource.WorkingTree());
+
+        Assert.False(result.Succeeded);
+        Assert.Contains(Path.Combine("Npcs", "GroupRecordData.json"), result.RefusalReason, StringComparison.Ordinal);
+        Assert.Contains("Re-Track", result.RefusalReason, StringComparison.Ordinal);
     }
 
     // Every write backs up the target plugin first (ADR-0008) — compile is a new write

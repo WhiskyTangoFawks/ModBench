@@ -97,6 +97,28 @@ public sealed class PluginBinaryWalkTests
         Assert.Equal(["RDMP", "RDMO"], loss.Value.Signatures);
     }
 
+    // A rewrite from the tree carries no group order, so the lossy record can come back at another
+    // position; it is still the same record, paired by type and FormID.
+    [Fact]
+    public void FindFirstSubrecordLoss_WhenTheRewriteOrdersRecordsDifferently_StillNamesTheLossyRecord()
+    {
+        var untouchedRecord = BuildRecordHeader("WEAP", 0x00000001, flags: 0,
+            subrecordBytes: Concat(Sub("EDID", "Gun"u8.ToArray())));
+        var originalLossyRecord = BuildRecordHeader("REGN", 0x001D2AF4, flags: 0,
+            subrecordBytes: Concat(Sub("EDID", "Region"u8.ToArray()), Sub("RDMP", [1]), Sub("RDMO", [2])));
+        var rewrittenLossyRecord = BuildRecordHeader("REGN", 0x001D2AF4, flags: 0,
+            subrecordBytes: Concat(Sub("EDID", "Region"u8.ToArray())));
+
+        var original = Concat(untouchedRecord, originalLossyRecord);
+        var rewritten = Concat(rewrittenLossyRecord, untouchedRecord);
+
+        var loss = PluginBinaryWalk.FindFirstSubrecordLoss(original, rewritten);
+
+        Assert.NotNull(loss);
+        Assert.Equal("REGN", loss!.Value.RecordType);
+        Assert.Equal(["RDMP", "RDMO"], loss.Value.Signatures);
+    }
+
     [Fact]
     public void FindFirstSubrecordLoss_NoDropAnywhere_ReturnsNull()
     {

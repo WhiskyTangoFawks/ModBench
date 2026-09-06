@@ -148,8 +148,8 @@ back.
 
 Everything else that changes bytes without changing content — zlib level/implementation,
 negative zero, subrecord order, GRUP child order, derived sizes and counts, master pruning
-(decision 4 below has its own interaction: the tree carries the original's order, a compile back
-out of it emits Mutagen's own) — is **documented here, not gated**: a real plugin written by
+(decision 4 below: the tree carries no group order, so a compile back out of it emits
+Mutagen's own) — is **documented here, not gated**: a real plugin written by
 CK/xEdit/another tool is no longer refused for encoding-only differences. Track logs which of
 these an accepted plugin's first Save & Compile will lose, so nothing is silent — informational
 only, not surfaced on the API response (a categorized report is a
@@ -177,57 +177,28 @@ order and nothing else carries it; a child has no file, no directory and no carr
 insert, delete or reorder of a child is a hunk in one file. A quest is therefore a flat file in its
 group folder, like any record with no child of its own on disk.
 
-**Order is a property of the parent's collection for the lists that remain folder-split**, which are
-the flat groups and the block levels (Cell and Worldspace block children). Each such list carries
-its order as an **ordered child list in the parent's own document**; each child file or directory
-is named by identity alone. A delete is one file deletion plus one line; an insert is one file plus
-one line; a reorder is a pure parent-document diff. The rename cascade is extinct at the root,
-rather than mitigated.
+**No list carries order.** A flat group's records and a block level's children are files and
+directories named by identity alone, and nothing records the order they had in the binary: the
+reader's directory enumeration and Mutagen's writer decide it, which decision 2 already classes as
+encoding (GRUP child order), so a compile back out of the tree emits an order of its own and the
+model-identity gate compares a worldspace's block levels in one canonical order rather than
+positionally. A delete is one file deletion; an insert is one file; no sibling is ever renamed or
+rewritten for another's arrival or departure. The superseded scheme was the serialization library's
+`[N] ` filename numbering, which denormalized parent data onto child names — which is exactly why a
+single-element change rewrote every later sibling's name. Measured: deleting one of 13 sibling quests
+showed 25 entries in the Source Control panel, and unstaged `git status` cannot pair a delete with an
+untracked add to collapse them. The scheme that replaced it, an ordered child list minted into the
+parent's own document with an asymmetric drift rule, is gone too: it was a second structural model
+the plugin does not have, and the order it preserved was observable nowhere the gate looks.
 
-The superseded scheme was the serialization library's `[N] ` filename numbering, which denormalized
-parent data onto child names — which is exactly why a single-element change rewrote every later
-sibling's name. Measured: deleting one of 13 sibling quests showed 25 entries in the Source Control
-panel, and unstaged `git status` cannot pair a delete with an untracked add to collapse them.
-
-**The carrier follows the parent, and there are two of them** (`Source/SourceChildOrder.cs`): a
-group's records are carried by that folder's own `GroupRecordData.json` — *minted by us* for the flat
-groups the writer makes none for, which is most of them — and a worldspace's blocks by the
-worldspace's own `RecordData.json`, keyed by member name, because a block folder has no document of
-its own. Both were verified against the pinned reader rather than assumed, including that
-a minted `GroupRecordData.json` in a folder whose children are `.json` *files* is not mistaken for one
-of those records. **Identity in the list is the FormKey, never the file name**, so an EditorID edit
-(a rename) never touches a parent's ordered list, and the walk that builds these lists is
-order-independent — which is what lets one traversal serve both the write and the read, where a
-name-keyed list would need to know the order to find the file recording the order.
-
-**Byte-fidelity is unchanged** (decision 3 stands): order is still carried for *every* folder-split
-list, and nothing is re-sorted, ever. Only the carrier moved. Identity-only names make the reader's
-own directory enumeration order undefined, so the post-deserialize reorder is mandatory rather than an
-optimisation — it lives inside the whole-mod read door itself, so no reader can obtain an unordered
-mod by forgetting to ask.
-
-**Drift is asymmetric, and that is the decision — not a softened rule.** A child on disk the list does
-not name fails the read loudly (`SourceChildOrderDriftException`, naming the parent and the children):
-nothing can say where an unlisted child belongs, and inventing a position is a change to the compiled
-plugin. Re-Track is the recovery, per decision 5. But a list entry with **no file** is
-honoured as a deletion rather than refused: deleting the file is how a record is deleted by hand — a
-git checkout, an agent's script, the user's own editor — and ADR-0041's git-native working-tree model
-makes that a first-class edit, not corruption (`SourceIngestTests` pins both halves: absent at
-Effective, still answerable at Head). The split is principled: **the tree is authoritative for whether
-a child exists; the parent's list is authoritative for the order of the ones that do.** Each stays
-authoritative for its own question.
-
-**The hand-delete's limit, stated rather than implied.** Honouring a missing file as a deletion makes
-the plugin *readable*; it does not by itself make it *compilable*. The round-trip gate compares the
-tree against what the codec would reserialize from it, and a list still naming the deleted record does
-not match — so a hand delete leaves the plugin's own next Save & Compile refusing until the author
-either removes the stale entry or re-Tracks. Modbench does not repair it: a tree changed behind its
-back is the author's to put right (maintainer ruling), the same refusal posture git itself takes.
-The superseded numbering scheme had the same limit in the same place — a hand-deleted file left a
-numbering gap the compile gate refused — so this is a faithful port of the old limit, not a new one.
-
-The *embeds* — every container's child records, inline in the parent's document in Mutagen's own
-list order — are excluded from the above precisely because they have no folder to order.
+**Hand edits to the tree are ordinary edits.** Deleting a child file is how a record is deleted by
+hand, and adding one is how a record is added; ADR-0041's git-native working-tree model makes both
+first-class. A document the codec cannot reproduce — a hand edit in a spelling the codec would not
+write, a file it has no place for, a document left over from a superseded layout — fails compile
+naming the path, in both directions of the codec fixed point (`PluginCompileService`: every
+regenerated file must match the tree byte for byte, and every `.json` in the tree must be one the
+regeneration produces). Re-Track is the recovery, per decision 5. Modbench does not repair a tree
+changed behind its back (maintainer ruling), the same refusal posture git itself takes.
 
 **5. Format identity is not stamped; compile failure is the uniform signal.** Nothing is written
 at Track and nothing is compared at load. Compatibility is observed, not predicted: a
@@ -300,6 +271,6 @@ and every text posted to another project is signed off by the maintainer first.
   worse than the filename it would replace.
 - **One tree-wide ordered-children map in the root document**, keyed by relative folder path. One
   file, one member, trivially uniform, and it satisfies the same "one deletion, one changed document"
-  test. Rejected: it re-centralizes precisely what decision 4 decentralizes, making the root document
-  a churn hotspot that every insert anywhere in the plugin rewrites, and it puts a collection's order
-  arbitrarily far from the collection.
+  test. Rejected: it makes the root document a churn hotspot that every insert anywhere in the plugin
+  rewrites, it puts a collection's order arbitrarily far from the collection, and decision 4 carries
+  no order for any list at all.

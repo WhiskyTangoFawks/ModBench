@@ -53,11 +53,6 @@ public sealed class RecordTextCodec(ILogger<RecordTextCodec> logger)
         var directory = Path.GetDirectoryName(filePath);
         var bytes = await SerializeCoreAsync(record, gameRelease, directory ?? string.Empty, cancel).ConfigureAwait(false);
 
-        // A worldspace's RecordData.json also carries its blocks' order (ADR-0042 decision 4).
-        // Merged before the write, never restored by a second write: that would reopen the
-        // torn-file window the temp-and-rename closes.
-        bytes = Source.SourceChildOrder.CarryOrderInto(bytes, filePath);
-
         // Write-then-rename: File.Create truncates before any new byte lands, so an interrupted
         // direct write leaves a 0-byte or partial record that dirty detection reads as an edit.
         // Same volume, so File.Move is an atomic rename.

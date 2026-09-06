@@ -5,9 +5,10 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Tests.Source;
 
-/// <summary>Treating an embedded list as folder-split carries an order the list already has, and
-/// a write that trusted the carrier would disagree with the document beside it.</summary>
-public sealed class EmbedCustomizationsAreExcludedFromChildOrderTests
+/// <summary><see cref="ContainerChildFields.EmbeddedSlots"/> is the runtime shadow of the embed
+/// customizations: the slots a write descends through to reach a child inside its container's
+/// document. A list missing here is a child no edit can reach.</summary>
+public sealed class EmbeddedSlotsMatchTheEmbedCustomizationsTests
 {
     // Literals rather than reflected: the customizations are lambdas over a builder, so reflecting
     // them means re-implementing it. Landscape and TopCell are single records, never lists.

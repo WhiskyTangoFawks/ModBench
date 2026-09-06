@@ -38,7 +38,6 @@ public sealed class ReadTimeFreshnessContainerTests : IDisposable
         var effective = index.At(Core.Records.RecordRef.Effective).GetDocument(_fixture.Quest.ToString(), _fixture.Plugin)!.Body;
         var head = index.At(Core.Records.RecordRef.Head).GetDocument(_fixture.Quest.ToString(), _fixture.Plugin)!.Body;
 
-        Assert.DoesNotContain(SourceChildOrder.OrderMember, effective, StringComparison.Ordinal);
         Assert.Equal(head, effective);
     }
 

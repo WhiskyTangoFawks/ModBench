@@ -28,8 +28,8 @@ internal static class SourceUnitResolver
     /// extension).</summary>
     internal const string RecordDataFileName = "RecordData.json";
 
-    /// <summary>The whole-mod door's own name for a group or block level's metadata file. Also the
-    /// carrier for those levels' ordered child lists (<see cref="SourceChildOrder"/>), hence shared.</summary>
+    /// <summary>The whole-mod door's own name for a group or block level's metadata file, written only
+    /// when the level has non-default metadata.</summary>
     internal const string GroupRecordDataFileName = "GroupRecordData.json";
 
     private const string JsonSuffix = ".json";

@@ -555,12 +555,10 @@ already empty: matching xEdit's own guard (`Element.EditValue` must be non-empty
   no path setter, no mirror of the backend's key rule, no cascade, no default table (ADR-0032).
   There is no free drag-reorder and no auto-sort.
 - **A container's children keep their positions across every edit.** A parent record's document
-  holds its own fields, its embedded child slots inline, and, for a folder-split collection, the
-  non-Mutagen child-order member the source tree also carries
-  ([ADR-0042](../adr/0042-plugin-is-the-source-of-truth-lossless-source.md) decision 4).
-  `DocumentEdit` strips that member before patching and re-attaches it verbatim afterwards, so an
-  ordinary field edit never reorders or drops a sibling and never inlines a folder-split child into
-  its parent — the same byte parity the whole-plugin writer holds survives an edit through this
+  holds its own fields and its embedded child slots inline, in Mutagen's list order
+  ([ADR-0042](../adr/0042-plugin-is-the-source-of-truth-lossless-source.md) decision 4), and
+  `DocumentEdit` patches exactly the edited path, so an ordinary field edit never reorders or drops
+  a sibling — the same byte parity the whole-plugin writer holds survives an edit through this
   path too.
 - **Editing writes working-tree source text directly** (ADR-0041) — there is no staged
   intermediate state. A single field's value can be **dragged between plugin columns** to copy

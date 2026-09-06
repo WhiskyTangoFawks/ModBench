@@ -4,6 +4,7 @@ using Loqui;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
+using Noggog;
 
 namespace MEditService.Core.Source;
 
@@ -48,7 +49,10 @@ public static class ModelIdentity
                     "is missing from the recompiled plugin.");
             }
 
-            var field = FirstNonExcludedFailingField(originalRecord, recompiledRecord);
+            var normalizedOriginal = NormalizeEncoding(originalRecord);
+            var normalizedRecompiled = NormalizeEncoding(recompiledRecord);
+
+            var field = FirstNonExcludedFailingField(normalizedOriginal, normalizedRecompiled);
             if (field != null)
             {
                 return new Divergence(originalRecord.GetType().Name, originalRecord.FormKey, originalRecord.EditorID,
@@ -58,7 +62,7 @@ public static class ModelIdentity
             // The mask lies by omission (a polymorphic hierarchy's derived-only fields bind through the
             // base overload and are never compared), so a mask-equal pair is never the verdict; the codec
             // document is.
-            if (!CodecDocumentsMatch(originalRecord, recompiledRecord, original.GameRelease))
+            if (!CodecDocumentsMatch(normalizedOriginal, normalizedRecompiled, original.GameRelease))
             {
                 return new Divergence(originalRecord.GetType().Name, originalRecord.FormKey, originalRecord.EditorID,
                     "differs after being recompiled from its own tracked source — the records' codec " +
@@ -117,14 +121,12 @@ public static class ModelIdentity
         return true;
     }
 
-    // Both records through the codec, byte-compared, from group-header-normalized copies.
+    // Both records through the codec, byte-compared.
     private static bool CodecDocumentsMatch(
         IMajorRecordGetter original, IMajorRecordGetter recompiled, Mutagen.Bethesda.GameRelease release)
     {
-        var originalBytes = Codec.SerializeToBytesAsync(NormalizeGroupHeaderDerivedFields(original), release)
-            .GetAwaiter().GetResult();
-        var recompiledBytes = Codec.SerializeToBytesAsync(NormalizeGroupHeaderDerivedFields(recompiled), release)
-            .GetAwaiter().GetResult();
+        var originalBytes = Codec.SerializeToBytesAsync(original, release).GetAwaiter().GetResult();
+        var recompiledBytes = Codec.SerializeToBytesAsync(recompiled, release).GetAwaiter().GetResult();
         if (originalBytes.AsSpan().SequenceEqual(recompiledBytes)) return true;
 
         // Not byte-identical: decide structurally, honouring only the two model-equal respellings a rewrite
@@ -219,9 +221,10 @@ public static class ModelIdentity
     private static readonly Serialization.RecordTextCodec Codec =
         new(Microsoft.Extensions.Logging.Abstractions.NullLogger<Serialization.RecordTextCodec>.Instance);
 
-    // Deep copies with group-header-derived fields zeroed, on the record and every nested carrier; other
-    // types return unchanged.
-    private static IMajorRecordGetter NormalizeGroupHeaderDerivedFields(IMajorRecordGetter record)
+    // Deep copies without the encoding a rewrite is entitled to change: group-header-derived fields
+    // zeroed, and a worldspace's block levels in one canonical order, since the tree carries none
+    // (ADR-0042 decision 4).
+    private static IMajorRecordGetter NormalizeEncoding(IMajorRecordGetter record)
     {
         switch (record)
         {
@@ -242,8 +245,11 @@ public static class ModelIdentity
                         subBlock.LastModified = 0;
                         subBlock.Unknown = 0;
                         foreach (var nestedCell in subBlock.Items) ZeroCellGroupFields(nestedCell);
+                        subBlock.Items.SetTo(subBlock.Items.OrderBy(c => c.FormKey.ToString(), StringComparer.Ordinal).ToList());
                     }
+                    block.Items.SetTo(block.Items.OrderBy(s => s.BlockNumberX).ThenBy(s => s.BlockNumberY).ToList());
                 }
+                worldspaceCopy.SubCells.SetTo(worldspaceCopy.SubCells.OrderBy(b => b.BlockNumberX).ThenBy(b => b.BlockNumberY).ToList());
                 if (worldspaceCopy.TopCell is { } topCell) ZeroCellGroupFields(topCell);
                 return worldspaceCopy;
             case IQuestGetter quest:

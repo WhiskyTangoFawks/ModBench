@@ -40,8 +40,6 @@ internal static class DocumentEdit
         if (ValidateEnvelope(envelope, spelled) is { } malformed) return malformed;
 
         if (JsonNode.Parse(request.Text) is not JsonObject root) return Malformed(spelled, "the document is not a JSON object");
-        var order = root[SourceChildOrder.OrderMember];
-        root.Remove(SourceChildOrder.OrderMember);
         var record = WalkPrefix(root, request.Prefix);
         var before = WalkPrefix((JsonObject)JsonNode.Parse(request.Text)!, request.Prefix);
 
@@ -104,7 +102,7 @@ internal static class DocumentEdit
             }
         }
 
-        text = order == null ? written : SourceChildOrder.WithOrder(written, order);
+        text = written;
         return null;
     }
 

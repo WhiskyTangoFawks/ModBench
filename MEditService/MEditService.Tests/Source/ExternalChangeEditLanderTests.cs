@@ -140,12 +140,6 @@ public sealed class ExternalChangeEditLanderTests : IDisposable
         var survivor = Assert.Single(otherNpcFiles);
         Assert.Equal(otherNpcPathBeforeDelete, survivor);
         Assert.Equal(otherNpcTextBeforeDelete, File.ReadAllText(survivor));
-
-        // The deleted sibling is gone from the group's ordered child list, and the survivor keeps its
-        // relative position behind the record that was not deleted.
-        Assert.Equal(
-            [_mod.Npc.ToString(), _mod.OtherNpc.ToString()],
-            SourceChildOrder.ListAt(SourceChildOrder.CarrierFor(npcsDir, parentIsRecord: false), "Npcs"));
     }
 
     [Fact]

@@ -102,8 +102,8 @@ public sealed class RecordEditService(
         WriteBodyAtomic(sourcePath, newText);
 
         // The unit's document is what changed; an embedded child's own row is the index's derivation
-        // from it. The index holds the record's own fields, never the tree-layout member.
-        index.ApplyWorkingTreeChanges(plugin, [(unit.OwnerFormKey, SourceChildOrder.WithoutOrder(newText))]);
+        // from it.
+        index.ApplyWorkingTreeChanges(plugin, [(unit.OwnerFormKey, newText)]);
 
         // The new value can flip filter membership either way.
         mirror.ReapplyFilter();
@@ -281,10 +281,6 @@ public sealed class RecordEditService(
         {
             // The unit may already be gone (another tool, a hand delete): that is the state this call
             // is trying to reach, not a failure.
-            var groupDirectory = unit.IsDirectoryPerRecord
-                ? Path.GetDirectoryName(Path.GetDirectoryName(unit.FullPath)!)!
-                : Path.GetDirectoryName(unit.FullPath)!;
-
             if (unit.IsDirectoryPerRecord)
             {
                 var directory = Path.GetDirectoryName(unit.FullPath)!;
@@ -294,10 +290,6 @@ public sealed class RecordEditService(
             {
                 File.Delete(unit.FullPath);
             }
-
-            // One line leaves one document (ADR-0042 decision 4): no sibling is renamed, so a mid-list
-            // delete stages as one deletion plus one changed group document.
-            SourceChildOrder.RemoveByIdentity(groupDirectory, formKey);
 
             delta = (formKey, null);
         }
@@ -344,7 +336,7 @@ public sealed class RecordEditService(
         // by the write itself when the plugin has never held this type.
         var placement = SourcePlacement.For(plugin.Name, recordType, targetFormKey, record.EditorID, release);
         var relativePath = placement.RelativePath;
-        var newBody = WritePlaced(modFolder, placement, targetFormKey, path => SerializeAndWrite(_codec, record, path, release));
+        var newBody = WriteAt(modFolder, placement, path => SerializeAndWrite(_codec, record, path, release));
 
         index.CreateWorkingTreeRecord(plugin, targetFormKey, recordType, newBody);
         // A brand-new row can newly match an active filter.
@@ -437,7 +429,7 @@ public sealed class RecordEditService(
             destinationPlugin.Name, document.RecordType, formKey, document.EditorId, release,
             isCell ? EnsureInteriorCellBlockPath(destinationModFolder, destinationPlugin.Name, release) : null);
         var relativePath = destination.RelativePath;
-        WritePlaced(destinationModFolder, destination, formKey, path =>
+        WriteAt(destinationModFolder, destination, path =>
         {
             WriteBodyAtomic(path, body);
             return body;
@@ -493,8 +485,7 @@ public sealed class RecordEditService(
         var placement = SourcePlacement.For(
             destinationPlugin.Name, document.RecordType, targetFormKey, newRecord.EditorID, release);
         var relativePath = placement.RelativePath;
-        var newBody = WritePlaced(
-            destinationModFolder, placement, targetFormKey, path => SerializeAndWrite(_codec, newRecord, path, release));
+        var newBody = WriteAt(destinationModFolder, placement, path => SerializeAndWrite(_codec, newRecord, path, release));
 
         index.CreateWorkingTreeRecord(destinationPlugin, targetFormKey, document.RecordType, newBody);
         // A brand-new row can newly match an active filter.
@@ -1135,8 +1126,7 @@ public sealed class RecordEditService(
         var oldLeafPath = isDirectoryPerRecord ? Path.GetDirectoryName(unit.FullPath)! : unit.FullPath;
         var parentDirectory = Path.GetDirectoryName(oldLeafPath)!;
 
-        // Only the FormKey half of the leaf name changes. The parent's ordered list is keyed by
-        // FormKey, so the entry is repointed in place rather than moved to the end.
+        // Only the FormKey half of the leaf name changes.
         var newLeafName =
             SourceUnitResolver.LeafNameFor(FormKey.Factory(newFormKey), document.EditorId, isDirectoryPerRecord);
         var newLeafPath = Path.Combine(parentDirectory, newLeafName);
@@ -1160,15 +1150,6 @@ public sealed class RecordEditService(
             () => _codec.SerializeAsync(record, writePath, release).GetAwaiter().GetResult());
 
         if (!isDirectoryPerRecord && File.Exists(unit.FullPath)) transaction.Delete(modFolder, unit.FullPath);
-
-        // The carrier is a file this pass changed, so a failed renumber has to put it back too
-        // (ADR-0045).
-        if (SourceChildOrder.SlotHolding(parentDirectory, oldFormKey) is { } slot)
-        {
-            transaction.Write(
-                modFolder, slot.Carrier,
-                () => SourceChildOrder.Rename(slot.Carrier, slot.Key, oldFormKey, newFormKey));
-        }
 
         // The whole index side in one call, and therefore one transaction: a fault part-way
         // must not leave an index naming a FormKey no source file backs. Last act, to keep the
@@ -1518,32 +1499,19 @@ public sealed class RecordEditService(
         var cellsDirectory = Path.Combine(modFolder, SourceRecordPath.RootFor(pluginName), cellsFolder);
         SourceUnitResolver.InMintedDirectory(cellsDirectory, () => WriteMinimalGroupRecordDataIfMissing(cellsDirectory, groupType: null));
 
-        var blockDirectory = FindOrMintGroupDirectory(
-            cellsDirectory, "InteriorCellBlock", cellsFolder);
-        var subBlockDirectory = FindOrMintGroupDirectory(
-            blockDirectory, "InteriorCellSubBlock", RecordTypeDispatch.BlockChildMember);
+        var blockDirectory = FindOrMintGroupDirectory(cellsDirectory, "InteriorCellBlock");
+        var subBlockDirectory = FindOrMintGroupDirectory(blockDirectory, "InteriorCellSubBlock");
 
         return [Path.GetFileName(blockDirectory), Path.GetFileName(subBlockDirectory)];
     }
 
-    // A freshly minted block has to join the parent's ordered child list under orderKey, or the next
-    // read refuses the tree as drift.
-    private static string FindOrMintGroupDirectory(string parentDirectory, string groupType, string orderKey)
+    private static string FindOrMintGroupDirectory(string parentDirectory, string groupType)
     {
         var existing = Directory.EnumerateDirectories(parentDirectory).FirstOrDefault();
         if (existing != null) return existing;
 
-        const string blockNumber = "0";
-        var directory = Path.Combine(parentDirectory, blockNumber);
-        WritePlaced(
-            SourceChildOrder.CarrierFor(directory, parentIsRecord: false),
-            SourceChildOrder.CarrierFor(parentDirectory, parentIsRecord: false),
-            orderKey, blockNumber,
-            _ =>
-            {
-                WriteMinimalGroupRecordDataIfMissing(directory, groupType);
-                return "";
-            });
+        var directory = Path.Combine(parentDirectory, "0");
+        SourceUnitResolver.InMintedDirectory(directory, () => WriteMinimalGroupRecordDataIfMissing(directory, groupType));
         return directory;
     }
 
@@ -1589,30 +1557,13 @@ public sealed class RecordEditService(
             .GetAwaiter().GetResult();
     }
 
-    /// <summary>Writes the file, then names it in the ordered child list (ADR-0042). Not a transaction
-    /// (ADR-0045 is the cascade's tool): one tree need only fail on the tolerated side of the drift
-    /// rule.</summary>
-    internal static string WritePlaced(string modFolder, SourcePlacement placement, string identity, Func<string, string> write) =>
-        WritePlaced(
-            Path.Combine(modFolder, placement.RelativePath),
-            Path.Combine(modFolder, placement.CarrierRelativePath),
-            placement.Key, identity, write);
-
-    private static string WritePlaced(string path, string carrier, string key, string identity, Func<string, string> write) =>
-        SourceUnitResolver.InMintedDirectory(Path.GetDirectoryName(path)!, () =>
-        {
-            var body = write(path);
-            try
-            {
-                SourceChildOrder.Add(carrier, key, identity);
-            }
-            catch
-            {
-                File.Delete(path);
-                throw;
-            }
-            return body;
-        });
+    /// <summary>Writes the record's file at its placement, minting the directories above it and
+    /// removing them again if the write throws.</summary>
+    internal static string WriteAt(string modFolder, SourcePlacement placement, Func<string, string> write)
+    {
+        var path = Path.Combine(modFolder, placement.RelativePath);
+        return SourceUnitResolver.InMintedDirectory(Path.GetDirectoryName(path)!, () => write(path));
+    }
 
     /// <summary>Two serializations, one for the index and one for disk; <see cref="RecordTextCodec"/>
     /// producing identical bytes for both is what makes what the index is told and what lands the same text.</summary>
