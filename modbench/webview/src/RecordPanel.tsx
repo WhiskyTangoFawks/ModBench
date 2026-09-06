@@ -68,9 +68,8 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
     return writable;
   }, [result, immutableSet, notInLoadOrderSet, trackedSet]);
 
-  // ADR-0035/ADR-0036: the one definition of "this column renders at reduced weight" — a copy the
-  // load order does not name, or a Partial Form record — computed beside editableColumns so the
-  // header and every cell beneath it can never disagree about which columns are dimmed.
+  // ADR-0035/ADR-0036: one definition of "this column renders at reduced weight" — a copy the load
+  // order does not name, or a Partial Form record — so the header and the cells cannot disagree.
   const dimmedColumns = useMemo(() => {
     const dimmed = new Set<ColumnKey>();
     for (const o of result?.overrides ?? []) {
@@ -169,9 +168,8 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
     return map;
   }, [result, isHeaderRecord]);
 
-  // `path` addresses the array itself for add and the element for the rest; the backend resolves
-  // it against the document it holds. A move off either end is the backend's to refuse by name, so
-  // the direction the row asked for is posted as it stands.
+  // `path` addresses the array itself for add and the element for the rest. A move off either end
+  // is the backend's to refuse by name, so the direction the row asked for is posted as it is.
   const handleArrayOp = useCallback((
     plugin: ColumnKey, path: PathSegment[], rootField: string, op: ArrayOp,
   ) => {

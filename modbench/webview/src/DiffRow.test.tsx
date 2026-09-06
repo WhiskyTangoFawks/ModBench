@@ -317,9 +317,8 @@ describe('DiffRow — FormKey leaf resolution is independent of the parent field
   });
 });
 
-// The warning a row shows is the check error on the row's own root field. Every other fixture
-// here carries one field, where `fields[0]` would be right by accident; the decoy ahead of
-// Location is what forbids that reading.
+// Every other fixture here carries one field, where `fields[0]` would be right by accident; the
+// decoy ahead of Location is what forbids that reading.
 describe('DiffRow — the check error is the row\'s own root field\'s', () => {
   const locationMeta = fieldMeta({ name: 'Location', type: 'struct', fields: [fieldMeta({ name: 'aliasId', type: 'int' })] });
 

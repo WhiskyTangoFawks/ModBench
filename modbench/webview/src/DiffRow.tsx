@@ -132,9 +132,8 @@ interface DiffRowProps {
   // up and can never render against a shape the panel did not choose.
   meta: FieldMetadata;
   columns: Column[];
-  // ADR-0035/ADR-0036: the columns that render at reduced weight — a copy the load order does not
-  // name, or a Partial Form record. One set, computed beside editableColumns, so the header and
-  // every cell under it can never disagree; the cue survives scrolling past the non-sticky header.
+  // ADR-0035/ADR-0036: the columns that render at reduced weight, as one set the panel computes,
+  // so the header and every cell under it can never disagree.
   dimmedColumns: Set<ColumnKey>;
   collapsedColumns: Set<ColumnKey>;
   onOpen: (fk: string) => void;
@@ -264,10 +263,10 @@ export function DiffRow({
         // value in full.
         const offersMenu = arrayEditable || meta.type === 'string';
         const arrayOps = arrayEditable ? {
-          add: isArrayParentRow ? () => onArrayOp?.(key, 'add') : undefined,
-          remove: isArrayElementRow ? () => onArrayOp?.(key, 'remove') : undefined,
-          moveUp: isMovableElementRow ? () => onArrayOp?.(key, 'moveUp') : undefined,
-          moveDown: isMovableElementRow ? () => onArrayOp?.(key, 'moveDown') : undefined,
+          add: isArrayParentRow ? () => onArrayOp(key, 'add') : undefined,
+          remove: isArrayElementRow ? () => onArrayOp(key, 'remove') : undefined,
+          moveUp: isMovableElementRow ? () => onArrayOp(key, 'moveUp') : undefined,
+          moveDown: isMovableElementRow ? () => onArrayOp(key, 'moveDown') : undefined,
         } : undefined;
         // Hoisted above vscodeContext because stringValueContext needs it too — a string cell's
         // own `readOnly` is this same boolean negated, so the right-click menu and the

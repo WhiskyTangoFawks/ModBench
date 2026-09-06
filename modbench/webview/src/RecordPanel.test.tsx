@@ -13,7 +13,6 @@ import { DIMMED_OPACITY } from './gridStyles';
 import type { FieldMetadata } from './types';
 import { fieldMeta } from './test/fixtures';
 import { columnKey } from './types';
-import type { LoadResult, RecordPanelClient } from './RecordPanelClient';
 import { panelClient, type PanelOpts } from './test/fixtures';
 
 const strMeta: FieldMetadata = fieldMeta({ name: 'Name', type: 'string'});

@@ -18,10 +18,8 @@ export type FieldType =
   | 'string' | 'translatedString' | 'int' | 'float' | 'bool' | 'enum' | 'flags' | 'formKey'
   | 'struct' | 'array' | 'hex' | 'color' | 'vector';
 
-/** The wire's own metadata, with `type` narrowed and the three recursive members re-declared
- *  against that narrowing. `readOnly` is the one member the wire does not carry: a per-row stamp
- *  the panel applies regardless of the column's own mutability, where every other field's
- *  editability comes purely from the column — "per column, never a mode". */
+/** `readOnly` is the one member the wire does not carry: a per-row stamp regardless of the
+ *  column's own mutability — "per column, never a mode". */
 export type FieldMetadata =
   Omit<Schemas['FieldMetadata'], 'type' | 'elementType' | 'fields' | 'variants'> & {
     type: FieldType;

@@ -6,7 +6,6 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 vi.mock('./vscode', () => ({ vscode: { postMessage: vi.fn() } }));
 
 import { RecordPanel } from './RecordPanel';
-import { columnKey } from './types';
 import { vscode } from './vscode';
 import { WEBVIEW_TO_EXTENSION, EXTENSION_TO_WEBVIEW } from './messages';
 import { at, fieldMeta, keyed, lastPostedEnvelope, member, panelClient } from './test/fixtures';

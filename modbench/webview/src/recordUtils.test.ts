@@ -19,7 +19,7 @@ import {
   type PathSegment,
 } from './recordUtils';
 import type { CompareOverride, FieldMetadata } from './types';
-import { at, diffNode, fieldMeta, keyed, member } from './test/fixtures';
+import { fieldMeta } from './test/fixtures';
 
 function makeOverride(plugin: string, extra: Partial<CompareOverride> = {}): CompareOverride {
   return {

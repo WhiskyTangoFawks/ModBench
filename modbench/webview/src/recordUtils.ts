@@ -83,10 +83,8 @@ import type {
   StringValueContext,
 } from './messages';
 
-// Its mere presence is the gate, so no immutable/isSortable flag travels in the payload. `path` is
-// the envelope's own wire path, which a scalar index could never carry. Only Move Up is gated: the
-// row's index comes from the union-aligned tree across every column, so this column's own array
-// length is not known here and a move off the far end is the backend's to refuse by name.
+// Only Move Up is gated: the row's index spans every column, so this column's own length is not
+// known here, and a move off the far end is the backend's to refuse by name.
 export function arrayElementContext(
   formKey: string, plugin: string, origin: string, path: PathHop[],
 ): ArrayElementContext {
