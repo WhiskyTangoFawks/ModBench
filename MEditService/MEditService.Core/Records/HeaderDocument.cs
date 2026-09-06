@@ -80,7 +80,7 @@ internal static class HeaderDocument
     private static string ScratchFolder() =>
         Path.Combine(Path.GetTempPath(), $"medit-header-{Guid.NewGuid():N}");
 
-    // Keeps the root document's bytes and sends every folder-split child's to Stream.Null; unlike the
+    // Keeps the root document's bytes and sends every other record's to Stream.Null; unlike the
     // per-record codec's DiscardChildRecordStreams, this one must also answer for the root.
     private sealed class CaptureRootDocument(string rootPath) : ICreateStream, IDisposable
     {

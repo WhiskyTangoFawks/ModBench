@@ -163,10 +163,16 @@ changed is the verdict for a plugin that is not already Mutagen-canonical: Track
 over every record of the plugin being tracked, and the test theories that exercise real
 (CK/xEdit-authored) plugins now compare on model identity instead.
 
-**3. Nothing is omitted and nothing is re-sorted in the files — ever.** Byte identity of the
-files is the safety net, and every omission, however well proven, is a hole in it. Omission and
-sorting are *view-layer* concerns: if header counters, timestamps or Creation-Kit-shuffled lists
-make a diff noisy, the diff view or the editor hides or sorts them at render time.
+**3. Semantically lossless is the requirement, and nothing is re-sorted in the files — ever.**
+Compile reproduces the plugin's model, and the model-identity gate (decision 2) is the verdict;
+byte identity is asserted only for our own codec on Mutagen-written fixtures
+(`CompileRoundTripGateTests`, `BinaryRoundTripGateTests`). No `Omit` customization exists, ever,
+because each one drops real data: the pinned `Mutagen.Bethesda.Serialization`'s only customization
+surface is the embed list (decision 4) and nothing else, which
+`EmbedCustomizationsAreTheDerivedSlotsTests` enforces by replaying every customization against a
+recording builder whose `Omit` overloads throw. Sorting stays a *view-layer* concern: if header
+counters, timestamps or Creation-Kit-shuffled lists make a diff noisy, the diff view or the editor
+hides or sorts them at render time, never the files.
 
 **4. A container's children live inline in the container's document, in Mutagen's list order.**
 Every container member that holds child major records is an embed customization
@@ -183,13 +189,9 @@ reader's directory enumeration and Mutagen's writer decide it, which decision 2 
 encoding (GRUP child order), so a compile back out of the tree emits an order of its own and the
 model-identity gate compares a worldspace's block levels in one canonical order rather than
 positionally. A delete is one file deletion; an insert is one file; no sibling is ever renamed or
-rewritten for another's arrival or departure. The superseded scheme was the serialization library's
-`[N] ` filename numbering, which denormalized parent data onto child names — which is exactly why a
-single-element change rewrote every later sibling's name. Measured: deleting one of 13 sibling quests
-showed 25 entries in the Source Control panel, and unstaged `git status` cannot pair a delete with an
-untracked add to collapse them. The scheme that replaced it, an ordered child list minted into the
-parent's own document with an asymmetric drift rule, is gone too: it was a second structural model
-the plugin does not have, and the order it preserved was observable nowhere the gate looks.
+rewritten for another's arrival or departure. File-name mechanics are `SourceRecordPathTests`' to
+pin, not this decision's to restate; the two schemes this superseded are in Alternatives rejected,
+below.
 
 **Hand edits to the tree are ordinary edits.** Deleting a child file is how a record is deleted by
 hand, and adding one is how a record is added; ADR-0041's git-native working-tree model makes both
@@ -254,15 +256,18 @@ and every text posted to another project is signed off by the maintainer first.
 - **Fork Spriggit / ask for a library / per-record API upstream.** Tool packaging, .NET target
   and exact Mutagen pins all mismatch, and it binds us to their version on their schedule.
 - **A local `[N] ` prefix on `Responses/` only, byte-identical to a hoped-for upstream fix** —
-  moot twice over: numbering every folder-split list was our format's definition, and decision 4 no
-  longer numbers any of them.
+  moot twice over: numbering every quest- and topic-child list was our format's definition, and
+  decision 4 embeds each of them instead.
 - **Keeping the `[N] ` prefixes and mitigating the churn in the IDE** (auto-stage the byte-identical
   prefix-shift renames the gesture performs, so the staged view's rename detection collapses them).
   Accepted as safe IDE behaviour, and it would have worked — but it treats the symptom. The renames
   are real writes to real files, so every other consumer of the tree (a hand `git status`, a merge, a
   reviewer's diff) still sees them, and the model stays denormalized either way. Superseded by
-  decision 4 rather than kept as a fallback: once order lives in the parent, there is nothing left to
-  collapse.
+  decision 4 rather than kept as a fallback: no list carries order at all under decision 4, so there
+  is nothing left to collapse.
+- **An ordered child list minted into the parent's own document, reconciled against the file tree
+  on every read and write.** The scheme decision 4 replaced. Rejected: a second structural model
+  the plugin does not have, preserving an order observable nowhere the gate looks.
 - **Order keys inside each child's own document** (the original "dominated" verdict). That verdict leaned on
   stock Spriggit silently dropping an unrecognized key, which decision 6 made irrelevant by abandoning
   Spriggit compatibility — no foreign reader exists. Still rejected, but now on its own merits: a
