@@ -139,7 +139,6 @@ function buildDiff(
     fieldName,
     values,
     winnerColumn: columns[0],
-    winnerValue: values[columns[0]],
     resolutions: resolved.length === 0 ? undefined : Object.fromEntries(resolved.map(c => [c, {
       state: 'ResolvedValidType' as const, recordType: null, editorId: editorIds[values[c] as string],
     }])),

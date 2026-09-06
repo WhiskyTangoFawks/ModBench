@@ -523,8 +523,8 @@ already empty: matching xEdit's own guard (`Element.EditValue` must be non-empty
   element. A **keyed** array — `wbArrayS` sorted by a key read off the element, addressed by that
   key rather than by index — offers **Add** and **Remove** and no **Move**: it is stored back in
   key order on every write, so no move a user could make would change the file. An array
-  **sorted by its own element value** (a plain FormLink list,
-  `FieldMetadata.ElementType.IsSortable`) offers none of the four, because its elements have no
+  **sorted by its own element value** (a plain FormLink list — one whose
+  `FieldMetadata.ElementType.type` is `formKey`) offers none of the four, because its elements have no
   identity apart from their values. The entries a set does not include are absent, not disabled.
   They live in the **right-click menu**, with
   `Ctrl+↑` / `Ctrl+↓` / `Delete` / `Insert` as accelerators onto the same menu items — xEdit's
@@ -677,9 +677,9 @@ gesture — Sim Settlements 2 is a real-world example on Fallout 4.
   beyond the master is a Partial Form record therefore classifies `NoConflict`, not `Override` or
   `Conflict`, even when that override's own field genuinely differs byte-for-byte from the master's
   — its own change is out of scope for conflict purposes, full stop, the same way CONTEXT.md's
-  Partial Form entry states it. `FieldDiff.WinnerColumn`/`WinnerValue` fall through to the nearest
-  plugin that actually carries a value for that field, not the record-wide winner, so a field the
-  winning override never touches reports the real effective value rather than a blank one.
+  Partial Form entry states it. `FieldDiff.WinnerColumn` falls through to the nearest plugin that
+  actually carries a value for that field, not the record-wide winner, so a field the winning
+  override never touches names the column holding the real effective value rather than a blank one.
   **Children are unaffected** — a placed reference (or other embedded child) the override
   introduces is a separate record with its own FormKey, and classifies normally (typically
   `OnlyOne`, since it exists in only the one plugin that added it).

@@ -646,7 +646,6 @@ export interface components {
                 [key: string]: unknown;
             };
             winnerColumn: string;
-            winnerValue?: unknown;
             cellStates: {
                 [key: string]: components["schemas"]["ConflictThis"];
             };
@@ -654,6 +653,9 @@ export interface components {
             children?: components["schemas"]["FieldDiff"][] | null;
             resolutions?: {
                 [key: string]: components["schemas"]["FormKeyResolution"];
+            } | null;
+            checkErrors?: {
+                [key: string]: string;
             } | null;
         };
         FieldMetadata: {
@@ -664,7 +666,6 @@ export interface components {
             enumMembers: components["schemas"]["EnumMember"][];
             elementType?: components["schemas"]["FieldMetadata"] | null;
             fields?: components["schemas"]["FieldMetadata"][] | null;
-            isSortable: boolean;
             allowsNull: boolean;
             displayLabel?: string | null;
             isDiscriminator: boolean;

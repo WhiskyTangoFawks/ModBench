@@ -75,7 +75,7 @@ A record with the `IsPartialForm` header flag intentionally omits fields it does
 
 - Full two-axis classification using Mutagen field values for comparison. `ConflictThis` and `ConflictAll` values match xEdit semantics for the common cases (identical-to-master, override, conflict wins/loses).
 - Injected record detection: if an override plugin's master list does not include the FormKey's origin plugin, the record escalates to `ConflictCritical` — but only when the base classification is already `Override`/`Conflict`, i.e. a real non-empty value difference exists; a content-identical injected record stays `NoConflict`. This matches xEdit (`xeMainForm.pas`, `ConflictLevelForNodeDatas`) and is a game-agnostic structural check that does not require a priority table.
-- Sorted array order-independent comparison: driven by `FieldMetadata.ElementType.IsSortable` (set by `SchemaReflector` for FormLink arrays), not a lookup table. Two sorted arrays with the same elements in different order do not register as a conflict.
+- Sorted array order-independent comparison: driven by the element type — an array whose `FieldMetadata.ElementType.Type` is `formKey` is a pure-link array — not a lookup table and not a name set collected at the top of the record, so the rule reads the same however deep the node sits. Two sorted arrays with the same elements in different order do not register as a conflict.
 
 **Not implemented — `ConflictPriority` table:**
 
