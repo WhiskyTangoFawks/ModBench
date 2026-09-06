@@ -17,6 +17,19 @@ internal sealed class IndexOverridingMirror(ILoadOrderMirror inner, IRecordIndex
     // serializes against the same object production would use.
     public IndexWriteGate WriteGate => inner.WriteGate;
     public LoadOrderStatus Status => inner.Status;
+    // overrideIndex's own count, not inner's: a test intercepting Index wants the sequence its
+    // double advances, not whatever inner's real (unused) index sits at.
+    public long Sequence => overrideIndex.Sequence;
+    public async Task<bool> AwaitSequenceAsync(long atLeast, TimeSpan timeout)
+    {
+        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+        while (overrideIndex.Sequence < atLeast)
+        {
+            if (stopwatch.Elapsed >= timeout) return false;
+            await Task.Delay(TimeSpan.FromMilliseconds(20)).ConfigureAwait(false);
+        }
+        return true;
+    }
     public (ILoadOrder LoadOrder, IRecordReads Reads) RequireScope() => inner.RequireScope();
     public void Reconcile(
         string gameDirectory, IReadOnlyList<LoadOrderEntry> plugins, GameRelease gameRelease,

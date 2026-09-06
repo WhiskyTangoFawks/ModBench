@@ -62,6 +62,19 @@ public static class LoadOrderEndpoints
             .Produces<FilterResponse>()
             .ProducesProblem(503);
 
+        // ADR-0046: the read side's read-your-writes hook. 0 with no index held, the same
+        // "absence is a state" answer GetLoadOrderStatus gives.
+        app.MapGet("/load-order/sequence", GetSequence)
+            .WithName("GetSequence")
+            .WithTags(Tag)
+            .Produces<long>();
+
+        app.MapGet("/load-order/sequence/await", AwaitSequence)
+            .WithName("AwaitSequence")
+            .WithTags(Tag)
+            .Produces<SequenceAwaitResponse>()
+            .ProducesProblem(400);
+
         return app;
     }
 
@@ -158,6 +171,17 @@ public static class LoadOrderEndpoints
     {
         loggerFactory.CreateLogger(nameof(LoadOrderEndpoints)).LogTrace("Received GetLoadOrderStatus");
         return Results.Ok(mirror.Status);
+    }
+
+    private static IResult GetSequence(ILoadOrderMirror mirror) => Results.Ok(mirror.Sequence);
+
+    private static async Task<IResult> AwaitSequence(ILoadOrderMirror mirror, long atLeast, int timeoutMs = 5000)
+    {
+        if (timeoutMs <= 0)
+            return Results.Problem("timeoutMs must be positive.", statusCode: 400);
+
+        var reached = await mirror.AwaitSequenceAsync(atLeast, TimeSpan.FromMilliseconds(timeoutMs));
+        return Results.Ok(new SequenceAwaitResponse(reached, mirror.Sequence));
     }
 
     private static IResult SetFilter(FilterRequest req, ILoadOrderMirror mirror, ILoggerFactory loggerFactory)

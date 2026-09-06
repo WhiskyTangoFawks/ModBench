@@ -107,6 +107,24 @@ public sealed class LoadOrderMirror(
         }
     }
 
+    public long Sequence { get { lock (_lock) return _index?.Sequence ?? 0; } }
+
+    // Polling, not an event: the notification port is later work, and every write already
+    // serializes through IndexWriteGate, so a short poll answers within one interval of landing.
+    private static readonly TimeSpan SequencePollInterval = TimeSpan.FromMilliseconds(20);
+
+    public async Task<bool> AwaitSequenceAsync(long atLeast, TimeSpan timeout)
+    {
+        var stopwatch = Stopwatch.StartNew();
+        while (true)
+        {
+            if (Sequence >= atLeast) return true;
+            var remaining = timeout - stopwatch.Elapsed;
+            if (remaining <= TimeSpan.Zero) return false;
+            await Task.Delay(remaining < SequencePollInterval ? remaining : SequencePollInterval).ConfigureAwait(false);
+        }
+    }
+
     public void Reconcile(
         string gameDirectory, IReadOnlyList<LoadOrderEntry> plugins, GameRelease gameRelease,
         string? instanceRoot = null)

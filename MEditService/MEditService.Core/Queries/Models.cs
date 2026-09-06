@@ -232,6 +232,10 @@ public record PluginRecordTypeCount(string Type, int Count, string DisplayName, 
 public record FilterRequest(string Sql);
 public record FilterResponse(string? Sql);
 
+/// <summary>ADR-0046: the answer to "did the projection reach at least N?" — Sequence is the value
+/// observed at the moment of that answer, not necessarily equal to the awaited bound.</summary>
+public record SequenceAwaitResponse(bool Reached, long Sequence);
+
 // CrashRepairOffers: tracked plugins found stale/missing against Modbench's own record, surfaced
 // the same structured way Failures is (ADR-0026), never a second endpoint or poller: either
 // condition can only appear through a compile this process drives or a restart.

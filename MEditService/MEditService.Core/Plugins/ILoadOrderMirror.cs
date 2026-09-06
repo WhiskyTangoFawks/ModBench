@@ -26,6 +26,15 @@ public interface ILoadOrderMirror
     /// not an error.</summary>
     LoadOrderStatus Status { get; }
 
+    /// <summary>ADR-0046: the Index's projection sequence, or 0 with no index held. Read-your-writes
+    /// belongs here: a caller re-reads once this is past the sequence its write returned.</summary>
+    long Sequence { get; }
+
+    /// <summary>Polls <see cref="Sequence"/> until it reaches <paramref name="atLeast"/> or
+    /// <paramref name="timeout"/> elapses. True the moment it lands; false, never a throw, on a
+    /// timeout — the answer is "not yet", not a failure.</summary>
+    Task<bool> AwaitSequenceAsync(long atLeast, TimeSpan timeout);
+
     /// <summary>Throws <see cref="NoLoadOrderException"/>, never null: the load order and the index
     /// are only ever both set or both null, so this can never observe one without the other.</summary>
     (ILoadOrder LoadOrder, IRecordReads Reads) RequireScope();
