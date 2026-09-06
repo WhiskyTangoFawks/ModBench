@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using MEditService.Core.Edits;
 using MEditService.Core.Plugins;
 using MEditService.Core.Queries;
@@ -76,44 +77,46 @@ public sealed class CompileRoundTripGateTests(CompileRoundTripGateFixture fixtur
             f, @"^Worldspaces/[^/]+/(\[\d+\] )?-?\d+, -?\d+/(\[\d+\] )?-?\d+, -?\d+/[^/]+/RecordData\.json$"));
     }
 
+    // Order is the document's list order: a topic's Responses array reads the binary's order back,
+    // and a response has no file, no directory and no carrier entry of its own anywhere in the tree.
     [Fact]
-    public void Track_OfTheRealFixture_NamesEveryDialogTopicResponseInItsTopicsOrderedChildList()
+    public void Track_OfTheRealFixture_WritesEveryResponseInlineInItsTopicsDocument_InTheBinarysOrder()
     {
-        var responseDirs = Directory.EnumerateDirectories(fixture.SourceRoot, "Responses", SearchOption.AllDirectories)
+        using var original = ModFactory.ImportGetter(
+            new ModPath(ModKey.FromFileName(CutDownPluginFixture.PluginFileName), CutDownPluginFixture.PluginPath),
+            GameRelease.Fallout4);
+        var topics = ((IFallout4ModGetter)original).Quests
+            .SelectMany(q => q.DialogTopics)
+            .Where(t => t.Responses.Count > 0)
             .ToList();
-        Assert.NotEmpty(responseDirs);
+        Assert.Contains(topics, t => t.Responses.Count >= 2);
 
-        var multiResponseDirs = responseDirs
-            .Where(dir => Directory.EnumerateFiles(dir, "*.json", SearchOption.TopDirectoryOnly).Count() > 1)
-            .ToList();
-        Assert.NotEmpty(multiResponseDirs);
+        var documents = Directory.EnumerateFiles(fixture.SourceRoot, "*.json", SearchOption.AllDirectories).ToList();
+        Assert.DoesNotContain(
+            Directory.EnumerateDirectories(fixture.SourceRoot, "*", SearchOption.AllDirectories),
+            d => Path.GetFileName(d) == nameof(DialogTopic.Responses));
 
-        foreach (var dir in multiResponseDirs)
+        foreach (var topic in topics)
         {
-            var files = Directory.EnumerateFiles(dir, "*.json", SearchOption.TopDirectoryOnly)
-                .Select(Path.GetFileName)
-                .Select(name => name!)
-                .ToList();
+            var responses = topic.Responses.Select(r => r.FormKey.ToString()).ToList();
+            foreach (var response in responses)
+                Assert.DoesNotContain(documents, f => SourceUnitResolver.NameCarriesFormKey(Path.GetFileName(f), response));
 
-            // A file name is identity alone: position lives in the topic's own document, one directory up.
-            Assert.All(files, name => Assert.DoesNotContain("[", name, StringComparison.Ordinal));
-
-            var topicDirectory = Path.GetDirectoryName(dir)!;
-            var order = SourceChildOrder.ListAt(
-                SourceChildOrder.CarrierFor(topicDirectory, parentIsRecord: true), "Responses");
-
-            Assert.Equal(files.Count, order.Count);
-            Assert.Equal(order.Count, order.Distinct(StringComparer.Ordinal).Count());
-
-            // Every listed FormKey has a file carrying it, and every file is listed — the exact
-            // agreement the read side refuses a tree for lacking.
-            foreach (var identity in order)
-            {
-                var filesafe = identity.Replace(':', '_');
-                Assert.Contains(files, name => name.EndsWith($"{filesafe}.json", StringComparison.Ordinal));
-            }
+            var root = JsonNode.Parse(File.ReadAllText(SourceDocumentOf(documents, topic.FormKey.ToString())))!.AsObject();
+            Assert.Null(root[SourceChildOrder.OrderMember]);
+            Assert.Equal(
+                responses,
+                root[nameof(DialogTopic.Responses)]!.AsArray().Select(r => r![nameof(IMajorRecordGetter.FormKey)]!.GetValue<string>()));
         }
     }
+
+    // A record's document is the file carrying its FormKey, or the RecordData.json of the directory
+    // that does: the layout is the serialization library's, so both shapes are admitted here.
+    internal static string SourceDocumentOf(IReadOnlyList<string> documents, string formKey) =>
+        documents.Single(f =>
+            SourceUnitResolver.NameCarriesFormKey(Path.GetFileName(f), formKey)
+            || (Path.GetFileName(f) == SourceUnitResolver.RecordDataFileName
+                && SourceUnitResolver.NameCarriesFormKey(Path.GetFileName(Path.GetDirectoryName(f)!), formKey)));
 
     // This cell because its timestamps are a real deep-copied value, not a coincidental zero that
     // would pass whether or not the field was suppressed.
@@ -133,10 +136,10 @@ public sealed class CompileRoundTripGateTests(CompileRoundTripGateFixture fixtur
     [Fact]
     public void Track_OfTheRealFixture_WritesConditionUnknown1AndHeaderStats()
     {
-        var responseFile = Directory.EnumerateFiles(fixture.SourceRoot, "*.json", SearchOption.AllDirectories)
-            .Single(f => f.Contains("01AACD_Fallout4.esm.json", StringComparison.Ordinal));
-        var responseText = File.ReadAllText(responseFile);
-        Assert.Contains("\"Unknown1\": \"0x1D9D68\"", responseText, StringComparison.Ordinal);
+        // Inline in its topic's document, so the topic's text is where the pad has to appear.
+        var topicText = File.ReadAllText(Directory.EnumerateFiles(fixture.SourceRoot, "*.json", SearchOption.AllDirectories)
+            .Single(f => File.ReadAllText(f).Contains("\"FormKey\": \"01AACD:Fallout4.esm\"", StringComparison.Ordinal)));
+        Assert.Contains("\"Unknown1\": \"0x1D9D68\"", topicText, StringComparison.Ordinal);
 
         var rootText = File.ReadAllText(Path.Combine(fixture.SourceRoot, "RecordData.json"));
         Assert.Contains("\"NumRecords\": 4743", rootText, StringComparison.Ordinal);

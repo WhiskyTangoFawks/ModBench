@@ -269,8 +269,7 @@ public sealed class RecordEditServiceContainerDeleteRenumberTests : IDisposable
     [Fact]
     public void RenumberingAMidListFolderSplitChild_RenormalizesSurvivingSiblingsToContiguousSlots_AndCompiles()
     {
-        var dialogTopicsDirectory = Path.GetDirectoryName(
-            Path.GetDirectoryName(_fixture.SourceFileContaining(ContainerModFixture.DialogTopicEditorId)))!;
+        var dialogTopicsDirectory = Path.GetDirectoryName(_fixture.SourceFileContaining(ContainerModFixture.DialogTopicEditorId))!;
         Assert.Equal("DialogTopics", Path.GetFileName(dialogTopicsDirectory));
 
         var result = EditService().RenumberRecord(_fixture.Plugin, _fixture.DialogTopic2.ToString());
@@ -289,8 +288,8 @@ public sealed class RecordEditServiceContainerDeleteRenumberTests : IDisposable
         Assert.Equal(result.NewFormKey, order[1]);
         Assert.Equal(_fixture.DialogTopic3.ToString(), order[2]);
 
-        // And the directory names themselves carry no position at all.
-        var names = Directory.EnumerateDirectories(dialogTopicsDirectory).Select(Path.GetFileName).ToList();
+        // And the file names themselves carry no position at all.
+        var names = Directory.EnumerateFiles(dialogTopicsDirectory).Select(Path.GetFileName).ToList();
         Assert.Equal(3, names.Count);
         Assert.All(names, n => Assert.DoesNotContain("[", n!, StringComparison.Ordinal));
 

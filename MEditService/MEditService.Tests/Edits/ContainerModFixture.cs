@@ -61,11 +61,13 @@ public sealed class ContainerModFixture : IDisposable
     public const string DialogTopicEditorId = "EmbedTopic";
     public FormKey DialogTopic { get; }
 
-    // A folder-split grandchild of its own — DialogTopic.Responses is folder-split same
-    // as Quest.DialogTopics is, so renumbering DialogTopic (a container of folder-split children in
-    // its own right) is the shape that regresses container_child for its own children.
+    // Two responses inline in the first topic's document: a sibling is what shows an edit, a delete
+    // or a renumber touching only its own element, and two is the shortest list with an order.
     public const string ResponseEditorId = "EmbedResponse";
     public FormKey Response { get; }
+
+    public const string Response2EditorId = "EmbedResponse2";
+    public FormKey Response2 { get; }
 
     // Two more siblings under the same Quest, so "delete/renumber a mid-list folder-split
     // child, then compile" has an actual middle and two actual survivors to pin the GRUP order of —
@@ -125,7 +127,9 @@ public sealed class ContainerModFixture : IDisposable
         var quest = new Quest(mod) { EditorID = QuestEditorId };
         var dialogTopic = new DialogTopic(mod) { EditorID = DialogTopicEditorId };
         var response = new DialogResponses(mod) { EditorID = ResponseEditorId };
+        var response2 = new DialogResponses(mod) { EditorID = Response2EditorId };
         dialogTopic.Responses.Add(response);
+        dialogTopic.Responses.Add(response2);
         var dialogTopic2 = new DialogTopic(mod) { EditorID = DialogTopic2EditorId };
         var dialogTopic3 = new DialogTopic(mod) { EditorID = DialogTopic3EditorId };
         quest.DialogTopics.Add(dialogTopic);
@@ -141,7 +145,7 @@ public sealed class ContainerModFixture : IDisposable
         (Navmesh, Landscape) = (navmesh.FormKey, landscape.FormKey);
         (Worldspace, TopCell, TopCellRef) = (worldspace.FormKey, topCell.FormKey, topCellRef.FormKey);
         (Quest, DialogTopic) = (quest.FormKey, dialogTopic.FormKey);
-        Response = response.FormKey;
+        (Response, Response2) = (response.FormKey, response2.FormKey);
         (DialogTopic2, DialogTopic3) = (dialogTopic2.FormKey, dialogTopic3.FormKey);
 
         Mirror = new LoadOrderMirror(
@@ -167,8 +171,10 @@ public sealed class ContainerModFixture : IDisposable
 
     public string SourceRoot => Path.Combine(ModFolder, SourceRecordPath.RootFor(PluginName));
 
+    // Any document: a container's RecordData.json, a flat record's own file, or the file that inlines
+    // an embedded child.
     public string SourceFileContaining(string editorId) =>
-        Directory.EnumerateFiles(SourceRoot, "RecordData.json", SearchOption.AllDirectories)
+        Directory.EnumerateFiles(SourceRoot, "*.json", SearchOption.AllDirectories)
             .Single(f => File.ReadAllText(f).Contains($"\"{editorId}\"", StringComparison.Ordinal));
 
     public IReadOnlyList<string> GitStatus() =>

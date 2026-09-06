@@ -79,6 +79,11 @@ public sealed class CopyAsNewContainerTests : IDisposable
 
         // Compiled: the quest carries the new topic; the topic carries both responses under their
         // new keys in order; the copied Response2 still links the ORIGINAL Response1.
+        // Both responses are inline in the new topic's one document.
+        var topicText = File.ReadAllText(_fixture.DestinationSourceFileContaining(ContainerCopyFixture.DialogTopicEditorId));
+        Assert.All(children, c => Assert.Contains(c.ChildFormKey, topicText, StringComparison.Ordinal));
+        Assert.Empty(Directory.EnumerateDirectories(_fixture.DestinationSourceRoot, "Responses", SearchOption.AllDirectories));
+
         var compiled = ImportCompiled();
         var compiledQuest = compiled.Quests.Single(q => q.FormKey == _fixture.Quest);
         var compiledTopic = compiledQuest.DialogTopics.Single(t => t.FormKey.ToString() == newTopicFormKey);
@@ -126,10 +131,10 @@ public sealed class CopyAsNewContainerTests : IDisposable
         var questDoc = reads.GetDocument(_fixture.Quest.ToString(), _fixture.DestinationPlugin);
         Assert.False(questDoc!.IsPartialForm);
 
-        // One quest directory total; the topic's directory sits inside it.
+        // One quest directory total; the topic's file sits inside it.
         var questsDir = Path.Combine(_fixture.DestinationSourceRoot, "Quests");
         var questDir = Assert.Single(Directory.EnumerateDirectories(questsDir));
-        Assert.Single(Directory.EnumerateDirectories(Path.Combine(questDir, "DialogTopics")));
+        Assert.Single(Directory.EnumerateFiles(Path.Combine(questDir, "DialogTopics")));
 
         var compiledQuest = ImportCompiled().Quests.Single(q => q.FormKey == _fixture.Quest);
         Assert.Equal(ContainerCopyFixture.QuestEditorId, compiledQuest.EditorID);
@@ -156,6 +161,10 @@ public sealed class CopyAsNewContainerTests : IDisposable
         var children = reads.GetContainerChildren(_fixture.DestinationPlugin, _fixture.DialogTopic.ToString());
         var childRow = Assert.Single(children);
         Assert.Equal(newFormKey, childRow.ChildFormKey);
+
+        // Inline in the minted topic's document, which is the only file the response is in.
+        Assert.Contains(newFormKey, File.ReadAllText(_fixture.DestinationSourceFileContaining(ContainerCopyFixture.Response1EditorId)), StringComparison.Ordinal);
+        Assert.Empty(Directory.EnumerateDirectories(_fixture.DestinationSourceRoot, "Responses", SearchOption.AllDirectories));
 
         var compiledTopic = ImportCompiled().Quests.Single(q => q.FormKey == _fixture.Quest)
             .DialogTopics.Single(t => t.FormKey == _fixture.DialogTopic);

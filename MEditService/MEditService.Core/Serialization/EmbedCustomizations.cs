@@ -3,9 +3,9 @@ using Mutagen.Bethesda.Serialization.Customizations;
 
 namespace MEditService.Core.Serialization;
 
-/// <summary>Spriggit's five EmbedRecordsInSameFile customizations across Cell/Worldspace, kept on
-/// this project's own grounds: one document per cell (ADR-0042 decision 4). Spriggit's SortList
-/// calls are never adopted — decision 3 forbids re-sorting.</summary>
+/// <summary>The embed list: a container member holding child major records is inlined in the
+/// container's document in Mutagen's list order (ADR-0042 decision 4). No SortList: decision 3
+/// forbids re-sorting.</summary>
 public sealed class CellEmbedCustomization : ICustomize<ICellGetter>
 {
     public void CustomizeFor(ICustomizationBuilder<ICellGetter> builder)
@@ -23,5 +23,14 @@ public sealed class WorldspaceEmbedCustomization : ICustomize<IWorldspaceGetter>
     public void CustomizeFor(ICustomizationBuilder<IWorldspaceGetter> builder)
     {
         builder.EmbedRecordsInSameFile(x => x.TopCell);
+    }
+}
+
+/// <inheritdoc cref="CellEmbedCustomization"/>
+public sealed class DialogTopicEmbedCustomization : ICustomize<IDialogTopicGetter>
+{
+    public void CustomizeFor(ICustomizationBuilder<IDialogTopicGetter> builder)
+    {
+        builder.EmbedRecordsInSameFile(x => x.Responses);
     }
 }
