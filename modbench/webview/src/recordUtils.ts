@@ -90,16 +90,16 @@ import type {
 } from './messages';
 
 // Its mere presence is the gate, so no immutable/isSortable flag travels in the payload.
-// `arrayLength` only exists to derive canMoveUp/canMoveDown. `path` is the element's full chain of
-// hops, which a scalar index could never carry.
+// `arrayLength` only exists to derive canMoveUp/canMoveDown. `path` is the envelope's own wire
+// path, which a scalar index could never carry.
 export function arrayElementContext(
-  formKey: string, plugin: string, origin: string, rootField: string, path: PathSegment[], arrayLength: number,
+  formKey: string, plugin: string, origin: string, path: PathHop[], arrayLength: number,
 ): ArrayElementContext {
   const lastSeg = path.at(-1);
   const index = lastSeg?.kind === 'index' ? lastSeg.index : -1;
   const movable = isMovableElementHop(lastSeg);
   return {
-    webviewSection: 'arrayElement', formKey, plugin, origin, rootField, path,
+    webviewSection: 'arrayElement', formKey, plugin, origin, path,
     // `canMoveUp` must also check hasElementAt (this plugin's length), or the menu offers Move Up
     // on a row this plugin doesn't have an element in — canMoveDown needs no such check since
     // index < arrayLength - 1 already implies it.
@@ -109,12 +109,11 @@ export function arrayElementContext(
   };
 }
 
-// `path` addresses the array itself (the row's own path when it *is* the array — a top-level
-// array's is `[]`).
+// `path` addresses the array itself — a top-level array's is the one member hop.
 export function arrayParentContext(
-  formKey: string, plugin: string, origin: string, rootField: string, path: PathSegment[],
+  formKey: string, plugin: string, origin: string, path: PathHop[],
 ): ArrayParentContext {
-  return { webviewSection: 'arrayParent', formKey, plugin, origin, rootField, path, preventDefaultContextMenuItems: true };
+  return { webviewSection: 'arrayParent', formKey, plugin, origin, path, preventDefaultContextMenuItems: true };
 }
 
 export function headerCellContext(formKey: string, plugin: string, origin: string): ColumnHeaderContext {
@@ -125,11 +124,11 @@ export function headerCellContext(formKey: string, plugin: string, origin: strin
 // left-click gesture may reach it. Offered on immutable cells too — `readOnly` is what the
 // command's `when` clause acts on.
 export function stringValueContext(
-  formKey: string, plugin: string, origin: string, fieldName: string, value: string, readOnly: boolean,
-  path: PathSegment[], rootField: string,
+  formKey: string, plugin: string, origin: string, recordLabel: string, fieldName: string, value: string,
+  readOnly: boolean, path: PathHop[],
 ): StringValueContext {
   return {
-    webviewSection: 'stringValue', formKey, plugin, origin, fieldName, value, readOnly, path, rootField,
+    webviewSection: 'stringValue', formKey, plugin, origin, recordLabel, fieldName, value, readOnly, path,
     preventDefaultContextMenuItems: true,
   };
 }
@@ -151,7 +150,7 @@ export function combineVscodeContexts(...contexts: (object | undefined)[]): stri
 }
 
 // ── Reading the document along a row's path ──────────────────────────────────
-export type { PathSegment };
+export type { PathHop, PathSegment };
 
 export function getAtPath(root: unknown, path: readonly PathSegment[]): unknown {
   let cur = root;

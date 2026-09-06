@@ -11,20 +11,6 @@ export const EXTENSION_TO_WEBVIEW = {
   // A reply to the one panel that asked (`requestId`), never a broadcast: the QuickPick existed
   // only for that request. `formKey: null` is a dismissal, leaving the field unchanged.
   FORM_KEY_PICKED: 'formKeyPicked',
-  // Not a one-shot reply: a tab can be saved repeatedly while open, so the webview keeps its
-  // callback registered until EXTENDED_EDITOR_CLOSED.
-  EXTENDED_EDITOR_COMMITTED: 'extendedEditorCommitted',
-  // Lets nativeBridge delete its `requestId -> onCommit` entry, so a load order that opens many
-  // extended editors accumulates no stale entry per tab. Carries no value: closing commits nothing.
-  EXTENDED_EDITOR_CLOSED: 'extendedEditorClosed',
-  // `path` addresses the array itself for 'add', the element for the other three; a top-level
-  // array's path is one hop or empty, a nested array's carries every hop. The backend computes
-  // the result, never the webview.
-  ARRAY_STRUCTURAL_OP: 'arrayStructuralOp',
-  // ADR-0039: right-click is the one route into the extended editor. Broadcast and self-filtered
-  // like the array ops, carrying what the webview captured at right-click time, since only it
-  // knows the record's display label.
-  FIELD_OPEN_EXTENDED_EDITOR: 'fieldOpenExtendedEditor',
 } as const;
 
 export const WEBVIEW_TO_EXTENSION = {
@@ -43,10 +29,6 @@ export const WEBVIEW_TO_EXTENSION = {
   // Native QuickPick: only the extension host can call `vscode.window.createQuickPick`. `seed` is
   // the current reference (empty when there is none), which pre-selects the matching item.
   OPEN_FORM_KEY_PICKER: 'openFormKeyPicker',
-  // The one type/gesture combination where double-click's target differs from second-click/F2's.
-  // `readOnly` is decided webview-side, which already knows the column's editability; the host
-  // turns identity into a filesystem-safe path, never the webview.
-  OPEN_EXTENDED_EDITOR: 'openExtendedEditor',
 } as const;
 
 export type LogLevel = 'debug' | 'info' | 'warn';
@@ -64,41 +46,30 @@ export type WebviewToExtension =
       origin: string;
       envelope: RecordEditEnvelope;
     }
-  | { type: typeof WEBVIEW_TO_EXTENSION.OPEN_FORM_KEY_PICKER; requestId: string; seed: string; validTypes: string[] }
-  | {
-      type: typeof WEBVIEW_TO_EXTENSION.OPEN_EXTENDED_EDITOR; requestId: string; value: string;
-      recordLabel: string; fieldName: string; plugin: string;
-      // ADR-0036: required alongside `plugin`, consistent with every other column-identity
-      // payload above — folds into the temp-file path (extendedEditorPath's own directory
-      // segment) so two same-filename columns never alias onto one file.
-      origin: string;
-      readOnly: boolean;
-    };
+  | { type: typeof WEBVIEW_TO_EXTENSION.OPEN_FORM_KEY_PICKER; requestId: string; seed: string; validTypes: string[] };
 
-// A `data-vscode-context` payload VS Code hands to the invoked command; it never travels through
-// `postMessage`, hence beside the message unions rather than inside them. `path` carries every
-// hop, which a bare index could not.
+// A `data-vscode-context` payload VS Code hands the invoked command, never a `postMessage` — hence
+// beside the message unions. `path` is the envelope's own wire path, resolved cell-side
+// (`wirePath`): the host holds no document.
 export interface ArrayElementContext {
   webviewSection: 'arrayElement';
   formKey: string;
   plugin: string;
   origin: string;
-  rootField: string;
-  path: PathSegment[];
+  path: PathHop[];
   canMoveUp: boolean;
   canMoveDown: boolean;
   preventDefaultContextMenuItems: true;
 }
 
-// `path` addresses the array itself — `[]` for a top-level array, the row's own path within the
-// subtree root for a nested one.
+// `path` addresses the array itself — one member hop for a top-level array, every hop down to the
+// nested array for the rest.
 export interface ArrayParentContext {
   webviewSection: 'arrayParent';
   formKey: string;
   plugin: string;
   origin: string;
-  rootField: string;
-  path: PathSegment[];
+  path: PathHop[];
   preventDefaultContextMenuItems: true;
 }
 
@@ -139,13 +110,17 @@ export interface StringValueContext {
   formKey: string;
   plugin: string;
   origin: string;
+  // The record as every other identity-bearing surface here spells it ("EditorID [FormKey]"), for
+  // the temp file's own directory — only the webview knows the record's display label.
+  recordLabel: string;
+  // The row's own label, which is what the tab is titled by — a nested leaf names itself, not the
+  // member it sits under.
   fieldName: string;
   value: string;
   readOnly: boolean;
-  // The row's path within the field plus the subtree root's member — the save commits the same
-  // set envelope at the same path an inline edit of that row posts.
-  path: PathSegment[];
-  rootField: string;
+  // The wire path of the row the menu was opened on — the save commits the same set envelope at
+  // the same path an inline edit of that row posts.
+  path: PathHop[];
   preventDefaultContextMenuItems: true;
 }
 
@@ -153,17 +128,4 @@ export type ExtensionToWebview =
   | { type: typeof EXTENSION_TO_WEBVIEW.LOAD_RECORD; formKey: string }
   | { type: typeof EXTENSION_TO_WEBVIEW.CONFLICTS_COMPUTED }
   | { type: typeof EXTENSION_TO_WEBVIEW.RECORD_EDITED; formKey: string }
-  | { type: typeof EXTENSION_TO_WEBVIEW.FORM_KEY_PICKED; requestId: string; formKey: string | null }
-  | { type: typeof EXTENSION_TO_WEBVIEW.EXTENDED_EDITOR_COMMITTED; requestId: string; value: string }
-  | { type: typeof EXTENSION_TO_WEBVIEW.EXTENDED_EDITOR_CLOSED; requestId: string }
-  // `rootField`/`path` are forwarded verbatim from the context; `op` names which gesture fired.
-  | {
-      type: typeof EXTENSION_TO_WEBVIEW.ARRAY_STRUCTURAL_OP; formKey: string; plugin: string; origin: string;
-      rootField: string; path: PathSegment[]; op: 'add' | 'remove' | 'moveUp' | 'moveDown';
-    }
-  | {
-      type: typeof EXTENSION_TO_WEBVIEW.FIELD_OPEN_EXTENDED_EDITOR; formKey: string; plugin: string; origin: string;
-      fieldName: string; value: string; readOnly: boolean;
-      // Forwarded verbatim from StringValueContext.
-      path: PathSegment[]; rootField: string;
-    };
+  | { type: typeof EXTENSION_TO_WEBVIEW.FORM_KEY_PICKED; requestId: string; formKey: string | null };

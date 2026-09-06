@@ -61,6 +61,7 @@ function baseProps(overrides: Partial<React.ComponentProps<typeof DiffRow>> = {}
     // without saying so.
     editableColumns: new Set(),
     onOpen: vi.fn(),
+    recordLabel: 'TestNPC [000001:Fallout4.esm]',
     context: { path: [], rootField: effectiveDiff.fieldName, depth: 0 },
     rowKey: 'Name',
     focusedCell: null,
@@ -450,12 +451,12 @@ describe('DiffRow — string cell right-click menu (ADR-0039)', () => {
       formKey: '000001:Fallout4.esm',
       plugin: 'MyMod.esp',
       origin: 'Data',
+      recordLabel: 'TestNPC [000001:Fallout4.esm]',
       fieldName: 'Name',
       value: 'disk-value',
       readOnly: false,
-      // A top-level row's path is always empty and its rootField its diff's own fieldName.
-      path: [],
-      rootField: 'Name',
+      // A top-level row's wire path is the record's own member, and nothing else.
+      path: [{ kind: 'member', name: 'Name' }],
       preventDefaultContextMenuItems: true,
     });
   });
@@ -467,9 +468,9 @@ describe('DiffRow — string cell right-click menu (ADR-0039)', () => {
     expect(ctx.readOnly).toBe(true);
   });
 
-  // Without its own path within the field, a nested leaf's context reads identically to a
-  // top-level field's, and its save would land on the root.
-  it('a nested string cell carries the row\'s own path and the subtree root\'s wire path, not just the root', () => {
+  // Without every hop, a nested leaf's context reads identically to a top-level field's, and its
+  // save would land on the root.
+  it('a nested string cell carries its whole wire path, and is titled by its own label', () => {
     const path: PathSegment[] = [{ kind: 'member', name: 'Sub' }];
     renderRow({
       editableColumns: new Set([columnKey('MyMod.esp', null)]),
@@ -477,10 +478,9 @@ describe('DiffRow — string cell right-click menu (ADR-0039)', () => {
       context: { path, rootField: 'Struct', depth: path.length },
     });
     const ctx = stringContext('disk-value', 1);
-    expect(ctx.path).toEqual(path);
-    expect(ctx.rootField).toBe('Struct');
-    // fieldName is the extended-editor tab's display path, the same value as rootField here.
-    expect(ctx.fieldName).toBe('Struct');
+    expect(ctx.path).toEqual([{ kind: 'member', name: 'Struct' }, { kind: 'member', name: 'Sub' }]);
+    // The tab is named for the leaf the menu was opened on, not for the member it sits under.
+    expect(ctx.fieldName).toBe('Name');
   });
 
   it('double click opens the inline editor in place, never a tab, calling no callback', () => {
@@ -516,7 +516,7 @@ describe('DiffRow — array parent/element right-click context', () => {
     };
   }
 
-  it('a top-level array-parent row\'s context carries an empty path and its own field as rootField', () => {
+  it('a top-level array-parent row\'s context carries the one member hop of its own field', () => {
     renderRow({
       diff: arrayDiff(),
       fieldMetaMap: { Items: intArrayMeta },
@@ -527,8 +527,7 @@ describe('DiffRow — array parent/element right-click context', () => {
     });
     const ctx = vscodeContextFor('[2]', 1);
     expect(ctx.webviewSection).toBe('arrayParent');
-    expect(ctx.path).toEqual([]);
-    expect(ctx.rootField).toBe('Items');
+    expect(ctx.path).toEqual([{ kind: 'member', name: 'Items' }]);
     expect(ctx.index).toBeUndefined();
     expect(ctx.fieldName).toBeUndefined();
   });
@@ -545,8 +544,7 @@ describe('DiffRow — array parent/element right-click context', () => {
       hasChildren: true, isExpanded: false,
     });
     const ctx = vscodeContextFor('[2]', 1);
-    expect(ctx.path).toEqual(path);
-    expect(ctx.rootField).toBe('Container');
+    expect(ctx.path).toEqual([{ kind: 'member', name: 'Container' }, ...path]);
   });
 
   it('a top-level array-element row\'s context carries a one-hop index path', () => {
@@ -559,8 +557,7 @@ describe('DiffRow — array parent/element right-click context', () => {
     });
     const ctx = vscodeContextFor('2', 1);
     expect(ctx.webviewSection).toBe('arrayElement');
-    expect(ctx.path).toEqual(path);
-    expect(ctx.rootField).toBe('Items');
+    expect(ctx.path).toEqual([{ kind: 'member', name: 'Items' }, ...path]);
     expect(ctx.index).toBeUndefined();
   });
 
@@ -574,8 +571,7 @@ describe('DiffRow — array parent/element right-click context', () => {
       context: { path, rootField: 'Container', overrideMeta: intMetaLeaf, depth: path.length },
     });
     const ctx = vscodeContextFor('5', 1);
-    expect(ctx.path).toEqual(path);
-    expect(ctx.rootField).toBe('Container');
+    expect(ctx.path).toEqual([{ kind: 'member', name: 'Container' }, ...path]);
   });
 });
 

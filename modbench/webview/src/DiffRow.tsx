@@ -9,7 +9,7 @@ import { copyToClipboard } from './nativeBridge';
 import { baseCell, toggleBtnStyle, getCellStyle, focusedRowStyle, DIMMED_OPACITY } from './gridStyles';
 import {
   arrayElementContext, arrayParentContext, combineVscodeContexts, defaultOf, isArrayElementHop,
-  isMovableElementHop, offersArrayAdd, stringValueContext, type Column, type PathSegment,
+  isMovableElementHop, offersArrayAdd, stringValueContext, wirePath, type Column, type PathSegment,
 } from './recordUtils';
 import type { ColumnKey, CompareOverride, ConflictAll, FieldDiff, FieldMetadata, FormKeyResolution } from './types';
 
@@ -138,6 +138,9 @@ interface DiffRowProps {
   notInLoadOrderSet: Set<ColumnKey>;
   collapsedColumns: Set<ColumnKey>;
   onOpen: (fk: string) => void;
+  // "EditorID [FormKey]", the composite the panel's own title uses — the extended editor's temp
+  // file is filed under it, and only the panel knows it.
+  recordLabel: string;
   context: RowContext;
   hasChildren?: boolean;
   isExpanded?: boolean;
@@ -174,7 +177,7 @@ interface DiffRowProps {
 export function DiffRow({
   diff, columns, overrideMap, fieldMetaMap, notInLoadOrderSet,
   collapsedColumns, onOpen,
-  context, hasChildren, isExpanded, onToggle,
+  recordLabel, context, hasChildren, isExpanded, onToggle,
   rowKey, focusedCell, onFocusCell, editableColumns, onEditCell,
   onArrayAdd, onArrayRemove, onArrayMoveUp, onArrayMoveDown, collapsedSummary, ownerPresent, cellMetas,
 }: Readonly<DiffRowProps>) {
@@ -188,6 +191,8 @@ export function DiffRow({
   // same wire path/overlay-fields key, so RecordPanel hands it down unchanged at every depth rather
   // than DiffRow re-deriving "top-level or not."
   const rootField = context.rootField;
+  // What the label column shows for this row, reused as the extended-editor tab's own title.
+  const label = meta.displayLabel ?? diff.fieldName;
   // showActions (the checkError icon): every hop on this row's path is a struct member
   // (path.length === 0 is vacuously true; a single element hop, or one anywhere in a longer
   // chain, turns it off).
@@ -227,7 +232,7 @@ export function DiffRow({
         )}
         {/* The schema's own label when the field's name is a wire name rather than a readable
             one (a union's MutagenObjectType is "Kind"). */}
-        {meta.displayLabel ?? diff.fieldName}
+        {label}
       </td>
       {columns.map(col => {
         const { key, override } = col;
@@ -248,9 +253,8 @@ export function DiffRow({
         if (collapsedColumns.has(key)) {
           return <td key={`disk:${key}`} style={cellStyle} />;
         }
-        const checkError = showActions
-          ? overrideMap[key]?.fields.find(f => f.metadata.name === rootField)?.checkError
-          : undefined;
+        const rootValue = overrideMap[key]?.fields.find(f => f.metadata.name === rootField);
+        const checkError = showActions ? rootValue?.checkError : undefined;
         const isFocused = isCellFocused(focusedCell, rowKey, key);
         const cellMeta = cellMetas?.[key] ?? meta;
         // Whether this column has something on this row: a struct it carries, or a leaf whose
@@ -275,27 +279,30 @@ export function DiffRow({
         // own `readOnly` is this same boolean negated, so the right-click menu and the
         // inline-editor gate can never disagree.
         const cellEditable = !!onEditCell && editableColumns.has(key) && !meta.readOnly;
+        // The host that invokes these commands holds no document, so it is handed the envelope's
+        // own path, resolved here against this column's own value of the root.
+        const hops = (arrayEditable || meta.type === 'string')
+          ? wirePath(rootField, context.path, rootValue?.value)
+          : [];
         // ADR-0039: a `string` cell always carries its own right-click context, mutable or
         // immutable alike — a read-only tab is still the only way to read a long immutable
         // value in full.
         const vscodeContext = (arrayEditable || meta.type === 'string') ? combineVscodeContexts(
-          // `context.path` addresses the array itself here (this row *is* the array) —
-          // `[]` for a top-level array.
+          // `hops` addresses the array itself here — this row *is* the array.
           isArrayParentRow
-            ? arrayParentContext(col.override.formKey, col.override.plugin, col.override.origin, rootField, context.path)
+            ? arrayParentContext(col.override.formKey, col.override.plugin, col.override.origin, hops)
             : undefined,
-          // `context.path` addresses this row's own element (ends in the `index`/`key` hop that
-          // gates isArrayElementRow) — every hop from `rootField`, not just the trailing one.
+          // `hops` ends in the `index`/`key` hop that gates isArrayElementRow, and carries every
+          // hop above it rather than just that one.
           isArrayElementRow
             ? arrayElementContext(
-                col.override.formKey, col.override.plugin, col.override.origin, rootField,
-                context.path, Number.MAX_SAFE_INTEGER,
+                col.override.formKey, col.override.plugin, col.override.origin, hops, Number.MAX_SAFE_INTEGER,
               )
             : undefined,
           meta.type === 'string'
             ? stringValueContext(
-                col.override.formKey, col.override.plugin, col.override.origin, rootField,
-                modelValue(diff.values[key], meta), !cellEditable, context.path, rootField,
+                col.override.formKey, col.override.plugin, col.override.origin, recordLabel, label,
+                modelValue(diff.values[key], meta), !cellEditable, hops,
               )
             : undefined,
         ) : undefined;
