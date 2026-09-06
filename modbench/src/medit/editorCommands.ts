@@ -49,15 +49,15 @@ export interface EditorCommandDeps {
   refreshSourceControlFor: (plugin: string) => void;
   outputChannel: vscode.LogOutputChannel;
 }
-// ADR-0041: the single write path, plus the broadcast telling every panel showing this record to
-// re-read — broadcast, not a reply, since the record can be open in several panels.
+// ADR-0041: the single write path. A panel showing this record re-reads on rows-changed from the
+// notification stream (ADR-0046 invariant 5), not a broadcast from here.
 function recordPanelWriteDeps(
   deps: EditorCommandDeps, recordDecorationProvider: RecordDecorationProvider,
 ): RecordWriteDeps {
   return {
     repository: deps.repository,
     onRecordEdited: makeOnRecordEdited(
-      deps.treeProvider, recordDecorationProvider, deps.recordPanels,
+      deps.treeProvider, recordDecorationProvider,
       () => { deps.refreshMatchingPlugins(); },
       (plugin) => deps.refreshSourceControlFor(plugin),
     ),
