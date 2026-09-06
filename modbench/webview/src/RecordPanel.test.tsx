@@ -12,9 +12,9 @@ import { recordPanelIncompleteMessage } from '../../src/medit/loadOrderProgress'
 import { DIMMED_OPACITY } from './gridStyles';
 import type { FieldMetadata } from './types';
 import { columnKey } from './types';
-import type { LoadResult, RecordPanelClient } from './RecordPanelClient';
+import { fieldMeta, panelClient, type PanelOpts } from './test/fixtures';
 
-const strMeta: FieldMetadata = { name: 'Name', type: 'string', isArray: false, validFormKeyTypes: [], enumMembers: [] };
+const strMeta: FieldMetadata = fieldMeta({ name: 'Name', type: 'string' });
 
 const compareResult = {
   conflictAll: 'Conflict',
@@ -75,10 +75,9 @@ const immutableWinnerCompareResult = {
   ],
 };
 
-const intMeta: FieldMetadata = { name: 'Level', type: 'int', isArray: false, validFormKeyTypes: [], enumMembers: [] };
-const fkMeta: FieldMetadata = {
-  name: 'Race', type: 'formKey', isArray: false, validFormKeyTypes: ['race'], enumMembers: [],
-};
+const intMeta: FieldMetadata = fieldMeta({ name: 'Level', type: 'int' });
+const fkMeta: FieldMetadata = fieldMeta({
+  name: 'Race', type: 'formKey', validFormKeyTypes: ['race']});
 
 const fkCompareResult = {
   conflictAll: 'OnlyOne',
@@ -212,10 +211,9 @@ const partialFormCompareResult = {
 };
 
 // The document names both A and B, so the resting label reads "A, B".
-const flagsFieldMeta: FieldMetadata = {
-  name: 'Flags', type: 'flags', isArray: false, validFormKeyTypes: [],
-  enumMembers: [{ value: 'A', bitValue: '1' }, { value: 'B', bitValue: '2' }],
-};
+const flagsFieldMeta: FieldMetadata = fieldMeta({
+  name: 'Flags', type: 'flags',
+  enumMembers: [{ value: 'A', bitValue: '1' }, { value: 'B', bitValue: '2' }]});
 
 const flagsCompareResult = {
   conflictAll: 'NoConflict',
@@ -262,17 +260,13 @@ const flagsTrackedPluginsResponse = [
   { name: 'MyMod.esp', isImmutable: false, loadOrderIndex: 1, isTracked: true },
 ];
 
-const structFieldMeta: FieldMetadata = {
+const structFieldMeta: FieldMetadata = fieldMeta({
   name: 'Bounds',
   type: 'struct',
-  isArray: false,
-  validFormKeyTypes: [],
-  enumMembers: [],
   fields: [
-    { name: 'X', type: 'int', isArray: false, validFormKeyTypes: [], enumMembers: [] },
-    { name: 'Y', type: 'int', isArray: false, validFormKeyTypes: [], enumMembers: [] },
-  ],
-};
+    fieldMeta({ name: 'X', type: 'int' }),
+    fieldMeta({ name: 'Y', type: 'int' }),
+  ]});
 
 const structCompareResult = {
   conflictAll: 'Override',
@@ -323,33 +317,10 @@ const structCompareResult = {
   ],
 };
 
-interface FakeOpts {
-  plugins?: unknown[];
-  // ADR-0035: defaults to true — settled, no banner; the banner cases override it.
-  conflictsComputed?: boolean;
-  load?: RecordPanelClient['load'];
-}
-
-function fakeClient(compare: unknown, opts: FakeOpts = {}): RecordPanelClient {
-  const pl = (opts.plugins ?? pluginsResponse) as { name: string; isImmutable: boolean; origin?: string; inLoadOrder?: boolean; isTracked?: boolean }[];
-  const okLoad = {
-    ok: true, result: compare, plugins: pl,
-    // ADR-0036: a fake keying this by bare plugin name would silently pass every same-filename
-    // case that exercises immutableSet.
-    immutableSet: new Set(pl.filter(p => p.isImmutable).map(p => columnKey(p.name, p.origin ?? null))),
-    // ADR-0035: a fixture that never sets inLoadOrder must default every column to
-    // in-load-order, the defensive default the real client applies.
-    notInLoadOrderSet: new Set(pl.filter(p => p.inLoadOrder === false).map(p => columnKey(p.name, p.origin ?? null))),
-    // ADR-0041: a fixture omitting isTracked defaults every column to untracked, the real
-    // client's fail-closed default.
-    trackedSet: new Set(pl.filter(p => p.isTracked === true).map(p => columnKey(p.name, p.origin ?? null))),
-    conflictsComputed: opts.conflictsComputed ?? true,
-  } as unknown as LoadResult;
-  return { load: opts.load ?? vi.fn().mockResolvedValue(okLoad) };
-}
-
-function renderPanel(compare: unknown, opts: FakeOpts = {}) {
-  const client = fakeClient(compare, opts);
+// `pluginsResponse` is this file's own default column set; every other option is the shared
+// fixture's.
+function renderPanel(compare: unknown, opts: PanelOpts = {}) {
+  const client = panelClient(() => compare, { plugins: pluginsResponse, ...opts });
   return { client, ...render(<RecordPanel client={client} />) };
 }
 
@@ -513,6 +484,32 @@ describe('RecordPanel — a Partial Form column', () => {
     expect(th).toHaveStyle({ opacity: String(DIMMED_OPACITY) });
   });
 
+  // One dimmed set reaches the header and every cell under it: a header-only rule would leave the
+  // column's own cells at full weight once the non-sticky header scrolls away.
+  it('renders every cell of that column dimmed too', async () => {
+    vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
+    renderPanel(partialFormCompareResult, { plugins: pluginsResponse });
+    await waitFor(() => expect(screen.getByText('Name')).toBeInTheDocument());
+
+    const cells = screen.getByText('Name').closest('tr')!.querySelectorAll('td');
+    expect(cells[2]).toHaveStyle({ opacity: String(DIMMED_OPACITY) });
+    expect(cells[1]).not.toHaveStyle({ opacity: String(DIMMED_OPACITY) });
+  });
+
+  // The panel resolves every row's schema leaf itself, so a diff naming a member no override
+  // declares has no shape to render against and neither it nor its subtree appears.
+  it('drops a diff node naming a member no override\'s schema declares', async () => {
+    vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
+    renderPanel({
+      ...compareResult,
+      diffs: [...compareResult.diffs, {
+        fieldName: 'Undeclared', values: { 'MyMod.esp': 'x' }, winnerColumn: 'MyMod.esp',
+        winnerValue: 'x', cellStates: {}, conflictAll: 'NoConflict',
+      }],
+    });
+    await waitFor(() => expect(screen.getByText('Name')).toBeInTheDocument());
+    expect(screen.queryByText('Undeclared')).not.toBeInTheDocument();
+  });
 });
 
 describe('RecordPanel — Partial Form header toggle', () => {
@@ -886,25 +883,21 @@ describe('RecordPanel — column collapse (issue #3)', () => {
 // Two plugins can disagree on which leaf of an abstract union an element is, so the element's
 // rows are the union of both leaves' members, each rendered only in the columns that have it.
 const intSubMeta = (name: string): FieldMetadata =>
-  ({ name, type: 'int', isArray: false, validFormKeyTypes: [], enumMembers: [] });
+  (fieldMeta({ name, type: 'int' }));
 
-const aliasesMeta: FieldMetadata = {
-  name: 'aliases', type: 'array', isArray: true, validFormKeyTypes: [], enumMembers: [],
-  elementType: {
-    name: '', type: 'struct', isArray: false, validFormKeyTypes: [], enumMembers: [],
+const aliasesMeta: FieldMetadata = fieldMeta({
+  name: 'aliases', type: 'array', isArray: true,
+  elementType: fieldMeta({
+    name: '', type: 'struct',
     fields: [
-      { name: 'name', type: 'string', isArray: false, validFormKeyTypes: [], enumMembers: [] },
-      {
-        name: 'location', type: 'struct', isArray: false, validFormKeyTypes: [], enumMembers: [],
-        fields: [intSubMeta('alias_id')],
-      },
-      {
-        name: 'external', type: 'struct', isArray: false, validFormKeyTypes: [], enumMembers: [],
-        fields: [intSubMeta('alias_id')],
-      },
-    ],
-  },
-};
+      fieldMeta({ name: 'name', type: 'string' }),
+      fieldMeta({
+        name: 'location', type: 'struct',
+        fields: [intSubMeta('alias_id')]}),
+      fieldMeta({
+        name: 'external', type: 'struct',
+        fields: [intSubMeta('alias_id')]}),
+    ]})});
 
 const masterAlias = { name: 'RefAlias', location: { alias_id: 5 }, external: null };
 const overrideAlias = { name: 'RefAlias', location: null, external: { alias_id: 7 } };
@@ -1051,22 +1044,17 @@ describe('RecordPanel — union element rows', () => {
 
 // A Mutagen class name is a wire token the user is never shown, so the panel displays the
 // reflector's labels and posts the values.
-const unionFieldMeta: FieldMetadata = {
+const unionFieldMeta: FieldMetadata = fieldMeta({
   name: 'Level',
   type: 'struct',
-  isArray: false,
-  validFormKeyTypes: [],
-  enumMembers: [],
   fields: [
-    { name: 'level', type: 'int', isArray: false, validFormKeyTypes: [], enumMembers: [] },
-    {
-      name: 'MutagenObjectType', type: 'enum', isArray: false, validFormKeyTypes: [],
+    fieldMeta({ name: 'level', type: 'int' }),
+    fieldMeta({
+      name: 'MutagenObjectType', type: 'enum',
       enumMembers: [{ value: 'NpcLevel', label: 'Npc Level' },
         { value: 'PcLevelMult', label: 'Pc Level Mult' }],
-      displayLabel: 'Kind',
-    },
-  ],
-};
+      displayLabel: 'Kind'}),
+  ]});
 
 const unionValue = { level: 5, MutagenObjectType: 'NpcLevel' };
 
@@ -1159,20 +1147,18 @@ describe('RecordPanel — an abstract union\'s leaf is an editable field', () =>
 // Absent means default (ADR-0032): the document omits a member equal to its default, and the grid
 // reads it back as that default. "—" is kept for a member whose metadata says null is a value.
 describe('RecordPanel — an absent member reads as its default', () => {
-  const statsMeta: FieldMetadata = {
-    name: 'Stats', type: 'struct', isArray: false, validFormKeyTypes: [], enumMembers: [],
+  const statsMeta: FieldMetadata = fieldMeta({
+    name: 'Stats', type: 'struct',
     fields: [
-      { name: 'Weight', type: 'int', isArray: false, validFormKeyTypes: [], enumMembers: [] },
-      { name: 'Essential', type: 'bool', isArray: false, validFormKeyTypes: [], enumMembers: [] },
-      { name: 'Prefix', type: 'string', isArray: false, validFormKeyTypes: [], enumMembers: [] },
-      {
-        name: 'RunOn', type: 'enum', isArray: false, validFormKeyTypes: [], default: 'Subject',
-        enumMembers: [{ value: 'Subject' }, { value: 'Target' }],
-      },
-      { name: 'Count', type: 'int', isArray: false, validFormKeyTypes: [], enumMembers: [], default: 100 },
-      { name: 'Owner', type: 'formKey', isArray: false, validFormKeyTypes: ['NPC_'], enumMembers: [], allowsNull: true },
-    ],
-  };
+      fieldMeta({ name: 'Weight', type: 'int' }),
+      fieldMeta({ name: 'Essential', type: 'bool' }),
+      fieldMeta({ name: 'Prefix', type: 'string' }),
+      fieldMeta({
+        name: 'RunOn', type: 'enum', default: 'Subject',
+        enumMembers: [{ value: 'Subject' }, { value: 'Target' }]}),
+      fieldMeta({ name: 'Count', type: 'int', default: 100 }),
+      fieldMeta({ name: 'Owner', type: 'formKey', validFormKeyTypes: ['NPC_'], allowsNull: true }),
+    ]});
   const full = { Weight: 3, Essential: true, Prefix: 'x', RunOn: 'Target', Count: 7, Owner: '000019:Fallout4.esm' };
   const sparse = {};
 
@@ -1249,14 +1235,12 @@ describe('RecordPanel — an absent member reads as its default', () => {
 // A member whose owner is not there in a column is not absent-by-default: there is nothing for it
 // to be a member of, so it reads as nothing, not as zero.
 describe('RecordPanel — a member of an absent owner reads as nothing', () => {
-  const boundsMeta: FieldMetadata = {
-    name: 'Bounds', type: 'struct', isArray: false, validFormKeyTypes: [], enumMembers: [],
-    fields: [{ name: 'X', type: 'int', isArray: false, validFormKeyTypes: [], enumMembers: [] }],
-  };
-  const valuesMeta: FieldMetadata = {
-    name: 'Values', type: 'array', isArray: true, validFormKeyTypes: [], enumMembers: [],
-    elementType: { name: '', type: 'int', isArray: false, validFormKeyTypes: [], enumMembers: [] },
-  };
+  const boundsMeta: FieldMetadata = fieldMeta({
+    name: 'Bounds', type: 'struct',
+    fields: [fieldMeta({ name: 'X', type: 'int' })]});
+  const valuesMeta: FieldMetadata = fieldMeta({
+    name: 'Values', type: 'array', isArray: true,
+    elementType: fieldMeta({ name: '', type: 'int' })});
   const compare = {
     conflictAll: 'Conflict',
     overrides: [
@@ -1320,7 +1304,7 @@ describe('RecordPanel — a member of an absent owner reads as nothing', () => {
 // A translated string is one leaf whose document spelling is an object; its set carries that
 // object, so the codec receives what it wrote.
 describe('RecordPanel — a translated string leaf posts its object', () => {
-  const nameMeta: FieldMetadata = { name: 'Name', type: 'translatedString', isArray: false, validFormKeyTypes: [], enumMembers: [] };
+  const nameMeta: FieldMetadata = fieldMeta({ name: 'Name', type: 'translatedString' });
   const value = { TargetLanguage: 'English', Value: 'Base name' };
   const compare = {
     conflictAll: 'OnlyOne',

@@ -6,38 +6,27 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 vi.mock('./vscode', () => ({ vscode: { postMessage: vi.fn() } }));
 
 import { RecordPanel } from './RecordPanel';
-import type { FieldMetadata } from './types';
-import { columnKey } from './types';
-import type { LoadResult, RecordPanelClient } from './RecordPanelClient';
 import { vscode } from './vscode';
 import { WEBVIEW_TO_EXTENSION, EXTENSION_TO_WEBVIEW } from './messages';
+import { at, fieldMeta, keyed, lastPostedEnvelope, member, panelClient } from './test/fixtures';
+
+const lastEnvelope = () => lastPostedEnvelope(vscode.postMessage);
 
 
-const sortedArrayMeta: FieldMetadata = {
+const sortedArrayMeta = fieldMeta({
   name: 'Keywords',
   type: 'array',
   isArray: true,
-  validFormKeyTypes: [],
-  enumMembers: [],
-  elementType: {
-    name: '',
-    type: 'formKey',
-    isArray: false,
-    validFormKeyTypes: [],
-    enumMembers: [],
-    isSortable: true,
-  },
-};
+  elementType: fieldMeta({ name: '', type: 'formKey', isSortable: true }),
+});
 
 // A decoy ahead of the array in every column's field list: the wire path has to be resolved
 // against the root field's own value, which "the first field" would only accidentally be.
-const decoyMeta: FieldMetadata = {
-  name: 'Level', type: 'int', isArray: false, validFormKeyTypes: [], enumMembers: [],
-};
+const decoyMeta = fieldMeta({ name: 'Level', type: 'int' });
 
 const pluginsResponse = [
-  { name: 'Fallout4.esm', isImmutable: true,  loadOrderIndex: 0 },
-  { name: 'MyMod.esp',    isImmutable: false, loadOrderIndex: 1 },
+  { name: 'Fallout4.esm', isImmutable: true },
+  { name: 'MyMod.esp' },
 ];
 
 const sortedArrayCompareResult = {
@@ -85,17 +74,11 @@ const sortedArrayCompareResult = {
   }],
 };
 
-const structMeta: FieldMetadata = {
+const structMeta = fieldMeta({
   name: 'ObjectBounds',
   type: 'struct',
-  isArray: false,
-  validFormKeyTypes: [],
-  enumMembers: [],
-  fields: [
-    { name: 'X1', type: 'int', isArray: false, validFormKeyTypes: [], enumMembers: [] },
-    { name: 'X2', type: 'int', isArray: false, validFormKeyTypes: [], enumMembers: [] },
-  ],
-};
+  fields: [fieldMeta({ name: 'X1', type: 'int' }), fieldMeta({ name: 'X2', type: 'int' })],
+});
 
 const structCollapseExpandResult = {
   conflictAll: 'Override',
@@ -136,33 +119,22 @@ const structCollapseExpandResult = {
   }],
 };
 
-const nestedStructArrayMeta: FieldMetadata = {
+const nestedStructArrayMeta = fieldMeta({
   name: 'Container',
   type: 'struct',
-  isArray: false,
-  validFormKeyTypes: [],
-  enumMembers: [],
   fields: [
-    {
+    fieldMeta({
       name: 'Entries',
       type: 'array',
       isArray: true,
-      validFormKeyTypes: [],
-      enumMembers: [],
-      elementType: {
+      elementType: fieldMeta({
         name: '',
         type: 'struct',
-        isArray: false,
-        validFormKeyTypes: [],
-        enumMembers: [],
-        fields: [
-          { name: 'Id', type: 'string', isArray: false, validFormKeyTypes: [], enumMembers: [] },
-          { name: 'Weight', type: 'int', isArray: false, validFormKeyTypes: [], enumMembers: [] },
-        ],
-      },
-    },
+        fields: [fieldMeta({ name: 'Id', type: 'string' }), fieldMeta({ name: 'Weight', type: 'int' })],
+      }),
+    }),
   ],
-};
+});
 
 const nestedStructArrayResult = {
   conflictAll: 'NoConflict',
@@ -217,20 +189,8 @@ const nestedStructArrayResult = {
 
 let currentCompare: unknown = null;
 
-function fakeClient(): RecordPanelClient {
-  return {
-    load: vi.fn().mockImplementation(() => Promise.resolve({
-      ok: true,
-      result: currentCompare,
-      immutableSet: new Set(pluginsResponse.filter(p => p.isImmutable).map(p => columnKey(p.name, null))),
-      notInLoadOrderSet: new Set(),
-      conflictsComputed: true,
-    } as unknown as LoadResult)),
-  };
-}
-
 function renderPanel() {
-  const client = fakeClient();
+  const client = panelClient(() => currentCompare, { plugins: pluginsResponse });
   return { client, ...render(<RecordPanel client={client} />) };
 }
 
@@ -349,26 +309,11 @@ describe('RecordPanel — a struct member that is itself an array of structs', (
 
 });
 
-// Every gesture posts one envelope: an operation, the hops from the record's own member down to
-// the row, and a value where the operation takes one. The backend resolves the hops against the
-// document it holds.
-type Envelope = { op: string; path: unknown[]; value?: unknown };
-
-function lastEnvelope(): Envelope | undefined {
-  const calls = (vscode.postMessage as ReturnType<typeof vi.fn>).mock.calls;
-  const call = [...calls].reverse().find(([m]) => (m as { type?: string }).type === WEBVIEW_TO_EXTENSION.EDIT_FIELD);
-  return (call?.[0] as { envelope?: Envelope } | undefined)?.envelope;
-}
-
-const member = (name: string) => ({ kind: 'member', name });
-const at = (index: number) => ({ kind: 'index', index });
-const keyed = (key: string) => ({ kind: 'key', key });
-
 describe('RecordPanel — array editing (unsorted)', () => {
-  const intArrayMeta: FieldMetadata = {
-    name: 'Values', type: 'array', isArray: true, validFormKeyTypes: [], enumMembers: [],
-    elementType: { name: '', type: 'int', isArray: false, validFormKeyTypes: [], enumMembers: [] },
-  };
+  const intArrayMeta = fieldMeta({
+    name: 'Values', type: 'array', isArray: true,
+    elementType: fieldMeta({ name: '', type: 'int' }),
+  });
 
   const intArrayCompareResult = {
     conflictAll: 'NoConflict',
@@ -392,21 +337,10 @@ describe('RecordPanel — array editing (unsorted)', () => {
     }],
   };
 
-  function fakeEditableClient(): RecordPanelClient {
-    return {
-      load: vi.fn().mockImplementation(() => Promise.resolve({
-        ok: true,
-        result: intArrayCompareResult,
-        immutableSet: new Set(),
-        notInLoadOrderSet: new Set(),
-        trackedSet: new Set([columnKey('MyMod.esp', null)]),
-        conflictsComputed: true,
-      } as unknown as LoadResult)),
-    };
-  }
-
   function renderEditablePanel() {
-    const client = fakeEditableClient();
+    const client = panelClient(() => intArrayCompareResult, {
+      plugins: [{ name: 'MyMod.esp', isTracked: true }],
+    });
     return { client, ...render(<RecordPanel client={client} />) };
   }
 
@@ -481,10 +415,10 @@ describe('RecordPanel — array editing (unsorted)', () => {
 });
 
 // Module scope: the inline-edit blocks below share these fixtures.
-const editableIntArrayMeta: FieldMetadata = {
-  name: 'Values', type: 'array', isArray: true, validFormKeyTypes: [], enumMembers: [],
-  elementType: { name: '', type: 'int', isArray: false, validFormKeyTypes: [], enumMembers: [] },
-};
+const editableIntArrayMeta = fieldMeta({
+  name: 'Values', type: 'array', isArray: true,
+  elementType: fieldMeta({ name: '', type: 'int' }),
+});
 
 const editableIntArrayResult = {
   conflictAll: 'NoConflict',
@@ -508,9 +442,7 @@ const editableIntArrayResult = {
   }],
 };
 
-const scalarMeta: FieldMetadata = {
-  name: 'Level', type: 'int', isArray: false, validFormKeyTypes: [], enumMembers: [],
-};
+const scalarMeta = fieldMeta({ name: 'Level', type: 'int' });
 
 const scalarResult = {
   conflictAll: 'NoConflict',
@@ -530,16 +462,9 @@ const scalarResult = {
 };
 
 function renderEditablePanel() {
-  const client: RecordPanelClient = {
-    load: vi.fn().mockImplementation(() => Promise.resolve({
-      ok: true,
-      result: currentCompare,
-      immutableSet: new Set(pluginsResponse.filter(p => p.isImmutable).map(p => columnKey(p.name, null))),
-      notInLoadOrderSet: new Set(),
-      trackedSet: new Set([columnKey('MyMod.esp', null)]),
-      conflictsComputed: true,
-    } as unknown as LoadResult)),
-  };
+  const client = panelClient(() => currentCompare, {
+    plugins: [{ name: 'Fallout4.esm', isImmutable: true }, { name: 'MyMod.esp', isTracked: true }],
+  });
   return { client, ...render(<RecordPanel client={client} />) };
 }
 
@@ -672,17 +597,14 @@ describe('RecordPanel — a value edit posts one set envelope addressing the lea
 // One row's path is shared by every column, so a keyed array's element is addressed by the key
 // text the diff node states, and the backend finds it in each column's own array.
 describe('RecordPanel — a keyed array\'s element is addressed by key', () => {
-  const scriptMeta: FieldMetadata = {
-    name: 'Scripts', type: 'array', isArray: true, validFormKeyTypes: [], enumMembers: [],
+  const scriptMeta = fieldMeta({
+    name: 'Scripts', type: 'array', isArray: true,
     keyMembers: ['name'],
-    elementType: {
-      name: '', type: 'struct', isArray: false, validFormKeyTypes: [], enumMembers: [],
-      fields: [
-        { name: 'name', type: 'string', isArray: false, validFormKeyTypes: [], enumMembers: [] },
-        { name: 'flags', type: 'string', isArray: false, validFormKeyTypes: [], enumMembers: [] },
-      ],
-    },
-  };
+    elementType: fieldMeta({
+      name: '', type: 'struct',
+      fields: [fieldMeta({ name: 'name', type: 'string' }), fieldMeta({ name: 'flags', type: 'string' })],
+    }),
+  });
 
   const master = [{ name: 'Guard', flags: 'm' }];
   const override = [{ name: 'Ambush', flags: 'a' }, { name: 'Guard', flags: 'g' }];
@@ -730,16 +652,9 @@ describe('RecordPanel — a keyed array\'s element is addressed by key', () => {
   };
 
   function renderKeyedPanel() {
-    const client: RecordPanelClient = {
-      load: vi.fn().mockImplementation(() => Promise.resolve({
-        ok: true,
-        result: keyedResult,
-        immutableSet: new Set([columnKey('Fallout4.esm', null)]),
-        notInLoadOrderSet: new Set(),
-        trackedSet: new Set([columnKey('MyMod.esp', null)]),
-        conflictsComputed: true,
-      } as unknown as LoadResult)),
-    };
+    const client = panelClient(() => keyedResult, {
+      plugins: [{ name: 'Fallout4.esm', isImmutable: true }, { name: 'MyMod.esp', isTracked: true }],
+    });
     return render(<RecordPanel client={client} />);
   }
 
@@ -791,22 +706,16 @@ describe('RecordPanel — a keyed array\'s element is addressed by key', () => {
   // The backend spells a key from the element's declared defaults, so an element omitting a key
   // member is labelled "10 / 0"; the row posts that text as stated, never a respelling of its own.
   it('posts the key text the diff node states, not one read off the element', async () => {
-    const fragmentsMeta: FieldMetadata = {
-      name: 'Fragments', type: 'array', isArray: true, validFormKeyTypes: [], enumMembers: [],
+    const fragmentsMeta = fieldMeta({
+      name: 'Fragments', type: 'array', isArray: true,
       keyMembers: ['Stage', 'StageIndex'],
-      elementType: {
-        name: '', type: 'struct', isArray: false, validFormKeyTypes: [], enumMembers: [],
-        fields: [
-          { name: 'Stage', type: 'int', isArray: false, validFormKeyTypes: [], enumMembers: [] },
-          { name: 'StageIndex', type: 'int', isArray: false, validFormKeyTypes: [], enumMembers: [] },
-        ],
-      },
-    };
+      elementType: fieldMeta({
+        name: '', type: 'struct',
+        fields: [fieldMeta({ name: 'Stage', type: 'int' }), fieldMeta({ name: 'StageIndex', type: 'int' })],
+      }),
+    });
     const element = { Stage: 10 };
-    const client: RecordPanelClient = {
-      load: vi.fn().mockImplementation(() => Promise.resolve({
-        ok: true,
-        result: {
+    const client = panelClient(() => ({
           conflictAll: 'OnlyOne',
           overrides: [{
             formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'Data', loadOrderIndex: 1, isWinner: true,
@@ -821,11 +730,7 @@ describe('RecordPanel — a keyed array\'s element is addressed by key', () => {
               children: [{ fieldName: 'Stage', values: { 'MyMod.esp': 10 }, winnerColumn: 'MyMod.esp', winnerValue: 10, cellStates: {} }],
             }],
           }],
-        },
-        immutableSet: new Set(), notInLoadOrderSet: new Set(),
-        trackedSet: new Set([columnKey('MyMod.esp', null)]), conflictsComputed: true,
-      } as unknown as LoadResult)),
-    };
+    }), { plugins: [{ name: 'MyMod.esp', isTracked: true }] });
     render(<RecordPanel client={client} />);
     await waitFor(() => screen.getByText('Fragments'));
     fireEvent.click(screen.getByText('Fragments').closest('tr')!.querySelector('button')!);
@@ -849,27 +754,27 @@ describe('RecordPanel — a keyed array\'s element is addressed by key', () => {
 
     expect(lastEnvelope()).toBeUndefined();
   });
+
+  // Inert means the row never offers the op, not that the envelope builder refuses it afterwards:
+  // a row that offered it would swallow the key and still post nothing, indistinguishable above.
+  it('Ctrl+ArrowDown on a keyed element leaves the key unhandled', async () => {
+    await expandTo('Guard');
+    const row = screen.getAllByText('Guard')[0].closest('tr')!;
+    const cells = row.querySelectorAll('td');
+    const cell = cells[cells.length - 1] as HTMLElement;
+    fireEvent.click(cell);
+
+    expect(fireEvent.keyDown(cell, { key: 'ArrowDown', ctrlKey: true })).toBe(true);
+  });
 });
 
 // A pure-FormLink array is sorted by its own values, so an element sits at a different position in
 // every column; the hop is that position in the column being written.
 describe('RecordPanel — an element of a sorted array is addressed at its position in this column', () => {
-  const sortedPlugins = [
-    { name: 'Fallout4.esm', isImmutable: true, loadOrderIndex: 0 },
-    { name: 'MyMod.esp', isImmutable: false, loadOrderIndex: 1 },
-  ];
-
   function renderSortedPanel() {
-    const client: RecordPanelClient = {
-      load: vi.fn().mockImplementation(() => Promise.resolve({
-        ok: true,
-        result: sortedArrayCompareResult,
-        immutableSet: new Set(sortedPlugins.filter(p => p.isImmutable).map(p => columnKey(p.name, null))),
-        notInLoadOrderSet: new Set(),
-        trackedSet: new Set([columnKey('MyMod.esp', null)]),
-        conflictsComputed: true,
-      } as unknown as LoadResult)),
-    };
+    const client = panelClient(() => sortedArrayCompareResult, {
+      plugins: [{ name: 'Fallout4.esm', isImmutable: true }, { name: 'MyMod.esp', isTracked: true }],
+    });
     return render(<RecordPanel client={client} />);
   }
 

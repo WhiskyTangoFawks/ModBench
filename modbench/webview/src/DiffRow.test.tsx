@@ -16,9 +16,12 @@ import type { Column, PathSegment } from './recordUtils';
 import type { CompareOverride, FieldDiff, FieldMetadata, FormKeyResolution } from './types';
 import { columnKey } from './types';
 import { DIMMED_OPACITY } from './gridStyles';
+import { diffNode, fieldMeta } from './test/fixtures';
 
-const strMeta: FieldMetadata = { name: 'Name', type: 'string', isArray: false, validFormKeyTypes: [], enumMembers: [] };
-const intMeta: FieldMetadata = { name: 'Level', type: 'int', isArray: false, validFormKeyTypes: [], enumMembers: [] };
+const strMeta = fieldMeta({ name: 'Name', type: 'string' });
+const intMeta = fieldMeta({ name: 'Level', type: 'int' });
+// A row offers its expand toggle when its own diff node carries children.
+const CHILDREN: FieldDiff[] = [diffNode({ fieldName: 'child' })];
 
 function override(plugin: string, partial: Partial<CompareOverride> = {}): CompareOverride {
   return {
@@ -34,13 +37,12 @@ function diskColumn(o: CompareOverride): Column {
   return { key: columnKey(o.plugin, o.origin), override: o };
 }
 function diff(partial: Partial<FieldDiff> = {}): FieldDiff {
-  return {
+  return diffNode({
     fieldName: 'Name',
     values: { 'Fallout4.esm': 'disk-value', 'MyMod.esp': 'disk-value' },
     winnerColumn: 'Fallout4.esm', winnerValue: 'disk-value',
-    cellStates: {},
     ...partial,
-  };
+  });
 }
 
 function baseProps(overrides: Partial<React.ComponentProps<typeof DiffRow>> = {}): React.ComponentProps<typeof DiffRow> {
@@ -51,11 +53,10 @@ function baseProps(overrides: Partial<React.ComponentProps<typeof DiffRow>> = {}
   const effectiveDiff = overrides.diff ?? diff();
   return {
     diff: effectiveDiff,
+    meta: strMeta,
     columns: [diskColumn(master), diskColumn(mod)],
-    overrideMap: { [columnKey('Fallout4.esm', null)]: master, [columnKey('MyMod.esp', null)]: mod },
-    fieldMetaMap: { Name: strMeta },
-    // ADR-0035: immutability alone must not dim a column; only absence from the load order does.
-    notInLoadOrderSet: new Set(),
+    // ADR-0035/ADR-0036: dimming is the panel's one answer; immutability alone is not part of it.
+    dimmedColumns: new Set(),
     collapsedColumns: new Set(),
     // Empty by default — editability is opt-in per fixture, never something a test inherits
     // without saying so.
@@ -88,20 +89,20 @@ describe('DiffRow — top-level scalar row', () => {
 
   it('renders the expand toggle when hasChildren is set, and calls onToggle', () => {
     const onToggle = vi.fn();
-    renderRow({ hasChildren: true, isExpanded: false, onToggle });
+    renderRow({ diff: diff({ children: CHILDREN }), isExpanded: false, onToggle });
     const btn = screen.getByText('▶');
     fireEvent.click(btn);
     expect(onToggle).toHaveBeenCalled();
   });
 
   it('shows ▼ when expanded', () => {
-    renderRow({ hasChildren: true, isExpanded: true });
+    renderRow({ diff: diff({ children: CHILDREN }), isExpanded: true });
     expect(screen.getByText('▼')).toBeInTheDocument();
   });
 
   // ADR-0041: with no editable columns wired, no cell opens an editor on any gesture.
   it('a value cell opens no editor on click, second click or double click', () => {
-    renderRow({ fieldMetaMap: { Name: intMeta }, diff: diff({ values: { 'Fallout4.esm': 5, 'MyMod.esp': 5 } }) });
+    renderRow({ meta: intMeta, diff: diff({ values: { 'Fallout4.esm': 5, 'MyMod.esp': 5 } }) });
     const cell = screen.getAllByText('5')[1]; // MyMod.esp
     fireEvent.click(cell);
     fireEvent.click(cell);
@@ -111,14 +112,14 @@ describe('DiffRow — top-level scalar row', () => {
   });
 
   it('double click on an immutable disk cell opens nothing', () => {
-    renderRow({ focusedCell: null, fieldMetaMap: { Name: intMeta }, diff: diff({ values: { 'Fallout4.esm': 5, 'MyMod.esp': 5 } }) });
+    renderRow({ focusedCell: null, meta: intMeta, diff: diff({ values: { 'Fallout4.esm': 5, 'MyMod.esp': 5 } }) });
     fireEvent.doubleClick(screen.getAllByText('5')[0]); // Fallout4.esm — immutable
     expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
   });
 
   it('double click on the label column toggles expand/collapse without breaking the existing button', () => {
     const onToggle = vi.fn();
-    renderRow({ hasChildren: true, isExpanded: false, onToggle });
+    renderRow({ diff: diff({ children: CHILDREN }), isExpanded: false, onToggle });
     const labelCell = screen.getByText('▶').closest('td')!;
     fireEvent.doubleClick(labelCell);
     expect(onToggle).toHaveBeenCalledTimes(1);
@@ -133,21 +134,16 @@ describe('DiffRow — top-level scalar row', () => {
   });
 });
 
-// Read off the column's own override.isPartialForm, already riding on the Column the row is
-// handed, rather than a separately-threaded Set.
-describe('DiffRow — Partial Form column dimming', () => {
-  it('dims a cell whose column override is a Partial Form record', () => {
-    const master = override('Fallout4.esm');
-    const partial = override('MyMod.esp', { isPartialForm: true });
-    renderRow({
-      columns: [diskColumn(master), diskColumn(partial)],
-      overrideMap: { [columnKey('Fallout4.esm', null)]: master, [columnKey('MyMod.esp', null)]: partial },
-    });
+// The panel decides which columns are dimmed and hands down one set; the row applies it to every
+// cell of that column and asks nothing else.
+describe('DiffRow — dimmed columns', () => {
+  it('dims a cell whose column the panel named dimmed', () => {
+    renderRow({ dimmedColumns: new Set([columnKey('MyMod.esp', null)]) });
     const cell = screen.getAllByText('disk-value')[1].closest('td')!;
     expect(cell).toHaveStyle({ opacity: String(DIMMED_OPACITY) });
   });
 
-  it('does not dim an ordinary (non-Partial-Form) column', () => {
+  it('does not dim a column outside that set', () => {
     renderRow();
     const cell = screen.getAllByText('disk-value')[1].closest('td')!;
     expect(cell).not.toHaveStyle({ opacity: String(DIMMED_OPACITY) });
@@ -225,7 +221,6 @@ describe('DiffRow — cell focus', () => {
     const colB = override('Shared.esp', { origin: 'ModB' });
     renderRow({
       columns: [diskColumn(colA), diskColumn(colB)],
-      overrideMap: { [columnKey('Shared.esp', 'ModA')]: colA, [columnKey('Shared.esp', 'ModB')]: colB },
       diff: diff({ values: { [columnKey('Shared.esp', 'ModA')]: 'disk-value', [columnKey('Shared.esp', 'ModB')]: 'disk-value' } }),
       focusedCell: { rowKey: 'Name', plugin: columnKey('Shared.esp', 'ModA') },
     });
@@ -237,20 +232,10 @@ describe('DiffRow — cell focus', () => {
   });
 });
 
-describe('DiffRow — non-top-level contexts', () => {
-
-  it('returns null when the row context has no resolvable field metadata', () => {
-    const { container } = render(<table><tbody>{React.createElement(DiffRow, baseProps({
-      fieldMetaMap: {}, // 'Name' not present -> top-level meta lookup misses
-    }))}</tbody></table>);
-    expect(container.querySelector('tr')).not.toBeInTheDocument();
-  });
-});
-
 // ADR-0031: the affordance keys off the leaf's own `diff.resolutions` entry, not the parent
 // field's aggregate `checkError` — a dangling sibling must not hide a live link beside it.
 describe('DiffRow — FormKey leaf resolution is independent of the parent field aggregate', () => {
-  const fkMeta: FieldMetadata = { name: '', type: 'formKey', isArray: false, validFormKeyTypes: [], enumMembers: [] };
+  const fkMeta = fieldMeta({ name: '', type: 'formKey' });
   const validType: FormKeyResolution = { state: 'ResolvedValidType', recordType: 'kywd', editorId: 'SomeKeyword' };
   const wrongType: FormKeyResolution = { state: 'ResolvedWrongType', recordType: 'npc_', editorId: 'SomeNpc' };
   const unresolved: FormKeyResolution = { state: 'Unresolved', recordType: null, editorId: null };
@@ -264,7 +249,11 @@ describe('DiffRow — FormKey leaf resolution is independent of the parent field
     const parentFieldName = kind === 'array-element' ? 'Keywords' : 'LinkedRef';
     const parentType = kind === 'array-element' ? 'array' : 'struct';
     const master = override('Fallout4.esm', {
-      fields: [{ metadata: { name: parentFieldName, type: parentType, isArray: kind === 'array-element', validFormKeyTypes: [], enumMembers: [] }, value: kind === 'array-element' ? [] : {}, checkError: 'aggregate: one sibling is dangling' }],
+      fields: [{
+        metadata: fieldMeta({ name: parentFieldName, type: parentType, isArray: kind === 'array-element' }),
+        value: kind === 'array-element' ? [] : {},
+        checkError: 'aggregate: one sibling is dangling',
+      }],
     });
     const path: PathSegment[] = kind === 'array-element'
       ? [{ kind: 'index', index: 1 }]
@@ -272,9 +261,8 @@ describe('DiffRow — FormKey leaf resolution is independent of the parent field
     return baseProps({
       diff: diff({ fieldName: kind === 'array-element' ? '[1]' : 'Reference', values: { 'Fallout4.esm': value }, resolutions: { 'Fallout4.esm': resolution } }),
       columns: [diskColumn(master)],
-      overrideMap: { [columnKey('Fallout4.esm', null)]: master },
-      fieldMetaMap: { [parentFieldName]: fkMeta },
-      context: { path, overrideMeta: fkMeta, rootField: parentFieldName, depth: path.length },
+      meta: fkMeta,
+      context: { path, rootField: parentFieldName, depth: path.length },
     });
   }
 
@@ -329,15 +317,38 @@ describe('DiffRow — FormKey leaf resolution is independent of the parent field
   });
 });
 
+// Every other fixture here carries one field, where `fields[0]` would be right by accident; the
+// decoy ahead of Location is what forbids that reading.
+describe('DiffRow — the check error is the row\'s own root field\'s', () => {
+  const locationMeta = fieldMeta({ name: 'Location', type: 'struct', fields: [fieldMeta({ name: 'aliasId', type: 'int' })] });
+
+  it('shows the warning from the row\'s own root field, not from the first field in the column', () => {
+    const master = override('Fallout4.esm', {
+      fields: [
+        { metadata: fieldMeta({ name: 'Level', type: 'int' }), value: 4, checkError: 'decoy: a different field is dangling' },
+        { metadata: locationMeta, value: {}, checkError: 'Location: its reference is dangling' },
+      ],
+    });
+    renderRow({
+      diff: diff({ fieldName: 'Location', values: { 'Fallout4.esm': {} } }),
+      meta: locationMeta,
+      columns: [diskColumn(master)],
+      context: { path: [], rootField: 'Location', depth: 0 },
+    });
+    expect(screen.getByTitle('Location: its reference is dangling')).toBeInTheDocument();
+    expect(screen.queryByTitle('decoy: a different field is dangling')).not.toBeInTheDocument();
+  });
+});
+
 describe('DiffRow — flags cell wiring', () => {
-  const flagMeta: FieldMetadata = {
-    name: 'Flags', type: 'flags', isArray: false, validFormKeyTypes: [],
+  const flagMeta = fieldMeta({
+    name: 'Flags', type: 'flags',
     enumMembers: [{ value: 'A', bitValue: '1' }, { value: 'B', bitValue: '2' }],
-  };
+  });
 
   function flagsRow(overrides: Partial<React.ComponentProps<typeof DiffRow>> = {}) {
     return renderRow({
-      fieldMetaMap: { Name: flagMeta },
+      meta: flagMeta,
       diff: diff({ values: { 'Fallout4.esm': ['A'], 'MyMod.esp': ['A'] } }),
       ...overrides,
     });
@@ -389,11 +400,11 @@ describe('DiffRow — flags cell wiring', () => {
 });
 
 describe('DiffRow — formKey cell wiring', () => {
-  const fkMeta: FieldMetadata = { name: 'Race', type: 'formKey', isArray: false, validFormKeyTypes: ['race'], enumMembers: [] };
+  const fkMeta = fieldMeta({ name: 'Race', type: 'formKey', validFormKeyTypes: ['race'] });
 
   function fkRow(overrides: Partial<React.ComponentProps<typeof DiffRow>> = {}) {
     return renderRow({
-      fieldMetaMap: { Name: fkMeta },
+      meta: fkMeta,
       diff: diff({ values: { 'Fallout4.esm': '000019:Fallout4.esm', 'MyMod.esp': '000019:Fallout4.esm' } }),
       ...overrides,
     });
@@ -500,30 +511,30 @@ describe('DiffRow — array parent/element right-click context', () => {
     return JSON.parse(attr!) as Record<string, unknown>;
   }
 
-  const intArrayMeta: FieldMetadata = {
-    name: 'Items', type: 'array', isArray: true, validFormKeyTypes: [], enumMembers: [],
-    elementType: { name: '', type: 'int', isArray: false, validFormKeyTypes: [], enumMembers: [] },
-  };
-  const intMetaLeaf: FieldMetadata = { name: '', type: 'int', isArray: false, validFormKeyTypes: [], enumMembers: [] };
+  const intArrayMeta = fieldMeta({
+    name: 'Items', type: 'array', isArray: true,
+    elementType: fieldMeta({ name: '', type: 'int' }),
+  });
+  const intMetaLeaf = fieldMeta({ name: '', type: 'int' });
 
   function arrayDiff(partial: Partial<FieldDiff> = {}): FieldDiff {
-    return {
+    return diffNode({
       fieldName: 'Items',
       values: { 'Fallout4.esm': [1, 2], 'MyMod.esp': [1, 2] },
       winnerColumn: 'Fallout4.esm', winnerValue: [1, 2],
-      cellStates: {},
+      children: CHILDREN,
       ...partial,
-    };
+    });
   }
 
   it('a top-level array-parent row\'s context carries the one member hop of its own field', () => {
     renderRow({
       diff: arrayDiff(),
-      fieldMetaMap: { Items: intArrayMeta },
+      meta: intArrayMeta,
       editableColumns: new Set([columnKey('MyMod.esp', null)]),
-      onEditCell: vi.fn(),
+      onArrayOp: vi.fn(),
       context: { path: [], rootField: 'Items', depth: 0 },
-      hasChildren: true, isExpanded: false,
+      isExpanded: false,
     });
     const ctx = vscodeContextFor('[2]', 1);
     expect(ctx.webviewSection).toBe('arrayParent');
@@ -538,10 +549,11 @@ describe('DiffRow — array parent/element right-click context', () => {
     const path: PathSegment[] = [{ kind: 'member', name: 'Items' }];
     renderRow({
       diff: arrayDiff(),
+      meta: intArrayMeta,
       editableColumns: new Set([columnKey('MyMod.esp', null)]),
-      onEditCell: vi.fn(),
-      context: { path, rootField: 'Container', overrideMeta: intArrayMeta, depth: path.length },
-      hasChildren: true, isExpanded: false,
+      onArrayOp: vi.fn(),
+      context: { path, rootField: 'Container', depth: path.length },
+      isExpanded: false,
     });
     const ctx = vscodeContextFor('[2]', 1);
     expect(ctx.path).toEqual([{ kind: 'member', name: 'Container' }, ...path]);
@@ -551,9 +563,10 @@ describe('DiffRow — array parent/element right-click context', () => {
     const path: PathSegment[] = [{ kind: 'index', index: 1 }];
     renderRow({
       diff: diff({ fieldName: '[1]', values: { 'Fallout4.esm': 2, 'MyMod.esp': 2 } }),
+      meta: intMetaLeaf,
       editableColumns: new Set([columnKey('MyMod.esp', null)]),
-      onEditCell: vi.fn(),
-      context: { path, rootField: 'Items', overrideMeta: intMetaLeaf, depth: path.length },
+      onArrayOp: vi.fn(),
+      context: { path, rootField: 'Items', depth: path.length },
     });
     const ctx = vscodeContextFor('2', 1);
     expect(ctx.webviewSection).toBe('arrayElement');
@@ -566,9 +579,10 @@ describe('DiffRow — array parent/element right-click context', () => {
     const path: PathSegment[] = [{ kind: 'member', name: 'Entries' }, { kind: 'index', index: 0 }];
     renderRow({
       diff: diff({ fieldName: '[0]', values: { 'Fallout4.esm': 5, 'MyMod.esp': 5 } }),
+      meta: intMetaLeaf,
       editableColumns: new Set([columnKey('MyMod.esp', null)]),
-      onEditCell: vi.fn(),
-      context: { path, rootField: 'Container', overrideMeta: intMetaLeaf, depth: path.length },
+      onArrayOp: vi.fn(),
+      context: { path, rootField: 'Container', depth: path.length },
     });
     const ctx = vscodeContextFor('5', 1);
     expect(ctx.path).toEqual([{ kind: 'member', name: 'Container' }, ...path]);
@@ -600,20 +614,21 @@ describe('DiffRow — label indentation', () => {
 // `{…}`/`[n]` states that something is present but collapsed. A column whose plugin has no
 // element there has nothing to collapse, so its cell stays empty.
 describe('DiffRow — a collapsed container row, per column', () => {
-  const structMeta: FieldMetadata = {
-    name: 'Location', type: 'struct', isArray: false, validFormKeyTypes: [], enumMembers: [],
-    fields: [{ name: 'aliasId', type: 'int', isArray: false, validFormKeyTypes: [], enumMembers: [] }],
-  };
-  const arrayMeta: FieldMetadata = {
-    name: 'Items', type: 'array', isArray: true, validFormKeyTypes: [], enumMembers: [],
-    elementType: { name: '', type: 'int', isArray: false, validFormKeyTypes: [], enumMembers: [] },
-  };
+  const structMeta = fieldMeta({
+    name: 'Location', type: 'struct',
+    fields: [fieldMeta({ name: 'aliasId', type: 'int' })],
+  });
+  const arrayMeta = fieldMeta({
+    name: 'Items', type: 'array', isArray: true,
+    elementType: fieldMeta({ name: '', type: 'int' }),
+  });
 
   function renderContainer(values: Record<string, unknown>, meta: FieldMetadata = structMeta) {
     return renderRow({
-      diff: diff({ fieldName: meta.name, values }),
-      context: { path: [], rootField: meta.name, overrideMeta: meta, depth: 0 },
-      hasChildren: true, isExpanded: false,
+      diff: diff({ fieldName: meta.name, values, children: CHILDREN }),
+      meta,
+      context: { path: [], rootField: meta.name, depth: 0 },
+      isExpanded: false,
     });
   }
 
@@ -636,9 +651,10 @@ describe('DiffRow — a collapsed container row, per column', () => {
   // The document omits an empty list, so a column with no array there has an empty one.
   it('shows the element count in every column whose owner is there, an absent array as [0]', () => {
     renderRow({
-      diff: diff({ fieldName: 'Items', values: { 'Fallout4.esm': [1, 2, 3], 'MyMod.esp': null } }),
-      context: { path: [], rootField: 'Items', overrideMeta: arrayMeta, depth: 0 },
-      hasChildren: true, isExpanded: false,
+      diff: diff({ fieldName: 'Items', values: { 'Fallout4.esm': [1, 2, 3], 'MyMod.esp': null }, children: CHILDREN }),
+      meta: arrayMeta,
+      context: { path: [], rootField: 'Items', depth: 0 },
+      isExpanded: false,
     });
     const cells = screen.getByText('Items').closest('tr')!.querySelectorAll('td');
     expect(cells[1].textContent).toBe('[3]');
@@ -647,9 +663,10 @@ describe('DiffRow — a collapsed container row, per column', () => {
 
   it('shows nothing for an array whose owner the column does not carry', () => {
     renderRow({
-      diff: diff({ fieldName: 'Items', values: { 'Fallout4.esm': [1, 2, 3], 'MyMod.esp': null } }),
-      context: { path: [{ kind: 'member', name: 'Items' }], rootField: 'Owner', overrideMeta: arrayMeta, depth: 1 },
-      hasChildren: true, isExpanded: false,
+      diff: diff({ fieldName: 'Items', values: { 'Fallout4.esm': [1, 2, 3], 'MyMod.esp': null }, children: CHILDREN }),
+      meta: arrayMeta,
+      context: { path: [{ kind: 'member', name: 'Items' }], rootField: 'Owner', depth: 1 },
+      isExpanded: false,
       ownerPresent: column => column === columnKey('Fallout4.esm', null),
     });
     const cells = screen.getByText('Items').closest('tr')!.querySelectorAll('td');
@@ -669,12 +686,12 @@ describe('DiffRow — a collapsed container row, per column', () => {
 // A labelled enum's values are Mutagen class names, so the cell speaks its label everywhere —
 // including Ctrl+C, which ADR-0034 binds to the one string the cell displays.
 describe('DiffRow — an enum whose values are wire tokens', () => {
-  const kindMeta: FieldMetadata = {
-    name: 'MutagenObjectType', type: 'enum', isArray: false, validFormKeyTypes: [],
+  const kindMeta = fieldMeta({
+    name: 'MutagenObjectType', type: 'enum',
     enumMembers: [{ value: 'QuestReferenceAlias', label: 'Reference' },
       { value: 'QuestLocationAlias', label: 'Location' }],
     displayLabel: 'Kind',
-  };
+  });
   const kindDiff = diff({
     fieldName: 'MutagenObjectType',
     values: { 'Fallout4.esm': 'QuestReferenceAlias', 'MyMod.esp': 'QuestReferenceAlias' },
@@ -683,8 +700,8 @@ describe('DiffRow — an enum whose values are wire tokens', () => {
 
   function renderKindRow() {
     return renderRow({
-      diff: kindDiff, fieldMetaMap: { MutagenObjectType: kindMeta }, rowKey: 'MutagenObjectType',
-      context: { path: [], rootField: 'MutagenObjectType', depth: 0, overrideMeta: kindMeta },
+      diff: kindDiff, meta: kindMeta, rowKey: 'MutagenObjectType',
+      context: { path: [], rootField: 'MutagenObjectType', depth: 0 },
     });
   }
 

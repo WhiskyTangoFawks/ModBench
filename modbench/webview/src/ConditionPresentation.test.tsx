@@ -7,16 +7,11 @@ vi.mock('./vscode', () => ({ vscode: { postMessage: vi.fn() } }));
 
 import { RecordPanel } from './RecordPanel';
 import type { FieldMetadata } from './types';
-import { columnKey } from './types';
-import type { LoadResult, RecordPanelClient } from './RecordPanelClient';
 import { vscode } from './vscode';
-import { WEBVIEW_TO_EXTENSION } from './messages';
+import { fieldMeta, leafMeta as leaf, panelClient, postedEnvelopes as sharedPostedEnvelopes } from './test/fixtures';
 
 // The metadata below is the Fallout 4 schema's own shape, trimmed to the enum members these
 // cases name and never restructured; `siblingsInUse` rows come from Condition.GetParameterTypes.
-
-const leaf = (name: string, type: string, extra: Partial<FieldMetadata> = {}): FieldMetadata =>
-  ({ name, type: type as FieldMetadata['type'], isArray: false, validFormKeyTypes: [], enumMembers: [], ...extra });
 
 const RUN_ON_VALUES = ['Subject', 'Target', 'Reference', 'CombatTarget'];
 
@@ -32,8 +27,8 @@ const FUNCTION_SLOTS: Record<string, string[]> = {
   HasAssociationType: ['ParameterOneRecord', 'ParameterTwoRecord'],
 };
 
-const dataMeta: FieldMetadata = {
-  name: 'Data', type: 'struct', isArray: false, validFormKeyTypes: [], enumMembers: [],
+const dataMeta = fieldMeta({
+  name: 'Data', type: 'struct',
   leafTypeName: 'ConditionData',
   fields: [
     leaf('RunOnType', 'enum', {
@@ -64,7 +59,7 @@ const dataMeta: FieldMetadata = {
       ],
     }),
   ],
-};
+});
 
 // ComparisonValue is one member whose type the leaf decides; the variant per leaf is what the
 // backend's schema carries, and the field's own shape is the first leaf's.
@@ -72,10 +67,10 @@ const comparisonValueMeta: FieldMetadata = leaf('ComparisonValue', 'float', {
   variants: { ConditionFloat: leaf('ComparisonValue', 'float'), ConditionGlobal: leaf('ComparisonValue', 'formKey') },
 });
 
-const conditionsMeta: FieldMetadata = {
-  name: 'Conditions', type: 'array', isArray: true, validFormKeyTypes: [], enumMembers: [],
-  elementType: {
-    name: '', type: 'struct', isArray: false, validFormKeyTypes: [], enumMembers: [],
+const conditionsMeta = fieldMeta({
+  name: 'Conditions', type: 'array', isArray: true,
+  elementType: fieldMeta({
+    name: '', type: 'struct',
     leafTypeName: 'Condition',
     fields: [
       dataMeta,
@@ -98,8 +93,8 @@ const conditionsMeta: FieldMetadata = {
         ],
       }),
     ],
-  },
-};
+  }),
+});
 
 type Condition = Record<string, unknown>;
 
@@ -182,17 +177,9 @@ const oneColumn = (
 let currentCompare: unknown = null;
 
 function renderPanel() {
-  const client: RecordPanelClient = {
-    load: vi.fn().mockImplementation(() => Promise.resolve({
-      ok: true,
-      result: currentCompare,
-      immutableSet: new Set(),
-      notInLoadOrderSet: new Set(),
-      trackedSet: new Set([columnKey(PLUGIN, null)]),
-      conflictsComputed: true,
-    } as unknown as LoadResult)),
-  };
-  return render(<RecordPanel client={client} />);
+  return render(<RecordPanel client={panelClient(() => currentCompare, {
+    plugins: [{ name: PLUGIN, isTracked: true }],
+  })} />);
 }
 
 async function expandConditions() {
@@ -228,12 +215,7 @@ async function openMemberEditor(memberName: string): Promise<HTMLTableCellElemen
   return cell;
 }
 
-function postedEnvelopes(): unknown[] {
-  const calls = (vscode.postMessage as ReturnType<typeof vi.fn>).mock.calls;
-  return calls
-    .filter(([m]) => (m as { type?: string }).type === WEBVIEW_TO_EXTENSION.EDIT_FIELD)
-    .map(([m]) => (m as { envelope: unknown }).envelope);
-}
+const postedEnvelopes = () => sharedPostedEnvelopes(vscode.postMessage);
 
 const dataMember = (name: string) => [
   { kind: 'member', name: 'Conditions' }, { kind: 'index', index: 0 },

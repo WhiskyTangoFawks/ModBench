@@ -4,18 +4,16 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
 
 import { FlagCell } from './FlagCell';
-import type { FieldMetadata } from './types';
+import { fieldMeta } from './test/fixtures';
 
 // The codec spells a flags member as the array of the names that are set; the metadata lists the
 // members, in its own order.
-const flagMeta: FieldMetadata = {
+const flagMeta = fieldMeta({
   name: 'Flags',
   type: 'flags',
-  isArray: false,
-  validFormKeyTypes: [],
   enumMembers: [{ value: 'A', bitValue: '1' }, { value: 'B', bitValue: '2' },
     { value: 'C', bitValue: '4' }, { value: 'D', bitValue: '8' }],
-};
+});
 
 // A deliberate ADR-0034 divergence, recorded there: the checkbox list is the cell — always
 // visible, one checkbox per flag, no gesture to reveal it.

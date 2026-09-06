@@ -70,12 +70,6 @@ export function elementSegment(arrayMeta: FieldMetadata, fieldName: string, ordi
   return { kind: 'index', index: ordinal };
 }
 
-// A row's index comes from the union-aligned tree across every plugin's column, not from this one
-// plugin's array, so it can be at or past *this* array's length even though the row exists.
-export function hasElementAt(length: number, index: number): boolean {
-  return index >= 0 && index < length;
-}
-
 // ── Native right-click menu contexts ──────────────────────────────────────────
 //
 // VS Code gates these on a `data-vscode-context` attribute carrying JSON it parses itself, never a
@@ -89,22 +83,18 @@ import type {
   StringValueContext,
 } from './messages';
 
-// Its mere presence is the gate, so no immutable/isSortable flag travels in the payload.
-// `arrayLength` only exists to derive canMoveUp/canMoveDown. `path` is the envelope's own wire
-// path, which a scalar index could never carry.
+// Only the near end is bounded: the row's index spans every column, so this column's own length
+// is not known here, and a move off the far end is the backend's to refuse by name.
 export function arrayElementContext(
-  formKey: string, plugin: string, origin: string, path: PathHop[], arrayLength: number,
+  formKey: string, plugin: string, origin: string, path: PathHop[],
 ): ArrayElementContext {
   const lastSeg = path.at(-1);
-  const index = lastSeg?.kind === 'index' ? lastSeg.index : -1;
   const movable = isMovableElementHop(lastSeg);
+  const index = lastSeg?.kind === 'index' ? lastSeg.index : -1;
   return {
     webviewSection: 'arrayElement', formKey, plugin, origin, path,
-    // `canMoveUp` must also check hasElementAt (this plugin's length), or the menu offers Move Up
-    // on a row this plugin doesn't have an element in — canMoveDown needs no such check since
-    // index < arrayLength - 1 already implies it.
-    canMoveUp: movable && index > 0 && hasElementAt(arrayLength, index),
-    canMoveDown: movable && index < arrayLength - 1,
+    canMoveUp: movable && index > 0,
+    canMoveDown: movable,
     preventDefaultContextMenuItems: true,
   };
 }

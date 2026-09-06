@@ -18,24 +18,15 @@ export type FieldType =
   | 'string' | 'translatedString' | 'int' | 'float' | 'bool' | 'enum' | 'flags' | 'formKey'
   | 'struct' | 'array' | 'hex' | 'color' | 'vector';
 
-/** `readOnly` is a per-row stamp the panel applies regardless of the column's own mutability;
- *  every other field's editability comes purely from the column — "per column, never a mode". */
+/** `readOnly` is the one member the wire does not carry: a per-row stamp regardless of the
+ *  column's own mutability — "per column, never a mode". */
 export type FieldMetadata =
-  // `isDiscriminator` says which member of a struct names the concrete class its object is — the
-  // document's own `MutagenObjectType`. `variants` is a union member's shape per leaf, keyed by
-  // that discriminator's values.
-  Omit<Schemas['FieldMetadata'],
-    'type' | 'elementType' | 'fields' | 'isSortable' | 'allowsNull' | 'isDiscriminator' | 'variants'> & {
+  Omit<Schemas['FieldMetadata'], 'type' | 'elementType' | 'fields' | 'variants'> & {
     type: FieldType;
     elementType?: FieldMetadata | null;   // present when type === 'array'
     fields?: FieldMetadata[] | null;      // present when type === 'struct'
     variants?: Record<string, FieldMetadata> | null;
     readOnly?: boolean;
-    // Required non-nullable booleans on the wire, optional here so a test fixture can leave a
-    // question that does not apply to its row unanswered rather than fabricating `false` for it.
-    isSortable?: boolean;   // on elementType: true for pure FormLink arrays
-    allowsNull?: boolean;   // for 'formKey': true when the Mutagen type is IFormLinkNullable<T>
-    isDiscriminator?: boolean;  // this member names its object's concrete leaf
   };
 
 export type FieldValue = Omit<Schemas['FieldValue'], 'metadata'> & { metadata: FieldMetadata };
@@ -63,10 +54,7 @@ export type CompareOverride = Omit<Schemas['CompareOverride'], 'fields'> & { fie
 // Lives in messages.ts so it can cross to the extension host.
 export type { PathHop, PathSegment, RecordEditEnvelope } from './messages';
 
-/** `conflictAll` is required on the wire but optional here, so a fixture that states no conflict
- *  state degrades to "no background" rather than having to state one. */
-export type FieldDiff = Omit<Schemas['FieldDiff'], 'children' | 'conflictAll'> & {
-  conflictAll?: ConflictAll;
+export type FieldDiff = Omit<Schemas['FieldDiff'], 'children'> & {
   children?: FieldDiff[] | null;
 };
 

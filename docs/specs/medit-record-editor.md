@@ -681,9 +681,9 @@ gesture — Sim Settlements 2 is a real-world example on Fallout 4.
   Partial Form column: the same
   `DIMMED_OPACITY` treatment a
   not-in-load-order column already gets, both at the column header and on every one of that
-  column's own cells (read straight off `CompareOverride.IsPartialForm`, not a separately-computed
-  set). A dimmed column is not a full competing override, matching what the exclusion above already
-  computed.
+  column's own cells — one dimmed-columns set, computed once for the whole grid beside the editable
+  one, so the header and the cells under it cannot disagree. A dimmed column is not a full
+  competing override, matching what the exclusion above already computed.
 - **Read-only except the header — and EditorID.** A Partial Form override's own fields refuse on
   the single write path (`RecordEditRefusal.PartialFormFieldReadOnly`) — a typed refusal, not just
   a UI disable, so an agent (ADR-0024) sees the same rule a human does. Checked against the write

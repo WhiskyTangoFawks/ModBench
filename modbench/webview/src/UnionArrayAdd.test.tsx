@@ -6,33 +6,30 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 vi.mock('./vscode', () => ({ vscode: { postMessage: vi.fn() } }));
 
 import { RecordPanel } from './RecordPanel';
-import type { FieldMetadata } from './types';
-import { columnKey } from './types';
-import type { LoadResult, RecordPanelClient } from './RecordPanelClient';
 import { vscode } from './vscode';
-import { WEBVIEW_TO_EXTENSION } from './messages';
+import { fieldMeta, lastPostedEnvelope, panelClient } from './test/fixtures';
 
 // Add on an abstract-union array: the webview contributes no element and no default. A
 // reflected array's default element belongs to the backend's DocumentEdit, the only place that can
 // name a leaf the codec will accept.
 
-const aliasesMeta: FieldMetadata = {
-  name: 'aliases', type: 'array', isArray: true, validFormKeyTypes: [], enumMembers: [],
-  elementType: {
-    name: '', type: 'struct', isArray: false, validFormKeyTypes: [], enumMembers: [],
+const aliasesMeta = fieldMeta({
+  name: 'aliases', type: 'array', isArray: true,
+  elementType: fieldMeta({
+    name: '', type: 'struct',
     fields: [
-      {
-        name: 'MutagenObjectType', type: 'enum', isArray: false, validFormKeyTypes: [],
+      fieldMeta({
+        name: 'MutagenObjectType', type: 'enum',
         enumMembers: [
           { value: 'QuestReferenceAlias', label: 'Reference' },
           { value: 'QuestLocationAlias', label: 'Location' },
           { value: 'QuestCollectionAlias', label: 'Collection' }],
         displayLabel: 'Kind',
-      },
-      { name: 'name', type: 'string', isArray: false, validFormKeyTypes: [], enumMembers: [] },
+      }),
+      fieldMeta({ name: 'name', type: 'string' }),
     ],
-  },
-};
+  }),
+});
 
 const aliasesCompareResult = {
   conflictAll: 'NoConflict',
@@ -64,24 +61,13 @@ const aliasesCompareResult = {
 
 describe('RecordPanel — Add on an abstract-union array', () => {
   function renderPanel() {
-    const client: RecordPanelClient = {
-      load: vi.fn().mockImplementation(() => Promise.resolve({
-        ok: true,
-        result: aliasesCompareResult,
-        immutableSet: new Set(),
-        notInLoadOrderSet: new Set(),
-        trackedSet: new Set([columnKey('MyMod.esp', null)]),
-        conflictsComputed: true,
-      } as unknown as LoadResult)),
-    };
+    const client = panelClient(() => aliasesCompareResult, {
+      plugins: [{ name: 'MyMod.esp', isTracked: true }],
+    });
     return render(<RecordPanel client={client} />);
   }
 
-  function lastEnvelope(): unknown {
-    const calls = (vscode.postMessage as ReturnType<typeof vi.fn>).mock.calls;
-    const call = [...calls].reverse().find(([m]) => (m as { type?: string }).type === WEBVIEW_TO_EXTENSION.EDIT_FIELD);
-    return (call?.[0] as { envelope?: unknown } | undefined)?.envelope;
-  }
+  const lastEnvelope = () => lastPostedEnvelope(vscode.postMessage);
 
   beforeEach(() => {
     vi.stubGlobal('mEditFormKey', '000001:Quest548.esp');
