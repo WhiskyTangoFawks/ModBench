@@ -61,6 +61,12 @@ internal static class ReflectedTypes
 
     internal static bool IsAtomicValueType(Type core) => core == typeof(System.Drawing.Color);
 
+    /// <summary>Whether the getter declares this member as possibly absent. A Loqui sub-record is a
+    /// reference type, so the CLR type says nothing and only the interface's own nullable annotation
+    /// answers.</summary>
+    internal static bool IsNullableMember(PropertyInfo prop) =>
+        new NullabilityInfoContext().Create(prop).ReadState == NullabilityState.Nullable;
+
     // Loqui's own registry answers for a class or a getter interface alike, an open generic
     // included, whose statics reflection cannot invoke.
     private static ILoquiRegistration? Registration(Type type) =>

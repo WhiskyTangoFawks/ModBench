@@ -14,6 +14,9 @@ internal static class StructLeaves
         if (sub.Count == 0) return SchemaRefusals.ReportUnclassified<SubFieldSpec>(game, logger, prop, core, "empty struct");
         return new(prop.Name, "struct", LeafSpec.NoFormKeyTypes, LeafSpec.NoEnumMembers,
             SubFields: sub,
+            // Absence is the value where the getter says the sub-record may be unset; where it may
+            // not, an omitted member is the codec's own default, not "no struct".
+            AllowsNull: ReflectedTypes.IsNullableMember(prop),
             LeafTypeName: ReflectedTypes.LeafTypeName(core));
     }
 }

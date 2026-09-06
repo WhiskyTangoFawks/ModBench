@@ -55,6 +55,18 @@ public sealed class OneLeafBuilderTests
         Assert.True(unsorted.Count == 0, string.Join("\n", unsorted));
     }
 
+    // A struct's nullability is the getter's own annotation and nothing else: the CLR type is a
+    // reference type either way, so without it an omitted Destructible and an omitted ObjectBounds
+    // read alike.
+    [Fact]
+    public void AStructMember_SaysWhetherAbsenceIsAValue()
+    {
+        var container = Schemas["cont"].RecordColumns;
+
+        Assert.True(container.Single(c => c.Name == "Destructible").Field.AllowsNull);
+        Assert.False(container.Single(c => c.Name == "ObjectBounds").Field.AllowsNull);
+    }
+
     // A "Null" slot is a tolerated placeholder in any form-link array, not a dangling reference.
     [Fact]
     public void EveryFormLinkArrayElement_AllowsNull_HoweverDeepTheWalkReachedIt()

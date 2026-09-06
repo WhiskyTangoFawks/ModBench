@@ -113,7 +113,10 @@ public record FieldMetadata(
     FieldMetadata? ElementType = null,          // for 'array': element schema
     IReadOnlyList<FieldMetadata>? Fields = null, // for 'struct': sub-field schemas
     bool IsSortable = false,                     // true when element is a pure FormLink
-    bool AllowsNull = false,                     // for 'formKey': true when the Mutagen type is IFormLinkNullable<T>
+
+    // The member may be absent-meaning-null rather than absent-meaning-default: a nullable
+    // FormLink, a sub-record the getter declares nullable, a member some union leaf lacks.
+    bool AllowsNull = false,
 
     // Null for an ordinary field, whose row label is its own name; set by the abstract-union
     // discriminator, whose name is a wire name.
