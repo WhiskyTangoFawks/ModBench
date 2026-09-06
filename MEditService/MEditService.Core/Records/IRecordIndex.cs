@@ -93,6 +93,11 @@ public interface IRecordIndex : IDisposable
     /// one door SQL crosses this seam through (ADR-0041). Throws if the SQL returns no
     /// <c>form_key</c> column; state is unchanged on failure.</summary>
     void SetFilter(string? sql);
+
+    /// <summary>ADR-0046: the one projection verb. Re-derives <paramref name="formKeys"/>' rows at
+    /// both refs from the Source repository, idempotent by content; skips a key held at neither
+    /// ref. <paramref name="modFolder"/> is the caller's to resolve.</summary>
+    void RefreshByKeys(PluginKey key, string modFolder, IReadOnlyList<string> formKeys);
 }
 
 /// <summary>What <see cref="IRecordIndex.ApplyRenumber"/> needs.</summary>

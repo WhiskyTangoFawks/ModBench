@@ -399,6 +399,81 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         tx.Commit();
     }
 
+    // --- Refresh ---
+
+    /// <summary>See <see cref="IRecordIndex.RefreshByKeys"/>.</summary>
+    public void RefreshByKeys(PluginKey key, string modFolder, IReadOnlyList<string> formKeys)
+    {
+        foreach (var formKey in formKeys)
+            RefreshOneKey(key, modFolder, formKey);
+    }
+
+    // Re-derives one key's rows at both refs. Every write below is a push verb above; called again
+    // with the same bytes, neither fires.
+    private void RefreshOneKey(PluginKey key, string modFolder, string formKey)
+    {
+        var effective = At(RecordRef.Effective).GetDocument(formKey, key);
+        var head = At(RecordRef.Head).GetDocument(formKey, key);
+        // Neither ref knows this key: nothing to resolve a source unit under, and refresh re-derives
+        // an existing record rather than materializing one from a bare FormKey.
+        var recordType = effective?.RecordType ?? head?.RecordType;
+        if (recordType == null) return;
+
+        var unit = SourceUnitResolver.Resolve(
+            At(RecordRef.Effective), key, modFolder, formKey, recordType, effective?.EditorId ?? head?.EditorId, _release);
+
+        string? workingTreeText = null;
+        if (unit is { } resolved)
+        {
+            var ownerBytes = File.Exists(resolved.FullPath) ? File.ReadAllBytes(resolved.FullPath) : null;
+            workingTreeText = SourceUnitResolver.RecordBodyFromOwnerBytes(ownerBytes, resolved, formKey, _release, _codec);
+        }
+
+        if (!string.Equals(workingTreeText, effective?.Body, StringComparison.Ordinal))
+            ApplyWorkingTreeChanges(key, [(formKey, workingTreeText)]);
+
+        // Nothing left to ask git about when Resolve found no unit at all — fail closed rather than
+        // consulting a path that was never real.
+        if (unit is { } resolvedUnit)
+            RebaselineIfHeadMoved(key, modFolder, resolvedUnit, formKey);
+    }
+
+    // Asked only for a record the index already believes dirty; a clean one's committed bytes are the
+    // file's, so no git process starts. The unit tells a record's own file from an embedded child's owner.
+    private void RebaselineIfHeadMoved(PluginKey key, string modFolder, SourceUnit unit, string formKey)
+    {
+        var head = At(RecordRef.Head).GetDocument(formKey, key);
+        if (head?.Body is not { } committedBody) return;
+
+        var relativePath = unit.RelativePath;
+
+        // The hash fast path is meaningless for an embedded child: the blob at relativePath is the owner's
+        // whole document.
+        if (!unit.IsEmbedded)
+        {
+            var hashes = SourceRepository.CommittedSourceHashes(modFolder, [relativePath]);
+            if (hashes == null || !hashes.TryGetValue(relativePath.Replace('\\', '/'), out var headHash)) return;
+
+            // Equality is conclusive; inequality only sends us to compare bytes, never an assertion of change.
+            if (headHash == GitBlobHash.Of(Encoding.UTF8.GetBytes(committedBody))) return;
+        }
+
+        if (SourceRepository.ReadCommittedSourceText(modFolder, relativePath) is not { } headOwnerText) return;
+
+        // Same BOM defence as RecordBodyFromOwnerBytes.
+        headOwnerText = headOwnerText.TrimStart('\uFEFF');
+
+        // For an embedded child the HEAD text is the owner's document; a null means the owner's HEAD copy
+        // does not carry this child, which leaves the committed baseline alone (fail closed).
+        var headText = unit.IsEmbedded
+            ? SourceUnitResolver.RecordBodyFromOwnerBytes(Encoding.UTF8.GetBytes(headOwnerText), unit, formKey, _release, _codec)
+            : headOwnerText;
+        if (headText is not { } resolvedHeadText) return;
+        if (string.Equals(resolvedHeadText, committedBody, StringComparison.Ordinal)) return;
+
+        SetCommittedBaseline(key, [(formKey, resolvedHeadText)]);
+    }
+
     // --- Queries ---
 
     // `records` holds one row per record copy and that row is Effective, so every read reaches its

@@ -1,3 +1,4 @@
+using System.Text;
 using MEditService.Core.Records;
 using MEditService.Core.Serialization;
 using Mutagen.Bethesda;
@@ -315,6 +316,32 @@ internal static class SourceUnitResolver
 
         return groupFolder;
     }
+
+    /// <summary>The record's own text out of the bytes <paramref name="unit"/>'s file holds: itself for
+    /// a flat record, or re-extracted for an embedded child. Shared by SourceFreshness's drift check
+    /// and RefreshByKeys's write.</summary>
+    internal static string? RecordBodyFromOwnerBytes(
+        byte[]? ownerBytes, SourceUnit unit, string formKey, GameRelease release, RecordTextCodec codec)
+    {
+        if (ownerBytes == null) return null;
+
+        // File.ReadAllText strips a UTF-8 BOM; raw bytes do not — unstripped, a BOM-carrying file
+        // would never compare equal to the codec's BOM-free text.
+        ownerBytes = StripUtf8Bom(ownerBytes);
+
+        if (!unit.IsEmbedded) return Encoding.UTF8.GetString(ownerBytes);
+
+        var owner = codec.DeserializeFromBytesAsync(ownerBytes, release, unit.OwnerRecordType).GetAwaiter().GetResult();
+        if (ContainerChildFields.FindEmbeddedChild(owner, formKey) is not { } found) return null;
+
+        var childBytes = codec.SerializeToBytesAsync(found.Child, release).GetAwaiter().GetResult();
+        return Encoding.UTF8.GetString(childBytes);
+    }
+
+    private static readonly byte[] Utf8Bom = [0xEF, 0xBB, 0xBF];
+
+    internal static byte[] StripUtf8Bom(byte[] bytes) =>
+        bytes.AsSpan(0, Math.Min(bytes.Length, Utf8Bom.Length)).SequenceEqual(Utf8Bom) ? bytes[Utf8Bom.Length..] : bytes;
 
     /// <summary><c>[&lt;EditorID&gt; - ]&lt;hex6&gt;_&lt;originModKey&gt;</c>, with <c>.json</c> for a flat
     /// file and without for a container's directory — the reason an EditorID edit is a rename.</summary>
