@@ -36,8 +36,8 @@ public class UnionArrayAddInventoryTests
         "ConditionFloat|ConditionGlobal",
         // omod.properties
         "ObjectModIntProperty<Armor+Property>|ObjectModFloatProperty<Armor+Property>|ObjectModBoolProperty<Armor+Property>|"
-        + "ObjectModStringProperty<Armor+Property>|ObjectModEnumProperty<Armor+Property>|"
-        + "ObjectModFormLinkIntProperty<Armor+Property>|ObjectModFormLinkFloatProperty<Armor+Property>",
+        + "ObjectModStringProperty<Armor+Property>|ObjectModFormLinkIntProperty<Armor+Property>|"
+        + "ObjectModFormLinkFloatProperty<Armor+Property>|ObjectModEnumProperty<Armor+Property>",
         // perk.effects
         "PerkEntryPointModifyActorValue|PerkEntryPointModifyValue|PerkQuestEffect|PerkAbilityEffect|" +
         "PerkEntryPointAddRangeToValue|PerkEntryPointAbsoluteValue|PerkEntryPointAddLeveledItem|" +

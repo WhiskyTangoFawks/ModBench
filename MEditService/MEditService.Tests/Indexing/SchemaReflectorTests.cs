@@ -109,8 +109,8 @@ public class SchemaReflectorTests
 
     // ── OMOD's Properties element must surface the property's actual Value ──
     //
-    // IAObjectModPropertyGetter<T> declares only Property/Step; the payload lives on seven leaf getter
-    // interfaces BuildSubSchema descends into. Read-only: the write path is a separate known defect.
+    // IAObjectModPropertyGetter<T> declares only Property/Step; the payload lives on the seven generic
+    // leaves under the base, each named as the codec closes it with the owner's type argument.
 
     [Fact]
     public void GetSchemas_Omod_PropertiesElement_ExposesSevenLeafUnionFields()

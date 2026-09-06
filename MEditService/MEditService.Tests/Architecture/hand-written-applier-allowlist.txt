@@ -1,3 +1,4 @@
 MEditService.Core/Edits/PluginWriter.cs: writeBuilder = writeBuilder.WithStringsWriter(new StringsWriter(
 MEditService.Core/Edits/SpatialContainerMint.cs: var mod = new Fallout4Mod(ModKey.FromFileName(destinationPlugin.Name), release.ToFallout4Release());
-MEditService.Core/Schema/ObjectModPropertyLeaves.cs: leaves.Add((open.MakeGenericType(args), valueTypeName));
+MEditService.Core/Edits/SpatialContainerMint.cs: var block = new WorldspaceBlock
+MEditService.Core/Edits/SpatialContainerMint.cs: var subBlock = new WorldspaceSubBlock

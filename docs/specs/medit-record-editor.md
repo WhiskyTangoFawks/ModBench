@@ -853,9 +853,10 @@ generic class: Skyrim has 426 per-function subclasses and Starfield about 610 pl
 `IConditionParameters` whose `Parameter1` is a bare `object`. Two things follow that any future
 multi-game work has to settle rather than inherit: a bare `object` has no closed domain and lands
 in `SchemaRefusals`, and
-`LoquiUnions.BuildUnionShapeField` takes its metadata from the first declaring leaf alone — so
-same-named parameters closed over *different* record types would share one shape key, not split, and
-would silently advertise the first leaf's `ValidFormKeyTypes`. Fallout 4 never meets that: its
+a union member's own shape is the first declaring leaf's, with a variant per leaf wherever the
+leaves' wire descriptions differ — `ValidFormKeyTypes` and an enum's domain included — so
+same-named parameters closed over *different* record types would each advertise their own leaf's
+targets, at the cost of a variant map on every such member. Fallout 4 never meets that: its
 parameters close over `IFallout4MajorRecordGetter`, which names no type at all.
 
 `GetEventData`, the second `ConditionData` leaf, is modelled but unreadable in the pinned Mutagen
@@ -908,19 +909,16 @@ These apply everywhere a field value is rendered — the one compare grid and an
    element whose discriminator is missing or unrecognized refuses naming the field, rather
    than guessing or crashing — the same polymorphism applies read-side.
 
-   Mutagen's own generated code has a second, more common shape for a polymorphic field: an
-   abstract `A<Name>` base (`ANpcLevel`, `AQuestAlias`, ...) whose real per-subclass data lives on
-   concrete classes that *inherit from* the base, rather than the OMOD-only leaves (generic
-   sibling interfaces the base never inherits from, each needing its own hand-verified value-type
-   table). The same discriminator pattern generalizes reflectively — `SchemaReflector` finds
-   every concrete subclass of an abstract base in the same Mutagen assembly, exposes each leaf's own
-   members as a sparse union keyed by the document's own `MutagenObjectType` sub-field (the leaf's
-   own class name as the codec spells it, e.g. `"NpcLevel"`/`"PcLevelMult"`, `"QuestReferenceAlias"`/
-   `"QuestLocationAlias"`/`"QuestCollectionAlias"`), and writes back by resolving `MutagenObjectType`
-   the same way OMOD's does — no per-type table, and OMOD's own `BuildObjectModPropertyLeafFields`
-   stays alongside it unmerged, since OMOD's leaf discovery is a genuinely different mechanism (a
-   generic base with no reflectively-enumerable subclasses of its own), not a special case of this
-   one.
+   Every polymorphic field is that one shape: a Loqui base with concrete classes under it in the
+   same Mutagen assembly — an abstract `A<Name>` base (`ANpcLevel`, `AQuestAlias`, ...), OMOD's
+   generic `AObjectModProperty<T>` whose seven leaves are generic too and are named by closing them
+   with the owner's type argument (`"ObjectModIntProperty<Armor+Property>"`), and a record class
+   whose signature several subclasses share (below, 7). `LoquiUnions` finds the leaves through
+   Loqui's own registry, exposes each leaf's own members as a sparse union keyed by the document's
+   own `MutagenObjectType` sub-field (the leaf's class name as the codec spells it, e.g.
+   `"NpcLevel"`/`"PcLevelMult"`, `"QuestReferenceAlias"`/`"QuestLocationAlias"`/
+   `"QuestCollectionAlias"`), and the write path resolves `MutagenObjectType` the same way for every
+   one of them — no per-type table anywhere.
    **Every struct declares its own class**, union or not: `FieldMetadata.LeafTypeName` carries the
    reflected type name on every `struct` and is null on every other type. The discriminator is a
    different claim — the schema's name says which class was *promised*, the discriminator's value

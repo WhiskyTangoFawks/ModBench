@@ -1,4 +1,5 @@
 using System.Reflection;
+using Loqui;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Strings;
 using Noggog;
@@ -56,25 +57,17 @@ internal static class ReflectedTypes
 
     internal static bool IsAtomicValueType(Type core) => core == typeof(System.Drawing.Color);
 
-    // Retrieve the concrete mutable class (e.g. RankPlacement) via ILoquiRegistration.SetterType.
-    internal static Type? GetSetterType(Type getterInterface)
-    {
-        var regProp = getterInterface.GetProperty(
-            "StaticRegistration", BindingFlags.Public | BindingFlags.Static);
-        var reg = regProp?.GetValue(null);
-        return reg?.GetType().GetField("ClassType", BindingFlags.Public | BindingFlags.Static)?.GetValue(null) as Type;
-    }
+    // Loqui's own registry answers for a class or a getter interface alike, an open generic
+    // included, whose statics reflection cannot invoke.
+    private static ILoquiRegistration? Registration(Type type) =>
+        LoquiRegistration.TryGetRegister(type, out var registration) ? registration : null;
 
-    // Mirrors GetSetterType: reads GetterType off a *concrete* Loqui class's own StaticRegistration,
-    // rather than SetterType off a getter interface's.
-    internal static Type? GetOwnGetterType(Type concreteClass)
-    {
-        var regProp = concreteClass.GetProperty(
-            "StaticRegistration", BindingFlags.Public | BindingFlags.Static);
-        var reg = regProp?.GetValue(null);
-        return reg?.GetType().GetField("GetterType", BindingFlags.Public | BindingFlags.Static)
-            ?.GetValue(null) as Type;
-    }
+    /// <summary>The concrete mutable class behind a getter interface (RankPlacement for
+    /// IRankPlacementGetter), open where the interface is generic.</summary>
+    internal static Type? GetSetterType(Type getterInterface) => Registration(getterInterface)?.ClassType;
+
+    /// <summary>A Loqui class's own getter interface, open where the class is generic.</summary>
+    internal static Type? GetOwnGetterType(Type loquiClass) => Registration(loquiClass)?.GetterType;
 
     /// <summary>The Loqui setter class behind a getter interface, or the type itself where Loqui has
     /// none — the vocabulary a union's discriminator values are drawn from, so a union leaf and a
@@ -102,17 +95,15 @@ internal static class ReflectedTypes
 
     /// <summary>The name the codec writes as <c>MutagenObjectType</c> for a value of this class
     /// (Mutagen.Bethesda.Serialization's <c>GetNameWithDeclaringType</c>), so a discriminator domain
-    /// and the document agree; <paramref name="typeArguments"/> closes an open generic.</summary>
-    internal static string DocumentTypeName(Type type, Type[]? typeArguments = null) =>
-        DocumentTypeName(type.DeclaringType == null ? type.Name : $"{type.DeclaringType.Name}+{type.Name}", typeArguments ?? type.GetGenericArguments());
-
-    /// <summary>The same spelling from a CLR name (<c>Outer+Inner</c>, <c>Open`1</c>) and the
-    /// arguments closing it, for a generic the caller need not construct.</summary>
-    internal static string DocumentTypeName(string clrName, Type[] typeArguments)
+    /// and the document agree. <paramref name="typeArguments"/> close an open generic by name, since
+    /// the closed type is a construction the codec, not the reflector, owns.</summary>
+    internal static string DocumentTypeName(Type type, Type[]? typeArguments = null)
     {
-        var arity = clrName.IndexOf('`', StringComparison.Ordinal);
-        if (arity < 0) return clrName;
-        return $"{clrName[..arity]}<{string.Join(", ", typeArguments.Select(a => DocumentTypeName(a)))}>";
+        var name = type.DeclaringType == null ? type.Name : $"{type.DeclaringType.Name}+{type.Name}";
+        var arity = name.IndexOf('`', StringComparison.Ordinal);
+        if (arity < 0) return name;
+        var arguments = typeArguments is { Length: > 0 } ? typeArguments : type.GetGenericArguments();
+        return $"{name[..arity]}<{string.Join(", ", arguments.Select(a => DocumentTypeName(a)))}>";
     }
 
     internal static bool IsModKey(Type type) => type == typeof(ModKey);

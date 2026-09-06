@@ -154,7 +154,7 @@ public sealed class ScalarValueRefusalTests : IDisposable
         Assert.Equal(before, omod.Body());
     }
 
-    // The sibling-merge "column exists on the schema, not on this instance" shape, which
+    // The record-level union's "column exists on the schema, not on this class" shape, which
     // TrackedModFixture's NPC has no equivalent of. GlobalShort rather than GlobalBool: Mutagen's
     // GlobalBool writes FLTV as one byte and reads back expecting four.
     private sealed class GlobFixture : IDisposable

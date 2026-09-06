@@ -17,7 +17,7 @@ public enum RecordEditRefusal
     RecordNotFound,
 
     /// <summary>The path resolves to no member of the schema, or to one the record's own class lacks
-    /// (a sibling-merge column, a union member of another leaf).</summary>
+    /// (a column only another record class declares, a union member of another leaf).</summary>
     FieldNotFound,
 
     /// <summary>Permanently unwritable (masters are compile-derived, ADR-0038), unlike the state-dependent Partial Form refusal.</summary>
