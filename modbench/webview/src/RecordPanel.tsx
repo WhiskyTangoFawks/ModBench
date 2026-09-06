@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { PluginHeader } from './PluginHeader';
 import { DiffRow, type ArrayOp, type FocusedCell } from './DiffRow';
 import {
-  buildColumns, elementSegment, collidingFilenames, nodeIsThere, rootFieldOf,
+  buildColumns, columnHasNode, elementSegment, collidingFilenames, rootFieldOf,
   wirePath, variantFor, declaresMember,
   headerCellContext, combineVscodeContexts,
 } from './recordUtils';
@@ -335,7 +335,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
         rows.push(...buildRows(
           child, memberMeta, [...path, { kind: 'member', name: child.fieldName }],
           rootField, childRowKey,
-          column => present(column) && nodeIsThere(meta, diff.values[column])
+          column => present(column) && columnHasNode(meta, diff.values[column])
             && (!member || declaresMember(member, diff.values[column], meta)),
           depth + 1, undefined, cellMetas));
       }

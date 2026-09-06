@@ -361,13 +361,14 @@ describe('DiffRow — the check error is the diff node\'s own, per column', () =
   });
 
   // A nested row is a diff node like any other, so its error is its own, not its root field's.
-  it('a struct-member row shows its own error where its sibling shows none', () => {
-    const nested = {
-      meta: fkMeta,
-      columns: [diskColumn(decoyed('Fallout4.esm'))],
-      context: { path: [{ kind: 'member', name: 'Reference' }] as PathSegment[], rootField: 'Location', depth: 1 },
-    };
-    const { unmount } = renderRow({
+  const nested = {
+    meta: fkMeta,
+    columns: [diskColumn(decoyed('Fallout4.esm'))],
+    context: { path: [{ kind: 'member', name: 'Reference' }] as PathSegment[], rootField: 'Location', depth: 1 },
+  };
+
+  it('a struct-member row shows the error its own node carries', () => {
+    renderRow({
       ...nested,
       diff: diff({
         fieldName: 'Reference', values: { 'Fallout4.esm': 'FFFFFF:Dangling.esm' },
@@ -375,14 +376,14 @@ describe('DiffRow — the check error is the diff node\'s own, per column', () =
       }),
     });
     expect(screen.getByTitle('Reference: [FFFFFF:Dangling.esm] <Error: Could not be resolved>')).toBeInTheDocument();
-    unmount();
+  });
 
+  it('a struct-member row whose node carries none shows none', () => {
     renderRow({
       ...nested,
       diff: diff({ fieldName: 'Reference', values: { 'Fallout4.esm': '000019:Fallout4.esm' } }),
     });
     expect(screen.queryByText('⚠')).not.toBeInTheDocument();
-    expect(screen.queryByTitle('decoy: the root field\'s own error')).not.toBeInTheDocument();
   });
 
   // An array element's error is the element's own, so an element hop does not suppress it.
@@ -671,11 +672,11 @@ describe('DiffRow — label indentation', () => {
   });
 });
 
-// `{…}`/`[n]` states that something is present but collapsed. A column whose plugin has no
-// element there has nothing to collapse, so its cell stays empty.
+// `{…}`/`[n]` states that something is present but collapsed. A column with nothing there — an
+// unset nullable struct, an owner it does not carry — has nothing to collapse.
 describe('DiffRow — a collapsed container row, per column', () => {
   const structMeta = fieldMeta({
-    name: 'Location', type: 'struct',
+    name: 'Location', type: 'struct', allowsNull: true,
     fields: [fieldMeta({ name: 'aliasId', type: 'int' })],
   });
   const arrayMeta = fieldMeta({
@@ -697,16 +698,16 @@ describe('DiffRow — a collapsed container row, per column', () => {
   }
 
   it('shows the placeholder only in the column that has a nullable struct', () => {
-    renderContainer(
-      { 'Fallout4.esm': { aliasId: 5 }, 'MyMod.esp': null },
-      fieldMeta({ ...structMeta, allowsNull: true }));
+    renderContainer({ 'Fallout4.esm': { aliasId: 5 }, 'MyMod.esp': null });
     expect(cellText(0)).toBe('{…}');
     expect(cellText(1)).toBe('');
   });
 
   // ADR-0032: a non-nullable struct has no unset, so the column omitting it holds its default.
   it('shows the placeholder in every column for a non-nullable struct one column omits', () => {
-    renderContainer({ 'Fallout4.esm': { aliasId: 5 }, 'MyMod.esp': null });
+    renderContainer(
+      { 'Fallout4.esm': { aliasId: 5 }, 'MyMod.esp': null },
+      fieldMeta({ ...structMeta, allowsNull: false }));
     expect(cellText(0)).toBe('{…}');
     expect(cellText(1)).toBe('{…}');
   });

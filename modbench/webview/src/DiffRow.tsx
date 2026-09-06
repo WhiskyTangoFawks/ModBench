@@ -9,7 +9,7 @@ import { copyToClipboard } from './nativeBridge';
 import { baseCell, toggleBtnStyle, getCellStyle, focusedRowStyle, DIMMED_OPACITY } from './gridStyles';
 import {
   arrayElementContext, arrayParentContext, combineVscodeContexts, defaultOf, isArrayElementHop,
-  isMovableElementHop, nodeIsThere, offersArrayAdd, rootFieldOf, stringValueContext, wirePath,
+  columnHasNode, isMovableElementHop, offersArrayAdd, rootFieldOf, stringValueContext, wirePath,
   type Column, type PathSegment,
 } from './recordUtils';
 import type { ColumnKey, ConflictAll, FieldDiff, FieldMetadata, FormKeyResolution } from './types';
@@ -242,14 +242,14 @@ export function DiffRow({
           return <td key={key} style={cellStyle} />;
         }
         const rootValue = rootFieldOf(override, rootField);
-        // The node's own error for this column, computed at whatever depth this row sits at.
+        // The wire carries one per column at every depth, so this row's error is its own node's.
         const checkError = diff.checkErrors?.[key];
         const isFocused = isCellFocused(focusedCell, rowKey, key);
         const cellMeta = cellMetas?.[key] ?? meta;
         // Whether this column has something on this row: this row's own node, and the object it
         // is a member of. A leaf its owner omits is the default, so it is there.
         const hasElement = rowIsStructural
-          || ((ownerPresent?.(key) ?? true) && nodeIsThere(cellMeta, diff.values[key]));
+          || ((ownerPresent?.(key) ?? true) && columnHasNode(cellMeta, diff.values[key]));
         const shown = hasElement ? diff.values[key] ?? defaultOf(cellMeta) : undefined;
         // ADR-0034: the string Ctrl+C copies for this cell, computed once so the
         // struct/array-summary branch and the leaf branch below hand DiskCell the same value.

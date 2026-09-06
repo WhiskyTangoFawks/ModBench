@@ -874,26 +874,28 @@ describe('RecordPanel — column collapse (issue #3)', () => {
 });
 
 // Two plugins can disagree on which leaf of an abstract union an element is, so the element's
-// rows are the union of both leaves' members. A member one leaf lacks is a nullable slot.
+// rows are both leaves' members. A member's `variants`, read through the element's discriminator,
+// name the leaves declaring it.
 const intSubMeta = (name: string): FieldMetadata =>
   (fieldMeta({ name, type: 'int' }));
+
+const aliasSubMeta = (name: string, leaf: string): FieldMetadata => fieldMeta({
+  name, type: 'struct', fields: [intSubMeta('alias_id')],
+  variants: { [leaf]: fieldMeta({ name, type: 'struct', fields: [intSubMeta('alias_id')] }) }});
 
 const aliasesMeta: FieldMetadata = fieldMeta({
   name: 'aliases', type: 'array', isArray: true,
   elementType: fieldMeta({
     name: '', type: 'struct',
     fields: [
+      fieldMeta({ name: 'Kind', type: 'string', isDiscriminator: true }),
       fieldMeta({ name: 'name', type: 'string' }),
-      fieldMeta({
-        name: 'location', type: 'struct', allowsNull: true,
-        fields: [intSubMeta('alias_id')]}),
-      fieldMeta({
-        name: 'external', type: 'struct', allowsNull: true,
-        fields: [intSubMeta('alias_id')]}),
+      aliasSubMeta('location', 'RefAlias'),
+      aliasSubMeta('external', 'LocAlias'),
     ]})});
 
-const masterAlias = { name: 'RefAlias', location: { alias_id: 5 }, external: null };
-const overrideAlias = { name: 'RefAlias', location: null, external: { alias_id: 7 } };
+const masterAlias = { Kind: 'RefAlias', name: 'AnAlias', location: { alias_id: 5 }, external: null };
+const overrideAlias = { Kind: 'LocAlias', name: 'AnAlias', location: null, external: { alias_id: 7 } };
 
 const mixedLeafAliasResult = {
   conflictAll: 'Conflict',
@@ -917,7 +919,7 @@ const mixedLeafAliasResult = {
       winnerColumn: 'MyMod.esp', cellStates: {},
       children: [
         {
-          fieldName: 'name', values: { 'Fallout4.esm': 'RefAlias', 'MyMod.esp': 'RefAlias' },
+          fieldName: 'name', values: { 'Fallout4.esm': 'AnAlias', 'MyMod.esp': 'AnAlias' },
           winnerColumn: 'MyMod.esp', cellStates: {},
         },
         {
@@ -1293,6 +1295,33 @@ describe('RecordPanel — a member of an absent owner reads as nothing', () => {
     expect(cellsOf('Name')[1].textContent).toBe('Original Name');
     expect(cellsOf('Name')[2].textContent).toBe('');
   });
+
+  // A non-nullable struct is the field whose absence would otherwise read as its default.
+  it('a Partial Form column\'s non-nullable struct field reads as nothing, not as its default', async () => {
+    const sizeMeta: FieldMetadata = fieldMeta({
+      name: 'Size', type: 'struct', fields: [fieldMeta({ name: 'Width', type: 'int' })]});
+    renderPanel({
+      ...partialFormCompareResult,
+      overrides: partialFormCompareResult.overrides.map((o, i) => ({
+        ...o, fields: [{ metadata: sizeMeta, value: i === 0 ? { Width: 3 } : null }],
+      })),
+      diffs: [{
+        fieldName: 'Size', values: { 'Fallout4.esm': { Width: 3 }, 'MyMod.esp': null },
+        winnerColumn: 'Fallout4.esm', cellStates: {},
+        children: [{
+          fieldName: 'Width', values: { 'Fallout4.esm': 3, 'MyMod.esp': null },
+          winnerColumn: 'Fallout4.esm', cellStates: {},
+        }],
+      }],
+    }, { plugins: partialFormTrackedPluginsResponse });
+    await waitFor(() => rows().getByText('Size'));
+    expect(cellsOf('Size')[1].textContent).toBe('{…}');
+    expect(cellsOf('Size')[2].textContent).toBe('');
+
+    fireEvent.click(rows().getByText('Size').closest('td')!.querySelector('button')!);
+    await waitFor(() => rows().getByText('Width'));
+    expect(cellsOf('Width')[2].textContent).toBe('');
+  });
 });
 
 // ADR-0032: absent means default. A non-nullable struct has no "unset", so the column that omits
@@ -1330,16 +1359,19 @@ describe('RecordPanel — an absent non-nullable struct reads as its default mem
   beforeEach(() => vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm'));
   afterEach(() => vi.unstubAllGlobals());
 
-  async function renderExpanded() {
+  async function renderCollapsed() {
     renderPanel(compare, { plugins: flagsTrackedPluginsResponse });
     await waitFor(() => rows().getByText('Size'));
+  }
+
+  async function renderExpanded() {
+    await renderCollapsed();
     fireEvent.click(rows().getByText('Size').closest('td')!.querySelector('button')!);
     await waitFor(() => rows().getByText('Width'));
   }
 
   it('the struct the column omits reads as a struct, not as nothing', async () => {
-    renderPanel(compare, { plugins: flagsTrackedPluginsResponse });
-    await waitFor(() => rows().getByText('Size'));
+    await renderCollapsed();
     expect(cellsOf('Size')[2].textContent).toBe('{…}');
   });
 
