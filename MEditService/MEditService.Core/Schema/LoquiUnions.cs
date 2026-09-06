@@ -22,18 +22,18 @@ internal static class LoquiUnions
             .Where(t => t is { IsClass: true, IsAbstract: false } && typeof(ILoquiObjectSetter).IsAssignableFrom(t))
             .Select(t => (Class: t, Getter: ReflectedTypes.GetOwnGetterType(t)))
             .Where(l => l.Getter != null)
-            .SelectMany(l => ReflectedTypes.BaseChain(l.Class).Select(b => (Base: Definition(b), Leaf: (l.Class, l.Getter!))))
+            .SelectMany(l => ReflectedTypes.BaseChain(l.Class).Select(b => (Base: GenericDefinition(b), Leaf: (l.Class, l.Getter!))))
             .ToLookup(e => e.Base, e => e.Leaf);
 
-    private static Type Definition(Type type) => type.IsGenericType ? type.GetGenericTypeDefinition() : type;
+    private static Type GenericDefinition(Type type) => type.IsGenericType ? type.GetGenericTypeDefinition() : type;
 
     private static IEnumerable<(Type Class, Type Getter)> LeavesUnder(Type setterType) =>
-        LeavesByBase.GetOrAdd(setterType.Assembly, IndexLeavesByBase)[Definition(setterType)];
+        LeavesByBase.GetOrAdd(setterType.Assembly, IndexLeavesByBase)[GenericDefinition(setterType)];
 
     // A concrete class with no subclass is not a union: it would be its own only leaf. Mutagen
     // builds a bare ScriptProperty for a property of type None.
-    private static bool IsUnionBase(Type setterType, List<(Type GetterType, string ClassName)> leaves) =>
-        leaves.Count > (setterType.IsAbstract ? 0 : 1);
+    private static bool IsUnionBase(Type setterType, int leafCount) =>
+        leafCount > (setterType.IsAbstract ? 0 : 1);
 
     // ExcludedUnions gates here, not only in IsExcludedUnionColumn: BuildSubSchema's recursive walk
     // reaches a type with no memory of which field led to it.
@@ -50,7 +50,7 @@ internal static class LoquiUnions
             .OrderBy(leaf => leaf.Class == setterType)
             .Select(leaf => (leaf.Getter, ReflectedTypes.DocumentTypeName(leaf.Class, typeArguments)))
             .ToList();
-        return IsUnionBase(setterType, leaves) ? new LoquiUnion(setterType, leaves) : null;
+        return IsUnionBase(setterType, leaves.Count) ? new LoquiUnion(setterType, leaves) : null;
     }
 
     /// <summary>The class itself when concrete, else the first concrete class under it; null when
@@ -101,7 +101,7 @@ internal static class LoquiUnions
             var members = ReflectedTypes.GetAllInterfaceProperties(getterType)
                 .Where(p => !game.Annotations.IsExcludedMember(p) && !baseMemberNames.Contains(p.Name))
                 .GroupBy(p => p.Name, StringComparer.Ordinal)
-                .Select(g => g.Aggregate((best, cand) => best.DeclaringType!.IsAssignableFrom(cand.DeclaringType!) ? cand : best))
+                .Select(ReflectedTypes.MostDerived)
                 .Select(p => SubFieldReflection.GetSubFieldInfo(p, game, leafPath, depth, logger))
                 .OfType<SubFieldSpec>()
                 .ToList();

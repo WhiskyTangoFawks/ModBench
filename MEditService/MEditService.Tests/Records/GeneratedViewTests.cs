@@ -111,7 +111,7 @@ public sealed class GeneratedViewTests : IClassFixture<CutDownPluginFixture>
     }
 
     [Fact]
-    public void Views_OmitArraysStructsAndWidenedColumns_ButKeepScalars()
+    public void Views_OmitArraysStructsAndClassVaryingColumns_ButKeepScalars()
     {
         var schemas = SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4);
 

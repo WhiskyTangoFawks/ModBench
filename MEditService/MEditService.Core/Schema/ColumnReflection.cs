@@ -33,9 +33,7 @@ internal static class ColumnReflection
 
         foreach (var group in grouped)
         {
-            var prop = group.Aggregate((best, candidate) =>
-                best.DeclaringType!.IsAssignableFrom(candidate.DeclaringType!) ? candidate : best);
-
+            var prop = ReflectedTypes.MostDerived(group);
             var info = GetColumnInfo(prop, game, logger);
             if (info == null) continue;
 

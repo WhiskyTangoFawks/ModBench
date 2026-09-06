@@ -22,8 +22,6 @@ public sealed class UnionMechanismSchemaTests
 
     private static IEnumerable<string> Domain(FieldMetadata meta) => meta.EnumMembers.Select(m => m.Value);
 
-    // The record classes sharing a signature, OMOD's generic-closed properties, an abstract union, a
-    // concrete base with subclasses: one shape each, the document's discriminator beside the members.
     [Theory]
     [InlineData("gmst")]
     [InlineData("glob")]

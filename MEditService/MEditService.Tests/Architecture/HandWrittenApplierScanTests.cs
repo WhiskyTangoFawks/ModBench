@@ -57,10 +57,13 @@ public sealed class HandWrittenApplierScanTests
                 Path.Combine(root, "Layer", "Generated.cs"),
                 Path.Combine(root, "Layer", "obj", "Generated.cs"));
             File.WriteAllText(Path.Combine(root, "Layer", "Clean.cs"), "var made = new JsonObject();");
+            File.WriteAllText(Path.Combine(root, "Layer", "Initializer.cs"), "var made = new TranslatedString\n{\n    TargetLanguage = language,\n};");
 
             var sites = Sites(root, ["Layer"]);
 
-            Assert.Equal(["Layer/Applier.cs: var made = new MemorySlice<byte>(bytes);"], sites);
+            Assert.Equal(
+                ["Layer/Applier.cs: var made = new MemorySlice<byte>(bytes);", "Layer/Initializer.cs: var made = new TranslatedString"],
+                sites);
 
             var unallowedSite = Assert.Throws<Xunit.Sdk.TrueException>(
                 () => AssertSitesMatchAllowlist(sites, [], AllowlistPath));

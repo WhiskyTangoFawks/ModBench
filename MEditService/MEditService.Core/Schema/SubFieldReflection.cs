@@ -28,10 +28,7 @@ internal static class SubFieldReflection
         var result = new List<SubFieldSpec>();
         foreach (var group in grouped)
         {
-            var prop = group.Aggregate((best, candidate) =>
-                best.DeclaringType!.IsAssignableFrom(candidate.DeclaringType!) ? candidate : best);
-
-            var spec = GetSubFieldInfo(prop, game, inner, depth + 1, logger);
+            var spec = GetSubFieldInfo(ReflectedTypes.MostDerived(group), game, inner, depth + 1, logger);
             if (spec != null) result.Add(spec);
         }
 

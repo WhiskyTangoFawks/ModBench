@@ -15,6 +15,10 @@ internal static class ReflectedTypes
             .Append(type)
             .SelectMany(i => i.GetProperties(BindingFlags.Public | BindingFlags.Instance));
 
+    /// <summary>Of one member declared along an interface chain, the declaration nearest the leaf.</summary>
+    internal static PropertyInfo MostDerived(IEnumerable<PropertyInfo> declarations) =>
+        declarations.Aggregate((best, candidate) => best.DeclaringType!.IsAssignableFrom(candidate.DeclaringType!) ? candidate : best);
+
     internal static bool IsTranslatedString(Type type) =>
         typeof(ITranslatedStringGetter).IsAssignableFrom(type);
 

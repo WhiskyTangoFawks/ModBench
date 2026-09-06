@@ -140,7 +140,7 @@ public sealed class ScalarValueRefusalTests : IDisposable
     // ── An OMOD carrying one property, for the sub-field-decline slice below ──
 
     [Fact]
-    public void OmodPropertiesArray_DeclinedWidenedLeafValue_RefusesTheWholeArrayWrite()
+    public void OmodPropertiesArray_ValueItsLeafCannotHold_RefusesTheWholeArrayWrite()
     {
         using var omod = new OmodFixture();
         var before = omod.Body();
