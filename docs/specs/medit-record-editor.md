@@ -979,14 +979,17 @@ These apply everywhere a field value is rendered — the one compare grid and an
    array, so inside either struct leaf neither is offered again and the walk ends there). A
    re-entry whose loop runs through such a point is let through for the same reason — every
    lap passes it, and it is entered once — which is what lets `ScriptEntry` be re-entered
-   under a struct leaf's `Members` before the walk ends. That is a
-   different mechanism from the depth cap, which bounds struct nesting and resets across a
-   list hop.
+   under a struct leaf's `Members` before the walk ends. That path is the only bound: there is
+   no depth cap, so nothing is dropped at depth, and every truncation row is checked against the
+   re-entries the walk actually made.
    `ASceneActionType` is a concrete base with two leaves the mechanism must not expand
    (`SchemaAnnotations.ExcludedUnions`): its real discriminator is a raw `ANAM` `UInt16` tag
    read by hand-written custom binary code, `4` selecting `SceneActionStartScene` and every
    other value collapsing into `SceneActionTypicalType`, whose binary-overlay `Type` getter is
    an unimplemented `throw` upstream — wiring it would crash the first read of a real scene.
+   `SceneAction.Type` is therefore a `SchemaAnnotations.KnownDefects` row: the schema names the
+   member with that reason and no members of its own, and the write path refuses every path
+   reaching it by name.
    `AVirtualMachineAdapter` (VMAD) is genuinely `abstract` too, and is modelled by this mechanism
    like every other union — as are `Condition`/`ConditionData`; all three were once excluded by
    name and none is now.

@@ -31,6 +31,8 @@ public sealed class RecordEditServiceRenumberCascadeTests
         Assert.False(result.Applied, result.Message);
         Assert.Equal(RecordEditRefusal.ReferenceRemapIncomplete, result.Refusal);
         Assert.Contains(fixture.Referencer.ToString(), result.Message, StringComparison.Ordinal);
+        // The known-defect row is what names the member Mutagen's generated remap skips.
+        Assert.Contains("IScriptStructListPropertyGetter.Structs", result.Message, StringComparison.Ordinal);
 
         // Refused before any write, on both sides of the cascade.
         Assert.Equal(referencerBefore, File.ReadAllText(referencerFile));

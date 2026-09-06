@@ -1,8 +1,5 @@
 using System.Reflection;
 using Microsoft.Extensions.Logging;
-using Mutagen.Bethesda.Plugins;
-using Mutagen.Bethesda.Plugins.Records;
-using Noggog;
 
 namespace MEditService.Core.Schema;
 
@@ -29,7 +26,7 @@ internal static class SchemaRefusals
         where T : class
     {
         var owner = prop.DeclaringType?.Name ?? "?";
-        if ((ExcludedShapeReason(shape) ?? EmptySubSchemaReason(game, shape)) is { } reason)
+        if ((ExcludedShapeReason(game, shape) ?? EmptySubSchemaReason(game, shape)) is { } reason)
         {
             // Named, so not an anomaly — but still said out loud, at Debug, so a real run can answer
             // "why is this field missing?" without anyone reading this file. Guarded because
@@ -48,61 +45,19 @@ internal static class SchemaRefusals
         return null;
     }
 
-    // A shape the walk reaches and could present, but nobody has decided a presentation for, is named
-    // here. Counts are live, from the audit's enumeration over Fallout 4. Each reason says what a
-    // future ticket would have to decide.
-    internal static string? ExcludedShapeReason(Type shape)
+    // A shape the walk reaches and could present, but nobody has decided a presentation for. A byte
+    // slice is a hex leaf ByteSliceHex classifies long before this is asked.
+    private static string? ExcludedShapeReason(GameReflection game, Type shape) =>
+        ByteSliceHex.IsByteSlice(shape) ? null : game.Annotations.RefusedShapeReason(shape);
+
+    // A Loqui struct whose own sub-schema comes out empty, so there is nothing to present. Recorded
+    // as observed, since the annotation claiming it is validated against what the walk found.
+    private static string? EmptySubSchemaReason(GameReflection game, Type shape)
     {
-        var open = shape.IsGenericType ? shape.GetGenericTypeDefinition() : null;
-
-        // Real modding content: Race height, head data, models and voices per sex, ArmorAddon models,
-        // faction rank titles. Deferred: presenting a gendered pair is a new rendered shape needing
-        // its own xEdit-shape decision, a maintainer call.
-        if (open == typeof(IGenderedItemGetter<>))
-            return "gendered Male/Female pair — 20 fields; real data, deferred pending a presentation decision";
-
-        // A slice of typed elements is a list shape; only a byte slice has a hex reading, and the
-        // element-type test keeps a byte slice reaching an untaught site loud.
-        if (open == typeof(ReadOnlyMemorySlice<>) && !ByteSliceHex.IsByteSlice(shape))
-            return "non-byte element slice — 2 fields; an array of typed elements, not a hex blob";
-
-        // 4 fields: LandscapeVertexHeightMap-style grids. Real data, tiny population, no grid shape.
-        if (open == typeof(IReadOnlyArray2d<>))
-            return "2D array grid — 4 fields; no grid presentation exists";
-
-        // 2 fields: Race.BipedObjects (keyed by BipedObject) and Package.Data (keyed by SByte). Real
-        // data; a keyed map is a shape neither the schema's array nor its struct model covers.
-        if (open == typeof(IReadOnlyDictionary<,>))
-            return "keyed map — 2 fields; neither the array nor the struct model covers a dictionary";
-
-        // Candidate atomic-value entries, each a new rendered leaf needing its own xEdit-shape decision:
-        // Percent is a raw float in xEdit, TimeOnly a byte in 10-minute increments, RecordType a
-        // 4-character signature.
-        if (shape == typeof(Percent))
-            return "Noggog Percent — 25 fields; candidate atomic value, presentation undecided";
-        if (shape == typeof(TimeOnly))
-            return "TimeOnly — 4 fields; candidate atomic value, presentation undecided";
-        if (shape == typeof(RecordType))
-            return "Mutagen RecordType signature — 7 fields; candidate atomic value, presentation undecided";
-
-        return null;
+        if (!game.Annotations.IsEmptySubSchemaType(shape)) return null;
+        game.Observed.CameOutEmpty(shape.Name);
+        return "empty sub-schema — the shape declares no member the walk can present";
     }
-
-    // A Loqui struct whose own sub-schema comes out empty, so there is nothing to present.
-    private static string? EmptySubSchemaReason(GameReflection game, Type shape) =>
-        game.Annotations.IsEmptySubSchemaType(shape)
-            ? "empty sub-schema — see SchemaReflectorLeafCoverageCompletenessTests.KnownGaps"
-            : null;
-
-    /// <summary>Every excluded shape's reason, for the audit's own non-vacuity guard.</summary>
-    internal static IReadOnlyList<string> ExcludedShapeLabels =>
-    [
-        .. new[]
-        {
-            typeof(IGenderedItemGetter<>), typeof(ReadOnlyMemorySlice<>), typeof(IReadOnlyArray2d<>),
-            typeof(IReadOnlyDictionary<,>), typeof(Percent), typeof(TimeOnly), typeof(RecordType),
-        }.Select(t => ExcludedShapeReason(t)!),
-    ];
 
     internal static bool IsExcludedUnionColumn(PropertyInfo prop, GameReflection game)
     {

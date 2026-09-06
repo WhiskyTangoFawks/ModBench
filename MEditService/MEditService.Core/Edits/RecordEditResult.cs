@@ -41,8 +41,8 @@ public enum RecordEditRefusal
     /// <summary>Renumbering an override would mean renumbering it across every plugin in the stack; a typed target must be native for the same reason.</summary>
     NotNativeRecord,
 
-    /// <summary>Mutagen's generated <c>RemapLinks</c> skips <c>ScriptStructListProperty.Structs</c>
-    /// (upstream-mutagen-issue.md), so a VMAD struct-list link survives the remap; refused rather than written half-remapped.</summary>
+    /// <summary>A link a KnownDefects row says Mutagen's generated <c>RemapLinks</c> leaves behind
+    /// survived the remap; refused rather than written half-remapped.</summary>
     ReferenceRemapIncomplete,
 
     /// <summary>A typed refusal, not an exception: a full plugin is an ordinary outcome, never conflated with "no usable load order".</summary>

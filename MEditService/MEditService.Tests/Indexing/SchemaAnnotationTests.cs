@@ -171,6 +171,119 @@ public sealed class SchemaAnnotationTests
     }
 
     [Fact]
+    public void ExcludedSignature_TheGameDeclaresNoSuchGrup_FailsSchemaGenerationNamingTheEntry()
+    {
+        var reflector = AmendedSchemaReflector.Fallout4With(a => a with
+        {
+            ExcludedSignatures = new(a.ExcludedSignatures) { ["zzzz"] = "no reason at all" },
+        });
+        AssertFailsNaming(reflector, "zzzz is no GRUP signature");
+    }
+
+    [Fact]
+    public void VectorStructType_NoMemberHoldsThatShape_FailsSchemaGenerationNamingTheEntry()
+    {
+        var reflector = AmendedSchemaReflector.Fallout4With(a => a with
+        {
+            VectorStructTypes = [.. a.VectorStructTypes, "Noggog.P3Double"],
+        });
+        AssertFailsNaming(reflector, "Noggog.P3Double is the shape of no member");
+    }
+
+    [Fact]
+    public void RefusedShape_NoMemberHoldsThatShape_FailsSchemaGenerationNamingTheEntry()
+    {
+        var reflector = AmendedSchemaReflector.Fallout4With(a => a with
+        {
+            RefusedShapes = new(a.RefusedShapes) { ["NoSuchShape"] = "10 fields; undecided" },
+        });
+        AssertFailsNaming(reflector, "NoSuchShape is the shape of no member");
+    }
+
+    [Fact]
+    public void KnownDefect_ReflectionDidNotFindTheMember_FailsSchemaGenerationNamingTheEntry()
+    {
+        var reflector = AmendedSchemaReflector.Fallout4With(a => a with
+        {
+            KnownDefects = [.. a.KnownDefects, new("INpcGetter", "NoSuchMember", KnownDefectEffect.MemberReadOnly, "why")],
+        });
+        AssertFailsNaming(reflector, "KnownDefects: INpcGetter.NoSuchMember");
+    }
+
+    // The existence check answers for a type reflection cannot find; these four say the row is not
+    // the kind of thing its table claims, which existence alone would let through.
+
+    [Fact]
+    public void ExcludedUnion_ResolvesToNoUnionBase_FailsSchemaGenerationNamingTheEntry()
+    {
+        var reflector = AmendedSchemaReflector.Fallout4With(a => a with
+        {
+            ExcludedUnions = [.. a.ExcludedUnions, "ScriptStringProperty"],
+        });
+        AssertFailsNaming(reflector, "ScriptStringProperty is no union base");
+    }
+
+    [Theory]
+    [InlineData("IKeywordGetter", "Color", "is no form link")]
+    [InlineData("ISceneActionGetter", "Topic", "is already a nullable form link")]
+    public void PermittedNullFormLink_IsNoNonNullableLink_FailsSchemaGenerationNamingTheEntry(
+        string type, string member, string named)
+    {
+        var reflector = AmendedSchemaReflector.Fallout4With(a => a with
+        {
+            PermittedNullFormLinks = [.. a.PermittedNullFormLinks, (type, member)],
+        });
+        AssertFailsNaming(reflector, $"{type}.{member} {named}");
+    }
+
+    [Fact]
+    public void AlphaBearingColorField_IsNoColor_FailsSchemaGenerationNamingTheEntry()
+    {
+        var reflector = AmendedSchemaReflector.Fallout4With(a => a with
+        {
+            AlphaBearingColorFields = [.. a.AlphaBearingColorFields, ("IKeywordGetter", "Type")],
+        });
+        AssertFailsNaming(reflector, "IKeywordGetter.Type is no Color");
+    }
+
+    [Fact]
+    public void CycleTruncation_TheWalkNeverAppliesIt_FailsSchemaGenerationNamingTheEntry()
+    {
+        var reflector = AmendedSchemaReflector.Fallout4With(a => a with
+        {
+            CycleTruncations = [.. a.CycleTruncations, "INpcGetter"],
+        });
+        AssertFailsNaming(reflector, "INpcGetter never stops the walk or lets a loop through");
+    }
+
+    [Fact]
+    public void EmptySubSchemaType_NeverComesOutEmpty_FailsSchemaGenerationNamingTheEntry()
+    {
+        var reflector = AmendedSchemaReflector.Fallout4With(a => a with
+        {
+            EmptySubSchemaTypes = [.. a.EmptySubSchemaTypes, "IScriptEntryGetter"],
+        });
+        AssertFailsNaming(reflector, "IScriptEntryGetter never comes out empty in the walk");
+    }
+
+    [Theory]
+    [InlineData("INoSuchGetter", "Flags", "NoSuchFlag", "EnumMemberLabels: INoSuchGetter.Flags")]
+    [InlineData("IFallout4ModHeaderGetter", "Author", "NoSuchFlag", "labels members of String, which is not an enum")]
+    [InlineData("IFallout4ModHeaderGetter", "Flags", "NoSuchFlag", "labels member NoSuchFlag, which HeaderFlag does not define")]
+    public void EnumMemberLabel_LabelsNoMemberOfAnEnum_FailsSchemaGenerationNamingTheEntry(
+        string type, string member, string labelled, string named)
+    {
+        var reflector = AmendedSchemaReflector.Fallout4With(a => a with
+        {
+            EnumMemberLabels = new(a.EnumMemberLabels)
+            {
+                [(type, member)] = new Dictionary<string, string> { [labelled] = "xEdit's own" },
+            },
+        });
+        AssertFailsNaming(reflector, named);
+    }
+
+    [Fact]
     public void ShippedFallout4Table_EveryEntryResolves()
     {
         // The production table, through the production seam: a stale row fails here, not in a user's

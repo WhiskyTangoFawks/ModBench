@@ -178,8 +178,6 @@ internal static class DocumentEdit
                     RecordEditRefusal.FieldNotFound, spelled, $"'{schema.TableName}' has no field '{name}'.");
             }
         }
-        if (column.ReadOnlyReason is { } reason)
-            return RecordEditResult.RefusedAt(RecordEditRefusal.FieldReadOnly, spelled, $"'{name}' is read-only: {reason}.");
         if (column.Synthetic != null && path.Count > 1)
             return RecordEditResult.RefusedAt(RecordEditRefusal.FieldNotFound, spelled, $"'{name}' has no members.");
 
@@ -283,8 +281,16 @@ internal static class DocumentEdit
                 Index = index,
             };
         }
-        return null;
+
+        // Asked once, of whatever the path resolved to: a read-only member has no members of its
+        // own, so no path can pass through one to reach something writable below it.
+        return cursor.Field?.ReadOnlyReason is { } why
+            ? ReadOnlyRefusal(spelled, cursor.MemberName ?? name, why)
+            : null;
     }
+
+    private static RecordEditResult ReadOnlyRefusal(string path, string name, string reason) =>
+        RecordEditResult.RefusedAt(RecordEditRefusal.FieldReadOnly, path, $"'{name}' is read-only: {reason}.");
 
     private static RecordEditResult NoElement(string spelled, int count) =>
         RecordEditResult.RefusedAt(
@@ -524,8 +530,8 @@ internal static class DocumentEdit
 
     // ── the closed pre-check list ───────────────────────────────────────────
 
-    // Discriminator present and first on a union element, hex length where the document establishes
-    // one; walked over the value with the metadata beside it, the current node where the document has one.
+    // Discriminator first on a union element, a member a known-defect row marks read-only, hex
+    // length where the document establishes one; walked over the value with the metadata beside it.
     private static RecordEditResult? PreCheck(JsonNode? value, FieldMetadata meta, JsonNode? current, string path)
     {
         switch (value)
@@ -545,6 +551,8 @@ internal static class DocumentEdit
                 foreach (var (name, child) in obj)
                 {
                     if (fields.FirstOrDefault(f => f.Name == name) is not { } field) continue;
+                    // A whole-subtree set reaches a read-only member the same way a path to it does.
+                    if (field.ReadOnlyReason is { } reason) return ReadOnlyRefusal($"{path}.{name}", name, reason);
                     if (PreCheck(child, DocumentNodes.VariantFor(field, obj), currentObj?[name], $"{path}.{name}") is { } refused) return refused;
                 }
                 return null;

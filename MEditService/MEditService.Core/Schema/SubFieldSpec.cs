@@ -27,7 +27,9 @@ public sealed record SubFieldSpec(
     // See FieldMetadata.Variants.
     IReadOnlyDictionary<string, SubFieldSpec>? Variants = null,
     // See FieldMetadata.Default.
-    object? Default = null)
+    object? Default = null,
+    // See FieldMetadata.ReadOnlyReason.
+    string? ReadOnlyReason = null)
 {
     /// <summary>Derived from ApiType rather than carried, so the two can never disagree.</summary>
     public bool IsArray => ApiType == "array";
@@ -44,5 +46,6 @@ public sealed record SubFieldSpec(
             KeyMembers: KeyMembers,
             LeafTypeName: LeafTypeName,
             Variants: Variants?.ToDictionary(v => v.Key, v => v.Value.ToFieldMetadata(), StringComparer.Ordinal),
-            Default: Default);
+            Default: Default,
+            ReadOnlyReason: ReadOnlyReason);
 }

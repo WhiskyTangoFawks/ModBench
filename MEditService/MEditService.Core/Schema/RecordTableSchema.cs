@@ -19,7 +19,6 @@ public sealed record ColumnSpec(
     // The SQL literal a view COALESCEs to when the serializer omitted a default-valued field, or null
     // when NULL is the honest answer.
     string? ViewDefaultLiteral = null,
-    string? ReadOnlyReason = null,
     SyntheticBit? Synthetic = null)
 {
     /// <summary>The document's own member name, which is the wire name and the view column name.</summary>
@@ -27,6 +26,10 @@ public sealed record ColumnSpec(
 
     /// <summary>The wire's own name for the leaf kind, which decides how a view projects it.</summary>
     public string ApiType => Field.ApiType;
+
+    /// <summary>Why a write reaching this column is refused, or null. The field's own, so a column
+    /// and a nested member state it once.</summary>
+    public string? ReadOnlyReason => Field.ReadOnlyReason;
 
     /// <summary>Scalar leaves with one DuckDB type only: arrays and structs have no scalar rendering,
     /// a column varying by record class no single type, a synthetic member no document node. "No

@@ -3,7 +3,6 @@ using System.Reflection;
 using Loqui;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Strings;
-using Noggog;
 
 namespace MEditService.Core.Schema;
 
@@ -55,18 +54,6 @@ internal static class ReflectedTypes
         type.IsInterface &&
         !IsFormLink(type) &&
         type.GetProperty("StaticRegistration", BindingFlags.Public | BindingFlags.Static) != null;
-
-    // A closed, verified set rather than an "any small struct with X/Y/Z" rule, which would also match
-    // these types' self-referencing Point property and recurse forever. Noggog's other siblings have
-    // no FO4 usages.
-    private static readonly HashSet<Type> VectorStructTypes =
-    [
-        typeof(P3Int16), typeof(P3Float),
-        typeof(P2Int), typeof(P2UInt8), typeof(P2Int16),
-        typeof(P3UInt8), typeof(P3UInt16), typeof(P2Float),
-    ];
-
-    internal static bool IsVectorStructType(Type type) => VectorStructTypes.Contains(type);
 
     // The codec writes a vector as its components in English, comma-separated
     // (NewtonsoftJsonSerializationWriterKernel.WriteP3Float). None of these types is IFormattable,

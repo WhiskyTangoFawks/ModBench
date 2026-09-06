@@ -360,8 +360,8 @@ public class FormReferencesTests
                 var vmad = new VirtualMachineAdapter();
                 var script = new ScriptEntry { Name = "DefaultScript", Flags = ScriptEntry.Flag.Local };
 
-                // Parts = ArrayOfStruct [ {PartRef=Object}, {PartRef=Object} ] — the shape
-                // upstream-mutagen-issue.md's own RemapLinks gap lives in.
+                // Parts = ArrayOfStruct [ {PartRef=Object}, {PartRef=Object} ] — the shape the
+                // KnownDefects RemapLinks row names.
                 var parts = new ScriptStructListProperty { Name = "Parts" };
 
                 var inst0 = new ScriptEntryStructs();

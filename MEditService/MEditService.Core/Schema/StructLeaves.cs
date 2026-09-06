@@ -8,9 +8,9 @@ internal static class StructLeaves
 {
     internal static SubFieldSpec? BuildStruct(
         PropertyInfo prop, Type core,
-        GameReflection game, Type[] path, int depth, ILogger logger)
+        GameReflection game, Type[] path, ILogger logger)
     {
-        var sub = SubFieldReflection.BuildSubSchema(core, game, logger, path, depth);
+        var sub = SubFieldReflection.BuildSubSchema(core, game, logger, path);
         if (sub.Count == 0) return SchemaRefusals.ReportUnclassified<SubFieldSpec>(game, logger, prop, core, "empty struct");
         return new(prop.Name, "struct", LeafSpec.NoFormKeyTypes, LeafSpec.NoEnumMembers,
             SubFields: sub,
