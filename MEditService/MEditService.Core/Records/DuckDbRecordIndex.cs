@@ -5,6 +5,7 @@ using System.Runtime.ExceptionServices;
 using System.Text;
 using System.Text.Json;
 using DuckDB.NET.Data;
+using MEditService.Core.Notifications;
 using MEditService.Core.Plugins;
 using MEditService.Core.Queries;
 using MEditService.Core.Schema;
@@ -53,15 +54,21 @@ public sealed class DuckDbRecordIndex : IRecordIndex
     private readonly TableDdlBuilder _ddlBuilder;
     private bool _recordTypeViewsCreated;
 
+    // ADR-0046: null in every test that does not care, so this stays additive over the ~100 direct
+    // constructions across the suite.
+    private readonly INotificationPublisher? _notifications;
+
     public DuckDbRecordIndex(
         SchemaReflector schemaReflector,
         TableDdlBuilder ddlBuilder,
         ILogger logger,
-        string? databasePath = null)
+        string? databasePath = null,
+        INotificationPublisher? notifications = null)
     {
         _schemaReflector = schemaReflector;
         _ddlBuilder = ddlBuilder;
         _logger = logger;
+        _notifications = notifications;
         _indexStore = new IndexStore(logger, databasePath);
     }
 
@@ -291,6 +298,9 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         if (_workingTreeOverlay.ApplyWorkingTreeChanges(key, deltas)) UpdateWinnersCore();
         _indexStore.BumpSequence();
         tx.Commit();
+        // ADR-0046: after the commit, not inside it, so a subscriber that re-reads on receipt sees
+        // the rows this names.
+        _notifications?.Publish(new RowsChangedNotification(key, [.. deltas.Select(d => d.FormKey)], Sequence));
     }
 
     /// <summary>See <see cref="IRecordIndex.CreateWorkingTreeRecord"/>.</summary>
@@ -305,6 +315,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         UpdateWinnersCore();
         _indexStore.BumpSequence();
         tx.Commit();
+        _notifications?.Publish(new RowsChangedNotification(key, [formKey], Sequence));
     }
 
     // Made before either caller opens a transaction: a collision is a caller mistake, and answering
@@ -344,6 +355,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         UpdateWinnersCore();
         _indexStore.BumpSequence();
         tx.Commit();
+        _notifications?.Publish(new RowsChangedNotification(key, [oldFormKey, newFormKey], Sequence));
     }
 
     /// <summary>See <see cref="IRecordIndex.SetCommittedBaseline"/>.</summary>

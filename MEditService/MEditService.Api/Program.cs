@@ -2,8 +2,10 @@ using System.Globalization;
 using System.Text.Json.Serialization;
 using MEditService.Api;
 using MEditService.Api.Endpoints;
+using MEditService.Api.Notifications;
 using MEditService.Bridge;
 using MEditService.Core.Edits;
+using MEditService.Core.Notifications;
 using MEditService.Core.Plugins;
 using MEditService.Core.Queries;
 using MEditService.Core.Records;
@@ -58,6 +60,10 @@ try
     });
     builder.Services.AddSingleton<SchemaReflector>();
     builder.Services.AddSingleton<TableDdlBuilder>();
+    // ADR-0046: one publisher instance, resolved as both types — the concrete type for the stream
+    // endpoint's own subscribe/unsubscribe, the interface for every publisher.
+    builder.Services.AddSingleton<SseNotificationPublisher>();
+    builder.Services.AddSingleton<INotificationPublisher>(sp => sp.GetRequiredService<SseNotificationPublisher>());
     // ADR-0001: the index is a persistent file per MO2 instance, inside the instance root —
     // the load request names it, so there is nothing for the composition root to state here.
     builder.Services.AddSingleton<IRecordIndexFactory, DuckDbRecordIndexFactory>();
@@ -90,6 +96,7 @@ try
     // per reconcile instead.
     var indexMirror = new IndexMirror(
         app.Services.GetRequiredService<ILoadOrderMirror>(),
+        app.Services.GetRequiredService<INotificationPublisher>(),
         app.Services.GetRequiredService<ILoggerFactory>().CreateLogger(nameof(IndexMirror)));
     app.Services.GetRequiredService<ExternalChangeWatcher>().IndexedBinaryChanged = indexMirror.Apply;
 
@@ -123,6 +130,7 @@ try
     app.MapRecordEndpoints(app.Services.GetRequiredService<ILoggerFactory>());
     app.MapWorldspaceEndpoints(app.Services.GetRequiredService<ILoggerFactory>());
     app.MapContainerChildEndpoints(app.Services.GetRequiredService<ILoggerFactory>());
+    app.MapNotificationEndpoints();
 
     await app.RunAsync();
 }

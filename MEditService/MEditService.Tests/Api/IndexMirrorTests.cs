@@ -1,7 +1,9 @@
 using MEditService.Api;
 using MEditService.Bridge;
+using MEditService.Core.Notifications;
 using MEditService.Core.Records;
 using MEditService.Tests.Edits;
+using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -23,10 +25,10 @@ public sealed class IndexMirrorTests
         }
     }
 
-    private static ExternalChangeWatcher StartMirroring(TrackedModFixture fixture)
+    private static ExternalChangeWatcher StartMirroring(TrackedModFixture fixture, INotificationPublisher? notifications = null)
     {
         var watcher = new ExternalChangeWatcher(TimeSpan.FromMilliseconds(100));
-        var mirror = new IndexMirror(fixture.Mirror, NullLogger.Instance);
+        var mirror = new IndexMirror(fixture.Mirror, notifications ?? new InMemoryNotificationPublisher(), NullLogger.Instance);
         watcher.IndexedBinaryChanged = mirror.Apply;
         ExternalChangeLoadOrderHook.RunAfterReconcile(
             fixture.Mirror.LoadOrder, fixture.Mirror.Index, watcher, NullLogger.Instance);
@@ -58,6 +60,22 @@ public sealed class IndexMirrorTests
 
         WaitUntil(() => EditorIds(fixture, fixture.Plugin).Contains("ArrivedExternally"), TimeSpan.FromSeconds(10));
         Assert.Contains("ArrivedExternally", EditorIds(fixture, fixture.Plugin));
+    }
+
+    // ADR-0046: the plugin watcher's own re-index is exactly "whenever the plugin watcher
+    // re-indexes a binary" — the trigger this notification names.
+    [Fact]
+    public void AnUntrackedPluginChangedMidReconcile_PublishesPluginChanged()
+    {
+        using var fixture = TrackedModFixture.Untracked();
+        var notifications = new InMemoryNotificationPublisher();
+        using var watcher = StartMirroring(fixture, notifications);
+
+        RewriteBinaryWithExtraNpc(fixture, "ArrivedExternally");
+
+        WaitUntil(() => notifications.Notifications.Count > 0, TimeSpan.FromSeconds(10));
+        var changed = Assert.IsType<PluginChangedNotification>(Assert.Single(notifications.Notifications));
+        Assert.Equal(fixture.Plugin, changed.Plugin);
     }
 
     // A deletion removes the rows rather than re-reading a file that is not there: the index
