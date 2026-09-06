@@ -274,7 +274,7 @@ public sealed class ContainerCopyFixture : IDisposable
     public string DestinationSourceRoot => Path.Combine(DestinationModFolder, SourceRecordPath.RootFor(DestinationPluginName));
 
     public string DestinationSourceFileContaining(string editorId) =>
-        Directory.EnumerateFiles(DestinationSourceRoot, "RecordData.json", SearchOption.AllDirectories)
+        Directory.EnumerateFiles(DestinationSourceRoot, "*.json", SearchOption.AllDirectories)
             .Single(f => File.ReadAllText(f).Contains($"\"{editorId}\"", StringComparison.Ordinal));
 
     public void Dispose()

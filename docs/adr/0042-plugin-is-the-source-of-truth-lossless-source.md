@@ -169,7 +169,7 @@ sorting are *view-layer* concerns: if header counters, timestamps or Creation-Ki
 make a diff noisy, the diff view or the editor hides or sorts them at render time.
 
 **4. Order is a property of the parent's collection, not of each child.** Every folder-split list
-(`DialogTopic.Responses`, `Quest.{DialogTopics,DialogBranches,Scenes}`, Cell/Worldspace children)
+(`Quest.{DialogTopics,DialogBranches,Scenes}`, Cell/Worldspace block children)
 carries its order as an **ordered child list in the parent's own document**; each child file or
 directory is named by identity alone. A delete is one file deletion plus one line; an insert is one
 file plus one line; a reorder is a pure parent-document diff. The rename cascade is extinct at the
@@ -199,8 +199,8 @@ mod by forgetting to ask.
 
 **Drift is asymmetric, and that is the decision — not a softened rule.** A child on disk the list does
 not name fails the read loudly (`SourceChildOrderDriftException`, naming the parent and the children):
-nothing can say where an unlisted child belongs, and inventing a position is a *gameplay* change for
-`DialogTopic.Responses`. Re-Track is the recovery, per decision 5. But a list entry with **no file** is
+nothing can say where an unlisted child belongs, and inventing a position is a change to the compiled
+plugin. Re-Track is the recovery, per decision 5. But a list entry with **no file** is
 honoured as a deletion rather than refused: deleting the file is how a record is deleted by hand — a
 git checkout, an agent's script, the user's own editor — and ADR-0041's git-native working-tree model
 makes that a first-class edit, not corruption (`SourceIngestTests` pins both halves: absent at
@@ -217,9 +217,9 @@ back is the author's to put right (maintainer ruling), the same refusal posture 
 The superseded numbering scheme had the same limit in the same place — a hand-deleted file left a
 numbering gap the compile gate refused — so this is a faithful port of the old limit, not a new one.
 
-The Cell/Worldspace *embeds* (children inline in the parent document) are kept on our own grounds —
-one document per cell is the tree a human wants — and are excluded from the above precisely because
-they have no folder to order.
+The *embeds* — a cell's and a worldspace's children, and a dialog topic's responses, inline in the
+parent's document in Mutagen's own list order — are excluded from the above precisely because they
+have no folder to order.
 
 **5. Format identity is not stamped; compile failure is the uniform signal.** Nothing is written
 at Track and nothing is compared at load. Compatibility is observed, not predicted: a

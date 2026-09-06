@@ -50,7 +50,7 @@ public sealed class SourcePlacementTests
     }
 
     [Fact]
-    public void AFolderSplitContainerChild_IsADirectoryInItsParentsSlot_ListedInTheParentsOwnDocument()
+    public void AFolderSplitChildWithFolderSplitChildrenOfItsOwn_IsADirectoryInItsParentsSlot_ListedInTheParentsOwnDocument()
     {
         var modFolder = Path.Combine(Path.GetTempPath(), "some-mod");
         var questDirectory = Path.Combine(modFolder, "source", Plugin, "Quests", "SomeQuest - 000800_Vendor.esp");
@@ -68,25 +68,23 @@ public sealed class SourcePlacementTests
         Assert.Equal("DialogTopics", placement.Key);
     }
 
+    // A dialog topic: its responses are inline, so it has no folder-split children and needs no directory.
     [Fact]
     public void AFolderSplitLeafChild_IsAFileInItsParentsSlot_ListedInTheParentsOwnDocument()
     {
         var modFolder = Path.Combine(Path.GetTempPath(), "some-mod");
-        var topicDirectory = Path.Combine(
-            modFolder, "source", Plugin, "Quests", "SomeQuest - 000800_Vendor.esp", "DialogTopics", "SomeTopic - 000801_Vendor.esp");
+        var questDirectory = Path.Combine(modFolder, "source", Plugin, "Quests", "SomeQuest - 000800_Vendor.esp");
 
         var placement = SourcePlacement.ForSlotChild(
-            modFolder, topicDirectory, "Responses", "000802:Vendor.esp", editorId: null, isDirectory: false);
+            modFolder, questDirectory, "DialogTopics", "000801:Vendor.esp", editorId: null, isDirectory: false);
 
         Assert.Equal(
-            Path.Combine("source", Plugin, "Quests", "SomeQuest - 000800_Vendor.esp", "DialogTopics",
-                "SomeTopic - 000801_Vendor.esp", "Responses", "000802_Vendor.esp.json"),
+            Path.Combine("source", Plugin, "Quests", "SomeQuest - 000800_Vendor.esp", "DialogTopics", "000801_Vendor.esp.json"),
             placement.RelativePath);
         Assert.Equal(
-            Path.Combine("source", Plugin, "Quests", "SomeQuest - 000800_Vendor.esp", "DialogTopics",
-                "SomeTopic - 000801_Vendor.esp", "RecordData.json"),
+            Path.Combine("source", Plugin, "Quests", "SomeQuest - 000800_Vendor.esp", "RecordData.json"),
             placement.CarrierRelativePath);
-        Assert.Equal("Responses", placement.Key);
+        Assert.Equal("DialogTopics", placement.Key);
     }
 
     [Fact]

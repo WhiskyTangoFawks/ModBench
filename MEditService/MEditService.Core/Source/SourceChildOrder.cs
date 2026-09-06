@@ -108,8 +108,8 @@ internal static class SourceChildOrder
         });
 
     /// <summary>Repoints an entry in place: a renumber changes the FormKey the list is keyed by, and a
-    /// remove-then-add would move the record to the end — a gameplay change for
-    /// <c>DialogTopic.Responses</c>.</summary>
+    /// remove-then-add would move the record to the end, a position change the compiled plugin
+    /// would carry.</summary>
     internal static void Rename(
         string carrierPath, string key, string oldIdentity, string newIdentity, IFileSystem? fileSystem = null)
         => Mutate(carrierPath, key, fileSystem, list =>
@@ -324,8 +324,8 @@ internal static class SourceChildOrder
             var byIdentity = new Dictionary<string, object>(StringComparer.Ordinal);
             for (var i = 0; i < identities.Count; i++) byIdentity[identities[i]] = collection.Children[i];
 
-            // Present but unlisted: refuse. Appending would invent a position, a gameplay change for
-            // DialogTopic.Responses (ADR-0042 decision 5); re-Track is the recovery.
+            // Present but unlisted: refuse. Appending would invent a position, so re-Track is the
+            // recovery (ADR-0042 decision 4).
             var unlisted = identities.Where(i => !wanted.Contains(i, StringComparer.Ordinal)).ToList();
             if (unlisted.Count > 0)
             {
@@ -434,20 +434,18 @@ internal static class SourceChildOrder
         }
     }
 
-    // Embedded lists are excluded: Cell.{Temporary,Persistent,NavigationMeshes} are inlined by
-    // CellEmbedCustomization, so treating one as folder-split would mint a directory the reader fails on.
-    private static IEnumerable<PropertyInfo> FolderSplitProperties(Type type) =>
-        type.GetProperties(BindingFlags.Public | BindingFlags.Instance)
+    // Embedded lists are excluded: an inlined list has no folder to order, so carrying it would put
+    // a second copy of the order beside the list itself.
+    private static IEnumerable<PropertyInfo> FolderSplitProperties(Type type)
+    {
+        var parentType = ContainerChildFields.NormalizedTypeName(type);
+        return type.GetProperties(BindingFlags.Public | BindingFlags.Instance)
             .Where(p => p.GetIndexParameters().Length == 0
-                        && !EmbeddedListMembers.Contains(p.Name)
+                        && !ContainerChildFields.EmbeddedSlots.Contains((parentType, p.Name))
                         && ElementOf(p.PropertyType) is { } element
                         && (typeof(IMajorRecordGetter).IsAssignableFrom(element) || IsBlock(element)))
             .OrderBy(p => p.Name, StringComparer.Ordinal);
-
-    /// <summary>Mirrors <see cref="Serialization.CellEmbedCustomization"/>'s list members, by name alone
-    /// because the names are unique to Cell.</summary>
-    internal static readonly IReadOnlySet<string> EmbeddedListMembers =
-        new HashSet<string>(StringComparer.Ordinal) { "Temporary", "Persistent", "NavigationMeshes" };
+    }
 
     // Spelled against Fallout 4's types, but every Mutagen game names these three identically, which is
     // what keeps the walk reflective.

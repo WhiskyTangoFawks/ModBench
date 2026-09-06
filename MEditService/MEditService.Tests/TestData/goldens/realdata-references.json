@@ -1,7 +1,7 @@
 {
   "ReferencedBy": {
     "003648:Fallout4.esm": {
-      "Count": 661,
+      "Count": 730,
       "Sample": [
         {
           "EditorId": "DialogueDiamondCity",
@@ -20,25 +20,25 @@
           "RecordType": "dial"
         },
         {
-          "EditorId": "ArturoGreetScene",
-          "FieldPath": "Quest",
-          "FormKey": "004E1E:Fallout4.esm",
-          "Origin": "Data",
-          "Plugin": "mEditTestSubset.esm",
-          "RecordType": "scen"
-        },
-        {
           "EditorId": null,
-          "FieldPath": "Quest",
-          "FormKey": "0057DD:Fallout4.esm",
+          "FieldPath": "Responses[103].Conditions[1].Data.ParameterOneRecord",
+          "FormKey": "0048EB:Fallout4.esm",
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
           "RecordType": "dial"
         },
         {
           "EditorId": null,
-          "FieldPath": "Quest",
-          "FormKey": "00581D:Fallout4.esm",
+          "FieldPath": "Responses[166].Conditions[1].Data.ParameterOneRecord",
+          "FormKey": "0048EB:Fallout4.esm",
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm",
+          "RecordType": "dial"
+        },
+        {
+          "EditorId": null,
+          "FieldPath": "Responses[20].Conditions[0].Data.ParameterOneRecord",
+          "FormKey": "0048EB:Fallout4.esm",
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
           "RecordType": "dial"
@@ -46,7 +46,7 @@
       ]
     },
     "004E1E:Fallout4.esm": {
-      "Count": 19,
+      "Count": 38,
       "Sample": [
         {
           "EditorId": null,
@@ -55,6 +55,22 @@
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
           "RecordType": "info"
+        },
+        {
+          "EditorId": null,
+          "FieldPath": "Responses[0].StartScene",
+          "FormKey": "02B892:Fallout4.esm",
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm",
+          "RecordType": "dial"
+        },
+        {
+          "EditorId": null,
+          "FieldPath": "Responses[1].StartScene",
+          "FormKey": "02B892:Fallout4.esm",
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm",
+          "RecordType": "dial"
         },
         {
           "EditorId": null,
@@ -71,27 +87,11 @@
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
           "RecordType": "info"
-        },
-        {
-          "EditorId": null,
-          "FieldPath": "StartScene",
-          "FormKey": "02B8A1:Fallout4.esm",
-          "Origin": "Data",
-          "Plugin": "mEditTestSubset.esm",
-          "RecordType": "info"
-        },
-        {
-          "EditorId": null,
-          "FieldPath": "StartScene",
-          "FormKey": "02B8A2:Fallout4.esm",
-          "Origin": "Data",
-          "Plugin": "mEditTestSubset.esm",
-          "RecordType": "info"
         }
       ]
     },
     "00583D:Fallout4.esm": {
-      "Count": 18,
+      "Count": 36,
       "Sample": [
         {
           "EditorId": null,
@@ -111,27 +111,27 @@
         },
         {
           "EditorId": null,
-          "FieldPath": "StartScene",
-          "FormKey": "01DA84:Fallout4.esm",
+          "FieldPath": "Responses[0].StartScene",
+          "FormKey": "01DA26:Fallout4.esm",
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
-          "RecordType": "info"
+          "RecordType": "dial"
         },
         {
           "EditorId": null,
-          "FieldPath": "StartScene",
-          "FormKey": "01DAAA:Fallout4.esm",
+          "FieldPath": "Responses[1].StartScene",
+          "FormKey": "01DA26:Fallout4.esm",
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
-          "RecordType": "info"
+          "RecordType": "dial"
         },
         {
           "EditorId": null,
-          "FieldPath": "StartScene",
-          "FormKey": "01F611:Fallout4.esm",
+          "FieldPath": "Responses[2].StartScene",
+          "FormKey": "01DA26:Fallout4.esm",
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
-          "RecordType": "info"
+          "RecordType": "dial"
         }
       ]
     },
@@ -181,11 +181,19 @@
       ]
     },
     "0179F3:Fallout4.esm": {
-      "Count": 304,
+      "Count": 327,
       "Sample": [
         {
           "EditorId": null,
           "FieldPath": "Quest",
+          "FormKey": "0179F1:Fallout4.esm",
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm",
+          "RecordType": "dial"
+        },
+        {
+          "EditorId": null,
+          "FieldPath": "Responses[41].Conditions[2].Data.ParameterOneRecord",
           "FormKey": "0179F1:Fallout4.esm",
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
@@ -214,19 +222,11 @@
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
           "RecordType": "qust"
-        },
-        {
-          "EditorId": "DialogueConcordArea",
-          "FieldPath": "VirtualMachineAdapter.Script.Properties[10].Object",
-          "FormKey": "0179F3:Fallout4.esm",
-          "Origin": "Data",
-          "Plugin": "mEditTestSubset.esm",
-          "RecordType": "qust"
         }
       ]
     },
     "017B27:Fallout4.esm": {
-      "Count": 7,
+      "Count": 13,
       "Sample": [
         {
           "EditorId": null,
@@ -238,35 +238,35 @@
         },
         {
           "EditorId": null,
+          "FieldPath": "Responses[0].StartScene",
+          "FormKey": "01F679:Fallout4.esm",
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm",
+          "RecordType": "dial"
+        },
+        {
+          "EditorId": null,
+          "FieldPath": "Responses[1].StartScene",
+          "FormKey": "01F679:Fallout4.esm",
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm",
+          "RecordType": "dial"
+        },
+        {
+          "EditorId": null,
+          "FieldPath": "Responses[2].StartScene",
+          "FormKey": "01F679:Fallout4.esm",
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm",
+          "RecordType": "dial"
+        },
+        {
+          "EditorId": null,
           "FieldPath": "StartScene",
           "FormKey": "01F685:Fallout4.esm",
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
           "RecordType": "info"
-        },
-        {
-          "EditorId": null,
-          "FieldPath": "StartScene",
-          "FormKey": "030E13:Fallout4.esm",
-          "Origin": "Data",
-          "Plugin": "mEditTestSubset.esm",
-          "RecordType": "info"
-        },
-        {
-          "EditorId": null,
-          "FieldPath": "StartScene",
-          "FormKey": "030E14:Fallout4.esm",
-          "Origin": "Data",
-          "Plugin": "mEditTestSubset.esm",
-          "RecordType": "info"
-        },
-        {
-          "EditorId": "NatMQ103Scene",
-          "FieldPath": "Template",
-          "FormKey": "08BB68:Fallout4.esm",
-          "Origin": "Data",
-          "Plugin": "mEditTestSubset.esm",
-          "RecordType": "scen"
         }
       ]
     },

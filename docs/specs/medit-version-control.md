@@ -378,8 +378,8 @@ plugins are never probed at all.
   outcomes, on purpose: **deleting a child file is honoured as a deletion** (it is how a
   record is deleted by hand, and the git-native model above makes that first-class), while
   **adding a child the parent's list does not name is refused**, naming the parent and the
-  children — nothing can say where an unlisted child belongs, and for `DialogTopic.Responses`
-  an invented position is a gameplay change. Re-Track is the recovery, the same uniform
+  children — nothing can say where an unlisted child belongs, and an invented position is a
+  change to the compiled plugin. Re-Track is the recovery, the same uniform
   answer every other format break gets. The tree is authoritative for whether a child
   exists; the parent's list for the order of the ones that do. A hand delete is honoured at *read* but
   still refuses at *compile*, until the author removes the stale entry or re-Tracks — Modbench does

@@ -26,7 +26,7 @@ public sealed class MidListDeleteStagesWithoutRenamesTests : IClassFixture<Conta
     public void DeletingOneOfThreeDialogTopics_StagesOneDeletionAndOneChangedParent_WithNoRenames()
     {
         var topicFile = _fixture.SourceFileContaining(ContainerModFixture.DialogTopic2EditorId);
-        var questDirectory = Path.GetDirectoryName(Path.GetDirectoryName(Path.GetDirectoryName(topicFile)!)!)!;
+        var questDirectory = Path.GetDirectoryName(Path.GetDirectoryName(topicFile)!)!;
         var carrier = SourceChildOrder.CarrierFor(questDirectory, parentIsRecord: true);
 
         var before = SourceChildOrder.ListAt(carrier, "DialogTopics");

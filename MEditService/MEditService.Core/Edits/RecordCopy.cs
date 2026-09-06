@@ -56,25 +56,47 @@ internal sealed class RecordCopy(ILoadOrderMirror mirror, SchemaReflector schema
                 $"{formKey} is already held by a record in {destinationPlugin.Name} at some ref.");
         }
 
-        var reads = index.At(RecordRef.Effective);
-        var containerFormKey = embedding.Container.FormKey;
         var childRecord = codec
             .DeserializeFromBytesAsync(Encoding.UTF8.GetBytes(document.Body!), release, document.RecordType)
             .GetAwaiter().GetResult();
+        var appended = AppendEmbeddedChild(
+            sourcePlugin, embedding.Container.FormKey, embedding.Container.RecordType, embedding.SlotName, childRecord,
+            destinationPlugin, destinationModFolder, index, release);
+
+        if (appended.Applied && logger.IsEnabled(LogLevel.Information))
+        {
+            logger.LogInformation(
+                "Copied {FormKey} from {SourcePlugin} ({SourceOrigin}) as an override into {DestinationPlugin} " +
+                "({DestinationOrigin}) — inside {ContainerFormKey}'s {SlotName} slot",
+                formKey, sourcePlugin.Name, sourcePlugin.Origin, destinationPlugin.Name, destinationPlugin.Origin,
+                embedding.Container.FormKey, embedding.SlotName);
+        }
+        return appended;
+    }
+
+    /// <summary>The container rule: the child lands at the end of its slot in the destination's copy
+    /// of the container's document, minted bare and Partial Form when absent; the index derives its
+    /// rows from that document.</summary>
+    internal RecordEditResult AppendEmbeddedChild(
+        PluginKey sourcePlugin, string containerFormKey, string containerRecordType, string slotName, IMajorRecord childRecord,
+        PluginKey destinationPlugin, string destinationModFolder, IRecordIndex index, GameRelease release)
+    {
+        var reads = index.At(RecordRef.Effective);
+        var childFormKey = childRecord.FormKey.ToString();
 
         var destinationContainer = reads.GetDocument(containerFormKey, destinationPlugin);
         if (destinationContainer == null)
         {
-            var bare = BarePartialFormAncestor(containerFormKey, embedding.Container.RecordType, release);
-            ContainerChildFields.AddChildToSlot(bare, embedding.SlotName, childRecord);
+            var bare = BarePartialFormAncestor(containerFormKey, containerRecordType, release);
+            ContainerChildFields.AddChildToSlot(bare, slotName, childRecord);
             var minted = PlaceMintedContainer(
-                sourcePlugin, containerFormKey, embedding.Container.RecordType, bare, destinationPlugin, destinationModFolder, index, release);
+                sourcePlugin, containerFormKey, containerRecordType, bare, destinationPlugin, destinationModFolder, index, release);
             if (minted.Applied && logger.IsEnabled(LogLevel.Information))
             {
                 logger.LogInformation(
-                    "Copied {FormKey} from {SourcePlugin} ({SourceOrigin}) as an override into {DestinationPlugin} " +
-                    "({DestinationOrigin}) — minted its container {ContainerFormKey} as a Partial Form ancestor around it",
-                    formKey, sourcePlugin.Name, sourcePlugin.Origin, destinationPlugin.Name, destinationPlugin.Origin, containerFormKey);
+                    "Landed {FormKey} in {DestinationPlugin} ({DestinationOrigin}) — minted its container {ContainerFormKey} " +
+                    "as a Partial Form ancestor around it",
+                    childFormKey, destinationPlugin.Name, destinationPlugin.Origin, containerFormKey);
             }
             return minted;
         }
@@ -86,7 +108,7 @@ internal sealed class RecordCopy(ILoadOrderMirror mirror, SchemaReflector schema
                 $"{containerFormKey} is indexed in {destinationPlugin.Name} but SourceUnitResolver cannot find its source unit.");
 
         var containerRecord = RecordEditService.ReadRecordFromSource(codec, logger, containerUnit.FullPath, destinationContainer, release);
-        ContainerChildFields.AddChildToSlot(containerRecord, embedding.SlotName, childRecord);
+        ContainerChildFields.AddChildToSlot(containerRecord, slotName, childRecord);
         var newContainerBody = RecordEditService.SerializeAndWrite(codec, containerRecord, containerUnit.FullPath, release);
 
         try
@@ -99,23 +121,14 @@ internal sealed class RecordCopy(ILoadOrderMirror mirror, SchemaReflector schema
             // surface as a bare exception that says nothing about the file that landed.
             logger.LogError(
                 ex, "Index update failed after writing {ContainerFormKey}'s new body to {SourcePath} for copied child {FormKey}",
-                containerFormKey, containerUnit.FullPath, formKey);
+                containerFormKey, containerUnit.FullPath, childFormKey);
             return RecordEditResult.Refused(
                 RecordEditRefusal.ContainerCopyIndexUpdateFailedAfterWrite,
-                $"{containerFormKey}'s working-tree file was updated to carry {formKey}, but the index failed to " +
+                $"{containerFormKey}'s working-tree file was updated to carry {childFormKey}, but the index failed to " +
                 $"record it ({ex.Message}). The file itself is a real, reviewable working-tree change — check " +
                 "the Source Control panel, or relaunch mEdit to re-index it.");
         }
         mirror.ReapplyFilter();
-
-        if (logger.IsEnabled(LogLevel.Information))
-        {
-            logger.LogInformation(
-                "Copied {FormKey} from {SourcePlugin} ({SourceOrigin}) as an override into {DestinationPlugin} " +
-                "({DestinationOrigin}) — appended into {ContainerFormKey}'s {SlotName} slot",
-                formKey, sourcePlugin.Name, sourcePlugin.Origin, destinationPlugin.Name, destinationPlugin.Origin,
-                containerFormKey, embedding.SlotName);
-        }
         return RecordEditResult.Success();
     }
 
@@ -288,15 +301,17 @@ internal sealed class RecordCopy(ILoadOrderMirror mirror, SchemaReflector schema
         }
         else
         {
-            // A folder-split container (DialogTopic): under its own parent's slot, ensured first.
+            // A folder-split child (a dialog topic): under its own parent's slot, ensured first. It gets
+            // a directory only when it has folder-split children of its own.
             ownParent = reads.GetContainerParent(sourcePlugin, ancestorFormKey)
                 ?? throw new InvalidOperationException(
-                    $"{sourcePlugin.Name}'s index names no parent for folder-split container {ancestorFormKey}.");
+                    $"{sourcePlugin.Name}'s index names no parent for folder-split child {ancestorFormKey}.");
             var parentDirectory = EnsureContainerAncestorDirectory(
                 index, reads, sourcePlugin, ownParent.Value.ParentFormKey, ownParent.Value.ParentRecordType,
                 destinationPlugin, destinationModFolder, release);
             placement = SourcePlacement.ForSlotChild(
-                destinationModFolder, parentDirectory, ownParent.Value.SlotName, ancestorFormKey, record.EditorID, isDirectory: true);
+                destinationModFolder, parentDirectory, ownParent.Value.SlotName, ancestorFormKey, record.EditorID,
+                isDirectory: ContainerChildFields.HasFolderSplitChildren(record.GetType()));
         }
 
         var recordDataPath = Path.Combine(destinationModFolder, placement.RelativePath);

@@ -587,8 +587,8 @@ public sealed class RecordEditService(
                 $"{sourcePlugin.Name}'s index names no parent quest for dialog topic {formKey} — " +
                 "container_child resolved every other read of this record.");
 
-        // Every response is copied too, and each one lands after the topic and its siblings are
-        // already written, so an unreadable one is refused here rather than mid-copy.
+        // Every response is copied too, so an unreadable one is refused here, before the topic or
+        // its quest is written.
         foreach (var childFormKey in reads.GetContainerChildren(sourcePlugin, formKey).Select(c => c.ChildFormKey))
         {
             if (reads.GetDocument(childFormKey, sourcePlugin) is { } childDocument
@@ -601,71 +601,50 @@ public sealed class RecordEditService(
         if (ResolveTargetFormKey(index, destinationPlugin, requestedFormKey, out var targetFormKey) is { } refusedTarget)
             return refusedTarget;
 
+        // The topic's embedded children ride along, each under a fresh key of its own. One document
+        // lands, so every key is drawn before anything is written and the allocator is told which
+        // keys this copy has already taken.
+        var topicRecord = ReadCopySourceRecord(sourcePlugin, formKey, document, release)
+            .Duplicate(FormKey.Factory(targetFormKey));
+        var children = ContainerChildFields.EnumerateChildren(topicRecord).Select(c => (c.SlotName, c.Child)).ToList();
+        ContainerChildFields.ClearAllChildSlots(topicRecord);
+        if (topicRecord is IFormLinkContainer selfLinking)
+        {
+            selfLinking.RemapLinks(new Dictionary<FormKey, FormKey> { [FormKey.Factory(formKey)] = FormKey.Factory(targetFormKey) });
+        }
+
+        var taken = new HashSet<string>(StringComparer.Ordinal) { targetFormKey };
+        foreach (var (slotName, child) in children)
+        {
+            if (ResolveTargetFormKey(index, destinationPlugin, requestedFormKey: null, out var childFormKey, taken) is { } childRefused)
+                return childRefused;
+            taken.Add(childFormKey);
+
+            var childRecord = child.Duplicate(FormKey.Factory(childFormKey));
+            if (childRecord is IFormLinkContainer childSelfLinking)
+            {
+                childSelfLinking.RemapLinks(new Dictionary<FormKey, FormKey> { [child.FormKey] = FormKey.Factory(childFormKey) });
+            }
+            ContainerChildFields.AddChildToSlot(topicRecord, slotName, childRecord);
+        }
+
         // The parent quest override, found or minted — resolved to its own directory either way.
         var questDirectory = _recordCopy.EnsureContainerAncestorDirectory(
             index, reads, sourcePlugin, parentQuest.ParentFormKey, parentQuest.ParentRecordType,
             destinationPlugin, destinationModFolder, release);
 
-        // The slot folder is minted by the topic's own write, so it is unminted with it if that
-        // write fails.
-        var topicRecord = ReadCopySourceRecord(sourcePlugin, formKey, document, release)
-            .Duplicate(FormKey.Factory(targetFormKey));
-        if (topicRecord is IFormLinkContainer selfLinking)
-        {
-            selfLinking.RemapLinks(new Dictionary<FormKey, FormKey> { [FormKey.Factory(formKey)] = FormKey.Factory(targetFormKey) });
-        }
         var topicPlacement = SourcePlacement.ForSlotChild(
-            destinationModFolder, questDirectory, parentQuest.SlotName, targetFormKey, topicRecord.EditorID, isDirectory: true);
-        var topicDirectory = Path.GetDirectoryName(Path.Combine(destinationModFolder, topicPlacement.RelativePath))!;
+            destinationModFolder, questDirectory, parentQuest.SlotName, targetFormKey, topicRecord.EditorID,
+            isDirectory: ContainerChildFields.HasFolderSplitChildren(topicRecord.GetType()));
         var topicBody = WritePlaced(
             destinationModFolder, topicPlacement, targetFormKey, path => SerializeAndWrite(_codec, topicRecord, path, release));
+        // Every embedded child's row is the index's derivation from this one document.
         index.CreateWorkingTreeRecord(destinationPlugin, targetFormKey, document.RecordType, topicBody);
 
         // The topic's own membership in the quest's slot, appended at the end.
         RecordCopy.AppendChildToSlot(
             index, reads, destinationPlugin, parentQuest.ParentFormKey, parentQuest.ParentRecordType,
             parentQuest.SlotName, targetFormKey);
-
-        // Allocation and row-creation interleave so the next-free scan always sees the key the
-        // previous child just took.
-        var copiedChildren = new List<(string ChildFormKey, int SlotIndex)>();
-        foreach (var child in reads.GetContainerChildren(sourcePlugin, formKey).OrderBy(c => c.SlotIndex))
-        {
-            var childDocument = reads.GetDocument(child.ChildFormKey, sourcePlugin)
-                ?? throw new InvalidOperationException(
-                    $"{sourcePlugin.Name}'s index names {child.ChildFormKey} as a child of {formKey} but holds no document for it.");
-            if (ResolveTargetFormKey(index, destinationPlugin, requestedFormKey: null, out var childFormKey) is { } childRefused)
-            {
-                // The topic and earlier responses are already written, so a Refused here would hide
-                // partial state; a fault after writes is an exception carrying the disclosure.
-                throw new IOException(
-                    $"Allocating a FormKey for copied response {child.ChildFormKey} failed after the new topic " +
-                    $"{targetFormKey} (and {copiedChildren.Count} earlier response(s)) already landed in " +
-                    $"{destinationPlugin.Name}'s working tree — review them in the Source Control panel. " +
-                    $"Underlying refusal: {childRefused.Message}");
-            }
-
-            var childRecord = ReadCopySourceRecord(sourcePlugin, child.ChildFormKey, childDocument, release)
-                .Duplicate(FormKey.Factory(childFormKey));
-            if (childRecord is IFormLinkContainer childSelfLinking)
-            {
-                childSelfLinking.RemapLinks(
-                    new Dictionary<FormKey, FormKey> { [FormKey.Factory(child.ChildFormKey)] = FormKey.Factory(childFormKey) });
-            }
-
-            // Source order: the new topic's own document says where its responses sit.
-            var childPlacement = SourcePlacement.ForSlotChild(
-                destinationModFolder, topicDirectory, child.SlotName, childFormKey, childRecord.EditorID, isDirectory: false);
-            var childBody = WritePlaced(
-                destinationModFolder, childPlacement, childFormKey, path => SerializeAndWrite(_codec, childRecord, path, release));
-            index.CreateWorkingTreeRecord(destinationPlugin, childFormKey, childDocument.RecordType, childBody);
-            copiedChildren.Add((childFormKey, copiedChildren.Count));
-        }
-        if (copiedChildren.Count > 0)
-        {
-            index.ReplaceContainerChildSlot(
-                destinationPlugin, targetFormKey, document.RecordType, "Responses", copiedChildren);
-        }
 
         mirror.ReapplyFilter();
 
@@ -675,12 +654,13 @@ public sealed class RecordEditService(
                 "Copied {FormKey} from {SourcePlugin} ({SourceOrigin}) as new dialog topic {NewFormKey} into " +
                 "{DestinationPlugin} ({DestinationOrigin}) with {ChildCount} response(s), each under a fresh FormKey",
                 formKey, sourcePlugin.Name, sourcePlugin.Origin, targetFormKey, destinationPlugin.Name,
-                destinationPlugin.Origin, copiedChildren.Count);
+                destinationPlugin.Origin, children.Count);
         }
         return RecordEditResult.Success(targetFormKey);
     }
 
-    // The missing ancestor chain (topic, then its quest) auto-creates bare and Partial Form.
+    // The missing ancestor chain (topic, then its quest) auto-creates bare and Partial Form, with
+    // the new response inline in the topic's document.
     private RecordEditResult CopyDialogResponseAsNewRecord(
         IRecordIndex index, PluginKey sourcePlugin, string formKey, RecordDocument document,
         PluginKey destinationPlugin, string destinationModFolder, GameRelease release, string? requestedFormKey)
@@ -694,10 +674,6 @@ public sealed class RecordEditService(
         if (ResolveTargetFormKey(index, destinationPlugin, requestedFormKey, out var targetFormKey) is { } refusedTarget)
             return refusedTarget;
 
-        var topicDirectory = _recordCopy.EnsureContainerAncestorDirectory(
-            index, reads, sourcePlugin, parentTopic.ParentFormKey, parentTopic.ParentRecordType,
-            destinationPlugin, destinationModFolder, release);
-
         var newRecord = ReadCopySourceRecord(sourcePlugin, formKey, document, release)
             .Duplicate(FormKey.Factory(targetFormKey));
         if (newRecord is IFormLinkContainer selfLinking)
@@ -705,17 +681,10 @@ public sealed class RecordEditService(
             selfLinking.RemapLinks(new Dictionary<FormKey, FormKey> { [FormKey.Factory(formKey)] = FormKey.Factory(targetFormKey) });
         }
 
-        // The slot folder is minted by the response's own write, not ahead of it.
-        var placement = SourcePlacement.ForSlotChild(
-            destinationModFolder, topicDirectory, parentTopic.SlotName, targetFormKey, newRecord.EditorID, isDirectory: false);
-        var newBody = WritePlaced(
-            destinationModFolder, placement, targetFormKey, path => SerializeAndWrite(_codec, newRecord, path, release));
-        index.CreateWorkingTreeRecord(destinationPlugin, targetFormKey, document.RecordType, newBody);
-        RecordCopy.AppendChildToSlot(
-            index, reads, destinationPlugin, parentTopic.ParentFormKey, parentTopic.ParentRecordType,
-            parentTopic.SlotName, targetFormKey);
-
-        mirror.ReapplyFilter();
+        var appended = _recordCopy.AppendEmbeddedChild(
+            sourcePlugin, parentTopic.ParentFormKey, parentTopic.ParentRecordType, parentTopic.SlotName, newRecord,
+            destinationPlugin, destinationModFolder, index, release);
+        if (!appended.Applied) return appended;
 
         if (logger.IsEnabled(LogLevel.Information))
         {
@@ -1240,8 +1209,7 @@ public sealed class RecordEditService(
         var parentDirectory = Path.GetDirectoryName(oldLeafPath)!;
 
         // Only the FormKey half of the leaf name changes. The parent's ordered list is keyed by
-        // FormKey, so the entry is repointed in place rather than moved to the end; for
-        // DialogTopic.Responses that is gameplay.
+        // FormKey, so the entry is repointed in place rather than moved to the end.
         var newLeafName =
             SourceUnitResolver.LeafNameFor(FormKey.Factory(newFormKey), document.EditorId, isDirectoryPerRecord);
         var newLeafPath = Path.Combine(parentDirectory, newLeafName);
@@ -1287,10 +1255,11 @@ public sealed class RecordEditService(
         index.At(RecordRef.Effective).GetDocument(formKey, plugin) == null
         && index.At(RecordRef.Head).GetDocument(formKey, plugin) == null;
 
-    // Non-null is the refusal; targetFormKey is "" then, so call sites need no second null-check
-    // after checking the return.
+    // Non-null is the refusal; targetFormKey is "" then, so call sites need no second null-check.
+    // taken: keys this gesture drew but has not written, so one document's records get distinct keys.
     private RecordEditResult? ResolveTargetFormKey(
-        IRecordIndex index, PluginKey plugin, string? requestedFormKey, out string targetFormKey)
+        IRecordIndex index, PluginKey plugin, string? requestedFormKey, out string targetFormKey,
+        IReadOnlySet<string>? taken = null)
     {
         var mod = mirror.LoadOrder!.GetMod(plugin.Name, plugin.Origin!);
         var isLight = IsLightAtEffective(index, plugin, mod);
@@ -1313,7 +1282,7 @@ public sealed class RecordEditService(
             return null;
         }
 
-        var allocated = NextFreeNativeFormId(index, plugin, mod, isLight);
+        var allocated = NextFreeNativeFormId(index, plugin, mod, isLight, taken);
         if (allocated != null)
         {
             targetFormKey = allocated;
@@ -1325,7 +1294,7 @@ public sealed class RecordEditService(
         // flag: surfaced as a typed marker, the same way out compile offers.
         var eslContradiction = isLight
             && IsLightByRemovableFlag(index, plugin, mod)
-            && NextFreeNativeFormId(index, plugin, mod, isLight: false) != null;
+            && NextFreeNativeFormId(index, plugin, mod, isLight: false, taken) != null;
         return RecordEditResult.Refused(
             RecordEditRefusal.FormKeySpaceExhausted, FormKeySpaceExhaustedMessage(plugin, isLight, eslContradiction),
             eslContradiction);
@@ -1389,11 +1358,13 @@ public sealed class RecordEditService(
 
     // Unions Effective (committed plus uncompiled creates) and Head (natives the working tree
     // deleted, whose IDs must not be reused before compile). Null means exhausted.
-    private static string? NextFreeNativeFormId(IRecordIndex index, PluginKey plugin, IModGetter? mod, bool isLight)
+    private static string? NextFreeNativeFormId(
+        IRecordIndex index, PluginKey plugin, IModGetter? mod, bool isLight, IReadOnlySet<string>? taken = null)
     {
         var floor = mod?.GetDefaultInitialNextFormID() ?? 0x800u;
         var highest = index.At(RecordRef.Effective).GetNativeFormKeys(plugin)
             .Concat(index.At(RecordRef.Head).GetNativeFormKeys(plugin))
+            .Concat(taken ?? Enumerable.Empty<string>())
             .Select(LocalId)
             .DefaultIfEmpty(0u)
             .Max();
@@ -1604,9 +1575,8 @@ public sealed class RecordEditService(
 
         return RecordEditResult.Refused(
             RecordEditRefusal.ContainerRecordNotYetSupported,
-            $"'{recordType}' has no container of its own anywhere in the tree — it is a record embedded " +
-            "in a container (a placed reference, a landscape, a navmesh) or a folder-split child with no " +
-            "independent top-level existence (a dialog topic, a scene, a response).");
+            $"'{recordType}' has no container of its own anywhere in the tree — it is a folder-split child " +
+            "with no independent top-level existence (a dialog topic, a scene).");
     }
 
     /// <summary>Interior placement carries no gameplay meaning (PlacementWalker records null block/sub

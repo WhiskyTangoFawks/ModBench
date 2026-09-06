@@ -21,6 +21,14 @@ internal static class ContainerChildFields
     internal static IReadOnlyList<string>? EnumerateChildFieldsFor(Type recordType) =>
         ByTypeName.TryGetValue(NormalizedTypeName(recordType), out var fields) ? fields : null;
 
+    /// <summary>Whether a slot child of this type gets a directory: the writer gives one to a record
+    /// with any child slot its document does not embed, and a file to every other.</summary>
+    internal static bool HasFolderSplitChildren(Type recordType)
+    {
+        var name = NormalizedTypeName(recordType);
+        return ByTypeName.TryGetValue(name, out var fields) && fields.Any(f => !EmbeddedSlots.Contains((name, f)));
+    }
+
     private const string OverlaySuffix = "BinaryOverlay";
 
     private const string GetterPrefix = "I";
@@ -164,13 +172,14 @@ internal static class ContainerChildFields
         ((dynamic)value!).RemoveAt(slotIndex);
     }
 
-    // The slots that serialize inline into the parent's document — the runtime shadow of
-    // CellEmbedCustomization and WorldspaceEmbedCustomization. A strict subset of ByTypeName: Quest and
-    // DialogTopic children stay folder-split. Keep in step with the two customizations.
+    // The slots that serialize inline into the parent's document — the runtime shadow of the
+    // embed customizations in Serialization/EmbedCustomizations.cs. A strict subset of ByTypeName:
+    // Quest children stay folder-split. Keep in step with the customizations.
     internal static readonly HashSet<(string ParentType, string Slot)> EmbeddedSlots =
     [
         ("Cell", "Persistent"), ("Cell", "Temporary"), ("Cell", "Landscape"), ("Cell", "NavigationMeshes"),
         ("Worldspace", "TopCell"),
+        ("DialogTopic", "Responses"),
     ];
 
     /// <summary>Child major records read non-destructively off a getter, so ingest captures parentage in

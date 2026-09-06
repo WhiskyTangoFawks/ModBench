@@ -615,8 +615,8 @@ public class FormReferencesTests
 
         using var repo = IndexOnly(fixture, "InfoFragmentScript.esp");
 
-        var row = Assert.Single(ReferencesTo(repo, targetFormKey));
-        Assert.Equal(responseFormKey.ToString(), row.Source);
+        // The response's own row: it is inline in its topic's document, and its links are its own.
+        var row = Assert.Single(ReferencesTo(repo, targetFormKey), r => r.Source == responseFormKey.ToString());
         Assert.Equal("VirtualMachineAdapter.ScriptFragments.Script.Properties[0].Object", row.FieldPath);
         Assert.Equal("info", row.RecordType);
     }

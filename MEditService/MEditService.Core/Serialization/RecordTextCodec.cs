@@ -258,9 +258,9 @@ public sealed class RecordTextCodec(ILogger<RecordTextCodec> logger)
 
     private const string OverlaySuffix = "BinaryOverlay";
 
-    // Under FilePerRecord a container writes each non-embedded child (Quest, DialogTopic) to its
-    // own file via StreamCreator — one real Quest created 1,057 directories. A folder-split child
-    // is its own source unit, so its bytes go nowhere.
+    // Under FilePerRecord a container writes each non-embedded child (a Quest's topics) to its own
+    // file via StreamCreator — one real Quest created 1,057 directories. A folder-split child is
+    // its own source unit, so its bytes go nowhere.
     private sealed class DiscardChildRecordStreams : ICreateStream
     {
         internal static readonly DiscardChildRecordStreams Instance = new();
