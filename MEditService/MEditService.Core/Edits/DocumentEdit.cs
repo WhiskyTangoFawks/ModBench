@@ -178,7 +178,6 @@ internal static class DocumentEdit
                     RecordEditRefusal.FieldNotFound, spelled, $"'{schema.TableName}' has no field '{name}'.");
             }
         }
-        if (column.ReadOnlyReason is { } reason) return ReadOnlyRefusal(spelled, name, reason);
         if (column.Synthetic != null && path.Count > 1)
             return RecordEditResult.RefusedAt(RecordEditRefusal.FieldNotFound, spelled, $"'{name}' has no members.");
 
@@ -229,8 +228,6 @@ internal static class DocumentEdit
                 var field = fields.FirstOrDefault(f => f.Name == hop.Name);
                 if (field == null)
                     return RecordEditResult.RefusedAt(RecordEditRefusal.FieldNotFound, sofar, $"'{cursor.Meta.LeafTypeName ?? RecordEditEnvelope.Spell(path.Take(i))}' has no member '{hop.Name}'.");
-                if (field.ReadOnlyReason is { } memberReason)
-                    return ReadOnlyRefusal(sofar, hop.Name!, memberReason);
                 if (LeafOf(obj) is { } leaf && field.Variants is { } variants && !variants.ContainsKey(leaf))
                     return RecordEditResult.RefusedAt(RecordEditRefusal.FieldNotFound, sofar, $"'{leaf}' has no member '{hop.Name}'.");
 
@@ -284,7 +281,12 @@ internal static class DocumentEdit
                 Index = index,
             };
         }
-        return null;
+
+        // Asked once, of whatever the path resolved to: a read-only member has no members of its
+        // own, so no path can pass through one to reach something writable below it.
+        return cursor.Field?.ReadOnlyReason is { } why
+            ? ReadOnlyRefusal(spelled, cursor.MemberName ?? name, why)
+            : null;
     }
 
     private static RecordEditResult ReadOnlyRefusal(string path, string name, string reason) =>

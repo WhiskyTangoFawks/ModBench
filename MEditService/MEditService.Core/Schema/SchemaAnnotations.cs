@@ -268,7 +268,6 @@ internal sealed record SchemaAnnotations(
             ? annotations
             : throw new InvalidOperationException($"No schema annotation table for {category}");
 
-    public bool IsExcludedSignature(string signature) => ExcludedSignatures.ContainsKey(signature);
     public bool IsExcludedColumn(PropertyInfo prop) => ExcludedColumns.Contains(Key(prop));
     public bool IsExcludedMember(PropertyInfo prop) => ExcludedMembers.Contains(Key(prop));
     public bool IsExcludedUnion(Type setterType)
@@ -574,8 +573,8 @@ internal sealed record SchemaAnnotations(
     {
         string[] idle =
         [
-            .. CycleTruncations.Where(t => !observed.ReEnteredTruncations.Contains(t)).Order(StringComparer.Ordinal)
-                .Select(t => $"{nameof(CycleTruncations)}: {t} is never re-entered by the walk"),
+            .. CycleTruncations.Where(t => !observed.AppliedTruncations.Contains(t)).Order(StringComparer.Ordinal)
+                .Select(t => $"{nameof(CycleTruncations)}: {t} never stops the walk or lets a loop through"),
             .. EmptySubSchemaTypes.Where(t => !observed.EmptySubSchemas.Contains(t)).Order(StringComparer.Ordinal)
                 .Select(t => $"{nameof(EmptySubSchemaTypes)}: {t} never comes out empty in the walk"),
         ];
@@ -593,12 +592,13 @@ internal sealed record SchemaAnnotations(
 /// records; <see cref="SchemaAnnotations.ValidateObserved"/> reads, once the schema is built.</summary>
 internal sealed class WalkObservations
 {
-    private readonly HashSet<string> _reEnteredTruncations = new(StringComparer.Ordinal);
+    private readonly HashSet<string> _appliedTruncations = new(StringComparer.Ordinal);
     private readonly HashSet<string> _emptySubSchemas = new(StringComparer.Ordinal);
 
-    internal IReadOnlySet<string> ReEnteredTruncations => _reEnteredTruncations;
+    internal IReadOnlySet<string> AppliedTruncations => _appliedTruncations;
     internal IReadOnlySet<string> EmptySubSchemas => _emptySubSchemas;
 
-    internal void ReEnteredTruncation(string getterInterfaceName) => _reEnteredTruncations.Add(getterInterfaceName);
+    /// <summary>The walk stopped at this truncation, or let a loop through because of it.</summary>
+    internal void AppliedTruncation(string getterInterfaceName) => _appliedTruncations.Add(getterInterfaceName);
     internal void CameOutEmpty(string getterInterfaceName) => _emptySubSchemas.Add(getterInterfaceName);
 }

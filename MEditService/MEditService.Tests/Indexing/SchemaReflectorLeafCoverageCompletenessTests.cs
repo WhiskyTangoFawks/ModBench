@@ -115,19 +115,22 @@ public sealed class SchemaReflectorLeafCoverageCompletenessTests
     public void EveryDirectRecordProperty_IsRepresentedInItsSchemaOrExplicitlyExcluded()
     {
         var schemas = SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4);
+        // Or this is the winner-only sweep it replaced, and a sibling's own members go unasked for.
+        Assert.Contains(schemas.Values, s => OwnersOf(s).Count > 1);
+
         var gaps = new List<string>();
         foreach (var schema in schemas.Values)
         {
             // ModHeader is never an IMajorRecordGetter — no CLR getter type of its own for this sweep to walk.
             if (schema.IsHeader) continue;
 
-            foreach (var prop in DirectDataProperties(schema.RecordType, BaseSkip))
+            foreach (var owner in OwnersOf(schema))
             {
-                if (prop.Name == "VirtualMachineAdapter"
-                    && typeof(IHaveVirtualMachineAdapterGetter).IsAssignableFrom(schema.RecordType))
-                    continue;
-                if (schema.RecordColumns.Any(c => c.PropertyName == prop.Name)) continue;
-                gaps.Add($"{schema.RecordType.Name}.{prop.Name} (missing from '{schema.TableName}' entirely)");
+                foreach (var prop in DirectDataProperties(owner, BaseSkip))
+                {
+                    if (schema.RecordColumns.Any(c => c.PropertyName == prop.Name)) continue;
+                    gaps.Add($"{owner.Name}.{prop.Name} (missing from '{schema.TableName}' entirely)");
+                }
             }
         }
 
@@ -146,12 +149,11 @@ public sealed class SchemaReflectorLeafCoverageCompletenessTests
         {
             if (schema.IsHeader) continue;
 
-            var ownProperties = DirectDataProperties(schema.RecordType, BaseSkip).ToList();
+            var ownProperties = OwnersOf(schema).SelectMany(o => DirectDataProperties(o, BaseSkip)).ToList();
             foreach (var column in schema.RecordColumns)
             {
-                var ownerProp = ownProperties.FirstOrDefault(p => p.Name == column.PropertyName);
-                if (ownerProp == null) continue; // not this schema's own property — the depth-0 test covers it on its own type
-                Descend(gaps, $"{schema.RecordType.Name}.{column.PropertyName}", ownerProp.PropertyType, column.Field, []);
+                foreach (var ownerProp in ownProperties.Where(p => p.Name == column.PropertyName))
+                    Descend(gaps, $"{schema.TableName}.{column.PropertyName}", ownerProp.PropertyType, column.Field, []);
             }
         }
 
@@ -194,6 +196,24 @@ public sealed class SchemaReflectorLeafCoverageCompletenessTests
         var shapes = field.Variants?.Values.Prepend(field) ?? [field];
         return [.. shapes.SelectMany(s => s.SubFields ?? s.ElementSpec?.SubFields ?? [])];
     }
+
+    // Every getter interface the game registers under one GRUP signature. A table's columns are the
+    // union of its siblings', so a sweep keyed to the discovery winner alone would miss the rest.
+    private static readonly ILookup<string, Type> SiblingsBySignature =
+        typeof(INpcGetter).Assembly.GetTypes()
+            .Where(t => t is { IsAbstract: false, IsInterface: false }
+                && typeof(IFallout4MajorRecordGetter).IsAssignableFrom(t))
+            .Select(t => (Grup: t.GetField("GrupRecordType", BindingFlags.Public | BindingFlags.Static), Class: t))
+            .Where(x => x.Grup != null)
+            .Select(x => (
+                Signature: ((RecordType)x.Grup!.GetValue(null)!).Type.ToLowerInvariant(),
+                Getter: typeof(INpcGetter).Assembly.GetType($"Mutagen.Bethesda.Fallout4.I{x.Class.Name}Getter")!))
+            .ToLookup(x => x.Signature, x => x.Getter, StringComparer.OrdinalIgnoreCase);
+
+    private static IReadOnlyList<Type> OwnersOf(RecordTableSchema schema) =>
+        SiblingsBySignature[schema.TableName] is var siblings && siblings.Any()
+            ? [.. siblings]
+            : [schema.RecordType];
 
     // The same interface-hierarchy walk SchemaReflector's GetAllInterfaceProperties does, re-derived
     // here because it is private.

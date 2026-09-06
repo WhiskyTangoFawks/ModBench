@@ -1177,14 +1177,12 @@ public sealed class RecordEditService(
     private string SerializeToText(IMajorRecordGetter record, GameRelease release) =>
         Encoding.UTF8.GetString(_codec.SerializeToBytesAsync(record, release).GetAwaiter().GetResult());
 
-    // A KnownDefects row is why this guard exists; with no row there is nothing to guard. Asked of
-    // PluginIngest.CollectFormRefs: text cannot tell a link from an EditorID or string.
+    // A link the typed remap left behind is refused wherever it sits; a KnownDefects row is what
+    // names the member Mutagen is known to skip. Asked of PluginIngest.CollectFormRefs: text cannot
+    // tell a link from an EditorID or string.
     private RecordEditResult? RefuseIfRemapIncomplete(
         IMajorRecordGetter record, string recordType, string oldFormKey, PluginKey plugin, GameRelease release)
     {
-        var defects = schemaReflector.DefectsWith(release, KnownDefectEffect.RenumberRemapIncomplete);
-        if (defects.Count == 0) return null;
-
         var refs = new List<FormRef>();
         if (!schemaReflector.GetSchemas(release).TryGetValue(recordType, out var schema))
         {
@@ -1203,13 +1201,24 @@ public sealed class RecordEditService(
             return RecordEditResult.Refused(
                 RecordEditRefusal.ReferenceRemapIncomplete,
                 $"{record.FormKey} in {plugin.Name} still links {oldFormKey} at {stale.FieldPath} after the " +
-                "typed link remap, so renumbering would leave that reference dangling. " +
-                string.Join(" ", defects.Select(d => $"{d.TypeName}.{d.MemberName}: {d.Reason}.")) +
-                " Nothing was written.");
+                $"typed link remap, so renumbering would leave that reference dangling. {WhyRemapIsIncomplete(stale, release)} " +
+                "Nothing was written.");
         }
 
         return null;
     }
+
+    // A reference path is member names separated by dots, with an element index in brackets.
+    private static readonly char[] PathHopSeparators = ['.', '['];
+
+    // The row whose member the surviving link sits under, where one names it: the path is the
+    // document's own member names, so a row's member name is a hop of it.
+    private string WhyRemapIsIncomplete(FormRef stale, GameRelease release) =>
+        schemaReflector.DefectsWith(release, KnownDefectEffect.RenumberRemapIncomplete)
+            .FirstOrDefault(d => stale.FieldPath.Split(PathHopSeparators).Contains(d.MemberName, StringComparer.Ordinal))
+            is { } defect
+                ? $"{defect.TypeName}.{defect.MemberName}: {defect.Reason}."
+                : "No known-defect row names a member Mutagen's generated remap skips, so the cause is unknown.";
 
     // The transaction holds the pre-image and wraps the write in InMintedDirectory like every other
     // source-tree write.

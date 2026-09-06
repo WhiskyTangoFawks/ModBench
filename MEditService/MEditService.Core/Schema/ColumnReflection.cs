@@ -46,18 +46,15 @@ internal static class ColumnReflection
         PropertyInfo prop, string propertyName, GameReflection game, ILogger logger)
     {
         var (core, nullable) = ReflectedTypes.CoreOf(prop);
+        if (SubFieldReflection.GetSubFieldInfo(prop, game, SubFieldReflection.RootPath, logger) is not { } spec)
+            return null;
 
-        if (LeafClassification.ClassifyLeaf(prop, core, game) is { } leaf)
-        {
-            return new ColumnSpec(
-                SubFieldReflection.ProjectSubField(prop, nullable, leaf, game), propertyName, leaf.DuckDbType,
-                // A nullable property genuinely can be absent-meaning-null, so it keeps NULL rather
-                // than being coalesced to a default it never had.
-                ViewDefaultLiteral: nullable ? null : leaf.ViewDefaultLiteral);
-        }
+        if (LeafClassification.ClassifyLeaf(prop, core, game) is not { } leaf)
+            return new ColumnSpec(spec, propertyName, "VARCHAR");
 
-        return SubFieldReflection.GetSubFieldInfo(prop, game, SubFieldReflection.RootPath, logger) is { } spec
-            ? new ColumnSpec(spec, propertyName, "VARCHAR")
-            : null;
+        // A nullable property genuinely can be absent-meaning-null, so it keeps NULL rather than
+        // being coalesced to a default it never had.
+        var viewDefault = nullable ? null : leaf.ViewDefaultLiteral;
+        return new ColumnSpec(spec, propertyName, leaf.DuckDbType, ViewDefaultLiteral: viewDefault);
     }
 }

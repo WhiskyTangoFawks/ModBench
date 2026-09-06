@@ -95,7 +95,14 @@ public sealed class SchemaReflector
 
         foreach (var (tableName, getterInterface) in grups)
         {
-            if (annotations.IsExcludedSignature(tableName)) continue;
+            // Named, so not an anomaly, but still said out loud: a real run can answer "why is this
+            // record type missing?" without anyone reading the table.
+            if (annotations.ExcludedSignatures.TryGetValue(tableName, out var whyExcluded))
+            {
+                if (logger.IsEnabled(LogLevel.Debug))
+                    logger.LogDebug("SchemaReflector: no table for {Signature} — {Reason}", tableName, whyExcluded);
+                continue;
+            }
 
             if (!siblingsByTable.TryGetValue(tableName, out var siblings))
                 siblingsByTable[tableName] = siblings = [];

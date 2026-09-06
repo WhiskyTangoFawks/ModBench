@@ -43,7 +43,7 @@ internal static class SubFieldReflection
     {
         if (game.Annotations.IsCycleTruncation(getterInterface) && path.Any(game.Annotations.IsCycleTruncation))
         {
-            game.Observed.ReEnteredTruncation(getterInterface.Name);
+            game.Observed.AppliedTruncation(getterInterface.Name);
             return null;
         }
         var lastEntry = Array.LastIndexOf(path, getterInterface);
@@ -51,7 +51,7 @@ internal static class SubFieldReflection
         var onTheLoop = path.Skip(lastEntry).Where(game.Annotations.IsCycleTruncation).ToList();
         if (onTheLoop.Count > 0)
         {
-            foreach (var truncation in onTheLoop) game.Observed.ReEnteredTruncation(truncation.Name);
+            foreach (var truncation in onTheLoop) game.Observed.AppliedTruncation(truncation.Name);
             return [.. path, getterInterface];
         }
         throw new InvalidOperationException(
@@ -96,7 +96,6 @@ internal static class SubFieldReflection
             // the getter's own annotation, which is what tells an unset member from a defaulted one.
             AllowsNull: leaf.AllowsNull || ReflectedTypes.IsNullableMember(prop),
             SiblingsInUse: game.Annotations.SiblingsInUseFor(prop),
-            Default: nullable ? null : leaf.Default,
-            ReadOnlyReason: game.Annotations.ReadOnlyReasonFor(prop));
+            Default: nullable ? null : leaf.Default);
     }
 }

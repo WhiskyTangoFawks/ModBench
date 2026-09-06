@@ -247,13 +247,13 @@ public sealed class SchemaAnnotationTests
     }
 
     [Fact]
-    public void CycleTruncation_TheWalkNeverReEntersIt_FailsSchemaGenerationNamingTheEntry()
+    public void CycleTruncation_TheWalkNeverAppliesIt_FailsSchemaGenerationNamingTheEntry()
     {
         var reflector = AmendedSchemaReflector.Fallout4With(a => a with
         {
             CycleTruncations = [.. a.CycleTruncations, "INpcGetter"],
         });
-        AssertFailsNaming(reflector, "INpcGetter is never re-entered by the walk");
+        AssertFailsNaming(reflector, "INpcGetter never stops the walk or lets a loop through");
     }
 
     [Fact]
