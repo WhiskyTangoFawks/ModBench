@@ -622,6 +622,17 @@ public sealed class RecordEditService(
                 $"{sourcePlugin.Name}'s index names no parent quest for dialog topic {formKey} — " +
                 "container_child resolved every other read of this record.");
 
+        // Every response is copied too, and each one lands after the topic and its siblings are
+        // already written, so an unreadable one is refused here rather than mid-copy.
+        foreach (var childFormKey in reads.GetContainerChildren(sourcePlugin, formKey).Select(c => c.ChildFormKey))
+        {
+            if (reads.GetDocument(childFormKey, sourcePlugin) is { } childDocument
+                && RefuseIfParseFailed(childFormKey, childDocument) is { } childRefusal)
+            {
+                return childRefusal;
+            }
+        }
+
         if (ResolveTargetFormKey(index, destinationPlugin, requestedFormKey, out var targetFormKey) is { } refusedTarget)
             return refusedTarget;
 
@@ -1603,10 +1614,22 @@ public sealed class RecordEditService(
                 $"{sourcePlugin.Name} does not hold record {formKey}.");
         }
 
+        if (RefuseIfParseFailed(formKey, document) is { } parseRefusal) return parseRefusal;
+
         var release = mirror.LoadOrder!.GameRelease;
         source = new CopySource(index, destinationModFolder, release, document);
         return null;
     }
+
+    // A stub is all a parse-failed record has, so copying it would land its FormKey and EditorID as
+    // a real record and silently drop everything else.
+    private static RecordEditResult? RefuseIfParseFailed(string formKey, RecordDocument document) =>
+        document.ParseDiagnosis is { } diagnosis
+            ? RecordEditResult.Refused(
+                RecordEditRefusal.RecordParseFailed,
+                $"{formKey} could not be read when it was indexed, so its document is a stub holding only its " +
+                $"FormKey and EditorID; copying it would land that stub rather than the record: {diagnosis}")
+            : null;
 
     // INVARIANT: every write gesture calls this first (untracked, then the external-change deferral).
     // Reaching ApplyWorkingTreeChanges/CreateWorkingTreeRecord any other way bypasses the deferral
