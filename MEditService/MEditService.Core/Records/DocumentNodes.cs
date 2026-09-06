@@ -29,7 +29,7 @@ internal static class DocumentNodes
 
     // Two columns spelling one value: the codec's own text, since JsonElement has no Equals(); an
     // unordered array as a set; and against an absent side, what `defaultOf` says the codec omits.
-    internal static bool SameNode(object? a, object? b, bool unordered, FieldMetadata? defaultOf)
+    internal static bool SameNode(object? a, object? b, bool unordered, FieldMetadata? absentReadsAs)
     {
         if (a is JsonElement ja && b is JsonElement jb)
         {
@@ -39,20 +39,21 @@ internal static class DocumentNodes
                         .SequenceEqual(jb.EnumerateArray().Select(e => e.GetRawText()).Order());
             return ja.GetRawText() == jb.GetRawText();
         }
-        if (a is null && b is JsonElement onlyB) return IsOmitted(onlyB, defaultOf);
-        if (b is null && a is JsonElement onlyA) return IsOmitted(onlyA, defaultOf);
+        if (a is null && b is null) return true;
+        if (a is null || b is null)
+            return absentReadsAs is { } meta && (a ?? b) is JsonElement present && IsOmitted(present, meta);
         return Equals(a, b);
     }
 
     // What the codec omits: the declared default where the metadata spells one, else a zero number,
     // false, an empty list or object, and a link to nothing.
-    private static bool IsOmitted(JsonElement value, FieldMetadata? meta) => meta?.Default is { } declared
+    private static bool IsOmitted(JsonElement value, FieldMetadata meta) => meta.Default is { } declared
         ? SameValue(value, JsonSerializer.SerializeToElement(declared))
         : value.ValueKind switch
         {
             JsonValueKind.Number => value.GetRawText().Trim('-', '0', '.') is "" or "e0",
             JsonValueKind.False => true,
-            JsonValueKind.String => meta?.Type == "formKey" && value.GetString() == "Null",
+            JsonValueKind.String => meta.Type == "formKey" && value.GetString() == "Null",
             JsonValueKind.Array => value.GetArrayLength() == 0,
             JsonValueKind.Object => !value.EnumerateObject().Any(),
             _ => false,
@@ -73,6 +74,8 @@ internal static class DocumentNodes
             ? Variant(member, name)
             : member;
 
-    private static FieldMetadata Variant(FieldMetadata member, string? leaf) =>
+    /// <summary>The shape a member has under a named union leaf; its own where no variant
+    /// answers to that name.</summary>
+    internal static FieldMetadata Variant(FieldMetadata member, string? leaf) =>
         leaf != null && member.Variants is { } variants && variants.TryGetValue(leaf, out var variant) ? variant : member;
 }

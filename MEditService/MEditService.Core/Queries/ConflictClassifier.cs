@@ -42,6 +42,7 @@ public sealed class ConflictClassifier(ILogger<ConflictClassifier>? logger = nul
             MasterColumn: Column(conflictingRecords[0]),
             RecordWinnerColumn: Column(winner),
             ColumnOrder: [.. conflictingRecords.Select(r => (Column(r), r.LoadOrderIndex))],
+            PartialFormColumns: conflictingRecords.Where(r => r.IsPartialForm).Select(Column).ToHashSet(StringComparer.Ordinal),
             FormKey: conflictingRecords[0].FormKey,
             Logger: _logger,
             ResolveFormKey: resolveFormKey,
@@ -81,6 +82,7 @@ public sealed class ConflictClassifier(ILogger<ConflictClassifier>? logger = nul
         string MasterColumn,
         string RecordWinnerColumn,
         IReadOnlyList<(string Column, int LoadOrderIndex)> ColumnOrder,
+        IReadOnlySet<string> PartialFormColumns,
         string FormKey,
         ILogger Logger,
         Func<string, RecordLookupEntry?>? ResolveFormKey,
@@ -88,7 +90,7 @@ public sealed class ConflictClassifier(ILogger<ConflictClassifier>? logger = nul
 
     // One node of the diff tree, at whatever depth the walk reached it. absentMeansDefault is false
     // for an array element, which the codec never omits for equalling its default.
-    private static FieldDiff Node(
+    private static FieldDiff DiffNode(
         string label,
         Dictionary<string, object?> values,
         Dictionary<string, FieldMetadata> shapes,
@@ -113,41 +115,42 @@ public sealed class ConflictClassifier(ILogger<ConflictClassifier>? logger = nul
         var conflictAll = (children ?? []).Aggregate(
             ConflictRules.Reduce(cellStates.Values), (all, child) => ConflictRules.Escalate(all, child.ConflictAll));
 
-        var (resolutions, checkErrors) = Links(shapes, values, ctx);
-        return new FieldDiff(label, values, winnerColumn, cellStates, conflictAll, children, resolutions, checkErrors);
+        var links = LinkFacts(shapes, values, ctx);
+        return new FieldDiff(
+            label, values, winnerColumn, cellStates, conflictAll, children, links.Resolutions, links.CheckErrors);
     }
 
     // A table of several record classes carries the document's discriminator as a column, and a
     // column whose type varies by class reads through it.
     private static List<FieldDiff> RecordChildren(IReadOnlyList<RecordDetail> records, DiffContext ctx)
     {
-        var recordClass = records.ToDictionary(Column, r => Value(r, LoquiUnions.UnionTypeDiscriminator));
+        var recordClass = records.ToDictionary(
+            Column, r => FormRefPathBuilder.ExtractString(MemberValue(r, LoquiUnions.UnionTypeDiscriminator)));
         var memberMeta = records[0].Fields.ToDictionary(f => f.Metadata.Name, f => f.Metadata);
-        return [.. memberMeta.Values
-            .Select(member => Node(
-                member.Name,
-                // A Partial Form override's fields are excluded as if null (ADR-0016), so they fall
-                // through to the previous non-partial override with no new state.
-                records.ToDictionary(Column, r => r.IsPartialForm ? null : Value(r, member.Name)),
-                ShapeByColumn(member, recordClass),
-                absentMeansDefault: true, ctx))
-            .Where(d => d.Values.Values.Any(v => v != null))];
+        var diffs = new List<FieldDiff>();
+        foreach (var member in memberMeta.Values)
+        {
+            // A Partial Form override's fields are excluded as if null (ADR-0016), so they fall
+            // through to the previous non-partial override with no new state.
+            var values = records.ToDictionary(Column, r => r.IsPartialForm ? null : MemberValue(r, member.Name));
+            if (values.Values.All(v => v == null)) continue;
+            var shapes = recordClass.ToDictionary(kv => kv.Key, kv => DocumentNodes.Variant(member, kv.Value));
+            diffs.Add(DiffNode(member.Name, values, shapes, absentMeansDefault: true, ctx));
+        }
+        return diffs;
     }
-
-    private static object? Value(RecordDetail record, string member) =>
-        record.Fields.FirstOrDefault(f => f.Metadata.Name == member)?.Value;
 
     private static List<FieldDiff>? StructChildren(
         IReadOnlyList<FieldMetadata> members, Dictionary<string, object?> owners, DiffContext ctx)
     {
-        var discriminators = owners.ToDictionary(
-            kv => kv.Key, kv => (object?)MemberValue(kv.Value, LoquiUnions.UnionTypeDiscriminator));
         var children = new List<FieldDiff>();
         foreach (var member in members)
         {
             var values = owners.ToDictionary(kv => kv.Key, kv => (object?)MemberValue(kv.Value, member.Name));
             if (values.Values.All(v => v == null)) continue;
-            children.Add(Node(member.Name, values, ShapeByColumn(member, discriminators), absentMeansDefault: true, ctx));
+            var shapes = owners.ToDictionary(
+                kv => kv.Key, kv => DocumentNodes.VariantFor(member, kv.Value as JsonElement?));
+            children.Add(DiffNode(member.Name, values, shapes, absentMeansDefault: true, ctx));
         }
         return children.Count > 0 ? children : null;
     }
@@ -193,7 +196,7 @@ public sealed class ConflictClassifier(ILogger<ConflictClassifier>? logger = nul
         if (array.KeyMembers != null) union.Sort((a, b) => a.CompareTo(b));
 
         var shapes = values.Keys.ToDictionary(column => column, _ => element);
-        return [.. union.Select(key => Node(
+        return [.. union.Select(key => DiffNode(
             key.Text,
             values.Keys.ToDictionary(
                 column => column,
@@ -201,21 +204,10 @@ public sealed class ConflictClassifier(ILogger<ConflictClassifier>? logger = nul
             shapes, absentMeansDefault: false, ctx))];
     }
 
-    // The shape a member has in one column: its own, or the variant that column's discriminator
-    // names, since a union member's leaf can differ across columns.
-    private static Dictionary<string, FieldMetadata> ShapeByColumn(
-        FieldMetadata member, Dictionary<string, object?> discriminators) =>
-        discriminators.ToDictionary(kv => kv.Key, kv =>
-            member.Variants is { } variants
-            && FormRefPathBuilder.ExtractString(kv.Value) is { } leaf
-            && variants.TryGetValue(leaf, out var variant)
-                ? variant
-                : member);
-
     // ADR-0031: Resolutions are a scalar formKey node's alone, never aggregated up from Children, so
     // a dangling sibling can't hide a live hyperlink beside it. A check error is the node's whole
     // subtree's.
-    private static (Dictionary<string, FormKeyResolution>?, Dictionary<string, string>?) Links(
+    private static (Dictionary<string, FormKeyResolution>? Resolutions, Dictionary<string, string>? CheckErrors) LinkFacts(
         Dictionary<string, FieldMetadata> shapes, Dictionary<string, object?> values, DiffContext ctx)
     {
         if (ctx.ResolveFormKey == null) return (null, null);
@@ -224,6 +216,9 @@ public sealed class ConflictClassifier(ILogger<ConflictClassifier>? logger = nul
         var checkErrors = new Dictionary<string, string>();
         foreach (var (column, value) in values)
         {
+            // A Partial Form override asserts nothing about the fields it omits (ADR-0016), so its
+            // absent value is not an unset link to report.
+            if (ctx.PartialFormColumns.Contains(column)) continue;
             var meta = shapes[column];
             if (CheckErrorBuilder.Build(meta, value as JsonElement?, ctx.ResolveFormKey, ctx.Release) is { } error)
                 checkErrors[column] = error;
@@ -238,6 +233,9 @@ public sealed class ConflictClassifier(ILogger<ConflictClassifier>? logger = nul
     // xEdit's wbArrayS keyed by the element itself: a pure-link array's order carries no meaning, so
     // two spellings of one set are one value. Read off the element type at every depth.
     private static bool ComparesUnordered(FieldMetadata meta) => meta.ElementType?.Type == "formKey";
+
+    private static object? MemberValue(RecordDetail record, string member) =>
+        record.Fields.FirstOrDefault(f => f.Metadata.Name == member)?.Value;
 
     private static JsonElement? MemberValue(object? owner, string member) =>
         owner is JsonElement { ValueKind: JsonValueKind.Object } obj

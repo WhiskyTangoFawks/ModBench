@@ -116,6 +116,20 @@ public class ArrayChildDiffTests
         Assert.Equal(ConflictThis.Override, slot.CellStates["B.esp"]);
     }
 
+    [Fact]
+    public void UnsortedArray_TrailingZeroElementInOneColumn_IsNotReadAsTheOtherColumnsAbsence()
+    {
+        var meta = new FieldMetadata("Items", "array", true, [], [],
+            ElementType: new FieldMetadata("", "int", false, [], []));
+        var shorter = JsonSerializer.Deserialize<JsonElement>("[1,2]");
+        var longer = JsonSerializer.Deserialize<JsonElement>("[1,2,0]");
+
+        var result = Classify([MakeRecord("A.esp", 0, false, meta, shorter), MakeRecord("B.esp", 1, true, meta, longer)]);
+
+        var third = result.Diffs.First(d => d.FieldName == "Items").Children![2];
+        Assert.Equal(ConflictThis.Override, third.CellStates["B.esp"]);
+    }
+
     // ── Unsorted array tests ─────────────────────────────────────────────────
 
     [Fact]

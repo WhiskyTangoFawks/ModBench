@@ -1080,6 +1080,26 @@ public class ConflictClassifierTests
         Assert.Null(children.First(c => c.FieldName == "Rank").CheckErrors);
     }
 
+    // ADR-0016: a Partial Form override's own fields are excluded as if absent, and an exclusion is
+    // not the record saying the link is unset, so its column reports no check error of its own.
+    [Fact]
+    public void Classify_PartialFormColumn_ReportsNoUnsetLinkCheckError()
+    {
+        var meta = new FieldMetadata("Race", "formKey", false, ["race"], []);
+        var link = JsonSerializer.Deserialize<JsonElement>("\"000AAA:Test.esp\"");
+        var master = new RecordDetail("000001:Test.esp", "A.esp", 0, false, null,
+            [new FieldValue(meta, link)], "Data");
+        var partial = new RecordDetail("000001:Test.esp", "B.esp", 1, true, null,
+            [new FieldValue(meta, link)], "Data", IsPartialForm: true);
+
+        static MEditService.Core.Records.RecordLookupEntry? Resolve(string fk) =>
+            new MEditService.Core.Records.RecordLookupEntry("race", "GoodRace");
+
+        var diff = Assert.Single(Classifier.Classify([master, partial], NoMasters, GameRelease.Fallout4, Resolve).Diffs);
+
+        Assert.Null(diff.CheckErrors);
+    }
+
     [Fact]
     public void Classify_NoResolverPassed_CheckErrorsStayNull()
     {
