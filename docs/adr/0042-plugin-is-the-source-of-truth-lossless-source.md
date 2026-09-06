@@ -168,12 +168,21 @@ files is the safety net, and every omission, however well proven, is a hole in i
 sorting are *view-layer* concerns: if header counters, timestamps or Creation-Kit-shuffled lists
 make a diff noisy, the diff view or the editor hides or sorts them at render time.
 
-**4. Order is a property of the parent's collection, not of each child.** Every folder-split list
-(`Quest.{DialogTopics,DialogBranches,Scenes}`, Cell/Worldspace block children)
-carries its order as an **ordered child list in the parent's own document**; each child file or
-directory is named by identity alone. A delete is one file deletion plus one line; an insert is one
-file plus one line; a reorder is a pure parent-document diff. The rename cascade is extinct at the
-root, rather than mitigated.
+**4. A container's children live inline in the container's document, in Mutagen's list order.**
+Every container member that holds child major records is an embed customization
+(`Serialization/EmbedCustomizations.cs`): a cell's placed references, landscape and navmeshes, a
+worldspace's top cell, a quest's topics, branches and scenes, and a topic's responses, transitively —
+the quest's document holds its topics and each topic holds its responses. Order is the array's
+order and nothing else carries it; a child has no file, no directory and no carrier entry. An edit,
+insert, delete or reorder of a child is a hunk in one file. A quest is therefore a flat file in its
+group folder, like any record with no child of its own on disk.
+
+**Order is a property of the parent's collection for the lists that remain folder-split**, which are
+the flat groups and the block levels (Cell and Worldspace block children). Each such list carries
+its order as an **ordered child list in the parent's own document**; each child file or directory
+is named by identity alone. A delete is one file deletion plus one line; an insert is one file plus
+one line; a reorder is a pure parent-document diff. The rename cascade is extinct at the root,
+rather than mitigated.
 
 The superseded scheme was the serialization library's `[N] ` filename numbering, which denormalized
 parent data onto child names — which is exactly why a single-element change rewrote every later
@@ -182,9 +191,9 @@ panel, and unstaged `git status` cannot pair a delete with an untracked add to c
 
 **The carrier follows the parent, and there are two of them** (`Source/SourceChildOrder.cs`): a
 group's records are carried by that folder's own `GroupRecordData.json` — *minted by us* for the flat
-groups the writer makes none for, which is most of them — and a record's own member collection by the
-owning record's `RecordData.json`, keyed by member name, because a `MajorRecordList` folder has no
-document of its own. Both were verified against the pinned reader rather than assumed, including that
+groups the writer makes none for, which is most of them — and a worldspace's blocks by the
+worldspace's own `RecordData.json`, keyed by member name, because a block folder has no document of
+its own. Both were verified against the pinned reader rather than assumed, including that
 a minted `GroupRecordData.json` in a folder whose children are `.json` *files* is not mistaken for one
 of those records. **Identity in the list is the FormKey, never the file name**, so an EditorID edit
 (a rename) never touches a parent's ordered list, and the walk that builds these lists is
@@ -217,9 +226,8 @@ back is the author's to put right (maintainer ruling), the same refusal posture 
 The superseded numbering scheme had the same limit in the same place — a hand-deleted file left a
 numbering gap the compile gate refused — so this is a faithful port of the old limit, not a new one.
 
-The *embeds* — a cell's and a worldspace's children, and a dialog topic's responses, inline in the
-parent's document in Mutagen's own list order — are excluded from the above precisely because they
-have no folder to order.
+The *embeds* — every container's child records, inline in the parent's document in Mutagen's own
+list order — are excluded from the above precisely because they have no folder to order.
 
 **5. Format identity is not stamped; compile failure is the uniform signal.** Nothing is written
 at Track and nothing is compared at load. Compatibility is observed, not predicted: a

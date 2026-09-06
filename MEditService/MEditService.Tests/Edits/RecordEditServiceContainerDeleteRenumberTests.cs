@@ -257,56 +257,13 @@ public sealed class RecordEditServiceContainerDeleteRenumberTests : IDisposable
             Assert.True(deleted.Applied, deleted.Message);
         }
 
+        // The codec writes nothing for an emptied list, so the slot itself is gone from the document.
         var questFile = _fixture.SourceFileContaining(ContainerModFixture.QuestEditorId);
-        Assert.DoesNotContain(SourceChildOrder.OrderMember, File.ReadAllText(questFile), StringComparison.Ordinal);
+        Assert.DoesNotContain($"\"{nameof(Quest.DialogTopics)}\"", File.ReadAllText(questFile), StringComparison.Ordinal);
 
         var compileResult = new PluginCompileService(
                 _fixture.Mirror, new PluginWriter(NullLogger<PluginWriter>.Instance), NullLogger<PluginCompileService>.Instance)
             .Compile(_fixture.Plugin, new CompileSource.WorkingTree());
         Assert.True(compileResult.Succeeded, compileResult.RefusalReason);
     }
-
-    [Fact]
-    public void RenumberingAMidListFolderSplitChild_RenormalizesSurvivingSiblingsToContiguousSlots_AndCompiles()
-    {
-        var dialogTopicsDirectory = Path.GetDirectoryName(_fixture.SourceFileContaining(ContainerModFixture.DialogTopicEditorId))!;
-        Assert.Equal("DialogTopics", Path.GetFileName(dialogTopicsDirectory));
-
-        var result = EditService().RenumberRecord(_fixture.Plugin, _fixture.DialogTopic2.ToString());
-        Assert.True(result.Applied, result.Message);
-
-        // The quest's own document is what carries its DialogTopics' order now — not the child
-        // directory names, which carry identity and nothing else.
-        var questDirectory = Path.GetDirectoryName(dialogTopicsDirectory)!;
-        var order = SourceChildOrder.ListAt(
-            SourceChildOrder.CarrierFor(questDirectory, parentIsRecord: true), "DialogTopics");
-
-        Assert.Equal(3, order.Count);
-        // Every sibling stays where it was, and the renumbered record holds its own middle slot under its
-        // new FormKey rather than being appended past its siblings.
-        Assert.Equal(_fixture.DialogTopic.ToString(), order[0]);
-        Assert.Equal(result.NewFormKey, order[1]);
-        Assert.Equal(_fixture.DialogTopic3.ToString(), order[2]);
-
-        // And the file names themselves carry no position at all.
-        var names = Directory.EnumerateFiles(dialogTopicsDirectory).Select(Path.GetFileName).ToList();
-        Assert.Equal(3, names.Count);
-        Assert.All(names, n => Assert.DoesNotContain("[", n!, StringComparison.Ordinal));
-
-        // The promise: this compiles, and the compiled binary's DialogTopics are in exactly the
-        // order the quest's document records.
-        var compileResult = new PluginCompileService(
-                _fixture.Mirror, new PluginWriter(NullLogger<PluginWriter>.Instance), NullLogger<PluginCompileService>.Instance)
-            .Compile(_fixture.Plugin, new CompileSource.WorkingTree());
-        Assert.True(compileResult.Succeeded, compileResult.RefusalReason);
-
-        var pluginPath = Path.Combine(_fixture.ModFolder, ContainerModFixture.PluginName);
-        using var overlay = ModFactory.ImportGetter(
-            new ModPath(ModKey.FromFileName(ContainerModFixture.PluginName), pluginPath), GameRelease.Fallout4);
-        var quest = ((IFallout4ModGetter)overlay).Quests.Single(q => q.FormKey == _fixture.Quest);
-        Assert.Equal(
-            [ContainerModFixture.DialogTopicEditorId, ContainerModFixture.DialogTopic2EditorId, ContainerModFixture.DialogTopic3EditorId],
-            quest.DialogTopics.Select(t => t.EditorID!).ToArray());
-    }
-
 }

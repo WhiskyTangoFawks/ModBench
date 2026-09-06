@@ -581,10 +581,43 @@ public class FormReferencesTests
 
         using var repo = IndexOnly(fixture, "SceneFragmentScript.esp");
 
-        var row = Assert.Single(ReferencesTo(repo, targetFormKey));
-        Assert.Equal(sceneFormKey.ToString(), row.Source);
+        // The scene's own row: it is inline in its quest's document, and its links are its own.
+        var row = Assert.Single(ReferencesTo(repo, targetFormKey), r => r.Source == sceneFormKey.ToString());
         Assert.Equal("VirtualMachineAdapter.ScriptFragments.Script.Properties[0].Object", row.FieldPath);
         Assert.Equal("scen", row.RecordType);
+    }
+
+    // The container's document carries its embedded children, so the quest also holds the scene's link
+    // at the scene's path, as a cell holds its Landscape's. Held for the user's ruling; pinned here.
+    [Fact]
+    public void Index_AQuest_CarriesItsInlineScenesScriptReference_AsItsOwn()
+    {
+        FormKey targetFormKey = default;
+        FormKey questFormKey = default;
+
+        using var fixture = new PluginFixtureBuilder("form-refs-quest-carries-scene")
+            .WithPlugin("QuestCarriesScene.esp", mod =>
+            {
+                targetFormKey = mod.Npcs.AddNew("SceneFragmentTarget").FormKey;
+                var quest = mod.Quests.AddNew("SceneOwnerQuest");
+                questFormKey = quest.FormKey;
+                var scene = new Scene(mod) { EditorID = "FragmentScene" };
+                scene.VirtualMachineAdapter = new SceneAdapter
+                {
+                    ScriptFragments = new SceneScriptFragments
+                    {
+                        Script = ScriptWithObjectProperty("SceneScript", "TargetRef", targetFormKey),
+                    },
+                };
+                quest.Scenes.Add(scene);
+            })
+            .Build();
+
+        using var repo = IndexOnly(fixture, "QuestCarriesScene.esp");
+
+        var row = Assert.Single(ReferencesTo(repo, targetFormKey), r => r.Source == questFormKey.ToString());
+        Assert.Equal("Scenes[0].VirtualMachineAdapter.ScriptFragments.Script.Properties[0].Object", row.FieldPath);
+        Assert.Equal("qust", row.RecordType);
     }
 
     [Fact]

@@ -82,7 +82,7 @@ internal static class SourceChildOrder
     }
 
     /// <summary>The document carrying a folder-split collection's order: the owning record's
-    /// <c>RecordData.json</c> for a member collection, the level's own <c>GroupRecordData.json</c> for
+    /// <c>RecordData.json</c> for a worldspace's blocks, the level's own <c>GroupRecordData.json</c> for
     /// a group or block.</summary>
     internal static string CarrierFor(string parentDirectory, bool parentIsRecord) =>
         Path.Combine(parentDirectory, parentIsRecord ? SourceUnitResolver.RecordDataFileName : SourceUnitResolver.GroupRecordDataFileName);
@@ -406,9 +406,9 @@ internal static class SourceChildOrder
         );
     }
 
-    // A member folder such as a Quest's DialogTopics exists only when parent and children are both major
-    // records; where a block is on either side, children sit directly in the parent's directory. The
-    // carrier follows the parent.
+    // Every folder-split list below a group is a block level or the cells under one: a block is on one
+    // side or the other, so children sit directly in the parent's directory. The carrier follows the
+    // parent.
     private static IEnumerable<OrderedCollection> Walk(string parentDirectory, object parent, bool parentIsRecord)
     {
         var carrier = CarrierFor(parentDirectory, parentIsRecord);
@@ -422,20 +422,16 @@ internal static class SourceChildOrder
             yield return new OrderedCollection(carrier, property.Name, children, rewrite);
 
             var childIsRecord = typeof(IMajorRecordGetter).IsAssignableFrom(ElementOf(property.PropertyType)!);
-            var childBase = parentIsRecord && childIsRecord
-                ? Path.Combine(parentDirectory, property.Name)
-                : parentDirectory;
-
             foreach (var child in children)
             {
-                foreach (var nested in Walk(Path.Combine(childBase, LeafOf(child)), child, childIsRecord))
+                foreach (var nested in Walk(Path.Combine(parentDirectory, LeafOf(child)), child, childIsRecord))
                     yield return nested;
             }
         }
     }
 
-    // Embedded lists are excluded: an inlined list has no folder to order, so carrying it would put
-    // a second copy of the order beside the list itself.
+    // Embedded lists are excluded: an inlined list has no folder to order, so a carrier would be a
+    // second copy of it. What remains is blocks, sub-blocks and the cells under them.
     private static IEnumerable<PropertyInfo> FolderSplitProperties(Type type)
     {
         var parentType = ContainerChildFields.NormalizedTypeName(type);

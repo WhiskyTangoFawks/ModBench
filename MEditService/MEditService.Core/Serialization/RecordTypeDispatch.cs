@@ -13,11 +13,11 @@ internal sealed class RecordTypeDispatch
 {
     private static readonly ConcurrentDictionary<GameCategory, RecordTypeDispatch> Models = new();
 
-    // Named explicitly, not inferred: inference would silently cover a fourth type the day Mutagen's
-    // generator picks a directory for one. Valued by group folder because reflection cannot supply
-    // Cell's (Cells holds CellBlock, not a major record).
+    // Named explicitly, not inferred: inference would cover a third type the day Mutagen's generator
+    // picks a directory for one. Valued by group folder because reflection cannot supply Cell's. A
+    // quest is flat: every child slot is embedded.
     private static readonly Dictionary<string, string> DirectoryPerRecordFolders =
-        new(StringComparer.Ordinal) { ["Cell"] = "Cells", ["Worldspace"] = "Worldspaces", ["Quest"] = "Quests" };
+        new(StringComparer.Ordinal) { ["Cell"] = "Cells", ["Worldspace"] = "Worldspaces" };
 
     private readonly IReadOnlyDictionary<string, Type?> _byName;
     private readonly IReadOnlySet<Type> _ambiguous;
@@ -65,7 +65,7 @@ internal sealed class RecordTypeDispatch
             : null;
 
     /// <summary>A search hint, never a path: which subtree a record is somewhere inside, including
-    /// the three directory-per-record types <see cref="FolderNameFor"/> refuses. A wrong answer costs
+    /// the two directory-per-record types <see cref="FolderNameFor"/> refuses. A wrong answer costs
     /// a miss, never a wrong write.</summary>
     internal string? GroupFolderNameFor(string recordType) =>
         FolderNameFor(recordType)

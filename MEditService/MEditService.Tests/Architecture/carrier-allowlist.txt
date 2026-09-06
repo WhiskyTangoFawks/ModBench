@@ -11,6 +11,5 @@ MEditService.Core/Source/SourceChildOrder.cs: MEditChildOrder: 1
 MEditService.Core/Source/SourceChildOrder.cs: SourceChildOrder: 2
 MEditService.Core/Source/SourceChildOrder.cs: SourceChildOrderDriftException: 5
 MEditService.Core/Source/SourceFreshness.cs: SourceChildOrder: 2
-MEditService.Core/Source/SourcePlacement.cs: SourceChildOrder: 1
 MEditService.Core/Source/SourceUnitResolver.cs: SourceChildOrder: 1
 MEditService.Core/Source/TrackService.cs: SourceChildOrder: 1

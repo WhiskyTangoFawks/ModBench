@@ -2,7 +2,7 @@ using MEditService.Core.Source;
 
 namespace MEditService.Tests.Source;
 
-// Without a memo each folder-split child re-enumerated its whole subtree, 25 of Compile's 42 seconds
+// Without a memo each container's child re-enumerated its whole subtree, 25 of Compile's 42 seconds
 // on the real fixture.
 public class SourceUnitResolutionCacheTests
 {

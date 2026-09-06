@@ -36,7 +36,7 @@ public sealed class DocumentShapeParityTests
     }
 
     [Fact]
-    public async Task PerRecordCodecBytes_ForANonEmbeddedContainer_EqualTheWholeModPathsFileForIt()
+    public async Task PerRecordCodecBytes_ForAQuest_EqualTheWholeModPathsFileForIt()
     {
         var mod = NewMod();
         var quest = MakePopulatedQuest(mod);
@@ -46,7 +46,7 @@ public sealed class DocumentShapeParityTests
     }
 
     [Fact]
-    public async Task SerializeAsync_ForANonEmbeddedContainer_WritesExactlyOneFileAndNoChildFolders()
+    public async Task SerializeAsync_ForAQuest_WritesExactlyOneFileAndNoChildFolders()
     {
         var dir = Directory.CreateTempSubdirectory("medit-parity-quest-files-");
         try
@@ -122,9 +122,11 @@ public sealed class DocumentShapeParityTests
         {
             await MutagenJsonConverter.Instance.Serialize(mod, dir.FullName);
 
-            var recordDir = Assert.Single(
-                Directory.EnumerateDirectories(dir.FullName, $"*{editorId}*", SearchOption.AllDirectories));
-            var wholeModFile = Path.Combine(recordDir, "RecordData.json");
+            // A directory-per-record container's RecordData.json, or a flat record's own file.
+            var wholeModFile = Assert.Single(
+                Directory.EnumerateDirectories(dir.FullName, $"*{editorId}*", SearchOption.AllDirectories)
+                    .Select(d => Path.Combine(d, "RecordData.json"))
+                    .Concat(Directory.EnumerateFiles(dir.FullName, $"*{editorId}*.json", SearchOption.AllDirectories)));
             Assert.True(File.Exists(wholeModFile), $"Expected the whole-mod door to write {wholeModFile}.");
 
             var wholeModBytes = await File.ReadAllBytesAsync(wholeModFile);

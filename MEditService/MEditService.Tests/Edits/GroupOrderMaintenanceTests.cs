@@ -106,7 +106,7 @@ public sealed class GroupOrderMaintenanceTests : IDisposable
         }
     }
 
-    // ---- delete inside a container-nested folder-split list ----
+    // ---- delete inside a quest's embedded list ----
 
     [Fact]
     public void DeletingTheMiddleOfThreeDialogTopics_ThenCompiling_Succeeds_KeepingSurvivorsInOrder()

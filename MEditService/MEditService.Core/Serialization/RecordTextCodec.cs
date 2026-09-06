@@ -53,9 +53,9 @@ public sealed class RecordTextCodec(ILogger<RecordTextCodec> logger)
         var directory = Path.GetDirectoryName(filePath);
         var bytes = await SerializeCoreAsync(record, gameRelease, directory ?? string.Empty, cancel).ConfigureAwait(false);
 
-        // A container's RecordData.json also carries its folder-split children's order (ADR-0042
-        // decision 4). Merged before the write, never restored by a second write: that would reopen
-        // the torn-file window the temp-and-rename closes.
+        // A worldspace's RecordData.json also carries its blocks' order (ADR-0042 decision 4).
+        // Merged before the write, never restored by a second write: that would reopen the
+        // torn-file window the temp-and-rename closes.
         bytes = Source.SourceChildOrder.CarryOrderInto(bytes, filePath);
 
         // Write-then-rename: File.Create truncates before any new byte lands, so an interrupted
@@ -258,9 +258,8 @@ public sealed class RecordTextCodec(ILogger<RecordTextCodec> logger)
 
     private const string OverlaySuffix = "BinaryOverlay";
 
-    // Under FilePerRecord a container writes each non-embedded child (a Quest's topics) to its own
-    // file via StreamCreator — one real Quest created 1,057 directories. A folder-split child is
-    // its own source unit, so its bytes go nowhere.
+    // Under FilePerRecord a container writes each non-embedded child (a worldspace's blocks) to its
+    // own file via StreamCreator. A block level is its own source unit, so its bytes go nowhere.
     private sealed class DiscardChildRecordStreams : ICreateStream
     {
         internal static readonly DiscardChildRecordStreams Instance = new();

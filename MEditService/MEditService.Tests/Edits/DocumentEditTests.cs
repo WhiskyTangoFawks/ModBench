@@ -601,18 +601,4 @@ public sealed class DocumentEditTests
             JsonNode.Parse(after)![SourceChildOrder.OrderMember]!.ToJsonString());
         Assert.Equal(["EditorID: \"Ordered\" -> \"Renamed\""], ConditionEditTests.DocumentDiff(before, after));
     }
-
-    [Fact]
-    public void FolderSplitChild_IsNeverInlinedIntoItsParent()
-    {
-        var before = DocumentEdits.Serialize(_quest);
-
-        var refusal = Apply(before, "qust", SetAt(Json($$"""[{"FormKey": "000900:DocEdit.esp", "EditorID": "Topic"}]"""), Member("DialogTopics")), out var written);
-
-        // The per-record codec writes a folder-split child to its own file, never inline, so the
-        // member the patch spelled comes back absent and the write is refused as dropped.
-        Assert.Equal(RecordEditRefusal.CodecDroppedValue, refusal!.Refusal);
-        Assert.Equal("DialogTopics", refusal.Path);
-        Assert.Equal(before, written);
-    }
 }

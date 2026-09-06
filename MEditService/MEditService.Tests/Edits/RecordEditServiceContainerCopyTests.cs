@@ -14,7 +14,7 @@ public sealed class RecordEditServiceContainerCopyTests
         new(mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
 
     [Fact]
-    public void CopyRecordAsOverride_OnAQuest_Succeeds_OwnFieldsLand_NoFolderSplitChildrenCopied()
+    public void CopyRecordAsOverride_OnAQuest_Succeeds_OwnFieldsLand_ChildListsEmpty()
     {
         using var fixture = ContainerCopyFixture.Create();
 
@@ -27,11 +27,15 @@ public sealed class RecordEditServiceContainerCopyTests
         Assert.NotNull(doc);
         Assert.Equal(ContainerCopyFixture.QuestEditorId, doc!.EditorId);
 
-        // Own fields only — the DialogTopic never lands as its own file, and the destination's Quest
-        // directory carries no DialogTopics subfolder at all.
-        Assert.Null(fixture.Mirror.Index!.At(RecordRef.Effective).GetDocument(fixture.DialogTopic.ToString(), fixture.DestinationPlugin));
-        var questDirectory = Path.GetDirectoryName(fixture.DestinationSourceFileContaining(ContainerCopyFixture.QuestEditorId))!;
-        Assert.False(Directory.Exists(Path.Combine(questDirectory, "DialogTopics")));
+        // Own fields only — no child lands as a row, and the quest's own document carries no child slot.
+        var reads = fixture.Mirror.Index!.At(RecordRef.Effective);
+        Assert.Null(reads.GetDocument(fixture.DialogTopic.ToString(), fixture.DestinationPlugin));
+        Assert.Null(reads.GetDocument(fixture.Scene.ToString(), fixture.DestinationPlugin));
+        Assert.Null(reads.GetDocument(fixture.DialogBranch.ToString(), fixture.DestinationPlugin));
+        Assert.Empty(reads.GetContainerChildren(fixture.DestinationPlugin, fixture.Quest.ToString()));
+        var questText = File.ReadAllText(fixture.DestinationSourceFileContaining(ContainerCopyFixture.QuestEditorId));
+        foreach (var slot in new[] { "DialogTopics", "DialogBranches", "Scenes" })
+            Assert.DoesNotContain($"\"{slot}\"", questText, StringComparison.Ordinal);
     }
 
     // A Cell's own fields land, but its four embedded slots come back empty, not verbatim. Their

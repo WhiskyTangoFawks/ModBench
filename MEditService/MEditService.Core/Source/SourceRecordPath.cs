@@ -11,8 +11,8 @@ namespace MEditService.Core.Source;
 internal sealed record SourceRecordIdentity(string PluginFileName, string RecordType);
 
 /// <summary>The file layout for flat (single-file) records — the whole-mod door's own file-per-record
-/// convention, taken over wholesale (ADR-0041 amendment). Cell, Worldspace and Quest get a
-/// directory instead; <see cref="SourceUnitResolver"/> owns those.</summary>
+/// convention, taken over wholesale (ADR-0041 amendment). Cell and Worldspace get a directory
+/// instead; <see cref="SourceUnitResolver"/> owns those.</summary>
 internal static class SourceRecordPath
 {
     /// <summary>Plain, not dot-prefixed: the plugin's source is first-class, not hidden metadata. The
@@ -41,7 +41,7 @@ internal static class SourceRecordPath
         var folder = RecordTypeDispatch.For(gameRelease).FolderNameFor(recordType)
             ?? throw new NotSupportedException(
                 $"'{recordType}' has no flat source path under the source layout — it is a " +
-                "directory-per-record container type (Cell/Worldspace/Quest), or has no top-level " +
+                "directory-per-record container type (Cell/Worldspace), or has no top-level " +
                 "group at all, and SourceUnitResolver owns it, not this helper.");
 
         var fileName = string.IsNullOrEmpty(editorId)

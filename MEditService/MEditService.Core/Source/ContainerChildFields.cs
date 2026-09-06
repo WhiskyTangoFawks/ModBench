@@ -21,14 +21,6 @@ internal static class ContainerChildFields
     internal static IReadOnlyList<string>? EnumerateChildFieldsFor(Type recordType) =>
         ByTypeName.TryGetValue(NormalizedTypeName(recordType), out var fields) ? fields : null;
 
-    /// <summary>Whether a slot child of this type gets a directory: the writer gives one to a record
-    /// with any child slot its document does not embed, and a file to every other.</summary>
-    internal static bool HasFolderSplitChildren(Type recordType)
-    {
-        var name = NormalizedTypeName(recordType);
-        return ByTypeName.TryGetValue(name, out var fields) && fields.Any(f => !EmbeddedSlots.Contains((name, f)));
-    }
-
     private const string OverlaySuffix = "BinaryOverlay";
 
     private const string GetterPrefix = "I";
@@ -46,16 +38,16 @@ internal static class ContainerChildFields
             : name;
     }
 
-    /// <summary><see cref="Child"/> is the real object hanging off the parent, not a copy: mutating it and
-    /// reserializing the parent is how an embedded child is written without a JSON path.</summary>
-    internal readonly record struct EmbeddedChild(string SlotName, int SlotIndex, IMajorRecord Child);
+    /// <summary><see cref="Child"/> is the real object hanging off Parent, not a copy: mutating it and
+    /// reserializing the document's root is how an embedded child is written. Parent is the direct
+    /// container, which a slot replace needs.</summary>
+    internal readonly record struct EmbeddedChild(IMajorRecordGetter Parent, string SlotName, int SlotIndex, IMajorRecord Child);
 
     /// <summary>The child through Mutagen's own object model, not a JSON pointer, so existing writers
-    /// apply unchanged. Descends only through <see cref="EmbeddedSlots"/>: a folder-split child edited
-    /// here would silently miss its own file.</summary>
+    /// apply unchanged. Descends through <see cref="EmbeddedSlots"/> at every level.</summary>
     internal static EmbeddedChild? FindEmbeddedChild(IMajorRecordGetter parent, string formKey) =>
         FindEmbeddedChildSlot(parent, formKey) is { } slot
-            ? new EmbeddedChild(slot.SlotName, slot.SlotIndex, slot.Child)
+            ? new EmbeddedChild(slot.Parent, slot.SlotName, slot.SlotIndex, slot.Child)
             : null;
 
     /// <summary>Removes the child from wherever <see cref="FindEmbeddedChild"/> would find it: a list slot
@@ -72,9 +64,9 @@ internal static class ContainerChildFields
     // right object.
     private readonly record struct EmbeddedChildSlot(IMajorRecordGetter Parent, string SlotName, int SlotIndex, IMajorRecord Child);
 
-    // Descends through embedded slots more than one level: a worldspace's RecordData.json embeds its
-    // TopCell, which embeds its own placed references. Bounded to EmbeddedSlots — a folder-split child
-    // has its own file.
+    // Descends through embedded slots at every level: a worldspace embeds its TopCell, which embeds its
+    // placed references; a quest embeds its topics, which embed their responses. Bounded to
+    // EmbeddedSlots: a worldspace's blocks have directories.
     private static EmbeddedChildSlot? FindEmbeddedChildSlot(IMajorRecordGetter parent, string formKey)
     {
         var parentType = NormalizedTypeName(parent.GetType());
@@ -95,8 +87,8 @@ internal static class ContainerChildFields
     }
 
     /// <summary>The own-fields-only half of Copy as Override: xEdit's lands own-fields-only, containers
-    /// included. Built over <see cref="EnumerateChildren"/>, so a folder-split child never inlined in
-    /// the body is a no-op.</summary>
+    /// included. Built over <see cref="EnumerateChildren"/>, so a record with no child slot is a
+    /// no-op.</summary>
     internal static void ClearAllChildSlots(IMajorRecordGetter record)
     {
         var slotNames = EnumerateChildren(record).Select(c => c.SlotName).Distinct(StringComparer.Ordinal).ToList();
@@ -173,12 +165,13 @@ internal static class ContainerChildFields
     }
 
     // The slots that serialize inline into the parent's document — the runtime shadow of the
-    // embed customizations in Serialization/EmbedCustomizations.cs. A strict subset of ByTypeName:
-    // Quest children stay folder-split. Keep in step with the customizations.
+    // embed customizations in Serialization/EmbedCustomizations.cs. Every slot of ByTypeName but a
+    // worldspace's SubCells, whose blocks are directories. Keep in step with the customizations.
     internal static readonly HashSet<(string ParentType, string Slot)> EmbeddedSlots =
     [
         ("Cell", "Persistent"), ("Cell", "Temporary"), ("Cell", "Landscape"), ("Cell", "NavigationMeshes"),
         ("Worldspace", "TopCell"),
+        ("Quest", "DialogTopics"), ("Quest", "DialogBranches"), ("Quest", "Scenes"),
         ("DialogTopic", "Responses"),
     ];
 

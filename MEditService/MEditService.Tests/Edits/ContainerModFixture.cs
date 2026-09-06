@@ -69,14 +69,25 @@ public sealed class ContainerModFixture : IDisposable
     public const string Response2EditorId = "EmbedResponse2";
     public FormKey Response2 { get; }
 
-    // Two more siblings under the same Quest, so "delete/renumber a mid-list folder-split
-    // child, then compile" has an actual middle and two actual survivors to pin the GRUP order of —
-    // one DialogTopic alone cannot exercise "gap, not renumbered".
+    // Two more siblings under the same Quest, so "delete/renumber a mid-list topic, then compile"
+    // has an actual middle and two actual survivors to pin the GRUP order of — one DialogTopic
+    // alone cannot exercise "gap, not renumbered".
     public const string DialogTopic2EditorId = "EmbedTopic2";
     public FormKey DialogTopic2 { get; }
 
     public const string DialogTopic3EditorId = "EmbedTopic3";
     public FormKey DialogTopic3 { get; }
+
+    // The quest's other two child slots, one record each.
+    public const string DialogBranchEditorId = "EmbedBranch";
+    public FormKey DialogBranch { get; }
+
+    public const string SceneEditorId = "EmbedScene";
+    public FormKey Scene { get; }
+
+    // The first response's own array field, seeded with two lines so an array op on an embedded
+    // child has an order to change.
+    public static readonly byte[] ResponseLineNumbers = [1, 2];
 
     public ContainerModFixture()
     {
@@ -127,6 +138,7 @@ public sealed class ContainerModFixture : IDisposable
         var quest = new Quest(mod) { EditorID = QuestEditorId };
         var dialogTopic = new DialogTopic(mod) { EditorID = DialogTopicEditorId };
         var response = new DialogResponses(mod) { EditorID = ResponseEditorId };
+        foreach (var line in ResponseLineNumbers) response.Responses.Add(new DialogResponse { ResponseNumber = line });
         var response2 = new DialogResponses(mod) { EditorID = Response2EditorId };
         dialogTopic.Responses.Add(response);
         dialogTopic.Responses.Add(response2);
@@ -135,6 +147,10 @@ public sealed class ContainerModFixture : IDisposable
         quest.DialogTopics.Add(dialogTopic);
         quest.DialogTopics.Add(dialogTopic2);
         quest.DialogTopics.Add(dialogTopic3);
+        var dialogBranch = new DialogBranch(mod) { EditorID = DialogBranchEditorId };
+        quest.DialogBranches.Add(dialogBranch);
+        var scene = new Scene(mod) { EditorID = SceneEditorId };
+        quest.Scenes.Add(scene);
         mod.Quests.Add(quest);
 
         mod.WriteToBinary(pluginPath);
@@ -147,6 +163,7 @@ public sealed class ContainerModFixture : IDisposable
         (Quest, DialogTopic) = (quest.FormKey, dialogTopic.FormKey);
         (Response, Response2) = (response.FormKey, response2.FormKey);
         (DialogTopic2, DialogTopic3) = (dialogTopic2.FormKey, dialogTopic3.FormKey);
+        (DialogBranch, Scene) = (dialogBranch.FormKey, scene.FormKey);
 
         Mirror = new LoadOrderMirror(
             new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));

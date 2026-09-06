@@ -437,10 +437,10 @@ end.
 
 ### Quest / dialog topic children
 
-- A Quest's dialog topics/branches/scenes are folder-split in Source layout; a Dialog Topic's
-  responses are inline in the topic's own document, in Mutagen's list order. A container's document
-  carries its embedded children (ADR-0041 amendment; `ContainerChildFields`), and each child is also
-  its own extracted index row. The Plugins tree restores navigation to them as expandable tree children,
+- A Quest's dialog topics/branches/scenes are inline in the quest's own document, and a Dialog
+  Topic's responses inline in the topic's, in Mutagen's list order. A container's document carries
+  its embedded children (ADR-0041 amendment; `ContainerChildFields`), and each child is also its own
+  extracted index row. The Plugins tree restores navigation to them as expandable tree children,
   reading the same containment index the worldspace tree above reads, never a parallel source.
 - A Quest row expands to its `DialogTopics`, `DialogBranches`, then `Scenes`, in that flat order
   with no intermediate grouping node — xEdit's own GroupType-10 order

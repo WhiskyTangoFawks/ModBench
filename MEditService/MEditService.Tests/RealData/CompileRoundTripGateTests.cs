@@ -77,36 +77,65 @@ public sealed class CompileRoundTripGateTests(CompileRoundTripGateFixture fixtur
             f, @"^Worldspaces/[^/]+/(\[\d+\] )?-?\d+, -?\d+/(\[\d+\] )?-?\d+, -?\d+/[^/]+/RecordData\.json$"));
     }
 
-    // Order is the document's list order: a topic's Responses array reads the binary's order back,
-    // and a response has no file, no directory and no carrier entry of its own anywhere in the tree.
+    // Order is the document's list order, transitively: a quest's document holds its topics, branches
+    // and scenes in the binary's order, each topic its responses, and none has a file, a directory or a
+    // carrier entry anywhere.
     [Fact]
-    public void Track_OfTheRealFixture_WritesEveryResponseInlineInItsTopicsDocument_InTheBinarysOrder()
+    public void Track_OfTheRealFixture_WritesEveryQuestDescendantInlineInItsQuestsDocument_InTheBinarysOrder()
     {
         using var original = ModFactory.ImportGetter(
             new ModPath(ModKey.FromFileName(CutDownPluginFixture.PluginFileName), CutDownPluginFixture.PluginPath),
             GameRelease.Fallout4);
-        var topics = ((IFallout4ModGetter)original).Quests
-            .SelectMany(q => q.DialogTopics)
-            .Where(t => t.Responses.Count > 0)
+        var quests = ((IFallout4ModGetter)original).Quests
+            .Where(q => q.DialogTopics.Count + q.DialogBranches.Count + q.Scenes.Count > 0)
             .ToList();
-        Assert.Contains(topics, t => t.Responses.Count >= 2);
+        Assert.Contains(quests, q => q.DialogTopics.Count >= 2);
+        Assert.Contains(quests, q => q.Scenes.Count >= 1);
 
         var documents = Directory.EnumerateFiles(fixture.SourceRoot, "*.json", SearchOption.AllDirectories).ToList();
-        Assert.DoesNotContain(
-            Directory.EnumerateDirectories(fixture.SourceRoot, "*", SearchOption.AllDirectories),
-            d => Path.GetFileName(d) == nameof(DialogTopic.Responses));
-
-        foreach (var topic in topics)
+        foreach (var slot in new[] { nameof(Quest.DialogTopics), nameof(Quest.DialogBranches), nameof(Quest.Scenes), nameof(DialogTopic.Responses) })
         {
-            var responses = topic.Responses.Select(r => r.FormKey.ToString()).ToList();
-            foreach (var response in responses)
-                Assert.DoesNotContain(documents, f => SourceUnitResolver.NameCarriesFormKey(Path.GetFileName(f), response));
+            Assert.DoesNotContain(
+                Directory.EnumerateDirectories(fixture.SourceRoot, "*", SearchOption.AllDirectories),
+                d => Path.GetFileName(d) == slot);
+        }
 
-            var root = JsonNode.Parse(File.ReadAllText(SourceDocumentOf(documents, topic.FormKey.ToString())))!.AsObject();
+        foreach (var quest in quests)
+        {
+            var root = JsonNode.Parse(File.ReadAllText(SourceDocumentOf(documents, quest.FormKey.ToString())))!.AsObject();
             Assert.Null(root[SourceChildOrder.OrderMember]);
-            Assert.Equal(
-                responses,
-                root[nameof(DialogTopic.Responses)]!.AsArray().Select(r => r![nameof(IMajorRecordGetter.FormKey)]!.GetValue<string>()));
+
+            foreach (var (slot, children) in new (string, IEnumerable<IMajorRecordGetter>)[]
+                     {
+                         (nameof(Quest.DialogTopics), quest.DialogTopics),
+                         (nameof(Quest.DialogBranches), quest.DialogBranches),
+                         (nameof(Quest.Scenes), quest.Scenes),
+                     })
+            {
+                var expected = children.Select(c => c.FormKey.ToString()).ToList();
+                foreach (var child in expected)
+                    Assert.DoesNotContain(documents, f => SourceUnitResolver.NameCarriesFormKey(Path.GetFileName(f), child));
+                if (expected.Count == 0)
+                {
+                    Assert.Null(root[slot]);
+                    continue;
+                }
+                Assert.Equal(
+                    expected,
+                    root[slot]!.AsArray().Select(c => c![nameof(IMajorRecordGetter.FormKey)]!.GetValue<string>()));
+            }
+
+            foreach (var topic in quest.DialogTopics)
+            {
+                foreach (var response in topic.Responses)
+                    Assert.DoesNotContain(documents, f => SourceUnitResolver.NameCarriesFormKey(Path.GetFileName(f), response.FormKey.ToString()));
+                var inline = root[nameof(Quest.DialogTopics)]!.AsArray()
+                    .Single(t => t![nameof(IMajorRecordGetter.FormKey)]!.GetValue<string>() == topic.FormKey.ToString())!;
+                Assert.Null(inline[SourceChildOrder.OrderMember]);
+                Assert.Equal(
+                    topic.Responses.Select(r => r.FormKey.ToString()),
+                    inline[nameof(DialogTopic.Responses)]?.AsArray().Select(r => r![nameof(IMajorRecordGetter.FormKey)]!.GetValue<string>()) ?? []);
+            }
         }
     }
 
