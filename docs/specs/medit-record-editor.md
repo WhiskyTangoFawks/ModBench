@@ -672,7 +672,7 @@ gesture — Sim Settlements 2 is a real-world example on Fallout 4.
 
 - **Type-gated, not a bare bit test.** Bit 14 is reused for unrelated meanings on record types that
   never declare a `'Partial Form'` flag at all, so a record's own concrete type must be one of the
-  four container types (Cell/Worldspace/Quest/DialogTopic — `ContainerChildFields`'s own table)
+  four container types (Cell/Worldspace/Quest/DialogTopic — the members `ContainerMembers` derives)
   before the bit means anything. A container type is the domain-correct gate regardless: Partial
   Form exists specifically so a container can carry children without asserting its own fields, so
   only a type with children to carry can ever need it.
@@ -714,8 +714,8 @@ gesture — Sim Settlements 2 is a real-world example on Fallout 4.
   patched by `DocumentEdit` onto the document itself. Flips bit 14 only (a byte-diff assertion
   checks no other bit or field moves) and is exempt from `PartialFormFieldReadOnly` so clearing
   is reachable while the flag is still set. **The generic-container gate, not a bare reflection
-  check:** the annotation names exactly the container types the `PartialFormFlag`/
-  `ContainerChildFields` type table admits (a test holds the two equal; Mutagen's own static
+  check:** the annotation names exactly the container types `PartialFormFlag`/
+  `ContainerChildFields` derive from the game assembly (a test holds the two equal; Mutagen's own static
   `IsPartialFormable` property doesn't cover every game's container types — FO4's own `Cell` is
   one of the gaps — so the write path can't rely on it either). A `PluginHeader` checkbox
   (rendered only when `CompareOverride.IsPartialFormable`) is the UI trigger, posting

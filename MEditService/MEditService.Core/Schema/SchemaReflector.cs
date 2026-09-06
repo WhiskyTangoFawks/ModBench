@@ -56,6 +56,17 @@ public sealed class SchemaReflector
 
     private static Assembly? ProbeAssembly(GameRelease release, GameCategory category, ILogger logger)
     {
+        if (GameModule(category) is { } assembly) return assembly;
+
+        logger.LogWarning(
+            "Game release {Release} is unavailable: Mutagen assembly {AssemblyName} is not referenced in this build",
+            release, AssemblyNameFor(category));
+        return null;
+    }
+
+    /// <summary>The game module assembly, or null when this build does not reference it.</summary>
+    internal static Assembly? GameModule(GameCategory category)
+    {
         var assemblyName = AssemblyNameFor(category);
         var loaded = AppDomain.CurrentDomain.GetAssemblies()
             .FirstOrDefault(a => a.GetName().Name == assemblyName);
@@ -65,11 +76,8 @@ public sealed class SchemaReflector
         {
             return Assembly.Load(assemblyName);
         }
-        catch (FileNotFoundException ex)
+        catch (FileNotFoundException)
         {
-            logger.LogWarning(ex,
-                "Game release {Release} is unavailable: Mutagen assembly {AssemblyName} is not referenced in this build",
-                release, assemblyName);
             return null;
         }
     }
