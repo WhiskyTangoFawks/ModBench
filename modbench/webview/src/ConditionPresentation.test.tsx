@@ -8,13 +8,10 @@ vi.mock('./vscode', () => ({ vscode: { postMessage: vi.fn() } }));
 import { RecordPanel } from './RecordPanel';
 import type { FieldMetadata } from './types';
 import { vscode } from './vscode';
-import { fieldMeta, panelClient, postedEnvelopes as sharedPostedEnvelopes } from './test/fixtures';
+import { fieldMeta, leafMeta as leaf, panelClient, postedEnvelopes as sharedPostedEnvelopes } from './test/fixtures';
 
 // The metadata below is the Fallout 4 schema's own shape, trimmed to the enum members these
 // cases name and never restructured; `siblingsInUse` rows come from Condition.GetParameterTypes.
-
-const leaf = (name: string, type: string, extra: Partial<FieldMetadata> = {}): FieldMetadata =>
-  fieldMeta({ name, type: type as FieldMetadata['type'], ...extra });
 
 const RUN_ON_VALUES = ['Subject', 'Target', 'Reference', 'CombatTarget'];
 

@@ -44,16 +44,16 @@ export interface PanelOpts {
 export function panelClient(compare: () => unknown, opts: PanelOpts = {}): RecordPanelClient {
   const plugins = opts.plugins ?? [];
   // ADR-0036: compound keying, so a fake keyed by bare filename cannot pass a same-filename case.
-  const keyed = (p: (plugin: FixturePlugin) => boolean) =>
+  const columnsWhere = (p: (plugin: FixturePlugin) => boolean) =>
     new Set(plugins.filter(p).map(x => columnKey(x.name, x.origin ?? null)));
   return {
     load: opts.load ?? vi.fn().mockImplementation(() => Promise.resolve({
       ok: true,
       result: compare(),
-      immutableSet: keyed(p => p.isImmutable === true),
+      immutableSet: columnsWhere(p => p.isImmutable === true),
       // ADR-0035/ADR-0041: an unstated plugin is in the load order, and untracked.
-      notInLoadOrderSet: keyed(p => p.inLoadOrder === false),
-      trackedSet: keyed(p => p.isTracked === true),
+      notInLoadOrderSet: columnsWhere(p => p.inLoadOrder === false),
+      trackedSet: columnsWhere(p => p.isTracked === true),
       conflictsComputed: opts.conflictsComputed ?? true,
     } as unknown as LoadResult)),
   };
@@ -69,6 +69,11 @@ export function postedEnvelopes(postMessage: unknown): RecordEditEnvelope[] {
 
 export const lastPostedEnvelope = (postMessage: unknown): RecordEditEnvelope | undefined =>
   postedEnvelopes(postMessage).at(-1);
+
+/** A leaf whose `type` arrives as a plain string, the shape a schema fixture reads most naturally. */
+export const leafMeta = (
+  name: string, type: FieldMetadata['type'], extra: Partial<FieldMetadata> = {},
+): FieldMetadata => fieldMeta({ name, type, ...extra });
 
 export const member = (name: string): PathHop => ({ kind: 'member', name });
 export const at = (index: number): PathHop => ({ kind: 'index', index });

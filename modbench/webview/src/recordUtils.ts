@@ -83,16 +83,18 @@ import type {
   StringValueContext,
 } from './messages';
 
-// Only Move Up is gated: the row's index spans every column, so this column's own length is not
-// known here, and a move off the far end is the backend's to refuse by name.
+// Only the near end is bounded: the row's index spans every column, so this column's own length
+// is not known here, and a move off the far end is the backend's to refuse by name.
 export function arrayElementContext(
   formKey: string, plugin: string, origin: string, path: PathHop[],
 ): ArrayElementContext {
   const lastSeg = path.at(-1);
+  const movable = isMovableElementHop(lastSeg);
   const index = lastSeg?.kind === 'index' ? lastSeg.index : -1;
   return {
     webviewSection: 'arrayElement', formKey, plugin, origin, path,
-    canMoveUp: isMovableElementHop(lastSeg) && index > 0,
+    canMoveUp: movable && index > 0,
+    canMoveDown: movable,
     preventDefaultContextMenuItems: true,
   };
 }

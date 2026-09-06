@@ -11,7 +11,7 @@ import { mono, fg, headerCell, getConflictBg, DIMMED_OPACITY } from './gridStyle
 import { collapsedSummaries } from './presentation';
 import { idleMembers } from './siblingsInUse';
 import type {
-  ColumnKey, CompareResult, ConflictThis, FieldDiff, FieldMetadata, RecordEditEnvelope,
+  ColumnKey, CompareOverride, CompareResult, ConflictThis, FieldDiff, FieldMetadata, RecordEditEnvelope,
 } from './types';
 import { columnKey } from './types';
 import { vscode } from './vscode';
@@ -25,6 +25,19 @@ const mEditWindow = window as Window & typeof globalThis & {
 };
 
 const getHeaderBg = (c: ConflictThis | undefined): string | undefined => getConflictBg(c, 0.35);
+
+// ADR-0036: one sweep over the response's own overrides, keyed the way the backend keys its
+// dictionaries, so every whole-grid column set is minted the same way.
+function columnKeysWhere(
+  overrides: CompareOverride[] | undefined, holds: (o: CompareOverride, key: ColumnKey) => boolean,
+): Set<ColumnKey> {
+  const keys = new Set<ColumnKey>();
+  for (const o of overrides ?? []) {
+    const key = columnKey(o.plugin, o.origin);
+    if (holds(o, key)) keys.add(key);
+  }
+  return keys;
+}
 
 // ── RecordPanel ───────────────────────────────────────────────────────────────
 
@@ -57,27 +70,15 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
   // ADR-0041: one definition of "this column can be written", computed once for the whole grid.
   // Derived rather than asked of the backend per cell — a per-cell round trip would make
   // editability lag the grid it decorates.
-  const editableColumns = useMemo(() => {
-    const writable = new Set<ColumnKey>();
-    for (const o of result?.overrides ?? []) {
-      const key = columnKey(o.plugin, o.origin);
-      if (!immutableSet.has(key) && !notInLoadOrderSet.has(key) && trackedSet.has(key) && !o.isPartialForm) {
-        writable.add(key);
-      }
-    }
-    return writable;
-  }, [result, immutableSet, notInLoadOrderSet, trackedSet]);
+  const editableColumns = useMemo(() => columnKeysWhere(result?.overrides, (o, key) =>
+    !immutableSet.has(key) && !notInLoadOrderSet.has(key) && trackedSet.has(key) && !o.isPartialForm),
+    [result, immutableSet, notInLoadOrderSet, trackedSet]);
 
   // ADR-0035/ADR-0036: one definition of "this column renders at reduced weight" — a copy the load
   // order does not name, or a Partial Form record — so the header and the cells cannot disagree.
-  const dimmedColumns = useMemo(() => {
-    const dimmed = new Set<ColumnKey>();
-    for (const o of result?.overrides ?? []) {
-      const key = columnKey(o.plugin, o.origin);
-      if (notInLoadOrderSet.has(key) || o.isPartialForm) dimmed.add(key);
-    }
-    return dimmed;
-  }, [result, notInLoadOrderSet]);
+  const dimmedColumns = useMemo(() => columnKeysWhere(result?.overrides, (o, key) =>
+    notInLoadOrderSet.has(key) || o.isPartialForm),
+    [result, notInLoadOrderSet]);
 
   // ADR-0036: the column key alone is a rendering key; the override carries the compound identity
   // the write path needs and the values a wire path resolves against.
@@ -374,7 +375,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
                   const inLoadOrder = !notInLoadOrderSet.has(col.key);
                   return (
                     <th
-                      key={`disk:${col.key}`}
+                      key={col.key}
                       style={{
                         ...headerCell, textAlign: 'left', minWidth: isCollapsed ? '48px' : '200px',
                         backgroundColor: getHeaderBg(col.override.conflictThis),

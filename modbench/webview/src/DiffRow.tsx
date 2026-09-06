@@ -200,7 +200,7 @@ export function DiffRow({
   // This row paints its own node's conflict state, not a record-wide value. An expanded row with
   // children defers to its children's tints — painting both would duplicate the signal — and
   // shows the subtree's aggregate only while collapsed.
-  const rowConflictAll = hasChildren && isExpanded ? undefined : ROW_BG[diff.conflictAll];
+  const rowBg = hasChildren && isExpanded ? undefined : ROW_BG[diff.conflictAll];
 
   // A flags row is collapsible like a struct row, though its "children" are the checkbox lines
   // inside the cell, not sub-rows. It starts collapsed, sharing struct rows' default exactly.
@@ -212,7 +212,7 @@ export function DiffRow({
   const rowIsStructural = Object.values(diff.values).every(v => v == null);
 
   return (
-    <tr style={{ backgroundColor: rowConflictAll, ...(isRowFocused ? focusedRowStyle : undefined) }}>
+    <tr style={{ backgroundColor: rowBg, ...(isRowFocused ? focusedRowStyle : undefined) }}>
       {/* ADR-0034: double-clicking the label column expands/collapses the node, the same action
           the toggle button performs. For a row with no children the flip lands in
           expandedStructs, an entry nothing reads. */}
@@ -242,7 +242,7 @@ export function DiffRow({
           opacity: dimmedColumns.has(key) ? DIMMED_OPACITY : undefined,
         };
         if (collapsedColumns.has(key)) {
-          return <td key={`disk:${key}`} style={cellStyle} />;
+          return <td key={key} style={cellStyle} />;
         }
         const rootValue = rootFieldOf(override, rootField);
         const checkError = showActions ? rootValue?.checkError : undefined;
@@ -300,7 +300,7 @@ export function DiffRow({
           const collapsedLabel = summary ?? (meta.type === 'array' ? `[${len}]` : '{…}');
           return (
             <DiskCell
-              key={`disk:${key}`}
+              key={key}
               style={cellStyle}
               isFocused={isFocused}
               onFocusCell={() => onFocusCell(rowKey, key)}
@@ -320,7 +320,7 @@ export function DiffRow({
           <DiskCell
             arrayOps={arrayOps}
             vscodeContext={vscodeContext}
-            key={`disk:${key}`}
+            key={key}
             style={cellStyle}
             isFocused={isFocused}
             onFocusCell={() => onFocusCell(rowKey, key)}

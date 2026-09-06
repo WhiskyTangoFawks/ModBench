@@ -11,11 +11,10 @@ import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION } from './messages';
 import { recordPanelIncompleteMessage } from '../../src/medit/loadOrderProgress';
 import { DIMMED_OPACITY } from './gridStyles';
 import type { FieldMetadata } from './types';
-import { fieldMeta } from './test/fixtures';
 import { columnKey } from './types';
-import { panelClient, type PanelOpts } from './test/fixtures';
+import { fieldMeta, panelClient, type PanelOpts } from './test/fixtures';
 
-const strMeta: FieldMetadata = fieldMeta({ name: 'Name', type: 'string'});
+const strMeta: FieldMetadata = fieldMeta({ name: 'Name', type: 'string' });
 
 const compareResult = {
   conflictAll: 'Conflict',
@@ -76,7 +75,7 @@ const immutableWinnerCompareResult = {
   ],
 };
 
-const intMeta: FieldMetadata = fieldMeta({ name: 'Level', type: 'int'});
+const intMeta: FieldMetadata = fieldMeta({ name: 'Level', type: 'int' });
 const fkMeta: FieldMetadata = fieldMeta({
   name: 'Race', type: 'formKey', validFormKeyTypes: ['race']});
 
@@ -265,8 +264,8 @@ const structFieldMeta: FieldMetadata = fieldMeta({
   name: 'Bounds',
   type: 'struct',
   fields: [
-    fieldMeta({ name: 'X', type: 'int'}),
-    fieldMeta({ name: 'Y', type: 'int'}),
+    fieldMeta({ name: 'X', type: 'int' }),
+    fieldMeta({ name: 'Y', type: 'int' }),
   ]});
 
 const structCompareResult = {
@@ -884,14 +883,14 @@ describe('RecordPanel — column collapse (issue #3)', () => {
 // Two plugins can disagree on which leaf of an abstract union an element is, so the element's
 // rows are the union of both leaves' members, each rendered only in the columns that have it.
 const intSubMeta = (name: string): FieldMetadata =>
-  (fieldMeta({ name, type: 'int'}));
+  (fieldMeta({ name, type: 'int' }));
 
 const aliasesMeta: FieldMetadata = fieldMeta({
   name: 'aliases', type: 'array', isArray: true,
   elementType: fieldMeta({
     name: '', type: 'struct',
     fields: [
-      fieldMeta({ name: 'name', type: 'string'}),
+      fieldMeta({ name: 'name', type: 'string' }),
       fieldMeta({
         name: 'location', type: 'struct',
         fields: [intSubMeta('alias_id')]}),
@@ -1049,7 +1048,7 @@ const unionFieldMeta: FieldMetadata = fieldMeta({
   name: 'Level',
   type: 'struct',
   fields: [
-    fieldMeta({ name: 'level', type: 'int'}),
+    fieldMeta({ name: 'level', type: 'int' }),
     fieldMeta({
       name: 'MutagenObjectType', type: 'enum',
       enumMembers: [{ value: 'NpcLevel', label: 'Npc Level' },
@@ -1151,9 +1150,9 @@ describe('RecordPanel — an absent member reads as its default', () => {
   const statsMeta: FieldMetadata = fieldMeta({
     name: 'Stats', type: 'struct',
     fields: [
-      fieldMeta({ name: 'Weight', type: 'int'}),
-      fieldMeta({ name: 'Essential', type: 'bool'}),
-      fieldMeta({ name: 'Prefix', type: 'string'}),
+      fieldMeta({ name: 'Weight', type: 'int' }),
+      fieldMeta({ name: 'Essential', type: 'bool' }),
+      fieldMeta({ name: 'Prefix', type: 'string' }),
       fieldMeta({
         name: 'RunOn', type: 'enum', default: 'Subject',
         enumMembers: [{ value: 'Subject' }, { value: 'Target' }]}),
@@ -1238,10 +1237,10 @@ describe('RecordPanel — an absent member reads as its default', () => {
 describe('RecordPanel — a member of an absent owner reads as nothing', () => {
   const boundsMeta: FieldMetadata = fieldMeta({
     name: 'Bounds', type: 'struct',
-    fields: [fieldMeta({ name: 'X', type: 'int'})]});
+    fields: [fieldMeta({ name: 'X', type: 'int' })]});
   const valuesMeta: FieldMetadata = fieldMeta({
     name: 'Values', type: 'array', isArray: true,
-    elementType: fieldMeta({ name: '', type: 'int'})});
+    elementType: fieldMeta({ name: '', type: 'int' })});
   const compare = {
     conflictAll: 'Conflict',
     overrides: [
@@ -1305,7 +1304,7 @@ describe('RecordPanel — a member of an absent owner reads as nothing', () => {
 // A translated string is one leaf whose document spelling is an object; its set carries that
 // object, so the codec receives what it wrote.
 describe('RecordPanel — a translated string leaf posts its object', () => {
-  const nameMeta: FieldMetadata = fieldMeta({ name: 'Name', type: 'translatedString'});
+  const nameMeta: FieldMetadata = fieldMeta({ name: 'Name', type: 'translatedString' });
   const value = { TargetLanguage: 'English', Value: 'Base name' };
   const compare = {
     conflictAll: 'OnlyOne',

@@ -58,6 +58,7 @@ export interface ArrayElementContext {
   origin: string;
   path: PathHop[];
   canMoveUp: boolean;
+  canMoveDown: boolean;
   preventDefaultContextMenuItems: true;
 }
 

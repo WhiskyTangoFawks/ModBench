@@ -9,13 +9,10 @@ import { RecordPanel } from './RecordPanel';
 import type { FieldDiff, FieldMetadata } from './types';
 import { vscode } from './vscode';
 import { EXTENSION_TO_WEBVIEW } from './messages';
-import { diffNode, fieldMeta, lastPostedEnvelope, panelClient } from './test/fixtures';
+import { diffNode, fieldMeta, leafMeta as field, lastPostedEnvelope, panelClient } from './test/fixtures';
 
 // The metadata below is the Fallout 4 schema's own shape, trimmed to the leaves these cases
 // name; the keyed arrays and their key members are Fallout4VmadAnnotations.KeyedArrays.
-
-const field = (name: string, type: string, extra: Partial<FieldMetadata> = {}): FieldMetadata =>
-  fieldMeta({ name, type: type as FieldMetadata['type'], ...extra });
 
 // LeafLabel.For('ScriptProperty', leaf) — the base's own words dropped from head and tail.
 const PROPERTY_LEAVES: Record<string, string> = {

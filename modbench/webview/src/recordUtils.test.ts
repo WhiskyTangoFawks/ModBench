@@ -232,7 +232,7 @@ describe('getAtPath', () => {
 });
 
 // `path` is the envelope's own wire path, never a bare scalar index: an array nested inside a
-// struct needs every hop. `canMoveUp` reads the last hop.
+// struct needs every hop. `canMoveUp`/`canMoveDown` read the last hop.
 describe('arrayElementContext', () => {
   it('produces the data-vscode-context object for a middle element', () => {
     const path: PathHop[] = [{ kind: 'member', name: 'Items' }, { kind: 'index', index: 1 }];
@@ -243,6 +243,7 @@ describe('arrayElementContext', () => {
       origin: 'ModA',
       path,
       canMoveUp: true,
+      canMoveDown: true,
       preventDefaultContextMenuItems: true,
     });
   });
@@ -254,21 +255,23 @@ describe('arrayElementContext', () => {
 
   // A keyed array is stored in key order on every write, so neither Move could change the file;
   // Remove still applies, which is why the row carries this context at all.
-  it('offers no Move Up on a keyed element, and still offers the element itself', () => {
+  it('offers neither Move on a keyed element, and still offers the element itself', () => {
     const path: PathHop[] = [{ kind: 'member', name: 'Scripts' }, { kind: 'key', key: 'Guard' }];
     const context = arrayElementContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', path);
     expect(context.canMoveUp).toBe(false);
+    expect(context.canMoveDown).toBe(false);
     expect(context.webviewSection).toBe('arrayElement');
     expect(context.path).toBe(path);
   });
 
-  // canMoveUp must key off the last hop, not path.length, and the full chain must survive onto
-  // the payload rather than collapse to the trailing index.
-  it('a nested element carries every hop of its own path, and canMoveUp reads the last one', () => {
+  // canMoveUp/canMoveDown must key off the last hop, not path.length, and the full chain must
+  // survive onto the payload rather than collapse to the trailing index.
+  it('a nested element carries every hop of its own path, and the Moves read the last one', () => {
     const path: PathHop[] = [{ kind: 'member', name: 'Container' }, { kind: 'member', name: 'Sub' }, { kind: 'index', index: 0 }];
     const ctx = arrayElementContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', path);
     expect(ctx.path).toEqual(path);
     expect(ctx.canMoveUp).toBe(false); // last hop's index is 0
+    expect(ctx.canMoveDown).toBe(true);
   });
 });
 
@@ -331,7 +334,7 @@ describe('combineVscodeContexts', () => {
       stringValueContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', 'Dogmeat [000001:Fallout4.esm]', 'tags', 'a', false, TAGS_PATH),
     );
     const parsed = JSON.parse(result!);
-    expect(parsed.canMoveUp).toBe(false);
+    expect(parsed.canMoveDown).toBe(true);
     expect(parsed.value).toBe('a');
     expect(parsed.path).toEqual(TAGS_PATH);
   });
@@ -438,7 +441,7 @@ describe('wirePath', () => {
   });
 });
 
-// A collapsed row's prose summary has only a path, never a render-time `overrideMeta`, so it
+// A collapsed row's prose summary has only a path, never the row's own resolved metadata, so it
 // descends FieldMetadata itself to reach a nested array's element type.
 describe('metaAtPath', () => {
   const idMeta = fieldMeta({ name: 'Id', type: 'string' });
