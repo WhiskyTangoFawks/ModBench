@@ -1,7 +1,6 @@
 import * as vscode from 'vscode';
 import { mkdir, writeFile, chmod, unlink } from 'node:fs/promises';
 import { join } from 'node:path';
-import { EXTENSION_TO_WEBVIEW, type ExtensionToWebview } from './messages';
 import type { Reporter } from '../modmanager/deployer';
 
 // Any segment may carry a FormKey's `:` or characters Windows paths reject. Collapsed whitespace
@@ -27,7 +26,6 @@ export function extendedEditorPath(
 }
 
 export interface OpenExtendedFieldEditorParams {
-  requestId: string;
   value: string;
   recordLabel: string;
   fieldName: string;
@@ -43,7 +41,9 @@ export interface ExtendedFieldEditorDeps {
   // written under — injected rather than computed from `os.tmpdir()` here, so a test can point it
   // at its own throwaway directory instead of littering (and depending on) the real OS temp dir.
   tempRoot: string;
-  reply: (msg: ExtensionToWebview) => void;
+  // Runs once per save, not once per tab: a tab can be saved any number of times while open, and
+  // each save is its own commit of the leaf.
+  onCommit: (value: string) => Promise<void> | void;
   log: (msg: string) => void;
   reporter: Reporter;
 }
@@ -73,15 +73,14 @@ export async function openExtendedFieldEditor(
     const doc = await vscode.workspace.openTextDocument(uri);
     await vscode.window.showTextDocument(doc, { viewColumn: vscode.ViewColumn.Beside, preview: false });
 
-    const saveListener = vscode.workspace.onDidSaveTextDocument(savedDoc => {
+    const saveListener = vscode.workspace.onDidSaveTextDocument(async savedDoc => {
       if (savedDoc.uri.fsPath !== uri.fsPath) return;
-      deps.reply({ type: EXTENSION_TO_WEBVIEW.EXTENDED_EDITOR_COMMITTED, requestId: params.requestId, value: savedDoc.getText() });
+      await deps.onCommit(savedDoc.getText());
     });
     const closeListener = vscode.workspace.onDidCloseTextDocument(async closedDoc => {
       if (closedDoc.uri.fsPath !== uri.fsPath) return;
       saveListener.dispose();
       closeListener.dispose();
-      deps.reply({ type: EXTENSION_TO_WEBVIEW.EXTENDED_EDITOR_CLOSED, requestId: params.requestId });
       // Best-effort: the OS reclaims the temp dir regardless, so this is logged, not surfaced
       // (ADR-0026). Awaited so the listener's promise settles only once the file is gone — an
       // orphaned unlink races anything observing the path.
@@ -93,9 +92,5 @@ export async function openExtendedFieldEditor(
     // The user double-clicked a cell — an explicit action — so a failure here is ADR-0026's
     // "explicit action failed" row: error notification + log, not a silent swallow.
     deps.reporter.report('error', 'Could not open the extended editor.', err instanceof Error ? err.message : String(err));
-    // No tab ever opened, so no onDidCloseTextDocument will fire — without this, nativeBridge's
-    // requestId entry (registered optimistically) would never be deleted. Reusing the CLOSED
-    // message keeps the webview's cleanup to the one signal it already knows.
-    deps.reply({ type: EXTENSION_TO_WEBVIEW.EXTENDED_EDITOR_CLOSED, requestId: params.requestId });
   }
 }

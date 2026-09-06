@@ -3,17 +3,12 @@ import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION, type ExtensionToWebview, ty
 import type { Reporter } from '../modmanager/deployer';
 import type { RecordSummary } from './ApiClient';
 import type { PluginRepository } from './PluginRepository';
-import { openExtendedFieldEditor, type ExtendedFieldEditorDeps } from './extendedFieldEditor';
+import { applyRecordEdit, type RecordWriteDeps } from './applyRecordEdit';
 
-export interface RouteRecordPanelMessageDeps {
-  // ADR-0041: the single write path, reached from the panel. Injected rather than imported so this
-  // stays callable from a plain unit test. Also the FormKey picker's own search, reused by the
-  // per-panel bundle below.
+export interface RouteRecordPanelMessageDeps extends RecordWriteDeps {
+  // The write path's own repository, widened by the FormKey picker's search — one repository
+  // serves both, and the per-panel picker bundle below reuses it.
   repository: Pick<PluginRepository, 'editRecord' | 'searchRecords'>;
-  // A plain callback rather than a webview handle, so this router never has to know which panel
-  // asked. plugin/origin ride along because a FormKey names a record, not which plugin's copy of
-  // it this edit landed on.
-  onRecordEdited: (formKey: string, plugin: string, origin: string) => void;
   // The leveled 'Modbench' channel the webview has no direct route to — the webview composes the
   // message text, this is a pure level→method forward.
   channel: Pick<vscode.LogOutputChannel, 'debug' | 'info' | 'warn'>;
@@ -24,9 +19,6 @@ export interface RouteRecordPanelMessageDeps {
   // `reply` must post back to the one panel that asked, never a broadcast, so this bundle is
   // reconstructed per message at the call site rather than shared like `channel`/`reporter`.
   formKeyPicker: FormKeyPickerDeps | undefined;
-  // Same per-panel reconstruction as formKeyPicker above, but this bundle also carries
-  // `tempRoot`/`log`, which are load-order-static and copied into every reconstruction.
-  extendedFieldEditor: ExtendedFieldEditorDeps | undefined;
 }
 
 export interface FormKeyPickerDeps {
@@ -60,7 +52,6 @@ const HANDLERS: {
   [WEBVIEW_TO_EXTENSION.COPY_TO_CLIPBOARD]: (deps, m) => copyToClipboard(deps.reporter, m.value),
   [WEBVIEW_TO_EXTENSION.EDIT_FIELD]: editField,
   [WEBVIEW_TO_EXTENSION.OPEN_FORM_KEY_PICKER]: (deps, m) => replyFormKeyPicked(deps.formKeyPicker, m),
-  [WEBVIEW_TO_EXTENSION.OPEN_EXTENDED_EDITOR]: (deps, m) => openExtendedEditor(deps.extendedFieldEditor, m),
 };
 
 // The single dispatch point for every message the webview sends up. A plain function, not a
@@ -74,22 +65,6 @@ export async function routeRecordPanelMessage(msg: unknown, deps: RouteRecordPan
     | undefined;
   // A message whose type the map doesn't know (a stale webview build) stays a no-op.
   if (handler) await handler(deps, m);
-}
-
-// The real work lives in extendedFieldEditor.ts, which owns its replies itself (zero, one, or
-// many), so this is a thin pass-through rather than a reply-once wrapper.
-async function openExtendedEditor(
-  deps: ExtendedFieldEditorDeps | undefined,
-  m: Extract<WebviewToExtension, { type: typeof WEBVIEW_TO_EXTENSION.OPEN_EXTENDED_EDITOR }>,
-): Promise<void> {
-  if (!deps) return;
-  await openExtendedFieldEditor(
-    {
-      requestId: m.requestId, value: m.value, recordLabel: m.recordLabel, fieldName: m.fieldName,
-      plugin: m.plugin, origin: m.origin, readOnly: m.readOnly,
-    },
-    deps,
-  );
 }
 
 // The same "EditorID [FormKey]" label the picker's items have always
@@ -170,22 +145,11 @@ async function replyFormKeyPicked(
   deps.reply({ type: EXTENSION_TO_WEBVIEW.FORM_KEY_PICKED, requestId: m.requestId, formKey });
 }
 
-// An edit travels through the extension host rather than straight to the backend because a
-// refusal has to become a native notification, a surface only the host has. A refusal is a
-// warning, a transport failure an error.
-async function editField(
+// The webview's inline and keyboard edits reach the same host-side write path the right-click
+// menus call directly (ADR-0041).
+function editField(
   deps: RouteRecordPanelMessageDeps,
   m: Extract<WebviewToExtension, { type: typeof WEBVIEW_TO_EXTENSION.EDIT_FIELD }>,
 ): Promise<void> {
-  try {
-    const outcome = await deps.repository.editRecord(m.formKey, m.plugin, m.origin, m.envelope);
-    if (outcome.applied) {
-      deps.onRecordEdited(m.formKey, m.plugin, m.origin);
-      return;
-    }
-    deps.reporter.report('warning', outcome.message);
-  } catch (err) {
-    deps.reporter.report(
-      'error', 'Could not edit this record.', err instanceof Error ? err.message : String(err));
-  }
+  return applyRecordEdit(deps, m.formKey, m.plugin, m.origin, m.envelope);
 }

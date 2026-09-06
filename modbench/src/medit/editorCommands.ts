@@ -17,9 +17,10 @@ import { EXTENSION_TO_WEBVIEW, type ExtensionToWebview, type ColumnHeaderContext
 import { copyTargetPlugins, type CopyGesture } from './copyTargetPlugins';
 import { renumberConfirmMessage } from './renumberConfirm';
 import { routeRecordPanelMessage, type RouteRecordPanelMessageDeps } from './recordPanelMessageRouter';
+import type { RecordWriteDeps } from './applyRecordEdit';
 import { RecordDecorationProvider } from './RecordDecorationProvider';
 import { makeOnRecordEdited } from './onRecordEdited';
-import { registerForwarderCommands } from './recordPanelForwarderCommands';
+import { registerRecordPanelContextCommands } from './recordPanelContextCommands';
 import { makeReporter } from '../reporter';
 
 export interface EditorCommandDeps {
@@ -48,40 +49,45 @@ export interface EditorCommandDeps {
   refreshSourceControlFor: (plugin: string) => void;
   outputChannel: vscode.LogOutputChannel;
 }
-export function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposable[] {
-  return [
-    ...registerRecordViewCommands(deps),
-    ...registerForwarderCommands(deps.recordPanels),
-  ];
+// ADR-0041: the single write path, plus the broadcast telling every panel showing this record to
+// re-read — broadcast, not a reply, since the record can be open in several panels.
+function recordPanelWriteDeps(
+  deps: EditorCommandDeps, recordDecorationProvider: RecordDecorationProvider,
+): RecordWriteDeps {
+  return {
+    repository: deps.repository,
+    onRecordEdited: makeOnRecordEdited(
+      deps.treeProvider, recordDecorationProvider, deps.recordPanels,
+      () => { deps.refreshMatchingPlugins(); },
+      (plugin) => deps.refreshSourceControlFor(plugin),
+    ),
+    // ADR-0026 surfacing for a refused edit, and for a failed clipboard write.
+    reporter: makeReporter(deps.outputChannel, 'recordPanel'),
+  };
 }
-export function registerRecordViewCommands(deps: EditorCommandDeps): vscode.Disposable[] {
+
+export function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposable[] {
   const {
     context, openPanels, recordPanels, activeRecordTracker, port, treeProvider, controller, scriptsPath,
     referencedByTreeView, outputChannel, mergedTreeSelection,
   } = deps;
-  // The *shared* router deps; `formKeyPicker` is rebuilt per panel below, since its reply must
-  // reach the one panel that asked. One decoration provider per activation: its lookup reads
-  // treeProvider's cache live, so it needs no copy of that state.
+  // One decoration provider per activation: its lookup reads treeProvider's cache live, so it
+  // needs no copy of that state.
   const recordDecorationProvider = new RecordDecorationProvider(
     (plugin, origin, formKey) => treeProvider.workingTreeStateOf(plugin, origin, formKey));
+  const writeDeps = recordPanelWriteDeps(deps, recordDecorationProvider);
+  // `formKeyPicker` is a placeholder here and rebuilt per panel below, since its reply must reach
+  // the one panel that asked.
   const routerDeps: RouteRecordPanelMessageDeps = {
-    channel: outputChannel,
-    // COPY_TO_CLIPBOARD's ADR-0026 surfacing on a failed clipboard write.
-    reporter: makeReporter(outputChannel, 'copyToClipboard'),
-    // ADR-0041: the single write path, plus the broadcast telling every panel showing this record
-    // to re-read — broadcast, not a reply, since the record can be open in several panels.
-    repository: deps.repository,
-    onRecordEdited: makeOnRecordEdited(
-      treeProvider, recordDecorationProvider, recordPanels,
-      () => { deps.refreshMatchingPlugins(); },
-      (plugin) => deps.refreshSourceControlFor(plugin),
-    ),
-    // Placeholders — the onDidReceiveMessage wiring below overrides both per panel every call.
-    formKeyPicker: undefined,
-    extendedFieldEditor: undefined,
+    ...writeDeps, repository: deps.repository, channel: outputChannel, formKeyPicker: undefined,
   };
   return [
     vscode.window.registerFileDecorationProvider(recordDecorationProvider),
+    // The native right-click menus write from here directly, with no panel in the path — the same
+    // write deps the router has, plus the extended editor's temp root and log.
+    ...registerRecordPanelContextCommands({
+      ...writeDeps, tempRoot: extendedFieldEditorTempRoot, log: (m: string) => outputChannel.debug(m),
+    }),
     vscode.commands.registerCommand('modbench.openEditor', (args?: { formKey?: string; label?: string }) => {
       openRecordPanel(context, openPanels, args?.label ?? args?.formKey ?? 'mEdit', args?.formKey, port,
         vscode.ViewColumn.One, { routerDeps, recordPanels, activeRecordTracker, singleton: true });
@@ -129,7 +135,7 @@ export function registerRecordViewCommands(deps: EditorCommandDeps): vscode.Disp
       }),
   ];
 }
-// Apart from registerRecordViewCommands because select/apply/clear the active SQL filter is one
+// Apart from registerEditorCommands because select/apply/clear the active SQL filter is one
 // concern, distinct from the record-panel and reveal commands.
 export function registerFilterCommands(scriptsPath: string, controller: EditingController): vscode.Disposable[] {
   return [
@@ -561,21 +567,12 @@ export function openRecordPanel(
   panel.onDidDispose(() => activeRecordTracker.removePanel(panel));
 
   panel.webview.onDidReceiveMessage((msg: unknown) => {
-    // Every reply must reach the one panel that asked, never a broadcast; `routerDeps` is shared
-    // across panels, so these per-panel fields are rebuilt with the panel this closure holds.
+    // A reply must reach the one panel that asked, never a broadcast; `routerDeps` is shared
+    // across panels, so this per-panel field is rebuilt with the panel this closure holds.
     const reply = (m: ExtensionToWebview) => { void panel.webview.postMessage(m); };
     void routeRecordPanelMessage(msg, {
       ...routerDeps,
       formKeyPicker: { repository: routerDeps.repository, reply },
-      // tempRoot/log/reporter are load order-static (the same values every panel would
-      // get); only `reply` genuinely varies per panel — bundled here anyway, matching
-      // formKeyPicker's own reconstruction on this object.
-      extendedFieldEditor: {
-        tempRoot: extendedFieldEditorTempRoot,
-        reply,
-        log: (m: string) => routerDeps.channel.debug(m),
-        reporter: routerDeps.reporter,
-      },
     });
   });
 

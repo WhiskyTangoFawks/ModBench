@@ -15,6 +15,7 @@ import {
   headerCellContext,
   stringValueContext,
   metaAtPath,
+  type PathHop,
   type PathSegment,
 } from './recordUtils';
 import type { CompareOverride, FieldMetadata } from './types';
@@ -229,17 +230,16 @@ describe('getAtPath', () => {
   });
 });
 
-// `path` is the row's restage coordinates, never a bare scalar index: an array nested inside a
-// struct needs every hop from the subtree root. `canMoveUp`/`canMoveDown` read the last segment.
+// `path` is the envelope's own wire path, never a bare scalar index: an array nested inside a
+// struct needs every hop. `canMoveUp`/`canMoveDown` read the last hop.
 describe('arrayElementContext', () => {
   it('produces the data-vscode-context object for a middle element (can move either way)', () => {
-    const path: PathSegment[] = [{ kind: 'index', index: 1 }];
-    expect(arrayElementContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', 'Items', path, 3)).toEqual({
+    const path: PathHop[] = [{ kind: 'member', name: 'Items' }, { kind: 'index', index: 1 }];
+    expect(arrayElementContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', path, 3)).toEqual({
       webviewSection: 'arrayElement',
       formKey: '000001:Fallout4.esm',
       plugin: 'MyMod.esp',
       origin: 'ModA',
-      rootField: 'Items',
       path,
       canMoveUp: true,
       canMoveDown: true,
@@ -248,20 +248,20 @@ describe('arrayElementContext', () => {
   });
 
   it('canMoveUp is false for the first element', () => {
-    const path: PathSegment[] = [{ kind: 'index', index: 0 }];
-    expect(arrayElementContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', 'Items', path, 3).canMoveUp).toBe(false);
+    const path: PathHop[] = [{ kind: 'member', name: 'Items' }, { kind: 'index', index: 0 }];
+    expect(arrayElementContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', path, 3).canMoveUp).toBe(false);
   });
 
   it('canMoveDown is false for the last element', () => {
-    const path: PathSegment[] = [{ kind: 'index', index: 2 }];
-    expect(arrayElementContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', 'Items', path, 3).canMoveDown).toBe(false);
+    const path: PathHop[] = [{ kind: 'member', name: 'Items' }, { kind: 'index', index: 2 }];
+    expect(arrayElementContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', path, 3).canMoveDown).toBe(false);
   });
 
   // A keyed array is stored in key order on every write, so neither Move could change the file;
   // Remove still applies, which is why the row carries this context at all.
   it('offers neither Move on a keyed element, and still offers the element itself', () => {
-    const path: PathSegment[] = [{ kind: 'key', key: 'Guard' }];
-    const context = arrayElementContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', 'Scripts', path, 3);
+    const path: PathHop[] = [{ kind: 'member', name: 'Scripts' }, { kind: 'key', key: 'Guard' }];
+    const context = arrayElementContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', path, 3);
     expect(context.canMoveUp).toBe(false);
     expect(context.canMoveDown).toBe(false);
     expect(context.webviewSection).toBe('arrayElement');
@@ -270,72 +270,72 @@ describe('arrayElementContext', () => {
 
   it('canMoveUp is false when index is at or past this plugin\'s own array length', () => {
     expect(arrayElementContext(
-      '000001:Fallout4.esm', 'MyMod.esp', 'ModA', 'Items', [{ kind: 'index', index: 1 }], 1,
+      '000001:Fallout4.esm', 'MyMod.esp', 'ModA', [{ kind: 'member', name: 'Items' }, { kind: 'index', index: 1 }], 1,
     ).canMoveUp).toBe(false);
     expect(arrayElementContext(
-      '000001:Fallout4.esm', 'MyMod.esp', 'ModA', 'Items', [{ kind: 'index', index: 2 }], 1,
+      '000001:Fallout4.esm', 'MyMod.esp', 'ModA', [{ kind: 'member', name: 'Items' }, { kind: 'index', index: 2 }], 1,
     ).canMoveUp).toBe(false);
   });
 
   // canMoveUp/canMoveDown must key off the last hop, not path.length, and the full chain must
   // survive onto the payload rather than collapse to the trailing index.
   it('a nested element carries every hop of its own path, and canMoveUp/canMoveDown read the last one', () => {
-    const path: PathSegment[] = [{ kind: 'member', name: 'Sub' }, { kind: 'index', index: 0 }];
-    const ctx = arrayElementContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', 'Container', path, 2);
+    const path: PathHop[] = [{ kind: 'member', name: 'Container' }, { kind: 'member', name: 'Sub' }, { kind: 'index', index: 0 }];
+    const ctx = arrayElementContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', path, 2);
     expect(ctx.path).toEqual(path);
-    expect(ctx.rootField).toBe('Container');
     expect(ctx.canMoveUp).toBe(false); // last hop's index is 0
     expect(ctx.canMoveDown).toBe(true);
   });
 });
 
 describe('arrayParentContext', () => {
-  it('produces the data-vscode-context object for a top-level array-parent cell (empty path)', () => {
-    expect(arrayParentContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', 'Items', [])).toEqual({
+  it('produces the data-vscode-context object for a top-level array-parent cell (one member hop)', () => {
+    expect(arrayParentContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', [{ kind: 'member', name: 'Items' }])).toEqual({
       webviewSection: 'arrayParent',
       formKey: '000001:Fallout4.esm',
       plugin: 'MyMod.esp',
       origin: 'ModA',
-      rootField: 'Items',
-      path: [],
+      path: [{ kind: 'member', name: 'Items' }],
       preventDefaultContextMenuItems: true,
     });
   });
 
-  // A nested array's "Add" must address the array itself: "the root field is the array" holds
-  // only for a top-level array.
-  it('carries the row\'s own path for a nested array-parent cell', () => {
-    const path: PathSegment[] = [{ kind: 'member', name: 'Entries' }];
-    const ctx = arrayParentContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', 'Container', path);
+  // A nested array's "Add" must address the array itself, which is more hops than the record's
+  // own member.
+  it('carries every hop down to a nested array-parent cell', () => {
+    const path: PathHop[] = [{ kind: 'member', name: 'Container' }, { kind: 'member', name: 'Entries' }];
+    const ctx = arrayParentContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', path);
     expect(ctx.path).toEqual(path);
-    expect(ctx.rootField).toBe('Container');
   });
 });
 
 // A row can be more than one structural-op target at once, so combining contexts rather than
 // picking one is what makes both menus reachable from the same cell.
 describe('combineVscodeContexts', () => {
+  const TAGS_PATH: PathHop[] = [{ kind: 'member', name: 'tags' }, { kind: 'index', index: 0 }];
+
   it('returns undefined when every context is absent', () => {
     expect(combineVscodeContexts(undefined, undefined)).toBeUndefined();
   });
 
   it('passes a single context through, still as a JSON string (an unchanged call site contract)', () => {
-    const result = combineVscodeContexts(arrayParentContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', 'Items', []));
+    const result = combineVscodeContexts(arrayParentContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', [{ kind: 'member', name: 'Items' }]));
     expect(JSON.parse(result!)).toEqual({
-      webviewSection: 'arrayParent', formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'ModA', rootField: 'Items', path: [],
+      webviewSection: 'arrayParent', formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'ModA',
+      path: [{ kind: 'member', name: 'Items' }],
       preventDefaultContextMenuItems: true,
     });
   });
 
   it('skips an absent context among present ones', () => {
-    const result = combineVscodeContexts(undefined, arrayParentContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', 'Items', []), undefined);
+    const result = combineVscodeContexts(undefined, arrayParentContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', [{ kind: 'member', name: 'Items' }]), undefined);
     expect(JSON.parse(result!).webviewSection).toBe('arrayParent');
   });
 
   it('combines two contexts\' webviewSection into one space-separated token list', () => {
     const result = combineVscodeContexts(
-      arrayElementContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', 'tags', [{ kind: 'index', index: 0 }], 2),
-      stringValueContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', 'tags', 'a', false, [{ kind: 'index', index: 0 }], 'tags'),
+      arrayElementContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', TAGS_PATH, 2),
+      stringValueContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', 'Dogmeat [000001:Fallout4.esm]', 'tags', 'a', false, TAGS_PATH),
     );
     const parsed = JSON.parse(result!);
     expect(parsed.webviewSection).toBe('arrayElement stringValue');
@@ -343,13 +343,13 @@ describe('combineVscodeContexts', () => {
 
   it('merges every other key from both contexts (so package.json\'s when clauses can read either)', () => {
     const result = combineVscodeContexts(
-      arrayElementContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', 'tags', [{ kind: 'index', index: 0 }], 2),
-      stringValueContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', 'tags', 'a', false, [{ kind: 'index', index: 0 }], 'tags'),
+      arrayElementContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', TAGS_PATH, 2),
+      stringValueContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', 'Dogmeat [000001:Fallout4.esm]', 'tags', 'a', false, TAGS_PATH),
     );
     const parsed = JSON.parse(result!);
     expect(parsed.canMoveDown).toBe(true);
     expect(parsed.value).toBe('a');
-    expect(parsed.rootField).toBe('tags');
+    expect(parsed.path).toEqual(TAGS_PATH);
   });
 });
 
@@ -375,41 +375,48 @@ describe('headerCellContext', () => {
 // ADR-0039: the string-cell right-click menu's own identity — the extended editor's only
 // trigger, since no left-click gesture reaches it.
 describe('stringValueContext', () => {
-  it('carries the cell\'s own identity, current value and readOnly flag', () => {
-    expect(stringValueContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', 'Name', 'Dogmeat', false, [], 'Name')).toEqual({
+  const NAME_PATH: PathHop[] = [{ kind: 'member', name: 'Name' }];
+
+  it('carries the cell\'s own identity, record label, current value and readOnly flag', () => {
+    expect(stringValueContext(
+      '000001:Fallout4.esm', 'MyMod.esp', 'ModA', 'Dogmeat [000001:Fallout4.esm]', 'Name', 'Dogmeat', false, NAME_PATH,
+    )).toEqual({
       webviewSection: 'stringValue',
       formKey: '000001:Fallout4.esm',
       plugin: 'MyMod.esp',
       origin: 'ModA',
+      recordLabel: 'Dogmeat [000001:Fallout4.esm]',
       fieldName: 'Name',
       value: 'Dogmeat',
       readOnly: false,
-      path: [],
-      rootField: 'Name',
+      path: NAME_PATH,
       preventDefaultContextMenuItems: true,
     });
   });
 
   it('carries readOnly: true for an immutable/untracked/not-in-load-order column unchanged', () => {
-    expect(stringValueContext('000001:Fallout4.esm', 'Fallout4.esm', 'Data', 'Name', 'Dogmeat', true, [], 'Name').readOnly).toBe(true);
+    expect(stringValueContext(
+      '000001:Fallout4.esm', 'Fallout4.esm', 'Data', 'Dogmeat', 'Name', 'Dogmeat', true, NAME_PATH,
+    ).readOnly).toBe(true);
   });
 
-  // A nested string leaf carries its own path within the field and the subtree root's member —
-  // the two coordinates its set envelope needs, distinct from the display `fieldName`.
-  it('carries the row\'s own path and the subtree root\'s wire path for a nested string leaf', () => {
-    const path: PathSegment[] = [{ kind: 'member', name: 'Entries' }, { kind: 'index', index: 0 }, { kind: 'member', name: 'Id' }];
-    const ctx = stringValueContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', 'Container', 'A', false, path, 'Container');
-    expect(ctx.path).toEqual(path);
-    expect(ctx.rootField).toBe('Container');
+  // A nested string leaf's set envelope lands at its own hops, not the member it sits under.
+  it('carries every hop of a nested string leaf\'s wire path', () => {
+    const path: PathHop[] = [
+      { kind: 'member', name: 'Container' }, { kind: 'member', name: 'Entries' },
+      { kind: 'index', index: 0 }, { kind: 'member', name: 'Id' },
+    ];
+    expect(stringValueContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', 'Dogmeat', 'Id', 'A', false, path).path)
+      .toEqual(path);
   });
 
   it('combines like every other context', () => {
     const result = combineVscodeContexts(
-      stringValueContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', 'Name', 'Dogmeat', false, [], 'Name'),
+      stringValueContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', 'Dogmeat', 'Name', 'Dogmeat', false, NAME_PATH),
     );
     expect(JSON.parse(result!)).toEqual({
       webviewSection: 'stringValue', formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'ModA',
-      fieldName: 'Name', value: 'Dogmeat', readOnly: false, path: [], rootField: 'Name',
+      recordLabel: 'Dogmeat', fieldName: 'Name', value: 'Dogmeat', readOnly: false, path: NAME_PATH,
       preventDefaultContextMenuItems: true,
     });
   });
@@ -447,8 +454,8 @@ describe('wirePath', () => {
   });
 });
 
-// The array-op broadcast handler has only the wire's rootField and path, never a render-time
-// `overrideMeta`, so it descends FieldMetadata itself to reach a nested array's element type.
+// A collapsed row's prose summary has only a path, never a render-time `overrideMeta`, so it
+// descends FieldMetadata itself to reach a nested array's element type.
 describe('metaAtPath', () => {
   const idMeta: FieldMetadata = { name: 'Id', type: 'string', isArray: false, validFormKeyTypes: [], enumMembers: [] };
   const weightMeta: FieldMetadata = { name: 'Weight', type: 'int', isArray: false, validFormKeyTypes: [], enumMembers: [] };

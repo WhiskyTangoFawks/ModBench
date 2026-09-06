@@ -21,7 +21,6 @@ import { mkdtemp, rm, stat, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { openExtendedFieldEditor, extendedEditorPath, type ExtendedFieldEditorDeps } from './extendedFieldEditor';
-import { EXTENSION_TO_WEBVIEW } from './messages';
 
 function makeFakeDocEvent() {
   const listeners: Array<(doc: { uri: { fsPath: string }; getText: () => string }) => unknown> = [];
@@ -56,7 +55,7 @@ afterEach(async () => {
 function makeDeps(tempRoot: string, overrides: Partial<ExtendedFieldEditorDeps> = {}): ExtendedFieldEditorDeps {
   return {
     tempRoot,
-    reply: vi.fn(),
+    onCommit: vi.fn(),
     log: vi.fn(),
     reporter: { report: vi.fn() },
     ...overrides,
@@ -110,7 +109,7 @@ describe('openExtendedFieldEditor', () => {
     openTextDocument.mockResolvedValue({ uri: { fsPath: path }, getText: () => 'a long description' });
 
     await openExtendedFieldEditor(
-      { requestId: 'r1', value: 'a long description', recordLabel: 'Deacon [000123:Fallout4.esm]', fieldName: 'Description', plugin: 'Fallout4.esm', origin: 'Data', readOnly: false },
+      { value: 'a long description', recordLabel: 'Deacon [000123:Fallout4.esm]', fieldName: 'Description', plugin: 'Fallout4.esm', origin: 'Data', readOnly: false },
       makeDeps(tempRoot),
     );
 
@@ -127,7 +126,7 @@ describe('openExtendedFieldEditor', () => {
     openTextDocument.mockResolvedValue({ uri: { fsPath: path }, getText: () => 'x' });
 
     await openExtendedFieldEditor(
-      { requestId: 'r1', value: 'x', recordLabel: 'Deacon', fieldName: 'Description', plugin: 'Fallout4.esm', origin: 'Data', readOnly: false },
+      { value: 'x', recordLabel: 'Deacon', fieldName: 'Description', plugin: 'Fallout4.esm', origin: 'Data', readOnly: false },
       makeDeps(tempRoot),
     );
 
@@ -141,7 +140,7 @@ describe('openExtendedFieldEditor', () => {
     openTextDocument.mockResolvedValue({ uri: { fsPath: path }, getText: () => 'x' });
 
     await openExtendedFieldEditor(
-      { requestId: 'r1', value: 'x', recordLabel: 'Deacon', fieldName: 'Description', plugin: 'Fallout4.esm', origin: 'Data', readOnly: true },
+      { value: 'x', recordLabel: 'Deacon', fieldName: 'Description', plugin: 'Fallout4.esm', origin: 'Data', readOnly: true },
       makeDeps(tempRoot),
     );
 
@@ -149,7 +148,7 @@ describe('openExtendedFieldEditor', () => {
     expect(mode & 0o200).toBe(0); // owner-write bit cleared
   });
 
-  it('replies with EXTENDED_EDITOR_COMMITTED carrying the saved content when the doc is saved', async () => {
+  it('commits the saved content on every save, not just the first', async () => {
     const tempRoot = await makeTempRoot();
     const saveEvent = makeFakeDocEvent();
     onDidSaveTextDocument.mockImplementation(saveEvent.register);
@@ -158,14 +157,14 @@ describe('openExtendedFieldEditor', () => {
     const deps = makeDeps(tempRoot);
 
     await openExtendedFieldEditor(
-      { requestId: 'r1', value: 'x', recordLabel: 'Deacon', fieldName: 'Description', plugin: 'Fallout4.esm', origin: 'Data', readOnly: false },
+      { value: 'x', recordLabel: 'Deacon', fieldName: 'Description', plugin: 'Fallout4.esm', origin: 'Data', readOnly: false },
       deps,
     );
     await saveEvent.fire({ uri: { fsPath: path }, getText: () => 'first save' });
     await saveEvent.fire({ uri: { fsPath: path }, getText: () => 'second save' });
 
-    expect(deps.reply).toHaveBeenNthCalledWith(1, { type: EXTENSION_TO_WEBVIEW.EXTENDED_EDITOR_COMMITTED, requestId: 'r1', value: 'first save' });
-    expect(deps.reply).toHaveBeenNthCalledWith(2, { type: EXTENSION_TO_WEBVIEW.EXTENDED_EDITOR_COMMITTED, requestId: 'r1', value: 'second save' });
+    expect(deps.onCommit).toHaveBeenNthCalledWith(1, 'first save');
+    expect(deps.onCommit).toHaveBeenNthCalledWith(2, 'second save');
   });
 
   it('ignores a save event for a different document', async () => {
@@ -177,15 +176,15 @@ describe('openExtendedFieldEditor', () => {
     const deps = makeDeps(tempRoot);
 
     await openExtendedFieldEditor(
-      { requestId: 'r1', value: 'x', recordLabel: 'Deacon', fieldName: 'Description', plugin: 'Fallout4.esm', origin: 'Data', readOnly: false },
+      { value: 'x', recordLabel: 'Deacon', fieldName: 'Description', plugin: 'Fallout4.esm', origin: 'Data', readOnly: false },
       deps,
     );
     await saveEvent.fire({ uri: { fsPath: '/some/other/file.txt' }, getText: () => 'unrelated' });
 
-    expect(deps.reply).not.toHaveBeenCalled();
+    expect(deps.onCommit).not.toHaveBeenCalled();
   });
 
-  it('on close: deletes the temp file, disposes both listeners, and replies EXTENDED_EDITOR_CLOSED', async () => {
+  it('on close: deletes the temp file and disposes both listeners', async () => {
     const tempRoot = await makeTempRoot();
     const saveEvent = makeFakeDocEvent();
     const closeEvent = makeFakeDocEvent();
@@ -196,28 +195,25 @@ describe('openExtendedFieldEditor', () => {
     const deps = makeDeps(tempRoot);
 
     await openExtendedFieldEditor(
-      { requestId: 'r1', value: 'x', recordLabel: 'Deacon', fieldName: 'Description', plugin: 'Fallout4.esm', origin: 'Data', readOnly: false },
+      { value: 'x', recordLabel: 'Deacon', fieldName: 'Description', plugin: 'Fallout4.esm', origin: 'Data', readOnly: false },
       deps,
     );
     await closeEvent.fire({ uri: { fsPath: path }, getText: () => 'x' });
 
-    expect(deps.reply).toHaveBeenCalledWith({ type: EXTENSION_TO_WEBVIEW.EXTENDED_EDITOR_CLOSED, requestId: 'r1' });
     expect(saveEvent.isDisposed()).toBe(true);
     expect(closeEvent.isDisposed()).toBe(true);
     await expect(stat(path)).rejects.toThrow();
   });
 
-  // A failed open leaves no tab, so nothing else would ever send the webview its cleanup signal.
-  it('reports an error, does not throw, and still replies EXTENDED_EDITOR_CLOSED when opening fails', async () => {
+  it('reports an error and does not throw when opening fails', async () => {
     const deps = makeDeps('/nonexistent-root-\0-invalid');
 
     await expect(openExtendedFieldEditor(
-      { requestId: 'r1', value: 'x', recordLabel: 'Deacon', fieldName: 'Description', plugin: 'Fallout4.esm', origin: 'Data', readOnly: false },
+      { value: 'x', recordLabel: 'Deacon', fieldName: 'Description', plugin: 'Fallout4.esm', origin: 'Data', readOnly: false },
       deps,
     )).resolves.toBeUndefined();
 
     expect(deps.reporter.report).toHaveBeenCalledWith('error', 'Could not open the extended editor.', expect.any(String));
-    expect(deps.reply).toHaveBeenCalledWith({ type: EXTENSION_TO_WEBVIEW.EXTENDED_EDITOR_CLOSED, requestId: 'r1' });
   });
 
   // The second open rewrites a file the first already chmod'ed 0o444, which throws EACCES.
@@ -225,14 +221,14 @@ describe('openExtendedFieldEditor', () => {
     const tempRoot = await makeTempRoot();
     const path = extendedEditorPath(tempRoot, 'Deacon', 'Description', 'Fallout4.esm', 'Data');
     openTextDocument.mockResolvedValue({ uri: { fsPath: path }, getText: () => 'x' });
-    const params = { requestId: 'r1', value: 'x', recordLabel: 'Deacon', fieldName: 'Description', plugin: 'Fallout4.esm', origin: 'Data', readOnly: true };
+    const params = { value: 'x', recordLabel: 'Deacon', fieldName: 'Description', plugin: 'Fallout4.esm', origin: 'Data', readOnly: true };
 
     const firstDeps = makeDeps(tempRoot);
     await openExtendedFieldEditor(params, firstDeps);
     expect(firstDeps.reporter.report).not.toHaveBeenCalled();
 
     const secondDeps = makeDeps(tempRoot);
-    await openExtendedFieldEditor({ ...params, requestId: 'r2' }, secondDeps);
+    await openExtendedFieldEditor(params, secondDeps);
 
     expect(secondDeps.reporter.report).not.toHaveBeenCalled();
     const mode = (await stat(path)).mode & 0o777;
@@ -246,11 +242,11 @@ describe('openExtendedFieldEditor', () => {
     openTextDocument.mockImplementation((uri: { fsPath: string }) => Promise.resolve({ uri, getText: () => '' }));
 
     await openExtendedFieldEditor(
-      { requestId: 'r1', value: 'from ModA', recordLabel: 'Deacon', fieldName: 'Description', plugin: 'Shared.esp', origin: 'ModA', readOnly: false },
+      { value: 'from ModA', recordLabel: 'Deacon', fieldName: 'Description', plugin: 'Shared.esp', origin: 'ModA', readOnly: false },
       makeDeps(tempRoot),
     );
     await openExtendedFieldEditor(
-      { requestId: 'r2', value: 'from ModB', recordLabel: 'Deacon', fieldName: 'Description', plugin: 'Shared.esp', origin: 'ModB', readOnly: false },
+      { value: 'from ModB', recordLabel: 'Deacon', fieldName: 'Description', plugin: 'Shared.esp', origin: 'ModB', readOnly: false },
       makeDeps(tempRoot),
     );
 
@@ -266,7 +262,7 @@ describe('openExtendedFieldEditor', () => {
     openTextDocument.mockResolvedValue({ uri: { fsPath: path }, getText: () => 'x' });
 
     await openExtendedFieldEditor(
-      { requestId: 'r1', value: 'x', recordLabel: 'Deacon', fieldName: 'Description', plugin: 'Fallout4.esm', origin: '../../../etc/passwd', readOnly: false },
+      { value: 'x', recordLabel: 'Deacon', fieldName: 'Description', plugin: 'Fallout4.esm', origin: '../../../etc/passwd', readOnly: false },
       makeDeps(tempRoot),
     );
 
@@ -285,7 +281,7 @@ describe('openExtendedFieldEditor', () => {
     const deps = makeDeps(tempRoot);
 
     await openExtendedFieldEditor(
-      { requestId: 'r1', value: multiline, recordLabel: 'Deacon', fieldName: 'Description', plugin: 'Fallout4.esm', origin: 'Data', readOnly: false },
+      { value: multiline, recordLabel: 'Deacon', fieldName: 'Description', plugin: 'Fallout4.esm', origin: 'Data', readOnly: false },
       deps,
     );
     expect(await readFile(path, 'utf8')).toBe(multiline);
@@ -293,6 +289,6 @@ describe('openExtendedFieldEditor', () => {
     const edited = `${multiline}\nA fifth line, added in the editor.`;
     await saveEvent.fire({ uri: { fsPath: path }, getText: () => edited });
 
-    expect(deps.reply).toHaveBeenCalledWith({ type: EXTENSION_TO_WEBVIEW.EXTENDED_EDITOR_COMMITTED, requestId: 'r1', value: edited });
+    expect(deps.onCommit).toHaveBeenCalledWith(edited);
   });
 });
