@@ -21,8 +21,9 @@ public sealed class HandWrittenApplierScanTests
     private const string AllowlistPath = "MEditService.Tests/Architecture/hand-written-applier-allowlist.txt";
 
     // The name is captured dotted and matched on its last segment, so a fully qualified
-    // construction cannot slip past a scan that only ever saw simple names.
-    private static readonly Regex Construction = new(@"\bnew\s+([A-Za-z_][A-Za-z0-9_.]*)\s*[(<{]", RegexOptions.Compiled);
+    // construction cannot slip past; a name ending the line is an object initializer whose brace
+    // opens on the next.
+    private static readonly Regex Construction = new(@"\bnew\s+([A-Za-z_][A-Za-z0-9_.]*)\s*(?:[(<{]|$)", RegexOptions.Compiled);
 
     private static readonly IReadOnlySet<string> MutagenTypeNames = MutagenAndNoggogTypeNames();
 
@@ -56,10 +57,13 @@ public sealed class HandWrittenApplierScanTests
                 Path.Combine(root, "Layer", "Generated.cs"),
                 Path.Combine(root, "Layer", "obj", "Generated.cs"));
             File.WriteAllText(Path.Combine(root, "Layer", "Clean.cs"), "var made = new JsonObject();");
+            File.WriteAllText(Path.Combine(root, "Layer", "Initializer.cs"), "var made = new TranslatedString\n{\n    TargetLanguage = language,\n};");
 
             var sites = Sites(root, ["Layer"]);
 
-            Assert.Equal(["Layer/Applier.cs: var made = new MemorySlice<byte>(bytes);"], sites);
+            Assert.Equal(
+                ["Layer/Applier.cs: var made = new MemorySlice<byte>(bytes);", "Layer/Initializer.cs: var made = new TranslatedString"],
+                sites);
 
             var unallowedSite = Assert.Throws<Xunit.Sdk.TrueException>(
                 () => AssertSitesMatchAllowlist(sites, [], AllowlistPath));

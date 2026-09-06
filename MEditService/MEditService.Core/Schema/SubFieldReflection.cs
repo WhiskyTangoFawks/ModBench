@@ -10,8 +10,7 @@ namespace MEditService.Core.Schema;
 internal static class SubFieldReflection
 {
     // Walks only what getterInterface declares or inherits, never a more-derived sibling interface, so
-    // a union's leaf members are unreachable from the base alone; ObjectModPropertyLeaves and
-    // LoquiUnions close that gap below.
+    // a union's leaf members are unreachable from the base alone; LoquiUnions closes that gap below.
     internal static List<SubFieldSpec> BuildSubSchema(
         Type getterInterface,
         GameReflection game,
@@ -29,16 +28,11 @@ internal static class SubFieldReflection
         var result = new List<SubFieldSpec>();
         foreach (var group in grouped)
         {
-            var prop = group.Aggregate((best, candidate) =>
-                best.DeclaringType!.IsAssignableFrom(candidate.DeclaringType!) ? candidate : best);
-
-            var spec = GetSubFieldInfo(prop, game, inner, depth + 1, logger);
+            var spec = GetSubFieldInfo(ReflectedTypes.MostDerived(group), game, inner, depth + 1, logger);
             if (spec != null) result.Add(spec);
         }
 
-        if (ObjectModPropertyLeaves.IsObjectModPropertyBase(getterInterface))
-            result.AddRange(ObjectModPropertyLeaves.BuildObjectModPropertyLeafFields(getterInterface, game, logger));
-        else if (LoquiUnions.TryGetUnion(getterInterface, game) is { } union)
+        if (LoquiUnions.TryGetUnion(getterInterface, game) is { } union)
             result.AddRange(LoquiUnions.BuildUnionLeafFields(
                 getterInterface, union, game, inner, depth + 1, logger));
 

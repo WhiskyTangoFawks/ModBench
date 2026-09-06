@@ -161,26 +161,11 @@ public sealed class SchemaReflector
         string tableName, Type getterType, List<Type> siblingGetterTypes,
         GameReflection game, ILogger logger)
     {
-        var columns = ColumnReflection.ReflectColumns(getterType, game, logger);
-
-        // Decided by column shape, never table or signature name, so another game's multi-subclass
-        // signature needs no change. The table is a union at the record level: its document names
-        // its class first, and the discriminator column carries it.
-        if (siblingGetterTypes.Count > 1)
-        {
-            var union = LoquiUnions.RecordUnion(siblingGetterTypes);
-            var classNames = union.Leaves.ToDictionary(l => l.GetterType, l => l.ClassName);
-            columns = SiblingColumns.Fold(
-                [.. siblingGetterTypes
-                    .OrderBy(s => s != getterType)
-                    .Select(s => (classNames[s], s == getterType ? columns : ColumnReflection.ReflectColumns(s, game, logger)))]);
-
-            var discriminator = LoquiUnions.BuildUnionDiscriminatorField(union);
-            columns.Insert(0, new ColumnSpec(
-                discriminator.Name, discriminator.Name, "VARCHAR", discriminator.ApiType,
-                discriminator.ValidFormKeyTypes, discriminator.EnumMembers,
-                IsDiscriminator: true, DisplayLabel: discriminator.DisplayLabel));
-        }
+        // Decided by sibling count, never table or signature name, so another game's multi-subclass
+        // signature needs no change.
+        var columns = siblingGetterTypes.Count > 1
+            ? LoquiUnions.BuildUnionColumns(LoquiUnions.RecordUnion(siblingGetterTypes), game, logger)
+            : ColumnReflection.ReflectColumns(getterType, game, logger);
 
         return new RecordTableSchema
         {

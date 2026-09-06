@@ -414,8 +414,8 @@ end.
   per-type filter SQL keeps working by name. View columns are **scalar leaves only** with types
   preserved via casts: primitives, plain enums, FormLinks, translated strings (their `Value`),
   and `[Flags]` enums as comma-joined member names (filter with `LIKE '%FlagName%'`; `''` when
-  unset). Arrays, structs, and widened/split columns have **no view column at
-  all** — a record's nested structure lives in its JSON document (`records.document`,
+  unset). Arrays, structs, and columns whose shape varies by record class have **no view column
+  at all** — a record's nested structure lives in its JSON document (`records.document`,
   reachable with `json_extract` directly for power users). The filter runs once into a
   materialised set when applied, so its cost is per-apply, not per-listing.
 
