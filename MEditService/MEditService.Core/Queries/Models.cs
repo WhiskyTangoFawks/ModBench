@@ -172,7 +172,11 @@ public record RecordDetail(
     bool IsPartialForm = false,
     // Whether this record type could carry the flag at all, so the webview can render its Partial
     // Form toggle without duplicating the container-type table client-side.
-    bool IsPartialFormable = false);
+    bool IsPartialFormable = false,
+    // Non-null when ingest could not produce this record's document, so Fields are the stub's.
+    // The record editor renders the column read-only with this as the reason; every write is
+    // refused.
+    string? ParseDiagnosis = null);
 
 public record CompareOverride(
     string FormKey,
@@ -185,10 +189,11 @@ public record CompareOverride(
     string Origin,
     string RecordType = "",
     bool IsPartialForm = false,
-    bool IsPartialFormable = false)
+    bool IsPartialFormable = false,
+    string? ParseDiagnosis = null)
     : RecordDetail(
         FormKey, Plugin, LoadOrderIndex, IsWinner, EditorId, Fields, Origin, RecordType, IsPartialForm,
-        IsPartialFormable);
+        IsPartialFormable, ParseDiagnosis);
 
 public record FieldDiff(
     string FieldName,

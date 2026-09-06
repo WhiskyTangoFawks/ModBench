@@ -67,11 +67,12 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
   // Keyed by column identity — two same-filename columns must collapse independently.
   // Deliberately not reset by LOAD_RECORD: collapse state persists across record navigation.
   const [collapsedColumns, setCollapsedColumns] = useState<Set<ColumnKey>>(new Set());
-  // ADR-0041: one definition of "this column can be written", computed once for the whole grid.
-  // Derived rather than asked of the backend per cell — a per-cell round trip would make
-  // editability lag the grid it decorates.
+  // ADR-0041: one definition of "this column can be written", computed for the whole grid at
+  // once, since per cell it would lag. A stub document (ADR-0032) takes no patch, so a diagnosis
+  // vetoes the column too.
   const editableColumns = useMemo(() => columnKeysWhere(result?.overrides, (o, key) =>
-    !immutableSet.has(key) && !notInLoadOrderSet.has(key) && trackedSet.has(key) && !o.isPartialForm),
+    !immutableSet.has(key) && !notInLoadOrderSet.has(key) && trackedSet.has(key)
+    && !o.isPartialForm && o.parseDiagnosis == null),
     [result, immutableSet, notInLoadOrderSet, trackedSet]);
 
   // ADR-0035/ADR-0036: one definition of "this column renders at reduced weight" — a copy the load

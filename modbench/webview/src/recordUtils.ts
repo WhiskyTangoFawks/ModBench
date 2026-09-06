@@ -23,14 +23,16 @@ export function buildColumns(overrides: CompareOverride[]): Column[] {
 // `immutableSet` says only that a column is immutable, which is ambiguous: a vanilla master is
 // immutable and named by the load order, while a copy the load order doesn't name (ADR-0036) is
 // immutable *because* it isn't.
-export type ColumnStatus = 'vanillaMaster' | 'notInLoadOrder' | 'untracked' | 'tracked';
+export type ColumnStatus =
+  'parseFailure' | 'vanillaMaster' | 'notInLoadOrder' | 'untracked' | 'tracked';
 
-/** Ordered by what the user can do about it: the two reasons they cannot fix here come first, so
- *  a vanilla master is never told to run Track — naming the wrong way out is worse than naming
- *  none. */
+/** Ordered by what the user can do about it: a parse failure and an immutable column come first,
+ *  since nothing the user does about tracking lifts either — naming the wrong way out is worse
+ *  than naming none. */
 export function columnStatus(
-  isImmutable: boolean, inLoadOrder: boolean, isTracked = true,
+  isImmutable: boolean, inLoadOrder: boolean, isTracked = true, parseDiagnosis?: string | null,
 ): ColumnStatus {
+  if (parseDiagnosis != null) return 'parseFailure';
   if (isImmutable) return inLoadOrder ? 'vanillaMaster' : 'notInLoadOrder';
   return isTracked ? 'tracked' : 'untracked';
 }

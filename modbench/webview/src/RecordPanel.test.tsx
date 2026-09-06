@@ -1332,3 +1332,96 @@ describe('RecordPanel — a translated string leaf posts its object', () => {
   });
 });
 
+
+// A record Mutagen could not read stays in the grid rather than vanishing, showing what was
+// stored and offering nothing that writes. Both columns here are tracked and mutable, so only
+// the diagnosis can explain a read-only cell.
+describe('RecordPanel — a column whose record failed to parse', () => {
+  const PARSE_DIAGNOSIS = 'the PERK entry point did not have expected parameter type flag';
+
+  const keywordsMeta: FieldMetadata = fieldMeta({
+    name: 'Keywords', type: 'array', isArray: true,
+    elementType: fieldMeta({ name: '', type: 'string' }),
+  });
+
+  const column = (plugin: string, name: string, parseDiagnosis?: string) => ({
+    formKey: '000001:Broken.esp', plugin, loadOrderIndex: plugin === 'Broken.esp' ? 0 : 1,
+    isWinner: plugin !== 'Broken.esp', editorId: 'TestNPC',
+    fields: [{ metadata: strMeta, value: name }, { metadata: keywordsMeta, value: ['KwdA'] }],
+    conflictThis: 'Master', parseDiagnosis,
+  });
+
+  const compare = {
+    conflictAll: 'Conflict',
+    overrides: [column('Broken.esp', 'Stored Name', PARSE_DIAGNOSIS), column('Good.esp', 'Readable Name')],
+    diffs: [
+      {
+        fieldName: 'Name', values: { 'Broken.esp': 'Stored Name', 'Good.esp': 'Readable Name' },
+        winnerColumn: 'Good.esp', winnerValue: 'Readable Name', cellStates: {}, conflictAll: 'Conflict',
+      },
+      {
+        fieldName: 'Keywords', values: { 'Broken.esp': ['KwdA'], 'Good.esp': ['KwdA'] },
+        winnerColumn: 'Good.esp', winnerValue: ['KwdA'], cellStates: {}, conflictAll: 'NoConflict',
+        children: [{
+          fieldName: 'KwdA', values: { 'Broken.esp': 'KwdA', 'Good.esp': 'KwdA' },
+          winnerColumn: 'Good.esp', winnerValue: 'KwdA', cellStates: {},
+        }],
+      },
+    ],
+  };
+
+  const plugins = [
+    { name: 'Broken.esp', isImmutable: false, loadOrderIndex: 0, isTracked: true },
+    { name: 'Good.esp', isImmutable: false, loadOrderIndex: 1, isTracked: true },
+  ];
+
+  const contextsFor = (container: HTMLElement, plugin: string) =>
+    Array.from(container.querySelectorAll('[data-vscode-context]'))
+      .map((e): Record<string, unknown> => JSON.parse(e.getAttribute('data-vscode-context') ?? ''))
+      .filter(c => c.plugin === plugin);
+
+  beforeEach(() => vi.stubGlobal('mEditFormKey', '000001:Broken.esp'));
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('renders the column from its stored document rather than dropping it', async () => {
+    renderPanel(compare, { plugins });
+
+    await waitFor(() => expect(screen.getByText('Broken.esp')).toBeInTheDocument());
+    expect(screen.getByText('Stored Name')).toBeInTheDocument();
+  });
+
+  it('opens no editor on its cells, where the readable column opens one', async () => {
+    renderPanel(compare, { plugins });
+    await waitFor(() => screen.getByText('Stored Name'));
+
+    fireEvent.doubleClick(screen.getByText('Stored Name'));
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+
+    fireEvent.doubleClick(screen.getByText('Readable Name'));
+    expect(screen.getByRole('textbox')).toBeInTheDocument();
+  });
+
+  // The array gestures are host commands gated on the row's own data-vscode-context, so a column
+  // that offers no array section offers no Add/Remove/Move at all.
+  it('offers no array right-click commands, where the readable column offers them', async () => {
+    const { container } = renderPanel(compare, { plugins });
+    await waitFor(() => screen.getByText('Stored Name'));
+
+    const arraySections = (plugin: string) => contextsFor(container, plugin)
+      .map(c => String(c.webviewSection)).filter(s => s.includes('array'));
+    expect(arraySections('Broken.esp')).toEqual([]);
+    expect(arraySections('Good.esp')).not.toEqual([]);
+  });
+
+  // ADR-0039 keeps Open in Editor… on a read-only column — it is the only way to read a long
+  // value in full — so what has to be pinned is that it cannot write.
+  it('marks the extended editor read-only on its string cells, where the readable column does not', async () => {
+    const { container } = renderPanel(compare, { plugins });
+    await waitFor(() => screen.getByText('Stored Name'));
+
+    const stringContext = (plugin: string) => contextsFor(container, plugin)
+      .find(c => String(c.webviewSection).includes('stringValue'));
+    expect(stringContext('Broken.esp')?.readOnly).toBe(true);
+    expect(stringContext('Good.esp')?.readOnly).toBe(false);
+  });
+});

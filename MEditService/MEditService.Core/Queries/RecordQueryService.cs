@@ -117,7 +117,7 @@ public sealed class RecordQueryService(
                 o.FormKey, o.Plugin, o.LoadOrderIndex, o.IsWinner, o.EditorId, o.Fields,
                 classification.PluginStates.GetValueOrDefault(ColumnKey.Of(o.Plugin, o.Origin), ConflictThis.OnlyOne),
                 Origin: o.Origin, RecordType: o.RecordType, IsPartialForm: o.IsPartialForm,
-                IsPartialFormable: o.IsPartialFormable));
+                IsPartialFormable: o.IsPartialFormable, ParseDiagnosis: o.ParseDiagnosis));
 
         return new CompareResult(annotated, classification.Diffs, conflictAll);
     }
@@ -155,7 +155,8 @@ public sealed class RecordQueryService(
     private static RecordDetail ToRecordDetail(RecordDocument document) =>
         new(document.FormKey, document.Plugin.Name, document.LoadOrderIndex, document.IsWinner, document.EditorId,
             document.Fields, Origin: document.Plugin.Origin!, RecordType: document.RecordType,
-            IsPartialForm: document.IsPartialForm, IsPartialFormable: document.IsPartialFormable);
+            IsPartialForm: document.IsPartialForm, IsPartialFormable: document.IsPartialFormable,
+            ParseDiagnosis: document.ParseDiagnosis);
 
     private ILoadOrder RequireLoadOrder() => _mirror.RequireScope().LoadOrder;
 

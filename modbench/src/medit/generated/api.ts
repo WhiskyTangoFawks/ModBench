@@ -574,6 +574,7 @@ export interface components {
             recordType: string;
             isPartialForm: boolean;
             isPartialFormable: boolean;
+            parseDiagnosis?: string | null;
             conflictThis: components["schemas"]["ConflictThis"];
         };
         CompareResult: {
@@ -866,6 +867,7 @@ export interface components {
             recordType: string;
             isPartialForm: boolean;
             isPartialFormable: boolean;
+            parseDiagnosis?: string | null;
         };
         RecordEditRequest: {
             plugin: string;
