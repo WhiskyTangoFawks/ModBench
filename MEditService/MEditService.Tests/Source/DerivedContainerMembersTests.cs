@@ -1,13 +1,15 @@
 using System.Reflection;
+using MEditService.Core.Schema;
 using MEditService.Core.Source;
 using Mutagen.Bethesda;
+using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Tests.Source;
 
 /// <summary>A container's members come from the game assembly, so the next <c>Quest.Scenes</c> cannot
-/// be missed. Swept from the schema's record types, which the derivation never consults, so it
-/// cannot agree with itself.</summary>
+/// be missed. Swept through each record's getter interface, a route the derivation never takes, so
+/// it cannot agree with itself.</summary>
 public sealed class DerivedContainerMembersTests
 {
     [Fact]
@@ -25,50 +27,97 @@ public sealed class DerivedContainerMembersTests
     {
         var expected = Sweep(p => TypedAsChildMajor(p) || ReachesChildMajor(p.PropertyType, [])).ToList();
 
-        var derived = RecordTypes()
-            .SelectMany(t => (ContainerChildFields.EnumerateChildFieldsFor(t) ?? []).Select(f => (t.Name, f)))
-            .Order()
-            .ToList();
-
         Assert.NotEmpty(expected);
-        Assert.Equal(expected, derived);
+        Assert.Equal(expected, DerivedChildFields().Order().ToList());
     }
 
     [Fact]
-    public void TheChildFields_AreASupersetOfTheEmbeddedSlots_AndTheDifferenceHasADirectoryOfItsOwn()
+    public void EveryRecordTypeInTheGameAssembly_IsSwept_IncludingTheOnesTheSchemaExcludes()
     {
-        var embedded = ContainerChildFields.EmbeddedSlots.ToHashSet();
-        var childFields = RecordTypes()
-            .SelectMany(t => (ContainerChildFields.EnumerateChildFieldsFor(t) ?? []).Select(f => (t.Name, f)))
-            .ToHashSet();
+        var swept = RecordTypes().Select(t => t.Name).ToHashSet(StringComparer.Ordinal);
+        var tabled = SchemaRecordTypeNames();
 
-        Assert.Empty(embedded.Except(childFields));
-        // The nested-group members are containment the document does not carry: their records live in
-        // directories of their own, which is why they are child fields and not embedded slots.
-        foreach (var (parent, slot) in childFields.Except(embedded))
+        // The schema drops land, navm, navi and the placed variants collapsed into refr, so a sweep
+        // no broader than it would assert nothing about them.
+        Assert.True(swept.Count > tabled.Count, "the sweep is no broader than the schema's record types.");
+        Assert.Empty(tabled.Except(swept, StringComparer.Ordinal));
+
+        // A derived member on a type outside the sweep is a member the tests above never reach.
+        Assert.Empty(DerivedChildFields().Select(row => row.Parent).Distinct().Except(swept, StringComparer.Ordinal));
+    }
+
+    [Fact]
+    public void EveryEmbeddedSlotsElement_IsAMajorRecordByMutagensOwnReckoning()
+    {
+        var mod = ModFactory.Activator(ModKey.FromFileName("Sweep.esp"), GameRelease.Fallout4);
+
+        foreach (var (parent, slot) in ContainerChildFields.EmbeddedSlots)
+            Assert.True(EnumeratesAsMajorRecords(mod, ElementOf(parent, slot)), $"{parent}.{slot} holds no major record.");
+
+        // The same oracle, negatively: what a child field names beyond an embedded slot is a nested
+        // group, which Mutagen refuses to enumerate as a record.
+        var nested = DerivedChildFields().Where(row => !ContainerChildFields.EmbeddedSlots.Contains(row)).ToList();
+        Assert.NotEmpty(nested);
+        foreach (var (parent, slot) in nested)
         {
-            var property = RecordTypes().Single(t => t.Name == parent).GetProperty(slot)!;
-            Assert.False(TypedAsChildMajor(property), $"{parent}.{slot} is typed as a child major record, so it must be an embedded slot.");
+            Assert.False(EnumeratesAsMajorRecords(mod, ElementOf(parent, slot)),
+                $"{parent}.{slot} holds major records directly, so it belongs in the embedded slots.");
         }
     }
+
+    // Mutagen's own registration: it enumerates a type it knows as a major record and throws for
+    // anything else, a verdict the derivation's type tests do not produce.
+    private static bool EnumeratesAsMajorRecords(IMod mod, Type element)
+    {
+        try
+        {
+            return mod.EnumerateMajorRecords(element).Count() >= 0;
+        }
+        catch (ArgumentException)
+        {
+            return false;
+        }
+    }
+
+    private static Type ElementOf(string parent, string slot)
+    {
+        var property = RecordTypes().First(t => t.Name == parent).GetProperty(slot)!;
+        return property.PropertyType.IsGenericType
+            ? property.PropertyType.GetGenericArguments()[0]
+            : property.PropertyType;
+    }
+
+    private static IEnumerable<(string Parent, string Member)> DerivedChildFields() =>
+        RecordTypes().SelectMany(t => (ContainerChildFields.EnumerateChildFieldsFor(t) ?? []).Select(f => (t.Name, f)));
 
     private static IOrderedEnumerable<(string Parent, string Member)> Sweep(Func<PropertyInfo, bool> holdsChildren) =>
         RecordTypes()
             .SelectMany(t => t.GetProperties().Where(holdsChildren).Select(p => (t.Name, p.Name)))
             .Order();
 
-    // The schema's own record types, resolved to the concrete class through Mutagen's "I<Name>Getter"
-    // naming convention.
+    // Every record in every game module this build references, reached through its own getter
+    // interface and Mutagen's "I<Name>Getter" naming convention.
     private static IEnumerable<Type> RecordTypes() =>
-        SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4).Values
-            .Select(s => ConcreteFor(s.RecordType))
-            .OfType<Type>()
-            .Distinct();
+        Enum.GetValues<GameCategory>()
+            .Select(SchemaReflector.GameModule)
+            .OfType<Assembly>()
+            .SelectMany(module => module.GetTypes()
+                .Where(type => type.IsInterface && typeof(IMajorRecordGetter).IsAssignableFrom(type))
+                .Select(getter => ConcreteFor(module, getter))
+                .OfType<Type>()
+                .Where(type => type.IsClass && !type.IsAbstract && type.IsPublic));
 
-    private static Type? ConcreteFor(Type getterType) =>
+    private static Type? ConcreteFor(Assembly module, Type getterType) =>
         getterType.Name is ['I', .. var stem] && stem.EndsWith("Getter", StringComparison.Ordinal)
-            ? getterType.Assembly.GetType($"{getterType.Namespace}.{stem[..^"Getter".Length]}")
+            ? module.GetType($"{getterType.Namespace}.{stem[..^"Getter".Length]}")
             : null;
+
+    // The mod header has a table of its own and is no record, so it is not swept and not expected.
+    private static HashSet<string> SchemaRecordTypeNames() =>
+        SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4).Values
+            .Where(s => typeof(IMajorRecordGetter).IsAssignableFrom(s.RecordType))
+            .Select(s => s.RecordType.Name[1..^"Getter".Length])
+            .ToHashSet(StringComparer.Ordinal);
 
     private static bool TypedAsChildMajor(PropertyInfo property) =>
         typeof(IMajorRecordGetter).IsAssignableFrom(property.PropertyType)

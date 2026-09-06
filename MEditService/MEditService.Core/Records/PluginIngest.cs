@@ -35,13 +35,12 @@ internal sealed class PluginIngest
 
     internal readonly record struct IndexTiming(long DocumentsMs, long PrepareMs, long AppendMs, long ExtractedMs);
 
-    // Cell.Persistent/Temporary and Worldspace.TopCell/SubCells are already covered by
-    // placement/cell_location; this skip-list keeps container_child additive. Keyed by
-    // ContainerChildFields.NormalizedTypeName so it cannot drift from what EnumerateChildren walks.
+    // The placement tables' own slot list, not a container-member list: those come from
+    // ContainerMembers. What placement and cell_location already carry is skipped here so
+    // container_child stays additive rather than competing.
     internal static readonly HashSet<(string ParentType, string Slot)> CoveredByPlacementTables =
     [
-        ("Cell", "Persistent"), ("Cell", "Temporary"),
-        ("Worldspace", "TopCell"), ("Worldspace", "SubCells"),
+        ("Cell", "Persistent"), ("Cell", "Temporary"), ("Worldspace", "TopCell"),
     ];
 
     // Everything the index derives from one record, computed off the appender thread; only writing
