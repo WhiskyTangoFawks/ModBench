@@ -76,6 +76,18 @@ public sealed class UnionMechanismSchemaTests
         Assert.NotEqual("string", data.Type);
     }
 
+    // glob.OutputChar is declared by GlobalFloat alone, so "false" is that class's default and no
+    // other's: a view putting it back would answer it for a GlobalInt row that has no such member.
+    [Fact]
+    public void AColumnVaryingByRecordClass_CoalescesToNoLiteral()
+    {
+        var outputChar = Schemas["glob"].RecordColumns.Single(c => c.Name == "OutputChar");
+
+        Assert.NotNull(outputChar.Field.Variants);
+        Assert.True(outputChar.IsViewable, "the leaves agree on its type, so the view keeps the column");
+        Assert.Null(outputChar.ViewDefaultLiteral);
+    }
+
     [Fact]
     public void PerkEffectModification_AdvertisesEachLeafsOwnEnumDomain()
     {

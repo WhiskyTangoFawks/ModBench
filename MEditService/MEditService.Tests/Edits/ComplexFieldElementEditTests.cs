@@ -268,6 +268,27 @@ public sealed class ComplexFieldElementEditTests : IDisposable
         Assert.DoesNotContain("ObjectModFloatProperty", body, StringComparison.Ordinal);
     }
 
+    // FunctionType is an enum on every OMOD property leaf, but each leaf's own domain: MultAndAdd
+    // is a float function the bool leaf has no member for, so the switch drops it rather than
+    // handing the codec a value the incoming leaf cannot hold.
+    [Fact]
+    public void SwitchingAnOmodPropertyLeaf_DropsAMemberWhoseDomainTheIncomingLeafLacks()
+    {
+        using var omod = new OmodFixture();
+        var seed = omod.Service().Set(omod.Plugin, omod.ArmorMod.ToString(), "Properties", Json("""
+            [{"MutagenObjectType":"ObjectModFloatProperty<Armor+Property>","Property":"Weight","Step":2.0,"Value":1.5,"Value2":2.5,"FunctionType":"MultAndAdd"}]
+            """));
+        Assert.True(seed.Applied, seed.Message);
+
+        var result = omod.Service().Edit(omod.Plugin, omod.ArmorMod.ToString(),
+            SetAt(Json("\"ObjectModBoolProperty<Armor+Property>\""), Member("Properties"), At(0), Member("MutagenObjectType")));
+
+        Assert.True(result.Applied, result.Message);
+        var element = JsonDocument.Parse(omod.Body()).RootElement.GetProperty("Properties")[0];
+        Assert.Equal("ObjectModBoolProperty<Armor+Property>", element.GetProperty("MutagenObjectType").GetString());
+        Assert.False(element.TryGetProperty("FunctionType", out _), "MultAndAdd is not a bool function");
+    }
+
     // ── a declined member fails the whole struct/array write, not just that member ───────────
 
     [Fact]

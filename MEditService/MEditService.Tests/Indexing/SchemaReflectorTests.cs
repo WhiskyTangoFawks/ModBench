@@ -88,7 +88,7 @@ public class SchemaReflectorTests
         var properties = schemas["omod"].RecordColumns.Single(c => c.Name == "Properties");
 
         Assert.Equal("array", properties.ApiType);
-        Assert.NotNull(properties.ElementType);
+        Assert.NotNull(properties.Field.ElementSpec);
     }
 
     [Fact]
@@ -99,12 +99,12 @@ public class SchemaReflectorTests
         var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
         var properties = schemas["omod"].RecordColumns.Single(c => c.Name == "Properties");
 
-        static List<string> PropertyDomain(MEditService.Core.Queries.FieldMetadata variant) =>
-            [.. variant.ElementType!.Fields!.Single(f => f.Name == "Property").EnumMembers.Select(m => m.Value)];
-        Assert.Contains("BodyPart", PropertyDomain(properties.Variants![nameof(ArmorModification)]));
-        Assert.Contains("ForcedInventory", PropertyDomain(properties.Variants[nameof(NpcModification)]));
-        Assert.Contains("AmmoCapacity", PropertyDomain(properties.Variants[nameof(WeaponModification)]));
-        Assert.DoesNotContain("BodyPart", PropertyDomain(properties.Variants[nameof(NpcModification)]));
+        static List<string> PropertyDomain(SubFieldSpec variant) =>
+            [.. variant.ElementSpec!.SubFields!.Single(f => f.Name == "Property").EnumMembers.Select(m => m.Value)];
+        Assert.Contains("BodyPart", PropertyDomain(properties.Field.Variants![nameof(ArmorModification)]));
+        Assert.Contains("ForcedInventory", PropertyDomain(properties.Field.Variants[nameof(NpcModification)]));
+        Assert.Contains("AmmoCapacity", PropertyDomain(properties.Field.Variants[nameof(WeaponModification)]));
+        Assert.DoesNotContain("BodyPart", PropertyDomain(properties.Field.Variants[nameof(NpcModification)]));
     }
 
     // ── OMOD's Properties element must surface the property's actual Value ──
@@ -118,7 +118,7 @@ public class SchemaReflectorTests
         // The seven leaves' members, as one element schema.
         var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
         var properties = schemas["omod"].RecordColumns.Single(c => c.Name == "Properties");
-        var fields = properties.ElementType!.Fields!;
+        var fields = properties.Field.ElementSpec!.SubFields!;
 
         var value = fields.Single(f => f.Name == "Value");
         var value2 = fields.Single(f => f.Name == "Value2");
@@ -129,17 +129,17 @@ public class SchemaReflectorTests
         // Value/Value2/FunctionType collide in CLR type across the seven leaves, so each carries a
         // variant per leaf. Record and EnumIntValue are typed alike by the leaves declaring them,
         // and the variant map names exactly those leaves.
-        Assert.Equal("int", value.Variants!["ObjectModIntProperty<Armor+Property>"].Type);
-        Assert.Equal("float", value.Variants["ObjectModFloatProperty<Armor+Property>"].Type);
-        Assert.Equal("bool", value.Variants["ObjectModBoolProperty<Armor+Property>"].Type);
+        Assert.Equal("int", value.Variants!["ObjectModIntProperty<Armor+Property>"].ApiType);
+        Assert.Equal("float", value.Variants["ObjectModFloatProperty<Armor+Property>"].ApiType);
+        Assert.Equal("bool", value.Variants["ObjectModBoolProperty<Armor+Property>"].ApiType);
         Assert.NotNull(value2.Variants);
         Assert.NotNull(functionType.Variants);
-        Assert.Equal("formKey", record.Type);
+        Assert.Equal("formKey", record.ApiType);
         Assert.Equal(
             ["ObjectModFormLinkFloatProperty<Armor+Property>", "ObjectModFormLinkIntProperty<Armor+Property>"],
             record.Variants!.Keys.Order(StringComparer.Ordinal));
-        Assert.All(record.Variants.Values, v => Assert.Equal("formKey", v.Type));
-        Assert.Equal("int", enumIntValue.Type);
+        Assert.All(record.Variants.Values, v => Assert.Equal("formKey", v.ApiType));
+        Assert.Equal("int", enumIntValue.ApiType);
         Assert.Equal(["ObjectModEnumProperty<Armor+Property>"], enumIntValue.Variants!.Keys);
 
         // Every one of these is sparse — declared by some leaves, not all — so every row of a
@@ -166,9 +166,9 @@ public class SchemaReflectorTests
         var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
         var outputChar = schemas["glob"].RecordColumns.Single(c => c.Name == "OutputChar");
 
-        Assert.True(outputChar.AllowsNull);
-        Assert.Equal([nameof(GlobalFloat)], outputChar.Variants!.Keys);
-        Assert.Equal("bool", outputChar.Variants[nameof(GlobalFloat)].Type);
+        Assert.True(outputChar.Field.AllowsNull);
+        Assert.Equal([nameof(GlobalFloat)], outputChar.Field.Variants!.Keys);
+        Assert.Equal("bool", outputChar.Field.Variants[nameof(GlobalFloat)].ApiType);
         Assert.True(outputChar.IsViewable);
     }
 
@@ -204,8 +204,8 @@ public class SchemaReflectorTests
         Assert.NotNull(col);
         Assert.Equal("VARCHAR", col.DuckDbType);
         Assert.Equal("enum", col.ApiType);
-        Assert.NotEmpty(col.EnumMembers);
-        Assert.Contains("Unaggressive", col.EnumMembers.Select(m => m.Value));
+        Assert.NotEmpty(col.Field.EnumMembers);
+        Assert.Contains("Unaggressive", col.Field.EnumMembers.Select(m => m.Value));
     }
 
     [Fact]
@@ -216,7 +216,7 @@ public class SchemaReflectorTests
         Assert.NotNull(col);
         Assert.Equal("VARCHAR", col.DuckDbType);
         Assert.Equal("formKey", col.ApiType);
-        Assert.Contains("race", col.ValidFormKeyTypes);
+        Assert.Contains("race", col.Field.ValidFormKeyTypes);
     }
 
     [Fact]
@@ -226,7 +226,7 @@ public class SchemaReflectorTests
         var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
         var col = schemas["npc_"].RecordColumns.FirstOrDefault(c => c.Name == "Race");
         Assert.NotNull(col);
-        Assert.False(col!.AllowsNull);
+        Assert.False(col!.Field.AllowsNull);
     }
 
     [Fact]
@@ -236,7 +236,7 @@ public class SchemaReflectorTests
         var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
         var col = schemas["npc_"].RecordColumns.FirstOrDefault(c => c.Name == "Voice");
         Assert.NotNull(col);
-        Assert.True(col!.AllowsNull);
+        Assert.True(col!.Field.AllowsNull);
     }
 
     [Fact]
@@ -246,7 +246,7 @@ public class SchemaReflectorTests
         var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
         var col = schemas["npc_"].RecordColumns.FirstOrDefault(c => c.Name == "Factions");
         Assert.NotNull(col);
-        var faction = col!.ElementType?.Fields?.FirstOrDefault(f => f.Name == "Faction");
+        var faction = col!.Field.ElementSpec?.SubFields?.FirstOrDefault(f => f.Name == "Faction");
         Assert.NotNull(faction);
         Assert.False(faction!.AllowsNull);
     }
@@ -281,9 +281,9 @@ public class SchemaReflectorTests
         var col = schemas["npc_"].RecordColumns.FirstOrDefault(c => c.Name == "Keywords");
         Assert.NotNull(col);
         Assert.Equal("array", col.ApiType);
-        Assert.NotNull(col.ElementType);
-        Assert.Equal("formKey", col.ElementType.Type);
-        Assert.Contains("kywd", col.ElementType.ValidFormKeyTypes);
+        Assert.NotNull(col.Field.ElementSpec);
+        Assert.Equal("formKey", col.Field.ElementSpec.ApiType);
+        Assert.Contains("kywd", col.Field.ElementSpec.ValidFormKeyTypes);
     }
 
     [Fact]
@@ -292,8 +292,8 @@ public class SchemaReflectorTests
         var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
         var col = schemas["npc_"].RecordColumns.FirstOrDefault(c => c.Name == "Keywords");
         Assert.NotNull(col);
-        Assert.NotNull(col.ElementType);
-        Assert.True(col.ElementType.IsSortable);
+        Assert.NotNull(col.Field.ElementSpec);
+        Assert.True(col.Field.ElementSpec.IsSortable);
     }
 
     [Fact]
@@ -303,12 +303,12 @@ public class SchemaReflectorTests
         var col = schemas["npc_"].RecordColumns.FirstOrDefault(c => c.Name == "Factions");
         Assert.NotNull(col);
         Assert.Equal("array", col.ApiType);
-        Assert.NotNull(col.ElementType);
-        Assert.Equal("struct", col.ElementType.Type);
-        var fields = col.ElementType.Fields;
+        Assert.NotNull(col.Field.ElementSpec);
+        Assert.Equal("struct", col.Field.ElementSpec.ApiType);
+        var fields = col.Field.ElementSpec.SubFields;
         Assert.NotNull(fields);
-        Assert.Contains(fields, f => f.Name == "Faction" && f.Type == "formKey");
-        Assert.Contains(fields, f => f.Name == "Rank" && f.Type == "int");
+        Assert.Contains(fields, f => f.Name == "Faction" && f.ApiType == "formKey");
+        Assert.Contains(fields, f => f.Name == "Rank" && f.ApiType == "int");
     }
 
     // ── Float column ──────────────────────────────────────────────────────────
@@ -382,14 +382,14 @@ public class SchemaReflectorTests
         var structCol = npc.RecordColumns.FirstOrDefault(c => c.Name == structOrArrayColumn);
         Assert.NotNull(structCol);
 
-        IReadOnlyList<MEditService.Core.Queries.FieldMetadata>? subFields = isArray
-            ? structCol!.ElementType?.Fields
-            : structCol!.SubFields;
+        IReadOnlyList<SubFieldSpec>? subFields = isArray
+            ? structCol!.Field.ElementSpec?.SubFields
+            : structCol!.Field.SubFields;
 
         Assert.NotNull(subFields);
         var subField = subFields!.FirstOrDefault(f => f.Name == subFieldName);
         Assert.NotNull(subField);
-        Assert.Equal(expectedApiType, subField!.Type);
+        Assert.Equal(expectedApiType, subField!.ApiType);
     }
 
     // ── Bitmask / [Flags] enum support ────────────────────────────
@@ -419,7 +419,7 @@ public class SchemaReflectorTests
         var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
         var col = schemas["npc_"].RecordColumns.FirstOrDefault(c => c.Name == "Aggression");
         Assert.NotNull(col);
-        Assert.All(col!.EnumMembers, m => Assert.Null(m.BitValue));
+        Assert.All(col!.Field.EnumMembers, m => Assert.Null(m.BitValue));
     }
 
     [Fact]
@@ -430,8 +430,8 @@ public class SchemaReflectorTests
         var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
         var col = schemas["npc_"].RecordColumns.FirstOrDefault(c => c.Name == "Flags");
         Assert.NotNull(col);
-        Assert.NotEmpty(col!.EnumMembers);
-        Assert.All(col.EnumMembers, m =>
+        Assert.NotEmpty(col!.Field.EnumMembers);
+        Assert.All(col.Field.EnumMembers, m =>
         {
             Assert.NotNull(m.BitValue);
             long v = long.Parse(m.BitValue!, System.Globalization.CultureInfo.InvariantCulture);
@@ -447,7 +447,7 @@ public class SchemaReflectorTests
         // A member's BitValue must be string so the frontend can parse it as BigInt.
         var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
         var col = schemas["race"].RecordColumns.Single(c => c.Name == "Flags");
-        var bits = col.EnumMembers.Select(m => m.BitValue).ToList();
+        var bits = col.Field.EnumMembers.Select(m => m.BitValue).ToList();
         Assert.Contains("9007199254740992", bits);   // LowPriorityPushable = 2^53
         Assert.Contains("18014398509481984", bits);  // CannotUsePlayableItems = 2^54
         Assert.Contains("1", bits);                   // Playable (low-bit sanity check)
@@ -464,7 +464,7 @@ public class SchemaReflectorTests
         var col = schemas["misc"].RecordColumns.FirstOrDefault(c => c.Name == "MajorFlags");
         Assert.NotNull(col);
         Assert.Equal("flags", col!.ApiType);
-        Assert.All(col.EnumMembers, m => Assert.Null(m.BitValue));
+        Assert.All(col.Field.EnumMembers, m => Assert.Null(m.BitValue));
     }
 
     // ── Plugin header as a first-class record ─────────────────────────────────
@@ -497,10 +497,10 @@ public class SchemaReflectorTests
         var col = schemas["header"].RecordColumns.FirstOrDefault(c => c.Name == "Flags");
         Assert.NotNull(col);
         Assert.Equal("flags", col!.ApiType);
-        Assert.Equal("ESM", col.EnumMembers.Single(m => m.Value == "Master").Label);
-        Assert.Equal("ESL", col.EnumMembers.Single(m => m.Value == "Small").Label);
-        Assert.Null(col.EnumMembers.Single(m => m.Value == "Localized").Label);
-        Assert.DoesNotContain(col.EnumMembers, m => m.Value is "ESM" or "ESL");
+        Assert.Equal("ESM", col.Field.EnumMembers.Single(m => m.Value == "Master").Label);
+        Assert.Equal("ESL", col.Field.EnumMembers.Single(m => m.Value == "Small").Label);
+        Assert.Null(col.Field.EnumMembers.Single(m => m.Value == "Localized").Label);
+        Assert.DoesNotContain(col.Field.EnumMembers, m => m.Value is "ESM" or "ESL");
     }
 
     [Theory]
@@ -526,9 +526,9 @@ public class SchemaReflectorTests
         Assert.NotNull(col);
         Assert.Equal("array", col!.ApiType);
         Assert.Equal("ModHeader.MasterReferences", col.PropertyName);
-        Assert.NotNull(col.ElementType);
-        Assert.Equal("struct", col.ElementType!.Type);
-        Assert.Contains(col.ElementType.Fields!, f => f.Name == "Master" && f.Type == "string");
+        Assert.NotNull(col.Field.ElementSpec);
+        Assert.Equal("struct", col.Field.ElementSpec!.ApiType);
+        Assert.Contains(col.Field.ElementSpec.SubFields!, f => f.Name == "Master" && f.ApiType == "string");
     }
 
     [Fact]
@@ -549,8 +549,8 @@ public class SchemaReflectorTests
         // master entry as a further repeatable list.
         var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
         var col = schemas["header"].RecordColumns.Single(c => c.Name == "MasterReferences");
-        Assert.NotNull(col.ElementType);
-        Assert.False(col.ElementType!.IsArray);
+        Assert.NotNull(col.Field.ElementSpec);
+        Assert.False(col.Field.ElementSpec!.IsArray);
     }
 
     [Fact]
@@ -596,8 +596,8 @@ public class SchemaReflectorTests
         Assert.NotNull(col);
         Assert.Equal("struct", col!.ApiType);
 
-        Assert.Equal("vector", col.SubFields?.FirstOrDefault(f => f.Name == "First")?.Type);
-        Assert.Equal("vector", col.SubFields?.FirstOrDefault(f => f.Name == "Second")?.Type);
+        Assert.Equal("vector", col.Field.SubFields?.FirstOrDefault(f => f.Name == "First")?.ApiType);
+        Assert.Equal("vector", col.Field.SubFields?.FirstOrDefault(f => f.Name == "Second")?.ApiType);
     }
 
     // ── Nested list inside a struct (Destructible.Resistances/Stages) ──────────
@@ -611,16 +611,16 @@ public class SchemaReflectorTests
         var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
         var destructible = schemas["cont"].RecordColumns.First(c => c.Name == "Destructible");
 
-        var resistances = destructible.SubFields?.FirstOrDefault(f => f.Name == "Resistances");
+        var resistances = destructible.Field.SubFields?.FirstOrDefault(f => f.Name == "Resistances");
         Assert.NotNull(resistances);
-        Assert.Equal("array", resistances!.Type);
+        Assert.Equal("array", resistances!.ApiType);
         Assert.True(resistances.IsArray);
 
-        var stages = destructible.SubFields?.FirstOrDefault(f => f.Name == "Stages");
+        var stages = destructible.Field.SubFields?.FirstOrDefault(f => f.Name == "Stages");
         Assert.NotNull(stages);
-        Assert.Equal("array", stages!.Type);
+        Assert.Equal("array", stages!.ApiType);
         Assert.True(stages.IsArray);
-        Assert.Contains(stages.ElementType!.Fields!, f => f.Name == "HealthPercent");
+        Assert.Contains(stages.ElementSpec!.SubFields!, f => f.Name == "HealthPercent");
     }
 
     // ── P3Float, both dispatch paths, on fixtures with no side-table mirror ────────────────────
@@ -635,7 +635,7 @@ public class SchemaReflectorTests
         var col = schemas["mato"].RecordColumns.FirstOrDefault(c => c.Name == "ProjectionVector");
         Assert.NotNull(col);
         Assert.Equal("vector", col!.ApiType);
-        Assert.Null(col.SubFields);
+        Assert.Null(col.Field.SubFields);
     }
 
     [Fact]
@@ -647,8 +647,8 @@ public class SchemaReflectorTests
         var teleport = schemas["refr"].RecordColumns.FirstOrDefault(c => c.Name == "TeleportDestination");
         Assert.NotNull(teleport);
 
-        Assert.Equal("vector", teleport!.SubFields?.FirstOrDefault(f => f.Name == "Position")?.Type);
-        Assert.Equal("vector", teleport.SubFields?.FirstOrDefault(f => f.Name == "Rotation")?.Type);
+        Assert.Equal("vector", teleport!.Field.SubFields?.FirstOrDefault(f => f.Name == "Position")?.ApiType);
+        Assert.Equal("vector", teleport.Field.SubFields?.FirstOrDefault(f => f.Name == "Rotation")?.ApiType);
     }
 
     // ── Noggog's small value-vector struct family, beyond P3Int16/P3Float ──────────────────────
@@ -662,10 +662,10 @@ public class SchemaReflectorTests
         var col = schemas["cell"].RecordColumns.FirstOrDefault(c => c.Name == "Grid");
         Assert.NotNull(col);
         Assert.Equal("struct", col!.ApiType);
-        Assert.Equal(2, col.SubFields!.Count);
+        Assert.Equal(2, col.Field.SubFields!.Count);
 
-        Assert.Contains(col.SubFields!, f => f.Name == "Flags" && f.Type is "enum" or "Flags");
-        Assert.Contains(col.SubFields!, f => f.Name == "Point" && f.Type == "vector");
+        Assert.Contains(col.Field.SubFields!, f => f.Name == "Flags" && f.ApiType is "enum" or "Flags");
+        Assert.Contains(col.Field.SubFields!, f => f.Name == "Point" && f.ApiType == "vector");
     }
 
     [Fact]
@@ -678,10 +678,10 @@ public class SchemaReflectorTests
         Assert.NotNull(col);
         Assert.Equal("array", col!.ApiType);
 
-        var coordinates = col.ElementType?.Fields?.FirstOrDefault(f => f.Name == "Coordinates");
+        var coordinates = col.Field.ElementSpec?.SubFields?.FirstOrDefault(f => f.Name == "Coordinates");
         Assert.NotNull(coordinates);
         Assert.True(coordinates!.IsArray);
-        Assert.Equal("vector", coordinates.ElementType!.Type);
+        Assert.Equal("vector", coordinates.ElementSpec!.ApiType);
     }
 
 }

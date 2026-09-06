@@ -207,7 +207,7 @@ public sealed class DocumentEditTests
         var after = Applied(before, "cobj", AddAt(Member("Conditions")));
 
         AssertOnlyChanged(before, after, "Conditions[2]");
-        var leaf = Schemas["cobj"].RecordColumns.Single(c => c.Name == "Conditions").ElementType!.Fields!.Single(f => f.IsDiscriminator).EnumMembers[0].Value;
+        var leaf = Schemas["cobj"].RecordColumns.Single(c => c.Name == "Conditions").Field.ElementSpec!.SubFields!.Single(f => f.IsDiscriminator).EnumMembers[0].Value;
         Assert.Equal(leaf, Node(after, "Conditions")[2]!["MutagenObjectType"]!.GetValue<string>());
     }
 

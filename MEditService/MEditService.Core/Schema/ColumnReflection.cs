@@ -5,8 +5,8 @@ using Mutagen.Bethesda.Plugins.Records;
 namespace MEditService.Core.Schema;
 
 /// <summary>One record type's top-level columns: every member of its getter interface that is not
-/// record-header metadata, dispatched to its leaf kind and projected into a
-/// <see cref="ColumnSpec"/> named by the member itself.</summary>
+/// record-header metadata, built by the same leaf builders every nested member uses and given the
+/// database facts a column needs on top.</summary>
 internal static class ColumnReflection
 {
     // Declared by Mutagen.Bethesda.Core's IMajorRecordGetter for every game: identity and header
@@ -34,49 +34,34 @@ internal static class ColumnReflection
         foreach (var group in grouped)
         {
             var prop = ReflectedTypes.MostDerived(group);
-            var info = GetColumnInfo(prop, game, logger);
-            if (info == null) continue;
-
-            columns.Add(new ColumnSpec(
-                prop.Name, prop.Name, info.DuckDbType, info.ApiType,
-                info.ValidFormKeyTypes, info.EnumMembers,
-                IsArray: info.ApiType == "array",
-                ElementType: info.ElementMeta,
-                SubFields: info.SubFieldMetas,
-                AllowsNull: info.AllowsNull,
-                ViewDefaultLiteral: info.ViewDefaultLiteral,
-                KeyMembers: info.KeyMembers,
-                LeafTypeName: info.LeafTypeName,
-                Default: info.Default));
+            if (BuildColumn(prop, prop.Name, game, logger) is { } column) columns.Add(column);
         }
 
         columns.AddRange(SyntheticColumns.For(getterType, game, backingPathPrefix: "", backingNames: _ => LeafSpec.NoEnumMembers));
         return columns;
     }
 
-    private static ColumnInfoResult? GetColumnInfo(
-        PropertyInfo prop, GameReflection game, ILogger logger)
+    /// <summary>One member as a column: the spec every walk builds it as, plus its database facts.
+    /// A scalar leaf casts to its own DuckDB type and coalesces to its own default; an array or a
+    /// struct is one JSON node the view has no scalar reading of.</summary>
+    internal static ColumnSpec? BuildColumn(
+        PropertyInfo prop, string propertyName, GameReflection game, ILogger logger)
     {
         var type = prop.PropertyType;
         var core = Nullable.GetUnderlyingType(type) ?? type;
         var nullable = Nullable.GetUnderlyingType(type) != null || !type.IsValueType;
 
-        return LeafClassification.ClassifyLeaf(prop, core, game) switch
+        if (LeafClassification.ClassifyLeaf(prop, core, game) is { } leaf)
         {
-            { } leaf => ProjectColumn(nullable, leaf),
-            null when ReflectedTypes.IsListType(core, out var elementType) => ListLeaves.BuildListColumn(prop, elementType, game, logger),
-            null when ReflectedTypes.IsLoquiInterface(core) => StructLeaves.BuildStructColumn(prop, core, game, logger),
-            _ => SchemaRefusals.ReportUnclassified<ColumnInfoResult>(game, logger, prop, core, "column"),
-        };
-    }
+            return new ColumnSpec(
+                SubFieldReflection.ProjectSubField(prop, nullable, leaf, game), propertyName, leaf.DuckDbType,
+                // A nullable property genuinely can be absent-meaning-null, so it keeps NULL rather
+                // than being coalesced to a default it never had.
+                ViewDefaultLiteral: nullable ? null : leaf.ViewDefaultLiteral);
+        }
 
-    private static ColumnInfoResult ProjectColumn(bool nullable, LeafSpec leaf)
-    {
-        return new(leaf.DuckDbType, leaf.ApiType, leaf.ValidFormKeyTypes, leaf.EnumMembers,
-            AllowsNull: leaf.AllowsNull,
-            // A nullable property genuinely can be absent-meaning-null, so it keeps NULL rather than
-            // being coalesced to a default it never had.
-            ViewDefaultLiteral: nullable ? null : leaf.ViewDefaultLiteral,
-            Default: nullable ? null : leaf.Default);
+        return SubFieldReflection.GetSubFieldInfo(prop, game, SubFieldReflection.RootPath, depth: 0, logger) is { } spec
+            ? new ColumnSpec(spec, propertyName, "VARCHAR")
+            : null;
     }
 }

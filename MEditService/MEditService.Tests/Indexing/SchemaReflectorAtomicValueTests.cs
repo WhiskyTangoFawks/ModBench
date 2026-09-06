@@ -25,7 +25,7 @@ public class SchemaReflectorAtomicValueTests
         var color = Column("ligh", "Color");
 
         Assert.Equal("color", color.ApiType);
-        Assert.Null(color.SubFields);
+        Assert.Null(color.Field.SubFields);
         Assert.True(color.IsViewable);
     }
 
@@ -36,10 +36,10 @@ public class SchemaReflectorAtomicValueTests
         // above, proving the leaf kind is reached from BuildSubSchema's dispatch and not only from
         // the top-level column dispatch.
         var lighting = Column("cell", "Lighting");
-        var ambient = lighting.SubFields!.Single(f => f.Name == "AmbientColor");
+        var ambient = lighting.Field.SubFields!.Single(f => f.Name == "AmbientColor");
 
-        Assert.Equal("color", ambient.Type);
-        Assert.Null(ambient.Fields);
+        Assert.Equal("color", ambient.ApiType);
+        Assert.Null(ambient.SubFields);
     }
 
     // ── The alpha byte is written only where xEdit shows one (wbByteRGBA) ──────────────────────

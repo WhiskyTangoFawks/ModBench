@@ -34,14 +34,14 @@ public sealed class DeclaredDefaultTests
         var script = Member(Vmad, "Scripts").ElementType!;
 
         Assert.Null(Member(script, "Name").Default);
-        Assert.Null(Schemas["npc_"].RecordColumns.Single(c => c.Name == "HeightMin").Default);
+        Assert.Null(Schemas["npc_"].RecordColumns.Single(c => c.Name == "HeightMin").Field.Default);
     }
 
     [Fact]
     public void AnEnumMember_AlwaysNamesItsDefault_DeclaredOrZero()
     {
         var property = Member(Member(Vmad, "Scripts").ElementType!, "Properties").ElementType!;
-        var data = Schemas["cobj"].RecordColumns.Single(c => c.Name == "Conditions").ElementType!.Fields!.Single(f => f.Name == "Data");
+        var data = Schemas["cobj"].RecordColumns.Single(c => c.Name == "Conditions").Field.ElementSpec!.ToFieldMetadata().Fields!.Single(f => f.Name == "Data");
 
         Assert.Equal("Edited", Member(property, "Flags").Default);
         Assert.Equal("Subject", Member(data, "RunOnType").Default);
@@ -53,8 +53,17 @@ public sealed class DeclaredDefaultTests
     {
         var priority = Schemas["dial"].RecordColumns.Single(c => c.Name == "Priority");
 
-        Assert.Equal(50, AsLong(priority.Default));
+        Assert.Equal(50, AsLong(priority.Field.Default));
         Assert.Equal("50", priority.ViewDefaultLiteral);
+    }
+
+    // A colour, vector or hex member has no wire zero of its own — 0 is not "#00000000" — so the
+    // metadata names the codec's own spelling of it, as an enum names its zero member.
+    [Fact]
+    public void AColorOrVectorMember_NamesTheCodecsSpellingOfItsZero()
+    {
+        Assert.Equal("#00000000", Schemas["ligh"].RecordColumns.Single(c => c.Name == "Color").Field.Default);
+        Assert.Equal("0, 0, 0", Schemas["mato"].RecordColumns.Single(c => c.Name == "ProjectionVector").Field.Default);
     }
 
     [Fact]

@@ -20,8 +20,8 @@ public class UnionArrayAddInventoryTests
     {
         var found = SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4).Values
             .SelectMany(s => s.RecordColumns)
-            .Where(c => c.ElementType?.Fields?.Any(f => f.IsDiscriminator) == true)
-            .Select(c => string.Join("|", c.ElementType!.Fields!.Single(f => f.IsDiscriminator)
+            .Where(c => c.Field.ElementSpec?.SubFields?.Any(f => f.IsDiscriminator) == true)
+            .Select(c => string.Join("|", c.Field.ElementSpec!.SubFields!.Single(f => f.IsDiscriminator)
                 .EnumMembers.Select(m => m.Value)))
             .Distinct(StringComparer.Ordinal)
             .OrderBy(n => n, StringComparer.Ordinal);
@@ -74,7 +74,7 @@ public class UnionArrayAddInventoryTests
         var written = document.RootElement.GetProperty(col.PropertyName);
         Assert.Equal(1, written.GetArrayLength());
         // The one member the default names, and the leaf it names.
-        var discriminator = col.ElementType!.Fields!.Single(f => f.IsDiscriminator);
+        var discriminator = col.Field.ElementSpec!.SubFields!.Single(f => f.IsDiscriminator);
         Assert.Equal(
             discriminator.EnumMembers[0].Value,
             written[0].GetProperty(discriminator.Name).GetString());

@@ -26,12 +26,12 @@ public sealed class ConcreteBaseUnionSchemaTests
         var column = NpcAdapterColumn(SharedSchemaReflector.Instance);
 
         Assert.Equal("struct", column.ApiType);
-        Assert.Contains(column.SubFields!, f => f.Name == "Scripts");
+        Assert.Contains(column.Field.SubFields!, f => f.Name == "Scripts");
     }
 
     private static FieldMetadata ScriptPropertyElement(ColumnSpec adapter) =>
-        adapter.SubFields!.Single(f => f.Name == "Scripts").ElementType!
-            .Fields!.Single(f => f.Name == "Properties").ElementType!;
+        adapter.Field.SubFields!.Single(f => f.Name == "Scripts").ElementSpec!
+            .SubFields!.Single(f => f.Name == "Properties").ElementSpec!.ToFieldMetadata();
 
     [Fact]
     public void ScriptProperty_ConcreteType_ListsFourteenLeavesAndTheBaseItself()
