@@ -2,24 +2,16 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Core.Source;
 
-/// <summary>Which fields of a container hold child major records — the index's <c>container_child</c>
-/// rows. Nothing is stripped (ADR-0041 amendment). Hand-maintained; a gap here costs an index
-/// row, never a record in the compiled binary.</summary>
+/// <summary>Reading and writing a container's child major records through the members
+/// <see cref="ContainerMembers"/> derives. Nothing is stripped (ADR-0041 amendment).</summary>
 internal static class ContainerChildFields
 {
-    private static readonly Dictionary<string, string[]> ByTypeName = new(StringComparer.Ordinal)
-    {
-        ["Cell"] = ["Persistent", "Temporary", "NavigationMeshes", "Landscape"],
-        ["Worldspace"] = ["TopCell", "SubCells"],
-        // Scenes: Scene is a major record with no top-level group of its own.
-        ["Quest"] = ["DialogBranches", "DialogTopics", "Scenes"],
-        ["DialogTopic"] = ["Responses"],
-    };
-
     /// <summary>The child-major field names for <paramref name="recordType"/>, or null when it is not a
     /// known container shape.</summary>
     internal static IReadOnlyList<string>? EnumerateChildFieldsFor(Type recordType) =>
-        ByTypeName.TryGetValue(NormalizedTypeName(recordType), out var fields) ? fields : null;
+        ContainerMembers.Derived.ChildFieldsByType.TryGetValue(NormalizedTypeName(recordType), out var fields)
+            ? fields
+            : null;
 
     private const string OverlaySuffix = "BinaryOverlay";
 
@@ -96,7 +88,7 @@ internal static class ContainerChildFields
         {
             var property = record.GetType().GetProperty(slotName)
                 ?? throw new InvalidOperationException(
-                    $"{record.GetType().Name} has no property '{slotName}' to clear — ContainerChildFields' table is stale.");
+                    $"{record.GetType().Name} has no property '{slotName}' to clear — its child members are the assembly's own.");
 
             var value = property.GetValue(record);
             if (value is IMajorRecordGetter) property.SetValue(record, null);
@@ -110,7 +102,7 @@ internal static class ContainerChildFields
     {
         var property = parent.GetType().GetProperty(slotName)
             ?? throw new InvalidOperationException(
-                $"{parent.GetType().Name} has no property '{slotName}' to add a child to — ContainerChildFields' table is stale.");
+                $"{parent.GetType().Name} has no property '{slotName}' to add a child to — its child members are the assembly's own.");
 
         ((dynamic)property.GetValue(parent)!).Add((dynamic)child);
     }
@@ -124,7 +116,7 @@ internal static class ContainerChildFields
         {
             var property = to.GetType().GetProperty(slotName)
                 ?? throw new InvalidOperationException(
-                    $"{to.GetType().Name} has no property '{slotName}' to transplant a child into — ContainerChildFields' table is stale.");
+                    $"{to.GetType().Name} has no property '{slotName}' to transplant a child into — its child members are the assembly's own.");
             // Branch on the slot's shape, not the current value — a cleared list slot could in
             // principle be null, and SetValue'ing a single child into a list property would crash.
             var value = property.GetValue(to);
@@ -139,20 +131,20 @@ internal static class ContainerChildFields
     {
         var property = parent.GetType().GetProperty(slotName)
             ?? throw new InvalidOperationException(
-                $"{parent.GetType().Name} has no property '{slotName}' to replace a child in — ContainerChildFields' table is stale.");
+                $"{parent.GetType().Name} has no property '{slotName}' to replace a child in — its child members are the assembly's own.");
 
         var value = property.GetValue(parent);
         if (value is IMajorRecordGetter) property.SetValue(parent, child);
         else ((dynamic)value!)[slotIndex] = (dynamic)child;
     }
 
-    // Reflection plus dynamic so one path cannot drift from the table; RemoveAt resolves against the
+    // Reflection plus dynamic so one path cannot drift from the derived members; RemoveAt resolves against the
     // slot's runtime list type.
     private static void RemoveFromSlot(IMajorRecordGetter parent, string slotName, int slotIndex)
     {
         var property = parent.GetType().GetProperty(slotName)
             ?? throw new InvalidOperationException(
-                $"{parent.GetType().Name} has no property '{slotName}' to remove a child from — ContainerChildFields' table is stale.");
+                $"{parent.GetType().Name} has no property '{slotName}' to remove a child from — its child members are the assembly's own.");
 
         var value = property.GetValue(parent);
         if (value is IMajorRecordGetter)
@@ -164,16 +156,9 @@ internal static class ContainerChildFields
         ((dynamic)value!).RemoveAt(slotIndex);
     }
 
-    // The slots that serialize inline into the parent's document — the runtime shadow of the
-    // embed customizations in Serialization/EmbedCustomizations.cs. Every slot of ByTypeName but a
-    // worldspace's SubCells, whose blocks are directories. Keep in step with the customizations.
-    internal static readonly HashSet<(string ParentType, string Slot)> EmbeddedSlots =
-    [
-        ("Cell", "Persistent"), ("Cell", "Temporary"), ("Cell", "Landscape"), ("Cell", "NavigationMeshes"),
-        ("Worldspace", "TopCell"),
-        ("Quest", "DialogTopics"), ("Quest", "DialogBranches"), ("Quest", "Scenes"),
-        ("DialogTopic", "Responses"),
-    ];
+    /// <summary>The slots that serialize inline into the parent's document, which is every member the
+    /// embed customizations accept.</summary>
+    internal static IReadOnlySet<(string ParentType, string Slot)> EmbeddedSlots => ContainerMembers.Derived.EmbeddedSlots;
 
     /// <summary>Child major records read non-destructively off a getter, so ingest captures parentage in
     /// the same pass that writes the parent. <c>SlotIndex</c> is preserved so compile reproduces the
@@ -181,13 +166,13 @@ internal static class ContainerChildFields
     internal static IEnumerable<(string SlotName, int SlotIndex, IMajorRecordGetter Child)> EnumerateChildren(
         IMajorRecordGetter record)
     {
-        if (!ByTypeName.TryGetValue(NormalizedTypeName(record.GetType()), out var fields)) yield break;
+        if (EnumerateChildFieldsFor(record.GetType()) is not { } fields) yield break;
 
         foreach (var fieldName in fields)
         {
             var property = record.GetType().GetProperty(fieldName)
                 ?? throw new InvalidOperationException(
-                    $"{record.GetType().Name} has no property '{fieldName}' to read children from — ContainerChildFields' table is stale.");
+                    $"{record.GetType().Name} has no property '{fieldName}' to read children from — its child members are the assembly's own.");
 
             switch (property.GetValue(record))
             {
