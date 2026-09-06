@@ -65,6 +65,10 @@ export type WorldspaceSubBlock = Schemas['WorldspaceSubBlockDto'];
 export type WorldspaceBlock = Schemas['WorldspaceBlockDto'];
 export type WorldspaceBlocks = Schemas['WorldspaceBlocks'];
 
+/** `GET /notifications/stream`'s one wire shape for every kind (ADR-0046 invariant 12). `kind` is
+ *  a plain `string` on the schema — it is a discriminator, not a C# enum. */
+export type NotificationEvent = Schemas['NotificationEvent'];
+
 /** `GET /load-order/status`, polled alongside the in-flight `PUT /load-order`. The wire's `state`
  *  is deliberately not carried: it duplicates `conflictsComputed`, and a second, coincidentally
  *  equal field would invite the wrong read. */
@@ -86,6 +90,12 @@ export interface LoadOrderStatus {
 
 export function createApiClient(port: number, fetch?: (input: Request) => Promise<Response>) {
   return createClient<paths>({ baseUrl: `http://localhost:${port}`, ...(fetch ? { fetch } : {}) });
+}
+
+/** `GET /notifications/stream` is chunked, so `parseAs: 'stream'` skips the client's JSON parse
+ *  and hands back the raw `Response` — the SSE adapter reads its body itself. */
+export function openNotificationStream(client: ApiClient, signal: AbortSignal): Promise<Response> {
+  return client.GET('/notifications/stream', { parseAs: 'stream', signal }).then(({ response }) => response);
 }
 
 /** openapi-fetch has already drained the Response body to produce `error`, so callers must use

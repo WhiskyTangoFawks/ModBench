@@ -15,6 +15,12 @@ export class ActiveRecordTracker<TPanel = unknown> {
     return this.lastFired;
   }
 
+  /** Any tracked panel's own FormKey, active or not — the notification subscription's per-panel
+   *  match key. */
+  formKeyOf(panel: TPanel): string | undefined {
+    return this.formKeys.get(panel);
+  }
+
   /** Fires only if `panel` is the active one. */
   setFormKey(panel: TPanel, formKey: string): void {
     this.formKeys.set(panel, formKey);
