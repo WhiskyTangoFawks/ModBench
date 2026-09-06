@@ -2,14 +2,18 @@ using MEditService.Core.Queries;
 
 namespace MEditService.Core.Schema;
 
-internal sealed record SubFieldSpec(
+/// <summary>One member of the document, whatever the walk reached it as: a record's own column
+/// (<see cref="ColumnSpec.Field"/>), a member nested inside a struct, or an array's element.</summary>
+public sealed record SubFieldSpec(
     string Name,
     string ApiType,
-    string[] ValidFormKeyTypes,
+    IReadOnlyList<string> ValidFormKeyTypes,
     IReadOnlyList<EnumMember> EnumMembers,
     IReadOnlyList<SubFieldSpec>? SubFields = null,
     SubFieldSpec? ElementSpec = null,
     bool AllowsNull = false,
+    // See FieldMetadata.IsSortable.
+    bool IsSortable = false,
     // The row's title when Name is a wire token; see FieldMetadata.DisplayLabel.
     string? DisplayLabel = null,
     // See FieldMetadata.IsDiscriminator.
@@ -25,11 +29,14 @@ internal sealed record SubFieldSpec(
     // See FieldMetadata.Default.
     object? Default = null)
 {
-    // IsArray is derived from ApiType, as ColumnSpec's is, rather than a flag that could disagree with it.
+    /// <summary>Derived from ApiType rather than carried, so the two can never disagree.</summary>
+    public bool IsArray => ApiType == "array";
+
     public FieldMetadata ToFieldMetadata() =>
-        new(Name, ApiType, ApiType == "array", ValidFormKeyTypes, EnumMembers,
+        new(Name, ApiType, IsArray, ValidFormKeyTypes, EnumMembers,
             ElementSpec?.ToFieldMetadata(),
             SubFields?.Select(s => s.ToFieldMetadata()).ToList(),
+            IsSortable: IsSortable,
             AllowsNull: AllowsNull,
             DisplayLabel: DisplayLabel,
             IsDiscriminator: IsDiscriminator,

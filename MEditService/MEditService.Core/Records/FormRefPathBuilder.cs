@@ -25,8 +25,8 @@ internal static class FormRefPathBuilder
             (path, raw, _, _) => { if (IsRealRef(raw)) visitor(path, raw!); });
     }
 
-    // Keyed by reference: ColumnSpec is a record whose value equality would hash every member
-    // (delegates included) on each lookup, and the schema's own instances are the only ones here.
+    // Keyed by reference: ColumnSpec is a record whose value equality would walk its whole member
+    // tree on each lookup, and the schema's own instances are the only ones here.
     private static readonly ConcurrentDictionary<ColumnSpec, (FieldMetadata Meta, bool CarriesFormKeys)> Plans =
         new(ReferenceEqualityComparer.Instance);
 

@@ -168,7 +168,9 @@ internal static class DocumentEdit
             // The one identity member every record's document spells that no column reflects.
             if (name == EditorIdMember && !schema.IsHeader)
             {
-                column = new ColumnSpec(EditorIdMember, EditorIdMember, "VARCHAR", "string", LeafSpec.NoFormKeyTypes, LeafSpec.NoEnumMembers, AllowsNull: true);
+                column = new ColumnSpec(
+                    new SubFieldSpec(EditorIdMember, "string", LeafSpec.NoFormKeyTypes, LeafSpec.NoEnumMembers, AllowsNull: true),
+                    EditorIdMember, "VARCHAR");
             }
             else
             {
@@ -428,9 +430,15 @@ internal static class DocumentEdit
         foreach (var (name, node) in rest) owner[name] = node;
     }
 
-    private static bool SameShape(FieldMetadata a, FieldMetadata b) =>
-        a.Type == b.Type && a.LeafTypeName == b.LeafTypeName
-        && a.ElementType?.Type == b.ElementType?.Type && a.ElementType?.LeafTypeName == b.ElementType?.LeafTypeName;
+    // Alike means the codec would take the same value under either leaf: same kind, same class and
+    // — since each leaf closes an enum over its own members — the same domain, element included.
+    private static bool SameShape(FieldMetadata? a, FieldMetadata? b) =>
+        a is null || b is null
+            ? a is null && b is null
+            : a.Type == b.Type && a.LeafTypeName == b.LeafTypeName
+              && a.EnumMembers.Select(m => m.Value).SequenceEqual(b.EnumMembers.Select(m => m.Value), StringComparer.Ordinal)
+              && a.ValidFormKeyTypes.SequenceEqual(b.ValidFormKeyTypes, StringComparer.Ordinal)
+              && SameShape(a.ElementType, b.ElementType);
 
     private static RecordEditResult? Add(
         Cursor cursor, JsonElement? value, DocumentEditRequest request, string spelled,

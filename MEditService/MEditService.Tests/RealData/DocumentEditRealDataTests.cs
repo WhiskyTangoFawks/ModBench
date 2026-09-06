@@ -79,7 +79,7 @@ public sealed class DocumentEditRealDataTests(CutDownPluginFixture fixture, ITes
         var childSlots = RecordTypeDispatch.For(GameRelease.Fallout4).ConcreteFor(schema.TableName) is { } concrete
             ? ContainerChildFields.EnumerateChildFieldsFor(concrete) ?? []
             : [];
-        foreach (var column in schema.RecordColumns.Where(c => c.IsArray && c.Synthetic == null && c.ReadOnlyReason == null && !childSlots.Contains(c.Name)))
+        foreach (var column in schema.RecordColumns.Where(c => c.Field.IsArray && c.Synthetic == null && c.ReadOnlyReason == null && !childSlots.Contains(c.Name)))
         {
             if (DocumentNodes.At(root, column.PropertyName) is not { ValueKind: JsonValueKind.Array } array || array.GetArrayLength() == 0) continue;
             var meta = DocumentNodes.VariantFor(column.ToFieldMetadata(), root);

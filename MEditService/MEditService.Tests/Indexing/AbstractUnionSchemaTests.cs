@@ -36,8 +36,8 @@ public class AbstractUnionSchemaTests
 
         Assert.NotNull(aliases);
         Assert.Equal("array", aliases!.ApiType);
-        Assert.NotNull(aliases.ElementType);
-        Assert.NotEmpty(aliases.ElementType!.Fields!);
+        Assert.NotNull(aliases.Field.ElementSpec);
+        Assert.NotEmpty(aliases.Field.ElementSpec!.SubFields!);
     }
 
 

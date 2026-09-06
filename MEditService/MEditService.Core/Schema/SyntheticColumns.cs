@@ -17,7 +17,9 @@ internal static class SyntheticColumns
                 ? SchemaAnnotations.ParseBit(flag)
                 : long.Parse(names.Single(m => m.Value == flag).BitValue!, CultureInfo.InvariantCulture);
             var aliases = names.Count == 0 ? game.Defaults.MembersAliasing(getterType, backingMember, bit) : [];
-            yield return new ColumnSpec(name, name, "BOOLEAN", "bool", LeafSpec.NoFormKeyTypes, LeafSpec.NoEnumMembers,
+            yield return new ColumnSpec(
+                new SubFieldSpec(name, "bool", LeafSpec.NoFormKeyTypes, LeafSpec.NoEnumMembers),
+                name, "BOOLEAN",
                 ViewDefaultLiteral: "false",
                 Synthetic: new SyntheticBit(backingPathPrefix + backingMember, bit, names.Count == 0 ? null : flag, aliases));
         }

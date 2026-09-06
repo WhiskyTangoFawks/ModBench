@@ -1,5 +1,4 @@
 using System.Reflection;
-using MEditService.Core.Queries;
 using Microsoft.Extensions.Logging;
 
 namespace MEditService.Core.Schema;
@@ -56,47 +55,6 @@ internal static class SubFieldReflection
             "A re-entry the game's own data format cannot nest belongs in SchemaAnnotations.CycleTruncations.");
     }
 
-    // Element metadata for use in FieldMetadata.ElementType.
-    internal static FieldMetadata? BuildElementMeta(
-        Type elementType, GameReflection game, Type[] path, ILogger logger)
-    {
-        var core = Nullable.GetUnderlyingType(elementType) ?? elementType;
-
-        if (ReflectedTypes.IsFormLink(core))
-        {
-            // Array elements are commonly sparse (a "Null" slot is a tolerated placeholder, not a
-            // data error) — getter interfaces can't statically distinguish this from a non-nullable
-            // scalar anyway, so default permissive here regardless.
-            return new FieldMetadata("", "formKey", false,
-                LeafClassification.GetFormLinkValidTypes(core, game), LeafSpec.NoEnumMembers,
-                IsSortable: true, AllowsNull: true);
-        }
-
-        if (ReflectedTypes.IsLoquiInterface(core))
-            return StructElementMeta(BuildSubSchema(core, game, logger, path), core);
-
-        return core switch
-        {
-            _ when core == typeof(float) => new("", "float", false, LeafSpec.NoFormKeyTypes, LeafSpec.NoEnumMembers),
-            _ when core == typeof(string) => new("", "string", false, LeafSpec.NoFormKeyTypes, LeafSpec.NoEnumMembers),
-            _ when ReflectedTypes.IsTranslatedString(core) => new("", "translatedString", false, LeafSpec.NoFormKeyTypes, LeafSpec.NoEnumMembers),
-            _ when ReflectedTypes.IntegerTypes.Contains(core) => new("", "int", false, LeafSpec.NoFormKeyTypes, LeafSpec.NoEnumMembers),
-            _ when core == typeof(bool) => new("", "bool", false, LeafSpec.NoFormKeyTypes, LeafSpec.NoEnumMembers),
-            _ when ByteSliceHex.IsByteSlice(core) => new("", ByteSliceHex.HexApiType, false, LeafSpec.NoFormKeyTypes, LeafSpec.NoEnumMembers),
-            _ when ReflectedTypes.IsVectorStructType(core) => new("", "vector", false, LeafSpec.NoFormKeyTypes, LeafSpec.NoEnumMembers),
-            _ => null,
-        };
-    }
-
-    // An element has no name of its own — its members and the class it is are what identify it.
-    // A shape with no members is not one the walk can present, and is left out of the array.
-    private static FieldMetadata? StructElementMeta(List<SubFieldSpec> members, Type core) =>
-        members.Count == 0
-            ? null
-            : new FieldMetadata("", "struct", false, LeafSpec.NoFormKeyTypes, LeafSpec.NoEnumMembers,
-                Fields: [.. members.Select(s => s.ToFieldMetadata())],
-                LeafTypeName: ReflectedTypes.LeafTypeName(core));
-
     internal static SubFieldSpec? GetSubFieldInfo(
         PropertyInfo prop,
         GameReflection game,
@@ -106,24 +64,26 @@ internal static class SubFieldReflection
     {
         if (depth > 3) return null;
 
-        var type = prop.PropertyType;
-        var core = Nullable.GetUnderlyingType(type) ?? type;
-        var nullable = Nullable.GetUnderlyingType(type) != null || !type.IsValueType;
+        var (core, nullable) = ReflectedTypes.CoreOf(prop);
 
         return LeafClassification.ClassifyLeaf(prop, core, game) switch
         {
             { } leaf => ProjectSubField(prop, nullable, leaf, game),
             null when ReflectedTypes.IsListType(core, out var elementType) =>
-                ListLeaves.BuildListSubField(prop, elementType, game, path, logger),
-            null when ReflectedTypes.IsLoquiInterface(core) => StructLeaves.BuildStructSubField(prop, core, game, path, depth, logger),
-            _ => SchemaRefusals.ReportUnclassified<SubFieldSpec>(game, logger, prop, core, "sub-field"),
+                ListLeaves.BuildList(prop, elementType, game, path, logger),
+            null when ReflectedTypes.IsLoquiInterface(core) => StructLeaves.BuildStruct(prop, core, game, path, depth, logger),
+            _ => SchemaRefusals.ReportUnclassified<SubFieldSpec>(game, logger, prop, core, "member"),
         };
     }
 
-    private static SubFieldSpec ProjectSubField(PropertyInfo prop, bool nullable, LeafSpec leaf, GameReflection game)
+    /// <summary>One classified leaf as the member it was reached as. A nullable member genuinely can
+    /// be absent-meaning-null, so it reads as null rather than as a default it never had.</summary>
+    internal static SubFieldSpec ProjectSubField(PropertyInfo prop, bool nullable, LeafSpec leaf, GameReflection game)
     {
         return new(prop.Name, leaf.ApiType, leaf.ValidFormKeyTypes, leaf.EnumMembers,
-            AllowsNull: leaf.AllowsNull,
+            // The leaf answers for a form link, whose getter type says nothing; every other kind is
+            // the getter's own annotation, which is what tells an unset member from a defaulted one.
+            AllowsNull: leaf.AllowsNull || ReflectedTypes.IsNullableMember(prop),
             SiblingsInUse: game.Annotations.SiblingsInUseFor(prop),
             Default: nullable ? null : leaf.Default);
     }

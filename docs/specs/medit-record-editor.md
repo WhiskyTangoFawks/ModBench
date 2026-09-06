@@ -949,10 +949,10 @@ These apply everywhere a field value is rendered — the one compare grid and an
    same bar `Npc.Level`/`Quest.Aliases` themselves only gained there. Two of them,
    `NavmeshGeometry.Parent` and `LocationTargetRadius.Target`, are reached one level *inside* another
    struct column (`Static.NavmeshGeometry`/`Faction.VendorLocation`) rather than as a column of their
-   own — the write side was extended down through nesting (`StructLeaves.BuildStructSubField`
-   wires the same shared struct applier `BuildStructColumn` uses, at every depth the read schema
-   builds), so a nested struct sub-field writes with identical discriminator-resolution and
-   refuse-before-attach semantics to a top-level struct column.
+   own — one struct builder serves every depth (`StructLeaves.BuildStruct`, whether the struct is a
+   record's own column or a member nested inside one), so a nested struct sub-field writes with
+   identical discriminator-resolution and refuse-before-attach semantics to a top-level struct
+   column.
    A base need not be `abstract` to be a union: a concrete class with subclasses in the
    same assembly is one too, its leaves the subclasses plus the base itself — a script property
    (`ScriptProperty`, fourteen leaves, a bare `ScriptProperty` for a property of type None) is
