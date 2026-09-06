@@ -3,6 +3,9 @@ status: accepted
 ---
 
 # The load order is mirrored, not loaded: one reconcile verb, every copy registered, no session
+Where the load order and the index live as modules, and why the mirror is two of them, is
+[ADR-0046](0046-ports-and-adapters-with-a-write-side-a-read-side-and-one-way-data-flow.md); this
+ADR governs the load order's content and the reconcile verb.
 
 Governs [ADR-0035](0035-one-plugins-tree-editing-is-a-capability.md) § The
 loading model and § Live mutation, [ADR-0001](0001-persistent-per-instance-index-load-order-is-a-registration.md)
