@@ -101,6 +101,21 @@ public class ArrayChildDiffTests
         Assert.Equal(ConflictAll.NoConflict, keywords.ConflictAll);
     }
 
+    // The codec omits a member equal to its default but never an element, so an element one column
+    // lacks is an absence there, not that column spelling the element's own default.
+    [Fact]
+    public void SortedArray_NullSlotInOneColumnOnly_IsNotReadAsThatColumnsDefault()
+    {
+        var meta = SortedArrayMeta("Keywords");
+        var withoutSlot = JsonSerializer.Deserialize<JsonElement>("[\"KwdA\"]");
+        var withSlot = JsonSerializer.Deserialize<JsonElement>("[\"KwdA\",\"Null\"]");
+
+        var result = Classify([MakeRecord("A.esp", 0, false, meta, withoutSlot), MakeRecord("B.esp", 1, true, meta, withSlot)]);
+
+        var slot = result.Diffs.First(d => d.FieldName == "Keywords").Children!.First(c => c.FieldName == "Null");
+        Assert.Equal(ConflictThis.Override, slot.CellStates["B.esp"]);
+    }
+
     // ── Unsorted array tests ─────────────────────────────────────────────────
 
     [Fact]

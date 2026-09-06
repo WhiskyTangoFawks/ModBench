@@ -1050,6 +1050,48 @@ public class ConflictClassifierTests
         Assert.Equal(MEditService.Core.Records.FormKeyResolutionState.Unresolved, kw2.Resolutions!["A.esp"].State);
     }
 
+    // --- CheckErrors, per column, at every depth ---
+
+    [Fact]
+    public void Classify_StructFormKeySubField_ReportsItsOwnCheckErrorAndTheParentReportsTheSubtreePathed()
+    {
+        var factionField = new FieldMetadata("Faction", "formKey", false, ["fact"], []);
+        var rankField = Meta("Rank", "int");
+        var structMeta = StructMeta("Factions", factionField, rankField);
+
+        var good = JsonSerializer.Deserialize<JsonElement>("""{"Faction":"000FFF:Test.esp","Rank":1}""");
+        var dangling = JsonSerializer.Deserialize<JsonElement>("""{"Faction":"000EEE:Test.esp","Rank":1}""");
+        var master = MakeStructOverride("A.esp", 0, false, structMeta, good);
+        var override1 = MakeStructOverride("B.esp", 1, true, structMeta, dangling);
+
+        static MEditService.Core.Records.RecordLookupEntry? Resolve(string fk) =>
+            fk == "000FFF:Test.esp" ? new MEditService.Core.Records.RecordLookupEntry("fact", "GoodFaction") : null;
+
+        var result = Classifier.Classify([master, override1], NoMasters, GameRelease.Fallout4, Resolve);
+
+        var factions = result.Diffs.First(d => d.FieldName == "Factions");
+        Assert.Equal("Faction: [000EEE:Test.esp] <Error: Could not be resolved>", factions.CheckErrors!["B.esp"]);
+        Assert.False(factions.CheckErrors.ContainsKey("A.esp"));
+
+        var children = factions.Children!;
+        Assert.Equal(
+            "[000EEE:Test.esp] <Error: Could not be resolved>",
+            children.First(c => c.FieldName == "Faction").CheckErrors!["B.esp"]);
+        Assert.Null(children.First(c => c.FieldName == "Rank").CheckErrors);
+    }
+
+    [Fact]
+    public void Classify_NoResolverPassed_CheckErrorsStayNull()
+    {
+        var meta = new FieldMetadata("Race", "formKey", false, ["Race"], []);
+        var master = new RecordDetail("000001:Test.esp", "A.esp", 0, true, null,
+            [new FieldValue(meta, "000AAA:Test.esp")], Origin: "Data");
+
+        var diff = Assert.Single(Classify([master]).Diffs);
+
+        Assert.Null(diff.CheckErrors);
+    }
+
     [Fact]
     public void Classify_StructFormKeySubField_ResolvesIndependentlyOfSiblingStructField()
     {

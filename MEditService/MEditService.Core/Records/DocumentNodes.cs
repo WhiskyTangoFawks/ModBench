@@ -27,9 +27,8 @@ internal static class DocumentNodes
             ? a.GetDouble().CompareTo(b.GetDouble()) == 0
             : a.GetRawText() == b.GetRawText();
 
-    // Two columns spelling one value. JsonElement doesn't override Equals(), so the codec's own
-    // text is the comparison; an unordered array compares as a set, and where one side is absent
-    // `defaultOf` says what the other has to equal for the codec to have omitted it.
+    // Two columns spelling one value: the codec's own text, since JsonElement has no Equals(); an
+    // unordered array as a set; and against an absent side, what `defaultOf` says the codec omits.
     internal static bool SameNode(object? a, object? b, bool unordered, FieldMetadata? defaultOf)
     {
         if (a is JsonElement ja && b is JsonElement jb)
