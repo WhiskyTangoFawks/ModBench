@@ -109,8 +109,9 @@ public sealed class LoadOrderMirror(
 
     public long Sequence { get { lock (_lock) return _index?.Sequence ?? 0; } }
 
-    // Polling, not an event: the notification port is later work, and every write already
-    // serializes through IndexWriteGate, so a short poll answers within one interval of landing.
+    // Polling, not the notification port: this answers one caller's own bound, not every
+    // subscriber, and every write already serializes through IndexWriteGate, so a short poll
+    // answers within one interval of landing.
     private static readonly TimeSpan SequencePollInterval = TimeSpan.FromMilliseconds(20);
 
     public async Task<bool> AwaitSequenceAsync(long atLeast, TimeSpan timeout)

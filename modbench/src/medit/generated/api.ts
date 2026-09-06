@@ -101,6 +101,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/notifications/stream": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["StreamNotifications"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/plugins": {
         parameters: {
             query?: never;
@@ -773,6 +789,14 @@ export interface components {
         NextFreeFormKeyResponse: {
             formKey: string;
         };
+        NotificationEvent: {
+            kind: string;
+            plugin: string;
+            origin: string;
+            keys: string[];
+            /** Format: int64 */
+            sequence: number;
+        };
         PathHop: {
             kind: string;
             name?: string | null;
@@ -1278,6 +1302,26 @@ export interface operations {
                 };
                 content: {
                     "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    StreamNotifications: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/event-stream": components["schemas"]["NotificationEvent"];
                 };
             };
         };

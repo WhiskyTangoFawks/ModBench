@@ -1,4 +1,5 @@
 using MEditService.Bridge;
+using MEditService.Core.Notifications;
 using MEditService.Core.Plugins;
 using MEditService.Core.Records;
 
@@ -7,7 +8,7 @@ namespace MEditService.Api;
 /// <summary>ADR-0001's runtime half. Nothing escapes <see cref="Apply"/>, which runs on a timer
 /// thread where an exception is a process crash; a false answer keeps the watcher from believing
 /// the index matches bytes it never read.</summary>
-internal sealed class IndexMirror(ILoadOrderMirror mirror, ILogger logger)
+internal sealed class IndexMirror(ILoadOrderMirror mirror, INotificationPublisher notifications, ILogger logger)
 {
     internal bool Apply(IndexedBinaryEvent change)
     {
@@ -30,6 +31,9 @@ internal sealed class IndexMirror(ILoadOrderMirror mirror, ILogger logger)
                     break;
             }
 
+            // ADR-0046: the plugin watcher's own re-index, so the whole plugin changed rather than
+            // named rows — the same event Track's own reindex would raise if it went through here.
+            notifications.Publish(new PluginChangedNotification(key, mirror.Sequence));
             return true;
         }
         catch (Exception ex)
