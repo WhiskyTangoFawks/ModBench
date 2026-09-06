@@ -7,21 +7,34 @@
         "CellStates": {
           "Top.esp": "Override"
         },
+        "CheckErrors": {
+          "Base.esm": "[0].Data.ParameterOneRecord: Found a NULL reference, expected: ",
+          "Top.esp": "[0].Data.ParameterOneRecord: Found a NULL reference, expected: "
+        },
         "Children": [
           {
             "CellStates": {
               "Top.esp": "Override"
+            },
+            "CheckErrors": {
+              "Base.esm": "Data.ParameterOneRecord: Found a NULL reference, expected: ",
+              "Top.esp": "Data.ParameterOneRecord: Found a NULL reference, expected: "
             },
             "Children": [
               {
                 "CellStates": {
                   "Top.esp": "Override"
                 },
+                "CheckErrors": {
+                  "Base.esm": "ParameterOneRecord: Found a NULL reference, expected: ",
+                  "Top.esp": "ParameterOneRecord: Found a NULL reference, expected: "
+                },
                 "Children": [
                   {
                     "CellStates": {
                       "Top.esp": "Override"
                     },
+                    "CheckErrors": null,
                     "Children": null,
                     "ConflictAll": "Override",
                     "FieldName": "RunOnType",
@@ -30,13 +43,13 @@
                       "Base.esm": null,
                       "Top.esp": "Target"
                     },
-                    "WinnerColumn": "Top.esp",
-                    "WinnerValue": "Target"
+                    "WinnerColumn": "Top.esp"
                   },
                   {
                     "CellStates": {
                       "Top.esp": "IdenticalToMaster"
                     },
+                    "CheckErrors": null,
                     "Children": null,
                     "ConflictAll": "NoConflict",
                     "FieldName": "Function",
@@ -45,13 +58,13 @@
                       "Base.esm": "GetIsID",
                       "Top.esp": "GetIsID"
                     },
-                    "WinnerColumn": "Top.esp",
-                    "WinnerValue": "GetIsID"
+                    "WinnerColumn": "Top.esp"
                   },
                   {
                     "CellStates": {
                       "Top.esp": "IdenticalToMaster"
                     },
+                    "CheckErrors": null,
                     "Children": null,
                     "ConflictAll": "NoConflict",
                     "FieldName": "MutagenObjectType",
@@ -60,8 +73,7 @@
                       "Base.esm": "FunctionConditionData",
                       "Top.esp": "FunctionConditionData"
                     },
-                    "WinnerColumn": "Top.esp",
-                    "WinnerValue": "FunctionConditionData"
+                    "WinnerColumn": "Top.esp"
                   }
                 ],
                 "ConflictAll": "Override",
@@ -78,17 +90,13 @@
                     "RunOnType": "Target"
                   }
                 },
-                "WinnerColumn": "Top.esp",
-                "WinnerValue": {
-                  "Function": "GetIsID",
-                  "MutagenObjectType": "FunctionConditionData",
-                  "RunOnType": "Target"
-                }
+                "WinnerColumn": "Top.esp"
               },
               {
                 "CellStates": {
                   "Top.esp": "IdenticalToMaster"
                 },
+                "CheckErrors": null,
                 "Children": null,
                 "ConflictAll": "NoConflict",
                 "FieldName": "Flags",
@@ -101,15 +109,13 @@
                     "OR"
                   ]
                 },
-                "WinnerColumn": "Top.esp",
-                "WinnerValue": [
-                  "OR"
-                ]
+                "WinnerColumn": "Top.esp"
               },
               {
                 "CellStates": {
                   "Top.esp": "IdenticalToMaster"
                 },
+                "CheckErrors": null,
                 "Children": null,
                 "ConflictAll": "NoConflict",
                 "FieldName": "Unknown1",
@@ -118,13 +124,13 @@
                   "Base.esm": "0x000000",
                   "Top.esp": "0x000000"
                 },
-                "WinnerColumn": "Top.esp",
-                "WinnerValue": "0x000000"
+                "WinnerColumn": "Top.esp"
               },
               {
                 "CellStates": {
                   "Top.esp": "IdenticalToMaster"
                 },
+                "CheckErrors": null,
                 "Children": null,
                 "ConflictAll": "NoConflict",
                 "FieldName": "ComparisonValue",
@@ -133,13 +139,13 @@
                   "Base.esm": 1.0,
                   "Top.esp": 1.0
                 },
-                "WinnerColumn": "Top.esp",
-                "WinnerValue": 1.0
+                "WinnerColumn": "Top.esp"
               },
               {
                 "CellStates": {
                   "Top.esp": "IdenticalToMaster"
                 },
+                "CheckErrors": null,
                 "Children": null,
                 "ConflictAll": "NoConflict",
                 "FieldName": "MutagenObjectType",
@@ -148,8 +154,7 @@
                   "Base.esm": "ConditionFloat",
                   "Top.esp": "ConditionFloat"
                 },
-                "WinnerColumn": "Top.esp",
-                "WinnerValue": "ConditionFloat"
+                "WinnerColumn": "Top.esp"
               }
             ],
             "ConflictAll": "Override",
@@ -182,20 +187,7 @@
                 "Unknown1": "0x000000"
               }
             },
-            "WinnerColumn": "Top.esp",
-            "WinnerValue": {
-              "ComparisonValue": 1.0,
-              "Data": {
-                "Function": "GetIsID",
-                "MutagenObjectType": "FunctionConditionData",
-                "RunOnType": "Target"
-              },
-              "Flags": [
-                "OR"
-              ],
-              "MutagenObjectType": "ConditionFloat",
-              "Unknown1": "0x000000"
-            }
+            "WinnerColumn": "Top.esp"
           }
         ],
         "ConflictAll": "Override",
@@ -232,22 +224,7 @@
             }
           ]
         },
-        "WinnerColumn": "Top.esp",
-        "WinnerValue": [
-          {
-            "ComparisonValue": 1.0,
-            "Data": {
-              "Function": "GetIsID",
-              "MutagenObjectType": "FunctionConditionData",
-              "RunOnType": "Target"
-            },
-            "Flags": [
-              "OR"
-            ],
-            "MutagenObjectType": "ConditionFloat",
-            "Unknown1": "0x000000"
-          }
-        ]
+        "WinnerColumn": "Top.esp"
       }
     ],
     "Overrides": [
@@ -347,6 +324,7 @@
           "Mid.esp": "ConflictLoses",
           "Top.esp": "ConflictWins"
         },
+        "CheckErrors": null,
         "Children": null,
         "ConflictAll": "Conflict",
         "FieldName": "Name",
@@ -365,16 +343,17 @@
             "Value": "Top name"
           }
         },
-        "WinnerColumn": "Top.esp",
-        "WinnerValue": {
-          "TargetLanguage": "English",
-          "Value": "Top name"
-        }
+        "WinnerColumn": "Top.esp"
       },
       {
         "CellStates": {
           "Mid.esp": "IdenticalToMaster",
           "Top.esp": "ConflictWins"
+        },
+        "CheckErrors": {
+          "Base.esm": "[000900:Base.esm] \u003CError: Could not be resolved\u003E",
+          "Mid.esp": "[000900:Base.esm] \u003CError: Could not be resolved\u003E",
+          "Top.esp": "[000901:Base.esm] \u003CError: Could not be resolved\u003E"
         },
         "Children": null,
         "ConflictAll": "Conflict",
@@ -401,14 +380,14 @@
           "Mid.esp": "000900:Base.esm",
           "Top.esp": "000901:Base.esm"
         },
-        "WinnerColumn": "Top.esp",
-        "WinnerValue": "000901:Base.esm"
+        "WinnerColumn": "Top.esp"
       },
       {
         "CellStates": {
           "Mid.esp": "ConflictLoses",
           "Top.esp": "ConflictWins"
         },
+        "CheckErrors": null,
         "Children": null,
         "ConflictAll": "Conflict",
         "FieldName": "CalculatedHealth",
@@ -418,8 +397,7 @@
           "Mid.esp": 250,
           "Top.esp": 999
         },
-        "WinnerColumn": "Top.esp",
-        "WinnerValue": 999
+        "WinnerColumn": "Top.esp"
       }
     ],
     "Overrides": [

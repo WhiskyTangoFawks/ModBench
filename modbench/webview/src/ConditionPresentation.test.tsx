@@ -143,7 +143,7 @@ function compareResult(
     return keys.map(name => ({
       fieldName: name,
       values: valuesFor([...path, name], index),
-      winnerColumn: columns[0], winnerValue: at(columns[0], index, [...path, name]), cellStates: {},
+      winnerColumn: columns[0], cellStates: {},
       resolutions: resolutionsFor([...path, name], index),
       children: name === 'Data' ? memberDiffs([...path, name], index) : undefined,
     }));
@@ -159,11 +159,11 @@ function compareResult(
     diffs: [{
       fieldName: 'Conditions',
       values: Object.fromEntries(columns.map(c => [c, byColumn[c]])),
-      winnerColumn: columns[0], winnerValue: byColumn[columns[0]], cellStates: {},
+      winnerColumn: columns[0], cellStates: {},
       children: byColumn[columns[0]].map((_, i) => ({
         fieldName: `[${i}]`,
         values: valuesFor([], i),
-        winnerColumn: columns[0], winnerValue: byColumn[columns[0]][i], cellStates: {},
+        winnerColumn: columns[0], cellStates: {},
         children: memberDiffs([], i),
       })),
     }],

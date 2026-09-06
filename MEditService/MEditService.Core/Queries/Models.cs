@@ -110,9 +110,9 @@ public record FieldMetadata(
     // contract, not a rendering detail — a discriminator's first member is the leaf a new array
     // element is built as (DocumentEdit).
     IReadOnlyList<EnumMember> EnumMembers,
-    FieldMetadata? ElementType = null,          // for 'array': element schema
-    IReadOnlyList<FieldMetadata>? Fields = null, // for 'struct': sub-field schemas
-    bool IsSortable = false,                     // true when element is a pure FormLink
+    // For 'array': the element's schema. For 'struct': the sub-field schemas.
+    FieldMetadata? ElementType = null,
+    IReadOnlyList<FieldMetadata>? Fields = null,
 
     // The member may be absent-meaning-null rather than absent-meaning-default: a nullable
     // FormLink, a sub-record the getter declares nullable, a member some union leaf lacks.
@@ -203,7 +203,6 @@ public record FieldDiff(
     string FieldName,
     [property: ColumnKeyed] Dictionary<string, object?> Values,
     string WinnerColumn,
-    object? WinnerValue,
     [property: ColumnKeyed] IReadOnlyDictionary<string, ConflictThis> CellStates,
     // This subtree's own aggregate, distinct from the record-wide ClassifyResult.ConflictAll; drives
     // the compare grid's per-row background (ADR-0016): a struct's aggregate while collapsed.
@@ -211,7 +210,10 @@ public record FieldDiff(
     IReadOnlyList<FieldDiff>? Children = null,
     // ADR-0031: only on a scalar formKey leaf, keyed like Values; never aggregated up from Children,
     // so a dangling sibling can't hide a live hyperlink on the leaf next to it.
-    [property: ColumnKeyed] IReadOnlyDictionary<string, FormKeyResolution>? Resolutions = null);
+    [property: ColumnKeyed] IReadOnlyDictionary<string, FormKeyResolution>? Resolutions = null,
+    // This node's own subtree's link check, per column — a struct row states the errors under it
+    // rather than the whole record's, which FieldValue.CheckError on the root field states.
+    [property: ColumnKeyed] IReadOnlyDictionary<string, string>? CheckErrors = null);
 
 public record ClassifyResult(
     ConflictAll ConflictAll,

@@ -40,7 +40,7 @@ function diff(partial: Partial<FieldDiff> = {}): FieldDiff {
   return diffNode({
     fieldName: 'Name',
     values: { 'Fallout4.esm': 'disk-value', 'MyMod.esp': 'disk-value' },
-    winnerColumn: 'Fallout4.esm', winnerValue: 'disk-value',
+    winnerColumn: 'Fallout4.esm',
     ...partial,
   });
 }
@@ -521,7 +521,7 @@ describe('DiffRow — array parent/element right-click context', () => {
     return diffNode({
       fieldName: 'Items',
       values: { 'Fallout4.esm': [1, 2], 'MyMod.esp': [1, 2] },
-      winnerColumn: 'Fallout4.esm', winnerValue: [1, 2],
+      winnerColumn: 'Fallout4.esm',
       children: CHILDREN,
       ...partial,
     });
@@ -695,7 +695,6 @@ describe('DiffRow — an enum whose values are wire tokens', () => {
   const kindDiff = diff({
     fieldName: 'MutagenObjectType',
     values: { 'Fallout4.esm': 'QuestReferenceAlias', 'MyMod.esp': 'QuestReferenceAlias' },
-    winnerValue: 'QuestReferenceAlias',
   });
 
   function renderKindRow() {

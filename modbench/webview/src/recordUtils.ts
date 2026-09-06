@@ -58,17 +58,23 @@ export function isMovableElementHop(seg: PathSegment | undefined): boolean {
   return seg?.kind === 'index';
 }
 
+// An array sorted by its own element value (xEdit's wbArrayS): its elements are pure links, which
+// the element type alone says.
+function isPureLinkArray(meta: FieldMetadata): boolean {
+  return meta.elementType?.type === 'formKey';
+}
+
 // Add applies to any array whose elements are not themselves the value — a keyed array included,
 // where a new element starts with the empty key.
 export function offersArrayAdd(meta: FieldMetadata | undefined): boolean {
-  return meta?.type === 'array' && !!meta.elementType && !meta.elementType.isSortable;
+  return meta?.type === 'array' && !!meta.elementType && !isPureLinkArray(meta);
 }
 
 // A keyed array's child is addressed by the key text as the backend labelled it, a pure-FormLink
 // array's by the element value, every other array's by the child's place among its siblings.
 export function elementSegment(arrayMeta: FieldMetadata, fieldName: string, ordinal: number): PathSegment {
   if (arrayMeta.keyMembers) return { kind: 'key', key: fieldName };
-  if (arrayMeta.elementType?.isSortable) return { kind: 'value', value: fieldName };
+  if (isPureLinkArray(arrayMeta)) return { kind: 'value', value: fieldName };
   return { kind: 'index', index: ordinal };
 }
 

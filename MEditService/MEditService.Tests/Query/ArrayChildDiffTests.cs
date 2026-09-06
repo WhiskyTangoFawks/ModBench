@@ -18,7 +18,7 @@ public class ArrayChildDiffTests
 
     private static FieldMetadata SortedArrayMeta(string name) =>
         new(name, "array", true, [], [],
-            ElementType: new FieldMetadata("", "formKey", false, [], [], IsSortable: true));
+            ElementType: new FieldMetadata("", "formKey", false, [], []));
 
     private static FieldMetadata UnsortedArrayMeta(string name) =>
         new(name, "array", true, [], [],
@@ -83,6 +83,51 @@ public class ArrayChildDiffTests
 
         var children = result.Diffs.First(d => d.FieldName == "Keywords").Children!;
         Assert.Equal(["KwdB", "KwdA", "KwdC"], children.Select(c => c.FieldName).ToList());
+    }
+
+    // Order-insensitivity is a fact the element type states, so it holds however deep the walk
+    // reached the array: the row the elements hang off reads identical, not overridden.
+    [Fact]
+    public void NestedSortedArray_DifferingOnlyInOrder_IsNotAConflictAtTheArrayRow()
+    {
+        var meta = new FieldMetadata("Owner", "struct", false, [], [], Fields: [SortedArrayMeta("Keywords")]);
+        var a = JsonSerializer.Deserialize<JsonElement>("{\"Keywords\":[\"KwdA\",\"KwdB\"]}");
+        var b = JsonSerializer.Deserialize<JsonElement>("{\"Keywords\":[\"KwdB\",\"KwdA\"]}");
+
+        var result = Classify([MakeRecord("A.esp", 0, false, meta, a), MakeRecord("B.esp", 1, true, meta, b)]);
+
+        var keywords = result.Diffs.First(d => d.FieldName == "Owner").Children!.First(c => c.FieldName == "Keywords");
+        Assert.Equal(ConflictThis.IdenticalToMaster, keywords.CellStates["B.esp"]);
+        Assert.Equal(ConflictAll.NoConflict, keywords.ConflictAll);
+    }
+
+    // The codec omits a member equal to its default but never an element, so an element one column
+    // lacks is an absence there, not that column spelling the element's own default.
+    [Fact]
+    public void SortedArray_NullSlotInOneColumnOnly_IsNotReadAsThatColumnsDefault()
+    {
+        var meta = SortedArrayMeta("Keywords");
+        var withoutSlot = JsonSerializer.Deserialize<JsonElement>("[\"KwdA\"]");
+        var withSlot = JsonSerializer.Deserialize<JsonElement>("[\"KwdA\",\"Null\"]");
+
+        var result = Classify([MakeRecord("A.esp", 0, false, meta, withoutSlot), MakeRecord("B.esp", 1, true, meta, withSlot)]);
+
+        var slot = result.Diffs.First(d => d.FieldName == "Keywords").Children!.First(c => c.FieldName == "Null");
+        Assert.Equal(ConflictThis.Override, slot.CellStates["B.esp"]);
+    }
+
+    [Fact]
+    public void UnsortedArray_TrailingZeroElementInOneColumn_IsNotReadAsTheOtherColumnsAbsence()
+    {
+        var meta = new FieldMetadata("Items", "array", true, [], [],
+            ElementType: new FieldMetadata("", "int", false, [], []));
+        var shorter = JsonSerializer.Deserialize<JsonElement>("[1,2]");
+        var longer = JsonSerializer.Deserialize<JsonElement>("[1,2,0]");
+
+        var result = Classify([MakeRecord("A.esp", 0, false, meta, shorter), MakeRecord("B.esp", 1, true, meta, longer)]);
+
+        var third = result.Diffs.First(d => d.FieldName == "Items").Children![2];
+        Assert.Equal(ConflictThis.Override, third.CellStates["B.esp"]);
     }
 
     // ── Unsorted array tests ─────────────────────────────────────────────────

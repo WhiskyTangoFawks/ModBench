@@ -17,7 +17,7 @@ const sortedArrayMeta = fieldMeta({
   name: 'Keywords',
   type: 'array',
   isArray: true,
-  elementType: fieldMeta({ name: '', type: 'formKey', isSortable: true }),
+  elementType: fieldMeta({ name: '', type: 'formKey' }),
 });
 
 // A decoy ahead of the array in every column's field list: the wire path has to be resolved
@@ -49,25 +49,24 @@ const sortedArrayCompareResult = {
     fieldName: 'Keywords',
     values: { 'Fallout4.esm': ['KwdA', 'KwdB'], 'MyMod.esp': ['KwdA', 'KwdC'] },
     winnerColumn: 'MyMod.esp',
-    winnerValue: ['KwdA', 'KwdC'],
     cellStates: { 'MyMod.esp': 'Override' },
     children: [
       {
         fieldName: 'KwdA',
         values: { 'Fallout4.esm': 'KwdA', 'MyMod.esp': 'KwdA' },
-        winnerColumn: 'Fallout4.esm', winnerValue: 'KwdA',
+        winnerColumn: 'Fallout4.esm',
         cellStates: { 'MyMod.esp': 'IdenticalToMaster' },
       },
       {
         fieldName: 'KwdB',
         values: { 'Fallout4.esm': 'KwdB', 'MyMod.esp': null },
-        winnerColumn: 'Fallout4.esm', winnerValue: 'KwdB',
+        winnerColumn: 'Fallout4.esm',
         cellStates: {},
       },
       {
         fieldName: 'KwdC',
         values: { 'Fallout4.esm': null, 'MyMod.esp': 'KwdC' },
-        winnerColumn: 'MyMod.esp', winnerValue: 'KwdC',
+        winnerColumn: 'MyMod.esp',
         cellStates: { 'MyMod.esp': 'Override' },
       },
     ],
@@ -97,21 +96,21 @@ const structCollapseExpandResult = {
   diffs: [{
     fieldName: 'ObjectBounds',
     values: { 'Fallout4.esm': { X1: 0, X2: 100 }, 'MyMod.esp': { X1: 5, X2: 100 } },
-    winnerColumn: 'MyMod.esp', winnerValue: { X1: 5, X2: 100 },
+    winnerColumn: 'MyMod.esp',
     cellStates: { 'MyMod.esp': 'Override' },
     conflictAll: 'Override',
     children: [
       {
         fieldName: 'X1',
         values: { 'Fallout4.esm': 0, 'MyMod.esp': 5 },
-        winnerColumn: 'MyMod.esp', winnerValue: 5,
+        winnerColumn: 'MyMod.esp',
         cellStates: { 'MyMod.esp': 'Override' },
         conflictAll: 'Override',
       },
       {
         fieldName: 'X2',
         values: { 'Fallout4.esm': 100, 'MyMod.esp': 100 },
-        winnerColumn: 'Fallout4.esm', winnerValue: 100,
+        winnerColumn: 'Fallout4.esm',
         cellStates: { 'MyMod.esp': 'IdenticalToMaster' },
         conflictAll: 'NoConflict',
       },
@@ -156,29 +155,29 @@ const nestedStructArrayResult = {
       'Fallout4.esm': { Entries: [{ Id: 'A', Weight: 1 }] },
       'MyMod.esp': { Entries: [{ Id: 'A', Weight: 1 }] },
     },
-    winnerColumn: 'Fallout4.esm', winnerValue: { Entries: [{ Id: 'A', Weight: 1 }] },
+    winnerColumn: 'Fallout4.esm',
     cellStates: {},
     children: [{
       fieldName: 'Entries',
       values: { 'Fallout4.esm': [{ Id: 'A', Weight: 1 }], 'MyMod.esp': [{ Id: 'A', Weight: 1 }] },
-      winnerColumn: 'Fallout4.esm', winnerValue: [{ Id: 'A', Weight: 1 }],
+      winnerColumn: 'Fallout4.esm',
       cellStates: {},
       children: [{
         fieldName: '[0]',
         values: { 'Fallout4.esm': { Id: 'A', Weight: 1 }, 'MyMod.esp': { Id: 'A', Weight: 1 } },
-        winnerColumn: 'Fallout4.esm', winnerValue: { Id: 'A', Weight: 1 },
+        winnerColumn: 'Fallout4.esm',
         cellStates: {},
         children: [
           {
             fieldName: 'Id',
             values: { 'Fallout4.esm': 'A', 'MyMod.esp': 'A' },
-            winnerColumn: 'Fallout4.esm', winnerValue: 'A',
+            winnerColumn: 'Fallout4.esm',
             cellStates: {},
           },
           {
             fieldName: 'Weight',
             values: { 'Fallout4.esm': 1, 'MyMod.esp': 1 },
-            winnerColumn: 'Fallout4.esm', winnerValue: 1,
+            winnerColumn: 'Fallout4.esm',
             cellStates: {},
           },
         ],
@@ -327,12 +326,12 @@ describe('RecordPanel — array editing (unsorted)', () => {
     diffs: [{
       fieldName: 'Values',
       values: { 'MyMod.esp': [1, 2, 3] },
-      winnerColumn: 'MyMod.esp', winnerValue: [1, 2, 3],
+      winnerColumn: 'MyMod.esp',
       cellStates: {},
       children: [
-        { fieldName: '[0]', values: { 'MyMod.esp': 1 }, winnerColumn: 'MyMod.esp', winnerValue: 1, cellStates: {} },
-        { fieldName: '[1]', values: { 'MyMod.esp': 2 }, winnerColumn: 'MyMod.esp', winnerValue: 2, cellStates: {} },
-        { fieldName: '[2]', values: { 'MyMod.esp': 3 }, winnerColumn: 'MyMod.esp', winnerValue: 3, cellStates: {} },
+        { fieldName: '[0]', values: { 'MyMod.esp': 1 }, winnerColumn: 'MyMod.esp', cellStates: {} },
+        { fieldName: '[1]', values: { 'MyMod.esp': 2 }, winnerColumn: 'MyMod.esp', cellStates: {} },
+        { fieldName: '[2]', values: { 'MyMod.esp': 3 }, winnerColumn: 'MyMod.esp', cellStates: {} },
       ],
     }],
   };
@@ -432,12 +431,12 @@ const editableIntArrayResult = {
   diffs: [{
     fieldName: 'Values',
     values: { 'MyMod.esp': [11, 22, 33] },
-    winnerColumn: 'MyMod.esp', winnerValue: [11, 22, 33],
+    winnerColumn: 'MyMod.esp',
     cellStates: {},
     children: [
-      { fieldName: '[0]', values: { 'MyMod.esp': 11 }, winnerColumn: 'MyMod.esp', winnerValue: 11, cellStates: {} },
-      { fieldName: '[1]', values: { 'MyMod.esp': 22 }, winnerColumn: 'MyMod.esp', winnerValue: 22, cellStates: {} },
-      { fieldName: '[2]', values: { 'MyMod.esp': 33 }, winnerColumn: 'MyMod.esp', winnerValue: 33, cellStates: {} },
+      { fieldName: '[0]', values: { 'MyMod.esp': 11 }, winnerColumn: 'MyMod.esp', cellStates: {} },
+      { fieldName: '[1]', values: { 'MyMod.esp': 22 }, winnerColumn: 'MyMod.esp', cellStates: {} },
+      { fieldName: '[2]', values: { 'MyMod.esp': 33 }, winnerColumn: 'MyMod.esp', cellStates: {} },
     ],
   }],
 };
@@ -456,7 +455,7 @@ const scalarResult = {
   diffs: [{
     fieldName: 'Level',
     values: { 'MyMod.esp': 4 },
-    winnerColumn: 'MyMod.esp', winnerValue: 4,
+    winnerColumn: 'MyMod.esp',
     cellStates: {},
   }],
 };
@@ -626,25 +625,25 @@ describe('RecordPanel — a keyed array\'s element is addressed by key', () => {
     diffs: [{
       fieldName: 'Scripts',
       values: { 'Fallout4.esm': master, 'MyMod.esp': override },
-      winnerColumn: 'MyMod.esp', winnerValue: override,
+      winnerColumn: 'MyMod.esp',
       cellStates: {},
       children: [
         {
           fieldName: 'Ambush',
           values: { 'MyMod.esp': override[0] },
-          winnerColumn: 'MyMod.esp', winnerValue: override[0], cellStates: {},
+          winnerColumn: 'MyMod.esp', cellStates: {},
           children: [
-            { fieldName: 'name', values: { 'MyMod.esp': 'Ambush' }, winnerColumn: 'MyMod.esp', winnerValue: 'Ambush', cellStates: {} },
-            { fieldName: 'flags', values: { 'MyMod.esp': 'a' }, winnerColumn: 'MyMod.esp', winnerValue: 'a', cellStates: {} },
+            { fieldName: 'name', values: { 'MyMod.esp': 'Ambush' }, winnerColumn: 'MyMod.esp', cellStates: {} },
+            { fieldName: 'flags', values: { 'MyMod.esp': 'a' }, winnerColumn: 'MyMod.esp', cellStates: {} },
           ],
         },
         {
           fieldName: 'Guard',
           values: { 'Fallout4.esm': master[0], 'MyMod.esp': override[1] },
-          winnerColumn: 'MyMod.esp', winnerValue: override[1], cellStates: {},
+          winnerColumn: 'MyMod.esp', cellStates: {},
           children: [
-            { fieldName: 'name', values: { 'Fallout4.esm': 'Guard', 'MyMod.esp': 'Guard' }, winnerColumn: 'MyMod.esp', winnerValue: 'Guard', cellStates: {} },
-            { fieldName: 'flags', values: { 'Fallout4.esm': 'm', 'MyMod.esp': 'g' }, winnerColumn: 'MyMod.esp', winnerValue: 'g', cellStates: {} },
+            { fieldName: 'name', values: { 'Fallout4.esm': 'Guard', 'MyMod.esp': 'Guard' }, winnerColumn: 'MyMod.esp', cellStates: {} },
+            { fieldName: 'flags', values: { 'Fallout4.esm': 'm', 'MyMod.esp': 'g' }, winnerColumn: 'MyMod.esp', cellStates: {} },
           ],
         },
       ],
@@ -722,12 +721,12 @@ describe('RecordPanel — a keyed array\'s element is addressed by key', () => {
             editorId: 'TestNPC', fields: [{ metadata: fragmentsMeta, value: [element] }], conflictThis: 'OnlyOne',
           }],
           diffs: [{
-            fieldName: 'Fragments', values: { 'MyMod.esp': [element] }, winnerColumn: 'MyMod.esp', winnerValue: [element],
+            fieldName: 'Fragments', values: { 'MyMod.esp': [element] }, winnerColumn: 'MyMod.esp',
             cellStates: {},
             children: [{
-              fieldName: '10 / 0', values: { 'MyMod.esp': element }, winnerColumn: 'MyMod.esp', winnerValue: element,
+              fieldName: '10 / 0', values: { 'MyMod.esp': element }, winnerColumn: 'MyMod.esp',
               cellStates: {},
-              children: [{ fieldName: 'Stage', values: { 'MyMod.esp': 10 }, winnerColumn: 'MyMod.esp', winnerValue: 10, cellStates: {} }],
+              children: [{ fieldName: 'Stage', values: { 'MyMod.esp': 10 }, winnerColumn: 'MyMod.esp', cellStates: {} }],
             }],
           }],
     }), { plugins: [{ name: 'MyMod.esp', isTracked: true }] });

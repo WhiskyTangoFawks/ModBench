@@ -12,8 +12,6 @@ public sealed record SubFieldSpec(
     IReadOnlyList<SubFieldSpec>? SubFields = null,
     SubFieldSpec? ElementSpec = null,
     bool AllowsNull = false,
-    // See FieldMetadata.IsSortable.
-    bool IsSortable = false,
     // The row's title when Name is a wire token; see FieldMetadata.DisplayLabel.
     string? DisplayLabel = null,
     // See FieldMetadata.IsDiscriminator.
@@ -38,7 +36,6 @@ public sealed record SubFieldSpec(
         new(Name, ApiType, IsArray, ValidFormKeyTypes, EnumMembers,
             ElementSpec?.ToFieldMetadata(),
             SubFields?.Select(s => s.ToFieldMetadata()).ToList(),
-            IsSortable: IsSortable,
             AllowsNull: AllowsNull,
             DisplayLabel: DisplayLabel,
             IsDiscriminator: IsDiscriminator,

@@ -144,7 +144,7 @@ describe('elementSegment', () => {
   });
 
   it('addresses a pure-FormLink array\'s child by the element value', () => {
-    expect(elementSegment(array({ elementType: element({ type: 'formKey', isSortable: true }) }), 'KwdA', 0))
+    expect(elementSegment(array({ elementType: element({ type: 'formKey' }) }), 'KwdA', 0))
       .toEqual({ kind: 'value', value: 'KwdA' });
   });
 

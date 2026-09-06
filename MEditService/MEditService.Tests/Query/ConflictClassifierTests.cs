@@ -21,7 +21,7 @@ public class ConflictClassifierTests
 
     private static FieldValue SortedArrayField(string name, object? value) =>
         new(new FieldMetadata(name, "array", true, [], [],
-            ElementType: new FieldMetadata("", "formKey", false, [], [], IsSortable: true)), value);
+            ElementType: new FieldMetadata("", "formKey", false, [], [])), value);
 
     private static RecordDetail MakeOverride(string plugin, int loadOrder, bool isWinner,
         params (string name, object? value)[] fields) =>
@@ -117,7 +117,7 @@ public class ConflictClassifierTests
         var nameDiff = result.Diffs.First(d => d.FieldName == "Name");
         Assert.Equal("SomeNPC", nameDiff.Values["DLCRobot.esm"]);
         Assert.Equal("DLCRobot.esm", nameDiff.WinnerColumn);
-        Assert.Equal("SomeNPC", nameDiff.WinnerValue);
+        Assert.Equal("SomeNPC", nameDiff.Values[nameDiff.WinnerColumn]);
     }
 
     [Fact]
@@ -370,7 +370,7 @@ public class ConflictClassifierTests
         Assert.NotEqual(ConflictAll.Conflict, result.ConflictAll);
     }
 
-    // --- Per-field WinnerColumn/WinnerValue fallthrough ---
+    // --- Per-field WinnerColumn fallthrough ---
     //
     // A field the record-wide winner never set must not report that winner's null value instead of
     // falling through to whichever plugin actually carries one.
@@ -386,7 +386,7 @@ public class ConflictClassifierTests
 
         var level = result.Diffs.Single(d => d.FieldName == "Level");
         Assert.Equal("A.esp", level.WinnerColumn);
-        Assert.Equal(1, level.WinnerValue);
+        Assert.Equal(1, level.Values[level.WinnerColumn]);
     }
 
     // --- Partial Form flag rule ---
@@ -979,7 +979,7 @@ public class ConflictClassifierTests
 
         var xChild = result.Diffs.First(d => d.FieldName == "Pos").Children!.First(c => c.FieldName == "X");
         Assert.Equal("B.esp", xChild.WinnerColumn);
-        Assert.Equal(5, ((System.Text.Json.JsonElement)xChild.WinnerValue!).GetInt32());
+        Assert.Equal(5, ((System.Text.Json.JsonElement)xChild.Values[xChild.WinnerColumn]!).GetInt32());
     }
 
     [Fact]
@@ -1043,11 +1043,73 @@ public class ConflictClassifierTests
         var arrayDiff = result.Diffs.First(d => d.FieldName == "Keywords");
         Assert.Null(arrayDiff.Resolutions); // no aggregation onto the parent array field
 
-        var kw1 = arrayDiff.Children!.First(c => c.WinnerValue is JsonElement je && je.GetString() == "000AAA:Test.esp");
-        var kw2 = arrayDiff.Children!.First(c => c.WinnerValue is JsonElement je && je.GetString() == "000BBB:Test.esp");
+        var kw1 = arrayDiff.Children!.First(c => c.FieldName == "000AAA:Test.esp");
+        var kw2 = arrayDiff.Children!.First(c => c.FieldName == "000BBB:Test.esp");
 
         Assert.Equal(MEditService.Core.Records.FormKeyResolutionState.ResolvedValidType, kw1.Resolutions!["A.esp"].State);
         Assert.Equal(MEditService.Core.Records.FormKeyResolutionState.Unresolved, kw2.Resolutions!["A.esp"].State);
+    }
+
+    // --- CheckErrors, per column, at every depth ---
+
+    [Fact]
+    public void Classify_StructFormKeySubField_ReportsItsOwnCheckErrorAndTheParentReportsTheSubtreePathed()
+    {
+        var factionField = new FieldMetadata("Faction", "formKey", false, ["fact"], []);
+        var rankField = Meta("Rank", "int");
+        var structMeta = StructMeta("Factions", factionField, rankField);
+
+        var good = JsonSerializer.Deserialize<JsonElement>("""{"Faction":"000FFF:Test.esp","Rank":1}""");
+        var dangling = JsonSerializer.Deserialize<JsonElement>("""{"Faction":"000EEE:Test.esp","Rank":1}""");
+        var master = MakeStructOverride("A.esp", 0, false, structMeta, good);
+        var override1 = MakeStructOverride("B.esp", 1, true, structMeta, dangling);
+
+        static MEditService.Core.Records.RecordLookupEntry? Resolve(string fk) =>
+            fk == "000FFF:Test.esp" ? new MEditService.Core.Records.RecordLookupEntry("fact", "GoodFaction") : null;
+
+        var result = Classifier.Classify([master, override1], NoMasters, GameRelease.Fallout4, Resolve);
+
+        var factions = result.Diffs.First(d => d.FieldName == "Factions");
+        Assert.Equal("Faction: [000EEE:Test.esp] <Error: Could not be resolved>", factions.CheckErrors!["B.esp"]);
+        Assert.False(factions.CheckErrors.ContainsKey("A.esp"));
+
+        var children = factions.Children!;
+        Assert.Equal(
+            "[000EEE:Test.esp] <Error: Could not be resolved>",
+            children.First(c => c.FieldName == "Faction").CheckErrors!["B.esp"]);
+        Assert.Null(children.First(c => c.FieldName == "Rank").CheckErrors);
+    }
+
+    // ADR-0016: a Partial Form override's own fields are excluded as if absent, and an exclusion is
+    // not the record saying the link is unset, so its column reports no check error of its own.
+    [Fact]
+    public void Classify_PartialFormColumn_ReportsNoUnsetLinkCheckError()
+    {
+        var meta = new FieldMetadata("Race", "formKey", false, ["race"], []);
+        var link = JsonSerializer.Deserialize<JsonElement>("\"000AAA:Test.esp\"");
+        var master = new RecordDetail("000001:Test.esp", "A.esp", 0, false, null,
+            [new FieldValue(meta, link)], "Data");
+        var partial = new RecordDetail("000001:Test.esp", "B.esp", 1, true, null,
+            [new FieldValue(meta, link)], "Data", IsPartialForm: true);
+
+        static MEditService.Core.Records.RecordLookupEntry? Resolve(string fk) =>
+            new MEditService.Core.Records.RecordLookupEntry("race", "GoodRace");
+
+        var diff = Assert.Single(Classifier.Classify([master, partial], NoMasters, GameRelease.Fallout4, Resolve).Diffs);
+
+        Assert.Null(diff.CheckErrors);
+    }
+
+    [Fact]
+    public void Classify_NoResolverPassed_CheckErrorsStayNull()
+    {
+        var meta = new FieldMetadata("Race", "formKey", false, ["Race"], []);
+        var master = new RecordDetail("000001:Test.esp", "A.esp", 0, true, null,
+            [new FieldValue(meta, "000AAA:Test.esp")], Origin: "Data");
+
+        var diff = Assert.Single(Classify([master]).Diffs);
+
+        Assert.Null(diff.CheckErrors);
     }
 
     [Fact]

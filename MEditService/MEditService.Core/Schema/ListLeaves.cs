@@ -24,11 +24,10 @@ internal static class ListLeaves
         // No owning member, so no declared default and no permitted-null annotation to ask about.
         if (LeafClassification.ClassifyLeaf(null, elementType, game) is not { } leaf) return null;
 
-        // A form-link element sorts by its own value, and is commonly sparse: a "Null" slot is a
-        // tolerated placeholder, not a data error, which the element type cannot say on its own.
-        var isFormLink = leaf.ApiType == "formKey";
+        // A form-link element is commonly sparse: a "Null" slot is a tolerated placeholder, not a
+        // data error, which the element type cannot say on its own.
         return new("", leaf.ApiType, leaf.ValidFormKeyTypes, leaf.EnumMembers,
-            AllowsNull: isFormLink, IsSortable: isFormLink, Default: leaf.Default);
+            AllowsNull: leaf.ApiType == "formKey", Default: leaf.Default);
     }
 
     internal static SubFieldSpec? BuildList(

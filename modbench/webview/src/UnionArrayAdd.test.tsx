@@ -45,14 +45,12 @@ const aliasesCompareResult = {
     fieldName: 'aliases',
     values: { 'MyMod.esp': [{ MutagenObjectType: 'QuestLocationAlias', name: 'OriginalLoc' }] },
     winnerColumn: 'MyMod.esp',
-    winnerValue: [{ MutagenObjectType: 'QuestLocationAlias', name: 'OriginalLoc' }],
     cellStates: {},
     children: [
       {
         fieldName: '[0]',
         values: { 'MyMod.esp': { MutagenObjectType: 'QuestLocationAlias', name: 'OriginalLoc' } },
         winnerColumn: 'MyMod.esp',
-        winnerValue: { MutagenObjectType: 'QuestLocationAlias', name: 'OriginalLoc' },
         cellStates: {},
       },
     ],

@@ -47,7 +47,6 @@ const compareResult = {
       fieldName: 'Name',
       values: { 'Fallout4.esm': 'Original Name', 'MyMod.esp': 'Override Name' },
       winnerColumn: 'MyMod.esp',
-      winnerValue: 'Override Name',
       cellStates: { 'MyMod.esp': 'ConflictWins' },
       conflictAll: 'Conflict',
     },
@@ -70,7 +69,7 @@ const immutableWinnerCompareResult = {
   diffs: [
     {
       fieldName: 'Name', values: { 'Fallout4.esm': 'Original Name' },
-      winnerColumn: 'Fallout4.esm', winnerValue: 'Original Name', cellStates: {},
+      winnerColumn: 'Fallout4.esm', cellStates: {},
     },
   ],
 };
@@ -97,7 +96,6 @@ const fkCompareResult = {
       fieldName: 'Race',
       values: { 'Fallout4.esm': '00013918:Fallout4.esm' },
       winnerColumn: 'Fallout4.esm',
-      winnerValue: '00013918:Fallout4.esm',
       cellStates: {},
       // ADR-0031: the backend carries a resolution signal per FormKey value; an unresolved
       // default would exercise no affordance at all.
@@ -115,7 +113,7 @@ const overrideCompareResult = {
       editorId: 'TestNPC', fields: [{ metadata: strMeta, value: 'Override Name' }], conflictThis: 'Override' },
   ],
   diffs: [{ fieldName: 'Name', values: { 'Fallout4.esm': 'Original Name', 'MyMod.esp': 'Override Name' },
-    winnerColumn: 'MyMod.esp', winnerValue: 'Override Name', cellStates: { 'MyMod.esp': 'Override' },
+    winnerColumn: 'MyMod.esp', cellStates: { 'MyMod.esp': 'Override' },
     conflictAll: 'Override' }],
 };
 
@@ -129,10 +127,10 @@ const twoSiblingFieldsResult = {
   ],
   diffs: [
     { fieldName: 'Name', values: { 'Fallout4.esm': 'Original Name', 'MyMod.esp': 'Override Name' },
-      winnerColumn: 'MyMod.esp', winnerValue: 'Override Name', cellStates: { 'MyMod.esp': 'Override' },
+      winnerColumn: 'MyMod.esp', cellStates: { 'MyMod.esp': 'Override' },
       conflictAll: 'Override' },
     { fieldName: 'Level', values: { 'Fallout4.esm': 5, 'MyMod.esp': 5 },
-      winnerColumn: 'MyMod.esp', winnerValue: 5, cellStates: {},
+      winnerColumn: 'MyMod.esp', cellStates: {},
       conflictAll: 'NoConflict' },
   ],
 };
@@ -149,7 +147,6 @@ const sameFilenameCompareResult = {
     fieldName: 'Name',
     values: { [columnKey('Shared.esp', 'ModA')]: 'FromA', [columnKey('Shared.esp', 'ModB')]: 'FromB' },
     winnerColumn: columnKey('Shared.esp', 'ModB'),
-    winnerValue: 'FromB',
     cellStates: { [columnKey('Shared.esp', 'ModB')]: 'ConflictWins' },
   }],
 };
@@ -171,7 +168,6 @@ const notInLoadOrderCompareResult = {
     fieldName: 'Name',
     values: { [columnKey('Solo.esp', 'ShadowMod')]: 'Shadowed value' },
     winnerColumn: columnKey('Solo.esp', 'ShadowMod'),
-    winnerValue: 'Shadowed value',
     cellStates: { [columnKey('Solo.esp', 'ShadowMod')]: 'OnlyOne' },
   }],
 };
@@ -204,7 +200,7 @@ const partialFormCompareResult = {
     {
       fieldName: 'Name',
       values: { 'Fallout4.esm': 'Original Name', 'MyMod.esp': null },
-      winnerColumn: 'Fallout4.esm', winnerValue: 'Original Name',
+      winnerColumn: 'Fallout4.esm',
       cellStates: {},
     },
   ],
@@ -241,13 +237,13 @@ const flagsCompareResult = {
     {
       fieldName: 'Name',
       values: { 'Fallout4.esm': 'Original Name', 'MyMod.esp': 'Override Name' },
-      winnerColumn: 'MyMod.esp', winnerValue: 'Override Name',
+      winnerColumn: 'MyMod.esp',
       cellStates: {},
     },
     {
       fieldName: 'Flags',
       values: { 'Fallout4.esm': ['A', 'B'], 'MyMod.esp': ['A', 'B'] },
-      winnerColumn: 'MyMod.esp', winnerValue: ['A', 'B'],
+      winnerColumn: 'MyMod.esp',
       cellStates: {},
     },
   ],
@@ -295,21 +291,18 @@ const structCompareResult = {
       fieldName: 'Bounds',
       values: { 'Fallout4.esm': { X: 10, Y: 20 }, 'MyMod.esp': { X: 15, Y: 20 } },
       winnerColumn: 'MyMod.esp',
-      winnerValue: { X: 15, Y: 20 },
       cellStates: { 'MyMod.esp': 'Override' },
       children: [
         {
           fieldName: 'X',
           values: { 'Fallout4.esm': 10, 'MyMod.esp': 15 },
           winnerColumn: 'MyMod.esp',
-          winnerValue: 15,
           cellStates: { 'MyMod.esp': 'Override' },
         },
         {
           fieldName: 'Y',
           values: { 'Fallout4.esm': 20, 'MyMod.esp': 20 },
           winnerColumn: 'MyMod.esp',
-          winnerValue: 20,
           cellStates: { 'MyMod.esp': 'IdenticalToMaster' },
         },
       ],
@@ -427,7 +420,7 @@ describe('RecordPanel — column header native right-click menu', () => {
       }],
       diffs: [{
         fieldName: 'Name', values: { 'MyMod.esp': 'Test Name' },
-        winnerColumn: 'MyMod.esp', winnerValue: 'Test Name', cellStates: {},
+        winnerColumn: 'MyMod.esp', cellStates: {},
       }],
     };
     const { container } = renderPanel(compare);
@@ -504,7 +497,7 @@ describe('RecordPanel — a Partial Form column', () => {
       ...compareResult,
       diffs: [...compareResult.diffs, {
         fieldName: 'Undeclared', values: { 'MyMod.esp': 'x' }, winnerColumn: 'MyMod.esp',
-        winnerValue: 'x', cellStates: {}, conflictAll: 'NoConflict',
+cellStates: {}, conflictAll: 'NoConflict',
       }],
     });
     await waitFor(() => expect(screen.getByText('Name')).toBeInTheDocument());
@@ -917,32 +910,32 @@ const mixedLeafAliasResult = {
   diffs: [{
     fieldName: 'aliases',
     values: { 'Fallout4.esm': [masterAlias], 'MyMod.esp': [overrideAlias] },
-    winnerColumn: 'MyMod.esp', winnerValue: [overrideAlias], cellStates: {},
+    winnerColumn: 'MyMod.esp', cellStates: {},
     children: [{
       fieldName: '[0]',
       values: { 'Fallout4.esm': masterAlias, 'MyMod.esp': overrideAlias },
-      winnerColumn: 'MyMod.esp', winnerValue: overrideAlias, cellStates: {},
+      winnerColumn: 'MyMod.esp', cellStates: {},
       children: [
         {
           fieldName: 'name', values: { 'Fallout4.esm': 'RefAlias', 'MyMod.esp': 'RefAlias' },
-          winnerColumn: 'MyMod.esp', winnerValue: 'RefAlias', cellStates: {},
+          winnerColumn: 'MyMod.esp', cellStates: {},
         },
         {
           fieldName: 'location',
           values: { 'Fallout4.esm': { alias_id: 5 }, 'MyMod.esp': null },
-          winnerColumn: 'Fallout4.esm', winnerValue: { alias_id: 5 }, cellStates: {},
+          winnerColumn: 'Fallout4.esm', cellStates: {},
           children: [{
             fieldName: 'alias_id', values: { 'Fallout4.esm': 5, 'MyMod.esp': null },
-            winnerColumn: 'Fallout4.esm', winnerValue: 5, cellStates: {},
+            winnerColumn: 'Fallout4.esm', cellStates: {},
           }],
         },
         {
           fieldName: 'external',
           values: { 'Fallout4.esm': null, 'MyMod.esp': { alias_id: 7 } },
-          winnerColumn: 'MyMod.esp', winnerValue: { alias_id: 7 }, cellStates: {},
+          winnerColumn: 'MyMod.esp', cellStates: {},
           children: [{
             fieldName: 'alias_id', values: { 'Fallout4.esm': null, 'MyMod.esp': 7 },
-            winnerColumn: 'MyMod.esp', winnerValue: 7, cellStates: {},
+            winnerColumn: 'MyMod.esp', cellStates: {},
           }],
         },
       ],
@@ -1071,15 +1064,15 @@ const unionCompareResult = {
     {
       fieldName: 'Level',
       values: { 'MyMod.esp': unionValue },
-      winnerColumn: 'MyMod.esp', winnerValue: unionValue, cellStates: {},
+      winnerColumn: 'MyMod.esp', cellStates: {},
       children: [
         {
           fieldName: 'level', values: { 'MyMod.esp': 5 },
-          winnerColumn: 'MyMod.esp', winnerValue: 5, cellStates: {},
+          winnerColumn: 'MyMod.esp', cellStates: {},
         },
         {
           fieldName: 'MutagenObjectType', values: { 'MyMod.esp': 'NpcLevel' },
-          winnerColumn: 'MyMod.esp', winnerValue: 'NpcLevel', cellStates: {},
+          winnerColumn: 'MyMod.esp', cellStates: {},
         },
       ],
     },
@@ -1172,10 +1165,10 @@ describe('RecordPanel — an absent member reads as its default', () => {
     ],
     diffs: [{
       fieldName: 'Stats', values: { 'Fallout4.esm': full, 'MyMod.esp': sparse },
-      winnerColumn: 'MyMod.esp', winnerValue: sparse, cellStates: {},
+      winnerColumn: 'MyMod.esp', cellStates: {},
       children: Object.entries(full).map(([name, v]) => ({
         fieldName: name, values: { 'Fallout4.esm': v, 'MyMod.esp': null },
-        winnerColumn: 'Fallout4.esm', winnerValue: v, cellStates: {},
+        winnerColumn: 'Fallout4.esm', cellStates: {},
       })),
     }],
   };
@@ -1252,15 +1245,15 @@ describe('RecordPanel — a member of an absent owner reads as nothing', () => {
     diffs: [
       {
         fieldName: 'Bounds', values: { 'Fallout4.esm': { X: 10 }, 'MyMod.esp': null },
-        winnerColumn: 'Fallout4.esm', winnerValue: { X: 10 }, cellStates: {},
-        children: [{ fieldName: 'X', values: { 'Fallout4.esm': 10, 'MyMod.esp': null }, winnerColumn: 'Fallout4.esm', winnerValue: 10, cellStates: {} }],
+        winnerColumn: 'Fallout4.esm', cellStates: {},
+        children: [{ fieldName: 'X', values: { 'Fallout4.esm': 10, 'MyMod.esp': null }, winnerColumn: 'Fallout4.esm', cellStates: {} }],
       },
       {
         fieldName: 'Values', values: { 'Fallout4.esm': [1, 2], 'MyMod.esp': [1] },
-        winnerColumn: 'MyMod.esp', winnerValue: [1], cellStates: {},
+        winnerColumn: 'MyMod.esp', cellStates: {},
         children: [
-          { fieldName: '[0]', values: { 'Fallout4.esm': 1, 'MyMod.esp': 1 }, winnerColumn: 'MyMod.esp', winnerValue: 1, cellStates: {} },
-          { fieldName: '[1]', values: { 'Fallout4.esm': 2, 'MyMod.esp': null }, winnerColumn: 'Fallout4.esm', winnerValue: 2, cellStates: {} },
+          { fieldName: '[0]', values: { 'Fallout4.esm': 1, 'MyMod.esp': 1 }, winnerColumn: 'MyMod.esp', cellStates: {} },
+          { fieldName: '[1]', values: { 'Fallout4.esm': 2, 'MyMod.esp': null }, winnerColumn: 'Fallout4.esm', cellStates: {} },
         ],
       },
     ],
@@ -1310,7 +1303,7 @@ describe('RecordPanel — a translated string leaf posts its object', () => {
     conflictAll: 'OnlyOne',
     overrides: [{ formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', loadOrderIndex: 0, isWinner: true,
       editorId: 'TestNPC', fields: [{ metadata: nameMeta, value }], conflictThis: 'OnlyOne' }],
-    diffs: [{ fieldName: 'Name', values: { 'MyMod.esp': value }, winnerColumn: 'MyMod.esp', winnerValue: value, cellStates: {} }],
+    diffs: [{ fieldName: 'Name', values: { 'MyMod.esp': value }, winnerColumn: 'MyMod.esp', cellStates: {} }],
   };
 
   beforeEach(() => vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm'));
@@ -1357,14 +1350,14 @@ describe('RecordPanel — a column whose record failed to parse', () => {
     diffs: [
       {
         fieldName: 'Name', values: { 'Broken.esp': 'Stored Name', 'Good.esp': 'Readable Name' },
-        winnerColumn: 'Good.esp', winnerValue: 'Readable Name', cellStates: {}, conflictAll: 'Conflict',
+        winnerColumn: 'Good.esp', cellStates: {}, conflictAll: 'Conflict',
       },
       {
         fieldName: 'Keywords', values: { 'Broken.esp': ['KwdA'], 'Good.esp': ['KwdA'] },
-        winnerColumn: 'Good.esp', winnerValue: ['KwdA'], cellStates: {}, conflictAll: 'NoConflict',
+        winnerColumn: 'Good.esp', cellStates: {}, conflictAll: 'NoConflict',
         children: [{
           fieldName: 'KwdA', values: { 'Broken.esp': 'KwdA', 'Good.esp': 'KwdA' },
-          winnerColumn: 'Good.esp', winnerValue: 'KwdA', cellStates: {},
+          winnerColumn: 'Good.esp', cellStates: {},
         }],
       },
     ],

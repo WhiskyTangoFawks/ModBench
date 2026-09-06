@@ -127,7 +127,7 @@ public sealed class WireEqualsDocumentTests(CutDownPluginCompareFixture fixture)
         JsonObject o => o.TryGetPropertyValue(name, out var member) ? member : null,
         JsonArray a when ElementIndex(name) is { } i && i >= 0 && i < a.Count => a[i],
         JsonArray a when meta?.KeyMembers is { } keyMembers => a.FirstOrDefault(e => ElementKey.Of(e, keyMembers, meta.ElementType).Text == name),
-        JsonArray a when meta?.ElementType?.IsSortable == true => a.FirstOrDefault(e => e?.GetValue<string>() == name),
+        JsonArray a when meta?.ElementType?.Type == "formKey" => a.FirstOrDefault(e => e?.GetValue<string>() == name),
         _ => null,
     };
 

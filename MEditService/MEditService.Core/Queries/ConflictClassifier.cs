@@ -4,7 +4,6 @@ using MEditService.Core.Schema;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
-using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Core.Queries;
 
@@ -24,85 +23,56 @@ public sealed class ConflictClassifier(ILogger<ConflictClassifier>? logger = nul
     {
         // ADR-0035: a non-participating plugin's override never contributes to conflict
         // classification — filtered out before OnlyOne/winner/diff computation below, not just
-        // masked in the result, so it can't leak into pluginMasters/IsInjectedRecord either.
+        // masked in the result, so it can't leak into pluginMasters/IsInjected either.
         conflictingRecords = ConflictRules.FilterParticipating(
             conflictingRecords, r => ColumnKey.Of(r.Plugin, r.Origin), pluginParticipates);
 
         if (conflictingRecords.Count == 0)
             return new ClassifyResult(ConflictAll.OnlyOne, new Dictionary<string, ConflictThis>(), []);
 
-        if (conflictingRecords.Count == 1)
-        {
-            var single = conflictingRecords[0];
-            var pluginState = new Dictionary<string, ConflictThis> { [ColumnKey.Of(single.Plugin, single.Origin)] = ConflictThis.OnlyOne };
-            var fieldNames = single.Fields.Select(f => f.Metadata.Name).ToList();
-            var singleCtx = new DiffContext(ColumnKey.Of(single.Plugin, single.Origin), conflictingRecords, _logger, resolveFormKey, release);
-            return new ClassifyResult(ConflictAll.OnlyOne, pluginState, BuildDiffs(fieldNames, conflictingRecords, single, singleCtx, []));
-        }
+        // The fallback for a field no column carries; a lone override is its own winner whatever
+        // its IsWinner flag says.
+        var winner = conflictingRecords.Count == 1
+            ? conflictingRecords[0]
+            : conflictingRecords.FirstOrDefault(o => o.IsWinner)
+                ?? throw new InvalidOperationException(
+                    $"No winner in {conflictingRecords.Count} overrides for FormKey '{conflictingRecords[0].FormKey}'");
 
-        var master = conflictingRecords[0];
-        var winner = conflictingRecords.FirstOrDefault(o => o.IsWinner)
-            ?? throw new InvalidOperationException(
-                $"No winner in {conflictingRecords.Count} overrides for FormKey '{conflictingRecords[0].FormKey}'");
-        var sortedArrays = conflictingRecords
-            .SelectMany(r => r.Fields)
-            .Where(f => f.Metadata.ElementType?.IsSortable == true)
-            .Select(f => f.Metadata.Name)
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var masterColumn = ColumnKey.Of(master.Plugin, master.Origin);
-        var ctx = new DiffContext(masterColumn, conflictingRecords, _logger, resolveFormKey, release);
-        var diffs = BuildDiffs([.. master.Fields.Select(f => f.Metadata.Name)], conflictingRecords, winner, ctx, sortedArrays);
+        var ctx = new DiffContext(
+            MasterColumn: Column(conflictingRecords[0]),
+            RecordWinnerColumn: Column(winner),
+            ColumnOrder: [.. conflictingRecords.Select(r => (Column(r), r.LoadOrderIndex))],
+            PartialFormColumns: conflictingRecords.Where(r => r.IsPartialForm).Select(Column).ToHashSet(StringComparer.Ordinal),
+            FormKey: conflictingRecords[0].FormKey,
+            Logger: _logger,
+            ResolveFormKey: resolveFormKey,
+            Release: release);
+        var diffs = RecordChildren(conflictingRecords, ctx);
+
+        if (conflictingRecords.Count == 1)
+            return new ClassifyResult(
+                ConflictAll.OnlyOne,
+                new Dictionary<string, ConflictThis> { [ctx.MasterColumn] = ConflictThis.OnlyOne },
+                diffs);
 
         var conflictAll = ConflictRules.Reduce(diffs.SelectMany(d => d.CellStates.Values));
 
-        // ADR-0036: keyed by the compound column identity, not the bare plugin — two
-        // overrides sharing a filename but differing in origin must land as two independent entries
-        // here, not collide (ToDictionary would throw on a literal duplicate key).
+        // ADR-0036: keyed by the compound column identity, not the bare plugin — two overrides
+        // sharing a filename but differing in origin must land as two independent entries here,
+        // not collide (ToDictionary would throw on a literal duplicate key).
         var pluginConflictThis = conflictingRecords.ToDictionary(
-            o => ColumnKey.Of(o.Plugin, o.Origin),
-            o => AggregateConflictThis(ColumnKey.Of(o.Plugin, o.Origin), masterColumn, diffs));
+            Column, o => ConflictRules.AggregateThis(Column(o), ctx.MasterColumn, diffs.Select(d => d.CellStates)));
 
         // Escalates an existing Override/Conflict to Critical; never overrides a NoConflict result
-        // (a content-identical injected record isn't a real conflict — see xeMainForm.pas ConflictLevelForNodeDatas).
-        if (conflictAll != ConflictAll.NoConflict && IsInjectedRecord(conflictingRecords, pluginMasters))
+        // (a content-identical injected record isn't a real conflict — see xeMainForm.pas
+        // ConflictLevelForNodeDatas).
+        if (conflictAll != ConflictAll.NoConflict && ConflictRules.IsInjected(conflictingRecords, pluginMasters))
             conflictAll = ConflictAll.ConflictCritical;
 
         return new ClassifyResult(conflictAll, pluginConflictThis, diffs);
     }
 
-    private static ConflictThis AggregateConflictThis(
-        string column,
-        string masterColumn,
-        IReadOnlyList<FieldDiff> diffs)
-    {
-        if (column == masterColumn) return ConflictThis.Master;
-
-        var states = diffs
-            .Where(d => d.CellStates.ContainsKey(column))
-            .Select(d => d.CellStates[column])
-            .ToList();
-
-        return states switch
-        {
-            { Count: 0 } => ConflictThis.IdenticalToMaster,
-            _ when states.Contains(ConflictThis.ConflictLoses) => ConflictThis.ConflictLoses,
-            _ when states.Contains(ConflictThis.ConflictWins) => ConflictThis.ConflictWins,
-            _ when states.Contains(ConflictThis.Override) => ConflictThis.Override,
-            _ => ConflictThis.IdenticalToMaster,
-        };
-    }
-
-    private static bool IsInjectedRecord(
-        IReadOnlyList<RecordDetail> overrides,
-        IReadOnlyDictionary<string, IReadOnlyList<string>> pluginMasters)
-    {
-        if (!FormKey.TryFactory(overrides[0].FormKey, out var formKey)) return false;
-        var originPlugin = formKey.ModKey.FileName.String;
-
-        return overrides.Skip(1).Any(o =>
-            pluginMasters.TryGetValue(ColumnKey.Of(o.Plugin, o.Origin), out var masters) &&
-            !masters.Contains(originPlugin, StringComparer.OrdinalIgnoreCase));
-    }
+    private static string Column(RecordDetail record) => ColumnKey.Of(record.Plugin, record.Origin);
 
     private const int MaxArrayChildCount = 500;
 
@@ -110,348 +80,167 @@ public sealed class ConflictClassifier(ILogger<ConflictClassifier>? logger = nul
     // can match the wrong column.
     private sealed record DiffContext(
         string MasterColumn,
-        IReadOnlyList<RecordDetail> Records,
+        string RecordWinnerColumn,
+        IReadOnlyList<(string Column, int LoadOrderIndex)> ColumnOrder,
+        IReadOnlySet<string> PartialFormColumns,
+        string FormKey,
         ILogger Logger,
         Func<string, RecordLookupEntry?>? ResolveFormKey,
         GameRelease Release);
 
-    private static List<FieldDiff> BuildDiffs(
-        IReadOnlyList<string> fieldNames,
-        IReadOnlyList<RecordDetail> records,
-        RecordDetail winner,
-        DiffContext ctx,
-        HashSet<string> sortedArrays)
-    {
-        // Record-wide fallback only — used when *no* plugin has a value for a field (the per-field
-        // computation below has nothing to fall through to at that point).
-        var recordWinnerColumn = ColumnKey.Of(winner.Plugin, winner.Origin);
-        var masterFieldMeta = records[0].Fields
-            .ToDictionary(f => f.Metadata.Name, f => f.Metadata);
-        // A table of several record classes carries the document's discriminator as a column, and a
-        // column whose type varies by class reads through that column's value.
-        var recordClass = records.ToDictionary(
-            o => ColumnKey.Of(o.Plugin, o.Origin),
-            o => o.Fields.FirstOrDefault(f => f.Metadata.Name == LoquiUnions.UnionTypeDiscriminator)?.Value);
-        return [.. fieldNames
-            .Select(fieldName =>
-            {
-                // A Partial Form override's fields are excluded as if null (ADR-0016), so they
-                // fall through to the previous non-partial override with no new state.
-                var values = records.ToDictionary(
-                    o => ColumnKey.Of(o.Plugin, o.Origin),
-                    o => o.IsPartialForm ? null : o.Fields.FirstOrDefault(f => f.Metadata.Name == fieldName)?.Value);
-                // This field's own winner, not the record-wide one, which may carry no value for
-                // this field (Partial Form, or a genuinely-null field).
-                var fieldWinner = records
-                    .Where(r => values.GetValueOrDefault(ColumnKey.Of(r.Plugin, r.Origin)) != null)
-                    .MaxBy(r => r.LoadOrderIndex);
-                var winnerColumn = fieldWinner != null ? ColumnKey.Of(fieldWinner.Plugin, fieldWinner.Origin) : recordWinnerColumn;
-                var winnerValue = values.GetValueOrDefault(winnerColumn);
-                var meta = masterFieldMeta.GetValueOrDefault(fieldName);
-                var metaByColumn = meta == null
-                    ? null
-                    : values.Keys.ToDictionary(column => column, column => VariantFor(meta, recordClass.GetValueOrDefault(column)));
-                var cellStates = ComputeCellStates(fieldName, values, ctx.MasterColumn, records, sortedArrays, meta);
-                var shape = metaByColumn == null ? null : metaByColumn[winnerColumn];
-                List<FieldDiff>? children = null;
-                if (shape?.Fields != null)
-                    children = BuildStructChildren(shape.Fields, values, ctx);
-                else if (shape?.ElementType != null)
-                    children = BuildArrayChildren(shape, values, ctx, MaxArrayChildCount, fieldName);
-                var resolutions = BuildResolutions(metaByColumn, values, ctx.ResolveFormKey, ctx.Release);
-                var conflictAll = AggregateConflictAll(cellStates, children);
-                return new FieldDiff(fieldName, values, winnerColumn, winnerValue, cellStates, conflictAll, children, resolutions);
-            })
-            .Where(d => d.Values.Values.Any(v => v != null))];
-    }
-
-    // The shape a member has in one column: its own, or the variant that column's leaf names.
-    private static FieldMetadata VariantFor(FieldMetadata member, object? leaf) =>
-        member.Variants is { } variants
-        && FormRefPathBuilder.ExtractString(leaf) is { } name
-        && variants.TryGetValue(name, out var variant)
-            ? variant
-            : member;
-
-    private static FieldMetadata VariantWithin(FieldMetadata member, object? owner) =>
-        member.Variants == null
-            ? member
-            : VariantFor(member, ExtractSubFieldValue(owner, LoquiUnions.UnionTypeDiscriminator));
-
-    // Only a scalar formKey-typed field carries Resolutions — struct/array fields' own Values
-    // aren't FormKey strings, and this is never propagated from Children (ADR-0031: no aggregation).
-    // Per column, since a union member's leaf can differ across plugins.
-    private static Dictionary<string, FormKeyResolution>? BuildResolutions(
-        Dictionary<string, FieldMetadata>? metaByColumn,
+    // One node of the diff tree, at whatever depth the walk reached it. absentMeansDefault is false
+    // for an array element, which the codec never omits for equalling its default.
+    private static FieldDiff DiffNode(
+        string label,
         Dictionary<string, object?> values,
-        Func<string, RecordLookupEntry?>? resolveFormKey,
-        GameRelease release)
-    {
-        if (resolveFormKey == null || metaByColumn == null) return null;
-
-        var resolutions = new Dictionary<string, FormKeyResolution>();
-        foreach (var (plugin, value) in values)
-        {
-            var meta = metaByColumn[plugin];
-            if (meta.Type != "formKey") continue;
-            var fk = FormRefPathBuilder.ExtractString(value);
-            if (string.IsNullOrEmpty(fk) || fk == "Null") continue;
-            resolutions[plugin] = FormKeyResolution.From(fk, resolveFormKey(fk), meta.ValidFormKeyTypes, release);
-        }
-        return resolutions.Count > 0 ? resolutions : null;
-    }
-
-    private static List<FieldDiff>? BuildArrayChildren(
-        FieldMetadata arrayMeta,
-        Dictionary<string, object?> parentValues,
-        DiffContext ctx,
-        int maxChildren,
-        string parentFieldName)
-    {
-        var elementMeta = arrayMeta.ElementType!;
-        var arrays = parentValues.ToDictionary(
-            kv => kv.Key,
-            kv => kv.Value is System.Text.Json.JsonElement je &&
-                  je.ValueKind == System.Text.Json.JsonValueKind.Array
-                ? (System.Text.Json.JsonElement?)je : null);
-
-        var builder = new ArrayChildrenBuilder(elementMeta, arrays, ctx, maxChildren, parentFieldName);
-        List<FieldDiff>? children;
-        if (arrayMeta.KeyMembers is { } keyMembers) children = builder.BuildKeyed(keyMembers);
-        else if (elementMeta.IsSortable) children = builder.BuildSorted();
-        else children = builder.BuildPositional();
-        return children is { Count: > 0 } ? children : null;
-    }
-
-    // One array field's per-element diff expansion: a keyed array (FieldMetadata.KeyMembers) diffs
-    // by the key its elements carry, a pure-FormLink array by the element value itself, and every
-    // other array by position.
-    private sealed class ArrayChildrenBuilder(
-        FieldMetadata elementMeta,
-        Dictionary<string, System.Text.Json.JsonElement?> arrays,
-        DiffContext ctx,
-        int maxChildren,
-        string parentFieldName)
-    {
-        private readonly IReadOnlyList<RecordDetail> _records = ctx.Records;
-        private readonly string _masterColumn = ctx.MasterColumn;
-        private readonly ILogger _logger = ctx.Logger;
-
-        /// <summary>Aligns by key, so a script one plugin lacks is an absence at that key rather
-        /// than a shift of everything after it. Rows come out in key order, the order the write
-        /// path stores them.</summary>
-        public List<FieldDiff>? BuildKeyed(IReadOnlyList<string> keyMembers) =>
-            BuildAligned(e => ElementKey.Of(e, keyMembers, elementMeta), (a, b) => a.CompareTo(b));
-
-        /// <summary>The element is its own key. A non-string element (the JSON null of a never-set
-        /// slot) is not a row. Rows stay in first-seen order across the load order.</summary>
-        public List<FieldDiff>? BuildSorted() =>
-            BuildAligned(
-                e => e.ValueKind == System.Text.Json.JsonValueKind.String ? ElementKey.OfValue(e.GetString()!) : null,
-                order: null);
-
-        // One row per key in the union across plugins. A second element sharing a key: the first
-        // wins — the write path refuses such a pair, but another tool's plugin can hold one.
-        private List<FieldDiff>? BuildAligned(
-            Func<System.Text.Json.JsonElement, ElementKey?> keyOf, Comparison<ElementKey>? order)
-        {
-            var byPlugin = new Dictionary<string, Dictionary<string, object?>>(StringComparer.Ordinal);
-            var union = new List<ElementKey>();
-            var seen = new HashSet<string>(StringComparer.Ordinal);
-            foreach (var r in _records)
-            {
-                var column = ColumnKey.Of(r.Plugin, r.Origin);
-                if (arrays.GetValueOrDefault(column) is not { } array) continue;
-                var lookup = new Dictionary<string, object?>(StringComparer.Ordinal);
-                foreach (var element in array.EnumerateArray())
-                {
-                    if (keyOf(element) is not { } key) continue;
-                    if (lookup.TryAdd(key.Text, element) && seen.Add(key.Text)) union.Add(key);
-                }
-                byPlugin[column] = lookup;
-            }
-
-            if (union.Count > maxChildren)
-            {
-                WarnTooLarge(union.Count);
-                return null;
-            }
-
-            if (order != null) union.Sort(order);
-
-            return [.. union.Select(key => MakeChild(
-                key.Text,
-                arrays.ToDictionary(
-                    kv => kv.Key,
-                    kv => byPlugin.TryGetValue(kv.Key, out var lookup) && lookup.TryGetValue(key.Text, out var el)
-                        ? el
-                        : null)))];
-        }
-
-        public List<FieldDiff>? BuildPositional()
-        {
-            var maxLen = arrays.Values
-                .Where(v => v != null)
-                .Select(v => v!.Value.GetArrayLength())
-                .DefaultIfEmpty(0)
-                .Max();
-            if (maxLen == 0) return null;
-
-            if (maxLen > maxChildren)
-            {
-                WarnTooLarge(maxLen);
-                return null;
-            }
-
-            var children = new List<FieldDiff>();
-            for (var i = 0; i < maxLen; i++)
-            {
-                var subValues = arrays.ToDictionary(
-                    kv => kv.Key,
-                    kv =>
-                    {
-                        if (kv.Value == null) return (object?)null;
-                        var arr = kv.Value.Value;
-                        return arr.GetArrayLength() > i ? (object?)arr[i] : null;
-                    });
-
-                children.Add(MakeChild($"[{i}]", subValues));
-            }
-            return children;
-        }
-
-        private FieldDiff MakeChild(string label, Dictionary<string, object?> subValues)
-        {
-            var fieldWinner = _records
-                .Where(r => subValues.GetValueOrDefault(ColumnKey.Of(r.Plugin, r.Origin)) != null)
-                .MaxBy(r => r.LoadOrderIndex)!;
-            var winnerColumn = ColumnKey.Of(fieldWinner.Plugin, fieldWinner.Origin);
-            var winnerValue = subValues[winnerColumn];
-            var cellStates = ComputeCellStates(label, subValues, _masterColumn, _records, []);
-            var childChildren = elementMeta.Fields != null
-                ? BuildStructChildren(elementMeta.Fields, subValues, ctx)
-                : null;
-            var resolutions = BuildResolutions(
-                subValues.Keys.ToDictionary(column => column, _ => elementMeta), subValues, ctx.ResolveFormKey, ctx.Release);
-            var conflictAll = AggregateConflictAll(cellStates, childChildren);
-            return new FieldDiff(label, subValues, winnerColumn, winnerValue, cellStates, conflictAll, childChildren, resolutions);
-        }
-
-        private void WarnTooLarge(int count) => _logger.LogWarning(
-            "Array field {Field} on {FormKey} has {Count} elements across plugins — exceeding MaxArrayChildCount ({Max}), falling back to opaque display",
-            parentFieldName, _records[0].FormKey, count, maxChildren);
-    }
-
-    private static List<FieldDiff>? BuildStructChildren(
-        IReadOnlyList<FieldMetadata> subFields,
-        Dictionary<string, object?> parentValues,
+        Dictionary<string, FieldMetadata> shapes,
+        bool absentMeansDefault,
         DiffContext ctx)
     {
-        var children = new List<FieldDiff>();
-        foreach (var subField in subFields)
+        var carrying = ctx.ColumnOrder.Where(c => values.GetValueOrDefault(c.Column) != null).ToList();
+        var winnerColumn = carrying.Count > 0 ? carrying.MaxBy(c => c.LoadOrderIndex).Column : ctx.RecordWinnerColumn;
+        var shape = shapes[winnerColumn];
+
+        var cellStates = ConflictRules.ComputeCellStates(
+            values, ctx.MasterColumn, ctx.ColumnOrder,
+            (a, b) => DocumentNodes.SameNode(a, b, ComparesUnordered(shape), absentMeansDefault ? shape : null));
+
+        List<FieldDiff>? children = null;
+        if (shape.Fields is { } members) children = StructChildren(members, values, ctx);
+        else if (shape.ElementType != null) children = ArrayChildren(shape, label, values, ctx);
+
+        // Escalate is associative and commutative over {NoConflict, Override, Conflict} (Reduce
+        // never produces the terminal states), so folding children equals reducing the whole
+        // subtree at once.
+        var conflictAll = (children ?? []).Aggregate(
+            ConflictRules.Reduce(cellStates.Values), (all, child) => ConflictRules.Escalate(all, child.ConflictAll));
+
+        var links = LinkFacts(shapes, values, ctx);
+        return new FieldDiff(
+            label, values, winnerColumn, cellStates, conflictAll, children, links.Resolutions, links.CheckErrors);
+    }
+
+    // A table of several record classes carries the document's discriminator as a column, and a
+    // column whose type varies by class reads through it.
+    private static List<FieldDiff> RecordChildren(IReadOnlyList<RecordDetail> records, DiffContext ctx)
+    {
+        var recordClass = records.ToDictionary(
+            Column, r => FormRefPathBuilder.ExtractString(MemberValue(r, LoquiUnions.UnionTypeDiscriminator)));
+        var memberMeta = records[0].Fields.ToDictionary(f => f.Metadata.Name, f => f.Metadata);
+        var diffs = new List<FieldDiff>();
+        foreach (var member in memberMeta.Values)
         {
-            var subValues = parentValues.ToDictionary(
-                kv => kv.Key,
-                kv => (object?)ExtractSubFieldValue(kv.Value, subField.Name));
+            // A Partial Form override's fields are excluded as if null (ADR-0016), so they fall
+            // through to the previous non-partial override with no new state.
+            var values = records.ToDictionary(Column, r => r.IsPartialForm ? null : MemberValue(r, member.Name));
+            if (values.Values.All(v => v == null)) continue;
+            var shapes = recordClass.ToDictionary(kv => kv.Key, kv => DocumentNodes.Variant(member, kv.Value));
+            diffs.Add(DiffNode(member.Name, values, shapes, absentMeansDefault: true, ctx));
+        }
+        return diffs;
+    }
 
-            if (subValues.Values.All(v => v == null)) continue;
-
-            var fieldWinner = ctx.Records
-                .Where(r => subValues.GetValueOrDefault(ColumnKey.Of(r.Plugin, r.Origin)) != null)
-                .MaxBy(r => r.LoadOrderIndex)!;
-
-            var winnerColumn = ColumnKey.Of(fieldWinner.Plugin, fieldWinner.Origin);
-            var winnerValue = subValues[winnerColumn];
-            // A member whose type varies by leaf takes each column's own leaf's shape; its children
-            // follow the winner's.
-            var metaByColumn = parentValues.ToDictionary(kv => kv.Key, kv => VariantWithin(subField, kv.Value));
-            var shape = metaByColumn[winnerColumn];
-
-            List<FieldDiff>? subChildren = null;
-            if (shape.IsArray && shape.ElementType != null)
-                subChildren = BuildArrayChildren(shape, subValues, ctx, MaxArrayChildCount, subField.Name);
-            else if (shape.Fields != null)
-                subChildren = BuildStructChildren(shape.Fields, subValues, ctx);
-
-            var cellStates = ComputeCellStates(subField.Name, subValues, ctx.MasterColumn, ctx.Records, [], shape);
-            var resolutions = BuildResolutions(metaByColumn, subValues, ctx.ResolveFormKey, ctx.Release);
-            var conflictAll = AggregateConflictAll(cellStates, subChildren);
-            children.Add(new FieldDiff(subField.Name, subValues, winnerColumn, winnerValue, cellStates, conflictAll, subChildren, resolutions));
+    private static List<FieldDiff>? StructChildren(
+        IReadOnlyList<FieldMetadata> members, Dictionary<string, object?> owners, DiffContext ctx)
+    {
+        var children = new List<FieldDiff>();
+        foreach (var member in members)
+        {
+            var values = owners.ToDictionary(kv => kv.Key, kv => (object?)MemberValue(kv.Value, member.Name));
+            if (values.Values.All(v => v == null)) continue;
+            var shapes = owners.ToDictionary(
+                kv => kv.Key, kv => DocumentNodes.VariantFor(member, kv.Value as JsonElement?));
+            children.Add(DiffNode(member.Name, values, shapes, absentMeansDefault: true, ctx));
         }
         return children.Count > 0 ? children : null;
     }
 
-    private static JsonElement? ExtractSubFieldValue(object? structValue, string subFieldName)
+    // Keyed, sorted and positional alignment are one union-by-key build over three key functions, so
+    // an element one plugin lacks is an absence at its key, not a shift. Keyed rows come out in key
+    // order.
+    private static List<FieldDiff>? ArrayChildren(
+        FieldMetadata array, string label, Dictionary<string, object?> values, DiffContext ctx)
     {
-        static JsonElement? NonNull(JsonElement e) =>
-            e.ValueKind == JsonValueKind.Null ? null : e;
+        var element = array.ElementType!;
+        Func<JsonElement, int, ElementKey?> keyOf;
+        if (array.KeyMembers is { } keyMembers) keyOf = (e, _) => ElementKey.Of(e, keyMembers, element);
+        // A non-string element (the JSON null of a never-set slot) is not a row.
+        else if (ComparesUnordered(array)) keyOf = (e, _) => e.ValueKind == JsonValueKind.String ? ElementKey.OfValue(e.GetString()!) : null;
+        else keyOf = (_, index) => ElementKey.OfValue($"[{index}]");
 
-        return structValue is JsonElement je &&
-            je.ValueKind == JsonValueKind.Object &&
-            je.TryGetProperty(subFieldName, out var sub)
-            ? NonNull(sub)
-            : null;
-    }
-
-    // Escalate is associative and commutative over {NoConflict, Override, Conflict} (Reduce never
-    // produces the terminal states), so folding children equals reducing the whole subtree at once.
-    private static ConflictAll AggregateConflictAll(
-        IReadOnlyDictionary<string, ConflictThis> ownCellStates, IReadOnlyList<FieldDiff>? children)
-    {
-        var result = ConflictRules.Reduce(ownCellStates.Values);
-        if (children == null) return result;
-        foreach (var child in children)
-            result = ConflictRules.Escalate(result, child.ConflictAll);
-        return result;
-    }
-
-    private static Dictionary<string, ConflictThis> ComputeCellStates(
-        string fieldName,
-        Dictionary<string, object?> values,
-        string masterColumn,
-        IReadOnlyList<RecordDetail> records,
-        HashSet<string> sortedArrays,
-        FieldMetadata? meta = null)
-    {
-        var isSorted = sortedArrays.Contains(fieldName);
-        var columnOrder = records.Select(r => (ColumnKey.Of(r.Plugin, r.Origin), r.LoadOrderIndex)).ToList();
-        return ConflictRules.ComputeCellStates(values, masterColumn, columnOrder, (a, b) => ValuesEqual(a, b, isSorted, meta));
-    }
-
-    // JsonElement doesn't override Equals(), so compare by raw JSON text; a sorted array compares
-    // sorted. The codec omits a member equal to its default, so an omitted member and one spelled
-    // as the default are the same value.
-    private static bool ValuesEqual(object? a, object? b, bool isSortedArray = false, FieldMetadata? meta = null)
-    {
-        if (a is JsonElement ja && b is JsonElement jb)
+        var byColumn = new Dictionary<string, Dictionary<string, object?>>(StringComparer.Ordinal);
+        var union = new List<ElementKey>();
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var (column, _) in ctx.ColumnOrder)
         {
-            if (isSortedArray &&
-                ja.ValueKind == JsonValueKind.Array &&
-                jb.ValueKind == JsonValueKind.Array)
+            if (values.GetValueOrDefault(column) is not JsonElement { ValueKind: JsonValueKind.Array } elements) continue;
+            var lookup = new Dictionary<string, object?>(StringComparer.Ordinal);
+            var index = 0;
+            foreach (var e in elements.EnumerateArray())
             {
-                if (ja.GetArrayLength() != jb.GetArrayLength()) return false;
-                var sortedA = ja.EnumerateArray().Select(e => e.GetRawText()).Order();
-                var sortedB = jb.EnumerateArray().Select(e => e.GetRawText()).Order();
-                return sortedA.SequenceEqual(sortedB);
+                // A second element sharing a key: the first wins — the write path refuses such a
+                // pair, but another tool's plugin can hold one.
+                if (keyOf(e, index++) is { } key && lookup.TryAdd(key.Text, e) && seen.Add(key.Text)) union.Add(key);
             }
-            return ja.GetRawText() == jb.GetRawText();
+            byColumn[column] = lookup;
         }
-        if (a is null && b is JsonElement onlyB) return IsDefault(onlyB, meta);
-        if (b is null && a is JsonElement onlyA) return IsDefault(onlyA, meta);
-        return Equals(a, b);
+
+        if (union.Count > MaxArrayChildCount)
+        {
+            ctx.Logger.LogWarning(
+                "Array field {Field} on {FormKey} has {Count} elements across plugins — exceeding MaxArrayChildCount ({Max}), falling back to opaque display",
+                label, ctx.FormKey, union.Count, MaxArrayChildCount);
+            return null;
+        }
+        if (union.Count == 0) return null;
+        if (array.KeyMembers != null) union.Sort((a, b) => a.CompareTo(b));
+
+        var shapes = values.Keys.ToDictionary(column => column, _ => element);
+        return [.. union.Select(key => DiffNode(
+            key.Text,
+            values.Keys.ToDictionary(
+                column => column,
+                column => byColumn.TryGetValue(column, out var lookup) && lookup.TryGetValue(key.Text, out var e) ? e : null),
+            shapes, absentMeansDefault: false, ctx))];
     }
 
-    // What the codec omits: the declared default where the metadata spells one, else a zero number,
-    // false, an empty list or object, and a link to nothing.
-    private static bool IsDefault(JsonElement value, FieldMetadata? meta) => meta?.Default is { } declared
-        ? DocumentNodes.SameValue(value, JsonSerializer.SerializeToElement(declared))
-        : value.ValueKind switch
+    // ADR-0031: Resolutions are a scalar formKey node's alone, never aggregated up from Children, so
+    // a dangling sibling can't hide a live hyperlink beside it. A check error is the node's whole
+    // subtree's.
+    private static (Dictionary<string, FormKeyResolution>? Resolutions, Dictionary<string, string>? CheckErrors) LinkFacts(
+        Dictionary<string, FieldMetadata> shapes, Dictionary<string, object?> values, DiffContext ctx)
+    {
+        if (ctx.ResolveFormKey == null) return (null, null);
+
+        var resolutions = new Dictionary<string, FormKeyResolution>();
+        var checkErrors = new Dictionary<string, string>();
+        foreach (var (column, value) in values)
         {
-            JsonValueKind.Number => value.GetRawText().Trim('-', '0', '.') is "" or "e0",
-            JsonValueKind.False => true,
-            JsonValueKind.String => meta?.Type == "formKey" && value.GetString() == "Null",
-            JsonValueKind.Array => value.GetArrayLength() == 0,
-            JsonValueKind.Object => !value.EnumerateObject().Any(),
-            _ => false,
-        };
+            // A Partial Form override asserts nothing about the fields it omits (ADR-0016), so its
+            // absent value is not an unset link to report.
+            if (ctx.PartialFormColumns.Contains(column)) continue;
+            var meta = shapes[column];
+            if (CheckErrorBuilder.Build(meta, value as JsonElement?, ctx.ResolveFormKey, ctx.Release) is { } error)
+                checkErrors[column] = error;
+            if (meta.Type != "formKey") continue;
+            var fk = FormRefPathBuilder.ExtractString(value);
+            if (string.IsNullOrEmpty(fk) || fk == "Null") continue;
+            resolutions[column] = FormKeyResolution.From(fk, ctx.ResolveFormKey(fk), meta.ValidFormKeyTypes, ctx.Release);
+        }
+        return (resolutions.Count > 0 ? resolutions : null, checkErrors.Count > 0 ? checkErrors : null);
+    }
+
+    // xEdit's wbArrayS keyed by the element itself: a pure-link array's order carries no meaning, so
+    // two spellings of one set are one value. Read off the element type at every depth.
+    private static bool ComparesUnordered(FieldMetadata meta) => meta.ElementType?.Type == "formKey";
+
+    private static object? MemberValue(RecordDetail record, string member) =>
+        record.Fields.FirstOrDefault(f => f.Metadata.Name == member)?.Value;
+
+    private static JsonElement? MemberValue(object? owner, string member) =>
+        owner is JsonElement { ValueKind: JsonValueKind.Object } obj
+        && obj.TryGetProperty(member, out var sub)
+        && sub.ValueKind != JsonValueKind.Null
+            ? sub
+            : null;
 }
