@@ -5,8 +5,7 @@ using Mutagen.Bethesda.Plugins.Records;
 namespace MEditService.Core.Schema;
 
 /// <summary>One record type's top-level columns: every member of its getter interface that is not
-/// record-header metadata, built by the same leaf builders every nested member uses and given the
-/// database facts a column needs on top.</summary>
+/// record-header metadata, built by the same leaf builders every nested member uses.</summary>
 internal static class ColumnReflection
 {
     // Declared by Mutagen.Bethesda.Core's IMajorRecordGetter for every game: identity and header
@@ -42,8 +41,7 @@ internal static class ColumnReflection
     }
 
     /// <summary>One member as a column: the spec every walk builds it as, plus its database facts.
-    /// A scalar leaf casts to its own DuckDB type and coalesces to its own default; an array or a
-    /// struct is one JSON node the view has no scalar reading of.</summary>
+    /// An array or a struct is one JSON node no view has a scalar reading of.</summary>
     internal static ColumnSpec? BuildColumn(
         PropertyInfo prop, string propertyName, GameReflection game, ILogger logger)
     {

@@ -7,8 +7,7 @@ using Noggog;
 namespace MEditService.Core.Schema;
 
 /// <summary>What kind of leaf a reflected property is — the one classification a column, a nested
-/// member and an array element all ask, so the three never disagree. Each kind names how the codec
-/// spells the value in the document.</summary>
+/// member and an array element all ask, so the three never disagree.</summary>
 internal static class LeafClassification
 {
     internal static string[] GetFormLinkValidTypes(
@@ -66,10 +65,8 @@ internal static class LeafClassification
         return atomic.Count > 0 ? atomic.ToArray() : [.. allNames.Select(n => new EnumMember(n))];
     }
 
-    // Classifies every leaf kind: primitive, translated-string, byte slice, colour, vector, mod key,
-    // enum, form-link. Returns null for list/loqui-struct — the callers handle those. `prop` is null
-    // where the leaf has no owning member (an array element), which is the only thing that can name
-    // a declared default or a permitted null link.
+    // Every leaf kind, and null for list/loqui-struct, which the callers handle. A null `prop` is an
+    // array element: no member to ask for a declared default or a permitted null link.
     internal static LeafSpec? ClassifyLeaf(
         PropertyInfo? prop, Type core, GameReflection game)
     {
@@ -93,8 +90,7 @@ internal static class LeafClassification
             return new("translatedString", "VARCHAR", LeafSpec.NoFormKeyTypes, LeafSpec.NoEnumMembers);
 
         // A hex blob, a colour and a vector each have a zero the wire's own 0 does not stand for and
-        // the type name alone cannot say, so the leaf carries the codec's own spelling of whatever
-        // the codec answered. An element, having no owning member to ask about, spells nothing.
+        // the type name alone cannot say, so the leaf carries the codec's own spelling of it.
         if (ByteSliceHex.IsByteSlice(core))
             return Spelled(ByteSliceHex.HexApiType, declared is ReadOnlyMemorySlice<byte> s ? ByteSliceHex.ToHex(s.Span) : null);
 

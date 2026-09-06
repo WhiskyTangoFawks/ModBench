@@ -268,9 +268,8 @@ public sealed class ComplexFieldElementEditTests : IDisposable
         Assert.DoesNotContain("ObjectModFloatProperty", body, StringComparison.Ordinal);
     }
 
-    // FunctionType is an enum on every OMOD property leaf, but each leaf's own domain: MultAndAdd
-    // is a float function the bool leaf has no member for, so the switch drops it rather than
-    // handing the codec a value the incoming leaf cannot hold.
+    // FunctionType is an enum on every OMOD property leaf, over that leaf's own domain: MultAndAdd
+    // is a float function the bool leaf has no member for, so the switch drops it.
     [Fact]
     public void SwitchingAnOmodPropertyLeaf_DropsAMemberWhoseDomainTheIncomingLeafLacks()
     {
