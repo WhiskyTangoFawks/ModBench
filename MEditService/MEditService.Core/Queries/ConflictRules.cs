@@ -1,3 +1,5 @@
+using Mutagen.Bethesda.Plugins;
+
 namespace MEditService.Core.Queries;
 
 // Single owner of the ADR-0016 two-axis model's decision rules, so a rule change cannot drift
@@ -10,13 +12,6 @@ public static class ConflictRules
     public static IReadOnlyList<T> FilterParticipating<T>(
         IReadOnlyList<T> items, Func<T, string> plugin, IReadOnlyDictionary<string, bool>? pluginParticipates) =>
         pluginParticipates == null ? items : [.. items.Where(i => pluginParticipates.GetValueOrDefault(plugin(i), true))];
-
-    // The winning plugin for a cell: highest load-order plugin that has a value. Callers only align
-    // over the union of plugins that carry the value, so at least one is always present.
-    public static string PickWinner(
-        IReadOnlyList<(string Plugin, int LoadOrderIndex)> pluginOrder,
-        Func<string, bool> hasValue) =>
-        pluginOrder.Where(p => hasValue(p.Plugin)).MaxBy(p => p.LoadOrderIndex)!.Plugin;
 
     // The field winner (highest load-order plugin with a value) is ConflictWins if contested by
     // another non-master plugin, else Override; the rest are IdenticalToMaster, ConflictLoses or
@@ -70,6 +65,38 @@ public static class ConflictRules
         }
 
         return !ctx.ValuesEqual(pluginValue, ctx.WinnerValue) ? ConflictThis.ConflictLoses : ConflictThis.Override;
+    }
+
+    // One column's own state across every row: the most severe cell it holds, and Master for the
+    // master's own column.
+    public static ConflictThis AggregateThis(
+        string column, string masterColumn, IEnumerable<IReadOnlyDictionary<string, ConflictThis>> rows)
+    {
+        if (column == masterColumn) return ConflictThis.Master;
+
+        var states = rows.Where(r => r.ContainsKey(column)).Select(r => r[column]).ToList();
+        return states switch
+        {
+            { Count: 0 } => ConflictThis.IdenticalToMaster,
+            _ when states.Contains(ConflictThis.ConflictLoses) => ConflictThis.ConflictLoses,
+            _ when states.Contains(ConflictThis.ConflictWins) => ConflictThis.ConflictWins,
+            _ when states.Contains(ConflictThis.Override) => ConflictThis.Override,
+            _ => ConflictThis.IdenticalToMaster,
+        };
+    }
+
+    // An override whose master list omits the plugin the FormKey originates in has injected the
+    // record into that plugin's FormID space.
+    public static bool IsInjected(
+        IReadOnlyList<RecordDetail> overrides,
+        IReadOnlyDictionary<string, IReadOnlyList<string>> pluginMasters)
+    {
+        if (!FormKey.TryFactory(overrides[0].FormKey, out var formKey)) return false;
+        var originPlugin = formKey.ModKey.FileName.String;
+
+        return overrides.Skip(1).Any(o =>
+            pluginMasters.TryGetValue(ColumnKey.Of(o.Plugin, o.Origin), out var masters) &&
+            !masters.Contains(originPlugin, StringComparer.OrdinalIgnoreCase));
     }
 
     // Folds a set of per-cell states into the row-level ConflictAll contribution they imply:

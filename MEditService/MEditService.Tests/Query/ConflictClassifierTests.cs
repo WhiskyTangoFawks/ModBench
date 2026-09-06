@@ -21,7 +21,7 @@ public class ConflictClassifierTests
 
     private static FieldValue SortedArrayField(string name, object? value) =>
         new(new FieldMetadata(name, "array", true, [], [],
-            ElementType: new FieldMetadata("", "formKey", false, [], [], IsSortable: true)), value);
+            ElementType: new FieldMetadata("", "formKey", false, [], [])), value);
 
     private static RecordDetail MakeOverride(string plugin, int loadOrder, bool isWinner,
         params (string name, object? value)[] fields) =>
@@ -117,7 +117,7 @@ public class ConflictClassifierTests
         var nameDiff = result.Diffs.First(d => d.FieldName == "Name");
         Assert.Equal("SomeNPC", nameDiff.Values["DLCRobot.esm"]);
         Assert.Equal("DLCRobot.esm", nameDiff.WinnerColumn);
-        Assert.Equal("SomeNPC", nameDiff.WinnerValue);
+        Assert.Equal("SomeNPC", nameDiff.Values[nameDiff.WinnerColumn]);
     }
 
     [Fact]
@@ -370,7 +370,7 @@ public class ConflictClassifierTests
         Assert.NotEqual(ConflictAll.Conflict, result.ConflictAll);
     }
 
-    // --- Per-field WinnerColumn/WinnerValue fallthrough ---
+    // --- Per-field WinnerColumn fallthrough ---
     //
     // A field the record-wide winner never set must not report that winner's null value instead of
     // falling through to whichever plugin actually carries one.
@@ -386,7 +386,7 @@ public class ConflictClassifierTests
 
         var level = result.Diffs.Single(d => d.FieldName == "Level");
         Assert.Equal("A.esp", level.WinnerColumn);
-        Assert.Equal(1, level.WinnerValue);
+        Assert.Equal(1, level.Values[level.WinnerColumn]);
     }
 
     // --- Partial Form flag rule ---
@@ -979,7 +979,7 @@ public class ConflictClassifierTests
 
         var xChild = result.Diffs.First(d => d.FieldName == "Pos").Children!.First(c => c.FieldName == "X");
         Assert.Equal("B.esp", xChild.WinnerColumn);
-        Assert.Equal(5, ((System.Text.Json.JsonElement)xChild.WinnerValue!).GetInt32());
+        Assert.Equal(5, ((System.Text.Json.JsonElement)xChild.Values[xChild.WinnerColumn]!).GetInt32());
     }
 
     [Fact]
@@ -1043,8 +1043,8 @@ public class ConflictClassifierTests
         var arrayDiff = result.Diffs.First(d => d.FieldName == "Keywords");
         Assert.Null(arrayDiff.Resolutions); // no aggregation onto the parent array field
 
-        var kw1 = arrayDiff.Children!.First(c => c.WinnerValue is JsonElement je && je.GetString() == "000AAA:Test.esp");
-        var kw2 = arrayDiff.Children!.First(c => c.WinnerValue is JsonElement je && je.GetString() == "000BBB:Test.esp");
+        var kw1 = arrayDiff.Children!.First(c => c.FieldName == "000AAA:Test.esp");
+        var kw2 = arrayDiff.Children!.First(c => c.FieldName == "000BBB:Test.esp");
 
         Assert.Equal(MEditService.Core.Records.FormKeyResolutionState.ResolvedValidType, kw1.Resolutions!["A.esp"].State);
         Assert.Equal(MEditService.Core.Records.FormKeyResolutionState.Unresolved, kw2.Resolutions!["A.esp"].State);

@@ -27,6 +27,38 @@ internal static class DocumentNodes
             ? a.GetDouble().CompareTo(b.GetDouble()) == 0
             : a.GetRawText() == b.GetRawText();
 
+    // Two columns spelling one value. JsonElement doesn't override Equals(), so the codec's own
+    // text is the comparison; an unordered array compares as a set, and where one side is absent
+    // `defaultOf` says what the other has to equal for the codec to have omitted it.
+    internal static bool SameNode(object? a, object? b, bool unordered, FieldMetadata? defaultOf)
+    {
+        if (a is JsonElement ja && b is JsonElement jb)
+        {
+            if (unordered && ja.ValueKind == JsonValueKind.Array && jb.ValueKind == JsonValueKind.Array)
+                return ja.GetArrayLength() == jb.GetArrayLength()
+                    && ja.EnumerateArray().Select(e => e.GetRawText()).Order()
+                        .SequenceEqual(jb.EnumerateArray().Select(e => e.GetRawText()).Order());
+            return ja.GetRawText() == jb.GetRawText();
+        }
+        if (a is null && b is JsonElement onlyB) return IsOmitted(onlyB, defaultOf);
+        if (b is null && a is JsonElement onlyA) return IsOmitted(onlyA, defaultOf);
+        return Equals(a, b);
+    }
+
+    // What the codec omits: the declared default where the metadata spells one, else a zero number,
+    // false, an empty list or object, and a link to nothing.
+    private static bool IsOmitted(JsonElement value, FieldMetadata? meta) => meta?.Default is { } declared
+        ? SameValue(value, JsonSerializer.SerializeToElement(declared))
+        : value.ValueKind switch
+        {
+            JsonValueKind.Number => value.GetRawText().Trim('-', '0', '.') is "" or "e0",
+            JsonValueKind.False => true,
+            JsonValueKind.String => meta?.Type == "formKey" && value.GetString() == "Null",
+            JsonValueKind.Array => value.GetArrayLength() == 0,
+            JsonValueKind.Object => !value.EnumerateObject().Any(),
+            _ => false,
+        };
+
     /// <summary>The shape a member has under the object holding it: its own, or the variant the
     /// object's discriminator names when the member's type varies by leaf.</summary>
     internal static FieldMetadata VariantFor(FieldMetadata member, JsonElement? owner) =>

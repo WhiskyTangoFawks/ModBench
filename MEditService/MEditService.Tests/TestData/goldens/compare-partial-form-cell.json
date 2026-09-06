@@ -98,6 +98,7 @@
     "Diffs": [
       {
         "CellStates": {},
+        "CheckErrors": null,
         "Children": null,
         "ConflictAll": "NoConflict",
         "FieldName": "WaterHeight",
@@ -106,8 +107,7 @@
           "Base.esm": 100.0,
           "Partial.esp": null
         },
-        "WinnerColumn": "Base.esm",
-        "WinnerValue": 100.0
+        "WinnerColumn": "Base.esm"
       }
     ],
     "Overrides": [

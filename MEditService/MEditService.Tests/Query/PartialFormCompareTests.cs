@@ -124,7 +124,7 @@ public sealed class PartialFormCompareTests : IDisposable
         Assert.DoesNotContain("Partial.esp", waterHeight.CellStates.Keys);
     }
 
-    // ── Per-field WinnerColumn/WinnerValue fall through past a Partial Form override ──────────
+    // ── Per-field WinnerColumn falls through past a Partial Form override ────────────────────
 
     [Fact]
     public void GetCompare_CellWithPartialFormOverride_WaterHeightWinnerFallsThroughToMaster()
@@ -136,8 +136,7 @@ public sealed class PartialFormCompareTests : IDisposable
         var waterHeight = compare.Diffs.Single(d => d.FieldName == "WaterHeight");
 
         Assert.Equal("Base.esm", waterHeight.WinnerColumn);
-        Assert.NotNull(waterHeight.WinnerValue);
-        Assert.Equal(MasterWaterHeight, Assert.IsType<JsonElement>(waterHeight.WinnerValue).GetSingle());
+        Assert.Equal(MasterWaterHeight, Assert.IsType<JsonElement>(waterHeight.Values["Base.esm"]).GetSingle());
     }
 
     [Fact]

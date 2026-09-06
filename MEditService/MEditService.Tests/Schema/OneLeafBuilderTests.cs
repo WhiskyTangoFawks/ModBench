@@ -49,14 +49,6 @@ public sealed class OneLeafBuilderTests
             .Select(x => x.Path)
             .Distinct(StringComparer.Ordinal));
 
-    [Fact]
-    public void EveryFormLinkArrayElement_IsSortable_HoweverDeepTheWalkReachedIt()
-    {
-        var unsorted = ArraysWhoseElement(e => !e.IsSortable);
-
-        Assert.True(unsorted.Length == 0, unsorted);
-    }
-
     // Absence is a value or it is a default, and only the getter's own annotation says which: the
     // CLR type is a reference type either way for a struct, and carries no default for a string.
     [Theory]

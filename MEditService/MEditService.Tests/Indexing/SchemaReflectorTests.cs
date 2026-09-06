@@ -290,16 +290,6 @@ public class SchemaReflectorTests
     }
 
     [Fact]
-    public void GetSchemas_Npc_Keywords_IsSortable()
-    {
-        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
-        var col = schemas["npc_"].RecordColumns.FirstOrDefault(c => c.Name == "Keywords");
-        Assert.NotNull(col);
-        Assert.NotNull(col.Field.ElementSpec);
-        Assert.True(col.Field.ElementSpec.IsSortable);
-    }
-
-    [Fact]
     public void GetSchemas_Npc_Factions_IsReflectedAsArrayOfStructs()
     {
         var schemas = _reflector.GetSchemas(GameRelease.Fallout4);

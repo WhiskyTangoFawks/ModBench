@@ -4,17 +4,21 @@
       "CellStates": {
         "Top.esp": "Override"
       },
+      "CheckErrors": null,
       "Children": [
         {
           "CellStates": {
             "Top.esp": "Override"
           },
+          "CheckErrors": null,
           "Children": [
             {
               "CellStates": {},
+              "CheckErrors": null,
               "Children": [
                 {
                   "CellStates": {},
+                  "CheckErrors": null,
                   "Children": null,
                   "ConflictAll": "NoConflict",
                   "FieldName": "Name",
@@ -23,17 +27,19 @@
                     "Base.esm": "Ambush",
                     "Top.esp": null
                   },
-                  "WinnerColumn": "Base.esm",
-                  "WinnerValue": "Ambush"
+                  "WinnerColumn": "Base.esm"
                 },
                 {
                   "CellStates": {},
+                  "CheckErrors": null,
                   "Children": [
                     {
                       "CellStates": {},
+                      "CheckErrors": null,
                       "Children": [
                         {
                           "CellStates": {},
+                          "CheckErrors": null,
                           "Children": null,
                           "ConflictAll": "NoConflict",
                           "FieldName": "Name",
@@ -42,11 +48,11 @@
                             "Base.esm": "Radius",
                             "Top.esp": null
                           },
-                          "WinnerColumn": "Base.esm",
-                          "WinnerValue": "Radius"
+                          "WinnerColumn": "Base.esm"
                         },
                         {
                           "CellStates": {},
+                          "CheckErrors": null,
                           "Children": null,
                           "ConflictAll": "NoConflict",
                           "FieldName": "Data",
@@ -55,11 +61,11 @@
                             "Base.esm": 10,
                             "Top.esp": null
                           },
-                          "WinnerColumn": "Base.esm",
-                          "WinnerValue": 10
+                          "WinnerColumn": "Base.esm"
                         },
                         {
                           "CellStates": {},
+                          "CheckErrors": null,
                           "Children": null,
                           "ConflictAll": "NoConflict",
                           "FieldName": "MutagenObjectType",
@@ -68,8 +74,7 @@
                             "Base.esm": "ScriptIntProperty",
                             "Top.esp": null
                           },
-                          "WinnerColumn": "Base.esm",
-                          "WinnerValue": "ScriptIntProperty"
+                          "WinnerColumn": "Base.esm"
                         }
                       ],
                       "ConflictAll": "NoConflict",
@@ -83,12 +88,7 @@
                         },
                         "Top.esp": null
                       },
-                      "WinnerColumn": "Base.esm",
-                      "WinnerValue": {
-                        "Data": 10,
-                        "MutagenObjectType": "ScriptIntProperty",
-                        "Name": "Radius"
-                      }
+                      "WinnerColumn": "Base.esm"
                     }
                   ],
                   "ConflictAll": "NoConflict",
@@ -104,14 +104,7 @@
                     ],
                     "Top.esp": null
                   },
-                  "WinnerColumn": "Base.esm",
-                  "WinnerValue": [
-                    {
-                      "Data": 10,
-                      "MutagenObjectType": "ScriptIntProperty",
-                      "Name": "Radius"
-                    }
-                  ]
+                  "WinnerColumn": "Base.esm"
                 }
               ],
               "ConflictAll": "NoConflict",
@@ -130,27 +123,19 @@
                 },
                 "Top.esp": null
               },
-              "WinnerColumn": "Base.esm",
-              "WinnerValue": {
-                "Name": "Ambush",
-                "Properties": [
-                  {
-                    "Data": 10,
-                    "MutagenObjectType": "ScriptIntProperty",
-                    "Name": "Radius"
-                  }
-                ]
-              }
+              "WinnerColumn": "Base.esm"
             },
             {
               "CellStates": {
                 "Top.esp": "IdenticalToMaster"
               },
+              "CheckErrors": null,
               "Children": [
                 {
                   "CellStates": {
                     "Top.esp": "IdenticalToMaster"
                   },
+                  "CheckErrors": null,
                   "Children": null,
                   "ConflictAll": "NoConflict",
                   "FieldName": "Name",
@@ -159,23 +144,25 @@
                     "Base.esm": "Guard",
                     "Top.esp": "Guard"
                   },
-                  "WinnerColumn": "Top.esp",
-                  "WinnerValue": "Guard"
+                  "WinnerColumn": "Top.esp"
                 },
                 {
                   "CellStates": {
                     "Top.esp": "IdenticalToMaster"
                   },
+                  "CheckErrors": null,
                   "Children": [
                     {
                       "CellStates": {
                         "Top.esp": "IdenticalToMaster"
                       },
+                      "CheckErrors": null,
                       "Children": [
                         {
                           "CellStates": {
                             "Top.esp": "IdenticalToMaster"
                           },
+                          "CheckErrors": null,
                           "Children": null,
                           "ConflictAll": "NoConflict",
                           "FieldName": "Name",
@@ -184,13 +171,13 @@
                             "Base.esm": "Radius",
                             "Top.esp": "Radius"
                           },
-                          "WinnerColumn": "Top.esp",
-                          "WinnerValue": "Radius"
+                          "WinnerColumn": "Top.esp"
                         },
                         {
                           "CellStates": {
                             "Top.esp": "IdenticalToMaster"
                           },
+                          "CheckErrors": null,
                           "Children": null,
                           "ConflictAll": "NoConflict",
                           "FieldName": "Data",
@@ -199,13 +186,13 @@
                             "Base.esm": 20,
                             "Top.esp": 20
                           },
-                          "WinnerColumn": "Top.esp",
-                          "WinnerValue": 20
+                          "WinnerColumn": "Top.esp"
                         },
                         {
                           "CellStates": {
                             "Top.esp": "IdenticalToMaster"
                           },
+                          "CheckErrors": null,
                           "Children": null,
                           "ConflictAll": "NoConflict",
                           "FieldName": "MutagenObjectType",
@@ -214,8 +201,7 @@
                             "Base.esm": "ScriptIntProperty",
                             "Top.esp": "ScriptIntProperty"
                           },
-                          "WinnerColumn": "Top.esp",
-                          "WinnerValue": "ScriptIntProperty"
+                          "WinnerColumn": "Top.esp"
                         }
                       ],
                       "ConflictAll": "NoConflict",
@@ -233,12 +219,7 @@
                           "Name": "Radius"
                         }
                       },
-                      "WinnerColumn": "Top.esp",
-                      "WinnerValue": {
-                        "Data": 20,
-                        "MutagenObjectType": "ScriptIntProperty",
-                        "Name": "Radius"
-                      }
+                      "WinnerColumn": "Top.esp"
                     }
                   ],
                   "ConflictAll": "NoConflict",
@@ -260,14 +241,7 @@
                       }
                     ]
                   },
-                  "WinnerColumn": "Top.esp",
-                  "WinnerValue": [
-                    {
-                      "Data": 20,
-                      "MutagenObjectType": "ScriptIntProperty",
-                      "Name": "Radius"
-                    }
-                  ]
+                  "WinnerColumn": "Top.esp"
                 }
               ],
               "ConflictAll": "NoConflict",
@@ -295,17 +269,7 @@
                   ]
                 }
               },
-              "WinnerColumn": "Top.esp",
-              "WinnerValue": {
-                "Name": "Guard",
-                "Properties": [
-                  {
-                    "Data": 20,
-                    "MutagenObjectType": "ScriptIntProperty",
-                    "Name": "Radius"
-                  }
-                ]
-              }
+              "WinnerColumn": "Top.esp"
             }
           ],
           "ConflictAll": "Override",
@@ -347,19 +311,7 @@
               }
             ]
           },
-          "WinnerColumn": "Top.esp",
-          "WinnerValue": [
-            {
-              "Name": "Guard",
-              "Properties": [
-                {
-                  "Data": 20,
-                  "MutagenObjectType": "ScriptIntProperty",
-                  "Name": "Radius"
-                }
-              ]
-            }
-          ]
+          "WinnerColumn": "Top.esp"
         }
       ],
       "ConflictAll": "Override",
@@ -405,21 +357,7 @@
           ]
         }
       },
-      "WinnerColumn": "Top.esp",
-      "WinnerValue": {
-        "Scripts": [
-          {
-            "Name": "Guard",
-            "Properties": [
-              {
-                "Data": 20,
-                "MutagenObjectType": "ScriptIntProperty",
-                "Name": "Radius"
-              }
-            ]
-          }
-        ]
-      }
+      "WinnerColumn": "Top.esp"
     },
     "ConflictAll": "Override"
   },
@@ -428,16 +366,19 @@
       "CellStates": {
         "Top.esp": "Override"
       },
+      "CheckErrors": null,
       "Children": [
         {
           "CellStates": {
             "Top.esp": "IdenticalToMaster"
           },
+          "CheckErrors": null,
           "Children": [
             {
               "CellStates": {
                 "Top.esp": "IdenticalToMaster"
               },
+              "CheckErrors": null,
               "Children": null,
               "ConflictAll": "NoConflict",
               "FieldName": "Name",
@@ -446,8 +387,7 @@
                 "Base.esm": "",
                 "Top.esp": ""
               },
-              "WinnerColumn": "Top.esp",
-              "WinnerValue": ""
+              "WinnerColumn": "Top.esp"
             }
           ],
           "ConflictAll": "NoConflict",
@@ -461,30 +401,31 @@
               "Name": ""
             }
           },
-          "WinnerColumn": "Top.esp",
-          "WinnerValue": {
-            "Name": ""
-          }
+          "WinnerColumn": "Top.esp"
         },
         {
           "CellStates": {
             "Top.esp": "Override"
           },
+          "CheckErrors": null,
           "Children": [
             {
               "CellStates": {
                 "Top.esp": "Override"
               },
+              "CheckErrors": null,
               "Children": [
                 {
                   "CellStates": {
                     "Top.esp": "IdenticalToMaster"
                   },
+                  "CheckErrors": null,
                   "Children": [
                     {
                       "CellStates": {
                         "Top.esp": "IdenticalToMaster"
                       },
+                      "CheckErrors": null,
                       "Children": null,
                       "ConflictAll": "NoConflict",
                       "FieldName": "Name",
@@ -493,13 +434,13 @@
                         "Base.esm": "",
                         "Top.esp": ""
                       },
-                      "WinnerColumn": "Top.esp",
-                      "WinnerValue": ""
+                      "WinnerColumn": "Top.esp"
                     },
                     {
                       "CellStates": {
                         "Top.esp": "IdenticalToMaster"
                       },
+                      "CheckErrors": null,
                       "Children": null,
                       "ConflictAll": "NoConflict",
                       "FieldName": "Alias",
@@ -508,8 +449,7 @@
                         "Base.esm": 0,
                         "Top.esp": 0
                       },
-                      "WinnerColumn": "Top.esp",
-                      "WinnerValue": 0
+                      "WinnerColumn": "Top.esp"
                     }
                   ],
                   "ConflictAll": "NoConflict",
@@ -525,26 +465,25 @@
                       "Name": ""
                     }
                   },
-                  "WinnerColumn": "Top.esp",
-                  "WinnerValue": {
-                    "Alias": 0,
-                    "Name": ""
-                  }
+                  "WinnerColumn": "Top.esp"
                 },
                 {
                   "CellStates": {
                     "Top.esp": "Override"
                   },
+                  "CheckErrors": null,
                   "Children": [
                     {
                       "CellStates": {
                         "Top.esp": "Override"
                       },
+                      "CheckErrors": null,
                       "Children": [
                         {
                           "CellStates": {
                             "Top.esp": "IdenticalToMaster"
                           },
+                          "CheckErrors": null,
                           "Children": null,
                           "ConflictAll": "NoConflict",
                           "FieldName": "Name",
@@ -553,23 +492,25 @@
                             "Base.esm": "AliasScript",
                             "Top.esp": "AliasScript"
                           },
-                          "WinnerColumn": "Top.esp",
-                          "WinnerValue": "AliasScript"
+                          "WinnerColumn": "Top.esp"
                         },
                         {
                           "CellStates": {
                             "Top.esp": "Override"
                           },
+                          "CheckErrors": null,
                           "Children": [
                             {
                               "CellStates": {
                                 "Top.esp": "Override"
                               },
+                              "CheckErrors": null,
                               "Children": [
                                 {
                                   "CellStates": {
                                     "Top.esp": "IdenticalToMaster"
                                   },
+                                  "CheckErrors": null,
                                   "Children": null,
                                   "ConflictAll": "NoConflict",
                                   "FieldName": "Name",
@@ -578,13 +519,13 @@
                                     "Base.esm": "Level",
                                     "Top.esp": "Level"
                                   },
-                                  "WinnerColumn": "Top.esp",
-                                  "WinnerValue": "Level"
+                                  "WinnerColumn": "Top.esp"
                                 },
                                 {
                                   "CellStates": {
                                     "Top.esp": "Override"
                                   },
+                                  "CheckErrors": null,
                                   "Children": null,
                                   "ConflictAll": "Override",
                                   "FieldName": "Data",
@@ -593,13 +534,13 @@
                                     "Base.esm": 1,
                                     "Top.esp": 2
                                   },
-                                  "WinnerColumn": "Top.esp",
-                                  "WinnerValue": 2
+                                  "WinnerColumn": "Top.esp"
                                 },
                                 {
                                   "CellStates": {
                                     "Top.esp": "IdenticalToMaster"
                                   },
+                                  "CheckErrors": null,
                                   "Children": null,
                                   "ConflictAll": "NoConflict",
                                   "FieldName": "MutagenObjectType",
@@ -608,8 +549,7 @@
                                     "Base.esm": "ScriptIntProperty",
                                     "Top.esp": "ScriptIntProperty"
                                   },
-                                  "WinnerColumn": "Top.esp",
-                                  "WinnerValue": "ScriptIntProperty"
+                                  "WinnerColumn": "Top.esp"
                                 }
                               ],
                               "ConflictAll": "Override",
@@ -627,12 +567,7 @@
                                   "Name": "Level"
                                 }
                               },
-                              "WinnerColumn": "Top.esp",
-                              "WinnerValue": {
-                                "Data": 2,
-                                "MutagenObjectType": "ScriptIntProperty",
-                                "Name": "Level"
-                              }
+                              "WinnerColumn": "Top.esp"
                             }
                           ],
                           "ConflictAll": "Override",
@@ -654,14 +589,7 @@
                               }
                             ]
                           },
-                          "WinnerColumn": "Top.esp",
-                          "WinnerValue": [
-                            {
-                              "Data": 2,
-                              "MutagenObjectType": "ScriptIntProperty",
-                              "Name": "Level"
-                            }
-                          ]
+                          "WinnerColumn": "Top.esp"
                         }
                       ],
                       "ConflictAll": "Override",
@@ -689,17 +617,7 @@
                           ]
                         }
                       },
-                      "WinnerColumn": "Top.esp",
-                      "WinnerValue": {
-                        "Name": "AliasScript",
-                        "Properties": [
-                          {
-                            "Data": 2,
-                            "MutagenObjectType": "ScriptIntProperty",
-                            "Name": "Level"
-                          }
-                        ]
-                      }
+                      "WinnerColumn": "Top.esp"
                     }
                   ],
                   "ConflictAll": "Override",
@@ -731,19 +649,7 @@
                       }
                     ]
                   },
-                  "WinnerColumn": "Top.esp",
-                  "WinnerValue": [
-                    {
-                      "Name": "AliasScript",
-                      "Properties": [
-                        {
-                          "Data": 2,
-                          "MutagenObjectType": "ScriptIntProperty",
-                          "Name": "Level"
-                        }
-                      ]
-                    }
-                  ]
+                  "WinnerColumn": "Top.esp"
                 }
               ],
               "ConflictAll": "Override",
@@ -787,25 +693,7 @@
                   ]
                 }
               },
-              "WinnerColumn": "Top.esp",
-              "WinnerValue": {
-                "Property": {
-                  "Alias": 0,
-                  "Name": ""
-                },
-                "Scripts": [
-                  {
-                    "Name": "AliasScript",
-                    "Properties": [
-                      {
-                        "Data": 2,
-                        "MutagenObjectType": "ScriptIntProperty",
-                        "Name": "Level"
-                      }
-                    ]
-                  }
-                ]
-              }
+              "WinnerColumn": "Top.esp"
             }
           ],
           "ConflictAll": "Override",
@@ -853,27 +741,7 @@
               }
             ]
           },
-          "WinnerColumn": "Top.esp",
-          "WinnerValue": [
-            {
-              "Property": {
-                "Alias": 0,
-                "Name": ""
-              },
-              "Scripts": [
-                {
-                  "Name": "AliasScript",
-                  "Properties": [
-                    {
-                      "Data": 2,
-                      "MutagenObjectType": "ScriptIntProperty",
-                      "Name": "Level"
-                    }
-                  ]
-                }
-              ]
-            }
-          ]
+          "WinnerColumn": "Top.esp"
         }
       ],
       "ConflictAll": "Override",
@@ -931,32 +799,7 @@
           }
         }
       },
-      "WinnerColumn": "Top.esp",
-      "WinnerValue": {
-        "Aliases": [
-          {
-            "Property": {
-              "Alias": 0,
-              "Name": ""
-            },
-            "Scripts": [
-              {
-                "Name": "AliasScript",
-                "Properties": [
-                  {
-                    "Data": 2,
-                    "MutagenObjectType": "ScriptIntProperty",
-                    "Name": "Level"
-                  }
-                ]
-              }
-            ]
-          }
-        ],
-        "Script": {
-          "Name": ""
-        }
-      }
+      "WinnerColumn": "Top.esp"
     },
     "ConflictAll": "Override"
   }
