@@ -20,6 +20,9 @@ export interface TeardownSession {
   /** Cleared by both teardown writers below so the two diagnosis surfaces — Problems entries and
    *  the tree badge — can never disagree about a dead session. */
   loadDiagnostics?: { clear(): void };
+  /** ADR-0046 invariant 12: the subscription follows the backend's own lifecycle. `stop()` is
+   *  idempotent. */
+  notificationSubscriber?: { stop(): void };
 }
 
 /** `TreeView.message` is the native surface for a view-scoped statement about its own contents,
@@ -78,6 +81,9 @@ export function clearTreeWhenBackendDies(
     session.loadOrderSync?.setMatches(undefined);
     // And neither must its diagnoses.
     session.loadDiagnostics?.clear();
+    // The subscription is against this dead backend specifically — closing it here covers both
+    // a crash and exitToLoadout's own stop(), which lands here too.
+    session.notificationSubscriber?.stop();
   });
 }
 

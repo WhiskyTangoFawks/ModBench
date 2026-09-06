@@ -15,6 +15,7 @@ function makeSession() {
     backendManager: { isHealthy: false, on: vi.fn(), stop: vi.fn().mockResolvedValue(undefined) },
     setFilterActive: vi.fn(),
     loadDiagnostics: { clear: vi.fn() },
+    notificationSubscriber: { stop: vi.fn() },
   };
 }
 
@@ -63,6 +64,7 @@ describe('clearTreeWhenBackendDies', () => {
     expect(recordBrowser.setTrackedPlugins).toHaveBeenCalledWith([]);
     expect(session.loadOrderSync.setMatches).toHaveBeenCalledWith(undefined);
     expect(session.loadDiagnostics.clear).toHaveBeenCalled();
+    expect(session.notificationSubscriber.stop).toHaveBeenCalled();
   });
 
   it('a healthy status clears nothing', () => {
@@ -74,6 +76,7 @@ describe('clearTreeWhenBackendDies', () => {
     expect(recordBrowser.setImmutablePlugins).not.toHaveBeenCalled();
     expect(recordBrowser.setTrackedPlugins).not.toHaveBeenCalled();
     expect(session.loadOrderSync.setMatches).not.toHaveBeenCalled();
+    expect(session.notificationSubscriber.stop).not.toHaveBeenCalled();
   });
 });
 
