@@ -109,7 +109,7 @@ public class HeaderIndexingTests
 
         using var repo = Indexed(mod);
 
-        var doc = repo.At(RecordRef.Effective).GetDocument(HeaderIndexer.FormKeyFor(mod.ModKey), new PluginKey("AuthorTest.esp", "Data"));
+        var doc = repo.At(RecordRef.Effective).GetDocument(PluginHeader.FormKeyFor(mod.ModKey), new PluginKey("AuthorTest.esp", "Data"));
         Assert.NotNull(doc);
         Assert.Equal("Vault Dweller", Assert.IsType<JsonElement>(FieldValueOf(doc, "Author")).GetString());
     }
@@ -122,7 +122,7 @@ public class HeaderIndexingTests
 
         using var repo = Indexed(mod);
 
-        var doc = repo.At(RecordRef.Effective).GetDocument(HeaderIndexer.FormKeyFor(mod.ModKey), new PluginKey("EslTest.esp", "Data"));
+        var doc = repo.At(RecordRef.Effective).GetDocument(PluginHeader.FormKeyFor(mod.ModKey), new PluginKey("EslTest.esp", "Data"));
         Assert.NotNull(doc);
         // The document spells the flags by Mutagen's member names.
         Assert.Equal(
@@ -139,10 +139,10 @@ public class HeaderIndexingTests
 
         using var repo = Indexed(mod);
 
-        var doc = repo.At(RecordRef.Effective).GetDocument(HeaderIndexer.FormKeyFor(mod.ModKey), new PluginKey("MastersTest.esp", "Data"));
+        var doc = repo.At(RecordRef.Effective).GetDocument(PluginHeader.FormKeyFor(mod.ModKey), new PluginKey("MastersTest.esp", "Data"));
         Assert.NotNull(doc);
         // The document's own shape: one object per master, naming it.
-        var masters = Assert.IsType<JsonElement>(FieldValueOf(doc, HeaderIndexer.MastersFieldName));
+        var masters = Assert.IsType<JsonElement>(FieldValueOf(doc, PluginHeader.MastersFieldName));
         Assert.Equal(
             ["Fallout4.esm", "DLCRobot.esm"],
             masters.EnumerateArray().Select(e => e.GetProperty("Master").GetString() ?? "").ToList());
@@ -151,8 +151,8 @@ public class HeaderIndexingTests
     [Fact]
     public void HeaderSchema_MastersColumn_IsReadOnlyWithAReason()
     {
-        var masters = Reflector.GetSchemas(GameRelease.Fallout4)[HeaderIndexer.RecordType]
-            .RecordColumns.Single(c => c.Name == HeaderIndexer.MastersFieldName);
+        var masters = Reflector.GetSchemas(GameRelease.Fallout4)[PluginHeader.RecordType]
+            .RecordColumns.Single(c => c.Name == PluginHeader.MastersFieldName);
 
         Assert.False(string.IsNullOrWhiteSpace(masters.ReadOnlyReason));
     }
@@ -190,7 +190,7 @@ public class HeaderIndexingTests
         Assert.True(records > 1, $"expected the header and at least one record; got {records}");
         Assert.Equal(records, lookups);
 
-        var resolved = repo.At(RecordRef.Effective).Resolve(HeaderIndexer.FormKeyFor(mod.ModKey));
+        var resolved = repo.At(RecordRef.Effective).Resolve(PluginHeader.FormKeyFor(mod.ModKey));
         Assert.NotNull(resolved);
         Assert.Equal("header", resolved.Value.RecordType);
         Assert.Null(resolved.Value.EditorId);

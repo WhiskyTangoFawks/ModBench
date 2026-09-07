@@ -349,18 +349,18 @@ internal sealed class WorkingTreeOverlay
         // The header carries no reference graph (masters are a plugin-dependency list, not FormKey
         // references), and a ModHeader cannot go through the per-record codec below, so this stops
         // after the identity-only update, clearing stale form_references.
-        if (recordType == HeaderIndexer.RecordType)
+        if (recordType == PluginHeader.RecordType)
         {
             DeleteFormReferencesForRecord(key, formKey);
             return;
         }
 
-        var refs = new List<FormRef>();
+        List<FormReferenceRow> refs;
         using (var document = JsonDocument.Parse(body))
         {
             var root = document.RootElement;
-            PluginIngest.CollectFormRefs(
-                refs, formKey, DocumentNodes.At(root, "EditorID")?.GetString(), root, recordType, schema);
+            refs = PluginIngest.Rows(
+                FormReferences.Collect(root, schema), formKey, DocumentNodes.At(root, "EditorID")?.GetString(), recordType);
         }
 
         DeleteFormReferencesForRecord(key, formKey);

@@ -18,7 +18,7 @@ public sealed class RecordEditServiceDeleteRecordTests
     public void DeleteRecord_OnTheHeader_RefusesWithoutTouchingTheSourceTree()
     {
         using var mod = TrackedModFixture.Tracked();
-        var headerFormKey = HeaderIndexer.FormKeyFor(ModKey.FromFileName(mod.ActualPluginName));
+        var headerFormKey = PluginHeader.FormKeyFor(ModKey.FromFileName(mod.ActualPluginName));
 
         var result = ServiceFor(mod.Mirror).DeleteRecord(mod.Plugin, headerFormKey);
 

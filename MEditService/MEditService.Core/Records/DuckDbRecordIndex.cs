@@ -900,7 +900,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
             // record occupies.
             using var cmd = owner.Connection.CreateCommand();
             cmd.CommandText =
-                $"SELECT DISTINCT form_key FROM {records} WHERE plugin = $1 AND origin = $2 AND record_type <> '{HeaderIndexer.RecordType}'";
+                $"SELECT DISTINCT form_key FROM {records} WHERE plugin = $1 AND origin = $2 AND record_type <> '{PluginHeader.RecordType}'";
             cmd.Parameters.Add(new DuckDBParameter { Value = plugin.Name });
             cmd.Parameters.Add(new DuckDBParameter { Value = plugin.Origin });
             using var reader = cmd.ExecuteReader();

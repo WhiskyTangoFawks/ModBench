@@ -1,4 +1,5 @@
 using MEditService.Core.Records;
+using MEditService.Core.Schema;
 using MEditService.Core.Source;
 using MEditService.Tests.Edits;
 using MEditService.Tests.TestSupport;
@@ -15,16 +16,16 @@ public sealed class SourceUnitResolverHeaderTests
     public void Resolve_ForAHeaderFormKey_FindsTheRootRecordDataJson()
     {
         using var mod = TrackedModFixture.Tracked();
-        var headerFormKey = HeaderIndexer.FormKeyFor(ModKey.FromFileName(mod.ActualPluginName));
+        var headerFormKey = PluginHeader.FormKeyFor(ModKey.FromFileName(mod.ActualPluginName));
 
         var unit = SourceUnitResolver.Resolve(
-            mod.Plugin, mod.ModFolder, headerFormKey, HeaderIndexer.RecordType, editorId: null,
+            mod.Plugin, mod.ModFolder, headerFormKey, PluginHeader.RecordType, editorId: null,
             GameRelease.Fallout4);
 
         Assert.NotNull(unit);
         Assert.False(unit!.Value.IsEmbedded);
         Assert.Equal(headerFormKey, unit.Value.OwnerFormKey);
-        Assert.Equal(HeaderIndexer.RecordType, unit.Value.OwnerRecordType);
+        Assert.Equal(PluginHeader.RecordType, unit.Value.OwnerRecordType);
         Assert.Equal(
             Path.Combine(mod.ModFolder, "source", mod.ActualPluginName, "RecordData.json"), unit.Value.FullPath);
         Assert.True(File.Exists(unit.Value.FullPath), "Track already writes this file — resolution must find the real one.");
@@ -34,10 +35,10 @@ public sealed class SourceUnitResolverHeaderTests
     public void Resolve_ForAHeaderFormKey_IsNotDirectoryPerRecord()
     {
         using var mod = TrackedModFixture.Tracked();
-        var headerFormKey = HeaderIndexer.FormKeyFor(ModKey.FromFileName(mod.ActualPluginName));
+        var headerFormKey = PluginHeader.FormKeyFor(ModKey.FromFileName(mod.ActualPluginName));
 
         var unit = SourceUnitResolver.Resolve(
-            mod.Plugin, mod.ModFolder, headerFormKey, HeaderIndexer.RecordType, editorId: null,
+            mod.Plugin, mod.ModFolder, headerFormKey, PluginHeader.RecordType, editorId: null,
             GameRelease.Fallout4);
 
         Assert.NotNull(unit);

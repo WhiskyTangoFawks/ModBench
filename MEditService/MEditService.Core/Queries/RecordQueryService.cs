@@ -54,7 +54,7 @@ public sealed class RecordQueryService(
         if (type != null && !schemas.ContainsKey(type))
             return new PagedResult<RecordSummary>([], 0);
 
-        IReadOnlyList<string> recordTypes = type != null ? [type] : [.. schemas.Keys.Where(t => t != HeaderIndexer.RecordType)];
+        IReadOnlyList<string> recordTypes = type != null ? [type] : [.. schemas.Keys.Where(t => t != PluginHeader.RecordType)];
         // Written as an if rather than `plugin == null ? null : new PluginKey(plugin, origin)`
         // — PluginKey's implicit string conversion makes that ternary's common-type inference reach
         // for the null literal via `string`, tripping CS8625 on PluginKey.Name.
@@ -132,7 +132,7 @@ public sealed class RecordQueryService(
         // The header is one `records` row per plugin, so this exclusion has to be real; without it
         // "Main File Header" appears as a browsable record-type node under every plugin.
         return [.. reads.GetRecordTypeCounts(new PluginKey(plugin, origin))
-            .Where(c => c.Type != HeaderIndexer.RecordType && schemas.ContainsKey(c.Type))
+            .Where(c => c.Type != PluginHeader.RecordType && schemas.ContainsKey(c.Type))
             .Select(c => new PluginRecordTypeCount(c.Type, c.Count, schemas.DisplayNameFor(c.Type), c.HasParseFailure))
             .OrderBy(r => r.Type)];
     }

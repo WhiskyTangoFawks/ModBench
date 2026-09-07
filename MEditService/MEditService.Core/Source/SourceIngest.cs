@@ -114,14 +114,14 @@ internal static class SourceIngest
 
             // The header: its FormKey is computed directly, since a ModHeader cannot flow through the
             // per-record codec, and the structural pass cannot reach it either.
-            if (identity.RecordType == HeaderIndexer.RecordType)
+            if (identity.RecordType == PluginHeader.RecordType)
             {
-                var headerFormKey = HeaderIndexer.FormKeyFor(ModKey.FromFileName(identity.PluginFileName));
+                var headerFormKey = PluginHeader.FormKeyFor(ModKey.FromFileName(identity.PluginFileName));
 
                 if (!File.Exists(fullPath))
                 {
                     if (headText != null)
-                        deletedInWorkingTree.Add((headerFormKey, HeaderIndexer.RecordType, headText));
+                        deletedInWorkingTree.Add((headerFormKey, PluginHeader.RecordType, headText));
                     continue;
                 }
 

@@ -107,7 +107,7 @@ public sealed class SourceIngestTests
     public void AnUncommittedHeaderEdit_LeavesHeadOnTheCommittedBytes_AndEffectiveOnTheWorkingTree()
     {
         using var mod = TrackedModFixture.Tracked();
-        var headerFormKey = HeaderIndexer.FormKeyFor(ModKey.FromFileName(TrackedModFixture.PluginName));
+        var headerFormKey = PluginHeader.FormKeyFor(ModKey.FromFileName(TrackedModFixture.PluginName));
         var headerPath = Path.Combine(mod.ModFolder, "source", TrackedModFixture.PluginName, "RecordData.json");
 
         // Rebuilt through the same door the production path uses, never a hand-spliced JSON string: the

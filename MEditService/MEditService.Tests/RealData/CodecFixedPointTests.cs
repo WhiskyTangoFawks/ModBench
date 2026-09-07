@@ -1,5 +1,6 @@
 using System.Text;
 using MEditService.Core.Records;
+using MEditService.Core.Schema;
 using MEditService.Core.Serialization;
 using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -46,7 +47,7 @@ public sealed class CodecFixedPointTests(CutDownPluginFixture fixture, ITestOutp
         string reserialized;
         try
         {
-            reserialized = document.RecordType == HeaderIndexer.RecordType
+            reserialized = document.RecordType == PluginHeader.RecordType
                 ? await RoundTripHeader(stored)
                 : await RoundTripRecord(codec, document.RecordType, stored);
         }

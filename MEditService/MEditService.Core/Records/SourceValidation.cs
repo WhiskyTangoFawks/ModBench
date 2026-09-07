@@ -1,6 +1,7 @@
 using System.Text;
 using System.Text.Json;
 using DuckDB.NET.Data;
+using MEditService.Core.Schema;
 using MEditService.Core.Source;
 using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda.Plugins;
@@ -122,7 +123,7 @@ internal sealed class SourceValidation(DuckDbRecordIndex index, DuckDBConnection
                 // other RecordData.json is named by the directory holding it.
                 if (path.Equals(headerPath, StringComparison.Ordinal))
                 {
-                    if (formKey.Equals(HeaderIndexer.FormKeyFor(ModKey.FromFileName(pluginFileName)), StringComparison.Ordinal))
+                    if (formKey.Equals(PluginHeader.FormKeyFor(ModKey.FromFileName(pluginFileName)), StringComparison.Ordinal))
                         return path;
                     continue;
                 }
