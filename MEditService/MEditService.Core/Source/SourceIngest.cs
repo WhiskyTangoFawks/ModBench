@@ -181,7 +181,7 @@ internal static class SourceIngest
         List<string> workingTreeOnly,
         List<(string FormKey, string RecordType, string Body)> deletedInWorkingTree)
     {
-        var headMod = DeserializeHeadTree(modFolder, key.Name);
+        var headMod = DeserializeHeadTree(modFolder, key, gameRelease);
         var schemas = schemaReflector.GetSchemas(gameRelease);
 
         var alreadyHandled = new HashSet<string>(StringComparer.Ordinal);
@@ -235,19 +235,14 @@ internal static class SourceIngest
 
     // Not Edits.SourceCheckout, which does exactly this: Source must not depend on Edits (the
     // dependency runs the other way), and duplicating this small a materialization is cheaper than a cycle.
-    private static IModGetter DeserializeHeadTree(string modFolder, string pluginName)
+    private static IModGetter DeserializeHeadTree(string modFolder, PluginKey plugin, GameRelease gameRelease)
     {
         var scratchRoot = Directory.CreateTempSubdirectory("medit-reconcile-head-").FullName;
         try
         {
-            foreach (var (relativePath, bytes) in SourceRepository.EnumerateSourceAtRef(modFolder, pluginName, "HEAD"))
-            {
-                var destination = Path.Combine(scratchRoot, relativePath);
-                Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
-                File.WriteAllBytes(destination, bytes);
-            }
+            SourceRepository.Open(modFolder, gameRelease)?.MaterializeAtRef(plugin, "HEAD", scratchRoot);
 
-            var treeRoot = Path.Combine(scratchRoot, SourceRecordPath.RootFor(pluginName));
+            var treeRoot = Path.Combine(scratchRoot, SourceRecordPath.RootFor(plugin.Name));
             return RecordTextCodecGeneratorSeed
                 .DeserializeWholeMod(treeRoot, InlineWorkDropoff.Instance, CancellationToken.None)
                 .GetAwaiter().GetResult();

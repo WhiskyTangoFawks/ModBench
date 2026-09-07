@@ -12,7 +12,7 @@ namespace MEditService.Core.Source;
 /// <summary>Documents by identity over one tracked mod folder (ADR-0046 invariant 9), and ADR-0041's
 /// git verbs beneath them. Every verb tolerates the folder having vanished since last observed —
 /// MO2's Replace install shell-deletes mod folders.</summary>
-public sealed class SourceRepository
+public sealed partial class SourceRepository
 {
     private readonly string _modFolder;
     private readonly GameRelease _release;
@@ -26,6 +26,11 @@ public sealed class SourceRepository
     /// whose record types name the tree's group folders.</summary>
     public static SourceRepository? Open(string modFolder, GameRelease release) =>
         IsTracked(modFolder) ? new SourceRepository(modFolder, release) : null;
+
+    /// <summary>The documents under a tree with no <c>.git</c> of its own — a compile's scratch
+    /// checkout at a named ref. Only the document verbs answer; every git verb here needs
+    /// <see cref="Open"/>.</summary>
+    internal static SourceRepository Over(string root, GameRelease release) => new(root, release);
 
     /// <summary>True exactly when <paramref name="modFolder"/> contains a <c>.git</c> directory —
     /// nothing broader (a folder that merely exists, or exists but was never tracked, is not
@@ -63,11 +68,13 @@ public sealed class SourceRepository
                 .GetAwaiter().GetResult();
             ContainerChildFields.ReplaceInSlot(found.Parent, found.SlotName, found.SlotIndex, child);
             Codec.SerializeAsync(owner, unit.FullPath, _release).GetAwaiter().GetResult();
+            Forget();
             return;
         }
 
         SourceUnitResolver.InMintedDirectory(
             Path.GetDirectoryName(unit.FullPath)!, () => SourceUnitResolver.WriteTextAtomic(unit.FullPath, document.Body));
+        Forget();
     }
 
     /// <summary>Takes the record out of the tree: its file, its directory, or its element of another
@@ -83,6 +90,7 @@ public sealed class SourceRepository
             if (!ContainerChildFields.RemoveEmbeddedChild(owner, identity.FormKey)) return false;
 
             Codec.SerializeAsync(owner, unit.FullPath, _release).GetAwaiter().GetResult();
+            Forget();
             return true;
         }
 
@@ -90,10 +98,12 @@ public sealed class SourceRepository
         {
             var directory = Path.GetDirectoryName(unit.FullPath)!;
             if (Directory.Exists(directory)) Directory.Delete(directory, recursive: true);
+            Forget();
             return true;
         }
 
         if (File.Exists(unit.FullPath)) File.Delete(unit.FullPath);
+        Forget();
         return true;
     }
 
@@ -125,15 +135,9 @@ public sealed class SourceRepository
             if (!File.Exists(from)) return null;
             File.Move(from, to, overwrite: true);
         }
+        Forget();
         return Path.GetFileName(to);
     }
-
-    /// <summary>The document holding <paramref name="identity"/>, and whether that document is another
-    /// record's. The one place an identity becomes a path; the callers still holding one are moving off
-    /// it.</summary>
-    internal SourceUnit? Locate(PluginKey plugin, RecordIdentity identity, SourceUnitResolutionCache? cache = null) =>
-        SourceUnitResolver.Resolve(
-            plugin, _modFolder, identity.FormKey, identity.RecordType, identity.EditorId, _release, cache);
 
     // The codec is the door for a record another document carries: the child is read and written as
     // part of its owner's whole graph.
@@ -269,35 +273,6 @@ public sealed class SourceRepository
         return GitCli.TryRun(gitDir, modFolder, out var stdout, "cat-file", "-p", $"HEAD:{ToGitPath(relativePath)}")
             ? stdout
             : null;
-    }
-
-    /// <summary>The plugin's tree as <paramref name="gitRef"/> has it, with no checkout, so a compile at
-    /// main never touches the edit branch's working tree. Empty, not null, when there is nothing at
-    /// that ref.</summary>
-    internal static IReadOnlyList<(string RelativePath, byte[] Bytes)> EnumerateSourceAtRef(
-        string modFolder, string pluginName, string gitRef)
-    {
-        if (!IsTracked(modFolder)) return [];
-
-        var gitDir = Path.Combine(modFolder, ".git");
-        var sourcePrefix = ToGitPath(SourceRecordPath.RootFor(pluginName));
-        if (!GitCli.TryRun(gitDir, modFolder, out var lsTreeOutput, "ls-tree", "-r", "-z", gitRef, "--", $"{sourcePrefix}/"))
-            return [];
-
-        var results = new List<(string RelativePath, byte[] Bytes)>();
-        foreach (var entry in lsTreeOutput.Split('\0', StringSplitOptions.RemoveEmptyEntries))
-        {
-            var tab = entry.IndexOf('\t', StringComparison.Ordinal);
-            if (tab < 0) continue;
-            var fields = entry[..tab].Split(' ', StringSplitOptions.RemoveEmptyEntries);
-            if (fields.Length < 3 || fields[1] != "blob") continue;
-            var relativePath = entry[(tab + 1)..];
-
-            // cat-file -p, not show: for a missing glob-shaped path show exits 0 with empty output.
-            if (!GitCli.TryRun(gitDir, modFolder, out var text, "cat-file", "-p", $"{gitRef}:{relativePath}")) continue;
-            results.Add((relativePath, System.Text.Encoding.UTF8.GetBytes(text)));
-        }
-        return results;
     }
 
     /// <summary>Re-parks the last-compile ref at the tree just compiled from, without moving HEAD, branch
@@ -514,7 +489,7 @@ public sealed class SourceRepository
 
     // git speaks forward slashes on every platform, Windows included, while SourceRecordPath builds
     // its paths with Path.Combine.
-    private static string ToGitPath(string relativePath) => relativePath.Replace('\\', '/');
+    internal static string ToGitPath(string relativePath) => relativePath.Replace('\\', '/');
 
     /// <summary>The one place <c>refs/medit/last-compile/&lt;plugin&gt;</c> is built. Almost every real
     /// plugin name is ref-unsafe, so the filename is percent-encoded: injective, but deliberately not

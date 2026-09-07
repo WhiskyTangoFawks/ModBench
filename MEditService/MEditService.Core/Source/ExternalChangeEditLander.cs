@@ -23,15 +23,14 @@ public static class ExternalChangeEditLander
         logger ??= NullLogger.Instance;
         var repository = SourceRepository.Open(modFolder, gameRelease)
             ?? throw new InvalidOperationException($"'{modFolder}' is not tracked, so it has no source to land on.");
-        // One pass over a whole mod: the tree is read again once for every record it cannot find, not once each.
-        var resolutions = new SourceUnitResolutionCache();
         var codec = new RecordTextCodec(NullLogger<RecordTextCodec>.Instance);
         var schemas = reflector.GetSchemas(gameRelease);
         var pluginName = plugin.Name;
 
-        var parkedRef = SourceRepository.LastCompileRef(pluginName);
-        var baselineByPath = SourceRepository.EnumerateSourceAtRef(modFolder, pluginName, parkedRef)
-            .ToDictionary(f => ToGitPath(f.RelativePath), f => Encoding.UTF8.GetString(f.Bytes), StringComparer.Ordinal);
+        // Keyed by the record, not by its path: an external EditorID change moves a record's file, and
+        // the baseline it is diffed against is still the same record's.
+        var baselineByFormKey = repository.ReadAll(plugin, SourceRepository.LastCompileRef(pluginName))
+            .ToDictionary(d => d.FormKey, d => d.Body, StringComparer.Ordinal);
 
         // Keep only runs against a tracked plugin, so the mod-folder-only ForRead overload applies.
         var deepParsed = ModFactory.ImportSetter(
@@ -47,8 +46,7 @@ public static class ExternalChangeEditLander
             // disk-scan resolution the point-write path uses.
             if (groupFolder is null)
             {
-                var unit = repository.Locate(
-                    plugin, new RecordIdentity(containerFormKey, recordType, record.EditorID), resolutions);
+                var unit = repository.Locate(plugin, new RecordIdentity(containerFormKey, recordType, record.EditorID));
 
                 if (unit is null)
                 {
@@ -80,8 +78,8 @@ public static class ExternalChangeEditLander
 
                 // Its own source unit, so the path found is the path to diff and land on.
                 if (DiffAgainstBaseline(
-                        record, gameRelease, codec, baselineByPath, containerFormKey,
-                        unit.Value.RelativePath, unit.Value.FullPath, unit.Value.FullPath) is { } containerTouched)
+                        record, gameRelease, codec, baselineByFormKey, containerFormKey,
+                        unit.Value.FullPath, unit.Value.FullPath) is { } containerTouched)
                 {
                     touched.Add(containerTouched);
                 }
@@ -89,17 +87,18 @@ public static class ExternalChangeEditLander
             }
 
             var formKey = record.FormKey.ToString();
-            var relativePath = SourceRecordPath.For(pluginName, recordType, formKey, record.EditorID, gameRelease);
+            var fullPath = Path.Combine(
+                modFolder, SourceRecordPath.For(pluginName, recordType, formKey, record.EditorID, gameRelease));
 
             // An external EditorID change moves the record's file, so it may sit under its old EditorID.
-            // Resolved by FormKey suffix so the collision check reads the real current text and the stale file
+            // Resolved by FormKey so the collision check reads the real current text and the stale file
             // is removed.
-            var existingPath = SourceUnitResolver.FlatSourcePath(
-                modFolder, pluginName, recordType, formKey, record.EditorID, gameRelease);
-            var fullPath = Path.Combine(modFolder, relativePath);
+            var existingPath = repository
+                .Locate(plugin, new RecordIdentity(formKey, recordType, record.EditorID))
+                ?.FullPath ?? fullPath;
 
             if (DiffAgainstBaseline(
-                    record, gameRelease, codec, baselineByPath, formKey, relativePath, fullPath, existingPath)
+                    record, gameRelease, codec, baselineByFormKey, formKey, fullPath, existingPath)
                 is { } flatTouched)
             {
                 touched.Add(flatTouched);
@@ -140,23 +139,20 @@ public static class ExternalChangeEditLander
     // Null when the external binary never touched this record (incoming == baseline).
     private static TouchedRecord? DiffAgainstBaseline(
         IMajorRecordGetter record, GameRelease gameRelease, RecordTextCodec codec,
-        Dictionary<string, string> baselineByPath, string formKey, string relativePath, string fullPath,
-        string existingPath)
+        Dictionary<string, string> baselineByFormKey, string formKey, string fullPath, string existingPath)
     {
         var incomingText = Encoding.UTF8.GetString(codec.SerializeToBytesAsync(record, gameRelease).GetAwaiter().GetResult());
 
-        var baselineText = baselineByPath.TryGetValue(ToGitPath(relativePath), out var baseline) ? baseline : null;
+        var baselineText = baselineByFormKey.TryGetValue(formKey, out var baseline) ? baseline : null;
         if (string.Equals(incomingText, baselineText, StringComparison.Ordinal))
             return null; // the external change never actually touched this record
 
         var currentText = File.Exists(existingPath) ? File.ReadAllText(existingPath) : null;
-        return new TouchedRecord(formKey, relativePath, fullPath, existingPath, incomingText, currentText, baselineText);
+        return new TouchedRecord(formKey, fullPath, existingPath, incomingText, currentText, baselineText);
     }
 
-    private static string ToGitPath(string relativePath) => relativePath.Replace('\\', '/');
-
     private sealed record TouchedRecord(
-        string FormKey, string RelativePath, string FullPath, string ExistingPath, string IncomingText,
+        string FormKey, string FullPath, string ExistingPath, string IncomingText,
         string? CurrentText, string? BaselineText);
 }
 

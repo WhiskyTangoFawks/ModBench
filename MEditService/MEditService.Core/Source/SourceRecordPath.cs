@@ -24,8 +24,8 @@ internal static class SourceRecordPath
 
     // The whole-mod door's own header/group-level file names — never a flat record's file, so TryParse
     // must reject them rather than mistake one for a record.
-    private const string RecordDataFileName = "RecordData.json";
-    private const string GroupRecordDataFileName = "GroupRecordData.json";
+    private const string RecordDataFileName = SourceUnitResolver.RecordDataFileName;
+    private const string GroupRecordDataFileName = SourceUnitResolver.GroupRecordDataFileName;
 
     /// <summary><c>source/&lt;pluginFileName&gt;</c>, one root rather than a per-plugin sibling tree: a
     /// per-plugin suffix guard orphans the tree when its plugin is renamed or deleted outside Modbench.</summary>
@@ -52,6 +52,24 @@ internal static class SourceRecordPath
     }
 
     private static string FilesafeFormKey(FormKey formKey) => $"{formKey.ID:X6}_{formKey.ModKey.FileName}";
+
+    /// <summary>The record type of the document at <paramref name="relativePath"/>: the flat and header
+    /// shapes <see cref="TryParse"/> names, and a container's own <c>RecordData.json</c> under its group
+    /// folder. Null means the path does not decide it and the document names its own type.</summary>
+    internal static string? RecordTypeOf(string relativePath, GameRelease gameRelease)
+    {
+        if (TryParse(relativePath, gameRelease, out var identity)) return identity.RecordType;
+
+        // source / <plugin> / <group folder> / [block levels] / <record directory> / RecordData.json
+        var segments = relativePath.Split(Path.DirectorySeparatorChar, StringSplitOptions.RemoveEmptyEntries);
+        const int groupFolderSegment = 2;
+        const int shallowestContainer = 5;
+        return segments.Length >= shallowestContainer
+               && segments[^1].Equals(RecordDataFileName, StringComparison.Ordinal)
+            ? RecordTypeDispatch.For(gameRelease)
+                .DirectoryPerRecordTypeIn(segments[groupFolderSegment], nested: segments.Length > shallowestContainer)
+            : null;
+    }
 
     /// <summary>Fails closed on anything not shaped like a flat record's path or the header's root
     /// <c>RecordData.json</c> (one segment shallower), so a tree walk never misreads a container path

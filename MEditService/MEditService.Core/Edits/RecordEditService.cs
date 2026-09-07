@@ -63,7 +63,7 @@ public sealed class RecordEditService(
         // An embedded child is patched inside the document that carries it, so the identity written
         // back is that document's — its own for every other shape, the header included.
         var written = unit.IsEmbedded
-            ? new RecordIdentity(unit.OwnerFormKey, unit.OwnerRecordType, owner.EditorId)
+            ? new RecordIdentity(unit.OwnerFormKey, unit.OwnerRecordType ?? owner.RecordType, owner.EditorId)
             : new RecordIdentity(formKey, document.RecordType, document.EditorId);
         var text = repository.Get(plugin, written)?.Body ?? IndexedBodyOf(written, owner, document);
 
@@ -72,7 +72,7 @@ public sealed class RecordEditService(
         IReadOnlyList<PathHop> prefix = [];
         if (unit.IsEmbedded)
         {
-            var parentType = RecordTypeDispatch.For(release).ConcreteFor(unit.OwnerRecordType);
+            var parentType = RecordTypeDispatch.For(release).ConcreteFor(written.RecordType);
             var found = parentType == null
                 ? null
                 : EmbeddedChildPath.Find((JsonObject)JsonNode.Parse(text)!, ContainerChildFields.NormalizedTypeName(parentType), formKey);
@@ -838,7 +838,7 @@ public sealed class RecordEditService(
                 // struct-list link is its own record's, and has to be asked of the child directly.
                 var childDoc = reads.GetDocument(embeddedFormKey, referencerPlugin);
                 if (RefuseIfRemapIncomplete(
-                        child, childDoc?.RecordType ?? unit.OwnerRecordType, oldFormKey, referencerPlugin, release)
+                        child, childDoc?.RecordType ?? ownerDoc.RecordType, oldFormKey, referencerPlugin, release)
                     is { } childIncomplete) return childIncomplete;
             }
 

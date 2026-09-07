@@ -6,22 +6,9 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Core.Source;
 
-/// <summary>The file holding a record. For a container or embedded child it was found on disk, since
-/// none is computable; for a flat record it is the computed path, which may not exist.</summary>
-internal readonly record struct SourceUnit(
-    string FullPath, string RelativePath, string OwnerFormKey, string OwnerRecordType, bool IsEmbedded)
-{
-    /// <summary>A container's own field file, not a flat file. The header's root RecordData.json shares
-    /// the filename, so <see cref="OwnerRecordType"/> distinguishes them, or a header delete would
-    /// remove the whole source root.</summary>
-    internal bool IsDirectoryPerRecord =>
-        OwnerRecordType != HeaderIndexer.RecordType
-        && Path.GetFileName(FullPath).Equals(SourceUnitResolver.RecordDataFileName, StringComparison.Ordinal);
-}
-
-/// <summary>The record→source-unit question for every record shape (ADR-0041 amendment), answered
-/// from the tree alone. The tree is the serializer's own output, so nothing it says can drift from
-/// what the codec reads.</summary>
+/// <summary>The source layout's stateless helpers: how a record's leaf is named, where a flat one
+/// lands, and how a document's bytes become one record's text. Which document holds a record is
+/// <see cref="SourceRepository.Locate"/>'s question, not this one's.</summary>
 internal static class SourceUnitResolver
 {
     /// <summary>The whole-mod door's own name for a directory-per-record container's field file
@@ -33,54 +20,7 @@ internal static class SourceUnitResolver
     /// when the level has non-default metadata.</summary>
     internal const string GroupRecordDataFileName = "GroupRecordData.json";
 
-    private const string JsonSuffix = ".json";
-
-    /// <summary><paramref name="formKey"/>'s source unit, or null when no document in the tree holds
-    /// it. Everything is matched on FormKey alone, so a stale <paramref name="editorId"/> costs a scan
-    /// rather than a wrong answer.</summary>
-    internal static SourceUnit? Resolve(
-        PluginKey plugin, string modFolder,
-        string formKey, string recordType, string? editorId, GameRelease release,
-        SourceUnitResolutionCache? cache = null)
-    {
-        // The header's unit is the fixed root RecordData.json: nothing to compute, scan or embed.
-        if (recordType == HeaderIndexer.RecordType)
-        {
-            var headerPath = Path.Combine(modFolder, SourceRecordPath.RootFor(plugin.Name), RecordDataFileName);
-            return new SourceUnit(
-                headerPath, Path.GetRelativePath(modFolder, headerPath), formKey, recordType, IsEmbedded: false);
-        }
-
-        // A flat record: the path is computed, then corrected if the file has been renamed out from
-        // under it. The overwhelmingly common edit pays one File.Exists and searches nothing.
-        try
-        {
-            var flat = FlatSourcePath(modFolder, plugin.Name, recordType, formKey, editorId, release);
-            return new SourceUnit(
-                flat, Path.GetRelativePath(modFolder, flat), formKey, recordType, IsEmbedded: false);
-        }
-        catch (NotSupportedException)
-        {
-            // Not flat — a container, or a child with no top-level group of its own. Fall through.
-        }
-
-        // Only a directory-per-record type (Cell, Worldspace) can have a directory of its own; a type
-        // with no group of its own is always embedded, so nothing is scanned for it.
-        var root = Path.Combine(modFolder, SourceRecordPath.RootFor(plugin.Name));
-        if (RecordTypeDispatch.For(release).GroupFolderNameFor(recordType) is not null
-            && FindOwnUnit(root, formKey, release, cache) is { } own)
-        {
-            return new SourceUnit(
-                own, Path.GetRelativePath(modFolder, own), formKey, recordType, IsEmbedded: false);
-        }
-
-        // Nothing of its own, so it is inlined in another record's document, which the owner map names.
-        if (EmbeddedOwners.For(root, release).DocumentHolding(formKey, cache) is not { } owner) return null;
-
-        return new SourceUnit(
-            owner.FullPath, Path.GetRelativePath(modFolder, owner.FullPath), owner.FormKey, owner.RecordType,
-            IsEmbedded: true);
-    }
+    internal const string JsonSuffix = ".json";
 
     /// <summary>The computed path when it exists, else whichever file in the group folder carries this
     /// FormKey. Name and document EditorIDs can disagree, and trusting the name alone would read a live
@@ -167,54 +107,6 @@ internal static class SourceUnitResolver
         }
     }
 
-    // Matches the FormKey alone, never the EditorID, which a caller may hold stale mid-rename. Every
-    // directory-per-record group is searched, since a cell's directory sits in its own group's blocks
-    // or inside its worldspace's.
-    private static string? FindOwnUnit(
-        string sourceRoot, string formKey, GameRelease release, SourceUnitResolutionCache? cache)
-    {
-        var suffix = FilesafeFormKey(formKey);
-        var matches = new List<string>();
-        foreach (var groupFolder in RecordTypeDispatch.For(release).DirectoryPerRecordFolderNames)
-        {
-            var scanRoot = Path.Combine(sourceRoot, groupFolder);
-            if (!Directory.Exists(scanRoot)) continue;
-
-            // With a cache the subtree is listed once and the pre-filter runs in memory; AsSourceUnitFile
-            // is the real test either way.
-            var candidates = cache == null
-                ? Directory.EnumerateFileSystemEntries(scanRoot, $"*{suffix}*", SearchOption.AllDirectories)
-                : cache.EntriesUnder(scanRoot).Where(e => Path.GetFileName(e).Contains(suffix, StringComparison.OrdinalIgnoreCase));
-            matches.AddRange(candidates.Select(entry => AsSourceUnitFile(entry, suffix)).OfType<string>().Take(2));
-            if (matches.Count > 1) break;
-        }
-
-        return matches.Count switch
-        {
-            0 => null,
-            1 => matches[0],
-            _ => throw new AmbiguousSourceUnitException(
-                $"More than one source unit under '{sourceRoot}' claims FormKey {formKey}. A FormKey is " +
-                "unique within a mod, so this tree is corrupt — resolve the duplicate by hand before editing."),
-        };
-    }
-
-    // A directory whose name carries the FormKey holds RecordData.json; a file whose name carries it is
-    // the record.
-    private static string? AsSourceUnitFile(string entry, string filesafeFormKey)
-    {
-        var leaf = Path.GetFileName(entry);
-
-        if (Directory.Exists(entry))
-        {
-            if (!NameCarries(leaf, filesafeFormKey)) return null;
-            var recordData = Path.Combine(entry, RecordDataFileName);
-            return File.Exists(recordData) ? recordData : null;
-        }
-
-        return NameCarries(leaf, filesafeFormKey + JsonSuffix) ? entry : null;
-    }
-
     /// <summary>Whether <paramref name="leaf"/> names the record with <paramref name="formKey"/> — asked
     /// in the one unambiguous direction, since an EditorID containing <c>" - "</c> makes splitting a
     /// name undecidable.</summary>
@@ -226,7 +118,7 @@ internal static class SourceUnitResolver
 
     // The whole-mod door's two name shapes: the filesafe FormKey alone, or "<EditorID> - " ahead of it.
     // Anchored at both ends so a name that merely embeds the text cannot match.
-    private static bool NameCarries(string leaf, string tail) =>
+    internal static bool NameCarries(string leaf, string tail) =>
         leaf.Equals(tail, StringComparison.Ordinal)
         || (leaf.EndsWith(tail, StringComparison.Ordinal)
             && leaf.EndsWith($" - {tail}", StringComparison.Ordinal));
@@ -328,7 +220,7 @@ internal static class SourceUnitResolver
         return string.IsNullOrEmpty(editorId) ? $"{filesafe}{extension}" : $"{editorId} - {filesafe}{extension}";
     }
 
-    private static string FilesafeFormKey(string formKey)
+    internal static string FilesafeFormKey(string formKey)
     {
         var parsed = FormKey.Factory(formKey);
         return $"{parsed.ID:X6}_{parsed.ModKey.FileName}";
