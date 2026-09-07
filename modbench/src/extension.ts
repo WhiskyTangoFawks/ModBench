@@ -46,7 +46,7 @@ import { makeRefreshAll } from './refreshAll';
 import { LoadoutHeaderProvider } from './LoadoutHeaderProvider';
 import { registerNameFilter, type NameFilter } from './nameFilter';
 import { onPluginCheckboxChanged } from './pluginCheckboxHandler';
-import { registerEditorCommands, registerRecordLifecycleCommands, makeResolveOriginOrReport, runCopyRecordCommand, makeMergeEditorOpener, compileAndReport, reportCompileTargetError, registerHeldTrackedRepositories, refreshSourceControlFor, wireExternalChangePolling, type MinimalRepository } from './medit/editorCommands';
+import { registerEditorCommands, registerRecordLifecycleCommands, makeResolveOriginOrReport, runCopyRecordCommand, makeMergeEditorOpener, compileAndReport, reportCompileTargetError, registerHeldTrackedRepositories, refreshSourceControlFor, wireExternalChangePending, type MinimalRepository } from './medit/editorCommands';
 import { reconcileModlistWithModsDir } from './modmanager/startupModlistReconcile';
 import { reconcilePluginsWithDisk } from './modmanager/pluginsReconcile';
 import { say, exitToLoadout, clearTreeWhenBackendDies, refreshMatchingPlugins } from './loadoutTeardown';
@@ -209,11 +209,16 @@ export function activate(context: vscode.ExtensionContext) {
   const activeRecordTracker = new ActiveRecordTracker<vscode.WebviewPanel>();
   const { scriptsPath, filterProvider } = setupScripts(meditConfig());
 
-  // ADR-0046 invariant 12: one subscription for the whole session, `start()`ed on every
-  // successful reconcile and `stop()`ped by loadoutTeardown wherever the backend goes unhealthy.
+  // ADR-0046 invariant 12: one subscription for the whole session, `stop()`ped by
+  // loadoutTeardown wherever the backend goes unhealthy.
   session.notificationSubscriber = new SseNotificationSubscriber({
     openStream: (signal) => openNotificationStream(client, signal),
     log: (msg) => outputChannel.debug(msg),
+  });
+  // `start()`ed as soon as the backend is healthy — before the first PUT, so its own progress
+  // rides the stream too — not on the first successful reconcile.
+  session.backendManager.on('status', () => {
+    if (session.backendManager?.isHealthy) session.notificationSubscriber?.start();
   });
   context.subscriptions.push(
     { dispose: subscribeTreeToNotifications(session.notificationSubscriber, treeProvider) },
@@ -225,6 +230,7 @@ export function activate(context: vscode.ExtensionContext) {
   const controller = new EditingController({
     client,
     repository,
+    notificationSubscriber: session.notificationSubscriber,
     log,
     refreshTree: () => treeProvider.refresh(),
     setStatusText: (t) => { statusBarItem.text = t; },
@@ -239,9 +245,6 @@ export function activate(context: vscode.ExtensionContext) {
       // ADR-0041: the load order just settled — the one reliable point to (re-)register every
       // tracked mod's repo with vscode.git.
       void registerHeldTrackedRepositories(repository, outputChannel, (repos) => { session.pluginRepositories = repos; });
-      // ADR-0046 invariant 12: the load order is now sent — start() is a no-op past the first
-      // reconcile.
-      session.notificationSubscriber?.start();
     },
   });
   // Retargets on `activeRecordTracker`'s active-record changes rather than an explicit command.
@@ -287,9 +290,8 @@ export function activate(context: vscode.ExtensionContext) {
       outputChannel.warn(`[extension] the malformed-plugin scan could not be read: ${err instanceof Error ? err.message : String(err)}`);
     });
   };
-  wireExternalChangePolling(repository, controller, outputChannel,
-    (cb) => session.backendManager!.on('status', cb), () => session.backendManager!.isHealthy);
   context.subscriptions.push(
+    { dispose: wireExternalChangePending(repository, controller, outputChannel, session.notificationSubscriber) },
     referencedByTreeView,
     activeRecordSubscription,
     vscode.languages.registerCodeLensProvider({ language: 'sql' }, filterProvider),

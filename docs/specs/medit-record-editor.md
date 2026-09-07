@@ -595,10 +595,11 @@ rather than merely omits.
 - **A panel already open when the sweep lands refetches its comparison**, not just clears its own
   banner over stale content — the extension host broadcasts `CONFLICTS_COMPUTED` to every
   open record panel exactly once, from `EditingController.reportReconciled`, the one point a
-  `putLoadOrder` call is known to have completed the sweep. No poller: the tick stream
-  `plugins.md`'s own progress indicator polls (`GET /load-order/status`) stops at essentially the same
-  instant the backend sets `conflictsComputed`, so it cannot reliably observe the transition —
-  reusing the load's own completion is the reliable choke point instead.
+  `putLoadOrder` call is known to have completed the sweep. Not the `load-order-status`
+  notification stream `plugins.md`'s own progress indicator subscribes to: that subscription is
+  torn down at essentially the same instant the backend sets `conflictsComputed`, so it cannot
+  reliably observe the transition — reusing the load's own completion is the reliable choke
+  point instead.
 - **Forward coupling:** the
   broadcast above fires only on the load-completing false→true transition. `conflictsComputed` is
   a separate field from load order state precisely because live mutation (reorder, enable, disable)

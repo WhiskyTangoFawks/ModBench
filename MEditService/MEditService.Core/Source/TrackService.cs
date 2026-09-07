@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using MEditService.Core.Notifications;
 using MEditService.Core.Plugins;
 using MEditService.Core.Serialization;
 using Microsoft.Extensions.Logging;
@@ -14,12 +15,14 @@ namespace MEditService.Core.Source;
 /// <summary>The Track gesture end to end: deep-parses each plugin under one origin (the load order's
 /// overlay is not always structurally faithful), serializes through the whole-mod door, and
 /// commits. A designated door (ADR-0041).</summary>
-public sealed class TrackService(ILogger<TrackService> logger)
+public sealed class TrackService(ILogger<TrackService> logger, INotificationPublisher? notifications = null)
 {
     // Read concurrently by GET /plugins/track/status while a POST is in flight. Snapshots are replaced
     // wholesale, never mutated, so Volatile.Read/Write suffices and no lock is needed.
     private TrackProgress _progress = TrackProgress.Idle;
     public TrackProgress Progress => Volatile.Read(ref _progress);
+    // ADR-0046: null in every test that does not care, matching DuckDbRecordIndex's own posture.
+    private readonly INotificationPublisher? _notifications = notifications;
 
     /// <summary>ADR-0046: raised with the mod folder and origin of a repository that now exists, so
     /// the Source watcher starts on a tracked mod with no restart.</summary>
@@ -264,8 +267,12 @@ public sealed class TrackService(ILogger<TrackService> logger)
         }
     }
 
-    private void SetProgress(string? origin, TrackPhase phase, int pluginsDone, int pluginsTotal) =>
-        Volatile.Write(ref _progress, new TrackProgress(origin, phase, pluginsDone, pluginsTotal));
+    private void SetProgress(string? origin, TrackPhase phase, int pluginsDone, int pluginsTotal)
+    {
+        var progress = new TrackProgress(origin, phase, pluginsDone, pluginsTotal);
+        Volatile.Write(ref _progress, progress);
+        _notifications?.Publish(new TrackProgressNotification(progress));
+    }
 
     private static byte[] StripCarriageReturns(byte[] bytes) => [.. bytes.Where(b => b != (byte)'\r')];
 

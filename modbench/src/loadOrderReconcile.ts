@@ -165,8 +165,7 @@ export function createLoadOrderSync<TPlugin = unknown, TProgress = unknown, TOff
   };
 }
 
-/** What a caller branches on: whether to keep polling for progress, or to do nothing more either
- *  way. */
+/** What a caller branches on once a reconcile settles. */
 export type ReconcileOutcome = 'reconciled' | 'no-game-directory' | 'failed' | 'abandoned';
 
 /** A tagged union matching `EditingController.LoadOrderOutcome`: `failed` and `abandoned` are
@@ -235,7 +234,7 @@ export function createReconcileSequencer<TPlugin = unknown, TProgress = unknown,
       return 'abandoned';
     }
     // The PUT is one blocking call that opens and indexes every copy new to the load order — the
-    // slow part on a cold start, SQL-only otherwise. The polled status takes over from here.
+    // slow part on a cold start, SQL-only otherwise. The subscribed status takes over from here.
     deps.logInfo(`[loadOrderSync] sending the load order snapshot (${plugins.length} plugin copies)`);
     const result = await deps.putLoadOrder(plugins, gd.dataFolder, signal, treeProgress.onProgress);
     // A deliberately abandoned reconcile leaves *silently*: nothing to surface (putLoadOrder

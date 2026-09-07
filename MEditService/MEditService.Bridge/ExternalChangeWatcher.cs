@@ -33,17 +33,28 @@ public sealed class ExternalChangeWatcher : IDisposable
         lock (_gate)
         {
             if (_entries.TryGetValue(key, out var existing)) existing.Dispose();
-            _entries[key] = StartWatch(directory, pluginPath, () => Settle(modFolder, pluginName, pluginPath));
+            _entries[key] = StartWatch(directory, pluginPath, () => Settle(modFolder, pluginName, pluginPath),
+                () => WatchOverflowed?.Invoke(modFolder, pluginName));
         }
     }
 
-    private WatchEntry StartWatch(string directory, string pluginPath, Action onSettle)
+    /// <summary>ADR-0046 invariant 6: an OS overflow drops events, so nothing this classification
+    /// watch saw can be trusted. modFolder/pluginName — this watcher's bare identity, not a
+    /// PluginKey.</summary>
+    public Action<string, string>? WatchOverflowed { get; set; }
+
+    /// <summary>The mirror-watch counterpart: <see cref="WatchIndexed"/> already carries an origin.</summary>
+    public Action<string, string>? IndexedWatchOverflowed { get; set; }
+
+    private WatchEntry StartWatch(string directory, string pluginPath, Action onSettle, Action onOverflow)
     {
         var fsWatcher = new FileSystemWatcher(directory, Path.GetFileName(pluginPath))
         {
             // FileName is required for Renamed to fire: a temp-file-then-rename write raises neither
             // Changed nor Created, and .NET's inotify-backed Linux watcher gates Renamed on this bit.
             NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.Size | NotifyFilters.FileName,
+            // Wider than the 8KB default: Error is still the backstop when a burst outruns even this.
+            InternalBufferSize = 65536,
         };
         var debounceTimer = new Timer(_debounce.TotalMilliseconds) { AutoReset = false };
         debounceTimer.Elapsed += (_, _) => onSettle();
@@ -53,8 +64,22 @@ public sealed class ExternalChangeWatcher : IDisposable
         // A deletion is a settle like any other: the whole point of a mirror watch, and a no-op for
         // a classification watch, whose Settle finds no bytes and returns.
         fsWatcher.Deleted += (_, _) => Restart(debounceTimer);
+        fsWatcher.Error += (_, _) => RaiseSafely(onOverflow);
         fsWatcher.EnableRaisingEvents = true;
         return new WatchEntry(fsWatcher, debounceTimer);
+    }
+
+    // Runs on the FileSystemWatcher's own error-reporting thread, with no caller to catch anything.
+    private static void RaiseSafely(Action action)
+    {
+        try
+        {
+            action();
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine(ex);
+        }
     }
 
     /// <summary>ADR-0001. A delegate, not an event, because the handler answers whether it applied:
@@ -76,7 +101,8 @@ public sealed class ExternalChangeWatcher : IDisposable
             if (_mirrors.TryGetValue(key, out var existing)) existing.Dispose();
             var mirror = new MirrorEntry(contentHash, pluginPath)
             {
-                Watch = StartWatch(directory, pluginPath, () => SettleIndexed(pluginName, origin, pluginPath)),
+                Watch = StartWatch(directory, pluginPath, () => SettleIndexed(pluginName, origin, pluginPath),
+                    () => IndexedWatchOverflowed?.Invoke(pluginName, origin)),
             };
             _mirrors[key] = mirror;
         }
@@ -108,18 +134,26 @@ public sealed class ExternalChangeWatcher : IDisposable
         lock (_gate) _unanswered.Remove(Key(modFolder, pluginName));
     }
 
+    /// <summary>ADR-0046: raised once the question is queued, whichever trigger found it. A
+    /// delegate, not an event, matching the watcher's other single-subscriber signals; raised
+    /// outside the lock, since the handler publishes a notification.</summary>
+    public Action<UnansweredExternalChange>? ExternalChangeReported { get; set; }
+
     /// <summary>Both triggers get <see cref="ExternalChangeDeferral"/>'s marker here. Set inside the
     /// lock, before the queue: the lock's barrier makes the refusal visible to another thread the
     /// instant the question is, and serializes the marker writes.</summary>
     public void ReportExternalChange(string modFolder, string pluginName, ExternalChangeClassification.ExternalChange classification)
     {
+        UnansweredExternalChange change;
         lock (_gate)
         {
             ExternalChangeDeferral.Set(modFolder, pluginName,
                 $"{pluginName} (in {Path.GetFileName(modFolder.TrimEnd(Path.DirectorySeparatorChar))}) changed outside " +
                 "Modbench and is awaiting an answer — Absorb Upstream Update or Keep as My Edit.");
-            _unanswered[Key(modFolder, pluginName)] = new UnansweredExternalChange(modFolder, pluginName, classification);
+            change = new UnansweredExternalChange(modFolder, pluginName, classification);
+            _unanswered[Key(modFolder, pluginName)] = change;
         }
+        RaiseSafely(() => ExternalChangeReported?.Invoke(change));
     }
 
     private static void Restart(Timer debounceTimer)

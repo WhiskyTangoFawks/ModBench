@@ -90,6 +90,19 @@ let holdPutLoadOrder = false;
 let releaseHealth: (() => void) | null = null;
 let holdHealth = false;
 
+// ADR-0046 invariant 12: the mock's SSE half. Pushed only where the real backend would publish
+// (the PUT /load-order handler below), never on connect, which would reach no listener yet.
+const sseClients: http.ServerResponse[] = [];
+
+function writeSseFrame(res: http.ServerResponse, kind: string, payload: Record<string, unknown>): void {
+  const data = JSON.stringify({ kind, plugin: '', origin: '', keys: [], sequence: 0, ...payload });
+  res.write(`event: ${kind}\ndata: ${data}\n\n`);
+}
+
+function pushLoadOrderStatus(): void {
+  for (const res of sseClients) writeSseFrame(res, 'load-order-status', { loadOrderStatus });
+}
+
 function resetMockBackend(): void {
   loadOrderHeld = false;
   requestLog.length = 0;
@@ -104,6 +117,7 @@ function resetMockBackend(): void {
   holdHealth = false;
   releaseHealth?.();
   releaseHealth = null;
+  for (const res of sseClients.splice(0)) res.end();
 }
 
 // `conflictsComputed` stays false until a test says so: the winner sweep is a load's last step.
@@ -116,6 +130,7 @@ function setIndexed(names: string[], extra: Partial<MockLoadOrderStatus> = {}): 
     failures: [],
     ...extra,
   };
+  pushLoadOrderStatus();
 }
 
 function createMockBackend(): http.Server {
@@ -167,6 +182,9 @@ function createMockBackend(): http.Server {
         // no-op reconcile and answers at once.
         if (!holdPutLoadOrder) return answer();
         holdPutLoadOrder = false;
+        // The real backend's first tick lands once Reconcile is under way, after this PUT lands —
+        // which is also after EditingController.putLoadOrder has subscribed.
+        pushLoadOrderStatus();
         releasePutLoadOrder = () => { releasePutLoadOrder = null; answer(); };
       });
       return;
@@ -181,6 +199,16 @@ function createMockBackend(): http.Server {
     if (url === '/load-order/filter') {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ sql: null }));
+      return;
+    }
+    if (url === '/notifications/stream') {
+      res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache' });
+      res.write(': connected\n\n');
+      sseClients.push(res);
+      req.on('close', () => {
+        const i = sseClients.indexOf(res);
+        if (i >= 0) sseClients.splice(i, 1);
+      });
       return;
     }
     if (url === '/plugins') {
@@ -621,14 +649,15 @@ describe('Overwrite row', () => {
   });
 });
 
-// ── External-change poller lifecycle is gated on the backend ────────────────────
-// Placed first: the suite activates once, so "no poll before launch" is provable only at the
-// one point in the run where that is still true.
+// ── Notification stream lifecycle is gated on the backend ────────────────────
 
-describe('External-change poller runs only while the backend is up', () => {
+// ADR-0046 invariant 12: every notification kind rides this one stream, proven once here.
+// Placed first — the suite activates once — so "no connection before launch" is provable only
+// at the one point in the run where that is still true.
+describe('Notification stream connects only while the backend is up', () => {
   const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   let gameDir = '';
-  const pollRequests = (log: string[]) => log.filter((r) => r.includes('external-changes/status'));
+  const streamRequests = (log: string[]) => log.filter((r) => r === 'GET /notifications/stream');
 
   before(async () => {
     if (!root) return;
@@ -649,22 +678,20 @@ describe('External-change poller runs only while the backend is up', () => {
     fs.rmSync(gameDir, { recursive: true, force: true });
   });
 
-  // What is load-bearing here: the poller runs only while a backend is up.
-  it('polls while the backend is up and stops when editing ends', async function () {
+  // The connection follows the backend's health, not the load order — it opens before the
+  // first PUT /load-order, so that PUT's own progress can ride it too.
+  it('connects once the backend is healthy and does not reconnect once editing ends', async function () {
     if (!root) this.skip();
     this.timeout(20000);
 
     await enterEditing();
-    // One full poll interval (EXTERNAL_CHANGE_POLL_INTERVAL_MS = 3000ms) plus slack.
-    await new Promise((r) => setTimeout(r, 3500));
-    assert.ok(pollRequests(requestLog).length > 0,
-      'expected the poller to run once the launch confirms the backend is up');
+    await waitFor('the notification stream to connect', () => streamRequests(requestLog).length > 0);
+    assert.strictEqual(streamRequests(requestLog).length, 1, 'expected exactly one connection for the launch');
 
     exitEditing();
-    const countAtClose = pollRequests(requestLog).length;
-    await new Promise((r) => setTimeout(r, 3500));
-    assert.strictEqual(pollRequests(requestLog).length, countAtClose,
-      'expected no further external-change polls once editing ends');
+    await new Promise((r) => setTimeout(r, 1000));
+    assert.strictEqual(streamRequests(requestLog).length, 1,
+      'expected no reconnect once editing ends');
   });
 });
 
@@ -1539,27 +1566,27 @@ describe('Progressive load', () => {
     await launch;
   });
 
-  // Closing mEdit mid-load is a deliberate abandonment, not a failure: polling stops, chevrons and
-  // message go, and nothing is reported broken. The "no error toast" half is asserted at the
-  // LoadOrderController seam, where the reporter is injectable.
-  it('stops polling and clears the view when mEdit is closed mid-load', async () => {
+  // Closing mEdit mid-load is a deliberate abandonment, not a failure: the notification stream
+  // closes, chevrons and message go, and nothing is reported broken. The "no error toast" half
+  // is asserted at the LoadOrderController seam, where the reporter is injectable.
+  it('closes the notification stream and clears the view when mEdit is closed mid-load', async () => {
     setIndexed(['TestMod.esp']);
     const launch = enterEditing();
-    await waitFor('the load to be under way, polling and rendering', async () =>
+    await waitFor('the load to be under way, subscribed and rendering', async () =>
       (await itemFor('TestMod.esp')).collapsibleState === vscode.TreeItemCollapsibleState.Collapsed);
+    const connectionsAtLoad = requestLog.filter((l) => l === 'GET /notifications/stream').length;
+    assert.ok(connectionsAtLoad > 0, 'the load should have been subscribed before it was abandoned');
 
     exitEditing();
     // The abandoned load resolves on its own — the abort reaches the in-flight POST rather than
     // leaving it to wait for a socket that will never answer.
     await launch;
-    const pollsAtClose = requestLog.filter((l) => l === 'GET /load-order/status').length;
-    assert.ok(pollsAtClose > 0, 'the load should have been polling before it was abandoned');
 
-    await new Promise((r) => setTimeout(r, 1500)); // three poll intervals
+    await new Promise((r) => setTimeout(r, 1000));
 
     assert.strictEqual(
-      requestLog.filter((l) => l === 'GET /load-order/status').length, pollsAtClose,
-      'closing mEdit must stop the polling, not leave it running against a dead backend',
+      requestLog.filter((l) => l === 'GET /notifications/stream').length, connectionsAtLoad,
+      'closing mEdit must not reconnect the stream against a dead backend',
     );
     assert.strictEqual(
       (await itemFor('TestMod.esp')).collapsibleState, vscode.TreeItemCollapsibleState.None,

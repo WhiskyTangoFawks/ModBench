@@ -3,9 +3,10 @@ import type { NotificationEvent } from './ApiClient';
 import type { ActiveRecordTracker } from './ActiveRecordTracker';
 import { EXTENSION_TO_WEBVIEW, type ExtensionToWebview } from './messages';
 
-/** The wire's two kinds, narrowed from the schema's honest `string` for a typed `subscribe` call
+/** The wire's five kinds, narrowed from the schema's honest `string` for a typed `subscribe` call
  *  — not a mirror of `NotificationEvent`, which keeps every field as the schema reports it. */
-export type NotificationKind = 'rows-changed' | 'plugin-changed';
+export type NotificationKind =
+  | 'rows-changed' | 'plugin-changed' | 'load-order-status' | 'track-progress' | 'external-change-pending';
 
 /** ADR-0046 invariant 12: the extension's one subscribe interface, transport behind an adapter.
  *  `SseNotificationSubscriber` and `FakeNotificationSubscriber` are its two adapters. */
