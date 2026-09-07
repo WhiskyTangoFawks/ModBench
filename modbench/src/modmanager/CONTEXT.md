@@ -1,6 +1,6 @@
 # Mod Management
 
-The Modbench subsystem (Loadout view) that installs, orders, enables, and deploys mods, and locates the game. Lives in the VS Code extension. Operates on files and folders, never on record internals.
+The Modbench subsystem (the Toolbox, Mods, Plugins and Downloads views) that installs, orders, enables, and deploys mods, and locates the game. Lives in the VS Code extension. Operates on files and folders, never on record internals.
 
 ## Language
 
@@ -47,6 +47,22 @@ _Avoid_: Removed (MO2's `.meta` key `removed` means *hidden*, so "Removed" colli
 **Hidden**:
 A download the user has dismissed from view (`.meta` `removed=true`). A display axis only — it says nothing about whether the download was ever installed, and carries no Download status of its own. Hidden downloads are absent from the Downloads view unless *Show hidden* is on.
 _Avoid_: removed, deleted (the file is still on disk)
+
+**Instance**:
+The MO2 instance directory Modbench is opened on, and the one read model derived from its files. Everything a view shows on the MO2 side is read from it; nothing writes to it.
+_Avoid_: loadout, workspace, model
+
+**Toolbox**:
+The view that presents the instance — MO2's top bar as a tree: the game, the active profile, deploy state, run, refresh, settings. Also the extension's composition root.
+_Avoid_: Loadout, header, dashboard
+
+**Profile**:
+An MO2 profile: one `modlist.txt` and one `plugins.txt` under `profiles/`. The active one is named in `ModOrganizer.ini` and is the only one the Instance reflects.
+_Avoid_: session, loadout
+
+**Load order snapshot**:
+The value the Instance sends the backend — every plugin copy with slot, enabled and winning, as ADR-0044 defines. The only thing called a snapshot; the Instance's own state is just its value.
+_Avoid_: mod override snapshot
 
 **Modlist**:
 The ordered, enable-able set of mods Modbench manages for a game. Its ordering is the **Mod override order** (below).
