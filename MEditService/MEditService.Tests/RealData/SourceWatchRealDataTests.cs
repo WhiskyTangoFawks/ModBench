@@ -126,15 +126,19 @@ public sealed class SourceWatchRealDataTests(SourceWatchRealDataFixture fixture,
         foreach (var document in documents)
             File.WriteAllText(document, File.ReadAllText(document).Replace($"\"{EditorIdOf(document)}\"", $"\"{EditorIdOf(document)}_ByHand\"", StringComparison.Ordinal));
 
-        Assert.True(await fixture.Mirror.AwaitSequenceAsync(before + 1, TimeSpan.FromSeconds(30)));
+        // 60s, not 30s: under CPU contention from parallel test runs this measured 37s once, and the
+        // margin below is a wait bound, not a cost this test pays every run.
+        Assert.True(await fixture.Mirror.AwaitSequenceAsync(before + 1, TimeSpan.FromSeconds(60)));
         await WaitForEveryRow(renamed);
         foreach (var (formKey, editorId) in renamed)
             Assert.Equal(editorId, fixture.Mirror.Index!.At(RecordRef.Effective).GetDocument(formKey, fixture.Plugin)?.EditorId);
     }
 
+    // 60s to match the sequence await above: the same load that delays the projection delays this
+    // settling too, and the bound is a wait, not a per-run cost.
     private async Task WaitForEveryRow(Dictionary<string, string> renamed)
     {
-        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(30);
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(60);
         while (DateTime.UtcNow < deadline)
         {
             if (renamed.All(r => fixture.Mirror.Index!.At(RecordRef.Effective).GetDocument(r.Key, fixture.Plugin)?.EditorId == r.Value))
