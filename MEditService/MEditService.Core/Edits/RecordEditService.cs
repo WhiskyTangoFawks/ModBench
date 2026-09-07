@@ -82,7 +82,7 @@ public sealed class RecordEditService(
                     RecordEditRefusal.SourceUnitNotFound,
                     // Deliberately does not blame an external change: a defect reads identically, and a
                     // wrong explanation sends the user hunting a problem that is not there.
-                    $"{unit.RelativePath} is indexed as holding {formKey}, but its own text does not " +
+                    $"{unit.RelativePath} was found holding {formKey}, but its own text does not " +
                     "carry it. If nothing outside Modbench changed that file, this is a defect — please " +
                     "report it; otherwise relaunch mEdit so the index re-reads the tree.");
             }
@@ -225,7 +225,7 @@ public sealed class RecordEditService(
             // Same diagnosis as Edit's embedded lookup: states only what is observed.
             return RecordEditResult.Refused(
                 RecordEditRefusal.SourceUnitNotFound,
-                $"{unit.RelativePath} is indexed as holding {formKey}, but its own text does not " +
+                $"{unit.RelativePath} was found holding {formKey}, but its own text does not " +
                 "carry it. If nothing outside Modbench changed that file, this is a defect — please " +
                 "report it; otherwise relaunch mEdit so the index re-reads the tree.");
         }
@@ -247,15 +247,13 @@ public sealed class RecordEditService(
     /// record is never handed out twice.</summary>
     public RecordEditResult CreateRecord(PluginKey plugin, string recordType, string? editorId, string? requestedFormKey = null)
     {
-        if (RefuseIfBlocked(plugin, out var modFolder) is { } blocked) return blocked;
+        if (RefuseIfBlocked(plugin, out _, out var repository) is { } blocked) return blocked;
 
         var index = mirror.Index;
         if (index == null)
             return RecordEditResult.Refused(RecordEditRefusal.RecordNotFound, "No load order has been received.");
 
         var release = mirror.LoadOrder!.GameRelease;
-        if (SourceRepository.Open(modFolder, release) is not { } repository) return RefuseUntracked(plugin);
-
         var schemas = schemaReflector.GetSchemas(release);
         if (recordType == HeaderIndexer.RecordType || !schemas.TryGetValue(recordType, out var schema))
         {
@@ -832,7 +830,7 @@ public sealed class RecordEditService(
                 {
                     return RecordEditResult.Refused(
                         RecordEditRefusal.SourceUnitNotFound,
-                        $"{unit.RelativePath} is indexed as carrying {embeddedFormKey}, but its own text does " +
+                        $"{unit.RelativePath} was found carrying {embeddedFormKey}, but its own text does " +
                         "not hold it. Nothing was written.");
                 }
 
@@ -956,7 +954,7 @@ public sealed class RecordEditService(
             {
                 return RecordEditResult.Refused(
                     RecordEditRefusal.SourceUnitNotFound,
-                    $"{unit.RelativePath} is indexed as holding {oldFormKey}, but its own text does not carry it. " +
+                    $"{unit.RelativePath} was found holding {oldFormKey}, but its own text does not carry it. " +
                     "Nothing was written.");
             }
 
@@ -1212,7 +1210,7 @@ public sealed class RecordEditService(
     {
         target = default;
 
-        if (RefuseIfBlocked(plugin, out var modFolder) is { } blocked) return blocked;
+        if (RefuseIfBlocked(plugin, out var modFolder, out var repository) is { } blocked) return blocked;
 
         var index = mirror.Index;
         if (index == null)
@@ -1229,18 +1227,14 @@ public sealed class RecordEditService(
 
         var release = mirror.LoadOrder!.GameRelease;
 
-        // Asked again rather than inferred from the gate above: MO2 can replace the folder between the
-        // two, and a repository is only ever held over a folder observed tracked.
-        if (SourceRepository.Open(modFolder, release) is not { } repository) return RefuseUntracked(plugin);
-
         // An embedded child (a placed ref, landscape, navmesh, top cell) resolves to its parent's file.
         if (repository.Locate(plugin, new RecordIdentity(formKey, document.RecordType, document.EditorId))
             is not { } unit)
         {
             return RecordEditResult.Refused(
                 RecordEditRefusal.SourceUnitNotFound,
-                $"No source file in {plugin.Name}'s tree holds {formKey}, and the index names no container " +
-                "that would. Something moved or removed it outside Modbench \u2014 check the Source Control panel.");
+                $"No document in {plugin.Name}'s source tree holds {formKey}, and no record's document " +
+                "carries it. Something moved or removed it outside Modbench \u2014 check the Source Control panel.");
         }
 
         target = new EditTarget(index, modFolder, release, document, unit, repository);
@@ -1257,7 +1251,7 @@ public sealed class RecordEditService(
     {
         source = default;
 
-        if (RefuseIfBlocked(destinationPlugin, out var destinationModFolder) is { } blocked) return blocked;
+        if (RefuseIfBlocked(destinationPlugin, out var destinationModFolder, out _) is { } blocked) return blocked;
 
         var index = mirror.Index;
         if (index == null)
@@ -1289,15 +1283,18 @@ public sealed class RecordEditService(
             : null;
 
     // INVARIANT: every write gesture calls this first (untracked, then the external-change deferral).
-    // Reaching the source tree any other way bypasses the deferral refusal entirely.
-    private RecordEditResult? RefuseIfBlocked(PluginKey plugin, out string modFolder)
+    // Reaching the source tree any other way bypasses the deferral refusal entirely. The only gate on
+    // tracked-ness, so no later call can disagree with it about the same folder.
+    private RecordEditResult? RefuseIfBlocked(PluginKey plugin, out string modFolder, out SourceRepository repository)
     {
-        if (ModFolders.TrackedOf(mirror.LoadOrder, plugin) is not { } folder)
-        {
-            modFolder = "";
-            return RefuseUntracked(plugin);
-        }
-        modFolder = folder;
+        modFolder = "";
+        repository = null!;
+
+        if (ModFolders.Of(mirror.LoadOrder, plugin) is not { } folder) return RefuseUntracked(plugin);
+        if (mirror.LoadOrder is not { } loadOrder) return RefuseUntracked(plugin);
+        if (SourceRepository.Open(folder, loadOrder.GameRelease) is not { } opened) return RefuseUntracked(plugin);
+
+        (modFolder, repository) = (folder, opened);
 
         // Checked before anything else, so the source file is never reached.
         return ExternalChangeDeferral.Unanswered(folder, plugin.Name) is { } question
