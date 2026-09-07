@@ -11,9 +11,9 @@ using Noggog;
 
 namespace MEditService.Tests.Edits;
 
-/// <summary>debt #779: the link resolver reads a tracked plugin's tree by document name, so it cannot
-/// name a record living inside its container's document. Compile says nothing about a link to one
-/// rather than calling it broken.</summary>
+/// <summary>debt #779: the link resolver reads a tracked tree by document name, so it cannot name a
+/// record inside its container's document. Compile says nothing about a link to one rather than
+/// calling it broken.</summary>
 public sealed class CompileEmbeddedTargetTests : IDisposable
 {
     private const string TargetName = "EmbeddedTarget.esp";
