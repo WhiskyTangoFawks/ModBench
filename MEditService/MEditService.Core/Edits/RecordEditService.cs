@@ -223,10 +223,10 @@ public sealed class RecordEditService(
         var removal = repository.Remove(plugin, new RecordIdentity(formKey, document.RecordType, document.EditorId));
         if (removal != SourceRemoval.Removed)
         {
-            // States only what is observed: the tree no longer names a document for it, or the document
-            // it does name has lost it.
+            // States only what is observed: either the tree names no document for it, or the document
+            // it names lacks it.
             var observed = removal == SourceRemoval.NoDocumentHoldsIt
-                ? $"No document in {plugin.Name}'s tree holds {formKey} any more."
+                ? $"No document in {plugin.Name}'s tree holds {formKey}."
                 : $"{unit.RelativePath} was found holding {formKey}, but its own text does not carry it.";
             return RecordEditResult.Refused(
                 RecordEditRefusal.SourceUnitNotFound,
@@ -789,6 +789,9 @@ public sealed class RecordEditService(
         var mapping = RenumberMapping(oldFormKey, newFormKey);
 
         var resolved = new List<(string FormKey, PluginKey Plugin, SourceRepository Repository, SourceUnit Unit)>();
+        // One repository per mod folder for the whole pass: this phase writes nothing, so a memo built
+        // over one referencer's tree still describes it for the next.
+        var repositories = new Dictionary<string, SourceRepository?>(StringComparer.OrdinalIgnoreCase);
         foreach (var (referencerFormKey, referencerPlugin) in referencers)
         {
             if (reads.GetDocument(referencerFormKey, referencerPlugin) is not { } doc)
@@ -800,7 +803,8 @@ public sealed class RecordEditService(
             }
 
             var referencerModFolder = ModFolders.TrackedOf(mirror.LoadOrder, referencerPlugin)!;
-            var referencerRepository = SourceRepository.Open(referencerModFolder, release);
+            if (!repositories.TryGetValue(referencerModFolder, out var referencerRepository))
+                repositories[referencerModFolder] = referencerRepository = SourceRepository.Open(referencerModFolder, release);
             if (referencerRepository
                     ?.Locate(referencerPlugin, new RecordIdentity(referencerFormKey, doc.RecordType, doc.EditorId))
                 is not { } unit)
@@ -1043,7 +1047,13 @@ public sealed class RecordEditService(
         // Only the FormKey half of a flat record's leaf name changes, which the put's own placement
         // computes; the remove then takes the file the old FormKey named.
         transaction.Put(repository, plugin, new SourceDocument(written.FormKey, written.RecordType, written.EditorId, text));
-        transaction.Remove(repository, plugin, new RecordIdentity(document.FormKey, document.RecordType, document.EditorId));
+        var removal = transaction.Remove(
+            repository, plugin, new RecordIdentity(document.FormKey, document.RecordType, document.EditorId));
+
+        // Both outcomes a flat record can answer leave the old leaf gone, which is the state this
+        // renumber wants; the embedded-only third would mean the tree changed under the put.
+        if (removal == SourceRemoval.OwnerDoesNotCarryIt)
+            throw new IOException($"The document holding {document.FormKey} does not carry it, so the renumber cannot take it out.");
     }
 
     /// <summary>A FormKey neither ref answers to is the only one a create may take: a collision is a

@@ -7,8 +7,8 @@ using Mutagen.Bethesda.Plugins;
 namespace MEditService.Core.Source;
 
 /// <summary>The source layout's stateless helpers: how a record's leaf is named, where a flat one
-/// lands, and how a document's bytes become one record's text. Which document holds a record is
-/// <see cref="SourceRepository.Locate"/>'s question, not this one's.</summary>
+/// lands, how a document's bytes become one record's text. Which document holds a record is the
+/// repository's question.</summary>
 internal static class SourceUnitResolver
 {
     /// <summary>The whole-mod door's own name for a directory-per-record container's field file

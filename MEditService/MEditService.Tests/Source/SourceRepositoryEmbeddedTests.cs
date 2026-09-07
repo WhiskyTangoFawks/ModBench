@@ -221,7 +221,7 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
         File.WriteAllBytes(FullPath(ExteriorCellPath), Serialize(_exteriorCell));
 
         // Absent, never the interior cell the map still lists: an answer the tree does not bear out
-        // would send a write into a document that no longer carries the record.
+        // would send a write into a document that does not carry the record.
         Assert.Null(repository.Locate(Plugin, Identity(_temporaryRef, "refr")));
     }
 

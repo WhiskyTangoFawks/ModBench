@@ -27,10 +27,12 @@ public static class ExternalChangeEditLander
         var schemas = reflector.GetSchemas(gameRelease);
         var pluginName = plugin.Name;
 
-        // Keyed by the record, not by its path: an external EditorID change moves a record's file, and
-        // the baseline it is diffed against is still the same record's.
-        var baselineByFormKey = repository.ReadAll(plugin, SourceRepository.LastCompileRef(pluginName))
-            .ToDictionary(d => d.FormKey, d => d.Body, StringComparer.Ordinal);
+        // Keyed by the record, not its path: an external EditorID change moves a record's file.
+        // First document wins a FormKey two claim — Compile refuses such a tree; refusing Keep over
+        // it too would help nobody.
+        var baselineByFormKey = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var document in repository.ReadAll(plugin, SourceRepository.LastCompileRef(pluginName)))
+            baselineByFormKey.TryAdd(document.FormKey, document.Body);
 
         // Keep only runs against a tracked plugin, so the mod-folder-only ForRead overload applies.
         var deepParsed = ModFactory.ImportSetter(

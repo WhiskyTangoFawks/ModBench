@@ -56,11 +56,16 @@ internal sealed class SourceTransaction
     }
 
     /// <summary>Takes one repository's record out of the tree, holding the document's bytes so the
-    /// rollback puts it back. The pre-image is that document's own file, which is the whole record for
-    /// a flat one and its owner's text for an embedded child.</summary>
+    /// rollback puts it back. The pre-image is that one document, so a shape whose removal takes more
+    /// than it is refused.</summary>
     internal SourceRemoval Remove(SourceRepository repository, PluginKey plugin, RecordIdentity identity)
     {
         if (repository.Locate(plugin, identity) is not { } unit) return SourceRemoval.NoDocumentHoldsIt;
+
+        // Refused before the tree is touched: a container's removal takes its whole directory, block
+        // subtree and all, and one document's bytes cannot put that back. A batch that cannot restore
+        // an act must not perform it (ADR-0045).
+        if (unit.IsDirectoryPerRecord) throw NotRestorable(unit, identity);
 
         var before = Snapshot(unit.FullPath);
         try
@@ -72,6 +77,11 @@ internal sealed class SourceTransaction
             _log.Add(new FileState(repository.ModFolder, unit.FullPath, before, Snapshot(unit.FullPath)));
         }
     }
+
+    private static NotSupportedException NotRestorable(SourceUnit unit, RecordIdentity identity) =>
+        new($"{identity.FormKey} has a directory of its own at {unit.RelativePath}, and removing it takes " +
+            "every document under that directory. A batch holds one document's bytes per act, so it " +
+            "cannot put that back — remove it outside the batch.");
 
     // Recorded in execution order and undone in reverse, so a rename is put back before the create that
     // provoked it.

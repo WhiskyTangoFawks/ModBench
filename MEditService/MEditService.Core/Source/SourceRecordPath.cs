@@ -53,9 +53,8 @@ internal static class SourceRecordPath
 
     private static string FilesafeFormKey(FormKey formKey) => $"{formKey.ID:X6}_{formKey.ModKey.FileName}";
 
-    /// <summary>The record type of the document at <paramref name="relativePath"/>: the flat and header
-    /// shapes <see cref="TryParse"/> names, and a container's own <c>RecordData.json</c> under its group
-    /// folder. Null means the path does not decide it and the document names its own type.</summary>
+    /// <summary>The record type of the document at <paramref name="relativePath"/>. Null means the
+    /// path does not decide it, so the document names its own type.</summary>
     internal static string? RecordTypeOf(string relativePath, GameRelease gameRelease)
     {
         if (TryParse(relativePath, gameRelease, out var identity)) return identity.RecordType;

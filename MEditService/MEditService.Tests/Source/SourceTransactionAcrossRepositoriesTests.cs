@@ -1,8 +1,13 @@
 using System.Text;
 using MEditService.Core.Records;
+using MEditService.Core.Serialization;
 using MEditService.Core.Source;
 using MEditService.Tests.TestSupport;
+using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
+using Mutagen.Bethesda.Fallout4;
+using Mutagen.Bethesda.Plugins;
+using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Tests.Source;
 
@@ -27,15 +32,45 @@ public sealed class SourceTransactionAcrossRepositoriesTests : IDisposable
     private static string BodyOf(string pluginName, string editorId) =>
         $"{{\n  \"FormKey\": \"000800:{pluginName}\",\n  \"EditorID\": \"{editorId}\"\n}}";
 
-    private static SourceRepository Track(string modFolder, string pluginName)
+    private static SourceRepository Track(string modFolder, string pluginName, params PristineFile[] alsoWrite)
     {
         SourceRepository.Track(
             modFolder, SourcePreset.Edits,
-            [new PristineFile(
-                SourceRecordPath.For(pluginName, "npc_", $"000800:{pluginName}", "Original", Release),
-                Encoding.UTF8.GetBytes(BodyOf(pluginName, "Original")))],
+            [
+                new PristineFile(
+                    SourceRecordPath.For(pluginName, "npc_", $"000800:{pluginName}", "Original", Release),
+                    Encoding.UTF8.GetBytes(BodyOf(pluginName, "Original"))),
+                .. alsoWrite,
+            ],
             new TrackProvenance(null, null, new Dictionary<string, string>()));
         return SourceRepository.Open(modFolder, Release)!;
+    }
+
+    // A worldspace with an exterior cell beneath it: the one shape whose removal takes a whole
+    // subtree rather than a file.
+    private static (PristineFile[] Files, FormKey Cell) ContainerFiles(string pluginName)
+    {
+        var mod = new Fallout4Mod(ModKey.FromFileName(pluginName), Fallout4Release.Fallout4);
+        var cell = new Cell(mod) { EditorID = "ExteriorCell", WaterHeight = 50f };
+        cell.Temporary.Add(new PlacedObject(mod) { EditorID = "ExteriorRef" });
+        var worldspace = new Worldspace(mod) { EditorID = "World" };
+
+        var codec = new RecordTextCodec(NullLogger<RecordTextCodec>.Instance);
+        byte[] Serialize(IMajorRecordGetter record) =>
+            codec.SerializeToBytesAsync(record, Release).GetAwaiter().GetResult();
+
+        string Leaf(IMajorRecordGetter record) =>
+            $"{record.EditorID} - {record.FormKey.ID:X6}_{record.FormKey.ModKey.FileName}";
+
+        var root = SourceRecordPath.RootFor(pluginName);
+        return (
+        [
+            new PristineFile(
+                Path.Combine(root, "Worldspaces", Leaf(worldspace), "RecordData.json"), Serialize(worldspace)),
+            new PristineFile(
+                Path.Combine(root, "Worldspaces", Leaf(worldspace), "0, 0", "0, 0", Leaf(cell), "RecordData.json"),
+                Serialize(cell)),
+        ], cell.FormKey);
     }
 
     [Fact]
@@ -83,6 +118,25 @@ public sealed class SourceTransactionAcrossRepositoriesTests : IDisposable
         Assert.Equal(
             BodyOf("Second.esp", "Rewritten"),
             second.Get(secondPlugin, new RecordIdentity("000800:Second.esp", "npc_", "Original"))?.Body);
+    }
+
+    [Fact]
+    public void ABatchAskedToRemoveAContainer_RefusesBeforeTouchingTheTree()
+    {
+        var (files, cell) = ContainerFiles("First.esp");
+        var repository = Track(_firstFolder, "First.esp", files);
+        var plugin = new PluginKey("First.esp", "FirstMod");
+        var before = TreeSnapshot.Of(_firstFolder);
+
+        var transaction = new SourceTransaction();
+        var refusal = Assert.Throws<NotSupportedException>(
+            () => transaction.Remove(repository, plugin, new RecordIdentity(cell.ToString(), "cell", "ExteriorCell")));
+
+        // The cell's directory carries its placed reference: a batch that kept only the cell's own
+        // document would restore the record and lose everything beneath it.
+        Assert.Contains(cell.ToString(), refusal.Message, StringComparison.Ordinal);
+        Assert.Empty(transaction.Rollback());
+        Assert.Equal(before, TreeSnapshot.Of(_firstFolder));
     }
 
     [Fact]

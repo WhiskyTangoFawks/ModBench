@@ -20,7 +20,8 @@ public sealed partial class SourceRepository
     /// <summary>The folder this repository is over, for a caller naming a path relative to it.</summary>
     internal string ModFolder => _modFolder;
 
-    // Private so the only way to hold a repository is to have observed the mod folder tracked.
+    // Private so a repository comes from one of the two named doors, each stating what it observed:
+    // Open, which found a tracked folder, or Over, which was handed a materialized tree.
     private SourceRepository(string modFolder, GameRelease release) =>
         (_modFolder, _release) = (modFolder, release);
 
@@ -81,8 +82,8 @@ public sealed partial class SourceRepository
     }
 
     /// <summary>Takes the record out of the tree: its file, its directory, or its element of another
-    /// record's document. Already gone is the state asked for, so it removes cleanly; the other two
-    /// outcomes say which of them stopped it.</summary>
+    /// record's document. Already gone is the state asked for; the other two outcomes say what
+    /// stopped it.</summary>
     public SourceRemoval Remove(PluginKey plugin, RecordIdentity identity)
     {
         if (Locate(plugin, identity) is not { } unit) return SourceRemoval.NoDocumentHoldsIt;
@@ -588,7 +589,7 @@ public sealed partial class SourceRepository
 /// places.</summary>
 public enum SourceRemoval
 {
-    /// <summary>The tree no longer holds it, including the record that was already gone.</summary>
+    /// <summary>The tree does not hold it, including the record that was already gone.</summary>
     Removed,
 
     /// <summary>Nothing in the tree holds it, so there was nothing to take out.</summary>
