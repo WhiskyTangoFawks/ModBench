@@ -103,13 +103,14 @@ public sealed class SourceChangeWatcherTests
         {
             var landedAt = new List<TimeSpan>();
             var stopwatch = Stopwatch.StartNew();
-            using var watcher = new SourceChangeWatcher(TimeSpan.FromMilliseconds(100), TimeSpan.FromMilliseconds(400));
+            // Quiet is far longer than both the write cadence and the maximum window, so only the
+            // maximum window can force a settle before the stream stops — an overshooting Sleep
+            // between writes still falls nowhere near 1500ms.
+            using var watcher = new SourceChangeWatcher(TimeSpan.FromMilliseconds(1500), TimeSpan.FromMilliseconds(300));
             watcher.SourceChanged = _ => { lock (landedAt) landedAt.Add(stopwatch.Elapsed); };
             watcher.Watch(modA, sourceA, "A.esp", "OriginA");
 
-            // Every 50ms, well inside the 100ms quiet window, for well past the 400ms maximum: the
-            // quiet timer alone would never fire.
-            var deadline = DateTime.UtcNow + TimeSpan.FromMilliseconds(1200);
+            var deadline = DateTime.UtcNow + TimeSpan.FromMilliseconds(900);
             while (DateTime.UtcNow < deadline)
             {
                 Write(sourceA);
@@ -120,8 +121,9 @@ public sealed class SourceChangeWatcherTests
             List<TimeSpan> snapshot;
             lock (landedAt) snapshot = [.. landedAt];
             Assert.NotEmpty(snapshot);
-            // Forced by the maximum window, well before the stream itself stopped at 1200ms.
-            Assert.True(snapshot[0] < TimeSpan.FromMilliseconds(1000), $"first batch landed at {snapshot[0]}");
+            // Forced by the maximum window during the still-active stream, not by quiet after it
+            // stopped at 900ms — quiet alone could not land before ~2400ms.
+            Assert.True(snapshot[0] < TimeSpan.FromMilliseconds(700), $"first batch landed at {snapshot[0]}");
         }
         finally
         {

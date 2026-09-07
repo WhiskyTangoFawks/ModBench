@@ -212,14 +212,16 @@ public sealed class SourceChangeWatcher : IDisposable
 
     public void Dispose()
     {
+        // Both timer disposes stay inside the lock: an in-flight Observe/Interrupted on another
+        // thread takes the same lock to call Start, and a Start racing a Dispose throws.
         lock (_gate)
         {
             foreach (var entry in _entries.Values) entry.Dispose();
             _entries.Clear();
-        }
 
-        _quietTimer.Dispose();
-        _maxWindowTimer.Dispose();
+            _quietTimer.Dispose();
+            _maxWindowTimer.Dispose();
+        }
     }
 
     // Paths and WholePlugin are the batch this window has accumulated. Guarded by _gate.
