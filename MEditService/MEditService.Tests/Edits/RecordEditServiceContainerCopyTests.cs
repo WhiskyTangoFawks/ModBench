@@ -186,15 +186,16 @@ public sealed class RecordEditServiceContainerCopyTests
         Assert.DoesNotContain(ContainerCopyFixture.ExteriorTemporaryRefEditorId, cellText, StringComparison.Ordinal);
         Assert.Null(index.At(RecordRef.Effective).GetDocument(fixture.ExteriorTemporaryRef.ToString(), fixture.DestinationPlugin));
 
-        // Block and sub-block are the directories the mint wrote (ADR-0046 invariant 1). The grid is
-        // a field, and a bare Partial Form ancestor carries none.
+        // Block and sub-block are the directories the mint wrote (ADR-0046 invariant 1); the grid is a
+        // field the mint carries into the bare ancestor's document, so the projector derives it same
+        // as any other cell's.
         var source = index.At(RecordRef.Effective).GetCellLocation(fixture.SourcePlugin, fixture.ExteriorCell.ToString())!.Value;
         var minted = index.At(RecordRef.Effective).GetCellLocation(fixture.DestinationPlugin, fixture.ExteriorCell.ToString())!.Value;
         Assert.Equal(
             (source.ParentWorldspace, source.BlockX, source.BlockY, source.SubX, source.SubY, source.IsInterior),
             (minted.ParentWorldspace, minted.BlockX, minted.BlockY, minted.SubX, minted.SubY, minted.IsInterior));
-        Assert.Null(minted.GridX);
-        Assert.Null(minted.GridY);
+        Assert.Equal(ContainerCopyFixture.ExteriorGridX, minted.GridX);
+        Assert.Equal(ContainerCopyFixture.ExteriorGridY, minted.GridY);
     }
 
     // "REFR in the same Persistent/Temporary slot as the source" — the

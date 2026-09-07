@@ -9,6 +9,7 @@ using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
 using Mutagen.Bethesda.Plugins.Utility;
+using Noggog;
 using Noggog.WorkEngine;
 
 namespace MEditService.Tests.Edits;
@@ -28,6 +29,12 @@ public sealed class SpatialContainerMintBuilderTests
             FormKey.Factory("000802:Source.esm"), GameRelease.Fallout4, typeof(Cell));
         cell.MajorRecordFlagsRaw |= PartialFormFlag.Bit;
 
+        // The bare ancestor carries no grid of its own; a distinct source cell stands in for the one
+        // the real copy path reads back off the source plugin's own document.
+        var sourceCell = (Cell)MajorRecordInstantiator.Activator(
+            cell.FormKey, GameRelease.Fallout4, typeof(Cell));
+        sourceCell.Grid = new CellGrid { Point = new P2Int(200, -199) };
+
         // Deliberately not derivable from a naive floor(grid/N)-style formula for this grid point —
         // a rival that recomputed block/sub-block instead of copying CellLocationRow's own numbers
         // through would not reproduce these exact values.
@@ -35,7 +42,8 @@ public sealed class SpatialContainerMintBuilderTests
             cell.FormKey.ToString(), worldspace.FormKey.ToString(),
             BlockX: 3, BlockY: -2, SubX: 0, SubY: -1, GridX: 200, GridY: -199, IsInterior: false);
 
-        var syntheticMod = SpatialContainerMint.BuildSyntheticWorldspaceMod(DestinationPlugin, worldspace, cellLocation, cell, GameRelease.Fallout4);
+        var syntheticMod = SpatialContainerMint.BuildSyntheticWorldspaceMod(
+            DestinationPlugin, worldspace, cellLocation, cell, sourceCell, GameRelease.Fallout4);
 
         var scratchDir = Directory.CreateTempSubdirectory("medit-mint-builder-test-").FullName;
         try
@@ -53,9 +61,12 @@ public sealed class SpatialContainerMintBuilderTests
                 .SingleOrDefault(d => Path.GetFileName(d).EndsWith("0, -1", StringComparison.Ordinal));
             Assert.NotNull(subBlockDir);
 
-            // The cell itself landed one level under the sub-block.
+            // The cell itself landed one level under the sub-block, its own document carrying the
+            // source cell's grid — not the bare ancestor's, which has none of its own.
             var cellRecordFiles = Directory.EnumerateFiles(subBlockDir!, "RecordData.json", SearchOption.AllDirectories).ToList();
-            Assert.Single(cellRecordFiles);
+            var cellRecordFile = Assert.Single(cellRecordFiles);
+            using var cellJson = JsonDocument.Parse(File.ReadAllText(cellRecordFile));
+            Assert.Equal("200, -199", cellJson.RootElement.GetProperty("Grid").GetProperty("Point").GetString());
 
             // The WRLD ancestor's own header round-trips as Partial Form (bit 14, 0x4000).
             var worldspaceOwnDir = Directory.EnumerateDirectories(worldspacesDir).Single();
