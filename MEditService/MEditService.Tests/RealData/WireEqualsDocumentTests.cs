@@ -32,7 +32,7 @@ public sealed class CutDownPluginCompareFixture : IDisposable
                 CutDownPluginFixture.PluginFileName, CutDownPluginFixture.PluginPath, Origin,
                 Slot: 0, Enabled: true, Winning: true)],
             GameRelease.Fallout4);
-        Compare = new RecordQueryService(Mirror, reflector, new ConflictClassifier());
+        Compare = new RecordQueryService(Mirror.Projector, reflector, new ConflictClassifier());
     }
 
     public void Dispose()

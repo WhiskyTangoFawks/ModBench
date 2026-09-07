@@ -38,7 +38,6 @@ public sealed class HeldPlugins : ILoadOrder
     public GameRelease GameRelease { get; }
     public IReadOnlyList<PluginMetadata> Plugins => Volatile.Read(ref _pluginsSnapshot);
     public IReadOnlyList<PluginLoadFailure> Failures => Volatile.Read(ref _loadFailuresSnapshot);
-    public string? FilterSql { get; set; }
 
     public HeldPlugins(string dataFolderPath, string? instanceRoot, GameRelease gameRelease, ILogger? logger = null)
     {

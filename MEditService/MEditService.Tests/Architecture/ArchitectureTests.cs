@@ -79,6 +79,39 @@ public sealed class ArchitectureTests
             "The load order is reconciled or written outside its endpoints in:\n" + string.Join("\n", offenders));
     }
 
+    // ADR-0046 invariant 3: Queries are the Index's only readers, so a member no query service
+    // calls is a widening nobody asked for — and every implementer, the projector and each query
+    // test's stub alike, pays for it.
+    [Fact]
+    public void TheIndexReadInterface_HoldsOnlyMembersTheQueryServicesCall()
+    {
+        var queries = SourceTree
+            .CSharpFiles(Path.Combine(SolutionDirectory(), "MEditService.Core", "Queries"))
+            .Select(File.ReadAllText)
+            .ToList();
+        // Property getters travel as get_X methods; naming the property is what a caller does.
+        var members = typeof(IQueryIndex).GetProperties().Select(m => m.Name)
+            .Concat(typeof(IQueryIndex).GetMethods().Where(m => !m.IsSpecialName).Select(m => m.Name));
+        var uncalled = members
+            .Where(name => !queries.Exists(text => text.Contains($".{name}", StringComparison.Ordinal)))
+            .ToList();
+        Assert.True(uncalled.Count == 0,
+            $"{nameof(IQueryIndex)} carries members no query service calls:\n" + string.Join("\n", uncalled));
+    }
+
+    // ADR-0046 invariants 3 and 10: the read side and the watchers take the Index itself. The
+    // composition root still names the mirror, which is the write side's shell over that same
+    // instance.
+    [Fact]
+    public void TheReadSideAndTheWatchers_NameTheIndex_NotTheMirror()
+    {
+        var offenders = Offenders(
+            SolutionDirectory(), ["MEditService.Api", Path.Combine("MEditService.Core", "Queries")],
+            nameof(ILoadOrderMirror), allowedFiles: ["Program.cs"]);
+        Assert.True(offenders.Count == 0,
+            "The mirror is named outside the composition root in:\n" + string.Join("\n", offenders));
+    }
+
     // ADR-0008: PluginWriter backs the binary up first; IndexProjector writes only a brand-new
     // file and TrackService only a scratch copy, so neither has anything to back up.
     [Fact]

@@ -35,7 +35,7 @@ public sealed class FileOverrideCompareColumnTests
             .ToList();
         manager.Reconcile(fx.GameDirectory, snapshot, GameRelease.Fallout4);
 
-        var svc = new RecordQueryService(manager, SharedSchemaReflector.Instance, new ConflictClassifier());
+        var svc = new RecordQueryService(manager.Projector, SharedSchemaReflector.Instance, new ConflictClassifier());
 
         var compare = svc.GetCompare("000800:Shared.esp");
 
@@ -65,7 +65,7 @@ public sealed class FileOverrideCompareColumnTests
         var snapshot = fx.Plugins.Select(p => p with { Enabled = false }).ToList();
         manager.Reconcile(fx.GameDirectory, snapshot, GameRelease.Fallout4);
 
-        var svc = new RecordQueryService(manager, SharedSchemaReflector.Instance, new ConflictClassifier());
+        var svc = new RecordQueryService(manager.Projector, SharedSchemaReflector.Instance, new ConflictClassifier());
 
         var compare = svc.GetCompare("000800:Solo.esp");
 

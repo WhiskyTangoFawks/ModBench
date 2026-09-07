@@ -8,11 +8,11 @@ namespace MEditService.Core.Queries;
 /// <summary>Container-child rows (a Quest's topics/branches/scenes, a Dialog Topic's responses),
 /// hydrated through the ordinary Search path so IsWinner/WorkingTreeState/LoadOrderIndex derive
 /// exactly as every other listing does — no second derivation to keep in step.</summary>
-public sealed class ContainerChildQueryService(ILoadOrderMirror loadOrder, ILogger<ContainerChildQueryService>? logger = null)
+public sealed class ContainerChildQueryService(IQueryIndex index, ILogger<ContainerChildQueryService>? logger = null)
 {
     private const int UnlimitedRecords = int.MaxValue;
 
-    private readonly ILoadOrderMirror _mirror = loadOrder;
+    private readonly IQueryIndex _index = index;
     private readonly ILogger _logger = (ILogger?)logger ?? NullLogger.Instance;
 
     // xEdit's presentation order (wbVWDAsQuestChildren: DIAL, DLBR, SCEN; INFO flat), not the
@@ -30,8 +30,8 @@ public sealed class ContainerChildQueryService(ILoadOrderMirror loadOrder, ILogg
     // (a tree row built from one) states it explicitly, else it's resolved from the load order.
     public IReadOnlyList<ContainerChildSummary> GetChildren(string plugin, string parentFormKey, string? origin = null)
     {
-        origin ??= PluginOriginResolver.Resolve(_mirror.LoadOrder, plugin);
-        var repo = RequireReads();
+        var (loadOrder, repo) = _index.RequireScope();
+        origin ??= PluginOriginResolver.Resolve(loadOrder, plugin);
         var pluginKey = new PluginKey(plugin, origin);
 
         var rows = repo.GetContainerChildren(pluginKey, parentFormKey)
@@ -70,6 +70,4 @@ public sealed class ContainerChildQueryService(ILoadOrderMirror loadOrder, ILogg
         }
         return result;
     }
-
-    private IRecordReads RequireReads() => _mirror.RequireScope().Reads;
 }

@@ -98,7 +98,7 @@ public sealed class CascadeRollbackFixture : IDisposable
         // Short, because a test waits on the projection rather than on the clock; the composition
         // root's own window is 300 ms.
         _watcher = new SourceChangeWatcher(TimeSpan.FromMilliseconds(100));
-        var sourceMirror = new SourceMirror(Mirror, _watcher, new InMemoryNotificationPublisher(), NullLogger.Instance);
+        var sourceMirror = new SourceMirror(Mirror.Projector, Mirror.WriteGate, _watcher, new InMemoryNotificationPublisher(), NullLogger.Instance);
         _watcher.SourceChanged = sourceMirror.Apply;
         ((ILoadOrderMirror)Mirror).LoadOrderChanged = sourceMirror.RefreshWatches;
         sourceMirror.RefreshWatches();

@@ -8,17 +8,29 @@ using Mutagen.Bethesda;
 namespace MEditService.Core.Plugins;
 
 /// <summary>See <see cref="ILoadOrderMirror"/>. Delegation only: the Index's projector holds the
-/// store and every projection (ADR-0046 invariant 10), and this type is the seam its consumers are
-/// still handed until they move onto the projector.</summary>
-public sealed class LoadOrderMirror(
-    IRecordIndexFactory indexFactory,
-    ILogger<LoadOrderMirror>? logger = null,
-    IModImporter? modImporter = null,
-    SchemaReflector? schemaReflector = null,
-    INotificationPublisher? notifications = null) : ILoadOrderMirror, IDisposable
+/// store and every projection (ADR-0046 invariant 10), and this type is the seam the write side is
+/// still handed until it moves onto the projector.</summary>
+public sealed class LoadOrderMirror : ILoadOrderMirror, IDisposable
 {
-    private readonly IndexProjector _projector =
-        new(indexFactory, logger, modImporter, schemaReflector, notifications);
+    private readonly IndexProjector _projector;
+
+    public LoadOrderMirror(
+        IRecordIndexFactory indexFactory,
+        ILogger<LoadOrderMirror>? logger = null,
+        IModImporter? modImporter = null,
+        SchemaReflector? schemaReflector = null,
+        INotificationPublisher? notifications = null)
+        : this(new IndexProjector(indexFactory, logger, modImporter, schemaReflector, notifications))
+    {
+    }
+
+    /// <summary>The composition root's door: the Index is what is registered, and this shell wraps
+    /// that one instance, so the write side and the read side never project into two stores.</summary>
+    public LoadOrderMirror(IndexProjector projector) => _projector = projector;
+
+    /// <summary>The Index this wraps, for a caller holding a mirror that needs to hand the Index
+    /// itself to a read-side collaborator.</summary>
+    public IndexProjector Projector => _projector;
 
     public ILoadOrder? LoadOrder => _projector.LoadOrder;
     public IRecordReads? Reads => _projector.Reads;

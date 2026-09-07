@@ -23,7 +23,7 @@ public sealed class CommittedOnlyReadPathTests : IDisposable
         var factory = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
         _manager = new LoadOrderMirror(factory);
         _manager.Reconcile(fixture.DataFolder, fixture.Plugins, GameRelease.Fallout4);
-        _svc = new RecordQueryService(_manager, reflector, new ConflictClassifier());
+        _svc = new RecordQueryService(_manager.Projector, reflector, new ConflictClassifier());
     }
 
     public void Dispose() => _manager.Dispose();
@@ -82,7 +82,7 @@ public sealed class CommittedOnlyReferencesTests : IDisposable
         var factory = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
         _manager = new LoadOrderMirror(factory);
         _manager.Reconcile(_fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4);
-        _svc = new RecordQueryService(_manager, reflector, new ConflictClassifier());
+        _svc = new RecordQueryService(_manager.Projector, reflector, new ConflictClassifier());
     }
 
     public void Dispose()

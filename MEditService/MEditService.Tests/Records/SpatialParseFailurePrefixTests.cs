@@ -107,7 +107,7 @@ public sealed class SpatialParseFailurePrefixTests
                 [new LoadOrderEntry(PluginName, path, Origin, Slot: 0, Enabled: true, Winning: true)],
                 GameRelease.Fallout4);
 
-            Query = new WorldspaceQueryService(_mirror);
+            Query = new WorldspaceQueryService(_mirror.Projector);
         }
 
         internal void MarkUnreadable(string formKey)

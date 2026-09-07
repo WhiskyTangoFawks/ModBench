@@ -38,7 +38,8 @@ public sealed class EndpointReceptionLoggingTests
         {
             var req = new LoadOrderRequest([], tempDir, tempDir, "Fallout4");
 
-            LoadOrderEndpoints.PutLoadOrder(req, new StubMirror(), new LoadOrderHolder(), new ExternalChangeWatcher(), loggerFactory);
+            using var index = new IndexProjector(new RefusingIndexFactory());
+            LoadOrderEndpoints.PutLoadOrder(req, index, new LoadOrderHolder(), new ExternalChangeWatcher(), loggerFactory);
 
             Assert.Contains(entries, e => e.Level == LogLevel.Information && e.Message.Contains(tempDir));
         }
@@ -52,17 +53,18 @@ public sealed class EndpointReceptionLoggingTests
     public void PutLoadOrder_GameDirectoryMissing_StillLogsReceived()
     {
         // The reception line fires on every call, including ones that go on to fail — this
-        // request fails validation (400) before LoadOrderMirror.Reconcile is called.
+        // request fails validation (400) before the Index is asked to project anything.
         var (loggerFactory, entries) = CapturingLoggerFactory();
         using var _ = loggerFactory;
-        var mirror = new StubMirror();
+        var factory = new RefusingIndexFactory();
+        using var index = new IndexProjector(factory);
         var req = new LoadOrderRequest([], "Z:\\does-not-exist", "Z:\\does-not-exist", "Fallout4");
 
-        var result = LoadOrderEndpoints.PutLoadOrder(req, mirror, new LoadOrderHolder(), new ExternalChangeWatcher(), loggerFactory);
+        var result = LoadOrderEndpoints.PutLoadOrder(req, index, new LoadOrderHolder(), new ExternalChangeWatcher(), loggerFactory);
 
         var problem = Assert.IsAssignableFrom<Microsoft.AspNetCore.Http.HttpResults.ProblemHttpResult>(result);
         Assert.Equal(400, problem.StatusCode);
-        Assert.False(mirror.LoadCalled); // confirms this is the pre-load validation-failure path
+        Assert.False(factory.Asked); // confirms this is the pre-projection validation-failure path
         Assert.Contains(entries, e => e.Level == LogLevel.Information && e.Message.Contains("Z:\\does-not-exist"));
     }
 
@@ -95,36 +97,6 @@ public sealed class EndpointReceptionLoggingTests
     }
 
     // --- Stubs (hand-written, no mocking framework — matches existing test-suite convention) ---
-
-    private sealed class StubMirror : ILoadOrderMirror
-    {
-        public bool LoadCalled { get; private set; }
-        public ILoadOrder? LoadOrder => null;
-        public IRecordReads? Reads => null;
-        public IRecordIndex? Index => null;
-        public IndexWriteGate WriteGate { get; } = new();
-        // These stubs never load, so they are always in the no-load-order state.
-        public LoadOrderStatus Status => LoadOrderStatus.None;
-        public long Sequence => 0;
-        public Task<bool> AwaitSequenceAsync(long atLeast, TimeSpan timeout) => throw new NotSupportedException();
-        public IDisposable BeginProjection() => throw new NotSupportedException();
-        public void Announce(Action publish) => throw new NotSupportedException();
-        public (ILoadOrder LoadOrder, IRecordReads Reads) RequireScope() => throw new NoLoadOrderException();
-        public void Reconcile(
-            string gameDirectory, IReadOnlyList<LoadOrderEntry> plugins, GameRelease gameRelease,
-            string? instanceRoot = null) => LoadCalled = true;
-        public void Close() => throw new NotSupportedException();
-        public PluginResponse CreatePlugin(string name, string path, string origin) =>
-            new(name, name, 0, false, false, [], 0, false, true, origin, [], true, true, true);
-        public Task ReindexPlugin(PluginKey key) => throw new NotSupportedException();
-        public IReadOnlyList<ValidationReport> ValidateIndex(PluginKey? plugin) => throw new NotSupportedException();
-        public void RefreshKeys(PluginKey key, IReadOnlyList<string> formKeys) => throw new NotSupportedException();
-        public Action? LoadOrderChanged { get; set; }
-        public void UnindexPlugin(PluginKey key) => throw new NotSupportedException();
-        public void SetFilter(string sql) => throw new NotSupportedException();
-        public void ClearFilter() => throw new NotSupportedException();
-        public void ReapplyFilter() => throw new NotSupportedException();
-    }
 
     private sealed class StubWorldspaceQueryService : IWorldspaceQueryService
     {

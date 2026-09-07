@@ -71,10 +71,19 @@ try
     builder.Services.AddSingleton<PluginWriter>();
     builder.Services.AddSingleton<IModImporter, DefaultModImporter>();
     builder.Services.AddSingleton<LoadOrderHolder>();
-    builder.Services.AddSingleton<ILoadOrderMirror, LoadOrderMirror>();
-    // Resolved from the mirror rather than registered on its own, so there is exactly one write
+    // ADR-0046 invariant 10: the Index is the registered instance. The mirror is the write side's
+    // shell over that same one, until the write side takes the Index itself.
+    builder.Services.AddSingleton(sp => new IndexProjector(
+        sp.GetRequiredService<IRecordIndexFactory>(),
+        sp.GetRequiredService<ILoggerFactory>().CreateLogger<IndexProjector>(),
+        sp.GetRequiredService<IModImporter>(),
+        sp.GetRequiredService<SchemaReflector>(),
+        sp.GetRequiredService<INotificationPublisher>()));
+    builder.Services.AddSingleton<IQueryIndex>(sp => sp.GetRequiredService<IndexProjector>());
+    builder.Services.AddSingleton<ILoadOrderMirror>(sp => new LoadOrderMirror(sp.GetRequiredService<IndexProjector>()));
+    // Resolved from the Index rather than registered on its own, so there is exactly one write
     // gate — a bare `AddSingleton<IndexWriteGate>()` would inject cleanly and serialize nothing.
-    builder.Services.AddSingleton(sp => sp.GetRequiredService<ILoadOrderMirror>().WriteGate);
+    builder.Services.AddSingleton(sp => sp.GetRequiredService<IndexProjector>().WriteGate);
     builder.Services.AddSingleton<IRecordQueryService, RecordQueryService>();
     builder.Services.AddSingleton<MalformedPluginQueryService>();
     builder.Services.AddSingleton<IWorldspaceQueryService, WorldspaceQueryService>();
@@ -96,10 +105,10 @@ try
     // ADR-0001: subscribed once, not per reconcile — the watcher is a process singleton, and
     // re-subscribing would stack a handler per reconcile. Which plugins are watched is re-decided
     // per reconcile instead.
-    var mirror = app.Services.GetRequiredService<ILoadOrderMirror>();
+    var index = app.Services.GetRequiredService<IndexProjector>();
     var externalChangeWatcher = app.Services.GetRequiredService<ExternalChangeWatcher>();
     var indexMirror = new IndexMirror(
-        mirror,
+        index,
         app.Services.GetRequiredService<INotificationPublisher>(),
         app.Services.GetRequiredService<ILoggerFactory>().CreateLogger(nameof(IndexMirror)));
     externalChangeWatcher.IndexedBinaryChanged = indexMirror.Apply;
@@ -108,22 +117,22 @@ try
     // ADR-0046: the plugin watcher's own external-change signals, subscribed once for the same
     // reason.
     var externalChangeMirror = new ExternalChangeMirror(
-        mirror,
+        index,
         app.Services.GetRequiredService<INotificationPublisher>(),
         app.Services.GetRequiredService<ILoggerFactory>().CreateLogger(nameof(ExternalChangeMirror)));
     externalChangeWatcher.ExternalChangeReported = externalChangeMirror.ApplyPending;
     externalChangeWatcher.WatchOverflowed = externalChangeMirror.ApplyOverflow;
 
-    // ADR-0046: the Source watcher's other half, subscribed once for the same reason. The mirror
+    // ADR-0046: the Source watcher's other half, subscribed once for the same reason. The Index
     // announces each reconcile and Track the repository it has created, so a watch starts with no
     // restart.
     var sourceWatcher = app.Services.GetRequiredService<SourceChangeWatcher>();
     var sourceMirror = new SourceMirror(
-        mirror, sourceWatcher,
+        index, app.Services.GetRequiredService<IndexWriteGate>(), sourceWatcher,
         app.Services.GetRequiredService<INotificationPublisher>(),
         app.Services.GetRequiredService<ILoggerFactory>().CreateLogger(nameof(SourceMirror)));
     sourceWatcher.SourceChanged = sourceMirror.Apply;
-    mirror.LoadOrderChanged = sourceMirror.RefreshWatches;
+    index.LoadOrderChanged = sourceMirror.RefreshWatches;
     app.Services.GetRequiredService<TrackService>().RepositoryCreated = sourceMirror.WatchTracking;
 
     // Most endpoint guards return a 4xx without logging, so without the selector a deliberate failure

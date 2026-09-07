@@ -9,13 +9,13 @@ namespace MEditService.Api;
 /// <summary>ADR-0046: the plugin watcher's external-change signals become notifications and a
 /// validate. Origin resolution mirrors <c>GetExternalChangeStatus</c> — the watcher only ever
 /// carries the bare (modFolder, pluginName) identity.</summary>
-internal sealed class ExternalChangeMirror(ILoadOrderMirror mirror, INotificationPublisher notifications, ILogger logger)
+internal sealed class ExternalChangeMirror(IndexProjector index, INotificationPublisher notifications, ILogger logger)
 {
     /// <summary>A question was queued: publishes it exactly as <c>GET /plugins/external-changes/status</c>
     /// would report it.</summary>
     internal void ApplyPending(UnansweredExternalChange change)
     {
-        var origin = PluginEndpoints.OriginOfExternalChange(mirror.LoadOrder, change.ModFolder, change.PluginName);
+        var origin = PluginEndpoints.OriginOfExternalChange(index.LoadOrder, change.ModFolder, change.PluginName);
         notifications.Publish(new ExternalChangePendingNotification(
             new PluginKey(change.PluginName, origin),
             change.Classification.MetaChanged, change.Classification.OldVersion, change.Classification.NewVersion));
@@ -25,15 +25,15 @@ internal sealed class ExternalChangeMirror(ILoadOrderMirror mirror, INotificatio
     /// <see cref="SourceMirror"/>'s own overflow-to-validate shape for the Source side.</summary>
     internal void ApplyOverflow(string modFolder, string pluginName)
     {
-        var origin = PluginEndpoints.OriginOfExternalChange(mirror.LoadOrder, modFolder, pluginName);
+        var origin = PluginEndpoints.OriginOfExternalChange(index.LoadOrder, modFolder, pluginName);
         var key = new PluginKey(pluginName, origin);
         try
         {
-            foreach (var report in mirror.ValidateIndex(key))
+            foreach (var report in index.ValidateIndex(key))
             {
                 foreach (var failure in report.Failures)
                     logger.LogWarning("Validating {Plugin} after a watch overflow: {Failure}", pluginName, failure);
-                if (report.NeedsRebuild) notifications.Publish(new PluginChangedNotification(key, mirror.Sequence));
+                if (report.NeedsRebuild) notifications.Publish(new PluginChangedNotification(key, index.Sequence));
             }
         }
         catch (Exception ex)
