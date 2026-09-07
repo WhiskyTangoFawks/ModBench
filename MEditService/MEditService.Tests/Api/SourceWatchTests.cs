@@ -126,7 +126,7 @@ public sealed class SourceWatchTests : IDisposable
     [Fact]
     public async Task AWriteThroughTheWriteApi_LandsThroughTheWatcher_AndChangesNoRowASecondTime()
     {
-        var service = new RecordEditService(_mod.Mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
+        var service = TestEditService.Over(_mod.Mirror);
         var before = _mod.Mirror.Sequence;
 
         var edit = service.Set(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", System.Text.Json.JsonDocument.Parse("0.75").RootElement);
@@ -178,7 +178,7 @@ public sealed class SourceWatchTests : IDisposable
     [Fact]
     public async Task DiscardingAWorkingTreeChangeThroughGit_RestoresTheCommittedValue()
     {
-        var service = new RecordEditService(_mod.Mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
+        var service = TestEditService.Over(_mod.Mirror);
         var before = _mod.Mirror.Sequence;
         Assert.True(service.Set(
             _mod.Plugin, _mod.Npc.ToString(), "HeightMax", System.Text.Json.JsonDocument.Parse("0.75").RootElement).Applied);

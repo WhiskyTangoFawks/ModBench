@@ -53,7 +53,7 @@ public sealed class SourceWatchContainerTests : IDisposable
     [Fact]
     public async Task RevertingAQuestsSourceFile_ReachesTheRecordEditorThroughTheWatcher()
     {
-        var service = new RecordEditService(_fixture.Mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
+        var service = TestEditService.Over(_fixture.Mirror);
         var file = _fixture.SourceFileContaining(ContainerModFixture.QuestEditorId);
 
         var before = _fixture.Mirror.Sequence;
@@ -77,7 +77,7 @@ public sealed class SourceWatchContainerTests : IDisposable
     [Fact]
     public async Task RevertingAPlacedRefsOwningCellFile_ReachesTheRecordEditorThroughTheWatcher()
     {
-        var service = new RecordEditService(_fixture.Mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
+        var service = TestEditService.Over(_fixture.Mirror);
         var file = _fixture.SourceFileContaining(ContainerModFixture.EmbedCellEditorId);
 
         var before = _fixture.Mirror.Sequence;

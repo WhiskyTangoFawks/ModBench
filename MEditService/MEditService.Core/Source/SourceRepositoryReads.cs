@@ -1,6 +1,7 @@
 using System.Text;
 using System.Text.Json;
 using MEditService.Core.Records;
+using MEditService.Core.Schema;
 using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Core.Source;
@@ -60,6 +61,42 @@ public sealed partial class SourceRepository
             }
         }
         return null;
+    }
+
+    /// <summary>Every FormKey the plugin originates and its tree holds now — a record with a document
+    /// of its own and an embedded child alike, the header excluded, its key being synthetic. The set an
+    /// allocator must not hand out twice.</summary>
+    public IReadOnlySet<string> NativeFormKeysHeld(PluginKey plugin) => Native(ReadAll(plugin), plugin);
+
+    /// <summary>The same set as <paramref name="gitRef"/> committed it, so an ID a working-tree
+    /// deletion freed stays taken until the plugin is compiled.</summary>
+    public IReadOnlySet<string> NativeFormKeysHeldAt(PluginKey plugin, string gitRef) =>
+        Native(ReadAll(plugin, gitRef), plugin);
+
+    private static HashSet<string> Native(IReadOnlyList<SourceDocument> documents, PluginKey plugin)
+    {
+        var keys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var document in documents)
+        {
+            if (document.RecordType != PluginHeader.RecordType) AddIfNative(keys, document.FormKey, plugin);
+
+            // A child inlined in this document is a record of its own with a FormKey of its own, so its
+            // ID is as taken as any other.
+            foreach (var (formKey, _, inAnEmbedSlot) in FormKeysIn(Encoding.UTF8.GetBytes(document.Body)))
+            {
+                if (inAnEmbedSlot) AddIfNative(keys, formKey, plugin);
+            }
+        }
+        return keys;
+    }
+
+    // Native: the record's own FormKey names this plugin, so this plugin allocated it — an override of
+    // a master carries the master's key and takes none of this plugin's space.
+    private static void AddIfNative(HashSet<string> keys, string formKey, PluginKey plugin)
+    {
+        var colon = formKey.IndexOf(':', StringComparison.Ordinal);
+        if (colon > 0 && formKey.AsSpan(colon + 1).Equals(plugin.Name, StringComparison.OrdinalIgnoreCase))
+            keys.Add(formKey);
     }
 
     /// <summary>Writes the plugin's tree as <paramref name="gitRef"/> has it under

@@ -218,24 +218,25 @@ public sealed class EmbeddedChildEditTests : IDisposable
             StringComparison.Ordinal);
     }
 
-    // ---- SourceUnitNotFound, both branches ----
+    // ---- a record the tree does not hold, both branches ----
 
     [Fact]
-    public void EditingARecordWhoseSourceDirectoryIsGone_RefusesAsSourceUnitNotFound()
+    public void EditingARecordWhoseSourceDirectoryIsGone_RefusesAsRecordNotFound()
     {
         // Branch one: no document of its own, and no other record's document carries it. An interior
-        // cell removed from disk by something outside Modbench is exactly that.
+        // cell removed from disk by something outside Modbench is exactly that, and the tree is the
+        // only thing asked (ADR-0046 invariant 7).
         Directory.Delete(Path.GetDirectoryName(_fixture.SourceFileContaining(ContainerModFixture.EmbedCellEditorId))!, recursive: true);
 
         var result = EditService().Set(_fixture.Plugin, _fixture.EmbedCell.ToString(), "WaterHeight", Json("77.0"));
 
         Assert.False(result.Applied);
-        Assert.Equal(RecordEditRefusal.SourceUnitNotFound, result.Refusal);
+        Assert.Equal(RecordEditRefusal.RecordNotFound, result.Refusal);
         Assert.Contains(_fixture.EmbedCell.ToString(), result.Message, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void EditingAnEmbeddedChildAbsentFromItsParentsSourceText_RefusesAsSourceUnitNotFound()
+    public void EditingAnEmbeddedChildAbsentFromItsParentsSourceText_RefusesAsRecordNotFound()
     {
         // Branch two: the document that carried the child has been edited out from under it, so the
         // locator answers absent rather than naming a document whose own text lacks the child.
@@ -249,7 +250,7 @@ public sealed class EmbeddedChildEditTests : IDisposable
         var result = EditService().Set(_fixture.Plugin, _fixture.TemporaryRef.ToString(), "Scale", Json("5.0"));
 
         Assert.False(result.Applied);
-        Assert.Equal(RecordEditRefusal.SourceUnitNotFound, result.Refusal);
+        Assert.Equal(RecordEditRefusal.RecordNotFound, result.Refusal);
         // The message states what is observed and does not assert an external change as the cause —
         // it is a defect report as often as it is a stale read.
         Assert.DoesNotContain("changed outside Modbench", result.Message, StringComparison.Ordinal);
@@ -272,7 +273,7 @@ public sealed class EmbeddedChildEditTests : IDisposable
         var result = EditService().DeleteRecord(_fixture.Plugin, _fixture.TemporaryRef.ToString());
 
         Assert.False(result.Applied);
-        Assert.Equal(RecordEditRefusal.SourceUnitNotFound, result.Refusal);
+        Assert.Equal(RecordEditRefusal.RecordNotFound, result.Refusal);
         Assert.Contains("no record's document carries it", result.Message, StringComparison.Ordinal);
     }
 

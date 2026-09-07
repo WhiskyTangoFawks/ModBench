@@ -20,7 +20,7 @@ internal static class DocumentEdits
         Func<string, RecordLookupEntry?>? resolve = null, IReadOnlyList<PathHop>? prefix = null, string? ownerRecordType = null)
     {
         var recordType = ownerRecordType ?? schema.TableName;
-        return DocumentEdit.Apply(
+        return DocumentEdit.Patch(
             new DocumentEditRequest(
                 text, prefix ?? [], schema, envelope, GameRelease.Fallout4, resolve ?? (_ => null),
                 patched => schema.IsHeader && prefix is null or { Count: 0 }

@@ -81,6 +81,11 @@ try
     builder.Services.AddSingleton<ContainerChildQueryService>();
     builder.Services.AddSingleton<RecordTextCodec>();
     builder.Services.AddSingleton<TrackService>();
+    // A factory, not a singleton: one resolver per gesture over the load order as it stood when the
+    // gesture started, disposed with it, so no answer outlives the write it was asked for.
+    builder.Services.AddSingleton<Func<LoadOrder, FormLinkResolver>>(sp => held => new FormLinkResolver(
+        held, sp.GetRequiredService<IModImporter>(), sp.GetRequiredService<SchemaReflector>(),
+        sp.GetRequiredService<ILogger<FormLinkResolver>>()));
     builder.Services.AddSingleton<RecordEditService>();
     // The write path's other half — source text -> binary.
     builder.Services.AddSingleton<PluginCompileService>();

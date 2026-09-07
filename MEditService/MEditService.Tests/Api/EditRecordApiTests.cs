@@ -146,7 +146,7 @@ public sealed class EditRecordApiTests(LoadedApiFixture<TestPluginFixture> loade
     }
 
     [Fact]
-    public async Task EditRecord_WhenTheSourceFileCannotBeWritten_IsAShapedProblem_NotAnUnhandled500()
+    public async Task EditRecord_WhenTheSourceFileHasBeenReplacedByADirectory_IsAShapedProblem_NotAnUnhandled500()
     {
         using var fx = BuildOneModOnePlugin();
         await LoadOnly(fx);
@@ -171,8 +171,9 @@ public sealed class EditRecordApiTests(LoadedApiFixture<TestPluginFixture> loade
         var response = await PostEdit(formKey, "HeightMax", 0.75);
 
         // A shaped ProblemDetails, not an empty 500: a client with no body to read cannot tell
-        // that apart from the backend having died.
-        Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
+        // that apart from the backend having died. The tree is the only thing asked, so a document
+        // that cannot be read is a record it does not hold (ADR-0046 invariant 7).
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
         var problem = await response.Content.ReadFromJsonAsync<JsonElement>();
         Assert.False(string.IsNullOrWhiteSpace(problem.GetProperty("detail").GetString()));
     }
