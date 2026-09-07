@@ -121,8 +121,11 @@ public sealed partial class SourceRepository
         if (SourceDocuments.FormKeyDeclaredIn(text, relativePath, headerDocument, pluginFileName) is not { } formKey)
             return null;
 
-        var recordType = SourceRecordPath.RecordTypeOf(relativePath, _release) ?? StringMember(text, "MutagenObjectType");
-        return recordType == null ? null : new SourceDocument(formKey, recordType, StringMember(text, "EditorID"), text);
+        var recordType = SourceRecordPath.RecordTypeOf(relativePath, _release)
+                         ?? SourceDocuments.RootStringIn(text, "MutagenObjectType");
+        return recordType == null
+            ? null
+            : new SourceDocument(formKey, recordType, SourceDocuments.RootStringIn(text, "EditorID"), text);
     }
 
     private static bool CarriesFormKey(string text, string formKey)
@@ -146,23 +149,6 @@ public sealed partial class SourceRepository
         JsonValueKind.Array => element.EnumerateArray().Any(item => CarriesFormKey(item, formKey)),
         _ => false,
     };
-
-    private static string? StringMember(string text, string name)
-    {
-        try
-        {
-            using var document = JsonDocument.Parse(text);
-            return document.RootElement.ValueKind == JsonValueKind.Object
-                   && document.RootElement.TryGetProperty(name, out var member)
-                   && member.ValueKind == JsonValueKind.String
-                ? member.GetString()
-                : null;
-        }
-        catch (JsonException)
-        {
-            return null;
-        }
-    }
 
     // Never exclusive owners of the file: it may have been deleted, moved or locked since the listing.
     private static string? ReadOrNull(string path)
