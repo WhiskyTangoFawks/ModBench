@@ -16,8 +16,8 @@ export type PluginDiagnosisReport = Schemas['PluginDiagnosisReport'];
 
 export type MasterIssue = Schemas['MasterIssue'];
 
-/** `GET /plugins/track/status`, polled alongside the in-flight `POST /plugins/track`. Counts are
- *  of *plugins*, not records. */
+/** The `track-progress` notification's payload, subscribed alongside the in-flight
+ *  `POST /plugins/track`. Counts are of *plugins*, not records. */
 export type TrackPhase = Schemas['TrackPhase'];
 export type TrackStatus = Schemas['TrackProgress'];
 
@@ -26,8 +26,9 @@ export type TrackStatus = Schemas['TrackProgress'];
 export type CompileResult = Schemas['CompileResult'];
 export type CompileDiagnostic = Schemas['CompileDiagnostic'];
 
-/** `GET /plugins/external-changes/status`. `metaChanged` only informs the dialog's default button
- *  — trailers never act (ADR-0041); `oldVersion`/`newVersion` must be shown, not hidden. */
+/** One `external-change-pending` notification's shape, reused for the `UnansweredExternalChangeResponse`
+ *  wire type it mirrors field-for-field. `metaChanged` only informs the dialog's default button —
+ *  trailers never act (ADR-0041); `oldVersion`/`newVersion` must be shown, not hidden. */
 export type UnansweredExternalChange = Schemas['UnansweredExternalChangeResponse'];
 
 /** Rides `PUT /load-order`'s own response: either reason can newly arise only from a compile this

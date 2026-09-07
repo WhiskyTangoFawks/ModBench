@@ -67,7 +67,7 @@ async function dispatchOne(
   deps: ExternalChangeCoordinatorDeps, item: UnansweredExternalChange, answer: ExternalChangeDialogAnswer,
 ): Promise<void> {
   // 'defer' (Esc/dismiss) writes nothing and calls nothing: the backend's queue still holds the
-  // question, so the next poll tick asks it again.
+  // question, so the next detection (a live change, or the next load-time check) asks it again.
   if (answer === 'defer') return;
 
   if (answer === 'keep') {
