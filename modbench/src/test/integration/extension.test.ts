@@ -64,6 +64,8 @@ let mockPluginsOverride: MockPlugin[] | null = null;
 // Makes the next PUT /load-order fail the way a bad game directory would. ADR-0044's contract
 // disposes the previous scope first, so the mock must not set loadOrderHeld on this path.
 let putLoadOrderShouldFail = false;
+// Makes the next POST /index/rebuild fail the way another window holding the index would (423).
+let rebuildIndexShouldFail = false;
 // Makes the next GET /plugins fail the way a transient backend hiccup would mid-session —
 // distinct from the 503 "no load order held" answer, which is a normal state, not a failure.
 let getPluginsShouldFail = false;
@@ -93,6 +95,7 @@ function resetMockBackend(): void {
   requestLog.length = 0;
   mockPluginsOverride = null;
   putLoadOrderShouldFail = false;
+  rebuildIndexShouldFail = false;
   getPluginsShouldFail = false;
   loadOrderStatus = { ...NO_LOAD_ORDER_STATUS };
   holdPutLoadOrder = false;
@@ -125,6 +128,19 @@ function createMockBackend(): http.Server {
       if (!holdHealth) return answer();
       holdHealth = false; // one-shot — only the launch's first probe is parked
       releaseHealth = () => { releaseHealth = null; answer(); };
+      return;
+    }
+    if (method === 'POST' && url === '/index/rebuild') {
+      req.on('data', () => {});
+      req.on('end', () => {
+        if (rebuildIndexShouldFail) {
+          res.writeHead(423, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ detail: 'This instance\'s index is open in another Modbench window.' }));
+          return;
+        }
+        res.writeHead(204);
+        res.end();
+      });
       return;
     }
     if (method === 'PUT' && url === '/load-order') {
@@ -1391,19 +1407,31 @@ describe('Close mEdit clears the record filter\'s code lens too, not just the re
   });
 });
 
-// Refresh (the single Mod-Management refresh) must remain distinct and never
-// trigger a reload — a regression assertion, not new behavior; modbench.refresh's own body
-// never touches enterEditing/putLoadOrder.
-describe('Refresh never triggers a reconcile', () => {
-  before(() => resetMockBackend());
+// ADR-0046: Refresh rebuilds the Index (drops and reopens it empty) and then resends the load
+// order exactly as a cold load does, so the reconcile that follows re-indexes everything.
+describe('Refresh rebuilds the index, then resends the load order', () => {
+  beforeEach(() => resetMockBackend());
   after(() => resetMockBackend());
 
-  it('does not PUT /load-order', async () => {
+  it('POSTs /index/rebuild before it PUTs /load-order', async () => {
     await vscode.commands.executeCommand('modbench.refresh');
 
+    const rebuildAt = requestLog.indexOf('POST /index/rebuild');
+    const putAt = requestLog.indexOf('PUT /load-order');
+    assert.ok(rebuildAt >= 0, 'modbench.refresh must rebuild the index');
+    assert.ok(putAt >= 0, 'modbench.refresh must resend the load order after the rebuild');
+    assert.ok(rebuildAt < putAt, 'the rebuild must run before the load order is resent');
+  });
+
+  it('sends no load order when the rebuild is refused (the index held elsewhere)', async () => {
+    rebuildIndexShouldFail = true;
+
+    await vscode.commands.executeCommand('modbench.refresh');
+
+    assert.ok(requestLog.some((l) => l === 'POST /index/rebuild'), 'sanity: the rebuild must still be attempted');
     assert.ok(
       !requestLog.some((l) => l === 'PUT /load-order'),
-      'modbench.refresh must never reload the editing backend',
+      'a refused rebuild must not be followed by a load-order send',
     );
   });
 });

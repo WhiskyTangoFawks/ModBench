@@ -1,6 +1,7 @@
 using MEditService.Core.Queries;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
+using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -91,5 +92,63 @@ public class RecordIndexFactoryTests : IDisposable
 
         using var second = factory.Create(GameRelease.Fallout4);
         Assert.Null(second.IndexedContentHash(key));
+    }
+
+    // ADR-0046: the rebuild endpoint's whole job — every trace of what the old file held is gone,
+    // not merely re-validated, because a rebuild must fix a row no hash-validate can (a wrong but
+    // still self-consistent body).
+    [Fact]
+    public void Rebuild_DropsEveryRow_AndReopensTheFileEmpty()
+    {
+        var instance = Folder("rebuild-instance");
+        var factory = MakeFactory();
+        PluginKey key;
+        using (var first = factory.Create(GameRelease.Fallout4, instance)) key = IndexOnePlugin(first, instance, "NpcBeforeRebuild");
+
+        using var rebuilt = factory.Rebuild(GameRelease.Fallout4, instance, atLeastSequence: 0);
+
+        Assert.Null(rebuilt.IndexedContentHash(key));
+        Assert.Empty(rebuilt.At(RecordRef.Effective).GetDocuments(key));
+    }
+
+    // ADR-0046: the process may already have answered a caller with a sequence value the fresh
+    // file's own table (seeded at 0) does not know about; the rebuild must never let Sequence
+    // regress within one process.
+    [Fact]
+    public void Rebuild_SeedsTheSequence_AtLeastTheValueGiven()
+    {
+        var instance = Folder("rebuild-sequence-instance");
+        var factory = MakeFactory();
+        long priorSequence;
+        using (var first = factory.Create(GameRelease.Fallout4, instance))
+        {
+            IndexOnePlugin(first, instance, "NpcForSequence");
+            priorSequence = first.Sequence;
+        }
+        Assert.True(priorSequence > 0, "sanity: indexing must have advanced the sequence past 0");
+
+        using var rebuilt = factory.Rebuild(GameRelease.Fallout4, instance, priorSequence);
+
+        Assert.True(rebuilt.Sequence >= priorSequence,
+            $"rebuilt sequence {rebuilt.Sequence} regressed below the prior process value {priorSequence}");
+    }
+
+    // ADR-0001 point 6: the same refusal PutLoadOrder answers with, at the seam that actually
+    // guards it — deleting an open file succeeds on POSIX and destroys a live index.
+    [ForeignIndexHolderFact]
+    public void Rebuild_RefusesAndNeverDeletes_WhenAnotherProcessHoldsTheFile()
+    {
+        var instance = Folder("rebuild-held-instance");
+        var factory = MakeFactory();
+        using (var first = factory.Create(GameRelease.Fallout4, instance)) IndexOnePlugin(first, instance, "NpcBeforeHold");
+
+        var indexPath = IndexFile.For(instance);
+        var bytesBeforeHold = File.ReadAllBytes(indexPath);
+        using var otherWindow = ForeignIndexHolder.Hold(indexPath);
+
+        Assert.Throws<IndexHeldElsewhereException>(() => factory.Rebuild(GameRelease.Fallout4, instance, atLeastSequence: 0));
+
+        Assert.True(File.Exists(indexPath), "the file must still exist — a refusal must never delete it");
+        Assert.Equal(bytesBeforeHold, File.ReadAllBytes(indexPath));
     }
 }

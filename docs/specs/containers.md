@@ -99,15 +99,20 @@ being no pair to place.)
 | `navigation@2` | Launch… | standalone deployment only |
 | overflow | Deploy, Purge | standalone deployment only |
 
-**Refresh** is one command id (`modbench.refresh`) that re-reads every Mod-Management source
-together — modlist, plugin load order, downloads, active profile. A partial refresh is the
-state where the user believes they have resynced and one tree still quietly disagrees. It
-remains a safety net for flaky watch events, never the primary path: every one of those
-sources is watcher-driven.
+**Refresh** is one command id (`modbench.refresh`) that refreshes the whole of Modbench, not only
+Mod Management. It re-reads mods, plugins and downloads from disk as it always did, and it also
+drops the Index and rebuilds it from scratch: every plugin re-indexed from its bytes, every
+tracked mod re-ingested from its source, through the same path the first load takes (ADR-0046).
+A partial refresh is the state where the user believes they have resynced and one tree still
+quietly disagrees. Refresh remains a safety net for flaky watch events, never the primary path:
+every one of those sources is otherwise watcher-driven.
 
-There is no reload of the editing backend to offer (ADR-0044): the load order it holds is
-reconciled on every loadout change, so Refresh — a re-read of Mod Management's own sources — is
-the only re-read gesture, and the backend's picture follows it through the same watchers.
+The rebuild is one backend call that drops the index file and reopens it empty, refusing (423)
+exactly as a load-order send does when another window holds it; the extension then resends the
+load order exactly as it does at startup, so the rebuild is the ordinary cold load and needs no
+code of its own. The header shows the same reconcile progress it shows for a cold load. A failed
+rebuild (423, or the backend down) stops Refresh there — no load order is sent and no tree is
+re-read — and is reported the way any other failed gesture is.
 
 ### Launch…
 

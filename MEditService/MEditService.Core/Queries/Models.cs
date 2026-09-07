@@ -250,6 +250,9 @@ public record LoadOrderRequest(
 // making every copy non-participating.
 public record LoadOrderPlugin(string Name, string Path, string Origin, int? Slot, bool? Enabled, bool? Winning);
 
+// ADR-0046: the Refresh rebuild's own request — same instance-keying reasoning as LoadOrderRequest.
+public record RebuildIndexRequest(string InstanceRoot, string GameRelease = "Fallout4");
+
 // Origin (ADR-0036): additive alongside Plugin; without it two same-filename sources referencing
 // the same target are indistinguishable.
 public record ReferenceResult(string FormKey, string Plugin, string FieldPath, string RecordType, string? EditorId, string Origin);

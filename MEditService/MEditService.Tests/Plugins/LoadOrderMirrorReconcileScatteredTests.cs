@@ -114,6 +114,8 @@ public sealed class LoadOrderMirrorReconcileScatteredTests
     {
         public IRecordIndex Create(GameRelease gameRelease, string? instanceRoot = null) =>
             new ThrowingOnIndexRepository(inner.Create(gameRelease), poisonPlugin);
+        public IRecordIndex Rebuild(GameRelease gameRelease, string instanceRoot, long atLeastSequence) =>
+            inner.Rebuild(gameRelease, instanceRoot, atLeastSequence);
     }
 
     // Only Index is interesting here; DelegatingRecordIndex forwards the rest of the (wide)

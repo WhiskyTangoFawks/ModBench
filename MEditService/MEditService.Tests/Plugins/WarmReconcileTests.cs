@@ -94,6 +94,8 @@ public sealed class WarmReconcileTests
 
         public IRecordIndex Create(GameRelease gameRelease, string? instanceRoot = null) =>
             new ProgressWatchingIndex(inner.Create(gameRelease, instanceRoot), this, observed);
+        public IRecordIndex Rebuild(GameRelease gameRelease, string instanceRoot, long atLeastSequence) =>
+            inner.Rebuild(gameRelease, instanceRoot, atLeastSequence);
     }
 
     private sealed class ProgressWatchingIndex(IRecordIndex inner, ProgressWatchingFactory owner, List<int> observed)

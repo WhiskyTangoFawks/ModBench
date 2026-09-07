@@ -133,8 +133,8 @@ internal sealed class IndexStore
     }
 
     // Only reachable once the file has already been opened, so it can never race the second-writer
-    // case IsAnotherWriter guards.
-    private void RebuildFile()
+    // case IsAnotherWriter guards. Internal: ADR-0046's rebuild reuses this same delete-and-reopen.
+    internal void RebuildFile()
     {
         Connection.Dispose();
         File.Delete(_databasePath!);
@@ -256,5 +256,16 @@ internal sealed class IndexStore
         using var cmd = Connection.CreateCommand();
         cmd.CommandText = $"SELECT value FROM {SequenceRelation}";
         return Convert.ToInt64(cmd.ExecuteScalar(), CultureInfo.InvariantCulture);
+    }
+
+    // ADR-0046: raises the sequence to at least atLeast, never lowers it — Sequence must never
+    // regress within one process across a rebuild.
+    internal void SeedSequence(long atLeast)
+    {
+        using var cmd = Connection.CreateCommand();
+        cmd.CommandText = $"UPDATE {SequenceRelation} SET value = $1 WHERE value < $2";
+        cmd.Parameters.Add(new DuckDBParameter { Value = atLeast });
+        cmd.Parameters.Add(new DuckDBParameter { Value = atLeast });
+        cmd.ExecuteNonQuery();
     }
 }

@@ -44,6 +44,7 @@ function makeClient({
   renumberRecordOk = true,
   copyAsOverrideOk = true,
   copyAsNewRecordOk = true,
+  rebuildIndexOk = true,
 }: {
   plugins?: PluginMetadata[];
   createPluginOk?: boolean;
@@ -52,6 +53,7 @@ function makeClient({
   renumberRecordOk?: boolean;
   copyAsOverrideOk?: boolean;
   copyAsNewRecordOk?: boolean;
+  rebuildIndexOk?: boolean;
 } = {}) {
   return {
     GET: vi.fn().mockResolvedValue({ data: plugins, response: { ok: true } }),
@@ -61,6 +63,11 @@ function makeClient({
           createPluginOk
             ? { response: { ok: true, status: 200 }, data: { name: 'test.esp' } }
             : drainedError(400, 'Bad Request'),
+        );
+      }
+      if (path === '/index/rebuild') {
+        return Promise.resolve(
+          rebuildIndexOk ? { response: { ok: true, status: 204 } } : drainedError(423, 'Locked'),
         );
       }
       // Create/delete/renumber — the wire shapes RecordEndpoints/PluginEndpoints actually
@@ -188,6 +195,41 @@ describe('EditingController.createPlugin', () => {
     expect(deps.showError).toHaveBeenCalledOnce();
     expect(result).toBeUndefined();
     expect(deps.refreshTree).not.toHaveBeenCalled();
+  });
+});
+
+// ── rebuildIndex ──────────────────────────────────────────────────────────────
+
+describe('EditingController.rebuildIndex', () => {
+  beforeEach(() => vi.resetAllMocks());
+
+  it('POSTs to /index/rebuild with the instance and game release, and resolves true', async () => {
+    const deps = makeDeps();
+    const ctrl = new EditingController(deps);
+    const onFailure = vi.fn();
+
+    const result = await ctrl.rebuildIndex('/mo2/instance', onFailure);
+
+    expect(deps.client.POST).toHaveBeenCalledWith(
+      '/index/rebuild',
+      expect.objectContaining({ body: { instanceRoot: '/mo2/instance', gameRelease: 'Fallout4' } }),
+    );
+    expect(result).toBe(true);
+    expect(onFailure).not.toHaveBeenCalled();
+  });
+
+  // Not EditingController's own showError (a bare toast): the caller's report, e.g. a held-index
+  // 423 routed through makeReporter (modbench/CLAUDE.md).
+  it('reports through the caller-supplied onFailure, not showError, and resolves false', async () => {
+    const deps = makeDeps({ client: makeClient({ rebuildIndexOk: false }) });
+    const ctrl = new EditingController(deps);
+    const onFailure = vi.fn();
+
+    const result = await ctrl.rebuildIndex('/mo2/instance', onFailure);
+
+    expect(result).toBe(false);
+    expect(onFailure).toHaveBeenCalledOnce();
+    expect(deps.showError).not.toHaveBeenCalled();
   });
 });
 

@@ -75,6 +75,17 @@ public static class LoadOrderEndpoints
             .Produces<SequenceAwaitResponse>()
             .ProducesProblem(400);
 
+        // ADR-0046: Refresh's own first step — the PUT /load-order that follows is then an
+        // ordinary cold load. Refuses exactly as PUT /load-order does when another window holds
+        // the file.
+        app.MapPost("/index/rebuild", PostRebuildIndex)
+            .WithName("PostRebuildIndex")
+            .WithTags(Tag)
+            .Produces(204)
+            .ProducesProblem(400)
+            .ProducesProblem(423)
+            .ProducesProblem(500);
+
         return app;
     }
 
@@ -160,6 +171,38 @@ public static class LoadOrderEndpoints
         catch (Exception ex)
         {
             logger.LogError(ex, "Failed to reconcile the load order for {InstanceRoot}", req.InstanceRoot);
+            return Results.Problem(ex.Message, statusCode: 500);
+        }
+    }
+
+    // Captured before Close(): once the mirror drops its index, Sequence reads 0, and the rebuilt
+    // file must not answer a caller with a value lower than this process already gave out.
+    internal static IResult PostRebuildIndex(RebuildIndexRequest req, ILoadOrderMirror mirror, IRecordIndexFactory indexFactory, ILoggerFactory loggerFactory)
+    {
+        var logger = loggerFactory.CreateLogger(nameof(LoadOrderEndpoints));
+        if (logger.IsEnabled(LogLevel.Information))
+        {
+            logger.LogInformation("Received PostRebuildIndex for {InstanceRoot}", req.InstanceRoot);
+        }
+        if (!Directory.Exists(req.InstanceRoot))
+            return Results.Problem($"Instance root not found: {req.InstanceRoot}", statusCode: 400);
+        if (ParseGameRelease(req.GameRelease, out var gameRelease) is { } releaseErr) return releaseErr;
+
+        var previousSequence = mirror.Sequence;
+        mirror.Close();
+
+        try
+        {
+            using var rebuilt = indexFactory.Rebuild(gameRelease, req.InstanceRoot, previousSequence);
+            return Results.NoContent();
+        }
+        catch (IndexHeldElsewhereException ex)
+        {
+            return IndexHeldElsewhere(logger, ex);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed to rebuild the index for {InstanceRoot}", req.InstanceRoot);
             return Results.Problem(ex.Message, statusCode: 500);
         }
     }
