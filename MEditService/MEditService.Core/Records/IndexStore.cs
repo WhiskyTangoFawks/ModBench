@@ -252,6 +252,7 @@ internal sealed class IndexStore
     private readonly Lock _projectionLock = new();
     private int _projectionDepth;
     private bool _bumpDeferred;
+    private readonly List<Action> _announcements = [];
 
     /// <summary>The scope handed out with no store to advance — a projector holding no index still
     /// answers its callers.</summary>
@@ -279,17 +280,39 @@ internal sealed class IndexStore
         DuckDbSql.ExecuteFor(Connection, $"UPDATE {SequenceRelation} SET value = value + 1");
     }
 
+    /// <summary>Runs <paramref name="publish"/> once the projection has landed: immediately outside
+    /// a scope, after the advance inside one. A subscriber is never told about rows at a sequence
+    /// the store has not reached.</summary>
+    internal void Announce(Action publish)
+    {
+        lock (_projectionLock)
+        {
+            if (_projectionDepth > 0)
+            {
+                _announcements.Add(publish);
+                return;
+            }
+        }
+        publish();
+    }
+
     // A transaction that rolled back inside the scope still leaves the advance owed, so this can
     // over-signal — a re-read finding nothing changed — but never under-signal.
     private void EndProjection()
     {
+        List<Action> announcements;
         lock (_projectionLock)
         {
             if (--_projectionDepth > 0) return;
-            if (!_bumpDeferred) return;
-            _bumpDeferred = false;
+            announcements = [.. _announcements];
+            _announcements.Clear();
+            if (_bumpDeferred)
+            {
+                _bumpDeferred = false;
+                DuckDbSql.ExecuteFor(Connection, $"UPDATE {SequenceRelation} SET value = value + 1");
+            }
         }
-        DuckDbSql.ExecuteFor(Connection, $"UPDATE {SequenceRelation} SET value = value + 1");
+        foreach (var publish in announcements) publish();
     }
 
     private sealed class ProjectionScope(IndexStore? store) : IDisposable
@@ -299,16 +322,6 @@ internal sealed class IndexStore
         // Idempotent: a second Dispose would otherwise decrement the depth twice and let the next
         // bump escape its enclosing scope.
         public void Dispose() => Interlocked.Exchange(ref _store, null)?.EndProjection();
-    }
-
-    /// <summary>The number this projection lands on: <see cref="CurrentSequence"/> plus the advance
-    /// an open scope still owes. A notification names this, so a subscriber awaits the value its
-    /// rows become visible at.</summary>
-    internal long ProjectedSequence()
-    {
-        bool owed;
-        lock (_projectionLock) owed = _bumpDeferred;
-        return CurrentSequence() + (owed ? 1 : 0);
     }
 
     public long CurrentSequence()

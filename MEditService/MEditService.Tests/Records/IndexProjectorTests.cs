@@ -1,9 +1,11 @@
 using System.Globalization;
+using MEditService.Core.Notifications;
 using MEditService.Core.Plugins;
 using MEditService.Core.Queries;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
 using MEditService.Tests.Edits;
+using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -192,6 +194,27 @@ public sealed class IndexProjectorTests
         }
 
         Assert.Equal(before + 1, projector.Sequence);
+    }
+
+    [Fact]
+    public void ARowsChangedNotification_WaitsForItsProjectionToLand_AndNamesTheSequenceItLandedOn()
+    {
+        var notifications = new InMemoryNotificationPublisher();
+        using var fixture = TrackedModFixture.Tracked(notifications);
+        var mirror = (ILoadOrderMirror)fixture.Mirror;
+        var text = File.ReadAllText(fixture.NpcSourceFile);
+        File.WriteAllText(fixture.NpcSourceFile, text.Replace(
+            $"\"{TrackedModFixture.NpcEditorId}\"", "\"RenamedByHand\"", StringComparison.Ordinal));
+
+        using (mirror.BeginProjection())
+        {
+            mirror.RefreshKeys(fixture.Plugin, [fixture.Npc.ToString()]);
+            Assert.Empty(notifications.Notifications.OfType<RowsChangedNotification>());
+        }
+
+        var landed = notifications.Notifications.OfType<RowsChangedNotification>().Single();
+        Assert.Contains(fixture.Npc.ToString(), landed.Keys);
+        Assert.Equal(mirror.Sequence, landed.Sequence);
     }
 
     [Fact]

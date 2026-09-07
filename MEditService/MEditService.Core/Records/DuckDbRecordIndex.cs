@@ -323,7 +323,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         // ADR-0046: after the commit, so a subscriber re-reading on receipt sees the rows this
         // names — embedded children included, since a record panel open on a placed ref inside a
         // refreshed cell has no other signal.
-        _notifications?.Publish(new RowsChangedNotification(key, touched, _indexStore.ProjectedSequence()));
+        _indexStore.Announce(() => _notifications?.Publish(new RowsChangedNotification(key, touched, Sequence)));
     }
 
     /// <summary>See <see cref="IRecordIndex.SetCommittedBaseline"/>.</summary>
@@ -464,7 +464,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         }
 
         // ADR-0046: too many rows to name, exactly as the plugin watcher's own re-index reports it.
-        _notifications?.Publish(new PluginChangedNotification(key, _indexStore.ProjectedSequence()));
+        _indexStore.Announce(() => _notifications?.Publish(new PluginChangedNotification(key, Sequence)));
     }
 
     // The three facts the copy's registration row carries (ADR-0044), read back for a re-ingest that
@@ -532,7 +532,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
     // Validate's own publish. MarkWorkingTreeOnly does not publish for itself: ingest calls it for
     // every reconciled record of a whole plugin, where a notification per record would be noise.
     internal void PublishRowsChanged(PluginKey key, IReadOnlyList<string> formKeys) =>
-        _notifications?.Publish(new RowsChangedNotification(key, formKeys, _indexStore.ProjectedSequence()));
+        _indexStore.Announce(() => _notifications?.Publish(new RowsChangedNotification(key, formKeys, Sequence)));
 
     // ADR-0001's load-time check, asked of one copy: the stored hash against the bytes on disk. A
     // binary has no smaller unit, so a mismatch is a rebuild the caller owns.

@@ -12,11 +12,9 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Core.Records;
 
-/// <summary>ADR-0046 invariant 10: the Index's other half. Everything that turns a system of record
-/// into rows lives here — ingest from a binary or a source tree, the registration sweep that makes
-/// the store's rows equal the load order, and the re-projections the watchers ask for. It decides
-/// nothing: which copies exist, which participate and which wins are the load order value's
-/// answers, and where a field goes is the schema's.</summary>
+/// <summary>ADR-0046 invariant 10: the Index's other half. Ingest, the registration sweep and the
+/// watchers' re-projections, deciding nothing — the load order value answers who participates and
+/// wins, the schema where a field goes.</summary>
 public sealed class IndexProjector : IDisposable
 {
     private readonly Lock _lock = new();
@@ -147,9 +145,8 @@ public sealed class IndexProjector : IDisposable
 
     public long Sequence { get { lock (_lock) return _index?.Sequence ?? 0; } }
 
-    /// <summary>ADR-0046: everything projected inside the scope advances the sequence once, when the
-    /// outermost scope closes. Nested scopes count, so a whole-plugin projection nested inside a
-    /// settled batch still leaves the batch as one advance. A no-op with no store held.</summary>
+    /// <summary>ADR-0046: everything projected inside the scope advances the sequence once, when
+    /// the outermost of any nested scopes closes. A no-op with no store held.</summary>
     public IDisposable BeginProjection()
     {
         lock (_lock) return _index?.BeginProjection() ?? IndexStore.NoProjectionScope;
@@ -172,9 +169,8 @@ public sealed class IndexProjector : IDisposable
         }
     }
 
-    /// <summary>ADR-0046 invariant 11: the load order is the state, and the store's registration rows
-    /// are its projection. Register what is new, unregister what has gone, re-register what moved,
-    /// index what the store has never held, then one winner sweep.</summary>
+    /// <summary>ADR-0046 invariant 11: the store's registration rows are made equal to the
+    /// snapshot's copies, copies the store has never held are indexed, then one winner sweep.</summary>
     public void Reconcile(LoadOrder snapshot)
     {
         if (_logger.IsEnabled(LogLevel.Debug))
