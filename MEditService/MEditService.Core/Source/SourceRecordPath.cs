@@ -13,7 +13,7 @@ internal sealed record SourceRecordIdentity(string PluginFileName, string Record
 
 /// <summary>The file layout for flat (single-file) records — the whole-mod door's own file-per-record
 /// convention, taken over wholesale (ADR-0041 amendment). Cell and Worldspace get a directory
-/// instead; <see cref="SourceUnitResolver"/> owns those.</summary>
+/// instead; <see cref="SourceRepository.Locate"/> owns those.</summary>
 internal static class SourceRecordPath
 {
     /// <summary>Plain, not dot-prefixed: the plugin's source is first-class, not hidden metadata. The
@@ -25,8 +25,8 @@ internal static class SourceRecordPath
 
     // The whole-mod door's own header/group-level file names — never a flat record's file, so TryParse
     // must reject them rather than mistake one for a record.
-    private const string RecordDataFileName = "RecordData.json";
-    private const string GroupRecordDataFileName = "GroupRecordData.json";
+    private const string RecordDataFileName = SourceUnitResolver.RecordDataFileName;
+    private const string GroupRecordDataFileName = SourceUnitResolver.GroupRecordDataFileName;
 
     /// <summary><c>source/&lt;pluginFileName&gt;</c>, one root rather than a per-plugin sibling tree: a
     /// per-plugin suffix guard orphans the tree when its plugin is renamed or deleted outside Modbench.</summary>
@@ -43,7 +43,7 @@ internal static class SourceRecordPath
             ?? throw new NotSupportedException(
                 $"'{recordType}' has no flat source path under the source layout — it is a " +
                 "directory-per-record container type (Cell/Worldspace), or has no top-level " +
-                "group at all, and SourceUnitResolver owns it, not this helper.");
+                "group at all, and the repository's own locator owns it, not this helper.");
 
         var fileName = string.IsNullOrEmpty(editorId)
             ? $"{FilesafeFormKey(formKey)}{JsonSuffix}"
@@ -53,6 +53,23 @@ internal static class SourceRecordPath
     }
 
     private static string FilesafeFormKey(FormKey formKey) => $"{formKey.ID:X6}_{formKey.ModKey.FileName}";
+
+    /// <summary>The record type of the document at <paramref name="relativePath"/>. Null means the
+    /// path does not decide it, so the document names its own type.</summary>
+    internal static string? RecordTypeOf(string relativePath, GameRelease gameRelease)
+    {
+        if (TryParse(relativePath, gameRelease, out var identity)) return identity.RecordType;
+
+        // source / <plugin> / <group folder> / [block levels] / <record directory> / RecordData.json
+        var segments = relativePath.Split(Path.DirectorySeparatorChar, StringSplitOptions.RemoveEmptyEntries);
+        const int groupFolderSegment = 2;
+        const int shallowestContainer = 5;
+        return segments.Length >= shallowestContainer
+               && segments[^1].Equals(RecordDataFileName, StringComparison.Ordinal)
+            ? RecordTypeDispatch.For(gameRelease)
+                .DirectoryPerRecordTypeIn(segments[groupFolderSegment], nested: segments.Length > shallowestContainer)
+            : null;
+    }
 
     /// <summary>Fails closed on anything not shaped like a flat record's path or the header's root
     /// <c>RecordData.json</c> (one segment shallower), so a tree walk never misreads a container path

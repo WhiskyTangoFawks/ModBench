@@ -1,3 +1,5 @@
+using MEditService.Core.Records;
+
 namespace MEditService.Core.Source;
 
 /// <summary>Why a rollback left a path as it stood. Every value is a preserved outcome except
@@ -24,11 +26,63 @@ internal enum UnrestoredReason
 internal sealed record UnrestoredPath(
     string RelativePath, string FullPath, UnrestoredReason Reason, string? Error = null);
 
-/// <summary>Pre-images of the files one action writes, so a failure part-way puts the working trees
-/// back (ADR-0045). Conditional by design: a path something else has written since is preserved
-/// and reported, never reverted.</summary>
-internal sealed class SourceWriteTransaction
+/// <summary>A batch of puts and removes across one or more repositories, applied all or restored all
+/// (ADR-0045). Conditional by design: a path something else has written since is preserved and
+/// reported, never reverted.</summary>
+internal sealed class SourceTransaction
 {
+    /// <summary>Creates or replaces one repository's document, holding its bytes so a later failure in
+    /// this batch puts the file back. A record no document can hold throws before anything is
+    /// recorded.</summary>
+    internal void Put(SourceRepository repository, PluginKey plugin, SourceDocument document)
+    {
+        var identity = new RecordIdentity(document.FormKey, document.RecordType, document.EditorId);
+        if (repository.Locate(plugin, identity) is not { } unit)
+        {
+            // Nothing to record: the repository refuses without touching the tree.
+            repository.Put(plugin, document);
+            return;
+        }
+
+        var before = Snapshot(unit.FullPath);
+        try
+        {
+            repository.Put(plugin, document);
+        }
+        finally
+        {
+            _log.Add(new FileState(repository.ModFolder, unit.FullPath, before, Snapshot(unit.FullPath)));
+        }
+    }
+
+    /// <summary>Takes one repository's record out of the tree, holding the document's bytes so the
+    /// rollback puts it back. The pre-image is that one document, so a shape whose removal takes more
+    /// than it is refused.</summary>
+    internal SourceRemoval Remove(SourceRepository repository, PluginKey plugin, RecordIdentity identity)
+    {
+        if (repository.Locate(plugin, identity) is not { } unit) return SourceRemoval.NoDocumentHoldsIt;
+
+        // Refused before the tree is touched: a container's removal takes its whole directory, block
+        // subtree and all, and one document's bytes cannot put that back. A batch that cannot restore
+        // an act must not perform it (ADR-0045).
+        if (unit.IsDirectoryPerRecord) throw NotRestorable(unit, identity);
+
+        var before = Snapshot(unit.FullPath);
+        try
+        {
+            return repository.Remove(plugin, identity);
+        }
+        finally
+        {
+            _log.Add(new FileState(repository.ModFolder, unit.FullPath, before, Snapshot(unit.FullPath)));
+        }
+    }
+
+    private static NotSupportedException NotRestorable(SourceUnit unit, RecordIdentity identity) =>
+        new($"{identity.FormKey} has a directory of its own at {unit.RelativePath}, and removing it takes " +
+            "every document under that directory. A batch holds one document's bytes per act, so it " +
+            "cannot put that back — remove it outside the batch.");
+
     // Recorded in execution order and undone in reverse, so a rename is put back before the create that
     // provoked it.
     private abstract record Operation(string ModFolder);

@@ -60,8 +60,8 @@ internal sealed class RecordTypeDispatch
         _byName.TryGetValue(NormalizeOverlayName(recordType), out var type) ? type : null;
 
     /// <summary>The group-property name ("Npcs") the generator writes verbatim as a flat record's
-    /// directory. Null when the type has no top-level group, is directory-per-record, or does not
-    /// resolve — all meaning "ask SourceUnitResolver instead".</summary>
+    /// directory. Null for a type with no top-level group, a directory-per-record one, or one that
+    /// does not resolve — ask the repository.</summary>
     internal string? FolderNameFor(string recordType) =>
         ConcreteFor(recordType) is { } concrete && _folderByType.TryGetValue(concrete, out var folder)
             ? folder

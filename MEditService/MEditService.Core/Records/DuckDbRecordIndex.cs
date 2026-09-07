@@ -378,12 +378,15 @@ public sealed class DuckDbRecordIndex : IRecordIndex
             return;
         }
 
+        // One repository for the batch, so its listing memo and embedded-owner map are built once
+        // rather than once per key.
+        var repository = SourceRepository.Over(modFolder, _release);
         foreach (var formKey in formKeys)
-            RefreshOneKey(key, modFolder, formKey);
+            RefreshOneKey(repository, key, modFolder, formKey);
     }
 
     // Re-derives one key's rows at both refs. Called again with the same bytes, nothing below fires.
-    private void RefreshOneKey(PluginKey key, string modFolder, string formKey)
+    private void RefreshOneKey(SourceRepository repository, PluginKey key, string modFolder, string formKey)
     {
         var effective = At(RecordRef.Effective).GetDocument(formKey, key);
         var head = At(RecordRef.Head).GetDocument(formKey, key);
@@ -392,8 +395,8 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         var recordType = effective?.RecordType ?? head?.RecordType;
         if (recordType == null) return;
 
-        var unit = SourceUnitResolver.Resolve(
-            key, modFolder, formKey, recordType, effective?.EditorId ?? head?.EditorId, _release);
+        var unit = repository.Locate(
+            key, new RecordIdentity(formKey, recordType, effective?.EditorId ?? head?.EditorId));
 
         string? workingTreeText = null;
         if (unit is { } resolved)

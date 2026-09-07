@@ -6,8 +6,8 @@ using Mutagen.Bethesda.Plugins;
 namespace MEditService.Core.Source;
 
 /// <summary>Which record a FormKey names in one plugin's working tree, for a caller holding no
-/// identity. <see cref="SourceUnitResolver"/> runs the other way and cannot be asked without the
-/// record type it looks for.</summary>
+/// identity. <see cref="SourceRepository.Locate"/> runs the other way and cannot be asked without
+/// the record type it looks for.</summary>
 internal static class SourceIdentities
 {
     /// <summary>What the tree holds at <paramref name="formKey"/>, or null when no document carries
@@ -40,7 +40,7 @@ internal static class SourceIdentities
             // file whose name carries it is the record.
             var document = Directory.Exists(entry) ? Path.Combine(entry, SourceUnitResolver.RecordDataFileName) : entry;
             if (!File.Exists(document)) continue;
-            if (EmbeddedOwners.RecordTypeOf(Path.GetRelativePath(modFolder, document), release) is not { } recordType)
+            if (SourceRecordPath.RecordTypeOf(Path.GetRelativePath(modFolder, document), release) is not { } recordType)
                 continue;
 
             // The name is the index; the document is the answer. A name the document contradicts is
