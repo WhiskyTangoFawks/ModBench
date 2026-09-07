@@ -1,0 +1,139 @@
+using System.Text;
+using MEditService.Core.Records;
+using MEditService.Core.Source;
+using Mutagen.Bethesda;
+
+namespace MEditService.Tests.Source;
+
+/// <summary>Whole-plugin reads over a real tracked tree, with no index in the fixture: the working
+/// tree's own documents, and the same question answered at a named ref through git.</summary>
+public sealed class SourceRepositoryReadAllTests : IDisposable
+{
+    private const string PluginName = "Fixture.esp";
+    private const string NpcFormKey = "000800:Fixture.esp";
+    private const string NpcEditorId = "FixtureNpc";
+    private const string NpcBody = "{\n  \"FormKey\": \"000800:Fixture.esp\",\n  \"EditorID\": \"FixtureNpc\"\n}";
+
+    private const string EditedBody = "{\n  \"FormKey\": \"000800:Fixture.esp\",\n  \"EditorID\": \"EditedSinceCompile\"\n}";
+    private const string LaterBody = "{\n  \"FormKey\": \"000900:Fixture.esp\",\n  \"EditorID\": \"Later\"\n}";
+
+    private static readonly PluginKey Plugin = new(PluginName, "FixtureMod");
+    private static readonly GameRelease Release = GameRelease.Fallout4;
+
+    private readonly string _modFolder = Directory.CreateTempSubdirectory("medit-readall-").FullName;
+
+    public void Dispose()
+    {
+        try { Directory.Delete(_modFolder, recursive: true); }
+        catch (IOException) { /* scratch directory, best effort */ }
+    }
+
+    // Track parks the last-compile ref for every plugin the trailers name, so the ref this reads at is
+    // the one Save & Compile parks.
+    private SourceRepository Tracked()
+    {
+        SourceRepository.Track(
+            _modFolder, SourcePreset.Edits,
+            [new PristineFile(
+                SourceRecordPath.For(PluginName, "npc_", NpcFormKey, NpcEditorId, Release),
+                Encoding.UTF8.GetBytes(NpcBody))],
+            new TrackProvenance(null, null, new Dictionary<string, string> { [PluginName] = "abc" }));
+        return SourceRepository.Open(_modFolder, Release)!;
+    }
+
+    private static (string, string, string?, string) Tuple(SourceDocument document) =>
+        (document.FormKey, document.RecordType, document.EditorId, document.Body);
+
+    [Fact]
+    public void ReadAll_AtTheWorkingTree_IsEveryDocumentPut()
+    {
+        var repository = Tracked();
+        var weapon = new SourceDocument("000900:Fixture.esp", "weap", "FixtureWeapon",
+            "{\n  \"FormKey\": \"000900:Fixture.esp\",\n  \"EditorID\": \"FixtureWeapon\"\n}");
+        var race = new SourceDocument("000A00:Fixture.esp", "race", null,
+            "{\n  \"FormKey\": \"000A00:Fixture.esp\"\n}");
+        repository.Put(Plugin, weapon);
+        repository.Put(Plugin, race);
+
+        var read = repository.ReadAll(Plugin);
+
+        Assert.Equal(
+            [(NpcFormKey, "npc_", NpcEditorId, NpcBody), Tuple(weapon), Tuple(race)],
+            read.Select(Tuple).OrderBy(t => t.Item1, StringComparer.Ordinal).ToList());
+    }
+
+    [Fact]
+    public void ReadAll_AtTheWorkingTree_DropsARecordRemoved()
+    {
+        var repository = Tracked();
+
+        repository.Remove(Plugin, new RecordIdentity(NpcFormKey, "npc_", NpcEditorId));
+
+        Assert.Empty(repository.ReadAll(Plugin));
+    }
+
+    [Fact]
+    public void ReadAll_AtTheParkedCompileRef_IsTheCommittedTextNotTheWorkingTreesEdit()
+    {
+        var repository = Tracked();
+        repository.Put(Plugin, new SourceDocument(NpcFormKey, "npc_", NpcEditorId, EditedBody));
+
+        var parked = repository.ReadAll(Plugin, SourceRepository.LastCompileRef(PluginName));
+
+        Assert.Equal([NpcBody], parked.Select(d => d.Body).ToList());
+        Assert.Equal([EditedBody], repository.ReadAll(Plugin).Select(d => d.Body).ToList());
+    }
+
+    [Fact]
+    public void ReadAll_AtTheParkedCompileRef_DoesNotSeeARecordCreatedSince()
+    {
+        var repository = Tracked();
+        repository.Put(Plugin, new SourceDocument("000900:Fixture.esp", "weap", "Later", LaterBody));
+
+        var parked = repository.ReadAll(Plugin, SourceRepository.LastCompileRef(PluginName));
+
+        Assert.Equal([NpcFormKey], parked.Select(d => d.FormKey).ToList());
+    }
+
+    [Fact]
+    public void ReadAll_AtARefThatHoldsNothingForThisPlugin_IsEmpty()
+    {
+        Assert.Empty(Tracked().ReadAll(new PluginKey("Other.esp", "FixtureMod"), "refs/heads/main"));
+    }
+
+    [Fact]
+    public void GetAt_TheParkedCompileRef_IsTheCommittedTextNotTheWorkingTreesEdit()
+    {
+        var repository = Tracked();
+        repository.Put(Plugin, new SourceDocument(NpcFormKey, "npc_", NpcEditorId, EditedBody));
+
+        var parked = repository.GetAt(
+            Plugin, new RecordIdentity(NpcFormKey, "npc_", NpcEditorId), SourceRepository.LastCompileRef(PluginName));
+
+        Assert.Equal(NpcBody, parked?.Body);
+    }
+
+    [Fact]
+    public void GetAt_ARecordTheRefNeverHeld_IsNull()
+    {
+        var repository = Tracked();
+        repository.Put(Plugin, new SourceDocument("000900:Fixture.esp", "weap", "Later", LaterBody));
+
+        Assert.Null(repository.GetAt(
+            Plugin, new RecordIdentity("000900:Fixture.esp", "weap", "Later"),
+            SourceRepository.LastCompileRef(PluginName)));
+    }
+
+    [Fact]
+    public void ReadAll_AtTheWorkingTree_SkipsAFileUnderTheTreeThatDeclaresNoRecord()
+    {
+        var repository = Tracked();
+        // Group metadata and a stray hand-written file both land here: what makes a file a document
+        // is the FormKey it declares, not where it sits.
+        var npcsFolder = Path.Combine(SourceDocuments.RootIn(_modFolder, PluginName), "Npcs");
+        File.WriteAllText(Path.Combine(npcsFolder, "GroupRecordData.json"), "{\n  \"Type\": \"npc_\"\n}");
+        File.WriteAllText(Path.Combine(npcsFolder, "notes.json"), "{\n  \"Note\": \"scratch\"\n}");
+
+        Assert.Equal([NpcFormKey], repository.ReadAll(Plugin).Select(d => d.FormKey).ToList());
+    }
+}

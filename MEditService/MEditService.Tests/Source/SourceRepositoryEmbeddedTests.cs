@@ -201,9 +201,47 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
         File.WriteAllBytes(FullPath(InteriorCellPath), Serialize(_interiorCell));
         File.WriteAllBytes(FullPath(ExteriorCellPath), Serialize(_exteriorCell));
 
-        Assert.NotNull(repository.Get(Plugin, Identity(_temporaryRef, "refr")));
-        Assert.Contains("TempRef", File.ReadAllText(FullPath(ExteriorCellPath)), StringComparison.Ordinal);
-        Assert.DoesNotContain("TempRef", File.ReadAllText(FullPath(InteriorCellPath)), StringComparison.Ordinal);
+        var found = repository.Get(Plugin, Identity(_temporaryRef, "refr"));
+        Assert.Equal(_temporaryRef.FormKey.ToString(), RootFormKeyOf(found!.Body));
+        Assert.Equal(
+            FullPath(ExteriorCellPath),
+            repository.Locate(Plugin, Identity(_temporaryRef, "refr"))?.FullPath);
+    }
+
+    [Fact]
+    public void Locate_AfterTheMapHasRebuiltOnce_AnswersAbsentForAChildTheListedOwnerHasLost()
+    {
+        var repository = Repository;
+        // A miss spends this repository's one rebuild, so the move below cannot buy a second.
+        Assert.Null(repository.Get(Plugin, new RecordIdentity("00FFFF:Embedded.esp", "refr", "Absent")));
+
+        _interiorCell.Temporary.Remove(_temporaryRef);
+        _exteriorCell.Temporary.Add(_temporaryRef);
+        File.WriteAllBytes(FullPath(InteriorCellPath), Serialize(_interiorCell));
+        File.WriteAllBytes(FullPath(ExteriorCellPath), Serialize(_exteriorCell));
+
+        // Absent, never the interior cell the map still lists: an answer the tree does not bear out
+        // would send a write into a document that no longer carries the record.
+        Assert.Null(repository.Locate(Plugin, Identity(_temporaryRef, "refr")));
+    }
+
+    [Fact]
+    public void Locate_ForAChildInsideADocumentOfAPathAmbiguousGroup_FindsThatDocument()
+    {
+        // "Globals" maps to GlobalBool/Float/Int/Short, so no path can name the type; the document
+        // names its own, and the map still has to carry the children it holds.
+        var folder = RecordTypeDispatch.For(Release).FolderNameFor("globalfloat")!;
+        var carrier = Path.Combine(_modFolder, Root, folder, "Carrier - 00A000_Embedded.esp.json");
+        Directory.CreateDirectory(Path.GetDirectoryName(carrier)!);
+        File.WriteAllText(
+            carrier,
+            "{\n  \"MutagenObjectType\": \"GlobalFloat\",\n  \"FormKey\": \"00A000:Embedded.esp\",\n" +
+            "  \"Kids\": [ { \"FormKey\": \"00A001:Embedded.esp\" } ]\n}");
+
+        var unit = Repository.Locate(Plugin, new RecordIdentity("00A001:Embedded.esp", "refr", null));
+
+        Assert.Equal(carrier, unit?.FullPath);
+        Assert.True(unit?.IsEmbedded);
     }
 
     [Fact]
@@ -242,6 +280,29 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
         Assert.Contains("\"Topic\"", questText, StringComparison.Ordinal);
         Assert.Null(repository.Get(Plugin, Identity(_response, "info")));
         Assert.NotNull(repository.Get(Plugin, Identity(_response2, "info")));
+    }
+
+    [Fact]
+    public void Remove_OfARecordNoDocumentHolds_SaysNoDocumentHoldsIt()
+    {
+        Assert.Equal(
+            SourceRemoval.NoDocumentHoldsIt,
+            Repository.Remove(Plugin, new RecordIdentity("00FFFF:Embedded.esp", "refr", "Absent")));
+    }
+
+    [Fact]
+    public void Remove_OfAKeyADocumentNamesButDoesNotCarry_SaysTheOwnersTextLacksIt()
+    {
+        // A FormKey somewhere inside a document is not the same as a child of it, and the two
+        // refusals send the author to different places.
+        var quest = File.ReadAllText(FullPath(QuestPath));
+        File.WriteAllText(
+            FullPath(QuestPath),
+            quest.TrimEnd().TrimEnd('}') + ",\n  \"NotAChild\": { \"FormKey\": \"00A001:Embedded.esp\" }\n}");
+
+        Assert.Equal(
+            SourceRemoval.OwnerDoesNotCarryIt,
+            Repository.Remove(Plugin, new RecordIdentity("00A001:Embedded.esp", "refr", "Absent")));
     }
 
     [Fact]
