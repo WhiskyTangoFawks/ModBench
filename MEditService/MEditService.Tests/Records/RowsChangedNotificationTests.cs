@@ -1,6 +1,7 @@
 using MEditService.Core.Notifications;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
+using MEditService.Tests.Edits;
 using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
@@ -57,5 +58,33 @@ public sealed class RowsChangedNotificationTests : IDisposable
         Assert.Equal(BaseKey, notification.Plugin);
         Assert.Equal([formKey], notification.Keys);
         Assert.Equal(index.Sequence, notification.Sequence);
+    }
+
+    // A container's document is one row plus every embedded child's, so a notification naming only
+    // the key the projector was handed leaves a record panel open on a placed reference inside a
+    // refreshed cell with nothing to re-read on.
+    [Fact]
+    public void ProjectingAContainersDocument_NamesTheContainerAndEveryEmbeddedChildWhoseRowsChanged()
+    {
+        var notifications = new InMemoryNotificationPublisher();
+        using var fixture = new ContainerModFixture(notifications);
+        var cell = fixture.EmbedCell.ToString();
+
+        // A hand edit to a child inside its owner's document: the child has no file of its own, and
+        // the projector is asked about the owner alone.
+        var document = fixture.SourceFileContaining(ContainerModFixture.TemporaryRefEditorId);
+        File.WriteAllText(
+            document,
+            File.ReadAllText(document).Replace(
+                $"\"{ContainerModFixture.TemporaryRefEditorId}\"", "\"RenamedByHand\"", StringComparison.Ordinal));
+
+        fixture.Mirror.Index!.RefreshByKeys(fixture.Plugin, fixture.ModFolder, [cell]);
+
+        var rowsChanged = notifications.Notifications.OfType<RowsChangedNotification>().Last();
+        Assert.Contains(cell, rowsChanged.Keys);
+        Assert.Contains(fixture.TemporaryRef.ToString(), rowsChanged.Keys);
+        // The sibling nobody touched is not named: a notification that names every child of every
+        // refreshed container is a broadcast again.
+        Assert.DoesNotContain(fixture.PersistentRef.ToString(), rowsChanged.Keys);
     }
 }
