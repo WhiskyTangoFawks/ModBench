@@ -17,6 +17,7 @@ public static class CompileServices
             holder,
             SharedSchemaReflector.Instance,
             new RecordTextCodec(NullLogger<RecordTextCodec>.Instance),
+            new DefaultModImporter(),
             new PluginWriter(NullLogger<PluginWriter>.Instance),
             NullLogger<PluginCompileService>.Instance);
     }

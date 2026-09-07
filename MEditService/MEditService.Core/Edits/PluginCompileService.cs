@@ -20,12 +20,15 @@ public sealed class PluginCompileService(
     LoadOrderHolder loadOrderHolder,
     SchemaReflector schemaReflector,
     RecordTextCodec codec,
+    IModImporter importer,
     PluginWriter writer,
     ILogger<PluginCompileService> logger)
 {
     public CompileResult Compile(PluginKey plugin, CompileSource source)
     {
         var loadOrder = loadOrderHolder.Current;
+        if (loadOrder.Copies.Count == 0)
+            return CompileResult.Refused("No load order has been received.");
         if (loadOrder.Copy(plugin) is not { } copy)
             return CompileResult.Refused($"{plugin.Name} is not in the load order.");
         if (ModFolders.TrackedOf(loadOrder, plugin) is not { } modFolder)
@@ -136,7 +139,7 @@ public sealed class PluginCompileService(
 
     // ADR-0046 invariant 1: the write side never reads the Index, so the masters content requires
     // (ADR-0038) and the check errors the editor shows come from the plugin's own records here,
-    // through the same collector and schema.
+    // through the same collector, schema and link resolver.
     private (List<CompileDiagnostic> Diagnostics, IReadOnlyList<string> Masters) ContentFacts(
         IMod mod, PluginKey plugin, LoadOrder loadOrder, string resolverRoot)
     {
@@ -153,13 +156,25 @@ public sealed class PluginCompileService(
         var own = new Dictionary<string, RecordLookupEntry>(StringComparer.OrdinalIgnoreCase);
         foreach (var (recordType, _, record) in typed)
             own[record.FormKey.ToString()] = new RecordLookupEntry(recordType, record.EditorID);
-        RecordLookupEntry? Resolve(string formKey) => own.TryGetValue(formKey, out var entry) ? entry : null;
 
-        // Compile sees one plugin's records, so a link into any other plugin is that plugin's to
-        // answer for; calling it unresolved would report every valid cross-plugin link as broken.
+        // The records just read answer for this plugin, at the ref being compiled; the working tree
+        // the resolver reads for a tracked plugin is a different answer at a named ref.
+        using var links = new FormLinkResolver(loadOrder, importer, schemaReflector);
+        RecordLookupEntry? ResolveOnce(string formKey)
+        {
+            if (own.TryGetValue(formKey, out var entry)) return entry;
+            return IsNative(formKey, plugin) ? null : links.Resolve(formKey);
+        }
+
+        // One answer per distinct FormKey: the resolver walks a tracked target's whole tree per call,
+        // and the same link recurs across a plugin's records.
+        var resolve = FormKeyResolutionCache.Memoize(ResolveOnce);
+
+        // #779: the resolver cannot name an embedded child in a tracked plugin, so a link that
+        // plugin's tree does carry is one this pass has no answer for, not a broken one.
+        var trackedTrees = new Dictionary<string, SourceRepository?>(StringComparer.OrdinalIgnoreCase);
         bool AnswersFor(string formKey) =>
-            PluginNameIn(formKey) is not { } owner
-            || owner.Equals(plugin.Name, StringComparison.OrdinalIgnoreCase);
+            resolve(formKey) is not null || !EmbeddedInATrackedPlugin(formKey, plugin, loadOrder, trackedTrees);
 
         // One repository for the pass, so its listing memo spans it: resolving per record against a
         // fresh tree scan dominated.
@@ -181,7 +196,7 @@ public sealed class PluginCompileService(
                 if (PluginNameIn(reference.TargetFormKey) is { } target) masters.Add(target);
             }
 
-            var errors = CheckErrors(schema, document.RootElement, Resolve, loadOrder.GameRelease, AnswersFor);
+            var errors = CheckErrors(schema, document.RootElement, resolve, loadOrder.GameRelease, AnswersFor);
             if (errors.Count == 0) continue;
 
             // Only records with something to report pay for resolution, which keeps a container's
@@ -233,6 +248,27 @@ public sealed class PluginCompileService(
         return [.. masters
             .OrderBy(m => slots.GetValueOrDefault(m, int.MaxValue))
             .ThenBy(m => m, StringComparer.OrdinalIgnoreCase)];
+    }
+
+    private static bool IsNative(string formKey, PluginKey plugin) =>
+        PluginNameIn(formKey) is { } owner && owner.Equals(plugin.Name, StringComparison.OrdinalIgnoreCase);
+
+    // One repository per tracked mod folder for the whole pass, so its owner map is built at most
+    // once: every call here has already missed the resolver, which is the uncommon path.
+    private static bool EmbeddedInATrackedPlugin(
+        string formKey, PluginKey plugin, LoadOrder loadOrder, Dictionary<string, SourceRepository?> trackedTrees)
+    {
+        if (IsNative(formKey, plugin)
+            || PluginNameIn(formKey) is not { } owner
+            || loadOrder.WinningCopy(owner) is not { } copy
+            || ModFolders.TrackedOf(loadOrder, copy.Key) is not { } modFolder)
+        {
+            return false;
+        }
+
+        if (!trackedTrees.TryGetValue(modFolder, out var repository))
+            trackedTrees[modFolder] = repository = SourceRepository.Open(modFolder, loadOrder.GameRelease);
+        return repository?.CarriesEmbedded(copy.Key, formKey) == true;
     }
 
     // The plugin half of a FormKey, which is how a reference names the master it needs.
