@@ -657,8 +657,8 @@ overflow, then native **Collapse All** last.
   (plugin → record type → record), so it earns the affordance.
 - **No Refresh of its own.** Re-reading `plugins.txt` is part of the single
   workspace-scope Refresh on the [Loadout header](containers.md), which re-reads every
-  Mod-Management source together. There is no reload of the editing backend to offer: the load
-  order it holds is reconciled on every change (ADR-0044).
+  Mod-Management source together and also drops and rebuilds the Index (ADR-0046) — the one
+  reload gesture, distinct from the ordinary per-change reconcile (ADR-0044).
 - **Refresh is not how the tab recovers from an external edit.** The `mods/**`,
   `profiles/*/modlist.txt` and `profiles/*/plugins.txt` watchers each invalidate this tree as
   well as requesting the editing-side reconcile, so a `plugins.txt` line added, removed,

@@ -28,4 +28,13 @@ public sealed class DuckDbRecordIndexFactory(
         repo.Initialize(gameRelease);
         return repo;
     }
+
+    // Construction alone opens (or refuses) the existing file; RebuildEmpty then drops it.
+    public IRecordIndex Rebuild(GameRelease gameRelease, string instanceRoot, long atLeastSequence)
+    {
+        var repo = new DuckDbRecordIndex(
+            _schemaReflector, _ddlBuilder, _logger, IndexFile.For(instanceRoot), _notifications);
+        repo.RebuildEmpty(gameRelease, atLeastSequence);
+        return repo;
+    }
 }

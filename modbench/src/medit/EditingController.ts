@@ -92,6 +92,26 @@ export class EditingController {
     return { name: data?.name ?? name };
   }
 
+  /** ADR-0046: Refresh's first step — drops the instance's index file and reopens it empty,
+   *  refusing (423) exactly as `putLoadOrder` does when another window holds it. `onFailure` is
+   *  the caller's report, never a bare toast (modbench/CLAUDE.md). */
+  async rebuildIndex(
+    instanceRoot: string,
+    onFailure: (message: string, detail: string) => void,
+    gameRelease = 'Fallout4',
+  ): Promise<boolean> {
+    const { error, response } = await this.deps.client.POST('/index/rebuild', {
+      body: { instanceRoot, gameRelease },
+    });
+    if (!response.ok) {
+      const text = errorText(error);
+      this.log(`[EditingController] rebuildIndex failed (${response.status}): ${text}`);
+      onFailure('mEdit: Could not rebuild the index', text);
+      return false;
+    }
+    return true;
+  }
+
   /** `gameDirectory` must be the resolved Data folder — the backend prepends implicit masters
    *  from it. The backend keys its persistent index on `instanceRoot` (ADR-0001) because `origin`
    *  is a folder *name*, unique only within one instance. */

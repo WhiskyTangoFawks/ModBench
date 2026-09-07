@@ -27,6 +27,9 @@ internal sealed class GatedIndexRepositoryFactory(IRecordIndexFactory inner, str
         return repository;
     }
 
+    public IRecordIndex Rebuild(GameRelease gameRelease, string instanceRoot, long atLeastSequence) =>
+        inner.Rebuild(gameRelease, instanceRoot, atLeastSequence);
+
     public async Task WaitUntilParkedAsync()
     {
         var arrived = await _arrived.WaitAsync(TimeSpan.FromSeconds(30));

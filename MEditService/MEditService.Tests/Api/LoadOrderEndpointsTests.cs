@@ -73,4 +73,37 @@ public sealed class LoadOrderEndpointsTests : IDisposable
         Assert.Contains("another Modbench window", problem.ProblemDetails.Detail, StringComparison.Ordinal);
         Assert.Equal(LoadOrderState.None, thisWindow.Status.State);
     }
+
+    // ADR-0046: the rebuild endpoint's own refusal, at the handler seam — mirrors PutLoadOrder's
+    // 423 above.
+    [ForeignIndexHolderFact]
+    public void PostRebuildIndex_Answers423NamingTheOtherWindow_WhenAnotherProcessHoldsTheInstance()
+    {
+        using var data = new PluginFixtureBuilder("second-window-rebuild").WithPlugin("A.esp").Build();
+        using var otherWindow = ForeignIndexHolder.Hold(IndexFile.For(data.InstanceRoot));
+        var reflector = SharedSchemaReflector.Instance;
+        var factory = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
+        using var thisWindow = new LoadOrderMirror(factory);
+        var request = new RebuildIndexRequest(data.InstanceRoot, "Fallout4");
+
+        var result = LoadOrderEndpoints.PostRebuildIndex(request, thisWindow, factory, NullLoggerFactory.Instance);
+
+        var problem = Assert.IsAssignableFrom<ProblemHttpResult>(result);
+        Assert.Equal(423, problem.StatusCode);
+        Assert.Contains("another Modbench window", problem.ProblemDetails.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void PostRebuildIndex_Answers204_WhenNothingHoldsTheInstance()
+    {
+        using var data = new PluginFixtureBuilder("rebuild-ok").WithPlugin("A.esp").Build();
+        var reflector = SharedSchemaReflector.Instance;
+        var factory = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
+        using var mirror = new LoadOrderMirror(factory);
+        var request = new RebuildIndexRequest(data.InstanceRoot, "Fallout4");
+
+        var result = LoadOrderEndpoints.PostRebuildIndex(request, mirror, factory, NullLoggerFactory.Instance);
+
+        Assert.IsAssignableFrom<NoContent>(result);
+    }
 }

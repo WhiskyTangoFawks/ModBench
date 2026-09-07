@@ -20,6 +20,8 @@ public sealed class LoadOrderMirrorReconcileTests
         public int Sweeps { get; set; }
         public IRecordIndex Create(GameRelease gameRelease, string? instanceRoot = null) =>
             new CountingIndex(inner.Create(gameRelease, instanceRoot), this);
+        public IRecordIndex Rebuild(GameRelease gameRelease, string instanceRoot, long atLeastSequence) =>
+            inner.Rebuild(gameRelease, instanceRoot, atLeastSequence);
     }
 
     private sealed class CountingIndex(IRecordIndex inner, CountingFactory owner) : DelegatingRecordIndex(inner)

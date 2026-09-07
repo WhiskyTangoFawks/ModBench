@@ -110,6 +110,16 @@ public sealed class DuckDbRecordIndex : IRecordIndex
             Unindex(key);
     }
 
+    // ADR-0046: the rebuild endpoint's whole job on an already-opened index — construction already
+    // refused (IndexHeldElsewhereException) if another process held the file, so nothing here
+    // re-checks that. atLeastSequence keeps Sequence monotonic within this process across the drop.
+    internal void RebuildEmpty(GameRelease release, long atLeastSequence)
+    {
+        _indexStore.RebuildFile();
+        Initialize(release);
+        _indexStore.SeedSequence(atLeastSequence);
+    }
+
     // --- Indexing ---
 
     public void Index(IModGetter plugin, Registration registration, PluginKey key, string? filePath = null) =>

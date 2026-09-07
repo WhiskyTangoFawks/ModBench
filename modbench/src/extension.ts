@@ -42,6 +42,7 @@ import { resolvePluginDestination, type PluginDestinationChoice } from './modman
 import { DownloadsProvider } from './modmanager/DownloadsProvider';
 import { ImplicitMasterDecorationProvider } from './modmanager/ImplicitMasterDecorationProvider';
 import { makeReporter } from './reporter';
+import { makeRefreshAll } from './refreshAll';
 import { LoadoutHeaderProvider } from './LoadoutHeaderProvider';
 import { registerNameFilter, type NameFilter } from './nameFilter';
 import { onPluginCheckboxChanged } from './pluginCheckboxHandler';
@@ -798,7 +799,7 @@ function wireEnterEditingOnRestart(
   });
 }
 
-function registerLoadoutView(session: ExtensionSession, deps: LoadoutViewDeps): { modListProvider: ModListProvider; downloadsProvider: DownloadsProvider; pluginListProvider: PluginListProvider; modlistSource: Mo2ModlistSource; instanceRoot: string; refreshAll: () => void; enterEditing: () => Promise<void> } | undefined {
+function registerLoadoutView(session: ExtensionSession, deps: LoadoutViewDeps): { modListProvider: ModListProvider; downloadsProvider: DownloadsProvider; pluginListProvider: PluginListProvider; modlistSource: Mo2ModlistSource; instanceRoot: string; refreshAll: () => Promise<void>; enterEditing: () => Promise<void> } | undefined {
   const { context, outputChannel, revealLog, controller, recordBrowser, heldPluginFiles, showCrashRepairOffers } = deps;
   // The flat log shim, built locally rather than threaded in as its own Deps field.
   const log = (msg: string) => outputChannel.info(msg);
@@ -890,24 +891,20 @@ function registerLoadoutView(session: ExtensionSession, deps: LoadoutViewDeps): 
       .then(reconcilePlugins);
     const { downloadsProvider, disposables: downloadsDisposables } = registerDownloadsView(instanceRoot, outputChannel);
     context.subscriptions.push(...downloadsDisposables);
-    const refreshAll = makeRefreshAll(modListProvider, pluginListProvider, downloadsProvider, updateProfileDescription);
+    // ADR-0046: rebuild before resend before the tree re-reads (refreshAll.ts owns the sequence);
+    // a rebuild failure is reported through makeReporter, never a bare toast (modbench/CLAUDE.md).
+    const refreshAll = makeRefreshAll({
+      rebuildIndex: () => controller.rebuildIndex(
+        instanceRoot,
+        (message, detail) => makeReporter(outputChannel, 'refresh').report('error', message, detail),
+      ),
+      sendLoadOrder: () => session.loadOrderSync!.flush(),
+      invalidateMods: () => modListProvider.invalidate(),
+      invalidatePlugins: () => pluginListProvider.invalidate(),
+      invalidateDownloads: () => downloadsProvider.invalidate(),
+      updateProfileDescription,
+    });
     return { modListProvider, downloadsProvider, pluginListProvider, modlistSource, instanceRoot, refreshAll, enterEditing };
-}
-
-// Refresh is one need, not three: a partial refresh is the state where the user believes they
-// have resynced and one tree still quietly disagrees.
-function makeRefreshAll(
-  modListProvider: ModListProvider,
-  pluginListProvider: PluginListProvider,
-  downloadsProvider: DownloadsProvider,
-  updateProfileDescription: () => Promise<void>,
-): () => void {
-  return () => {
-    modListProvider.invalidate();
-    pluginListProvider.invalidate();
-    downloadsProvider.invalidate();
-    void updateProfileDescription();
-  };
 }
 
 interface LoadoutHeaderDepsWiring {
@@ -919,7 +916,7 @@ interface LoadoutHeaderDepsWiring {
   /** Absent for the same reason as `modlistSource`; without it there is nothing to be
    *  deployed, so the deployment row stays absent regardless of the configured mode. */
   instanceRoot?: string;
-  refreshAll?: () => void;
+  refreshAll?: () => Promise<void>;
 }
 // Wired here, at the composition root, because it spans both bounded contexts; the provider
 // itself takes only getters and knows about neither.
@@ -948,8 +945,8 @@ function registerLoadoutHeaderView(session: ExtensionSession, deps: LoadoutHeade
     vscode.window.createTreeView('modbench.loadoutHeader', { treeDataProvider: provider }),
     // Its scope is the workspace, so it lives here rather than on any single tree — and it is only
     // the safety net for a flaky watcher, never the primary path.
-    vscode.commands.registerCommand('modbench.refresh', () => {
-      refreshAll?.();
+    vscode.commands.registerCommand('modbench.refresh', async () => {
+      await refreshAll?.();
       provider.refresh();
     }),
   );

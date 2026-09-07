@@ -381,6 +381,9 @@ public class LoadOrderMirrorTests(TestPluginFixture fixture)
             LastGameRelease = gameRelease;
             return _inner.Create(gameRelease);
         }
+
+        public IRecordIndex Rebuild(GameRelease gameRelease, string instanceRoot, long atLeastSequence) =>
+            _inner.Rebuild(gameRelease, instanceRoot, atLeastSequence);
     }
 
     // A real DuckDbRecordIndex wrapped through DelegatingRecordIndex (TestSupport) with one member
@@ -391,6 +394,8 @@ public class LoadOrderMirrorTests(TestPluginFixture fixture)
 
         public IRecordIndex Create(GameRelease gameRelease, string? instanceRoot = null) =>
             new FaultingSetFilterRepository(inner.Create(gameRelease, instanceRoot), this);
+        public IRecordIndex Rebuild(GameRelease gameRelease, string instanceRoot, long atLeastSequence) =>
+            inner.Rebuild(gameRelease, instanceRoot, atLeastSequence);
     }
 
     private sealed class FaultingSetFilterRepository(IRecordIndex inner, FaultingSetFilterRepositoryFactory owner)
@@ -419,6 +424,8 @@ public class LoadOrderMirrorTests(TestPluginFixture fixture)
     {
         public IRecordIndex Create(GameRelease gameRelease, string? instanceRoot = null) =>
             new FaultingUpdateWinnersRepository(inner.Create(gameRelease, instanceRoot));
+        public IRecordIndex Rebuild(GameRelease gameRelease, string instanceRoot, long atLeastSequence) =>
+            inner.Rebuild(gameRelease, instanceRoot, atLeastSequence);
     }
 
     private sealed class FaultingUpdateWinnersRepository(IRecordIndex inner) : DelegatingRecordIndex(inner)
