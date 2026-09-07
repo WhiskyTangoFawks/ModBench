@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { createApiClient, errorText } from '../ApiClient';
+import { createApiClient, errorText, toLoadOrderStatus } from '../ApiClient';
 
 describe('createApiClient', () => {
   it('uses the supplied port in the base URL', () => {
@@ -36,5 +36,26 @@ describe('errorText', () => {
 
   it('falls back to JSON for an object that is not a problem', () => {
     expect(errorText({ form_key: '000801:Fallout4.esm' })).toBe('{"form_key":"000801:Fallout4.esm"}');
+  });
+});
+
+// ADR-0035: the whole-set conflict sweep leaves a Ready load order with stale winners, so
+// anything rendering conflict information must read `conflictsComputed`, never the wire's `state`.
+describe('toLoadOrderStatus', () => {
+  it('keys indexedPlugins on filename alone, dropping origin and state', () => {
+    const status = toLoadOrderStatus({
+      state: 'Reconciling',
+      totalPlugins: 3,
+      indexedPlugins: [{ name: 'Fallout4.esm', origin: 'Data' }, { name: 'TestMod.esp', origin: 'ModA' }],
+      conflictsComputed: false,
+      failures: [{ name: 'Bad.esp', reason: 'RACE parse' }],
+    });
+
+    expect(status).toEqual({
+      totalPlugins: 3,
+      indexedPlugins: ['Fallout4.esm', 'TestMod.esp'],
+      conflictsComputed: false,
+      failures: [{ name: 'Bad.esp', reason: 'RACE parse' }],
+    });
   });
 });

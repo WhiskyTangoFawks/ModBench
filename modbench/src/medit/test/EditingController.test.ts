@@ -1,6 +1,22 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { EditingController, type EditingControllerDeps } from '../EditingController';
-import type { PluginMetadata } from '../ApiClient';
+import type { PluginMetadata, NotificationEvent } from '../ApiClient';
+import { FakeNotificationSubscriber } from '../NotificationSubscriber';
+import type { components } from '../generated/api';
+
+function loadOrderStatusEvent(status: Partial<components['schemas']['LoadOrderStatus']> = {}): NotificationEvent {
+  return {
+    kind: 'load-order-status', plugin: '', origin: '', keys: [], sequence: 0,
+    loadOrderStatus: { state: 'Reconciling', totalPlugins: 0, indexedPlugins: [], conflictsComputed: false, failures: [], ...status },
+  };
+}
+
+function trackProgressEvent(progress: Partial<components['schemas']['TrackProgress']> = {}): NotificationEvent {
+  return {
+    kind: 'track-progress', plugin: '', origin: '', keys: [], sequence: 0,
+    trackProgress: { phase: 'Idle', pluginsDone: 0, pluginsTotal: 0, ...progress },
+  };
+}
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -124,26 +140,16 @@ function makeRepository({
     clearFilter: vi.fn().mockResolvedValue(undefined),
     getActiveFilter: vi.fn().mockResolvedValue(activeFilter),
     getPlugins: vi.fn().mockResolvedValue(plugins),
-    getLoadOrderStatus: vi.fn().mockResolvedValue(makeStatus()),
-    getTrackStatus: vi.fn().mockResolvedValue({ phase: 'Idle', pluginsDone: 0, pluginsTotal: 0 }),
     getRecordTypes: vi.fn().mockResolvedValue([]),
     getRecords: vi.fn().mockResolvedValue({ items: [], total: 0 }),
   } as any;
-}
-
-function makeStatus({
-  totalPlugins = 2,
-  indexedPlugins = [] as string[],
-  conflictsComputed = false,
-  failures = [] as { name: string; reason: string }[],
-} = {}) {
-  return { totalPlugins, indexedPlugins, conflictsComputed, failures };
 }
 
 function makeDeps(overrides: Partial<EditingControllerDeps> = {}): EditingControllerDeps {
   return {
     client: makeClient(),
     repository: makeRepository(),
+    notificationSubscriber: new FakeNotificationSubscriber(),
     refreshTree: vi.fn(),
     setStatusText: vi.fn(),
     showWarning: vi.fn(),
@@ -671,13 +677,9 @@ describe('EditingController.putLoadOrder', () => {
 // ── putLoadOrder: progressive load (ADR-0035) ───────────────────
 
 // The load PUT stays blocking and the generated openapi-fetch client has no streaming path, so
-// progress is polled off GET /load-order/status alongside the still in-flight PUT.
-describe('EditingController.putLoadOrder progress polling', () => {
-  beforeEach(() => {
-    vi.resetAllMocks();
-    vi.useFakeTimers();
-  });
-  afterEach(() => vi.useRealTimers());
+// progress rides load-order-status notifications alongside the still in-flight PUT.
+describe('EditingController.putLoadOrder progress subscription', () => {
+  beforeEach(() => vi.resetAllMocks());
 
   const plugins = [
     { name: 'Foo.esp', path: '/mods/A/Foo.esp', origin: 'A', slot: 0, enabled: true, winning: true },
@@ -693,20 +695,19 @@ describe('EditingController.putLoadOrder progress polling', () => {
     return { PUT: vi.fn().mockReturnValue(held), finish };
   }
 
-  it('reports each poll\'s indexed plugin set to onProgress while the load PUT is still in flight', async () => {
+  it('reports each load-order-status notification\'s indexed plugin set to onProgress while the load PUT is still in flight', async () => {
     const { PUT, finish } = heldLoad();
-    const repository = makeRepository();
-    repository.getLoadOrderStatus
-      .mockResolvedValueOnce(makeStatus({ indexedPlugins: ['Fallout4.esm'] }))
-      .mockResolvedValueOnce(makeStatus({ indexedPlugins: ['Fallout4.esm', 'Foo.esp'] }));
-    const ctrl = new EditingController(makeDeps({ client: { ...makeClient(), PUT }, repository }));
+    const notificationSubscriber = new FakeNotificationSubscriber();
+    const ctrl = new EditingController(makeDeps({ client: { ...makeClient(), PUT }, notificationSubscriber }));
     const onProgress = vi.fn();
 
     const load = ctrl.putLoadOrder(plugins, '/game/Data', '/instance', 'Fallout4', { onProgress });
 
-    await vi.advanceTimersByTimeAsync(500);
+    notificationSubscriber.emit(loadOrderStatusEvent({ indexedPlugins: [{ name: 'Fallout4.esm', origin: 'Data' }] }));
     expect(onProgress).toHaveBeenLastCalledWith(expect.objectContaining({ indexedPlugins: ['Fallout4.esm'] }));
-    await vi.advanceTimersByTimeAsync(500);
+    notificationSubscriber.emit(loadOrderStatusEvent({
+      indexedPlugins: [{ name: 'Fallout4.esm', origin: 'Data' }, { name: 'Foo.esp', origin: 'A' }],
+    }));
     expect(onProgress).toHaveBeenLastCalledWith(
       expect.objectContaining({ indexedPlugins: ['Fallout4.esm', 'Foo.esp'] }),
     );
@@ -716,70 +717,42 @@ describe('EditingController.putLoadOrder progress polling', () => {
     await load;
   });
 
-  it('stops polling once the load PUT settles, so a finished load leaves no timer running', async () => {
+  it('unsubscribes once the load PUT settles, so a finished load reports no further progress', async () => {
     const { PUT, finish } = heldLoad();
-    const repository = makeRepository();
-    const ctrl = new EditingController(makeDeps({ client: { ...makeClient(), PUT }, repository }));
+    const notificationSubscriber = new FakeNotificationSubscriber();
+    const ctrl = new EditingController(makeDeps({ client: { ...makeClient(), PUT }, notificationSubscriber }));
     const onProgress = vi.fn();
 
     const load = ctrl.putLoadOrder(plugins, '/game/Data', '/instance', 'Fallout4', { onProgress });
-    await vi.advanceTimersByTimeAsync(500);
+    notificationSubscriber.emit(loadOrderStatusEvent());
+    // Guards the assertion below against passing vacuously: "no further calls" means nothing
+    // unless the load was actually subscribed in the first place.
+    expect(onProgress).toHaveBeenCalledTimes(1);
     finish();
     await load;
-    const pollsAtCompletion = repository.getLoadOrderStatus.mock.calls.length;
-    // Guards the assertion below against passing vacuously: "no further polls" means nothing
-    // unless the load was actually polling in the first place.
-    expect(pollsAtCompletion).toBeGreaterThan(0);
 
-    await vi.advanceTimersByTimeAsync(5000);
+    notificationSubscriber.emit(loadOrderStatusEvent());
 
-    expect(repository.getLoadOrderStatus.mock.calls).toHaveLength(pollsAtCompletion);
+    expect(onProgress).toHaveBeenCalledTimes(1);
   });
 
   // A per-plugin failure is reported the moment it happens, not held back until the load
   // finishes — the caller decorates that row straight away (ADR-0026).
-  it('carries the failures reported so far on each tick, before the load has finished', async () => {
+  it('carries the failures reported so far on each notification, before the load has finished', async () => {
     const { PUT, finish } = heldLoad();
-    const repository = makeRepository();
-    repository.getLoadOrderStatus.mockResolvedValue(
-      makeStatus({ indexedPlugins: ['Fallout4.esm'], failures: [{ name: 'Bad.esp', reason: 'RACE parse' }] }),
-    );
-    const ctrl = new EditingController(makeDeps({ client: { ...makeClient(), PUT }, repository }));
+    const notificationSubscriber = new FakeNotificationSubscriber();
+    const ctrl = new EditingController(makeDeps({ client: { ...makeClient(), PUT }, notificationSubscriber }));
     const onProgress = vi.fn();
 
     const load = ctrl.putLoadOrder(plugins, '/game/Data', '/instance', 'Fallout4', { onProgress });
-    await vi.advanceTimersByTimeAsync(500);
+    notificationSubscriber.emit(loadOrderStatusEvent({
+      indexedPlugins: [{ name: 'Fallout4.esm', origin: 'Data' }],
+      failures: [{ name: 'Bad.esp', reason: 'RACE parse' }],
+    }));
 
     expect(onProgress).toHaveBeenCalledWith(
       expect.objectContaining({ failures: [{ name: 'Bad.esp', reason: 'RACE parse' }] }),
     );
-
-    finish();
-    await load;
-  });
-
-  // ADR-0026 background/recoverable tier: a status poll is frequent and non-essential — a blip
-  // gets a log line and the next tick, never a toast and never an aborted load.
-  it('logs a failed status poll and keeps polling, without surfacing it or failing the load', async () => {
-    const { PUT, finish } = heldLoad();
-    const repository = makeRepository();
-    repository.getLoadOrderStatus
-      .mockRejectedValueOnce(new Error('GET /load-order/status failed (500)'))
-      .mockResolvedValue(makeStatus({ indexedPlugins: ['Foo.esp'] }));
-    const log = vi.fn();
-    const deps = makeDeps({ client: { ...makeClient(), PUT }, repository, log });
-    const ctrl = new EditingController(deps);
-    const onProgress = vi.fn();
-
-    const load = ctrl.putLoadOrder(plugins, '/game/Data', '/instance', 'Fallout4', { onProgress });
-    await vi.advanceTimersByTimeAsync(500);
-    expect(onProgress).not.toHaveBeenCalled();
-    await vi.advanceTimersByTimeAsync(500);
-
-    expect(onProgress).toHaveBeenCalledWith(expect.objectContaining({ indexedPlugins: ['Foo.esp'] }));
-    expect(log).toHaveBeenCalledWith(expect.stringContaining('load-order/status'));
-    expect(deps.showError).not.toHaveBeenCalled();
-    expect(deps.showWarning).not.toHaveBeenCalled();
 
     finish();
     await load;
@@ -1152,15 +1125,10 @@ describe('EditingController.renumberRecord', () => {
 
 });
 
-// Track progress is polled off GET /plugins/track/status alongside the
-// still in-flight track POST, the identical seam/idiom the load-progress suite above tests
-// (a held POST + fake timers, no VS Code types).
-describe('EditingController.track progress polling', () => {
-  beforeEach(() => {
-    vi.resetAllMocks();
-    vi.useFakeTimers();
-  });
-  afterEach(() => vi.useRealTimers());
+// Track progress rides track-progress notifications alongside the still in-flight track POST,
+// the identical seam/idiom the load-progress suite above tests.
+describe('EditingController.track progress subscription', () => {
+  beforeEach(() => vi.resetAllMocks());
 
   // A track POST held in flight until `finish` is called; this suite is about that window.
   function heldTrack() {
@@ -1171,22 +1139,19 @@ describe('EditingController.track progress polling', () => {
     return { POST: vi.fn().mockReturnValue(held), finish };
   }
 
-  it('reports each poll\'s progress to onProgress while the track POST is still in flight', async () => {
+  it('reports each track-progress notification to onProgress while the track POST is still in flight', async () => {
     const { POST, finish } = heldTrack();
-    const repository = makeRepository();
-    repository.getTrackStatus
-      .mockResolvedValueOnce({ phase: 'Serializing', pluginsDone: 10, pluginsTotal: 100 })
-      .mockResolvedValueOnce({ phase: 'Serializing', pluginsDone: 50, pluginsTotal: 100 });
-    const ctrl = new EditingController(makeDeps({ client: { ...makeClient(), POST }, repository }));
+    const notificationSubscriber = new FakeNotificationSubscriber();
+    const ctrl = new EditingController(makeDeps({ client: { ...makeClient(), POST }, notificationSubscriber }));
     const onProgress = vi.fn();
 
     const track = ctrl.track('ModA', 'Edits', { onProgress });
 
-    await vi.advanceTimersByTimeAsync(500);
+    notificationSubscriber.emit(trackProgressEvent({ phase: 'Serializing', pluginsDone: 10, pluginsTotal: 100 }));
     expect(onProgress).toHaveBeenLastCalledWith(
       expect.objectContaining({ phase: 'Serializing', pluginsDone: 10, pluginsTotal: 100 }),
     );
-    await vi.advanceTimersByTimeAsync(500);
+    notificationSubscriber.emit(trackProgressEvent({ phase: 'Serializing', pluginsDone: 50, pluginsTotal: 100 }));
     expect(onProgress).toHaveBeenLastCalledWith(
       expect.objectContaining({ phase: 'Serializing', pluginsDone: 50, pluginsTotal: 100 }),
     );
@@ -1196,30 +1161,29 @@ describe('EditingController.track progress polling', () => {
     await track;
   });
 
-  it('stops polling once the track POST settles, so a finished track leaves no timer running', async () => {
+  it('unsubscribes once the track POST settles, so a finished track reports no further progress', async () => {
     const { POST, finish } = heldTrack();
-    const repository = makeRepository();
-    const ctrl = new EditingController(makeDeps({ client: { ...makeClient(), POST }, repository }));
+    const notificationSubscriber = new FakeNotificationSubscriber();
+    const ctrl = new EditingController(makeDeps({ client: { ...makeClient(), POST }, notificationSubscriber }));
     const onProgress = vi.fn();
 
     const track = ctrl.track('ModA', 'Edits', { onProgress });
     finish();
     await track;
-    repository.getTrackStatus.mockClear();
 
-    await vi.advanceTimersByTimeAsync(2000);
+    notificationSubscriber.emit(trackProgressEvent());
 
-    expect(repository.getTrackStatus).not.toHaveBeenCalled();
+    expect(onProgress).not.toHaveBeenCalled();
   });
 
-  it('a track with no onProgress polls nothing at all', async () => {
+  it('a track with no onProgress subscribes to nothing', async () => {
     const { POST, finish } = heldTrack();
-    const repository = makeRepository();
-    const ctrl = new EditingController(makeDeps({ client: { ...makeClient(), POST }, repository }));
+    const notificationSubscriber = new FakeNotificationSubscriber();
+    const subscribeSpy = vi.spyOn(notificationSubscriber, 'subscribe');
+    const ctrl = new EditingController(makeDeps({ client: { ...makeClient(), POST }, notificationSubscriber }));
 
     const track = ctrl.track('ModA', 'Edits');
-    await vi.advanceTimersByTimeAsync(1000);
-    expect(repository.getTrackStatus).not.toHaveBeenCalled();
+    expect(subscribeSpy).not.toHaveBeenCalled();
 
     finish();
     await track;

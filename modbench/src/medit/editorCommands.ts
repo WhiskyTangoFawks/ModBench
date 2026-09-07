@@ -11,7 +11,8 @@ import { type CompileTarget } from './compileTarget';
 import { offerEslFlagRemoval, type EslFlagRemovalTarget } from './eslFlagRemovalPrompt';
 import { ApiPluginRepository, type PluginRepository } from './PluginRepository';
 import { trackedModFoldersOf, registerTrackedRepositories, pluginRepositoriesOf } from './trackedRepositories';
-import { startExternalChangePolling, gateExternalChangePolling, type OpenMergeEditor } from './externalChangeCoordinator';
+import { subscribeExternalChangePending, type OpenMergeEditor } from './externalChangeCoordinator';
+import type { NotificationSubscriber } from './NotificationSubscriber';
 import { buildWebviewHtml } from './webviewHtml';
 import { EXTENSION_TO_WEBVIEW, type ExtensionToWebview, type ColumnHeaderContext } from './messages';
 import { copyTargetPlugins, type CopyGesture } from './copyTargetPlugins';
@@ -385,32 +386,23 @@ export function refreshSourceControlFor(
   });
 }
 
-/** Gated on the backend's health signal, since the poller has no backend to answer it until a
- *  spawn succeeds. No disposable to register: Close mEdit and `deactivate()` both emit 'stopped',
- *  which this reacts to like any other transition. */
-export function wireExternalChangePolling(
+/** ADR-0046 invariant 12: the plugin watcher's signal drives the one dialog directly — no poll,
+ *  no health gate, since `notificationSubscriber` already follows the backend's lifecycle.
+ *  Returns the unsubscribe. */
+export function wireExternalChangePending(
   repository: PluginRepository, controller: EditingController, outputChannel: vscode.LogOutputChannel,
-  onBackendStatusChange: (cb: () => void) => void, isBackendHealthy: () => boolean,
-): void {
-  gateExternalChangePolling({
-    onBackendStatusChange,
-    isBackendHealthy,
-    // Polls `GET /plugins/external-changes/status` (fed by both the backend's live watcher and
-    // its load-time hash check) and runs the one dialog, sequentially, for whatever it finds.
-    startPolling: () => {
-      // `log` is a compat shim (defaults to .info) for modules taking a flat `(msg) => void`,
-      // built here at the boundary so the flat shape stops at the collaborator that needs it.
-      const log = (msg: string) => outputChannel.info(msg);
-      return startExternalChangePolling({
-        repository,
-        controller,
-        showDialog: (message, options, ...buttons) => Promise.resolve(vscode.window.showWarningMessage(message, options, ...buttons)),
-        showRebaseOffer: (message, ...buttons) => Promise.resolve(vscode.window.showInformationMessage(message, ...buttons)),
-        openMergeEditor: makeMergeEditorOpener(repository, outputChannel),
-        log,
-      });
-    },
-  });
+  notificationSubscriber: NotificationSubscriber,
+): () => void {
+  // `log` is a compat shim (defaults to .info) for modules taking a flat `(msg) => void`, built
+  // here at the boundary so the flat shape stops at the collaborator that needs it.
+  const log = (msg: string) => outputChannel.info(msg);
+  return subscribeExternalChangePending({
+    controller,
+    showDialog: (message, options, ...buttons) => Promise.resolve(vscode.window.showWarningMessage(message, options, ...buttons)),
+    showRebaseOffer: (message, ...buttons) => Promise.resolve(vscode.window.showInformationMessage(message, ...buttons)),
+    openMergeEditor: makeMergeEditorOpener(repository, outputChannel),
+    log,
+  }, notificationSubscriber);
 }
 
 /** Resolved fresh per call rather than bound to one origin: the dialog-driven path has no single

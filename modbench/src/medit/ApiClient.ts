@@ -69,9 +69,9 @@ export type WorldspaceBlocks = Schemas['WorldspaceBlocks'];
  *  a plain `string` on the schema — it is a discriminator, not a C# enum. */
 export type NotificationEvent = Schemas['NotificationEvent'];
 
-/** `GET /load-order/status`, polled alongside the in-flight `PUT /load-order`. The wire's `state`
- *  is deliberately not carried: it duplicates `conflictsComputed`, and a second, coincidentally
- *  equal field would invite the wrong read. */
+/** The `load-order-status` notification's payload, subscribed alongside the in-flight
+ *  `PUT /load-order`. The wire's `state` is deliberately not carried: it duplicates
+ *  `conflictsComputed`, and a second, coincidentally equal field would invite the wrong read. */
 export interface LoadOrderStatus {
   /** How many plugin copies the snapshot resolved to — the denominator for progress. Copies that
    *  fail to open still count toward it. */
@@ -86,6 +86,18 @@ export interface LoadOrderStatus {
   /** Plugins that could not be opened or indexed, as they are discovered — not held back until
    *  the reconcile finishes (ADR-0026). */
   failures: Schemas['PluginLoadFailure'][];
+}
+
+/** The transform a `load-order-status` notification's nested payload needs before it is this
+ *  side's {@link LoadOrderStatus}: the wire's `indexedPlugins` carries each entry's origin too,
+ *  and the consumer keys on filename alone. */
+export function toLoadOrderStatus(wire: Schemas['LoadOrderStatus']): LoadOrderStatus {
+  return {
+    totalPlugins: wire.totalPlugins,
+    indexedPlugins: wire.indexedPlugins.map((p) => p.name),
+    conflictsComputed: wire.conflictsComputed,
+    failures: wire.failures,
+  };
 }
 
 export function createApiClient(port: number, fetch?: (input: Request) => Promise<Response>) {

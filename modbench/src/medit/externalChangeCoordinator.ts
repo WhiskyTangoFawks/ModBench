@@ -1,8 +1,8 @@
-import type { PluginRepository } from './PluginRepository';
 import type { EditingController } from './EditingController';
 import type { ExternalChangeDialogAnswer, ShowExternalChangeDialog } from './externalChangeDialog';
 import { runExternalChangeDialogs } from './externalChangeDialog';
 import type { UnansweredExternalChange, RebaseResult } from './ApiClient';
+import type { NotificationSubscriber } from './NotificationSubscriber';
 
 /** The rebase offer is a separate, non-modal notification by contract, never folded into the
  *  external-change dialog itself. */
@@ -24,7 +24,6 @@ export type ShowRebaseOffer = (message: string, ...buttons: string[]) => Thenabl
 export type OpenMergeEditor = (origin: string, relativePath: string) => Thenable<unknown> | Promise<unknown>;
 
 export interface ExternalChangeCoordinatorDeps {
-  repository: PluginRepository;
   controller: EditingController;
   showDialog: ShowExternalChangeDialog;
   showRebaseOffer: ShowRebaseOffer;
@@ -32,55 +31,26 @@ export interface ExternalChangeCoordinatorDeps {
   log?: (msg: string) => void;
 }
 
-/** Slower than the reconcile poller: an external change is rare and never latency-sensitive,
- *  so there is no reason to poll at that cadence. */
-export const EXTERNAL_CHANGE_POLL_INTERVAL_MS = 3000;
-
-/** Self-rescheduling `setTimeout` rather than an interval, so a slow poll — or a dialog the
- *  user leaves open — can never stack ticks behind itself. Returns a stop function. */
-export function startExternalChangePolling(
-  deps: ExternalChangeCoordinatorDeps, intervalMs = EXTERNAL_CHANGE_POLL_INTERVAL_MS,
+/** ADR-0046 invariant 12: the plugin watcher's own signal becomes this dialog directly, no poll.
+ *  One notification is one queued question, run through the same sequential dialog path a
+ *  poll's batch would have. Returns the unsubscribe function. */
+export function subscribeExternalChangePending(
+  deps: ExternalChangeCoordinatorDeps, notificationSubscriber: NotificationSubscriber,
 ): () => void {
   const log = deps.log ?? (() => {});
-  let stopped = false;
-  let timer: ReturnType<typeof setTimeout>;
-
-  const tick = async () => {
-    try {
-      const unanswered = await deps.repository.getExternalChangeStatus();
-      if (!stopped && unanswered.length > 0) await handleUnanswered(deps, unanswered);
-    } catch (e) {
-      // ADR-0026 background/recoverable tier: a poll blip gets a log line and the next tick, same
-      // posture as every other poller in this codebase — never a toast for a transient failure to
-      // ask "is anything unanswered".
-      log(`[externalChangeCoordinator] poll failed: ${e instanceof Error ? e.message : String(e)}`);
-    }
-    if (!stopped) timer = setTimeout(() => { void tick(); }, intervalMs);
-  };
-  timer = setTimeout(() => { void tick(); }, intervalMs);
-  return () => { stopped = true; clearTimeout(timer); };
-}
-
-export interface ExternalChangePollerGateDeps {
-  onBackendStatusChange: (cb: () => void) => void;
-  /** Read fresh inside the callback: the emitted status string and `isHealthy` are two separate
-   *  reads on the real `BackendManager`. */
-  isBackendHealthy: () => boolean;
-  startPolling: () => () => void;
-}
-
-/** Tied to the backend's process lifecycle, not extension activation: polling before a backend
- *  exists is a `poll failed` line every tick. Health alone gates it — a load-order-less backend
- *  answers the endpoint anyway. */
-export function gateExternalChangePolling(deps: ExternalChangePollerGateDeps): void {
-  let stop: (() => void) | undefined;
-  deps.onBackendStatusChange(() => {
-    if (deps.isBackendHealthy()) {
-      stop ??= deps.startPolling();
-    } else {
-      stop?.();
-      stop = undefined;
-    }
+  return notificationSubscriber.subscribe('external-change-pending', (event) => {
+    const change: UnansweredExternalChange = {
+      plugin: event.plugin,
+      origin: event.origin,
+      metaChanged: event.externalChangeMetaChanged ?? false,
+      oldVersion: event.externalChangeOldVersion ?? null,
+      newVersion: event.externalChangeNewVersion ?? null,
+    };
+    // ADR-0026: a dialog/dispatch failure gets a log line, never a second toast on top of
+    // whatever the dialog or the mutate call already surfaced.
+    handleUnanswered(deps, [change]).catch((e: unknown) => {
+      log(`[externalChangeCoordinator] handling ${change.plugin} failed: ${e instanceof Error ? e.message : String(e)}`);
+    });
   });
 }
 
