@@ -28,14 +28,26 @@ public sealed class TrackService(ILogger<TrackService> logger, INotificationPubl
     /// the Source watcher starts on a tracked mod with no restart.</summary>
     public Action<string, string>? RepositoryCreated { get; set; }
 
-    public Task TrackAsync(ILoadOrder loadOrder, string origin, SourcePreset preset, CancellationToken cancel = default) =>
+    public Task TrackAsync(LoadOrder loadOrder, string origin, SourcePreset preset, CancellationToken cancel = default) =>
         TrackAsync(loadOrder, origin, preset, deserializeForVerification: null, cancel);
+
+    /// <summary>The same gesture for a caller still holding the mirror's view.</summary>
+    public Task TrackAsync(ILoadOrder loadOrder, string origin, SourcePreset preset, CancellationToken cancel = default) =>
+        TrackAsync(LoadOrder.From(loadOrder), origin, preset, deserializeForVerification: null, cancel);
 
     /// <summary>Same gesture with one extra seam: how the round-trip gate reads the tree back. Null gets
     /// the real whole-mod door. Only a negative test overrides it: no known codec defect can trigger
     /// the gate for real.</summary>
-    internal async Task TrackAsync(
+    internal Task TrackAsync(
         ILoadOrder loadOrder,
+        string origin,
+        SourcePreset preset,
+        Func<string, CancellationToken, Task<IFallout4Mod>>? deserializeForVerification,
+        CancellationToken cancel = default) =>
+        TrackAsync(LoadOrder.From(loadOrder), origin, preset, deserializeForVerification, cancel);
+
+    internal async Task TrackAsync(
+        LoadOrder loadOrder,
         string origin,
         SourcePreset preset,
         Func<string, CancellationToken, Task<IFallout4Mod>>? deserializeForVerification,
@@ -44,7 +56,7 @@ public sealed class TrackService(ILogger<TrackService> logger, INotificationPubl
         var deserialize = deserializeForVerification
             ?? ((folder, ct) => RecordTextCodecGeneratorSeed.DeserializeWholeMod(folder, InlineWorkDropoff.Instance, ct));
 
-        var plugins = loadOrder.Plugins.Where(p => p.Origin.Equals(origin, StringComparison.OrdinalIgnoreCase)).ToList();
+        var plugins = loadOrder.Copies.Where(p => p.Origin.Equals(origin, StringComparison.OrdinalIgnoreCase)).ToList();
         if (plugins.Count == 0)
             throw new KeyNotFoundException($"No loaded plugin has origin '{origin}' to track.");
 

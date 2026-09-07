@@ -34,7 +34,7 @@ public sealed class LoadOrderEndpointsTests : IDisposable
                 _ => throw new InvalidOperationException("simulated crash between source and binary write")));
 
         var result = LoadOrderEndpoints.PutLoadOrder(
-            SnapshotRequest(), _mod.Mirror, new ExternalChangeWatcher(), NullLoggerFactory.Instance);
+            SnapshotRequest(), _mod.Mirror, new LoadOrderHolder(), new ExternalChangeWatcher(), NullLoggerFactory.Instance);
 
         var ok = Assert.IsAssignableFrom<Ok<LoadOrderResponse>>(result);
         var offer = Assert.Single(ok.Value!.CrashRepairOffers);
@@ -47,7 +47,7 @@ public sealed class LoadOrderEndpointsTests : IDisposable
     public void PutLoadOrder_ReportsNoCrashRepairOffers_WhenNothingIsUnanswered()
     {
         var result = LoadOrderEndpoints.PutLoadOrder(
-            SnapshotRequest(), _mod.Mirror, new ExternalChangeWatcher(), NullLoggerFactory.Instance);
+            SnapshotRequest(), _mod.Mirror, new LoadOrderHolder(), new ExternalChangeWatcher(), NullLoggerFactory.Instance);
 
         var ok = Assert.IsAssignableFrom<Ok<LoadOrderResponse>>(result);
         Assert.Empty(ok.Value!.CrashRepairOffers);
@@ -66,7 +66,7 @@ public sealed class LoadOrderEndpointsTests : IDisposable
         var reflector = SharedSchemaReflector.Instance;
         using var thisWindow = new LoadOrderMirror(new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector)));
 
-        var result = LoadOrderEndpoints.PutLoadOrder(request, thisWindow, new ExternalChangeWatcher(), NullLoggerFactory.Instance);
+        var result = LoadOrderEndpoints.PutLoadOrder(request, thisWindow, new LoadOrderHolder(), new ExternalChangeWatcher(), NullLoggerFactory.Instance);
 
         var problem = Assert.IsAssignableFrom<ProblemHttpResult>(result);
         Assert.Equal(423, problem.StatusCode);

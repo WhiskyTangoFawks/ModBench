@@ -227,7 +227,7 @@ public static class PluginEndpoints
     // ADR-0041: the Track gesture. Origin names the mod folder (every loaded plugin sharing
     // it gets tracked together — a mod can hold more than one plugin); the load order resolves
     // which physical folder that is.
-    internal static async Task<IResult> Track(TrackRequest req, ILoadOrderMirror mirror, TrackService trackService, ILoggerFactory loggerFactory)
+    internal static async Task<IResult> Track(TrackRequest req, ILoadOrderMirror mirror, LoadOrderHolder holder, TrackService trackService, ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
         if (string.IsNullOrWhiteSpace(req.Origin))
@@ -237,8 +237,10 @@ public static class PluginEndpoints
 
         try
         {
-            var (loadOrder, _) = mirror.RequireScope();
-            await trackService.TrackAsync(loadOrder, req.Origin, preset);
+            // RequireScope for the refusal only: which copies this origin holds is the load order's
+            // answer, and the write side reads it from the shared kernel rather than from the mirror.
+            mirror.RequireScope();
+            await trackService.TrackAsync(holder.Current, req.Origin, preset);
             return Results.Ok(new TrackResponse(req.Origin));
         }
         catch (NoLoadOrderException ex)

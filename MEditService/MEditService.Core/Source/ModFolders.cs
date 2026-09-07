@@ -11,6 +11,11 @@ public static class ModFolders
     /// <summary>The folder holding the plugin's file, or null for a vanilla/DLC master resolved from the
     /// game's own Data directory (Track does not apply there) or a plugin the load order does not
     /// know.</summary>
+    public static string? Of(LoadOrder loadOrder, PluginKey plugin) =>
+        loadOrder.Copy(plugin) is { } copy ? Of(copy.Origin, copy.Path) : null;
+
+    // The same rule for a caller still holding the mirror's view. Scans the view rather than
+    // projecting it to a value: this is called per plugin inside per-plugin loops.
     public static string? Of(ILoadOrder? loadOrder, PluginKey plugin)
     {
         var metadata = loadOrder?.Plugins.FirstOrDefault(p =>
@@ -35,6 +40,13 @@ public static class ModFolders
 
     /// <summary>The mod folder only when it is tracked — the single condition under which a plugin has
     /// source text at all.</summary>
+    public static string? TrackedOf(LoadOrder loadOrder, PluginKey plugin) =>
+        Tracked(Of(loadOrder, plugin));
+
+    /// <summary>The same rule for a caller still holding the mirror's view.</summary>
     public static string? TrackedOf(ILoadOrder? loadOrder, PluginKey plugin) =>
-        Of(loadOrder, plugin) is { } modFolder && SourceRepository.IsTracked(modFolder) ? modFolder : null;
+        Tracked(Of(loadOrder, plugin));
+
+    private static string? Tracked(string? modFolder) =>
+        modFolder is not null && SourceRepository.IsTracked(modFolder) ? modFolder : null;
 }

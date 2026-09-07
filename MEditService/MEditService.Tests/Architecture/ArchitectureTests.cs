@@ -60,12 +60,16 @@ public sealed class ArchitectureTests
         Assert.True(offenders.Count == 0, "mtime read in:\n" + string.Join("\n", offenders));
     }
 
-    // ADR-0044: PUT /load-order is the only arrival; a second caller makes the mirror's Status lie.
+    // ADR-0044: PUT /load-order is the only arrival; a second caller makes the mirror's Status lie,
+    // and a second Apply makes the shared kernel's load order disagree with the snapshot that came in.
     [Fact]
     public void LoadOrder_ArrivesOnlyThroughTheLoadOrderEndpoint()
     {
-        var offenders = Offenders(SolutionDirectory(), Projects, ".Reconcile(", allowedFiles: ["LoadOrderEndpoints.cs"]);
-        Assert.True(offenders.Count == 0, "Reconcile called outside the endpoint in:\n" + string.Join("\n", offenders));
+        string[] allowed = ["LoadOrderEndpoints.cs"];
+        var offenders = Offenders(SolutionDirectory(), Projects, ".Reconcile(", allowed)
+            .Concat(Offenders(SolutionDirectory(), Projects, "holder.Apply(", allowed))
+            .ToList();
+        Assert.True(offenders.Count == 0, "Reconcile or Apply called outside the endpoint in:\n" + string.Join("\n", offenders));
     }
 
     // ADR-0008: PluginWriter backs the binary up first; LoadOrderMirror writes only a brand-new
