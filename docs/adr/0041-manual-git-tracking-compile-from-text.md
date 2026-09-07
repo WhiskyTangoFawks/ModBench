@@ -115,10 +115,13 @@ which diffs through `EnumerateMajorRecords`, and a `ModHeader` is not in that en
 
 **Container source units are found by scanning the tree, never by computing a path.** A
 path-computation grammar would be a second copy of the serializer's own directory-naming policy
-and could only drift from it; `SourceUnitResolver` reads the disk (one group subtree per
-lookup) — the one source that cannot drift. Head/Effective reconciliation of a container
-likewise diffs two whole-mod deserializations structurally. Proposed and declined twice;
-this paragraph is the standing answer.
+and could only drift from it; `SourceUnitResolver` reads the disk — the one source that cannot
+drift. A container's directory is found under whichever directory-per-record group folder holds
+it, and a record inlined in another record's document through a per-plugin FormKey-to-document
+map built by one token scan of the tree, validated on use rather than by a file timestamp
+(ADR-0001). Neither asks the Index (ADR-0046 invariant 9). Head/Effective reconciliation of a
+container likewise diffs two whole-mod deserializations structurally. Proposed and declined
+twice; this paragraph is the standing answer.
 
 **External change flows through one dialog.** A bridge assembly hosted in the backend process
 (watch / deserialize / compile; knows nothing of load orders or the DB) plus the load-time hash

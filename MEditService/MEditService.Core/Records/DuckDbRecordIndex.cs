@@ -393,7 +393,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         if (recordType == null) return;
 
         var unit = SourceUnitResolver.Resolve(
-            At(RecordRef.Effective), key, modFolder, formKey, recordType, effective?.EditorId ?? head?.EditorId, _release);
+            key, modFolder, formKey, recordType, effective?.EditorId ?? head?.EditorId, _release);
 
         string? workingTreeText = null;
         if (unit is { } resolved)

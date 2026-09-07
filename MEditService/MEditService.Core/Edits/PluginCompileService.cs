@@ -175,7 +175,7 @@ public sealed class PluginCompileService(
             // Only records with something to report pay for resolution, which keeps a container's
             // subtree scan off the common path.
             var relativePath = SourceUnitResolver
-                .Resolve(reads, plugin, resolverRoot, formKey, document.RecordType, document.EditorId, gameRelease, resolutionCache)
+                .Resolve(plugin, resolverRoot, formKey, document.RecordType, document.EditorId, gameRelease, resolutionCache)
                 ?.RelativePath ?? string.Empty;
             diagnostics.AddRange(errors.Select(message => new CompileDiagnostic(formKey, relativePath, message)));
         }

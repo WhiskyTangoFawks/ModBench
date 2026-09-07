@@ -60,16 +60,15 @@ public sealed class RecordEditService(
         var reads = index.At(RecordRef.Effective);
         var owner = reads.GetDocument(unit.OwnerFormKey, plugin)!;
 
-        // A flat record is the repository's, by identity; a container's own file and an embedded
-        // child's are still resolved to a path here.
-        var isFlat = !unit.IsEmbedded && !unit.IsDirectoryPerRecord;
-        var identity = new RecordIdentity(formKey, document.RecordType, document.EditorId);
-        var text = isFlat
-            ? repository.Get(plugin, identity)?.Body ?? IndexedBodyOf(document)
-            : ReadSourceText(unit.FullPath, owner);
+        // An embedded child is patched inside the document that carries it, so the identity written
+        // back is that document's — its own for every other shape, the header included.
+        var written = unit.IsEmbedded
+            ? new RecordIdentity(unit.OwnerFormKey, unit.OwnerRecordType, owner.EditorId)
+            : new RecordIdentity(formKey, document.RecordType, document.EditorId);
+        var text = repository.Get(plugin, written)?.Body ?? IndexedBodyOf(written, owner, document);
 
-        // An embedded child is patched inside its parent's document: the parent is what the file
-        // holds and what the codec reads, so every untouched byte of it comes back intact.
+        // The parent is what the file holds and what the codec reads, so every untouched byte of it
+        // comes back intact.
         IReadOnlyList<PathHop> prefix = [];
         if (unit.IsEmbedded)
         {
@@ -83,7 +82,7 @@ public sealed class RecordEditService(
                     RecordEditRefusal.SourceUnitNotFound,
                     // Deliberately does not blame an external change: a defect reads identically, and a
                     // wrong explanation sends the user hunting a problem that is not there.
-                    $"{unit.RelativePath} is indexed as holding {formKey}, but its own text does not " +
+                    $"{unit.RelativePath} was found holding {formKey}, but its own text does not " +
                     "carry it. If nothing outside Modbench changed that file, this is a defect — please " +
                     "report it; otherwise relaunch mEdit so the index re-reads the tree.");
             }
@@ -100,21 +99,16 @@ public sealed class RecordEditService(
         // or history entry.
         if (string.Equals(newText, text, StringComparison.Ordinal)) return RecordEditResult.Success();
 
-        // The file name carries the EditorID, so an EditorID edit is a rename too. Done before the write.
-        var newEditorId = unit.IsEmbedded ? document.EditorId : EditorIdOf(newText);
-        if (isFlat)
+        // The leaf name carries the EditorID, so an EditorID edit is a rename too. Done before the
+        // write; newText is the written document's own text, so its root EditorID is the new name.
+        var newEditorId = EditorIdOf(newText);
+        if (repository.Rename(plugin, written, newEditorId) is { } newLeaf && logger.IsEnabled(LogLevel.Information))
         {
-            repository.Rename(plugin, identity, newEditorId);
-            repository.Put(plugin, new SourceDocument(formKey, document.RecordType, newEditorId, newText));
+            logger.LogInformation(
+                "EditorID changed on {FormKey}; moved its source unit from {Old} to {New}",
+                written.FormKey, written.EditorId, newLeaf);
         }
-        else
-        {
-            var sourcePath = RenameSourceUnit(unit, FormKey.Factory(unit.OwnerFormKey), newEditorId, document);
-
-            // The atomic write matters here: the file is inside a live git working tree the SCM panel
-            // may read at any moment.
-            SourceUnitResolver.WriteTextAtomic(sourcePath, newText);
-        }
+        repository.Put(plugin, new SourceDocument(written.FormKey, written.RecordType, newEditorId, newText));
 
         // The new value can flip filter membership either way.
         mirror.ReapplyFilter();
@@ -137,23 +131,14 @@ public sealed class RecordEditService(
             : null;
     }
 
-    // Falls back to the indexed body only when the file is missing (never assume exclusive
-    // ownership): refusing would strand the user with no way to put the record back.
-    private string ReadSourceText(string sourcePath, RecordDocument document)
-    {
-        if (File.Exists(sourcePath)) return File.ReadAllText(sourcePath);
-        logger.LogWarning(
-            "Source file {SourcePath} is missing; editing from the indexed document and rewriting it", sourcePath);
-        return document.Body!;
-    }
-
-    // The same fallback for a caller that asked the repository and got nothing: it names no path, so
-    // the record is what the warning can name.
-    private string IndexedBodyOf(RecordDocument document)
+    // Falls back to the indexed body only when no document holds the record (never assume exclusive
+    // ownership): refusing would strand the user with no way to put it back.
+    private string IndexedBodyOf(RecordIdentity written, RecordDocument owner, RecordDocument document)
     {
         logger.LogWarning(
-            "No source file holds {FormKey}; editing from the indexed document and rewriting it", document.FormKey);
-        return document.Body!;
+            "No source document holds {FormKey}; editing from the indexed document and rewriting it",
+            written.FormKey);
+        return (written.FormKey == document.FormKey ? document : owner).Body!;
     }
 
     /// <summary>The codec is the one constructor: a record begins as the document naming its identity,
@@ -224,90 +209,25 @@ public sealed class RecordEditService(
         return null;
     }
 
-    // Move first, then write: a crash between leaves the file at its new name with old content, valid
-    // and still findable via FlatSourcePath's FormKey-suffix fallback. The reverse order leaves two
-    // files claiming one FormKey, which AmbiguousSourceUnitException refuses.
-    private string RenameSourceUnit(SourceUnit unit, FormKey formKey, string? editorId, RecordDocument document)
-    {
-        // An embedded child's EditorID appears in no path: the file belongs to its parent, whose own
-        // EditorID this edit did not touch. Nothing to move.
-        if (unit.IsEmbedded) return unit.FullPath;
-        if (string.Equals(editorId, document.EditorId, StringComparison.Ordinal)) return unit.FullPath;
-
-        var isDirectoryPerRecord = unit.IsDirectoryPerRecord;
-        var oldLeafPath = isDirectoryPerRecord ? Path.GetDirectoryName(unit.FullPath)! : unit.FullPath;
-
-        // A leaf is named by identity alone (ADR-0042 decision 4), so a rename touches no sibling or
-        // parent document.
-        var newLeafName = SourceUnitResolver.LeafNameFor(formKey, editorId, isDirectoryPerRecord);
-        var newLeafPath = Path.Combine(Path.GetDirectoryName(oldLeafPath)!, newLeafName);
-
-        if (string.Equals(oldLeafPath, newLeafPath, StringComparison.Ordinal)) return unit.FullPath;
-
-        if (isDirectoryPerRecord)
-        {
-            Directory.Move(oldLeafPath, newLeafPath);
-            if (logger.IsEnabled(LogLevel.Information))
-            {
-                logger.LogInformation(
-                    "EditorID changed on {FormKey}; moved its source directory {Old} to {New}",
-                    formKey, Path.GetFileName(oldLeafPath), Path.GetFileName(newLeafPath));
-            }
-            return Path.Combine(newLeafPath, SourceUnitResolver.RecordDataFileName);
-        }
-
-        File.Move(oldLeafPath, newLeafPath, overwrite: true);
-        if (logger.IsEnabled(LogLevel.Information))
-        {
-            logger.LogInformation(
-                "EditorID changed on {FormKey}; moved its source file {Old} to {New}",
-                formKey, Path.GetFileName(oldLeafPath), Path.GetFileName(newLeafPath));
-        }
-        return newLeafPath;
-    }
-
     /// <summary>A working-tree deletion: gone at Effective, still served at Head until compiled. No
     /// reference cascade; a dangling FormLink surfaces as an ordinary compile diagnostic (ADR-0041).
     /// Every record shape resolves through <see cref="SourceUnitResolver"/>.</summary>
     public RecordEditResult DeleteRecord(PluginKey plugin, string formKey)
     {
         if (ResolveEditTarget(plugin, formKey, out var target) is { } blocked) return blocked;
-        var (index, _, release, document, unit, repository) = target;
+        var (_, _, _, document, unit, repository) = target;
         if (RefuseIfHeader(document.RecordType) is { } headerRefusal) return headerRefusal;
-        var reads = index.At(RecordRef.Effective);
 
         // One changed document either way: the owner without the child, or the record's own gone.
         // Every descendant's row follows from that when the projector re-reads it.
-        if (unit.IsEmbedded)
+        if (!repository.Remove(plugin, new RecordIdentity(formKey, document.RecordType, document.EditorId)))
         {
-            var owner = reads.GetDocument(unit.OwnerFormKey, plugin)!;
-            var record = ReadRecordFromSource(_codec, logger, unit.FullPath, owner, release);
-
-            if (!ContainerChildFields.RemoveEmbeddedChild(record, formKey))
-            {
-                // Same diagnosis as Edit's embedded lookup: states only what is observed.
-                return RecordEditResult.Refused(
-                    RecordEditRefusal.SourceUnitNotFound,
-                    $"{unit.RelativePath} is indexed as holding {formKey}, but its own text does not " +
-                    "carry it. If nothing outside Modbench changed that file, this is a defect — please " +
-                    "report it; otherwise relaunch mEdit so the index re-reads the tree.");
-            }
-
-            SerializeAndWrite(_codec, record, unit.FullPath, release);
-        }
-        else
-        {
-            // The unit may already be gone (another tool, a hand delete): that is the state this call
-            // is trying to reach, not a failure.
-            if (unit.IsDirectoryPerRecord)
-            {
-                var directory = Path.GetDirectoryName(unit.FullPath)!;
-                if (Directory.Exists(directory)) Directory.Delete(directory, recursive: true);
-            }
-            else
-            {
-                repository.Remove(plugin, new RecordIdentity(formKey, document.RecordType, document.EditorId));
-            }
+            // Same diagnosis as Edit's embedded lookup: states only what is observed.
+            return RecordEditResult.Refused(
+                RecordEditRefusal.SourceUnitNotFound,
+                $"{unit.RelativePath} was found holding {formKey}, but its own text does not " +
+                "carry it. If nothing outside Modbench changed that file, this is a defect — please " +
+                "report it; otherwise relaunch mEdit so the index re-reads the tree.");
         }
 
         // A deleted row cannot match an active filter.
@@ -327,15 +247,13 @@ public sealed class RecordEditService(
     /// record is never handed out twice.</summary>
     public RecordEditResult CreateRecord(PluginKey plugin, string recordType, string? editorId, string? requestedFormKey = null)
     {
-        if (RefuseIfBlocked(plugin, out var modFolder) is { } blocked) return blocked;
+        if (RefuseIfBlocked(plugin, out _, out var repository) is { } blocked) return blocked;
 
         var index = mirror.Index;
         if (index == null)
             return RecordEditResult.Refused(RecordEditRefusal.RecordNotFound, "No load order has been received.");
 
         var release = mirror.LoadOrder!.GameRelease;
-        if (SourceRepository.Open(modFolder, release) is not { } repository) return RefuseUntracked(plugin);
-
         var schemas = schemaReflector.GetSchemas(release);
         if (recordType == HeaderIndexer.RecordType || !schemas.TryGetValue(recordType, out var schema))
         {
@@ -397,7 +315,7 @@ public sealed class RecordEditService(
             if (isContainer && reads.GetDocument(formKey, destinationPlugin) is { } existingTarget)
             {
                 return ReplaceExplicitContainerCopyTarget(
-                    index, sourcePlugin, formKey, document, existingTarget, destinationPlugin, destinationModFolder, release);
+                    sourcePlugin, formKey, document, existingTarget, destinationPlugin, destinationModFolder, release);
             }
             return RecordEditResult.Refused(
                 RecordEditRefusal.FormKeyCollision,
@@ -519,23 +437,27 @@ public sealed class RecordEditService(
     // cannot delete them. An EditorID difference renames the unit, since the round-trip gate
     // regenerates canonical names.
     private RecordEditResult ReplaceExplicitContainerCopyTarget(
-        IRecordIndex index, PluginKey sourcePlugin, string formKey, RecordDocument sourceDocument,
+        PluginKey sourcePlugin, string formKey, RecordDocument sourceDocument,
         RecordDocument existingTarget, PluginKey destinationPlugin, string destinationModFolder, GameRelease release)
     {
-        var reads = index.At(RecordRef.Effective);
-        var unit = SourceUnitResolver.Resolve(
-                reads, destinationPlugin, destinationModFolder, formKey,
-                existingTarget.RecordType, existingTarget.EditorId, release)
+        var repository = SourceRepository.Open(destinationModFolder, release)
+            ?? throw new InvalidOperationException($"{destinationPlugin.Name} stopped being tracked mid-copy.");
+        var identity = new RecordIdentity(formKey, existingTarget.RecordType, existingTarget.EditorId);
+        var unit = repository.Locate(destinationPlugin, identity)
             ?? throw new InvalidOperationException(
-                $"{formKey} is indexed in {destinationPlugin.Name} but SourceUnitResolver cannot find its source unit.");
+                $"{destinationPlugin.Name} holds {formKey}, but no document in its source tree carries it.");
 
         var replacement = ReadCopySourceRecord(sourcePlugin, formKey, sourceDocument, release);
         ContainerChildFields.ClearAllChildSlots(replacement);
         var destinationRecord = ReadRecordFromSource(_codec, logger, unit.FullPath, existingTarget, release);
         ContainerChildFields.TransplantChildSlots(destinationRecord, replacement);
 
-        var writePath = RenameSourceUnit(unit, replacement.FormKey, replacement.EditorID, existingTarget);
-        SerializeAndWrite(_codec, replacement, writePath, release);
+        // Move first, then write: a crash between leaves the leaf at its new name with old content,
+        // still findable by FormKey. The reverse order leaves two units claiming one FormKey.
+        repository.Rename(destinationPlugin, identity, replacement.EditorID);
+        repository.Put(
+            destinationPlugin,
+            new SourceDocument(formKey, existingTarget.RecordType, replacement.EditorID, SerializeToText(replacement, release)));
         mirror.ReapplyFilter();
 
         if (logger.IsEnabled(LogLevel.Information))
@@ -669,14 +591,13 @@ public sealed class RecordEditService(
     }
 
     // Null when the indexed body is the right representation: an untracked source, an embedded record,
-    // or a missing file. Full Resolve, since a container copy source has no flat path.
+    // or a missing file. The repository's own lookup, since a container copy source has no flat path.
     private string? TrackedCopySourcePath(PluginKey sourcePlugin, string formKey, RecordDocument document, GameRelease release)
     {
         if (ModFolders.TrackedOf(mirror.LoadOrder, sourcePlugin) is not { } sourceModFolder) return null;
-        if (mirror.Reads is not { } reads) return null;
 
-        var unit = SourceUnitResolver.Resolve(
-            reads, sourcePlugin, sourceModFolder, formKey, document.RecordType, document.EditorId, release);
+        var unit = SourceRepository.Open(sourceModFolder, release)
+            ?.Locate(sourcePlugin, new RecordIdentity(formKey, document.RecordType, document.EditorId));
         if (unit is { IsEmbedded: false } own && File.Exists(own.FullPath)) return own.FullPath;
         if (unit is { IsEmbedded: true }) return null;
 
@@ -870,9 +791,8 @@ public sealed class RecordEditService(
             }
 
             var referencerModFolder = ModFolders.TrackedOf(mirror.LoadOrder, referencerPlugin)!;
-            if (SourceUnitResolver.Resolve(
-                    reads, referencerPlugin, referencerModFolder, referencerFormKey, doc.RecordType,
-                    doc.EditorId, release)
+            if (SourceRepository.Open(referencerModFolder, release)
+                    ?.Locate(referencerPlugin, new RecordIdentity(referencerFormKey, doc.RecordType, doc.EditorId))
                 is not { } unit)
             {
                 return RecordEditResult.Refused(
@@ -910,7 +830,7 @@ public sealed class RecordEditService(
                 {
                     return RecordEditResult.Refused(
                         RecordEditRefusal.SourceUnitNotFound,
-                        $"{unit.RelativePath} is indexed as carrying {embeddedFormKey}, but its own text does " +
+                        $"{unit.RelativePath} was found carrying {embeddedFormKey}, but its own text does " +
                         "not hold it. Nothing was written.");
                 }
 
@@ -1008,7 +928,8 @@ public sealed class RecordEditService(
                 $"{plugin.Name} does not hold {oldFormKey}. Nothing was written — reindex {plugin.Name} and try again.");
         }
 
-        if (SourceUnitResolver.Resolve(reads, plugin, modFolder, oldFormKey, document.RecordType, document.EditorId, release)
+        if (SourceRepository.Open(modFolder, release)
+                ?.Locate(plugin, new RecordIdentity(oldFormKey, document.RecordType, document.EditorId))
             is not { } unit)
         {
             return RecordEditResult.Refused(
@@ -1033,7 +954,7 @@ public sealed class RecordEditService(
             {
                 return RecordEditResult.Refused(
                     RecordEditRefusal.SourceUnitNotFound,
-                    $"{unit.RelativePath} is indexed as holding {oldFormKey}, but its own text does not carry it. " +
+                    $"{unit.RelativePath} was found holding {oldFormKey}, but its own text does not carry it. " +
                     "Nothing was written.");
             }
 
@@ -1289,7 +1210,7 @@ public sealed class RecordEditService(
     {
         target = default;
 
-        if (RefuseIfBlocked(plugin, out var modFolder) is { } blocked) return blocked;
+        if (RefuseIfBlocked(plugin, out var modFolder, out var repository) is { } blocked) return blocked;
 
         var index = mirror.Index;
         if (index == null)
@@ -1306,18 +1227,14 @@ public sealed class RecordEditService(
 
         var release = mirror.LoadOrder!.GameRelease;
 
-        // Asked again rather than inferred from the gate above: MO2 can replace the folder between the
-        // two, and a repository is only ever held over a folder observed tracked.
-        if (SourceRepository.Open(modFolder, release) is not { } repository) return RefuseUntracked(plugin);
-
         // An embedded child (a placed ref, landscape, navmesh, top cell) resolves to its parent's file.
-        if (SourceUnitResolver.Resolve(reads, plugin, modFolder, formKey, document.RecordType, document.EditorId, release)
+        if (repository.Locate(plugin, new RecordIdentity(formKey, document.RecordType, document.EditorId))
             is not { } unit)
         {
             return RecordEditResult.Refused(
                 RecordEditRefusal.SourceUnitNotFound,
-                $"No source file in {plugin.Name}'s tree holds {formKey}, and the index names no container " +
-                "that would. Something moved or removed it outside Modbench \u2014 check the Source Control panel.");
+                $"No document in {plugin.Name}'s source tree holds {formKey}, and no record's document " +
+                "carries it. Something moved or removed it outside Modbench \u2014 check the Source Control panel.");
         }
 
         target = new EditTarget(index, modFolder, release, document, unit, repository);
@@ -1334,7 +1251,7 @@ public sealed class RecordEditService(
     {
         source = default;
 
-        if (RefuseIfBlocked(destinationPlugin, out var destinationModFolder) is { } blocked) return blocked;
+        if (RefuseIfBlocked(destinationPlugin, out var destinationModFolder, out _) is { } blocked) return blocked;
 
         var index = mirror.Index;
         if (index == null)
@@ -1365,16 +1282,18 @@ public sealed class RecordEditService(
                 $"FormKey and EditorID; copying it would land that stub rather than the record: {diagnosis}")
             : null;
 
-    // INVARIANT: every write gesture calls this first (untracked, then the external-change deferral).
+    // INVARIANT: every write gesture calls this first, and it is the only gate on tracked-ness.
     // Reaching the source tree any other way bypasses the deferral refusal entirely.
-    private RecordEditResult? RefuseIfBlocked(PluginKey plugin, out string modFolder)
+    private RecordEditResult? RefuseIfBlocked(PluginKey plugin, out string modFolder, out SourceRepository repository)
     {
-        if (ModFolders.TrackedOf(mirror.LoadOrder, plugin) is not { } folder)
-        {
-            modFolder = "";
-            return RefuseUntracked(plugin);
-        }
-        modFolder = folder;
+        modFolder = "";
+        repository = null!;
+
+        if (ModFolders.Of(mirror.LoadOrder, plugin) is not { } folder) return RefuseUntracked(plugin);
+        if (mirror.LoadOrder is not { } loadOrder) return RefuseUntracked(plugin);
+        if (SourceRepository.Open(folder, loadOrder.GameRelease) is not { } opened) return RefuseUntracked(plugin);
+
+        (modFolder, repository) = (folder, opened);
 
         // Checked before anything else, so the source file is never reached.
         return ExternalChangeDeferral.Unanswered(folder, plugin.Name) is { } question
