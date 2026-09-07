@@ -90,7 +90,7 @@ public static class ExternalChangeEditLander
 
             var formKey = record.FormKey.ToString();
             var fullPath = Path.Combine(
-                modFolder, SourceRecordPath.For(pluginName, recordType, formKey, record.EditorID, gameRelease));
+                modFolder, SourceRepository.FlatPathFor(pluginName, recordType, formKey, record.EditorID, gameRelease));
 
             // An external EditorID change moves the record's file, so it may sit under its old EditorID.
             // Resolved by FormKey so the collision check reads the real current text and the stale file

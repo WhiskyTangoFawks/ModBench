@@ -14,11 +14,11 @@ public sealed partial class SourceRepository
     /// text.</summary>
     public IReadOnlyList<SourceDocument> ReadAll(PluginKey plugin)
     {
-        var root = SourceDocuments.RootIn(_modFolder, plugin.Name);
+        var root = RootIn(_modFolder, plugin.Name);
         if (!Directory.Exists(root)) return [];
 
         var documents = new List<SourceDocument>();
-        foreach (var path in Directory.EnumerateFiles(root, $"*{SourceUnitResolver.JsonSuffix}", SearchOption.AllDirectories))
+        foreach (var path in Directory.EnumerateFiles(root, $"*{JsonSuffix}", SearchOption.AllDirectories))
         {
             if (ReadOrNull(path) is not { } text) continue;
             if (DocumentAt(Path.GetRelativePath(_modFolder, path), text, plugin.Name) is { } document)
@@ -53,7 +53,7 @@ public sealed partial class SourceRepository
             if (!CarriesFormKey(text, identity.FormKey)) continue;
             var unit = new SourceUnit(
                 relativePath, relativePath, document.FormKey, document.RecordType, IsEmbedded: true);
-            if (SourceUnitResolver.RecordBodyFromOwnerBytes(
+            if (RecordBodyFromOwnerBytes(
                     Encoding.UTF8.GetBytes(text), unit, identity.FormKey, _release, Codec) is { } body)
             {
                 return Own(body);
@@ -75,13 +75,6 @@ public sealed partial class SourceRepository
         }
     }
 
-    /// <summary>Which FormKeys more than one document claims. Asked of the tree, not the compiled mod:
-    /// the reader's FormKey-keyed RecordCache silently collapses two files in one group folder to the
-    /// last read.</summary>
-    internal IReadOnlyList<string> FormKeysWithMoreThanOneDocument(PluginKey plugin, IEnumerable<FormKey> formKeys) =>
-        SourceUnitResolver.FormKeysWithMoreThanOneSourceUnit(
-            SourceDocuments.RootIn(_modFolder, plugin.Name), formKeys);
-
     // The plugin's committed subtree, path and text, from one ls-tree plus one cat-file per blob.
     // Empty, never null: "nothing at that ref" is an answer here.
     private IEnumerable<(string RelativePath, string Text)> BlobsAtRef(string pluginName, string gitRef)
@@ -89,7 +82,7 @@ public sealed partial class SourceRepository
         if (!IsTracked(_modFolder)) yield break;
 
         var gitDir = Path.Combine(_modFolder, ".git");
-        var sourcePrefix = ToGitPath(SourceRecordPath.RootFor(pluginName));
+        var sourcePrefix = ToGitPath(RootFor(pluginName));
         if (!GitCli.TryRun(gitDir, _modFolder, out var listing, "ls-tree", "-r", "-z", gitRef, "--", $"{sourcePrefix}/"))
             yield break;
 
@@ -114,18 +107,18 @@ public sealed partial class SourceRepository
     // FormKey, and one whose type neither its path nor its own text names.
     private SourceDocument? DocumentAt(string relativePath, string text, string pluginFileName)
     {
-        if (SourceDocuments.CarriesNoRecord(relativePath)) return null;
+        if (CarriesNoRecord(relativePath)) return null;
 
         var headerDocument = Path.Combine(
-            SourceRecordPath.RootFor(pluginFileName), SourceUnitResolver.RecordDataFileName);
-        if (SourceDocuments.FormKeyDeclaredIn(text, relativePath, headerDocument, pluginFileName) is not { } formKey)
+            RootFor(pluginFileName), RecordDataFileName);
+        if (FormKeyDeclaredIn(text, relativePath, headerDocument, pluginFileName) is not { } formKey)
             return null;
 
-        var recordType = SourceRecordPath.RecordTypeOf(relativePath, _release)
-                         ?? SourceDocuments.RootStringIn(text, "MutagenObjectType");
+        var recordType = RecordTypeOf(relativePath, _release)
+                         ?? RootStringIn(text, "MutagenObjectType");
         return recordType == null
             ? null
-            : new SourceDocument(formKey, recordType, SourceDocuments.RootStringIn(text, "EditorID"), text);
+            : new SourceDocument(formKey, recordType, RootStringIn(text, "EditorID"), text);
     }
 
     private static bool CarriesFormKey(string text, string formKey)
@@ -155,7 +148,7 @@ public sealed partial class SourceRepository
     {
         try
         {
-            return Encoding.UTF8.GetString(SourceUnitResolver.StripUtf8Bom(File.ReadAllBytes(path)));
+            return Encoding.UTF8.GetString(StripUtf8Bom(File.ReadAllBytes(path)));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {

@@ -38,7 +38,7 @@ public sealed class PluginCompileServiceTests : IDisposable
     }
 
     private List<string> NpcFiles() =>
-        [.. Directory.GetFiles(Path.Combine(_mod.ModFolder, SourceRecordPath.RootFor(CompileFixture.PluginName), "Npcs"))
+        [.. Directory.GetFiles(Path.Combine(_mod.ModFolder, SourceRepository.RootFor(CompileFixture.PluginName), "Npcs"))
             .Select(Path.GetFileName)
             .Select(n => n!)
             .Order(StringComparer.Ordinal)];
@@ -151,7 +151,7 @@ public sealed class PluginCompileServiceTests : IDisposable
     public void Compile_OfATreeInThePreviousLayout_RefusesNamingTheLeftoverAndReTrack()
     {
         var leftover = Path.Combine(
-            _mod.ModFolder, SourceRecordPath.RootFor(CompileFixture.PluginName), "Npcs", "GroupRecordData.json");
+            _mod.ModFolder, SourceRepository.RootFor(CompileFixture.PluginName), "Npcs", "GroupRecordData.json");
         Assert.False(File.Exists(leftover));
         File.WriteAllText(leftover, "{\"MEditChildOrder\": {\"Npcs\": [\"" + _mod.Npc + "\", \"" + _mod.OtherNpc + "\"]}}");
 

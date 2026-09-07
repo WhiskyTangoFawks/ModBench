@@ -70,7 +70,7 @@ public sealed class RecordEditServiceCreateRecordTests
         var created = service.CreateRecord(mod.Plugin, "npc_", "AfterTheGap");
         Assert.True(created.Applied, created.Message);
 
-        var npcsDir = Path.Combine(mod.ModFolder, SourceRecordPath.RootFor(TrackedModFixture.PluginName), "Npcs");
+        var npcsDir = Path.Combine(mod.ModFolder, SourceRepository.RootFor(TrackedModFixture.PluginName), "Npcs");
         var names = Directory.GetFiles(npcsDir)
             .Select(Path.GetFileName)
             .Where(n => !string.Equals(n, "GroupRecordData.json", StringComparison.Ordinal))

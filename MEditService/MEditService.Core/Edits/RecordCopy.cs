@@ -190,7 +190,7 @@ internal sealed class RecordCopy(ILoadOrderMirror mirror, SchemaReflector schema
         }
 
         // An interior cell's block bucket is chosen (or minted) rather than derived.
-        var placement = SourcePlacement.For(
+        var placement = SourceRepository.PlacementFor(
             destinationPlugin.Name, recordType, formKey, record.EditorID, release,
             cellLocation != null ? RecordEditService.EnsureInteriorCellBlockPath(destinationModFolder, destinationPlugin.Name, release) : null);
         RecordEditService.WriteAt(

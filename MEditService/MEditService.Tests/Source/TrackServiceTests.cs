@@ -3,6 +3,7 @@ using MEditService.Core.Plugins;
 using MEditService.Core.Records;
 using MEditService.Core.Serialization;
 using MEditService.Core.Source;
+using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -44,8 +45,8 @@ public sealed class TrackServiceTests
                 .TrackAsync(loadOrder, [new PluginKey("Fixture.esp", "FixtureMod")], "FixtureMod", SourcePreset.Edits);
 
             Assert.True(SourceRepository.IsTracked(modFolder));
-            Assert.True(Directory.Exists(Path.Combine(modFolder, SourceRecordPath.RootFor("Fixture.esp"))));
-            Assert.False(Directory.Exists(Path.Combine(modFolder, SourceRecordPath.RootFor("Broken.esp"))));
+            Assert.True(Directory.Exists(Path.Combine(modFolder, SourceRepository.RootFor("Fixture.esp"))));
+            Assert.False(Directory.Exists(Path.Combine(modFolder, SourceRepository.RootFor("Broken.esp"))));
         }
         finally
         {
@@ -87,16 +88,15 @@ public sealed class TrackServiceTests
             Assert.True(SourceRepository.IsTracked(modFolder));
 
             // Key layout paths: root header, and each flat NPC under its own group folder.
-            var sourceRoot = Path.Combine(modFolder, SourceRecordPath.RootFor("Fixture.esp"));
+            var sourceRoot = Path.Combine(modFolder, SourceRepository.RootFor("Fixture.esp"));
             var rootHeader = Path.Combine(sourceRoot, "RecordData.json");
             Assert.True(File.Exists(rootHeader), $"expected {rootHeader}");
 
-            // SourceRecordPath.For alone cannot name the file without knowing its order index —
-            // resolved through SourceUnitResolver instead, which finds it by FormKey suffix
-            // regardless of position.
-            var sourceFile1 = SourceUnitResolver.FlatSourcePath(
+            // FlatPathFor alone cannot name the file without knowing its order index; the repository
+            // finds it by FormKey suffix regardless of position.
+            var sourceFile1 = SourceDocumentPath.Of(
                 modFolder, "Fixture.esp", "npc_", npc1.FormKey.ToString(), "FirstNpc", GameRelease.Fallout4);
-            var sourceFile2 = SourceUnitResolver.FlatSourcePath(
+            var sourceFile2 = SourceDocumentPath.Of(
                 modFolder, "Fixture.esp", "npc_", npc2.FormKey.ToString(), "SecondNpc", GameRelease.Fallout4);
             Assert.True(File.Exists(sourceFile1), $"expected {sourceFile1}");
             Assert.True(File.Exists(sourceFile2), $"expected {sourceFile2}");
@@ -654,7 +654,7 @@ public sealed class TrackServiceTests
 
             Assert.True(SourceRepository.IsTracked(modFolder));
 
-            var sourceFile = SourceUnitResolver.FlatSourcePath(
+            var sourceFile = SourceDocumentPath.Of(
                 modFolder, "Fixture.esp", "Door", door.FormKey.ToString(), "MainDoor", GameRelease.Fallout4);
             Assert.True(File.Exists(sourceFile), $"expected {sourceFile}");
             var sourceText = await File.ReadAllTextAsync(sourceFile);

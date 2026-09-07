@@ -258,14 +258,12 @@ public sealed class EmbeddedChildEditTests : IDisposable
     [Fact]
     public void DeletingAKeyTheOwningDocumentOnlyReferences_RefusesRatherThanReportingASuccess()
     {
-        // A FormKey inside a document is not a child of it, so there is nothing to take out; the
-        // refusal says exactly that rather than claiming the delete landed.
+        // A FormKey outside every embed slot is a reference, not a child, so no document holds the
+        // record and the refusal says that rather than claiming the delete landed.
         var file = _fixture.SourceFileContaining(ContainerModFixture.EmbedCellEditorId);
         var withoutTheRef = System.Text.RegularExpressions.Regex.Replace(
             File.ReadAllText(file), $@"\s*\{{[^{{}}]*""{ContainerModFixture.TemporaryRefEditorId}""[^{{}}]*\}},?", "",
             System.Text.RegularExpressions.RegexOptions.Singleline);
-        // The key still appears in the document, so the tree still names this document as its owner —
-        // it is a reference to the record, not the record.
         File.WriteAllText(
             file,
             withoutTheRef.TrimEnd().TrimEnd('}')
@@ -275,7 +273,7 @@ public sealed class EmbeddedChildEditTests : IDisposable
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.SourceUnitNotFound, result.Refusal);
-        Assert.Contains("does not carry it", result.Message, StringComparison.Ordinal);
+        Assert.Contains("no record's document carries it", result.Message, StringComparison.Ordinal);
     }
 
     // ---- the fifth guarded slot ----

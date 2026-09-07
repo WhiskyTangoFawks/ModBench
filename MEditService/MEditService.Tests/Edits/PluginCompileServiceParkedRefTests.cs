@@ -69,7 +69,7 @@ public sealed class PluginCompileServiceParkedRefTests : IDisposable
     [Fact]
     public void Compile_AtMain_ReadsNoWorkingTreeSourceFile()
     {
-        var sourceRoot = Path.Combine(_mod.ModFolder, SourceRecordPath.RootFor(CompileFixture.PluginName));
+        var sourceRoot = Path.Combine(_mod.ModFolder, SourceRepository.RootFor(CompileFixture.PluginName));
         foreach (var file in Directory.EnumerateFiles(sourceRoot, "*.json", SearchOption.AllDirectories))
             File.WriteAllText(file, "{ not valid json");
 
@@ -84,7 +84,7 @@ public sealed class PluginCompileServiceParkedRefTests : IDisposable
     public void Compile_AtARefWhoseTreeCannotBeWritten_LeavesNoScratchDirectoryBehind()
     {
         const string scratchPrefix = "medit-compile-ref-";
-        var sourceRoot = SourceRecordPath.RootFor(CompileFixture.PluginName);
+        var sourceRoot = SourceRepository.RootFor(CompileFixture.PluginName);
 
         // A file name past NAME_MAX, committed by plumbing onto a ref of its own. No checkout ever
         // happens, so git stores it without complaint and only the materialise step meets the OS.

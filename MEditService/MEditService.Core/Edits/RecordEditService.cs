@@ -362,13 +362,13 @@ public sealed class RecordEditService(
 
         // A Cell's block bucket is the one thing resolved first, because it is chosen (or minted)
         // rather than derived.
-        var destination = SourcePlacement.For(
+        var destination = SourceRepository.PlacementFor(
             destinationPlugin.Name, document.RecordType, formKey, document.EditorId, release,
             isCell ? EnsureInteriorCellBlockPath(destinationModFolder, destinationPlugin.Name, release) : null);
         var relativePath = destination.RelativePath;
         WriteAt(destinationModFolder, destination, path =>
         {
-            SourceUnitResolver.WriteTextAtomic(path, body);
+            SourceRepository.WriteTextAtomic(path, body);
             return body;
         });
 
@@ -418,7 +418,7 @@ public sealed class RecordEditService(
         // Own-record-only, like Copy as Override: a container's children never ride along (deep copy
         // is a separate operation).
         ContainerChildFields.ClearAllChildSlots(newRecord);
-        var placement = SourcePlacement.For(
+        var placement = SourceRepository.PlacementFor(
             destinationPlugin.Name, document.RecordType, targetFormKey, newRecord.EditorID, release);
         var relativePath = placement.RelativePath;
         WriteAt(destinationModFolder, placement, path => SerializeAndWrite(_codec, newRecord, path, release));
@@ -1034,10 +1034,10 @@ public sealed class RecordEditService(
             var oldLeafPath = Path.GetDirectoryName(unit.FullPath)!;
             var newLeafPath = Path.Combine(
                 Path.GetDirectoryName(oldLeafPath)!,
-                SourceUnitResolver.LeafNameFor(FormKey.Factory(newFormKey), document.EditorId, isDirectory: true));
+                SourceRepository.LeafNameFor(FormKey.Factory(newFormKey), document.EditorId, isDirectory: true));
 
             transaction.Move(repository.ModFolder, oldLeafPath, newLeafPath);
-            var writePath = Path.Combine(newLeafPath, SourceUnitResolver.RecordDataFileName);
+            var writePath = Path.Combine(newLeafPath, SourceRepository.RecordDataFileName);
             transaction.Write(
                 repository.ModFolder, writePath,
                 () => _codec.SerializeAsync(root, writePath, release).GetAwaiter().GetResult());
@@ -1397,8 +1397,8 @@ public sealed class RecordEditService(
         var cellsFolder = RecordTypeDispatch.For(release).GroupFolderNameFor("cell")
             ?? throw new InvalidOperationException(
                 "This game's schema has no Cell group folder — RefuseIfCopySourceHasNoContainerOfItsOwn should have refused this first.");
-        var cellsDirectory = Path.Combine(modFolder, SourceRecordPath.RootFor(pluginName), cellsFolder);
-        SourceUnitResolver.InMintedDirectory(cellsDirectory, () => WriteMinimalGroupRecordDataIfMissing(cellsDirectory, groupType: null));
+        var cellsDirectory = Path.Combine(modFolder, SourceRepository.RootFor(pluginName), cellsFolder);
+        SourceRepository.InMintedDirectory(cellsDirectory, () => WriteMinimalGroupRecordDataIfMissing(cellsDirectory, groupType: null));
 
         var blockDirectory = FindOrMintGroupDirectory(cellsDirectory, "InteriorCellBlock");
         var subBlockDirectory = FindOrMintGroupDirectory(blockDirectory, "InteriorCellSubBlock");
@@ -1412,7 +1412,7 @@ public sealed class RecordEditService(
         if (existing != null) return existing;
 
         var directory = Path.Combine(parentDirectory, "0");
-        SourceUnitResolver.InMintedDirectory(directory, () => WriteMinimalGroupRecordDataIfMissing(directory, groupType));
+        SourceRepository.InMintedDirectory(directory, () => WriteMinimalGroupRecordDataIfMissing(directory, groupType));
         return directory;
     }
 
@@ -1425,7 +1425,7 @@ public sealed class RecordEditService(
     // which byte-compare tooling depends on.
     private static void WriteMinimalGroupRecordDataIfMissing(string directory, string? groupType)
     {
-        var path = Path.Combine(directory, "GroupRecordData.json");
+        var path = Path.Combine(directory, SourceRepository.GroupRecordDataFileName);
         if (File.Exists(path)) return;
         var bytes = groupType == null
             ? JsonSerializer.SerializeToUtf8Bytes(new { }, GroupRecordDataOptions)
@@ -1463,7 +1463,7 @@ public sealed class RecordEditService(
     internal static string WriteAt(string modFolder, SourcePlacement placement, Func<string, string> write)
     {
         var path = Path.Combine(modFolder, placement.RelativePath);
-        return SourceUnitResolver.InMintedDirectory(Path.GetDirectoryName(path)!, () => write(path));
+        return SourceRepository.InMintedDirectory(Path.GetDirectoryName(path)!, () => write(path));
     }
 
     /// <summary>Two serializations, one for the index and one for disk; <see cref="RecordTextCodec"/>

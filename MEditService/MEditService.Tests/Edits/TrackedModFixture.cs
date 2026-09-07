@@ -3,6 +3,7 @@ using MEditService.Core.Plugins;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
 using MEditService.Core.Source;
+using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -146,7 +147,7 @@ public sealed class TrackedModFixture : IDisposable
         GitCli.Run(Path.Combine(ModFolder, ".git"), ModFolder, "show", $"HEAD:{relativePath.Replace('\\', '/')}");
 
     public string RelativeSourcePath(FormKey formKey, string recordType, string? editorId) =>
-        Path.GetRelativePath(ModFolder, SourceUnitResolver.FlatSourcePath(
+        Path.GetRelativePath(ModFolder, SourceDocumentPath.Of(
             ModFolder, ActualPluginName, recordType, formKey.ToString(), editorId, GameRelease.Fallout4));
 
     public void Dispose()
