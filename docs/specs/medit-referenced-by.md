@@ -147,7 +147,7 @@ condition-specific collector.
 **Only the members a condition actually uses are references.** Mutagen reads one four-byte slot into
 both `ParameterOneNumber` and `ParameterOneRecord`, so every numeric parameter also reads as a
 FormID; and `Reference` is populated whatever the Run On value says. Filing either as a reference
-would invent a referrer. `FormRefPathBuilder` therefore skips a member the record's own governing
+would invent a referrer. the form-reference collector therefore skips a member the record's own governing
 value says is idle, driven by `FieldMetadata.SiblingsInUse` (ADR-0032) — a quest-stage index is not
 a reference to whatever record happens to hold that FormID, and a Run On of Subject does not point
 at whatever target the condition last carried.
