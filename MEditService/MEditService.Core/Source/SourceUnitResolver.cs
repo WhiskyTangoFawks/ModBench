@@ -19,9 +19,9 @@ internal readonly record struct SourceUnit(
         && Path.GetFileName(FullPath).Equals(SourceUnitResolver.RecordDataFileName, StringComparison.Ordinal);
 }
 
-/// <summary>The record→source-unit question for every record shape (ADR-0041 amendment). Disk, not a
-/// path map: the tree is the serializer's own output and cannot drift from it. Scans narrow to
-/// one subtree where possible.</summary>
+/// <summary>The record→source-unit question for every record shape (ADR-0041 amendment), answered
+/// from the tree alone. The tree is the serializer's own output, so nothing it says can drift from
+/// what the codec reads.</summary>
 internal static class SourceUnitResolver
 {
     /// <summary>The whole-mod door's own name for a directory-per-record container's field file
@@ -35,11 +35,11 @@ internal static class SourceUnitResolver
 
     private const string JsonSuffix = ".json";
 
-    /// <summary><paramref name="formKey"/>'s source unit, or null when nothing holds it and the index
-    /// knows no container that would. The scan matches on FormKey alone, so a stale
-    /// <paramref name="editorId"/> cannot mislead it.</summary>
+    /// <summary><paramref name="formKey"/>'s source unit, or null when no document in the tree holds
+    /// it. Everything is matched on FormKey alone, so a stale <paramref name="editorId"/> costs a scan
+    /// rather than a wrong answer.</summary>
     internal static SourceUnit? Resolve(
-        IRecordReads reads, PluginKey plugin, string modFolder,
+        PluginKey plugin, string modFolder,
         string formKey, string recordType, string? editorId, GameRelease release,
         SourceUnitResolutionCache? cache = null)
     {
@@ -64,28 +64,22 @@ internal static class SourceUnitResolver
             // Not flat — a container, or a child with no top-level group of its own. Fall through.
         }
 
-        // A placed reference is embedded in its cell by definition and the index knows the cell outright —
-        // no scan for the most common container-shaped edit.
-        if (reads.GetPlacement(formKey, plugin) is { } placement)
-            return ResolveOwner(reads, plugin, modFolder, placement.ParentCell, release, cache);
-
-        // Only a directory-per-record type (Cell, Worldspace) can have a file of its own; a type with
-        // no group of its own is always embedded, so nothing is scanned for it.
+        // Only a directory-per-record type (Cell, Worldspace) can have a directory of its own; a type
+        // with no group of its own is always embedded, so nothing is scanned for it.
         var root = Path.Combine(modFolder, SourceRecordPath.RootFor(plugin.Name));
-        if (RecordTypeDispatch.For(release).GroupFolderNameFor(recordType) is { } groupFolder
-            && FindOwnUnit(reads, plugin, root, groupFolder, formKey, recordType, release, cache) is { } own)
+        if (RecordTypeDispatch.For(release).GroupFolderNameFor(recordType) is not null
+            && FindOwnUnit(root, formKey, release, cache) is { } own)
         {
             return new SourceUnit(
                 own, Path.GetRelativePath(modFolder, own), formKey, recordType, IsEmbedded: false);
         }
 
-        // No file of its own, so it is embedded in a parent's document: container_child names the parent
-        // of a quest's child, a response, a Landscape or a NavigationMesh; cell_location names a TopCell's
-        // worldspace.
-        var parent = reads.GetContainerParent(plugin, formKey)?.ParentFormKey
-                     ?? reads.GetCellLocation(plugin, formKey)?.ParentWorldspace;
+        // Nothing of its own, so it is inlined in another record's document, which the owner map names.
+        if (EmbeddedOwners.For(root, release).DocumentHolding(formKey, cache) is not { } owner) return null;
 
-        return parent == null ? null : ResolveOwner(reads, plugin, modFolder, parent, release, cache);
+        return new SourceUnit(
+            owner.FullPath, Path.GetRelativePath(modFolder, owner.FullPath), owner.FormKey, owner.RecordType,
+            IsEmbedded: true);
     }
 
     /// <summary>The computed path when it exists, else whichever file in the group folder carries this
@@ -121,25 +115,6 @@ internal static class SourceUnitResolver
                 "within a mod, so this tree is corrupt — most likely a rename that was interrupted " +
                 "partway. Resolve the duplicate by hand before editing."),
         };
-    }
-
-    // Re-entered through Resolve so a nested container needs no special case; bounded because the index
-    // cannot claim a record contains itself.
-    private static SourceUnit? ResolveOwner(
-        IRecordReads reads, PluginKey plugin, string modFolder, string ownerFormKey, GameRelease release,
-        SourceUnitResolutionCache? cache)
-    {
-        // One cell's worth of placed refs shares one owner read and one scan.
-        if (cache != null && cache.Owners.TryGetValue(ownerFormKey, out var memoized)) return memoized;
-
-        SourceUnit? resolved = null;
-        if (reads.GetDocument(ownerFormKey, plugin) is { } owner
-            && Resolve(reads, plugin, modFolder, ownerFormKey, owner.RecordType, owner.EditorId, release, cache) is { } unit)
-        {
-            resolved = unit with { IsEmbedded = true };
-        }
-        if (cache != null) cache.Owners[ownerFormKey] = resolved;
-        return resolved;
     }
 
     /// <summary>Which FormKeys more than one source unit claims. Asked of the tree, not the compiled mod:
@@ -192,32 +167,34 @@ internal static class SourceUnitResolver
         }
     }
 
-    // Matches the FormKey alone, never the EditorID, which the index's copy may hold stale mid-rename.
+    // Matches the FormKey alone, never the EditorID, which a caller may hold stale mid-rename. Every
+    // directory-per-record group is searched, since a cell's directory sits in its own group's blocks
+    // or inside its worldspace's.
     private static string? FindOwnUnit(
-        IRecordReads reads, PluginKey plugin, string sourceRoot, string groupFolder, string formKey, string recordType,
-        GameRelease release, SourceUnitResolutionCache? cache)
+        string sourceRoot, string formKey, GameRelease release, SourceUnitResolutionCache? cache)
     {
-        var scanRoot = Path.Combine(sourceRoot, ScanSubtree(reads, plugin, groupFolder, formKey, recordType, release) ?? string.Empty);
-        if (!Directory.Exists(scanRoot)) return null;
-
         var suffix = FilesafeFormKey(formKey);
-        // With a cache the subtree is listed once and the pre-filter runs in memory; AsSourceUnitFile is the
-        // real test either way.
-        var candidates = cache == null
-            ? Directory.EnumerateFileSystemEntries(scanRoot, $"*{suffix}*", SearchOption.AllDirectories)
-            : cache.EntriesUnder(scanRoot).Where(e => Path.GetFileName(e).Contains(suffix, StringComparison.OrdinalIgnoreCase));
-        var matches = candidates
-            .Select(entry => AsSourceUnitFile(entry, suffix))
-            .OfType<string>()
-            .Take(2)
-            .ToList();
+        var matches = new List<string>();
+        foreach (var groupFolder in RecordTypeDispatch.For(release).DirectoryPerRecordFolderNames)
+        {
+            var scanRoot = Path.Combine(sourceRoot, groupFolder);
+            if (!Directory.Exists(scanRoot)) continue;
+
+            // With a cache the subtree is listed once and the pre-filter runs in memory; AsSourceUnitFile
+            // is the real test either way.
+            var candidates = cache == null
+                ? Directory.EnumerateFileSystemEntries(scanRoot, $"*{suffix}*", SearchOption.AllDirectories)
+                : cache.EntriesUnder(scanRoot).Where(e => Path.GetFileName(e).Contains(suffix, StringComparison.OrdinalIgnoreCase));
+            matches.AddRange(candidates.Select(entry => AsSourceUnitFile(entry, suffix)).OfType<string>().Take(2));
+            if (matches.Count > 1) break;
+        }
 
         return matches.Count switch
         {
             0 => null,
             1 => matches[0],
             _ => throw new AmbiguousSourceUnitException(
-                $"More than one source unit under '{scanRoot}' claims FormKey {formKey}. A FormKey is " +
+                $"More than one source unit under '{sourceRoot}' claims FormKey {formKey}. A FormKey is " +
                 "unique within a mod, so this tree is corrupt — resolve the duplicate by hand before editing."),
         };
     }
@@ -315,25 +292,6 @@ internal static class SourceUnitResolver
 
     internal static void InMintedDirectory(string directory, Action write) =>
         InMintedDirectory(directory, () => { write(); return true; });
-
-    // The narrowing that keeps a point write off the full-tree walk. A Cell's subtree is not a property
-    // of its type: interior under Cells, exterior under its worldspace, per the index's cell_location row.
-    private static string? ScanSubtree(
-        IRecordReads reads, PluginKey plugin, string groupFolder, string formKey, string recordType, GameRelease release)
-    {
-        var dispatch = RecordTypeDispatch.For(release);
-
-        // A cell lives under Cells or under its worldspace, never both; an absent row leaves the choice open.
-        if (dispatch.ConcreteFor(recordType)?.Name == "Cell")
-        {
-            if (reads.GetCellLocation(plugin, formKey) is not { } location) return null;
-            // The worldspace folder through the same dispatch table rather than a second literal, so
-            // there is one place that knows what that directory is called.
-            return location.ParentWorldspace == null ? groupFolder : dispatch.GroupFolderNameFor("Worldspace");
-        }
-
-        return groupFolder;
-    }
 
     /// <summary>The record's own text out of the bytes <paramref name="unit"/>'s file holds: itself for
     /// a flat record, or re-extracted for an embedded child. RefreshByKeys's write.</summary>

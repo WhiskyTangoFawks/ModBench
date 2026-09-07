@@ -36,7 +36,7 @@ public sealed class ExternalChangeEditLanderTests : IDisposable
     {
         WriteExternalBinaryChange(0.9f);
 
-        var result = ExternalChangeEditLander.Keep(_mod.ModFolder, _mod.Plugin, PluginPath, GameRelease.Fallout4, _mod.Mirror.Projected(), SharedSchemaReflector.Instance);
+        var result = ExternalChangeEditLander.Keep(_mod.ModFolder, _mod.Plugin, PluginPath, GameRelease.Fallout4, SharedSchemaReflector.Instance);
 
         Assert.True(result.Applied, result.RefusalReason);
         Assert.Equal([_mod.Npc.ToString()], result.LandedFormKeys);
@@ -51,7 +51,7 @@ public sealed class ExternalChangeEditLanderTests : IDisposable
     {
         WriteExternalBinaryChange(0.9f);
 
-        ExternalChangeEditLander.Keep(_mod.ModFolder, _mod.Plugin, PluginPath, GameRelease.Fallout4, _mod.Mirror.Projected(), SharedSchemaReflector.Instance);
+        ExternalChangeEditLander.Keep(_mod.ModFolder, _mod.Plugin, PluginPath, GameRelease.Fallout4, SharedSchemaReflector.Instance);
 
         var gitDir = Path.Combine(_mod.ModFolder, ".git");
         var binarySha = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(PluginPath)));
@@ -64,7 +64,7 @@ public sealed class ExternalChangeEditLanderTests : IDisposable
         ExternalChangeDeferral.Set(_mod.ModFolder, TrackedModFixture.PluginName, "unanswered");
         WriteExternalBinaryChange(0.9f);
 
-        ExternalChangeEditLander.Keep(_mod.ModFolder, _mod.Plugin, PluginPath, GameRelease.Fallout4, _mod.Mirror.Projected(), SharedSchemaReflector.Instance);
+        ExternalChangeEditLander.Keep(_mod.ModFolder, _mod.Plugin, PluginPath, GameRelease.Fallout4, SharedSchemaReflector.Instance);
 
         Assert.Null(ExternalChangeDeferral.Unanswered(_mod.ModFolder, TrackedModFixture.PluginName));
     }
@@ -79,7 +79,7 @@ public sealed class ExternalChangeEditLanderTests : IDisposable
 
         WriteExternalBinaryChange(0.9f);
 
-        var result = ExternalChangeEditLander.Keep(_mod.ModFolder, _mod.Plugin, PluginPath, GameRelease.Fallout4, _mod.Mirror.Projected(), SharedSchemaReflector.Instance);
+        var result = ExternalChangeEditLander.Keep(_mod.ModFolder, _mod.Plugin, PluginPath, GameRelease.Fallout4, SharedSchemaReflector.Instance);
 
         Assert.False(result.Applied);
         Assert.Contains(_mod.Npc.ToString(), result.RefusalReason, StringComparison.Ordinal);
@@ -109,7 +109,7 @@ public sealed class ExternalChangeEditLanderTests : IDisposable
         firstMod.WriteToBinary(PluginPath);
 
         var firstLand = ExternalChangeEditLander.Keep(
-            _mod.ModFolder, _mod.Plugin, PluginPath, GameRelease.Fallout4, _mod.Mirror.Projected(), SharedSchemaReflector.Instance);
+            _mod.ModFolder, _mod.Plugin, PluginPath, GameRelease.Fallout4, SharedSchemaReflector.Instance);
         Assert.True(firstLand.Applied, firstLand.RefusalReason);
         var otherNpcPathBeforeDelete = SourceUnitResolver.FlatSourcePath(
             _mod.ModFolder, TrackedModFixture.PluginName, "npc_", _mod.OtherNpc.ToString(),
@@ -130,7 +130,7 @@ public sealed class ExternalChangeEditLanderTests : IDisposable
         secondMod.WriteToBinary(PluginPath);
 
         var secondLand = ExternalChangeEditLander.Keep(
-            _mod.ModFolder, _mod.Plugin, PluginPath, GameRelease.Fallout4, _mod.Mirror.Projected(), SharedSchemaReflector.Instance);
+            _mod.ModFolder, _mod.Plugin, PluginPath, GameRelease.Fallout4, SharedSchemaReflector.Instance);
         Assert.True(secondLand.Applied, secondLand.RefusalReason);
 
         // Exactly one file for UntouchedNpc, at the same path it already had, with its content
@@ -160,7 +160,7 @@ public sealed class ExternalChangeEditLanderTests : IDisposable
         fallout4Mod.WriteToBinary(pluginPath);
 
         var result = ExternalChangeEditLander.Keep(
-            mod.ModFolder, mod.Plugin, pluginPath, GameRelease.Fallout4, mod.Mirror.Projected(), SharedSchemaReflector.Instance);
+            mod.ModFolder, mod.Plugin, pluginPath, GameRelease.Fallout4, SharedSchemaReflector.Instance);
 
         Assert.True(result.Applied, result.RefusalReason);
         Assert.Equal([mod.Npc.ToString()], result.LandedFormKeys);
@@ -179,7 +179,7 @@ public sealed class ExternalChangeEditLanderTests : IDisposable
 
         WriteExternalBinaryChange(0.9f);
 
-        var result = ExternalChangeEditLander.Keep(_mod.ModFolder, _mod.Plugin, PluginPath, GameRelease.Fallout4, _mod.Mirror.Projected(), SharedSchemaReflector.Instance);
+        var result = ExternalChangeEditLander.Keep(_mod.ModFolder, _mod.Plugin, PluginPath, GameRelease.Fallout4, SharedSchemaReflector.Instance);
 
         Assert.True(result.Applied, result.RefusalReason);
     }

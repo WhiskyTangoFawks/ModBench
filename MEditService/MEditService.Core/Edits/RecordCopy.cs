@@ -112,11 +112,9 @@ internal sealed class RecordCopy(ILoadOrderMirror mirror, SchemaReflector schema
 
         // The container may itself be embedded (a topic inside its quest's document): the file read
         // and written is the document's root, and the container is found inside it.
-        var containerUnit = SourceUnitResolver.Resolve(
-            reads, destinationPlugin, destinationModFolder, containerFormKey, destinationContainer.RecordType,
-            destinationContainer.EditorId, release)
-            ?? throw new InvalidOperationException(
-                $"{containerFormKey} is indexed in {destinationPlugin.Name} but SourceUnitResolver cannot find its source unit.");
+        var containerUnit = Locate(
+            destinationModFolder, destinationPlugin, containerFormKey, destinationContainer.RecordType,
+            destinationContainer.EditorId, release);
         var owner = reads.GetDocument(containerUnit.OwnerFormKey, destinationPlugin)!;
         var ownerRecord = RecordEditService.ReadRecordFromSource(codec, logger, containerUnit.FullPath, owner, release);
         var containerRecord = containerUnit.IsEmbedded
@@ -139,10 +137,8 @@ internal sealed class RecordCopy(ILoadOrderMirror mirror, SchemaReflector schema
     {
         var reads = index.At(RecordRef.Effective);
         var existing = reads.GetDocument(formKey, destinationPlugin)!;
-        var unit = SourceUnitResolver.Resolve(
-                reads, destinationPlugin, destinationModFolder, formKey, existing.RecordType, existing.EditorId, release)
-            ?? throw new InvalidOperationException(
-                $"{formKey} is indexed in {destinationPlugin.Name} but SourceUnitResolver cannot find its source unit.");
+        var unit = Locate(
+            destinationModFolder, destinationPlugin, formKey, existing.RecordType, existing.EditorId, release);
         if (!unit.IsEmbedded)
         {
             throw new InvalidOperationException(
@@ -239,11 +235,9 @@ internal sealed class RecordCopy(ILoadOrderMirror mirror, SchemaReflector schema
         string? existingWorldspaceDirectory = null;
         if (existingWorldspace != null)
         {
-            var worldspaceUnit = SourceUnitResolver.Resolve(
-                reads, destinationPlugin, destinationModFolder, worldspaceFormKey,
-                existingWorldspace.RecordType, existingWorldspace.EditorId, release)
-                ?? throw new InvalidOperationException(
-                    $"{worldspaceFormKey} is indexed in {destinationPlugin.Name} but SourceUnitResolver cannot find its source unit.");
+            var worldspaceUnit = Locate(
+                destinationModFolder, destinationPlugin, worldspaceFormKey,
+                existingWorldspace.RecordType, existingWorldspace.EditorId, release);
             existingWorldspaceDirectory = Path.GetDirectoryName(worldspaceUnit.FullPath)!;
         }
 
@@ -274,6 +268,14 @@ internal sealed class RecordCopy(ILoadOrderMirror mirror, SchemaReflector schema
 
         return RecordEditResult.Success();
     }
+
+    // The destination is tracked by the time any copy writes to it, so a repository over it exists and
+    // a record its own index holds is in its tree.
+    private static SourceUnit Locate(
+        string modFolder, PluginKey plugin, string formKey, string recordType, string? editorId, GameRelease release) =>
+        SourceRepository.Open(modFolder, release)?.Locate(plugin, new RecordIdentity(formKey, recordType, editorId))
+        ?? throw new InvalidOperationException(
+            $"{plugin.Name} holds {formKey}, but no document in its source tree carries it.");
 
     // Bare fields, no EditorID is xEdit parity (AddIfMissingInternal's Assign() runs only under
     // `if aDeepCopy`, hardcoded False for ancestors).

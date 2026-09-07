@@ -17,10 +17,14 @@ namespace MEditService.Core.Source;
 public static class ExternalChangeEditLander
 {
     public static ExternalChangeLandResult Keep(
-        string modFolder, PluginKey plugin, string pluginPath, GameRelease gameRelease, IRecordReads reads,
+        string modFolder, PluginKey plugin, string pluginPath, GameRelease gameRelease,
         SchemaReflector reflector, ILogger? logger = null)
     {
         logger ??= NullLogger.Instance;
+        var repository = SourceRepository.Open(modFolder, gameRelease)
+            ?? throw new InvalidOperationException($"'{modFolder}' is not tracked, so it has no source to land on.");
+        // One pass over a whole mod: the tree is read again once for every record it cannot find, not once each.
+        var resolutions = new SourceUnitResolutionCache();
         var codec = new RecordTextCodec(NullLogger<RecordTextCodec>.Instance);
         var schemas = reflector.GetSchemas(gameRelease);
         var pluginName = plugin.Name;
@@ -43,8 +47,8 @@ public static class ExternalChangeEditLander
             // disk-scan resolution the point-write path uses.
             if (groupFolder is null)
             {
-                var unit = SourceUnitResolver.Resolve(
-                    reads, plugin, modFolder, containerFormKey, recordType, record.EditorID, gameRelease);
+                var unit = repository.Locate(
+                    plugin, new RecordIdentity(containerFormKey, recordType, record.EditorID), resolutions);
 
                 if (unit is null)
                 {

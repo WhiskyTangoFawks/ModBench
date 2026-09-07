@@ -7,9 +7,9 @@ internal sealed class SourceUnitResolutionCache
 {
     private readonly Dictionary<string, string[]> _entries = new(StringComparer.Ordinal);
 
-    /// <summary>Resolved units of owner containers, keyed by the owner's FormKey — one cell's worth of
-    /// placed refs shares one read and one scan.</summary>
-    internal Dictionary<string, SourceUnit?> Owners { get; } = new(StringComparer.Ordinal);
+    /// <summary>Source roots whose embedded-owner map this pass has already read the tree for, so a
+    /// whole mod's misses cost one rescan rather than one each.</summary>
+    internal HashSet<string> RescannedOwnerMaps { get; } = new(StringComparer.Ordinal);
 
     /// <summary>Every entry under <paramref name="scanRoot"/>, recursively, enumerated once; the caller
     /// filters by name in memory.</summary>
