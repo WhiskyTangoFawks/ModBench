@@ -32,6 +32,7 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
     private readonly Worldspace _worldspace;
     private readonly PlacedObject _topCellRef;
     private readonly Cell _exteriorCell;
+    private readonly PlacedObject _exteriorRef;
     private readonly Quest _quest;
     private readonly DialogTopic _topic;
     private readonly DialogResponses _response;
@@ -50,9 +51,9 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
         topCell.Temporary.Add(_topCellRef);
         _worldspace = new Worldspace(_mod) { EditorID = "World", TopCell = topCell };
 
-        var exteriorRef = new PlacedObject(_mod) { EditorID = "ExteriorRef", Position = new P3Float(4f, 5f, 6f), Scale = 2f };
+        _exteriorRef = new PlacedObject(_mod) { EditorID = "ExteriorRef", Position = new P3Float(4f, 5f, 6f), Scale = 2f };
         _exteriorCell = new Cell(_mod) { EditorID = "ExteriorCell", WaterHeight = 50f };
-        _exteriorCell.Temporary.Add(exteriorRef);
+        _exteriorCell.Temporary.Add(_exteriorRef);
 
         _response = new DialogResponses(_mod) { EditorID = "Response" };
         _response2 = new DialogResponses(_mod) { EditorID = "Response2" };
@@ -141,6 +142,16 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
         var body = Repository.Get(Plugin, Identity(_exteriorCell, "cell"))?.Body;
 
         Assert.Equal(File.ReadAllText(FullPath(ExteriorCellPath)), body);
+    }
+
+    [Fact]
+    public void Get_OfAPlacedReferenceInsideAnExteriorCell_ReadsThatCellsDirectoryAsACell()
+    {
+        var body = Repository.Get(Plugin, Identity(_exteriorRef, "refr"))?.Body;
+
+        Assert.NotNull(body);
+        Assert.Equal(_exteriorRef.FormKey.ToString(), RootFormKeyOf(body));
+        Assert.DoesNotContain("WaterHeight", body, StringComparison.Ordinal);
     }
 
     [Fact]
