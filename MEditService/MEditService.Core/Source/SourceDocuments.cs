@@ -26,7 +26,14 @@ public static class SourceDocuments
     /// <summary>The FormKey the document at <paramref name="filePath"/> declares — an embedded child's
     /// owner's, since the file is the owner's document. Null when it cannot be read or declares
     /// none.</summary>
-    public static string? FormKeyDeclaredBy(string filePath, string modFolder, string pluginFileName)
+    public static string? FormKeyDeclaredBy(string filePath, string modFolder, string pluginFileName) =>
+        DeclaredBy(filePath, modFolder, pluginFileName).FormKey;
+
+    /// <summary>Both the members a caller identifying the document needs, from the one read: a
+    /// separate call per member would read the file twice and could straddle another tool's
+    /// write.</summary>
+    public static (string? FormKey, string? EditorId) DeclaredBy(
+        string filePath, string modFolder, string pluginFileName)
     {
         byte[] bytes;
         try
@@ -37,12 +44,13 @@ public static class SourceDocuments
         {
             // Never exclusive owners of the file: it may have been deleted, moved or locked between
             // the event and this read.
-            return null;
+            return (null, null);
         }
 
-        return FormKeyDeclaredIn(
-            Encoding.UTF8.GetString(SourceUnitResolver.StripUtf8Bom(bytes)),
-            filePath, HeaderDocumentIn(modFolder, pluginFileName), pluginFileName);
+        var text = Encoding.UTF8.GetString(SourceUnitResolver.StripUtf8Bom(bytes));
+        return (
+            FormKeyDeclaredIn(text, filePath, HeaderDocumentIn(modFolder, pluginFileName), pluginFileName),
+            RootString(text, "EditorID"));
     }
 
     /// <summary>The plugin header's own document: the whole-mod door's root RecordData.json.</summary>
@@ -59,13 +67,19 @@ public static class SourceDocuments
         if (filePath.Equals(headerDocumentPath, StringComparison.Ordinal))
             return HeaderIndexer.FormKeyFor(ModKey.FromFileName(pluginFileName));
 
+        return RootString(text, "FormKey");
+    }
+
+    // A member of the document's own root object, as a string. Malformed text declares nothing.
+    private static string? RootString(string text, string member)
+    {
         try
         {
             using var document = JsonDocument.Parse(text);
             return document.RootElement.ValueKind == JsonValueKind.Object
-                   && document.RootElement.TryGetProperty("FormKey", out var formKey)
-                   && formKey.ValueKind == JsonValueKind.String
-                ? formKey.GetString()
+                   && document.RootElement.TryGetProperty(member, out var value)
+                   && value.ValueKind == JsonValueKind.String
+                ? value.GetString()
                 : null;
         }
         catch (JsonException)

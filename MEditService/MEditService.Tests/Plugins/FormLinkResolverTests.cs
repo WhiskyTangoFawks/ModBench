@@ -1,8 +1,12 @@
 using System.Text;
 using MEditService.Core.Plugins;
 using MEditService.Core.Source;
+using MEditService.Tests.TestSupport;
+using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
+using Mutagen.Bethesda.Plugins.Binary.Parameters;
+using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Tests.Plugins;
 
@@ -46,6 +50,97 @@ public sealed class FormLinkResolverTests
         using var resolver = ResolverOver(data);
 
         Assert.Equal(new Core.Records.RecordLookupEntry("npc_", TreeOnlyEditorId), resolver.Resolve(TreeOnlyFormKey));
+    }
+
+    [Fact]
+    public void Resolve_AFormKeySpelledUnlikeTheTree_IsStillTheRecordTheTreeHolds()
+    {
+        // The caller's spelling is an editor's raw input; the tree is written in the codec's, which
+        // upper-cases the hex and names the plugin as the load order registered it.
+        using var data = new PluginFixtureBuilder("resolver-spelling")
+            .WithPlugin(TrackedPlugin, origin: "TrackedMod")
+            .BuildScattered();
+        Track(ModFolderOf(data, TrackedPlugin), Npc(TrackedPlugin, "00080A:Tracked.esp", "MixedCaseNpc"));
+
+        using var resolver = ResolverOver(data);
+
+        Assert.Equal(
+            new Core.Records.RecordLookupEntry("npc_", "MixedCaseNpc"), resolver.Resolve("00080a:tracked.esp"));
+    }
+
+    // A copy that opens and then refuses to be read: the shape a truncated or locked file takes once
+    // Mutagen is past the header.
+    private sealed class UnreadableMod : ILoadedMod
+    {
+        public bool Disposed { get; private set; }
+        public IModGetter Getter => throw new InvalidOperationException("unreadable");
+        public void Dispose() => Disposed = true;
+    }
+
+    private sealed class OneModImporter(ILoadedMod mod) : IModImporter
+    {
+        public ILoadedMod Import(ModPath modPath, GameRelease gameRelease, BinaryReadParameters? param = null) => mod;
+    }
+
+    [Fact]
+    public void Resolve_WhenACopyCannotBeRead_ClosesIt_AndSaysSoInTheLog()
+    {
+        using var data = new PluginFixtureBuilder("resolver-unreadable")
+            .WithPlugin(UntrackedPlugin, mod => mod.Keywords.AddNew("FixtureKeyword"), origin: "UntrackedMod")
+            .BuildScattered();
+        var unreadable = new UnreadableMod();
+        List<LogEntry> log = [];
+
+        using (var resolver = new FormLinkResolver(
+                   LoadOrder.From(data.GameDirectory, data.Root, GameRelease.Fallout4, data.Plugins),
+                   new OneModImporter(unreadable),
+                   SharedSchemaReflector.Instance,
+                   new LoggerFactory([new CollectingLoggerProvider(log)]).CreateLogger<FormLinkResolver>()))
+        {
+            Assert.Null(resolver.Resolve($"000800:{UntrackedPlugin}"));
+        }
+
+        Assert.True(unreadable.Disposed);
+        Assert.Contains(log, e => e.Level == LogLevel.Warning);
+    }
+
+    [Fact]
+    public void Resolve_ADocumentThatSpellsItsOwnFormKeyDifferently_IsStillTheRecordItHolds()
+    {
+        // A hand-edited document: the codec writes upper-case hex, an author's text editor need not,
+        // and the FormKey it declares is the same key either way.
+        using var data = new PluginFixtureBuilder("resolver-declared-spelling")
+            .WithPlugin(TrackedPlugin, origin: "TrackedMod")
+            .BuildScattered();
+        Track(
+            ModFolderOf(data, TrackedPlugin),
+            new PristineFile(
+                SourceRecordPath.For(TrackedPlugin, "npc_", "00080A:Tracked.esp", "HandSpelledNpc", GameRelease.Fallout4),
+                Encoding.UTF8.GetBytes(
+                    "{\n  \"FormKey\": \"00080a:tracked.esp\",\n  \"EditorID\": \"HandSpelledNpc\"\n}")));
+
+        using var resolver = ResolverOver(data);
+
+        Assert.Equal(
+            new Core.Records.RecordLookupEntry("npc_", "HandSpelledNpc"), resolver.Resolve("00080A:Tracked.esp"));
+    }
+
+    [Fact]
+    public void Resolve_ThePluginHeaderSpelledUnlikeTheTree_IsTheHeaderRecordType()
+    {
+        using var data = new PluginFixtureBuilder("resolver-header")
+            .WithPlugin(TrackedPlugin, origin: "TrackedMod")
+            .BuildScattered();
+        Track(
+            ModFolderOf(data, TrackedPlugin),
+            new PristineFile(
+                Path.Combine(SourceRecordPath.RootFor(TrackedPlugin), "RecordData.json"),
+                Encoding.UTF8.GetBytes("{\n  \"ModKey\": \"Tracked.esp\"\n}")));
+
+        using var resolver = ResolverOver(data);
+
+        Assert.Equal(
+            new Core.Records.RecordLookupEntry("header", null), resolver.Resolve("000000:tracked.esp"));
     }
 
     [Fact]
