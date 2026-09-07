@@ -25,7 +25,7 @@ public sealed class SourceWatchContainerTests : IDisposable
     {
         _fixture = new ContainerModFixture(_notifications);
         _watcher = new SourceChangeWatcher(TimeSpan.FromMilliseconds(100));
-        var sourceMirror = new SourceMirror(_fixture.Mirror, _watcher, _notifications, NullLogger.Instance);
+        var sourceMirror = new SourceMirror(_fixture.Mirror.Projector, _fixture.Mirror.WriteGate, _watcher, _notifications, NullLogger.Instance);
         _watcher.SourceChanged = sourceMirror.Apply;
         _fixture.Mirror.LoadOrderChanged = sourceMirror.RefreshWatches;
         // ContainerModFixture's own constructor already reconciled, before any watch could be
@@ -40,7 +40,7 @@ public sealed class SourceWatchContainerTests : IDisposable
     }
 
     private IRecordQueryService Reads() =>
-        new RecordQueryService(_fixture.Mirror, SharedSchemaReflector.Instance, new ConflictClassifier());
+        new RecordQueryService(_fixture.Mirror.Projector, SharedSchemaReflector.Instance, new ConflictClassifier());
 
     private void Git(params string[] args) =>
         GitCli.Run(Path.Combine(_fixture.ModFolder, ".git"), _fixture.ModFolder, args);

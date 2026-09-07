@@ -25,7 +25,7 @@ public sealed class ExternalChangeMirrorTests : IDisposable
         File.WriteAllText(
             _mod.NpcSourceFile, text.Replace("\"FixtureNpc\"", "\"EditedWhileRunning\"", StringComparison.Ordinal));
 
-        var mirror = new ExternalChangeMirror(_mod.Mirror, _notifications, NullLogger.Instance);
+        var mirror = new ExternalChangeMirror(_mod.Mirror.Projector, _notifications, NullLogger.Instance);
         mirror.ApplyOverflow(_mod.ModFolder, TrackedModFixture.PluginName);
 
         Assert.Equal(
@@ -39,7 +39,7 @@ public sealed class ExternalChangeMirrorTests : IDisposable
     [Fact]
     public void ApplyOverflow_PublishesNothing_WhenTheTrackedSourceHasNotDrifted()
     {
-        var mirror = new ExternalChangeMirror(_mod.Mirror, _notifications, NullLogger.Instance);
+        var mirror = new ExternalChangeMirror(_mod.Mirror.Projector, _notifications, NullLogger.Instance);
 
         mirror.ApplyOverflow(_mod.ModFolder, TrackedModFixture.PluginName);
 

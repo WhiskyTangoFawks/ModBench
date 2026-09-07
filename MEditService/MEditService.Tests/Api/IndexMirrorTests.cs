@@ -28,7 +28,7 @@ public sealed class IndexMirrorTests
     private static ExternalChangeWatcher StartMirroring(TrackedModFixture fixture, INotificationPublisher? notifications = null)
     {
         var watcher = new ExternalChangeWatcher(TimeSpan.FromMilliseconds(100));
-        var mirror = new IndexMirror(fixture.Mirror, notifications ?? new InMemoryNotificationPublisher(), NullLogger.Instance);
+        var mirror = new IndexMirror(fixture.Mirror.Projector, notifications ?? new InMemoryNotificationPublisher(), NullLogger.Instance);
         watcher.IndexedBinaryChanged = mirror.Apply;
         ExternalChangeLoadOrderHook.RunAfterReconcile(
             fixture.Mirror.LoadOrder, fixture.Mirror.Index, watcher, NullLogger.Instance);

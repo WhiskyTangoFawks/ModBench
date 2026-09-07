@@ -28,7 +28,7 @@ public sealed class SourceWatchTests : IDisposable
     {
         _mod = TrackedModFixture.Tracked(_notifications);
         _watcher = new SourceChangeWatcher(TimeSpan.FromMilliseconds(100));
-        var sourceMirror = new SourceMirror(_mod.Mirror, _watcher, _notifications, NullLogger.Instance);
+        var sourceMirror = new SourceMirror(_mod.Mirror.Projector, _mod.Mirror.WriteGate, _watcher, _notifications, NullLogger.Instance);
         _watcher.SourceChanged = sourceMirror.Apply;
         _mod.Mirror.LoadOrderChanged = sourceMirror.RefreshWatches;
         // The watch set arrives the way it does in the composition root: the mirror announces the

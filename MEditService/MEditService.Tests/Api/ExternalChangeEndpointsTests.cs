@@ -49,7 +49,7 @@ public sealed class ExternalChangeEndpointsTests : IDisposable
         watcher.ReportExternalChange(_mod.ModFolder, TrackedModFixture.PluginName,
             new ExternalChangeClassification.ExternalChange(true, "1.0", "2.0"));
 
-        var result = PluginEndpoints.ExternalChangeStatus(watcher, _mod.Mirror);
+        var result = PluginEndpoints.ExternalChangeStatus(watcher, _mod.Mirror.Projector);
 
         var ok = Assert.IsAssignableFrom<Ok<List<UnansweredExternalChangeResponse>>>(result);
         var unanswered = Assert.Single(ok.Value!);
@@ -72,7 +72,7 @@ public sealed class ExternalChangeEndpointsTests : IDisposable
 
         var result = PluginEndpoints.AbsorbExternalChange(
             TrackedModFixture.PluginName, new ExternalChangeActionRequest(TrackedModFixture.ModFolderOrigin),
-            _mod.Mirror, watcher, loggerFactory);
+            _mod.Mirror.Projector, watcher, loggerFactory);
 
         var ok = Assert.IsAssignableFrom<Ok<ExternalChangeActionResponse>>(result);
         Assert.True(ok.Value!.Succeeded);
@@ -87,7 +87,7 @@ public sealed class ExternalChangeEndpointsTests : IDisposable
 
         var result = PluginEndpoints.AbsorbExternalChange(
             TrackedModFixture.PluginName, new ExternalChangeActionRequest("NoSuchOrigin"),
-            _mod.Mirror, new ExternalChangeWatcher(), loggerFactory);
+            _mod.Mirror.Projector, new ExternalChangeWatcher(), loggerFactory);
 
         var problem = Assert.IsAssignableFrom<ProblemHttpResult>(result);
         Assert.Equal(503, problem.StatusCode);
@@ -105,7 +105,7 @@ public sealed class ExternalChangeEndpointsTests : IDisposable
 
         var result = PluginEndpoints.KeepExternalChange(
             TrackedModFixture.PluginName, new ExternalChangeActionRequest(TrackedModFixture.ModFolderOrigin),
-            _mod.Mirror, new ExternalChangeWatcher(), SharedSchemaReflector.Instance, loggerFactory);
+            _mod.Mirror.Projector, new ExternalChangeWatcher(), SharedSchemaReflector.Instance, loggerFactory);
 
         var ok = Assert.IsAssignableFrom<Ok<ExternalChangeActionResponse>>(result);
         Assert.False(ok.Value!.Succeeded);
@@ -118,7 +118,7 @@ public sealed class ExternalChangeEndpointsTests : IDisposable
         var (loggerFactory, _) = CapturingLoggerFactory();
         using var _disposeLogger = loggerFactory;
 
-        var result = PluginEndpoints.Rebase(new RebaseRequest("NoSuchOrigin"), _mod.Mirror, loggerFactory);
+        var result = PluginEndpoints.Rebase(new RebaseRequest("NoSuchOrigin"), _mod.Mirror.Projector, loggerFactory);
 
         var problem = Assert.IsAssignableFrom<ProblemHttpResult>(result);
         Assert.Equal(404, problem.StatusCode);
@@ -130,7 +130,7 @@ public sealed class ExternalChangeEndpointsTests : IDisposable
         var (loggerFactory, _) = CapturingLoggerFactory();
         using var _disposeLogger = loggerFactory;
 
-        var result = PluginEndpoints.Rebase(new RebaseRequest(TrackedModFixture.ModFolderOrigin), _mod.Mirror, loggerFactory);
+        var result = PluginEndpoints.Rebase(new RebaseRequest(TrackedModFixture.ModFolderOrigin), _mod.Mirror.Projector, loggerFactory);
 
         var ok = Assert.IsAssignableFrom<Ok<RebaseResponse>>(result);
         Assert.Equal(RebaseOutcome.Clean, ok.Value!.Outcome);

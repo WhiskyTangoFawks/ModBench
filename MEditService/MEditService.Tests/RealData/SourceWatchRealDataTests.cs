@@ -46,7 +46,7 @@ public sealed class SourceWatchRealDataFixture : IDisposable
             GameRelease.Fallout4);
 
         _watcher = new SourceChangeWatcher(TimeSpan.FromMilliseconds(150));
-        var sourceMirror = new SourceMirror(Mirror, _watcher, Notifications, NullLogger.Instance);
+        var sourceMirror = new SourceMirror(Mirror.Projector, Mirror.WriteGate, _watcher, Notifications, NullLogger.Instance);
         _watcher.SourceChanged = sourceMirror.Apply;
         Mirror.LoadOrderChanged = sourceMirror.RefreshWatches;
         sourceMirror.RefreshWatches();

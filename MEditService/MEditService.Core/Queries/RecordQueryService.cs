@@ -6,23 +6,24 @@ using Mutagen.Bethesda;
 namespace MEditService.Core.Queries;
 
 public sealed class RecordQueryService(
-    ILoadOrderMirror loadOrder,
+    IQueryIndex index,
     SchemaReflector schemaReflector,
     ConflictClassifier conflictClassifier) : IRecordQueryService
 {
-    private readonly ILoadOrderMirror _mirror = loadOrder;
+    private readonly IQueryIndex _index = index;
     private readonly SchemaReflector _schemaReflector = schemaReflector;
     private readonly ConflictClassifier _conflictClassifier = conflictClassifier;
 
     public IReadOnlyList<PluginResponse> GetPlugins()
     {
         var s = RequireLoadOrder();
-        // ADR-0037: classified once per call, and only once the load is complete: a partial load
-        // order cannot tell a master not yet opened from one genuinely absent. Loading reports no
-        // issues rather than inventing a third state.
+        // ADR-0037: classified once per call, and only once the projection is complete: a partial
+        // load order cannot tell a master not yet opened from one genuinely absent. Reconciling
+        // reports no issues rather than inventing a third state.
+        var status = _index.Status;
         IReadOnlyDictionary<string, IReadOnlyList<MasterIssue>> masterIssues =
-            _mirror.Status.State == LoadOrderState.Ready
-                ? MasterResolution.Classify(s.Plugins, s.Failures)
+            status.State == LoadOrderState.Ready
+                ? MasterResolution.Classify(s.Plugins, status.Failures)
                 : new Dictionary<string, IReadOnlyList<MasterIssue>>();
         var parseFailures = RequireReads().GetPluginsWithParseFailures();
         PluginResponse ToResponse(PluginMetadata p, bool hasMatchingRecords) =>
@@ -30,7 +31,7 @@ public sealed class RecordQueryService(
                 p, masterIssues.GetValueOrDefault(p.Name), hasMatchingRecords,
                 parseFailures.Contains(ColumnKey.Of(p.Name, p.Origin)));
 
-        if (s.FilterSql is null)
+        if (_index.FilterSql is null)
             return [.. s.Plugins.Select(p => ToResponse(p, hasMatchingRecords: true))];
 
         // ADR-0035 amending ADR-0018: a record filter prunes records and record types, never
@@ -49,7 +50,7 @@ public sealed class RecordQueryService(
         var schemas = RequireSchemas();
         // The caller states which copy when it knows (a tree row does); otherwise resolve from the
         // load order, since a bare filename is all most callers have.
-        origin ??= plugin == null ? null : PluginOriginResolver.Resolve(_mirror.LoadOrder, plugin);
+        origin ??= plugin == null ? null : PluginOriginResolver.Resolve(RequireLoadOrder(), plugin);
 
         if (type != null && !schemas.ContainsKey(type))
             return new PagedResult<RecordSummary>([], 0);
@@ -126,7 +127,7 @@ public sealed class RecordQueryService(
         var reads = RequireReads();
         // Stated by the caller when it knows which copy it is browsing (a tree row does),
         // else resolved server-side from the load order.
-        origin ??= PluginOriginResolver.Resolve(_mirror.LoadOrder, plugin);
+        origin ??= PluginOriginResolver.Resolve(RequireLoadOrder(), plugin);
         var schemas = RequireSchemas();
 
         // The header is one `records` row per plugin, so this exclusion has to be real; without it
@@ -146,9 +147,9 @@ public sealed class RecordQueryService(
             IsPartialForm: document.IsPartialForm, IsPartialFormable: document.IsPartialFormable,
             ParseDiagnosis: document.ParseDiagnosis);
 
-    private ILoadOrder RequireLoadOrder() => _mirror.RequireScope().LoadOrder;
+    private ILoadOrder RequireLoadOrder() => _index.RequireScope().LoadOrder;
 
-    private IRecordReads RequireReads() => _mirror.RequireScope().Reads;
+    private IRecordReads RequireReads() => _index.RequireScope().Reads;
 
     private IReadOnlyDictionary<string, Schema.RecordTableSchema> RequireSchemas() =>
         _schemaReflector.GetSchemas(RequireLoadOrder().GameRelease);

@@ -8,7 +8,7 @@ namespace MEditService.Api;
 /// <summary>ADR-0001's runtime half. Nothing escapes <see cref="Apply"/>, which runs on a timer
 /// thread where an exception is a process crash; a false answer keeps the watcher from believing
 /// the index matches bytes it never read.</summary>
-internal sealed class IndexMirror(ILoadOrderMirror mirror, INotificationPublisher notifications, ILogger logger)
+internal sealed class IndexMirror(IndexProjector index, INotificationPublisher notifications, ILogger logger)
 {
     internal bool Apply(IndexedBinaryEvent change)
     {
@@ -23,23 +23,23 @@ internal sealed class IndexMirror(ILoadOrderMirror mirror, INotificationPublishe
                         logger.LogInformation(
                             "{Plugin} ({Origin}) changed on disk; re-indexing it", change.PluginName, change.Origin);
                     }
-                    mirror.ReindexPlugin(key).GetAwaiter().GetResult();
+                    index.ReindexPlugin(key).GetAwaiter().GetResult();
                     break;
 
                 case IndexedBinaryChange.Deleted:
-                    mirror.UnindexPlugin(key);
+                    index.UnindexPlugin(key);
                     break;
             }
 
             // ADR-0046: the plugin watcher's own re-index, so the whole plugin changed rather than
             // named rows — the same event Track's own reindex would raise if it went through here.
-            notifications.Publish(new PluginChangedNotification(key, mirror.Sequence));
+            notifications.Publish(new PluginChangedNotification(key, index.Sequence));
             return true;
         }
         catch (Exception ex)
         {
             logger.LogWarning(ex,
-                "Could not mirror the on-disk change to {Plugin} ({Origin}) into the index; it will be retried " +
+                "Could not project the on-disk change to {Plugin} ({Origin}) into the index; it will be retried " +
                 "the next time that file settles, and re-checked at the next reconcile",
                 change.PluginName, change.Origin);
             return false;
@@ -53,11 +53,11 @@ internal sealed class IndexMirror(ILoadOrderMirror mirror, INotificationPublishe
         var key = new PluginKey(pluginName, origin);
         try
         {
-            foreach (var report in mirror.ValidateIndex(key))
+            foreach (var report in index.ValidateIndex(key))
             {
                 foreach (var failure in report.Failures)
                     logger.LogWarning("Validating {Plugin} after a watch overflow: {Failure}", pluginName, failure);
-                if (report.NeedsRebuild) notifications.Publish(new PluginChangedNotification(key, mirror.Sequence));
+                if (report.NeedsRebuild) notifications.Publish(new PluginChangedNotification(key, index.Sequence));
             }
         }
         catch (Exception ex)

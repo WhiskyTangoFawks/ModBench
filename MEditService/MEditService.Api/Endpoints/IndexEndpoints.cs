@@ -35,7 +35,7 @@ public static class IndexEndpoints
     }
 
     private static IResult Reconcile(
-        ILoadOrderMirror mirror, ILoggerFactory loggerFactory, string? plugin = null, string? origin = null)
+        IndexProjector index, ILoggerFactory loggerFactory, string? plugin = null, string? origin = null)
     {
         var logger = loggerFactory.CreateLogger(nameof(IndexEndpoints));
         if (logger.IsEnabled(LogLevel.Information))
@@ -48,17 +48,17 @@ public static class IndexEndpoints
             return Results.Problem("Name a copy with both plugin and origin, or neither to check every copy.", statusCode: 400);
 
         PluginKey? key = string.IsNullOrEmpty(plugin) ? (PluginKey?)null : new PluginKey(plugin, origin!);
-        if (key is { } named && mirror.Index?.RegisteredPlugins().Any(k => k == named) != true)
+        if (key is { } named && index.Index?.RegisteredPlugins().Any(k => k == named) != true)
             return Results.Problem($"No registered copy of '{plugin}' from '{origin}'.", statusCode: 404);
 
         try
         {
-            var reports = mirror.ValidateIndex(key);
+            var reports = index.ValidateIndex(key);
             return Results.Ok(new ReconcileResponse(
                 reports.Count,
                 reports.Sum(r => r.ChangedKeys.Count),
                 reports.Count(r => r.NeedsRebuild),
-                mirror.Sequence,
+                index.Sequence,
                 [.. reports.SelectMany(r => r.Failures)]));
         }
         catch (IndexWriteGateTimeoutException ex)

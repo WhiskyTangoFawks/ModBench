@@ -213,7 +213,7 @@ public sealed class InjectedChildTests
         };
 
         public IReadOnlyList<ContainerChildSummary> Children(PluginKey plugin, FormKey container) =>
-            new ContainerChildQueryService(Mirror).GetChildren(plugin.Name, container.ToString(), plugin.Origin);
+            new ContainerChildQueryService(Mirror.Projector).GetChildren(plugin.Name, container.ToString(), plugin.Origin);
 
         public void TrackBoth()
         {
