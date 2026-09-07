@@ -170,9 +170,8 @@ public sealed class EditRecordApiTests(LoadedApiFixture<TestPluginFixture> loade
 
         var response = await PostEdit(formKey, "HeightMax", 0.75);
 
-        // A shaped ProblemDetails, not an empty 500: a client with no body to read cannot tell
-        // that apart from the backend having died. The tree is the only thing asked, so a document
-        // that cannot be read is a record it does not hold (ADR-0046 invariant 7).
+        // A shaped ProblemDetails, not an empty 500. The tree is the only thing asked, so a document
+        // that cannot be read is a record the plugin does not hold (ADR-0046 invariant 7).
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
         var problem = await response.Content.ReadFromJsonAsync<JsonElement>();
         Assert.False(string.IsNullOrWhiteSpace(problem.GetProperty("detail").GetString()));

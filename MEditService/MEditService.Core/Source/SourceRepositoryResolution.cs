@@ -73,9 +73,8 @@ public sealed partial class SourceRepository
         return Unit(owner.FullPath, owner.FormKey, owner.RecordType, isEmbedded: true);
     }
 
-    /// <summary>Which record the tree holds at <paramref name="formKey"/> — one with a document of its
-    /// own, an embedded child, or the header — or null when nothing carries it. <see cref="Locate"/>
-    /// runs the other way and cannot be asked without the record type it looks for.</summary>
+    /// <summary>Which record the tree holds at <paramref name="formKey"/> — one with a document of
+    /// its own, an embedded child, or the header — or null when nothing carries it.</summary>
     public RecordIdentity? IdentityOf(
         PluginKey plugin, string formKey, IReadOnlyDictionary<string, RecordTableSchema> schemas)
     {
@@ -107,9 +106,8 @@ public sealed partial class SourceRepository
         return new RecordIdentity(spelled, SourceRecordType.Resolve(child, schemas), child.EditorID);
     }
 
-    // A record with a document of its own: its leaf name carries the FormKey, and the document's own
-    // text has to bear that out — a name the text contradicts is stale, and the record it claims is
-    // elsewhere or gone.
+    // A record with a document of its own: its leaf name carries the FormKey and the text bears that
+    // out. A name the text contradicts is stale, and the record it claims is elsewhere or gone.
     private RecordIdentity? OwnDocumentIdentity(
         string sourceRoot, string pluginFileName, FormKey formKey, string spelled,
         IReadOnlyDictionary<string, RecordTableSchema> schemas)

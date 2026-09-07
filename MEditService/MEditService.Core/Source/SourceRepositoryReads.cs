@@ -63,9 +63,8 @@ public sealed partial class SourceRepository
         return null;
     }
 
-    /// <summary>Every FormKey the plugin originates and its tree holds now — a record with a document
-    /// of its own and an embedded child alike, the header excluded, its key being synthetic. The set an
-    /// allocator must not hand out twice.</summary>
+    /// <summary>Every FormKey the plugin originates and its tree holds now, a record with a document
+    /// of its own and an embedded child alike. The header is excluded: its key is synthetic.</summary>
     public IReadOnlySet<string> NativeFormKeysHeld(PluginKey plugin) => Native(ReadAll(plugin), plugin);
 
     /// <summary>The same set as <paramref name="gitRef"/> committed it, so an ID a working-tree

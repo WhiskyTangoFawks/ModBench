@@ -27,9 +27,8 @@ public sealed class RecordEditService(
     ILogger<RecordEditService> logger,
     ILoadOrderMirror? mirror = null)
 {
-    // RecordCopy shares this instance's mirror/schemaReflector so its writes are indistinguishable
-    // from this class's own (ADR-0041's one write path). Null only where no copy gesture can run:
-    // Edit, Delete and Create never reach it (ADR-0046 invariant 7).
+    // RecordCopy shares this instance's mirror and schema so its writes are indistinguishable from
+    // this class's own (ADR-0041's one write path). Null only where no copy gesture runs.
     private readonly RecordCopy _recordCopy = new(mirror!, schemaReflector, logger, codec);
 
     /// <summary>The single write path (ADR-0041): one envelope, patched onto the record's document
@@ -57,7 +56,7 @@ public sealed class RecordEditService(
         {
             return RecordEditResult.Refused(
                 RecordEditRefusal.SourceUnitNotFound,
-                $"{unit.RelativePath} no longer holds {formKey} — it was moved or removed outside " +
+                $"{unit.RelativePath} does not hold {formKey} — it was moved or removed outside " +
                 "Modbench. Check the Source Control panel.");
         }
 
@@ -1264,9 +1263,8 @@ public sealed class RecordEditService(
     private readonly record struct EditTarget(
         GameRelease Release, RecordIdentity Identity, SourceUnit Unit, SourceRepository Repository);
 
-    // The working tree is what the user is editing from, and the only thing asked (ADR-0046
-    // invariant 7): a second edit builds on the first, and no document ever comes from the Index. The
-    // copy gestures gate on the destination and read the source instead.
+    // The working tree is the only thing asked (ADR-0046 invariant 7): a second edit builds on the
+    // first, and no document comes from the Index. The copy gestures read the source instead.
     private RecordEditResult? ResolveEditTarget(PluginKey plugin, string formKey, out EditTarget target)
     {
         target = default;
