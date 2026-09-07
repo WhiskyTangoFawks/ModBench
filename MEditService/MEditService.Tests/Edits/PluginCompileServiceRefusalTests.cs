@@ -1,4 +1,6 @@
 using MEditService.Core.Edits;
+using MEditService.Core.Plugins;
+using MEditService.Core.Records;
 using MEditService.Core.Source;
 using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -16,6 +18,28 @@ public sealed class PluginCompileServiceRefusalTests : IDisposable
 
     private PluginCompileService CompileService() =>
         _mod.CompileService();
+
+    // Two different states with two different remedies: wait for Mod Management's snapshot, or add
+    // the plugin to a load order that has already arrived.
+    [Fact]
+    public void Compile_BeforeAnyLoadOrderHasArrived_RefusesSayingSo()
+    {
+        var result = CompileServices.Over(LoadOrder.Empty).Compile(_mod.Plugin, new CompileSource.WorkingTree());
+
+        Assert.False(result.Succeeded);
+        Assert.Equal("No load order has been received.", result.RefusalReason);
+    }
+
+    [Fact]
+    public void Compile_OfAPluginTheArrivedLoadOrderDoesNotHold_RefusesNamingThePlugin()
+    {
+        var stranger = new PluginKey("Stranger.esp", CompileFixture.Origin);
+
+        var result = _mod.CompileService().Compile(stranger, new CompileSource.WorkingTree());
+
+        Assert.False(result.Succeeded);
+        Assert.Equal("Stranger.esp is not in the load order.", result.RefusalReason);
+    }
 
     [Fact]
     public void Compile_WithTwoSourceFilesClaimingTheSameFormKey_RefusesNamingTheFormKey()
