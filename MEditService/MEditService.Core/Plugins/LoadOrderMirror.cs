@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using MEditService.Core.Edits;
+using MEditService.Core.Notifications;
 using MEditService.Core.Queries;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
@@ -17,12 +18,15 @@ public sealed class LoadOrderMirror(
     IRecordIndexFactory indexFactory,
     ILogger<LoadOrderMirror>? logger = null,
     IModImporter? modImporter = null,
-    SchemaReflector? schemaReflector = null) : ILoadOrderMirror, IDisposable
+    SchemaReflector? schemaReflector = null,
+    INotificationPublisher? notifications = null) : ILoadOrderMirror, IDisposable
 {
     private readonly Lock _lock = new();
     private readonly ILogger<LoadOrderMirror> _logger = logger ?? NullLogger<LoadOrderMirror>.Instance;
     private readonly IRecordIndexFactory _indexFactory = indexFactory;
     private readonly IModImporter _modImporter = modImporter ?? new DefaultModImporter();
+    // ADR-0046: null in every test that does not care, matching DuckDbRecordIndex's own posture.
+    private readonly INotificationPublisher? _notifications = notifications;
     // A direct constructor parameter rather than routed through IRecordIndexFactory, which has no
     // other reason to carry it; DI already registers SchemaReflector as its own singleton.
     private readonly SchemaReflector _schemaReflector = schemaReflector ?? new SchemaReflector();
@@ -124,6 +128,10 @@ public sealed class LoadOrderMirror(
             }
         }
     }
+
+    // ADR-0046: every site that changes what Status reports calls this after. _lock is reentrant
+    // (see ReapplyFilter), so this is safe to call from inside a lock a caller already holds.
+    private void PublishStatus() => _notifications?.Publish(new LoadOrderStatusNotification(Status));
 
     public long Sequence { get { lock (_lock) return _index?.Sequence ?? 0; } }
 
@@ -242,6 +250,7 @@ public sealed class LoadOrderMirror(
             _index = fresh;
             _gameRelease = gameRelease;
         }
+        PublishStatus();
         return (loadOrder, fresh);
     }
 
@@ -301,6 +310,9 @@ public sealed class LoadOrderMirror(
             _conflictsComputed = false;
             _plannedCount = resolved.Count;
         }
+        // Reconciling begins here, with the total known — the first status a subscriber sees for
+        // this reconcile.
+        PublishStatus();
 
         foreach (var key in leaving)
         {
@@ -313,6 +325,7 @@ public sealed class LoadOrderMirror(
                 _failedHashes.Remove(KeyOf(key));
             }
         }
+        if (leaving.Count > 0) PublishStatus();
 
         foreach (var plugin in moved)
         {
@@ -354,6 +367,8 @@ public sealed class LoadOrderMirror(
         var winnersTimer = Stopwatch.StartNew();
         index.UpdateWinners();
         lock (_lock) _conflictsComputed = true;
+        // Ready: the last status transition a subscriber sees for this reconcile.
+        PublishStatus();
         // Any of the above can change which records match an active filter.
         ReapplyFilter();
 
@@ -428,6 +443,7 @@ public sealed class LoadOrderMirror(
             // Counted exactly as an indexed plugin is: Status promises a plugin listed here is
             // wholly queryable, and a registered one is.
             lock (_lock) _indexed.Add(new IndexedPlugin(plugin.Name, plugin.Origin));
+            PublishStatus();
             return;
         }
 
@@ -456,6 +472,7 @@ public sealed class LoadOrderMirror(
             // runs in its own DuckDB transaction, so the rollback on throw leaves no partial rows.
             _logger.LogWarning(ex, "Failed to index {Plugin}; its records will not be queryable", plugin.Name);
             loadOrder.SetFailure(key, PluginLoadFailure.ReasonFor(ex));
+            PublishStatus();
             return;
         }
 
@@ -466,6 +483,7 @@ public sealed class LoadOrderMirror(
             // different form.
             _indexed.Add(new IndexedPlugin(plugin.Name, plugin.Origin));
         }
+        PublishStatus();
     }
 
     // Where a plugin's records come from (ADR-0041): a tracked plugin's source tree, the binary for
@@ -576,6 +594,7 @@ public sealed class LoadOrderMirror(
             var openedMod = loadOrder.GetMod(metadata.Name, metadata.Origin)!;
             index.Index(openedMod, metadata.Registration, metadata.Key, metadata.Path);
             _indexed.Add(new IndexedPlugin(metadata.Name, metadata.Origin));
+            PublishStatus();
             return PluginResponse.FromMetadata(metadata);
         }
     }
@@ -816,6 +835,7 @@ public sealed class LoadOrderMirror(
         try { lock (_lock) DisposeCurrent(); }
         finally { ExitExclusive(); }
 
+        PublishStatus();
         AnnounceLoadOrder();
     }
 

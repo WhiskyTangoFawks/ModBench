@@ -1,8 +1,8 @@
 import type { components } from './generated/api';
 import type {
-  ApiClient, PluginMetadata, LoadOrderStatus, TrackStatus,
+  ApiClient, PluginMetadata,
   WorldspaceSummary, CellReferences, WorldspaceBlocks,
-  UnansweredExternalChange, ContainerChildSummary, PluginDiagnosisReport,
+  ContainerChildSummary, PluginDiagnosisReport,
 } from './ApiClient';
 import { errorText, isWriteGateTimeout, writeGateBusyMessage } from './ApiClient';
 import type { RecordEditEnvelope } from './messages';
@@ -30,13 +30,6 @@ export interface PluginRepository {
   /** Read off each held plugin's original bytes and worded exactly as the Track refusal words
    *  them — one vocabulary. One call for the whole load order. */
   getDiagnoses(): Promise<PluginDiagnosisReport[]>;
-  // ADR-0035: separate from getPlugins() because this one answers while the load order is still
-  // incomplete, and it alone distinguishes "not looked yet" from "no conflict".
-  getLoadOrderStatus(): Promise<LoadOrderStatus>;
-  // Polled alongside the in-flight track POST.
-  getTrackStatus(): Promise<TrackStatus>;
-  // No load-order dependency of its own: the queue lives on the backend's singleton watcher.
-  getExternalChangeStatus(): Promise<UnansweredExternalChange[]>;
   // origin (ADR-0036) says which copy of `plugin` to read when two files share a filename.
   // Optional: a plain load-order row has none to give, and the backend resolves that case itself.
   getRecordTypes(plugin: string, origin?: string): Promise<PluginRecordTypeCount[]>;
@@ -130,37 +123,6 @@ export class ApiPluginRepository implements PluginRepository {
   async getDiagnoses(): Promise<PluginDiagnosisReport[]> {
     const { data, error, response } = await this.client.GET('/plugins/diagnoses', {});
     this.ensureOk('GET /plugins/diagnoses', response, error);
-    return data ?? [];
-  }
-
-  // The endpoint answers 200 in every state, "no load order" included, so a non-ok is a genuine
-  // fault: an empty status would be indistinguishable from a reconcile making no progress.
-  async getLoadOrderStatus(): Promise<LoadOrderStatus> {
-    const { data, error, response } = await this.client.GET('/load-order/status', {});
-    this.ensureOk('GET /load-order/status', response, error);
-    return {
-      totalPlugins: data?.totalPlugins ?? 0,
-      // The wire carries each entry's origin too; the consumer keys on filename alone (see
-      // LoadOrderStatus in ApiClient.ts), so it is dropped here rather than carried unused.
-      indexedPlugins: (data?.indexedPlugins ?? []).map((p) => p.name),
-      conflictsComputed: data?.conflictsComputed ?? false,
-      failures: data?.failures ?? [],
-    };
-  }
-
-  // Same "always 200, never degrade a fault into a fake idle" posture as
-  // getLoadOrderStatus above.
-  async getTrackStatus(): Promise<TrackStatus> {
-    const { data, error, response } = await this.client.GET('/plugins/track/status', {});
-    this.ensureOk('GET /plugins/track/status', response, error);
-    return data ?? { phase: 'Idle', pluginsDone: 0, pluginsTotal: 0 };
-  }
-
-  // Same "always 200, never degrade a fault into a fake empty queue" posture as
-  // getLoadOrderStatus/getTrackStatus above.
-  async getExternalChangeStatus(): Promise<UnansweredExternalChange[]> {
-    const { data, error, response } = await this.client.GET('/plugins/external-changes/status', {});
-    this.ensureOk('GET /plugins/external-changes/status', response, error);
     return data ?? [];
   }
 

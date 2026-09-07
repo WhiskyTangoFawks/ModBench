@@ -357,66 +357,6 @@ describe('ApiPluginRepository.getActiveFilter', () => {
   });
 });
 
-// ADR-0035: the whole-set conflict sweep leaves a Ready load order with stale winners, so
-// anything rendering conflict information must read `conflictsComputed`, never `state`.
-describe('ApiPluginRepository.getLoadOrderStatus', () => {
-  it('calls GET /load-order/status and reports the plugins indexed so far, the sweep state and the failures', async () => {
-    const client = {
-      GET: vi.fn().mockResolvedValue({
-        data: {
-          state: 1,
-          totalPlugins: 3,
-          indexedPlugins: [{ name: 'Fallout4.esm', origin: 'Data' }, { name: 'TestMod.esp', origin: 'ModA' }],
-          conflictsComputed: false,
-          failures: [{ name: 'Bad.esp', reason: 'RACE parse' }],
-        },
-        response: { ok: true },
-      }),
-    } as any;
-
-    const status = await new ApiPluginRepository(client).getLoadOrderStatus();
-
-    expect(status).toEqual({
-      totalPlugins: 3,
-      indexedPlugins: ['Fallout4.esm', 'TestMod.esp'],
-      conflictsComputed: false,
-      failures: [{ name: 'Bad.esp', reason: 'RACE parse' }],
-    });
-    expect(client.GET).toHaveBeenCalledWith('/load-order/status', expect.anything());
-  });
-
-  // The endpoint answers 200 in every state including "no load order" (LoadOrderEndpoints.cs), so
-  // a non-ok is a genuine fault; degrading to an empty status would read as a load stalling.
-  it('throws on a non-OK response rather than degrading to an empty, still-loading-looking status', async () => {
-    await expect(new ApiPluginRepository(nonOkClient()).getLoadOrderStatus()).rejects.toThrow(/500/);
-  });
-});
-
-// Polled the same way getTrackStatus/getLoadOrderStatus are.
-describe('ApiPluginRepository.getExternalChangeStatus', () => {
-  it('calls GET /plugins/external-changes/status and maps every queued question', async () => {
-    const client = {
-      GET: vi.fn().mockResolvedValue({
-        data: [
-          { plugin: 'Fixture.esp', origin: 'ModA', metaChanged: true, oldVersion: '1.0', newVersion: '2.0' },
-        ],
-        response: { ok: true },
-      }),
-    } as any;
-
-    const unanswered = await new ApiPluginRepository(client).getExternalChangeStatus();
-
-    expect(unanswered).toEqual([
-      { plugin: 'Fixture.esp', origin: 'ModA', metaChanged: true, oldVersion: '1.0', newVersion: '2.0' },
-    ]);
-    expect(client.GET).toHaveBeenCalledWith('/plugins/external-changes/status', expect.anything());
-  });
-
-  it('throws on a non-OK response rather than degrading to an empty queue', async () => {
-    await expect(new ApiPluginRepository(nonOkClient()).getExternalChangeStatus()).rejects.toThrow(/500/);
-  });
-});
-
 // The Renumber gesture's FormID input box's suggested default.
 describe('ApiPluginRepository.peekNextFreeFormKey', () => {
   it('calls GET /plugins/{plugin}/records/next-form-key with the plugin/origin and returns the suggested FormKey', async () => {

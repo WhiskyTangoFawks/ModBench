@@ -1,4 +1,6 @@
+using MEditService.Core.Plugins;
 using MEditService.Core.Records;
+using MEditService.Core.Source;
 
 namespace MEditService.Core.Notifications;
 
@@ -34,6 +36,34 @@ public sealed record PluginChangedNotification(PluginKey Plugin, long Sequence)
     public override NotificationEvent ToEvent() => new(Kind, Plugin.Name, Plugin.Origin ?? "", [], Sequence);
 }
 
-/// <summary>The one wire shape for every notification kind, declared on the OpenAPI surface so the
-/// generated client carries these fields even though the stream is consumed with a raw fetch.</summary>
-public sealed record NotificationEvent(string Kind, string Plugin, string Origin, IReadOnlyList<string> Keys, long Sequence);
+/// <summary>The mirror's <see cref="LoadOrderStatus"/> whenever it changes — reconciling through to
+/// Ready, the same transitions <c>GET /load-order/status</c> polling would have observed.</summary>
+public sealed record LoadOrderStatusNotification(LoadOrderStatus Status) : Notification("load-order-status")
+{
+    public override NotificationEvent ToEvent() => new(Kind, "", "", [], 0, LoadOrderStatus: Status);
+}
+
+/// <summary>Track's own progress (<see cref="TrackProgress"/>) as it advances through parsing,
+/// serializing and committing.</summary>
+public sealed record TrackProgressNotification(TrackProgress Progress) : Notification("track-progress")
+{
+    public override NotificationEvent ToEvent() => new(Kind, "", Progress.Origin ?? "", [], 0, TrackProgress: Progress);
+}
+
+/// <summary>The plugin watcher recorded a change awaiting the user's Absorb/Keep answer.</summary>
+public sealed record ExternalChangePendingNotification(PluginKey Plugin, bool MetaChanged, string? OldVersion, string? NewVersion)
+    : Notification("external-change-pending")
+{
+    public override NotificationEvent ToEvent() => new(Kind, Plugin.Name, Plugin.Origin ?? "", [], 0,
+        ExternalChangeMetaChanged: MetaChanged, ExternalChangeOldVersion: OldVersion, ExternalChangeNewVersion: NewVersion);
+}
+
+/// <summary>The one wire shape every notification kind serializes to. Kind is the discriminator; the
+/// trailing groups are null except for the one kind that fills them.</summary>
+public sealed record NotificationEvent(
+    string Kind, string Plugin, string Origin, IReadOnlyList<string> Keys, long Sequence,
+    LoadOrderStatus? LoadOrderStatus = null,
+    TrackProgress? TrackProgress = null,
+    bool? ExternalChangeMetaChanged = null,
+    string? ExternalChangeOldVersion = null,
+    string? ExternalChangeNewVersion = null);

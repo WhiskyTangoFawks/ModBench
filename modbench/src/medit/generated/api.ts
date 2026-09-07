@@ -829,6 +829,11 @@ export interface components {
             keys: string[];
             /** Format: int64 */
             sequence: number;
+            loadOrderStatus?: components["schemas"]["LoadOrderStatus"] | null;
+            trackProgress?: components["schemas"]["TrackProgress"] | null;
+            externalChangeMetaChanged?: boolean | null;
+            externalChangeOldVersion?: string | null;
+            externalChangeNewVersion?: string | null;
         };
         PathHop: {
             kind: string;

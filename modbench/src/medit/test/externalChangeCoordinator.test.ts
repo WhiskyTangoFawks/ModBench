@@ -1,19 +1,23 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import {
-  startExternalChangePolling, runRebase, rebaseOfferMessage, gateExternalChangePolling,
+  subscribeExternalChangePending, runRebase, rebaseOfferMessage,
   REBASE_NOW_BUTTON, REBASE_LATER_BUTTON,
-  type ExternalChangeCoordinatorDeps, type ExternalChangePollerGateDeps,
+  type ExternalChangeCoordinatorDeps,
 } from '../externalChangeCoordinator';
 import { ABSORB_BUTTON, KEEP_BUTTON } from '../externalChangeDialog';
-import type { UnansweredExternalChange } from '../ApiClient';
+import type { NotificationEvent } from '../ApiClient';
+import { FakeNotificationSubscriber } from '../NotificationSubscriber';
 
-function unanswered(overrides: Partial<UnansweredExternalChange> = {}): UnansweredExternalChange {
-  return { plugin: 'Fixture.esp', origin: 'ModA', metaChanged: false, oldVersion: null, newVersion: null, ...overrides };
+function pendingEvent(overrides: Partial<NotificationEvent> = {}): NotificationEvent {
+  return {
+    kind: 'external-change-pending', plugin: 'Fixture.esp', origin: 'ModA', keys: [], sequence: 0,
+    externalChangeMetaChanged: false, externalChangeOldVersion: null, externalChangeNewVersion: null,
+    ...overrides,
+  };
 }
 
 function makeDeps(overrides: Partial<ExternalChangeCoordinatorDeps> = {}): ExternalChangeCoordinatorDeps {
   return {
-    repository: { getExternalChangeStatus: vi.fn().mockResolvedValue([]) } as any,
     controller: {
       keepAsMyEdit: vi.fn().mockResolvedValue({ succeeded: true, refusalReason: null }),
       absorbUpstreamUpdate: vi.fn().mockResolvedValue({ succeeded: true, refusalReason: null }),
@@ -26,88 +30,82 @@ function makeDeps(overrides: Partial<ExternalChangeCoordinatorDeps> = {}): Exter
   };
 }
 
+// Flushes the microtask queue: the subscriber's listener dispatches `handleUnanswered`
+// fire-and-forget, so a test awaits one tick past `emit` before asserting its effects.
+function flush(): Promise<void> {
+  return new Promise((resolve) => { setTimeout(resolve, 0); });
+}
+
 describe('rebaseOfferMessage', () => {
   it('names the edit branch and the origin', () => {
     expect(rebaseOfferMessage('ModA')).toBe('main moved ahead of "edit" in ModA.');
   });
 });
 
-describe('startExternalChangePolling', () => {
-  beforeEach(() => vi.useFakeTimers());
-  afterEach(() => vi.useRealTimers());
-
-  it('polls, and does nothing when the queue is empty', async () => {
+describe('subscribeExternalChangePending', () => {
+  it('does nothing until a notification arrives', () => {
     const deps = makeDeps();
-    const stop = startExternalChangePolling(deps, 100);
+    subscribeExternalChangePending(deps, new FakeNotificationSubscriber());
 
-    await vi.advanceTimersByTimeAsync(100);
-
-    expect(deps.repository.getExternalChangeStatus).toHaveBeenCalled();
     expect(deps.showDialog).not.toHaveBeenCalled();
-    stop();
   });
 
   it('runs the dialog and dispatches Keep as My Edit', async () => {
-    const deps = makeDeps({
-      repository: { getExternalChangeStatus: vi.fn().mockResolvedValue([unanswered()]) } as any,
-      showDialog: vi.fn().mockResolvedValue(KEEP_BUTTON),
-    });
-    const stop = startExternalChangePolling(deps, 100);
+    const deps = makeDeps({ showDialog: vi.fn().mockResolvedValue(KEEP_BUTTON) });
+    const notificationSubscriber = new FakeNotificationSubscriber();
+    subscribeExternalChangePending(deps, notificationSubscriber);
 
-    await vi.advanceTimersByTimeAsync(100);
+    notificationSubscriber.emit(pendingEvent());
+    await flush();
 
     expect(deps.controller.keepAsMyEdit).toHaveBeenCalledWith('Fixture.esp', 'ModA');
     expect(deps.controller.absorbUpstreamUpdate).not.toHaveBeenCalled();
-    stop();
   });
 
   it('dispatches Absorb, then offers the rebase — Later does not rebase', async () => {
     const deps = makeDeps({
-      repository: { getExternalChangeStatus: vi.fn().mockResolvedValue([unanswered()]) } as any,
       showDialog: vi.fn().mockResolvedValue(ABSORB_BUTTON),
       showRebaseOffer: vi.fn().mockResolvedValue(REBASE_LATER_BUTTON),
     });
-    const stop = startExternalChangePolling(deps, 100);
+    const notificationSubscriber = new FakeNotificationSubscriber();
+    subscribeExternalChangePending(deps, notificationSubscriber);
 
-    await vi.advanceTimersByTimeAsync(100);
+    notificationSubscriber.emit(pendingEvent());
+    await flush();
 
     expect(deps.controller.absorbUpstreamUpdate).toHaveBeenCalledWith('Fixture.esp', 'ModA');
     expect(deps.showRebaseOffer).toHaveBeenCalledWith(rebaseOfferMessage('ModA'), REBASE_NOW_BUTTON, REBASE_LATER_BUTTON);
     expect(deps.controller.rebaseOntoMain).not.toHaveBeenCalled();
-    stop();
   });
 
   it('Rebase Now runs the rebase', async () => {
     const deps = makeDeps({
-      repository: { getExternalChangeStatus: vi.fn().mockResolvedValue([unanswered()]) } as any,
       showDialog: vi.fn().mockResolvedValue(ABSORB_BUTTON),
       showRebaseOffer: vi.fn().mockResolvedValue(REBASE_NOW_BUTTON),
     });
-    const stop = startExternalChangePolling(deps, 100);
+    const notificationSubscriber = new FakeNotificationSubscriber();
+    subscribeExternalChangePending(deps, notificationSubscriber);
 
-    await vi.advanceTimersByTimeAsync(100);
+    notificationSubscriber.emit(pendingEvent());
+    await flush();
 
     expect(deps.controller.rebaseOntoMain).toHaveBeenCalledWith('ModA');
-    stop();
   });
 
   it('a deferred (Esc) answer calls neither absorb nor keep', async () => {
-    const deps = makeDeps({
-      repository: { getExternalChangeStatus: vi.fn().mockResolvedValue([unanswered()]) } as any,
-      showDialog: vi.fn().mockResolvedValue(undefined),
-    });
-    const stop = startExternalChangePolling(deps, 100);
+    const deps = makeDeps({ showDialog: vi.fn().mockResolvedValue(undefined) });
+    const notificationSubscriber = new FakeNotificationSubscriber();
+    subscribeExternalChangePending(deps, notificationSubscriber);
 
-    await vi.advanceTimersByTimeAsync(100);
+    notificationSubscriber.emit(pendingEvent());
+    await flush();
 
     expect(deps.controller.keepAsMyEdit).not.toHaveBeenCalled();
     expect(deps.controller.absorbUpstreamUpdate).not.toHaveBeenCalled();
-    stop();
   });
 
   it('a failed Absorb never offers the rebase', async () => {
     const deps = makeDeps({
-      repository: { getExternalChangeStatus: vi.fn().mockResolvedValue([unanswered()]) } as any,
       showDialog: vi.fn().mockResolvedValue(ABSORB_BUTTON),
       controller: {
         keepAsMyEdit: vi.fn(),
@@ -115,39 +113,40 @@ describe('startExternalChangePolling', () => {
         rebaseOntoMain: vi.fn(),
       } as any,
     });
-    const stop = startExternalChangePolling(deps, 100);
+    const notificationSubscriber = new FakeNotificationSubscriber();
+    subscribeExternalChangePending(deps, notificationSubscriber);
 
-    await vi.advanceTimersByTimeAsync(100);
+    notificationSubscriber.emit(pendingEvent());
+    await flush();
 
     expect(deps.showRebaseOffer).not.toHaveBeenCalled();
-    stop();
   });
 
-  it('a poll failure logs and keeps polling rather than throwing', async () => {
+  it('a rejected dispatch logs rather than throwing', async () => {
     const log = vi.fn();
     const deps = makeDeps({
-      repository: { getExternalChangeStatus: vi.fn().mockRejectedValue(new Error('backend down')) } as any,
       log,
+      controller: { keepAsMyEdit: vi.fn().mockRejectedValue(new Error('backend down')) } as any,
     });
-    const stop = startExternalChangePolling(deps, 100);
+    const notificationSubscriber = new FakeNotificationSubscriber();
+    subscribeExternalChangePending(deps, notificationSubscriber);
 
-    await vi.advanceTimersByTimeAsync(100);
+    notificationSubscriber.emit(pendingEvent());
+    await flush();
+
     expect(log).toHaveBeenCalledWith(expect.stringContaining('backend down'));
-
-    (deps.repository.getExternalChangeStatus as ReturnType<typeof vi.fn>).mockResolvedValue([]);
-    await vi.advanceTimersByTimeAsync(100);
-    expect(deps.repository.getExternalChangeStatus).toHaveBeenCalledTimes(2);
-    stop();
   });
 
-  it('stops polling once stopped', async () => {
+  it('reports nothing further once unsubscribed', async () => {
     const deps = makeDeps();
-    const stop = startExternalChangePolling(deps, 100);
-    stop();
+    const notificationSubscriber = new FakeNotificationSubscriber();
+    const unsubscribe = subscribeExternalChangePending(deps, notificationSubscriber);
+    unsubscribe();
 
-    await vi.advanceTimersByTimeAsync(1000);
+    notificationSubscriber.emit(pendingEvent());
+    await flush();
 
-    expect(deps.repository.getExternalChangeStatus).not.toHaveBeenCalled();
+    expect(deps.showDialog).not.toHaveBeenCalled();
   });
 });
 
@@ -171,68 +170,5 @@ describe('runRebase', () => {
     await runRebase({ controller, openMergeEditor }, 'ModA');
 
     expect(openMergeEditor).not.toHaveBeenCalled();
-  });
-});
-
-// The poller has no reason to exist before a backend does — these prove the gate reacts to
-// the backend's health signal alone (never a timer, never load order state, which this fixture has no
-// concept of at all).
-describe('gateExternalChangePolling', () => {
-  function makeGateDeps() {
-    let statusCb: (() => void) | undefined;
-    let healthy = false;
-    const stopFns: Array<ReturnType<typeof vi.fn>> = [];
-    const deps: ExternalChangePollerGateDeps = {
-      onBackendStatusChange: vi.fn((cb: () => void) => { statusCb = cb; }),
-      isBackendHealthy: () => healthy,
-      startPolling: vi.fn(() => {
-        const stop = vi.fn();
-        stopFns.push(stop);
-        return stop;
-      }),
-    };
-    return {
-      deps,
-      stopFns,
-      setHealthy: (value: boolean) => { healthy = value; statusCb?.(); },
-    };
-  }
-
-  it('never starts polling before the backend has ever been healthy', () => {
-    const { deps } = makeGateDeps();
-    gateExternalChangePolling(deps);
-    expect(deps.startPolling).not.toHaveBeenCalled();
-  });
-
-  it('starts polling once the backend becomes healthy', () => {
-    const { deps, setHealthy } = makeGateDeps();
-    gateExternalChangePolling(deps);
-    setHealthy(true);
-    expect(deps.startPolling).toHaveBeenCalledTimes(1);
-  });
-
-  it('does not double-start on a repeated healthy signal (e.g. a crash-restart\'s own second "attached")', () => {
-    const { deps, setHealthy } = makeGateDeps();
-    gateExternalChangePolling(deps);
-    setHealthy(true);
-    setHealthy(true);
-    expect(deps.startPolling).toHaveBeenCalledTimes(1);
-  });
-
-  it('stops polling when the backend becomes unhealthy', () => {
-    const { deps, setHealthy, stopFns } = makeGateDeps();
-    gateExternalChangePolling(deps);
-    setHealthy(true);
-    setHealthy(false);
-    expect(stopFns[0]).toHaveBeenCalledTimes(1);
-  });
-
-  it('starts a fresh poll on the next healthy transition after stopping — a relaunch restarts it', () => {
-    const { deps, setHealthy } = makeGateDeps();
-    gateExternalChangePolling(deps);
-    setHealthy(true);
-    setHealthy(false);
-    setHealthy(true);
-    expect(deps.startPolling).toHaveBeenCalledTimes(2);
   });
 });

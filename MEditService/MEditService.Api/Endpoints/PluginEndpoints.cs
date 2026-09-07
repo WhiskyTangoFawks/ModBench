@@ -348,14 +348,19 @@ public static class PluginEndpoints
     {
         var loadOrder = mirror.LoadOrder;
         var responses = watcher.Unanswered().Select(p =>
-        {
-            var origin = loadOrder?.Plugins.FirstOrDefault(pl =>
-                pl.Name.Equals(p.PluginName, StringComparison.OrdinalIgnoreCase)
-                && ModFolders.Of(pl.Origin, pl.Path) == p.ModFolder)?.Origin ?? "";
-            return new UnansweredExternalChangeResponse(p.PluginName, origin, p.Classification.MetaChanged, p.Classification.OldVersion, p.Classification.NewVersion);
-        }).ToList();
+            new UnansweredExternalChangeResponse(
+                p.PluginName, OriginOfExternalChange(loadOrder, p.ModFolder, p.PluginName),
+                p.Classification.MetaChanged, p.Classification.OldVersion, p.Classification.NewVersion))
+            .ToList();
         return Results.Ok(responses);
     }
+
+    // Shared with ExternalChangeMirror's own notification and overflow paths, which start from the
+    // same bare (modFolder, pluginName) identity the watcher carries.
+    internal static string OriginOfExternalChange(ILoadOrder? loadOrder, string modFolder, string pluginName) =>
+        loadOrder?.Plugins.FirstOrDefault(pl =>
+            pl.Name.Equals(pluginName, StringComparison.OrdinalIgnoreCase)
+            && ModFolders.Of(pl.Origin, pl.Path) == modFolder)?.Origin ?? "";
 
     // Absorb Upstream Update. The plugin name and origin resolve the target the same way
     // Compile does; GameRelease comes off the loaded load order, never guessed.

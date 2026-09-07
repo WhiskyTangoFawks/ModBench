@@ -97,16 +97,27 @@ try
     // ADR-0001: subscribed once, not per reconcile — the watcher is a process singleton, and
     // re-subscribing would stack a handler per reconcile. Which plugins are watched is re-decided
     // per reconcile instead.
+    var mirror = app.Services.GetRequiredService<ILoadOrderMirror>();
+    var externalChangeWatcher = app.Services.GetRequiredService<ExternalChangeWatcher>();
     var indexMirror = new IndexMirror(
-        app.Services.GetRequiredService<ILoadOrderMirror>(),
+        mirror,
         app.Services.GetRequiredService<INotificationPublisher>(),
         app.Services.GetRequiredService<ILoggerFactory>().CreateLogger(nameof(IndexMirror)));
-    app.Services.GetRequiredService<ExternalChangeWatcher>().IndexedBinaryChanged = indexMirror.Apply;
+    externalChangeWatcher.IndexedBinaryChanged = indexMirror.Apply;
+    externalChangeWatcher.IndexedWatchOverflowed = indexMirror.ApplyOverflow;
+
+    // ADR-0046: the plugin watcher's own external-change signals, subscribed once for the same
+    // reason.
+    var externalChangeMirror = new ExternalChangeMirror(
+        mirror,
+        app.Services.GetRequiredService<INotificationPublisher>(),
+        app.Services.GetRequiredService<ILoggerFactory>().CreateLogger(nameof(ExternalChangeMirror)));
+    externalChangeWatcher.ExternalChangeReported = externalChangeMirror.ApplyPending;
+    externalChangeWatcher.WatchOverflowed = externalChangeMirror.ApplyOverflow;
 
     // ADR-0046: the Source watcher's other half, subscribed once for the same reason. The mirror
     // announces each reconcile and Track the repository it has created, so a watch starts with no
     // restart.
-    var mirror = app.Services.GetRequiredService<ILoadOrderMirror>();
     var sourceWatcher = app.Services.GetRequiredService<SourceChangeWatcher>();
     var sourceMirror = new SourceMirror(
         mirror, sourceWatcher,

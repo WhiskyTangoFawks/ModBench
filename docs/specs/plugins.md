@@ -287,7 +287,8 @@ end.
   suppresses them outright while loading (`RecordQueryService.GetPlugins` gates on
   `LoadOrderState.Ready`) and the frontend never asks for them mid-load.
 - **Closing mEdit is a deliberate abandonment, not a failure — at any point in the launch.**
-  The polling stops, chevrons/message/progress clear, and nothing is reported as broken. This
+  The progress subscription is torn down, chevrons/message/progress clear, and nothing is
+  reported as broken. This
   holds for the whole launch, not just the load: a close during the backend spawn and mod-tree
   walk must not report "Backend failed to start" for the stop the user just asked for, so the
   cancellation is armed before the launch's first await and checked after each one. Same for a
@@ -298,19 +299,19 @@ end.
   frontend surfaces that message as the load failure. No read-only mode, no waiting, never a second
   index file ([ADR-0001](../adr/0001-persistent-per-instance-index-load-order-is-a-registration.md)
   point 6).
-- **Mechanism: poll, don't stream.** Every call goes through the generated `openapi-fetch`
-  client, which has no streaming path, and the load POST stays blocking. So `GET /load-order/status`
-  is polled alongside the still
-  in-flight `PUT /load-order`, which remains the completion signal. Cadence lives in
-  one named constant, `STATUS_POLL_INTERVAL_MS` (`EditingController.ts`), set to 500ms to
-  match `BackendManager`'s own health-poll cadence; it is the single dial for any tuning pass.
+- **Mechanism: subscribe, don't poll.** The load POST stays blocking, and progress rides the
+  `load-order-status` notification on the SSE stream (ADR-0046 invariant 12) alongside the
+  still in-flight `PUT /load-order`, which remains the completion signal. The extension's
+  subscription is one call, `EditingController.subscribeStatus`, unsubscribed once the PUT
+  settles; the session-wide stream itself is `start()`ed as soon as the backend is healthy, not
+  on the first reconcile, so this same first `PUT`'s own progress can ride it.
 - **A progress tick is never the last word.** Ticks carry only the indexed set and the failures;
   the completed load's hand-off (`applyLoadOrderToTree`) always follows the final tick and
   carries read-only state and master issues with it. Were a tick ever last, both decorations
   would silently vanish from a fully loaded tree.
 - A tick re-renders only when something actually landed: `setLoadOrder` fires a whole-tree refresh
   and `PluginTreeProvider.getPluginChildren` is uncached, so an unconditional re-render every
-  poll would re-fetch record types for every expanded row.
+  notification would re-fetch record types for every expanded row.
 
 ### Record navigation (Editing, once the backend is running)
 
@@ -829,15 +830,15 @@ overflow, then native **Collapse All** last.
   context boundary itself (`src/test/contextBoundary.test.ts`).
 - **Record semantics and conflict classification** are the backend's responsibility and tested
   there (`MEditService/CLAUDE.md`); this surface consumes representative responses as fixtures.
-- **Progressive-load seams.** The polling itself is `EditingController.putLoadOrder`
+- **Progressive-load seams.** The subscription itself is `EditingController.putLoadOrder`
   with an `onProgress` callback and an `AbortSignal` — HTTP orchestration with no VS Code types,
-  so cadence, tick reporting, poll-failure tolerance and the three outcomes (reconciled /
-  failed / abandoned) are unit-tested with a fake client and fake timers. The incompleteness
+  so tick reporting and the three outcomes (reconciled / failed / abandoned) are unit-tested with
+  a fake client and `FakeNotificationSubscriber` (ADR-0046 invariant 12). The incompleteness
   statement's text is a pure function (`medit/loadOrderProgress.ts`). What only a live window can
   show — chevrons appearing one plugin at a time, a mid-load failure decoration, master issues
   staying off until completion, `TreeView.message` appearing and clearing, and a mid-load close
-  stopping the polling — is in the integration suite, whose mock backend **holds the load POST
-  open** so the assertions land in the window that actually matters.
+  tearing down the subscription — is in the integration suite, whose mock backend **holds the
+  load POST open** so the assertions land in the window that actually matters.
 - **The view-header progress indicator (AC2) has no automated test.** `withProgress` returns
   nothing readable and leaves no observable state in the extension host — the same absence of a
   seam as `showCollapseAll` ([containers.md](containers.md) title-bar rule 7). It is verified by reading the

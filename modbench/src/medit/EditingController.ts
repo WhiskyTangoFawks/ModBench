@@ -1,15 +1,19 @@
 import type { components } from './generated/api';
 import type {
   ApiClient, CompileResult, LoadOrderStatus, TrackStatus, ExternalChangeActionResult, RebaseResult,
-  CrashRepairOffer,
+  CrashRepairOffer, NotificationEvent,
 } from './ApiClient';
-import { errorText, isWriteGateTimeout, writeGateBusyMessage } from './ApiClient';
+import { errorText, isWriteGateTimeout, writeGateBusyMessage, toLoadOrderStatus } from './ApiClient';
 import type { PluginRepository } from './PluginRepository';
+import type { NotificationSubscriber, NotificationKind } from './NotificationSubscriber';
 import { reportSkippedPlugins } from './pluginFailures';
 
 export interface EditingControllerDeps {
   client: ApiClient;
   repository: PluginRepository;
+  /** ADR-0046 invariant 12: `putLoadOrder`'s and `track`'s own progress ride this rather than a
+   *  poll — see `subscribeStatus`. */
+  notificationSubscriber: NotificationSubscriber;
   refreshTree: () => void;
   setStatusText: (text: string) => void;
   showWarning: (msg: string) => void;
@@ -32,10 +36,6 @@ function eslContradictionMessage(error: unknown): string | undefined {
   const problem = error as { eslContradiction?: boolean; detail?: string } | undefined;
   return problem?.eslContradiction ? (problem.detail ?? errorText(error)) : undefined;
 }
-
-/** 500ms matches `BackendManager`'s own `GET /health` cadence — a precedent rather than a number
- *  picked by feel, and slow enough not to busy-loop a backend that is already indexing. */
-export const STATUS_POLL_INTERVAL_MS = 500;
 
 /** Re-exported under its own name because it is a callback contract, not merely a repository
  *  return type the caller happens to see. */
@@ -63,11 +63,11 @@ export type LoadOrderOutcome =
 /** Deliberately plain stdlib — `AbortSignal`, not a bespoke token — so this interface carries no
  *  VS Code types and `openapi-fetch` can forward it straight to `fetch`. */
 export interface LoadOrderOptions {
-  /** Called on each poll of `GET /load-order/status` while the PUT is in flight. Never called
+  /** Called on each `load-order-status` notification while the PUT is in flight. Never called
    *  after the reconcile settles. */
   onProgress?: (progress: LoadOrderProgress) => void;
-  /** Trips when the user deliberately abandons this reconcile (closing mEdit). Stops the polling
-   *  and aborts the PUT itself rather than waiting for a dead socket. */
+  /** Trips when the user deliberately abandons this reconcile (closing mEdit). Aborts the PUT
+   *  itself rather than waiting for a dead socket. */
   signal?: AbortSignal;
 }
 
@@ -123,9 +123,10 @@ export class EditingController {
     options: LoadOrderOptions = {},
   ): Promise<LoadOrderOutcome> {
     // The PUT stays blocking and the generated openapi-fetch client has no streaming path, so
-    // progress is polled off GET /load-order/status alongside the still in-flight PUT.
-    const stopPolling = this.pollStatus(
-      'GET /load-order/status', () => this.deps.repository.getLoadOrderStatus(), options.onProgress, options.signal,
+    // progress rides the load-order-status notification alongside the still in-flight PUT.
+    const unsubscribe = this.subscribeStatus(
+      'load-order-status', (event) => (event.loadOrderStatus ? toLoadOrderStatus(event.loadOrderStatus) : undefined),
+      options.onProgress,
     );
     let result;
     try {
@@ -138,7 +139,7 @@ export class EditingController {
       if (this.wasDeliberatelyAborted(options.signal)) return { outcome: 'abandoned' };
       throw e;
     } finally {
-      stopPolling();
+      unsubscribe();
     }
     const { data, error, response } = result;
     // 409 is the backend saying this snapshot was superseded: treating it as a failure would make
@@ -194,35 +195,18 @@ export class EditingController {
     return { outcome: 'reconciled', failures, crashRepairOffers };
   }
 
-  // Self-rescheduling rather than `setInterval`: a slow read must not stack ticks behind itself,
-  // and the first tick waits one interval because at t=0 the backend has published nothing.
-  private pollStatus<T>(
-    endpoint: string,
-    read: () => Promise<T>,
+  // ADR-0046 invariant 12: `putLoadOrder` and `track` each ride one notification kind. `extract`
+  // picks that kind's payload out of the flat wire envelope; undefined skips the event.
+  private subscribeStatus<T>(
+    kind: NotificationKind,
+    extract: (event: NotificationEvent) => T | undefined,
     onProgress: ((status: T) => void) | undefined,
-    signal?: AbortSignal,
   ): () => void {
     if (!onProgress) return () => {};
-    let stopped = false;
-    let timer: ReturnType<typeof setTimeout>;
-    const done = () => stopped || (signal?.aborted ?? false);
-    const tick = async () => {
-      try {
-        const status = await read();
-        // Re-checked after the await: the operation can settle (or be abandoned) while this read
-        // is in flight, and a tick landing after that would report progress nobody is waiting on.
-        if (done()) return;
-        onProgress(status);
-      } catch (e) {
-        // ADR-0026 background/recoverable tier: a poll is frequent and non-essential, so a blip
-        // gets a log line and the next tick — never a toast. The blocking request itself is the
-        // completion signal.
-        this.log(`[EditingController] ${endpoint} poll failed: ${e instanceof Error ? e.message : String(e)}`);
-      }
-      if (!done()) timer = setTimeout(() => { void tick(); }, STATUS_POLL_INTERVAL_MS);
-    };
-    timer = setTimeout(() => { void tick(); }, STATUS_POLL_INTERVAL_MS);
-    return () => { stopped = true; clearTimeout(timer); };
+    return this.deps.notificationSubscriber.subscribe(kind, (event) => {
+      const status = extract(event);
+      if (status !== undefined) onProgress(status);
+    });
   }
 
   // `refresh: 'both'` also re-reads the per-plugin filter matches: a changed record can start or
@@ -321,11 +305,8 @@ export class EditingController {
   async track(
     origin: string, preset: 'Edits' | 'Everything', options: { onProgress?: (status: TrackStatus) => void } = {},
   ): Promise<boolean> {
-    // The POST stays blocking, so progress is polled off GET /plugins/track/status alongside it
-    // (no `signal`: Track has no cancellation).
-    const stopPolling = this.pollStatus(
-      'GET /plugins/track/status', () => this.deps.repository.getTrackStatus(), options.onProgress,
-    );
+    // The POST stays blocking, so progress rides the track-progress notification alongside it.
+    const unsubscribe = this.subscribeStatus('track-progress', (event) => event.trackProgress ?? undefined, options.onProgress);
     let tracked: boolean;
     try {
       tracked = await this.mutate({
@@ -336,7 +317,7 @@ export class EditingController {
         failure: false,
       });
     } finally {
-      stopPolling();
+      unsubscribe();
     }
     // Tracked-ness isn't plugin metadata the tree renders, but the caller needs to re-register the
     // new repo with vscode.git's SCM panel. Not `refresh: 'both'`: tracking changes no record, so

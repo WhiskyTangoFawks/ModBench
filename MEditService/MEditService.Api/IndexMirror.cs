@@ -45,4 +45,26 @@ internal sealed class IndexMirror(ILoadOrderMirror mirror, INotificationPublishe
             return false;
         }
     }
+
+    /// <summary>ADR-0046 invariant 6: an OS overflow on the mirror watch, mirroring
+    /// <see cref="SourceMirror"/>'s own overflow-to-validate shape for the Source side.</summary>
+    internal void ApplyOverflow(string pluginName, string origin)
+    {
+        var key = new PluginKey(pluginName, origin);
+        try
+        {
+            foreach (var report in mirror.ValidateIndex(key))
+            {
+                foreach (var failure in report.Failures)
+                    logger.LogWarning("Validating {Plugin} after a watch overflow: {Failure}", pluginName, failure);
+                if (report.NeedsRebuild) notifications.Publish(new PluginChangedNotification(key, mirror.Sequence));
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex,
+                "Could not validate {Plugin} after a watch overflow; it will be re-checked at the next reconcile",
+                pluginName);
+        }
+    }
 }
