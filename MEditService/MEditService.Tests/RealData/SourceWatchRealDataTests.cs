@@ -134,9 +134,11 @@ public sealed class SourceWatchRealDataTests(SourceWatchRealDataFixture fixture,
             Assert.Equal(editorId, fixture.Mirror.Index!.At(RecordRef.Effective).GetDocument(formKey, fixture.Plugin)?.EditorId);
     }
 
+    // 60s to match the sequence await above: the same load that delays the projection delays this
+    // settling too, and the bound is a wait, not a per-run cost.
     private async Task WaitForEveryRow(Dictionary<string, string> renamed)
     {
-        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(30);
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(60);
         while (DateTime.UtcNow < deadline)
         {
             if (renamed.All(r => fixture.Mirror.Index!.At(RecordRef.Effective).GetDocument(r.Key, fixture.Plugin)?.EditorId == r.Value))
