@@ -23,6 +23,10 @@ public sealed class FormLinkResolver(
     // failed open is remembered too, or it is retried once per link in the record being edited.
     private readonly Dictionary<PluginKey, (ILoadedMod Mod, ILinkCache Cache)?> _opened = [];
 
+    // One repository per tracked mod folder, kept for this resolver's life so its listing and
+    // owner-map memos answer every link in one record from one scan of the tree.
+    private readonly Dictionary<string, SourceRepository> _repositories = new(StringComparer.Ordinal);
+
     /// <summary>The record type and EditorID <paramref name="formKey"/> names, or null when the
     /// load order holds nothing that names it: an unregistered plugin, a copy the game does not
     /// load, or a record neither tree nor file carries.</summary>
@@ -42,8 +46,8 @@ public sealed class FormLinkResolver(
 
         // A tracked copy's tree is its whole answer: a record the tree does not carry is one the
         // author deleted, and falling back to the compiled file would resurrect it.
-        return ModFolders.TrackedOf(loadOrder, copy.Key) is { } modFolder
-            ? FromWorkingTree(modFolder, copy.Name, canonical)
+        return TrackedTree(copy) is { } repository
+            ? FromWorkingTree(repository, copy.Key, canonical)
             : FromPluginFile(copy, canonical);
     }
 
@@ -57,8 +61,21 @@ public sealed class FormLinkResolver(
         _opened.Clear();
     }
 
-    private RecordLookupEntry? FromWorkingTree(string modFolder, string pluginFileName, FormKey formKey) =>
-        SourceIdentities.Of(modFolder, pluginFileName, formKey, loadOrder.GameRelease) is { } identity
+    // Null when the copy has no tracked mod folder, which is the one condition under which it has
+    // source text at all.
+    private SourceRepository? TrackedTree(RegisteredCopy copy)
+    {
+        if (ModFolders.Of(loadOrder, copy.Key) is not { } modFolder) return null;
+        if (_repositories.TryGetValue(modFolder, out var already)) return already;
+
+        var opened = SourceRepository.Open(modFolder, loadOrder.GameRelease);
+        if (opened != null) _repositories[modFolder] = opened;
+        return opened;
+    }
+
+    private RecordLookupEntry? FromWorkingTree(SourceRepository repository, PluginKey plugin, FormKey formKey) =>
+        repository.IdentityOf(plugin, formKey.ToString(), schemaReflector.GetSchemas(loadOrder.GameRelease))
+            is { } identity
             ? new RecordLookupEntry(identity.RecordType, identity.EditorId)
             : null;
 

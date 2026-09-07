@@ -3,6 +3,8 @@ using MEditService.Core.Records;
 using MEditService.Core.Schema;
 using MEditService.Core.Serialization;
 using Mutagen.Bethesda;
+using Mutagen.Bethesda.Plugins;
+using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Core.Source;
 
@@ -71,9 +73,109 @@ public sealed partial class SourceRepository
         return Unit(owner.FullPath, owner.FormKey, owner.RecordType, isEmbedded: true);
     }
 
+    /// <summary>Which record the tree holds at <paramref name="formKey"/> — one with a document of
+    /// its own, an embedded child, or the header — or null when nothing carries it.</summary>
+    public RecordIdentity? IdentityOf(
+        PluginKey plugin, string formKey, IReadOnlyDictionary<string, RecordTableSchema> schemas)
+    {
+        // A malformed FormKey is a caller's raw input, not a broken tree: it names nothing and throws
+        // nothing.
+        if (!FormKey.TryFactory(formKey, out var parsed)) return null;
+        var spelled = parsed.ToString();
+
+        var sourceRoot = Path.Combine(_modFolder, RootFor(plugin.Name));
+        if (!Directory.Exists(sourceRoot)) return null;
+
+        // The header's document is the fixed root RecordData.json, and it declares a ModKey rather
+        // than the FormKey the index files it under, so no name or text in the tree carries that key.
+        if (spelled.Equals(PluginHeader.FormKeyFor(ModKey.FromFileName(plugin.Name)), StringComparison.OrdinalIgnoreCase))
+        {
+            return File.Exists(Path.Combine(sourceRoot, RecordDataFileName))
+                ? new RecordIdentity(spelled, PluginHeader.RecordType, null)
+                : null;
+        }
+
+        if (OwnDocumentIdentity(sourceRoot, plugin.Name, parsed, spelled, schemas) is { } own) return own;
+
+        // Nothing of its own, so another record's document carries it inline, and only the codec can
+        // read a type and a name back out of that document's graph.
+        if (OwnersUnder(sourceRoot).DocumentHolding(spelled) is not { } owner) return null;
+        var ownerRecord = ReadOwner(Unit(owner.FullPath, owner.FormKey, owner.RecordType, isEmbedded: true));
+        if (ContainerChildFields.FindEmbeddedChild(ownerRecord, spelled)?.Child is not { } child) return null;
+
+        return new RecordIdentity(spelled, SourceRecordType.Resolve(child, schemas), child.EditorID);
+    }
+
+    /// <summary>The reader's own words for a document whose name carries <paramref name="formKey"/>
+    /// and whose text is not one; null when the tree names no such document.</summary>
+    public string? UnreadableDocumentFor(PluginKey plugin, string formKey)
+    {
+        if (!FormKey.TryFactory(formKey, out var parsed)) return null;
+        var sourceRoot = Path.Combine(_modFolder, RootFor(plugin.Name));
+        if (!Directory.Exists(sourceRoot)) return null;
+
+        foreach (var documentPath in DocumentsNaming(sourceRoot, parsed.ToString()))
+        {
+            if (ReadOrNull(documentPath) is { } text && NotADocument(text) is { } why) return why;
+        }
+        return null;
+    }
+
+    // Its root has to be a JSON object before any member of it can be read; anything else is a file
+    // something else wrote over the document, and the reader's message is the whole diagnosis.
+    private static string? NotADocument(string text)
+    {
+        try
+        {
+            using var document = System.Text.Json.JsonDocument.Parse(text);
+            return document.RootElement.ValueKind == JsonValueKind.Object ? null : "its root is not a JSON object.";
+        }
+        catch (JsonException ex)
+        {
+            return ex.Message;
+        }
+    }
+
+    // Every entry whose leaf name carries the FormKey, as the path of the document it stands for: a
+    // directory holds its record in RecordData.json, a file is the record.
+    private IEnumerable<string> DocumentsNaming(string sourceRoot, string spelled)
+    {
+        // Computed once rather than per entry: NameCarriesFormKey reparses the FormKey on every call.
+        var filesafe = FilesafeFormKey(spelled);
+        foreach (var entry in EntriesUnder(sourceRoot))
+        {
+            var leaf = Path.GetFileName(entry);
+            if (!NameCarries(leaf, filesafe) && !NameCarries(leaf, filesafe + JsonSuffix)) continue;
+
+            yield return Directory.Exists(entry) ? Path.Combine(entry, RecordDataFileName) : entry;
+        }
+    }
+
+    // A record with a document of its own: its leaf name carries the FormKey and the text bears that
+    // out. A name the text contradicts is stale, and the record it claims is elsewhere or gone.
+    private RecordIdentity? OwnDocumentIdentity(
+        string sourceRoot, string pluginFileName, FormKey formKey, string spelled,
+        IReadOnlyDictionary<string, RecordTableSchema> schemas)
+    {
+        foreach (var documentPath in DocumentsNaming(sourceRoot, spelled))
+        {
+            if (ReadOrNull(documentPath) is not { } text) continue;
+            var relativePath = Path.GetRelativePath(_modFolder, documentPath);
+            if (DocumentAt(relativePath, text, pluginFileName) is not { } document) continue;
+            if (!FormKey.TryFactory(document.FormKey, out var declared) || declared != formKey) continue;
+
+            // A path-ambiguous group's document names its own type, and that name is the codec's
+            // rather than the schema's table, so only the record itself says which table it is in.
+            var recordType = RecordTypeOf(relativePath, _release)
+                ?? SourceRecordType.Resolve(ReadOwn(documentPath), schemas);
+            return new RecordIdentity(spelled, recordType, document.EditorId);
+        }
+        return null;
+    }
+
     /// <summary>True when another record's document in this plugin's tree carries
-    /// <paramref name="formKey"/>: the embedded child a caller holding no record type cannot ask
-    /// <see cref="Locate"/> about (debt #779).</summary>
+    /// <paramref name="formKey"/>. The cheap half of <see cref="IdentityOf"/>, for a caller that
+    /// needs no name and will not pay the codec read one costs.</summary>
     internal bool CarriesEmbedded(PluginKey plugin, string formKey) =>
         OwnersUnder(Path.Combine(_modFolder, RootFor(plugin.Name)))
             .DocumentHolding(formKey) is not null;
@@ -151,6 +253,10 @@ public sealed partial class SourceRepository
         _ownersBySourceRoot[sourceRoot] = owners;
         return owners;
     }
+
+    // The document's own record, read with no type hint: a path-ambiguous document declares its type.
+    private IMajorRecordGetter ReadOwn(string documentPath) =>
+        Codec.DeserializeAsync(documentPath, _release, recordType: null).GetAwaiter().GetResult();
 
     // Which document carries a record no path names — a placed reference in its cell, a response in
     // its quest. One map per plugin's source root, from one token scan of every document under it.
@@ -233,69 +339,69 @@ public sealed partial class SourceRepository
                 return null;
             }
         }
-
-        // The codec writes a link as a bare string and a child as an object with a FormKey of its
-        // own, so the slot a key sits under tells the two apart. Malformed text yields what it read.
-        private static List<(string FormKey, bool AtRoot, bool InAnEmbedSlot)> FormKeysIn(byte[] bytes)
-        {
-            var found = new List<(string, bool, bool)>();
-            var reader = new Utf8JsonReader(bytes);
-
-            // The member that opened the container at each depth; null where an array element or the
-            // document's own root opened it.
-            var openedBy = new List<string?>();
-            string? pendingMember = null;
-            var atFormKey = false;
-            var keyDepth = 0;
-            try
-            {
-                while (reader.Read())
-                {
-                    switch (reader.TokenType)
-                    {
-                        case JsonTokenType.PropertyName:
-                            atFormKey = reader.ValueTextEquals(FormKeyPropertyName);
-                            keyDepth = reader.CurrentDepth;
-                            pendingMember = reader.GetString();
-                            continue;
-                        case JsonTokenType.StartObject or JsonTokenType.StartArray:
-                            OpenedAt(openedBy, reader.CurrentDepth, pendingMember);
-                            break;
-                        case JsonTokenType.String when atFormKey:
-                            found.Add((reader.GetString()!, keyDepth == 1, UnderAnEmbedSlot(openedBy, keyDepth)));
-                            break;
-                    }
-                    atFormKey = false;
-                    pendingMember = null;
-                }
-            }
-            catch (JsonException)
-            {
-                // Caught mid-save, or hand-edited into something that is not a document.
-            }
-            return found;
-        }
-
-        private static void OpenedAt(List<string?> openedBy, int depth, string? member)
-        {
-            while (openedBy.Count <= depth) openedBy.Add(null);
-            openedBy[depth] = member;
-        }
-
-        // A child record's own FormKey sits inside the slot its container embeds it in, at any depth: a
-        // worldspace embeds its TopCell, which embeds its placed references.
-        private static bool UnderAnEmbedSlot(List<string?> openedBy, int keyDepth)
-        {
-            for (var depth = 0; depth < keyDepth && depth < openedBy.Count; depth++)
-            {
-                if (openedBy[depth] is { } member && EmbedSlotNames.Contains(member)) return true;
-            }
-            return false;
-        }
-
-        private static readonly HashSet<string> EmbedSlotNames =
-            ContainerChildFields.EmbeddedSlots.Select(slot => slot.Slot).ToHashSet(StringComparer.Ordinal);
-
-        private static ReadOnlySpan<byte> FormKeyPropertyName => "FormKey"u8;
     }
+
+    // The codec writes a link as a bare string and a child as an object with a FormKey of its
+    // own, so the slot a key sits under tells the two apart. Malformed text yields what it read.
+    private static List<(string FormKey, bool AtRoot, bool InAnEmbedSlot)> FormKeysIn(byte[] bytes)
+    {
+        var found = new List<(string, bool, bool)>();
+        var reader = new Utf8JsonReader(bytes);
+
+        // The member that opened the container at each depth; null where an array element or the
+        // document's own root opened it.
+        var openedBy = new List<string?>();
+        string? pendingMember = null;
+        var atFormKey = false;
+        var keyDepth = 0;
+        try
+        {
+            while (reader.Read())
+            {
+                switch (reader.TokenType)
+                {
+                    case JsonTokenType.PropertyName:
+                        atFormKey = reader.ValueTextEquals(FormKeyPropertyName);
+                        keyDepth = reader.CurrentDepth;
+                        pendingMember = reader.GetString();
+                        continue;
+                    case JsonTokenType.StartObject or JsonTokenType.StartArray:
+                        OpenedAt(openedBy, reader.CurrentDepth, pendingMember);
+                        break;
+                    case JsonTokenType.String when atFormKey:
+                        found.Add((reader.GetString()!, keyDepth == 1, UnderAnEmbedSlot(openedBy, keyDepth)));
+                        break;
+                }
+                atFormKey = false;
+                pendingMember = null;
+            }
+        }
+        catch (JsonException)
+        {
+            // Caught mid-save, or hand-edited into something that is not a document.
+        }
+        return found;
+    }
+
+    private static void OpenedAt(List<string?> openedBy, int depth, string? member)
+    {
+        while (openedBy.Count <= depth) openedBy.Add(null);
+        openedBy[depth] = member;
+    }
+
+    // A child record's own FormKey sits inside the slot its container embeds it in, at any depth: a
+    // worldspace embeds its TopCell, which embeds its placed references.
+    private static bool UnderAnEmbedSlot(List<string?> openedBy, int keyDepth)
+    {
+        for (var depth = 0; depth < keyDepth && depth < openedBy.Count; depth++)
+        {
+            if (openedBy[depth] is { } member && EmbedSlotNames.Contains(member)) return true;
+        }
+        return false;
+    }
+
+    private static readonly HashSet<string> EmbedSlotNames =
+        ContainerChildFields.EmbeddedSlots.Select(slot => slot.Slot).ToHashSet(StringComparer.Ordinal);
+
+    private static ReadOnlySpan<byte> FormKeyPropertyName => "FormKey"u8;
 }

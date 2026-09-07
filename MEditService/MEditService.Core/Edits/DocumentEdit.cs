@@ -31,7 +31,7 @@ internal static class DocumentEdit
     /// <summary>The new document text, or the input text itself when the operation had nothing to do
     /// (an element past the end), in <paramref name="text"/>; a refusal otherwise, with nothing
     /// written anywhere.</summary>
-    internal static RecordEditResult? Apply(DocumentEditRequest request, out string text)
+    internal static RecordEditResult? Patch(DocumentEditRequest request, out string text)
     {
         text = request.Text;
         var envelope = request.Envelope;

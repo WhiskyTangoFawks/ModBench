@@ -4,6 +4,7 @@ using MEditService.Core.Source;
 using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
+using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Binary.Parameters;
 using Mutagen.Bethesda.Plugins.Records;
@@ -160,6 +161,37 @@ public sealed class FormLinkResolverTests
         using var resolver = ResolverOver(data);
 
         Assert.Equal(new Core.Records.RecordLookupEntry("npc_", TreeOnlyEditorId), resolver.Resolve(TreeOnlyFormKey));
+    }
+
+    // A placed reference has no document of its own: the only bytes it exists in are its cell's, so
+    // the tree lookup has to read that document through the codec to name it at all.
+    [Fact]
+    public async Task Resolve_APlacedReferenceInlineInATrackedCellsDocument_IsItsRecordTypeAndEditorId()
+    {
+        Fallout4Mod? built = null;
+        FormKey placed = default;
+        using var data = new PluginFixtureBuilder("resolver-embedded")
+            .WithPlugin(TrackedPlugin, mod => { built = mod; placed = AddCellWithPlacedObject(mod); }, origin: "TrackedMod")
+            .BuildScattered();
+        var pristine = await TrackService.SerializeToPristineFiles(built!, TrackedPlugin);
+        Track(ModFolderOf(data, TrackedPlugin), [.. pristine]);
+
+        using var resolver = ResolverOver(data);
+
+        Assert.Equal(new Core.Records.RecordLookupEntry("refr", "InlinePlacedRef"), resolver.Resolve(placed.ToString()));
+    }
+
+    private static FormKey AddCellWithPlacedObject(Fallout4Mod mod)
+    {
+        var placed = new PlacedObject(mod) { EditorID = "InlinePlacedRef", Scale = 1f };
+        var cell = new Cell(mod) { EditorID = "InlineCell" };
+        cell.Temporary.Add(placed);
+        var subBlock = new CellSubBlock { BlockNumber = 0, GroupType = GroupTypeEnum.InteriorCellSubBlock };
+        subBlock.Cells.Add(cell);
+        var block = new CellBlock { BlockNumber = 0, GroupType = GroupTypeEnum.InteriorCellBlock };
+        block.SubBlocks.Add(subBlock);
+        mod.Cells.Records.Add(block);
+        return placed.FormKey;
     }
 
     [Fact]

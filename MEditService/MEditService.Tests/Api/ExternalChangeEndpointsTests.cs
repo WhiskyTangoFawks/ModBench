@@ -96,8 +96,7 @@ public sealed class ExternalChangeEndpointsTests : IDisposable
     [Fact]
     public void KeepExternalChange_RefusalTravelsAsA200_NamingTheCollidingRecord()
     {
-        var editService = new MEditService.Core.Edits.RecordEditService(
-            _mod.Mirror, SharedSchemaReflector.Instance, Microsoft.Extensions.Logging.Abstractions.NullLogger<MEditService.Core.Edits.RecordEditService>.Instance);
+        var editService = MEditService.Tests.TestSupport.TestEditService.Over(_mod.Mirror);
         editService.Set(_mod.Plugin, _mod.Npc.ToString(), "HeightMax",
             System.Text.Json.JsonDocument.Parse("0.5").RootElement);
         WriteExternalBinaryChange(0.9f);

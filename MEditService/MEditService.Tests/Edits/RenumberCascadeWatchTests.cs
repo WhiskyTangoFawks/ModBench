@@ -14,7 +14,7 @@ public sealed class RenumberCascadeWatchTests
     private const string NewRaceFormKey = "000F00:Target.esp";
 
     private static RecordEditService ServiceFor(CascadeRollbackFixture fixture) =>
-        new(fixture.Mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
+        TestEditService.Over(fixture.Mirror);
 
     [Fact]
     public async Task ARenumberAcrossThreeTrackedMods_LandsEveryRewrittenReferenceThroughTheWatcher()

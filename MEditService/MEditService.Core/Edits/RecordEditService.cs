@@ -11,6 +11,7 @@ using MEditService.Core.Source;
 using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
+using Mutagen.Bethesda.Plugins.Meta;
 using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Core.Edits;
@@ -19,17 +20,17 @@ namespace MEditService.Core.Edits;
 /// change to the record's source JSON. The source text is the source, not the index; every
 /// refusal precedes any write.</summary>
 public sealed class RecordEditService(
-    ILoadOrderMirror mirror,
+    LoadOrderHolder loadOrder,
+    Func<LoadOrder, FormLinkResolver> resolvers,
+    IModImporter importer,
+    RecordTextCodec codec,
     SchemaReflector schemaReflector,
-    ILogger<RecordEditService> logger)
+    ILogger<RecordEditService> logger,
+    ILoadOrderMirror? mirror = null)
 {
-    private readonly RecordTextCodec _codec = new(Microsoft.Extensions.Logging.Abstractions.NullLogger<RecordTextCodec>.Instance);
-
-    // RecordCopy shares this instance's mirror/schemaReflector so its writes are indistinguishable
-    // from this class's own (ADR-0041's one write path). A field initializer cannot reference
-    // _codec, hence the second codec instance.
-    private readonly RecordCopy _recordCopy = new(
-        mirror, schemaReflector, logger, new RecordTextCodec(Microsoft.Extensions.Logging.Abstractions.NullLogger<RecordTextCodec>.Instance));
+    // RecordCopy shares this instance's mirror and schema so its writes are indistinguishable from
+    // this class's own (ADR-0041's one write path). Null only where no copy gesture runs.
+    private readonly RecordCopy _recordCopy = new(mirror!, schemaReflector, logger, codec);
 
     /// <summary>The single write path (ADR-0041): one envelope, patched onto the record's document
     /// by <see cref="DocumentEdit"/>, landed here as a working-tree change. This method owns only
@@ -37,42 +38,36 @@ public sealed class RecordEditService(
     public RecordEditResult Edit(PluginKey plugin, string formKey, RecordEditEnvelope envelope)
     {
         if (ResolveEditTarget(plugin, formKey, out var editTarget) is { } blocked) return blocked;
-        var (index, _, release, document, unit, repository) = editTarget;
+        var (release, identity, unit, repository) = editTarget;
         var spelled = RecordEditEnvelope.Spell(envelope.Path);
 
-        if (document.ParseDiagnosis is { } diagnosis)
-        {
-            return RecordEditResult.RefusedAt(
-                RecordEditRefusal.RecordParseFailed, spelled,
-                $"{formKey} could not be read when it was indexed, so its document is a stub and nothing can be " +
-                $"written to it: {diagnosis}");
-        }
-
         var schemas = schemaReflector.GetSchemas(release);
-        if (!schemas.TryGetValue(document.RecordType, out var schema))
+        if (!schemas.TryGetValue(identity.RecordType, out var schema))
         {
             return RecordEditResult.RefusedAt(
-                RecordEditRefusal.FieldNotFound, spelled, $"'{document.RecordType}' is not an editable record type.");
+                RecordEditRefusal.FieldNotFound, spelled, $"'{identity.RecordType}' is not an editable record type.");
         }
-        if (RefuseIfContainmentField(document.RecordType, envelope.Path, schemas, release) is { } containmentRefusal)
+        if (RefuseIfContainmentField(identity.RecordType, envelope.Path, schemas, release) is { } containmentRefusal)
             return containmentRefusal;
-
-        var reads = index.At(RecordRef.Effective);
-        var owner = reads.GetDocument(unit.OwnerFormKey, plugin)!;
 
         // An embedded child is patched inside the document that carries it, so the identity written
         // back is that document's — its own for every other shape, the header included.
-        var written = unit.IsEmbedded
-            ? new RecordIdentity(unit.OwnerFormKey, unit.OwnerRecordType ?? owner.RecordType, owner.EditorId)
-            : new RecordIdentity(formKey, document.RecordType, document.EditorId);
-        var text = repository.Get(plugin, written)?.Body ?? IndexedBodyOf(written, owner, document);
+        var written = unit.IsEmbedded ? repository.IdentityOf(plugin, unit.OwnerFormKey, schemas) : identity;
+        if (written is not { } target || repository.Get(plugin, target) is not { } document)
+        {
+            return RecordEditResult.Refused(
+                RecordEditRefusal.SourceUnitNotFound,
+                $"{unit.RelativePath} does not hold {formKey} — it was moved or removed outside " +
+                "Modbench. Check the Source Control panel.");
+        }
 
         // The parent is what the file holds and what the codec reads, so every untouched byte of it
         // comes back intact.
+        var text = document.Body;
         IReadOnlyList<PathHop> prefix = [];
         if (unit.IsEmbedded)
         {
-            var parentType = RecordTypeDispatch.For(release).ConcreteFor(written.RecordType);
+            var parentType = RecordTypeDispatch.For(release).ConcreteFor(target.RecordType);
             var found = parentType == null
                 ? null
                 : EmbeddedChildPath.Find((JsonObject)JsonNode.Parse(text)!, ContainerChildFields.NormalizedTypeName(parentType), formKey);
@@ -91,9 +86,30 @@ public sealed class RecordEditService(
 
         Func<string, string> roundTrip = schema.IsHeader
             ? patched => Encoding.UTF8.GetString(HeaderDocument.Write(HeaderDocument.Read(Encoding.UTF8.GetBytes(patched))))
-            : patched => _codec.RoundTrip(patched, release, unit.OwnerRecordType);
-        var request = new DocumentEditRequest(text, prefix, schema, envelope, release, reads.Resolve, roundTrip);
-        if (DocumentEdit.Apply(request, out var newText) is { } refused) return refused;
+            : patched => codec.RoundTrip(patched, release, unit.OwnerRecordType);
+
+        // One resolver per gesture over the load order as it stands now, so every link in this record
+        // is answered from one reading of the tree and none outlives the write.
+        using var resolver = resolvers(loadOrder.Current);
+        var request = new DocumentEditRequest(text, prefix, schema, envelope, release, resolver.Resolve, roundTrip);
+
+        string newText;
+        RecordEditResult? refused;
+        try
+        {
+            refused = DocumentEdit.Patch(request, out newText);
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            // A document JsonDocument tolerates and JsonNode does not — duplicate members, most of
+            // them — never reaches the codec, and this is the only reader that sees why.
+            return RefuseUnreadable(formKey, ex.Message, spelled);
+        }
+        // The codec rejected the patched document; whether the unpatched one reads decides whose fault
+        // that is, and it is only asked once an edit has already failed.
+        if (refused is { Refusal: RecordEditRefusal.CodecRejected } && Unreadable(roundTrip, text) is { } why)
+            return RefuseUnreadable(formKey, why, spelled);
+        if (refused is { } rejected) return rejected;
 
         // The document already said this (a value set to itself): nothing to commit, so no dirty file
         // or history entry.
@@ -102,16 +118,16 @@ public sealed class RecordEditService(
         // The leaf name carries the EditorID, so an EditorID edit is a rename too. Done before the
         // write; newText is the written document's own text, so its root EditorID is the new name.
         var newEditorId = EditorIdOf(newText);
-        if (repository.Rename(plugin, written, newEditorId) is { } newLeaf && logger.IsEnabled(LogLevel.Information))
+        if (repository.Rename(plugin, target, newEditorId) is { } newLeaf && logger.IsEnabled(LogLevel.Information))
         {
             logger.LogInformation(
                 "EditorID changed on {FormKey}; moved its source unit from {Old} to {New}",
-                written.FormKey, written.EditorId, newLeaf);
+                target.FormKey, target.EditorId, newLeaf);
         }
-        repository.Put(plugin, new SourceDocument(written.FormKey, written.RecordType, newEditorId, newText));
+        repository.Put(plugin, new SourceDocument(target.FormKey, target.RecordType, newEditorId, newText));
 
         // The new value can flip filter membership either way.
-        mirror.ReapplyFilter();
+        mirror?.ReapplyFilter();
 
         if (logger.IsEnabled(LogLevel.Information))
         {
@@ -122,6 +138,25 @@ public sealed class RecordEditService(
         return RecordEditResult.Success();
     }
 
+    // Parse status is not a precondition (ADR-0046 invariant 7): the codec is asked at edit time, and
+    // its own words are the reason.
+    private static RecordEditResult RefuseUnreadable(string formKey, string why, string? spelled = null) =>
+        new(false, RecordEditRefusal.RecordParseFailed,
+            $"{formKey}'s document cannot be read, so nothing can be written to it: {why}", Path: spelled);
+
+    private static string? Unreadable(Func<string, string> roundTrip, string text)
+    {
+        try
+        {
+            roundTrip(text);
+            return null;
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            return ex.Message;
+        }
+    }
+
     private static string? EditorIdOf(string text)
     {
         using var document = JsonDocument.Parse(text);
@@ -129,16 +164,6 @@ public sealed class RecordEditService(
             && editorId.ValueKind == JsonValueKind.String
             ? editorId.GetString()
             : null;
-    }
-
-    // Falls back to the indexed body only when no document holds the record (never assume exclusive
-    // ownership): refusing would strand the user with no way to put it back.
-    private string IndexedBodyOf(RecordIdentity written, RecordDocument owner, RecordDocument document)
-    {
-        logger.LogWarning(
-            "No source document holds {FormKey}; editing from the indexed document and rewriting it",
-            written.FormKey);
-        return (written.FormKey == document.FormKey ? document : owner).Body!;
     }
 
     /// <summary>The codec is the one constructor: a record begins as the document naming its identity,
@@ -215,12 +240,12 @@ public sealed class RecordEditService(
     public RecordEditResult DeleteRecord(PluginKey plugin, string formKey)
     {
         if (ResolveEditTarget(plugin, formKey, out var target) is { } blocked) return blocked;
-        var (_, _, _, document, unit, repository) = target;
-        if (RefuseIfHeader(document.RecordType) is { } headerRefusal) return headerRefusal;
+        var (_, identity, unit, repository) = target;
+        if (RefuseIfHeader(identity.RecordType) is { } headerRefusal) return headerRefusal;
 
         // One changed document either way: the owner without the child, or the record's own gone.
         // Every descendant's row follows from that when the projector re-reads it.
-        var removal = repository.Remove(plugin, new RecordIdentity(formKey, document.RecordType, document.EditorId));
+        var removal = repository.Remove(plugin, identity);
         if (removal != SourceRemoval.Removed)
         {
             // States only what is observed: either the tree names no document for it, or the document
@@ -235,7 +260,7 @@ public sealed class RecordEditService(
         }
 
         // A deleted row cannot match an active filter.
-        mirror.ReapplyFilter();
+        mirror?.ReapplyFilter();
 
         if (logger.IsEnabled(LogLevel.Information))
         {
@@ -253,11 +278,7 @@ public sealed class RecordEditService(
     {
         if (RefuseIfBlocked(plugin, out _, out var repository) is { } blocked) return blocked;
 
-        var index = mirror.Index;
-        if (index == null)
-            return RecordEditResult.Refused(RecordEditRefusal.RecordNotFound, "No load order has been received.");
-
-        var release = mirror.LoadOrder!.GameRelease;
+        var release = loadOrder.Current.GameRelease;
         var schemas = schemaReflector.GetSchemas(release);
         if (recordType == PluginHeader.RecordType || !schemas.TryGetValue(recordType, out var schema))
         {
@@ -266,10 +287,11 @@ public sealed class RecordEditService(
         }
         if (RefuseIfContainerType(recordType, release) is { } containerRefusal) return containerRefusal;
 
-        if (ResolveTargetFormKey(index, plugin, requestedFormKey, out var targetFormKey) is { } refusedTarget) return refusedTarget;
+        if (ResolveTargetFormKey(AllocatorOver(repository, plugin), requestedFormKey, out var targetFormKey)
+            is { } refusedTarget) return refusedTarget;
 
         var record = BareRecord(
-            _codec, schema, release, targetFormKey, string.IsNullOrWhiteSpace(editorId) ? null : editorId, partialForm: false);
+            codec, schema, release, targetFormKey, string.IsNullOrWhiteSpace(editorId) ? null : editorId, partialForm: false);
 
         // RefuseIfContainerType guarantees a flat record, so the repository's own layout is the whole
         // answer: no block path, and the group folder minted by the write when this type is new here.
@@ -277,7 +299,7 @@ public sealed class RecordEditService(
             plugin, new SourceDocument(targetFormKey, recordType, record.EditorID, SerializeToText(record, release)));
 
         // A brand-new row can newly match an active filter.
-        mirror.ReapplyFilter();
+        mirror?.ReapplyFilter();
 
         if (logger.IsEnabled(LogLevel.Information))
         {
@@ -294,7 +316,7 @@ public sealed class RecordEditService(
     public RecordEditResult CopyRecordAsOverride(PluginKey sourcePlugin, string formKey, PluginKey destinationPlugin)
     {
         if (ResolveCopySource(destinationPlugin, sourcePlugin, formKey, out var source) is { } blocked) return blocked;
-        var (index, destinationModFolder, release, document) = source;
+        var (index, destinationModFolder, _, release, document) = source;
         if (RefuseIfUnderride(formKey, destinationPlugin) is { } underrideRefusal) return underrideRefusal;
         var reads = index.At(RecordRef.Effective);
 
@@ -373,7 +395,7 @@ public sealed class RecordEditService(
         });
 
         // A brand-new row can newly match an active filter.
-        mirror.ReapplyFilter();
+        mirror?.ReapplyFilter();
 
         if (logger.IsEnabled(LogLevel.Information))
         {
@@ -393,7 +415,7 @@ public sealed class RecordEditService(
         PluginKey sourcePlugin, string formKey, PluginKey destinationPlugin, string? requestedFormKey = null)
     {
         if (ResolveCopySource(destinationPlugin, sourcePlugin, formKey, out var source) is { } blocked) return blocked;
-        var (index, destinationModFolder, release, document) = source;
+        var (index, destinationModFolder, destinationRepository, release, document) = source;
         if (RefuseIfDisallowedForCopyAsNewRecord(document.RecordType) is { } disallowedRefusal) return disallowedRefusal;
 
         // A record with no group of its own copies into its container's document (a topic into its
@@ -403,13 +425,14 @@ public sealed class RecordEditService(
             if (index.At(RecordRef.Effective).GetContainerParent(sourcePlugin, formKey) is { } parent)
             {
                 return CopyEmbeddedChildAsNewRecord(
-                    index, sourcePlugin, formKey, document, parent, destinationPlugin, destinationModFolder, release, requestedFormKey);
+                    index, sourcePlugin, formKey, document, parent, destinationPlugin, destinationModFolder,
+                    destinationRepository, release, requestedFormKey);
             }
             if (RefuseIfContainerType(document.RecordType, release) is { } containerRefusal) return containerRefusal;
         }
 
-        if (ResolveTargetFormKey(index, destinationPlugin, requestedFormKey, out var targetFormKey) is { } refusedTarget)
-            return refusedTarget;
+        if (ResolveTargetFormKey(AllocatorOver(destinationRepository, destinationPlugin), requestedFormKey, out var targetFormKey)
+            is { } refusedTarget) return refusedTarget;
 
         var sourceRecord = ReadCopySourceRecord(sourcePlugin, formKey, document, release);
         var newRecord = sourceRecord.Duplicate(FormKey.Factory(targetFormKey));
@@ -421,10 +444,10 @@ public sealed class RecordEditService(
         var placement = SourceRepository.PlacementFor(
             destinationPlugin.Name, document.RecordType, targetFormKey, newRecord.EditorID, release);
         var relativePath = placement.RelativePath;
-        WriteAt(destinationModFolder, placement, path => SerializeAndWrite(_codec, newRecord, path, release));
+        WriteAt(destinationModFolder, placement, path => SerializeAndWrite(codec, newRecord, path, release));
 
         // A brand-new row can newly match an active filter.
-        mirror.ReapplyFilter();
+        mirror?.ReapplyFilter();
 
         if (logger.IsEnabled(LogLevel.Information))
         {
@@ -453,7 +476,7 @@ public sealed class RecordEditService(
 
         var replacement = ReadCopySourceRecord(sourcePlugin, formKey, sourceDocument, release);
         ContainerChildFields.ClearAllChildSlots(replacement);
-        var destinationRecord = ReadRecordFromSource(_codec, logger, unit.FullPath, existingTarget, release);
+        var destinationRecord = ReadRecordFromSource(codec, logger, unit.FullPath, existingTarget, release);
         ContainerChildFields.TransplantChildSlots(destinationRecord, replacement);
 
         // Move first, then write: a crash between leaves the leaf at its new name with old content,
@@ -462,7 +485,7 @@ public sealed class RecordEditService(
         repository.Put(
             destinationPlugin,
             new SourceDocument(formKey, existingTarget.RecordType, replacement.EditorID, SerializeToText(replacement, release)));
-        mirror.ReapplyFilter();
+        mirror?.ReapplyFilter();
 
         if (logger.IsEnabled(LogLevel.Information))
         {
@@ -479,19 +502,21 @@ public sealed class RecordEditService(
     // auto-creates bare and Partial Form.
     private RecordEditResult CopyEmbeddedChildAsNewRecord(
         IRecordIndex index, PluginKey sourcePlugin, string formKey, RecordDocument document, ContainerChildRow parent,
-        PluginKey destinationPlugin, string destinationModFolder, GameRelease release, string? requestedFormKey)
+        PluginKey destinationPlugin, string destinationModFolder, SourceRepository destinationRepository,
+        GameRelease release, string? requestedFormKey)
     {
         var reads = index.At(RecordRef.Effective);
         if (RefuseIfAnyDescendantParseFailed(reads, sourcePlugin, formKey) is { } descendantRefusal) return descendantRefusal;
 
-        if (ResolveTargetFormKey(index, destinationPlugin, requestedFormKey, out var targetFormKey) is { } refusedTarget)
+        var allocator = AllocatorOver(destinationRepository, destinationPlugin);
+        if (ResolveTargetFormKey(allocator, requestedFormKey, out var targetFormKey) is { } refusedTarget)
             return refusedTarget;
 
         var newRecord = ReadCopySourceRecord(sourcePlugin, formKey, document, release).Duplicate(FormKey.Factory(targetFormKey));
         RemapSelfLink(newRecord, formKey, targetFormKey);
 
         var taken = new HashSet<string>(StringComparer.Ordinal) { targetFormKey };
-        if (RekeyEmbeddedDescendants(index, destinationPlugin, newRecord, taken) is { } childRefused) return childRefused;
+        if (RekeyEmbeddedDescendants(allocator, newRecord, taken) is { } childRefused) return childRefused;
 
         var appended = _recordCopy.AppendEmbeddedChild(
             sourcePlugin, parent.ParentFormKey, parent.ParentRecordType, parent.SlotName, newRecord,
@@ -528,21 +553,21 @@ public sealed class RecordEditService(
 
     // In place, on the duplicate's own graph: the list order is untouched, and a child's own
     // embedded children are re-keyed the same way one level down.
-    private RecordEditResult? RekeyEmbeddedDescendants(
-        IRecordIndex index, PluginKey destinationPlugin, IMajorRecordGetter container, HashSet<string> taken)
+    private static RecordEditResult? RekeyEmbeddedDescendants(
+        Allocator allocator, IMajorRecordGetter container, HashSet<string> taken)
     {
         var containerType = ContainerChildFields.NormalizedTypeName(container.GetType());
         foreach (var (slotName, _, child) in ContainerChildFields.EnumerateChildren(container).ToList())
         {
             if (!ContainerChildFields.EmbeddedSlots.Contains((containerType, slotName))) continue;
-            if (ResolveTargetFormKey(index, destinationPlugin, requestedFormKey: null, out var childFormKey, taken) is { } refused)
+            if (ResolveTargetFormKey(allocator, requestedFormKey: null, out var childFormKey, taken) is { } refused)
                 return refused;
             taken.Add(childFormKey);
 
             var oldFormKey = child.FormKey.ToString();
             ((IMajorRecordInternal)child).FormKey = FormKey.Factory(childFormKey);
             RemapSelfLink(child, oldFormKey, childFormKey);
-            if (RekeyEmbeddedDescendants(index, destinationPlugin, child, taken) is { } deeper) return deeper;
+            if (RekeyEmbeddedDescendants(allocator, child, taken) is { } deeper) return deeper;
         }
         return null;
     }
@@ -558,17 +583,16 @@ public sealed class RecordEditService(
     // beaten at runtime. A plugin the load order does not place passes.
     private RecordEditResult? RefuseIfUnderride(string formKey, PluginKey destinationPlugin)
     {
-        var plugins = mirror.LoadOrder?.Plugins;
-        if (plugins == null) return null;
+        var copies = loadOrder.Current.Copies;
 
         // A FormKey carries only a filename, so with two same-named copies (ADR-0036) the winning one
         // is the origin.
         var originName = FormKey.Factory(formKey).ModKey.FileName.String;
-        var sameNamed = plugins.Where(p => p.Name.Equals(originName, StringComparison.OrdinalIgnoreCase)).ToList();
-        var originIndex = (sameNamed.FirstOrDefault(p => p.Winning) ?? sameNamed.FirstOrDefault())?.LoadOrderIndex;
-        var destinationIndex = plugins.FirstOrDefault(
+        var sameNamed = copies.Where(p => p.Name.Equals(originName, StringComparison.OrdinalIgnoreCase)).ToList();
+        var originIndex = (sameNamed.FirstOrDefault(p => p.Winning) ?? sameNamed.FirstOrDefault())?.Slot;
+        var destinationIndex = copies.FirstOrDefault(
             p => p.Name.Equals(destinationPlugin.Name, StringComparison.OrdinalIgnoreCase)
-                && p.Origin.Equals(destinationPlugin.Origin, StringComparison.Ordinal))?.LoadOrderIndex;
+                && p.Origin.Equals(destinationPlugin.Origin, StringComparison.Ordinal))?.Slot;
         if (originIndex is not { } origin || destinationIndex is not { } destination || destination >= origin)
             return null;
 
@@ -598,7 +622,7 @@ public sealed class RecordEditService(
     // or a missing file. The repository's own lookup, since a container copy source has no flat path.
     private string? TrackedCopySourcePath(PluginKey sourcePlugin, string formKey, RecordDocument document, GameRelease release)
     {
-        if (ModFolders.TrackedOf(mirror.LoadOrder, sourcePlugin) is not { } sourceModFolder) return null;
+        if (ModFolders.TrackedOf(loadOrder.Current, sourcePlugin) is not { } sourceModFolder) return null;
 
         var unit = SourceRepository.Open(sourceModFolder, release)
             ?.Locate(sourcePlugin, new RecordIdentity(formKey, document.RecordType, document.EditorId));
@@ -615,9 +639,9 @@ public sealed class RecordEditService(
     private IMajorRecord ReadCopySourceRecord(PluginKey sourcePlugin, string formKey, RecordDocument document, GameRelease release)
     {
         if (TrackedCopySourcePath(sourcePlugin, formKey, document, release) is { } fullPath)
-            return _codec.DeserializeAsync(fullPath, release, document.RecordType).GetAwaiter().GetResult();
+            return codec.DeserializeAsync(fullPath, release, document.RecordType).GetAwaiter().GetResult();
 
-        return _codec
+        return codec
             .DeserializeFromBytesAsync(Encoding.UTF8.GetBytes(document.Body!), release, document.RecordType)
             .GetAwaiter().GetResult();
     }
@@ -631,8 +655,14 @@ public sealed class RecordEditService(
         // fresh. RecordType is kept for the header check, since a ModHeader cannot run through
         // ReadRecordFromSource.
         if (ResolveEditTarget(plugin, formKey, out var target) is { } blocked) return blocked;
-        var (index, modFolder, release, document, _, _) = target;
-        if (RefuseIfHeader(document.RecordType) is { } headerRefusal) return headerRefusal;
+        var (release, identity, _, repository) = target;
+        if (RefuseIfHeader(identity.RecordType) is { } headerRefusal) return headerRefusal;
+
+        // The cascade is still the Index's to answer (which records reference this one), so renumber
+        // alone among the write gestures still needs it.
+        if (mirror?.Index is not { } index)
+            return RecordEditResult.Refused(RecordEditRefusal.RecordNotFound, "No load order has been received.");
+        var modFolder = repository.ModFolder;
 
         // Canonicalised once: two ordinal comparisons below (the exclusion predicate and the
         // remap-completeness guard) run against canonical text, and a differently-cased spelling
@@ -649,7 +679,8 @@ public sealed class RecordEditService(
                 $"Renumber it there instead.");
         }
 
-        if (ResolveTargetFormKey(index, plugin, requestedFormKey, out var targetFormKey) is { } refusedTarget) return refusedTarget;
+        if (ResolveTargetFormKey(AllocatorOver(repository, plugin), requestedFormKey, out var targetFormKey)
+            is { } refusedTarget) return refusedTarget;
 
         // Deduplicated by source record: one typed remap moves every link in a record's graph. The
         // target itself is excluded even when self-referencing: ComputeTargetRewrite applies the same
@@ -663,7 +694,7 @@ public sealed class RecordEditService(
         var untrackedReferencers = referencers
             .Select(r => r.Plugin)
             .Distinct()
-            .Where(p => ModFolders.TrackedOf(mirror.LoadOrder, p) == null)
+            .Where(p => ModFolders.TrackedOf(loadOrder.Current, p) == null)
             .Select(p => p.Name)
             .Distinct()
             .OrderBy(n => n, StringComparer.OrdinalIgnoreCase)
@@ -702,7 +733,7 @@ public sealed class RecordEditService(
         {
             // On both outcomes: after a rollback the affected plugins have been re-derived and the
             // filter must not stay stale. Once rather than per write; SetFilter re-derives the full set.
-            mirror.ReapplyFilter();
+            mirror?.ReapplyFilter();
         }
 
         if (logger.IsEnabled(LogLevel.Information))
@@ -748,7 +779,7 @@ public sealed class RecordEditService(
             (UnrestoredReason.RestoreFailed, "could not be restored"),
         }.Select(r => NamedPaths(unrestored, r.Item1, r.Item2)).OfType<string>());
 
-        var modFolders = rewrites.Select(r => r.ModFolder).Append(ModFolders.Of(mirror.LoadOrder, plugin))
+        var modFolders = rewrites.Select(r => r.ModFolder).Append(ModFolders.Of(loadOrder.Current, plugin))
             .OfType<string>().Distinct().ToList();
         sentences.Add($"Underlying error: {RelativeToModFolders(cause.Message, modFolders)}");
         return string.Join(" ", sentences);
@@ -802,7 +833,7 @@ public sealed class RecordEditService(
                     $"as referencing {oldFormKey}. Nothing was written — reindex {referencerPlugin.Name} and try again.");
             }
 
-            var referencerModFolder = ModFolders.TrackedOf(mirror.LoadOrder, referencerPlugin)!;
+            var referencerModFolder = ModFolders.TrackedOf(loadOrder.Current, referencerPlugin)!;
             if (!repositories.TryGetValue(referencerModFolder, out var referencerRepository))
                 repositories[referencerModFolder] = referencerRepository = SourceRepository.Open(referencerModFolder, release);
             if (referencerRepository
@@ -832,7 +863,7 @@ public sealed class RecordEditService(
                     $"carries. Nothing was written — reindex {referencerPlugin.Name} and try again.");
             }
 
-            var owner = ReadRecordFromSource(_codec, logger, filePath, ownerDoc, release);
+            var owner = ReadRecordFromSource(codec, logger, filePath, ownerDoc, release);
             ((IFormLinkContainer)owner).RemapLinks(mapping);
             if (RefuseIfRemapIncomplete(owner, ownerDoc.RecordType, oldFormKey, referencerPlugin, release) is { } incomplete)
                 return incomplete;
@@ -871,7 +902,7 @@ public sealed class RecordEditService(
         new() { [FormKey.Factory(oldFormKey)] = FormKey.Factory(newFormKey) };
 
     private string SerializeToText(IMajorRecordGetter record, GameRelease release) =>
-        Encoding.UTF8.GetString(_codec.SerializeToBytesAsync(record, release).GetAwaiter().GetResult());
+        Encoding.UTF8.GetString(codec.SerializeToBytesAsync(record, release).GetAwaiter().GetResult());
 
     // A link the typed remap left behind is refused wherever it sits; a KnownDefects row is what
     // names the member Mutagen is known to skip. Asked of the collector: text cannot tell a link
@@ -969,7 +1000,7 @@ public sealed class RecordEditService(
                     $"{oldFormKey} inside. Nothing was written — reindex {plugin.Name} and try again.");
             }
 
-            var owner = ReadRecordFromSource(_codec, logger, unit.FullPath, ownerDocument, release);
+            var owner = ReadRecordFromSource(codec, logger, unit.FullPath, ownerDocument, release);
             if (ContainerChildFields.FindEmbeddedChild(owner, oldFormKey) is not { } found)
             {
                 return RecordEditResult.Refused(
@@ -998,7 +1029,7 @@ public sealed class RecordEditService(
             return null;
         }
 
-        var record = ReadRecordFromSource(_codec, logger, unit.FullPath, document, release);
+        var record = ReadRecordFromSource(codec, logger, unit.FullPath, document, release);
         ((IFormLinkContainer)record).RemapLinks(mapping);
 
         if (RefuseIfRemapIncomplete(record, document.RecordType, oldFormKey, plugin, release) is { } recordIncomplete)
@@ -1040,7 +1071,7 @@ public sealed class RecordEditService(
             var writePath = Path.Combine(newLeafPath, SourceRepository.RecordDataFileName);
             transaction.Write(
                 repository.ModFolder, writePath,
-                () => _codec.SerializeAsync(root, writePath, release).GetAwaiter().GetResult());
+                () => codec.SerializeAsync(root, writePath, release).GetAwaiter().GetResult());
             return;
         }
 
@@ -1062,23 +1093,72 @@ public sealed class RecordEditService(
         index.At(RecordRef.Effective).GetDocument(formKey, plugin) == null
         && index.At(RecordRef.Head).GetDocument(formKey, plugin) == null;
 
+    // Everything the allocator needs about one plugin, read from its tree once per gesture: a
+    // per-child re-read would walk the whole tree again for every key drawn.
+    private readonly record struct Allocator(
+        PluginKey Plugin, GameRelease Release, bool IsLight, bool EslFlagIsRemovable,
+        IReadOnlySet<string> Effective, IReadOnlySet<string> Head)
+    {
+        internal bool HoldsAtEitherRef(string formKey) => Effective.Contains(formKey) || Head.Contains(formKey);
+
+        internal IEnumerable<string> Taken => Effective.Concat(Head);
+    }
+
+    // A tracked copy allocates from its source tree; an untracked one has none, so the Plugin
+    // adapter answers from its own bytes, as the form-link resolver's untracked branch does.
+    private Allocator AllocatorFor(RegisteredCopy copy, PluginKey plugin)
+    {
+        if (ModFolders.Of(loadOrder.Current, plugin) is { } modFolder
+            && SourceRepository.Open(modFolder, loadOrder.Current.GameRelease) is { } repository)
+        {
+            return AllocatorOver(repository, plugin);
+        }
+
+        using var opened = importer.Open(copy, loadOrder.Current.GameRelease);
+        return AllocatorOver(opened.Getter, plugin);
+    }
+
+    // Both refs from the tree alone (ADR-0046 invariant 7): the working tree, plus HEAD, whose IDs a
+    // working-tree deletion has not freed until the plugin is compiled.
+    private Allocator AllocatorOver(SourceRepository repository, PluginKey plugin)
+    {
+        var byRemovableFlag = IsLightByRemovableFlag(repository, plugin);
+        return new Allocator(
+            plugin,
+            loadOrder.Current.GameRelease,
+            byRemovableFlag || plugin.Name.EndsWith(".esl", StringComparison.OrdinalIgnoreCase),
+            byRemovableFlag,
+            repository.NativeFormKeysHeld(plugin),
+            repository.NativeFormKeysHeldAt(plugin, "HEAD"));
+    }
+
+    // The copy's own records are the whole answer: it has no uncompiled state, so no second ref.
+    private Allocator AllocatorOver(IModGetter mod, PluginKey plugin) =>
+        new(plugin,
+            loadOrder.Current.GameRelease,
+            PluginFlagPredicates.IsLight(mod, plugin.Name),
+            mod.IsSmallMaster,
+            mod.EnumerateMajorRecords()
+                .Select(r => r.FormKey)
+                .Where(k => k.ModKey.FileName.String.Equals(plugin.Name, StringComparison.OrdinalIgnoreCase))
+                .Select(k => k.ToString())
+                .ToHashSet(StringComparer.OrdinalIgnoreCase),
+            new HashSet<string>(StringComparer.OrdinalIgnoreCase));
+
     // Non-null is the refusal; targetFormKey is "" then, so call sites need no second null-check.
     // taken: keys this gesture drew but has not written, so one document's records get distinct keys.
-    private RecordEditResult? ResolveTargetFormKey(
-        IRecordIndex index, PluginKey plugin, string? requestedFormKey, out string targetFormKey,
-        IReadOnlySet<string>? taken = null)
+    private static RecordEditResult? ResolveTargetFormKey(
+        Allocator allocator, string? requestedFormKey, out string targetFormKey, IReadOnlySet<string>? taken = null)
     {
-        var mod = mirror.LoadOrder!.GetMod(plugin.Name, plugin.Origin!);
-        var isLight = IsLightAtEffective(index, plugin, mod);
-
+        var plugin = allocator.Plugin;
         if (requestedFormKey != null)
         {
-            if (RefuseIfNotNativeTarget(requestedFormKey, plugin, isLight) is { } notNative)
+            if (RefuseIfNotNativeTarget(requestedFormKey, plugin, allocator.IsLight) is { } notNative)
             {
                 targetFormKey = "";
                 return notNative;
             }
-            if (!IsFreeAtBothRefs(index, plugin, requestedFormKey))
+            if (allocator.HoldsAtEitherRef(requestedFormKey))
             {
                 targetFormKey = "";
                 return RecordEditResult.Refused(
@@ -1089,7 +1169,7 @@ public sealed class RecordEditService(
             return null;
         }
 
-        var allocated = NextFreeNativeFormId(index, plugin, mod, isLight, taken);
+        var allocated = NextFreeNativeFormId(allocator, allocator.IsLight, taken);
         if (allocated != null)
         {
             targetFormKey = allocated;
@@ -1099,35 +1179,22 @@ public sealed class RecordEditService(
         targetFormKey = "";
         // The ESL cap, not the FormKey space, is exhausted, and the light-ness is the removable header
         // flag: surfaced as a typed marker, the same way out compile offers.
-        var eslContradiction = isLight
-            && IsLightByRemovableFlag(index, plugin, mod)
-            && NextFreeNativeFormId(index, plugin, mod, isLight: false, taken) != null;
+        var eslContradiction = allocator.IsLight
+            && allocator.EslFlagIsRemovable
+            && NextFreeNativeFormId(allocator, isLight: false, taken) != null;
         return RecordEditResult.Refused(
-            RecordEditRefusal.FormKeySpaceExhausted, FormKeySpaceExhaustedMessage(plugin, isLight, eslContradiction),
+            RecordEditRefusal.FormKeySpaceExhausted,
+            FormKeySpaceExhaustedMessage(plugin, allocator.IsLight, eslContradiction),
             eslContradiction);
     }
 
-    // A .esl extension also reads as light but no header edit can un-flag it; working-tree-first so a
-    // flag flipped this session answers immediately.
-    private static bool IsLightByRemovableFlag(IRecordIndex index, PluginKey plugin, IModGetter? mod)
+    // The header document in the working tree is the truth (ADR-0041), so a flag flipped this session
+    // caps minting immediately. A .esl extension also reads as light, but no header edit can un-flag it.
+    private static bool IsLightByRemovableFlag(SourceRepository repository, PluginKey plugin)
     {
         var headerFormKey = PluginHeader.FormKeyFor(ModKey.FromFileName(plugin.Name));
-        if (index.At(RecordRef.Effective).GetDocument(headerFormKey, plugin)?.Body is { } body)
-            return HeaderDocument.IsLight(Encoding.UTF8.GetBytes(body));
-        return mod?.IsSmallMaster ?? false;
-    }
-
-    // The header document at Effective is the truth (ADR-0041), so a flag flipped this session caps
-    // minting immediately; the loaded mod answers only when no document exists.
-    private static bool IsLightAtEffective(IRecordIndex index, PluginKey plugin, IModGetter? mod)
-    {
-        var headerFormKey = PluginHeader.FormKeyFor(ModKey.FromFileName(plugin.Name));
-        if (index.At(RecordRef.Effective).GetDocument(headerFormKey, plugin)?.Body is { } body)
-        {
-            return HeaderDocument.IsLight(Encoding.UTF8.GetBytes(body))
-                || plugin.Name.EndsWith(".esl", StringComparison.OrdinalIgnoreCase);
-        }
-        return IsLightPlugin(mod, plugin);
+        var header = repository.Get(plugin, new RecordIdentity(headerFormKey, PluginHeader.RecordType, null));
+        return header?.Body is { } body && HeaderDocument.IsLight(Encoding.UTF8.GetBytes(body));
     }
 
     // A foreign ModKey would land a record inside this plugin's tree while claiming another origin,
@@ -1157,27 +1224,21 @@ public sealed class RecordEditService(
         return null;
     }
 
-    // Falls back to the extension check when no mod object is loaded for the PluginKey.
-    private static bool IsLightPlugin(IModGetter? mod, PluginKey plugin) =>
-        mod != null
-            ? PluginFlagPredicates.IsLight(mod, plugin.Name)
-            : plugin.Name.EndsWith(".esl", StringComparison.OrdinalIgnoreCase);
-
-    // Unions Effective (committed plus uncompiled creates) and Head (natives the working tree
+    // Unions the working tree (committed plus uncompiled creates) and HEAD (natives the working tree
     // deleted, whose IDs must not be reused before compile). Null means exhausted.
-    private static string? NextFreeNativeFormId(
-        IRecordIndex index, PluginKey plugin, IModGetter? mod, bool isLight, IReadOnlySet<string>? taken = null)
+    private static string? NextFreeNativeFormId(Allocator allocator, bool isLight, IReadOnlySet<string>? taken = null)
     {
-        var floor = mod?.GetDefaultInitialNextFormID() ?? 0x800u;
-        var highest = index.At(RecordRef.Effective).GetNativeFormKeys(plugin)
-            .Concat(index.At(RecordRef.Head).GetNativeFormKeys(plugin))
+        // GetDefaultInitialNextFormID is this constant for every mod of a release: its own default
+        // argument takes the branch that returns the high range, loaded plugin or not.
+        var floor = GameConstants.Get(allocator.Release).DefaultHighRangeFormID;
+        var highest = allocator.Taken
             .Concat(taken ?? Enumerable.Empty<string>())
             .Select(LocalId)
             .DefaultIfEmpty(0u)
             .Max();
         var next = Math.Max(floor, highest + 1);
         var cap = isLight ? PluginFlagPredicates.LightLocalFormIdCap : FormID.FullIdMask;
-        return next > cap ? null : $"{next:X6}:{plugin.Name}";
+        return next > cap ? null : $"{next:X6}:{allocator.Plugin.Name}";
     }
 
     private static string FormKeySpaceExhaustedMessage(PluginKey plugin, bool isLight, bool eslContradiction = false)
@@ -1198,22 +1259,43 @@ public sealed class RecordEditService(
     private static uint LocalId(string formKey) =>
         uint.Parse(formKey[..formKey.IndexOf(':')], NumberStyles.HexNumber, CultureInfo.InvariantCulture);
 
-    /// <summary>The same both-refs allocator create/renumber use, exposed so the Renumber input box can
-    /// prefill a suggestion as xEdit does. Never a write and no tracked gate: pure arithmetic over
-    /// indexed state.</summary>
+    /// <summary>The allocator create and renumber use, exposed so the Renumber box can prefill a
+    /// suggestion as xEdit does. A tracked copy answers from its tree and HEAD, an untracked one from
+    /// its own binary.</summary>
     public RecordEditResult PeekNextFreeFormKey(PluginKey plugin)
     {
-        var index = mirror.Index;
-        if (index == null)
+        // No snapshot yet is a state, not a refusal about this plugin.
+        if (loadOrder.Current.Copies.Count == 0)
             return RecordEditResult.Refused(RecordEditRefusal.RecordNotFound, "No load order has been received.");
 
-        var mod = mirror.LoadOrder!.GetMod(plugin.Name, plugin.Origin!);
-        var isLight = IsLightAtEffective(index, plugin, mod);
-        var formKey = NextFreeNativeFormId(index, plugin, mod, isLight);
+        // Never a write, so no write gate and no tracked gate: an untracked copy answers too. A copy
+        // the load order does not register is the one left with nothing to answer from.
+        if (loadOrder.Current.Copy(plugin) is not { } copy)
+        {
+            return RecordEditResult.Refused(
+                RecordEditRefusal.RecordNotFound,
+                $"The load order does not hold {plugin.Name} ({plugin.Origin}).");
+        }
+
+        Allocator allocator;
+        try
+        {
+            allocator = AllocatorFor(copy, plugin);
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            // Registered and unreadable: MO2 replaces and removes a copy's file whenever it likes, and
+            // a read says so rather than faulting.
+            return RecordEditResult.Refused(
+                RecordEditRefusal.RecordParseFailed,
+                $"{plugin.Name} could not be read, so nothing can say which of its FormIDs are free: {ex.Message}");
+        }
+
+        var formKey = NextFreeNativeFormId(allocator, allocator.IsLight);
         return formKey != null
             ? RecordEditResult.Success(formKey)
             : RecordEditResult.Refused(
-                RecordEditRefusal.FormKeySpaceExhausted, FormKeySpaceExhaustedMessage(plugin, isLight));
+                RecordEditRefusal.FormKeySpaceExhausted, FormKeySpaceExhaustedMessage(plugin, allocator.IsLight));
     }
 
     /// <summary>The palette title verbatim (package.json's "Track…" under category "Modbench"); a signpost
@@ -1221,36 +1303,43 @@ public sealed class RecordEditService(
     internal const string TrackCommandTitle = "Modbench: Track\u2026";
 
     private readonly record struct EditTarget(
-        IRecordIndex Index, string ModFolder, GameRelease Release, RecordDocument Document, SourceUnit Unit,
-        SourceRepository Repository);
+        GameRelease Release, RecordIdentity Identity, SourceUnit Unit, SourceRepository Repository);
 
-    // Reads the document at Effective because that is what the user is editing from: a second edit
-    // must build on the first, not the committed baseline. The copy gestures gate on the destination
-    // and read the source instead.
+    // The working tree is the only thing asked (ADR-0046 invariant 7): a second edit builds on the
+    // first, and no document comes from the Index. The copy gestures read the source instead.
     private RecordEditResult? ResolveEditTarget(PluginKey plugin, string formKey, out EditTarget target)
     {
         target = default;
 
-        if (RefuseIfBlocked(plugin, out var modFolder, out var repository) is { } blocked) return blocked;
+        if (RefuseIfBlocked(plugin, out _, out var repository) is { } blocked) return blocked;
 
-        var index = mirror.Index;
-        if (index == null)
-            return RecordEditResult.Refused(RecordEditRefusal.RecordNotFound, "No load order has been received.");
-        var reads = index.At(RecordRef.Effective);
-
-        var document = reads.GetDocument(formKey, plugin);
-        if (document == null)
+        var release = loadOrder.Current.GameRelease;
+        RecordIdentity? found;
+        try
         {
-            return RecordEditResult.Refused(
-                RecordEditRefusal.RecordNotFound,
-                $"{plugin.Name} does not hold record {formKey}.");
+            found = repository.IdentityOf(plugin, formKey, schemaReflector.GetSchemas(release));
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            // Naming this record means reading the document that carries it, and the codec is the only
+            // reader of one: its own words are the reason.
+            return RefuseUnreadable(formKey, ex.Message);
         }
 
-        var release = mirror.LoadOrder!.GameRelease;
+        if (found is not { } identity)
+        {
+            // A document named after this record whose text is not one: present, so this is not
+            // absence, and the reader's words are the whole reason.
+            if (repository.UnreadableDocumentFor(plugin, formKey) is { } why) return RefuseUnreadable(formKey, why);
+
+            return RecordEditResult.Refused(
+                RecordEditRefusal.RecordNotFound,
+                $"No document in {plugin.Name}'s source tree holds {formKey}, and no record's document " +
+                "carries it.");
+        }
 
         // An embedded child (a placed ref, landscape, navmesh, top cell) resolves to its parent's file.
-        if (repository.Locate(plugin, new RecordIdentity(formKey, document.RecordType, document.EditorId))
-            is not { } unit)
+        if (repository.Locate(plugin, identity) is not { } unit)
         {
             return RecordEditResult.Refused(
                 RecordEditRefusal.SourceUnitNotFound,
@@ -1258,11 +1347,13 @@ public sealed class RecordEditService(
                 "carries it. Something moved or removed it outside Modbench \u2014 check the Source Control panel.");
         }
 
-        target = new EditTarget(index, modFolder, release, document, unit, repository);
+        target = new EditTarget(release, identity, unit, repository);
         return null;
     }
 
-    private readonly record struct CopySource(IRecordIndex Index, string DestinationModFolder, GameRelease Release, RecordDocument Document);
+    private readonly record struct CopySource(
+        IRecordIndex Index, string DestinationModFolder, SourceRepository DestinationRepository, GameRelease Release,
+        RecordDocument Document);
 
     // Asymmetric by construction: the write-path gate checks the destination, the document lookup
     // reads the source. Never resolves a source unit; an untracked source falls back to the indexed
@@ -1272,9 +1363,10 @@ public sealed class RecordEditService(
     {
         source = default;
 
-        if (RefuseIfBlocked(destinationPlugin, out var destinationModFolder, out _) is { } blocked) return blocked;
+        if (RefuseIfBlocked(destinationPlugin, out var destinationModFolder, out var destinationRepository)
+            is { } blocked) return blocked;
 
-        var index = mirror.Index;
+        var index = mirror?.Index;
         if (index == null)
             return RecordEditResult.Refused(RecordEditRefusal.RecordNotFound, "No load order has been received.");
 
@@ -1288,8 +1380,8 @@ public sealed class RecordEditService(
 
         if (RefuseIfParseFailed(formKey, document) is { } parseRefusal) return parseRefusal;
 
-        var release = mirror.LoadOrder!.GameRelease;
-        source = new CopySource(index, destinationModFolder, release, document);
+        var release = loadOrder.Current.GameRelease;
+        source = new CopySource(index, destinationModFolder, destinationRepository, release, document);
         return null;
     }
 
@@ -1310,9 +1402,8 @@ public sealed class RecordEditService(
         modFolder = "";
         repository = null!;
 
-        if (ModFolders.Of(mirror.LoadOrder, plugin) is not { } folder) return RefuseUntracked(plugin);
-        if (mirror.LoadOrder is not { } loadOrder) return RefuseUntracked(plugin);
-        if (SourceRepository.Open(folder, loadOrder.GameRelease) is not { } opened) return RefuseUntracked(plugin);
+        if (ModFolders.Of(loadOrder.Current, plugin) is not { } folder) return RefuseUntracked(plugin);
+        if (SourceRepository.Open(folder, loadOrder.Current.GameRelease) is not { } opened) return RefuseUntracked(plugin);
 
         (modFolder, repository) = (folder, opened);
 
@@ -1325,7 +1416,7 @@ public sealed class RecordEditService(
     // Two refusals, because there are two different ways out and a message that named neither
     // would be silent dead UI.
     private RecordEditResult RefuseUntracked(PluginKey plugin) =>
-        ModFolders.Of(mirror.LoadOrder, plugin) is null
+        ModFolders.Of(loadOrder.Current, plugin) is null
             ? RecordEditResult.Refused(
                 RecordEditRefusal.PluginHasNoModFolder,
                 $"{plugin.Name} is a base-game plugin with no mod folder, so it cannot be tracked. " +
@@ -1437,9 +1528,9 @@ public sealed class RecordEditService(
     // is the verbatim bytes.
     private string StripEmbeddedChildrenForShallowCopy(string body, string recordType, GameRelease release)
     {
-        var record = _codec.DeserializeFromBytesAsync(Encoding.UTF8.GetBytes(body), release, recordType).GetAwaiter().GetResult();
+        var record = codec.DeserializeFromBytesAsync(Encoding.UTF8.GetBytes(body), release, recordType).GetAwaiter().GetResult();
         ContainerChildFields.ClearAllChildSlots(record);
-        var stripped = _codec.SerializeToBytesAsync(record, release).GetAwaiter().GetResult();
+        var stripped = codec.SerializeToBytesAsync(record, release).GetAwaiter().GetResult();
         return Encoding.UTF8.GetString(stripped);
     }
 

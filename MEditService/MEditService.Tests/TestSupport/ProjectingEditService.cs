@@ -10,38 +10,49 @@ namespace MEditService.Tests.TestSupport;
 /// <summary>The write API with the projection behind it. ADR-0046 makes the write and the Index
 /// learning of it two events, so a test reading after a write lets the projector catch up
 /// first.</summary>
-internal sealed class ProjectingEditService(ILoadOrderMirror mirror, RecordEditService inner)
+internal sealed class ProjectingEditService(ILoadOrderMirror mirror, LoadOrderHolder holder, RecordEditService inner)
 {
     /// <summary>The service every test writes through, over <paramref name="mirror"/>'s own index and
     /// schemas.</summary>
-    internal static ProjectingEditService Over(ILoadOrderMirror mirror) =>
-        new(mirror, new RecordEditService(mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance));
+    internal static ProjectingEditService Over(ILoadOrderMirror mirror)
+    {
+        var holder = TestEditService.HolderOver(mirror);
+        return new ProjectingEditService(mirror, holder, TestEditService.Over(holder, mirror));
+    }
 
     internal RecordEditResult Edit(PluginKey plugin, string formKey, RecordEditEnvelope envelope) =>
-        Projected(inner.Edit(plugin, formKey, envelope));
+        Projected(Current().Edit(plugin, formKey, envelope));
 
     internal RecordEditResult Set(PluginKey plugin, string formKey, string member, JsonElement value) =>
-        Projected(inner.Set(plugin, formKey, member, value));
+        Projected(Current().Set(plugin, formKey, member, value));
 
     internal RecordEditResult DeleteRecord(PluginKey plugin, string formKey) =>
-        Projected(inner.DeleteRecord(plugin, formKey));
+        Projected(Current().DeleteRecord(plugin, formKey));
 
     internal RecordEditResult CreateRecord(
         PluginKey plugin, string recordType, string? editorId, string? requestedFormKey = null) =>
-        Projected(inner.CreateRecord(plugin, recordType, editorId, requestedFormKey));
+        Projected(Current().CreateRecord(plugin, recordType, editorId, requestedFormKey));
 
     internal RecordEditResult CopyRecordAsOverride(PluginKey sourcePlugin, string formKey, PluginKey destinationPlugin) =>
-        Projected(inner.CopyRecordAsOverride(sourcePlugin, formKey, destinationPlugin));
+        Projected(Current().CopyRecordAsOverride(sourcePlugin, formKey, destinationPlugin));
 
     internal RecordEditResult CopyRecordAsNewRecord(
         PluginKey sourcePlugin, string formKey, PluginKey destinationPlugin, string? requestedFormKey = null) =>
-        Projected(inner.CopyRecordAsNewRecord(sourcePlugin, formKey, destinationPlugin, requestedFormKey));
+        Projected(Current().CopyRecordAsNewRecord(sourcePlugin, formKey, destinationPlugin, requestedFormKey));
 
     internal RecordEditResult RenumberRecord(PluginKey plugin, string formKey, string? requestedFormKey = null) =>
-        Projected(inner.RenumberRecord(plugin, formKey, requestedFormKey));
+        Projected(Current().RenumberRecord(plugin, formKey, requestedFormKey));
 
     /// <summary>A read, so nothing follows it.</summary>
-    internal RecordEditResult PeekNextFreeFormKey(PluginKey plugin) => inner.PeekNextFreeFormKey(plugin);
+    internal RecordEditResult PeekNextFreeFormKey(PluginKey plugin) => Current().PeekNextFreeFormKey(plugin);
+
+    // The two load orders are one in the product, where a snapshot reaches the holder and the mirror
+    // together; here the mirror is the one a test reconciles, so the holder follows it per gesture.
+    private RecordEditService Current()
+    {
+        TestEditService.Sync(holder, mirror);
+        return inner;
+    }
 
     private RecordEditResult Projected(RecordEditResult result)
     {

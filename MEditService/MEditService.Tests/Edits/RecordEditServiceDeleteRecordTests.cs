@@ -1,26 +1,20 @@
 using MEditService.Core.Edits;
-using MEditService.Core.Plugins;
-using MEditService.Core.Records;
 using MEditService.Core.Schema;
 using MEditService.Core.Source;
 using MEditService.Tests.TestSupport;
-using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Tests.Edits;
 
 public sealed class RecordEditServiceDeleteRecordTests
 {
-    private static ProjectingEditService ServiceFor(ILoadOrderMirror mirror) =>
-        ProjectingEditService.Over(mirror);
-
     [Fact]
     public void DeleteRecord_OnTheHeader_RefusesWithoutTouchingTheSourceTree()
     {
-        using var mod = TrackedModFixture.Tracked();
+        using var mod = SourceEditFixture.Tracked();
         var headerFormKey = PluginHeader.FormKeyFor(ModKey.FromFileName(mod.ActualPluginName));
 
-        var result = ServiceFor(mod.Mirror).DeleteRecord(mod.Plugin, headerFormKey);
+        var result = mod.Edits.DeleteRecord(mod.Plugin, headerFormKey);
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.HeaderDeleteOrRenumberNotSupported, result.Refusal);
@@ -28,53 +22,54 @@ public sealed class RecordEditServiceDeleteRecordTests
         Assert.True(
             Directory.Exists(Path.Combine(mod.ModFolder, "source", mod.ActualPluginName)),
             "the plugin's own tracked source tree must survive");
-        Assert.NotNull(mod.Mirror.Projected().GetDocument(headerFormKey, mod.Plugin));
+        Assert.NotNull(mod.Document(headerFormKey));
     }
 
     [Fact]
-    public void DeleteRecord_RemovesTheSourceFile_GoneAtEffective_StillAtHead()
+    public void DeleteRecord_RemovesTheSourceFile_GoneFromTheTree_StillAtHead()
     {
-        using var mod = TrackedModFixture.Tracked();
+        using var mod = SourceEditFixture.Tracked();
 
-        var result = ServiceFor(mod.Mirror).DeleteRecord(mod.Plugin, mod.Npc.ToString());
+        var result = mod.Edits.DeleteRecord(mod.Plugin, mod.Npc.ToString());
 
         Assert.True(result.Applied, result.Message);
         Assert.False(File.Exists(mod.NpcSourceFile));
-        Assert.Null(mod.Mirror.Projected().GetDocument(mod.Npc.ToString(), mod.Plugin));
-        Assert.NotNull(mod.Mirror.Projected(RecordRef.Head).GetDocument(mod.Npc.ToString(), mod.Plugin));
+        Assert.Null(mod.Document(mod.Npc.ToString()));
+        // Still served by the last commit until a compile: a working-tree deletion is not a compile.
+        Assert.NotNull(
+            mod.CommittedDocument(mod.Npc.ToString(), "npc_", SourceEditFixture.NpcEditorId));
     }
 
     [Fact]
-    public void DeleteRecord_OnANeverCommittedRecord_ActuallyRemovesItFromTheIndex()
+    public void DeleteRecord_OnANeverCommittedRecord_LeavesNothingAtEitherRef()
     {
-        using var mod = TrackedModFixture.Tracked();
-        var service = ServiceFor(mod.Mirror);
-        var created = service.CreateRecord(mod.Plugin, "npc_", "BrandNew");
+        using var mod = SourceEditFixture.Tracked();
+        var created = mod.Edits.CreateRecord(mod.Plugin, "npc_", "BrandNew");
         Assert.True(created.Applied, created.Message);
 
-        var result = service.DeleteRecord(mod.Plugin, created.NewFormKey!);
+        var result = mod.Edits.DeleteRecord(mod.Plugin, created.NewFormKey!);
 
         Assert.True(result.Applied, result.Message);
-        Assert.Null(mod.Mirror.Projected().GetDocument(created.NewFormKey!, mod.Plugin));
-        Assert.Null(mod.Mirror.Projected(RecordRef.Head).GetDocument(created.NewFormKey!, mod.Plugin));
+        Assert.Null(mod.Document(created.NewFormKey!));
+        Assert.Null(mod.CommittedDocument(created.NewFormKey!, "npc_", "BrandNew"));
     }
 
     [Fact]
     public void DeleteRecord_LeavesOtherRecordsUntouched()
     {
-        using var mod = TrackedModFixture.Tracked();
+        using var mod = SourceEditFixture.Tracked();
 
-        ServiceFor(mod.Mirror).DeleteRecord(mod.Plugin, mod.Npc.ToString());
+        mod.Edits.DeleteRecord(mod.Plugin, mod.Npc.ToString());
 
-        Assert.NotNull(mod.Mirror.Projected().GetDocument(mod.OtherNpc.ToString(), mod.Plugin));
+        Assert.NotNull(mod.Document(mod.OtherNpc.ToString()));
     }
 
     [Fact]
     public void DeleteRecord_Refuses_WhenPluginIsUntracked_NamingTheTrackCommand()
     {
-        using var mod = TrackedModFixture.Untracked();
+        using var mod = SourceEditFixture.Untracked();
 
-        var result = ServiceFor(mod.Mirror).DeleteRecord(mod.Plugin, mod.Npc.ToString());
+        var result = mod.Edits.DeleteRecord(mod.Plugin, mod.Npc.ToString());
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.PluginNotTracked, result.Refusal);
@@ -84,10 +79,10 @@ public sealed class RecordEditServiceDeleteRecordTests
     [Fact]
     public void DeleteRecord_Refuses_WhileAnExternalChangeQuestionIsUnanswered()
     {
-        using var mod = TrackedModFixture.Tracked();
-        ExternalChangeDeferral.Set(mod.ModFolder, TrackedModFixture.PluginName, "unanswered");
+        using var mod = SourceEditFixture.Tracked();
+        ExternalChangeDeferral.Set(mod.ModFolder, SourceEditFixture.PluginName, "unanswered");
 
-        var result = ServiceFor(mod.Mirror).DeleteRecord(mod.Plugin, mod.Npc.ToString());
+        var result = mod.Edits.DeleteRecord(mod.Plugin, mod.Npc.ToString());
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.ExternalChangeUnanswered, result.Refusal);
@@ -97,9 +92,9 @@ public sealed class RecordEditServiceDeleteRecordTests
     [Fact]
     public void DeleteRecord_Refuses_ForAnUnknownFormKey()
     {
-        using var mod = TrackedModFixture.Tracked();
+        using var mod = SourceEditFixture.Tracked();
 
-        var result = ServiceFor(mod.Mirror).DeleteRecord(mod.Plugin, "FFFFFF:Fixture.esp");
+        var result = mod.Edits.DeleteRecord(mod.Plugin, "FFFFFF:Fixture.esp");
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.RecordNotFound, result.Refusal);

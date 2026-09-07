@@ -11,9 +11,8 @@ using Noggog;
 
 namespace MEditService.Tests.Edits;
 
-/// <summary>debt #779: the link resolver reads a tracked tree by document name, so it cannot name a
-/// record inside its container's document. Compile says nothing about a link to one rather than
-/// calling it broken.</summary>
+/// <summary>A link into another tracked plugin's container document: the target has no name of its
+/// own in that tree, and compile must not call the link broken.</summary>
 public sealed class CompileEmbeddedTargetTests : IDisposable
 {
     private const string TargetName = "EmbeddedTarget.esp";
@@ -100,8 +99,8 @@ public sealed class CompileEmbeddedTargetTests : IDisposable
         catch (UnauthorizedAccessException) { /* ditto */ }
     }
 
-    // The target's own tree carries the record, so "could not be resolved" would be false — the
-    // resolver's silence is a gap in what it can name, not a fact about the link.
+    // The target's own tree carries the record and the resolver names it from there, so a
+    // "could not be resolved" diagnostic would be false.
     [Fact]
     public void Compile_ForALinkToARecordEmbeddedInAnotherTrackedPlugin_ReportsNothingAboutIt()
     {
@@ -128,16 +127,16 @@ public sealed class CompileEmbeddedTargetTests : IDisposable
             d => d.Message.Contains($"[{_embeddedTarget}] <Error: Could not be resolved>", StringComparison.Ordinal));
     }
 
-    // The same tree, asked the way the resolver asks: proof the silence above is the gap and not an
-    // absent record.
+    // The same tree, asked the way the resolver asks: the silence above is the link resolving, not a
+    // record nothing can name.
     [Fact]
-    public void TheTargetsTree_CarriesTheEmbeddedRecord_ThoughItsNameDoesNot()
+    public void TheTargetsTree_CarriesTheEmbeddedRecord_AndTheResolverNamesIt()
     {
         var target = new PluginKey(TargetName, TargetOrigin);
         var repository = SourceRepository.Open(_targetFolder, GameRelease.Fallout4)!;
 
         Assert.True(repository.CarriesEmbedded(target, _embeddedTarget.ToString()));
         using var resolver = new FormLinkResolver(_loadOrder, new DefaultModImporter(), SharedSchemaReflector.Instance);
-        Assert.Null(resolver.Resolve(_embeddedTarget.ToString()));
+        Assert.Equal(new RecordLookupEntry("refr", "EmbeddedRef"), resolver.Resolve(_embeddedTarget.ToString()));
     }
 }

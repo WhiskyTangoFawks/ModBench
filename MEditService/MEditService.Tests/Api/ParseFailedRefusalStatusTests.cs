@@ -32,14 +32,21 @@ public sealed class ParseFailedRefusalStatusTests : IDisposable
             cmd.Parameters.Add(new DuckDBParameter { Value = _mod.SourceNpc.ToString() });
             cmd.ExecuteNonQuery();
         }
-        _edits = new RecordEditService(_mod.Mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
+        _edits = TestEditService.Over(_mod.Mirror);
     }
 
     public void Dispose() => _mod.Dispose();
 
+    // The edit door asks the codec rather than the Index (ADR-0046 invariant 7), so the record it
+    // refuses is one whose document on disk the codec cannot read.
     [Fact]
-    public void EditRecord_OfAParseFailedRecord_IsAProblemNamingTheRefusal()
+    public void EditRecord_OfADocumentTheCodecCannotRead_IsAProblemNamingTheRefusal()
     {
+        var path = _mod.SourceFileFor(_mod.SourcePlugin, _mod.SourceNpc, "npc_", CopyFixture.SourceNpcEditorId);
+        File.WriteAllText(
+            path,
+            File.ReadAllText(path).Replace(
+                "\"EditorID\"", "\"MajorRecordFlagsRaw\": \"notanumber\",\n  \"EditorID\"", StringComparison.Ordinal));
         var request = new RecordEditRequest(
             CopyFixture.SourcePluginName, CopyFixture.SourceOrigin, RecordEditEnvelope.Set,
             [PathHop.Member("HeightMax")], JsonDocument.Parse("0.75").RootElement);
@@ -47,7 +54,11 @@ public sealed class ParseFailedRefusalStatusTests : IDisposable
         var result = RecordEndpoints.EditRecord(
             _mod.SourceNpc.ToString(), request, _edits, _mod.Mirror.WriteGate, NullLogger.Instance);
 
-        AssertRefused(result);
+        var problem = Assert.IsAssignableFrom<ProblemHttpResult>(result);
+        Assert.Equal(RefusedStatus, problem.StatusCode);
+        Assert.Equal(
+            nameof(RecordEditRefusal.RecordParseFailed),
+            Assert.Contains("refusal", problem.ProblemDetails.Extensions));
     }
 
     [Fact]
