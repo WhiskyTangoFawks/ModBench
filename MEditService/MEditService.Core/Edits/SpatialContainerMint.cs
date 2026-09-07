@@ -18,7 +18,7 @@ internal static class SpatialContainerMint
     /// coordinates from <paramref name="cellLocation"/> and the grid from <paramref name="sourceCell"/>
     /// rather than deriving either.</summary>
     internal static Fallout4Mod BuildSyntheticWorldspaceMod(
-        PluginKey destinationPlugin, IMajorRecord worldspaceAncestor, CellLocationRow cellLocation, IMajorRecord cell,
+        PluginKey destinationPlugin, IMajorRecord worldspaceAncestor, CellPlacement cellLocation, IMajorRecord cell,
         IMajorRecord sourceCell, GameRelease release)
     {
         if (worldspaceAncestor is not Worldspace worldspace)

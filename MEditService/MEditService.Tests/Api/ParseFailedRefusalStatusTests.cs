@@ -1,90 +1,76 @@
 using System.Text.Json;
-using DuckDB.NET.Data;
 using MEditService.Api.Endpoints;
 using MEditService.Core.Edits;
 using MEditService.Core.Queries;
 using MEditService.Core.Records;
-using MEditService.Core.Schema;
 using MEditService.Tests.Edits;
-using MEditService.Tests.TestSupport;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace MEditService.Tests.Api;
 
-/// <summary>A parse-failed record answers the same at every write door: both copy endpoints map
-/// the refusal to the status and the typed extension the edit endpoint maps it to.</summary>
+/// <summary>A record the codec cannot read answers the same at every write door: both copy endpoints
+/// map the refusal to the status and the typed extension the edit endpoint maps it to.</summary>
 public sealed class ParseFailedRefusalStatusTests : IDisposable
 {
     private const int RefusedStatus = 422;
-    private const string Diagnosis = "the subrecord was cut short";
 
     private readonly CopyFixture _mod = CopyFixture.Create(trackSource: true);
-    private readonly RecordEditService _edits;
+    private readonly IndexWriteGate _gate = new();
 
+    // Parse status comes from the codec at edit time (ADR-0046 invariant 7), so the record every
+    // door here refuses is one whose document on disk the codec cannot read.
     public ParseFailedRefusalStatusTests()
-    {
-        using (var cmd = ((DuckDbRecordIndex)_mod.Mirror.Index!).Connection.CreateCommand())
-        {
-            cmd.CommandText = "UPDATE mirror.records SET parse_diagnosis = $1 WHERE form_key = $2";
-            cmd.Parameters.Add(new DuckDBParameter { Value = Diagnosis });
-            cmd.Parameters.Add(new DuckDBParameter { Value = _mod.SourceNpc.ToString() });
-            cmd.ExecuteNonQuery();
-        }
-        _edits = TestEditService.Over(_mod.Mirror);
-    }
-
-    public void Dispose() => _mod.Dispose();
-
-    // The edit door asks the codec rather than the Index (ADR-0046 invariant 7), so the record it
-    // refuses is one whose document on disk the codec cannot read.
-    [Fact]
-    public void EditRecord_OfADocumentTheCodecCannotRead_IsAProblemNamingTheRefusal()
     {
         var path = _mod.SourceFileFor(_mod.SourcePlugin, _mod.SourceNpc, "npc_", CopyFixture.SourceNpcEditorId);
         File.WriteAllText(
             path,
             File.ReadAllText(path).Replace(
                 "\"EditorID\"", "\"MajorRecordFlagsRaw\": \"notanumber\",\n  \"EditorID\"", StringComparison.Ordinal));
+    }
+
+    public void Dispose() => _mod.Dispose();
+
+    [Fact]
+    public void EditRecord_OfADocumentTheCodecCannotRead_IsAProblemNamingTheRefusal()
+    {
         var request = new RecordEditRequest(
             CopyFixture.SourcePluginName, CopyFixture.SourceOrigin, RecordEditEnvelope.Set,
             [PathHop.Member("HeightMax")], JsonDocument.Parse("0.75").RootElement);
 
         var result = RecordEndpoints.EditRecord(
-            _mod.SourceNpc.ToString(), request, _edits, _mod.Mirror.WriteGate, NullLogger.Instance);
+            _mod.SourceNpc.ToString(), request, _mod.Edits, _gate, NullLogger.Instance);
 
-        var problem = Assert.IsAssignableFrom<ProblemHttpResult>(result);
-        Assert.Equal(RefusedStatus, problem.StatusCode);
-        Assert.Equal(
-            nameof(RecordEditRefusal.RecordParseFailed),
-            Assert.Contains("refusal", problem.ProblemDetails.Extensions));
+        AssertRefused(result);
     }
 
     [Fact]
-    public void CopyRecordAsOverride_OfAParseFailedRecord_IsTheSameProblemAsARefusedEdit()
+    public void CopyRecordAsOverride_OfARecordTheCodecCannotRead_IsTheSameProblemAsARefusedEdit()
     {
         var request = new RecordCopyAsOverrideRequest(
             CopyFixture.SourcePluginName, CopyFixture.SourceOrigin,
             CopyFixture.DestinationPluginName, CopyFixture.DestinationOrigin);
 
         var result = RecordEndpoints.CopyRecordAsOverride(
-            _mod.SourceNpc.ToString(), request, _edits, _mod.Mirror.WriteGate, NullLogger.Instance);
+            _mod.SourceNpc.ToString(), request, _mod.Edits, _gate, NullLogger.Instance);
 
         AssertRefused(result);
+        Assert.Empty(_mod.DestinationGitStatus());
     }
 
     [Fact]
-    public void CopyRecordAsNewRecord_OfAParseFailedRecord_IsTheSameProblemAsARefusedEdit()
+    public void CopyRecordAsNewRecord_OfARecordTheCodecCannotRead_IsTheSameProblemAsARefusedEdit()
     {
         var request = new RecordCopyAsNewRecordRequest(
             CopyFixture.SourcePluginName, CopyFixture.SourceOrigin,
             CopyFixture.DestinationPluginName, CopyFixture.DestinationOrigin, RequestedFormKey: null);
 
         var result = RecordEndpoints.CopyRecordAsNewRecord(
-            _mod.SourceNpc.ToString(), request, _edits, _mod.Mirror.WriteGate, NullLogger.Instance);
+            _mod.SourceNpc.ToString(), request, _mod.Edits, _gate, NullLogger.Instance);
 
         AssertRefused(result);
+        Assert.Empty(_mod.DestinationGitStatus());
     }
 
     private static void AssertRefused(IResult result)
@@ -94,6 +80,8 @@ public sealed class ParseFailedRefusalStatusTests : IDisposable
         Assert.Equal(
             nameof(RecordEditRefusal.RecordParseFailed),
             Assert.Contains("refusal", problem.ProblemDetails.Extensions));
-        Assert.Contains(Diagnosis, problem.ProblemDetails.Detail!, StringComparison.Ordinal);
+        // The reader's own words, which is the only thing that says why.
+        // The reader's own words, which is the only thing that says why.
+        Assert.Contains("Unable to cast", problem.ProblemDetails.Detail!, StringComparison.Ordinal);
     }
 }

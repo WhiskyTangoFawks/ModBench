@@ -3,6 +3,7 @@ using MEditService.Core.Edits;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
 using MEditService.Core.Serialization;
+using MEditService.Core.Source;
 using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -36,11 +37,10 @@ public sealed class SpatialContainerMintBuilderTests
         sourceCell.Grid = new CellGrid { Point = new P2Int(200, -199) };
 
         // Deliberately not derivable from a naive floor(grid/N)-style formula for this grid point —
-        // a rival that recomputed block/sub-block instead of copying CellLocationRow's own numbers
+        // a rival that recomputed block/sub-block instead of copying the placement's own numbers
         // through would not reproduce these exact values.
-        var cellLocation = new CellLocationRow(
-            cell.FormKey.ToString(), worldspace.FormKey.ToString(),
-            BlockX: 3, BlockY: -2, SubX: 0, SubY: -1, GridX: 200, GridY: -199, IsInterior: false);
+        var cellLocation = new CellPlacement(
+            worldspace.FormKey.ToString(), BlockX: 3, BlockY: -2, SubX: 0, SubY: -1, IsInterior: false);
 
         var syntheticMod = SpatialContainerMint.BuildSyntheticWorldspaceMod(
             DestinationPlugin, worldspace, cellLocation, cell, sourceCell, GameRelease.Fallout4);

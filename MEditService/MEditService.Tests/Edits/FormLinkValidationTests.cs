@@ -84,3 +84,34 @@ public sealed class FormLinkValidationTests : IDisposable
         Assert.Contains("ABCDEF:NoSuchPlugin.esp", result.Message, StringComparison.OrdinalIgnoreCase);
     }
 }
+
+/// <summary>A link target whose container document the codec cannot read is one nothing can name, so
+/// the link is unresolved. The record being edited is readable and is not what refuses.</summary>
+public sealed class CorruptLinkTargetValidationTests : IDisposable
+{
+    private readonly ContainerCopyFixture _mod = ContainerCopyFixture.CreateWithTrackedSource();
+
+    public void Dispose() => _mod.Dispose();
+
+    [Fact]
+    public void PointingAFormLinkAtARecordWhoseContainerDocumentIsCorrupt_IsRefusedAsAnInvalidLink()
+    {
+        // The reference is inlined in its cell's document, so corrupting that document is what makes
+        // the target unnameable while the record being edited stays perfectly readable.
+        var cellFile = _mod.SourceFileContaining(_mod.SourcePlugin, ContainerCopyFixture.PersistentRefEditorId);
+        File.WriteAllText(
+            cellFile,
+            File.ReadAllText(cellFile).Replace(
+                $"\"EditorID\": \"{ContainerCopyFixture.PersistentRefEditorId}\"",
+                $"\"MajorRecordFlagsRaw\": \"notanumber\",\n\"EditorID\": \"{ContainerCopyFixture.PersistentRefEditorId}\"",
+                StringComparison.Ordinal));
+
+        var result = _mod.Edits.Set(
+            _mod.SourcePlugin, _mod.FlatNpc.ToString(), "Keywords",
+            JsonDocument.Parse($"[\"{_mod.PersistentRef}\"]").RootElement);
+
+        Assert.False(result.Applied);
+        Assert.Equal(RecordEditRefusal.InvalidFormLink, result.Refusal);
+        Assert.Contains("Could not be resolved", result.Message, StringComparison.Ordinal);
+    }
+}

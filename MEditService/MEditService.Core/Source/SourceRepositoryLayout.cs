@@ -368,6 +368,25 @@ public sealed partial class SourceRepository
         // Below its group's own directory level: an interior cell in a block, an exterior cell in its
         // worldspace's blocks.
         internal bool ContainerIsNested => _segments.Length > ShallowestContainerDocument;
+
+        // A block and a sub-block level sit between a cell's own directory and whatever holds it: its
+        // group folder for an interior cell, its worldspace's own directory for an exterior one.
+        private const int BlockLevels = 2;
+
+        internal bool UnderGroupBlockLevels =>
+            IsContainerDocument && _segments.Length == ShallowestContainerDocument + BlockLevels;
+
+        internal bool UnderWorldspaceBlockLevels =>
+            IsContainerDocument && _segments.Length == ShallowestContainerDocument + BlockLevels + 1;
+
+        internal string BlockFolderName => _segments[^4];
+
+        internal string SubBlockFolderName => _segments[^3];
+
+        /// <summary>The worldspace's own directory, for a path <see cref="UnderWorldspaceBlockLevels"/>
+        /// answers for: everything above the two block levels and the cell's own directory.</summary>
+        internal string WorldspaceDirectory =>
+            Path.Combine(_segments[..(ShallowestContainerDocument - 1)]);
     }
 }
 

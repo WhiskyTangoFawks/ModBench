@@ -1,37 +1,30 @@
 using MEditService.Core.Edits;
-using MEditService.Core.Plugins;
-using MEditService.Core.Records;
-using MEditService.Core.Schema;
+using MEditService.Core.Source;
 using MEditService.Tests.TestSupport;
-using Microsoft.Extensions.Logging.Abstractions;
-using Mutagen.Bethesda;
-using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Tests.Edits;
 
 public sealed class RecordEditServiceCopyRecordAsNewRecordTests
 {
-    private static ProjectingEditService ServiceFor(ILoadOrderMirror mirror) =>
-        ProjectingEditService.Over(mirror);
-
     [Fact]
     public void CopyRecordAsNewRecord_AllocatesAFreeFormKey_AndLandsAsAWorkingTreeRecordInTheDestination()
     {
         using var mod = CopyFixture.Create();
+        var sourceBefore = mod.SourcePluginBytes();
 
-        var result = ServiceFor(mod.Mirror).CopyRecordAsNewRecord(mod.SourcePlugin, mod.SourceNpc.ToString(), mod.DestinationPlugin);
+        var result = mod.Edits.CopyRecordAsNewRecord(mod.SourcePlugin, mod.SourceNpc.ToString(), mod.DestinationPlugin);
 
         Assert.True(result.Applied, result.Message);
         Assert.NotNull(result.NewFormKey);
         Assert.NotEqual(mod.SourceNpc.ToString(), result.NewFormKey);
         Assert.EndsWith(":" + CopyFixture.DestinationPluginName, result.NewFormKey, StringComparison.Ordinal);
 
-        var doc = mod.Mirror.Projected().GetDocument(result.NewFormKey!, mod.DestinationPlugin);
-        Assert.NotNull(doc);
-        Assert.Equal(CopyFixture.SourceNpcEditorId, doc!.EditorId);
+        var document = mod.Document(mod.DestinationPlugin, result.NewFormKey!);
+        Assert.NotNull(document);
+        Assert.Equal(CopyFixture.SourceNpcEditorId, document!.EditorId);
 
-        // The source's own copy is untouched — this is a copy, not a move.
-        Assert.NotNull(mod.Mirror.Projected().GetDocument(mod.SourceNpc.ToString(), mod.SourcePlugin));
+        // The source plugin's own file is untouched — this is a copy, not a move.
+        Assert.Equal(sourceBefore, mod.SourcePluginBytes());
     }
 
     [Fact]
@@ -40,7 +33,7 @@ public sealed class RecordEditServiceCopyRecordAsNewRecordTests
         using var mod = CopyFixture.Create();
         const string requested = "900000:Destination.esp";
 
-        var result = ServiceFor(mod.Mirror).CopyRecordAsNewRecord(
+        var result = mod.Edits.CopyRecordAsNewRecord(
             mod.SourcePlugin, mod.SourceNpc.ToString(), mod.DestinationPlugin, requested);
 
         Assert.True(result.Applied, result.Message);
@@ -52,9 +45,12 @@ public sealed class RecordEditServiceCopyRecordAsNewRecordTests
     {
         using var mod = CopyFixture.Create();
 
-        var result = ServiceFor(mod.Mirror).CopyRecordAsNewRecord(mod.SourcePlugin, mod.SourceNpc.ToString(), mod.DestinationPlugin);
+        var result = mod.Edits.CopyRecordAsNewRecord(mod.SourcePlugin, mod.SourceNpc.ToString(), mod.DestinationPlugin);
 
-        Assert.Null(mod.Mirror.Projected(RecordRef.Head).GetDocument(result.NewFormKey!, mod.DestinationPlugin));
+        Assert.True(result.Applied, result.Message);
+        Assert.Null(mod.CommittedDocument(
+            mod.DestinationPlugin,
+            new RecordIdentity(result.NewFormKey!, "npc_", CopyFixture.SourceNpcEditorId)));
     }
 
     // "Internal self-references follow the duplicate, not the
@@ -65,14 +61,14 @@ public sealed class RecordEditServiceCopyRecordAsNewRecordTests
     {
         using var mod = CopyFixture.Create();
 
-        var result = ServiceFor(mod.Mirror).CopyRecordAsNewRecord(
+        var result = mod.Edits.CopyRecordAsNewRecord(
             mod.SourcePlugin, mod.SelfLinkingFaction.ToString(), mod.DestinationPlugin);
 
         Assert.True(result.Applied, result.Message);
-        var doc = mod.Mirror.Projected().GetDocument(result.NewFormKey!, mod.DestinationPlugin);
-        Assert.NotNull(doc);
-        Assert.Contains(result.NewFormKey!, doc!.Body, StringComparison.Ordinal);
-        Assert.DoesNotContain(mod.SelfLinkingFaction.ToString(), doc.Body, StringComparison.Ordinal);
+        var document = mod.Document(mod.DestinationPlugin, result.NewFormKey!);
+        Assert.NotNull(document);
+        Assert.Contains(result.NewFormKey!, document!.Body, StringComparison.Ordinal);
+        Assert.DoesNotContain(mod.SelfLinkingFaction.ToString(), document.Body, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -81,7 +77,7 @@ public sealed class RecordEditServiceCopyRecordAsNewRecordTests
         using var mod = CopyFixture.Create();
         Directory.Delete(Path.Combine(mod.DestinationModFolder, ".git"), recursive: true);
 
-        var result = ServiceFor(mod.Mirror).CopyRecordAsNewRecord(mod.SourcePlugin, mod.SourceNpc.ToString(), mod.DestinationPlugin);
+        var result = mod.Edits.CopyRecordAsNewRecord(mod.SourcePlugin, mod.SourceNpc.ToString(), mod.DestinationPlugin);
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.PluginNotTracked, result.Refusal);
@@ -93,7 +89,7 @@ public sealed class RecordEditServiceCopyRecordAsNewRecordTests
     {
         using var mod = CopyFixture.Create();
 
-        var result = ServiceFor(mod.Mirror).CopyRecordAsNewRecord(
+        var result = mod.Edits.CopyRecordAsNewRecord(
             mod.SourcePlugin, mod.SourceNpc.ToString(), mod.DestinationPlugin, mod.DestinationNpc.ToString());
 
         Assert.False(result.Applied);
@@ -105,7 +101,7 @@ public sealed class RecordEditServiceCopyRecordAsNewRecordTests
     {
         using var mod = CopyFixture.Create();
 
-        var result = ServiceFor(mod.Mirror).CopyRecordAsNewRecord(
+        var result = mod.Edits.CopyRecordAsNewRecord(
             mod.SourcePlugin, mod.SourceNpc.ToString(), mod.DestinationPlugin, "900000:SomeOtherPlugin.esp");
 
         Assert.False(result.Applied);
@@ -116,11 +112,11 @@ public sealed class RecordEditServiceCopyRecordAsNewRecordTests
     public void CopyRecordAsNewRecord_Refuses_WhenTheFormKeySpaceIsExhausted()
     {
         using var mod = CopyFixture.Create();
-        var seeded = ServiceFor(mod.Mirror).CopyRecordAsNewRecord(
+        var seeded = mod.Edits.CopyRecordAsNewRecord(
             mod.SourcePlugin, mod.SourceNpc.ToString(), mod.DestinationPlugin, "FFFFFF:Destination.esp");
         Assert.True(seeded.Applied, seeded.Message);
 
-        var result = ServiceFor(mod.Mirror).CopyRecordAsNewRecord(mod.SourcePlugin, mod.SourceNpc.ToString(), mod.DestinationPlugin);
+        var result = mod.Edits.CopyRecordAsNewRecord(mod.SourcePlugin, mod.SourceNpc.ToString(), mod.DestinationPlugin);
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.FormKeySpaceExhausted, result.Refusal);
@@ -131,9 +127,10 @@ public sealed class RecordEditServiceCopyRecordAsNewRecordTests
     [Fact]
     public void CopyRecordAsNewRecord_Refuses_WhenTheSourceIsACell_PermanentlyDisallowed()
     {
-        using var fixture = new ContainerModFixture();
+        using var fixture = ContainerCopyFixture.Create();
 
-        var result = ServiceFor(fixture.Mirror).CopyRecordAsNewRecord(fixture.Plugin, fixture.Cell.ToString(), fixture.Plugin);
+        var result = fixture.Edits.CopyRecordAsNewRecord(
+            fixture.SourcePlugin, fixture.InteriorCell.ToString(), fixture.DestinationPlugin);
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.CopyAsNewRecordDisallowedForType, result.Refusal);
@@ -142,24 +139,27 @@ public sealed class RecordEditServiceCopyRecordAsNewRecordTests
     [Fact]
     public void CopyRecordAsNewRecord_Refuses_WhenTheSourceIsAWorldspace_PermanentlyDisallowed()
     {
-        using var fixture = new ContainerModFixture();
+        using var fixture = ContainerCopyFixture.Create();
 
-        var result = ServiceFor(fixture.Mirror).CopyRecordAsNewRecord(fixture.Plugin, fixture.Worldspace.ToString(), fixture.Plugin);
+        var result = fixture.Edits.CopyRecordAsNewRecord(
+            fixture.SourcePlugin, fixture.Worldspace.ToString(), fixture.DestinationPlugin);
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.CopyAsNewRecordDisallowedForType, result.Refusal);
     }
 
-    // A Quest is not on xEdit's permanent blacklist: DIAL/INFO/QUST copy as new.
+    // A Quest is not on xEdit's permanent blacklist: DIAL/INFO/QUST copy as new. From a tracked
+    // source, so the record's text comes out of a working tree rather than a plugin file.
     [Fact]
     public void CopyRecordAsNewRecord_OnAQuestFromATrackedSource_Succeeds()
     {
-        using var fixture = new ContainerModFixture();
+        using var fixture = ContainerCopyFixture.CreateWithTrackedSource();
 
-        var result = ServiceFor(fixture.Mirror).CopyRecordAsNewRecord(fixture.Plugin, fixture.Quest.ToString(), fixture.Plugin);
+        var result = fixture.Edits.CopyRecordAsNewRecord(
+            fixture.SourcePlugin, fixture.Quest.ToString(), fixture.DestinationPlugin);
 
         Assert.True(result.Applied, result.Message);
-        Assert.NotNull(fixture.Mirror.Projected().GetDocument(result.NewFormKey!, fixture.Plugin));
+        Assert.NotNull(fixture.Document(fixture.DestinationPlugin, result.NewFormKey!));
     }
 
     [Fact]
@@ -167,7 +167,7 @@ public sealed class RecordEditServiceCopyRecordAsNewRecordTests
     {
         using var mod = CopyFixture.Create();
 
-        var result = ServiceFor(mod.Mirror).CopyRecordAsNewRecord(mod.SourcePlugin, "ABCDEF:Source.esm", mod.DestinationPlugin);
+        var result = mod.Edits.CopyRecordAsNewRecord(mod.SourcePlugin, "ABCDEF:Source.esm", mod.DestinationPlugin);
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.RecordNotFound, result.Refusal);

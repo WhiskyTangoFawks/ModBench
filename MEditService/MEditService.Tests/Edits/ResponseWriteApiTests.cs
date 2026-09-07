@@ -120,23 +120,25 @@ public sealed class ResponseWriteApiTests : IDisposable
     public void CopyingAResponseAsOverride_IntoAPluginLackingItsTopic_MintsABarePartialFormTopicWithTheResponseInline()
     {
         using var fixture = ContainerCopyFixture.Create();
-        var service = ProjectingEditService.Over(fixture.Mirror);
 
-        var result = service.CopyRecordAsOverride(fixture.SourcePlugin, fixture.Response1.ToString(), fixture.DestinationPlugin);
+        var result = fixture.Edits.CopyRecordAsOverride(
+            fixture.SourcePlugin, fixture.Response1.ToString(), fixture.DestinationPlugin);
 
         Assert.True(result.Applied, result.Message);
-        var reads = fixture.Mirror.Projected();
-        Assert.True(reads.GetDocument(fixture.Quest.ToString(), fixture.DestinationPlugin)!.IsPartialForm);
-        Assert.True(reads.GetDocument(fixture.DialogTopic.ToString(), fixture.DestinationPlugin)!.IsPartialForm);
+        Assert.True(fixture.Document(fixture.DestinationPlugin, fixture.Quest.ToString())!.IsPartialForm());
+        var mintedTopic = fixture.Document(fixture.DestinationPlugin, fixture.DialogTopic.ToString());
+        Assert.NotNull(mintedTopic);
+        Assert.True(mintedTopic!.IsPartialForm());
         Assert.Equal(
             fixture.Response1.ToString(),
-            Assert.Single(reads.GetContainerChildren(fixture.DestinationPlugin, fixture.DialogTopic.ToString())).ChildFormKey);
+            Assert.Single(JsonDocument.Parse(mintedTopic.Body).RootElement.GetProperty("Responses").EnumerateArray())
+                .GetProperty("FormKey").GetString());
 
         var topicFile = fixture.DestinationSourceFileContaining(ContainerCopyFixture.Response1EditorId);
         Assert.Contains($"\"FormKey\": \"{fixture.DialogTopic}\"", File.ReadAllText(topicFile), StringComparison.Ordinal);
         Assert.Empty(Directory.EnumerateDirectories(fixture.DestinationSourceRoot, "Responses", SearchOption.AllDirectories));
 
-        var compile = CompileServices.Over(fixture.Mirror)
+        var compile = CompileServices.Over(fixture.LoadOrder)
             .Compile(fixture.DestinationPlugin, new CompileSource.WorkingTree());
         Assert.True(compile.Succeeded, compile.RefusalReason);
         using var overlay = ModFactory.ImportGetter(

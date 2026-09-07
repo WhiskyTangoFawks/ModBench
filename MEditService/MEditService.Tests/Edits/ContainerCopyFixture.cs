@@ -1,7 +1,8 @@
+using MEditService.Core.Edits;
 using MEditService.Core.Plugins;
 using MEditService.Core.Records;
-using MEditService.Core.Schema;
 using MEditService.Core.Source;
+using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -10,9 +11,9 @@ using Noggog;
 
 namespace MEditService.Tests.Edits;
 
-/// <summary>Two mod folders because <see cref="ContainerModFixture"/> holds one and cannot ask
-/// whether a copy crosses plugins; the source stays untracked, since every read here is served
-/// from the index rather than the tree.</summary>
+/// <summary>Two mod folders, because one cannot ask whether a copy crosses plugins. The source
+/// defaults untracked, so its records come through the Plugin adapter; no index anywhere in
+/// it.</summary>
 public sealed class ContainerCopyFixture : IDisposable
 {
     public const string SourcePluginName = "ContainerSource.esm";
@@ -23,7 +24,11 @@ public sealed class ContainerCopyFixture : IDisposable
     public string SourceModFolder { get; }
     public string DestinationModFolder { get; }
     public string GameDirectory { get; }
-    public LoadOrderMirror Mirror { get; }
+    /// <summary>The same snapshot as a list, for a test that reconciles an index over these trees.</summary>
+    public IReadOnlyList<LoadOrderEntry> Entries { get; }
+
+    public LoadOrder LoadOrder { get; }
+    public RecordEditService Edits { get; }
     public PluginKey SourcePlugin { get; } = new(SourcePluginName, SourceOrigin);
     public PluginKey DestinationPlugin { get; } = new(DestinationPluginName, DestinationOrigin);
 
@@ -124,7 +129,7 @@ public sealed class ContainerCopyFixture : IDisposable
     public const string ExteriorTemporaryRefEditorId = "SourceExteriorTemporaryRef";
     public FormKey ExteriorTemporaryRef { get; }
 
-    private ContainerCopyFixture(bool destinationLoadsFirst)
+    private ContainerCopyFixture(bool destinationLoadsFirst, bool trackSource)
     {
         SourceModFolder = Directory.CreateTempSubdirectory("medit-container-copy-source-").FullName;
         DestinationModFolder = Directory.CreateTempSubdirectory("medit-container-copy-dest-").FullName;
@@ -255,23 +260,46 @@ public sealed class ContainerCopyFixture : IDisposable
         destinationMod.WriteToBinary(destinationPath);
         DestinationNpc = destinationNpc.FormKey;
 
-        Mirror = new LoadOrderMirror(
-            new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
-        ((ILoadOrderMirror)Mirror).Reconcile(
-            GameDirectory,
-            [
-                new LoadOrderEntry(SourcePluginName, sourcePath, SourceOrigin, Slot: destinationLoadsFirst ? 1 : 0, Enabled: true, Winning: true),
-                new LoadOrderEntry(DestinationPluginName, destinationPath, DestinationOrigin, Slot: destinationLoadsFirst ? 0 : 1, Enabled: true, Winning: true),
-            ],
-            GameRelease.Fallout4);
+        Entries =
+        [
+            new LoadOrderEntry(SourcePluginName, sourcePath, SourceOrigin, Slot: destinationLoadsFirst ? 1 : 0, Enabled: true, Winning: true),
+            new LoadOrderEntry(DestinationPluginName, destinationPath, DestinationOrigin, Slot: destinationLoadsFirst ? 0 : 1, Enabled: true, Winning: true),
+        ];
+        LoadOrder = LoadOrder.From(GameDirectory, GameDirectory, GameRelease.Fallout4, Entries);
 
-        new TrackService(NullLogger<TrackService>.Instance)
-            .TrackAsync(Mirror.LoadOrder!, DestinationOrigin, SourcePreset.Edits).GetAwaiter().GetResult();
+        Track(DestinationOrigin, DestinationPlugin);
+        if (trackSource) Track(SourceOrigin, SourcePlugin);
+
+        var holder = new LoadOrderHolder();
+        holder.Apply(LoadOrder);
+        Edits = TestEditService.Over(holder);
     }
 
-    public static ContainerCopyFixture Create() => new(destinationLoadsFirst: false);
+    public static ContainerCopyFixture Create() => new(destinationLoadsFirst: false, trackSource: false);
 
-    public static ContainerCopyFixture CreateWithDestinationLoadingFirst() => new(destinationLoadsFirst: true);
+    public static ContainerCopyFixture CreateWithTrackedSource() => new(destinationLoadsFirst: false, trackSource: true);
+
+    public static ContainerCopyFixture CreateWithDestinationLoadingFirst() =>
+        new(destinationLoadsFirst: true, trackSource: false);
+
+    private void Track(string origin, PluginKey plugin) =>
+        new TrackService(NullLogger<TrackService>.Instance)
+            .TrackAsync(LoadOrder, [plugin], origin, SourcePreset.Edits).GetAwaiter().GetResult();
+
+    /// <summary>What a tracked plugin's tree holds for a FormKey — the whole read model here.</summary>
+    public SourceDocument? Document(PluginKey plugin, string formKey) =>
+        TrackedTree.Document(
+            plugin.Origin == SourceOrigin ? SourceModFolder : DestinationModFolder, plugin, formKey);
+
+    public IReadOnlyList<string> DestinationGitStatus() => TrackedTree.GitStatus(DestinationModFolder);
+
+    /// <summary>Where the destination's tree puts a cell it holds — the block directories the mint
+    /// wrote, read back the one way the write side reads them.</summary>
+    internal CellPlacement? DestinationCellPlacement(string cellFormKey, string? editorId)
+    {
+        var repository = SourceRepository.Open(DestinationModFolder, GameRelease.Fallout4)!;
+        return repository.CellPlacementOf(DestinationPlugin, new RecordIdentity(cellFormKey, "cell", editorId));
+    }
 
     private static void AddInteriorCell(Fallout4Mod mod, Cell cell, int blockNumber)
     {
@@ -285,12 +313,21 @@ public sealed class ContainerCopyFixture : IDisposable
     public string DestinationSourceRoot => Path.Combine(DestinationModFolder, SourceRepository.RootFor(DestinationPluginName));
 
     public string DestinationSourceFileContaining(string editorId) =>
-        Directory.EnumerateFiles(DestinationSourceRoot, "*.json", SearchOption.AllDirectories)
+        SourceFileContaining(DestinationPlugin, editorId);
+
+    /// <summary>Any document in a tracked plugin's tree carrying an EditorID: a container's own
+    /// RecordData.json, a flat record's file, or the file that inlines an embedded child.</summary>
+    public string SourceFileContaining(PluginKey plugin, string editorId) =>
+        Directory
+            .EnumerateFiles(
+                Path.Combine(
+                    plugin.Origin == SourceOrigin ? SourceModFolder : DestinationModFolder,
+                    SourceRepository.RootFor(plugin.Name)),
+                "*.json", SearchOption.AllDirectories)
             .Single(f => File.ReadAllText(f).Contains($"\"{editorId}\"", StringComparison.Ordinal));
 
     public void Dispose()
     {
-        Mirror.Dispose();
         TryDelete(SourceModFolder);
         TryDelete(DestinationModFolder);
         TryDelete(GameDirectory);

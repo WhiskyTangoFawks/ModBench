@@ -28,9 +28,9 @@ public sealed class RecordEditService(
     ILogger<RecordEditService> logger,
     ILoadOrderMirror? mirror = null)
 {
-    // RecordCopy shares this instance's mirror and schema so its writes are indistinguishable from
-    // this class's own (ADR-0041's one write path). Null only where no copy gesture runs.
-    private readonly RecordCopy _recordCopy = new(mirror!, schemaReflector, logger, codec);
+    // RecordCopy shares this instance's schema and codec so its writes are indistinguishable from
+    // this class's own (ADR-0041's one write path).
+    private readonly RecordCopy _recordCopy = new(schemaReflector, logger, codec);
 
     /// <summary>The single write path (ADR-0041): one envelope, patched onto the record's document
     /// by <see cref="DocumentEdit"/>, landed here as a working-tree change. This method owns only
@@ -310,39 +310,46 @@ public sealed class RecordEditService(
         return RecordEditResult.Success(targetFormKey);
     }
 
-    /// <summary>xEdit's "Copy as Override Into…" (ADR-0041): the bytes land verbatim under the same
-    /// FormKey, since <see cref="RecordDocument.Body"/> is byte-identical to the source file. The
-    /// master dependency is derived at compile (ADR-0038).</summary>
+    /// <summary>xEdit's "Copy as Override Into…" (ADR-0041): the source's own bytes land verbatim
+    /// under the same FormKey. The master dependency is derived at compile (ADR-0038).</summary>
     public RecordEditResult CopyRecordAsOverride(PluginKey sourcePlugin, string formKey, PluginKey destinationPlugin)
     {
-        if (ResolveCopySource(destinationPlugin, sourcePlugin, formKey, out var source) is { } blocked) return blocked;
-        var (index, destinationModFolder, _, release, document) = source;
+        if (ResolveCopySource(destinationPlugin, sourcePlugin, formKey, out var copy) is { } blocked) return blocked;
+        using var source = copy.Source;
+        var result = CopyAsOverride(copy, destinationPlugin);
+        // A brand-new row can newly match an active filter (debt #784).
+        if (result.Applied) mirror?.ReapplyFilter();
+        return result;
+    }
+
+    private RecordEditResult CopyAsOverride(CopyTarget copy, PluginKey destinationPlugin)
+    {
+        var (source, identity, destination, release, body) = copy;
+        var formKey = identity.FormKey;
         if (RefuseIfUnderride(formKey, destinationPlugin) is { } underrideRefusal) return underrideRefusal;
-        var reads = index.At(RecordRef.Effective);
 
         // A record a container's document carries lands inside the destination's copy of that
         // document (the container rule); the refusal below is for a record with no group of its own
-        // that no readable container document carries.
-        if (RecordTypeDispatch.For(release).GroupFolderNameFor(document.RecordType) is null
-            && _recordCopy.EmbeddedContainerOf(reads, sourcePlugin, formKey, release) is { } embedding)
+        // that no container document carries.
+        if (RecordTypeDispatch.For(release).GroupFolderNameFor(identity.RecordType) is null
+            && source.ContainerOf(identity) is { } container)
         {
             return _recordCopy.CopyEmbeddedChildAsOverride(
-                sourcePlugin, formKey, document, embedding, destinationPlugin, destinationModFolder, index, release);
+                source, formKey, source.Record(identity), container, destination, release);
         }
 
-        if (RefuseIfCopySourceHasNoContainerOfItsOwn(document.RecordType, release) is { } containerRefusal) return containerRefusal;
+        if (RefuseIfCopySourceHasNoContainerOfItsOwn(identity.RecordType, release) is { } containerRefusal)
+            return containerRefusal;
 
-        var isContainer = IsContainerType(document.RecordType, release);
-        if (!IsFreeAtBothRefs(index, destinationPlugin, formKey))
+        var isContainer = IsContainerType(identity.RecordType, release);
+        if (destination.Repository.HoldsAtEitherRef(destinationPlugin, formKey))
         {
             // A destination already overriding the explicitly-selected container record gets it
             // replaced, own-fields-only (xEdit's copy-into behavior). Every other record still
             // refuses, as does a record held only at Head.
-            if (isContainer && reads.GetDocument(formKey, destinationPlugin) is { } existingTarget)
-            {
-                return ReplaceExplicitContainerCopyTarget(
-                    sourcePlugin, formKey, document, existingTarget, destinationPlugin, destinationModFolder, release);
-            }
+            if (isContainer && _recordCopy.Identity(destination, formKey, release) is { } existingTarget)
+                return ReplaceExplicitContainerCopyTarget(source, identity, existingTarget, destination, release);
+
             return RecordEditResult.Refused(
                 RecordEditRefusal.FormKeyCollision,
                 $"{formKey} is already held by a record in {destinationPlugin.Name} at some ref.");
@@ -351,24 +358,24 @@ public sealed class RecordEditService(
         // IsInterior is false for both a genuine SubCells cell and a Worldspace's TopCell
         // (PlacementWalker hardcodes it). Only the SubCells case has block coordinates to mint from; a
         // TopCell falls through to the refusal, its placement being a follow-up.
-        var isCell = RecordTypeDispatch.For(release).ConcreteFor(document.RecordType)?.Name == "Cell";
-        var cellLocation = isCell ? reads.GetCellLocation(sourcePlugin, formKey) : null;
-        if (isCell && cellLocation?.IsInterior == false && cellLocation.Value.BlockX != null)
+        var isCell = IsCellType(identity.RecordType, release);
+        var placement = isCell ? source.CellPlacementOf(identity) : null;
+        if (isCell && placement?.IsInterior == false && placement.Value.BlockX != null)
         {
-            var cellRecord = ReadCopySourceRecord(sourcePlugin, formKey, document, release);
+            var cellRecord = source.Record(identity);
             ContainerChildFields.ClearAllChildSlots(cellRecord);
             var mintResult = _recordCopy.MintExteriorCell(
-                sourcePlugin, formKey, cellLocation.Value, cellRecord, destinationPlugin, destinationModFolder, index, release);
+                source, formKey, placement.Value, cellRecord, destination, release);
             if (mintResult.Applied && logger.IsEnabled(LogLevel.Information))
             {
                 logger.LogInformation(
                     "Copied {FormKey} from {SourcePlugin} ({SourceOrigin}) as an override into " +
                     "{DestinationPlugin} ({DestinationOrigin}) — minted its worldspace as a Partial Form ancestor",
-                    formKey, sourcePlugin.Name, sourcePlugin.Origin, destinationPlugin.Name, destinationPlugin.Origin);
+                    formKey, source.Plugin.Name, source.Plugin.Origin, destinationPlugin.Name, destinationPlugin.Origin);
             }
             return mintResult;
         }
-        if (isCell && cellLocation?.IsInterior != true)
+        if (isCell && placement?.IsInterior != true)
         {
             return RecordEditResult.Refused(
                 RecordEditRefusal.ContainerParentMissingInDestination,
@@ -377,32 +384,27 @@ public sealed class RecordEditService(
                 $"{destinationPlugin.Name}.");
         }
 
-        var body = ReadCopySourceBody(sourcePlugin, formKey, document, release);
-
         // A plain Copy as Override is own-fields-only, so a container's inline children are stripped.
-        if (isContainer) body = StripEmbeddedChildrenForShallowCopy(body, document.RecordType, release);
+        if (isContainer) body = StripEmbeddedChildrenForShallowCopy(body, identity.RecordType, release);
 
         // A Cell's block bucket is the one thing resolved first, because it is chosen (or minted)
         // rather than derived.
-        var destination = SourceRepository.PlacementFor(
-            destinationPlugin.Name, document.RecordType, formKey, document.EditorId, release,
-            isCell ? EnsureInteriorCellBlockPath(destinationModFolder, destinationPlugin.Name, release) : null);
-        var relativePath = destination.RelativePath;
-        WriteAt(destinationModFolder, destination, path =>
+        var written = SourceRepository.PlacementFor(
+            destinationPlugin.Name, identity.RecordType, formKey, identity.EditorId, release,
+            isCell ? EnsureInteriorCellBlockPath(destination.ModFolder, destinationPlugin.Name, release) : null);
+        WriteAt(destination.ModFolder, written, path =>
         {
             SourceRepository.WriteTextAtomic(path, body);
             return body;
         });
-
-        // A brand-new row can newly match an active filter.
-        mirror?.ReapplyFilter();
 
         if (logger.IsEnabled(LogLevel.Information))
         {
             logger.LogInformation(
                 "Copied {FormKey} from {SourcePlugin} ({SourceOrigin}) as an override into {DestinationPlugin} " +
                 "({DestinationOrigin}) — new working-tree source file at {SourcePath}",
-                formKey, sourcePlugin.Name, sourcePlugin.Origin, destinationPlugin.Name, destinationPlugin.Origin, relativePath);
+                formKey, source.Plugin.Name, source.Plugin.Origin, destinationPlugin.Name, destinationPlugin.Origin,
+                written.RelativePath);
         }
         // An override echoes the caller's own FormKey back, so NewFormKey stays null.
         return RecordEditResult.Success();
@@ -414,48 +416,51 @@ public sealed class RecordEditService(
     public RecordEditResult CopyRecordAsNewRecord(
         PluginKey sourcePlugin, string formKey, PluginKey destinationPlugin, string? requestedFormKey = null)
     {
-        if (ResolveCopySource(destinationPlugin, sourcePlugin, formKey, out var source) is { } blocked) return blocked;
-        var (index, destinationModFolder, destinationRepository, release, document) = source;
-        if (RefuseIfDisallowedForCopyAsNewRecord(document.RecordType) is { } disallowedRefusal) return disallowedRefusal;
+        if (ResolveCopySource(destinationPlugin, sourcePlugin, formKey, out var copy) is { } blocked) return blocked;
+        using var source = copy.Source;
+        var result = CopyAsNewRecord(copy, destinationPlugin, requestedFormKey);
+        // A brand-new row can newly match an active filter (debt #784).
+        if (result.Applied) mirror?.ReapplyFilter();
+        return result;
+    }
+
+    private RecordEditResult CopyAsNewRecord(
+        CopyTarget copy, PluginKey destinationPlugin, string? requestedFormKey)
+    {
+        var (source, identity, destination, release, _) = copy;
+        var formKey = identity.FormKey;
+        if (RefuseIfDisallowedForCopyAsNewRecord(identity.RecordType) is { } disallowedRefusal) return disallowedRefusal;
 
         // A record with no group of its own copies into its container's document (a topic into its
         // quest, a response into its topic); a placed reference has no such container and refuses.
-        if (RecordTypeDispatch.For(release).FolderNameFor(document.RecordType) is null)
+        if (RecordTypeDispatch.For(release).FolderNameFor(identity.RecordType) is null)
         {
-            if (index.At(RecordRef.Effective).GetContainerParent(sourcePlugin, formKey) is { } parent)
-            {
-                return CopyEmbeddedChildAsNewRecord(
-                    index, sourcePlugin, formKey, document, parent, destinationPlugin, destinationModFolder,
-                    destinationRepository, release, requestedFormKey);
-            }
-            if (RefuseIfContainerType(document.RecordType, release) is { } containerRefusal) return containerRefusal;
+            if (source.ContainerOf(identity) is { } container)
+                return CopyEmbeddedChildAsNewRecord(copy, container, destinationPlugin, requestedFormKey);
+            if (RefuseIfContainerType(identity.RecordType, release) is { } containerRefusal) return containerRefusal;
         }
 
-        if (ResolveTargetFormKey(AllocatorOver(destinationRepository, destinationPlugin), requestedFormKey, out var targetFormKey)
+        if (ResolveTargetFormKey(
+                AllocatorOver(destination.Repository, destinationPlugin), requestedFormKey, out var targetFormKey)
             is { } refusedTarget) return refusedTarget;
 
-        var sourceRecord = ReadCopySourceRecord(sourcePlugin, formKey, document, release);
-        var newRecord = sourceRecord.Duplicate(FormKey.Factory(targetFormKey));
+        var newRecord = source.Record(identity).Duplicate(FormKey.Factory(targetFormKey));
         RemapSelfLink(newRecord, formKey, targetFormKey);
 
         // Own-record-only, like Copy as Override: a container's children never ride along (deep copy
         // is a separate operation).
         ContainerChildFields.ClearAllChildSlots(newRecord);
         var placement = SourceRepository.PlacementFor(
-            destinationPlugin.Name, document.RecordType, targetFormKey, newRecord.EditorID, release);
-        var relativePath = placement.RelativePath;
-        WriteAt(destinationModFolder, placement, path => SerializeAndWrite(codec, newRecord, path, release));
-
-        // A brand-new row can newly match an active filter.
-        mirror?.ReapplyFilter();
+            destinationPlugin.Name, identity.RecordType, targetFormKey, newRecord.EditorID, release);
+        WriteAt(destination.ModFolder, placement, path => SerializeAndWrite(codec, newRecord, path, release));
 
         if (logger.IsEnabled(LogLevel.Information))
         {
             logger.LogInformation(
                 "Copied {FormKey} from {SourcePlugin} ({SourceOrigin}) as new record {NewFormKey} into " +
                 "{DestinationPlugin} ({DestinationOrigin}) — new working-tree source file at {SourcePath}",
-                formKey, sourcePlugin.Name, sourcePlugin.Origin, targetFormKey, destinationPlugin.Name,
-                destinationPlugin.Origin, relativePath);
+                formKey, source.Plugin.Name, source.Plugin.Origin, targetFormKey, destinationPlugin.Name,
+                destinationPlugin.Origin, placement.RelativePath);
         }
         return RecordEditResult.Success(targetFormKey);
     }
@@ -464,35 +469,34 @@ public sealed class RecordEditService(
     // cannot delete them. An EditorID difference renames the unit, since the round-trip gate
     // regenerates canonical names.
     private RecordEditResult ReplaceExplicitContainerCopyTarget(
-        PluginKey sourcePlugin, string formKey, RecordDocument sourceDocument,
-        RecordDocument existingTarget, PluginKey destinationPlugin, string destinationModFolder, GameRelease release)
+        CopySource source, RecordIdentity identity, RecordIdentity existingTarget,
+        RecordCopy.Destination destination, GameRelease release)
     {
-        var repository = SourceRepository.Open(destinationModFolder, release)
-            ?? throw new InvalidOperationException($"{destinationPlugin.Name} stopped being tracked mid-copy.");
-        var identity = new RecordIdentity(formKey, existingTarget.RecordType, existingTarget.EditorId);
-        var unit = repository.Locate(destinationPlugin, identity)
+        var unit = destination.Repository.Locate(destination.Plugin, existingTarget)
             ?? throw new InvalidOperationException(
-                $"{destinationPlugin.Name} holds {formKey}, but no document in its source tree carries it.");
+                $"{destination.Plugin.Name} holds {identity.FormKey}, but no document in its source tree carries it.");
 
-        var replacement = ReadCopySourceRecord(sourcePlugin, formKey, sourceDocument, release);
+        var replacement = source.Record(identity);
         ContainerChildFields.ClearAllChildSlots(replacement);
-        var destinationRecord = ReadRecordFromSource(codec, logger, unit.FullPath, existingTarget, release);
+        var destinationRecord = codec
+            .DeserializeAsync(unit.FullPath, release, unit.OwnerRecordType).GetAwaiter().GetResult();
         ContainerChildFields.TransplantChildSlots(destinationRecord, replacement);
 
         // Move first, then write: a crash between leaves the leaf at its new name with old content,
         // still findable by FormKey. The reverse order leaves two units claiming one FormKey.
-        repository.Rename(destinationPlugin, identity, replacement.EditorID);
-        repository.Put(
-            destinationPlugin,
-            new SourceDocument(formKey, existingTarget.RecordType, replacement.EditorID, SerializeToText(replacement, release)));
-        mirror?.ReapplyFilter();
+        destination.Repository.Rename(destination.Plugin, existingTarget, replacement.EditorID);
+        destination.Repository.Put(
+            destination.Plugin,
+            new SourceDocument(
+                identity.FormKey, existingTarget.RecordType, replacement.EditorID, SerializeToText(replacement, release)));
 
         if (logger.IsEnabled(LogLevel.Information))
         {
             logger.LogInformation(
                 "Copied {FormKey} from {SourcePlugin} ({SourceOrigin}) as an override into {DestinationPlugin} " +
                 "({DestinationOrigin}) — replaced the existing override's own fields in place",
-                formKey, sourcePlugin.Name, sourcePlugin.Origin, destinationPlugin.Name, destinationPlugin.Origin);
+                identity.FormKey, source.Plugin.Name, source.Plugin.Origin, destination.Plugin.Name,
+                destination.Plugin.Origin);
         }
         return RecordEditResult.Success();
     }
@@ -501,26 +505,25 @@ public sealed class RecordEditService(
     // Links between copied siblings are not remapped, xEdit's own behavior. A missing container chain
     // auto-creates bare and Partial Form.
     private RecordEditResult CopyEmbeddedChildAsNewRecord(
-        IRecordIndex index, PluginKey sourcePlugin, string formKey, RecordDocument document, ContainerChildRow parent,
-        PluginKey destinationPlugin, string destinationModFolder, SourceRepository destinationRepository,
-        GameRelease release, string? requestedFormKey)
+        CopyTarget copy, CopySource.Containment container, PluginKey destinationPlugin, string? requestedFormKey)
     {
-        var reads = index.At(RecordRef.Effective);
-        if (RefuseIfAnyDescendantParseFailed(reads, sourcePlugin, formKey) is { } descendantRefusal) return descendantRefusal;
+        var (source, identity, destination, release, _) = copy;
 
-        var allocator = AllocatorOver(destinationRepository, destinationPlugin);
+        var allocator = AllocatorOver(destination.Repository, destinationPlugin);
         if (ResolveTargetFormKey(allocator, requestedFormKey, out var targetFormKey) is { } refusedTarget)
             return refusedTarget;
 
-        var newRecord = ReadCopySourceRecord(sourcePlugin, formKey, document, release).Duplicate(FormKey.Factory(targetFormKey));
-        RemapSelfLink(newRecord, formKey, targetFormKey);
+        // Its own text carries its whole embedded subtree, so the codec has already read every
+        // descendant by the time one can be re-keyed.
+        var newRecord = source.Record(identity).Duplicate(FormKey.Factory(targetFormKey));
+        RemapSelfLink(newRecord, identity.FormKey, targetFormKey);
 
         var taken = new HashSet<string>(StringComparer.Ordinal) { targetFormKey };
         if (RekeyEmbeddedDescendants(allocator, newRecord, taken) is { } childRefused) return childRefused;
 
         var appended = _recordCopy.AppendEmbeddedChild(
-            sourcePlugin, parent.ParentFormKey, parent.ParentRecordType, parent.SlotName, newRecord,
-            destinationPlugin, destinationModFolder, index, release);
+            source, container.ParentFormKey, container.ParentRecordType, container.SlotName, newRecord,
+            destination, release);
         if (!appended.Applied) return appended;
 
         if (logger.IsEnabled(LogLevel.Information))
@@ -529,26 +532,10 @@ public sealed class RecordEditService(
                 "Copied {FormKey} from {SourcePlugin} ({SourceOrigin}) as new record {NewFormKey} into " +
                 "{DestinationPlugin} ({DestinationOrigin}) — inside {ContainerFormKey}'s {SlotName} slot, " +
                 "with {DescendantCount} embedded descendant(s) each under a fresh FormKey",
-                formKey, sourcePlugin.Name, sourcePlugin.Origin, targetFormKey, destinationPlugin.Name,
-                destinationPlugin.Origin, parent.ParentFormKey, parent.SlotName, taken.Count - 1);
+                identity.FormKey, source.Plugin.Name, source.Plugin.Origin, targetFormKey, destinationPlugin.Name,
+                destinationPlugin.Origin, container.ParentFormKey, container.SlotName, taken.Count - 1);
         }
         return RecordEditResult.Success(targetFormKey);
-    }
-
-    // Every embedded descendant is copied too, so an unreadable one is refused before anything is
-    // written. A stub is all a parse-failed record has.
-    private static RecordEditResult? RefuseIfAnyDescendantParseFailed(IRecordReads reads, PluginKey plugin, string containerFormKey)
-    {
-        foreach (var childFormKey in reads.GetContainerChildren(plugin, containerFormKey).Select(c => c.ChildFormKey))
-        {
-            if (reads.GetDocument(childFormKey, plugin) is { } childDocument
-                && RefuseIfParseFailed(childFormKey, childDocument) is { } childRefusal)
-            {
-                return childRefusal;
-            }
-            if (RefuseIfAnyDescendantParseFailed(reads, plugin, childFormKey) is { } deeper) return deeper;
-        }
-        return null;
     }
 
     // In place, on the duplicate's own graph: the list order is untouched, and a child's own
@@ -609,42 +596,10 @@ public sealed class RecordEditService(
         RecordTypeDispatch.For(release).ConcreteFor(recordType) is { } concrete
         && ContainerChildFields.EnumerateChildFieldsFor(concrete) != null;
 
-    // Verbatim source text, no deserialization; an untracked source falls back to the indexed body,
-    // the only representation that exists for it.
-    private string ReadCopySourceBody(PluginKey sourcePlugin, string formKey, RecordDocument document, GameRelease release)
-    {
-        if (TrackedCopySourcePath(sourcePlugin, formKey, document, release) is { } fullPath)
-            return File.ReadAllText(fullPath);
-        return document.Body!;
-    }
-
-    // Null when the indexed body is the right representation: an untracked source, an embedded record,
-    // or a missing file. The repository's own lookup, since a container copy source has no flat path.
-    private string? TrackedCopySourcePath(PluginKey sourcePlugin, string formKey, RecordDocument document, GameRelease release)
-    {
-        if (ModFolders.TrackedOf(loadOrder.Current, sourcePlugin) is not { } sourceModFolder) return null;
-
-        var unit = SourceRepository.Open(sourceModFolder, release)
-            ?.Locate(sourcePlugin, new RecordIdentity(formKey, document.RecordType, document.EditorId));
-        if (unit is { IsEmbedded: false } own && File.Exists(own.FullPath)) return own.FullPath;
-        if (unit is { IsEmbedded: true }) return null;
-
-        logger.LogWarning(
-            "Source file for {FormKey} in {SourcePlugin} is missing; copying from the indexed document instead",
-            formKey, sourcePlugin.Name);
-        return null;
-    }
-
-    // Duplicate needs an object to copy, unlike the override path.
-    private IMajorRecord ReadCopySourceRecord(PluginKey sourcePlugin, string formKey, RecordDocument document, GameRelease release)
-    {
-        if (TrackedCopySourcePath(sourcePlugin, formKey, document, release) is { } fullPath)
-            return codec.DeserializeAsync(fullPath, release, document.RecordType).GetAwaiter().GetResult();
-
-        return codec
-            .DeserializeFromBytesAsync(Encoding.UTF8.GetBytes(document.Body!), release, document.RecordType)
-            .GetAwaiter().GetResult();
-    }
+    /// <summary>Whether this record type is the game's cell — the one type whose place in the world is
+    /// its directory rather than a slot.</summary>
+    internal static bool IsCellType(string recordType, GameRelease release) =>
+        RecordTypeDispatch.For(release).ConcreteFor(recordType)?.Name == "Cell";
 
     /// <summary>A delete+create pair in source terms plus a reference cascade. Native records only; an
     /// untracked referencer refuses before any write. Computed whole, then written through a
@@ -1087,12 +1042,6 @@ public sealed class RecordEditService(
             throw new IOException($"The document holding {document.FormKey} does not carry it, so the renumber cannot take it out.");
     }
 
-    /// <summary>A FormKey neither ref answers to is the only one a create may take: a collision is a
-    /// typed refusal, decided before anything is written.</summary>
-    internal static bool IsFreeAtBothRefs(IRecordIndex index, PluginKey plugin, string formKey) =>
-        index.At(RecordRef.Effective).GetDocument(formKey, plugin) == null
-        && index.At(RecordRef.Head).GetDocument(formKey, plugin) == null;
-
     // Everything the allocator needs about one plugin, read from its tree once per gesture: a
     // per-child re-read would walk the whole tree again for every key drawn.
     private readonly record struct Allocator(
@@ -1351,49 +1300,51 @@ public sealed class RecordEditService(
         return null;
     }
 
-    private readonly record struct CopySource(
-        IRecordIndex Index, string DestinationModFolder, SourceRepository DestinationRepository, GameRelease Release,
-        RecordDocument Document);
+    private readonly record struct CopyTarget(
+        CopySource Source, RecordIdentity Identity, RecordCopy.Destination Destination, GameRelease Release, string Body);
 
-    // Asymmetric by construction: the write-path gate checks the destination, the document lookup
-    // reads the source. Never resolves a source unit; an untracked source falls back to the indexed
-    // body.
+    // Asymmetric by construction: the write-path gate checks the destination, the source answers for
+    // its own record. The text is read before anything is written, because a record the codec cannot
+    // read would land as a stub.
     private RecordEditResult? ResolveCopySource(
-        PluginKey destinationPlugin, PluginKey sourcePlugin, string formKey, out CopySource source)
+        PluginKey destinationPlugin, PluginKey sourcePlugin, string formKey, out CopyTarget target)
     {
-        source = default;
+        target = default;
 
         if (RefuseIfBlocked(destinationPlugin, out var destinationModFolder, out var destinationRepository)
             is { } blocked) return blocked;
 
-        var index = mirror?.Index;
-        if (index == null)
-            return RecordEditResult.Refused(RecordEditRefusal.RecordNotFound, "No load order has been received.");
-
-        var document = index.At(RecordRef.Effective).GetDocument(formKey, sourcePlugin);
-        if (document == null)
-        {
-            return RecordEditResult.Refused(
-                RecordEditRefusal.RecordNotFound,
-                $"{sourcePlugin.Name} does not hold record {formKey}.");
-        }
-
-        if (RefuseIfParseFailed(formKey, document) is { } parseRefusal) return parseRefusal;
-
         var release = loadOrder.Current.GameRelease;
-        source = new CopySource(index, destinationModFolder, destinationRepository, release, document);
-        return null;
+        var source = new CopySource(sourcePlugin, loadOrder.Current, importer, codec, schemaReflector);
+        try
+        {
+            if (source.Identity(formKey) is not { } identity)
+            {
+                source.Dispose();
+                return RecordEditResult.Refused(
+                    RecordEditRefusal.RecordNotFound, $"{sourcePlugin.Name} does not hold record {formKey}.");
+            }
+
+            target = new CopyTarget(
+                source, identity,
+                new RecordCopy.Destination(destinationRepository, destinationPlugin, destinationModFolder),
+                release, source.Body(identity));
+            return null;
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            source.Dispose();
+            return RefuseUnreadableCopySource(formKey, source.Diagnose(ex));
+        }
     }
 
-    // A stub is all a parse-failed record has, so copying it would land its FormKey and EditorID as
-    // a real record and silently drop everything else.
-    private static RecordEditResult? RefuseIfParseFailed(string formKey, RecordDocument document) =>
-        document.ParseDiagnosis is { } diagnosis
-            ? RecordEditResult.Refused(
-                RecordEditRefusal.RecordParseFailed,
-                $"{formKey} could not be read when it was indexed, so its document is a stub holding only its " +
-                $"FormKey and EditorID; copying it would land that stub rather than the record: {diagnosis}")
-            : null;
+    // A record's own descendants are inside its text, so one unreadable response refuses its topic
+    // here too.
+    private static RecordEditResult RefuseUnreadableCopySource(string formKey, string why) =>
+        RecordEditResult.Refused(
+            RecordEditRefusal.RecordParseFailed,
+            $"{formKey} cannot be read, so copying it would land a stub holding only its FormKey and " +
+            $"EditorID rather than the record: {why}");
 
     // INVARIANT: every write gesture calls this first, and it is the only gate on tracked-ness.
     // Reaching the source tree any other way bypasses the deferral refusal entirely.

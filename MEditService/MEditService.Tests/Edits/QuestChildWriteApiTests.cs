@@ -227,16 +227,18 @@ public sealed class QuestChildWriteApiTests : IDisposable
     public void CopyingASceneAsOverride_IntoAPluginLackingItsQuest_MintsABarePartialFormQuestWithTheSceneInline()
     {
         using var fixture = ContainerCopyFixture.Create();
-        var service = ProjectingEditService.Over(fixture.Mirror);
 
-        var result = service.CopyRecordAsOverride(fixture.SourcePlugin, fixture.Scene.ToString(), fixture.DestinationPlugin);
+        var result = fixture.Edits.CopyRecordAsOverride(
+            fixture.SourcePlugin, fixture.Scene.ToString(), fixture.DestinationPlugin);
 
         Assert.True(result.Applied, result.Message);
-        var reads = fixture.Mirror.Projected();
-        Assert.True(reads.GetDocument(fixture.Quest.ToString(), fixture.DestinationPlugin)!.IsPartialForm);
+        var quest = fixture.Document(fixture.DestinationPlugin, fixture.Quest.ToString());
+        Assert.NotNull(quest);
+        Assert.True(quest!.IsPartialForm());
         Assert.Equal(
             fixture.Scene.ToString(),
-            Assert.Single(reads.GetContainerChildren(fixture.DestinationPlugin, fixture.Quest.ToString())).ChildFormKey);
+            Assert.Single(JsonDocument.Parse(quest.Body).RootElement.GetProperty("Scenes").EnumerateArray())
+                .GetProperty("FormKey").GetString());
 
         var questFile = fixture.DestinationSourceFileContaining(ContainerCopyFixture.SceneEditorId);
         Assert.Equal("Quests", Path.GetFileName(Path.GetDirectoryName(questFile)));
@@ -253,16 +255,17 @@ public sealed class QuestChildWriteApiTests : IDisposable
     public void CopyingATopicAsOverride_IntoAPluginLackingItsQuest_MintsTheQuest_AndLandsTheTopicWithEmptyResponses()
     {
         using var fixture = ContainerCopyFixture.Create();
-        var service = ProjectingEditService.Over(fixture.Mirror);
 
-        var result = service.CopyRecordAsOverride(fixture.SourcePlugin, fixture.DialogTopic.ToString(), fixture.DestinationPlugin);
+        var result = fixture.Edits.CopyRecordAsOverride(
+            fixture.SourcePlugin, fixture.DialogTopic.ToString(), fixture.DestinationPlugin);
 
         Assert.True(result.Applied, result.Message);
-        var reads = fixture.Mirror.Projected();
-        Assert.True(reads.GetDocument(fixture.Quest.ToString(), fixture.DestinationPlugin)!.IsPartialForm);
-        Assert.Equal(ContainerCopyFixture.DialogTopicEditorId, reads.GetDocument(fixture.DialogTopic.ToString(), fixture.DestinationPlugin)!.EditorId);
-        Assert.Null(reads.GetDocument(fixture.Response1.ToString(), fixture.DestinationPlugin));
-        Assert.Empty(reads.GetContainerChildren(fixture.DestinationPlugin, fixture.DialogTopic.ToString()));
+        Assert.True(fixture.Document(fixture.DestinationPlugin, fixture.Quest.ToString())!.IsPartialForm());
+        var topic = fixture.Document(fixture.DestinationPlugin, fixture.DialogTopic.ToString());
+        Assert.NotNull(topic);
+        Assert.Equal(ContainerCopyFixture.DialogTopicEditorId, topic!.EditorId);
+        Assert.Null(fixture.Document(fixture.DestinationPlugin, fixture.Response1.ToString()));
+        Assert.False(JsonDocument.Parse(topic.Body).RootElement.TryGetProperty("Responses", out _));
 
         var compiledTopic = Assert.Single(CompileAndImport(fixture).Quests.Single(q => q.FormKey == fixture.Quest).DialogTopics);
         Assert.Equal(ContainerCopyFixture.DialogTopicEditorId, compiledTopic.EditorID);
@@ -274,16 +277,25 @@ public sealed class QuestChildWriteApiTests : IDisposable
     public void CopyingAResponseAsOverride_IntoAPluginLackingItsTopicAndQuest_MintsBoth_InOneQuestDocument()
     {
         using var fixture = ContainerCopyFixture.Create();
-        var service = ProjectingEditService.Over(fixture.Mirror);
 
-        var result = service.CopyRecordAsOverride(fixture.SourcePlugin, fixture.Response2.ToString(), fixture.DestinationPlugin);
+        var result = fixture.Edits.CopyRecordAsOverride(
+            fixture.SourcePlugin, fixture.Response2.ToString(), fixture.DestinationPlugin);
 
         Assert.True(result.Applied, result.Message);
-        var reads = fixture.Mirror.Projected();
-        Assert.True(reads.GetDocument(fixture.Quest.ToString(), fixture.DestinationPlugin)!.IsPartialForm);
-        Assert.True(reads.GetDocument(fixture.DialogTopic.ToString(), fixture.DestinationPlugin)!.IsPartialForm);
-        Assert.Equal(fixture.DialogTopic.ToString(), Assert.Single(reads.GetContainerChildren(fixture.DestinationPlugin, fixture.Quest.ToString())).ChildFormKey);
-        Assert.Equal(fixture.Response2.ToString(), Assert.Single(reads.GetContainerChildren(fixture.DestinationPlugin, fixture.DialogTopic.ToString())).ChildFormKey);
+        var quest = fixture.Document(fixture.DestinationPlugin, fixture.Quest.ToString());
+        Assert.NotNull(quest);
+        Assert.True(quest!.IsPartialForm());
+        var topic = fixture.Document(fixture.DestinationPlugin, fixture.DialogTopic.ToString());
+        Assert.NotNull(topic);
+        Assert.True(topic!.IsPartialForm());
+        Assert.Equal(
+            fixture.DialogTopic.ToString(),
+            Assert.Single(JsonDocument.Parse(quest.Body).RootElement.GetProperty("DialogTopics").EnumerateArray())
+                .GetProperty("FormKey").GetString());
+        Assert.Equal(
+            fixture.Response2.ToString(),
+            Assert.Single(JsonDocument.Parse(topic.Body).RootElement.GetProperty("Responses").EnumerateArray())
+                .GetProperty("FormKey").GetString());
 
         var questsFolder = Path.Combine(fixture.DestinationSourceRoot, "Quests");
         Assert.Single(Directory.EnumerateFiles(questsFolder), f => Path.GetFileName(f) != "GroupRecordData.json");
@@ -295,7 +307,7 @@ public sealed class QuestChildWriteApiTests : IDisposable
 
     private IFallout4ModGetter CompileAndImport(ContainerCopyFixture fixture)
     {
-        var compile = CompileServices.Over(fixture.Mirror)
+        var compile = CompileServices.Over(fixture.LoadOrder)
             .Compile(fixture.DestinationPlugin, new CompileSource.WorkingTree());
         Assert.True(compile.Succeeded, compile.RefusalReason);
         var overlay = ModFactory.ImportGetter(
