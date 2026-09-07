@@ -227,9 +227,8 @@ public sealed partial class SourceRepository
             }
         }
 
-        // The codec writes a link as a bare string under its field's name and a child as an object
-        // with a FormKey of its own, so the slot a key sits under tells the two apart. Malformed text
-        // yields what was read before the break.
+        // The codec writes a link as a bare string and a child as an object with a FormKey of its
+        // own, so the slot a key sits under tells the two apart. Malformed text yields what it read.
         private static List<(string FormKey, bool AtRoot, bool InAnEmbedSlot)> FormKeysIn(byte[] bytes)
         {
             var found = new List<(string, bool, bool)>();
