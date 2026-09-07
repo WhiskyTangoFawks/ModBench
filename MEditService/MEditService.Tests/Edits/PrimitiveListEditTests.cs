@@ -333,7 +333,7 @@ public sealed class PrimitiveListEditTests : IDisposable
         public string SceneCollectionBody() => Body(SceneCollection);
 
         public string RaceSourceText() =>
-            File.ReadAllText(SourceUnitResolver.FlatSourcePath(
+            File.ReadAllText(SourceDocumentPath.Of(
                 _modFolder, PluginName, "race", Race.ToString(), RaceEditorId, GameRelease.Fallout4));
 
         private string Body(FormKey formKey) =>

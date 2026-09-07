@@ -81,7 +81,7 @@ internal static class SpatialContainerMint
                 syntheticMod, scratchDir, InlineWorkDropoff.Instance, CancellationToken.None);
 
             const string worldspacesFolder = "Worldspaces";
-            const string recordDataFileName = "RecordData.json";
+            const string recordDataFileName = SourceRepository.RecordDataFileName;
             var scratchWorldspaces = Path.Combine(scratchDir, worldspacesFolder);
 
             // Exactly one Worldspace and one Cell: the Cell's file is the other RecordData.json beneath
@@ -103,7 +103,7 @@ internal static class SpatialContainerMint
             else
             {
                 var destinationWorldspaces = Path.Combine(
-                    destinationModFolder, SourceRecordPath.RootFor(destinationPluginName), worldspacesFolder);
+                    destinationModFolder, SourceRepository.RootFor(destinationPluginName), worldspacesFolder);
                 SourceTreeMerge.MergeAdditively(scratchWorldspaces, destinationWorldspaces);
             }
 

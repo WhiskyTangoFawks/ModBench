@@ -52,7 +52,7 @@ public sealed class CompileRoundTripGateFixture : IDisposable
     public string SourceRoot => SourceRootFor(ModFolder);
 
     public static string SourceRootFor(string modFolder) =>
-        Path.Combine(modFolder, SourceRecordPath.RootFor(CutDownPluginFixture.PluginFileName));
+        Path.Combine(modFolder, SourceRepository.RootFor(CutDownPluginFixture.PluginFileName));
 
     public static Dictionary<string, byte[]> ReadSourceTree(string modFolder) =>
         Directory.EnumerateFiles(SourceRootFor(modFolder), "*.json", SearchOption.AllDirectories)

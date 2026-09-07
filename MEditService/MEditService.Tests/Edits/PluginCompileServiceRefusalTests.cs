@@ -41,7 +41,7 @@ public sealed class PluginCompileServiceRefusalTests : IDisposable
         // Asked of the tree, not the compiled mod: the whole-mod read ends each group with a
         // FormKey-keyed SetTo, so the pair collapses silently before compile ever sees it.
         var npcSourceText = File.ReadAllText(_mod.NpcSourceFile);
-        var duplicatePath = Path.Combine(_mod.ModFolder, SourceRecordPath.For(
+        var duplicatePath = Path.Combine(_mod.ModFolder, SourceRepository.FlatPathFor(
             TrackedModFixture.PluginName, "npc_", _mod.Npc.ToString(), "CopyOfFixtureNpc", GameRelease.Fallout4));
         Assert.NotEqual(_mod.NpcSourceFile, duplicatePath);
         File.WriteAllText(duplicatePath, npcSourceText);

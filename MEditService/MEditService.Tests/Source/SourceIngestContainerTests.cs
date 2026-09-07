@@ -3,6 +3,7 @@ using MEditService.Core.Records;
 using MEditService.Core.Schema;
 using MEditService.Core.Source;
 using MEditService.Tests.Edits;
+using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 
 namespace MEditService.Tests.Source;
@@ -102,9 +103,9 @@ public sealed class SourceIngestContainerTests : IDisposable
     [Fact]
     public void AFlatRecordEditedBesideTheContainer_DoesReconcileItsHead()
     {
-        // Resolved through SourceUnitResolver rather than SourceRecordPath.For directly — For
-        // needs an order index this test has no reason to track.
-        var npcFile = SourceUnitResolver.FlatSourcePath(
+        // Asked of the repository rather than computed: FlatPathFor needs an order index this test
+        // has no reason to track.
+        var npcFile = SourceDocumentPath.Of(
             _fixture.ModFolder, ContainerModFixture.PluginName, "npc_", _fixture.Npc.ToString(),
             ContainerModFixture.NpcEditorId, GameRelease.Fallout4);
         File.WriteAllText(

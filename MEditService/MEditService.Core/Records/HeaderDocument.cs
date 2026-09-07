@@ -14,7 +14,7 @@ namespace MEditService.Core.Records;
 /// its dialect, without touching the disk.</summary>
 internal static class HeaderDocument
 {
-    // Same literal as SourceUnitResolver.RecordDataFileName; kept separate because the two answer
+    // Same literal as SourceRepository.RecordDataFileName; kept separate because the two answer
     // different questions and neither owns the other's.
     private const string RootDocumentFileName = "RecordData.json";
 

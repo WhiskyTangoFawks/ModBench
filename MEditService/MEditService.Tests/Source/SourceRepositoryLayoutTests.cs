@@ -8,7 +8,7 @@ namespace MEditService.Tests.Source;
 
 /// <summary>Group-folder names come from <see cref="RecordTypeDispatch"/> rather than literals, so
 /// these tests cannot drift from whatever the reflection walk decides.</summary>
-public sealed class SourceRecordPathTests
+public sealed class SourceRepositoryLayoutTests
 {
     private static readonly GameRelease Release = GameRelease.Fallout4;
 
@@ -17,7 +17,7 @@ public sealed class SourceRecordPathTests
     [InlineData("Vendor.esp", "npc_", "000800:Vendor.esp", "SomeNpc")]
     // No EditorID — the bare filesafe FormKey, no leading "&lt;EditorID&gt; - ".
     [InlineData("Vendor.esp", "npc_", "000800:Vendor.esp", null)]
-    // A plugin name with its own internal dot must round-trip as one whole segment (SourceRecordPath
+    // A plugin name with its own internal dot must round-trip as one whole segment (the layout
     // never splits a plugin name on its own dots) — a patch-plugin-shaped filename proves this for
     // real rather than by argument.
     [InlineData("Vendor.patch.esp", "Keyword", "0012AB:Vendor.patch.esp", "SomeKeyword")]
@@ -32,16 +32,16 @@ public sealed class SourceRecordPathTests
     public void For_ThenTryParse_RoundTripsPluginAndRecordType(
         string pluginFileName, string recordType, string formKeyString, string? editorId)
     {
-        var path = SourceRecordPath.For(pluginFileName, recordType, formKeyString, editorId, Release);
+        var path = SourceRepository.FlatPathFor(pluginFileName, recordType, formKeyString, editorId, Release);
 
         // Everything nests under one root "source/" folder, the plugin its own child directory, not a
         // "<plugin>.source/" sibling tree. Asserted rather than implied by TryParse round-tripping: a
         // broken root four segments deep would round-trip too.
         var segments = path.Split(Path.DirectorySeparatorChar);
-        Assert.Equal(SourceRecordPath.RootFolderName, segments[0]);
+        Assert.Equal(SourceRepository.RootFolderName, segments[0]);
         Assert.Equal(pluginFileName, segments[1]);
 
-        var ok = SourceRecordPath.TryParse(path, Release, out var identity);
+        var ok = SourceRepository.TryParseDocumentPath(path, Release, out var identity);
 
         Assert.True(ok, $"expected TryParse to succeed for a path For() itself produced: '{path}'");
         Assert.Equal(pluginFileName, identity.PluginFileName);
@@ -58,7 +58,7 @@ public sealed class SourceRecordPathTests
     [InlineData(null, "000800_Vendor.esp.json")]
     public void For_NamesTheRecordByIdentityAlone_WithNoOrderingPrefix(string? editorId, string expectedFileName)
     {
-        var path = SourceRecordPath.For("Vendor.esp", "npc_", "000800:Vendor.esp", editorId, Release);
+        var path = SourceRepository.FlatPathFor("Vendor.esp", "npc_", "000800:Vendor.esp", editorId, Release);
 
         Assert.Equal(expectedFileName, Path.GetFileName(path));
     }
@@ -67,7 +67,7 @@ public sealed class SourceRecordPathTests
     [Fact]
     public void For_ForAQuest_IsAFileInTheQuestsFolder()
     {
-        var path = SourceRecordPath.For("Vendor.esp", "Quest", "000800:Vendor.esp", "SomeQuest", Release);
+        var path = SourceRepository.FlatPathFor("Vendor.esp", "Quest", "000800:Vendor.esp", "SomeQuest", Release);
 
         Assert.Equal(Path.Combine("source", "Vendor.esp", "Quests", "SomeQuest - 000800_Vendor.esp.json"), path);
     }
@@ -78,7 +78,7 @@ public sealed class SourceRecordPathTests
     public void For_ForADirectoryPerRecordType_ThrowsNamedException(string recordType)
     {
         var ex = Assert.Throws<NotSupportedException>(
-            () => SourceRecordPath.For("Vendor.esp", recordType, "000800:Vendor.esp", "SomeName", Release));
+            () => SourceRepository.FlatPathFor("Vendor.esp", recordType, "000800:Vendor.esp", "SomeName", Release));
 
         Assert.Contains(recordType, ex.Message, StringComparison.Ordinal);
     }
@@ -87,10 +87,10 @@ public sealed class SourceRecordPathTests
     public void For_ForATypeWithNoTopLevelGroup_ThrowsNamedException()
     {
         // A placed reference lives inside a cell's own document, never under a top-level group of
-        // its own: the same "ask SourceUnitResolver" refusal as a directory-per-record type, for
+        // its own: the same "ask the repository" refusal as a directory-per-record type, for
         // another reason.
         Assert.Throws<NotSupportedException>(
-            () => SourceRecordPath.For("Vendor.esp", "placedobject", "000800:Vendor.esp", "SomeRef", Release));
+            () => SourceRepository.FlatPathFor("Vendor.esp", "placedobject", "000800:Vendor.esp", "SomeRef", Release));
     }
 
     [Theory]
@@ -119,7 +119,7 @@ public sealed class SourceRecordPathTests
         // than through For(), and every OS accepts it here.
         var normalized = relativePath.Replace('/', Path.DirectorySeparatorChar);
 
-        var ok = SourceRecordPath.TryParse(normalized, Release, out var identity);
+        var ok = SourceRepository.TryParseDocumentPath(normalized, Release, out var identity);
 
         Assert.False(ok, $"expected TryParse to fail for a malformed or unmapped path: '{relativePath}'");
         Assert.Null(identity);
@@ -134,9 +134,9 @@ public sealed class SourceRecordPathTests
         var ambiguousFolder = RecordTypeDispatch.For(Release).FolderNameFor("globalfloat");
         Assert.NotNull(ambiguousFolder); // sanity: GlobalFloat is a flat type with a real folder...
         var path = Path.Combine(
-            SourceRecordPath.RootFolderName, "Vendor.esp", ambiguousFolder!, "SomeGlobal - 000800_Vendor.esp.json");
+            SourceRepository.RootFolderName, "Vendor.esp", ambiguousFolder!, "SomeGlobal - 000800_Vendor.esp.json");
 
-        var ok = SourceRecordPath.TryParse(path, Release, out var identity);
+        var ok = SourceRepository.TryParseDocumentPath(path, Release, out var identity);
 
         Assert.False(ok, "...but that folder is shared with GlobalBool/GlobalInt/GlobalShort, so it must not resolve.");
         Assert.Null(identity);
@@ -145,7 +145,7 @@ public sealed class SourceRecordPathTests
     [Fact]
     public void TryParse_ForTheRootRecordDataJson_ResolvesTheHeaderIdentity()
     {
-        var ok = SourceRecordPath.TryParse(
+        var ok = SourceRepository.TryParseDocumentPath(
             Path.Combine("source", "Vendor.esp", "RecordData.json"), Release, out var identity);
 
         Assert.True(ok);

@@ -25,7 +25,7 @@ internal sealed class SourceMirror(
         {
             if (ModFolders.TrackedOf(order, new PluginKey(plugin.Name, plugin.Origin)) is not { } modFolder)
                 continue;
-            watcher.Watch(modFolder, SourceDocuments.RootIn(modFolder, plugin.Name), plugin.Name, plugin.Origin);
+            watcher.Watch(modFolder, SourceRepository.RootIn(modFolder, plugin.Name), plugin.Name, plugin.Origin);
         }
     }
 
@@ -36,7 +36,7 @@ internal sealed class SourceMirror(
         if (mirror.LoadOrder is not { } loadOrder) return;
 
         foreach (var plugin in loadOrder.Plugins.Where(p => p.Origin.Equals(origin, StringComparison.OrdinalIgnoreCase)))
-            watcher.Watch(modFolder, SourceDocuments.RootIn(modFolder, plugin.Name), plugin.Name, plugin.Origin);
+            watcher.Watch(modFolder, SourceRepository.RootIn(modFolder, plugin.Name), plugin.Name, plugin.Origin);
     }
 
     /// <summary>ADR-0046: the watcher hands over every plugin it settled together. Held under one
@@ -111,8 +111,8 @@ internal sealed class SourceMirror(
         var formKeys = new List<string>();
         foreach (var path in change.Paths)
         {
-            if (SourceDocuments.CarriesNoRecord(path)) continue;
-            if (SourceDocuments.FormKeyDeclaredBy(path, change.ModFolder, change.PluginName) is not { } formKey)
+            if (SourceRepository.CarriesNoRecord(path)) continue;
+            if (SourceRepository.FormKeyDeclaredBy(path, change.ModFolder, change.PluginName) is not { } formKey)
                 return null;
             formKeys.Add(formKey);
         }

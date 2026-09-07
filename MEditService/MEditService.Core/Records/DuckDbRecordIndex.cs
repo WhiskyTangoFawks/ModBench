@@ -402,7 +402,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         if (unit is { } resolved)
         {
             var ownerBytes = File.Exists(resolved.FullPath) ? File.ReadAllBytes(resolved.FullPath) : null;
-            workingTreeText = SourceUnitResolver.RecordBodyFromOwnerBytes(ownerBytes, resolved, formKey, _release, _codec);
+            workingTreeText = SourceRepository.RecordBodyFromOwnerBytes(ownerBytes, resolved, formKey, _release, _codec);
         }
 
         // Never exclusive owners of the file: it can be caught mid-save, or hand-edited into
@@ -441,7 +441,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
     // document. Idempotent by construction, being the ingest Track and a re-index run.
     private void RederiveWholeCopyFromSource(PluginKey key, string modFolder)
     {
-        var sourceTree = Path.Combine(modFolder, SourceRecordPath.RootFor(key.Name));
+        var sourceTree = Path.Combine(modFolder, SourceRepository.RootFor(key.Name));
         // Nothing to re-derive from: the tree went away between the signal and this line, or this
         // copy's rows came from its binary and a source key is not its to answer for.
         if (!Directory.Exists(sourceTree)) return;
@@ -499,7 +499,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         // For an embedded child the HEAD text is the owner's document; a null means the owner's HEAD copy
         // does not carry this child, which leaves the committed baseline alone (fail closed).
         var headText = unit.IsEmbedded
-            ? SourceUnitResolver.RecordBodyFromOwnerBytes(Encoding.UTF8.GetBytes(headOwnerText), unit, formKey, _release, _codec)
+            ? SourceRepository.RecordBodyFromOwnerBytes(Encoding.UTF8.GetBytes(headOwnerText), unit, formKey, _release, _codec)
             : headOwnerText;
         if (headText is not { } resolvedHeadText) return;
         if (string.Equals(resolvedHeadText, committedBody, StringComparison.Ordinal)) return;

@@ -56,7 +56,7 @@ public sealed class SourceWatchRealDataFixture : IDisposable
             .GetAwaiter().GetResult();
 
         DocumentsWritten = Directory
-            .EnumerateFiles(SourceDocuments.RootIn(ModFolder, CutDownPluginFixture.PluginFileName), "*.json", SearchOption.AllDirectories)
+            .EnumerateFiles(SourceRepository.RootIn(ModFolder, CutDownPluginFixture.PluginFileName), "*.json", SearchOption.AllDirectories)
             .Count();
 
         // Well past the debounce window and the projection behind it, so what the recorder holds is
@@ -73,7 +73,7 @@ public sealed class SourceWatchRealDataFixture : IDisposable
     // and a level's GroupRecordData.json are neither.
     public IReadOnlyList<string> FlatDocuments() =>
         [.. Directory
-            .EnumerateFiles(SourceDocuments.RootIn(ModFolder, CutDownPluginFixture.PluginFileName), "*.json", SearchOption.AllDirectories)
+            .EnumerateFiles(SourceRepository.RootIn(ModFolder, CutDownPluginFixture.PluginFileName), "*.json", SearchOption.AllDirectories)
             .Where(f => !Path.GetFileName(f).StartsWith("RecordData", StringComparison.Ordinal)
                         && !Path.GetFileName(f).StartsWith("GroupRecordData", StringComparison.Ordinal))
             .Order(StringComparer.Ordinal)];

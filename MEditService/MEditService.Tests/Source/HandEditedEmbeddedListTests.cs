@@ -65,7 +65,7 @@ public sealed class HandEditedEmbeddedListTests(CompileRoundTripGateFixture fixt
     {
         var modFolder = Directory.CreateTempSubdirectory("medit-hand-edited-list-").FullName;
         CompileRoundTripGateFixture.CopyDirectory(fixture.TrackedTemplateFolder, modFolder);
-        return (modFolder, Path.Combine(modFolder, SourceRecordPath.RootFor(CutDownPluginFixture.PluginFileName)));
+        return (modFolder, Path.Combine(modFolder, SourceRepository.RootFor(CutDownPluginFixture.PluginFileName)));
     }
 
     // The array named by the row inside a document: a quest's own DialogTopics, or the Responses of

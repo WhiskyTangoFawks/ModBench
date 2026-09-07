@@ -24,7 +24,7 @@ public sealed class FailedWriteDirectoryCleanupTests
     private static List<string> EntriesUnderSource(TrackedModFixture mod) =>
         Directory
             .EnumerateFileSystemEntries(
-                Path.Combine(mod.ModFolder, SourceRecordPath.RootFor(TrackedModFixture.PluginName)),
+                Path.Combine(mod.ModFolder, SourceRepository.RootFor(TrackedModFixture.PluginName)),
                 "*",
                 SearchOption.AllDirectories)
             .Select(e => Path.GetRelativePath(mod.ModFolder, e))
@@ -53,7 +53,7 @@ public sealed class FailedWriteDirectoryCleanupTests
         using var mod = TrackedModFixture.Tracked();
         var before = EntriesUnderSource(mod);
         var npcsDirectory = Path.Combine(
-            mod.ModFolder, SourceRecordPath.RootFor(TrackedModFixture.PluginName), "Npcs");
+            mod.ModFolder, SourceRepository.RootFor(TrackedModFixture.PluginName), "Npcs");
 
         Assert.Equal(2, Directory.GetFiles(npcsDirectory).Length);
 
@@ -97,7 +97,7 @@ public sealed class FailedWriteDirectoryCleanupTests
         File.WriteAllText(keeper, "{}");
         var target = Path.Combine(tree.Root, "Quests", "Q", "DialogTopics");
 
-        Assert.Throws<InvalidOperationException>(() => SourceUnitResolver.InMintedDirectory(
+        Assert.Throws<InvalidOperationException>(() => SourceRepository.InMintedDirectory(
             target, () => throw new InvalidOperationException("the write failed")));
 
         Assert.False(Directory.Exists(Path.Combine(tree.Root, "Quests")));
@@ -111,7 +111,7 @@ public sealed class FailedWriteDirectoryCleanupTests
         using var tree = new TempTree();
         var target = Path.Combine(tree.Root, "Quests", "Q", new string('B', 300));
 
-        Assert.ThrowsAny<Exception>(() => SourceUnitResolver.InMintedDirectory(target, () => 0));
+        Assert.ThrowsAny<Exception>(() => SourceRepository.InMintedDirectory(target, () => 0));
 
         Assert.False(Directory.Exists(Path.Combine(tree.Root, "Quests")));
         Assert.True(Directory.Exists(tree.Root));
@@ -126,7 +126,7 @@ public sealed class FailedWriteDirectoryCleanupTests
         var keeper = Path.Combine(target, "a-record.json");
         File.WriteAllText(keeper, "{}");
 
-        Assert.Throws<InvalidOperationException>(() => SourceUnitResolver.InMintedDirectory(
+        Assert.Throws<InvalidOperationException>(() => SourceRepository.InMintedDirectory(
             target, () => throw new InvalidOperationException("the write failed")));
 
         Assert.True(Directory.Exists(target));
@@ -140,7 +140,7 @@ public sealed class FailedWriteDirectoryCleanupTests
         var target = Path.Combine(tree.Root, "Quests", "Q");
         var intruder = Path.Combine(target, "somebody-elses.json");
 
-        Assert.Throws<InvalidOperationException>(() => SourceUnitResolver.InMintedDirectory(target, () =>
+        Assert.Throws<InvalidOperationException>(() => SourceRepository.InMintedDirectory(target, () =>
         {
             File.WriteAllText(intruder, "not mine");
             throw new InvalidOperationException("the write failed");
@@ -156,7 +156,7 @@ public sealed class FailedWriteDirectoryCleanupTests
         using var tree = new TempTree();
         var target = Path.Combine(tree.Root, "Quests", "Q");
 
-        var written = SourceUnitResolver.InMintedDirectory(target, () =>
+        var written = SourceRepository.InMintedDirectory(target, () =>
         {
             File.WriteAllText(Path.Combine(target, "RecordData.json"), "{}");
             return "body";

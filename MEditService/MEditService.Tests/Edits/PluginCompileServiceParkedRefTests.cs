@@ -74,7 +74,7 @@ public sealed class PluginCompileServiceParkedRefTests : IDisposable
     public void Compile_AtARefWhoseTreeCannotBeWritten_LeavesNoScratchDirectoryBehind()
     {
         const string scratchPrefix = "medit-compile-ref-";
-        var sourceRoot = SourceRecordPath.RootFor(TrackedModFixture.PluginName);
+        var sourceRoot = SourceRepository.RootFor(TrackedModFixture.PluginName);
 
         // A file name past NAME_MAX, committed by plumbing onto a ref of its own. No checkout ever
         // happens, so git stores it without complaint and only the materialise step meets the OS.

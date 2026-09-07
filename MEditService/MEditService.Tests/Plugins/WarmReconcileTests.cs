@@ -217,7 +217,7 @@ public sealed class WarmReconcileTests
                 second.Reconcile(gameDirectory, order, GameRelease.Fallout4, instanceRoot);
                 var npc = second.Index!.At(RecordRef.Effective)
                     .GetDocuments(new PluginKey(plugin, origin)).Single(d => d.EditorId == "TrackedNpc");
-                npcSourceFile = SourceUnitResolver.FlatSourcePath(
+                npcSourceFile = SourceDocumentPath.Of(
                     modFolder, plugin, npc.RecordType, npc.FormKey, npc.EditorId, GameRelease.Fallout4);
             }
 

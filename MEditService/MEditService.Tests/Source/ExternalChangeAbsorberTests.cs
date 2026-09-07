@@ -85,7 +85,7 @@ public sealed class ExternalChangeAbsorberTests : IDisposable
             .Select(l => l.Trim())
             .ToList();
 
-        var root = SourceRecordPath.RootFor(TrackedModFixture.PluginName).Replace('\\', '/');
+        var root = SourceRepository.RootFor(TrackedModFixture.PluginName).Replace('\\', '/');
         Assert.Contains($"{root}/RecordData.json", tree);
     }
 

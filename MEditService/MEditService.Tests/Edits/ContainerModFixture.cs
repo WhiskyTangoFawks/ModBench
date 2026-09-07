@@ -188,7 +188,7 @@ public sealed class ContainerModFixture : IDisposable
         mod.Cells.Records.Add(block);
     }
 
-    public string SourceRoot => Path.Combine(ModFolder, SourceRecordPath.RootFor(PluginName));
+    public string SourceRoot => Path.Combine(ModFolder, SourceRepository.RootFor(PluginName));
 
     // Any document: a container's RecordData.json, a flat record's own file, or the file that inlines
     // an embedded child.

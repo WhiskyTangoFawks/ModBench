@@ -197,7 +197,7 @@ public sealed class RecordEditServiceRenumberRecordTests
             // ADR-0045's path rule, asked of the one fault here that is a genuine OS error: the message names
             // the path it failed on, and no absolute path reaches the author. The relative remainder does.
             Assert.DoesNotContain(two.TargetModFolder, ex.Message, StringComparison.Ordinal);
-            Assert.Contains(SourceRecordPath.RootFor(TwoModFixture.TargetPluginName), ex.Message, StringComparison.Ordinal);
+            Assert.Contains(SourceRepository.RootFor(TwoModFixture.TargetPluginName), ex.Message, StringComparison.Ordinal);
         }
         finally
         {
@@ -372,10 +372,10 @@ public sealed class RecordEditServiceRenumberRecordTests
 
         public static TwoModFixture Create(bool trackReferencer) => new(trackReferencer);
 
-        // Resolved through SourceUnitResolver rather than SourceRecordPath.For directly — For
-        // needs an order index this fixture has no reason to track.
+        // Asked of the repository rather than computed: FlatPathFor needs an order index this
+        // fixture has no reason to track.
         public string SourceFileFor(PluginKey plugin, FormKey formKey, string recordType, string? editorId) =>
-            SourceUnitResolver.FlatSourcePath(
+            SourceDocumentPath.Of(
                 plugin.Origin == TargetOrigin ? TargetModFolder : ReferencerModFolder,
                 plugin.Name, recordType, formKey.ToString(), editorId, GameRelease.Fallout4);
 

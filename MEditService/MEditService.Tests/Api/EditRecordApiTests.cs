@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using MEditService.Core.Source;
+using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 
 namespace MEditService.Tests.Api;
@@ -158,9 +159,9 @@ public sealed class EditRecordApiTests(LoadedApiFixture<TestPluginFixture> loade
         var records = await _client.GetFromJsonAsync<JsonElement>($"/records?plugin={Plugin}&type=npc_");
         // Routed through the production path helper (Spriggit-flat layout) rather than
         // hand-reconstructed — "ApiNpc" is BuildOneModOnePlugin's own literal EditorID above.
-        // SourceUnitResolver rather than SourceRecordPath.For directly — For needs an order
-        // index this test has no reason to track.
-        var sourcePath = SourceUnitResolver.FlatSourcePath(
+        // Asked of the repository rather than computed: FlatPathFor needs an order index this test
+        // has no reason to track.
+        var sourcePath = SourceDocumentPath.Of(
             modFolder, Plugin, "npc_", formKey, "ApiNpc", GameRelease.Fallout4);
         Assert.True(File.Exists(sourcePath), $"expected a source file at {sourcePath}");
         Assert.NotEqual(0, records.GetProperty("total").GetInt32());

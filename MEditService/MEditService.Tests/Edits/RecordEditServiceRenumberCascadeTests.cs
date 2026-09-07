@@ -207,7 +207,7 @@ public sealed class RecordEditServiceRenumberCascadeTests
         });
 
         public string SourceFileOf(FormKey formKey, string recordType, string editorId) =>
-            SourceUnitResolver.FlatSourcePath(
+            SourceDocumentPath.Of(
                 ModFolder, PluginName, recordType, formKey.ToString(), editorId, GameRelease.Fallout4);
 
         public string DirectoryOf(FormKey formKey) =>

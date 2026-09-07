@@ -16,7 +16,7 @@ internal static class SourceIdentities
     internal static RecordIdentity? Of(
         string modFolder, string pluginFileName, FormKey formKey, GameRelease release)
     {
-        var root = SourceDocuments.RootIn(modFolder, pluginFileName);
+        var root = SourceRepository.RootIn(modFolder, pluginFileName);
         if (!Directory.Exists(root)) return null;
 
         // The header's document is the fixed root RecordData.json, and its FormKey is computed rather
@@ -24,7 +24,7 @@ internal static class SourceIdentities
         var header = FormKey.Factory(PluginHeader.FormKeyFor(ModKey.FromFileName(pluginFileName)));
         if (formKey == header)
         {
-            return File.Exists(Path.Combine(root, SourceUnitResolver.RecordDataFileName))
+            return File.Exists(Path.Combine(root, SourceRepository.RecordDataFileName))
                 ? new RecordIdentity(formKey.ToString(), PluginHeader.RecordType, null)
                 : null;
         }
@@ -34,18 +34,18 @@ internal static class SourceIdentities
         var spelled = formKey.ToString();
         foreach (var entry in Directory.EnumerateFileSystemEntries(root, "*", SearchOption.AllDirectories))
         {
-            if (!SourceUnitResolver.NameCarriesFormKey(Path.GetFileName(entry), spelled)) continue;
+            if (!SourceRepository.NameCarriesFormKey(Path.GetFileName(entry), spelled)) continue;
 
             // A directory whose name carries the FormKey holds the record in its RecordData.json; a
             // file whose name carries it is the record.
-            var document = Directory.Exists(entry) ? Path.Combine(entry, SourceUnitResolver.RecordDataFileName) : entry;
+            var document = Directory.Exists(entry) ? Path.Combine(entry, SourceRepository.RecordDataFileName) : entry;
             if (!File.Exists(document)) continue;
-            if (SourceRecordPath.RecordTypeOf(Path.GetRelativePath(modFolder, document), release) is not { } recordType)
+            if (SourceRepository.RecordTypeOf(Path.GetRelativePath(modFolder, document), release) is not { } recordType)
                 continue;
 
             // The name is the index; the document is the answer. A name the document contradicts is
             // stale, and the record it claims is elsewhere or gone.
-            var (declared, editorId) = SourceDocuments.DeclaredBy(document, modFolder, pluginFileName);
+            var (declared, editorId) = SourceRepository.DeclaredBy(document, modFolder, pluginFileName);
             if (!FormKey.TryFactory(declared, out var declaredKey) || declaredKey != formKey) continue;
 
             return new RecordIdentity(spelled, recordType, editorId);
