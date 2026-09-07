@@ -1269,9 +1269,14 @@ public sealed class RecordEditService(
         if (loadOrder.Current.Copies.Count == 0)
             return RecordEditResult.Refused(RecordEditRefusal.RecordNotFound, "No load order has been received.");
 
-        // Never a write, so no write gate and no tracked gate: an unanswered external change does not
-        // stop anyone asking what the next FormKey would be, and an untracked copy answers too.
-        if (AllocatorFor(plugin) is not { } allocator) return RefuseUntracked(plugin);
+        // Never a write, so no write gate and no tracked gate: an untracked copy answers too. A copy
+        // the load order does not register is the one left with nothing to answer from.
+        if (AllocatorFor(plugin) is not { } allocator)
+        {
+            return RecordEditResult.Refused(
+                RecordEditRefusal.RecordNotFound,
+                $"The load order does not hold {plugin.Name} ({plugin.Origin}).");
+        }
 
         var formKey = NextFreeNativeFormId(allocator, allocator.IsLight);
         return formKey != null

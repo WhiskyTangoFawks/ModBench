@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text.Json;
 using MEditService.Core.Edits;
+using MEditService.Core.Records;
 using MEditService.Core.Source;
 using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda.Plugins;
@@ -121,6 +122,19 @@ public sealed class RecordEditServiceCreateRecordTests
         Assert.True(result.Applied, result.Message);
         // The fixture's plugin holds four records from 000800; the next free local ID is the fifth.
         Assert.Equal("000804:Fixture.esp", result.NewFormKey);
+    }
+
+    // Not registered at all, so neither a tree nor a file answers for it — and "not tracked" would
+    // be a claim about a plugin the load order has never heard of.
+    [Fact]
+    public void PeekNextFreeFormKey_ForAPluginTheLoadOrderDoesNotRegister_RefusesAsRecordNotFound()
+    {
+        using var mod = SourceEditFixture.Tracked();
+
+        var result = mod.Edits.PeekNextFreeFormKey(new PluginKey("NotRegistered.esp", "NoSuchMod"));
+
+        Assert.False(result.Applied);
+        Assert.Equal(RecordEditRefusal.RecordNotFound, result.Refusal);
     }
 
     [Fact]
