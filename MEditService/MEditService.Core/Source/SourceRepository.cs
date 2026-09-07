@@ -1,16 +1,85 @@
 using System.Text.Json.Serialization;
+using MEditService.Core.Records;
+using Mutagen.Bethesda;
+using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Core.Source;
 
-/// <summary>ADR-0041's verb surface over a mod folder's git repository. Stateless: tracked is the
-/// presence of .git, and every verb tolerates the folder having vanished since last observed —
+/// <summary>Documents by identity over one tracked mod folder (ADR-0046 invariant 9), and ADR-0041's
+/// git verbs beneath them. Every verb tolerates the folder having vanished since last observed —
 /// MO2's Replace install shell-deletes mod folders.</summary>
-public static class SourceRepository
+public sealed class SourceRepository
 {
+    private readonly string _modFolder;
+    private readonly GameRelease _release;
+
+    // Private so the only way to hold a repository is to have observed the mod folder tracked.
+    private SourceRepository(string modFolder, GameRelease release) =>
+        (_modFolder, _release) = (modFolder, release);
+
+    /// <summary>The repository over <paramref name="modFolder"/>, or null when the folder is not
+    /// tracked and so has no source tree to answer from. <paramref name="release"/> is the game
+    /// whose record types name the tree's group folders.</summary>
+    public static SourceRepository? Open(string modFolder, GameRelease release) =>
+        IsTracked(modFolder) ? new SourceRepository(modFolder, release) : null;
+
     /// <summary>True exactly when <paramref name="modFolder"/> contains a <c>.git</c> directory —
     /// nothing broader (a folder that merely exists, or exists but was never tracked, is not
     /// tracked) and nothing narrower (no registry lookup, no cached answer).</summary>
     public static bool IsTracked(string modFolder) => Directory.Exists(Path.Combine(modFolder, ".git"));
+
+    /// <summary>The record's own text, or null when no file holds it. The identity comes back as it
+    /// was asked for; the body is the tree's answer.</summary>
+    public SourceDocument? Get(PluginKey plugin, RecordIdentity identity)
+    {
+        var path = FileFor(plugin, identity);
+        return File.Exists(path)
+            ? new SourceDocument(identity.FormKey, identity.RecordType, identity.EditorId, File.ReadAllText(path))
+            : null;
+    }
+
+    /// <summary>Creates or replaces the record's file, minting the group folder the first time the
+    /// plugin holds this type.</summary>
+    public void Put(PluginKey plugin, SourceDocument document)
+    {
+        var path = FileFor(plugin, new RecordIdentity(document.FormKey, document.RecordType, document.EditorId));
+        SourceUnitResolver.InMintedDirectory(
+            Path.GetDirectoryName(path)!, () => SourceUnitResolver.WriteTextAtomic(path, document.Body));
+    }
+
+    /// <summary>Deletes the record's file. A file already gone is the state this asks for, not a
+    /// failure: another tool or a hand delete reaches the same place.</summary>
+    public void Remove(PluginKey plugin, RecordIdentity identity)
+    {
+        var path = FileFor(plugin, identity);
+        if (File.Exists(path)) File.Delete(path);
+    }
+
+    /// <summary>Moves the record's file to the name <paramref name="newEditorId"/> computes. The body
+    /// is the caller's to update; the header has no such name and does not move.</summary>
+    public void Rename(PluginKey plugin, RecordIdentity identity, string? newEditorId)
+    {
+        if (identity.RecordType == HeaderIndexer.RecordType) return;
+        // The name it already has, so nothing moves — and a file something else renamed keeps that
+        // name rather than being dragged back to the computed one.
+        if (string.Equals(newEditorId, identity.EditorId, StringComparison.Ordinal)) return;
+
+        var from = FileFor(plugin, identity);
+        var to = Path.Combine(
+            Path.GetDirectoryName(from)!,
+            SourceUnitResolver.LeafNameFor(FormKey.Factory(identity.FormKey), newEditorId, isDirectory: false));
+        if (string.Equals(from, to, StringComparison.Ordinal)) return;
+
+        File.Move(from, to, overwrite: true);
+    }
+
+    // The one place an identity becomes a path, so no caller holds one. The header's is the fixed root
+    // document; a flat record's is the computed path, corrected to the file carrying the FormKey.
+    private string FileFor(PluginKey plugin, RecordIdentity identity) =>
+        identity.RecordType == HeaderIndexer.RecordType
+            ? SourceDocuments.HeaderDocumentIn(_modFolder, plugin.Name)
+            : SourceUnitResolver.FlatSourcePath(
+                _modFolder, plugin.Name, identity.RecordType, identity.FormKey, identity.EditorId, _release);
 
     /// <summary>Track's git mechanics: init, .gitignore, commit the baseline to main with trailers, park
     /// every plugin's last-compile ref there, check out the edit branch. One transaction: a failure
@@ -463,6 +532,15 @@ public static class SourceRepository
         _ => throw new ArgumentOutOfRangeException(nameof(preset), preset, "Unknown source preset."),
     };
 }
+
+/// <summary>What the repository locates a record by: the FormKey is the identity, the record type
+/// names its group folder, and the EditorID names its file, so a stale EditorID costs a scan rather
+/// than a wrong answer.</summary>
+public readonly record struct RecordIdentity(string FormKey, string RecordType, string? EditorId);
+
+/// <summary>One record as the Source tree holds it: its identity and its own text, byte for byte
+/// (ADR-0041).</summary>
+public sealed record SourceDocument(string FormKey, string RecordType, string? EditorId, string Body);
 
 /// <summary>The provenance main's tip carries right now, the read counterpart of
 /// <see cref="TrackProvenance"/>. All optional.</summary>

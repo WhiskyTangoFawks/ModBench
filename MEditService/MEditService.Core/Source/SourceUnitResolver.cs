@@ -262,6 +262,24 @@ internal static class SourceUnitResolver
         else File.Move(from, to);
     }
 
+    /// <summary>The codec's own write-then-rename, for the writers that hold text rather than a
+    /// record: an interrupted direct write leaves a partial file that dirty detection reads as an
+    /// edit.</summary>
+    internal static void WriteTextAtomic(string filePath, string body)
+    {
+        var tempPath = filePath + ".tmp";
+        try
+        {
+            File.WriteAllText(tempPath, body);
+            File.Move(tempPath, filePath, overwrite: true);
+        }
+        catch
+        {
+            File.Delete(tempPath);
+            throw;
+        }
+    }
+
     /// <summary>Removes the directories this call minted when <paramref name="write"/> throws: an
     /// empty record directory is invisible to git and fails the next ingest, since the reader opens
     /// every one unconditionally.</summary>
