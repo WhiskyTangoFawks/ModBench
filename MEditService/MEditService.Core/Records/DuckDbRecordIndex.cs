@@ -131,6 +131,9 @@ public sealed class DuckDbRecordIndex : IRecordIndex
     /// <summary>See <see cref="IRecordIndex.Sequence"/>.</summary>
     public long Sequence => _indexStore.CurrentSequence();
 
+    /// <summary>See <see cref="IRecordIndex.BeginProjection"/>.</summary>
+    public IDisposable BeginProjection() => _indexStore.BeginProjection();
+
     // ADR-0036: origin is threaded into every per-plugin delete/upsert/append so a plugin is
     // identified by (origin, plugin) together, never filename alone.
     private void Index(IModGetter pluginMod, Registration registration, string origin, string? filePath)
@@ -320,7 +323,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         // ADR-0046: after the commit, so a subscriber re-reading on receipt sees the rows this
         // names — embedded children included, since a record panel open on a placed ref inside a
         // refreshed cell has no other signal.
-        _notifications?.Publish(new RowsChangedNotification(key, touched, Sequence));
+        _notifications?.Publish(new RowsChangedNotification(key, touched, _indexStore.ProjectedSequence()));
     }
 
     /// <summary>See <see cref="IRecordIndex.SetCommittedBaseline"/>.</summary>
@@ -369,6 +372,9 @@ public sealed class DuckDbRecordIndex : IRecordIndex
     /// <summary>See <see cref="IRecordIndex.RefreshByKeys"/>.</summary>
     public void RefreshByKeys(PluginKey key, string modFolder, IReadOnlyList<string> formKeys)
     {
+        // One signal, one advance, however many documents and refs it moves.
+        using var projection = BeginProjection();
+
         // A key at neither ref is a record the tree has gained, and no document says where the tree
         // puts it: a new exterior cell's block is a directory, not a field.
         if (formKeys.Any(formKey => At(RecordRef.Effective).GetDocument(formKey, key) == null
@@ -444,13 +450,18 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         if (!Directory.Exists(sourceTree)) return;
         if (RegistrationOf(key) is not { } registration) return;
 
-        SourceIngest.Ingest(
-            this, modFolder, sourceTree, registration, key, _indexStore.IndexedFile(key)?.FilePath,
-            _release, _schemaReflector, _logger);
-        UpdateWinners();
+        // Ingest, head reconcile and winner sweep are one whole-plugin projection, so they are one
+        // advance and the notification below carries the number a subscriber can await.
+        using (BeginProjection())
+        {
+            SourceIngest.Ingest(
+                this, modFolder, sourceTree, registration, key, _indexStore.IndexedFile(key)?.FilePath,
+                _release, _schemaReflector, _logger);
+            UpdateWinners();
+        }
 
         // ADR-0046: too many rows to name, exactly as the plugin watcher's own re-index reports it.
-        _notifications?.Publish(new PluginChangedNotification(key, Sequence));
+        _notifications?.Publish(new PluginChangedNotification(key, _indexStore.ProjectedSequence()));
     }
 
     // The three facts the copy's registration row carries (ADR-0044), read back for a re-ingest that
@@ -518,7 +529,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
     // Validate's own publish. MarkWorkingTreeOnly does not publish for itself: ingest calls it for
     // every reconciled record of a whole plugin, where a notification per record would be noise.
     internal void PublishRowsChanged(PluginKey key, IReadOnlyList<string> formKeys) =>
-        _notifications?.Publish(new RowsChangedNotification(key, formKeys, Sequence));
+        _notifications?.Publish(new RowsChangedNotification(key, formKeys, _indexStore.ProjectedSequence()));
 
     // ADR-0001's load-time check, asked of one copy: the stored hash against the bytes on disk. A
     // binary has no smaller unit, so a mismatch is a rebuild the caller owns.

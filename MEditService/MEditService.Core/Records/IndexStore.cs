@@ -246,10 +246,70 @@ internal sealed class IndexStore
     public void DeleteIndexedFile(string plugin, string origin) =>
         DuckDbSql.ExecuteFor(Connection, $"DELETE FROM {FilesRelation} WHERE plugin = $1 AND origin = $2", plugin, origin);
 
-    // Joins whichever transaction is active on Connection, same as every other write here — the
-    // caller's tx.Commit()/rollback decides this counter's fate along with the rows it describes.
-    public void BumpSequence() =>
+    // ADR-0046: one advance per logical projection, not per transaction inside it. A whole-plugin
+    // ingest is four transactions, so a client awaiting the sequence once could otherwise read an
+    // in-between state.
+    private readonly Lock _projectionLock = new();
+    private int _projectionDepth;
+    private bool _bumpDeferred;
+
+    /// <summary>The scope handed out with no store to advance — a projector holding no index still
+    /// answers its callers.</summary>
+    internal static readonly IDisposable NoProjectionScope = new ProjectionScope(null);
+
+    internal IDisposable BeginProjection()
+    {
+        lock (_projectionLock) _projectionDepth++;
+        return new ProjectionScope(this);
+    }
+
+    // Outside a scope this joins whichever transaction is active on Connection, so the caller's
+    // commit or rollback decides the counter's fate with the rows. Inside one the advance is
+    // deferred instead, landing after the last of those commits.
+    public void BumpSequence()
+    {
+        lock (_projectionLock)
+        {
+            if (_projectionDepth > 0)
+            {
+                _bumpDeferred = true;
+                return;
+            }
+        }
         DuckDbSql.ExecuteFor(Connection, $"UPDATE {SequenceRelation} SET value = value + 1");
+    }
+
+    // A transaction that rolled back inside the scope still leaves the advance owed, so this can
+    // over-signal — a re-read finding nothing changed — but never under-signal.
+    private void EndProjection()
+    {
+        lock (_projectionLock)
+        {
+            if (--_projectionDepth > 0) return;
+            if (!_bumpDeferred) return;
+            _bumpDeferred = false;
+        }
+        DuckDbSql.ExecuteFor(Connection, $"UPDATE {SequenceRelation} SET value = value + 1");
+    }
+
+    private sealed class ProjectionScope(IndexStore? store) : IDisposable
+    {
+        private IndexStore? _store = store;
+
+        // Idempotent: a second Dispose would otherwise decrement the depth twice and let the next
+        // bump escape its enclosing scope.
+        public void Dispose() => Interlocked.Exchange(ref _store, null)?.EndProjection();
+    }
+
+    /// <summary>The number this projection lands on: <see cref="CurrentSequence"/> plus the advance
+    /// an open scope still owes. A notification names this, so a subscriber awaits the value its
+    /// rows become visible at.</summary>
+    internal long ProjectedSequence()
+    {
+        bool owed;
+        lock (_projectionLock) owed = _bumpDeferred;
+        return CurrentSequence() + (owed ? 1 : 0);
+    }
 
     public long CurrentSequence()
     {

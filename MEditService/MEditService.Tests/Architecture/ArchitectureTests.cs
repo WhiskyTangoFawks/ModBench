@@ -68,7 +68,9 @@ public sealed class ArchitectureTests
         // Scoped by the holder type rather than by a receiver name, so renaming the variable a write
         // goes through cannot disarm this.
         string[] writers = ["LoadOrderEndpoints.cs", "PluginEndpoints.cs", "LoadOrderHolder.cs"];
-        var offenders = Offenders(SolutionDirectory(), Projects, [".Reconcile("], ["LoadOrderEndpoints.cs"])
+        // LoadOrderMirror is the endpoint's own delegating shell: the reconcile it forwards is
+        // the endpoint's, not a second arrival.
+        var offenders = Offenders(SolutionDirectory(), Projects, [".Reconcile("], ["LoadOrderEndpoints.cs", "LoadOrderMirror.cs"])
             .Concat(Offenders(SolutionDirectory(), Projects, [nameof(LoadOrderHolder), ".Apply("], writers))
             .Concat(Offenders(SolutionDirectory(), Projects, [nameof(LoadOrderHolder), ".Register("], writers))
             .Distinct()
@@ -77,12 +79,12 @@ public sealed class ArchitectureTests
             "The load order is reconciled or written outside its endpoints in:\n" + string.Join("\n", offenders));
     }
 
-    // ADR-0008: PluginWriter backs the binary up first; LoadOrderMirror writes only a brand-new
+    // ADR-0008: PluginWriter backs the binary up first; IndexProjector writes only a brand-new
     // file and TrackService only a scratch copy, so neither has anything to back up.
     [Fact]
     public void ExistingPluginBinary_IsWrittenOnlyByPluginWriter()
     {
-        string[] allowed = ["PluginWriter.cs", "LoadOrderMirror.cs", "TrackService.cs"];
+        string[] allowed = ["PluginWriter.cs", "IndexProjector.cs", "TrackService.cs"];
         var offenders = Offenders(SolutionDirectory(), Projects, "WriteToBinary(", allowed)
             .Concat(Offenders(SolutionDirectory(), Projects, "BeginWrite", allowed))
             .ToList();

@@ -107,6 +107,7 @@ public sealed class EndpointReceptionLoggingTests
         public LoadOrderStatus Status => LoadOrderStatus.None;
         public long Sequence => 0;
         public Task<bool> AwaitSequenceAsync(long atLeast, TimeSpan timeout) => throw new NotSupportedException();
+        public IDisposable BeginProjection() => throw new NotSupportedException();
         public (ILoadOrder LoadOrder, IRecordReads Reads) RequireScope() => throw new NoLoadOrderException();
         public void Reconcile(
             string gameDirectory, IReadOnlyList<LoadOrderEntry> plugins, GameRelease gameRelease,

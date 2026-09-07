@@ -55,6 +55,7 @@ public sealed class SourceMirrorWriteGateTests
         public LoadOrderStatus Status => throw new NotImplementedException();
         public long Sequence => throw new NotImplementedException();
         public Task<bool> AwaitSequenceAsync(long atLeast, TimeSpan timeout) => throw new NotImplementedException();
+        public IDisposable BeginProjection() => throw new NotImplementedException();
         public (ILoadOrder LoadOrder, IRecordReads Reads) RequireScope() => throw new NotImplementedException();
         public void Reconcile(
             string gameDirectory, IReadOnlyList<LoadOrderEntry> plugins, GameRelease gameRelease,

@@ -17,6 +17,7 @@ internal abstract class DelegatingRecordIndex(IRecordIndex inner) : IRecordIndex
     public virtual ValidationReport Validate(PluginKey key, string? modFolder) => Inner.Validate(key, modFolder);
     public virtual void Initialize(GameRelease release) => Inner.Initialize(release);
     public virtual long Sequence => Inner.Sequence;
+    public virtual IDisposable BeginProjection() => Inner.BeginProjection();
 
     public virtual void Index(IModGetter plugin, Registration registration, PluginKey key, string? filePath = null) =>
         Inner.Index(plugin, registration, key, filePath);

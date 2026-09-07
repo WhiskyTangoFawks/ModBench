@@ -30,6 +30,10 @@ public interface ILoadOrderMirror
     /// belongs here: a caller re-reads once this is past the sequence its write returned.</summary>
     long Sequence { get; }
 
+    /// <summary>ADR-0046: everything projected inside the scope advances <see cref="Sequence"/> once,
+    /// when the outermost scope closes. A no-op scope with no index held.</summary>
+    IDisposable BeginProjection();
+
     /// <summary>Polls <see cref="Sequence"/> until it reaches <paramref name="atLeast"/> or
     /// <paramref name="timeout"/> elapses. True the moment it lands; false, never a throw, on a
     /// timeout — the answer is "not yet", not a failure.</summary>

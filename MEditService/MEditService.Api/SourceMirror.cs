@@ -43,10 +43,16 @@ internal sealed class SourceMirror(
     /// gate acquisition, so another writer cannot land between two plugins of the same batch.</summary>
     internal void Apply(IReadOnlyList<SourceChangeEvent> batch)
     {
+        var rederived = new List<PluginKey>();
         try
         {
             using var _ = mirror.WriteGate.Enter();
-            foreach (var change in batch) ApplyOne(change);
+            // ADR-0046: the batch is one logical write, so it is one sequence advance — a client
+            // that awaits once cannot land between two of its plugins.
+            using (mirror.BeginProjection())
+            {
+                foreach (var change in batch) ApplyOne(change, rederived);
+            }
         }
         catch (IndexWriteGateTimeoutException ex)
         {
@@ -58,9 +64,14 @@ internal sealed class SourceMirror(
                 "Could not project the source change batch for {Plugins}; it will be re-checked at the " +
                 "next signal and at the next reconcile", plugins);
         }
+
+        // Published once the batch's one advance has landed, so the number a subscriber awaits is
+        // the one these rows are visible at.
+        foreach (var key in rederived)
+            notifications.Publish(new PluginChangedNotification(key, mirror.Sequence));
     }
 
-    private void ApplyOne(SourceChangeEvent change)
+    private void ApplyOne(SourceChangeEvent change, List<PluginKey> rederived)
     {
         var key = new PluginKey(change.PluginName, change.Origin);
         try
@@ -79,7 +90,7 @@ internal sealed class SourceMirror(
                 return;
             }
 
-            Validate(key);
+            Validate(key, rederived);
         }
         catch (Exception ex)
         {
@@ -91,7 +102,7 @@ internal sealed class SourceMirror(
 
     // The answer to a ref move, a dropped event and a burst too wide to name keys for: one git
     // listing for the whole copy, where a per-key refresh asks git per record.
-    private void Validate(PluginKey key)
+    private void Validate(PluginKey key, List<PluginKey> rederived)
     {
         foreach (var report in mirror.ValidateIndex(key))
         {
@@ -100,7 +111,7 @@ internal sealed class SourceMirror(
 
             // ADR-0046: a re-derived copy has too many rows to name, so the notification names the
             // plugin instead, exactly as the plugin watcher's own re-index does.
-            if (report.NeedsRebuild) notifications.Publish(new PluginChangedNotification(key, mirror.Sequence));
+            if (report.NeedsRebuild) rederived.Add(key);
         }
     }
 
