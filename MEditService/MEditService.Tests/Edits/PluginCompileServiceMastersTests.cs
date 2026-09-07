@@ -22,7 +22,7 @@ public sealed class PluginCompileServiceMastersTests : IDisposable
     private const string DeltaName = "Delta.esm";
     private readonly string _modFolder = Directory.CreateTempSubdirectory("medit-masters-").FullName;
     private readonly string _gameDirectory = Directory.CreateTempSubdirectory("medit-masters-game-").FullName;
-    private readonly LoadOrderMirror _mirror;
+    private readonly LoadOrder _loadOrder;
     private readonly PluginKey _plugin = new(PluginName, "MastersMod");
     private readonly FormKey _npc;
     private readonly FormKey _bravoKeyword;
@@ -64,26 +64,22 @@ public sealed class PluginCompileServiceMastersTests : IDisposable
         });
         (_npc, _bravoKeyword, _charlieKeyword) = (npc.FormKey, bravoKeyword.FormKey, charlieKeyword.FormKey);
 
-        _mirror = new LoadOrderMirror(
-            new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
-        ((ILoadOrderMirror)_mirror).Reconcile(
-            _gameDirectory,
+        _loadOrder = LoadOrder.From(
+            _gameDirectory, instanceRoot: null, GameRelease.Fallout4,
             [
                 new LoadOrderEntry(CharlieName, charliePath, "Data", Slot: 0, Enabled: true, Winning: true),
                 new LoadOrderEntry(BravoName, bravoPath, "Data", Slot: 1, Enabled: true, Winning: true),
                 new LoadOrderEntry(DeltaName, deltaPath, "Data", Slot: 2, Enabled: true, Winning: true),
                 new LoadOrderEntry(PluginName, pluginPath, _plugin.Origin!, Slot: 3, Enabled: true, Winning: true),
-            ],
-            GameRelease.Fallout4);
+            ]);
 
         new TrackService(NullLogger<TrackService>.Instance)
-            .TrackAsync(_mirror.LoadOrder!, _plugin.Origin!, SourcePreset.Edits)
+            .TrackAsync(_loadOrder, [_plugin], _plugin.Origin!, SourcePreset.Edits)
             .GetAwaiter().GetResult();
     }
 
     public void Dispose()
     {
-        _mirror.Dispose();
         TryDelete(_modFolder);
         TryDelete(_gameDirectory);
     }
@@ -96,7 +92,46 @@ public sealed class PluginCompileServiceMastersTests : IDisposable
     }
 
     private PluginCompileService CompileService() =>
-        new(_mirror, new PluginWriter(NullLogger<PluginWriter>.Instance), NullLogger<PluginCompileService>.Instance);
+        CompileServices.Over(_loadOrder);
+
+    // The set the Index's masters read computed from its references table, now derived by running the
+    // collector over the same records (ADR-0038).
+    [Fact]
+    public void Compile_ReportsTheEffectiveMasters_InLoadOrder()
+    {
+        var result = CompileService().Compile(_plugin, new CompileSource.WorkingTree());
+
+        Assert.True(result.Succeeded, result.RefusalReason);
+        Assert.Equal([CharlieName, BravoName], result.Masters);
+    }
+
+    // Compile sees one plugin's records, so a link into a plugin the load order holds is one it
+    // cannot answer for; claiming it unresolved would fill the Problems panel with every valid link.
+    [Fact]
+    public void Compile_ForALinkIntoAPluginTheLoadOrderHolds_ReportsNoUnresolvedDiagnostic()
+    {
+        var result = CompileService().Compile(_plugin, new CompileSource.WorkingTree());
+
+        Assert.True(result.Succeeded, result.RefusalReason);
+        Assert.DoesNotContain(
+            result.Diagnostics, d => d.Message.Contains("Could not be resolved", StringComparison.Ordinal));
+    }
+
+    // The other half of the Index's masters rule: a plugin whose record this one overrides is a
+    // master whether or not anything here references it (ADR-0038).
+    [Fact]
+    public void Compile_ForAnOverrideOfAnotherPluginsRecord_NamesThatPluginAsAMaster()
+    {
+        SourceEdits.Write(
+            SourceRepository.Open(_modFolder, GameRelease.Fallout4)!, _plugin,
+            new Keyword(_deltaKeyword, Fallout4Release.Fallout4) { EditorID = "DeltaKeyword" },
+            "kywd", GameRelease.Fallout4);
+
+        var result = CompileService().Compile(_plugin, new CompileSource.WorkingTree());
+
+        Assert.True(result.Succeeded, result.RefusalReason);
+        Assert.Equal([CharlieName, BravoName, DeltaName], result.Masters);
+    }
 
     [Fact]
     public void Compile_WritesMasters_InCurrentLoadOrder_NotAlphabetical()
@@ -113,19 +148,15 @@ public sealed class PluginCompileServiceMastersTests : IDisposable
         Assert.Equal([CharlieName, BravoName], masterNames);
     }
 
-    // Exercised through the real edit door rather than pre-baked into the tracked baseline. DeltaName
+    // Written into the tracked source after Track rather than pre-baked into the baseline. DeltaName
     // is loaded but never referenced at Track time, so it provably is not yet a master.
     [Fact]
     public void Compile_AfterAnEditIntroducesAReferenceToAnUnreferencedPlugin_AddsItAsAMaster()
     {
-        var editResult = ProjectingEditService.Over(_mirror)
-            .Set(_plugin, _npc.ToString(), "Keywords",
-                System.Text.Json.JsonDocument.Parse(
-                    System.Text.Json.JsonSerializer.Serialize(new[]
-                    {
-                        _bravoKeyword.ToString(), _charlieKeyword.ToString(), _deltaKeyword.ToString(),
-                    })).RootElement);
-        Assert.True(editResult.Applied, editResult.Message);
+        SourceEdits.Rewrite<Npc>(
+            SourceRepository.Open(_modFolder, GameRelease.Fallout4)!, _plugin,
+            new RecordIdentity(_npc.ToString(), "npc_", "HostNpc"), GameRelease.Fallout4,
+            npc => npc.Keywords!.Add(new FormLink<IKeywordGetter>(_deltaKeyword)));
 
         var result = CompileService().Compile(_plugin, new CompileSource.WorkingTree());
         Assert.True(result.Succeeded, result.RefusalReason);

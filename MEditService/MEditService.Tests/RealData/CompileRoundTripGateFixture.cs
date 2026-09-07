@@ -2,6 +2,7 @@ using MEditService.Core.Edits;
 using MEditService.Core.Plugins;
 using MEditService.Core.Records;
 using MEditService.Core.Source;
+using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
@@ -47,7 +48,7 @@ public sealed class CompileRoundTripGateFixture : IDisposable
     }
 
     public PluginCompileService CompileService() =>
-        new(Mirror, new PluginWriter(NullLogger<PluginWriter>.Instance), NullLogger<PluginCompileService>.Instance);
+        CompileServices.Over(Mirror);
 
     public string SourceRoot => SourceRootFor(ModFolder);
 

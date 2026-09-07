@@ -224,8 +224,7 @@ public sealed class InjectedChildTests
 
         public IModDisposeGetter CompileAndReimport(PluginKey plugin)
         {
-            var result = new PluginCompileService(
-                    Mirror, new PluginWriter(NullLogger<PluginWriter>.Instance), NullLogger<PluginCompileService>.Instance)
+            var result = CompileServices.Over(Mirror)
                 .Compile(plugin, new CompileSource.WorkingTree());
             Assert.True(result.Succeeded, result.RefusalReason);
 

@@ -35,8 +35,7 @@ public sealed class QuestChildWriteApiTests : IDisposable
 
     private IQuestGetter CompiledQuest()
     {
-        var result = new PluginCompileService(
-                _fixture.Mirror, new PluginWriter(NullLogger<PluginWriter>.Instance), NullLogger<PluginCompileService>.Instance)
+        var result = CompileServices.Over(_fixture.Mirror)
             .Compile(_fixture.Plugin, new CompileSource.WorkingTree());
         Assert.True(result.Succeeded, result.RefusalReason);
 
@@ -296,8 +295,7 @@ public sealed class QuestChildWriteApiTests : IDisposable
 
     private IFallout4ModGetter CompileAndImport(ContainerCopyFixture fixture)
     {
-        var compile = new PluginCompileService(
-                fixture.Mirror, new PluginWriter(NullLogger<PluginWriter>.Instance), NullLogger<PluginCompileService>.Instance)
+        var compile = CompileServices.Over(fixture.Mirror)
             .Compile(fixture.DestinationPlugin, new CompileSource.WorkingTree());
         Assert.True(compile.Succeeded, compile.RefusalReason);
         var overlay = ModFactory.ImportGetter(

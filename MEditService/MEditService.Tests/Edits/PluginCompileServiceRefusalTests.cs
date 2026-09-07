@@ -1,5 +1,6 @@
 using MEditService.Core.Edits;
 using MEditService.Core.Source;
+using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 
@@ -9,12 +10,12 @@ namespace MEditService.Tests.Edits;
 /// exception and never a silently corrupted binary.</summary>
 public sealed class PluginCompileServiceRefusalTests : IDisposable
 {
-    private readonly TrackedModFixture _mod = TrackedModFixture.Tracked();
+    private readonly CompileFixture _mod = new();
 
     public void Dispose() => _mod.Dispose();
 
     private PluginCompileService CompileService() =>
-        new(_mod.Mirror, new PluginWriter(NullLogger<PluginWriter>.Instance), NullLogger<PluginCompileService>.Instance);
+        _mod.CompileService();
 
     [Fact]
     public void Compile_WithTwoSourceFilesClaimingTheSameFormKey_RefusesNamingTheFormKey()
@@ -23,7 +24,7 @@ public sealed class PluginCompileServiceRefusalTests : IDisposable
         // rename/hand-edit/third-party tool could), and there is no way to emit it as two binary
         // records without changing one's FormKey.
         var npcSourceText = File.ReadAllText(_mod.NpcSourceFile);
-        var collidingPath = _mod.SourceFileFor(_mod.Npc, "Keyword", TrackedModFixture.NpcEditorId);
+        var collidingPath = _mod.SourceFileFor(_mod.Npc, "Keyword", CompileFixture.NpcEditorId);
         Directory.CreateDirectory(Path.GetDirectoryName(collidingPath)!);
         File.WriteAllText(collidingPath, npcSourceText);
 
@@ -42,7 +43,7 @@ public sealed class PluginCompileServiceRefusalTests : IDisposable
         // FormKey-keyed SetTo, so the pair collapses silently before compile ever sees it.
         var npcSourceText = File.ReadAllText(_mod.NpcSourceFile);
         var duplicatePath = Path.Combine(_mod.ModFolder, SourceRecordPath.For(
-            TrackedModFixture.PluginName, "npc_", _mod.Npc.ToString(), "CopyOfFixtureNpc", GameRelease.Fallout4));
+            CompileFixture.PluginName, "npc_", _mod.Npc.ToString(), "CopyOfFixtureNpc", GameRelease.Fallout4));
         Assert.NotEqual(_mod.NpcSourceFile, duplicatePath);
         File.WriteAllText(duplicatePath, npcSourceText);
 
@@ -78,7 +79,7 @@ public sealed class PluginCompileServiceRefusalTests : IDisposable
 
         Assert.False(result.Succeeded);
         Assert.Contains("Re-Track", result.RefusalReason);
-        Assert.Contains(TrackedModFixture.NpcEditorId, result.RefusalReason);
+        Assert.Contains(CompileFixture.NpcEditorId, result.RefusalReason);
         Assert.Empty(result.Diagnostics);
         Assert.Empty(result.Masters);
     }

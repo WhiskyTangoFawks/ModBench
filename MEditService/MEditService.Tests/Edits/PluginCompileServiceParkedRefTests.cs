@@ -1,11 +1,10 @@
 using System.Security.Cryptography;
-using System.Text.Json;
 using MEditService.Core.Edits;
 using MEditService.Core.Schema;
 using MEditService.Core.Source;
-using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
+using Mutagen.Bethesda.Fallout4;
 
 namespace MEditService.Tests.Edits;
 
@@ -13,20 +12,15 @@ namespace MEditService.Tests.Edits;
 /// including a compile at a named ref, which touches neither working tree nor HEAD.</summary>
 public sealed class PluginCompileServiceParkedRefTests : IDisposable
 {
-    private readonly TrackedModFixture _mod = TrackedModFixture.Tracked();
+    private readonly CompileFixture _mod = new();
 
     public void Dispose() => _mod.Dispose();
 
-    private ProjectingEditService EditService() =>
-        ProjectingEditService.Over(_mod.Mirror);
-
     private PluginCompileService CompileService() =>
-        new(_mod.Mirror, new PluginWriter(NullLogger<PluginWriter>.Instance), NullLogger<PluginCompileService>.Instance);
-
-    private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
+        _mod.CompileService();
 
     private string GitDir => Path.Combine(_mod.ModFolder, ".git");
-    private static string ParkedRef => $"refs/medit/last-compile/{TrackedModFixture.PluginName}";
+    private static string ParkedRef => $"refs/medit/last-compile/{CompileFixture.PluginName}";
 
     private string RunGit(params string[] args) => GitCli.Run(GitDir, _mod.ModFolder, args);
 
@@ -37,14 +31,14 @@ public sealed class PluginCompileServiceParkedRefTests : IDisposable
     {
         var baselineParked = RunGit("rev-parse", ParkedRef).Trim();
 
-        EditService().Set(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", Json("0.75"));
+        _mod.Rewrite<Npc>(_mod.Npc, CompileFixture.NpcRecordType, CompileFixture.NpcEditorId, npc => npc.HeightMax = 0.75f);
         var result = CompileService().Compile(_mod.Plugin, new CompileSource.WorkingTree());
         Assert.True(result.Succeeded, result.RefusalReason);
 
         var newParked = RunGit("rev-parse", ParkedRef).Trim();
         Assert.NotEqual(baselineParked, newParked);
 
-        var pluginPath = Path.Combine(_mod.ModFolder, TrackedModFixture.PluginName);
+        var pluginPath = Path.Combine(_mod.ModFolder, CompileFixture.PluginName);
         var message = RunGit("show", "-s", "--format=%B", newParked);
         Assert.Contains($"Binary-SHA256: {Sha256Of(pluginPath)}", message, StringComparison.Ordinal);
     }
@@ -52,7 +46,7 @@ public sealed class PluginCompileServiceParkedRefTests : IDisposable
     [Fact]
     public void Compile_AtMain_AdvancesTheParkedRef_AndTouchesNeitherTheEditBranchsWorkingTreeNorHead()
     {
-        EditService().Set(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", Json("0.75"));
+        _mod.Rewrite<Npc>(_mod.Npc, CompileFixture.NpcRecordType, CompileFixture.NpcEditorId, npc => npc.HeightMax = 0.75f);
         var dirtBefore = _mod.GitStatus();
         var headBefore = RunGit("rev-parse", "HEAD").Trim();
         var branchBefore = RunGit("rev-parse", "--abbrev-ref", "HEAD").Trim();
@@ -64,17 +58,33 @@ public sealed class PluginCompileServiceParkedRefTests : IDisposable
         Assert.Equal(headBefore, RunGit("rev-parse", "HEAD").Trim());
         Assert.Equal(branchBefore, RunGit("rev-parse", "--abbrev-ref", "HEAD").Trim());
 
-        var pluginPath = Path.Combine(_mod.ModFolder, TrackedModFixture.PluginName);
+        var pluginPath = Path.Combine(_mod.ModFolder, CompileFixture.PluginName);
         var newParked = RunGit("rev-parse", ParkedRef).Trim();
         var message = RunGit("show", "-s", "--format=%B", newParked);
         Assert.Contains($"Binary-SHA256: {Sha256Of(pluginPath)}", message, StringComparison.Ordinal);
+    }
+
+    // Every working-tree document replaced with text the codec cannot read: a compile at main that
+    // read one would refuse, so succeeding is the proof it read the ref's blobs instead.
+    [Fact]
+    public void Compile_AtMain_ReadsNoWorkingTreeSourceFile()
+    {
+        var sourceRoot = Path.Combine(_mod.ModFolder, SourceRecordPath.RootFor(CompileFixture.PluginName));
+        foreach (var file in Directory.EnumerateFiles(sourceRoot, "*.json", SearchOption.AllDirectories))
+            File.WriteAllText(file, "{ not valid json");
+
+        var result = CompileService().Compile(_mod.Plugin, new CompileSource.AtRef("main"));
+
+        Assert.True(result.Succeeded, result.RefusalReason);
+        var mod = _mod.Reimport(out var handle);
+        using (handle) Assert.Contains(mod.Npcs, n => n.FormKey == _mod.Npc);
     }
 
     [Fact]
     public void Compile_AtARefWhoseTreeCannotBeWritten_LeavesNoScratchDirectoryBehind()
     {
         const string scratchPrefix = "medit-compile-ref-";
-        var sourceRoot = SourceRecordPath.RootFor(TrackedModFixture.PluginName);
+        var sourceRoot = SourceRecordPath.RootFor(CompileFixture.PluginName);
 
         // A file name past NAME_MAX, committed by plumbing onto a ref of its own. No checkout ever
         // happens, so git stores it without complaint and only the materialise step meets the OS.
@@ -111,7 +121,7 @@ public sealed class PluginCompileServiceParkedRefTests : IDisposable
         // Two source files claiming one FormKey (PluginCompileServiceRefusalTests' own scenario) —
         // structurally cannot emit, so nothing about the plugin's parked state should move.
         var npcSourceText = File.ReadAllText(_mod.NpcSourceFile);
-        var collidingPath = _mod.SourceFileFor(_mod.Npc, "Keyword", TrackedModFixture.NpcEditorId);
+        var collidingPath = _mod.SourceFileFor(_mod.Npc, "Keyword", CompileFixture.NpcEditorId);
         Directory.CreateDirectory(Path.GetDirectoryName(collidingPath)!);
         File.WriteAllText(collidingPath, npcSourceText);
 

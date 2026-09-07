@@ -243,8 +243,7 @@ public sealed class RecordEditServiceContainerDeleteRenumberTests : IDisposable
         var questFile = _fixture.SourceFileContaining(ContainerModFixture.QuestEditorId);
         Assert.DoesNotContain($"\"{nameof(Quest.DialogTopics)}\"", File.ReadAllText(questFile), StringComparison.Ordinal);
 
-        var compileResult = new PluginCompileService(
-                _fixture.Mirror, new PluginWriter(NullLogger<PluginWriter>.Instance), NullLogger<PluginCompileService>.Instance)
+        var compileResult = CompileServices.Over(_fixture.Mirror)
             .Compile(_fixture.Plugin, new CompileSource.WorkingTree());
         Assert.True(compileResult.Succeeded, compileResult.RefusalReason);
     }

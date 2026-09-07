@@ -36,8 +36,7 @@ public sealed class HeaderFlagEditTests : IDisposable
         var headerDoc = _fixture.Mirror.Projected().GetDocument(HeaderFormKey, _fixture.Plugin);
         Assert.Contains("Small", headerDoc!.Body!, StringComparison.Ordinal);
 
-        var compile = new PluginCompileService(
-                _fixture.Mirror, new PluginWriter(NullLogger<PluginWriter>.Instance), NullLogger<PluginCompileService>.Instance)
+        var compile = CompileServices.Over(_fixture.Mirror)
             .Compile(_fixture.Plugin, new CompileSource.WorkingTree());
         Assert.True(compile.Succeeded, compile.RefusalReason);
 
@@ -101,7 +100,7 @@ public sealed class HeaderFlagEditTests : IDisposable
     }
 
     private PluginCompileService CompileService() =>
-        new(_fixture.Mirror, new PluginWriter(NullLogger<PluginWriter>.Instance), NullLogger<PluginCompileService>.Instance);
+        CompileServices.Over(_fixture.Mirror);
 
     // The raw flags column stays exactly as read-only as it was — IsSmallMaster is the one door.
     [Fact]
