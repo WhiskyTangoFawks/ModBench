@@ -7,9 +7,11 @@ using MEditService.Core.Source;
 namespace MEditService.Api;
 
 /// <summary>ADR-0046 invariant 4's runtime half: the Source watcher's signals become projections.
-/// Nothing here reads or writes a row itself — the mirror's gated doors do.</summary>
+/// The gate arrives separately from the Index because a batch is one write across several of the
+/// Index's own gated doors.</summary>
 internal sealed class SourceMirror(
-    ILoadOrderMirror mirror, SourceChangeWatcher watcher, INotificationPublisher notifications, ILogger logger)
+    IndexProjector index, IndexWriteGate writeGate, SourceChangeWatcher watcher,
+    INotificationPublisher notifications, ILogger logger)
 {
     /// <summary>The watch set the load order now implies: one watch per tracked copy, and none for a
     /// copy whose mod folder holds no repository.</summary>
@@ -18,7 +20,7 @@ internal sealed class SourceMirror(
         // A watch must never outlive the load order that asked for it, or a plugin the load order
         // does not hold would keep validating itself into it.
         watcher.UnwatchAll();
-        if (mirror.LoadOrder is not { } loadOrder) return;
+        if (index.LoadOrder is not { } loadOrder) return;
 
         var order = LoadOrder.From(loadOrder);
         foreach (var plugin in loadOrder.Plugins)
@@ -33,7 +35,7 @@ internal sealed class SourceMirror(
     /// before the tree is written, so Track's burst is projected like any other.</summary>
     internal void WatchTracking(string modFolder, string origin)
     {
-        if (mirror.LoadOrder is not { } loadOrder) return;
+        if (index.LoadOrder is not { } loadOrder) return;
 
         foreach (var plugin in loadOrder.Plugins.Where(p => p.Origin.Equals(origin, StringComparison.OrdinalIgnoreCase)))
             watcher.Watch(modFolder, SourceRepository.RootIn(modFolder, plugin.Name), plugin.Name, plugin.Origin);
@@ -45,10 +47,10 @@ internal sealed class SourceMirror(
     {
         try
         {
-            using var _ = mirror.WriteGate.Enter();
+            using var _ = writeGate.Enter();
             // ADR-0046: the batch is one logical write, so it is one sequence advance — a client
             // that awaits once cannot land between two of its plugins.
-            using var projection = mirror.BeginProjection();
+            using var projection = index.BeginProjection();
             foreach (var change in batch) ApplyOne(change);
         }
         catch (IndexWriteGateTimeoutException ex)
@@ -78,7 +80,7 @@ internal sealed class SourceMirror(
 
             if (change.Scope == SourceChangeScope.Documents && FormKeysOf(change) is { } formKeys)
             {
-                mirror.RefreshKeys(key, formKeys);
+                index.RefreshKeys(key, formKeys);
                 return;
             }
 
@@ -96,7 +98,7 @@ internal sealed class SourceMirror(
     // listing for the whole copy, where a per-key refresh asks git per record.
     private void Validate(PluginKey key)
     {
-        foreach (var report in mirror.ValidateIndex(key))
+        foreach (var report in index.ValidateIndex(key))
         {
             foreach (var failure in report.Failures)
                 logger.LogWarning("Validating {Plugin} after a source change: {Failure}", key.Name, failure);
@@ -104,7 +106,7 @@ internal sealed class SourceMirror(
             // ADR-0046: a re-derived copy has too many rows to name, so this names the plugin.
             // Announced rather than published, so its sequence is the one the batch landed on.
             if (report.NeedsRebuild)
-                mirror.Announce(() => notifications.Publish(new PluginChangedNotification(key, mirror.Sequence)));
+                index.Announce(() => notifications.Publish(new PluginChangedNotification(key, index.Sequence)));
         }
     }
 

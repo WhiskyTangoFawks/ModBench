@@ -494,7 +494,7 @@ public sealed class ExternalChangeEndpointMappingCharacterizationTests : IDispos
         {
             var result = PluginEndpoints.KeepExternalChange(
                 TrackedModFixture.PluginName, new ExternalChangeActionRequest(TrackedModFixture.ModFolderOrigin),
-                _mod.Mirror, new ExternalChangeWatcher(), SharedSchemaReflector.Instance, loggerFactory);
+                _mod.Mirror.Projector, new ExternalChangeWatcher(), SharedSchemaReflector.Instance, loggerFactory);
 
             var problem = Assert.IsAssignableFrom<ProblemHttpResult>(result);
             Assert.Equal(500, problem.StatusCode);
@@ -514,7 +514,7 @@ public sealed class ExternalChangeEndpointMappingCharacterizationTests : IDispos
 
         var result = PluginEndpoints.KeepExternalChange(
             TrackedModFixture.PluginName, new ExternalChangeActionRequest("NoSuchOrigin"),
-            _mod.Mirror, new ExternalChangeWatcher(), SharedSchemaReflector.Instance, loggerFactory);
+            _mod.Mirror.Projector, new ExternalChangeWatcher(), SharedSchemaReflector.Instance, loggerFactory);
 
         var problem = Assert.IsAssignableFrom<ProblemHttpResult>(result);
         Assert.Equal(503, problem.StatusCode);

@@ -25,7 +25,7 @@ public sealed class RecordQueryServiceTests : IDisposable
         var factory = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
         _manager = new LoadOrderMirror(factory);
         _manager.Reconcile(fixture.DataFolder, fixture.Plugins, GameRelease.Fallout4);
-        _svc = new RecordQueryService(_manager, reflector, new ConflictClassifier());
+        _svc = new RecordQueryService(_manager.Projector, reflector, new ConflictClassifier());
     }
 
     public void Dispose() => _manager.Dispose();
@@ -59,7 +59,7 @@ public sealed class RecordQueryServiceTests : IDisposable
         using var manager = new LoadOrderMirror(
             new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
         manager.Reconcile(fx.DataFolder, fx.Plugins, GameRelease.Fallout4);
-        var svc = new RecordQueryService(manager, SharedSchemaReflector.Instance, new ConflictClassifier());
+        var svc = new RecordQueryService(manager.Projector, SharedSchemaReflector.Instance, new ConflictClassifier());
 
         var plugins = svc.GetPlugins();
 
@@ -87,7 +87,7 @@ public sealed class RecordQueryServiceTests : IDisposable
         using var manager = new LoadOrderMirror(
             new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
         manager.Reconcile(fx.DataFolder, fx.Plugins, GameRelease.Fallout4);
-        var svc = new RecordQueryService(manager, SharedSchemaReflector.Instance, new ConflictClassifier());
+        var svc = new RecordQueryService(manager.Projector, SharedSchemaReflector.Instance, new ConflictClassifier());
 
         var detail = svc.GetRecord(npcFormKey.ToString());
 
@@ -243,7 +243,7 @@ public sealed class RecordQueryServiceTests : IDisposable
     public void GetRecord_NeverReadsSourceItself_AHandEditStaysInvisibleUntilTheStoreIsRefreshed()
     {
         using var mod = TrackedModFixture.Tracked();
-        var reads = new RecordQueryService(mod.Mirror, SharedSchemaReflector.Instance, new ConflictClassifier());
+        var reads = new RecordQueryService(mod.Mirror.Projector, SharedSchemaReflector.Instance, new ConflictClassifier());
 
         var text = File.ReadAllText(mod.NpcSourceFile);
         File.WriteAllText(
@@ -299,7 +299,7 @@ public sealed class RecordQueryServiceTests : IDisposable
             var factory = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
             using var manager = new LoadOrderMirror(factory);
             manager.Reconcile(data.DataFolder, data.Plugins, GameRelease.Fallout4);
-            var svc = new RecordQueryService(manager, reflector, new ConflictClassifier());
+            var svc = new RecordQueryService(manager.Projector, reflector, new ConflictClassifier());
 
             var compare = svc.GetCompare(npcKey.ToString());
 
@@ -361,7 +361,7 @@ public sealed class RecordQueryServiceTests : IDisposable
             var factory = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
             using var manager = new LoadOrderMirror(factory);
             manager.Reconcile(data.DataFolder, data.Plugins, GameRelease.Fallout4);
-            var svc = new RecordQueryService(manager, reflector, new ConflictClassifier());
+            var svc = new RecordQueryService(manager.Projector, reflector, new ConflictClassifier());
 
             var compare = svc.GetCompare(npcKey.ToString());
 
@@ -629,7 +629,7 @@ public sealed class RecordQueryServiceTests : IDisposable
         var factory = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
         using var manager = new LoadOrderMirror(factory);
         manager.Reconcile(data.DataFolder, data.Plugins, GameRelease.Fallout4);
-        test(new RecordQueryService(manager, reflector, new ConflictClassifier()));
+        test(new RecordQueryService(manager.Projector, reflector, new ConflictClassifier()));
     }
 
     private static FormKey MakeScriptedNpc(IFallout4Mod mod, int power)
@@ -755,7 +755,7 @@ public sealed class RecordQueryServiceTests : IDisposable
             var factory = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
             using var manager = new LoadOrderMirror(factory);
             manager.Reconcile(data.DataFolder, data.Plugins, GameRelease.Fallout4);
-            var svc = new RecordQueryService(manager, reflector, new ConflictClassifier());
+            var svc = new RecordQueryService(manager.Projector, reflector, new ConflictClassifier());
 
             var result = svc.GetRecords(type: null, plugin: null, search: null, limit: 10, offset: 0);
 
@@ -793,7 +793,7 @@ public sealed class RecordQueryServiceTests : IDisposable
             var factory = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
             using var manager = new LoadOrderMirror(factory);
             manager.Reconcile(data.DataFolder, data.Plugins, GameRelease.Fallout4);
-            var svc = new RecordQueryService(manager, reflector, new ConflictClassifier());
+            var svc = new RecordQueryService(manager.Projector, reflector, new ConflictClassifier());
 
             var detail = svc.GetRecord("000000:HeaderQuery.esp");
 
@@ -822,7 +822,7 @@ public sealed class RecordQueryServiceTests : IDisposable
             var factory = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
             using var manager = new LoadOrderMirror(factory);
             manager.Reconcile(data.DataFolder, data.Plugins, GameRelease.Fallout4);
-            var svc = new RecordQueryService(manager, reflector, new ConflictClassifier());
+            var svc = new RecordQueryService(manager.Projector, reflector, new ConflictClassifier());
 
             var compare = svc.GetCompare("000000:CompareA.esp");
 
@@ -837,7 +837,7 @@ public sealed class RecordQueryServiceTests : IDisposable
         var reflector = SharedSchemaReflector.Instance;
         var factory = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
         var manager = new LoadOrderMirror(factory);
-        return new RecordQueryService(manager, reflector, new ConflictClassifier());
+        return new RecordQueryService(manager.Projector, reflector, new ConflictClassifier());
     }
 
     // --- GetPlugins: HasMatchingRecords, never row pruning (ADR-0035 amending ADR-0018) ---

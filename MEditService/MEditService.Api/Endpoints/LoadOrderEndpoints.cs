@@ -121,7 +121,7 @@ public static class LoadOrderEndpoints
             : Results.Problem($"Unknown game release: '{raw}'. Valid values: {string.Join(", ", Enum.GetNames<GameRelease>())}", statusCode: 400);
     }
 
-    internal static IResult PutLoadOrder(LoadOrderRequest req, ILoadOrderMirror mirror, LoadOrderHolder holder, ExternalChangeWatcher externalChangeWatcher, ILoggerFactory loggerFactory)
+    internal static IResult PutLoadOrder(LoadOrderRequest req, IndexProjector index, LoadOrderHolder holder, ExternalChangeWatcher externalChangeWatcher, ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(nameof(LoadOrderEndpoints));
         if (logger.IsEnabled(LogLevel.Information))
@@ -150,12 +150,13 @@ public static class LoadOrderEndpoints
                 .Select(p => new LoadOrderEntry(p.Name, p.Path, p.Origin, p.Slot, p.Enabled!.Value, p.Winning!.Value))
                 .ToList();
             // ADR-0046 invariant 11: the state lands in the shared kernel first, so a reader asking
-            // "which copy wins" during the reconcile is answered by the snapshot, not by the mirror.
+            // "which copy wins" during the reconcile is answered by the snapshot, not by the Index.
+            var snapshot = LoadOrder.From(req.GameDirectory, req.InstanceRoot, gameRelease, entries);
             var previous = holder.Current;
-            holder.Apply(LoadOrder.From(req.GameDirectory, req.InstanceRoot, gameRelease, entries));
+            holder.Apply(snapshot);
             try
             {
-                mirror.Reconcile(req.GameDirectory, entries, gameRelease, req.InstanceRoot);
+                index.Reconcile(snapshot);
             }
             catch
             {
@@ -167,8 +168,8 @@ public static class LoadOrderEndpoints
             // The hash check and the live watches for every plugin now held, in one pass after the
             // sweep; the crash-repair offers ride the response the same way Failures does.
             var crashRepairOffers = ExternalChangeLoadOrderHook.RunAfterReconcile(
-                mirror.LoadOrder, mirror.Index, externalChangeWatcher, logger);
-            return Results.Ok(new LoadOrderResponse("reconciled", mirror.LoadOrder?.Failures ?? [], crashRepairOffers));
+                index.LoadOrder, index.Index, externalChangeWatcher, logger);
+            return Results.Ok(new LoadOrderResponse("reconciled", index.Status.Failures, crashRepairOffers));
         }
         catch (OperationCanceledException ex)
         {
@@ -189,9 +190,9 @@ public static class LoadOrderEndpoints
         }
     }
 
-    // Captured before Close(): once the mirror drops its index, Sequence reads 0, and the rebuilt
+    // Captured before Close(): once the Index drops its store, Sequence reads 0, and the rebuilt
     // file must not answer a caller with a value lower than this process already gave out.
-    internal static IResult PostRebuildIndex(RebuildIndexRequest req, ILoadOrderMirror mirror, IRecordIndexFactory indexFactory, ILoggerFactory loggerFactory)
+    internal static IResult PostRebuildIndex(RebuildIndexRequest req, IndexProjector index, IRecordIndexFactory indexFactory, ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(nameof(LoadOrderEndpoints));
         if (logger.IsEnabled(LogLevel.Information))
@@ -202,8 +203,8 @@ public static class LoadOrderEndpoints
             return Results.Problem($"Instance root not found: {req.InstanceRoot}", statusCode: 400);
         if (ParseGameRelease(req.GameRelease, out var gameRelease) is { } releaseErr) return releaseErr;
 
-        var previousSequence = mirror.Sequence;
-        mirror.Close();
+        var previousSequence = index.Sequence;
+        index.Close();
 
         try
         {
@@ -224,24 +225,24 @@ public static class LoadOrderEndpoints
     // Deliberately not logged at Information like its neighbours: the Plugins tree polls this every
     // few hundred milliseconds for the duration of a reconcile, and one reception line per poll
     // would bury the per-plugin indexing lines it sits between.
-    private static IResult GetStatus(ILoadOrderMirror mirror, ILoggerFactory loggerFactory)
+    private static IResult GetStatus(IndexProjector index, ILoggerFactory loggerFactory)
     {
         loggerFactory.CreateLogger(nameof(LoadOrderEndpoints)).LogTrace("Received GetLoadOrderStatus");
-        return Results.Ok(mirror.Status);
+        return Results.Ok(index.Status);
     }
 
-    private static IResult GetSequence(ILoadOrderMirror mirror) => Results.Ok(mirror.Sequence);
+    private static IResult GetSequence(IndexProjector index) => Results.Ok(index.Sequence);
 
-    private static async Task<IResult> AwaitSequence(ILoadOrderMirror mirror, long atLeast, int timeoutMs = 5000)
+    private static async Task<IResult> AwaitSequence(IndexProjector index, long atLeast, int timeoutMs = 5000)
     {
         if (timeoutMs <= 0)
             return Results.Problem("timeoutMs must be positive.", statusCode: 400);
 
-        var reached = await mirror.AwaitSequenceAsync(atLeast, TimeSpan.FromMilliseconds(timeoutMs));
-        return Results.Ok(new SequenceAwaitResponse(reached, mirror.Sequence));
+        var reached = await index.AwaitSequenceAsync(atLeast, TimeSpan.FromMilliseconds(timeoutMs));
+        return Results.Ok(new SequenceAwaitResponse(reached, index.Sequence));
     }
 
-    private static IResult SetFilter(FilterRequest req, ILoadOrderMirror mirror, ILoggerFactory loggerFactory)
+    private static IResult SetFilter(FilterRequest req, IndexProjector index, ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(nameof(LoadOrderEndpoints));
         if (logger.IsEnabled(LogLevel.Information))
@@ -252,7 +253,7 @@ public static class LoadOrderEndpoints
             return Results.Problem("SQL is required.", statusCode: 400);
         try
         {
-            mirror.SetFilter(req.Sql);
+            index.SetFilter(req.Sql);
             return Results.Ok(new FilterResponse(req.Sql));
         }
         catch (InvalidOperationException ex)
@@ -272,13 +273,13 @@ public static class LoadOrderEndpoints
         }
     }
 
-    private static IResult ClearFilter(ILoadOrderMirror mirror, ILoggerFactory loggerFactory)
+    private static IResult ClearFilter(IndexProjector index, ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(nameof(LoadOrderEndpoints));
         logger.LogInformation("Received ClearFilter");
         try
         {
-            mirror.ClearFilter();
+            index.ClearFilter();
             return Results.NoContent();
         }
         catch (InvalidOperationException ex)
@@ -293,14 +294,14 @@ public static class LoadOrderEndpoints
         }
     }
 
-    private static IResult GetFilter(ILoadOrderMirror mirror, ILoggerFactory loggerFactory)
+    private static IResult GetFilter(IndexProjector index, ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(nameof(LoadOrderEndpoints));
         logger.LogInformation("Received GetFilter");
         try
         {
-            var (loadOrder, _) = mirror.RequireScope();
-            return Results.Ok(new FilterResponse(loadOrder.FilterSql));
+            index.RequireScope();
+            return Results.Ok(new FilterResponse(index.FilterSql));
         }
         catch (NoLoadOrderException ex)
         {

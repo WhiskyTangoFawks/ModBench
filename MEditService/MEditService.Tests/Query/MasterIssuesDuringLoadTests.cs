@@ -34,7 +34,7 @@ public sealed class MasterIssuesDuringLoadTests
         using var gate = new GatedIndexRepositoryFactory(inner, gateBefore: "B.esp");
         using var manager = new LoadOrderMirror(gate);
         var svc = new RecordQueryService(
-            manager, reflector, new ConflictClassifier());
+            manager.Projector, reflector, new ConflictClassifier());
 
         var load = Task.Run(() => manager.Reconcile(fx.GameDirectory, fx.Plugins, GameRelease.Fallout4));
         await gate.WaitUntilParkedAsync();
@@ -68,7 +68,7 @@ public sealed class MasterIssuesDuringLoadTests
             new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector)));
         manager.Reconcile(fx.DataFolder, fx.Plugins, GameRelease.Fallout4);
         var svc = new RecordQueryService(
-            manager, reflector, new ConflictClassifier());
+            manager.Projector, reflector, new ConflictClassifier());
 
         var patch = svc.GetPlugins().Single(p => p.Name == "Patch.esp");
         Assert.Contains(patch.MasterIssues ?? [], i => i.MasterName == "Ghost.esm");

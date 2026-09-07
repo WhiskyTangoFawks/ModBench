@@ -15,7 +15,7 @@ namespace MEditService.Core.Records;
 /// <summary>ADR-0046 invariant 10: the Index's other half. Ingest, the registration sweep and the
 /// watchers' re-projections, deciding nothing — the load order value answers who participates and
 /// wins, the schema where a field goes.</summary>
-public sealed class IndexProjector : IDisposable
+public sealed class IndexProjector : IQueryIndex, IDisposable
 {
     private readonly Lock _lock = new();
     private readonly ILogger _logger;
@@ -28,6 +28,9 @@ public sealed class IndexProjector : IDisposable
     private readonly SchemaReflector _schemaReflector;
     private HeldPlugins? _heldPlugins;
     private IRecordIndex? _index;
+    // Dropped with the scope it was materialized against (see DisposeCurrent): a filter names
+    // tables a freshly opened store has no _filter for.
+    private string? _filterSql;
     // The reconcile's own progress. Guarded by _lock like _heldPlugins/_index — written by
     // the reconciling thread as each plugin lands, read by whoever asks for Status meanwhile.
     private readonly List<IndexedPlugin> _indexed = [];
@@ -824,6 +827,9 @@ public sealed class IndexProjector : IDisposable
         }
     }
 
+    /// <summary>See <see cref="IQueryIndex.FilterSql"/>.</summary>
+    public string? FilterSql { get { lock (_lock) return _filterSql; } }
+
     public void SetFilter(string sql) => ApplyFilter(sql);
     public void ClearFilter() => ApplyFilter(null);
 
@@ -840,9 +846,9 @@ public sealed class IndexProjector : IDisposable
 
         lock (_lock)
         {
-            var (loadOrder, index) = RequireScopeCore();
+            var (_, index) = RequireScopeCore();
             index.SetFilter(sql);
-            loadOrder.FilterSql = sql;
+            _filterSql = sql;
         }
     }
 
@@ -852,7 +858,7 @@ public sealed class IndexProjector : IDisposable
     {
         lock (_lock)
         {
-            if (_heldPlugins?.FilterSql is not { } sql || _index is null) return;
+            if (_filterSql is not { } sql || _index is null) return;
             try
             {
                 _index.SetFilter(sql);
@@ -904,6 +910,7 @@ public sealed class IndexProjector : IDisposable
         _heldPlugins = null;
         _index?.Dispose();
         _index = null;
+        _filterSql = null;
         _indexed.Clear();
         _failedHashes.Clear();
         _conflictsComputed = false;

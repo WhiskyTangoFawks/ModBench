@@ -258,7 +258,7 @@ public class LoadOrderMirrorTests(TestPluginFixture fixture)
     {
         using var manager = MakeLoadedManager();
         manager.SetFilter("SELECT form_key FROM \"NPC_\"");
-        Assert.Equal("SELECT form_key FROM \"NPC_\"", manager.LoadOrder!.FilterSql);
+        Assert.Equal("SELECT form_key FROM \"NPC_\"", manager.Projector.FilterSql);
     }
 
     [Fact]
@@ -267,7 +267,7 @@ public class LoadOrderMirrorTests(TestPluginFixture fixture)
         using var manager = MakeLoadedManager();
         manager.SetFilter("SELECT form_key FROM \"NPC_\"");
         manager.ClearFilter();
-        Assert.Null(manager.LoadOrder!.FilterSql);
+        Assert.Null(manager.Projector.FilterSql);
     }
 
     // --- Filter re-materialization ---

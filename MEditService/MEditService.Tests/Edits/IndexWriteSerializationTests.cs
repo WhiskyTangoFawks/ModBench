@@ -17,7 +17,7 @@ public sealed class IndexWriteSerializationTests : IDisposable
     private ILoadOrderMirror Mirror => _mod.Mirror;
 
     private IRecordQueryService Reads() =>
-        new RecordQueryService(_mod.Mirror, SharedSchemaReflector.Instance, new ConflictClassifier());
+        new RecordQueryService(_mod.Mirror.Projector, SharedSchemaReflector.Instance, new ConflictClassifier());
 
     private static (Task Work, bool Finished) RunAndWait(Action work, TimeSpan within)
     {

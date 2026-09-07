@@ -64,34 +64,15 @@ public class WorldspaceQueryServiceTests
         public ContainerChildRow? GetContainerParent(PluginKey plugin, string childFormKey) => null;
     }
 
-    private sealed class StubMirror(IRecordReads repo, ILoadOrder? loadOrder = null) : ILoadOrderMirror
+    // The reads' presence is what "no load order" means for these tests, most of which leave
+    // loadOrder null, so a "both null together" check would throw in all of them.
+    private sealed class StubIndex(IRecordReads reads, ILoadOrder? loadOrder = null) : IQueryIndex
     {
-        public ILoadOrder? LoadOrder => loadOrder;
-        public IRecordReads? Reads => repo;
-        // Read-side double — the worldspace queries never write to the index.
-        public IRecordIndex? Index => null;
-        public IndexWriteGate WriteGate { get; } = new();
-        // These stubs never load, so they are always in the no-load-order state.
+        // These stubs never project, so they are always in the no-load-order state and unfiltered.
         public LoadOrderStatus Status => LoadOrderStatus.None;
-        public long Sequence => 0;
-        public Task<bool> AwaitSequenceAsync(long atLeast, TimeSpan timeout) => throw new NotSupportedException();
-        public IDisposable BeginProjection() => throw new NotSupportedException();
-        public void Announce(Action publish) => throw new NotSupportedException();
-        // Gating on repo alone: repo's presence is what "no load order" means for these tests, most of
-        // which leave loadOrder null, so a "both null together" check would throw in all of them.
+        public string? FilterSql => null;
         public (ILoadOrder LoadOrder, IRecordReads Reads) RequireScope() =>
-            repo is { } r ? (loadOrder!, r) : throw new NoLoadOrderException();
-        public void Reconcile(string gameDirectory, IReadOnlyList<LoadOrderEntry> plugins, GameRelease gameRelease, string? instanceRoot = null) => throw new NotSupportedException();
-        public void Close() => throw new NotSupportedException();
-        public PluginResponse CreatePlugin(string n, string p, string o) => throw new NotSupportedException();
-        public Task ReindexPlugin(PluginKey key) => throw new NotSupportedException();
-        public IReadOnlyList<ValidationReport> ValidateIndex(PluginKey? plugin) => throw new NotSupportedException();
-        public void RefreshKeys(PluginKey key, IReadOnlyList<string> formKeys) => throw new NotSupportedException();
-        public Action? LoadOrderChanged { get; set; }
-        public void UnindexPlugin(PluginKey key) => throw new NotSupportedException();
-        public void SetFilter(string s) => throw new NotSupportedException();
-        public void ClearFilter() => throw new NotSupportedException();
-        public void ReapplyFilter() => throw new NotSupportedException();
+            reads is { } r ? (loadOrder!, r) : throw new NoLoadOrderException();
     }
 
     // A minimal fake load order whose Plugins list is real enough to exercise
@@ -102,14 +83,12 @@ public class WorldspaceQueryServiceTests
         public string? InstanceRoot => null;
         public GameRelease GameRelease => GameRelease.Fallout4;
         public IReadOnlyList<PluginMetadata> Plugins => plugins;
-        public IReadOnlyList<PluginLoadFailure> Failures => [];
-        public string? FilterSql { get; set; }
         public Mutagen.Bethesda.Plugins.Records.IModGetter? GetMod(string pluginName, string origin) => null;
         public void Dispose() { }
     }
 
     private static WorldspaceQueryService Service(IReadOnlyList<CellLocationSummary> cells) =>
-        new(new StubMirror(new StubReader(cells)));
+        new(new StubIndex(new StubReader(cells)));
 
     [Fact]
     public void GetWorldspaceBlocks_GroupsCellsIntoBlocksAndSubBlocks()
@@ -165,7 +144,7 @@ public class WorldspaceQueryServiceTests
     public void GetWorldspaces_RealRepository_ReturnsCommonwealthWorldspace()
     {
         using var fixture = new CutDownPluginFixture();
-        var svc = new WorldspaceQueryService(new StubMirror(fixture.Repo.At(RecordRef.Effective)));
+        var svc = new WorldspaceQueryService(new StubIndex(fixture.Repo.At(RecordRef.Effective)));
 
         var result = svc.GetWorldspaces(CutDownPluginFixture.PluginFileName);
 
@@ -176,7 +155,7 @@ public class WorldspaceQueryServiceTests
     public void WorldspaceQuery_NoLoadOrder_ThrowsInvalidOperation()
     {
         // No load order held → Reads is null → a clear NoLoadOrderException, not an NRE.
-        var svc = new WorldspaceQueryService(new StubMirror(null!));
+        var svc = new WorldspaceQueryService(new StubIndex(null!));
         Assert.Throws<NoLoadOrderException>(() => svc.GetInteriorCells("M.esp", 50, 0));
     }
 
@@ -187,7 +166,7 @@ public class WorldspaceQueryServiceTests
             new RecordSummary("0001:M.esp", "M.esp", 0, true, "WorldA", "Data"),
             new RecordSummary("0002:M.esp", "M.esp", 0, true, null, "Data"),
         ]);
-        var svc = new WorldspaceQueryService(new StubMirror(reader));
+        var svc = new WorldspaceQueryService(new StubIndex(reader));
 
         var result = svc.GetWorldspaces("M.esp");
 
@@ -207,7 +186,7 @@ public class WorldspaceQueryServiceTests
         var loadOrder = new StubLoadOrder([
             new PluginMetadata("M.esp", "", 0, false, false, [], 0, false, Origin: "ModA", Enabled: true, Winning: true),
         ]);
-        var svc = new WorldspaceQueryService(new StubMirror(reader, loadOrder));
+        var svc = new WorldspaceQueryService(new StubIndex(reader, loadOrder));
 
         svc.GetWorldspaces("M.esp");
 
@@ -223,7 +202,7 @@ public class WorldspaceQueryServiceTests
         var loadOrder = new StubLoadOrder([
             new PluginMetadata("M.esp", "", 0, false, false, [], 0, false, Origin: "ModA", Enabled: true, Winning: true),
         ]);
-        var svc = new WorldspaceQueryService(new StubMirror(reader, loadOrder));
+        var svc = new WorldspaceQueryService(new StubIndex(reader, loadOrder));
 
         svc.GetWorldspaces("M.esp", origin: "ModB");
 
@@ -237,7 +216,7 @@ public class WorldspaceQueryServiceTests
         var loadOrder = new StubLoadOrder([
             new PluginMetadata("M.esp", "", 0, false, false, [], 0, false, Origin: "ModA", Enabled: true, Winning: true),
         ]);
-        var svc = new WorldspaceQueryService(new StubMirror(reader, loadOrder));
+        var svc = new WorldspaceQueryService(new StubIndex(reader, loadOrder));
 
         svc.GetWorldspaceBlocks("M.esp", "wrld:M.esp", origin: "ModB");
 
@@ -251,7 +230,7 @@ public class WorldspaceQueryServiceTests
         var loadOrder = new StubLoadOrder([
             new PluginMetadata("M.esp", "", 0, false, false, [], 0, false, Origin: "ModA", Enabled: true, Winning: true),
         ]);
-        var svc = new WorldspaceQueryService(new StubMirror(reader, loadOrder));
+        var svc = new WorldspaceQueryService(new StubIndex(reader, loadOrder));
 
         svc.GetInteriorCells("M.esp", 50, 0, origin: "ModB");
 

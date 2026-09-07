@@ -37,7 +37,8 @@ public sealed class LoadOrderEndpointsTests : IDisposable
         holder.Apply(previous);
 
         var result = LoadOrderEndpoints.PutLoadOrder(
-            SnapshotRequest(), new ThrowingMirror(), holder, new ExternalChangeWatcher(), NullLoggerFactory.Instance);
+            SnapshotRequest(), new IndexProjector(new RefusingIndexFactory()), holder,
+            new ExternalChangeWatcher(), NullLoggerFactory.Instance);
 
         Assert.Equal(500, Assert.IsAssignableFrom<ProblemHttpResult>(result).StatusCode);
         Assert.Equal(previous, holder.Current);
@@ -53,39 +54,12 @@ public sealed class LoadOrderEndpointsTests : IDisposable
 
         var result = await PluginEndpoints.CreatePlugin(
             new CreatePluginRequest("Minted.esp", _mod.ModFolder, TrackedModFixture.ModFolderOrigin),
-            _mod.Mirror, holder, new TrackService(NullLogger<TrackService>.Instance), NullLoggerFactory.Instance);
+            _mod.Mirror.Projector, holder, new TrackService(NullLogger<TrackService>.Instance), NullLoggerFactory.Instance);
 
         Assert.IsAssignableFrom<Ok<PluginResponse>>(result);
         var registered = holder.Current.Copy(new PluginKey("Minted.esp", TrackedModFixture.ModFolderOrigin));
         Assert.NotNull(registered);
         Assert.Equal(Path.Combine(_mod.ModFolder, "Minted.esp"), registered.Path);
-    }
-
-    private sealed class ThrowingMirror : ILoadOrderMirror
-    {
-        public ILoadOrder? LoadOrder => null;
-        public IRecordReads? Reads => null;
-        public IRecordIndex? Index => null;
-        public IndexWriteGate WriteGate { get; } = new();
-        public LoadOrderStatus Status => LoadOrderStatus.None;
-        public long Sequence => 0;
-        public Task<bool> AwaitSequenceAsync(long atLeast, TimeSpan timeout) => throw new NotSupportedException();
-        public IDisposable BeginProjection() => throw new NotSupportedException();
-        public void Announce(Action publish) => throw new NotSupportedException();
-        public (ILoadOrder LoadOrder, IRecordReads Reads) RequireScope() => throw new NoLoadOrderException();
-        public void Reconcile(
-            string gameDirectory, IReadOnlyList<LoadOrderEntry> plugins, GameRelease gameRelease,
-            string? instanceRoot = null) => throw new InvalidOperationException("the reconcile failed");
-        public void Close() => throw new NotSupportedException();
-        public PluginResponse CreatePlugin(string name, string path, string origin) => throw new NotSupportedException();
-        public Task ReindexPlugin(PluginKey key) => throw new NotSupportedException();
-        public IReadOnlyList<ValidationReport> ValidateIndex(PluginKey? plugin) => throw new NotSupportedException();
-        public void RefreshKeys(PluginKey key, IReadOnlyList<string> formKeys) => throw new NotSupportedException();
-        public Action? LoadOrderChanged { get; set; }
-        public void UnindexPlugin(PluginKey key) => throw new NotSupportedException();
-        public void SetFilter(string sql) => throw new NotSupportedException();
-        public void ClearFilter() => throw new NotSupportedException();
-        public void ReapplyFilter() => throw new NotSupportedException();
     }
 
     [Fact]
@@ -96,7 +70,7 @@ public sealed class LoadOrderEndpointsTests : IDisposable
                 _ => throw new InvalidOperationException("simulated crash between source and binary write")));
 
         var result = LoadOrderEndpoints.PutLoadOrder(
-            SnapshotRequest(), _mod.Mirror, new LoadOrderHolder(), new ExternalChangeWatcher(), NullLoggerFactory.Instance);
+            SnapshotRequest(), _mod.Mirror.Projector, new LoadOrderHolder(), new ExternalChangeWatcher(), NullLoggerFactory.Instance);
 
         var ok = Assert.IsAssignableFrom<Ok<LoadOrderResponse>>(result);
         var offer = Assert.Single(ok.Value!.CrashRepairOffers);
@@ -109,7 +83,7 @@ public sealed class LoadOrderEndpointsTests : IDisposable
     public void PutLoadOrder_ReportsNoCrashRepairOffers_WhenNothingIsUnanswered()
     {
         var result = LoadOrderEndpoints.PutLoadOrder(
-            SnapshotRequest(), _mod.Mirror, new LoadOrderHolder(), new ExternalChangeWatcher(), NullLoggerFactory.Instance);
+            SnapshotRequest(), _mod.Mirror.Projector, new LoadOrderHolder(), new ExternalChangeWatcher(), NullLoggerFactory.Instance);
 
         var ok = Assert.IsAssignableFrom<Ok<LoadOrderResponse>>(result);
         Assert.Empty(ok.Value!.CrashRepairOffers);
@@ -126,7 +100,7 @@ public sealed class LoadOrderEndpointsTests : IDisposable
             data.Plugins.Select(p => new LoadOrderPlugin(p.Name, p.Path, p.Origin, p.Slot, p.Enabled, p.Winning)).ToList(),
             data.DataFolder, data.InstanceRoot, "Fallout4");
         var reflector = SharedSchemaReflector.Instance;
-        using var thisWindow = new LoadOrderMirror(new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector)));
+        using var thisWindow = new IndexProjector(new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector)));
 
         var result = LoadOrderEndpoints.PutLoadOrder(request, thisWindow, new LoadOrderHolder(), new ExternalChangeWatcher(), NullLoggerFactory.Instance);
 
@@ -145,7 +119,7 @@ public sealed class LoadOrderEndpointsTests : IDisposable
         using var otherWindow = ForeignIndexHolder.Hold(IndexFile.For(data.InstanceRoot));
         var reflector = SharedSchemaReflector.Instance;
         var factory = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
-        using var thisWindow = new LoadOrderMirror(factory);
+        using var thisWindow = new IndexProjector(factory);
         var request = new RebuildIndexRequest(data.InstanceRoot, "Fallout4");
 
         var result = LoadOrderEndpoints.PostRebuildIndex(request, thisWindow, factory, NullLoggerFactory.Instance);
@@ -161,10 +135,10 @@ public sealed class LoadOrderEndpointsTests : IDisposable
         using var data = new PluginFixtureBuilder("rebuild-ok").WithPlugin("A.esp").Build();
         var reflector = SharedSchemaReflector.Instance;
         var factory = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
-        using var mirror = new LoadOrderMirror(factory);
+        using var index = new IndexProjector(factory);
         var request = new RebuildIndexRequest(data.InstanceRoot, "Fallout4");
 
-        var result = LoadOrderEndpoints.PostRebuildIndex(request, mirror, factory, NullLoggerFactory.Instance);
+        var result = LoadOrderEndpoints.PostRebuildIndex(request, index, factory, NullLoggerFactory.Instance);
 
         Assert.IsAssignableFrom<NoContent>(result);
     }
