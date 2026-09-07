@@ -84,6 +84,8 @@ public class WorldspaceQueryServiceTests
         public PluginResponse CreatePlugin(string n, string p, string o) => throw new NotSupportedException();
         public Task ReindexPlugin(PluginKey key) => throw new NotSupportedException();
         public IReadOnlyList<ValidationReport> ValidateIndex(PluginKey? plugin) => throw new NotSupportedException();
+        public void RefreshKeys(PluginKey key, IReadOnlyList<string> formKeys) => throw new NotSupportedException();
+        public Action? LoadOrderChanged { get; set; }
         public void ReingestPluginFromSource(PluginKey key) => throw new NotSupportedException();
         public void UnindexPlugin(PluginKey key) => throw new NotSupportedException();
         public void SetFilter(string s) => throw new NotSupportedException();

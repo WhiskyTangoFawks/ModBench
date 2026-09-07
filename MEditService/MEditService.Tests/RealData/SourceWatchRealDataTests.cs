@@ -1,0 +1,162 @@
+using System.Text.Json;
+using MEditService.Api;
+using MEditService.Bridge;
+using MEditService.Core.Notifications;
+using MEditService.Core.Plugins;
+using MEditService.Core.Records;
+using MEditService.Core.Schema;
+using MEditService.Core.Source;
+using MEditService.Tests.TestSupport;
+using Microsoft.Extensions.Logging.Abstractions;
+using Mutagen.Bethesda;
+using Xunit.Abstractions;
+
+namespace MEditService.Tests.RealData;
+
+/// <summary>The real cut-down plugin tracked under a live Source watch, so what Track's thousands of
+/// files and a wide hand-written burst cost the projector is measured on authentic data.</summary>
+public sealed class SourceWatchRealDataFixture : IDisposable
+{
+    public const string Origin = "FixtureMod";
+
+    public string ModFolder { get; } = Directory.CreateTempSubdirectory("medit-source-watch-").FullName;
+    public LoadOrderMirror Mirror { get; }
+    public PluginKey Plugin { get; } = new(CutDownPluginFixture.PluginFileName, Origin);
+    internal InMemoryNotificationPublisher Notifications { get; } = new();
+
+    /// <summary>How many documents Track wrote, the number a projection per file would be.</summary>
+    public int DocumentsWritten { get; }
+
+    /// <summary>What the recorder held once Track and the watch window behind it had settled.</summary>
+    public IReadOnlyList<Notification> AfterTrack { get; }
+
+    private readonly SourceChangeWatcher _watcher;
+    private readonly string _gameDirectory = Directory.CreateTempSubdirectory("medit-source-watch-game-").FullName;
+
+    public SourceWatchRealDataFixture()
+    {
+        var pluginPath = Path.Combine(ModFolder, CutDownPluginFixture.PluginFileName);
+        File.Copy(CutDownPluginFixture.PluginPath, pluginPath);
+
+        Mirror = new LoadOrderMirror(new DuckDbRecordIndexFactory(
+            SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance), Notifications));
+        ((ILoadOrderMirror)Mirror).Reconcile(
+            _gameDirectory,
+            [new LoadOrderEntry(CutDownPluginFixture.PluginFileName, pluginPath, Origin, Slot: 0, Enabled: true, Winning: true)],
+            GameRelease.Fallout4);
+
+        _watcher = new SourceChangeWatcher(TimeSpan.FromMilliseconds(150));
+        var sourceMirror = new SourceMirror(Mirror, _watcher, Notifications, NullLogger.Instance);
+        _watcher.SourceChanged = sourceMirror.Apply;
+        Mirror.LoadOrderChanged = sourceMirror.RefreshWatches;
+        sourceMirror.RefreshWatches();
+
+        new TrackService(NullLogger<TrackService>.Instance) { RepositoryCreated = sourceMirror.WatchTracking }
+            .TrackAsync(Mirror.LoadOrder!, Origin, SourcePreset.Edits)
+            .GetAwaiter().GetResult();
+
+        DocumentsWritten = Directory
+            .EnumerateFiles(SourceDocuments.RootIn(ModFolder, CutDownPluginFixture.PluginFileName), "*.json", SearchOption.AllDirectories)
+            .Count();
+
+        // Well past the debounce window and the projection behind it, so what the recorder holds is
+        // everything Track cost.
+        Thread.Sleep(2000);
+        AfterTrack = Notifications.Notifications;
+
+        // The reconcile request every tracked copy takes at load, so the rows the burst below drifts
+        // from are the source tree's own.
+        ((ILoadOrderMirror)Mirror).ValidateIndex(Plugin);
+    }
+
+    // Every document that is a record's own file, in tree order: a container's own RecordData.json
+    // and a level's GroupRecordData.json are neither.
+    public IReadOnlyList<string> FlatDocuments() =>
+        [.. Directory
+            .EnumerateFiles(SourceDocuments.RootIn(ModFolder, CutDownPluginFixture.PluginFileName), "*.json", SearchOption.AllDirectories)
+            .Where(f => !Path.GetFileName(f).StartsWith("RecordData", StringComparison.Ordinal)
+                        && !Path.GetFileName(f).StartsWith("GroupRecordData", StringComparison.Ordinal))
+            .Order(StringComparer.Ordinal)];
+
+    public void Dispose()
+    {
+        _watcher.Dispose();
+        Mirror.Dispose();
+        TryDelete(ModFolder);
+        TryDelete(_gameDirectory);
+    }
+
+    private static void TryDelete(string path)
+    {
+        try { Directory.Delete(path, recursive: true); }
+        catch (IOException) { /* scratch, best-effort */ }
+        catch (UnauthorizedAccessException) { /* scratch, best-effort */ }
+    }
+}
+
+/// <summary>ADR-0046 invariant 4 on real data: Track and a burst wider than any batch are each one
+/// projection of the plugin, and every row is right afterwards.</summary>
+public sealed class SourceWatchRealDataTests(SourceWatchRealDataFixture fixture, ITestOutputHelper output)
+    : IClassFixture<SourceWatchRealDataFixture>
+{
+    // The count a projection per file would be in the thousands; the watch starts once the repository
+    // exists, so Track's own writes cost the projector one settle at most.
+    [Fact]
+    public void TrackingARealPlugin_CostsAtMostOneProjection_NotOnePerFile()
+    {
+        output.WriteLine(
+            $"{fixture.DocumentsWritten} documents written ({fixture.FlatDocuments().Count} flat); " +
+            $"{fixture.AfterTrack.Count} projection(s) recorded");
+
+        Assert.True(fixture.DocumentsWritten > 32, $"only {fixture.DocumentsWritten} documents were written");
+        Assert.InRange(fixture.AfterTrack.Count, 0, 1);
+    }
+
+    // Wider than one batch is worth naming keys for, so it lands as one validate of the plugin; what
+    // the test asserts is the outcome, that every file's row followed.
+    [Fact]
+    public async Task ABurstWiderThanTheWindow_ValidatesThePlugin_AndEveryFilesRowFollows()
+    {
+        var documents = fixture.FlatDocuments().Where(HasAnEditorId).ToList();
+        // Wider than the batch a per-key refresh would name, which is what makes this a validate.
+        Assert.True(documents.Count > 32, $"only {documents.Count} documents carry an EditorID");
+        var renamed = documents.ToDictionary(d => FormKeyOf(d), d => $"{EditorIdOf(d)}_ByHand", StringComparer.Ordinal);
+        var before = fixture.Mirror.Sequence;
+
+        foreach (var document in documents)
+            File.WriteAllText(document, File.ReadAllText(document).Replace($"\"{EditorIdOf(document)}\"", $"\"{EditorIdOf(document)}_ByHand\"", StringComparison.Ordinal));
+
+        Assert.True(await fixture.Mirror.AwaitSequenceAsync(before + 1, TimeSpan.FromSeconds(30)));
+        await WaitForEveryRow(renamed);
+        foreach (var (formKey, editorId) in renamed)
+            Assert.Equal(editorId, fixture.Mirror.Index!.At(RecordRef.Effective).GetDocument(formKey, fixture.Plugin)?.EditorId);
+    }
+
+    private async Task WaitForEveryRow(Dictionary<string, string> renamed)
+    {
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(30);
+        while (DateTime.UtcNow < deadline)
+        {
+            if (renamed.All(r => fixture.Mirror.Index!.At(RecordRef.Effective).GetDocument(r.Key, fixture.Plugin)?.EditorId == r.Value))
+                return;
+            await Task.Delay(50);
+        }
+    }
+
+    private static bool HasAnEditorId(string document)
+    {
+        using var parsed = JsonDocument.Parse(File.ReadAllText(document));
+        return parsed.RootElement.TryGetProperty("EditorID", out var editorId)
+               && editorId.ValueKind == JsonValueKind.String;
+    }
+
+    private static string FormKeyOf(string document) => Property(document, "FormKey");
+
+    private static string EditorIdOf(string document) => Property(document, "EditorID");
+
+    private static string Property(string document, string name)
+    {
+        using var parsed = JsonDocument.Parse(File.ReadAllText(document));
+        return parsed.RootElement.GetProperty(name).GetString()!;
+    }
+}

@@ -149,6 +149,8 @@ public sealed class CompareResultColumnKeyIntegrityTests
         public PluginResponse CreatePlugin(string name, string path, string origin) => throw new NotSupportedException();
         public Task ReindexPlugin(PluginKey key) => throw new NotSupportedException();
         public IReadOnlyList<ValidationReport> ValidateIndex(PluginKey? plugin) => throw new NotSupportedException();
+        public void RefreshKeys(PluginKey key, IReadOnlyList<string> formKeys) => throw new NotSupportedException();
+        public Action? LoadOrderChanged { get; set; }
         public void ReingestPluginFromSource(PluginKey key) => throw new NotSupportedException();
         public void UnindexPlugin(PluginKey key) => throw new NotSupportedException();
         public void SetFilter(string sql) => throw new NotSupportedException();

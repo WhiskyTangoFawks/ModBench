@@ -1,3 +1,4 @@
+using MEditService.Core.Notifications;
 using MEditService.Core.Plugins;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
@@ -34,7 +35,9 @@ public sealed class TrackedModFixture : IDisposable
     public FormKey Keyword { get; }
     public FormKey OtherNpc { get; }
 
-    private TrackedModFixture(bool track, string pluginName, bool isLight = false, bool persistent = false)
+    private TrackedModFixture(
+        bool track, string pluginName, bool isLight = false, bool persistent = false,
+        INotificationPublisher? notifications = null)
     {
         ActualPluginName = pluginName;
         Plugin = new PluginKey(pluginName, ModFolderOrigin);
@@ -54,7 +57,8 @@ public sealed class TrackedModFixture : IDisposable
         (Npc, Race, Keyword, OtherNpc) = (npc.FormKey, race.FormKey, keyword.FormKey, otherNpc.FormKey);
 
         Mirror = new LoadOrderMirror(
-            new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
+            new DuckDbRecordIndexFactory(
+                SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance), notifications));
         ((ILoadOrderMirror)Mirror).Reconcile(
             GameDirectory,
             [Entry],
@@ -70,6 +74,11 @@ public sealed class TrackedModFixture : IDisposable
     }
 
     public static TrackedModFixture Tracked() => new(track: true, PluginName);
+
+    /// <summary>Tracked, with every projection the index publishes recorded: what a watcher's signal
+    /// reaches the front end as (ADR-0046).</summary>
+    public static TrackedModFixture Tracked(INotificationPublisher notifications) =>
+        new(track: true, PluginName, notifications: notifications);
 
     /// <summary>Tracked, over a persistent index file keyed on <see cref="InstanceRoot"/>, so a second
     /// mirror over the same instance starts warm — the shape a restart has.</summary>

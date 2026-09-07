@@ -88,6 +88,9 @@ try
     // The bridge's own live-watch lifecycle and unanswered-question queue — one instance for the
     // whole process, so the reconcile-time check (PUT /load-order) and the live watcher share it.
     builder.Services.AddSingleton<ExternalChangeWatcher>();
+    // ADR-0046 invariant 4: the Source watcher, a process singleton for the same reason — the watch
+    // set is re-decided per reconcile, and by Track.
+    builder.Services.AddSingleton<SourceChangeWatcher>();
 
     var app = builder.Build();
 
@@ -99,6 +102,19 @@ try
         app.Services.GetRequiredService<INotificationPublisher>(),
         app.Services.GetRequiredService<ILoggerFactory>().CreateLogger(nameof(IndexMirror)));
     app.Services.GetRequiredService<ExternalChangeWatcher>().IndexedBinaryChanged = indexMirror.Apply;
+
+    // ADR-0046: the Source watcher's other half, subscribed once for the same reason. The mirror
+    // announces each reconcile and Track the repository it has created, so a watch starts with no
+    // restart.
+    var mirror = app.Services.GetRequiredService<ILoadOrderMirror>();
+    var sourceWatcher = app.Services.GetRequiredService<SourceChangeWatcher>();
+    var sourceMirror = new SourceMirror(
+        mirror, sourceWatcher,
+        app.Services.GetRequiredService<INotificationPublisher>(),
+        app.Services.GetRequiredService<ILoggerFactory>().CreateLogger(nameof(SourceMirror)));
+    sourceWatcher.SourceChanged = sourceMirror.Apply;
+    mirror.LoadOrderChanged = sourceMirror.RefreshWatches;
+    app.Services.GetRequiredService<TrackService>().RepositoryCreated = sourceMirror.WatchTracking;
 
     // Most endpoint guards return a 4xx without logging, so without the selector a deliberate failure
     // would be invisible; at Information a success line would flood. The appsettings
