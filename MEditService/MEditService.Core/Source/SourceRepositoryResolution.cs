@@ -174,8 +174,8 @@ public sealed partial class SourceRepository
     }
 
     /// <summary>True when another record's document in this plugin's tree carries
-    /// <paramref name="formKey"/>: the embedded child a caller holding no record type cannot ask
-    /// <see cref="Locate"/> about (debt #779).</summary>
+    /// <paramref name="formKey"/>. The cheap half of <see cref="IdentityOf"/>, for a caller that
+    /// needs no name and will not pay the codec read one costs.</summary>
     internal bool CarriesEmbedded(PluginKey plugin, string formKey) =>
         OwnersUnder(Path.Combine(_modFolder, RootFor(plugin.Name)))
             .DocumentHolding(formKey) is not null;
