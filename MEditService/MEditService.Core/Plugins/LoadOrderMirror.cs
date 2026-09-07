@@ -72,6 +72,24 @@ public sealed class LoadOrderMirror(
     /// <c>_lock</c> first and then waiting here would deadlock.</summary>
     public IndexWriteGate WriteGate { get; } = new();
 
+    /// <summary>See <see cref="ILoadOrderMirror.LoadOrderChanged"/>.</summary>
+    public Action? LoadOrderChanged { get; set; }
+
+    // Raised outside _lock and outside the exclusive right, so a subscriber that reads the mirror
+    // back cannot deadlock against the reconcile that raised it. A throwing subscriber is its own
+    // business, never the reconcile's.
+    private void AnnounceLoadOrder()
+    {
+        try
+        {
+            LoadOrderChanged?.Invoke();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "A load-order subscriber failed; the load order itself is unaffected");
+        }
+    }
+
     /// <summary>See <see cref="ILoadOrderMirror.RequireScope"/>.</summary>
     public (ILoadOrder LoadOrder, IRecordReads Reads) RequireScope()
     {
@@ -168,6 +186,8 @@ public sealed class LoadOrderMirror(
             EndReconcile();
             ExitExclusive();
         }
+
+        AnnounceLoadOrder();
     }
 
     // Called with the exclusive right held, so no other reconcile can be in flight.
@@ -588,6 +608,23 @@ public sealed class LoadOrderMirror(
         return reports;
     }
 
+    /// <summary>See <see cref="ILoadOrderMirror.RefreshKeys"/>.</summary>
+    public void RefreshKeys(PluginKey key, IReadOnlyList<string> formKeys)
+    {
+        // Taken before anything reaches _lock or the index: this runs on the Source watcher's timer,
+        // with nothing else ordering it against an in-flight edit.
+        using var _ = WriteGate.Enter();
+
+        var (loadOrder, index) = RequireHeldIndex();
+
+        // Re-derived every call, never remembered from when the watch started: the repository can be
+        // deleted or replaced between the event and this line, and then there is no truth to read.
+        if (ModFolders.TrackedOf(loadOrder, key) is not { } modFolder) return;
+
+        index.RefreshByKeys(key, modFolder, formKeys);
+        ReapplyFilter();
+    }
+
     // Never null, and never one without the other, for the same reason RequireScope is not.
     private (ILoadOrder LoadOrder, IRecordIndex Index) RequireHeldIndex()
     {
@@ -778,6 +815,8 @@ public sealed class LoadOrderMirror(
         EnterExclusive();
         try { lock (_lock) DisposeCurrent(); }
         finally { ExitExclusive(); }
+
+        AnnounceLoadOrder();
     }
 
     public void Dispose()

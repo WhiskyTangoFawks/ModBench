@@ -153,10 +153,7 @@ internal sealed class SourceValidation(DuckDbRecordIndex index, DuckDBConnection
 
         foreach (var file in Directory.EnumerateFiles(sourceRoot, "*.json", SearchOption.AllDirectories))
         {
-            // Group and block metadata, written only where a level has non-default metadata. It
-            // carries no record and so claims no rows.
-            if (Path.GetFileName(file).Equals(SourceUnitResolver.GroupRecordDataFileName, StringComparison.Ordinal))
-                continue;
+            if (SourceDocuments.CarriesNoRecord(file)) continue;
 
             string text;
             try
@@ -172,7 +169,7 @@ internal sealed class SourceValidation(DuckDbRecordIndex index, DuckDBConnection
                 continue;
             }
 
-            if (FormKeyDeclaredBy(text, file, headerPath, pluginFileName) is not { } formKey)
+            if (SourceDocuments.FormKeyDeclaredIn(text, file, headerPath, pluginFileName) is not { } formKey)
             {
                 failures.Add($"'{file}' declares no FormKey, so the records it holds could not be validated.");
                 fullyRead = false;
@@ -183,28 +180,6 @@ internal sealed class SourceValidation(DuckDbRecordIndex index, DuckDBConnection
         }
 
         return documents;
-    }
-
-    // The header's document is the whole-mod door's root RecordData.json, which carries a ModKey
-    // rather than a FormKey; HeaderIndexer computes the FormKey the index files it under.
-    private static string? FormKeyDeclaredBy(string text, string file, string headerPath, string pluginFileName)
-    {
-        if (file.Equals(headerPath, StringComparison.Ordinal))
-            return HeaderIndexer.FormKeyFor(ModKey.FromFileName(pluginFileName));
-
-        try
-        {
-            using var document = JsonDocument.Parse(text);
-            return document.RootElement.ValueKind == JsonValueKind.Object
-                   && document.RootElement.TryGetProperty("FormKey", out var formKey)
-                   && formKey.ValueKind == JsonValueKind.String
-                ? formKey.GetString()
-                : null;
-        }
-        catch (JsonException)
-        {
-            return null;
-        }
     }
 
     // One row per source document: every Effective record no other record's document embeds. The

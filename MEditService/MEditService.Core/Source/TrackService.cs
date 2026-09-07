@@ -21,6 +21,10 @@ public sealed class TrackService(ILogger<TrackService> logger)
     private TrackProgress _progress = TrackProgress.Idle;
     public TrackProgress Progress => Volatile.Read(ref _progress);
 
+    /// <summary>ADR-0046: raised with the mod folder and origin of a repository that now exists, so
+    /// the Source watcher starts on a tracked mod with no restart.</summary>
+    public Action<string, string>? RepositoryCreated { get; set; }
+
     public Task TrackAsync(ILoadOrder loadOrder, string origin, SourcePreset preset, CancellationToken cancel = default) =>
         TrackAsync(loadOrder, origin, preset, deserializeForVerification: null, cancel);
 
@@ -111,6 +115,10 @@ public sealed class TrackService(ILogger<TrackService> logger)
                 logger.LogInformation("Tracking {Origin}: {FileCount} source files across {PluginCount} plugin(s)", origin, pristineFiles.Count, plugins.Count);
             }
             SourceRepository.Track(modFolder, preset, pristineFiles, trailers);
+
+            // After the tree is written and committed, never before: a watch over a half-written tree
+            // validates a plugin whose documents are still arriving, and re-derives it from them.
+            RepositoryCreated?.Invoke(modFolder, origin);
         }
         finally
         {

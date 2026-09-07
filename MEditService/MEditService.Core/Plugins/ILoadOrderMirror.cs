@@ -60,6 +60,14 @@ public interface ILoadOrderMirror
     /// this call re-derived whole.</summary>
     IReadOnlyList<ValidationReport> ValidateIndex(PluginKey? plugin);
 
+    /// <summary>ADR-0046 invariant 4's narrow signal: re-projects these keys from the source tree under
+    /// the write gate. An untracked or unheld copy is a no-op.</summary>
+    void RefreshKeys(PluginKey key, IReadOnlyList<string> formKeys);
+
+    /// <summary>Raised once a reconcile settles and once <see cref="Close"/> empties the mirror, so the
+    /// composition root re-registers the Source watches. Core names no watcher type.</summary>
+    Action? LoadOrderChanged { get; set; }
+
     /// <summary>Which truth it reads is the plugin's: an untracked copy from its binary, a tracked
     /// copy from its source tree (ADR-0041), because reading a tracked copy's binary would discard
     /// uncommitted edits.</summary>
