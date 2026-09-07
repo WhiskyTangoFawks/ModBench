@@ -113,4 +113,19 @@ public sealed class HeaderFlagEditTests : IDisposable
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.FieldReadOnly, result.Refusal);
     }
+
+    // Masters and Author refuse identically to Flags — the evidence that no masters-specific
+    // mechanism exists, only the shared absence of a write delegate on every header column.
+    [Fact]
+    public void EditField_MastersOrAuthor_RefusesAsReadOnly_LikeTheFlagsColumn()
+    {
+        var masters = Service().Set(
+            _fixture.Plugin, HeaderFormKey, HeaderIndexer.MastersFieldName, JsonDocument.Parse("[\"Other.esm\"]").RootElement);
+        var author = Service().Set(
+            _fixture.Plugin, HeaderFormKey, "Author", JsonDocument.Parse("\"Someone Else\"").RootElement);
+
+        Assert.Equal(RecordEditRefusal.FieldReadOnly, masters.Refusal);
+        Assert.Equal(RecordEditRefusal.FieldReadOnly, author.Refusal);
+        Assert.Empty(_fixture.GitStatus());
+    }
 }

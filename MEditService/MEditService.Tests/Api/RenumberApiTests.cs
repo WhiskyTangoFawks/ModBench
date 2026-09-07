@@ -68,9 +68,9 @@ public sealed class RenumberApiTests(LoadedApiFixture<TestPluginFixture> loaded)
 
         Assert.True(await ProjectionLanded(beforeRenumber), "the renumbered record never reached the index");
 
-        // The old FormKey's point-read refuses rather than serving stale data.
-        var oldRead = await _client.GetAsync($"/records/{Uri.EscapeDataString(oldFormKey)}");
-        Assert.Equal(HttpStatusCode.NotFound, oldRead.StatusCode);
+        // The old FormKey's point-read refuses rather than serving stale data. Polls like the
+        // listing below: the create and delete side of a renumber can settle as separate batches.
+        Assert.Equal(HttpStatusCode.NotFound, await OldFormKeyReadOnceItIs404(oldFormKey));
 
         // The old FormKey is gone from the plugin's listing, and the new one is present.
         var formKeys = await NpcFormKeysOnceTheyHold(newFormKey);
@@ -86,6 +86,18 @@ public sealed class RenumberApiTests(LoadedApiFixture<TestPluginFixture> loaded)
             new Uri($"/load-order/sequence/await?atLeast={before + 1}&timeoutMs=20000", UriKind.Relative));
         response.EnsureSuccessStatusCode();
         return (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("reached").GetBoolean();
+    }
+
+    private async Task<HttpStatusCode> OldFormKeyReadOnceItIs404(string oldFormKey)
+    {
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(20);
+        while (true)
+        {
+            var response = await _client.GetAsync($"/records/{Uri.EscapeDataString(oldFormKey)}");
+            if (response.StatusCode == HttpStatusCode.NotFound || DateTime.UtcNow >= deadline) return response.StatusCode;
+
+            await ProjectionLanded(await _client.GetFromJsonAsync<long>("/load-order/sequence"));
+        }
     }
 
     // A renumber moves one file and removes another, which the watcher may settle as more than one

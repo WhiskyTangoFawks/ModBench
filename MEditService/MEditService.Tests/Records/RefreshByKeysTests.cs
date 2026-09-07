@@ -12,7 +12,7 @@ using Mutagen.Bethesda.Plugins;
 namespace MEditService.Tests.Records;
 
 /// <summary>ADR-0046: the Index's one projection verb, exercised directly through the seam rather
-/// than through SourceFreshness — its first caller, covered separately.</summary>
+/// than through the Source watcher, its caller — covered separately.</summary>
 public sealed class RefreshByKeysTests : IDisposable
 {
     private readonly TrackedModFixture _mod = TrackedModFixture.Tracked();

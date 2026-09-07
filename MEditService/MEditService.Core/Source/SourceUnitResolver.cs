@@ -318,8 +318,7 @@ internal static class SourceUnitResolver
     }
 
     /// <summary>The record's own text out of the bytes <paramref name="unit"/>'s file holds: itself for
-    /// a flat record, or re-extracted for an embedded child. Shared by SourceFreshness's drift check
-    /// and RefreshByKeys's write.</summary>
+    /// a flat record, or re-extracted for an embedded child. RefreshByKeys's write.</summary>
     internal static string? RecordBodyFromOwnerBytes(
         byte[]? ownerBytes, SourceUnit unit, string formKey, GameRelease release, RecordTextCodec codec)
     {

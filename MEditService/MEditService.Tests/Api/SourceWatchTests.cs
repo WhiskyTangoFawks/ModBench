@@ -3,12 +3,14 @@ using MEditService.Bridge;
 using MEditService.Core.Edits;
 using MEditService.Core.Notifications;
 using MEditService.Core.Plugins;
+using MEditService.Core.Queries;
 using MEditService.Core.Records;
 using MEditService.Core.Source;
 using MEditService.Tests.Edits;
 using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
+using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Tests.Api;
 
@@ -147,6 +149,118 @@ public sealed class SourceWatchTests : IDisposable
         RenameTheNpcByHand("RenamedByHand");
         Assert.True(await Settles(afterTheProjection));
         Assert.Equal("RenamedByHand", EditorIdAt(RecordRef.Effective));
+    }
+
+    // The header is a source unit too (ADR-0041, ADR-0005): the watcher's own root is the mod
+    // folder, so a hand edit to RecordData.json reaches the index the same way any other document's
+    // does.
+    [Fact]
+    public async Task AHandEditToTheHeaderFile_LandsInTheIndex()
+    {
+        var headerFormKey = HeaderIndexer.FormKeyFor(ModKey.FromFileName(_mod.ActualPluginName));
+        var headerFile = Path.Combine(_mod.ModFolder, "source", _mod.ActualPluginName, "RecordData.json");
+        var before = _mod.Mirror.Sequence;
+
+        var text = File.ReadAllText(headerFile);
+        File.WriteAllText(headerFile, text.Replace(
+            "\"ModHeader\": {", "\"ModHeader\": {\n    \"Author\": \"RenamedByHand\",", StringComparison.Ordinal));
+
+        Assert.True(await Settles(before));
+        Assert.Contains(
+            "RenamedByHand",
+            Index.At(RecordRef.Effective).GetDocument(headerFormKey, _mod.Plugin)!.Body!,
+            StringComparison.Ordinal);
+    }
+
+    // The gesture a user makes in the Source Control panel's "Discard Changes" — a working-tree
+    // write the watcher sees exactly like a hand edit.
+    [Fact]
+    public async Task DiscardingAWorkingTreeChangeThroughGit_RestoresTheCommittedValue()
+    {
+        var service = new RecordEditService(_mod.Mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
+        var before = _mod.Mirror.Sequence;
+        Assert.True(service.Set(
+            _mod.Plugin, _mod.Npc.ToString(), "HeightMax", System.Text.Json.JsonDocument.Parse("0.75").RootElement).Applied);
+        Assert.True(await Settles(before));
+
+        var relativePath = _mod.RelativeSourcePath(_mod.Npc, "npc_", TrackedModFixture.NpcEditorId).Replace('\\', '/');
+        var afterEdit = _mod.Mirror.Sequence;
+        Git("restore", "--", relativePath);
+
+        Assert.True(await Settles(afterEdit));
+        var entry = Index.At(RecordRef.Effective).GetOverrideStack(_mod.Npc.ToString())!.Entries.Single();
+        Assert.False(entry.HasWorkingTreeChange);
+        Assert.DoesNotContain("0.75", entry.Effective.Body!, StringComparison.Ordinal);
+    }
+
+    // A BOM-carrying rewrite resolves identical to the codec's BOM-free text, so nothing about it
+    // ever bumps the sequence — there is no landing to await, only an absence of drift to find.
+    [Fact]
+    public void ASourceFileRewrittenWithAUtf8Bom_DoesNotSettleAsPerpetualDirt()
+    {
+        var before = _mod.Mirror.Sequence;
+        var original = File.ReadAllBytes(_mod.NpcSourceFile);
+        var bomPrefixed = new byte[] { 0xEF, 0xBB, 0xBF }.Concat(original).ToArray();
+        File.WriteAllBytes(_mod.NpcSourceFile, bomPrefixed);
+
+        WaitOutTheWatcher();
+
+        Assert.Equal(before, _mod.Mirror.Sequence);
+        var entry = Index.At(RecordRef.Effective).GetOverrideStack(_mod.Npc.ToString())!.Entries.Single();
+        Assert.False(entry.HasWorkingTreeChange);
+        Assert.Equal(entry.Head.Body, entry.Effective.Body);
+    }
+
+    // The self-heal a watcher-driven refresh performs is still a mutation as far as _filter's
+    // one-shot snapshot is concerned.
+    [Fact]
+    public async Task AHandEditThatMatchesAnActiveFilter_ReachesTheFilteredListing()
+    {
+        _mod.Mirror.SetFilter("SELECT form_key FROM npc_ WHERE editor_id = 'RenamedByHand'");
+        Assert.Equal(0, _mod.Mirror.Reads!.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0)).Total);
+
+        var before = _mod.Mirror.Sequence;
+        RenameTheNpcByHand("RenamedByHand");
+
+        Assert.True(await Settles(before));
+        var result = await FilteredNpcListingReachesOneRow();
+        Assert.Equal(1, result.Total);
+        Assert.Equal(_mod.Npc.ToString(), result.Items[0].FormKey);
+    }
+
+    // The sequence says the projection landed, not that ReapplyFilter's own re-materialization of
+    // _filter has finished on the mirror's lock — the two are two statements, not one.
+    private async Task<PagedResult<RecordSummary>> FilteredNpcListingReachesOneRow()
+    {
+        var query = new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0);
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(15);
+        PagedResult<RecordSummary> result;
+        do
+        {
+            result = _mod.Mirror.Reads!.Search(query);
+            if (result.Total > 0) return result;
+            await Task.Delay(50);
+        } while (DateTime.UtcNow < deadline);
+        return result;
+    }
+
+    // Renamed with content unchanged: the old path is unreadable at signal time, so the batch is a
+    // whole-plugin validate, which finds the FormKey wherever the tree now holds it. No drift, so
+    // no sequence bump to await.
+    [Fact]
+    public void RenamingASourceFileByHand_WithItsContentUnchanged_StillReadsCorrectly()
+    {
+        var before = _mod.Mirror.Sequence;
+        var originalPath = _mod.NpcSourceFile;
+        var renamed = Path.Combine(
+            Path.GetDirectoryName(originalPath)!, $"SomeOtherName - {_mod.Npc.ID:X6}_{_mod.Npc.ModKey.FileName}.json");
+
+        File.Move(originalPath, renamed);
+        WaitOutTheWatcher();
+
+        Assert.Equal(before, _mod.Mirror.Sequence);
+        Assert.Equal(TrackedModFixture.NpcEditorId, EditorIdAt(RecordRef.Effective));
+        Assert.NotNull(Index.At(RecordRef.Effective).GetDocument(_mod.Npc.ToString(), _mod.Plugin));
     }
 
     // Never exclusive owners of the folder (ADR-0041): MO2's Replace install shell-deletes a mod
