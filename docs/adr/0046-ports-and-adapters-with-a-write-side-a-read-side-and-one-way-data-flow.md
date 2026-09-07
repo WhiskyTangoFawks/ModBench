@@ -101,7 +101,9 @@ These describe the present and may change without revisiting the invariants.
 
 - The watchers are .NET file watchers in the Bridge assembly: the plugin watcher on mod folders,
   the Source watcher on each tracked mod's source folder and its git refs, HEAD, the refs
-  directory and packed-refs. Events are debounced and batched per plugin. The plugin watcher
+  directory and packed-refs. The Source watcher's quiet timer is shared across every watched
+  plugin, not per plugin, so a write spanning several plugins settles as one batch; a second,
+  non-restarting timer bounds the wait so a continuous stream still projects. The plugin watcher
   also signals Commands when a tracked plugin's bytes change outside, because absorb-or-keep is
   a user decision; that is the one upward arrow.
 - The first transport adapter for notifications is a server-sent event stream on the HTTP API.
