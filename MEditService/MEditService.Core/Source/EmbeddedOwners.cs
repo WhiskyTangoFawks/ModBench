@@ -90,9 +90,10 @@ internal sealed class EmbeddedOwners
         return byChild;
     }
 
-    // The document's own top-level record type: what SourceRecordPath parses for the header and a
-    // flat record, and the group folder's own for a container's directory.
-    private static string? RecordTypeOf(string relativePath, GameRelease release)
+    /// <summary>The document's own top-level record type: what SourceRecordPath parses for the header
+    /// and a flat record, and the group folder's own for a container's directory. Null when the path
+    /// is not a document's.</summary>
+    internal static string? RecordTypeOf(string relativePath, GameRelease release)
     {
         if (SourceRecordPath.TryParse(relativePath, release, out var identity)) return identity.RecordType;
 
