@@ -37,7 +37,7 @@ public sealed class RecordEditService(
     public RecordEditResult Edit(PluginKey plugin, string formKey, RecordEditEnvelope envelope)
     {
         if (ResolveEditTarget(plugin, formKey, out var editTarget) is { } blocked) return blocked;
-        var (index, _, release, document, unit) = editTarget;
+        var (index, _, release, document, unit, repository) = editTarget;
         var spelled = RecordEditEnvelope.Spell(envelope.Path);
 
         if (document.ParseDiagnosis is { } diagnosis)
@@ -59,7 +59,14 @@ public sealed class RecordEditService(
 
         var reads = index.At(RecordRef.Effective);
         var owner = reads.GetDocument(unit.OwnerFormKey, plugin)!;
-        var text = ReadSourceText(unit.FullPath, owner);
+
+        // A flat record is the repository's, by identity; a container's own file and an embedded
+        // child's are still resolved to a path here.
+        var isFlat = !unit.IsEmbedded && !unit.IsDirectoryPerRecord;
+        var identity = new RecordIdentity(formKey, document.RecordType, document.EditorId);
+        var text = isFlat
+            ? repository.Get(plugin, identity)?.Body ?? IndexedBodyOf(document)
+            : ReadSourceText(unit.FullPath, owner);
 
         // An embedded child is patched inside its parent's document: the parent is what the file
         // holds and what the codec reads, so every untouched byte of it comes back intact.
@@ -95,11 +102,19 @@ public sealed class RecordEditService(
 
         // The file name carries the EditorID, so an EditorID edit is a rename too. Done before the write.
         var newEditorId = unit.IsEmbedded ? document.EditorId : EditorIdOf(newText);
-        var sourcePath = RenameSourceUnit(unit, FormKey.Factory(unit.OwnerFormKey), newEditorId, document);
+        if (isFlat)
+        {
+            repository.Rename(plugin, identity, newEditorId);
+            repository.Put(plugin, new SourceDocument(formKey, document.RecordType, newEditorId, newText));
+        }
+        else
+        {
+            var sourcePath = RenameSourceUnit(unit, FormKey.Factory(unit.OwnerFormKey), newEditorId, document);
 
-        // The atomic write matters here: the file is inside a live git working tree the SCM panel may
-        // read at any moment.
-        WriteBodyAtomic(sourcePath, newText);
+            // The atomic write matters here: the file is inside a live git working tree the SCM panel
+            // may read at any moment.
+            SourceUnitResolver.WriteTextAtomic(sourcePath, newText);
+        }
 
         // The new value can flip filter membership either way.
         mirror.ReapplyFilter();
@@ -129,6 +144,15 @@ public sealed class RecordEditService(
         if (File.Exists(sourcePath)) return File.ReadAllText(sourcePath);
         logger.LogWarning(
             "Source file {SourcePath} is missing; editing from the indexed document and rewriting it", sourcePath);
+        return document.Body!;
+    }
+
+    // The same fallback for a caller that asked the repository and got nothing: it names no path, so
+    // the record is what the warning can name.
+    private string IndexedBodyOf(RecordDocument document)
+    {
+        logger.LogWarning(
+            "No source file holds {FormKey}; editing from the indexed document and rewriting it", document.FormKey);
         return document.Body!;
     }
 
@@ -248,7 +272,7 @@ public sealed class RecordEditService(
     public RecordEditResult DeleteRecord(PluginKey plugin, string formKey)
     {
         if (ResolveEditTarget(plugin, formKey, out var target) is { } blocked) return blocked;
-        var (index, _, release, document, unit) = target;
+        var (index, _, release, document, unit, repository) = target;
         if (RefuseIfHeader(document.RecordType) is { } headerRefusal) return headerRefusal;
         var reads = index.At(RecordRef.Effective);
 
@@ -280,9 +304,9 @@ public sealed class RecordEditService(
                 var directory = Path.GetDirectoryName(unit.FullPath)!;
                 if (Directory.Exists(directory)) Directory.Delete(directory, recursive: true);
             }
-            else if (File.Exists(unit.FullPath))
+            else
             {
-                File.Delete(unit.FullPath);
+                repository.Remove(plugin, new RecordIdentity(formKey, document.RecordType, document.EditorId));
             }
         }
 
@@ -310,6 +334,8 @@ public sealed class RecordEditService(
             return RecordEditResult.Refused(RecordEditRefusal.RecordNotFound, "No load order has been received.");
 
         var release = mirror.LoadOrder!.GameRelease;
+        if (SourceRepository.Open(modFolder, release) is not { } repository) return RefuseUntracked(plugin);
+
         var schemas = schemaReflector.GetSchemas(release);
         if (recordType == HeaderIndexer.RecordType || !schemas.TryGetValue(recordType, out var schema))
         {
@@ -323,11 +349,10 @@ public sealed class RecordEditService(
         var record = BareRecord(
             _codec, schema, release, targetFormKey, string.IsNullOrWhiteSpace(editorId) ? null : editorId, partialForm: false);
 
-        // RefuseIfContainerType guarantees a flat record, so no block path. The group folder is minted
-        // by the write itself when the plugin has never held this type.
-        var placement = SourcePlacement.For(plugin.Name, recordType, targetFormKey, record.EditorID, release);
-        var relativePath = placement.RelativePath;
-        WriteAt(modFolder, placement, path => SerializeAndWrite(_codec, record, path, release));
+        // RefuseIfContainerType guarantees a flat record, so the repository's own layout is the whole
+        // answer: no block path, and the group folder minted by the write when this type is new here.
+        repository.Put(
+            plugin, new SourceDocument(targetFormKey, recordType, record.EditorID, SerializeToText(record, release)));
 
         // A brand-new row can newly match an active filter.
         mirror.ReapplyFilter();
@@ -335,8 +360,8 @@ public sealed class RecordEditService(
         if (logger.IsEnabled(LogLevel.Information))
         {
             logger.LogInformation(
-                "Created {RecordType} {FormKey} in {Plugin} ({Origin}) — new working-tree source file at {SourcePath}",
-                recordType, targetFormKey, plugin.Name, plugin.Origin, relativePath);
+                "Created {RecordType} {FormKey} in {Plugin} ({Origin}) — new working-tree source document",
+                recordType, targetFormKey, plugin.Name, plugin.Origin);
         }
         return RecordEditResult.Success(targetFormKey);
     }
@@ -421,7 +446,7 @@ public sealed class RecordEditService(
         var relativePath = destination.RelativePath;
         WriteAt(destinationModFolder, destination, path =>
         {
-            WriteBodyAtomic(path, body);
+            SourceUnitResolver.WriteTextAtomic(path, body);
             return body;
         });
 
@@ -672,22 +697,6 @@ public sealed class RecordEditService(
             .GetAwaiter().GetResult();
     }
 
-    // The codec's own write-then-rename, needed here because Copy as Override writes text directly.
-    private static void WriteBodyAtomic(string filePath, string body)
-    {
-        var tempPath = filePath + ".tmp";
-        try
-        {
-            File.WriteAllText(tempPath, body);
-            File.Move(tempPath, filePath, overwrite: true);
-        }
-        catch
-        {
-            File.Delete(tempPath);
-            throw;
-        }
-    }
-
     /// <summary>A delete+create pair in source terms plus a reference cascade. Native records only; an
     /// untracked referencer refuses before any write. Computed whole, then written through a
     /// <see cref="SourceWriteTransaction"/> that restores every tree on failure (ADR-0045).</summary>
@@ -697,7 +706,7 @@ public sealed class RecordEditService(
         // fresh. RecordType is kept for the header check, since a ModHeader cannot run through
         // ReadRecordFromSource.
         if (ResolveEditTarget(plugin, formKey, out var target) is { } blocked) return blocked;
-        var (index, modFolder, release, document, _) = target;
+        var (index, modFolder, release, document, _, _) = target;
         if (RefuseIfHeader(document.RecordType) is { } headerRefusal) return headerRefusal;
 
         // Canonicalised once: two ordinal comparisons below (the exclusion predicate and the
@@ -1270,7 +1279,8 @@ public sealed class RecordEditService(
     internal const string TrackCommandTitle = "Modbench: Track\u2026";
 
     private readonly record struct EditTarget(
-        IRecordIndex Index, string ModFolder, GameRelease Release, RecordDocument Document, SourceUnit Unit);
+        IRecordIndex Index, string ModFolder, GameRelease Release, RecordDocument Document, SourceUnit Unit,
+        SourceRepository Repository);
 
     // Reads the document at Effective because that is what the user is editing from: a second edit
     // must build on the first, not the committed baseline. The copy gestures gate on the destination
@@ -1296,6 +1306,10 @@ public sealed class RecordEditService(
 
         var release = mirror.LoadOrder!.GameRelease;
 
+        // Asked again rather than inferred from the gate above: MO2 can replace the folder between the
+        // two, and a repository is only ever held over a folder observed tracked.
+        if (SourceRepository.Open(modFolder, release) is not { } repository) return RefuseUntracked(plugin);
+
         // An embedded child (a placed ref, landscape, navmesh, top cell) resolves to its parent's file.
         if (SourceUnitResolver.Resolve(reads, plugin, modFolder, formKey, document.RecordType, document.EditorId, release)
             is not { } unit)
@@ -1306,7 +1320,7 @@ public sealed class RecordEditService(
                 "that would. Something moved or removed it outside Modbench \u2014 check the Source Control panel.");
         }
 
-        target = new EditTarget(index, modFolder, release, document, unit);
+        target = new EditTarget(index, modFolder, release, document, unit, repository);
         return null;
     }
 
