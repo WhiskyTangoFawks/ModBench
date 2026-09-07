@@ -675,20 +675,20 @@ public sealed class LoadOrderMirror(
         // for itself, so neither trusts the other about a folder either could have lost in between.
         if (SourceIngest.TreeFor(metadata.Origin, metadata.Path, metadata.Name) != null)
         {
-            ReingestPluginFromSource(key);
+            IngestFromSourceTree(key);
             return Task.CompletedTask;
         }
 
         return ReindexOne(metadata, index, gameRelease);
     }
 
-    /// <summary>The same <see cref="SourceIngest.Ingest"/> the reconcile's tracked branch runs, so a
-    /// re-ingest and a first ingest produce the same rows by construction. A failed read is recorded
-    /// and rethrown, never degraded to the binary.</summary>
-    public void ReingestPluginFromSource(PluginKey key)
+    // The same SourceIngest.Ingest the reconcile's tracked branch runs, so a re-ingest and a first
+    // ingest produce the same rows by construction. A failed read is recorded and rethrown, never
+    // degraded to the binary.
+    private void IngestFromSourceTree(PluginKey key)
     {
-        // Outside _lock, always. Reached both from the watcher's timer and directly, so it takes the
-        // gate for itself rather than trusting a caller; the reentrant gate makes that free.
+        // Outside _lock, always. It takes the gate for itself rather than trusting its caller; the
+        // reentrant gate makes that free.
         using var _ = WriteGate.Enter();
 
         var (metadata, index, gameRelease) = RequireHeldCopy(key);

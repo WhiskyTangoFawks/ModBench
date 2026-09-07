@@ -9,11 +9,12 @@ namespace MEditService.Tests.Architecture;
 public sealed class CarrierScanTests
 {
     // The carrier's own name, its drift rule, and the member it minted into a document; then the
-    // four push verbs, whose row work lives behind the projector under names of its own.
+    // push verbs, whose row work lives behind the projector under names of its own.
     private static readonly string[] Symbols =
     [
         "SourceChildOrder", "SourceChildOrderDriftException", "MEditChildOrder",
         "ApplyWorkingTreeChanges", "CreateWorkingTreeRecord", "ApplyRenumber", "CreateCellLocation",
+        "ReingestPluginFromSource",
     ];
 
     private static readonly string[] ScannedRoots =

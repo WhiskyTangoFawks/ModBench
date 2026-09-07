@@ -170,10 +170,10 @@ public sealed class SourceIngestTests
         Assert.Equal(WorkingTreeState.None, byFormKey[mod.Race.ToString()].WorkingTreeState);
     }
 
-    // ---- The named source re-ingest door ----
+    // ---- Re-indexing a tracked copy reads its tree, never its binary ----
 
     [Fact]
-    public void ReingestPluginFromSource_ReDerivesFromTheMovedSourceTree_UnderALiveLoadOrder()
+    public async Task ReindexPlugin_OnATrackedCopy_ReDerivesFromItsSourceTree_UnderALiveLoadOrder()
     {
         using var mod = TrackedModFixture.Tracked();
 
@@ -184,19 +184,10 @@ public sealed class SourceIngestTests
         File.WriteAllText(mod.NpcSourceFile, text.Replace(
             TrackedModFixture.NpcEditorId, "ExternallyRenamed", StringComparison.Ordinal));
 
-        ((ILoadOrderMirror)mod.Mirror).ReingestPluginFromSource(mod.Plugin);
+        await ((ILoadOrderMirror)mod.Mirror).ReindexPlugin(mod.Plugin);
 
         var after = mod.Mirror.Projected().GetDocument(mod.Npc.ToString(), mod.Plugin)!;
         Assert.Equal("ExternallyRenamed", after.EditorId);
-    }
-
-    [Fact]
-    public void ReingestPluginFromSource_OnAnUntrackedPlugin_Throws()
-    {
-        using var mod = TrackedModFixture.Untracked();
-
-        Assert.Throws<InvalidOperationException>(
-            () => ((ILoadOrderMirror)mod.Mirror).ReingestPluginFromSource(mod.Plugin));
     }
 
     // ---- A source tree that cannot be read degrades to the binary, visibly ----

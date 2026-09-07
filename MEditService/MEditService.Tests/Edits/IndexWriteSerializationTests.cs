@@ -55,14 +55,14 @@ public sealed class IndexWriteSerializationTests : IDisposable
     }
 
     [Fact]
-    public async Task ReingestPluginFromSource_WaitsForAnInFlightWriteToRelease()
+    public async Task ReindexPlugin_WaitsForAnInFlightWriteToRelease()
     {
         Task work;
         using (new GateHeldElsewhere(Mirror.WriteGate))
         {
             bool finished;
-            (work, finished) = RunAndWait(() => Mirror.ReingestPluginFromSource(_mod.Plugin), BlockedWindow);
-            Assert.False(finished, "ReingestPluginFromSource wrote to the index without taking the write gate");
+            (work, finished) = RunAndWait(() => Mirror.ReindexPlugin(_mod.Plugin), BlockedWindow);
+            Assert.False(finished, "ReindexPlugin wrote to the index without taking the write gate");
         }
 
         await work.WaitAsync(Generous);

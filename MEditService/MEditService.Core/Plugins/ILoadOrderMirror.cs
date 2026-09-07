@@ -73,11 +73,6 @@ public interface ILoadOrderMirror
     /// uncommitted edits.</summary>
     Task ReindexPlugin(PluginKey key);
 
-    /// <summary>Names the truth it reads rather than inferring it, for a caller that has just moved
-    /// the source under a live load order. An unreadable tree is recorded and rethrown, never
-    /// degraded to the binary.</summary>
-    void ReingestPluginFromSource(PluginKey key);
-
     /// <summary>The file is gone, so its rows go with it. A no-op while the held copy still exists
     /// or with no load order: the watcher that calls this races teardowns and superseding load
     /// orders.</summary>
