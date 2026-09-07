@@ -1,5 +1,6 @@
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
+using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -115,7 +116,7 @@ public sealed class ProjectionSequenceTests : IDisposable
     }
 
     [Fact]
-    public void ApplyWorkingTreeChanges_TwoDeltasInOneCall_AdvancesTheSequenceOnce()
+    public void ProjectDocuments_TwoDeltasInOneCall_AdvancesTheSequenceOnce()
     {
         using var index = OpenIndex();
         index.Index(LoadBaseMod(), Registration.Participating(0), BaseKey);
@@ -129,20 +130,20 @@ public sealed class ProjectionSequenceTests : IDisposable
             .Replace("Second", "SecondEdited", StringComparison.Ordinal);
 
         var before = index.Sequence;
-        index.ApplyWorkingTreeChanges(BaseKey, [(formKey1, body1), (formKey2, body2)]);
+        index.ProjectDocuments(BaseKey, [(formKey1, body1), (formKey2, body2)]);
 
         Assert.Equal(before + 1, index.Sequence);
     }
 
     [Fact]
-    public void ApplyWorkingTreeChanges_WithNoDeltas_DoesNotAdvanceTheSequence()
+    public void ProjectDocuments_WithNoDeltas_DoesNotAdvanceTheSequence()
     {
         using var index = OpenIndex();
         index.Index(LoadBaseMod(), Registration.Participating(0), BaseKey);
         index.UpdateWinners();
         var before = index.Sequence;
 
-        index.ApplyWorkingTreeChanges(BaseKey, []);
+        index.ProjectDocuments(BaseKey, []);
 
         Assert.Equal(before, index.Sequence);
     }

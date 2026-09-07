@@ -27,19 +27,12 @@ internal abstract class DelegatingRecordIndex(IRecordIndex inner) : IRecordIndex
     public virtual void Unregister(PluginKey key) => Inner.Unregister(key);
     public virtual void UpdateWinners() => Inner.UpdateWinners();
     public virtual IReadOnlyList<PluginKey> RegisteredPlugins() => Inner.RegisteredPlugins();
-    public virtual void ApplyWorkingTreeChanges(PluginKey key, IReadOnlyList<(string FormKey, string? Body)> deltas) =>
-        Inner.ApplyWorkingTreeChanges(key, deltas);
-    public virtual void CreateWorkingTreeRecord(PluginKey key, string formKey, string recordType, string body) =>
-        Inner.CreateWorkingTreeRecord(key, formKey, recordType, body);
     public virtual void SetCommittedBaseline(PluginKey key, IReadOnlyList<(string FormKey, string Body)> baselines) =>
         Inner.SetCommittedBaseline(key, baselines);
     public virtual void MarkWorkingTreeOnly(PluginKey key, IReadOnlyList<string> formKeys) =>
         Inner.MarkWorkingTreeOnly(key, formKeys);
     public virtual void SeedCommittedOnly(PluginKey key, IReadOnlyList<(string FormKey, string RecordType, string Body)> records) =>
         Inner.SeedCommittedOnly(key, records);
-    public virtual void ApplyRenumber(PluginKey key, RenumberedRecord renumbered) =>
-        Inner.ApplyRenumber(key, renumbered);
-    public virtual void CreateCellLocation(PluginKey plugin, CellLocationRow row) => Inner.CreateCellLocation(plugin, row);
     public virtual void Dispose() => Inner.Dispose();
 
     public virtual IRecordReads At(RecordRef recordRef) => Inner.At(recordRef);

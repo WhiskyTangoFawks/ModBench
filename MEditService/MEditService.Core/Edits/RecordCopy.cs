@@ -125,25 +125,7 @@ internal sealed class RecordCopy(ILoadOrderMirror mirror, SchemaReflector schema
                   $"{containerUnit.RelativePath} is indexed as holding {containerFormKey}, but its own text does not carry it.")
             : ownerRecord;
         ContainerChildFields.AddChildToSlot(containerRecord, slotName, childRecord);
-        var newOwnerBody = RecordEditService.SerializeAndWrite(codec, ownerRecord, containerUnit.FullPath, release);
-
-        try
-        {
-            index.ApplyWorkingTreeChanges(destinationPlugin, [(containerUnit.OwnerFormKey, newOwnerBody)]);
-        }
-        catch (Exception ex)
-        {
-            // The container's file already carries the child's bytes, so a failure here must not
-            // surface as a bare exception that says nothing about the file that landed.
-            logger.LogError(
-                ex, "Index update failed after writing {ContainerFormKey}'s new body to {SourcePath} for copied child {FormKey}",
-                containerFormKey, containerUnit.FullPath, childFormKey);
-            return RecordEditResult.Refused(
-                RecordEditRefusal.ContainerCopyIndexUpdateFailedAfterWrite,
-                $"{containerFormKey}'s working-tree file was updated to carry {childFormKey}, but the index failed to " +
-                $"record it ({ex.Message}). The file itself is a real, reviewable working-tree change — check " +
-                "the Source Control panel, or relaunch mEdit to re-index it.");
-        }
+        RecordEditService.SerializeAndWrite(codec, ownerRecord, containerUnit.FullPath, release);
         mirror.ReapplyFilter();
         return RecordEditResult.Success();
     }
@@ -175,8 +157,7 @@ internal sealed class RecordCopy(ILoadOrderMirror mirror, SchemaReflector schema
         ContainerChildFields.TransplantChildSlots(found.Child, replacement);
         ContainerChildFields.ReplaceInSlot(found.Parent, found.SlotName, found.SlotIndex, replacement);
 
-        var newOwnerBody = RecordEditService.SerializeAndWrite(codec, ownerRecord, unit.FullPath, release);
-        index.ApplyWorkingTreeChanges(destinationPlugin, [(unit.OwnerFormKey, newOwnerBody)]);
+        RecordEditService.SerializeAndWrite(codec, ownerRecord, unit.FullPath, release);
         mirror.ReapplyFilter();
 
         if (logger.IsEnabled(LogLevel.Information))
@@ -216,9 +197,8 @@ internal sealed class RecordCopy(ILoadOrderMirror mirror, SchemaReflector schema
         var placement = SourcePlacement.For(
             destinationPlugin.Name, recordType, formKey, record.EditorID, release,
             cellLocation != null ? RecordEditService.EnsureInteriorCellBlockPath(destinationModFolder, destinationPlugin.Name, release) : null);
-        var body = RecordEditService.WriteAt(
+        RecordEditService.WriteAt(
             destinationModFolder, placement, path => RecordEditService.SerializeAndWrite(codec, record, path, release));
-        index.CreateWorkingTreeRecord(destinationPlugin, formKey, recordType, body);
         mirror.ReapplyFilter();
 
         if (logger.IsEnabled(LogLevel.Information))
@@ -232,8 +212,8 @@ internal sealed class RecordCopy(ILoadOrderMirror mirror, SchemaReflector schema
     }
 
     /// <summary>Mints an exterior CELL at its worldspace block/sub-block, auto-creating a bare Partial
-    /// Form WRLD when the destination has none. Index rows are written from the exact bytes the mint
-    /// wrote, never a second serialization.</summary>
+    /// Form WRLD when the destination has none. The block directories it writes are where the cell's
+    /// location is read back from.</summary>
     internal RecordEditResult MintExteriorCell(
         PluginKey sourcePlugin, string cellFormKey, CellLocationRow cellLocation, IMajorRecord cellRecord,
         PluginKey destinationPlugin, string destinationModFolder, IRecordIndex index, GameRelease release)
@@ -275,24 +255,12 @@ internal sealed class RecordCopy(ILoadOrderMirror mirror, SchemaReflector schema
 
         var syntheticMod = SpatialContainerMint.BuildSyntheticWorldspaceMod(
             destinationPlugin, worldspaceAncestor, cellLocation, cellRecord, release);
-        var minted = SpatialContainerMint.MintAsync(
+        SpatialContainerMint.MintAsync(
                 syntheticMod, destinationModFolder, destinationPlugin.Name, existingWorldspaceDirectory)
             .GetAwaiter().GetResult();
 
-        if (existingWorldspace == null)
-        {
-            index.CreateWorkingTreeRecord(
-                destinationPlugin, worldspaceFormKey, sourceWorldspaceDocument.RecordType,
-                Encoding.UTF8.GetString(minted.WorldspaceBody));
-        }
         // The cell's block and sub-block are the directories the mint wrote, a fact no document
-        // carries, so the row is copied from the source's rather than derived.
-        index.CreateCellLocation(destinationPlugin, cellLocation);
-        index.CreateWorkingTreeRecord(
-            destinationPlugin, cellFormKey, SourceRecordType.Resolve(cellRecord, schemaReflector.GetSchemas(release)),
-            Encoding.UTF8.GetString(minted.CellBody));
-
-        // Both callers rely on this leaving the index consistent, so the filter is reapplied here.
+        // carries: the projector re-derives them from the tree the mint just changed.
         mirror.ReapplyFilter();
 
         return RecordEditResult.Success();

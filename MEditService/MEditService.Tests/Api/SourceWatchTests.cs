@@ -118,25 +118,34 @@ public sealed class SourceWatchTests : IDisposable
         Assert.Equal(TrackedModFixture.NpcEditorId, EditorIdAt(RecordRef.Effective));
     }
 
-    // ADR-0046 invariant 4: our own writes are not suppressed, because a refresh that finds the same
-    // bytes changes nothing — the push the write already made stands.
+    // ADR-0046 invariant 4: our own write reaches the Index the way a hand edit does, and a second
+    // signal over bytes that already landed changes nothing.
     [Fact]
-    public async Task AWriteThroughTheWriteApi_IsObserved_AndChangesNoRowASecondTime()
+    public async Task AWriteThroughTheWriteApi_LandsThroughTheWatcher_AndChangesNoRowASecondTime()
     {
         var service = new RecordEditService(_mod.Mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
+        var before = _mod.Mirror.Sequence;
 
         var edit = service.Set(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", System.Text.Json.JsonDocument.Parse("0.75").RootElement);
         Assert.True(edit.Applied);
-        var afterTheWrite = _mod.Mirror.Sequence;
-        var projectionsAfterTheWrite = _notifications.Notifications.Count;
 
+        Assert.True(await Settles(before));
+        Assert.Contains(
+            "0.75",
+            Index.At(RecordRef.Effective).GetDocument(_mod.Npc.ToString(), _mod.Plugin)!.Body!,
+            StringComparison.Ordinal);
+        var afterTheProjection = _mod.Mirror.Sequence;
+        var projections = _notifications.Notifications.Count;
+
+        // The same bytes, signalled again: a projection idempotent by content writes no row.
+        File.SetLastWriteTimeUtc(_mod.NpcSourceFile, DateTime.UtcNow);
         WaitOutTheWatcher();
 
-        Assert.Equal(afterTheWrite, _mod.Mirror.Sequence);
-        Assert.Equal(projectionsAfterTheWrite, _notifications.Notifications.Count);
+        Assert.Equal(afterTheProjection, _mod.Mirror.Sequence);
+        Assert.Equal(projections, _notifications.Notifications.Count);
         // The watch is live all the same: the next hand edit lands through it.
         RenameTheNpcByHand("RenamedByHand");
-        Assert.True(await Settles(afterTheWrite));
+        Assert.True(await Settles(afterTheProjection));
         Assert.Equal("RenamedByHand", EditorIdAt(RecordRef.Effective));
     }
 

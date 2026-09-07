@@ -2,6 +2,7 @@ using System.Text.Json;
 using MEditService.Core.Edits;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
+using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -24,8 +25,8 @@ public sealed class CopyAsNewContainerTests : IDisposable
 
     private readonly List<IDisposable> _overlays = [];
 
-    private RecordEditService EditService() =>
-        new(_fixture.Mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
+    private ProjectingEditService EditService() =>
+        ProjectingEditService.Over(_fixture.Mirror);
 
     private IFallout4ModGetter ImportCompiled()
     {
@@ -54,7 +55,7 @@ public sealed class CopyAsNewContainerTests : IDisposable
         var newTopicFormKey = result.NewFormKey!;
         Assert.EndsWith(ContainerCopyFixture.DestinationPluginName, newTopicFormKey, StringComparison.OrdinalIgnoreCase);
 
-        var reads = _fixture.Mirror.Index!.At(RecordRef.Effective);
+        var reads = _fixture.Mirror.Projected();
 
         // The parent chain: quest auto-created as a bare Partial Form override, same FormKey as the
         // source quest (it is an override, not a copy).
@@ -126,7 +127,7 @@ public sealed class CopyAsNewContainerTests : IDisposable
         var landed = Assert.Single(questAfter.RootElement.GetProperty(nameof(Quest.DialogTopics)).EnumerateArray());
         Assert.Equal(result.NewFormKey, landed.GetProperty("FormKey").GetString());
 
-        var reads = _fixture.Mirror.Index!.At(RecordRef.Effective);
+        var reads = _fixture.Mirror.Projected();
         var questDoc = reads.GetDocument(_fixture.Quest.ToString(), _fixture.DestinationPlugin);
         Assert.False(questDoc!.IsPartialForm);
 
@@ -153,7 +154,7 @@ public sealed class CopyAsNewContainerTests : IDisposable
         var newFormKey = result.NewFormKey!;
         Assert.EndsWith(ContainerCopyFixture.DestinationPluginName, newFormKey, StringComparison.OrdinalIgnoreCase);
 
-        var reads = _fixture.Mirror.Index!.At(RecordRef.Effective);
+        var reads = _fixture.Mirror.Projected();
         Assert.True(reads.GetDocument(_fixture.Quest.ToString(), _fixture.DestinationPlugin)!.IsPartialForm);
         Assert.True(reads.GetDocument(_fixture.DialogTopic.ToString(), _fixture.DestinationPlugin)!.IsPartialForm);
 
@@ -184,7 +185,7 @@ public sealed class CopyAsNewContainerTests : IDisposable
         var newFormKey = result.NewFormKey!;
         Assert.EndsWith(ContainerCopyFixture.DestinationPluginName, newFormKey, StringComparison.OrdinalIgnoreCase);
 
-        var reads = _fixture.Mirror.Index!.At(RecordRef.Effective);
+        var reads = _fixture.Mirror.Projected();
         var doc = reads.GetDocument(newFormKey, _fixture.DestinationPlugin);
         Assert.NotNull(doc);
         Assert.Equal(ContainerCopyFixture.QuestEditorId, doc!.EditorId);

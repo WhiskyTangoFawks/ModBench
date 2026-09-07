@@ -24,7 +24,7 @@ public sealed class ParseFailedEditRefusalTests : IDisposable
             cmd.Parameters.Add(new DuckDBParameter { Value = _mod.Npc.ToString() });
             cmd.ExecuteNonQuery();
         }
-        var service = new RecordEditService(_mod.Mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
+        var service = ProjectingEditService.Over(_mod.Mirror);
 
         var result = service.Set(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", JsonDocument.Parse("0.75").RootElement);
 

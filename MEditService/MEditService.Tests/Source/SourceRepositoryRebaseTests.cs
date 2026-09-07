@@ -22,8 +22,8 @@ public sealed class SourceRepositoryRebaseTests : IDisposable
     private string GitDir => Path.Combine(_mod.ModFolder, ".git");
     private string RunGit(params string[] args) => GitCli.Run(GitDir, _mod.ModFolder, args);
 
-    private RecordEditService EditService() =>
-        new(_mod.Mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
+    private ProjectingEditService EditService() =>
+        ProjectingEditService.Over(_mod.Mirror);
 
     private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
 

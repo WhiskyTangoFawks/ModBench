@@ -20,7 +20,7 @@ public sealed class ExternalChangeClassifierTests
         var mod = TrackedModFixture.Tracked();
         try
         {
-            var editService = new RecordEditService(mod.Mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
+            var editService = ProjectingEditService.Over(mod.Mirror);
             editService.Set(mod.Plugin, mod.Npc.ToString(), "HeightMax", Json("0.75"));
 
             var compileService = new PluginCompileService(mod.Mirror, new PluginWriter(NullLogger<PluginWriter>.Instance), NullLogger<PluginCompileService>.Instance);
@@ -85,7 +85,7 @@ public sealed class ExternalChangeClassifierTests
         var mod = TrackedModFixture.Tracked();
         try
         {
-            var editService = new RecordEditService(mod.Mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
+            var editService = ProjectingEditService.Over(mod.Mirror);
             editService.Set(mod.Plugin, mod.Npc.ToString(), "HeightMax", Json("0.75"));
             var compileService = new PluginCompileService(mod.Mirror, new PluginWriter(NullLogger<PluginWriter>.Instance), NullLogger<PluginCompileService>.Instance);
             var result = compileService.Compile(mod.Plugin, new CompileSource.WorkingTree());

@@ -41,7 +41,6 @@ internal sealed class IndexOverridingMirror(ILoadOrderMirror inner, IRecordIndex
     public IReadOnlyList<ValidationReport> ValidateIndex(PluginKey? plugin) => inner.ValidateIndex(plugin);
     public void RefreshKeys(PluginKey key, IReadOnlyList<string> formKeys) => inner.RefreshKeys(key, formKeys);
     public Action? LoadOrderChanged { get => inner.LoadOrderChanged; set => inner.LoadOrderChanged = value; }
-    public void ReingestPluginFromSource(PluginKey key) => inner.ReingestPluginFromSource(key);
     public void UnindexPlugin(PluginKey key) => inner.UnindexPlugin(key);
     public void SetFilter(string sql) => inner.SetFilter(sql);
     public void ClearFilter() => inner.ClearFilter();

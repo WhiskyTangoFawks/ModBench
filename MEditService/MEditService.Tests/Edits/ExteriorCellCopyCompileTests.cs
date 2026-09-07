@@ -1,6 +1,7 @@
 using MEditService.Core.Edits;
 using MEditService.Core.Schema;
 using MEditService.Core.Source;
+using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -22,8 +23,8 @@ public sealed class ExteriorCellCopyCompileTests : IDisposable
         _fixture.Dispose();
     }
 
-    private RecordEditService EditService() =>
-        new(_fixture.Mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
+    private ProjectingEditService EditService() =>
+        ProjectingEditService.Over(_fixture.Mirror);
 
     private PluginCompileService CompileService() =>
         new(_fixture.Mirror, new PluginWriter(NullLogger<PluginWriter>.Instance), NullLogger<PluginCompileService>.Instance);

@@ -41,19 +41,24 @@ internal sealed class WorkingTreeOverlay
         _schemas = schemas;
     }
 
-    /// <summary>See <see cref="IRecordIndex.ApplyWorkingTreeChanges"/>. Returns whether any delta
-    /// added or removed an Effective row; the caller resweeps winners on that answer.</summary>
-    public bool ApplyWorkingTreeChanges(PluginKey key, IReadOnlyList<(string FormKey, string? Body)> deltas)
+    /// <summary>Folds re-derived documents into the read model: null Body deletes, byte-equal body
+    /// converges. <c>Structural</c> is an Effective row added or removed, which winners resweep on;
+    /// <c>Touched</c> is every key whose rows moved.</summary>
+    public (bool Structural, List<string> Touched) ProjectDocuments(
+        PluginKey key, IReadOnlyList<(string FormKey, string? Body)> deltas)
     {
         var structural = false;
+        // The deltas' own keys are named whether or not their bytes moved: the caller asked about
+        // them, and a subscriber re-reading one it was told about costs one query.
+        var touched = new List<string>(deltas.Select(d => d.FormKey));
         foreach (var (formKey, body) in deltas)
-            structural |= ApplyOneWorkingTreeChange(key, formKey, body);
-        return structural;
+            structural |= ApplyOneWorkingTreeChange(key, formKey, body, touched);
+        return (structural, touched);
     }
 
     // Returns true when it added or removed an Effective row — a structural change, the only kind
-    // that can move winner status.
-    private bool ApplyOneWorkingTreeChange(PluginKey key, string formKey, string? body)
+    // that can move winner status. touched collects every key whose rows this call moved.
+    private bool ApplyOneWorkingTreeChange(PluginKey key, string formKey, string? body, ICollection<string> touched)
     {
         // The committed bytes, wherever they currently live: the snapshot if this record already
         // diverged, else the still-clean Effective row itself. Reading through the Head relation is
@@ -63,7 +68,7 @@ internal sealed class WorkingTreeOverlay
             formKey, key.Name, key.Origin!);
 
         // Computed ahead of the guard because the guard must consult Effective too: a record that
-        // never reached Head (straight off CreateWorkingTreeRecord) is exactly as real here, and "no
+        // never reached Head (straight off a materialization) is exactly as real here, and "no
         // Head answer" must not silently drop its delete or edit.
         var existedBefore = RowExistsAtEffective(key, formKey);
 
@@ -87,7 +92,10 @@ internal sealed class WorkingTreeOverlay
             foreach (var child in ChildrenRecorded(key, formKey, embeddedIn: null))
             {
                 if (RowExistsAtEffective(key, child) && !HeldByAnotherContainer(key, child, formKey))
-                    ApplyOneWorkingTreeChange(key, child, null);
+                {
+                    touched.Add(child);
+                    ApplyOneWorkingTreeChange(key, child, null, touched);
+                }
             }
 
             // Deleted in the working tree: gone at Effective — document, lookup row and outgoing
@@ -113,7 +121,7 @@ internal sealed class WorkingTreeOverlay
             UpsertEffectiveBody(key, formKey, body);
         }
 
-        RederiveIndexRowsForRecord(key, formKey, body);
+        RederiveIndexRowsForRecord(key, formKey, body, touched);
         return !existedBefore;
     }
 
@@ -125,12 +133,13 @@ internal sealed class WorkingTreeOverlay
         DuckDbSql.ScalarString(_connection, $"SELECT form_key FROM {HeadRelation} WHERE form_key = $1 AND plugin = $2 AND origin = $3",
             formKey, key.Name, key.Origin!) != null;
 
-    /// <summary>See <see cref="IRecordIndex.CreateWorkingTreeRecord"/>. The both-refs refusal is the
-    /// caller's job, run before the transaction this work happens inside.</summary>
-    public void CreateWorkingTreeRecord(PluginKey key, string formKey, string recordType, string body)
+    // A record at neither ref, materialized: the shape an embedded child re-derived out of a
+    // container's document arrives in. Its caller has already established that neither ref holds it.
+    private void MaterializeRecord(
+        PluginKey key, string formKey, string recordType, string body, ICollection<string> touched)
     {
         InsertNewWorkingTreeRow(key, formKey, recordType, body);
-        RederiveIndexRowsForRecord(key, formKey, body);
+        RederiveIndexRowsForRecord(key, formKey, body, touched);
     }
 
     // A create writes a row straight to `ref = working-tree` with nothing in records_committed; that
@@ -310,7 +319,7 @@ internal sealed class WorkingTreeOverlay
     // ADR-0041: the extracted tables are derived from the document, never written independently of
     // it. Rebuilt for one record through the same collectors ingest uses, so an edit cannot leave
     // derived answers describing bytes that are gone.
-    private void RederiveIndexRowsForRecord(PluginKey key, string formKey, string body)
+    private void RederiveIndexRowsForRecord(PluginKey key, string formKey, string body, ICollection<string> touched)
     {
         var recordType = DuckDbSql.ScalarString(_connection,
             "SELECT record_type FROM records WHERE form_key = $1 AND plugin = $2 AND origin = $3",
@@ -370,7 +379,7 @@ internal sealed class WorkingTreeOverlay
             .GetAwaiter().GetResult();
         var containerType = ContainerChildFields.NormalizedTypeName(record.GetType());
         var recordedBefore = ChildrenRecorded(key, formKey, embeddedIn: containerType);
-        DeriveEmbeddedChildRows(key, record);
+        DeriveEmbeddedChildRows(key, record, touched);
         RederiveContainmentForRecord(key, formKey, recordType, record);
 
         // A child absent from the document is gone at Effective, unless another container's document
@@ -382,7 +391,10 @@ internal sealed class WorkingTreeOverlay
         foreach (var gone in recordedBefore.Where(fk => !carriedNow.Contains(fk)))
         {
             if (RowExistsAtEffective(key, gone) && !HeldByAnotherContainer(key, gone, formKey))
-                ApplyOneWorkingTreeChange(key, gone, null);
+            {
+                touched.Add(gone);
+                ApplyOneWorkingTreeChange(key, gone, null, touched);
+            }
         }
     }
 
@@ -430,7 +442,7 @@ internal sealed class WorkingTreeOverlay
     // An embedded child's own row is a projection of its container's document, like its placement
     // row: serialized out of the container's graph through the codec ingest uses. No schema, no
     // row, as at ingest.
-    private void DeriveEmbeddedChildRows(PluginKey key, IMajorRecordGetter container)
+    private void DeriveEmbeddedChildRows(PluginKey key, IMajorRecordGetter container, ICollection<string> touched)
     {
         var containerType = ContainerChildFields.NormalizedTypeName(container.GetType());
         foreach (var (slotName, _, child) in ContainerChildFields.EnumerateChildren(container))
@@ -443,10 +455,11 @@ internal sealed class WorkingTreeOverlay
             var childBody = Encoding.UTF8.GetString(_codec.SerializeToBytesAsync(child, _release).GetAwaiter().GetResult());
             if (string.Equals(childBody, EffectiveBody(key, childFormKey), StringComparison.Ordinal)) continue;
 
+            touched.Add(childFormKey);
             if (RowExistsAtEffective(key, childFormKey) || RowExistsAtHead(key, childFormKey))
-                ApplyOneWorkingTreeChange(key, childFormKey, childBody);
+                ApplyOneWorkingTreeChange(key, childFormKey, childBody, touched);
             else
-                CreateWorkingTreeRecord(key, childFormKey, childType, childBody);
+                MaterializeRecord(key, childFormKey, childType, childBody, touched);
         }
     }
 

@@ -70,12 +70,12 @@ something broken behind after we are done is not.** This ADR is about failure at
    folder — new state, new staleness, new recovery semantics — for a failure mode the existing gate
    already catches.
 
-6. **The index is re-derived, not rolled back.** It is a cache over the source trees, and unwinding
-   rows would be a second implementation of what a re-ingest already computes, free to drift from it.
-   After the files go back, every affected plugin is re-derived from its restored tree through
-   `ILoadOrderMirror.ReingestPluginFromSource`. Note that the renumber's own
-   index update is already a single transaction, so the only index rows a mid-cascade failure can leave behind
-   are the referencers' — exactly what the re-ingest corrects.
+6. **The index is re-derived, not rolled back.** It is a projection of the source trees, and
+   unwinding rows would be a second implementation of what a re-derivation already computes, free to
+   drift from it. Nothing here re-derives anything itself: the cascade writes files and returns
+   (ADR-0046 invariant 4), and the restored files reach the Index through the Source watcher exactly
+   as the written ones would have. A mid-cascade failure can therefore leave no index rows behind at
+   all — the rows only ever follow the files.
 
 7. **A rollback that cannot complete reports, it does not fail silently.** `Rollback()` returns a
    structured `UnrestoredPath` collection (ADR-0026) — never a formatted string — carrying the

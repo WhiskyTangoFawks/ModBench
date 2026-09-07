@@ -139,10 +139,10 @@ public sealed class NestedStructSubFieldEditTests : IDisposable
                 .GetAwaiter().GetResult();
         }
 
-        public RecordEditService Service() =>
-            new(_mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
+        public ProjectingEditService Service() =>
+        ProjectingEditService.Over(_mirror);
 
-        public string Body() => _mirror.Index!.At(RecordRef.Effective).GetDocument(Faction.ToString(), Plugin)!.Body!;
+        public string Body() => _mirror.Projected().GetDocument(Faction.ToString(), Plugin)!.Body!;
 
         public void Dispose()
         {

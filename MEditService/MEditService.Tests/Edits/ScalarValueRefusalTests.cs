@@ -21,12 +21,12 @@ public sealed class ScalarValueRefusalTests : IDisposable
 
     public void Dispose() => _mod.Dispose();
 
-    private RecordEditService Service() =>
-        new(_mod.Mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
+    private ProjectingEditService Service() =>
+        ProjectingEditService.Over(_mod.Mirror);
 
     private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
 
-    private string NpcBody() => _mod.Mirror.Index!.At(RecordRef.Effective).GetDocument(_mod.Npc.ToString(), _mod.Plugin)!.Body!;
+    private string NpcBody() => _mod.Mirror.Projected().GetDocument(_mod.Npc.ToString(), _mod.Plugin)!.Body!;
 
     // ── converter-declined scalar values ───────────────────────────────────────
 
@@ -199,10 +199,10 @@ public sealed class ScalarValueRefusalTests : IDisposable
                 .GetAwaiter().GetResult();
         }
 
-        public RecordEditService Service() =>
-            new(_mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
+        public ProjectingEditService Service() =>
+        ProjectingEditService.Over(_mirror);
 
-        public string Body() => _mirror.Index!.At(RecordRef.Effective).GetDocument(GlobalShort.ToString(), Plugin)!.Body!;
+        public string Body() => _mirror.Projected().GetDocument(GlobalShort.ToString(), Plugin)!.Body!;
 
         public void Dispose()
         {
@@ -253,10 +253,10 @@ public sealed class ScalarValueRefusalTests : IDisposable
                 .GetAwaiter().GetResult();
         }
 
-        public RecordEditService Service() =>
-            new(_mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
+        public ProjectingEditService Service() =>
+        ProjectingEditService.Over(_mirror);
 
-        public string Body() => _mirror.Index!.At(RecordRef.Effective).GetDocument(ArmorMod.ToString(), Plugin)!.Body!;
+        public string Body() => _mirror.Projected().GetDocument(ArmorMod.ToString(), Plugin)!.Body!;
 
         public void Dispose()
         {

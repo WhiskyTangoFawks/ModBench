@@ -23,8 +23,8 @@ public sealed class AbstractUnionCompileRoundTripTests : IDisposable
 
     private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
 
-    private RecordEditService EditService() =>
-        new(_fixture.Mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
+    private ProjectingEditService EditService() =>
+        ProjectingEditService.Over(_fixture.Mirror);
 
     private PluginCompileService CompileService() =>
         new(_fixture.Mirror, new PluginWriter(NullLogger<PluginWriter>.Instance), NullLogger<PluginCompileService>.Instance);

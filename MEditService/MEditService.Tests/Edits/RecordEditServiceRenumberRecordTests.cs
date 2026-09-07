@@ -3,6 +3,7 @@ using MEditService.Core.Plugins;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
 using MEditService.Core.Source;
+using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -15,8 +16,8 @@ namespace MEditService.Tests.Edits;
 /// a different mod folder's own repo, cannot be asked of one.</summary>
 public sealed class RecordEditServiceRenumberRecordTests
 {
-    private static RecordEditService ServiceFor(ILoadOrderMirror mirror) =>
-        new(mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
+    private static ProjectingEditService ServiceFor(ILoadOrderMirror mirror) =>
+        ProjectingEditService.Over(mirror);
 
     [Fact]
     public void RenumberRecord_OnTheHeader_RefusesWithoutTouchingTheSourceTree()
@@ -29,7 +30,7 @@ public sealed class RecordEditServiceRenumberRecordTests
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.HeaderDeleteOrRenumberNotSupported, result.Refusal);
         Assert.True(File.Exists(mod.NpcSourceFile), "an unrelated sibling record's file must survive");
-        Assert.NotNull(mod.Mirror.Index!.At(RecordRef.Effective).GetDocument(headerFormKey, mod.Plugin));
+        Assert.NotNull(mod.Mirror.Projected().GetDocument(headerFormKey, mod.Plugin));
     }
 
     [Fact]
@@ -40,6 +41,7 @@ public sealed class RecordEditServiceRenumberRecordTests
         var result = ServiceFor(mod.Mirror).RenumberRecord(mod.Plugin, mod.Npc.ToString());
 
         Assert.True(result.Applied, result.Message);
+        mod.Mirror.Settle();
         var index = mod.Mirror.Index!;
         Assert.Null(index.At(RecordRef.Effective).GetDocument(mod.Npc.ToString(), mod.Plugin));
         Assert.NotNull(index.At(RecordRef.Head).GetDocument(mod.Npc.ToString(), mod.Plugin));
@@ -59,7 +61,7 @@ public sealed class RecordEditServiceRenumberRecordTests
         var result = service.RenumberRecord(mod.Plugin, oldFormKey);
 
         Assert.True(result.Applied, result.Message);
-        var repository = mod.Mirror.Reads!;
+        var repository = mod.Mirror.SettledReads();
         Assert.Null(repository.GetDocument(oldFormKey));
         Assert.NotNull(repository.GetDocument(result.NewFormKey!));
         var listing = repository.Search(new RecordQuery(RecordTypes: ["npc_"], Plugin: mod.Plugin, Limit: 50, Offset: 0));
@@ -100,12 +102,12 @@ public sealed class RecordEditServiceRenumberRecordTests
     {
         using var mod = TrackedModFixture.Tracked();
         mod.Mirror.SetFilter("SELECT form_key FROM npc_ WHERE editor_id = 'FixtureNpc'");
-        Assert.Equal(1, mod.Mirror.Reads!.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0)).Total);
+        Assert.Equal(1, mod.Mirror.SettledReads().Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0)).Total);
 
         var result = ServiceFor(mod.Mirror).RenumberRecord(mod.Plugin, mod.Npc.ToString());
 
         Assert.True(result.Applied, result.Message);
-        var after = mod.Mirror.Reads!.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0));
+        var after = mod.Mirror.SettledReads().Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0));
         Assert.Equal(1, after.Total);
         Assert.Equal(result.NewFormKey, after.Items[0].FormKey);
     }
@@ -160,6 +162,7 @@ public sealed class RecordEditServiceRenumberRecordTests
         var result = ServiceFor(two.Mirror).RenumberRecord(two.TargetPlugin, two.TargetRace.ToString());
 
         Assert.True(result.Applied, result.Message);
+        two.Mirror.Settle();
         var index = two.Mirror.Index!;
         var referencer = index.At(RecordRef.Effective).GetDocument(two.ReferencerNpc.ToString(), two.ReferencerPlugin)!;
         Assert.Contains(result.NewFormKey!, referencer.Body, StringComparison.Ordinal);
@@ -180,7 +183,7 @@ public sealed class RecordEditServiceRenumberRecordTests
         two.Mirror.SetFilter(
             $"SELECT source_form_key AS form_key FROM form_references " +
             $"WHERE target_form_key = '{requestedTarget}' AND field_path = 'race'");
-        Assert.Equal(0, two.Mirror.Reads!.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0)).Total);
+        Assert.Equal(0, two.Mirror.SettledReads().Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0)).Total);
 
         Chmod(two.TargetModFolder, "500"); // read+execute only — the new race source file can't be created
         try
@@ -205,8 +208,8 @@ public sealed class RecordEditServiceRenumberRecordTests
         // file, so the filter — re-materialized even though the overall gesture threw — still matches
         // nothing, exactly as it did before the gesture ran.
         Assert.Equal(
-            0, two.Mirror.Reads!.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0)).Total);
-        var referencer = two.Mirror.Index!.At(RecordRef.Effective)
+            0, two.Mirror.SettledReads().Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0)).Total);
+        var referencer = two.Mirror.Projected()
             .GetDocument(two.ReferencerNpc.ToString(), two.ReferencerPlugin)!;
         Assert.Contains(two.TargetRace.ToString(), referencer.Body, StringComparison.Ordinal);
         Assert.DoesNotContain(requestedTarget, referencer.Body, StringComparison.Ordinal);
@@ -238,8 +241,8 @@ public sealed class RecordEditServiceRenumberRecordTests
 
         // "No half-applied state": refused before any write, on either side of the cascade.
         Assert.True(File.Exists(oldRaceSourceFile));
-        Assert.NotNull(two.Mirror.Index!.At(RecordRef.Effective).GetDocument(two.TargetRace.ToString(), two.TargetPlugin));
-        var referencerBody = two.Mirror.Index!.At(RecordRef.Effective).GetDocument(two.ReferencerNpc.ToString(), two.ReferencerPlugin)!.Body!;
+        Assert.NotNull(two.Mirror.Projected().GetDocument(two.TargetRace.ToString(), two.TargetPlugin));
+        var referencerBody = two.Mirror.Projected().GetDocument(two.ReferencerNpc.ToString(), two.ReferencerPlugin)!.Body!;
         Assert.Contains(two.TargetRace.ToString(), referencerBody, StringComparison.Ordinal);
     }
 
@@ -286,7 +289,7 @@ public sealed class RecordEditServiceRenumberRecordTests
         using var mod = TrackedModFixture.Tracked();
         mod.Mirror.Dispose();
 
-        var suggested = new RecordEditService(mod.Mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance)
+        var suggested = ProjectingEditService.Over(mod.Mirror)
             .PeekNextFreeFormKey(mod.Plugin);
 
         Assert.False(suggested.Applied);

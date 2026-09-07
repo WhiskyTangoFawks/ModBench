@@ -3,6 +3,7 @@ using MEditService.Core.Queries;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
 using MEditService.Core.Serialization;
+using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -222,7 +223,7 @@ public sealed class ParseFailedRecordTests
         private readonly string _modFolder = Directory.CreateTempSubdirectory("medit-parsefail-mod-").FullName;
 
         public LoadOrderMirror Mirror { get; }
-        public IRecordReads Reads => Mirror.Reads!;
+        public IRecordReads Reads => Mirror.SettledReads();
         public PluginKey Plugin { get; }
         public IRecordQueryService Query { get; }
         public string PluginPath { get; }

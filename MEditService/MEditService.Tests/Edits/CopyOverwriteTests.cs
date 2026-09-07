@@ -1,6 +1,7 @@
 using MEditService.Core.Edits;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
+using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace MEditService.Tests.Edits;
@@ -13,8 +14,8 @@ public sealed class CopyOverwriteTests : IDisposable
 
     public void Dispose() => _fixture.Dispose();
 
-    private RecordEditService EditService() =>
-        new(_fixture.Mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
+    private ProjectingEditService EditService() =>
+        ProjectingEditService.Over(_fixture.Mirror);
 
     // The replace is own-fields-only: children the destination's override accumulated (a copied-in
     // placed ref, embedded inline in the cell's document) survive the overwrite.
@@ -35,7 +36,7 @@ public sealed class CopyOverwriteTests : IDisposable
         var cellText = File.ReadAllText(cellFile);
         // Own fields re-copied, and the copied-in child still embedded.
         Assert.Contains(ContainerCopyFixture.PersistentRefEditorId, cellText, StringComparison.Ordinal);
-        var reads = _fixture.Mirror.Index!.At(RecordRef.Effective);
+        var reads = _fixture.Mirror.Projected();
         Assert.NotNull(reads.GetDocument(_fixture.PersistentRef.ToString(), _fixture.DestinationPlugin));
     }
 
@@ -69,7 +70,7 @@ public sealed class CopyOverwriteTests : IDisposable
             _fixture.SourcePlugin, _fixture.PersistentRef.ToString(), _fixture.DestinationPlugin);
 
         Assert.True(result.Applied, result.Message);
-        var reads = _fixture.Mirror.Index!.At(RecordRef.Effective);
+        var reads = _fixture.Mirror.Projected();
         var placement = reads.GetPlacement(_fixture.PersistentRef.ToString(), _fixture.DestinationPlugin);
         Assert.NotNull(placement);
         // Still exactly one embedding of the ref in the cell's document.
@@ -85,15 +86,14 @@ public sealed class CopyOverwriteTests : IDisposable
     public void CopyAsOverride_IntoADestinationThatLoadsBeforeTheOrigin_RefusesAsUnderride()
     {
         using var underrideFixture = ContainerCopyFixture.CreateWithDestinationLoadingFirst();
-        var service = new RecordEditService(
-            underrideFixture.Mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
+        var service = ProjectingEditService.Over(underrideFixture.Mirror);
 
         var result = service.CopyRecordAsOverride(
             underrideFixture.SourcePlugin, underrideFixture.FlatNpc.ToString(), underrideFixture.DestinationPlugin);
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.UnderrideDestination, result.Refusal);
-        Assert.Null(underrideFixture.Mirror.Index!.At(RecordRef.Effective)
+        Assert.Null(underrideFixture.Mirror.Projected()
             .GetDocument(underrideFixture.FlatNpc.ToString(), underrideFixture.DestinationPlugin));
     }
 
@@ -109,7 +109,7 @@ public sealed class CopyOverwriteTests : IDisposable
 
         Assert.True(result.Applied, result.Message);
 
-        var reads = _fixture.Mirror.Index!.At(RecordRef.Effective);
+        var reads = _fixture.Mirror.Projected();
         var questDoc = reads.GetDocument(_fixture.Quest.ToString(), _fixture.DestinationPlugin);
         Assert.Equal(ContainerCopyFixture.QuestEditorId, questDoc!.EditorId);
 

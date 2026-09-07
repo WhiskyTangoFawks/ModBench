@@ -1,8 +1,7 @@
-using System.Text;
 using MEditService.Core.Queries;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
-using MEditService.Core.Serialization;
+using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -17,7 +16,6 @@ public sealed class RecordSummaryWorkingTreeStateTests : IDisposable
     private static readonly SchemaReflector Reflector = SharedSchemaReflector.Instance;
     private static readonly TableDdlBuilder Ddl = new TableDdlBuilder(Reflector);
     private static readonly PluginKey BaseKey = new("Base.esm", "Data");
-    private static readonly RecordTextCodec Codec = new(NullLogger<RecordTextCodec>.Instance);
 
     private readonly PluginFixtureData _fixture;
     private readonly FormKey _editedFormKey;
@@ -49,15 +47,6 @@ public sealed class RecordSummaryWorkingTreeStateTests : IDisposable
         return index;
     }
 
-    // Real codec bytes, the same shape CreateRecord writes in production — mirrors
-    // WorkingTreeCreationTests.NewNpcBody rather than a hand-crafted JSON literal.
-    private static string NewNpcBody(string formKey, string editorId)
-    {
-        var npc = new Npc(FormKey.Factory(formKey), Fallout4Release.Fallout4) { EditorID = editorId };
-        var bytes = Codec.SerializeToBytesAsync(npc, GameRelease.Fallout4).GetAwaiter().GetResult();
-        return Encoding.UTF8.GetString(bytes);
-    }
-
     private static RecordSummary SummaryFor(PagedResult<RecordSummary> page, string formKey) =>
         page.Items.Single(i => i.FormKey == formKey);
 
@@ -67,7 +56,7 @@ public sealed class RecordSummaryWorkingTreeStateTests : IDisposable
         using var index = LoadedIndex();
         var edited = _editedFormKey.ToString();
         var committed = index.At(RecordRef.Effective).GetDocument(edited, BaseKey)!;
-        index.ApplyWorkingTreeChanges(
+        index.ProjectDocuments(
             BaseKey, [(edited, committed.Body!.Replace("EditedOriginal", "EditedNew", StringComparison.Ordinal))]);
 
         var page = index.At(RecordRef.Effective).Search(new RecordQuery(Plugin: BaseKey, RecordTypes: ["npc_"], Limit: 50));
@@ -80,8 +69,10 @@ public sealed class RecordSummaryWorkingTreeStateTests : IDisposable
     public void Search_NewlyCreatedRecord_ReportsAdded()
     {
         using var index = LoadedIndex();
-        var created = "800000:Base.esm";
-        index.CreateWorkingTreeRecord(BaseKey, created, "npc_", NewNpcBody(created, "BrandNew"));
+        // A created record is one no committed ref holds — the state ingest reconciles a new source
+        // document into, and the only thing the listing can read.
+        var created = _untouchedFormKey.ToString();
+        index.MarkWorkingTreeOnly(BaseKey, [created]);
 
         var page = index.At(RecordRef.Effective).Search(new RecordQuery(Plugin: BaseKey, RecordTypes: ["npc_"], Limit: 50));
 
@@ -97,7 +88,7 @@ public sealed class RecordSummaryWorkingTreeStateTests : IDisposable
         using var index = LoadedIndex();
         var edited = _editedFormKey.ToString();
         var committed = index.At(RecordRef.Effective).GetDocument(edited, BaseKey)!;
-        index.ApplyWorkingTreeChanges(
+        index.ProjectDocuments(
             BaseKey, [(edited, committed.Body!.Replace("EditedOriginal", "EditedNew", StringComparison.Ordinal))]);
 
         var headPage = index.At(RecordRef.Head).Search(new RecordQuery(Plugin: BaseKey, RecordTypes: ["npc_"], Limit: 50));

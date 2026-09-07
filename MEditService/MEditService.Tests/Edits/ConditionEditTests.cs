@@ -330,15 +330,15 @@ public sealed class ConditionEditTests : IDisposable
                 .GetAwaiter().GetResult();
         }
 
-        public RecordEditService Service() =>
-            new(_mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
+        public ProjectingEditService Service() =>
+        ProjectingEditService.Over(_mirror);
 
         public string Body(FormKey formKey) =>
-            _mirror.Index!.At(RecordRef.Effective).GetDocument(formKey.ToString(), Plugin)!.Body!;
+            _mirror.Projected().GetDocument(formKey.ToString(), Plugin)!.Body!;
 
         public JsonArray Field(FormKey formKey, string name)
         {
-            var document = _mirror.Index!.At(RecordRef.Effective).GetDocument(formKey.ToString(), Plugin)!;
+            var document = _mirror.Projected().GetDocument(formKey.ToString(), Plugin)!;
             var raw = document.Fields.Single(f => f.Metadata.Name == name).Value;
             return JsonNode.Parse(raw!.ToString()!)!.AsArray();
         }

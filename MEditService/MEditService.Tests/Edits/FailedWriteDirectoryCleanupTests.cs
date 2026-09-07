@@ -1,6 +1,7 @@
 using MEditService.Core.Edits;
 using MEditService.Core.Schema;
 using MEditService.Core.Source;
+using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace MEditService.Tests.Edits;
@@ -10,8 +11,8 @@ namespace MEditService.Tests.Edits;
 /// filesystem's per-component limit.</summary>
 public sealed class FailedWriteDirectoryCleanupTests
 {
-    private static RecordEditService ServiceFor(TrackedModFixture mod) =>
-        new(mod.Mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
+    private static ProjectingEditService ServiceFor(TrackedModFixture mod) =>
+        ProjectingEditService.Over(mod.Mirror);
 
     // Exceeds the 255-byte per-component limit on every filesystem this runs on.
     private const string OverLongEditorId =

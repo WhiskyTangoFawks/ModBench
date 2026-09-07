@@ -24,8 +24,8 @@ public sealed class ContainmentRederivationTests : IDisposable
 
     public void Dispose() => _fixture.Dispose();
 
-    private RecordEditService EditService() =>
-        new(_fixture.Mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
+    private ProjectingEditService EditService() =>
+        ProjectingEditService.Over(_fixture.Mirror);
 
     private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
 
@@ -34,6 +34,7 @@ public sealed class ContainmentRederivationTests : IDisposable
     [Fact]
     public void DeletingAnEmbeddedPlacedReference_RemovesItsPlacementRow_SameLoadOrder()
     {
+        _fixture.Mirror.Settle();
         var index = _fixture.Mirror.Index!;
         Assert.NotNull(index.At(RecordRef.Effective).GetPlacement(_fixture.TemporaryRef.ToString(), _fixture.Plugin));
         Assert.Contains(
@@ -59,7 +60,7 @@ public sealed class ContainmentRederivationTests : IDisposable
     private async Task<IMajorRecord> ReadEmbedCellAsync()
     {
         var codec = new RecordTextCodec(NullLogger<RecordTextCodec>.Instance);
-        var document = _fixture.Mirror.Index!.At(RecordRef.Effective).GetDocument(_fixture.EmbedCell.ToString(), _fixture.Plugin)!;
+        var document = _fixture.Mirror.Projected().GetDocument(_fixture.EmbedCell.ToString(), _fixture.Plugin)!;
         return await codec.DeserializeFromBytesAsync(
             Encoding.UTF8.GetBytes(document.Body!), GameRelease.Fallout4, document.RecordType);
     }
@@ -67,6 +68,7 @@ public sealed class ContainmentRederivationTests : IDisposable
     [Fact]
     public async Task DeletingAnEmbeddedNavigationMesh_RemovesItsContainerChildRow_ButLeavesItsSiblingIntact()
     {
+        _fixture.Mirror.Settle();
         var index = _fixture.Mirror.Index!;
         Assert.NotNull(index.At(RecordRef.Effective).GetContainerParent(_fixture.Plugin, _fixture.Navmesh.ToString()));
 
@@ -75,7 +77,7 @@ public sealed class ContainmentRederivationTests : IDisposable
         Assert.True(ContainerChildFields.RemoveEmbeddedChild(owner, _fixture.Navmesh.ToString()));
         var newBody = await codec.SerializeToBytesAsync(owner, GameRelease.Fallout4);
 
-        index.ApplyWorkingTreeChanges(_fixture.Plugin, [(_fixture.EmbedCell.ToString(), Encoding.UTF8.GetString(newBody))]);
+        index.ProjectDocuments(_fixture.Plugin, [(_fixture.EmbedCell.ToString(), Encoding.UTF8.GetString(newBody))]);
 
         Assert.Null(index.At(RecordRef.Effective).GetContainerParent(_fixture.Plugin, _fixture.Navmesh.ToString()));
         Assert.DoesNotContain(
@@ -93,6 +95,7 @@ public sealed class ContainmentRederivationTests : IDisposable
     [Fact]
     public async Task RenumberingAnEmbeddedNavigationMesh_MovesItsContainerChildRow_ToTheNewFormKey_WithTheSameSlot()
     {
+        _fixture.Mirror.Settle();
         var index = _fixture.Mirror.Index!;
         var before = index.At(RecordRef.Effective).GetContainerParent(_fixture.Plugin, _fixture.Navmesh.ToString());
         Assert.NotNull(before);
@@ -104,13 +107,11 @@ public sealed class ContainmentRederivationTests : IDisposable
         var newFormKey = FormKey.Factory("F00001:ContainerFixture.esp");
         ((IMajorRecordInternal)found!.Value.Child).FormKey = newFormKey;
 
-        var newOwnerBody = await codec.SerializeToBytesAsync(owner, GameRelease.Fallout4);
-        var newChildBody = await codec.SerializeToBytesAsync(found.Value.Child, GameRelease.Fallout4);
-
-        index.ApplyWorkingTreeChanges(_fixture.Plugin, [(_fixture.EmbedCell.ToString(), Encoding.UTF8.GetString(newOwnerBody))]);
-        index.CreateWorkingTreeRecord(
-            _fixture.Plugin, newFormKey.ToString(), "navm", Encoding.UTF8.GetString(newChildBody));
-        index.ApplyWorkingTreeChanges(_fixture.Plugin, [(_fixture.Navmesh.ToString(), null)]);
+        // The renumber's whole file side: the owner's document is what carries the child's new
+        // identity, and the projector re-reads the rows out of it (ADR-0046).
+        await codec.SerializeAsync(
+            owner, _fixture.SourceFileContaining(ContainerModFixture.EmbedCellEditorId), GameRelease.Fallout4);
+        index.RefreshByKeys(_fixture.Plugin, _fixture.ModFolder, [_fixture.EmbedCell.ToString()]);
 
         // Old FormKey absent...
         Assert.Null(index.At(RecordRef.Effective).GetContainerParent(_fixture.Plugin, _fixture.Navmesh.ToString()));
@@ -132,6 +133,7 @@ public sealed class ContainmentRederivationTests : IDisposable
     [Fact]
     public void DeletingAPlacedRefTwoLevelsInsideAWorldspacesDocument_RemovesItsPlacementRow_AndKeepsTheTopCellsOwnCellLocationCorrect()
     {
+        _fixture.Mirror.Settle();
         var index = _fixture.Mirror.Index!;
         Assert.NotNull(index.At(RecordRef.Effective).GetPlacement(_fixture.TopCellRef.ToString(), _fixture.Plugin));
         var topCellBefore = index.At(RecordRef.Effective).GetCellLocation(_fixture.Plugin, _fixture.TopCell.ToString());
@@ -155,6 +157,7 @@ public sealed class ContainmentRederivationTests : IDisposable
     [Fact]
     public void DeletingTheMiddleOfThreeDialogTopics_ReflectsTheRemoval_AndReindexesTheSurvivor_SameLoadOrder()
     {
+        _fixture.Mirror.Settle();
         var index = _fixture.Mirror.Index!;
         var before = index.At(RecordRef.Effective).GetContainerChildren(_fixture.Plugin, _fixture.Quest.ToString());
         Assert.Equal(
@@ -178,6 +181,7 @@ public sealed class ContainmentRederivationTests : IDisposable
     [Fact]
     public void RenumberingADialogTopic_RepointsItsResponsesContainerChildRows_ToTheNewParentFormKey_SameLoadOrder()
     {
+        _fixture.Mirror.Settle();
         var index = _fixture.Mirror.Index!;
         var before = index.At(RecordRef.Effective).GetContainerParent(_fixture.Plugin, _fixture.Response.ToString());
         Assert.NotNull(before);
@@ -204,6 +208,7 @@ public sealed class ContainmentRederivationTests : IDisposable
     [Fact]
     public void RenumberingAContainersOwnRecord_RepointsItsPlacedRefsPlacementRows_ToTheNewFormKey_SameLoadOrder()
     {
+        _fixture.Mirror.Settle();
         var index = _fixture.Mirror.Index!;
         Assert.Equal(_fixture.EmbedCell.ToString(), index.At(RecordRef.Effective).GetPlacement(_fixture.TemporaryRef.ToString(), _fixture.Plugin)!.Value.ParentCell);
 
@@ -226,7 +231,7 @@ public sealed class ContainmentRederivationTests : IDisposable
         var result = EditService().RenumberRecord(_fixture.Plugin, _fixture.EmbedCell.ToString());
         Assert.True(result.Applied, result.Message);
 
-        var rows = _fixture.Mirror.Index!.At(RecordRef.Effective).GetContainerChildren(_fixture.Plugin, result.NewFormKey!)
+        var rows = _fixture.Mirror.Projected().GetContainerChildren(_fixture.Plugin, result.NewFormKey!)
             .Select(c => (c.ChildFormKey, c.SlotName)).OrderBy(r => r.ChildFormKey, StringComparer.Ordinal).ToList();
         Assert.Equal(
             [(_fixture.Navmesh.ToString(), "NavigationMeshes"), (_fixture.Landscape.ToString(), "Landscape")],
@@ -239,7 +244,7 @@ public sealed class ContainmentRederivationTests : IDisposable
     public void AfterAnEmbeddedFieldEdit_AFreshReopen_AgreesWithTheLiveChildDocument()
     {
         Assert.True(EditService().Set(_fixture.Plugin, _fixture.TemporaryRef.ToString(), "Scale", Json("6.5")).Applied);
-        var live = _fixture.Mirror.Index!.At(RecordRef.Effective).GetDocument(_fixture.TemporaryRef.ToString(), _fixture.Plugin)!.Body;
+        var live = _fixture.Mirror.Projected().GetDocument(_fixture.TemporaryRef.ToString(), _fixture.Plugin)!.Body;
         Assert.Contains("\"Scale\": 6.5", live!, StringComparison.Ordinal);
 
         using var reloaded = new LoadOrderMirror(
@@ -261,7 +266,7 @@ public sealed class ContainmentRederivationTests : IDisposable
         var result = EditService().RenumberRecord(_fixture.Plugin, _fixture.EmbedCell.ToString());
         Assert.True(result.Applied, result.Message);
 
-        var live = _fixture.Mirror.Index!.At(RecordRef.Effective).GetPlacement(_fixture.TemporaryRef.ToString(), _fixture.Plugin);
+        var live = _fixture.Mirror.Projected().GetPlacement(_fixture.TemporaryRef.ToString(), _fixture.Plugin);
 
         using var reloaded = new LoadOrderMirror(
             new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
@@ -281,6 +286,7 @@ public sealed class ContainmentRederivationTests : IDisposable
     [Fact]
     public void RenumberingAQuest_RepointsItsDialogTopicsContainerChildRows_ToTheNewParentFormKey_SameLoadOrder()
     {
+        _fixture.Mirror.Settle();
         var index = _fixture.Mirror.Index!;
         var before = index.At(RecordRef.Effective).GetContainerParent(_fixture.Plugin, _fixture.DialogTopic.ToString());
         Assert.NotNull(before);
@@ -307,7 +313,7 @@ public sealed class ContainmentRederivationTests : IDisposable
         Assert.True(result.Applied, result.Message);
         var newFormKey = result.NewFormKey!;
 
-        var live = _fixture.Mirror.Index!.At(RecordRef.Effective).GetContainerChildren(_fixture.Plugin, newFormKey)
+        var live = _fixture.Mirror.Projected().GetContainerChildren(_fixture.Plugin, newFormKey)
             .OrderBy(c => c.SlotIndex).Select(c => (c.ChildFormKey, c.SlotName, c.SlotIndex)).ToList();
 
         using var reloaded = new LoadOrderMirror(
@@ -324,50 +330,12 @@ public sealed class ContainmentRederivationTests : IDisposable
         Assert.Equal(freshlyIngested, live);
     }
 
-    // ---- creating a record whose own body embeds children populates all three tables ----
-
-    [Fact]
-    public async Task CreatingAWorkingTreeRecord_WithEmbeddedChildren_PopulatesPlacementAndContainerChild()
-    {
-        var mod = new Fallout4Mod(ModKey.FromFileName("FreshCreate.esp"), Fallout4Release.Fallout4);
-        var cell = new Cell(mod) { EditorID = "FreshCell" };
-        var placedRef = new PlacedObject(mod)
-        {
-            EditorID = "FreshPlacedRef",
-            Position = new P3Float(1f, 2f, 3f),
-        };
-        var navMesh = new NavigationMesh(mod) { EditorID = "FreshNavMesh" };
-        cell.Persistent.Add(placedRef);
-        cell.NavigationMeshes.Add(navMesh);
-
-        var codec = new RecordTextCodec(NullLogger<RecordTextCodec>.Instance);
-        var body = await codec.SerializeToBytesAsync(cell, GameRelease.Fallout4);
-
-        using var repo = new DuckDbRecordIndex(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance), NullLogger.Instance);
-        repo.Initialize(GameRelease.Fallout4);
-        // Seeds the `plugins` row CreateWorkingTreeRecord requires — an empty mod under the same key,
-        // exactly what a load order already holds before any create is possible.
-        repo.Index(new Fallout4Mod(ModKey.FromFileName("FreshCreate.esp"), Fallout4Release.Fallout4), Registration.Participating(0), new PluginKey("FreshCreate.esp", "Data"));
-
-        var key = new PluginKey("FreshCreate.esp", "Data");
-        repo.CreateWorkingTreeRecord(key, cell.FormKey.ToString(), "cell", Encoding.UTF8.GetString(body));
-
-        // GetPlacement/GetContainerChildren read `placement`/`container_child` directly, unlike
-        // GetCellReferences (which additionally joins against `records` for the placed ref's own row —
-        // a separate row this isolated create, unlike a real embedded-child gesture, never asks for).
-        var placement = repo.At(RecordRef.Effective).GetPlacement(placedRef.FormKey.ToString(), key);
-        Assert.NotNull(placement);
-        Assert.Equal(cell.FormKey.ToString(), placement!.Value.ParentCell);
-        Assert.Equal(
-            navMesh.FormKey.ToString(),
-            Assert.Single(repo.At(RecordRef.Effective).GetContainerChildren(key, cell.FormKey.ToString())).ChildFormKey);
-    }
-
     // ---- a plain field edit re-derives containment rows unchanged ----
 
     [Fact]
     public void APlainFieldEdit_ReDerivesContainmentRowsIdentically_NoBehaviorChange()
     {
+        _fixture.Mirror.Settle();
         var index = _fixture.Mirror.Index!;
         var placementBefore = index.At(RecordRef.Effective).GetPlacement(_fixture.PersistentRef.ToString(), _fixture.Plugin);
         var navmeshParentBefore = index.At(RecordRef.Effective).GetContainerParent(_fixture.Plugin, _fixture.Navmesh.ToString());
@@ -389,7 +357,7 @@ public sealed class ContainmentRederivationTests : IDisposable
         var deleted = EditService().DeleteRecord(_fixture.Plugin, _fixture.DialogTopic2.ToString());
         Assert.True(deleted.Applied, deleted.Message);
 
-        var live = _fixture.Mirror.Index!.At(RecordRef.Effective).GetContainerChildren(_fixture.Plugin, _fixture.Quest.ToString())
+        var live = _fixture.Mirror.Projected().GetContainerChildren(_fixture.Plugin, _fixture.Quest.ToString())
             .OrderBy(c => c.SlotIndex).Select(c => (c.ChildFormKey, c.SlotName, c.SlotIndex)).ToList();
 
         using var reloaded = new LoadOrderMirror(
@@ -409,6 +377,7 @@ public sealed class ContainmentRederivationTests : IDisposable
     [Fact]
     public async Task AfterRenumberingAnEmbeddedChild_AFreshReopen_AgreesWithTheLive()
     {
+        _fixture.Mirror.Settle();
         var index = _fixture.Mirror.Index!;
         var codec = new RecordTextCodec(NullLogger<RecordTextCodec>.Instance);
         var owner = await ReadEmbedCellAsync();
@@ -417,17 +386,12 @@ public sealed class ContainmentRederivationTests : IDisposable
         var newFormKey = FormKey.Factory("F00002:ContainerFixture.esp");
         ((IMajorRecordInternal)found!.Value.Child).FormKey = newFormKey;
 
-        var newOwnerBody = await codec.SerializeToBytesAsync(owner, GameRelease.Fallout4);
-        var newChildBody = await codec.SerializeToBytesAsync(found.Value.Child, GameRelease.Fallout4);
-
-        // Written to the owner's actual source file too (RecordEditService's own
-        // renumber's own embedded branch does the same) — a fresh reload ingests the tree, not the live index.
+        // The owner's source file is the whole of the renumber's file side, and a fresh reload
+        // ingests that tree — so the live index has to reach the same rows from the same bytes.
         var cellFile = _fixture.SourceFileContaining(ContainerModFixture.EmbedCellEditorId);
         await codec.SerializeAsync(owner, cellFile, GameRelease.Fallout4);
 
-        index.ApplyWorkingTreeChanges(_fixture.Plugin, [(_fixture.EmbedCell.ToString(), Encoding.UTF8.GetString(newOwnerBody))]);
-        index.CreateWorkingTreeRecord(_fixture.Plugin, newFormKey.ToString(), "navm", Encoding.UTF8.GetString(newChildBody));
-        index.ApplyWorkingTreeChanges(_fixture.Plugin, [(_fixture.Navmesh.ToString(), null)]);
+        index.RefreshByKeys(_fixture.Plugin, _fixture.ModFolder, [_fixture.EmbedCell.ToString()]);
 
         var live = index.At(RecordRef.Effective).GetContainerChildren(_fixture.Plugin, _fixture.EmbedCell.ToString())
             .OrderBy(c => c.SlotName).ThenBy(c => c.SlotIndex)

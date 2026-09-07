@@ -5,6 +5,7 @@ using MEditService.Core.Records;
 using MEditService.Core.Schema;
 using MEditService.Core.Serialization;
 using MEditService.Core.Source;
+using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -22,8 +23,8 @@ public sealed class RecordEditServiceContainerDeleteRenumberTests : IDisposable
 
     public void Dispose() => _fixture.Dispose();
 
-    private RecordEditService EditService() =>
-        new(_fixture.Mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
+    private ProjectingEditService EditService() =>
+        ProjectingEditService.Over(_fixture.Mirror);
 
     private IRecordIndex Index => _fixture.Mirror.Index!;
 
@@ -61,25 +62,6 @@ public sealed class RecordEditServiceContainerDeleteRenumberTests : IDisposable
         Assert.Null(Index.At(RecordRef.Effective).GetDocument(_fixture.Worldspace.ToString(), _fixture.Plugin));
         Assert.Null(Index.At(RecordRef.Effective).GetDocument(_fixture.TopCell.ToString(), _fixture.Plugin));
         Assert.Null(Index.At(RecordRef.Effective).GetDocument(_fixture.TopCellRef.ToString(), _fixture.Plugin));
-    }
-
-    // A worldspace's directory holds its block-placed cells' files too, so its delete takes every cell
-    // the index records under it, not only the embedded top cell.
-    [Fact]
-    public void DeletingAWorldspace_CascadesIntoEveryCellRecordedUnderIt_BlockPlacedIncluded()
-    {
-        Index.CreateCellLocation(_fixture.Plugin, new CellLocationRow(
-            _fixture.EmbedCell.ToString(), _fixture.Worldspace.ToString(),
-            BlockX: 1, BlockY: 1, SubX: 0, SubY: 0, GridX: 3, GridY: 3, IsInterior: false));
-
-        var result = EditService().DeleteRecord(_fixture.Plugin, _fixture.Worldspace.ToString());
-
-        Assert.True(result.Applied, result.Message);
-        Assert.Null(Index.At(RecordRef.Effective).GetDocument(_fixture.TopCell.ToString(), _fixture.Plugin));
-        Assert.Null(Index.At(RecordRef.Effective).GetDocument(_fixture.TopCellRef.ToString(), _fixture.Plugin));
-        Assert.Null(Index.At(RecordRef.Effective).GetDocument(_fixture.EmbedCell.ToString(), _fixture.Plugin));
-        Assert.Null(Index.At(RecordRef.Effective).GetDocument(_fixture.TemporaryRef.ToString(), _fixture.Plugin));
-        Assert.Null(Index.At(RecordRef.Effective).GetDocument(_fixture.PersistentRef.ToString(), _fixture.Plugin));
     }
 
     // ---- an embedded child ----
@@ -216,7 +198,7 @@ public sealed class RecordEditServiceContainerDeleteRenumberTests : IDisposable
                 .Single(f => File.ReadAllText(f).Contains("\"ReferencerRef\"", StringComparison.Ordinal));
             Assert.Contains(npc.FormKey.ToString(), File.ReadAllText(file), StringComparison.Ordinal);
 
-            var result = new RecordEditService(mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance)
+            var result = ProjectingEditService.Over(mirror)
                 .RenumberRecord(plugin, npc.FormKey.ToString());
 
             Assert.True(result.Applied, result.Message);

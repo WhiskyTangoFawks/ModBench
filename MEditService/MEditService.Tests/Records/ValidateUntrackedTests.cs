@@ -1,5 +1,6 @@
 using MEditService.Core.Records;
 using MEditService.Tests.Edits;
+using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -49,6 +50,6 @@ public sealed class ValidateUntrackedTests : IDisposable
         var report = _mod.Mirror.Index!.Validate(_mod.Plugin, _mod.ModFolder);
 
         Assert.False(report.NeedsRebuild);
-        Assert.Empty(_mod.Mirror.Index!.At(RecordRef.Effective).GetDocuments(_mod.Plugin));
+        Assert.Empty(_mod.Mirror.Projected().GetDocuments(_mod.Plugin));
     }
 }

@@ -1,6 +1,7 @@
 using MEditService.Core.Records;
 using MEditService.Core.Source;
 using MEditService.Tests.Edits;
+using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
 
@@ -15,7 +16,7 @@ public sealed class SourceUnitResolverHeaderTests
     {
         using var mod = TrackedModFixture.Tracked();
         var headerFormKey = HeaderIndexer.FormKeyFor(ModKey.FromFileName(mod.ActualPluginName));
-        var reads = mod.Mirror.Index!.At(RecordRef.Effective);
+        var reads = mod.Mirror.Projected();
 
         var unit = SourceUnitResolver.Resolve(
             reads, mod.Plugin, mod.ModFolder, headerFormKey, HeaderIndexer.RecordType, editorId: null,
@@ -35,7 +36,7 @@ public sealed class SourceUnitResolverHeaderTests
     {
         using var mod = TrackedModFixture.Tracked();
         var headerFormKey = HeaderIndexer.FormKeyFor(ModKey.FromFileName(mod.ActualPluginName));
-        var reads = mod.Mirror.Index!.At(RecordRef.Effective);
+        var reads = mod.Mirror.Projected();
 
         var unit = SourceUnitResolver.Resolve(
             reads, mod.Plugin, mod.ModFolder, headerFormKey, HeaderIndexer.RecordType, editorId: null,

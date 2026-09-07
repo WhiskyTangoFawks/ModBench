@@ -3,6 +3,7 @@ using MEditService.Core.Records;
 using MEditService.Core.Serialization;
 using MEditService.Core.Source;
 using MEditService.Tests.Edits;
+using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -45,7 +46,7 @@ public sealed class WorkingTreeEmbeddedChildTests : IDisposable
         var body = CellBodyAfter(cell => ((Cell)cell).Temporary.Add(
             new PlacedObject(newRef, Fallout4Release.Fallout4) { EditorID = "AppendedRef", Position = new P3Float(4f, 5f, 6f) }));
 
-        Index.ApplyWorkingTreeChanges(_fixture.Plugin, [(_fixture.EmbedCell.ToString(), body)]);
+        Index.ProjectDocuments(_fixture.Plugin, [(_fixture.EmbedCell.ToString(), body)]);
 
         Assert.Equal("AppendedRef", Effective.GetDocument(newRef.ToString(), _fixture.Plugin)!.EditorId);
         Assert.Null(Head.GetDocument(newRef.ToString(), _fixture.Plugin));
@@ -58,7 +59,7 @@ public sealed class WorkingTreeEmbeddedChildTests : IDisposable
         var removed = _fixture.TemporaryRef.ToString();
         var body = CellBodyAfter(cell => Assert.True(ContainerChildFields.RemoveEmbeddedChild(cell, removed)));
 
-        Index.ApplyWorkingTreeChanges(_fixture.Plugin, [(_fixture.EmbedCell.ToString(), body)]);
+        Index.ProjectDocuments(_fixture.Plugin, [(_fixture.EmbedCell.ToString(), body)]);
 
         Assert.Null(Effective.GetDocument(removed, _fixture.Plugin));
         Assert.NotNull(Head.GetDocument(removed, _fixture.Plugin));
@@ -71,7 +72,7 @@ public sealed class WorkingTreeEmbeddedChildTests : IDisposable
     [Fact]
     public void DeletingAContainer_TakesEveryEmbeddedDescendantWithIt_TwoLevelsDeep()
     {
-        Index.ApplyWorkingTreeChanges(_fixture.Plugin, [(_fixture.Worldspace.ToString(), null)]);
+        Index.ProjectDocuments(_fixture.Plugin, [(_fixture.Worldspace.ToString(), null)]);
 
         foreach (var formKey in new[] { _fixture.Worldspace, _fixture.TopCell, _fixture.TopCellRef })
         {
@@ -90,7 +91,7 @@ public sealed class WorkingTreeEmbeddedChildTests : IDisposable
         var edited = CellBody().Replace("\"Scale\": 1.0", "\"Scale\": 2.5", StringComparison.Ordinal);
         Assert.NotEqual(CellBody(), edited);
 
-        Index.ApplyWorkingTreeChanges(_fixture.Plugin, [(_fixture.EmbedCell.ToString(), edited)]);
+        Index.ProjectDocuments(_fixture.Plugin, [(_fixture.EmbedCell.ToString(), edited)]);
 
         var child = _fixture.TemporaryRef.ToString();
         Assert.Contains("\"Scale\": 2.5", Effective.GetDocument(child, _fixture.Plugin)!.Body!, StringComparison.Ordinal);

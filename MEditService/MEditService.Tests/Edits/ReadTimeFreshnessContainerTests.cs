@@ -16,8 +16,8 @@ public sealed class ReadTimeFreshnessContainerTests : IDisposable
 
     public void Dispose() => _fixture.Dispose();
 
-    private RecordEditService EditService() =>
-        new(_fixture.Mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
+    private ProjectingEditService EditService() =>
+        ProjectingEditService.Over(_fixture.Mirror);
 
     private IRecordQueryService Reads() =>
         new RecordQueryService(_fixture.Mirror, SharedSchemaReflector.Instance, new ConflictClassifier());
@@ -33,6 +33,8 @@ public sealed class ReadTimeFreshnessContainerTests : IDisposable
     public void ReadingAQuestWithChildren_LeavesItsIndexedBodyClean()
     {
         Assert.NotNull(Reads().GetRecord(_fixture.Quest.ToString()));
+
+        _fixture.Mirror.Settle();
 
         var index = _fixture.Mirror.Index!;
         var effective = index.At(Core.Records.RecordRef.Effective).GetDocument(_fixture.Quest.ToString(), _fixture.Plugin)!.Body;

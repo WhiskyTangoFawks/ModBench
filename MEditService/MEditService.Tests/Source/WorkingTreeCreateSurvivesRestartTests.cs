@@ -3,6 +3,7 @@ using MEditService.Core.Plugins;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
 using MEditService.Tests.Edits;
+using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 
@@ -17,7 +18,7 @@ public sealed class WorkingTreeCreateSurvivesRestartTests
     public void ARecordCreated_ButNeverCompiled_IsStillReadable_AfterARestart()
     {
         using var mod = TrackedModFixture.Tracked();
-        var created = new RecordEditService(mod.Mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance)
+        var created = ProjectingEditService.Over(mod.Mirror)
             .CreateRecord(mod.Plugin, "npc_", "SurvivesRestart");
         Assert.True(created.Applied, created.Message);
 
@@ -42,7 +43,7 @@ public sealed class WorkingTreeCreateSurvivesRestartTests
     public void ARecordCreated_IsWinner_AfterARestart()
     {
         using var mod = TrackedModFixture.Tracked();
-        var created = new RecordEditService(mod.Mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance)
+        var created = ProjectingEditService.Over(mod.Mirror)
             .CreateRecord(mod.Plugin, "npc_", "SurvivesRestart");
 
         using var reloaded = new LoadOrderMirror(

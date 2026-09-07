@@ -143,10 +143,10 @@ public sealed class ConcreteBaseUnionEditTests : IDisposable
                 .GetAwaiter().GetResult();
         }
 
-        public RecordEditService Service() =>
-            new(_mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
+        public ProjectingEditService Service() =>
+        ProjectingEditService.Over(_mirror);
 
-        public string NpcBody() => _mirror.Index!.At(RecordRef.Effective).GetDocument(Npc.ToString(), Plugin)!.Body!;
+        public string NpcBody() => _mirror.Projected().GetDocument(Npc.ToString(), Plugin)!.Body!;
 
         public void Dispose()
         {

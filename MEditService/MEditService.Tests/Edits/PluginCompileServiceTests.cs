@@ -19,8 +19,8 @@ public sealed class PluginCompileServiceTests : IDisposable
 
     public void Dispose() => _mod.Dispose();
 
-    private RecordEditService EditService() =>
-        new(_mod.Mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
+    private ProjectingEditService EditService() =>
+        ProjectingEditService.Over(_mod.Mirror);
 
     private PluginCompileService CompileService() =>
         new(_mod.Mirror, new PluginWriter(NullLogger<PluginWriter>.Instance), NullLogger<PluginCompileService>.Instance);
@@ -132,7 +132,7 @@ public sealed class PluginCompileServiceTests : IDisposable
     public void Compile_AfterDeletingTheMiddleOfThreeDialogTopics_Succeeds_KeepingSurvivorsInOrder()
     {
         using var container = new ContainerModFixture();
-        var editService = new RecordEditService(container.Mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
+        var editService = ProjectingEditService.Over(container.Mirror);
         var compileService = new PluginCompileService(
             container.Mirror, new PluginWriter(NullLogger<PluginWriter>.Instance), NullLogger<PluginCompileService>.Instance);
 

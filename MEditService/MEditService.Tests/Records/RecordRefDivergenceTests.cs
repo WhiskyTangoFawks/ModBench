@@ -3,6 +3,7 @@ using MEditService.Core.Queries;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
 using MEditService.Core.Serialization;
+using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -66,23 +67,21 @@ public sealed class RecordRefDivergenceTests : IDisposable
     }
 
     // One crafted divergence, five distinct At(Head) observers. Deletion is structural, so
-    // ApplyWorkingTreeChanges' own UpdateWinners() resweep already covers it.
+    // ProjectDocuments' own UpdateWinners() resweep already covers it.
     private DuckDbRecordIndex RepositoryWithWinnerOverrideDeleted()
     {
         var repo = LoadedRepository();
-        repo.ApplyWorkingTreeChanges(WinnerKey, [(_keptNpcFormKey.ToString(), null)]);
+        repo.ProjectDocuments(WinnerKey, [(_keptNpcFormKey.ToString(), null)]);
         return repo;
     }
 
-    // A real codec-produced body, the shape CreateRecord writes in production: a hand-crafted JSON
-    // literal would prove only this test's guess at the codec's shape.
-    private static readonly RecordTextCodec Codec = new(NullLogger<RecordTextCodec>.Instance);
-
-    private static string NewNpcBody(string formKey, string editorId)
+    // A record the working tree created and no commit holds yet: ingest reconciles it into exactly
+    // this state, and every read below is about the state, not about how it was reached.
+    private string NpcCreatedInTheWorkingTree(DuckDbRecordIndex repo)
     {
-        var npc = new Npc(FormKey.Factory(formKey), Fallout4Release.Fallout4) { EditorID = editorId };
-        var bytes = Codec.SerializeToBytesAsync(npc, GameRelease.Fallout4).GetAwaiter().GetResult();
-        return Encoding.UTF8.GetString(bytes);
+        var formKey = _droppedNpcFormKey.ToString();
+        repo.MarkWorkingTreeOnly(BaseKey, [formKey]);
+        return formKey;
     }
 
     [Fact]
@@ -139,7 +138,7 @@ public sealed class RecordRefDivergenceTests : IDisposable
         var basePlugin = new PluginKey("Base.esm", "Data");
 
         var before = repo.At(RecordRef.Effective).GetDocument(edited, basePlugin)!;
-        repo.ApplyWorkingTreeChanges(
+        repo.ProjectDocuments(
             basePlugin, [(edited, before.Body!.Replace("KeepMe", "RenamedInWorkingTree", StringComparison.Ordinal))]);
 
         // The edited record's own Base.esm entry diverges...
@@ -195,8 +194,9 @@ public sealed class RecordRefDivergenceTests : IDisposable
     public void AtHead_GetRecordTypeCounts_ExcludesAWorkingTreeOnlyCreatedRecord()
     {
         using var repo = LoadedRepository();
-        var newFormKey = "800000:Base.esm";
-        repo.CreateWorkingTreeRecord(BaseKey, newFormKey, "npc_", NewNpcBody(newFormKey, "WorkingTreeOnlyNpc"));
+        // What a created record is once the projector has re-read the tree: an Effective row no
+        // committed ref holds (ADR-0041), which is the state ingest marks rather than a verb of its own.
+        var newFormKey = NpcCreatedInTheWorkingTree(repo);
 
         var effectiveCount = repo.At(RecordRef.Effective).GetRecordTypeCounts(BaseKey).Single(c => c.Type == "npc_").Count;
         var headCount = repo.At(RecordRef.Head).GetRecordTypeCounts(BaseKey).Single(c => c.Type == "npc_").Count;
@@ -208,8 +208,7 @@ public sealed class RecordRefDivergenceTests : IDisposable
     public void AtHead_GetNativeFormKeys_ExcludesAWorkingTreeOnlyCreatedRecord()
     {
         using var repo = LoadedRepository();
-        var newFormKey = "800000:Base.esm";
-        repo.CreateWorkingTreeRecord(BaseKey, newFormKey, "npc_", NewNpcBody(newFormKey, "WorkingTreeOnlyNpc"));
+        var newFormKey = NpcCreatedInTheWorkingTree(repo);
 
         Assert.Contains(newFormKey, repo.At(RecordRef.Effective).GetNativeFormKeys(BaseKey));
         Assert.DoesNotContain(newFormKey, repo.At(RecordRef.Head).GetNativeFormKeys(BaseKey));

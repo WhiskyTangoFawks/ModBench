@@ -1,3 +1,4 @@
+using MEditService.Core.Notifications;
 using MEditService.Core.Plugins;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
@@ -89,7 +90,7 @@ public sealed class ContainerModFixture : IDisposable
     // child has an order to change.
     public static readonly byte[] ResponseLineNumbers = [1, 2];
 
-    public ContainerModFixture()
+    public ContainerModFixture(INotificationPublisher? notifications = null)
     {
         ModFolder = Directory.CreateTempSubdirectory("medit-container-mod-").FullName;
         GameDirectory = Directory.CreateTempSubdirectory("medit-container-game-").FullName;
@@ -166,7 +167,8 @@ public sealed class ContainerModFixture : IDisposable
         (DialogBranch, Scene) = (dialogBranch.FormKey, scene.FormKey);
 
         Mirror = new LoadOrderMirror(
-            new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
+            new DuckDbRecordIndexFactory(
+                SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance), notifications));
         ((ILoadOrderMirror)Mirror).Reconcile(
             GameDirectory,
             [new LoadOrderEntry(PluginName, pluginPath, ModFolderOrigin, Slot: 0, Enabled: true, Winning: true)],
