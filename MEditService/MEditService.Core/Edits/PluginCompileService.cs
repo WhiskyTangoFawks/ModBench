@@ -1,9 +1,13 @@
+using System.Text.Json;
 using MEditService.Core.Plugins;
+using MEditService.Core.Queries;
 using MEditService.Core.Records;
+using MEditService.Core.Schema;
 using MEditService.Core.Serialization;
 using MEditService.Core.Source;
 using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
+using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Analysis;
 using Mutagen.Bethesda.Plugins.Records;
 using Noggog.WorkEngine;
@@ -14,16 +18,22 @@ namespace MEditService.Core.Edits;
 /// the source's own bytes, never the DB index; refuses only what it structurally cannot emit, and
 /// the rest becomes diagnostics.</summary>
 public sealed class PluginCompileService(
-    ILoadOrderMirror mirror,
+    LoadOrderHolder loadOrderHolder,
+    SchemaReflector schemaReflector,
+    RecordTextCodec codec,
+    IModImporter importer,
     PluginWriter writer,
     ILogger<PluginCompileService> logger)
 {
     public CompileResult Compile(PluginKey plugin, CompileSource source)
     {
-        var (resolvedLoadOrder, resolvedIndex, resolvedModFolder, resolvedMetadata, targetRefusal) = ResolveCompileTarget(plugin);
-        if (targetRefusal != null)
-            return CompileResult.Refused(targetRefusal);
-        var (loadOrder, index, modFolder, metadata) = (resolvedLoadOrder!, resolvedIndex!, resolvedModFolder!, resolvedMetadata!);
+        var loadOrder = loadOrderHolder.Current;
+        if (loadOrder.Copies.Count == 0)
+            return CompileResult.Refused("No load order has been received.");
+        if (loadOrder.Copy(plugin) is not { } copy)
+            return CompileResult.Refused($"{plugin.Name} is not in the load order.");
+        if (ModFolders.TrackedOf(loadOrder, plugin) is not { } modFolder)
+            return CompileResult.Refused($"{plugin.Name} is not tracked, so there is no source to compile.");
 
         // A compile at a named ref reads that ref's tree onto disk first, so both cases below are the
         // same "read this directory" call.
@@ -82,12 +92,12 @@ public sealed class PluginCompileService(
         if (roundTripRefusal != null)
             return CompileResult.Refused(roundTripRefusal);
 
-        var diagnostics = CollectDiagnostics(mod, index, plugin, checkout.ResolverRoot, loadOrder.GameRelease);
+        var (diagnostics, masters) = ContentFacts(mod, plugin, loadOrder, checkout.ResolverRoot);
 
-        var loadOrderNames = loadOrder.Plugins
-            .Where(p => p.InLoadOrder)
-            .OrderBy(p => p.LoadOrderIndex)
-            .Select(p => p.Name)
+        var loadOrderNames = loadOrder.Copies
+            .Where(c => c.Registration.InLoadOrder)
+            .OrderBy(c => c.Slot!.Value)
+            .Select(c => c.Name)
             .ToList();
 
         // A crash mid-flight is what the journal marker is for: only the unmappable-FormID shape is
@@ -99,7 +109,7 @@ public sealed class PluginCompileService(
         {
             try
             {
-                writer.SaveFromModAsync(mod, metadata.Path, loadOrderNames).GetAwaiter().GetResult();
+                writer.SaveFromModAsync(mod, copy.Path, loadOrderNames).GetAwaiter().GetResult();
             }
             catch (Exception ex) when (PluginDiagnosis.HasUnmappableFormID(ex))
             {
@@ -113,14 +123,13 @@ public sealed class PluginCompileService(
             // The parked snapshot advances only after the binary write has landed. An AtRef compile
             // parks too: otherwise the parked trailer still names the old working-tree hash and
             // Modbench's own write reads as an external change.
-            var binarySha256 = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(metadata.Path)));
+            var binarySha256 = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(copy.Path)));
             SourceRepository.ParkCompileSnapshot(modFolder, plugin.Name, atRef, binarySha256);
             return true;
         });
         if (writeRefusal != null)
             return CompileResult.Refused(writeRefusal);
 
-        var masters = index.At(RecordRef.Effective).GetEffectiveMasters(plugin);
         if (logger.IsEnabled(LogLevel.Information))
         {
             logger.LogInformation("Compiled {Plugin} ({Origin}) from {RecordCount} source records",
@@ -129,60 +138,148 @@ public sealed class PluginCompileService(
         return CompileResult.Success(diagnostics, masters);
     }
 
-    private (ILoadOrder? LoadOrder, IRecordIndex? Index, string? ModFolder, PluginMetadata? Metadata, string? RefusalReason)
-        ResolveCompileTarget(PluginKey plugin)
+    // ADR-0046 invariant 1: the write side never reads the Index, so the masters content requires
+    // (ADR-0038) and the check errors the editor shows come from the records here, through the
+    // same collector, schema and link resolver.
+    private (List<CompileDiagnostic> Diagnostics, IReadOnlyList<string> Masters) ContentFacts(
+        IMod mod, PluginKey plugin, LoadOrder loadOrder, string resolverRoot)
     {
-        var loadOrder = mirror.LoadOrder;
-        var index = mirror.Index;
-        if (loadOrder == null || index == null)
-            return (null, null, null, null, "No load order has been received.");
-
-        var modFolder = ModFolders.TrackedOf(loadOrder, plugin);
-        if (modFolder == null)
-            return (null, null, null, null, $"{plugin.Name} is not tracked, so there is no source to compile.");
-
-        var metadata = loadOrder.Plugins.FirstOrDefault(p =>
-            p.Name.Equals(plugin.Name, StringComparison.OrdinalIgnoreCase)
-            && p.Origin.Equals(plugin.Origin, StringComparison.OrdinalIgnoreCase));
-        if (metadata == null)
-            return (null, null, null, null, $"{plugin.Name} is not in the load order.");
-
-        return (loadOrder, index, modFolder, metadata, null);
-    }
-
-    // Reads the CheckError the editor already shows per field rather than re-deriving it, so the two
-    // cannot drift. Walks the mod, not the files, so embedded children report too.
-    private static List<CompileDiagnostic> CollectDiagnostics(
-        IMod mod, IRecordIndex index, PluginKey plugin, string resolverRoot, GameRelease gameRelease)
-    {
-        var diagnostics = new List<CompileDiagnostic>();
-        // One bulk read rather than a point-read per record: two DuckDB queries each, most of
-        // Compile's wall clock on a 3,940-record fixture.
-        var reads = index.At(RecordRef.Effective);
-        var documents = reads.GetDocuments(plugin).ToDictionary(d => d.FormKey);
-        // One repository for the pass, so its listing memo spans it: resolving per record against a
-        // fresh tree scan dominated.
-        var repository = SourceRepository.Over(resolverRoot, gameRelease);
+        // One walk, and the record type is the one SourceRecordType names, so what compile files a
+        // record under and what the tree calls it cannot differ. A type no schema claims has no
+        // document, so nothing is derived from it.
+        var schemas = schemaReflector.GetSchemas(loadOrder.GameRelease);
+        var typed = new List<(string RecordType, RecordTableSchema Schema, IMajorRecordGetter Record)>();
         foreach (var record in mod.EnumerateMajorRecords())
         {
-            var formKey = record.FormKey.ToString();
-            if (!documents.TryGetValue(formKey, out var document)) continue;
+            var recordType = SourceRecordType.Resolve(record, schemas);
+            if (schemas.TryGetValue(recordType, out var schema)) typed.Add((recordType, schema, record));
+        }
 
-            var errors = document.Fields
-                .Where(f => f.CheckError != null)
-                .Select(f => $"{f.Metadata.Name}: {f.CheckError}")
-                .ToList();
+        var own = new Dictionary<string, RecordLookupEntry>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (recordType, _, record) in typed)
+            own[record.FormKey.ToString()] = new RecordLookupEntry(recordType, record.EditorID);
+
+        // The records just read answer for this plugin, at the ref being compiled; the working tree
+        // the resolver reads for a tracked plugin is a different answer at a named ref.
+        using var links = new FormLinkResolver(loadOrder, importer, schemaReflector);
+        RecordLookupEntry? ResolveOnce(string formKey)
+        {
+            if (own.TryGetValue(formKey, out var entry)) return entry;
+            return IsNative(formKey, plugin) ? null : links.Resolve(formKey);
+        }
+
+        // One answer per distinct FormKey: the resolver walks a tracked target's whole tree per call,
+        // and the same link recurs across a plugin's records.
+        var resolve = FormKeyResolutionCache.Memoize(ResolveOnce);
+
+        // debt #779: the resolver cannot name an embedded child in a tracked plugin, so a link
+        // that plugin's tree does carry is one this pass has no answer for, not a broken one.
+        var trackedTrees = new Dictionary<string, SourceRepository?>(StringComparer.OrdinalIgnoreCase);
+        bool AnswersFor(string formKey) =>
+            resolve(formKey) is not null || !EmbeddedInATrackedPlugin(formKey, plugin, loadOrder, trackedTrees);
+
+        // One repository for the pass, so its listing memo spans it: resolving per record against a
+        // fresh tree scan dominated.
+        var repository = SourceRepository.Over(resolverRoot, loadOrder.GameRelease);
+        var diagnostics = new List<CompileDiagnostic>();
+        var masters = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (recordType, schema, record) in typed)
+        {
+            var formKey = record.FormKey.ToString();
+            // An override carries another plugin's FormKey, which needs that plugin as a master
+            // whether or not the record references anything.
+            if (PluginNameIn(formKey) is { } native) masters.Add(native);
+
+            // The document, not the live object: what a reference is, is what the source file holds.
+            var body = codec.SerializeToBytesAsync(record, loadOrder.GameRelease).GetAwaiter().GetResult();
+            using var document = JsonDocument.Parse(body);
+            foreach (var reference in FormReferences.Collect(document.RootElement, schema))
+            {
+                if (PluginNameIn(reference.TargetFormKey) is { } target) masters.Add(target);
+            }
+
+            var errors = CheckErrors(schema, document.RootElement, resolve, loadOrder.GameRelease, AnswersFor);
             if (errors.Count == 0) continue;
 
             // Only records with something to report pay for resolution, which keeps a container's
             // subtree scan off the common path.
             var relativePath = repository
-                .Locate(plugin, new RecordIdentity(formKey, document.RecordType, document.EditorId))
+                .Locate(plugin, new RecordIdentity(formKey, recordType, record.EditorID))
                 ?.RelativePath ?? string.Empty;
             diagnostics.AddRange(errors.Select(message => new CompileDiagnostic(formKey, relativePath, message)));
         }
-        return diagnostics;
+
+        masters.Remove(plugin.Name);
+        return (diagnostics, InLoadOrderOrder(masters, loadOrder));
     }
+
+    // The same fields the editor shows a CheckError on, from the same builder, so compile and the
+    // record panel cannot hold two definitions of what is broken.
+    private static List<string> CheckErrors(
+        RecordTableSchema schema, JsonElement root, Func<string, RecordLookupEntry?> resolve,
+        GameRelease release, Func<string, bool> answersFor)
+    {
+        var errors = new List<string>();
+        foreach (var column in schema.RecordColumns)
+        {
+            var meta = column.ToFieldMetadata();
+            // The collector's own gate: a column with no formKey leaf has nothing to check.
+            if (!FormReferences.CarriesFormKeys(meta)) continue;
+
+            var checkError = CheckErrorBuilder.Build(
+                DocumentNodes.VariantFor(meta, root), DocumentNodes.At(root, column.PropertyName),
+                resolve, release, answersFor: answersFor);
+            if (checkError != null) errors.Add($"{meta.Name}: {checkError}");
+        }
+        return errors;
+    }
+
+    // A master the load order holds sorts by its slot; one it does not falls after every held
+    // master, alphabetically among themselves, so the result is stable either way.
+    private static IReadOnlyList<string> InLoadOrderOrder(HashSet<string> masters, LoadOrder loadOrder)
+    {
+        if (masters.Count == 0) return [];
+
+        var slots = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        foreach (var copy in loadOrder.Copies)
+        {
+            if (copy.Slot is not { } slot) continue;
+            if (!slots.TryGetValue(copy.Name, out var held) || slot < held) slots[copy.Name] = slot;
+        }
+
+        return [.. masters
+            .OrderBy(m => slots.GetValueOrDefault(m, int.MaxValue))
+            .ThenBy(m => m, StringComparer.OrdinalIgnoreCase)];
+    }
+
+    private static bool IsNative(string formKey, PluginKey plugin) =>
+        PluginNameIn(formKey) is { } owner && owner.Equals(plugin.Name, StringComparison.OrdinalIgnoreCase);
+
+    // One repository per tracked mod folder for the whole pass, so its owner map is built at most
+    // once: every call here has already missed the resolver, which is the uncommon path.
+    private static bool EmbeddedInATrackedPlugin(
+        string formKey, PluginKey plugin, LoadOrder loadOrder, Dictionary<string, SourceRepository?> trackedTrees)
+    {
+        // The same chain the resolver walks, participation included (ADR-0044): a copy the game does
+        // not load holds nothing this link points at, so its tree is not an answer either.
+        if (IsNative(formKey, plugin)
+            || PluginNameIn(formKey) is not { } owner
+            || loadOrder.WinningCopy(owner) is not { } copy
+            || !copy.Registration.Participates
+            || ModFolders.TrackedOf(loadOrder, copy.Key) is not { } modFolder)
+        {
+            return false;
+        }
+
+        if (!trackedTrees.TryGetValue(modFolder, out var repository))
+            trackedTrees[modFolder] = repository = SourceRepository.Open(modFolder, loadOrder.GameRelease);
+        return repository?.CarriesEmbedded(copy.Key, formKey) == true;
+    }
+
+    // The plugin half of a FormKey, which is how a reference names the master it needs. Mutagen's
+    // own parser, not a split on the colon: a FormKey's spelling is its definition.
+    private static string? PluginNameIn(string formKey) =>
+        FormKey.TryFactory(formKey, out var parsed) ? parsed.ModKey.FileName.String : null;
 
     // Whatever is wrong with the source, the remedy is re-Track (ADR-0042), so the catch is
     // deliberately unfiltered and the message uniform.

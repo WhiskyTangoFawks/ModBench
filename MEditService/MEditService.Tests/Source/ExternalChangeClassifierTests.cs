@@ -23,7 +23,7 @@ public sealed class ExternalChangeClassifierTests
             var editService = ProjectingEditService.Over(mod.Mirror);
             editService.Set(mod.Plugin, mod.Npc.ToString(), "HeightMax", Json("0.75"));
 
-            var compileService = new PluginCompileService(mod.Mirror, new PluginWriter(NullLogger<PluginWriter>.Instance), NullLogger<PluginCompileService>.Instance);
+            var compileService = CompileServices.Over(mod.Mirror);
             var result = compileService.Compile(mod.Plugin, new CompileSource.WorkingTree());
             Assert.True(result.Succeeded, result.RefusalReason);
 
@@ -87,7 +87,7 @@ public sealed class ExternalChangeClassifierTests
         {
             var editService = ProjectingEditService.Over(mod.Mirror);
             editService.Set(mod.Plugin, mod.Npc.ToString(), "HeightMax", Json("0.75"));
-            var compileService = new PluginCompileService(mod.Mirror, new PluginWriter(NullLogger<PluginWriter>.Instance), NullLogger<PluginCompileService>.Instance);
+            var compileService = CompileServices.Over(mod.Mirror);
             var result = compileService.Compile(mod.Plugin, new CompileSource.WorkingTree());
             Assert.True(result.Succeeded, result.RefusalReason);
 

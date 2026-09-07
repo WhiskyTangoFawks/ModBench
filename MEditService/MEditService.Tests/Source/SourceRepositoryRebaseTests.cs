@@ -146,7 +146,7 @@ public sealed class SourceRepositoryRebaseTests : IDisposable
         Assert.Equal("edit", RunGit("rev-parse", "--abbrev-ref", "HEAD").Trim());
         Assert.Empty(SourceRepository.WorkingTreeStatus(_mod.ModFolder));
 
-        var compileService = new PluginCompileService(_mod.Mirror, new PluginWriter(NullLogger<PluginWriter>.Instance), NullLogger<PluginCompileService>.Instance);
+        var compileService = CompileServices.Over(_mod.Mirror);
         var compileResult = compileService.Compile(_mod.Plugin, new CompileSource.WorkingTree());
         Assert.True(compileResult.Succeeded, compileResult.RefusalReason);
     }

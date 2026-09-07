@@ -30,8 +30,7 @@ public sealed class CopyAsNewContainerTests : IDisposable
 
     private IFallout4ModGetter ImportCompiled()
     {
-        var compileResult = new PluginCompileService(
-                _fixture.Mirror, new PluginWriter(NullLogger<PluginWriter>.Instance), NullLogger<PluginCompileService>.Instance)
+        var compileResult = CompileServices.Over(_fixture.Mirror)
             .Compile(_fixture.DestinationPlugin, new CompileSource.WorkingTree());
         Assert.True(compileResult.Succeeded, compileResult.RefusalReason);
 

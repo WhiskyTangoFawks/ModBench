@@ -26,9 +26,7 @@ public sealed class ColorCompileRoundTripTests : IDisposable
 
     private IFallout4ModGetter CompileAndReparse()
     {
-        var result = new PluginCompileService(
-                _fixture.Mirror, new PluginWriter(NullLogger<PluginWriter>.Instance),
-                NullLogger<PluginCompileService>.Instance)
+        var result = CompileServices.Over(_fixture.Mirror)
             .Compile(_fixture.Plugin, new CompileSource.WorkingTree());
         Assert.True(result.Succeeded, result.RefusalReason);
 

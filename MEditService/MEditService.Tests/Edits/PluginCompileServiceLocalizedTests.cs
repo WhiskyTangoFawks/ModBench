@@ -3,6 +3,7 @@ using MEditService.Core.Plugins;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
 using MEditService.Core.Source;
+using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -12,8 +13,8 @@ using Mutagen.Bethesda.Strings;
 
 namespace MEditService.Tests.Edits;
 
-/// <summary>Its own small fixture rather than <see cref="TrackedModFixture"/>: none of that
-/// fixture's records carry a translated string.</summary>
+/// <summary>Its own small fixture rather than <see cref="CompileFixture"/>: none of that fixture's
+/// records carry a translated string.</summary>
 public sealed class PluginCompileServiceLocalizedTests : IDisposable
 {
     private const string PluginName = "Fixture.esp";
@@ -21,7 +22,7 @@ public sealed class PluginCompileServiceLocalizedTests : IDisposable
 
     private readonly string _modFolder = Directory.CreateTempSubdirectory("medit-compile-localized-").FullName;
     private readonly string _gameDir = Directory.CreateTempSubdirectory("medit-compile-localized-game-").FullName;
-    private readonly LoadOrderMirror _mirror;
+    private readonly LoadOrder _loadOrder;
 
     public PluginCompileServiceLocalizedTests()
     {
@@ -32,19 +33,17 @@ public sealed class PluginCompileServiceLocalizedTests : IDisposable
         mod.UsingLocalization = true;
         mod.WriteToBinary(pluginPath);
 
-        _mirror = new LoadOrderMirror(
-            new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
-        ((ILoadOrderMirror)_mirror).Reconcile(
-            _gameDir, [new LoadOrderEntry(PluginName, pluginPath, Origin, Slot: 0, Enabled: true, Winning: true)], GameRelease.Fallout4);
+        _loadOrder = LoadOrder.From(
+            _gameDir, instanceRoot: null, GameRelease.Fallout4,
+            [new LoadOrderEntry(PluginName, pluginPath, Origin, Slot: 0, Enabled: true, Winning: true)]);
 
         new TrackService(NullLogger<TrackService>.Instance)
-            .TrackAsync(_mirror.LoadOrder!, Origin, SourcePreset.Edits)
+            .TrackAsync(_loadOrder, [new PluginKey(PluginName, Origin)], Origin, SourcePreset.Edits)
             .GetAwaiter().GetResult();
     }
 
     public void Dispose()
     {
-        _mirror.Dispose();
         Directory.Delete(_modFolder, recursive: true);
         Directory.Delete(_gameDir, recursive: true);
     }
@@ -69,8 +68,7 @@ public sealed class PluginCompileServiceLocalizedTests : IDisposable
             File.Delete(Path.Combine(stringsDir, fileName));
 
         var plugin = new PluginKey(PluginName, Origin);
-        var compileService = new PluginCompileService(
-            _mirror, new PluginWriter(NullLogger<PluginWriter>.Instance), NullLogger<PluginCompileService>.Instance);
+        var compileService = CompileServices.Over(_loadOrder);
         var result = compileService.Compile(plugin, new CompileSource.WorkingTree());
 
         Assert.True(result.Succeeded, result.RefusalReason);

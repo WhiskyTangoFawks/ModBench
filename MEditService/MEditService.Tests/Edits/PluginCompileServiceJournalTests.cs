@@ -1,5 +1,6 @@
 using MEditService.Core.Edits;
 using MEditService.Core.Source;
+using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace MEditService.Tests.Edits;
@@ -8,12 +9,12 @@ namespace MEditService.Tests.Edits;
 /// <c>CompileJournalTests</c> covers the primitive in isolation.</summary>
 public sealed class PluginCompileServiceJournalTests : IDisposable
 {
-    private readonly TrackedModFixture _mod = TrackedModFixture.Tracked();
+    private readonly CompileFixture _mod = new();
 
     public void Dispose() => _mod.Dispose();
 
     private PluginCompileService CompileService() =>
-        new(_mod.Mirror, new PluginWriter(NullLogger<PluginWriter>.Instance), NullLogger<PluginCompileService>.Instance);
+        _mod.CompileService();
 
     [Fact]
     public void Compile_ThatSucceeds_LeavesNoJournalMarkerBehind()
@@ -37,12 +38,12 @@ public sealed class PluginCompileServiceJournalTests : IDisposable
         }
         finally
         {
-            Chmod(_mod.ModFolder, "700"); // restored before TrackedModFixture.Dispose() needs to clean up
+            Chmod(_mod.ModFolder, "700"); // restored before CompileFixture.Dispose() needs to clean up
         }
 
         var recovery = CompileJournal.UnfinishedBatch(_mod.ModFolder);
         Assert.NotNull(recovery);
-        Assert.Equal([TrackedModFixture.PluginName], recovery.Plugins);
+        Assert.Equal([CompileFixture.PluginName], recovery.Plugins);
         Assert.Empty(recovery.Landed);
     }
 
