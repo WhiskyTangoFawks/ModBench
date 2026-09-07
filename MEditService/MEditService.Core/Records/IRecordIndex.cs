@@ -98,6 +98,11 @@ public interface IRecordIndex : IDisposable
     /// both refs from the Source repository, idempotent by content; skips a key held at neither
     /// ref. <paramref name="modFolder"/> is the caller's to resolve.</summary>
     void RefreshByKeys(PluginKey key, string modFolder, IReadOnlyList<string> formKeys);
+
+    /// <summary>ADR-0046 invariant 6: compares <paramref name="key"/>'s rows against the system of
+    /// record they came from — source documents at both refs for a tracked
+    /// <paramref name="modFolder"/>, the binary otherwise — and refreshes what differs.</summary>
+    ValidationReport Validate(PluginKey key, string? modFolder);
 }
 
 /// <summary>What <see cref="IRecordIndex.ApplyRenumber"/> needs.</summary>

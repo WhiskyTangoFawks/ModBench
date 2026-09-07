@@ -49,6 +49,9 @@ public sealed class DuckDbRecordIndex : IRecordIndex
     // one-directionally.
     private WorkingTreeOverlay _workingTreeOverlay = null!;
 
+    // Validate's tracked half. Constructed alongside its siblings, for the same reason.
+    private SourceValidation _sourceValidation = null!;
+
     public DuckDBConnection Connection => _indexStore.Connection;
 
     private readonly TableDdlBuilder _ddlBuilder;
@@ -99,6 +102,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         _pluginIngest = new PluginIngest(Connection, _logger, _codec, _placementWalker);
         _workingTreeOverlay = new WorkingTreeOverlay(
             Connection, _logger, _codec, _placementWalker, release, _schemas);
+        _sourceValidation = new SourceValidation(this, Connection, _logger);
 
         // Unindex is this class's cross-cutting verb (registration plus every ingest-owned table), so
         // acting on the stale set stays here.
@@ -472,6 +476,49 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         if (string.Equals(resolvedHeadText, committedBody, StringComparison.Ordinal)) return;
 
         SetCommittedBaseline(key, [(formKey, resolvedHeadText)]);
+    }
+
+    // --- Validate ---
+
+    /// <summary>See <see cref="IRecordIndex.Validate"/>.</summary>
+    public ValidationReport Validate(PluginKey key, string? modFolder)
+    {
+        if (modFolder != null && SourceRepository.IsTracked(modFolder))
+            return _sourceValidation.Validate(key, modFolder);
+
+        return ValidateAgainstBinary(key);
+    }
+
+    // Validate's own publish. MarkWorkingTreeOnly does not publish for itself: ingest calls it for
+    // every reconciled record of a whole plugin, where a notification per record would be noise.
+    internal void PublishRowsChanged(PluginKey key, IReadOnlyList<string> formKeys) =>
+        _notifications?.Publish(new RowsChangedNotification(key, formKeys, Sequence));
+
+    // ADR-0001's load-time check, asked of one copy: the stored hash against the bytes on disk. A
+    // binary has no smaller unit, so a mismatch is a rebuild the caller owns.
+    private ValidationReport ValidateAgainstBinary(PluginKey key)
+    {
+        // Nothing vouches for these rows (an in-memory mod, or a tracked copy whose folder went
+        // away), so there is nothing to compare them against.
+        if (_indexStore.IndexedFile(key) is not { } claim) return ValidationReport.Clean(key);
+
+        if (!File.Exists(claim.FilePath))
+        {
+            if (_logger.IsEnabled(LogLevel.Information))
+            {
+                _logger.LogInformation(
+                    "{Plugin} ({Origin}) is absent from disk at {Path}; removing its rows",
+                    key.Name, key.Origin, claim.FilePath);
+            }
+            Unindex(key);
+            return ValidationReport.Clean(key);
+        }
+
+        // A file that cannot be read is no evidence its rows are still true, so it counts as a
+        // mismatch — IndexStore.ValidateAgainstDisk's own rule.
+        return PluginBinaryHash.OfFile(claim.FilePath) == claim.ContentHash
+            ? ValidationReport.Clean(key)
+            : new ValidationReport(key, [], NeedsRebuild: true, []);
     }
 
     // --- Queries ---

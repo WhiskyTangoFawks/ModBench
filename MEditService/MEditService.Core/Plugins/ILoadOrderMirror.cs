@@ -55,6 +55,11 @@ public interface ILoadOrderMirror
     /// corrects the slot.</summary>
     PluginResponse CreatePlugin(string name, string path, string origin);
 
+    /// <summary>ADR-0046 invariant 6's reconcile request: validates <paramref name="plugin"/>, or
+    /// every registered copy when null, and repairs what differs. <c>NeedsRebuild</c> names a copy
+    /// this call re-derived whole.</summary>
+    IReadOnlyList<ValidationReport> ValidateIndex(PluginKey? plugin);
+
     /// <summary>Which truth it reads is the plugin's: an untracked copy from its binary, a tracked
     /// copy from its source tree (ADR-0041), because reading a tracked copy's binary would discard
     /// uncommitted edits.</summary>

@@ -346,6 +346,34 @@ public sealed class LoadOrderMirror(
         }
     }
 
+    // Registers first: the index's reads are scoped by registration, so validate would otherwise
+    // compare an empty row set against a full tree. False falls through to a full index.
+    private bool WarmRegister(IRecordIndex index, PluginMetadata plugin, string? sourceTree)
+    {
+        index.Register(plugin.Key, plugin.Registration);
+
+        // An untracked copy's binary was already hashed against its stored claim when the index file
+        // opened (IndexStore.ValidateAgainstDisk), so a second hash of every binary here would pay
+        // that whole cost twice for no new answer.
+        if (sourceTree == null) return true;
+
+        try
+        {
+            var report = index.Validate(plugin.Key, ModFolders.Of(plugin.Origin, plugin.Path));
+            foreach (var failure in report.Failures)
+                _logger.LogWarning("Validating {Plugin} at load: {Failure}", plugin.Name, failure);
+            return !report.NeedsRebuild;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException
+            or NotSupportedException)
+        {
+            // A tree that cannot be read is no evidence the rows are still true, and the ingest below
+            // reports its own failure properly (a source read is never degraded to the binary silently).
+            _logger.LogWarning(ex, "Could not validate {Plugin}'s source tree at load; re-deriving it", plugin.Name);
+            return false;
+        }
+    }
+
     // While the bytes are unchanged the error state stands, and the parse is not paid again.
     private bool StillFailing(ResolvedPlugin plugin)
     {
@@ -360,14 +388,16 @@ public sealed class LoadOrderMirror(
     // ADR-0001: a copy the index has already seen is registered rather than indexed — a non-null
     // content hash means "held, and still matching the bytes on disk".
 
-    // A tracked plugin never takes that path: its rows come from its source tree, which the index
-    // holds no hash for. The tree is resolved here because the register/index decision needs the
-    // same answer the ingest does.
+    // ADR-0046 invariant 6: a tracked copy takes the same warm path, its source tree validated by
+    // content where the untracked branch checked the binary hash at open. Only a moved document set
+    // is re-derived whole.
+
+    // The tree is resolved here because the register/index decision needs the answer the ingest does.
     private void RegisterOrIndex(LoadOrder loadOrder, IRecordIndex index, PluginMetadata plugin, CancellationToken token)
     {
         var key = plugin.Key;
         var sourceTree = SourceIngest.TreeFor(plugin.Origin, plugin.Path, plugin.Name);
-        if (sourceTree == null && index.IndexedContentHash(key) != null)
+        if (index.IndexedContentHash(key) != null && WarmRegister(index, plugin, sourceTree))
         {
             if (_logger.IsEnabled(LogLevel.Information))
             {
@@ -375,7 +405,6 @@ public sealed class LoadOrderMirror(
                     "Registering {Plugin} ({RecordCount} records), already indexed and unchanged on disk",
                     plugin.Name, plugin.RecordCount);
             }
-            index.Register(key, plugin.Registration);
             // Counted exactly as an indexed plugin is: Status promises a plugin listed here is
             // wholly queryable, and a registered one is.
             lock (_lock) _indexed.Add(new IndexedPlugin(plugin.Name, plugin.Origin));
@@ -528,6 +557,44 @@ public sealed class LoadOrderMirror(
             index.Index(openedMod, metadata.Registration, metadata.Key, metadata.Path);
             _indexed.Add(new IndexedPlugin(metadata.Name, metadata.Origin));
             return PluginResponse.FromMetadata(metadata);
+        }
+    }
+
+    /// <summary>See <see cref="ILoadOrderMirror.ValidateIndex"/>.</summary>
+    public IReadOnlyList<ValidationReport> ValidateIndex(PluginKey? plugin)
+    {
+        // Outside _lock, as every mutation door here is: validate refreshes rows through the index's
+        // own verbs, and the gate is reentrant so the rebuild below can take it again.
+        using var _ = WriteGate.Enter();
+
+        var (loadOrder, index) = RequireHeldIndex();
+        var keys = plugin is { } one ? (IReadOnlyList<PluginKey>)[one] : index.RegisteredPlugins();
+
+        var reports = new List<ValidationReport>(keys.Count);
+        foreach (var key in keys)
+        {
+            var report = index.Validate(key, ModFolders.Of(loadOrder, key));
+            foreach (var failure in report.Failures)
+                _logger.LogWarning("Reconciling {Plugin}: {Failure}", key.Name, failure);
+
+            // A record set that moved is a whole-plugin re-derivation, which is the mirror's to run:
+            // it holds the mod and knows which truth this copy reads (ADR-0041).
+            if (report.NeedsRebuild) ReindexPlugin(key).GetAwaiter().GetResult();
+            reports.Add(report);
+        }
+
+        // Any of the above can change which records match an active filter.
+        ReapplyFilter();
+        return reports;
+    }
+
+    // Never null, and never one without the other, for the same reason RequireScope is not.
+    private (ILoadOrder LoadOrder, IRecordIndex Index) RequireHeldIndex()
+    {
+        lock (_lock)
+        {
+            if (_loadOrder == null || _index == null) throw new NoLoadOrderException();
+            return (_loadOrder, _index);
         }
     }
 

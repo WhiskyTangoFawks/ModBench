@@ -211,6 +211,18 @@ internal sealed class IndexStore
         return hash;
     }
 
+    /// <summary>The disk claim <paramref name="key"/>'s rows carry, or null when nothing backs them.
+    /// Validate's untracked half asks for both halves at once: the path to re-hash and the hash the
+    /// rows were built under.</summary>
+    internal (string FilePath, string ContentHash)? IndexedFile(PluginKey key)
+    {
+        using var cmd = Connection.CreateCommand();
+        cmd.CommandText = $"SELECT file_path, content_hash FROM {FilesRelation} WHERE plugin = $1 AND origin = $2";
+        DuckDbSql.AddParams(cmd, [key.Name, key.Origin!]);
+        using var reader = cmd.ExecuteReader();
+        return reader.Read() ? (reader.GetString(0), reader.GetString(1)) : null;
+    }
+
     /// <summary>See <see cref="IRecordIndex.IndexedContentHash"/>.</summary>
     public string? IndexedContentHash(PluginKey key) =>
         DuckDbSql.ScalarString(Connection,

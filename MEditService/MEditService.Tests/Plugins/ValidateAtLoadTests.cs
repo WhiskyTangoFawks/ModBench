@@ -1,0 +1,45 @@
+using MEditService.Core.Plugins;
+using MEditService.Core.Records;
+using MEditService.Core.Schema;
+using MEditService.Tests.Edits;
+using MEditService.Tests.TestSupport;
+using Microsoft.Extensions.Logging;
+using Mutagen.Bethesda;
+
+namespace MEditService.Tests.Plugins;
+
+/// <summary>ADR-0046 invariant 6: the projector validates at load, before the load order answers. A
+/// tracked copy whose documents moved while nothing ran is corrected there, not on the next
+/// read.</summary>
+public sealed class ValidateAtLoadTests
+{
+    [Fact]
+    public void AHandEditMadeWhileStopped_IsInTheLoadOrdersAnswer_WithoutReIndexingTheWholePlugin()
+    {
+        using var mod = TrackedModFixture.TrackedPersistent();
+        var formKey = mod.Npc.ToString();
+        var text = File.ReadAllText(mod.NpcSourceFile);
+        File.WriteAllText(mod.NpcSourceFile, text.Replace("\"FixtureNpc\"", "\"EditedWhileStopped\"", StringComparison.Ordinal));
+        mod.Mirror.Dispose();
+
+        var entries = new List<LogEntry>();
+        using var loggerFactory = LoggerFactory.Create(b =>
+        {
+            b.SetMinimumLevel(LogLevel.Debug);
+            b.AddProvider(new CollectingLoggerProvider(entries));
+        });
+        var reflector = SharedSchemaReflector.Instance;
+        using var restarted = new LoadOrderMirror(
+            new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector)),
+            loggerFactory.CreateLogger<LoadOrderMirror>());
+
+        ((ILoadOrderMirror)restarted).Reconcile(
+            mod.GameDirectory, [mod.Entry], GameRelease.Fallout4, mod.InstanceRoot);
+
+        Assert.Equal(
+            "EditedWhileStopped",
+            restarted.Index!.At(RecordRef.Effective).GetDocument(formKey, mod.Plugin)!.EditorId);
+        Assert.DoesNotContain(
+            entries, e => e.Message.StartsWith($"Indexing {TrackedModFixture.PluginName} ", StringComparison.Ordinal));
+    }
+}

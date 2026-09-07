@@ -180,10 +180,11 @@ public sealed class WarmReconcileTests
         Assert.Equal(LoadOrderState.Ready, warm.Status.State);
     }
 
-    // A tracked plugin's truth is its source tree (ADR-0041/0042), so it is re-ingested on
-    // every load however current its binary — persistence must never override the working tree.
+    // A tracked plugin's truth is its source tree (ADR-0041/0042), so persistence must never override
+    // the working tree. ADR-0046 invariant 6: the load validates by content, so an unmoved tree costs
+    // a register and a comparison.
     [Fact]
-    public async Task ATrackedPlugin_IsReingestedFromSourceOnEveryLoad()
+    public async Task ATrackedPlugin_IsValidatedAgainstItsSourceTreeOnEveryLoad()
     {
         const string origin = "TrackedMod";
         const string plugin = "Tracked.esp";
@@ -207,19 +208,37 @@ public sealed class WarmReconcileTests
             }
 
             // Loaded twice *after* tracking, so both loads see a tracked plugin whose binary the
-            // index already holds a current hash for — the exact state a register would wrongly
-            // shortcut.
-            using (var second = MakeManager()) second.Reconcile(gameDirectory, order, GameRelease.Fallout4, instanceRoot);
+            // index already holds a current hash for.
+            string npcSourceFile;
+            using (var second = MakeManager())
+            {
+                second.Reconcile(gameDirectory, order, GameRelease.Fallout4, instanceRoot);
+                var npc = second.Index!.At(RecordRef.Effective)
+                    .GetDocuments(new PluginKey(plugin, origin)).Single(d => d.EditorId == "TrackedNpc");
+                npcSourceFile = SourceUnitResolver.FlatSourcePath(
+                    modFolder, plugin, npc.RecordType, npc.FormKey, npc.EditorId, GameRelease.Fallout4);
+            }
 
             var (loggerFactory, entries) = Capturing();
             using var _ = loggerFactory;
             using var third = MakeManager(loggerFactory.CreateLogger<LoadOrderMirror>());
             third.Reconcile(gameDirectory, order, GameRelease.Fallout4, instanceRoot);
 
-            Assert.Equal(0, Registered(entries, plugin));
-            Assert.Equal(1, Indexed(entries, plugin));
-            Assert.Contains(entries, e => e.Message.Contains("from its source tree", StringComparison.Ordinal));
+            // An unmoved tree: registered and validated, never re-derived.
+            Assert.Equal(1, Registered(entries, plugin));
+            Assert.Equal(0, Indexed(entries, plugin));
             Assert.Empty(third.LoadOrder!.Failures);
+
+            // And the working tree still wins: an edit made between loads is in the load order's
+            // answer, which is the whole point of validating rather than trusting the stored rows.
+            var text = await File.ReadAllTextAsync(npcSourceFile);
+            await File.WriteAllTextAsync(
+                npcSourceFile, text.Replace("\"TrackedNpc\"", "\"EditedBetweenLoads\"", StringComparison.Ordinal));
+            using var fourth = MakeManager();
+            fourth.Reconcile(gameDirectory, order, GameRelease.Fallout4, instanceRoot);
+            Assert.Contains(
+                fourth.Index!.At(RecordRef.Effective).GetDocuments(new PluginKey(plugin, origin)),
+                d => d.EditorId == "EditedBetweenLoads");
         }
         finally
         {

@@ -34,7 +34,7 @@ public sealed class TrackedModFixture : IDisposable
     public FormKey Keyword { get; }
     public FormKey OtherNpc { get; }
 
-    private TrackedModFixture(bool track, string pluginName, bool isLight = false)
+    private TrackedModFixture(bool track, string pluginName, bool isLight = false, bool persistent = false)
     {
         ActualPluginName = pluginName;
         Plugin = new PluginKey(pluginName, ModFolderOrigin);
@@ -57,8 +57,9 @@ public sealed class TrackedModFixture : IDisposable
             new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
         ((ILoadOrderMirror)Mirror).Reconcile(
             GameDirectory,
-            [new LoadOrderEntry(pluginName, pluginPath, ModFolderOrigin, Slot: 0, Enabled: true, Winning: true)],
-            GameRelease.Fallout4);
+            [Entry],
+            GameRelease.Fallout4,
+            persistent ? InstanceRoot : null);
 
         if (track)
         {
@@ -69,6 +70,15 @@ public sealed class TrackedModFixture : IDisposable
     }
 
     public static TrackedModFixture Tracked() => new(track: true, PluginName);
+
+    /// <summary>Tracked, over a persistent index file keyed on <see cref="InstanceRoot"/>, so a second
+    /// mirror over the same instance starts warm — the shape a restart has.</summary>
+    public static TrackedModFixture TrackedPersistent() => new(track: true, PluginName, persistent: true);
+
+    /// <summary>The load order snapshot this fixture's one plugin copy is, for a caller reconciling a
+    /// second mirror over the same instance.</summary>
+    public LoadOrderEntry Entry =>
+        new(ActualPluginName, Path.Combine(ModFolder, ActualPluginName), ModFolderOrigin, Slot: 0, Enabled: true, Winning: true);
 
     public static TrackedModFixture TrackedLight(string pluginName = PluginName) =>
         new(track: true, pluginName, isLight: true);

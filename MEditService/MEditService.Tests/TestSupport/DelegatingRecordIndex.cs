@@ -14,6 +14,7 @@ internal abstract class DelegatingRecordIndex(IRecordIndex inner) : IRecordIndex
     public virtual void SetFilter(string? sql) => Inner.SetFilter(sql);
     public virtual void RefreshByKeys(PluginKey key, string modFolder, IReadOnlyList<string> formKeys) =>
         Inner.RefreshByKeys(key, modFolder, formKeys);
+    public virtual ValidationReport Validate(PluginKey key, string? modFolder) => Inner.Validate(key, modFolder);
     public virtual void Initialize(GameRelease release) => Inner.Initialize(release);
     public virtual long Sequence => Inner.Sequence;
 
