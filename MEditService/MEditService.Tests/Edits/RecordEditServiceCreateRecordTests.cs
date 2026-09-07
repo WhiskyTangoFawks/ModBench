@@ -137,6 +137,20 @@ public sealed class RecordEditServiceCreateRecordTests
         Assert.Equal(RecordEditRefusal.RecordNotFound, result.Refusal);
     }
 
+    // Registered, untracked, and its file replaced by something that is not a plugin: peek reads it
+    // now, so an unreadable copy has to be a refusal rather than a fault.
+    [Fact]
+    public void PeekNextFreeFormKey_WhenTheCopysFileCannotBeRead_RefusesRatherThanThrowing()
+    {
+        using var mod = SourceEditFixture.Untracked();
+        File.WriteAllText(Path.Combine(mod.ModFolder, mod.ActualPluginName), "not a plugin");
+
+        var result = mod.Edits.PeekNextFreeFormKey(mod.Plugin);
+
+        Assert.False(result.Applied);
+        Assert.Equal(RecordEditRefusal.RecordParseFailed, result.Refusal);
+    }
+
     [Fact]
     public void PeekNextFreeFormKey_OnATrackedPlugin_MatchesWhatCreateAllocates()
     {

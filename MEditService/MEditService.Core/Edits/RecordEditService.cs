@@ -1106,9 +1106,8 @@ public sealed class RecordEditService(
 
     // A tracked copy allocates from its source tree; an untracked one has none, so the Plugin
     // adapter answers from its own bytes, as the form-link resolver's untracked branch does.
-    private Allocator? AllocatorFor(PluginKey plugin)
+    private Allocator AllocatorFor(RegisteredCopy copy, PluginKey plugin)
     {
-        if (loadOrder.Current.Copy(plugin) is not { } copy) return null;
         if (ModFolders.Of(loadOrder.Current, plugin) is { } modFolder
             && SourceRepository.Open(modFolder, loadOrder.Current.GameRelease) is { } repository)
         {
@@ -1271,11 +1270,25 @@ public sealed class RecordEditService(
 
         // Never a write, so no write gate and no tracked gate: an untracked copy answers too. A copy
         // the load order does not register is the one left with nothing to answer from.
-        if (AllocatorFor(plugin) is not { } allocator)
+        if (loadOrder.Current.Copy(plugin) is not { } copy)
         {
             return RecordEditResult.Refused(
                 RecordEditRefusal.RecordNotFound,
                 $"The load order does not hold {plugin.Name} ({plugin.Origin}).");
+        }
+
+        Allocator allocator;
+        try
+        {
+            allocator = AllocatorFor(copy, plugin);
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            // Registered and unreadable: MO2 replaces and removes a copy's file whenever it likes, and
+            // a read says so rather than faulting.
+            return RecordEditResult.Refused(
+                RecordEditRefusal.RecordParseFailed,
+                $"{plugin.Name} could not be read, so nothing can say which of its FormIDs are free: {ex.Message}");
         }
 
         var formKey = NextFreeNativeFormId(allocator, allocator.IsLight);
