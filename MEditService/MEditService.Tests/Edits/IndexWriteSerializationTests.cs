@@ -2,10 +2,7 @@ using MEditService.Core.Plugins;
 using MEditService.Core.Queries;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
-using MEditService.Core.Serialization;
-using MEditService.Core.Source;
 using MEditService.Tests.TestSupport;
-using Microsoft.Extensions.Logging.Abstractions;
 
 namespace MEditService.Tests.Edits;
 
@@ -21,9 +18,6 @@ public sealed class IndexWriteSerializationTests : IDisposable
 
     private IRecordQueryService Reads() =>
         new RecordQueryService(_mod.Mirror, SharedSchemaReflector.Instance, new ConflictClassifier());
-
-    private SourceFreshness Freshness() =>
-        new(_mod.Mirror, NullLogger<SourceFreshness>.Instance, new RecordTextCodec(NullLogger<RecordTextCodec>.Instance));
 
     private static (Task Work, bool Finished) RunAndWait(Action work, TimeSpan within)
     {
@@ -100,37 +94,18 @@ public sealed class IndexWriteSerializationTests : IDisposable
         await work.WaitAsync(Generous);
     }
 
-    // --- AC3: the read-path freshness self-heal takes the gate only when it is about to write ---
+    // --- The Source watcher's own timer-driven index write (ADR-0046 invariant 4) ---
 
     [Fact]
-    public void FreshnessValidate_WithNoDrift_NeverAcquiresTheGate()
+    public async Task RefreshKeys_WaitsForAnInFlightWriteToRelease()
     {
-        var freshness = Freshness();
-        freshness.Validate(_mod.Npc.ToString()); // settle any first-read self-heal before measuring
-
-        using var _ = new GateHeldElsewhere(Mirror.WriteGate);
-        var (_, finished) = RunAndWait(() => freshness.Validate(_mod.Npc.ToString()), ServedWindow);
-
-        Assert.True(finished, "a drift-free read acquired the write gate");
-    }
-
-    [Fact]
-    public async Task FreshnessValidate_WithDrift_WaitsForAnInFlightWriteToRelease()
-    {
-        var freshness = Freshness();
-        freshness.Validate(_mod.Npc.ToString());
-
-        // An edit made outside Modbench, exactly as ReadTimeFreshnessTests makes them.
-        var text = File.ReadAllText(_mod.NpcSourceFile);
-        File.WriteAllText(_mod.NpcSourceFile, text.Replace("\"FixtureNpc\"", "\"RenamedByHand\"", StringComparison.Ordinal));
-        Assert.NotEqual(text, File.ReadAllText(_mod.NpcSourceFile)); // the drift is real, not a no-op replace
-
         Task work;
         using (new GateHeldElsewhere(Mirror.WriteGate))
         {
             bool finished;
-            (work, finished) = RunAndWait(() => freshness.Validate(_mod.Npc.ToString()), BlockedWindow);
-            Assert.False(finished, "the self-heal folded a change into the index without taking the write gate");
+            (work, finished) = RunAndWait(
+                () => Mirror.RefreshKeys(_mod.Plugin, [_mod.Npc.ToString()]), BlockedWindow);
+            Assert.False(finished, "RefreshKeys wrote to the index without taking the write gate");
         }
 
         await work.WaitAsync(Generous);

@@ -4,6 +4,7 @@ using MEditService.Core.Plugins;
 using MEditService.Core.Queries;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
+using MEditService.Tests.Edits;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -234,6 +235,25 @@ public sealed class RecordQueryServiceTests : IDisposable
         var detail = _svc.GetRecord("FFFFFF:Unknown.esp");
 
         Assert.Null(detail);
+    }
+
+    // ADR-0046 invariant 4: the query path never opens a file under a mod folder, so a hand edit
+    // stays invisible until RefreshByKeys — the door the Source watcher calls — lands it.
+    [Fact]
+    public void GetRecord_NeverReadsSourceItself_AHandEditStaysInvisibleUntilTheStoreIsRefreshed()
+    {
+        using var mod = TrackedModFixture.Tracked();
+        var reads = new RecordQueryService(mod.Mirror, SharedSchemaReflector.Instance, new ConflictClassifier());
+
+        var text = File.ReadAllText(mod.NpcSourceFile);
+        File.WriteAllText(
+            mod.NpcSourceFile, text.Replace("\"FixtureNpc\"", "\"RenamedByHand\"", StringComparison.Ordinal));
+
+        Assert.Equal(TrackedModFixture.NpcEditorId, reads.GetRecord(mod.Npc.ToString())!.EditorId);
+
+        mod.Mirror.Index!.RefreshByKeys(mod.Plugin, mod.ModFolder, [mod.Npc.ToString()]);
+
+        Assert.Equal("RenamedByHand", reads.GetRecord(mod.Npc.ToString())!.EditorId);
     }
 
     // "Copy as New Record" needs the record's schema table name up front (CreateRecord

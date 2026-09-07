@@ -1,10 +1,6 @@
 using MEditService.Core.Plugins;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
-using MEditService.Core.Serialization;
-using MEditService.Core.Source;
-using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 
 namespace MEditService.Core.Queries;
@@ -12,17 +8,11 @@ namespace MEditService.Core.Queries;
 public sealed class RecordQueryService(
     ILoadOrderMirror loadOrder,
     SchemaReflector schemaReflector,
-    ConflictClassifier conflictClassifier,
-    SourceFreshness? freshness = null) : IRecordQueryService
+    ConflictClassifier conflictClassifier) : IRecordQueryService
 {
     private readonly ILoadOrderMirror _mirror = loadOrder;
     private readonly SchemaReflector _schemaReflector = schemaReflector;
     private readonly ConflictClassifier _conflictClassifier = conflictClassifier;
-    // GetRecord/GetCompare are where source text is re-checked against the index. Optional only so
-    // read-shape tests construct this directly; the default is the real validator, never a no-op.
-    private readonly SourceFreshness _freshness =
-        freshness ?? new SourceFreshness(
-            loadOrder, NullLogger<SourceFreshness>.Instance, new RecordTextCodec(NullLogger<RecordTextCodec>.Instance));
 
     public IReadOnlyList<PluginResponse> GetPlugins()
     {
@@ -76,14 +66,12 @@ public sealed class RecordQueryService(
 
     public RecordDetail? GetRecord(string formKey)
     {
-        _freshness.Validate(formKey);
         var document = RequireReads().GetDocument(formKey);
         return document == null ? null : ToRecordDetail(document);
     }
 
     public CompareResult? GetCompare(string formKey)
     {
-        _freshness.Validate(formKey);
         var reads = RequireReads();
         // ADR-0031: one memoizing cache per response — a FormKey repeated across sibling
         // cells/plugins/leaves (generic fields and VMAD alike) is resolved at most once.

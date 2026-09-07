@@ -3,9 +3,9 @@ using MEditService.Tests.TestSupport;
 
 namespace MEditService.Tests.Architecture;
 
-/// <summary>Two retirements, one scan: the source order carrier, and the Index's push verbs
-/// (ADR-0046 invariant 4). References are counted against an allowlist that stays empty;
-/// "folder-split" is refused in docs prose.</summary>
+/// <summary>Retirements, one scan: the source order carrier, the Index's push verbs and
+/// validate-on-read (ADR-0046 invariant 4). References are counted against an allowlist that
+/// stays empty; "folder-split" is refused in docs prose.</summary>
 public sealed class CarrierScanTests
 {
     // The carrier's own name, its drift rule, and the member it minted into a document; then the
@@ -14,7 +14,7 @@ public sealed class CarrierScanTests
     [
         "SourceChildOrder", "SourceChildOrderDriftException", "MEditChildOrder",
         "ApplyWorkingTreeChanges", "CreateWorkingTreeRecord", "ApplyRenumber", "CreateCellLocation",
-        "ReingestPluginFromSource",
+        "ReingestPluginFromSource", "SourceFreshness",
     ];
 
     private static readonly string[] ScannedRoots =

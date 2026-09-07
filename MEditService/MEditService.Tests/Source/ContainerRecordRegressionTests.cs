@@ -30,7 +30,7 @@ public sealed class ContainerRecordRegressionTests : IDisposable
     private IRecordQueryService Reads() =>
         new RecordQueryService(_fixture.Mirror, SharedSchemaReflector.Instance, new ConflictClassifier());
 
-    // ---- Reads degrade (SourceFreshness) ----
+    // ---- Reads never throw on a container ----
 
     [Fact]
     public void ReadingACellInATrackedPlugin_DoesNotThrow_AndServesTheIndexedDocument()
@@ -44,8 +44,7 @@ public sealed class ContainerRecordRegressionTests : IDisposable
     [Fact]
     public void ReadingACellsCompareGrid_DoesNotThrow()
     {
-        // GetCompare drives SourceFreshness.Validate exactly like GetRecord — a second real read path
-        // that must not crash on a container, not a duplicate assertion of the same code path.
+        // A second real read path over the same container, not a duplicate assertion of GetRecord's.
         Assert.Null(Record.Exception(() => Reads().GetCompare(_fixture.Cell.ToString())));
     }
 

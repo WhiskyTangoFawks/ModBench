@@ -77,7 +77,15 @@ public sealed class EditRecordApiTests(LoadedApiFixture<TestPluginFixture> loade
         (await _client.PostAsJsonAsync("/plugins/track", new { origin = Origin, preset = "Edits" })).EnsureSuccessStatusCode();
 
         var formKey = await FirstNpcFormKey();
+        var before = await _client.GetFromJsonAsync<long>("/load-order/sequence");
         (await PostEdit(formKey, "HeightMax", 0.75)).EnsureSuccessStatusCode();
+
+        // ADR-0046 invariant 5: read-your-writes belongs to the read side. The write leaves the
+        // edit for the Source watcher to project; the caller awaits the sequence before it reads.
+        var awaited = await _client.GetAsync(
+            new Uri($"/load-order/sequence/await?atLeast={before + 1}&timeoutMs=15000", UriKind.Relative));
+        awaited.EnsureSuccessStatusCode();
+        Assert.True((await awaited.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("reached").GetBoolean());
 
         var detail = await _client.GetFromJsonAsync<JsonElement>($"/records/{Uri.EscapeDataString(formKey)}");
         var field = detail.GetProperty("fields").EnumerateArray()

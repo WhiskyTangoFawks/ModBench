@@ -85,7 +85,6 @@ public interface ILoadOrderMirror
     void ClearFilter();
 
     /// <summary>Every mutation must call this or _filter stays a snapshot of a matching set that has
-    /// moved. Never throws, no-ops without a filter: a read must never throw (SourceFreshness), and
-    /// the write this follows already succeeded.</summary>
+    /// moved. Never throws, no-ops without a filter: the write this follows already succeeded.</summary>
     void ReapplyFilter();
 }

@@ -80,8 +80,6 @@ try
     builder.Services.AddSingleton<ContainerChildQueryService>();
     builder.Services.AddSingleton<RecordTextCodec>();
     builder.Services.AddSingleton<TrackService>();
-    // The single write path, plus the read-time freshness validation the read model consumes.
-    builder.Services.AddSingleton<SourceFreshness>();
     builder.Services.AddSingleton<RecordEditService>();
     // The write path's other half — source text -> binary.
     builder.Services.AddSingleton<PluginCompileService>();
