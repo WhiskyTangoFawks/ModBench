@@ -109,6 +109,32 @@ public sealed class RecordEditServiceCreateRecordTests
     private static uint LocalId(string formKey) =>
         uint.Parse(formKey[..formKey.IndexOf(':', StringComparison.Ordinal)], NumberStyles.HexNumber, CultureInfo.InvariantCulture);
 
+    // Peek is a read, so tracking is not its business: an untracked copy has no source tree and the
+    // Plugin adapter answers from its own bytes instead.
+    [Fact]
+    public void PeekNextFreeFormKey_OnAnUntrackedPlugin_AnswersFromThePluginsOwnBinary()
+    {
+        using var mod = SourceEditFixture.Untracked();
+
+        var result = mod.Edits.PeekNextFreeFormKey(mod.Plugin);
+
+        Assert.True(result.Applied, result.Message);
+        // The fixture's plugin holds four records from 000800; the next free local ID is the fifth.
+        Assert.Equal("000804:Fixture.esp", result.NewFormKey);
+    }
+
+    [Fact]
+    public void PeekNextFreeFormKey_OnATrackedPlugin_MatchesWhatCreateAllocates()
+    {
+        using var mod = SourceEditFixture.Tracked();
+
+        var suggested = mod.Edits.PeekNextFreeFormKey(mod.Plugin);
+        var created = mod.Edits.CreateRecord(mod.Plugin, "npc_", "AfterThePeek");
+
+        Assert.True(suggested.Applied, suggested.Message);
+        Assert.Equal(suggested.NewFormKey, created.NewFormKey);
+    }
+
     [Fact]
     public void CreateRecord_Refuses_WhenPluginIsUntracked_NamingTheTrackCommand()
     {

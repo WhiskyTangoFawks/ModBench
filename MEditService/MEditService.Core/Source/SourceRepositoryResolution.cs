@@ -106,11 +106,39 @@ public sealed partial class SourceRepository
         return new RecordIdentity(spelled, SourceRecordType.Resolve(child, schemas), child.EditorID);
     }
 
-    // A record with a document of its own: its leaf name carries the FormKey and the text bears that
-    // out. A name the text contradicts is stale, and the record it claims is elsewhere or gone.
-    private RecordIdentity? OwnDocumentIdentity(
-        string sourceRoot, string pluginFileName, FormKey formKey, string spelled,
-        IReadOnlyDictionary<string, RecordTableSchema> schemas)
+    /// <summary>The reader's own words for a document whose name carries <paramref name="formKey"/>
+    /// and whose text is not one; null when the tree names no such document.</summary>
+    public string? UnreadableDocumentFor(PluginKey plugin, string formKey)
+    {
+        if (!FormKey.TryFactory(formKey, out var parsed)) return null;
+        var sourceRoot = Path.Combine(_modFolder, RootFor(plugin.Name));
+        if (!Directory.Exists(sourceRoot)) return null;
+
+        foreach (var documentPath in DocumentsNaming(sourceRoot, parsed.ToString()))
+        {
+            if (ReadOrNull(documentPath) is { } text && NotADocument(text) is { } why) return why;
+        }
+        return null;
+    }
+
+    // Its root has to be a JSON object before any member of it can be read; anything else is a file
+    // something else wrote over the document, and the reader's message is the whole diagnosis.
+    private static string? NotADocument(string text)
+    {
+        try
+        {
+            using var document = System.Text.Json.JsonDocument.Parse(text);
+            return document.RootElement.ValueKind == JsonValueKind.Object ? null : "its root is not a JSON object.";
+        }
+        catch (JsonException ex)
+        {
+            return ex.Message;
+        }
+    }
+
+    // Every entry whose leaf name carries the FormKey, as the path of the document it stands for: a
+    // directory holds its record in RecordData.json, a file is the record.
+    private IEnumerable<string> DocumentsNaming(string sourceRoot, string spelled)
     {
         // Computed once rather than per entry: NameCarriesFormKey reparses the FormKey on every call.
         var filesafe = FilesafeFormKey(spelled);
@@ -119,7 +147,18 @@ public sealed partial class SourceRepository
             var leaf = Path.GetFileName(entry);
             if (!NameCarries(leaf, filesafe) && !NameCarries(leaf, filesafe + JsonSuffix)) continue;
 
-            var documentPath = Directory.Exists(entry) ? Path.Combine(entry, RecordDataFileName) : entry;
+            yield return Directory.Exists(entry) ? Path.Combine(entry, RecordDataFileName) : entry;
+        }
+    }
+
+    // A record with a document of its own: its leaf name carries the FormKey and the text bears that
+    // out. A name the text contradicts is stale, and the record it claims is elsewhere or gone.
+    private RecordIdentity? OwnDocumentIdentity(
+        string sourceRoot, string pluginFileName, FormKey formKey, string spelled,
+        IReadOnlyDictionary<string, RecordTableSchema> schemas)
+    {
+        foreach (var documentPath in DocumentsNaming(sourceRoot, spelled))
+        {
             if (ReadOrNull(documentPath) is not { } text) continue;
             var relativePath = Path.GetRelativePath(_modFolder, documentPath);
             if (DocumentAt(relativePath, text, pluginFileName) is not { } document) continue;

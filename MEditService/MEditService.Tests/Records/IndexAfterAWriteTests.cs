@@ -1,7 +1,9 @@
 using System.Text.Json;
 using MEditService.Core.Records;
+using MEditService.Core.Schema;
 using MEditService.Tests.Edits;
 using MEditService.Tests.TestSupport;
+using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Tests.Records;
 
@@ -111,6 +113,30 @@ public sealed class IndexAfterAWriteTests : IDisposable
         var after = _mod.Mirror.SettledReads().Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 50, Offset: 0));
         Assert.Equal(before + 1, after.Total);
         Assert.Contains(after.Items, i => i.FormKey == result.NewFormKey);
+    }
+
+    [Fact]
+    public void AnEditToANeverCommittedRecord_ReachesTheRow_NotJustTheTree()
+    {
+        var service = Service();
+        var created = service.CreateRecord(_mod.Plugin, "npc_", "BrandNewNpc");
+        Assert.True(created.Applied, created.Message);
+
+        Assert.True(service.Set(_mod.Plugin, created.NewFormKey!, "EditorID", Json("\"RenamedNpc\"")).Applied);
+
+        var document = _mod.Mirror.Projected().GetDocument(created.NewFormKey!, _mod.Plugin)!;
+        Assert.Equal("RenamedNpc", document.EditorId);
+        Assert.Contains("RenamedNpc", document.Body, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ARefusedHeaderDelete_LeavesTheHeadersOwnRowStanding()
+    {
+        var headerFormKey = PluginHeader.FormKeyFor(ModKey.FromFileName(_mod.ActualPluginName));
+
+        Assert.False(Service().DeleteRecord(_mod.Plugin, headerFormKey).Applied);
+
+        Assert.NotNull(_mod.Mirror.Projected().GetDocument(headerFormKey, _mod.Plugin));
     }
 
     [Fact]

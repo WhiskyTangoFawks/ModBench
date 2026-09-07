@@ -5,9 +5,8 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Core.Source;
 
-/// <summary>A record's source record-type folder name, resolved the same way
-/// <c>DuckDbRecordIndex.ResolveRecordType</c> does: schema table name by type match, else the CLR
-/// type name lowercased.</summary>
+/// <summary>Which schema table a record belongs to: the table whose type it is an instance of, else
+/// the GRUP signature the schema names tables after, else the CLR type name lowercased.</summary>
 internal static class SourceRecordType
 {
     internal static string Resolve(IMajorRecordGetter record, IReadOnlyDictionary<string, RecordTableSchema> schemas)

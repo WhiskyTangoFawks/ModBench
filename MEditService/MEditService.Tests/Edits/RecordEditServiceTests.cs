@@ -159,13 +159,17 @@ public sealed class RecordEditServiceTests : IDisposable
     {
         // Hand-edited into a document the codec cannot build a record from: text where the record's
         // own class carries a number.
-        Corrupt("\"MajorRecordFlagsRaw\": \"notanumber\",\n  \"EditorID\"");
+        var corrupted = Corrupt("\"MajorRecordFlagsRaw\": \"notanumber\",\n  \"EditorID\"");
 
         var result = _mod.Edits.Set(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", Json("0.75"));
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.RecordParseFailed, result.Refusal);
-        Assert.Contains("cannot be read", result.Message, StringComparison.Ordinal);
+        // The codec's own words, not a wrapper that could stand in front of any failure.
+        Assert.Contains(
+            "Unable to cast object of type 'System.String' to type 'System.Int64'",
+            result.Message, StringComparison.Ordinal);
+        Assert.Equal(corrupted, File.ReadAllText(_mod.NpcSourceFile));
     }
 
     // JsonDocument tolerates a duplicate member and JsonNode does not, so this document never
@@ -173,29 +177,37 @@ public sealed class RecordEditServiceTests : IDisposable
     [Fact]
     public void EditField_OfADocumentWithADuplicateMember_RefusesRatherThanThrowing()
     {
-        Corrupt("\"EditorID\": \"Twice\",\n  \"EditorID\"");
+        var corrupted = Corrupt("\"EditorID\": \"Twice\",\n  \"EditorID\"");
 
         var result = _mod.Edits.Set(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", Json("0.75"));
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.RecordParseFailed, result.Refusal);
+        Assert.Equal(corrupted, File.ReadAllText(_mod.NpcSourceFile));
     }
 
-    private void Corrupt(string replacingEditorIdMember) =>
-        File.WriteAllText(
-            _mod.NpcSourceFile,
-            File.ReadAllText(_mod.NpcSourceFile)
-                .Replace("\"EditorID\"", replacingEditorIdMember, StringComparison.Ordinal));
-
-    [Fact]
-    public void EditField_OfADocumentThatIsNotJson_RefusesRatherThanThrowing()
+    private string Corrupt(string replacingEditorIdMember)
     {
-        File.WriteAllText(_mod.NpcSourceFile, "this is not a document");
+        var corrupted = File.ReadAllText(_mod.NpcSourceFile)
+            .Replace("\"EditorID\"", replacingEditorIdMember, StringComparison.Ordinal);
+        File.WriteAllText(_mod.NpcSourceFile, corrupted);
+        return corrupted;
+    }
+
+    // Present, so this is not a record the plugin does not hold: the file naming it is there and its
+    // text is not a document.
+    [Fact]
+    public void EditField_OfADocumentThatIsNotJson_RefusesAsUnreadable_AndWritesNothing()
+    {
+        const string garbage = "this is not a document";
+        File.WriteAllText(_mod.NpcSourceFile, garbage);
 
         var result = _mod.Edits.Set(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", Json("0.75"));
 
         Assert.False(result.Applied);
-        Assert.Equal(RecordEditRefusal.RecordNotFound, result.Refusal);
+        Assert.Equal(RecordEditRefusal.RecordParseFailed, result.Refusal);
+        Assert.Contains($"'{garbage}' is an invalid JSON literal", result.Message, StringComparison.Ordinal);
+        Assert.Equal(garbage, File.ReadAllText(_mod.NpcSourceFile));
     }
 
     [Fact]

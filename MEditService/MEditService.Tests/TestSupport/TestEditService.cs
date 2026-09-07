@@ -10,7 +10,7 @@ namespace MEditService.Tests.TestSupport;
 internal static class TestEditService
 {
     internal static RecordEditService Over(LoadOrderHolder holder, ILoadOrderMirror? mirror = null) =>
-        new(holder, Resolver, new RecordTextCodec(NullLogger<RecordTextCodec>.Instance),
+        new(holder, Resolver, new DefaultModImporter(), new RecordTextCodec(NullLogger<RecordTextCodec>.Instance),
             SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance, mirror);
 
     /// <summary>The same service for a test still holding a mirror: its held copies are the load

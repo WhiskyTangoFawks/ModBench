@@ -22,6 +22,7 @@ namespace MEditService.Core.Edits;
 public sealed class RecordEditService(
     LoadOrderHolder loadOrder,
     Func<LoadOrder, FormLinkResolver> resolvers,
+    IModImporter importer,
     RecordTextCodec codec,
     SchemaReflector schemaReflector,
     ILogger<RecordEditService> logger,
@@ -1103,6 +1104,21 @@ public sealed class RecordEditService(
         internal IEnumerable<string> Taken => Effective.Concat(Head);
     }
 
+    // A tracked copy allocates from its source tree; an untracked one has none, so the Plugin
+    // adapter answers from its own bytes, as the form-link resolver's untracked branch does.
+    private Allocator? AllocatorFor(PluginKey plugin)
+    {
+        if (loadOrder.Current.Copy(plugin) is not { } copy) return null;
+        if (ModFolders.Of(loadOrder.Current, plugin) is { } modFolder
+            && SourceRepository.Open(modFolder, loadOrder.Current.GameRelease) is { } repository)
+        {
+            return AllocatorOver(repository, plugin);
+        }
+
+        using var opened = importer.Open(copy, loadOrder.Current.GameRelease);
+        return AllocatorOver(opened.Getter, plugin);
+    }
+
     // Both refs from the tree alone (ADR-0046 invariant 7): the working tree, plus HEAD, whose IDs a
     // working-tree deletion has not freed until the plugin is compiled.
     private Allocator AllocatorOver(SourceRepository repository, PluginKey plugin)
@@ -1116,6 +1132,19 @@ public sealed class RecordEditService(
             repository.NativeFormKeysHeld(plugin),
             repository.NativeFormKeysHeldAt(plugin, "HEAD"));
     }
+
+    // The copy's own records are the whole answer: it has no uncompiled state, so no second ref.
+    private Allocator AllocatorOver(IModGetter mod, PluginKey plugin) =>
+        new(plugin,
+            loadOrder.Current.GameRelease,
+            PluginFlagPredicates.IsLight(mod, plugin.Name),
+            mod.IsSmallMaster,
+            mod.EnumerateMajorRecords()
+                .Select(r => r.FormKey)
+                .Where(k => k.ModKey.FileName.String.Equals(plugin.Name, StringComparison.OrdinalIgnoreCase))
+                .Select(k => k.ToString())
+                .ToHashSet(StringComparer.OrdinalIgnoreCase),
+            new HashSet<string>(StringComparer.OrdinalIgnoreCase));
 
     // Non-null is the refusal; targetFormKey is "" then, so call sites need no second null-check.
     // taken: keys this gesture drew but has not written, so one document's records get distinct keys.
@@ -1231,24 +1260,19 @@ public sealed class RecordEditService(
     private static uint LocalId(string formKey) =>
         uint.Parse(formKey[..formKey.IndexOf(':')], NumberStyles.HexNumber, CultureInfo.InvariantCulture);
 
-    /// <summary>The same both-refs allocator create/renumber use, exposed so the Renumber input box can
-    /// prefill a suggestion as xEdit does. Never a write and no tracked gate: pure arithmetic over
-    /// indexed state.</summary>
+    /// <summary>The allocator create and renumber use, exposed so the Renumber box can prefill a
+    /// suggestion as xEdit does. A tracked copy answers from its tree and HEAD, an untracked one from
+    /// its own binary.</summary>
     public RecordEditResult PeekNextFreeFormKey(PluginKey plugin)
     {
         // No snapshot yet is a state, not a refusal about this plugin.
         if (loadOrder.Current.Copies.Count == 0)
             return RecordEditResult.Refused(RecordEditRefusal.RecordNotFound, "No load order has been received.");
 
-        // A read, so it opens the repository itself rather than going through the write gate: an
-        // unanswered external change does not stop anyone asking what the next FormKey would be.
-        if (ModFolders.Of(loadOrder.Current, plugin) is not { } modFolder
-            || SourceRepository.Open(modFolder, loadOrder.Current.GameRelease) is not { } repository)
-        {
-            return RefuseUntracked(plugin);
-        }
+        // Never a write, so no write gate and no tracked gate: an unanswered external change does not
+        // stop anyone asking what the next FormKey would be, and an untracked copy answers too.
+        if (AllocatorFor(plugin) is not { } allocator) return RefuseUntracked(plugin);
 
-        var allocator = AllocatorOver(repository, plugin);
         var formKey = NextFreeNativeFormId(allocator, allocator.IsLight);
         return formKey != null
             ? RecordEditResult.Success(formKey)
@@ -1286,6 +1310,10 @@ public sealed class RecordEditService(
 
         if (found is not { } identity)
         {
+            // A document named after this record whose text is not one: present, so this is not
+            // absence, and the reader's words are the whole reason.
+            if (repository.UnreadableDocumentFor(plugin, formKey) is { } why) return RefuseUnreadable(formKey, why);
+
             return RecordEditResult.Refused(
                 RecordEditRefusal.RecordNotFound,
                 $"No document in {plugin.Name}'s source tree holds {formKey}, and no record's document " +
