@@ -116,7 +116,7 @@ public sealed class CompareResultColumnKeyIntegrityTests
     private static IEnumerable<Type> CandidateInterfaces(Type type) =>
         type.IsInterface ? [type, .. type.GetInterfaces()] : type.GetInterfaces();
 
-    // ---- minimal ILoadOrderMirror/ILoadOrder fakes ----
+    // ---- minimal IQueryIndex/ILoadOrder fakes ----
     //
     // One Plugins entry is all this needs: it asserts the shape of the response's column keys, not
     // classification, and the other column falls back to fail-open defaults it never reads.
@@ -126,37 +126,16 @@ public sealed class CompareResultColumnKeyIntegrityTests
         public string? InstanceRoot => throw new NotSupportedException();
         public GameRelease GameRelease => GameRelease.Fallout4;
         public IReadOnlyList<PluginMetadata> Plugins { get; } = plugins;
-        public IReadOnlyList<PluginLoadFailure> Failures => [];
-        public string? FilterSql { get; set; }
         public IModGetter? GetMod(string pluginName, string origin) => throw new NotSupportedException();
         public void Dispose() { }
     }
 
-    private sealed class FakeMirror(ILoadOrder loadOrder, IRecordReads reads) : ILoadOrderMirror
+    private sealed class FakeIndex(ILoadOrder loadOrder, IRecordReads reads) : IQueryIndex
     {
-        public ILoadOrder? LoadOrder => loadOrder;
-        public IRecordReads? Reads => reads;
-        // This double exists for read-model shape assertions only — nothing here writes.
-        public IRecordIndex? Index => null;
-        public IndexWriteGate WriteGate { get; } = new();
-        // These stubs never load, so they are always in the no-load-order state.
+        // This double exists for read-model shape assertions only: nothing here projects or filters.
         public LoadOrderStatus Status => LoadOrderStatus.None;
-        public long Sequence => 0;
-        public Task<bool> AwaitSequenceAsync(long atLeast, TimeSpan timeout) => throw new NotSupportedException();
-        public IDisposable BeginProjection() => throw new NotSupportedException();
-        public void Announce(Action publish) => throw new NotSupportedException();
+        public string? FilterSql => null;
         public (ILoadOrder LoadOrder, IRecordReads Reads) RequireScope() => (loadOrder, reads);
-        public void Reconcile(string gameDirectory, IReadOnlyList<LoadOrderEntry> plugins, GameRelease gameRelease, string? instanceRoot = null) => throw new NotSupportedException();
-        public void Close() => throw new NotSupportedException();
-        public PluginResponse CreatePlugin(string name, string path, string origin) => throw new NotSupportedException();
-        public Task ReindexPlugin(PluginKey key) => throw new NotSupportedException();
-        public IReadOnlyList<ValidationReport> ValidateIndex(PluginKey? plugin) => throw new NotSupportedException();
-        public void RefreshKeys(PluginKey key, IReadOnlyList<string> formKeys) => throw new NotSupportedException();
-        public Action? LoadOrderChanged { get; set; }
-        public void UnindexPlugin(PluginKey key) => throw new NotSupportedException();
-        public void SetFilter(string sql) => throw new NotSupportedException();
-        public void ClearFilter() => throw new NotSupportedException();
-        public void ReapplyFilter() => throw new NotSupportedException();
     }
 
     [Fact]
@@ -213,8 +192,8 @@ public sealed class CompareResultColumnKeyIntegrityTests
         repo.UpdateWinners();
 
         var plugins = new[] { new PluginMetadata("Shared.esp", "", 0, false, false, [], 1, false, Origin: "Data", Enabled: true, Winning: true) };
-        var loadOrder = new FakeMirror(new FakeLoadOrder(plugins), repo.At(RecordRef.Effective));
-        var svc = new RecordQueryService(loadOrder, reflector, new ConflictClassifier());
+        var index = new FakeIndex(new FakeLoadOrder(plugins), repo.At(RecordRef.Effective));
+        var svc = new RecordQueryService(index, reflector, new ConflictClassifier());
 
         var compare = svc.GetCompare(perk.FormKey.ToString());
 

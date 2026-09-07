@@ -54,32 +54,15 @@ public class ContainerChildQueryServiceTests
         public ContainerChildRow? GetContainerParent(PluginKey plugin, string childFormKey) => null;
     }
 
-    private sealed class StubMirror(IRecordReads repo, ILoadOrder? loadOrder = null) : ILoadOrderMirror
+    // The reads' presence is what "no load order" means for these tests, most of which leave
+    // loadOrder null, so a "both null together" check would throw in all of them.
+    private sealed class StubIndex(IRecordReads reads, ILoadOrder? loadOrder = null) : IQueryIndex
     {
-        public ILoadOrder? LoadOrder => loadOrder;
-        public IRecordReads? Reads => repo;
-        public IRecordIndex? Index => null;
-        public IndexWriteGate WriteGate { get; } = new();
+        // These stubs never project, so they are always in the no-load-order state and unfiltered.
         public LoadOrderStatus Status => LoadOrderStatus.None;
-        public long Sequence => 0;
-        public Task<bool> AwaitSequenceAsync(long atLeast, TimeSpan timeout) => throw new NotSupportedException();
-        public IDisposable BeginProjection() => throw new NotSupportedException();
-        public void Announce(Action publish) => throw new NotSupportedException();
-        // Gating on repo alone: repo's presence is what "no load order" means for these tests, most of
-        // which leave loadOrder null, so a "both null together" check would throw in all of them.
+        public string? FilterSql => null;
         public (ILoadOrder LoadOrder, IRecordReads Reads) RequireScope() =>
-            repo is { } r ? (loadOrder!, r) : throw new NoLoadOrderException();
-        public void Reconcile(string gameDirectory, IReadOnlyList<LoadOrderEntry> plugins, GameRelease gameRelease, string? instanceRoot = null) => throw new NotSupportedException();
-        public void Close() => throw new NotSupportedException();
-        public PluginResponse CreatePlugin(string n, string p, string o) => throw new NotSupportedException();
-        public Task ReindexPlugin(PluginKey key) => throw new NotSupportedException();
-        public IReadOnlyList<ValidationReport> ValidateIndex(PluginKey? plugin) => throw new NotSupportedException();
-        public void RefreshKeys(PluginKey key, IReadOnlyList<string> formKeys) => throw new NotSupportedException();
-        public Action? LoadOrderChanged { get; set; }
-        public void UnindexPlugin(PluginKey key) => throw new NotSupportedException();
-        public void SetFilter(string s) => throw new NotSupportedException();
-        public void ClearFilter() => throw new NotSupportedException();
-        public void ReapplyFilter() => throw new NotSupportedException();
+            reads is { } r ? (loadOrder!, r) : throw new NoLoadOrderException();
     }
 
     private sealed class StubLoadOrder(IReadOnlyList<PluginMetadata> plugins) : ILoadOrder
@@ -88,8 +71,6 @@ public class ContainerChildQueryServiceTests
         public string? InstanceRoot => null;
         public GameRelease GameRelease => GameRelease.Fallout4;
         public IReadOnlyList<PluginMetadata> Plugins => plugins;
-        public IReadOnlyList<PluginLoadFailure> Failures => [];
-        public string? FilterSql { get; set; }
         public Mutagen.Bethesda.Plugins.Records.IModGetter? GetMod(string pluginName, string origin) => null;
         public void Dispose() { }
     }
@@ -116,7 +97,7 @@ public class ContainerChildQueryServiceTests
                 ["dlbr"] = [new RecordSummary("dlbr1:M.esp", "M.esp", 0, true, "BranchA", "Data")],
                 ["scen"] = [new RecordSummary("scen1:M.esp", "M.esp", 0, true, "SceneA", "Data")],
             });
-        var svc = new ContainerChildQueryService(new StubMirror(reader));
+        var svc = new ContainerChildQueryService(new StubIndex(reader));
 
         var result = svc.GetChildren("M.esp", "qust1:M.esp");
 
@@ -145,7 +126,7 @@ public class ContainerChildQueryServiceTests
                     new RecordSummary("dial2:M.esp", "M.esp", 0, true, "TopicB", "Data", HasContainerChildren: false),
                 ],
             });
-        var svc = new ContainerChildQueryService(new StubMirror(reader));
+        var svc = new ContainerChildQueryService(new StubIndex(reader));
 
         var result = svc.GetChildren("M.esp", "qust1:M.esp");
 
@@ -170,7 +151,7 @@ public class ContainerChildQueryServiceTests
                     new RecordSummary("info2:M.esp", "M.esp", 0, true, null, "Data"),
                 ],
             });
-        var svc = new ContainerChildQueryService(new StubMirror(reader));
+        var svc = new ContainerChildQueryService(new StubIndex(reader));
 
         var result = svc.GetChildren("M.esp", "dial1:M.esp");
 
@@ -187,7 +168,7 @@ public class ContainerChildQueryServiceTests
         var loadOrder = new StubLoadOrder([
             new PluginMetadata("M.esp", "", 0, false, false, [], 0, false, Origin: "ModA", Enabled: true, Winning: true),
         ]);
-        var svc = new ContainerChildQueryService(new StubMirror(reader, loadOrder));
+        var svc = new ContainerChildQueryService(new StubIndex(reader, loadOrder));
 
         svc.GetChildren("M.esp", "qust1:M.esp", origin: "ModB");
 
@@ -212,7 +193,7 @@ public class ContainerChildQueryServiceTests
             });
         var entries = new List<LogEntry>();
         using var loggerFactory = LoggerFactory.Create(b => b.AddProvider(new CollectingLoggerProvider(entries)));
-        var svc = new ContainerChildQueryService(new StubMirror(reader), loggerFactory.CreateLogger<ContainerChildQueryService>());
+        var svc = new ContainerChildQueryService(new StubIndex(reader), loggerFactory.CreateLogger<ContainerChildQueryService>());
 
         var result = svc.GetChildren("M.esp", "qust1:M.esp");
 
@@ -233,7 +214,7 @@ public class ContainerChildQueryServiceTests
     public void GetChildren_NoContainerChildRows_ReturnsEmpty_WithoutSearching()
     {
         var reader = new StubReader([]);
-        var svc = new ContainerChildQueryService(new StubMirror(reader));
+        var svc = new ContainerChildQueryService(new StubIndex(reader));
 
         var result = svc.GetChildren("M.esp", "qust1:M.esp");
 
@@ -244,7 +225,7 @@ public class ContainerChildQueryServiceTests
     [Fact]
     public void GetChildren_NoLoadOrder_ThrowsInvalidOperation()
     {
-        var svc = new ContainerChildQueryService(new StubMirror(null!));
+        var svc = new ContainerChildQueryService(new StubIndex(null!));
         Assert.Throws<NoLoadOrderException>(() => svc.GetChildren("M.esp", "qust1:M.esp"));
     }
 }

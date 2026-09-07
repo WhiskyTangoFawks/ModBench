@@ -257,7 +257,7 @@ public sealed class IndexProjectorTests
         using var fixture = TrackedModFixture.Tracked(notifications);
         var mirror = (ILoadOrderMirror)fixture.Mirror;
         using var watcher = new SourceChangeWatcher();
-        var sourceMirror = new SourceMirror(mirror, watcher, notifications, NullLogger.Instance);
+        var sourceMirror = new SourceMirror(fixture.Mirror.Projector, mirror.WriteGate, watcher, notifications, NullLogger.Instance);
 
         var otherNpcSource = fixture.SourceFileFor(
             fixture.OtherNpc, "npc_", TrackedModFixture.OtherNpcEditorId);

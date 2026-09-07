@@ -162,7 +162,7 @@ public sealed class ParseFailedRecordTests
         var counts = scratch.Query.GetPluginRecordTypes(CorruptGroupFixture.PluginName, Origin);
 
         Assert.Equal(1, counts.Single(t => t.Type == "weap").Count);
-        Assert.DoesNotContain(scratch.Mirror.LoadOrder!.Failures, f => f.Name == CorruptGroupFixture.PluginName);
+        Assert.DoesNotContain(scratch.Mirror.Status.Failures, f => f.Name == CorruptGroupFixture.PluginName);
     }
 
     [Fact]
@@ -183,7 +183,7 @@ public sealed class ParseFailedRecordTests
     {
         using var scratch = new Scratch(Fixture, corruptWholeFile: true);
 
-        Assert.Contains(scratch.Mirror.LoadOrder!.Failures, f => f.Name == Fixture);
+        Assert.Contains(scratch.Mirror.Status.Failures, f => f.Name == Fixture);
     }
 
     // One NPC whose signature inside the NPC_ GRUP is mangled, plus one readable WEAP, so
@@ -258,7 +258,7 @@ public sealed class ParseFailedRecordTests
             Mirror = new LoadOrderMirror(
                 new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
             ((ILoadOrderMirror)Mirror).Reconcile(_gameDirectory, inputs, GameRelease.Fallout4);
-            Query = new RecordQueryService(Mirror, SharedSchemaReflector.Instance, new ConflictClassifier());
+            Query = new RecordQueryService(Mirror.Projector, SharedSchemaReflector.Instance, new ConflictClassifier());
         }
 
         public void Dispose()

@@ -229,7 +229,7 @@ public sealed class WarmReconcileTests
             // An unmoved tree: registered and validated, never re-derived.
             Assert.Equal(1, Registered(entries, plugin));
             Assert.Equal(0, Indexed(entries, plugin));
-            Assert.Empty(third.LoadOrder!.Failures);
+            Assert.Empty(third.Status.Failures);
 
             // And the working tree still wins: an edit made between loads is in the load order's
             // answer, which is the whole point of validating rather than trusting the stored rows.

@@ -98,7 +98,7 @@ public sealed class LoadOrderMirrorReconcileScatteredTests
         manager.Reconcile(fx.GameDirectory, fx.Plugins, GameRelease.Fallout4);
 
         Assert.NotNull(manager.LoadOrder);
-        Assert.Contains(manager.LoadOrder!.Failures, f => f.Name == "Bad.esp");
+        Assert.Contains(manager.Status.Failures, f => f.Name == "Bad.esp");
         Assert.Equal(1, manager.Reads!.GetRecordTypeCounts(new PluginKey("Good.esp", "Data"))
             .FirstOrDefault(c => string.Equals(c.Type, "npc_", StringComparison.OrdinalIgnoreCase))?.Count ?? 0);
         Assert.Equal(0, manager.Reads!.GetRecordTypeCounts(new PluginKey("Bad.esp", "Data"))
