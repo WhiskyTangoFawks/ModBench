@@ -73,7 +73,7 @@ public sealed partial class SourceRepository
 
     /// <summary>True when another record's document in this plugin's tree carries
     /// <paramref name="formKey"/>: the embedded child a caller holding no record type cannot ask
-    /// <see cref="Locate"/> about (#779).</summary>
+    /// <see cref="Locate"/> about (debt #779).</summary>
     internal bool CarriesEmbedded(PluginKey plugin, string formKey) =>
         OwnersUnder(Path.Combine(_modFolder, RootFor(plugin.Name)))
             .DocumentHolding(formKey) is not null;

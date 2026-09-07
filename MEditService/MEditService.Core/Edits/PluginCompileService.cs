@@ -138,8 +138,8 @@ public sealed class PluginCompileService(
     }
 
     // ADR-0046 invariant 1: the write side never reads the Index, so the masters content requires
-    // (ADR-0038) and the check errors the editor shows come from the plugin's own records here,
-    // through the same collector, schema and link resolver.
+    // (ADR-0038) and the check errors the editor shows come from the records here, through the
+    // same collector, schema and link resolver.
     private (List<CompileDiagnostic> Diagnostics, IReadOnlyList<string> Masters) ContentFacts(
         IMod mod, PluginKey plugin, LoadOrder loadOrder, string resolverRoot)
     {
@@ -170,8 +170,8 @@ public sealed class PluginCompileService(
         // and the same link recurs across a plugin's records.
         var resolve = FormKeyResolutionCache.Memoize(ResolveOnce);
 
-        // #779: the resolver cannot name an embedded child in a tracked plugin, so a link that
-        // plugin's tree does carry is one this pass has no answer for, not a broken one.
+        // debt #779: the resolver cannot name an embedded child in a tracked plugin, so a link
+        // that plugin's tree does carry is one this pass has no answer for, not a broken one.
         var trackedTrees = new Dictionary<string, SourceRepository?>(StringComparer.OrdinalIgnoreCase);
         bool AnswersFor(string formKey) =>
             resolve(formKey) is not null || !EmbeddedInATrackedPlugin(formKey, plugin, loadOrder, trackedTrees);

@@ -32,6 +32,10 @@ public sealed class PluginCompileServiceMastersTests : IDisposable
     // needs a plugin that provably was *not* already a master before the edit introduces it.
     private readonly FormKey _deltaKeyword;
 
+    // A record in a loaded plugin that is not a Keyword, so a Keywords entry naming it is resolvable
+    // and wrong-typed — the diagnostic axis a link into another plugin can only reach this way.
+    private readonly FormKey _bravoRace;
+
     // Charlie.esm loads *before* Bravo.esm — deliberately not alphabetical, so an order assertion
     // can't pass by coincidence.
     public PluginCompileServiceMastersTests()
@@ -39,6 +43,7 @@ public sealed class PluginCompileServiceMastersTests : IDisposable
         var bravoPath = Path.Combine(_gameDirectory, BravoName);
         var bravoMod = new Fallout4Mod(ModKey.FromFileName(BravoName), Fallout4Release.Fallout4);
         var bravoKeyword = bravoMod.Keywords.AddNew("BravoKeyword");
+        _bravoRace = bravoMod.Races.AddNew("BravoRace").FormKey;
         bravoMod.WriteToBinary(bravoPath);
 
         var charliePath = Path.Combine(_gameDirectory, CharlieName);
@@ -131,6 +136,25 @@ public sealed class PluginCompileServiceMastersTests : IDisposable
 
         Assert.True(result.Succeeded, result.RefusalReason);
         Assert.Equal([CharlieName, BravoName, DeltaName], result.Masters);
+    }
+
+    // The Index answered this from its global lookup; the link resolver answers it from the copy the
+    // load order loads, so what the author sees in the Problems panel is unchanged.
+    [Fact]
+    public void Compile_ForALinkIntoAnotherPluginNamingTheWrongRecordType_ReportsIt()
+    {
+        SourceEdits.Rewrite<Npc>(
+            SourceRepository.Open(_modFolder, GameRelease.Fallout4)!, _plugin,
+            new RecordIdentity(_npc.ToString(), "npc_", "HostNpc"), GameRelease.Fallout4,
+            npc => npc.Keywords!.Add(new FormLink<IKeywordGetter>(_bravoRace)));
+
+        var result = CompileService().Compile(_plugin, new CompileSource.WorkingTree());
+
+        Assert.True(result.Succeeded, result.RefusalReason);
+        var diagnostic = Assert.Single(
+            result.Diagnostics, d => d.Message.Contains("race reference", StringComparison.Ordinal));
+        Assert.Equal(_npc.ToString(), diagnostic.FormKey);
+        Assert.Equal("Keywords: [2]: Found a race reference, expected: kywd", diagnostic.Message);
     }
 
     [Fact]
