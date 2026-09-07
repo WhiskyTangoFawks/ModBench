@@ -4,6 +4,7 @@ using MEditService.Core.Records;
 using MEditService.Core.Schema;
 using MEditService.Core.Serialization;
 using MEditService.Core.Source;
+using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -142,7 +143,7 @@ public sealed class StaleNextObjectIdRoundTripGateTests
                 .TrackAsync(_mirror.LoadOrder!, Plugin.Origin!, SourcePreset.Edits, deserialize);
 
         public PluginCompileService CompileService() =>
-            new(_mirror, new PluginWriter(NullLogger<PluginWriter>.Instance), NullLogger<PluginCompileService>.Instance);
+            CompileServices.Over(_mirror);
 
         public void Dispose()
         {

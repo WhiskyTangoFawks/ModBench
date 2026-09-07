@@ -3,6 +3,7 @@ using MEditService.Core.Plugins;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
 using MEditService.Core.Source;
+using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -24,10 +25,15 @@ public sealed class PluginCompileServiceContainerTests : IDisposable
     // tree's own root RecordData.json would leave both null.
     private const string HeaderAuthor = "CompileHeaderAuthor";
     private const string HeaderDescription = "Header carried from the source tree.";
+    private const string TopicC1EditorId = "TopicC1";
+    private const string TopicC2EditorId = "TopicC2";
+    private const string TopicC3EditorId = "TopicC3";
+
+    private const string QuestRecordType = "quest";
 
     private readonly string _modFolder;
     private readonly string _gameDirectory;
-    private readonly LoadOrderMirror _mirror;
+    private readonly LoadOrder _loadOrder;
     private readonly PluginKey _plugin = new(PluginName, Origin);
 
     private readonly FormKey _cellA;
@@ -38,6 +44,8 @@ public sealed class PluginCompileServiceContainerTests : IDisposable
     private readonly FormKey _exteriorCell;
     private readonly FormKey _questA;
     private readonly FormKey _questB;
+    private readonly FormKey _questC;
+    private readonly FormKey _topicC2;
 
     public PluginCompileServiceContainerTests()
     {
@@ -110,26 +118,31 @@ public sealed class PluginCompileServiceContainerTests : IDisposable
         questB.DialogTopics.Add(topicB);
         mod.Quests.Add(questB);
 
+        // Three topics in one slot, so a delete of the middle one has an order to keep.
+        var questC = new Quest(mod) { EditorID = "QuestC" };
+        var topicC2 = new DialogTopic(mod) { EditorID = TopicC2EditorId };
+        questC.DialogTopics.Add(new DialogTopic(mod) { EditorID = TopicC1EditorId });
+        questC.DialogTopics.Add(topicC2);
+        questC.DialogTopics.Add(new DialogTopic(mod) { EditorID = TopicC3EditorId });
+        mod.Quests.Add(questC);
+        (_questC, _topicC2) = (questC.FormKey, topicC2.FormKey);
+
         mod.WriteToBinary(pluginPath);
         (_cellA, _cellB, _cellATemporaryRef) = (cellA.FormKey, cellB.FormKey, cellATemporaryRef.FormKey);
         (_worldspace, _topCell, _exteriorCell) = (worldspace.FormKey, topCell.FormKey, exteriorCell.FormKey);
         (_questA, _questB) = (questA.FormKey, questB.FormKey);
 
-        _mirror = new LoadOrderMirror(
-            new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
-        ((ILoadOrderMirror)_mirror).Reconcile(
-            _gameDirectory,
-            [new LoadOrderEntry(PluginName, pluginPath, Origin, Slot: 0, Enabled: true, Winning: true)],
-            GameRelease.Fallout4);
+        _loadOrder = LoadOrder.From(
+            _gameDirectory, instanceRoot: null, GameRelease.Fallout4,
+            [new LoadOrderEntry(PluginName, pluginPath, Origin, Slot: 0, Enabled: true, Winning: true)]);
 
         new TrackService(NullLogger<TrackService>.Instance)
-            .TrackAsync(_mirror.LoadOrder!, Origin, SourcePreset.Edits)
+            .TrackAsync(_loadOrder, [_plugin], Origin, SourcePreset.Edits)
             .GetAwaiter().GetResult();
     }
 
     public void Dispose()
     {
-        _mirror.Dispose();
         TryDelete(_modFolder);
         TryDelete(_gameDirectory);
     }
@@ -141,8 +154,7 @@ public sealed class PluginCompileServiceContainerTests : IDisposable
         catch (UnauthorizedAccessException) { /* scratch, best-effort */ }
     }
 
-    private PluginCompileService CompileService() =>
-        new(_mirror, new PluginWriter(NullLogger<PluginWriter>.Instance), NullLogger<PluginCompileService>.Instance);
+    private PluginCompileService CompileService() => CompileServices.Over(_loadOrder);
 
     private IFallout4ModGetter CompileAndReimport(out IDisposable handle)
     {
@@ -237,6 +249,24 @@ public sealed class PluginCompileServiceContainerTests : IDisposable
         Assert.True(File.Exists(full), $"'{diagnostic.SourceRelativePath}' is not a file in the tree.");
         Assert.Equal("RecordData.json", Path.GetFileName(full));
         Assert.Contains("\"CellA\"", File.ReadAllText(full), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Compile_AfterDeletingTheMiddleOfThreeDialogTopics_Succeeds_KeepingSurvivorsInOrder()
+    {
+        SourceEdits.Rewrite<Quest>(
+            SourceRepository.Open(_modFolder, GameRelease.Fallout4)!, _plugin,
+            new RecordIdentity(_questC.ToString(), QuestRecordType, "QuestC"), GameRelease.Fallout4,
+            quest => quest.DialogTopics.Remove(quest.DialogTopics.Single(t => t.FormKey == _topicC2)));
+
+        var mod = CompileAndReimport(out var handle);
+        using (handle)
+        {
+            var questC = mod.Quests.Single(q => q.FormKey == _questC);
+            Assert.Equal(
+                [TopicC1EditorId, TopicC3EditorId],
+                questC.DialogTopics.Select(t => t.EditorID!).ToArray());
+        }
     }
 
     [Fact]

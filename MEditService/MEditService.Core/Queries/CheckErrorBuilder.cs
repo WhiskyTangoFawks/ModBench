@@ -14,12 +14,15 @@ public static class CheckErrorBuilder
     // asserts nothing about it.
     public static string? Build(
         FieldMetadata meta, JsonElement? value, Func<string, RecordLookupEntry?> resolve, GameRelease release,
-        bool absentMeansNull = true)
+        bool absentMeansNull = true, Func<string, bool>? answersFor = null)
     {
         var entries = new List<string>();
         FormReferences.Walk(meta, value, "",
             (path, raw, allowsNull, validTypes) =>
             {
+                // A record the caller cannot speak for is left unchecked: "unresolved" would be a
+                // claim it has no basis for. The global lookup speaks for every record and passes null.
+                if (raw is not null && raw != "Null" && answersFor?.Invoke(raw) == false) return;
                 var err = CheckScalar(raw, allowsNull, validTypes, resolve, release);
                 if (err != null) entries.Add(path.Length > 0 ? $"{path}: {err}" : err);
             },

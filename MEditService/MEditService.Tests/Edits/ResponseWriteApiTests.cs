@@ -31,8 +31,7 @@ public sealed class ResponseWriteApiTests : IDisposable
 
     private IReadOnlyList<string> CompiledResponseEditorIds()
     {
-        var result = new PluginCompileService(
-                _fixture.Mirror, new PluginWriter(NullLogger<PluginWriter>.Instance), NullLogger<PluginCompileService>.Instance)
+        var result = CompileServices.Over(_fixture.Mirror)
             .Compile(_fixture.Plugin, new CompileSource.WorkingTree());
         Assert.True(result.Succeeded, result.RefusalReason);
 
@@ -137,8 +136,7 @@ public sealed class ResponseWriteApiTests : IDisposable
         Assert.Contains($"\"FormKey\": \"{fixture.DialogTopic}\"", File.ReadAllText(topicFile), StringComparison.Ordinal);
         Assert.Empty(Directory.EnumerateDirectories(fixture.DestinationSourceRoot, "Responses", SearchOption.AllDirectories));
 
-        var compile = new PluginCompileService(
-                fixture.Mirror, new PluginWriter(NullLogger<PluginWriter>.Instance), NullLogger<PluginCompileService>.Instance)
+        var compile = CompileServices.Over(fixture.Mirror)
             .Compile(fixture.DestinationPlugin, new CompileSource.WorkingTree());
         Assert.True(compile.Succeeded, compile.RefusalReason);
         using var overlay = ModFactory.ImportGetter(

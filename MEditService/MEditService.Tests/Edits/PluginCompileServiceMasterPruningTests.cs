@@ -3,6 +3,7 @@ using MEditService.Core.Plugins;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
 using MEditService.Core.Source;
+using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -23,7 +24,7 @@ public sealed class PluginCompileServiceMasterPruningTests : IDisposable
 
     private readonly string _gameDirectory = Directory.CreateTempSubdirectory("medit-520-compile-game-").FullName;
     private readonly string _modFolder = Directory.CreateTempSubdirectory("medit-520-compile-mod-").FullName;
-    private readonly LoadOrderMirror _mirror;
+    private readonly LoadOrder _loadOrder;
     private readonly PluginKey _plugin = new(FixtureFileName, Origin);
 
     public PluginCompileServiceMasterPruningTests()
@@ -47,9 +48,7 @@ public sealed class PluginCompileServiceMasterPruningTests : IDisposable
         }
         inputs.Add(new LoadOrderEntry(FixtureFileName, pluginPath, Origin, Slot: inputs.Count, Enabled: true, Winning: true));
 
-        _mirror = new LoadOrderMirror(
-            new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
-        ((ILoadOrderMirror)_mirror).Reconcile(_gameDirectory, inputs, GameRelease.Fallout4);
+        _loadOrder = LoadOrder.From(_gameDirectory, instanceRoot: null, GameRelease.Fallout4, inputs);
 
         // Track directly (bypassing TrackService.TrackAsync's own round-trip gate — see class doc comment).
         var deepParsed = ModFactory.ImportSetter(
@@ -63,8 +62,7 @@ public sealed class PluginCompileServiceMasterPruningTests : IDisposable
     [Fact]
     public void Compile_OfTheRealSpaDiaAMRFixtureTrackedBeforeTheFix_RefusesNamingTheQuestAndThePrunedMaster()
     {
-        var compileService = new PluginCompileService(
-            _mirror, new PluginWriter(NullLogger<PluginWriter>.Instance), NullLogger<PluginCompileService>.Instance);
+        var compileService = CompileServices.Over(_loadOrder);
 
         var result = compileService.Compile(_plugin, new CompileSource.WorkingTree());
 
@@ -77,8 +75,7 @@ public sealed class PluginCompileServiceMasterPruningTests : IDisposable
     [Fact]
     public void Compile_OfTheRealSpaDiaAMRFixtureTrackedBeforeTheFix_LeavesNoOrphanedTempDirectory()
     {
-        var compileService = new PluginCompileService(
-            _mirror, new PluginWriter(NullLogger<PluginWriter>.Instance), NullLogger<PluginCompileService>.Instance);
+        var compileService = CompileServices.Over(_loadOrder);
 
         var result = compileService.Compile(_plugin, new CompileSource.WorkingTree());
 
@@ -91,7 +88,6 @@ public sealed class PluginCompileServiceMasterPruningTests : IDisposable
 
     public void Dispose()
     {
-        _mirror.Dispose();
         try { Directory.Delete(_modFolder, recursive: true); } catch (IOException) { }
         try { Directory.Delete(_gameDirectory, recursive: true); } catch (IOException) { }
     }

@@ -340,7 +340,7 @@ public sealed class CompileRoundTripGateTests(CompileRoundTripGateFixture fixtur
         }
 
         public PluginCompileService CompileService() =>
-            new(Mirror, new PluginWriter(NullLogger<PluginWriter>.Instance), NullLogger<PluginCompileService>.Instance);
+            CompileServices.Over(Mirror);
 
         public void Dispose()
         {

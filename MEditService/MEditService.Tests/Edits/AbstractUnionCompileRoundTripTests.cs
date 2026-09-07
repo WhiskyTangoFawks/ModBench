@@ -27,7 +27,7 @@ public sealed class AbstractUnionCompileRoundTripTests : IDisposable
         ProjectingEditService.Over(_fixture.Mirror);
 
     private PluginCompileService CompileService() =>
-        new(_fixture.Mirror, new PluginWriter(NullLogger<PluginWriter>.Instance), NullLogger<PluginCompileService>.Instance);
+        CompileServices.Over(_fixture.Mirror);
 
     private IFallout4ModGetter CompileAndReparse()
     {

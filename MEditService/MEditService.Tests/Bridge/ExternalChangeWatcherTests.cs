@@ -140,7 +140,7 @@ public sealed class ExternalChangeWatcherTests
 
             var editService = ProjectingEditService.Over(mod.Mirror);
             editService.Set(mod.Plugin, mod.Npc.ToString(), "HeightMax", JsonDocument.Parse("0.75").RootElement);
-            var compileService = new PluginCompileService(mod.Mirror, new PluginWriter(NullLogger<PluginWriter>.Instance), NullLogger<PluginCompileService>.Instance);
+            var compileService = CompileServices.Over(mod.Mirror);
             var result = compileService.Compile(mod.Plugin, new CompileSource.WorkingTree());
             Assert.True(result.Succeeded, result.RefusalReason);
 

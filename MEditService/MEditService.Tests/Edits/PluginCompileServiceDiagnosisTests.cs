@@ -1,6 +1,7 @@
 using MEditService.Core.Edits;
 using MEditService.Core.Schema;
 using MEditService.Core.Source;
+using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace MEditService.Tests.Edits;
@@ -10,7 +11,7 @@ namespace MEditService.Tests.Edits;
 /// <c>FilePathedException</c> wrapping <see cref="ArgumentException"/>, not <c>RecordException</c>.</summary>
 public sealed class PluginCompileServiceDiagnosisTests : IDisposable
 {
-    private readonly TrackedModFixture _mod = TrackedModFixture.Tracked();
+    private readonly CompileFixture _mod = new();
 
     public void Dispose() => _mod.Dispose();
 
@@ -21,8 +22,7 @@ public sealed class PluginCompileServiceDiagnosisTests : IDisposable
         var original = File.ReadAllText(npcFile);
         File.WriteAllText(npcFile, original.Replace(_mod.Race.ToString(), "NOT-A-FORMKEY", StringComparison.Ordinal));
 
-        var compileService = new PluginCompileService(
-            _mod.Mirror, new PluginWriter(NullLogger<PluginWriter>.Instance), NullLogger<PluginCompileService>.Instance);
+        var compileService = _mod.CompileService();
         var result = compileService.Compile(_mod.Plugin, new CompileSource.WorkingTree());
 
         Assert.False(result.Succeeded);
