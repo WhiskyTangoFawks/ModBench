@@ -39,7 +39,15 @@ internal sealed class SourceMirror(
             watcher.Watch(modFolder, SourceDocuments.RootIn(modFolder, plugin.Name), plugin.Name, plugin.Origin);
     }
 
-    internal void Apply(SourceChangeEvent change)
+    /// <summary>ADR-0046: the watcher hands over every plugin it settled together. Held under one
+    /// gate acquisition, so another writer cannot land between two plugins of the same batch.</summary>
+    internal void Apply(IReadOnlyList<SourceChangeEvent> batch)
+    {
+        using var _ = mirror.WriteGate.Enter();
+        foreach (var change in batch) ApplyOne(change);
+    }
+
+    private void ApplyOne(SourceChangeEvent change)
     {
         var key = new PluginKey(change.PluginName, change.Origin);
         try

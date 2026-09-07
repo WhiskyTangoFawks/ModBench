@@ -126,7 +126,9 @@ public sealed class SourceWatchRealDataTests(SourceWatchRealDataFixture fixture,
         foreach (var document in documents)
             File.WriteAllText(document, File.ReadAllText(document).Replace($"\"{EditorIdOf(document)}\"", $"\"{EditorIdOf(document)}_ByHand\"", StringComparison.Ordinal));
 
-        Assert.True(await fixture.Mirror.AwaitSequenceAsync(before + 1, TimeSpan.FromSeconds(30)));
+        // 60s, not 30s: under CPU contention from parallel test runs this measured 37s once, and the
+        // margin below is a wait bound, not a cost this test pays every run.
+        Assert.True(await fixture.Mirror.AwaitSequenceAsync(before + 1, TimeSpan.FromSeconds(60)));
         await WaitForEveryRow(renamed);
         foreach (var (formKey, editorId) in renamed)
             Assert.Equal(editorId, fixture.Mirror.Index!.At(RecordRef.Effective).GetDocument(formKey, fixture.Plugin)?.EditorId);

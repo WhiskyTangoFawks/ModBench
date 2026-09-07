@@ -3,20 +3,33 @@ using Timer = System.Timers.Timer;
 
 namespace MEditService.Bridge;
 
-/// <summary>ADR-0046 invariant 4: the Source watcher. One watch per tracked plugin copy, rooted on
-/// the mod folder — the root that exists before and after Track creates the tree and the repository
-/// under it.</summary>
+/// <summary>ADR-0046 invariant 4: the Source watcher. Settling is watcher-wide: any event on any
+/// watch restarts one shared quiet timer, so a write spanning several plugins lands in one
+/// batch.</summary>
 public sealed class SourceChangeWatcher : IDisposable
 {
-    private readonly TimeSpan _debounce;
+    private readonly TimeSpan _quiet;
+    private readonly TimeSpan _maxWindow;
     private readonly object _gate = new();
     private readonly Dictionary<string, WatchEntry> _entries = new(StringComparer.Ordinal);
 
-    /// <param name="debounce">Collapses the several events one save, one git command or one editor's
-    /// write-out raises into a single projection. Defaults to 300ms; tests shorten it.</param>
-    public SourceChangeWatcher(TimeSpan? debounce = null)
+    // Shared across every watched plugin. _quietTimer restarts on any event, anywhere; _maxWindowTimer
+    // starts once a batch opens and is never restarted, so a stream that never goes quiet still settles.
+    private readonly Timer _quietTimer;
+    private readonly Timer _maxWindowTimer;
+    private bool _batchOpen;
+
+    /// <param name="quiet">Collapses several events into one projection. Defaults to 300ms.</param>
+    /// <param name="maxWindow">The longest a batch stays open. Defaults to 2s.</param>
+    public SourceChangeWatcher(TimeSpan? quiet = null, TimeSpan? maxWindow = null)
     {
-        _debounce = debounce ?? TimeSpan.FromMilliseconds(300);
+        _quiet = quiet ?? TimeSpan.FromMilliseconds(300);
+        _maxWindow = maxWindow ?? TimeSpan.FromSeconds(2);
+
+        _quietTimer = new Timer(_quiet.TotalMilliseconds) { AutoReset = false };
+        _quietTimer.Elapsed += (_, _) => Settle();
+        _maxWindowTimer = new Timer(_maxWindow.TotalMilliseconds) { AutoReset = false };
+        _maxWindowTimer.Elapsed += (_, _) => Settle();
     }
 
     // Past this many documents in one window the batch is projected whole: a whole-plugin validate of
@@ -24,10 +37,10 @@ public sealed class SourceChangeWatcher : IDisposable
     // once per key.
     private const int CoalesceThreshold = 32;
 
-    /// <summary>ADR-0046: what the projector is handed. A delegate, not an event, because there is
-    /// exactly one subscriber and it answers by projecting. Raised outside the lock, since the
-    /// handler re-projects a plugin.</summary>
-    public Action<SourceChangeEvent>? SourceChanged { get; set; }
+    /// <summary>ADR-0046: what the projector is handed — every plugin's settled batch together. A
+    /// delegate, not an event, because there is exactly one subscriber and it answers by
+    /// projecting.</summary>
+    public Action<IReadOnlyList<SourceChangeEvent>>? SourceChanged { get; set; }
 
     /// <summary>Re-watching an already-watched copy replaces the previous watch. A mod folder that has
     /// vanished since the load order named it gets no watch, and no throw.</summary>
@@ -55,9 +68,7 @@ public sealed class SourceChangeWatcher : IDisposable
                 return;
             }
 
-            var debounceTimer = new Timer(_debounce.TotalMilliseconds) { AutoReset = false };
-            var entry = new WatchEntry(fsWatcher, debounceTimer, modFolder, sourceRoot, pluginName, origin);
-            debounceTimer.Elapsed += (_, _) => Settle(key);
+            var entry = new WatchEntry(fsWatcher, modFolder, sourceRoot, pluginName, origin);
             fsWatcher.Changed += (_, e) => Observe(entry, e.FullPath);
             fsWatcher.Created += (_, e) => Observe(entry, e.FullPath);
             fsWatcher.Deleted += (_, e) => Observe(entry, e.FullPath);
@@ -110,8 +121,7 @@ public sealed class SourceChangeWatcher : IDisposable
                 return;
             }
 
-            entry.Debounce.Stop();
-            entry.Debounce.Start();
+            OpenOrExtendBatch();
         }
     }
 
@@ -134,30 +144,57 @@ public sealed class SourceChangeWatcher : IDisposable
             }
 
             entry.WholePlugin = true;
-            entry.Debounce.Stop();
-            entry.Debounce.Start();
+            OpenOrExtendBatch();
         }
     }
 
-    private void Settle(string key)
+    // Called under _gate. Starts the bounding max-window timer once per batch, and always restarts
+    // the quiet timer.
+    private void OpenOrExtendBatch()
     {
-        SourceChangeEvent change;
+        if (!_batchOpen)
+        {
+            _batchOpen = true;
+            _maxWindowTimer.Stop();
+            _maxWindowTimer.Start();
+        }
+
+        _quietTimer.Stop();
+        _quietTimer.Start();
+    }
+
+    // Fired by either timer. Settles every plugin with a pending change into one batch, so a write
+    // spanning several plugins is one projection rather than one per plugin.
+    private void Settle()
+    {
+        List<SourceChangeEvent> batch;
         lock (_gate)
         {
-            if (!_entries.TryGetValue(key, out var entry)) return;
+            if (!_batchOpen) return;
+            _batchOpen = false;
+            _quietTimer.Stop();
+            _maxWindowTimer.Stop();
 
-            var whole = entry.WholePlugin || entry.Paths.Count > CoalesceThreshold;
-            change = new SourceChangeEvent(
-                entry.PluginName, entry.Origin, entry.ModFolder,
-                whole ? SourceChangeScope.WholePlugin : SourceChangeScope.Documents,
-                whole ? [] : [.. entry.Paths]);
-            entry.Paths.Clear();
-            entry.WholePlugin = false;
+            batch = [];
+            foreach (var entry in _entries.Values)
+            {
+                if (entry.Paths.Count == 0 && !entry.WholePlugin) continue;
+
+                var whole = entry.WholePlugin || entry.Paths.Count > CoalesceThreshold;
+                batch.Add(new SourceChangeEvent(
+                    entry.PluginName, entry.Origin, entry.ModFolder,
+                    whole ? SourceChangeScope.WholePlugin : SourceChangeScope.Documents,
+                    whole ? [] : [.. entry.Paths]));
+                entry.Paths.Clear();
+                entry.WholePlugin = false;
+            }
         }
+
+        if (batch.Count == 0) return;
 
         try
         {
-            SourceChanged?.Invoke(change);
+            SourceChanged?.Invoke(batch);
         }
         catch (Exception ex)
         {
@@ -180,14 +217,16 @@ public sealed class SourceChangeWatcher : IDisposable
             foreach (var entry in _entries.Values) entry.Dispose();
             _entries.Clear();
         }
+
+        _quietTimer.Dispose();
+        _maxWindowTimer.Dispose();
     }
 
     // Paths and WholePlugin are the batch this window has accumulated. Guarded by _gate.
     private sealed class WatchEntry(
-        FileSystemWatcher watcher, Timer debounce, string modFolder, string sourceRoot, string pluginName, string origin)
+        FileSystemWatcher watcher, string modFolder, string sourceRoot, string pluginName, string origin)
         : IDisposable
     {
-        public Timer Debounce { get; } = debounce;
         public string ModFolder { get; } = modFolder;
         public string SourceRoot { get; } = sourceRoot;
         public string GitDirectory { get; } = Path.Combine(modFolder, ".git");
@@ -196,17 +235,12 @@ public sealed class SourceChangeWatcher : IDisposable
         public HashSet<string> Paths { get; } = new(StringComparer.Ordinal);
         public bool WholePlugin { get; set; }
 
-        public void Dispose()
-        {
-            watcher.Dispose();
-            Debounce.Dispose();
-        }
+        public void Dispose() => watcher.Dispose();
     }
 }
 
 /// <summary>Which projection the batch asks for: the named documents, or the whole copy when a ref
-/// moved, the operating system dropped events, or the burst was wider than one batch is
-/// worth.</summary>
+/// moved, the operating system dropped events, or the burst was wider than one batch is worth.</summary>
 public enum SourceChangeScope
 {
     Documents,

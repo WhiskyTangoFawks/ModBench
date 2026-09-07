@@ -69,7 +69,7 @@ public sealed class RenumberApiTests(LoadedApiFixture<TestPluginFixture> loaded)
         Assert.True(await ProjectionLanded(beforeRenumber), "the renumbered record never reached the index");
 
         // The old FormKey's point-read refuses rather than serving stale data. Polls like the
-        // listing below: the create and delete side of a renumber can settle as separate batches.
+        // listing below, for the reason NpcFormKeysOnceTheyHold's own comment gives.
         Assert.Equal(HttpStatusCode.NotFound, await OldFormKeyReadOnceItIs404(oldFormKey));
 
         // The old FormKey is gone from the plugin's listing, and the new one is present.
@@ -100,8 +100,9 @@ public sealed class RenumberApiTests(LoadedApiFixture<TestPluginFixture> loaded)
         }
     }
 
-    // A renumber moves one file and removes another, which the watcher may settle as more than one
-    // batch, so the wait is on the listing itself, each round parked on the projection sequence.
+    // A renumber moves one file and removes another, and a whole-plugin re-derivation of either
+    // lands as more than one sequence advance inside the Index itself: each round parks on the
+    // projection sequence rather than trusting one await.
     private async Task<List<string>> NpcFormKeysOnceTheyHold(string formKey)
     {
         var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(20);
