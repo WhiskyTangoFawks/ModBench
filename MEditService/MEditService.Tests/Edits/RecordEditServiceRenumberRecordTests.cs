@@ -23,7 +23,7 @@ public sealed class RecordEditServiceRenumberRecordTests
     public void RenumberRecord_OnTheHeader_RefusesWithoutTouchingTheSourceTree()
     {
         using var mod = TrackedModFixture.Tracked();
-        var headerFormKey = HeaderIndexer.FormKeyFor(ModKey.FromFileName(mod.ActualPluginName));
+        var headerFormKey = PluginHeader.FormKeyFor(ModKey.FromFileName(mod.ActualPluginName));
 
         var result = ServiceFor(mod.Mirror).RenumberRecord(mod.Plugin, headerFormKey);
 

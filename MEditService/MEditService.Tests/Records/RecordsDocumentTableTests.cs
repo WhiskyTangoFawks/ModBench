@@ -1,5 +1,6 @@
 using System.Globalization;
 using MEditService.Core.Records;
+using MEditService.Core.Schema;
 using MEditService.Core.Serialization;
 using MEditService.Core.Source;
 using MEditService.Tests.RealData;
@@ -39,7 +40,7 @@ public sealed class RecordsDocumentTableTests(CutDownPluginFixture fixture) : IC
         // added back as the one ordinary `records` row it contributes, so leaving it out would under-count
         // by exactly one per plugin.
         var expected = SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4)
-            .Where(kv => kv.Key != HeaderIndexer.RecordType)
+            .Where(kv => kv.Key != PluginHeader.RecordType)
             .Sum(kv => overlay.EnumerateMajorRecords(kv.Value.RecordType, throwIfUnknown: false).Count())
             + 1;
 

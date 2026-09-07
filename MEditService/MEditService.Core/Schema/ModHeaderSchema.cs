@@ -14,7 +14,7 @@ internal static class ModHeaderSchema
         GameReflection game, ILogger logger)
     {
         if (BuildHeaderSchema(category, assembly, game, logger) is { } headerSchema)
-            schemas[HeaderIndexer.RecordType] = headerSchema;
+            schemas[PluginHeader.RecordType] = headerSchema;
     }
 
     // The members of the header the editor presents, and why a write reaching each is refused. A mod
@@ -26,7 +26,7 @@ internal static class ModHeaderSchema
         ("Flags", SchemaRefusals.HeaderNoWritePathReason),
         // Masters are read-only: content-derived at compile time (ADR-0038), so a write reaching
         // them is refused FieldReadOnly.
-        (HeaderIndexer.MastersFieldName, "masters are wholly content-derived at compile time"),
+        (PluginHeader.MastersFieldName, "masters are wholly content-derived at compile time"),
     ];
 
     // PropertyName carries the "ModHeader." prefix because the header's document is the whole mod's
@@ -68,8 +68,8 @@ internal static class ModHeaderSchema
 
         return new RecordTableSchema
         {
-            TableName = HeaderIndexer.RecordType,
-            DisplayName = RecordDisplayNames.For(HeaderIndexer.RecordType),
+            TableName = PluginHeader.RecordType,
+            DisplayName = RecordDisplayNames.For(PluginHeader.RecordType),
             RecordType = headerGetterType,
             RecordColumns = columns,
             IsHeader = true,

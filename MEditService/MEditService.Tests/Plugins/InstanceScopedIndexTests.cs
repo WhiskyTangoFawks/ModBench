@@ -48,7 +48,7 @@ public sealed class InstanceScopedIndexTests : IDisposable
     // including it would put a meaningless null in front of every expectation here.
     private static IReadOnlyList<string?> EditorIdsIn(LoadOrderMirror manager) =>
         [.. manager.Index!.At(RecordRef.Effective).GetDocuments(Key)
-            .Where(d => d.RecordType != HeaderIndexer.RecordType)
+            .Where(d => d.RecordType != PluginHeader.RecordType)
             .Select(d => d.EditorId)];
 
     // Warm on both sides: the second load of each instance is the one that would register the other's

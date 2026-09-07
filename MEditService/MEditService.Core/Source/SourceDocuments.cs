@@ -1,6 +1,7 @@
 using System.Text;
 using System.Text.Json;
 using MEditService.Core.Records;
+using MEditService.Core.Schema;
 using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Core.Source;
@@ -57,7 +58,7 @@ public static class SourceDocuments
         // The header's document carries a ModKey rather than a FormKey; HeaderIndexer computes the
         // FormKey the index files it under.
         if (filePath.Equals(headerDocumentPath, StringComparison.Ordinal))
-            return HeaderIndexer.FormKeyFor(ModKey.FromFileName(pluginFileName));
+            return PluginHeader.FormKeyFor(ModKey.FromFileName(pluginFileName));
 
         try
         {

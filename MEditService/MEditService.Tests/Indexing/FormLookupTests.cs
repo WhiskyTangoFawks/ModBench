@@ -59,7 +59,7 @@ public class FormLookupTests
             "SELECT record_type, editor_id FROM form_lookup WHERE plugin = 'Lookup.esp' AND form_key = '000000:Lookup.esp'";
         using var reader = headerCmd.ExecuteReader();
         Assert.True(reader.Read(), "the plugin header must have its own form_lookup row");
-        Assert.Equal(HeaderIndexer.RecordType, reader.GetString(0));
+        Assert.Equal(PluginHeader.RecordType, reader.GetString(0));
         Assert.True(reader.IsDBNull(1), "a header has no EditorID");
     }
 

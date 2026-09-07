@@ -1,5 +1,6 @@
 using System.Text.Json.Nodes;
 using MEditService.Core.Queries;
+using MEditService.Core.Schema;
 
 namespace MEditService.Core.Edits;
 
@@ -15,7 +16,7 @@ internal static class KeyedArrays
         {
             foreach (var field in fields)
             {
-                var member = Records.DocumentNodes.VariantFor(field, obj);
+                var member = DocumentNodes.VariantFor(field, obj);
                 if (obj.TryGetPropertyValue(field.Name, out var child)
                     && Normalize(child, member, path.Length == 0 ? field.Name : $"{path}.{field.Name}") is { } dup)
                 {

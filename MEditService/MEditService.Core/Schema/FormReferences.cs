@@ -1,17 +1,32 @@
 using System.Collections.Concurrent;
 using System.Text.Json;
 using MEditService.Core.Queries;
-using MEditService.Core.Schema;
 
-namespace MEditService.Core.Records;
+namespace MEditService.Core.Schema;
 
-internal static class FormRefPathBuilder
+/// <summary>One link a document holds: the record it names, and the member path that names it.</summary>
+internal readonly record struct FormReference(string TargetFormKey, string FieldPath);
+
+/// <summary>Which FormKeys a document references, answered by the schema for its record type
+/// (ADR-0046 invariant 10). Over the document and the schema alone: no index, no plugin, no path
+/// on disk.</summary>
+internal static class FormReferences
 {
-    public delegate void RefVisitor(string fieldPath, string targetFormKey);
+    /// <summary>Every link the document holds, in the schema's column order. A target named at two
+    /// members is answered twice, once under each path, because a path is what names it.</summary>
+    internal static List<FormReference> Collect(JsonElement document, RecordTableSchema schema)
+    {
+        var refs = new List<FormReference>();
+        foreach (var col in schema.RecordColumns)
+            Walk(col, document, (path, fk) => refs.Add(new FormReference(fk, path)));
+        return refs;
+    }
 
-    /// <summary>Every reference one column of <paramref name="root"/> holds, read off the document
-    /// itself by the column's own path.</summary>
-    public static void Walk(ColumnSpec col, JsonElement root, RefVisitor visitor)
+    private delegate void RefVisitor(string fieldPath, string targetFormKey);
+
+    // Every reference one column of the document holds, read off the document by the column's own
+    // path.
+    private static void Walk(ColumnSpec col, JsonElement root, RefVisitor visitor)
     {
         // A column whose metadata holds no formKey leaf is skipped without being read, decided once
         // per ColumnSpec since the schema is built at startup.

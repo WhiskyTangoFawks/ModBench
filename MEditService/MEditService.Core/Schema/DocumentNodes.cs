@@ -2,7 +2,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using MEditService.Core.Queries;
 
-namespace MEditService.Core.Records;
+namespace MEditService.Core.Schema;
 
 /// <summary>Reads of the stored document by the schema's own paths. A node is handed out cloned,
 /// so it outlives the <see cref="JsonDocument"/> it was parsed from.</summary>
@@ -63,14 +63,14 @@ internal static class DocumentNodes
     /// object's discriminator names when the member's type varies by leaf.</summary>
     internal static FieldMetadata VariantFor(FieldMetadata member, JsonElement? owner) =>
         owner is { ValueKind: JsonValueKind.Object } obj
-            && obj.TryGetProperty(Schema.LoquiUnions.UnionTypeDiscriminator, out var leaf)
+            && obj.TryGetProperty(LoquiUnions.UnionTypeDiscriminator, out var leaf)
             && leaf.ValueKind == JsonValueKind.String
             ? Variant(member, leaf.GetString())
             : member;
 
     /// <summary>The same question over the write path's mutable tree.</summary>
     internal static FieldMetadata VariantFor(FieldMetadata member, JsonNode? owner) =>
-        owner is JsonObject obj && obj[Schema.LoquiUnions.UnionTypeDiscriminator] is JsonValue leaf && leaf.TryGetValue<string>(out var name)
+        owner is JsonObject obj && obj[LoquiUnions.UnionTypeDiscriminator] is JsonValue leaf && leaf.TryGetValue<string>(out var name)
             ? Variant(member, name)
             : member;
 

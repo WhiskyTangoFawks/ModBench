@@ -46,7 +46,7 @@ internal sealed class PluginIngest
     // Everything the index derives from one record, computed off the appender thread; only writing
     // it is sequential. ParseDiagnosis is null for a record whose document was produced.
     private sealed record PreparedRecord(
-        string FormKey, byte[] Body, string ContentHash, List<FormRef> Refs,
+        string FormKey, byte[] Body, string ContentHash, List<FormReferenceRow> Refs,
         List<ContainerChildRow> ChildRows, string? EditorId, string? ParseDiagnosis);
 
     private sealed class RefCounters
@@ -75,7 +75,7 @@ internal sealed class PluginIngest
         IModGetter pluginMod, string plugin, string origin,
         IReadOnlyDictionary<string, RecordTableSchema> schemas, DuckDBAppender documentAppender)
     {
-        var refs = new List<FormRef>();
+        var refs = new List<FormReferenceRow>();
         var lookupRows = new List<(string FormKey, string RecordType, string? EditorId)>();
         var containerChildRows = new List<ContainerChildRow>();
         var typeFailures = new List<(string RecordType, string Diagnosis)>();
@@ -86,7 +86,7 @@ internal sealed class PluginIngest
         {
             // The header is never a major-record type (no FormKey/EditorID), so EnumerateMajorRecords
             // cannot reach it; HeaderIndexer.Index appends it separately below.
-            if (tableName == HeaderIndexer.RecordType) continue;
+            if (tableName == PluginHeader.RecordType) continue;
             IndexRecordTable(
                 tableName, schema, pluginMod, plugin, origin, refs, lookupRows,
                 containerChildRows, typeFailures, documentAppender, pluginMod.GameRelease, counters);
@@ -102,7 +102,7 @@ internal sealed class PluginIngest
 
         // Before the form_lookup flush, so the header's row and lookup row go through the same two
         // flushes as every record's (ADR-0031: one lookup row per record row, by construction).
-        if (schemas.ContainsKey(HeaderIndexer.RecordType))
+        if (schemas.ContainsKey(PluginHeader.RecordType))
             lookupRows.Add(HeaderIndexer.Index(pluginMod, plugin, origin, documentAppender));
 
         DeleteFormReferencesForPlugin(plugin, origin);
@@ -202,9 +202,9 @@ internal sealed class PluginIngest
 
         // References are read off the document just written, never the live object: the document is
         // the model, and what Referenced-By answers is what the source file holds.
-        var refs = new List<FormRef>();
+        List<FormReferenceRow> refs;
         using (var document = JsonDocument.Parse(body))
-            CollectFormRefs(refs, record.FormKey.ToString(), record.EditorID, document.RootElement, recordType, schema);
+            refs = Rows(FormReferences.Collect(document.RootElement, schema), record.FormKey.ToString(), record.EditorID, recordType);
 
         // Hashed from the codec's own bytes rather than a string, so the hash is defined by what the
         // source file would contain.
@@ -237,7 +237,7 @@ internal sealed class PluginIngest
 
     private void IndexRecordTable(
         string tableName, RecordTableSchema schema, IModGetter pluginMod,
-        string plugin, string origin, List<FormRef> refs,
+        string plugin, string origin, List<FormReferenceRow> refs,
         List<(string FormKey, string RecordType, string? EditorId)> lookupRows,
         List<ContainerChildRow> containerChildRows,
         List<(string RecordType, string Diagnosis)> typeFailures,
@@ -367,24 +367,15 @@ internal sealed class PluginIngest
             placed => AppendPlacementRow(placeAppender, placed, plugin, origin));
     }
 
-    internal static void CollectFormRefs(
-        List<FormRef> refs,
-        string sourceFormKey,
-        string? sourceEditorId,
-        JsonElement document,
-        string tableName,
-        RecordTableSchema schema)
-    {
-        foreach (var col in schema.RecordColumns)
-        {
-            FormRefPathBuilder.Walk(col, document, (path, fk) =>
-                refs.Add(new FormRef(sourceFormKey, fk, path, tableName, sourceEditorId)));
-        }
-    }
+    // The rows the shared kernel's answer becomes once the record naming the links is known. Shared
+    // by ingest and the per-record working-tree rederivation.
+    internal static List<FormReferenceRow> Rows(
+        List<FormReference> references, string sourceFormKey, string? sourceEditorId, string recordType) =>
+        [.. references.Select(r => new FormReferenceRow(sourceFormKey, r.TargetFormKey, r.FieldPath, recordType, sourceEditorId))];
 
     // Shared by ingest and the per-record working-tree rederivation so the two paths cannot append
     // different column orders into the same table.
-    internal static void AppendFormReference(DuckDBAppender appender, FormRef r, string plugin, string origin)
+    internal static void AppendFormReference(DuckDBAppender appender, FormReferenceRow r, string plugin, string origin)
     {
         var row = appender.CreateRow();
         row.AppendValue(r.SourceFormKey);
