@@ -15,10 +15,11 @@ namespace MEditService.Core.Edits;
 internal static class SpatialContainerMint
 {
     /// <summary>Only wires the block/sub-block nesting between two already-constructed records, copying
-    /// coordinates from <paramref name="cellLocation"/> rather than deriving them.</summary>
+    /// coordinates from <paramref name="cellLocation"/> and the grid from <paramref name="sourceCell"/>
+    /// rather than deriving either.</summary>
     internal static Fallout4Mod BuildSyntheticWorldspaceMod(
         PluginKey destinationPlugin, IMajorRecord worldspaceAncestor, CellLocationRow cellLocation, IMajorRecord cell,
-        GameRelease release)
+        IMajorRecord sourceCell, GameRelease release)
     {
         if (worldspaceAncestor is not Worldspace worldspace)
         {
@@ -32,6 +33,14 @@ internal static class SpatialContainerMint
                 $"{cell.GetType()} is not a Cell — the whole-mod door this mints through is FO4-only.",
                 nameof(cell));
         }
+        if (sourceCell is not Cell sourceFo4Cell)
+        {
+            throw new ArgumentException(
+                $"{sourceCell.GetType()} is not a Cell — the whole-mod door this mints through is FO4-only.",
+                nameof(sourceCell));
+        }
+
+        fo4Cell.Grid = sourceFo4Cell.Grid;
 
         var subBlock = new WorldspaceSubBlock
         {

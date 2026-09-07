@@ -253,8 +253,17 @@ internal sealed class RecordCopy(ILoadOrderMirror mirror, SchemaReflector schema
 
         var worldspaceAncestor = BarePartialFormAncestor(worldspaceFormKey, sourceWorldspaceDocument.RecordType, release);
 
+        // The mint's cell (bare when it is only a placed reference's ancestor) carries none of its own
+        // grid; the source cell's document does, so the grid rides along from here.
+        var sourceCellDocument = reads.GetDocument(cellFormKey, sourcePlugin)
+            ?? throw new InvalidOperationException(
+                $"{sourcePlugin.Name} does not hold {cellFormKey} — cell_location resolved this FormKey from its own row.");
+        var sourceCellRecord = codec
+            .DeserializeFromBytesAsync(Encoding.UTF8.GetBytes(sourceCellDocument.Body!), release, sourceCellDocument.RecordType)
+            .GetAwaiter().GetResult();
+
         var syntheticMod = SpatialContainerMint.BuildSyntheticWorldspaceMod(
-            destinationPlugin, worldspaceAncestor, cellLocation, cellRecord, release);
+            destinationPlugin, worldspaceAncestor, cellLocation, cellRecord, sourceCellRecord, release);
         SpatialContainerMint.MintAsync(
                 syntheticMod, destinationModFolder, destinationPlugin.Name, existingWorldspaceDirectory)
             .GetAwaiter().GetResult();
