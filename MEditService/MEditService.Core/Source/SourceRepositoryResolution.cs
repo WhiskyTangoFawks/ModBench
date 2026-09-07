@@ -1,5 +1,6 @@
 using System.Text.Json;
 using MEditService.Core.Records;
+using MEditService.Core.Schema;
 using MEditService.Core.Serialization;
 using Mutagen.Bethesda;
 
@@ -15,7 +16,7 @@ internal readonly record struct SourceUnit(
     /// the filename, so <see cref="OwnerRecordType"/> distinguishes them, or a header delete would
     /// remove the whole source root.</summary>
     internal bool IsDirectoryPerRecord =>
-        OwnerRecordType != HeaderIndexer.RecordType
+        OwnerRecordType != PluginHeader.RecordType
         && Path.GetFileName(FullPath).Equals(SourceUnitResolver.RecordDataFileName, StringComparison.Ordinal);
 }
 
@@ -35,7 +36,7 @@ public sealed partial class SourceRepository
     internal SourceUnit? Locate(PluginKey plugin, RecordIdentity identity)
     {
         // The header's unit is the fixed root RecordData.json: nothing to compute, scan or embed.
-        if (identity.RecordType == HeaderIndexer.RecordType)
+        if (identity.RecordType == PluginHeader.RecordType)
         {
             var headerPath = Path.Combine(
                 _modFolder, SourceRecordPath.RootFor(plugin.Name), SourceUnitResolver.RecordDataFileName);

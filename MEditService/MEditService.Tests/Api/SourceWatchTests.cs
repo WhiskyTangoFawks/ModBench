@@ -5,6 +5,7 @@ using MEditService.Core.Notifications;
 using MEditService.Core.Plugins;
 using MEditService.Core.Queries;
 using MEditService.Core.Records;
+using MEditService.Core.Schema;
 using MEditService.Core.Source;
 using MEditService.Tests.Edits;
 using MEditService.Tests.TestSupport;
@@ -157,7 +158,7 @@ public sealed class SourceWatchTests : IDisposable
     [Fact]
     public async Task AHandEditToTheHeaderFile_LandsInTheIndex()
     {
-        var headerFormKey = HeaderIndexer.FormKeyFor(ModKey.FromFileName(_mod.ActualPluginName));
+        var headerFormKey = PluginHeader.FormKeyFor(ModKey.FromFileName(_mod.ActualPluginName));
         var headerFile = Path.Combine(_mod.ModFolder, "source", _mod.ActualPluginName, "RecordData.json");
         var before = _mod.Mirror.Sequence;
 

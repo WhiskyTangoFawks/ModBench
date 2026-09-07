@@ -1,6 +1,7 @@
 using System.Text;
 using System.Text.Json.Serialization;
 using MEditService.Core.Records;
+using MEditService.Core.Schema;
 using MEditService.Core.Serialization;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
@@ -117,7 +118,7 @@ public sealed partial class SourceRepository
     /// record have no leaf name of their own.</summary>
     public string? Rename(PluginKey plugin, RecordIdentity identity, string? newEditorId)
     {
-        if (identity.RecordType == HeaderIndexer.RecordType) return null;
+        if (identity.RecordType == PluginHeader.RecordType) return null;
         // The name it already has, so nothing moves — and a leaf something else renamed keeps that
         // name rather than being dragged back to the computed one.
         if (string.Equals(newEditorId, identity.EditorId, StringComparison.Ordinal)) return null;

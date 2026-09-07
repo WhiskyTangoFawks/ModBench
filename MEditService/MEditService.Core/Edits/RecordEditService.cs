@@ -259,7 +259,7 @@ public sealed class RecordEditService(
 
         var release = mirror.LoadOrder!.GameRelease;
         var schemas = schemaReflector.GetSchemas(release);
-        if (recordType == HeaderIndexer.RecordType || !schemas.TryGetValue(recordType, out var schema))
+        if (recordType == PluginHeader.RecordType || !schemas.TryGetValue(recordType, out var schema))
         {
             return RecordEditResult.Refused(
                 RecordEditRefusal.RecordTypeNotFound, $"'{recordType}' is not a creatable record type.");
@@ -874,12 +874,11 @@ public sealed class RecordEditService(
         Encoding.UTF8.GetString(_codec.SerializeToBytesAsync(record, release).GetAwaiter().GetResult());
 
     // A link the typed remap left behind is refused wherever it sits; a KnownDefects row is what
-    // names the member Mutagen is known to skip. Asked of PluginIngest.CollectFormRefs: text cannot
-    // tell a link from an EditorID or string.
+    // names the member Mutagen is known to skip. Asked of the collector: text cannot tell a link
+    // from an EditorID or string.
     private RecordEditResult? RefuseIfRemapIncomplete(
         IMajorRecordGetter record, string recordType, string oldFormKey, PluginKey plugin, GameRelease release)
     {
-        var refs = new List<FormRef>();
         if (!schemaReflector.GetSchemas(release).TryGetValue(recordType, out var schema))
         {
             // A record from an indexed document always has a schema; refusing keeps the guard's
@@ -890,8 +889,9 @@ public sealed class RecordEditService(
                 $"{record.FormKey} in {plugin.Name} could not run. Nothing was written.");
         }
 
+        List<FormReference> refs;
         using (var document = JsonDocument.Parse(SerializeToText(record, release)))
-            PluginIngest.CollectFormRefs(refs, record.FormKey.ToString(), record.EditorID, document.RootElement, recordType, schema);
+            refs = FormReferences.Collect(document.RootElement, schema);
         if (refs.FirstOrDefault(r => r.TargetFormKey == oldFormKey) is { TargetFormKey: not null } stale)
         {
             return RecordEditResult.Refused(
@@ -909,7 +909,7 @@ public sealed class RecordEditService(
 
     // The row whose member the surviving link sits under, where one names it: the path is the
     // document's own member names, so a row's member name is a hop of it.
-    private string WhyRemapIsIncomplete(FormRef stale, GameRelease release) =>
+    private string WhyRemapIsIncomplete(FormReference stale, GameRelease release) =>
         schemaReflector.DefectsWith(release, KnownDefectEffect.RenumberRemapIncomplete)
             .FirstOrDefault(d => stale.FieldPath.Split(PathHopSeparators).Contains(d.MemberName, StringComparer.Ordinal))
             is { } defect
@@ -1111,7 +1111,7 @@ public sealed class RecordEditService(
     // flag flipped this session answers immediately.
     private static bool IsLightByRemovableFlag(IRecordIndex index, PluginKey plugin, IModGetter? mod)
     {
-        var headerFormKey = HeaderIndexer.FormKeyFor(ModKey.FromFileName(plugin.Name));
+        var headerFormKey = PluginHeader.FormKeyFor(ModKey.FromFileName(plugin.Name));
         if (index.At(RecordRef.Effective).GetDocument(headerFormKey, plugin)?.Body is { } body)
             return HeaderDocument.IsLight(Encoding.UTF8.GetBytes(body));
         return mod?.IsSmallMaster ?? false;
@@ -1121,7 +1121,7 @@ public sealed class RecordEditService(
     // minting immediately; the loaded mod answers only when no document exists.
     private static bool IsLightAtEffective(IRecordIndex index, PluginKey plugin, IModGetter? mod)
     {
-        var headerFormKey = HeaderIndexer.FormKeyFor(ModKey.FromFileName(plugin.Name));
+        var headerFormKey = PluginHeader.FormKeyFor(ModKey.FromFileName(plugin.Name));
         if (index.At(RecordRef.Effective).GetDocument(headerFormKey, plugin)?.Body is { } body)
         {
             return HeaderDocument.IsLight(Encoding.UTF8.GetBytes(body))
@@ -1340,7 +1340,7 @@ public sealed class RecordEditService(
     // header deliberately. Without it, SourceUnit.IsDirectoryPerRecord (filename-only) answers true
     // for the header and DeleteRecord deletes the plugin's whole source root.
     private static RecordEditResult? RefuseIfHeader(string recordType) =>
-        recordType == HeaderIndexer.RecordType
+        recordType == PluginHeader.RecordType
             ? RecordEditResult.Refused(
                 RecordEditRefusal.HeaderDeleteOrRenumberNotSupported,
                 "The plugin header cannot be deleted or renumbered — it is not an ordinary record.")

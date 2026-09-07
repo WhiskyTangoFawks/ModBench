@@ -93,7 +93,7 @@ public sealed class WinnersDerivedTableTests : IDisposable
         // winner-only lookup.
         foreach (var plugin in new[] { BaseKey, OverKey })
         {
-            var headerFk = HeaderIndexer.FormKeyFor(ModKey.FromFileName(plugin.Name));
+            var headerFk = PluginHeader.FormKeyFor(ModKey.FromFileName(plugin.Name));
             Assert.Equal(Expected(plugin), WinnerOf(index, RecordRef.Effective, headerFk));
         }
 

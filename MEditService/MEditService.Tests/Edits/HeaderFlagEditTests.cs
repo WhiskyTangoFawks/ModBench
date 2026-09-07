@@ -120,7 +120,7 @@ public sealed class HeaderFlagEditTests : IDisposable
     public void EditField_MastersOrAuthor_RefusesAsReadOnly_LikeTheFlagsColumn()
     {
         var masters = Service().Set(
-            _fixture.Plugin, HeaderFormKey, HeaderIndexer.MastersFieldName, JsonDocument.Parse("[\"Other.esm\"]").RootElement);
+            _fixture.Plugin, HeaderFormKey, PluginHeader.MastersFieldName, JsonDocument.Parse("[\"Other.esm\"]").RootElement);
         var author = Service().Set(
             _fixture.Plugin, HeaderFormKey, "Author", JsonDocument.Parse("\"Someone Else\"").RootElement);
 

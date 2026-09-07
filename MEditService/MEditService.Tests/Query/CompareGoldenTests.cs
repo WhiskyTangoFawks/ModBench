@@ -171,7 +171,7 @@ public sealed class CompareGoldenTests : IDisposable
             // GameRelease.Fallout4 is hardcoded rather than derived from the reconciled load order: the same
             // constant this fixture reconciles with two lines above, and the game-generalization rule permits
             // an FO4-concrete test fixture.
-            RecordTypes = _reflector.GetSchemas(GameRelease.Fallout4).Keys.Count(t => t != HeaderIndexer.RecordType),
+            RecordTypes = _reflector.GetSchemas(GameRelease.Fallout4).Keys.Count(t => t != PluginHeader.RecordType),
             PerPluginTypes = new[] { "Base.esm", "Mid.esp", "Top.esp" }
                 .ToDictionary(p => p, p => _service.GetPluginRecordTypes(p)),
             WinningRecords = new[] { ConflictedNpc, UnchangedWeapon, SoleNpc, InjectedNpc, ConflictedRecipe }

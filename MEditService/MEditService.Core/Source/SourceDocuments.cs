@@ -1,6 +1,7 @@
 using System.Text;
 using System.Text.Json;
 using MEditService.Core.Records;
+using MEditService.Core.Schema;
 using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Core.Source;
@@ -54,10 +55,10 @@ public static class SourceDocuments
     internal static string? FormKeyDeclaredIn(
         string text, string filePath, string headerDocumentPath, string pluginFileName)
     {
-        // The header's document carries a ModKey rather than a FormKey; HeaderIndexer computes the
+        // The header's document carries a ModKey rather than a FormKey; PluginHeader computes the
         // FormKey the index files it under.
         if (filePath.Equals(headerDocumentPath, StringComparison.Ordinal))
-            return HeaderIndexer.FormKeyFor(ModKey.FromFileName(pluginFileName));
+            return PluginHeader.FormKeyFor(ModKey.FromFileName(pluginFileName));
 
         try
         {

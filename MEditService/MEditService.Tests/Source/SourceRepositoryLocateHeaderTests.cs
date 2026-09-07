@@ -1,4 +1,5 @@
 using MEditService.Core.Records;
+using MEditService.Core.Schema;
 using MEditService.Core.Source;
 using MEditService.Tests.Edits;
 using MEditService.Tests.TestSupport;
@@ -15,15 +16,15 @@ public sealed class SourceRepositoryLocateHeaderTests
     public void Locate_ForAHeaderFormKey_FindsTheRootRecordDataJson()
     {
         using var mod = TrackedModFixture.Tracked();
-        var headerFormKey = HeaderIndexer.FormKeyFor(ModKey.FromFileName(mod.ActualPluginName));
+        var headerFormKey = PluginHeader.FormKeyFor(ModKey.FromFileName(mod.ActualPluginName));
 
         var unit = SourceRepository.Open(mod.ModFolder, GameRelease.Fallout4)!
-            .Locate(mod.Plugin, new RecordIdentity(headerFormKey, HeaderIndexer.RecordType, EditorId: null));
+            .Locate(mod.Plugin, new RecordIdentity(headerFormKey, PluginHeader.RecordType, EditorId: null));
 
         Assert.NotNull(unit);
         Assert.False(unit!.Value.IsEmbedded);
         Assert.Equal(headerFormKey, unit.Value.OwnerFormKey);
-        Assert.Equal(HeaderIndexer.RecordType, unit.Value.OwnerRecordType);
+        Assert.Equal(PluginHeader.RecordType, unit.Value.OwnerRecordType);
         Assert.Equal(
             Path.Combine(mod.ModFolder, "source", mod.ActualPluginName, "RecordData.json"), unit.Value.FullPath);
         Assert.True(File.Exists(unit.Value.FullPath), "Track already writes this file — resolution must find the real one.");
@@ -33,10 +34,10 @@ public sealed class SourceRepositoryLocateHeaderTests
     public void Locate_ForAHeaderFormKey_IsNotDirectoryPerRecord()
     {
         using var mod = TrackedModFixture.Tracked();
-        var headerFormKey = HeaderIndexer.FormKeyFor(ModKey.FromFileName(mod.ActualPluginName));
+        var headerFormKey = PluginHeader.FormKeyFor(ModKey.FromFileName(mod.ActualPluginName));
 
         var unit = SourceRepository.Open(mod.ModFolder, GameRelease.Fallout4)!
-            .Locate(mod.Plugin, new RecordIdentity(headerFormKey, HeaderIndexer.RecordType, EditorId: null));
+            .Locate(mod.Plugin, new RecordIdentity(headerFormKey, PluginHeader.RecordType, EditorId: null));
 
         Assert.NotNull(unit);
         Assert.False(unit!.Value.IsDirectoryPerRecord);

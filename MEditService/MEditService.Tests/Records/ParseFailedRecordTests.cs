@@ -65,11 +65,11 @@ public sealed class ParseFailedRecordTests
             new ModPath(ModKey.FromFileName(Fixture), scratch.PluginPath), Fallout4Release.Fallout4);
         var schemas = SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4);
         var inThePlugin = schemas
-            .Where(kv => kv.Key != HeaderIndexer.RecordType)
+            .Where(kv => kv.Key != PluginHeader.RecordType)
             .Sum(kv => overlay.EnumerateMajorRecords(kv.Value.RecordType, throwIfUnknown: false).Count());
 
         var listed = scratch.Reads.GetRecordTypeCounts(scratch.Plugin)
-            .Where(c => c.Type != HeaderIndexer.RecordType).Sum(c => c.Count);
+            .Where(c => c.Type != PluginHeader.RecordType).Sum(c => c.Count);
 
         Assert.Equal(inThePlugin, listed);
     }
