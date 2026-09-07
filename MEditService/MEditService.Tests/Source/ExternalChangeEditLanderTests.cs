@@ -136,7 +136,7 @@ public sealed class ExternalChangeEditLanderTests : IDisposable
         var firstLand = ExternalChangeEditLander.Keep(
             _mod.ModFolder, _mod.Plugin, PluginPath, GameRelease.Fallout4, SharedSchemaReflector.Instance);
         Assert.True(firstLand.Applied, firstLand.RefusalReason);
-        var otherNpcPathBeforeDelete = SourceUnitResolver.FlatSourcePath(
+        var otherNpcPathBeforeDelete = SourceDocumentPath.Of(
             _mod.ModFolder, TrackedModFixture.PluginName, "npc_", _mod.OtherNpc.ToString(),
             TrackedModFixture.OtherNpcEditorId, GameRelease.Fallout4);
         Assert.StartsWith("UntouchedNpc", Path.GetFileNameWithoutExtension(otherNpcPathBeforeDelete), StringComparison.Ordinal);
@@ -160,7 +160,7 @@ public sealed class ExternalChangeEditLanderTests : IDisposable
 
         // Exactly one file for UntouchedNpc, at the same path it already had, with its content
         // intact — a sibling's external deletion is not an event in this record's life at all.
-        var npcsDir = Path.Combine(_mod.ModFolder, SourceRecordPath.RootFor(TrackedModFixture.PluginName), "Npcs");
+        var npcsDir = Path.Combine(_mod.ModFolder, SourceRepository.RootFor(TrackedModFixture.PluginName), "Npcs");
         var otherNpcFiles = Directory.GetFiles(npcsDir, "*UntouchedNpc*");
         var survivor = Assert.Single(otherNpcFiles);
         Assert.Equal(otherNpcPathBeforeDelete, survivor);

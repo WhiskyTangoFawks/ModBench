@@ -282,7 +282,7 @@ public sealed class ContainerCopyFixture : IDisposable
         mod.Cells.Records.Add(block);
     }
 
-    public string DestinationSourceRoot => Path.Combine(DestinationModFolder, SourceRecordPath.RootFor(DestinationPluginName));
+    public string DestinationSourceRoot => Path.Combine(DestinationModFolder, SourceRepository.RootFor(DestinationPluginName));
 
     public string DestinationSourceFileContaining(string editorId) =>
         Directory.EnumerateFiles(DestinationSourceRoot, "*.json", SearchOption.AllDirectories)

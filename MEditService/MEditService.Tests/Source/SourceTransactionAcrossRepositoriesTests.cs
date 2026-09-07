@@ -38,7 +38,7 @@ public sealed class SourceTransactionAcrossRepositoriesTests : IDisposable
             modFolder, SourcePreset.Edits,
             [
                 new PristineFile(
-                    SourceRecordPath.For(pluginName, "npc_", $"000800:{pluginName}", "Original", Release),
+                    SourceRepository.FlatPathFor(pluginName, "npc_", $"000800:{pluginName}", "Original", Release),
                     Encoding.UTF8.GetBytes(BodyOf(pluginName, "Original"))),
                 .. alsoWrite,
             ],
@@ -62,7 +62,7 @@ public sealed class SourceTransactionAcrossRepositoriesTests : IDisposable
         string Leaf(IMajorRecordGetter record) =>
             $"{record.EditorID} - {record.FormKey.ID:X6}_{record.FormKey.ModKey.FileName}";
 
-        var root = SourceRecordPath.RootFor(pluginName);
+        var root = SourceRepository.RootFor(pluginName);
         return (
         [
             new PristineFile(

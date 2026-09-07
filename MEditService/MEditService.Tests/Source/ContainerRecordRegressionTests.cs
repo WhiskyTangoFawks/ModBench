@@ -191,7 +191,7 @@ public sealed class ContainerRecordRegressionTests : IDisposable
             .Split('\n', StringSplitOptions.RemoveEmptyEntries)
             .Select(l => l.Trim())
             .ToList();
-        var root = SourceRecordPath.RootFor(ContainerModFixture.PluginName).Replace('\\', '/');
+        var root = SourceRepository.RootFor(ContainerModFixture.PluginName).Replace('\\', '/');
         Assert.Contains($"{root}/RecordData.json", tree);
         // The Cell, written as its own directory-per-record unit.
         Assert.Contains(tree, f => f.StartsWith($"{root}/Cells/", StringComparison.Ordinal));

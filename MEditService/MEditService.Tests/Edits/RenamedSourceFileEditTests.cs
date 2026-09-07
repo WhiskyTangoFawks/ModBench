@@ -4,7 +4,7 @@ using MEditService.Tests.TestSupport;
 namespace MEditService.Tests.Edits;
 
 /// <summary>A file a user renamed by hand, content unchanged, is still the record's file: the write
-/// path resolves it by the SourceUnitResolver fallback scan rather than a stale computed path.</summary>
+/// path resolves it by the repository's fallback scan rather than a stale computed path.</summary>
 public sealed class RenamedSourceFileEditTests : IDisposable
 {
     private readonly TrackedModFixture _mod = TrackedModFixture.Tracked();

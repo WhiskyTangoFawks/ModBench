@@ -35,7 +35,7 @@ public sealed class SourceRepositoryReadAllTests : IDisposable
         SourceRepository.Track(
             _modFolder, SourcePreset.Edits,
             [new PristineFile(
-                SourceRecordPath.For(PluginName, "npc_", NpcFormKey, NpcEditorId, Release),
+                SourceRepository.FlatPathFor(PluginName, "npc_", NpcFormKey, NpcEditorId, Release),
                 Encoding.UTF8.GetBytes(NpcBody))],
             new TrackProvenance(null, null, new Dictionary<string, string> { [PluginName] = "abc" }));
         return SourceRepository.Open(_modFolder, Release)!;
@@ -130,7 +130,7 @@ public sealed class SourceRepositoryReadAllTests : IDisposable
         var repository = Tracked();
         // Group metadata and a stray hand-written file both land here: what makes a file a document
         // is the FormKey it declares, not where it sits.
-        var npcsFolder = Path.Combine(SourceDocuments.RootIn(_modFolder, PluginName), "Npcs");
+        var npcsFolder = Path.Combine(SourceRepository.RootIn(_modFolder, PluginName), "Npcs");
         File.WriteAllText(Path.Combine(npcsFolder, "GroupRecordData.json"), "{\n  \"Type\": \"npc_\"\n}");
         File.WriteAllText(Path.Combine(npcsFolder, "notes.json"), "{\n  \"Note\": \"scratch\"\n}");
 

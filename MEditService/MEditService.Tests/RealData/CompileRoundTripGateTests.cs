@@ -42,7 +42,7 @@ public sealed class CompileRoundTripGateTests(CompileRoundTripGateFixture fixtur
 
             return Directory.EnumerateFiles(scratch, "*.json", SearchOption.AllDirectories)
                 .ToDictionary(
-                    f => Path.Combine(SourceRecordPath.RootFor(pluginFileName), Path.GetRelativePath(scratch, f)),
+                    f => Path.Combine(SourceRepository.RootFor(pluginFileName), Path.GetRelativePath(scratch, f)),
                     f => StripCarriageReturns(File.ReadAllBytes(f)));
         }
         finally
@@ -112,7 +112,7 @@ public sealed class CompileRoundTripGateTests(CompileRoundTripGateFixture fixtur
             {
                 var expected = children.Select(c => c.FormKey.ToString()).ToList();
                 foreach (var child in expected)
-                    Assert.DoesNotContain(documents, f => SourceUnitResolver.NameCarriesFormKey(Path.GetFileName(f), child));
+                    Assert.DoesNotContain(documents, f => SourceRepository.NameCarriesFormKey(Path.GetFileName(f), child));
                 if (expected.Count == 0)
                 {
                     Assert.Null(root[slot]);
@@ -126,7 +126,7 @@ public sealed class CompileRoundTripGateTests(CompileRoundTripGateFixture fixtur
             foreach (var topic in quest.DialogTopics)
             {
                 foreach (var response in topic.Responses)
-                    Assert.DoesNotContain(documents, f => SourceUnitResolver.NameCarriesFormKey(Path.GetFileName(f), response.FormKey.ToString()));
+                    Assert.DoesNotContain(documents, f => SourceRepository.NameCarriesFormKey(Path.GetFileName(f), response.FormKey.ToString()));
                 var inline = root[nameof(Quest.DialogTopics)]!.AsArray()
                     .Single(t => t![nameof(IMajorRecordGetter.FormKey)]!.GetValue<string>() == topic.FormKey.ToString())!;
                 Assert.Equal(
@@ -156,12 +156,12 @@ public sealed class CompileRoundTripGateTests(CompileRoundTripGateFixture fixtur
     {
         var libraryTree = DeriveSourceTreeFromBinary(CutDownPluginFixture.PluginPath, GameRelease.Fallout4);
         var libraryGroupDocuments = libraryTree
-            .Where(kv => Path.GetFileName(kv.Key) == SourceUnitResolver.GroupRecordDataFileName)
+            .Where(kv => Path.GetFileName(kv.Key) == SourceRepository.GroupRecordDataFileName)
             .ToDictionary(kv => kv.Key, kv => kv.Value);
         Assert.NotEmpty(libraryGroupDocuments);
 
         var trackedGroupDocuments = fixture.ReadSourceTree()
-            .Where(kv => Path.GetFileName(kv.Key) == SourceUnitResolver.GroupRecordDataFileName)
+            .Where(kv => Path.GetFileName(kv.Key) == SourceRepository.GroupRecordDataFileName)
             .ToDictionary(kv => kv.Key, kv => kv.Value);
 
         Assert.Equal(libraryGroupDocuments.Keys.Order(), trackedGroupDocuments.Keys.Order());
@@ -173,9 +173,9 @@ public sealed class CompileRoundTripGateTests(CompileRoundTripGateFixture fixtur
     // that does: the layout is the serialization library's, so both shapes are admitted here.
     internal static string SourceDocumentOf(IReadOnlyList<string> documents, string formKey) =>
         documents.Single(f =>
-            SourceUnitResolver.NameCarriesFormKey(Path.GetFileName(f), formKey)
-            || (Path.GetFileName(f) == SourceUnitResolver.RecordDataFileName
-                && SourceUnitResolver.NameCarriesFormKey(Path.GetFileName(Path.GetDirectoryName(f)!), formKey)));
+            SourceRepository.NameCarriesFormKey(Path.GetFileName(f), formKey)
+            || (Path.GetFileName(f) == SourceRepository.RecordDataFileName
+                && SourceRepository.NameCarriesFormKey(Path.GetFileName(Path.GetDirectoryName(f)!), formKey)));
 
     // This cell because its timestamps are a real deep-copied value, not a coincidental zero that
     // would pass whether or not the field was suppressed.
@@ -254,9 +254,9 @@ public sealed class CompileRoundTripGateTests(CompileRoundTripGateFixture fixtur
         var npc = scope.Mirror.Index!
             .At(RecordRef.Effective).Search(new RecordQuery(RecordTypes: ["npc_"], Plugin: scope.Plugin, Limit: 1))
             .Items[0];
-        // SourceUnitResolver rather than SourceRecordPath.For directly — For needs an order
-        // index this test would otherwise have to reverse-engineer from Track's own output.
-        var expectedPath = Path.GetRelativePath(scope.ModFolder, SourceUnitResolver.FlatSourcePath(
+        // Asked of the repository rather than computed: FlatPathFor needs an order index this test
+        // would otherwise reverse-engineer from Track's own output.
+        var expectedPath = Path.GetRelativePath(scope.ModFolder, SourceDocumentPath.Of(
             scope.ModFolder, CutDownPluginFixture.PluginFileName, "npc_", npc.FormKey, npc.EditorId, GameRelease.Fallout4));
 
         var before = CompileRoundTripGateFixture.ReadSourceTree(scope.ModFolder);

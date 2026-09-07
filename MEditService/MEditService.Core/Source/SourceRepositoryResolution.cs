@@ -17,7 +17,7 @@ internal readonly record struct SourceUnit(
     /// remove the whole source root.</summary>
     internal bool IsDirectoryPerRecord =>
         OwnerRecordType != PluginHeader.RecordType
-        && Path.GetFileName(FullPath).Equals(SourceUnitResolver.RecordDataFileName, StringComparison.Ordinal);
+        && Path.GetFileName(FullPath).Equals(SourceRepository.RecordDataFileName, StringComparison.Ordinal);
 }
 
 /// <summary>Resolution: which document in the tree holds a record. The listing memo and the
@@ -39,7 +39,7 @@ public sealed partial class SourceRepository
         if (identity.RecordType == PluginHeader.RecordType)
         {
             var headerPath = Path.Combine(
-                _modFolder, SourceRecordPath.RootFor(plugin.Name), SourceUnitResolver.RecordDataFileName);
+                _modFolder, RootFor(plugin.Name), RecordDataFileName);
             return Unit(headerPath, identity.FormKey, identity.RecordType, isEmbedded: false);
         }
 
@@ -47,7 +47,7 @@ public sealed partial class SourceRepository
         // under it. The overwhelmingly common edit pays one File.Exists and searches nothing.
         try
         {
-            var flat = SourceUnitResolver.FlatSourcePath(
+            var flat = FlatSourcePath(
                 _modFolder, plugin.Name, identity.RecordType, identity.FormKey, identity.EditorId, _release);
             return Unit(flat, identity.FormKey, identity.RecordType, isEmbedded: false);
         }
@@ -58,7 +58,7 @@ public sealed partial class SourceRepository
 
         // Only a directory-per-record type (Cell, Worldspace) can have a directory of its own; a type
         // with no group of its own is always embedded, so nothing is scanned for it.
-        var sourceRoot = Path.Combine(_modFolder, SourceRecordPath.RootFor(plugin.Name));
+        var sourceRoot = Path.Combine(_modFolder, RootFor(plugin.Name));
         if (RecordTypeDispatch.For(_release).GroupFolderNameFor(identity.RecordType) is not null
             && FindOwnUnit(sourceRoot, identity.FormKey) is { } own)
         {
@@ -79,7 +79,7 @@ public sealed partial class SourceRepository
     // or inside its worldspace's.
     private string? FindOwnUnit(string sourceRoot, string formKey)
     {
-        var suffix = SourceUnitResolver.FilesafeFormKey(formKey);
+        var suffix = FilesafeFormKey(formKey);
         var matches = new List<string>();
         foreach (var groupFolder in RecordTypeDispatch.For(_release).DirectoryPerRecordFolderNames)
         {
@@ -112,12 +112,12 @@ public sealed partial class SourceRepository
 
         if (Directory.Exists(entry))
         {
-            if (!SourceUnitResolver.NameCarries(leaf, filesafeFormKey)) return null;
-            var recordData = Path.Combine(entry, SourceUnitResolver.RecordDataFileName);
+            if (!NameCarries(leaf, filesafeFormKey)) return null;
+            var recordData = Path.Combine(entry, RecordDataFileName);
             return File.Exists(recordData) ? recordData : null;
         }
 
-        return SourceUnitResolver.NameCarries(leaf, filesafeFormKey + SourceUnitResolver.JsonSuffix) ? entry : null;
+        return NameCarries(leaf, filesafeFormKey + JsonSuffix) ? entry : null;
     }
 
     // One listing per scan root turns a whole-mod pass from O(records × tree) into O(tree).
@@ -183,7 +183,7 @@ public sealed partial class SourceRepository
 
         private static bool StillCarries(string documentPath, string formKey) =>
             DocumentBytes(documentPath) is { } bytes
-            && FormKeysIn(bytes).Any(k => k.FormKey.Equals(formKey, StringComparison.Ordinal));
+            && FormKeysIn(bytes).Any(k => k.InAnEmbedSlot && k.FormKey.Equals(formKey, StringComparison.Ordinal));
 
         // First document wins a FormKey two of them claim: that tree is corrupt, and refusing to answer
         // at all would take every unrelated record down with it.
@@ -195,7 +195,7 @@ public sealed partial class SourceRepository
             var modFolder = Path.GetDirectoryName(Path.GetDirectoryName(sourceRoot))!;
             foreach (var documentPath in Directory.EnumerateFiles(sourceRoot, "*.json", SearchOption.AllDirectories))
             {
-                if (SourceDocuments.CarriesNoRecord(documentPath)) continue;
+                if (CarriesNoRecord(documentPath)) continue;
                 if (DocumentBytes(documentPath) is not { } bytes) continue;
 
                 var keys = FormKeysIn(bytes);
@@ -203,12 +203,12 @@ public sealed partial class SourceRepository
 
                 // A null type is an answer, not a skip: a path-ambiguous group's documents name their
                 // own type, and dropping them leaves every child they carry unlocatable.
-                var recordType = SourceRecordPath.RecordTypeOf(Path.GetRelativePath(modFolder, documentPath), release);
+                var recordType = RecordTypeOf(Path.GetRelativePath(modFolder, documentPath), release);
 
                 var owner = new OwnerDocument(documentPath, root, recordType);
-                foreach (var (childFormKey, atRoot) in keys)
+                foreach (var (childFormKey, _, inAnEmbedSlot) in keys)
                 {
-                    if (!atRoot) byChild.TryAdd(childFormKey, owner);
+                    if (inAnEmbedSlot) byChild.TryAdd(childFormKey, owner);
                 }
             }
             return byChild;
@@ -219,7 +219,7 @@ public sealed partial class SourceRepository
         {
             try
             {
-                return File.Exists(path) ? SourceUnitResolver.StripUtf8Bom(File.ReadAllBytes(path)) : null;
+                return File.Exists(path) ? StripUtf8Bom(File.ReadAllBytes(path)) : null;
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
@@ -227,27 +227,39 @@ public sealed partial class SourceRepository
             }
         }
 
-        // Every FormKey the document declares, each flagged with whether it is the root record's own.
-        // Malformed text yields what was read before the break.
-        private static List<(string FormKey, bool AtRoot)> FormKeysIn(byte[] bytes)
+        // The codec writes a link as a bare string and a child as an object with a FormKey of its
+        // own, so the slot a key sits under tells the two apart. Malformed text yields what it read.
+        private static List<(string FormKey, bool AtRoot, bool InAnEmbedSlot)> FormKeysIn(byte[] bytes)
         {
-            var found = new List<(string, bool)>();
+            var found = new List<(string, bool, bool)>();
             var reader = new Utf8JsonReader(bytes);
+
+            // The member that opened the container at each depth; null where an array element or the
+            // document's own root opened it.
+            var openedBy = new List<string?>();
+            string? pendingMember = null;
             var atFormKey = false;
-            var depth = 0;
+            var keyDepth = 0;
             try
             {
                 while (reader.Read())
                 {
-                    if (reader.TokenType == JsonTokenType.PropertyName)
+                    switch (reader.TokenType)
                     {
-                        atFormKey = reader.ValueTextEquals(FormKeyPropertyName);
-                        depth = reader.CurrentDepth;
-                        continue;
+                        case JsonTokenType.PropertyName:
+                            atFormKey = reader.ValueTextEquals(FormKeyPropertyName);
+                            keyDepth = reader.CurrentDepth;
+                            pendingMember = reader.GetString();
+                            continue;
+                        case JsonTokenType.StartObject or JsonTokenType.StartArray:
+                            OpenedAt(openedBy, reader.CurrentDepth, pendingMember);
+                            break;
+                        case JsonTokenType.String when atFormKey:
+                            found.Add((reader.GetString()!, keyDepth == 1, UnderAnEmbedSlot(openedBy, keyDepth)));
+                            break;
                     }
-                    if (atFormKey && reader.TokenType == JsonTokenType.String)
-                        found.Add((reader.GetString()!, depth == 1));
                     atFormKey = false;
+                    pendingMember = null;
                 }
             }
             catch (JsonException)
@@ -256,6 +268,26 @@ public sealed partial class SourceRepository
             }
             return found;
         }
+
+        private static void OpenedAt(List<string?> openedBy, int depth, string? member)
+        {
+            while (openedBy.Count <= depth) openedBy.Add(null);
+            openedBy[depth] = member;
+        }
+
+        // A child record's own FormKey sits inside the slot its container embeds it in, at any depth: a
+        // worldspace embeds its TopCell, which embeds its placed references.
+        private static bool UnderAnEmbedSlot(List<string?> openedBy, int keyDepth)
+        {
+            for (var depth = 0; depth < keyDepth && depth < openedBy.Count; depth++)
+            {
+                if (openedBy[depth] is { } member && EmbedSlotNames.Contains(member)) return true;
+            }
+            return false;
+        }
+
+        private static readonly HashSet<string> EmbedSlotNames =
+            ContainerChildFields.EmbeddedSlots.Select(slot => slot.Slot).ToHashSet(StringComparer.Ordinal);
 
         private static ReadOnlySpan<byte> FormKeyPropertyName => "FormKey"u8;
     }

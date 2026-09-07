@@ -2,6 +2,7 @@ using MEditService.Core.Plugins;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
 using MEditService.Core.Source;
+using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -80,10 +81,10 @@ public sealed class CopyFixture : IDisposable
 
     public static CopyFixture Create(bool trackSource = false) => new(trackSource);
 
-    // Resolved through SourceUnitResolver, matching TwoModFixture's own reason — For needs
-    // an order index this fixture has no reason to track.
+    // Asked of the repository, matching TwoModFixture's own reason: FlatPathFor needs an order
+    // index this fixture has no reason to track.
     public string SourceFileFor(PluginKey plugin, FormKey formKey, string recordType, string? editorId) =>
-        SourceUnitResolver.FlatSourcePath(
+        SourceDocumentPath.Of(
             plugin.Origin == SourceOrigin ? SourceModFolder : DestinationModFolder,
             plugin.Name, recordType, formKey.ToString(), editorId, GameRelease.Fallout4);
 

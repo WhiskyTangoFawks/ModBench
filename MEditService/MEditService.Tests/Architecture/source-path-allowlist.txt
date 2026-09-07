@@ -1,0 +1,7 @@
+# Every spelling of a source-layout literal outside SourceRepository's own files, as file, literal
+# and count. Ask the repository for the path instead of adding a line here.
+#
+# HeaderDocument writes and reads the plugin header through the whole-mod door in a temp folder that
+# is never under source/. Its RecordData.json names that door's output, not a path in the tree, so
+# the two answer different questions and neither owns the other's name.
+MEditService.Core/Records/HeaderDocument.cs: "RecordData.json": 1

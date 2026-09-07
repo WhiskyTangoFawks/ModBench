@@ -177,7 +177,7 @@ public sealed class TrackService(ILogger<TrackService> logger, INotificationPubl
         {
             await PristineFileWriter.WriteAllAsync(pristineFilesForThisPlugin, scratchDir, cancel);
 
-            var treeRoot = Path.Combine(scratchDir, SourceRecordPath.RootFor(pluginName));
+            var treeRoot = Path.Combine(scratchDir, SourceRepository.RootFor(pluginName));
             var recompiled = await deserialize(treeRoot, cancel);
 
             var recompiledPath = Path.Combine(scratchDir, pluginName);
@@ -285,7 +285,7 @@ public sealed class TrackService(ILogger<TrackService> logger, INotificationPubl
             {
                 cancel.ThrowIfCancellationRequested();
                 var relativePath = Path.Combine(
-                    SourceRecordPath.RootFor(pluginName), Path.GetRelativePath(scratchDir, file));
+                    SourceRepository.RootFor(pluginName), Path.GetRelativePath(scratchDir, file));
                 pristineFiles.Add(new PristineFile(relativePath, StripCarriageReturns(await File.ReadAllBytesAsync(file, cancel))));
             }
             return pristineFiles;

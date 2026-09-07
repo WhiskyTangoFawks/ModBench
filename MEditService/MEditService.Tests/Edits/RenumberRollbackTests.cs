@@ -129,7 +129,7 @@ public sealed class RenumberRollbackTests
             fixture.SourceFileContaining(ContainerModFixture.WorldspaceEditorId))!;
         return Path.Combine(
             Path.GetDirectoryName(worldspaceDirectory)!,
-            SourceUnitResolver.LeafNameFor(
+            SourceRepository.LeafNameFor(
                 FormKey.Factory(newFormKey), ContainerModFixture.WorldspaceEditorId, isDirectory: true));
     }
 

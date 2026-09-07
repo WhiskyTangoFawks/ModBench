@@ -216,8 +216,8 @@ public sealed class PluginCompileService(
     private static string? RefuseIfSourceDoesNotRoundTrip(IMod mod, string pluginName, string resolverRoot)
     {
         var regeneratedFiles = TrackService.SerializeToPristineFiles(mod, pluginName).GetAwaiter().GetResult();
-        var treeRoot = SourceRecordPath.RootFor(pluginName);
-        var rootHeaderPath = Path.Combine(treeRoot, SourceUnitResolver.RecordDataFileName);
+        var treeRoot = SourceRepository.RootFor(pluginName);
+        var rootHeaderPath = Path.Combine(treeRoot, SourceRepository.RecordDataFileName);
 
         foreach (var file in regeneratedFiles)
         {
@@ -270,7 +270,7 @@ internal sealed class SourceCheckout : IDisposable
 
     internal static SourceCheckout Of(string modFolder, PluginKey plugin, CompileSource source, GameRelease release)
     {
-        var treeName = SourceRecordPath.RootFor(plugin.Name);
+        var treeName = SourceRepository.RootFor(plugin.Name);
 
         if (source is CompileSource.AtRef atRef)
         {

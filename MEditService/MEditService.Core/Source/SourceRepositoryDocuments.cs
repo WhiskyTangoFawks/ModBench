@@ -1,29 +1,17 @@
 using System.Text;
 using System.Text.Json;
-using MEditService.Core.Records;
 using MEditService.Core.Schema;
+using MEditService.Core.Serialization;
+using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Core.Source;
 
-/// <summary>Which record the file at a path declares, and where a plugin's documents live. The
+/// <summary>What the file at a path declares, read as text rather than through the codec — the
 /// reverse of <see cref="SourceRepository.Locate"/>, whose question is which file a record lives
 /// in.</summary>
-public static class SourceDocuments
+public sealed partial class SourceRepository
 {
-    private const string JsonSuffix = ".json";
-
-    /// <summary>The folder holding <paramref name="pluginFileName"/>'s documents. It need not exist:
-    /// an untracked mod has none until Track writes one.</summary>
-    public static string RootIn(string modFolder, string pluginFileName) =>
-        Path.Combine(modFolder, SourceRecordPath.RootFor(pluginFileName));
-
-    /// <summary>True for a file under the source root that holds no record — group and block metadata,
-    /// and anything that is not a document at all. No row is derived from one.</summary>
-    public static bool CarriesNoRecord(string filePath) =>
-        !filePath.EndsWith(JsonSuffix, StringComparison.OrdinalIgnoreCase)
-        || Path.GetFileName(filePath).Equals(SourceUnitResolver.GroupRecordDataFileName, StringComparison.Ordinal);
-
     /// <summary>The FormKey the document at <paramref name="filePath"/> declares — an embedded child's
     /// owner's, since the file is the owner's document. Null when it cannot be read or declares
     /// none.</summary>
@@ -48,15 +36,11 @@ public static class SourceDocuments
             return (null, null);
         }
 
-        var text = Encoding.UTF8.GetString(SourceUnitResolver.StripUtf8Bom(bytes));
+        var text = Encoding.UTF8.GetString(StripUtf8Bom(bytes));
         return (
             FormKeyDeclaredIn(text, filePath, HeaderDocumentIn(modFolder, pluginFileName), pluginFileName),
             RootStringIn(text, "EditorID"));
     }
-
-    /// <summary>The plugin header's own document: the whole-mod door's root RecordData.json.</summary>
-    internal static string HeaderDocumentIn(string modFolder, string pluginFileName) =>
-        Path.Combine(RootIn(modFolder, pluginFileName), SourceUnitResolver.RecordDataFileName);
 
     /// <summary>The same answer for a caller holding the text already, so a whole-tree pass reads each
     /// file once.</summary>
@@ -88,4 +72,29 @@ public static class SourceDocuments
             return null;
         }
     }
+
+    /// <summary>The record's own text out of the bytes <paramref name="unit"/>'s file holds: itself for
+    /// a flat record, or re-extracted for an embedded child.</summary>
+    internal static string? RecordBodyFromOwnerBytes(
+        byte[]? ownerBytes, SourceUnit unit, string formKey, GameRelease release, RecordTextCodec codec)
+    {
+        if (ownerBytes == null) return null;
+
+        // File.ReadAllText strips a UTF-8 BOM; raw bytes do not — unstripped, a BOM-carrying file
+        // would never compare equal to the codec's BOM-free text.
+        ownerBytes = StripUtf8Bom(ownerBytes);
+
+        if (!unit.IsEmbedded) return Encoding.UTF8.GetString(ownerBytes);
+
+        var owner = codec.DeserializeFromBytesAsync(ownerBytes, release, unit.OwnerRecordType).GetAwaiter().GetResult();
+        if (ContainerChildFields.FindEmbeddedChild(owner, formKey) is not { } found) return null;
+
+        var childBytes = codec.SerializeToBytesAsync(found.Child, release).GetAwaiter().GetResult();
+        return Encoding.UTF8.GetString(childBytes);
+    }
+
+    private static readonly byte[] Utf8Bom = [0xEF, 0xBB, 0xBF];
+
+    internal static byte[] StripUtf8Bom(byte[] bytes) =>
+        bytes.AsSpan(0, Math.Min(bytes.Length, Utf8Bom.Length)).SequenceEqual(Utf8Bom) ? bytes[Utf8Bom.Length..] : bytes;
 }

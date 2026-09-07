@@ -19,7 +19,7 @@ internal sealed class SourceValidation(DuckDbRecordIndex index, DuckDBConnection
     internal ValidationReport Validate(PluginKey key, string modFolder)
     {
         var failures = new List<string>();
-        var sourceRoot = Path.Combine(modFolder, SourceRecordPath.RootFor(key.Name));
+        var sourceRoot = Path.Combine(modFolder, SourceRepository.RootFor(key.Name));
 
         // Tracked but holding no tree for this plugin: nothing here can say what its rows should be,
         // and the caller's whole-plugin path already knows how to fall back to the binary.
@@ -108,16 +108,16 @@ internal sealed class SourceValidation(DuckDbRecordIndex index, DuckDBConnection
         return goneAtHead;
     }
 
-    // Asked in the one decidable direction (SourceUnitResolver.NameCarriesFormKey): a leaf may embed
+    // Asked in the one decidable direction (SourceRepository.NameCarriesFormKey): a leaf may embed
     // an EditorID that itself contains the separator, so a name cannot be split, only tested.
     private static string? CommittedPathFor(IEnumerable<string> committedPaths, string pluginFileName, string formKey)
     {
-        var headerPath = ToGitPath(Path.Combine(SourceRecordPath.RootFor(pluginFileName), SourceUnitResolver.RecordDataFileName));
+        var headerPath = ToGitPath(Path.Combine(SourceRepository.RootFor(pluginFileName), SourceRepository.RecordDataFileName));
 
         foreach (var path in committedPaths)
         {
             var leaf = path[(path.LastIndexOf('/') + 1)..];
-            if (leaf.Equals(SourceUnitResolver.RecordDataFileName, StringComparison.Ordinal))
+            if (leaf.Equals(SourceRepository.RecordDataFileName, StringComparison.Ordinal))
             {
                 // The header's document has a fixed path and a name that carries no FormKey; every
                 // other RecordData.json is named by the directory holding it.
@@ -131,7 +131,7 @@ internal sealed class SourceValidation(DuckDbRecordIndex index, DuckDBConnection
                 leaf = container[(container.LastIndexOf('/') + 1)..];
             }
 
-            if (SourceUnitResolver.NameCarriesFormKey(leaf, formKey)) return path;
+            if (SourceRepository.NameCarriesFormKey(leaf, formKey)) return path;
         }
         return null;
     }
@@ -144,22 +144,22 @@ internal sealed class SourceValidation(DuckDbRecordIndex index, DuckDBConnection
             formKey, key.Name, key.Origin!);
 
     // Keyed by the FormKey the document declares, never by its path: a file name carries an EditorID
-    // that may contain the separator, so a path is not a decidable identity (SourceRecordPath).
+    // that may contain the separator, so a path is not a decidable identity.
     private static Dictionary<string, string> DocumentsOnDisk(
         string sourceRoot, string pluginFileName, List<string> failures, out bool fullyRead)
     {
         fullyRead = true;
-        var headerPath = Path.Combine(sourceRoot, SourceUnitResolver.RecordDataFileName);
+        var headerPath = Path.Combine(sourceRoot, SourceRepository.RecordDataFileName);
         var documents = new Dictionary<string, string>(StringComparer.Ordinal);
 
         foreach (var file in Directory.EnumerateFiles(sourceRoot, "*.json", SearchOption.AllDirectories))
         {
-            if (SourceDocuments.CarriesNoRecord(file)) continue;
+            if (SourceRepository.CarriesNoRecord(file)) continue;
 
             string text;
             try
             {
-                text = Encoding.UTF8.GetString(SourceUnitResolver.StripUtf8Bom(File.ReadAllBytes(file)));
+                text = Encoding.UTF8.GetString(SourceRepository.StripUtf8Bom(File.ReadAllBytes(file)));
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
@@ -170,7 +170,7 @@ internal sealed class SourceValidation(DuckDbRecordIndex index, DuckDBConnection
                 continue;
             }
 
-            if (SourceDocuments.FormKeyDeclaredIn(text, file, headerPath, pluginFileName) is not { } formKey)
+            if (SourceRepository.FormKeyDeclaredIn(text, file, headerPath, pluginFileName) is not { } formKey)
             {
                 failures.Add($"'{file}' declares no FormKey, so the records it holds could not be validated.");
                 fullyRead = false;
@@ -184,7 +184,7 @@ internal sealed class SourceValidation(DuckDbRecordIndex index, DuckDBConnection
     }
 
     // One row per source document: every Effective record no other record's document embeds. The
-    // parent tables are SourceUnitResolver's own, asked in bulk instead of a scan per record.
+    // parent tables are the repository's own, asked in bulk instead of a scan per record.
 
     // A worldspace's TopCell is the one cell embedded rather than filed, and PlacementWalker leaves
     // its block coordinates null — what tells it from an exterior cell, which has a directory.

@@ -30,14 +30,14 @@ public sealed class SourceRepositoryDocumentTests : IDisposable
             _modFolder, SourcePreset.Edits, files, new TrackProvenance(null, null, new Dictionary<string, string>()));
 
     private static PristineFile Npc0800 =>
-        new(SourceRecordPath.For(PluginName, "npc_", NpcFormKey, NpcEditorId, GameRelease.Fallout4),
+        new(SourceRepository.FlatPathFor(PluginName, "npc_", NpcFormKey, NpcEditorId, GameRelease.Fallout4),
             System.Text.Encoding.UTF8.GetBytes(NpcBody));
 
     // Asserted against directly: "the file moved" and "the file is gone" are claims about the tree,
     // and asking the repository for them would only echo its own rule back.
     private string NpcGroupFolder =>
         Path.GetDirectoryName(Path.Combine(
-            _modFolder, SourceRecordPath.For(PluginName, "npc_", NpcFormKey, NpcEditorId, GameRelease.Fallout4)))!;
+            _modFolder, SourceRepository.FlatPathFor(PluginName, "npc_", NpcFormKey, NpcEditorId, GameRelease.Fallout4)))!;
 
     private SourceRepository Opened()
     {

@@ -52,6 +52,36 @@ public sealed class SourceTransactionTests : IDisposable
     }
 
     [Fact]
+    public void Rollback_TakesBackTheDirectoriesTheBatchMinted_NotJustTheFilesInThem()
+    {
+        Seed("Npcs/existing.json", "original");
+        var before = TreeSnapshot.Of(_root);
+
+        // git tracks files, not directories, so an emptied record directory left standing is invisible
+        // to status while failing the next ingest.
+        var transaction = new SourceTransaction();
+        WriteThrough(transaction, "Cells/0/0/Home - 000800_Fixture.esp/RecordData.json", "cell");
+
+        Assert.True(Directory.Exists(Path_("Cells/0/0")));
+        Assert.Empty(transaction.Rollback());
+        Assert.Equal(before, TreeSnapshot.Of(_root));
+    }
+
+    [Fact]
+    public void Rollback_LeavesAMintedDirectoryAThirdPartyHasSinceFilled()
+    {
+        Seed("Npcs/existing.json", "original");
+
+        var transaction = new SourceTransaction();
+        WriteThrough(transaction, "Cells/0/0/Home - 000800_Fixture.esp/RecordData.json", "cell");
+        File.WriteAllText(Path_("Cells/0/theirs.json"), "another tool's");
+
+        Assert.Empty(transaction.Rollback());
+        Assert.True(File.Exists(Path_("Cells/0/theirs.json")));
+        Assert.False(Directory.Exists(Path_("Cells/0/0")));
+    }
+
+    [Fact]
     public void Rollback_UndoesActsInReverse_SoARestoreNeverCollidesWithARenamedSibling()
     {
         Seed("Races/old.json", "old");

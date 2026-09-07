@@ -25,7 +25,7 @@ internal static class SourceIngest
         if (ModFolders.Of(origin, pluginPath) is not { } modFolder) return null;
         if (!SourceRepository.IsTracked(modFolder)) return null;
 
-        var tree = Path.Combine(modFolder, SourceRecordPath.RootFor(pluginName));
+        var tree = Path.Combine(modFolder, SourceRepository.RootFor(pluginName));
         return Directory.Exists(tree) ? tree : null;
     }
 
@@ -77,15 +77,15 @@ internal static class SourceIngest
         var needsStructuralFallback = false;
 
         // Which plugin's subtree a dirty path sits under — not a container-path grammar (ADR-0041 amendment).
-        var ownTreePrefix = $"{SourceRecordPath.RootFor(key.Name)}{Path.DirectorySeparatorChar}";
+        var ownTreePrefix = $"{SourceRepository.RootFor(key.Name)}{Path.DirectorySeparatorChar}";
 
         foreach (var gitPath in dirty)
         {
-            // git speaks forward slashes on every platform; SourceRecordPath splits on the platform's
+            // git speaks forward slashes on every platform; the layout splits on the platform's
             // own separator, so a raw porcelain path would simply never parse on Windows.
             var relativePath = gitPath.Replace('/', Path.DirectorySeparatorChar);
 
-            if (!SourceRecordPath.TryParse(relativePath, gameRelease, out var identity))
+            if (!SourceRepository.TryParseDocumentPath(relativePath, gameRelease, out var identity))
             {
                 // Not a flat record file: a path under this plugin's own tree (a container) defers to the
                 // structural pass, once, after the loop; a path outside it carries nothing to reconcile.
@@ -242,7 +242,7 @@ internal static class SourceIngest
         {
             SourceRepository.Open(modFolder, gameRelease)?.MaterializeAtRef(plugin, "HEAD", scratchRoot);
 
-            var treeRoot = Path.Combine(scratchRoot, SourceRecordPath.RootFor(plugin.Name));
+            var treeRoot = Path.Combine(scratchRoot, SourceRepository.RootFor(plugin.Name));
             return RecordTextCodecGeneratorSeed
                 .DeserializeWholeMod(treeRoot, InlineWorkDropoff.Instance, CancellationToken.None)
                 .GetAwaiter().GetResult();

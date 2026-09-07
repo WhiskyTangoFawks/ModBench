@@ -83,7 +83,7 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
         new(QuestPath, Serialize(_quest)),
     ];
 
-    private static string Root => SourceRecordPath.RootFor(PluginName);
+    private static string Root => SourceRepository.RootFor(PluginName);
 
     private string InteriorCellPath =>
         Path.Combine(Root, "Cells", "0", "0", Leaf(_interiorCell), "RecordData.json");
@@ -236,7 +236,7 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
         File.WriteAllText(
             carrier,
             "{\n  \"MutagenObjectType\": \"GlobalFloat\",\n  \"FormKey\": \"00A000:Embedded.esp\",\n" +
-            "  \"Kids\": [ { \"FormKey\": \"00A001:Embedded.esp\" } ]\n}");
+            "  \"Temporary\": [ { \"FormKey\": \"00A001:Embedded.esp\" } ]\n}");
 
         var unit = Repository.Locate(Plugin, new RecordIdentity("00A001:Embedded.esp", "refr", null));
 
@@ -291,14 +291,30 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
     }
 
     [Fact]
-    public void Remove_OfAKeyADocumentNamesButDoesNotCarry_SaysTheOwnersTextLacksIt()
+    public void Locate_ForAKeyADocumentNamesOutsideEveryEmbedSlot_FindsNoOwner()
     {
-        // A FormKey somewhere inside a document is not the same as a child of it, and the two
-        // refusals send the author to different places.
+        // The codec writes a link as a bare string under its own field name and a child as an object
+        // inside the slot its container embeds; a FormKey anywhere else is a reference, not a child.
         var quest = File.ReadAllText(FullPath(QuestPath));
         File.WriteAllText(
             FullPath(QuestPath),
             quest.TrimEnd().TrimEnd('}') + ",\n  \"NotAChild\": { \"FormKey\": \"00A001:Embedded.esp\" }\n}");
+
+        var identity = new RecordIdentity("00A001:Embedded.esp", "refr", "Absent");
+
+        Assert.Null(Repository.Locate(Plugin, identity));
+        Assert.Equal(SourceRemoval.NoDocumentHoldsIt, Repository.Remove(Plugin, identity));
+    }
+
+    [Fact]
+    public void Remove_OfAKeyASlotNamesButTheRecordDoesNotCarry_SaysTheOwnersTextLacksIt()
+    {
+        // A slot the quest itself has no member for: the map reads the name and answers, and only the
+        // codec's own object model can say the record does not carry it.
+        var quest = File.ReadAllText(FullPath(QuestPath));
+        File.WriteAllText(
+            FullPath(QuestPath),
+            quest.TrimEnd().TrimEnd('}') + ",\n  \"Persistent\": [ { \"FormKey\": \"00A001:Embedded.esp\" } ]\n}");
 
         Assert.Equal(
             SourceRemoval.OwnerDoesNotCarryIt,

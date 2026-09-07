@@ -138,7 +138,7 @@ public sealed class MasterPruningRoundTripGateTests
         await PristineFileWriter.WriteAllAsync(pristineFiles, scratchDir, CancellationToken.None);
 
         return await RecordTextCodecGeneratorSeed.DeserializeWholeMod(
-            Path.Combine(scratchDir, SourceRecordPath.RootFor(LegendariesFixtureFileName)),
+            Path.Combine(scratchDir, SourceRepository.RootFor(LegendariesFixtureFileName)),
             InlineWorkDropoff.Instance,
             CancellationToken.None);
     }

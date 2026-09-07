@@ -35,7 +35,7 @@ public sealed class FormLinkResolverTests
             modFolder, SourcePreset.Edits, files, new TrackProvenance(null, null, new Dictionary<string, string>()));
 
     private static PristineFile Npc(string pluginName, string formKey, string editorId) =>
-        new(SourceRecordPath.For(pluginName, "npc_", formKey, editorId, GameRelease.Fallout4),
+        new(SourceRepository.FlatPathFor(pluginName, "npc_", formKey, editorId, GameRelease.Fallout4),
             Encoding.UTF8.GetBytes($"{{\n  \"FormKey\": \"{formKey}\",\n  \"EditorID\": \"{editorId}\"\n}}"));
 
     [Fact]
@@ -115,7 +115,7 @@ public sealed class FormLinkResolverTests
         Track(
             ModFolderOf(data, TrackedPlugin),
             new PristineFile(
-                SourceRecordPath.For(TrackedPlugin, "npc_", "00080A:Tracked.esp", "HandSpelledNpc", GameRelease.Fallout4),
+                SourceRepository.FlatPathFor(TrackedPlugin, "npc_", "00080A:Tracked.esp", "HandSpelledNpc", GameRelease.Fallout4),
                 Encoding.UTF8.GetBytes(
                     "{\n  \"FormKey\": \"00080a:tracked.esp\",\n  \"EditorID\": \"HandSpelledNpc\"\n}")));
 
@@ -134,7 +134,7 @@ public sealed class FormLinkResolverTests
         Track(
             ModFolderOf(data, TrackedPlugin),
             new PristineFile(
-                Path.Combine(SourceRecordPath.RootFor(TrackedPlugin), "RecordData.json"),
+                Path.Combine(SourceRepository.RootFor(TrackedPlugin), "RecordData.json"),
                 Encoding.UTF8.GetBytes("{\n  \"ModKey\": \"Tracked.esp\"\n}")));
 
         using var resolver = ResolverOver(data);
@@ -154,7 +154,7 @@ public sealed class FormLinkResolverTests
         var modFolder = ModFolderOf(data, TrackedPlugin);
         Track(modFolder, Npc(TrackedPlugin, TreeOnlyFormKey, TreeOnlyEditorId));
         var unit = Path.Combine(
-            modFolder, SourceRecordPath.For(TrackedPlugin, "npc_", TreeOnlyFormKey, TreeOnlyEditorId, GameRelease.Fallout4));
+            modFolder, SourceRepository.FlatPathFor(TrackedPlugin, "npc_", TreeOnlyFormKey, TreeOnlyEditorId, GameRelease.Fallout4));
         File.Move(unit, Path.Combine(Path.GetDirectoryName(unit)!, $"HandRenamed - 000800_{TrackedPlugin}.json"));
 
         using var resolver = ResolverOver(data);

@@ -45,12 +45,15 @@ internal sealed class SourceTransaction
         }
 
         var before = Snapshot(unit.FullPath);
+        var minted = SourceRepository.LevelsMintedBy(System.IO.Path.GetDirectoryName(unit.FullPath)!);
         try
         {
             repository.Put(plugin, document);
         }
         finally
         {
+            // Ahead of the write it enabled, so the reverse pass empties the directory before taking it.
+            RecordMint(repository.ModFolder, minted);
             _log.Add(new FileState(repository.ModFolder, unit.FullPath, before, Snapshot(unit.FullPath)));
         }
     }
@@ -94,22 +97,36 @@ internal sealed class SourceTransaction
 
     private sealed record EntryMove(string ModFolder, string From, string To) : Operation(ModFolder);
 
+    // Deepest first, as LevelsMintedBy names them.
+    private sealed record MintedDirectories(string ModFolder, IReadOnlyList<string> Levels) : Operation(ModFolder);
+
     private readonly List<Operation> _log = [];
 
     /// <summary>Captures <paramref name="path"/>'s content before and after the write, whether it returned
-    /// or threw. Minting goes through <see cref="SourceUnitResolver.InMintedDirectory{T}"/> as any source
+    /// or threw. Minting goes through <see cref="SourceRepository.InMintedDirectory{T}"/> as any source
     /// write does.</summary>
     internal void Write(string modFolder, string path, Action write)
     {
+        var directory = System.IO.Path.GetDirectoryName(path)!;
         var before = Snapshot(path);
+        var minted = SourceRepository.LevelsMintedBy(directory);
         try
         {
-            SourceUnitResolver.InMintedDirectory(System.IO.Path.GetDirectoryName(path)!, write);
+            SourceRepository.InMintedDirectory(directory, write);
         }
         finally
         {
+            // Ahead of the write it enabled, so the reverse pass empties the directory before taking it.
+            RecordMint(modFolder, minted);
             _log.Add(new FileState(modFolder, path, before, Snapshot(path)));
         }
+    }
+
+    // A directory this batch minted is the batch's to take back: rolling the file away and leaving the
+    // directory standing leaves an empty record directory, which fails the next ingest.
+    private void RecordMint(string modFolder, IReadOnlyList<string> minted)
+    {
+        if (minted.Count > 0) _log.Add(new MintedDirectories(modFolder, minted));
     }
 
     /// <summary>Deletes <paramref name="path"/>, holding its bytes so the rollback can put the file
@@ -132,7 +149,7 @@ internal sealed class SourceTransaction
     /// rename the entry or leave it, so a throw leaves nothing to undo.</summary>
     internal void Move(string modFolder, string from, string to)
     {
-        SourceUnitResolver.MoveEntry(from, to);
+        SourceRepository.MoveEntry(from, to);
         _log.Add(new EntryMove(modFolder, from, to));
     }
 
@@ -151,6 +168,9 @@ internal sealed class SourceTransaction
                     break;
                 case EntryMove move:
                     RestoreMove(move, unrestored);
+                    break;
+                case MintedDirectories mint:
+                    SourceRepository.RemoveMintedLevels(mint.Levels);
                     break;
             }
         }
@@ -216,7 +236,7 @@ internal sealed class SourceTransaction
 
         try
         {
-            SourceUnitResolver.MoveEntry(move.To, move.From);
+            SourceRepository.MoveEntry(move.To, move.From);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
