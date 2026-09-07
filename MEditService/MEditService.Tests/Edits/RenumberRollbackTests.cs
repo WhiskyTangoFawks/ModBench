@@ -7,8 +7,7 @@ using Mutagen.Bethesda.Plugins;
 namespace MEditService.Tests.Edits;
 
 /// <summary>A renumber that fails part-way leaves the working trees as they were (ADR-0045). The
-/// faults are real I/O: after ADR-0046 the cascade's second phase writes files and nothing else,
-/// so a blocked path is the only thing that can fail it.</summary>
+/// faults are real I/O: its second phase writes files and nothing else.</summary>
 public sealed class RenumberRollbackTests
 {
     // Free at both refs in the fixture's target plugin, and requested rather than allocated so the

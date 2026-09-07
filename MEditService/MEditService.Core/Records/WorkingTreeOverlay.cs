@@ -42,9 +42,8 @@ internal sealed class WorkingTreeOverlay
     }
 
     /// <summary>Folds re-derived documents into the read model: null Body deletes, byte-equal body
-    /// converges. <c>Structural</c> is whether any delta added or removed an Effective row, which is
-    /// what the caller resweeps winners on; <c>Touched</c> is every key whose rows moved, the
-    /// deltas' own and each embedded child re-derived out of them.</summary>
+    /// converges. <c>Structural</c> is an Effective row added or removed, which winners resweep on;
+    /// <c>Touched</c> is every key whose rows moved.</summary>
     public (bool Structural, List<string> Touched) ProjectDocuments(
         PluginKey key, IReadOnlyList<(string FormKey, string? Body)> deltas)
     {

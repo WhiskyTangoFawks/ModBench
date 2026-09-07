@@ -3,15 +3,13 @@ using MEditService.Tests.TestSupport;
 
 namespace MEditService.Tests.Architecture;
 
-/// <summary>Two retirements, one scan: the source order carrier is gone, and so is every verb the
-/// write side used to push rows into the Index (ADR-0046 invariant 4). C# references to either are
-/// counted against an allowlist that stays empty; "folder-split" and the carrier's name are refused
-/// outright in docs prose.</summary>
+/// <summary>Two retirements, one scan: the source order carrier, and the Index's push verbs
+/// (ADR-0046 invariant 4). References are counted against an allowlist that stays empty;
+/// "folder-split" is refused in docs prose.</summary>
 public sealed class CarrierScanTests
 {
     // The carrier's own name, its drift rule, and the member it minted into a document; then the
-    // Index's four write-side push verbs, whose row work now lives behind the projector under names
-    // that say what it does for the projector rather than for a caller.
+    // four push verbs, whose row work lives behind the projector under names of its own.
     private static readonly string[] Symbols =
     [
         "SourceChildOrder", "SourceChildOrderDriftException", "MEditChildOrder",

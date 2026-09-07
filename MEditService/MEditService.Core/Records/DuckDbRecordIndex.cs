@@ -297,10 +297,9 @@ public sealed class DuckDbRecordIndex : IRecordIndex
 
     // --- Working-tree changes ---
 
-    /// <summary>The projector's own landing of re-derived documents: one transaction for the whole
-    /// batch, so a throw partway cannot leave Effective and Head disagreeing about which records
-    /// diverged. A null body is the record's document gone. Internal, not public: ADR-0046 leaves the
-    /// write side no way to push rows, and only the projector's own refresh reaches this.</summary>
+    /// <summary>The projector's landing of re-derived documents: one transaction for the batch, so a
+    /// throw partway cannot leave Effective and Head disagreeing. A null body is the document
+    /// gone.</summary>
     internal void ProjectDocuments(PluginKey key, IReadOnlyList<(string FormKey, string? Body)> deltas)
     {
         if (deltas.Count == 0) return;
@@ -318,9 +317,9 @@ public sealed class DuckDbRecordIndex : IRecordIndex
             tx.Commit();
         }
 
-        // ADR-0046: after the commit, not inside it, so a subscriber that re-reads on receipt sees
-        // the rows this names. Every embedded child the re-derivation added, changed or removed is
-        // named too: a record panel open on a placed ref inside a refreshed cell has no other signal.
+        // ADR-0046: after the commit, so a subscriber re-reading on receipt sees the rows this
+        // names — embedded children included, since a record panel open on a placed ref inside a
+        // refreshed cell has no other signal.
         _notifications?.Publish(new RowsChangedNotification(key, touched, Sequence));
     }
 
@@ -370,10 +369,8 @@ public sealed class DuckDbRecordIndex : IRecordIndex
     /// <summary>See <see cref="IRecordIndex.RefreshByKeys"/>.</summary>
     public void RefreshByKeys(PluginKey key, string modFolder, IReadOnlyList<string> formKeys)
     {
-        // A key at neither ref is a record the tree has gained. Its own document cannot say where
-        // the tree puts it — a new exterior cell's worldspace block is a directory, not a field — so
-        // the copy is re-derived whole, which lands every other key in the batch with it. One
-        // projection rather than a per-key sequence a reader could catch half-applied.
+        // A key at neither ref is a record the tree has gained, and no document says where the tree
+        // puts it: a new exterior cell's block is a directory, not a field.
         if (formKeys.Any(formKey => At(RecordRef.Effective).GetDocument(formKey, key) == null
                                     && At(RecordRef.Head).GetDocument(formKey, key) == null))
         {
@@ -406,8 +403,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         }
 
         // Never exclusive owners of the file: it can be caught mid-save, or hand-edited into
-        // something that is not a document at all. Rows the projector cannot derive are left as they
-        // stand, and the next signal projects the file once it is a document again.
+        // something that is not a document. Rows stay as they stand until it reads as one again.
         if (workingTreeText != null && !IsDocument(workingTreeText))
         {
             _logger.LogWarning(
@@ -438,10 +434,8 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         }
     }
 
-    // The whole tree, read as one mod: the answer for a record the index has never seen, whose
-    // placement — which worldspace block holds a cell, which container carries a child — is a fact
-    // about the tree rather than about any one document. Idempotent by construction: it is the
-    // ingest Track and a re-index run.
+    // The whole tree, read as one mod: where a record sits is a fact about the tree, not about one
+    // document. Idempotent by construction, being the ingest Track and a re-index run.
     private void RederiveWholeCopyFromSource(PluginKey key, string modFolder)
     {
         var sourceTree = Path.Combine(modFolder, SourceRecordPath.RootFor(key.Name));

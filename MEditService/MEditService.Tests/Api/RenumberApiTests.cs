@@ -89,8 +89,7 @@ public sealed class RenumberApiTests(LoadedApiFixture<TestPluginFixture> loaded)
     }
 
     // A renumber moves one file and removes another, which the watcher may settle as more than one
-    // batch, so the wait is on the listing the caller is about to assert on — each round parked on
-    // the projection sequence rather than on a timer.
+    // batch, so the wait is on the listing itself, each round parked on the projection sequence.
     private async Task<List<string>> NpcFormKeysOnceTheyHold(string formKey)
     {
         var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(20);

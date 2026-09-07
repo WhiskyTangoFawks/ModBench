@@ -212,8 +212,8 @@ internal sealed class RecordCopy(ILoadOrderMirror mirror, SchemaReflector schema
     }
 
     /// <summary>Mints an exterior CELL at its worldspace block/sub-block, auto-creating a bare Partial
-    /// Form WRLD when the destination has none. The block directories the mint writes are what the
-    /// projector reads the cell's location back out of.</summary>
+    /// Form WRLD when the destination has none. The block directories it writes are where the cell's
+    /// location is read back from.</summary>
     internal RecordEditResult MintExteriorCell(
         PluginKey sourcePlugin, string cellFormKey, CellLocationRow cellLocation, IMajorRecord cellRecord,
         PluginKey destinationPlugin, string destinationModFolder, IRecordIndex index, GameRelease release)

@@ -780,9 +780,8 @@ public sealed class RecordEditService(
         return RecordEditResult.Success(targetFormKey);
     }
 
-    // Only the trees are put back (ADR-0045): the index is a projection of them, and the Source
-    // watcher lands the restored files exactly as it lands the written ones. Paths are named relative
-    // to the mod folder, the form the Source Control panel lists; absolute paths go to the log only.
+    // Only the trees are put back (ADR-0045); the Source watcher lands the restored files. Paths
+    // are relative to the mod folder, the form the Source Control panel lists.
     private string RollBackFailedRenumber(
         SourceWriteTransaction transaction, PluginKey plugin, IReadOnlyList<ComputedRewrite> rewrites,
         string oldFormKey, string newFormKey, Exception cause)

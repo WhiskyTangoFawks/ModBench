@@ -75,9 +75,8 @@ public interface IRecordIndex : IDisposable
     void SetFilter(string? sql);
 
     /// <summary>ADR-0046: the one projection verb. Re-derives <paramref name="formKeys"/>' rows at
-    /// both refs from the Source repository, idempotent by content. A key the index holds at neither
-    /// ref is a record the tree has gained, which only a whole-copy re-derivation can place, so one
-    /// runs. <paramref name="modFolder"/> is the caller's to resolve.</summary>
+    /// both refs from the Source repository, idempotent by content. A key held at neither ref
+    /// re-derives the whole copy.</summary>
     void RefreshByKeys(PluginKey key, string modFolder, IReadOnlyList<string> formKeys);
 
     /// <summary>ADR-0046 invariant 6: compares <paramref name="key"/>'s rows against the system of

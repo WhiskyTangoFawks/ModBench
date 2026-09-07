@@ -186,10 +186,8 @@ public sealed class RecordEditServiceContainerCopyTests
         Assert.DoesNotContain(ContainerCopyFixture.ExteriorTemporaryRefEditorId, cellText, StringComparison.Ordinal);
         Assert.Null(index.At(RecordRef.Effective).GetDocument(fixture.ExteriorTemporaryRef.ToString(), fixture.DestinationPlugin));
 
-        // The block and sub-block are the directories the mint wrote, re-derived from the tree
-        // (ADR-0046 invariant 1). The grid is a field of the cell's own document, and the ancestor
-        // minted around a copied reference is a bare Partial Form that carries none — so the row
-        // says what the tree says, and nothing the tree cannot say.
+        // Block and sub-block are the directories the mint wrote (ADR-0046 invariant 1). The grid is
+        // a field, and a bare Partial Form ancestor carries none.
         var source = index.At(RecordRef.Effective).GetCellLocation(fixture.SourcePlugin, fixture.ExteriorCell.ToString())!.Value;
         var minted = index.At(RecordRef.Effective).GetCellLocation(fixture.DestinationPlugin, fixture.ExteriorCell.ToString())!.Value;
         Assert.Equal(

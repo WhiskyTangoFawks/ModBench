@@ -128,8 +128,7 @@ public sealed class CascadeRollbackFixture : IDisposable
     ];
 
     /// <summary>Waits until the Index answers <paramref name="condition"/>, parking each round on the
-    /// projection sequence rather than on a timer: a write's projection is a separate event, and a
-    /// renumber's file moves can settle as more than one batch.</summary>
+    /// projection sequence: a renumber's file moves can settle as more than one batch.</summary>
     public async Task<bool> ProjectionReaches(Func<IRecordReads, bool> condition)
     {
         var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(20);

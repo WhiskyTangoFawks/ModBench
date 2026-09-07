@@ -30,8 +30,8 @@ internal static class SourceIngest
     }
 
     /// <summary>Indexes the whole tree as the key. Throws whatever the tree throws: "quietly served the
-    /// binary instead" is the silent lie the caller's visible failure prevents.
-    /// <paramref name="binaryPath"/> only stamps the rows; null claims no file backs them.</summary>
+    /// binary instead" is a silent lie. <paramref name="binaryPath"/> only stamps the rows; null
+    /// claims no file backs them.</summary>
     internal static void Ingest(
         IRecordIndex index, string modFolder, string sourceTree, Registration registration,
         PluginKey key, string? binaryPath, GameRelease gameRelease, SchemaReflector schemaReflector,

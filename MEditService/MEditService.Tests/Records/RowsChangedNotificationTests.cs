@@ -60,9 +60,8 @@ public sealed class RowsChangedNotificationTests : IDisposable
         Assert.Equal(index.Sequence, notification.Sequence);
     }
 
-    // A container's document is one row plus every embedded child's, so a notification naming only
-    // the key the projector was handed leaves a record panel open on a placed reference inside a
-    // refreshed cell with nothing to re-read on.
+    // A container's document is one row plus every embedded child's, so naming only the key the
+    // projector was handed leaves a panel open on a placed reference with nothing to re-read on.
     [Fact]
     public void ProjectingAContainersDocument_NamesTheContainerAndEveryEmbeddedChildWhoseRowsChanged()
     {

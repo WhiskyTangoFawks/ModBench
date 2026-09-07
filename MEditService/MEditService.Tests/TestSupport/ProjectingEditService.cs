@@ -8,8 +8,8 @@ using Microsoft.Extensions.Logging.Abstractions;
 namespace MEditService.Tests.TestSupport;
 
 /// <summary>The write API with the projection behind it. ADR-0046 makes the write and the Index
-/// learning of it two events, so a test that reads after a write — or writes again, since target
-/// resolution reads the Index — asks the projector to catch up in between.</summary>
+/// learning of it two events, so a test reading after a write lets the projector catch up
+/// first.</summary>
 internal sealed class ProjectingEditService(ILoadOrderMirror mirror, RecordEditService inner)
 {
     /// <summary>The service every test writes through, over <paramref name="mirror"/>'s own index and

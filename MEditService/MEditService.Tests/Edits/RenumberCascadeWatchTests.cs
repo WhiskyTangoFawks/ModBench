@@ -6,9 +6,9 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 namespace MEditService.Tests.Edits;
 
-/// <summary>ADR-0046 invariant 4, end to end: the renumber cascade writes three source trees and
-/// returns, and the Source watcher is what lands every rewritten reference in the Index. A failed
-/// renumber's restore reaches it the same way, because the restore is also just files.</summary>
+/// <summary>ADR-0046 invariant 4, end to end: the cascade writes three source trees and returns, and
+/// the Source watcher lands every rewritten reference. A failed renumber's restore reaches the Index
+/// the same way.</summary>
 public sealed class RenumberCascadeWatchTests
 {
     private const string NewRaceFormKey = "000F00:Target.esp";
