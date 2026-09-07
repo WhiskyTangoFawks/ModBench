@@ -131,6 +131,7 @@ try
     app.MapWorldspaceEndpoints(app.Services.GetRequiredService<ILoggerFactory>());
     app.MapContainerChildEndpoints(app.Services.GetRequiredService<ILoggerFactory>());
     app.MapNotificationEndpoints();
+    app.MapIndexEndpoints();
 
     await app.RunAsync();
 }

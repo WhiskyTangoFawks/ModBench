@@ -20,6 +20,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/index/reconcile": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Validates the index by content hash against the systems of record its rows came from — each source document at both refs for a tracked copy, the binary for an untracked one — and refreshes what differs. Name one copy with plugin and origin together, or omit both to check every registered copy. Rows it changes are published on /notifications/stream as they land. */
+        post: operations["ReconcileIndex"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/load-order": {
         parameters: {
             query?: never;
@@ -872,6 +889,17 @@ export interface components {
             refusalReason?: string | null;
             conflictedPaths: string[];
         };
+        ReconcileResponse: {
+            /** Format: int32 */
+            plugins: number;
+            /** Format: int32 */
+            rowsChanged: number;
+            /** Format: int32 */
+            pluginsRebuilt: number;
+            /** Format: int64 */
+            sequence: number;
+            failures: string[];
+        };
         RecordCopyAsNewRecordRequest: {
             sourcePlugin: string;
             sourceOrigin: string;
@@ -1055,6 +1083,65 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    ReconcileIndex: {
+        parameters: {
+            query?: {
+                plugin?: string;
+                origin?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReconcileResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
             };
         };
     };
