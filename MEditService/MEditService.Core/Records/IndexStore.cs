@@ -250,18 +250,21 @@ internal sealed class IndexStore
     // ingest is four transactions, so a client awaiting the sequence once could otherwise read an
     // in-between state.
     private readonly Lock _projectionLock = new();
-    private int _projectionDepth;
-    private bool _bumpDeferred;
-    private readonly List<Action> _announcements = [];
+
+    // Per projection, never store-wide: a source batch and a reconcile hold different gates, so a
+    // shared counter would let one swallow the other's advance. Flow-local, so nesting is seen and
+    // concurrency is not.
+    private readonly AsyncLocal<ProjectionScope?> _openProjection = new();
 
     /// <summary>The scope handed out with no store to advance — a projector holding no index still
     /// answers its callers.</summary>
-    internal static readonly IDisposable NoProjectionScope = new ProjectionScope(null);
+    internal static readonly IDisposable NoProjectionScope = new NoScope();
 
     internal IDisposable BeginProjection()
     {
-        lock (_projectionLock) _projectionDepth++;
-        return new ProjectionScope(this);
+        var scope = new ProjectionScope(this, _openProjection.Value);
+        _openProjection.Value = scope;
+        return scope;
     }
 
     // Outside a scope this joins whichever transaction is active on Connection, so the caller's
@@ -269,15 +272,12 @@ internal sealed class IndexStore
     // deferred instead, landing after the last of those commits.
     public void BumpSequence()
     {
-        lock (_projectionLock)
+        if (_openProjection.Value is { } scope)
         {
-            if (_projectionDepth > 0)
-            {
-                _bumpDeferred = true;
-                return;
-            }
+            lock (_projectionLock) scope.BumpOwed = true;
+            return;
         }
-        DuckDbSql.ExecuteFor(Connection, $"UPDATE {SequenceRelation} SET value = value + 1");
+        Advance();
     }
 
     /// <summary>Runs <paramref name="publish"/> once the projection has landed: immediately outside
@@ -285,43 +285,65 @@ internal sealed class IndexStore
     /// the store has not reached.</summary>
     internal void Announce(Action publish)
     {
-        lock (_projectionLock)
+        if (_openProjection.Value is { } scope)
         {
-            if (_projectionDepth > 0)
-            {
-                _announcements.Add(publish);
-                return;
-            }
+            lock (_projectionLock) scope.Announcements.Add(publish);
+            return;
         }
         publish();
     }
 
+    private void Advance() =>
+        DuckDbSql.ExecuteFor(Connection, $"UPDATE {SequenceRelation} SET value = value + 1");
+
     // A transaction that rolled back inside the scope still leaves the advance owed, so this can
     // over-signal — a re-read finding nothing changed — but never under-signal.
-    private void EndProjection()
+
+    // The advance runs before the debt is cleared and before a single notification goes out, so a
+    // failed UPDATE throws with both still owed rather than losing them silently.
+    private void EndProjection(ProjectionScope scope)
     {
+        _openProjection.Value = scope.Parent;
+
         List<Action> announcements;
         lock (_projectionLock)
         {
-            if (--_projectionDepth > 0) return;
-            announcements = [.. _announcements];
-            _announcements.Clear();
-            if (_bumpDeferred)
+            // Nested: the debt and the announcements are the enclosing projection's, so a batch
+            // stays one advance however many whole-plugin projections it contains.
+            if (scope.Parent is { } parent)
             {
-                _bumpDeferred = false;
-                DuckDbSql.ExecuteFor(Connection, $"UPDATE {SequenceRelation} SET value = value + 1");
+                parent.BumpOwed |= scope.BumpOwed;
+                parent.Announcements.AddRange(scope.Announcements);
+                scope.Announcements.Clear();
+                return;
             }
+
+            if (scope.BumpOwed)
+            {
+                Advance();
+                scope.BumpOwed = false;
+            }
+            announcements = [.. scope.Announcements];
+            scope.Announcements.Clear();
         }
+
         foreach (var publish in announcements) publish();
     }
 
-    private sealed class ProjectionScope(IndexStore? store) : IDisposable
+    private sealed class ProjectionScope(IndexStore store, ProjectionScope? parent) : IDisposable
     {
+        internal ProjectionScope? Parent { get; } = parent;
+        internal bool BumpOwed { get; set; }
+        internal List<Action> Announcements { get; } = [];
         private IndexStore? _store = store;
 
-        // Idempotent: a second Dispose would otherwise decrement the depth twice and let the next
-        // bump escape its enclosing scope.
-        public void Dispose() => Interlocked.Exchange(ref _store, null)?.EndProjection();
+        // Idempotent: a second Dispose would otherwise re-announce and pop a scope it does not own.
+        public void Dispose() => Interlocked.Exchange(ref _store, null)?.EndProjection(this);
+    }
+
+    private sealed class NoScope : IDisposable
+    {
+        public void Dispose() { }
     }
 
     public long CurrentSequence()

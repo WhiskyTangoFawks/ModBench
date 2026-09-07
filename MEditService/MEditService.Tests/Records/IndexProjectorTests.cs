@@ -1,4 +1,6 @@
-using System.Globalization;
+using System.Collections.Concurrent;
+using MEditService.Api;
+using MEditService.Bridge;
 using MEditService.Core.Notifications;
 using MEditService.Core.Plugins;
 using MEditService.Core.Queries;
@@ -6,6 +8,7 @@ using MEditService.Core.Records;
 using MEditService.Core.Schema;
 using MEditService.Tests.Edits;
 using MEditService.Tests.TestSupport;
+using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -194,6 +197,108 @@ public sealed class IndexProjectorTests
         }
 
         Assert.Equal(before + 1, projector.Sequence);
+    }
+
+    [Fact]
+    public async Task TwoProjectionsOpenAtOnce_EachLandsItsOwnAdvance_AndNothingIsAnnouncedAheadOfTheStore()
+    {
+        using var index = new DuckDbRecordIndex(Reflector, new TableDdlBuilder(Reflector), NullLogger.Instance);
+        index.Initialize(GameRelease.Fallout4);
+        var before = index.Sequence;
+        var announced = new ConcurrentBag<long>();
+
+        // The two projections overlap without nesting — the first opens before the second and closes
+        // before it — while every store call stays strictly ordered, since one connection is one
+        // writer.
+        using var firstOpen = new ManualResetEventSlim();
+        using var secondOpen = new ManualResetEventSlim();
+        using var firstClosed = new ManualResetEventSlim();
+
+        var first = Task.Run(() =>
+        {
+            using (index.BeginProjection())
+            {
+                index.Register(new PluginKey("First.esm", PluginOrigin.DataDirectory), Registration.Participating(0));
+                index.Announce(() => announced.Add(index.Sequence));
+                firstOpen.Set();
+                Wait(secondOpen);
+            }
+            firstClosed.Set();
+        });
+
+        var second = Task.Run(() =>
+        {
+            Wait(firstOpen);
+            using (index.BeginProjection())
+            {
+                index.Register(new PluginKey("Second.esp", PluginOrigin.DataDirectory), Registration.Participating(1));
+                index.Announce(() => announced.Add(index.Sequence));
+                secondOpen.Set();
+                Wait(firstClosed);
+            }
+        });
+
+        await Task.WhenAll(first, second);
+
+        Assert.Equal(before + 2, index.Sequence);
+        Assert.Equal(2, announced.Count);
+        Assert.All(announced, sequence => Assert.InRange(sequence, before + 1, index.Sequence));
+    }
+
+    private static void Wait(ManualResetEventSlim gate)
+    {
+        if (!gate.Wait(TimeSpan.FromSeconds(10))) throw new TimeoutException("The other projection never got there.");
+    }
+
+    [Fact]
+    public void SourceMirrorApply_LandsTheWholeSettledBatchAsOneAdvance()
+    {
+        var notifications = new InMemoryNotificationPublisher();
+        using var fixture = TrackedModFixture.Tracked(notifications);
+        var mirror = (ILoadOrderMirror)fixture.Mirror;
+        using var watcher = new SourceChangeWatcher();
+        var sourceMirror = new SourceMirror(mirror, watcher, notifications, NullLogger.Instance);
+
+        var otherNpcSource = fixture.SourceFileFor(
+            fixture.OtherNpc, "npc_", TrackedModFixture.OtherNpcEditorId);
+        RenameByHand(fixture.NpcSourceFile, TrackedModFixture.NpcEditorId, "RenamedByHand");
+        RenameByHand(otherNpcSource, TrackedModFixture.OtherNpcEditorId, "AlsoRenamedByHand");
+        var before = mirror.Sequence;
+
+        // Two documents the watcher settled together: projected one at a time, they are two
+        // advances, so this only holds while Apply opens a projection around the batch.
+        sourceMirror.Apply([
+            Settled(fixture, fixture.NpcSourceFile),
+            Settled(fixture, otherNpcSource),
+        ]);
+
+        Assert.Equal(before + 1, mirror.Sequence);
+    }
+
+    private static SourceChangeEvent Settled(TrackedModFixture fixture, string documentPath) =>
+        new(fixture.ActualPluginName, TrackedModFixture.ModFolderOrigin, fixture.ModFolder,
+            SourceChangeScope.Documents, [documentPath]);
+
+    private static void RenameByHand(string documentPath, string from, string to)
+    {
+        var text = File.ReadAllText(documentPath);
+        File.WriteAllText(documentPath, text.Replace($"\"{from}\"", $"\"{to}\"", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void CreatePlugin_ReappliesTheFilter_SoTheNewCopysRowsAnswerThroughIt()
+    {
+        using var fx = TwoProviders("projector-create-filter");
+        var projector = MakeProjector();
+        using var _1 = projector;
+        projector.Reconcile(Snapshot(fx));
+        projector.SetFilter("SELECT form_key FROM records");
+
+        var created = projector.CreatePlugin("Minted.esp", Path.Combine(fx.Root, "mod-minted"), "MintedMod");
+
+        var rows = projector.Reads!.Search(new RecordQuery(
+            Plugin: new PluginKey(created.Name, created.Origin), Limit: 10, Offset: 0));
+        Assert.NotEmpty(rows.Items);
     }
 
     [Fact]

@@ -38,6 +38,8 @@ public sealed class LoadOrderMirror(
 
     public IDisposable BeginProjection() => _projector.BeginProjection();
 
+    public void Announce(Action publish) => _projector.Announce(publish);
+
     public (ILoadOrder LoadOrder, IRecordReads Reads) RequireScope() => _projector.RequireScope();
 
     /// <summary>The snapshot becomes the load order value here, through the same

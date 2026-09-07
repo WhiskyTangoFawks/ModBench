@@ -134,6 +134,9 @@ public sealed class DuckDbRecordIndex : IRecordIndex
     /// <summary>See <see cref="IRecordIndex.BeginProjection"/>.</summary>
     public IDisposable BeginProjection() => _indexStore.BeginProjection();
 
+    /// <summary>See <see cref="IRecordIndex.Announce"/>.</summary>
+    public void Announce(Action publish) => _indexStore.Announce(publish);
+
     // ADR-0036: origin is threaded into every per-plugin delete/upsert/append so a plugin is
     // identified by (origin, plugin) together, never filename alone.
     private void Index(IModGetter pluginMod, Registration registration, string origin, string? filePath)

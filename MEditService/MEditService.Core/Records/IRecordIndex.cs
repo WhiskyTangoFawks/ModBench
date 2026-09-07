@@ -24,6 +24,10 @@ public interface IRecordIndex : IDisposable
     /// one advance. Nested scopes count.</summary>
     IDisposable BeginProjection();
 
+    /// <summary>Runs <paramref name="publish"/> once the projection it was raised in has landed:
+    /// immediately outside a scope, after that scope's advance inside one.</summary>
+    void Announce(Action publish);
+
     /// <summary>Indexes one plugin file, replacing whatever <paramref name="key"/> held. ADR-0001:
     /// <paramref name="filePath"/> is stamped with its content hash so the rows are validatable at
     /// the next open; omitting it claims no file backs them.</summary>

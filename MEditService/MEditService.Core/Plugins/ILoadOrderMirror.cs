@@ -34,6 +34,10 @@ public interface ILoadOrderMirror
     /// when the outermost scope closes. A no-op scope with no index held.</summary>
     IDisposable BeginProjection();
 
+    /// <summary>Runs <paramref name="publish"/> once the projection it was raised in has landed, so
+    /// nothing names a sequence the store has not reached. Runs at once with no index held.</summary>
+    void Announce(Action publish);
+
     /// <summary>Polls <see cref="Sequence"/> until it reaches <paramref name="atLeast"/> or
     /// <paramref name="timeout"/> elapses. True the moment it lands; false, never a throw, on a
     /// timeout — the answer is "not yet", not a failure.</summary>

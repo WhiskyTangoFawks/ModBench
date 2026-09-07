@@ -18,6 +18,7 @@ internal abstract class DelegatingRecordIndex(IRecordIndex inner) : IRecordIndex
     public virtual void Initialize(GameRelease release) => Inner.Initialize(release);
     public virtual long Sequence => Inner.Sequence;
     public virtual IDisposable BeginProjection() => Inner.BeginProjection();
+    public virtual void Announce(Action publish) => Inner.Announce(publish);
 
     public virtual void Index(IModGetter plugin, Registration registration, PluginKey key, string? filePath = null) =>
         Inner.Index(plugin, registration, key, filePath);

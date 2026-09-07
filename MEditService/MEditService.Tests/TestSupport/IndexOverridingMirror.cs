@@ -21,6 +21,7 @@ internal sealed class IndexOverridingMirror(ILoadOrderMirror inner, IRecordIndex
     // double advances, not whatever inner's real (unused) index sits at.
     public long Sequence => overrideIndex.Sequence;
     public IDisposable BeginProjection() => overrideIndex.BeginProjection();
+    public void Announce(Action publish) => overrideIndex.Announce(publish);
     public async Task<bool> AwaitSequenceAsync(long atLeast, TimeSpan timeout)
     {
         var stopwatch = System.Diagnostics.Stopwatch.StartNew();

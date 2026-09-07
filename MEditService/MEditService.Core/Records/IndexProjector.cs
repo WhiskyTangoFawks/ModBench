@@ -152,6 +152,15 @@ public sealed class IndexProjector : IDisposable
         lock (_lock) return _index?.BeginProjection() ?? IndexStore.NoProjectionScope;
     }
 
+    /// <summary>See <see cref="ILoadOrderMirror.Announce"/>.</summary>
+    public void Announce(Action publish)
+    {
+        IRecordIndex? index;
+        lock (_lock) index = _index;
+        if (index is null) publish();
+        else index.Announce(publish);
+    }
+
     // Polling, not the notification port: this answers one caller's own bound, not every
     // subscriber, and every write already serializes through IndexWriteGate, so a short poll
     // answers within one interval of landing.
