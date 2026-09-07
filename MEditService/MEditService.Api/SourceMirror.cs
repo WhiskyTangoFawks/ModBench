@@ -39,7 +39,28 @@ internal sealed class SourceMirror(
             watcher.Watch(modFolder, SourceDocuments.RootIn(modFolder, plugin.Name), plugin.Name, plugin.Origin);
     }
 
-    internal void Apply(SourceChangeEvent change)
+    /// <summary>ADR-0046: the watcher hands over every plugin it settled together. Held under one
+    /// gate acquisition, so another writer cannot land between two plugins of the same batch.</summary>
+    internal void Apply(IReadOnlyList<SourceChangeEvent> batch)
+    {
+        try
+        {
+            using var _ = mirror.WriteGate.Enter();
+            foreach (var change in batch) ApplyOne(change);
+        }
+        catch (IndexWriteGateTimeoutException ex)
+        {
+            // ADR-0026: never swallowed. The timer callback has no caller to propagate to, so the
+            // whole batch is logged rather than lost; it is re-checked the same way a single
+            // plugin's own catch below re-checks its.
+            var plugins = string.Join(", ", batch.Select(c => $"{c.PluginName} ({c.Origin})"));
+            logger.LogWarning(ex,
+                "Could not project the source change batch for {Plugins}; it will be re-checked at the " +
+                "next signal and at the next reconcile", plugins);
+        }
+    }
+
+    private void ApplyOne(SourceChangeEvent change)
     {
         var key = new PluginKey(change.PluginName, change.Origin);
         try
