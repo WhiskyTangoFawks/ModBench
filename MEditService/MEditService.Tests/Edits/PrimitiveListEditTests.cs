@@ -321,8 +321,8 @@ public sealed class PrimitiveListEditTests : IDisposable
                 .GetAwaiter().GetResult();
         }
 
-        public RecordEditService Service() =>
-            new(_mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
+        public ProjectingEditService Service() =>
+        ProjectingEditService.Over(_mirror);
 
         public string RaceBody() => Body(Race);
 
@@ -337,7 +337,7 @@ public sealed class PrimitiveListEditTests : IDisposable
                 _modFolder, PluginName, "race", Race.ToString(), RaceEditorId, GameRelease.Fallout4));
 
         private string Body(FormKey formKey) =>
-            _mirror.Index!.At(RecordRef.Effective).GetDocument(formKey.ToString(), Plugin)!.Body!;
+            _mirror.Projected().GetDocument(formKey.ToString(), Plugin)!.Body!;
 
         public void Dispose()
         {

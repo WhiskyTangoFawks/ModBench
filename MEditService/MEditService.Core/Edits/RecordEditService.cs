@@ -101,10 +101,6 @@ public sealed class RecordEditService(
         // read at any moment.
         WriteBodyAtomic(sourcePath, newText);
 
-        // The unit's document is what changed; an embedded child's own row is the index's derivation
-        // from it.
-        index.ApplyWorkingTreeChanges(plugin, [(unit.OwnerFormKey, newText)]);
-
         // The new value can flip filter membership either way.
         mirror.ReapplyFilter();
 
@@ -257,9 +253,7 @@ public sealed class RecordEditService(
         var reads = index.At(RecordRef.Effective);
 
         // One changed document either way: the owner without the child, or the record's own gone.
-        // Every descendant's row follows from that in the index.
-        (string FormKey, string? Body) delta;
-
+        // Every descendant's row follows from that when the projector re-reads it.
         if (unit.IsEmbedded)
         {
             var owner = reads.GetDocument(unit.OwnerFormKey, plugin)!;
@@ -275,7 +269,7 @@ public sealed class RecordEditService(
                     "report it; otherwise relaunch mEdit so the index re-reads the tree.");
             }
 
-            delta = (unit.OwnerFormKey, SerializeAndWrite(_codec, record, unit.FullPath, release));
+            SerializeAndWrite(_codec, record, unit.FullPath, release);
         }
         else
         {
@@ -290,11 +284,8 @@ public sealed class RecordEditService(
             {
                 File.Delete(unit.FullPath);
             }
-
-            delta = (formKey, null);
         }
 
-        index.ApplyWorkingTreeChanges(plugin, [delta]);
         // A deleted row cannot match an active filter.
         mirror.ReapplyFilter();
 
@@ -336,9 +327,8 @@ public sealed class RecordEditService(
         // by the write itself when the plugin has never held this type.
         var placement = SourcePlacement.For(plugin.Name, recordType, targetFormKey, record.EditorID, release);
         var relativePath = placement.RelativePath;
-        var newBody = WriteAt(modFolder, placement, path => SerializeAndWrite(_codec, record, path, release));
+        WriteAt(modFolder, placement, path => SerializeAndWrite(_codec, record, path, release));
 
-        index.CreateWorkingTreeRecord(plugin, targetFormKey, recordType, newBody);
         // A brand-new row can newly match an active filter.
         mirror.ReapplyFilter();
 
@@ -435,7 +425,6 @@ public sealed class RecordEditService(
             return body;
         });
 
-        index.CreateWorkingTreeRecord(destinationPlugin, formKey, document.RecordType, body);
         // A brand-new row can newly match an active filter.
         mirror.ReapplyFilter();
 
@@ -485,9 +474,8 @@ public sealed class RecordEditService(
         var placement = SourcePlacement.For(
             destinationPlugin.Name, document.RecordType, targetFormKey, newRecord.EditorID, release);
         var relativePath = placement.RelativePath;
-        var newBody = WriteAt(destinationModFolder, placement, path => SerializeAndWrite(_codec, newRecord, path, release));
+        WriteAt(destinationModFolder, placement, path => SerializeAndWrite(_codec, newRecord, path, release));
 
-        index.CreateWorkingTreeRecord(destinationPlugin, targetFormKey, document.RecordType, newBody);
         // A brand-new row can newly match an active filter.
         mirror.ReapplyFilter();
 
@@ -522,8 +510,7 @@ public sealed class RecordEditService(
         ContainerChildFields.TransplantChildSlots(destinationRecord, replacement);
 
         var writePath = RenameSourceUnit(unit, replacement.FormKey, replacement.EditorID, existingTarget);
-        var newBody = SerializeAndWrite(_codec, replacement, writePath, release);
-        index.ApplyWorkingTreeChanges(destinationPlugin, [(formKey, newBody)]);
+        SerializeAndWrite(_codec, replacement, writePath, release);
         mirror.ReapplyFilter();
 
         if (logger.IsEnabled(LogLevel.Information))
@@ -767,8 +754,8 @@ public sealed class RecordEditService(
         var transaction = new SourceWriteTransaction();
         try
         {
-            foreach (var rewrite in rewrites) WriteComputedRewrite(index, transaction, rewrite, release);
-            WriteTargetRewrite(index, transaction, plugin, modFolder, targetRewrite, formKey, targetFormKey, release);
+            foreach (var rewrite in rewrites) WriteComputedRewrite(transaction, rewrite, release);
+            WriteTargetRewrite(transaction, modFolder, targetRewrite, targetFormKey, release);
         }
         catch (Exception ex)
         {
@@ -793,9 +780,9 @@ public sealed class RecordEditService(
         return RecordEditResult.Success(targetFormKey);
     }
 
-    // The index is re-derived, not unwound (ADR-0045): it is a cache over the source trees. Paths are
-    // named relative to the mod folder, the form the Source Control panel lists; absolute paths go to
-    // the log only.
+    // Only the trees are put back (ADR-0045): the index is a projection of them, and the Source
+    // watcher lands the restored files exactly as it lands the written ones. Paths are named relative
+    // to the mod folder, the form the Source Control panel lists; absolute paths go to the log only.
     private string RollBackFailedRenumber(
         SourceWriteTransaction transaction, PluginKey plugin, IReadOnlyList<ComputedRewrite> rewrites,
         string oldFormKey, string newFormKey, Exception cause)
@@ -807,22 +794,6 @@ public sealed class RecordEditService(
                 "Rolling back the failed renumber of {OldFormKey} left {Count} path(s) as they stood: {Paths}",
                 oldFormKey, unrestored.Count,
                 string.Join("; ", unrestored.Select(u => $"{u.FullPath} [{u.Reason}{(u.Error is null ? "" : $": {u.Error}")}]")));
-        }
-
-        var notReDerived = new List<string>();
-        foreach (var affected in rewrites.Select(r => r.Plugin).Append(plugin).Distinct())
-        {
-            try
-            {
-                mirror.ReingestPluginFromSource(affected);
-            }
-            catch (Exception ex)
-            {
-                // Already in the load order's Failures (ADR-0026); named here too because "the
-                // files went back but the index did not follow" is part of this message.
-                logger.LogWarning(ex, "Could not re-derive {Plugin} after rolling back a failed renumber", affected.Name);
-                notReDerived.Add(affected.Name);
-            }
         }
 
         var sentences = new List<string>
@@ -843,13 +814,6 @@ public sealed class RecordEditService(
                 "occupied by something else, so what this renumber moved away was not moved back"),
             (UnrestoredReason.RestoreFailed, "could not be restored"),
         }.Select(r => NamedPaths(unrestored, r.Item1, r.Item2)).OfType<string>());
-
-        if (notReDerived.Count > 0)
-        {
-            sentences.Add(
-                $"The index could not be re-read from the source of {string.Join(", ", notReDerived)} — " +
-                "reindex or re-Track before editing further.");
-        }
 
         var modFolders = rewrites.Select(r => r.ModFolder).Append(ModFolders.Of(mirror.LoadOrder, plugin))
             .OfType<string>().Distinct().ToList();
@@ -872,12 +836,7 @@ public sealed class RecordEditService(
     }
 
     // Record is the file's top-level record: the referencer itself, or its owner when embedded.
-    private sealed record ComputedRewrite(
-        PluginKey Plugin,
-        string ModFolder,
-        string FilePath,
-        IMajorRecord Record,
-        IReadOnlyList<(string FormKey, string? Body)> IndexChanges);
+    private sealed record ComputedRewrite(PluginKey Plugin, string ModFolder, string FilePath, IMajorRecord Record);
 
     // Grouped by file before anything is read, so a container document holding several referencers
     // is remapped once; per-referencer graphs would discard each other's writes. The typed remap
@@ -932,7 +891,6 @@ public sealed class RecordEditService(
 
             var owner = ReadRecordFromSource(_codec, logger, filePath, ownerDoc, release);
             ((IFormLinkContainer)owner).RemapLinks(mapping);
-            var ownerBody = SerializeToText(owner, release);
             if (RefuseIfRemapIncomplete(owner, ownerDoc.RecordType, oldFormKey, referencerPlugin, release) is { } incomplete)
                 return incomplete;
 
@@ -959,8 +917,7 @@ public sealed class RecordEditService(
             // Carried rather than recomputed at write time: the transaction names unrestored paths
             // relative to this folder.
             rewrites.Add(new ComputedRewrite(
-                referencerPlugin, ModFolders.TrackedOf(mirror.LoadOrder, referencerPlugin)!,
-                filePath, owner, [(unit.OwnerFormKey, ownerBody)]));
+                referencerPlugin, ModFolders.TrackedOf(mirror.LoadOrder, referencerPlugin)!, filePath, owner));
         }
 
         return null;
@@ -1018,17 +975,15 @@ public sealed class RecordEditService(
     // The transaction holds the pre-image and wraps the write in InMintedDirectory like every other
     // source-tree write.
     private void WriteComputedRewrite(
-        IRecordIndex index, SourceWriteTransaction transaction, ComputedRewrite rewrite, GameRelease release)
+        SourceWriteTransaction transaction, ComputedRewrite rewrite, GameRelease release)
     {
         transaction.Write(
             rewrite.ModFolder, rewrite.FilePath,
             () => _codec.SerializeAsync(rewrite.Record, rewrite.FilePath, release).GetAwaiter().GetResult());
-
-        index.ApplyWorkingTreeChanges(rewrite.Plugin, rewrite.IndexChanges);
     }
 
     // Root is the record serialized at Unit.FullPath: the owner when embedded.
-    private sealed record ComputedTarget(SourceUnit Unit, RecordDocument Document, IMajorRecord Root, string RootBody);
+    private sealed record ComputedTarget(SourceUnit Unit, RecordDocument Document, IMajorRecord Root);
 
     // The referencer pass skips the target, so this is the only place a self-link is remapped.
     // Nothing here writes; both failure modes are typed refusals.
@@ -1087,7 +1042,7 @@ public sealed class RecordEditService(
 
             ((IMajorRecordInternal)found.Child).FormKey = FormKey.Factory(newFormKey);
 
-            target = new ComputedTarget(unit, document, owner, SerializeToText(owner, release));
+            target = new ComputedTarget(unit, document, owner);
             return null;
         }
 
@@ -1099,15 +1054,15 @@ public sealed class RecordEditService(
 
         ((IMajorRecordInternal)record).FormKey = FormKey.Factory(newFormKey);
 
-        target = new ComputedTarget(unit, document, record, SerializeToText(record, release));
+        target = new ComputedTarget(unit, document, record);
         return null;
     }
 
     private void WriteTargetRewrite(
-        IRecordIndex index, SourceWriteTransaction transaction, PluginKey plugin, string modFolder,
-        ComputedTarget target, string oldFormKey, string newFormKey, GameRelease release)
+        SourceWriteTransaction transaction, string modFolder, ComputedTarget target, string newFormKey,
+        GameRelease release)
     {
-        var (unit, document, root, rootBody) = target;
+        var (unit, document, root) = target;
         if (unit.IsEmbedded)
         {
             // No file moves: an embedded record has no leaf name of its own. The owner is reserialized
@@ -1116,7 +1071,6 @@ public sealed class RecordEditService(
             transaction.Write(
                 modFolder, unit.FullPath,
                 () => _codec.SerializeAsync(root, unit.FullPath, release).GetAwaiter().GetResult());
-            index.ApplyWorkingTreeChanges(plugin, [(unit.OwnerFormKey, rootBody)]);
             return;
         }
 
@@ -1150,15 +1104,10 @@ public sealed class RecordEditService(
             () => _codec.SerializeAsync(record, writePath, release).GetAwaiter().GetResult());
 
         if (!isDirectoryPerRecord && File.Exists(unit.FullPath)) transaction.Delete(modFolder, unit.FullPath);
-
-        // The whole index side in one call, and therefore one transaction: a fault part-way
-        // must not leave an index naming a FormKey no source file backs. Last act, to keep the
-        // disk/index disagreement window smallest.
-        index.ApplyRenumber(plugin, new RenumberedRecord(oldFormKey, newFormKey, document.RecordType, rootBody));
     }
 
-    /// <summary>The same rule <see cref="IRecordIndex.CreateWorkingTreeRecord"/> enforces by throwing,
-    /// checked first so a collision is a typed refusal.</summary>
+    /// <summary>A FormKey neither ref answers to is the only one a create may take: a collision is a
+    /// typed refusal, decided before anything is written.</summary>
     internal static bool IsFreeAtBothRefs(IRecordIndex index, PluginKey plugin, string formKey) =>
         index.At(RecordRef.Effective).GetDocument(formKey, plugin) == null
         && index.At(RecordRef.Head).GetDocument(formKey, plugin) == null;
@@ -1404,8 +1353,7 @@ public sealed class RecordEditService(
             : null;
 
     // INVARIANT: every write gesture calls this first (untracked, then the external-change deferral).
-    // Reaching ApplyWorkingTreeChanges/CreateWorkingTreeRecord any other way bypasses the deferral
-    // refusal entirely.
+    // Reaching the source tree any other way bypasses the deferral refusal entirely.
     private RecordEditResult? RefuseIfBlocked(PluginKey plugin, out string modFolder)
     {
         if (ModFolders.TrackedOf(mirror.LoadOrder, plugin) is not { } folder)
@@ -1415,7 +1363,7 @@ public sealed class RecordEditService(
         }
         modFolder = folder;
 
-        // Checked before anything else, so neither the source file nor the index call is ever reached.
+        // Checked before anything else, so the source file is never reached.
         return ExternalChangeDeferral.Unanswered(folder, plugin.Name) is { } question
             ? RecordEditResult.Refused(RecordEditRefusal.ExternalChangeUnanswered, question)
             : null;

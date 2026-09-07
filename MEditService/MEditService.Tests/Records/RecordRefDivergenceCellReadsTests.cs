@@ -1,5 +1,6 @@
 using MEditService.Core.Records;
 using MEditService.Tests.Edits;
+using MEditService.Tests.TestSupport;
 
 namespace MEditService.Tests.Records;
 
@@ -12,10 +13,11 @@ public sealed class RecordRefDivergenceCellReadsTests
     public void AtHead_GetWorldspaceCells_ShowsTheCommittedEditorId_WhenEffectiveWasRenamed()
     {
         using var fixture = new ContainerModFixture();
+        fixture.Mirror.Settle();
         var index = fixture.Mirror.Index!;
         var before = index.At(RecordRef.Effective).GetDocument(fixture.TopCell.ToString(), fixture.Plugin)!;
 
-        index.ApplyWorkingTreeChanges(
+        index.ProjectDocuments(
             fixture.Plugin,
             [(fixture.TopCell.ToString(),
               before.Body!.Replace(ContainerModFixture.TopCellEditorId, "RenamedTopCell", StringComparison.Ordinal))]);
@@ -33,10 +35,11 @@ public sealed class RecordRefDivergenceCellReadsTests
     public void AtHead_GetInteriorCells_ShowsTheCommittedEditorId_WhenEffectiveWasRenamed()
     {
         using var fixture = new ContainerModFixture();
+        fixture.Mirror.Settle();
         var index = fixture.Mirror.Index!;
         var before = index.At(RecordRef.Effective).GetDocument(fixture.Cell.ToString(), fixture.Plugin)!;
 
-        index.ApplyWorkingTreeChanges(
+        index.ProjectDocuments(
             fixture.Plugin,
             [(fixture.Cell.ToString(),
               before.Body!.Replace(ContainerModFixture.CellEditorId, "RenamedCell", StringComparison.Ordinal))]);
@@ -54,10 +57,11 @@ public sealed class RecordRefDivergenceCellReadsTests
     public void AtHead_GetCellReferences_ShowsTheCommittedEditorId_WhenEffectiveWasRenamed()
     {
         using var fixture = new ContainerModFixture();
+        fixture.Mirror.Settle();
         var index = fixture.Mirror.Index!;
         var before = index.At(RecordRef.Effective).GetDocument(fixture.TemporaryRef.ToString(), fixture.Plugin)!;
 
-        index.ApplyWorkingTreeChanges(
+        index.ProjectDocuments(
             fixture.Plugin,
             [(fixture.TemporaryRef.ToString(),
               before.Body!.Replace(ContainerModFixture.TemporaryRefEditorId, "RenamedTempRef", StringComparison.Ordinal))]);

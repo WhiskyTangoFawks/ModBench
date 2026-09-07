@@ -1,6 +1,7 @@
 using MEditService.Core.Plugins;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
+using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 
 namespace MEditService.Tests.Plugins;
@@ -27,7 +28,7 @@ public sealed class UnindexPluginChecksDiskTests : IDisposable
         _data.Dispose();
     }
 
-    private int HeldRows() => _mirror.Reads!.GetRecordTypeCounts(Key).Sum(c => c.Count);
+    private int HeldRows() => _mirror.SettledReads().GetRecordTypeCounts(Key).Sum(c => c.Count);
 
     [Fact]
     public void UnindexPlugin_WhileTheHeldCopyIsStillOnDisk_KeepsItsRows()

@@ -15,8 +15,8 @@ public sealed class RecordEditServiceExternalChangeDeferralTests : IDisposable
 
     public void Dispose() => _mod.Dispose();
 
-    private RecordEditService Service() =>
-        new(_mod.Mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
+    private ProjectingEditService Service() =>
+        ProjectingEditService.Over(_mod.Mirror);
 
     private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
 
@@ -48,13 +48,13 @@ public sealed class RecordEditServiceExternalChangeDeferralTests : IDisposable
     [Fact]
     public void EditField_Refuses_BeforeTheIndexEverLearnsOfTheAttemptedChange()
     {
-        var before = _mod.Mirror.Index!.At(RecordRef.Effective).GetDocument(_mod.Npc.ToString(), _mod.Plugin)!
+        var before = _mod.Mirror.Projected().GetDocument(_mod.Npc.ToString(), _mod.Plugin)!
             .Fields.Single(f => f.Metadata.Name == "HeightMax").Value;
         ExternalChangeDeferral.Set(_mod.ModFolder, TrackedModFixture.PluginName, "unanswered");
 
         Service().Set(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", Json("0.75"));
 
-        var after = _mod.Mirror.Index!.At(RecordRef.Effective).GetDocument(_mod.Npc.ToString(), _mod.Plugin)!
+        var after = _mod.Mirror.Projected().GetDocument(_mod.Npc.ToString(), _mod.Plugin)!
             .Fields.Single(f => f.Metadata.Name == "HeightMax").Value;
         Assert.Equal(before, after);
     }

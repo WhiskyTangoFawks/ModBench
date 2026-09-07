@@ -18,8 +18,8 @@ public sealed class HeaderFlagEditTests : IDisposable
 
     public void Dispose() => _fixture.Dispose();
 
-    private RecordEditService Service() =>
-        new(_fixture.Mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
+    private ProjectingEditService Service() =>
+        ProjectingEditService.Over(_fixture.Mirror);
 
     private static string HeaderFormKey => FormKey.Factory($"000000:{TrackedModFixture.PluginName}").ToString();
 
@@ -33,7 +33,7 @@ public sealed class HeaderFlagEditTests : IDisposable
         Assert.True(result.Applied, result.Message);
 
         // The source document is the truth: the root RecordData.json now carries the flag.
-        var headerDoc = _fixture.Mirror.Index!.At(RecordRef.Effective).GetDocument(HeaderFormKey, _fixture.Plugin);
+        var headerDoc = _fixture.Mirror.Projected().GetDocument(HeaderFormKey, _fixture.Plugin);
         Assert.Contains("Small", headerDoc!.Body!, StringComparison.Ordinal);
 
         var compile = new PluginCompileService(
@@ -57,7 +57,7 @@ public sealed class HeaderFlagEditTests : IDisposable
         var result = service.Set(_fixture.Plugin, HeaderFormKey, "IsSmallMaster", Json(false));
 
         Assert.True(result.Applied, result.Message);
-        var headerDoc = _fixture.Mirror.Index!.At(RecordRef.Effective).GetDocument(HeaderFormKey, _fixture.Plugin);
+        var headerDoc = _fixture.Mirror.Projected().GetDocument(HeaderFormKey, _fixture.Plugin);
         Assert.DoesNotContain("Small", headerDoc!.Body!, StringComparison.Ordinal);
     }
 

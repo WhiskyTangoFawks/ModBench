@@ -64,8 +64,8 @@ public sealed class PartialFormEditRefusalTests : IDisposable
         try { Directory.Delete(_gameDirectory, recursive: true); } catch { /* best-effort cleanup */ }
     }
 
-    private RecordEditService Service() =>
-        new(_mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
+    private ProjectingEditService Service() =>
+        ProjectingEditService.Over(_mirror);
 
     [Fact]
     public void EditField_NonHeaderFieldOnPartialFormRecord_IsRefused()

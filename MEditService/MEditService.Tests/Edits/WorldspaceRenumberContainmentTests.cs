@@ -3,6 +3,7 @@ using MEditService.Core.Plugins;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
 using MEditService.Core.Source;
+using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -73,8 +74,8 @@ public sealed class WorldspaceRenumberContainmentTests : IDisposable
         catch (UnauthorizedAccessException) { /* scratch, best-effort */ }
     }
 
-    private RecordEditService EditService() =>
-        new(_mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
+    private ProjectingEditService EditService() =>
+        ProjectingEditService.Over(_mirror);
 
     // ---- the confirmed gap ----
 
@@ -124,7 +125,7 @@ public sealed class WorldspaceRenumberContainmentTests : IDisposable
         Assert.True(result.Applied, result.Message);
         var newFormKey = result.NewFormKey!;
 
-        var live = _mirror.Index!.At(RecordRef.Effective).GetWorldspaceCells(_plugin, newFormKey)
+        var live = _mirror.Projected().GetWorldspaceCells(_plugin, newFormKey)
             .OrderBy(c => c.FormKey).ToList();
 
         using var reloaded = new LoadOrderMirror(

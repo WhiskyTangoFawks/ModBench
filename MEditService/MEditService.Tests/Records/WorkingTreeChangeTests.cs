@@ -1,5 +1,6 @@
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
+using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -46,7 +47,7 @@ public sealed class WorkingTreeChangeTests : IDisposable
         document.EditorId ?? throw new InvalidOperationException("The fixture record has no EditorID.");
 
     [Fact]
-    public void ApplyWorkingTreeChanges_EffectiveServesTheNewBody_WhileHeadKeepsTheCommittedOne()
+    public void ProjectDocuments_EffectiveServesTheNewBody_WhileHeadKeepsTheCommittedOne()
     {
         using var index = LoadedIndex();
         var formKey = _npcFormKey.ToString();
@@ -54,7 +55,7 @@ public sealed class WorkingTreeChangeTests : IDisposable
         var editedBody = committed.Body!.Replace("OriginalName", "EditedName", StringComparison.Ordinal);
         Assert.NotEqual(committed.Body, editedBody); // the fixture really does carry the text being replaced
 
-        index.ApplyWorkingTreeChanges(BaseKey, [(formKey, editedBody)]);
+        index.ProjectDocuments(BaseKey, [(formKey, editedBody)]);
 
         var effective = index.At(RecordRef.Effective).GetDocument(formKey, BaseKey)!;
         Assert.Equal(editedBody, effective.Body);
@@ -66,7 +67,7 @@ public sealed class WorkingTreeChangeTests : IDisposable
     }
 
     [Fact]
-    public void ApplyWorkingTreeChanges_MarksTheOverrideStackEntryAsCarryingAWorkingTreeChange()
+    public void ProjectDocuments_MarksTheOverrideStackEntryAsCarryingAWorkingTreeChange()
     {
         using var index = LoadedIndex();
         var formKey = _npcFormKey.ToString();
@@ -76,7 +77,7 @@ public sealed class WorkingTreeChangeTests : IDisposable
         Assert.False(clean.HasWorkingTreeChange);
         Assert.Equal(clean.Effective.Body, clean.Head.Body);
 
-        index.ApplyWorkingTreeChanges(
+        index.ProjectDocuments(
             BaseKey, [(formKey, committed.Body!.Replace("OriginalName", "EditedName", StringComparison.Ordinal))]);
 
         var dirty = index.At(RecordRef.Effective).GetOverrideStack(formKey)!.Entries.Single();
@@ -86,19 +87,19 @@ public sealed class WorkingTreeChangeTests : IDisposable
     }
 
     [Fact]
-    public void ApplyWorkingTreeChanges_EditingBackToTheCommittedBytes_ConvergesToClean()
+    public void ProjectDocuments_EditingBackToTheCommittedBytes_ConvergesToClean()
     {
         using var index = LoadedIndex();
         var formKey = _npcFormKey.ToString();
         var committed = index.At(RecordRef.Effective).GetDocument(formKey, BaseKey)!;
 
-        index.ApplyWorkingTreeChanges(
+        index.ProjectDocuments(
             BaseKey, [(formKey, committed.Body!.Replace("OriginalName", "EditedName", StringComparison.Ordinal))]);
         Assert.True(index.At(RecordRef.Effective).GetOverrideStack(formKey)!.Entries.Single().HasWorkingTreeChange);
 
         // Byte compare *is* the revert-convergence detection — an edit back to the
         // committed bytes is not "a change that happens to match", it is no change at all.
-        index.ApplyWorkingTreeChanges(BaseKey, [(formKey, committed.Body!)]);
+        index.ProjectDocuments(BaseKey, [(formKey, committed.Body!)]);
 
         var reverted = index.At(RecordRef.Effective).GetOverrideStack(formKey)!.Entries.Single();
         Assert.False(reverted.HasWorkingTreeChange);

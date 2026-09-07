@@ -24,8 +24,8 @@ public sealed class ContainerRecordRegressionTests : IDisposable
 
     public void Dispose() => _fixture.Dispose();
 
-    private RecordEditService EditService() =>
-        new(_fixture.Mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
+    private ProjectingEditService EditService() =>
+        ProjectingEditService.Over(_fixture.Mirror);
 
     private IRecordQueryService Reads() =>
         new RecordQueryService(_fixture.Mirror, SharedSchemaReflector.Instance, new ConflictClassifier());
@@ -70,7 +70,7 @@ public sealed class ContainerRecordRegressionTests : IDisposable
             File.ReadAllText(file));
         // The source unit's own indexed document moved with the file.
         Assert.Contains(
-            "250.0", _fixture.Mirror.Index!.At(RecordRef.Effective).GetDocument(_fixture.Cell.ToString(), _fixture.Plugin)!.Body!, StringComparison.Ordinal);
+            "250.0", _fixture.Mirror.Projected().GetDocument(_fixture.Cell.ToString(), _fixture.Plugin)!.Body!, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -131,7 +131,7 @@ public sealed class ContainerRecordRegressionTests : IDisposable
         var result = EditService().DeleteRecord(_fixture.Plugin, _fixture.Cell.ToString());
 
         Assert.True(result.Applied, result.Message);
-        Assert.Null(_fixture.Mirror.Index!.At(RecordRef.Effective).GetDocument(_fixture.Cell.ToString(), _fixture.Plugin));
+        Assert.Null(_fixture.Mirror.Projected().GetDocument(_fixture.Cell.ToString(), _fixture.Plugin));
     }
 
     [Fact]
@@ -160,8 +160,8 @@ public sealed class ContainerRecordRegressionTests : IDisposable
         var result = EditService().RenumberRecord(_fixture.Plugin, _fixture.Cell.ToString());
 
         Assert.True(result.Applied, result.Message);
-        Assert.Null(_fixture.Mirror.Index!.At(RecordRef.Effective).GetDocument(_fixture.Cell.ToString(), _fixture.Plugin));
-        Assert.NotNull(_fixture.Mirror.Index!.At(RecordRef.Effective).GetDocument(result.NewFormKey!, _fixture.Plugin));
+        Assert.Null(_fixture.Mirror.Projected().GetDocument(_fixture.Cell.ToString(), _fixture.Plugin));
+        Assert.NotNull(_fixture.Mirror.Projected().GetDocument(result.NewFormKey!, _fixture.Plugin));
     }
 
     [Fact]
@@ -205,7 +205,7 @@ public sealed class ContainerRecordRegressionTests : IDisposable
 
         var result = ExternalChangeEditLander.Keep(
             _fixture.ModFolder, _fixture.Plugin, pluginPath, GameRelease.Fallout4,
-            _fixture.Mirror.Index!.At(RecordRef.Effective), SharedSchemaReflector.Instance, NullLogger<ContainerRecordRegressionTests>.Instance);
+            _fixture.Mirror.Projected(), SharedSchemaReflector.Instance, NullLogger<ContainerRecordRegressionTests>.Instance);
 
         Assert.True(result.Applied, result.RefusalReason);
         Assert.DoesNotContain(_fixture.Cell.ToString(), result.LandedFormKeys);
@@ -225,7 +225,7 @@ public sealed class ContainerRecordRegressionTests : IDisposable
 
         var result = ExternalChangeEditLander.Keep(
             _fixture.ModFolder, _fixture.Plugin, pluginPath, GameRelease.Fallout4,
-            _fixture.Mirror.Index!.At(RecordRef.Effective), SharedSchemaReflector.Instance, NullLogger<ContainerRecordRegressionTests>.Instance);
+            _fixture.Mirror.Projected(), SharedSchemaReflector.Instance, NullLogger<ContainerRecordRegressionTests>.Instance);
 
         Assert.True(result.Applied, result.RefusalReason);
         Assert.Contains(_fixture.Cell.ToString(), result.LandedFormKeys);
@@ -249,7 +249,7 @@ public sealed class ContainerRecordRegressionTests : IDisposable
 
         var result = ExternalChangeEditLander.Keep(
             _fixture.ModFolder, _fixture.Plugin, pluginPath, GameRelease.Fallout4,
-            _fixture.Mirror.Index!.At(RecordRef.Effective), SharedSchemaReflector.Instance, NullLogger<ContainerRecordRegressionTests>.Instance);
+            _fixture.Mirror.Projected(), SharedSchemaReflector.Instance, NullLogger<ContainerRecordRegressionTests>.Instance);
 
         Assert.True(result.Applied, result.RefusalReason);
         Assert.Contains(_fixture.EmbedCell.ToString(), result.LandedFormKeys);
@@ -272,7 +272,7 @@ public sealed class ContainerRecordRegressionTests : IDisposable
 
         var result = ExternalChangeEditLander.Keep(
             _fixture.ModFolder, _fixture.Plugin, pluginPath, GameRelease.Fallout4,
-            _fixture.Mirror.Index!.At(RecordRef.Effective), SharedSchemaReflector.Instance, NullLogger<ContainerRecordRegressionTests>.Instance);
+            _fixture.Mirror.Projected(), SharedSchemaReflector.Instance, NullLogger<ContainerRecordRegressionTests>.Instance);
 
         Assert.False(result.Applied);
         Assert.Contains(_fixture.Cell.ToString(), result.RefusalReason, StringComparison.Ordinal);
@@ -298,7 +298,7 @@ public sealed class ContainerRecordRegressionTests : IDisposable
         var entries = new List<LogEntry>();
         var result = ExternalChangeEditLander.Keep(
             _fixture.ModFolder, _fixture.Plugin, pluginPath, GameRelease.Fallout4,
-            _fixture.Mirror.Index!.At(RecordRef.Effective), SharedSchemaReflector.Instance, new CollectingLogger(entries));
+            _fixture.Mirror.Projected(), SharedSchemaReflector.Instance, new CollectingLogger(entries));
 
         Assert.True(result.Applied, result.RefusalReason);
         Assert.DoesNotContain(brandNewCellKey.ToString(), result.LandedFormKeys);

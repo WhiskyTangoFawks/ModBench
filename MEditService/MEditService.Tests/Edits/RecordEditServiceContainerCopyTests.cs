@@ -2,6 +2,7 @@ using MEditService.Core.Edits;
 using MEditService.Core.Plugins;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
+using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace MEditService.Tests.Edits;
@@ -10,8 +11,8 @@ namespace MEditService.Tests.Edits;
 /// included (xEdit parity: only "Deep copy as override" carries children).</summary>
 public sealed class RecordEditServiceContainerCopyTests
 {
-    private static RecordEditService ServiceFor(ILoadOrderMirror mirror) =>
-        new(mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
+    private static ProjectingEditService ServiceFor(ILoadOrderMirror mirror) =>
+        ProjectingEditService.Over(mirror);
 
     [Fact]
     public void CopyRecordAsOverride_OnAQuest_Succeeds_OwnFieldsLand_ChildListsEmpty()
@@ -23,12 +24,12 @@ public sealed class RecordEditServiceContainerCopyTests
 
         Assert.True(result.Applied, result.Message);
 
-        var doc = fixture.Mirror.Index!.At(RecordRef.Effective).GetDocument(fixture.Quest.ToString(), fixture.DestinationPlugin);
+        var doc = fixture.Mirror.Projected().GetDocument(fixture.Quest.ToString(), fixture.DestinationPlugin);
         Assert.NotNull(doc);
         Assert.Equal(ContainerCopyFixture.QuestEditorId, doc!.EditorId);
 
         // Own fields only — no child lands as a row, and the quest's own document carries no child slot.
-        var reads = fixture.Mirror.Index!.At(RecordRef.Effective);
+        var reads = fixture.Mirror.Projected();
         Assert.Null(reads.GetDocument(fixture.DialogTopic.ToString(), fixture.DestinationPlugin));
         Assert.Null(reads.GetDocument(fixture.Scene.ToString(), fixture.DestinationPlugin));
         Assert.Null(reads.GetDocument(fixture.DialogBranch.ToString(), fixture.DestinationPlugin));
@@ -50,7 +51,7 @@ public sealed class RecordEditServiceContainerCopyTests
 
         Assert.True(result.Applied, result.Message);
 
-        var doc = fixture.Mirror.Index!.At(RecordRef.Effective).GetDocument(fixture.InteriorCell.ToString(), fixture.DestinationPlugin);
+        var doc = fixture.Mirror.Projected().GetDocument(fixture.InteriorCell.ToString(), fixture.DestinationPlugin);
         Assert.NotNull(doc);
         Assert.Equal(ContainerCopyFixture.InteriorCellEditorId, doc!.EditorId);
         Assert.Contains(
@@ -58,8 +59,8 @@ public sealed class RecordEditServiceContainerCopyTests
             File.ReadAllText(fixture.DestinationSourceFileContaining(ContainerCopyFixture.InteriorCellEditorId)),
             StringComparison.Ordinal);
 
-        Assert.Null(fixture.Mirror.Index!.At(RecordRef.Effective).GetDocument(fixture.PersistentRef.ToString(), fixture.DestinationPlugin));
-        Assert.Null(fixture.Mirror.Index!.At(RecordRef.Effective).GetDocument(fixture.TemporaryRef.ToString(), fixture.DestinationPlugin));
+        Assert.Null(fixture.Mirror.Projected().GetDocument(fixture.PersistentRef.ToString(), fixture.DestinationPlugin));
+        Assert.Null(fixture.Mirror.Projected().GetDocument(fixture.TemporaryRef.ToString(), fixture.DestinationPlugin));
 
         var cellFile = fixture.DestinationSourceFileContaining(ContainerCopyFixture.InteriorCellEditorId);
         var text = File.ReadAllText(cellFile);
@@ -83,11 +84,11 @@ public sealed class RecordEditServiceContainerCopyTests
 
         Assert.True(result.Applied, result.Message);
 
-        var doc = fixture.Mirror.Index!.At(RecordRef.Effective).GetDocument(fixture.Worldspace.ToString(), fixture.DestinationPlugin);
+        var doc = fixture.Mirror.Projected().GetDocument(fixture.Worldspace.ToString(), fixture.DestinationPlugin);
         Assert.NotNull(doc);
         Assert.Equal(ContainerCopyFixture.WorldspaceEditorId, doc!.EditorId);
 
-        Assert.Null(fixture.Mirror.Index!.At(RecordRef.Effective).GetDocument(fixture.TopCell.ToString(), fixture.DestinationPlugin));
+        Assert.Null(fixture.Mirror.Projected().GetDocument(fixture.TopCell.ToString(), fixture.DestinationPlugin));
         var worldFile = fixture.DestinationSourceFileContaining(ContainerCopyFixture.WorldspaceEditorId);
         Assert.DoesNotContain(ContainerCopyFixture.TopCellEditorId, File.ReadAllText(worldFile), StringComparison.Ordinal);
     }
@@ -107,7 +108,7 @@ public sealed class RecordEditServiceContainerCopyTests
             fixture.SourcePlugin, fixture.PersistentRef.ToString(), fixture.DestinationPlugin);
 
         Assert.True(result.Applied, result.Message);
-        var childDoc = fixture.Mirror.Index!.At(RecordRef.Effective).GetDocument(fixture.PersistentRef.ToString(), fixture.DestinationPlugin);
+        var childDoc = fixture.Mirror.Projected().GetDocument(fixture.PersistentRef.ToString(), fixture.DestinationPlugin);
         Assert.NotNull(childDoc);
         Assert.Equal(ContainerCopyFixture.PersistentRefEditorId, childDoc!.EditorId);
 
@@ -116,7 +117,7 @@ public sealed class RecordEditServiceContainerCopyTests
         // The negative control this copy must not touch: the reference never copied at all.
         Assert.DoesNotContain(ContainerCopyFixture.TemporaryRefEditorId, File.ReadAllText(cellFile), StringComparison.Ordinal);
 
-        var cellDoc = fixture.Mirror.Index!.At(RecordRef.Effective).GetDocument(fixture.InteriorCell.ToString(), fixture.DestinationPlugin);
+        var cellDoc = fixture.Mirror.Projected().GetDocument(fixture.InteriorCell.ToString(), fixture.DestinationPlugin);
         Assert.False(cellDoc!.IsPartialForm);
     }
 
@@ -132,7 +133,7 @@ public sealed class RecordEditServiceContainerCopyTests
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.ContainerParentMissingInDestination, result.Refusal);
-        Assert.Null(fixture.Mirror.Index!.At(RecordRef.Effective).GetDocument(fixture.TopCellRef.ToString(), fixture.DestinationPlugin));
+        Assert.Null(fixture.Mirror.Projected().GetDocument(fixture.TopCellRef.ToString(), fixture.DestinationPlugin));
     }
 
     // Copying the TopCell itself hits its own check (the isCell branch in CopyRecordAsOverride, not
@@ -147,7 +148,7 @@ public sealed class RecordEditServiceContainerCopyTests
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.ContainerParentMissingInDestination, result.Refusal);
-        Assert.Null(fixture.Mirror.Index!.At(RecordRef.Effective).GetDocument(fixture.TopCell.ToString(), fixture.DestinationPlugin));
+        Assert.Null(fixture.Mirror.Projected().GetDocument(fixture.TopCell.ToString(), fixture.DestinationPlugin));
     }
 
     // The genuine SubCells exterior case. Both ancestors mint as bare Partial Forms; the REFR lands
@@ -162,6 +163,8 @@ public sealed class RecordEditServiceContainerCopyTests
             fixture.SourcePlugin, fixture.ExteriorPersistentRef.ToString(), fixture.DestinationPlugin);
 
         Assert.True(result.Applied, result.Message);
+
+        fixture.Mirror.Settle();
 
         var index = fixture.Mirror.Index!;
         var worldspaceDoc = index.At(RecordRef.Effective).GetDocument(fixture.Worldspace.ToString(), fixture.DestinationPlugin);
@@ -183,8 +186,17 @@ public sealed class RecordEditServiceContainerCopyTests
         Assert.DoesNotContain(ContainerCopyFixture.ExteriorTemporaryRefEditorId, cellText, StringComparison.Ordinal);
         Assert.Null(index.At(RecordRef.Effective).GetDocument(fixture.ExteriorTemporaryRef.ToString(), fixture.DestinationPlugin));
 
-        var expectedLocation = index.At(RecordRef.Effective).GetCellLocation(fixture.SourcePlugin, fixture.ExteriorCell.ToString());
-        Assert.Equal(expectedLocation, index.At(RecordRef.Effective).GetCellLocation(fixture.DestinationPlugin, fixture.ExteriorCell.ToString()));
+        // The block and sub-block are the directories the mint wrote, re-derived from the tree
+        // (ADR-0046 invariant 1). The grid is a field of the cell's own document, and the ancestor
+        // minted around a copied reference is a bare Partial Form that carries none — so the row
+        // says what the tree says, and nothing the tree cannot say.
+        var source = index.At(RecordRef.Effective).GetCellLocation(fixture.SourcePlugin, fixture.ExteriorCell.ToString())!.Value;
+        var minted = index.At(RecordRef.Effective).GetCellLocation(fixture.DestinationPlugin, fixture.ExteriorCell.ToString())!.Value;
+        Assert.Equal(
+            (source.ParentWorldspace, source.BlockX, source.BlockY, source.SubX, source.SubY, source.IsInterior),
+            (minted.ParentWorldspace, minted.BlockX, minted.BlockY, minted.SubX, minted.SubY, minted.IsInterior));
+        Assert.Null(minted.GridX);
+        Assert.Null(minted.GridY);
     }
 
     // "REFR in the same Persistent/Temporary slot as the source" — the
@@ -198,6 +210,7 @@ public sealed class RecordEditServiceContainerCopyTests
             fixture.SourcePlugin, fixture.ExteriorTemporaryRef.ToString(), fixture.DestinationPlugin);
 
         Assert.True(result.Applied, result.Message);
+        fixture.Mirror.Settle();
         var index = fixture.Mirror.Index!;
         Assert.True(index.At(RecordRef.Effective).GetDocument(fixture.ExteriorCell.ToString(), fixture.DestinationPlugin)!.IsPartialForm);
         Assert.NotNull(index.At(RecordRef.Effective).GetDocument(fixture.ExteriorTemporaryRef.ToString(), fixture.DestinationPlugin));
@@ -217,6 +230,8 @@ public sealed class RecordEditServiceContainerCopyTests
             fixture.SourcePlugin, fixture.ExteriorCell.ToString(), fixture.DestinationPlugin);
 
         Assert.True(result.Applied, result.Message);
+
+        fixture.Mirror.Settle();
 
         var index = fixture.Mirror.Index!;
         var worldspaceDoc = index.At(RecordRef.Effective).GetDocument(fixture.Worldspace.ToString(), fixture.DestinationPlugin);
@@ -246,13 +261,13 @@ public sealed class RecordEditServiceContainerCopyTests
         // an unscoped filter would match pre-copy and pass whether or not the new row was re-evaluated.
         fixture.Mirror.SetFilter($"SELECT form_key FROM cell WHERE plugin = '{ContainerCopyFixture.DestinationPluginName}'");
         var query = new RecordQuery(RecordTypes: ["cell"], Plugin: fixture.DestinationPlugin, Limit: 50, Offset: 0);
-        var before = fixture.Mirror.Reads!.Search(query).Total;
+        var before = fixture.Mirror.SettledReads().Search(query).Total;
 
         var result = ServiceFor(fixture.Mirror).CopyRecordAsOverride(
             fixture.SourcePlugin, fixture.ExteriorCell.ToString(), fixture.DestinationPlugin);
 
         Assert.True(result.Applied, result.Message);
-        var after = fixture.Mirror.Reads!.Search(query);
+        var after = fixture.Mirror.SettledReads().Search(query);
         Assert.Equal(before + 1, after.Total);
     }
 
@@ -269,7 +284,7 @@ public sealed class RecordEditServiceContainerCopyTests
 
         Assert.True(result.Applied, result.Message);
 
-        var cellDoc = fixture.Mirror.Index!.At(RecordRef.Effective).GetDocument(fixture.InteriorCell.ToString(), fixture.DestinationPlugin);
+        var cellDoc = fixture.Mirror.Projected().GetDocument(fixture.InteriorCell.ToString(), fixture.DestinationPlugin);
         Assert.NotNull(cellDoc);
         Assert.True(cellDoc!.IsPartialForm);
 
@@ -284,7 +299,7 @@ public sealed class RecordEditServiceContainerCopyTests
             StringComparison.Ordinal);
         Assert.Contains(ContainerCopyFixture.PersistentRefEditorId, File.ReadAllText(cellFile), StringComparison.Ordinal);
 
-        var childDoc = fixture.Mirror.Index!.At(RecordRef.Effective).GetDocument(fixture.PersistentRef.ToString(), fixture.DestinationPlugin);
+        var childDoc = fixture.Mirror.Projected().GetDocument(fixture.PersistentRef.ToString(), fixture.DestinationPlugin);
         Assert.NotNull(childDoc);
     }
 }

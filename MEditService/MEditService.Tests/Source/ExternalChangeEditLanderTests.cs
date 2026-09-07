@@ -36,7 +36,7 @@ public sealed class ExternalChangeEditLanderTests : IDisposable
     {
         WriteExternalBinaryChange(0.9f);
 
-        var result = ExternalChangeEditLander.Keep(_mod.ModFolder, _mod.Plugin, PluginPath, GameRelease.Fallout4, _mod.Mirror.Index!.At(RecordRef.Effective), SharedSchemaReflector.Instance);
+        var result = ExternalChangeEditLander.Keep(_mod.ModFolder, _mod.Plugin, PluginPath, GameRelease.Fallout4, _mod.Mirror.Projected(), SharedSchemaReflector.Instance);
 
         Assert.True(result.Applied, result.RefusalReason);
         Assert.Equal([_mod.Npc.ToString()], result.LandedFormKeys);
@@ -51,7 +51,7 @@ public sealed class ExternalChangeEditLanderTests : IDisposable
     {
         WriteExternalBinaryChange(0.9f);
 
-        ExternalChangeEditLander.Keep(_mod.ModFolder, _mod.Plugin, PluginPath, GameRelease.Fallout4, _mod.Mirror.Index!.At(RecordRef.Effective), SharedSchemaReflector.Instance);
+        ExternalChangeEditLander.Keep(_mod.ModFolder, _mod.Plugin, PluginPath, GameRelease.Fallout4, _mod.Mirror.Projected(), SharedSchemaReflector.Instance);
 
         var gitDir = Path.Combine(_mod.ModFolder, ".git");
         var binarySha = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(PluginPath)));
@@ -64,7 +64,7 @@ public sealed class ExternalChangeEditLanderTests : IDisposable
         ExternalChangeDeferral.Set(_mod.ModFolder, TrackedModFixture.PluginName, "unanswered");
         WriteExternalBinaryChange(0.9f);
 
-        ExternalChangeEditLander.Keep(_mod.ModFolder, _mod.Plugin, PluginPath, GameRelease.Fallout4, _mod.Mirror.Index!.At(RecordRef.Effective), SharedSchemaReflector.Instance);
+        ExternalChangeEditLander.Keep(_mod.ModFolder, _mod.Plugin, PluginPath, GameRelease.Fallout4, _mod.Mirror.Projected(), SharedSchemaReflector.Instance);
 
         Assert.Null(ExternalChangeDeferral.Unanswered(_mod.ModFolder, TrackedModFixture.PluginName));
     }
@@ -72,14 +72,14 @@ public sealed class ExternalChangeEditLanderTests : IDisposable
     [Fact]
     public void Keep_Refuses_WhenTheSameRecordAlreadyHasUncommittedDirtThatDisagreesWithTheIncomingValue()
     {
-        var editService = new RecordEditService(_mod.Mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
+        var editService = ProjectingEditService.Over(_mod.Mirror);
         var applyResult = editService.Set(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", JsonDocument.Parse("0.5").RootElement);
         Assert.True(applyResult.Applied, applyResult.Message);
         var myOwnEditText = File.ReadAllText(_mod.NpcSourceFile);
 
         WriteExternalBinaryChange(0.9f);
 
-        var result = ExternalChangeEditLander.Keep(_mod.ModFolder, _mod.Plugin, PluginPath, GameRelease.Fallout4, _mod.Mirror.Index!.At(RecordRef.Effective), SharedSchemaReflector.Instance);
+        var result = ExternalChangeEditLander.Keep(_mod.ModFolder, _mod.Plugin, PluginPath, GameRelease.Fallout4, _mod.Mirror.Projected(), SharedSchemaReflector.Instance);
 
         Assert.False(result.Applied);
         Assert.Contains(_mod.Npc.ToString(), result.RefusalReason, StringComparison.Ordinal);
@@ -109,7 +109,7 @@ public sealed class ExternalChangeEditLanderTests : IDisposable
         firstMod.WriteToBinary(PluginPath);
 
         var firstLand = ExternalChangeEditLander.Keep(
-            _mod.ModFolder, _mod.Plugin, PluginPath, GameRelease.Fallout4, _mod.Mirror.Index!.At(RecordRef.Effective), SharedSchemaReflector.Instance);
+            _mod.ModFolder, _mod.Plugin, PluginPath, GameRelease.Fallout4, _mod.Mirror.Projected(), SharedSchemaReflector.Instance);
         Assert.True(firstLand.Applied, firstLand.RefusalReason);
         var otherNpcPathBeforeDelete = SourceUnitResolver.FlatSourcePath(
             _mod.ModFolder, TrackedModFixture.PluginName, "npc_", _mod.OtherNpc.ToString(),
@@ -130,7 +130,7 @@ public sealed class ExternalChangeEditLanderTests : IDisposable
         secondMod.WriteToBinary(PluginPath);
 
         var secondLand = ExternalChangeEditLander.Keep(
-            _mod.ModFolder, _mod.Plugin, PluginPath, GameRelease.Fallout4, _mod.Mirror.Index!.At(RecordRef.Effective), SharedSchemaReflector.Instance);
+            _mod.ModFolder, _mod.Plugin, PluginPath, GameRelease.Fallout4, _mod.Mirror.Projected(), SharedSchemaReflector.Instance);
         Assert.True(secondLand.Applied, secondLand.RefusalReason);
 
         // Exactly one file for UntouchedNpc, at the same path it already had, with its content
@@ -160,7 +160,7 @@ public sealed class ExternalChangeEditLanderTests : IDisposable
         fallout4Mod.WriteToBinary(pluginPath);
 
         var result = ExternalChangeEditLander.Keep(
-            mod.ModFolder, mod.Plugin, pluginPath, GameRelease.Fallout4, mod.Mirror.Index!.At(RecordRef.Effective), SharedSchemaReflector.Instance);
+            mod.ModFolder, mod.Plugin, pluginPath, GameRelease.Fallout4, mod.Mirror.Projected(), SharedSchemaReflector.Instance);
 
         Assert.True(result.Applied, result.RefusalReason);
         Assert.Equal([mod.Npc.ToString()], result.LandedFormKeys);
@@ -174,12 +174,12 @@ public sealed class ExternalChangeEditLanderTests : IDisposable
     {
         // Not a real collision: the user happened to make the exact same edit the external tool made
         // — nothing to lose by landing it.
-        var editService = new RecordEditService(_mod.Mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
+        var editService = ProjectingEditService.Over(_mod.Mirror);
         editService.Set(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", JsonDocument.Parse("0.9").RootElement);
 
         WriteExternalBinaryChange(0.9f);
 
-        var result = ExternalChangeEditLander.Keep(_mod.ModFolder, _mod.Plugin, PluginPath, GameRelease.Fallout4, _mod.Mirror.Index!.At(RecordRef.Effective), SharedSchemaReflector.Instance);
+        var result = ExternalChangeEditLander.Keep(_mod.ModFolder, _mod.Plugin, PluginPath, GameRelease.Fallout4, _mod.Mirror.Projected(), SharedSchemaReflector.Instance);
 
         Assert.True(result.Applied, result.RefusalReason);
     }

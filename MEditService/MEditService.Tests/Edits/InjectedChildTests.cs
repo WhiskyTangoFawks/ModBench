@@ -83,8 +83,7 @@ public sealed class InjectedChildTests
         using var fixture = new TwoPlugins();
         var (container, child, _) = fixture.Case(injection);
         fixture.TrackBoth();
-        var service = new RecordEditService(
-            fixture.Mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
+        var service = ProjectingEditService.Over(fixture.Mirror);
 
         var edit = service.Set(
             fixture.Injector, child.ToString(), "EditorID", JsonDocument.Parse("\"Renamed\"").RootElement);

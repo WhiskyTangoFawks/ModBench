@@ -3,6 +3,7 @@ using MEditService.Core.Plugins;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
 using MEditService.Core.Source;
+using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -16,8 +17,8 @@ namespace MEditService.Tests.Edits;
 /// anything; a computation failure is a typed refusal with the tree untouched.</summary>
 public sealed class RecordEditServiceRenumberCascadeTests
 {
-    private static RecordEditService ServiceFor(ILoadOrderMirror mirror) =>
-        new(mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
+    private static ProjectingEditService ServiceFor(ILoadOrderMirror mirror) =>
+        ProjectingEditService.Over(mirror);
 
     [Fact]
     public void RenumberRecord_Refuses_WhenAReferencersOnlyLinkIsAStructListScriptProperty_NamingIt()
@@ -37,7 +38,7 @@ public sealed class RecordEditServiceRenumberCascadeTests
         // Refused before any write, on both sides of the cascade.
         Assert.Equal(referencerBefore, File.ReadAllText(referencerFile));
         Assert.True(File.Exists(fixture.SourceFileOf(fixture.Target, "race", "CascadeTargetRace")));
-        Assert.NotNull(fixture.Mirror.Index!.At(RecordRef.Effective)
+        Assert.NotNull(fixture.Mirror.Projected()
             .GetDocument(fixture.Target.ToString(), fixture.Plugin));
     }
 
@@ -65,7 +66,7 @@ public sealed class RecordEditServiceRenumberCascadeTests
         var result = ServiceFor(fixture.Mirror).RenumberRecord(fixture.Plugin, oldFormKey);
 
         Assert.True(result.Applied, result.Message);
-        var moved = fixture.Mirror.Index!.At(RecordRef.Effective)
+        var moved = fixture.Mirror.Projected()
             .GetDocument(result.NewFormKey!, fixture.Plugin)!;
 
         // The Name field says the old FormKey and always did — it is text, not a link, and nothing
@@ -73,9 +74,9 @@ public sealed class RecordEditServiceRenumberCascadeTests
         Assert.Contains($"\"{oldFormKey}\"", moved.Body!, StringComparison.Ordinal);
         // The self-link, by contrast, moved: it is the only *link* the record holds.
         Assert.Contains(
-            fixture.Mirror.Index!.At(RecordRef.Effective).GetReferencedBy(result.NewFormKey!),
+            fixture.Mirror.Projected().GetReferencedBy(result.NewFormKey!),
             r => r.FormKey == result.NewFormKey);
-        Assert.Empty(fixture.Mirror.Index!.At(RecordRef.Effective).GetReferencedBy(oldFormKey));
+        Assert.Empty(fixture.Mirror.Projected().GetReferencedBy(oldFormKey));
     }
 
     [Fact]

@@ -1,6 +1,7 @@
 using DuckDB.NET.Data;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
+using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -146,8 +147,8 @@ public sealed class WinnersDerivedTableTests : IDisposable
 
         // Both plugins' copies vanish from the working tree and turn out to be held by no commit
         // either, so nothing holds the NPC at either ref...
-        index.ApplyWorkingTreeChanges(OverKey, [(_npc, null)]);
-        index.ApplyWorkingTreeChanges(BaseKey, [(_npc, null)]);
+        index.ProjectDocuments(OverKey, [(_npc, null)]);
+        index.ProjectDocuments(BaseKey, [(_npc, null)]);
         index.MarkWorkingTreeOnly(OverKey, [_npc]);
         index.MarkWorkingTreeOnly(BaseKey, [_npc]);
         Assert.Null(WinnerOf(index, RecordRef.Effective, _npc));

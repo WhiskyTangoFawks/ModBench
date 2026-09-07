@@ -2,6 +2,7 @@ using MEditService.Api.Endpoints;
 using MEditService.Core.Edits;
 using MEditService.Core.Queries;
 using MEditService.Tests.Edits;
+using MEditService.Tests.TestSupport;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.Extensions.Logging.Abstractions;
 

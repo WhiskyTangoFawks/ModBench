@@ -20,8 +20,8 @@ public sealed class TopLevelFormLinkColumnEditTests : IDisposable
 
     public void Dispose() => _mod.Dispose();
 
-    private RecordEditService Service() =>
-        new(_mod.Mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
+    private ProjectingEditService Service() =>
+        ProjectingEditService.Over(_mod.Mirror);
 
     private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
 
@@ -38,7 +38,7 @@ public sealed class TopLevelFormLinkColumnEditTests : IDisposable
         Assert.NotEmpty(_mod.GitStatus());
 
         // Answers at Effective: the read model's own document for OtherNpc now carries the new race.
-        var body = _mod.Mirror.Index!.At(RecordRef.Effective).GetDocument(_mod.OtherNpc.ToString(), _mod.Plugin)!.Body!;
+        var body = _mod.Mirror.Projected().GetDocument(_mod.OtherNpc.ToString(), _mod.Plugin)!.Body!;
         Assert.Contains(_mod.Race.ToString(), body, StringComparison.Ordinal);
     }
 
@@ -74,7 +74,7 @@ public sealed class TopLevelFormLinkColumnEditTests : IDisposable
     {
         using var untracked = TrackedModFixture.Untracked();
 
-        var result = new RecordEditService(untracked.Mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance)
+        var result = ProjectingEditService.Over(untracked.Mirror)
             .Set(untracked.Plugin, untracked.OtherNpc.ToString(), "Race", Json($"\"{untracked.Race}\""));
 
         Assert.False(result.Applied);
@@ -102,7 +102,7 @@ public sealed class TopLevelFormLinkColumnEditTests : IDisposable
     {
         using var vanilla = new DataDirectoryFixture();
 
-        var result = new RecordEditService(vanilla.Mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance)
+        var result = ProjectingEditService.Over(vanilla.Mirror)
             .Set(vanilla.Plugin, vanilla.Npc.ToString(), "Race", Json($"\"{_mod.Race}\""));
 
         Assert.False(result.Applied);

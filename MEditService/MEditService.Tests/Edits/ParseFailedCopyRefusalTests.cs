@@ -5,6 +5,7 @@ using MEditService.Core.Queries;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
 using MEditService.Core.Source;
+using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -88,8 +89,8 @@ public sealed class ParseFailedCopyRefusalTests : IDisposable
 
         public PluginKey SourcePlugin { get; } = new(SourcePluginName, SourceOrigin);
         public PluginKey DestinationPlugin { get; } = new(DestinationPluginName, DestinationOrigin);
-        public RecordEditService Service { get; }
-        public IRecordReads Reads => _mirror.Reads!;
+        public ProjectingEditService Service { get; }
+        public IRecordReads Reads => _mirror.SettledReads();
 
         public ParseFailedCopyFixture()
         {
@@ -123,7 +124,7 @@ public sealed class ParseFailedCopyRefusalTests : IDisposable
             new TrackService(NullLogger<TrackService>.Instance)
                 .TrackAsync(_mirror.LoadOrder!, DestinationOrigin, SourcePreset.Edits).GetAwaiter().GetResult();
 
-            Service = new RecordEditService(_mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
+            Service = ProjectingEditService.Over(_mirror);
         }
 
         public string ReadablePerk() =>
@@ -176,7 +177,7 @@ public sealed class ParseFailedDialogChildCopyRefusalTests : IDisposable
             cmd.Parameters.Add(new DuckDBParameter { Value = _mod.Response2.ToString() });
             cmd.ExecuteNonQuery();
         }
-        var service = new RecordEditService(_mod.Mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
+        var service = ProjectingEditService.Over(_mod.Mirror);
 
         var result = service.CopyRecordAsNewRecord(_mod.SourcePlugin, _mod.DialogTopic.ToString(), _mod.DestinationPlugin);
 
@@ -188,6 +189,6 @@ public sealed class ParseFailedDialogChildCopyRefusalTests : IDisposable
             .Run(Path.Combine(_mod.DestinationModFolder, ".git"), _mod.DestinationModFolder, "status", "--porcelain")
             .Split('\n', StringSplitOptions.RemoveEmptyEntries));
         // The auto-created parent quest override is the first thing the copy would land.
-        Assert.Null(_mod.Mirror.Reads!.GetDocument(_mod.Quest.ToString(), _mod.DestinationPlugin));
+        Assert.Null(_mod.Mirror.SettledReads().GetDocument(_mod.Quest.ToString(), _mod.DestinationPlugin));
     }
 }

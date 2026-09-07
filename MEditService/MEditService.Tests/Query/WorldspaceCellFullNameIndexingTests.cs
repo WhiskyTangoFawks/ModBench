@@ -1,6 +1,7 @@
 using MEditService.Core.Plugins;
 using MEditService.Core.Records;
 using MEditService.Core.Source;
+using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -76,7 +77,7 @@ public sealed class WorldspaceCellFullNameIndexingTests : IDisposable
     [Fact]
     public void GetWorldspaceCells_ExteriorCellWithFullNameSet_CarriesItThrough()
     {
-        var cells = _mirror.Index!.At(RecordRef.Effective).GetWorldspaceCells(_plugin, _worldspaceFormKey);
+        var cells = _mirror.Projected().GetWorldspaceCells(_plugin, _worldspaceFormKey);
 
         var extCell = Assert.Single(cells, c => c.EditorId == "ExtCell");
         Assert.Equal("Sanctuary Hills", extCell.FullName);
@@ -85,7 +86,7 @@ public sealed class WorldspaceCellFullNameIndexingTests : IDisposable
     [Fact]
     public void GetWorldspaceCells_TopCellWithNoFullNameSet_FullNameIsNull()
     {
-        var cells = _mirror.Index!.At(RecordRef.Effective).GetWorldspaceCells(_plugin, _worldspaceFormKey);
+        var cells = _mirror.Projected().GetWorldspaceCells(_plugin, _worldspaceFormKey);
 
         var topCell = Assert.Single(cells, c => c.EditorId == "TopCell");
         Assert.Null(topCell.FullName);

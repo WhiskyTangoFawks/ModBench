@@ -123,7 +123,7 @@ public sealed class SourceWatchTests : IDisposable
     [Fact]
     public async Task AWriteThroughTheWriteApi_IsObserved_AndChangesNoRowASecondTime()
     {
-        var service = new RecordEditService(_mod.Mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
+        var service = ProjectingEditService.Over(_mod.Mirror);
 
         var edit = service.Set(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", System.Text.Json.JsonDocument.Parse("0.75").RootElement);
         Assert.True(edit.Applied);

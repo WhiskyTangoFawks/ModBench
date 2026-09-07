@@ -2,6 +2,7 @@ using MEditService.Core.Edits;
 using MEditService.Core.Plugins;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
+using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
@@ -10,8 +11,8 @@ namespace MEditService.Tests.Edits;
 
 public sealed class RecordEditServiceCopyRecordAsNewRecordTests
 {
-    private static RecordEditService ServiceFor(ILoadOrderMirror mirror) =>
-        new(mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
+    private static ProjectingEditService ServiceFor(ILoadOrderMirror mirror) =>
+        ProjectingEditService.Over(mirror);
 
     [Fact]
     public void CopyRecordAsNewRecord_AllocatesAFreeFormKey_AndLandsAsAWorkingTreeRecordInTheDestination()
@@ -25,12 +26,12 @@ public sealed class RecordEditServiceCopyRecordAsNewRecordTests
         Assert.NotEqual(mod.SourceNpc.ToString(), result.NewFormKey);
         Assert.EndsWith(":" + CopyFixture.DestinationPluginName, result.NewFormKey, StringComparison.Ordinal);
 
-        var doc = mod.Mirror.Index!.At(RecordRef.Effective).GetDocument(result.NewFormKey!, mod.DestinationPlugin);
+        var doc = mod.Mirror.Projected().GetDocument(result.NewFormKey!, mod.DestinationPlugin);
         Assert.NotNull(doc);
         Assert.Equal(CopyFixture.SourceNpcEditorId, doc!.EditorId);
 
         // The source's own copy is untouched — this is a copy, not a move.
-        Assert.NotNull(mod.Mirror.Index!.At(RecordRef.Effective).GetDocument(mod.SourceNpc.ToString(), mod.SourcePlugin));
+        Assert.NotNull(mod.Mirror.Projected().GetDocument(mod.SourceNpc.ToString(), mod.SourcePlugin));
     }
 
     [Fact]
@@ -53,7 +54,7 @@ public sealed class RecordEditServiceCopyRecordAsNewRecordTests
 
         var result = ServiceFor(mod.Mirror).CopyRecordAsNewRecord(mod.SourcePlugin, mod.SourceNpc.ToString(), mod.DestinationPlugin);
 
-        Assert.Null(mod.Mirror.Index!.At(RecordRef.Head).GetDocument(result.NewFormKey!, mod.DestinationPlugin));
+        Assert.Null(mod.Mirror.Projected(RecordRef.Head).GetDocument(result.NewFormKey!, mod.DestinationPlugin));
     }
 
     // "Internal self-references follow the duplicate, not the
@@ -68,7 +69,7 @@ public sealed class RecordEditServiceCopyRecordAsNewRecordTests
             mod.SourcePlugin, mod.SelfLinkingFaction.ToString(), mod.DestinationPlugin);
 
         Assert.True(result.Applied, result.Message);
-        var doc = mod.Mirror.Index!.At(RecordRef.Effective).GetDocument(result.NewFormKey!, mod.DestinationPlugin);
+        var doc = mod.Mirror.Projected().GetDocument(result.NewFormKey!, mod.DestinationPlugin);
         Assert.NotNull(doc);
         Assert.Contains(result.NewFormKey!, doc!.Body, StringComparison.Ordinal);
         Assert.DoesNotContain(mod.SelfLinkingFaction.ToString(), doc.Body, StringComparison.Ordinal);
@@ -158,7 +159,7 @@ public sealed class RecordEditServiceCopyRecordAsNewRecordTests
         var result = ServiceFor(fixture.Mirror).CopyRecordAsNewRecord(fixture.Plugin, fixture.Quest.ToString(), fixture.Plugin);
 
         Assert.True(result.Applied, result.Message);
-        Assert.NotNull(fixture.Mirror.Index!.At(RecordRef.Effective).GetDocument(result.NewFormKey!, fixture.Plugin));
+        Assert.NotNull(fixture.Mirror.Projected().GetDocument(result.NewFormKey!, fixture.Plugin));
     }
 
     [Fact]

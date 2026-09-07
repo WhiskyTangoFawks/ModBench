@@ -17,8 +17,8 @@ namespace MEditService.Tests.Edits;
 
 public sealed class RecordEditServiceCreateRecordTests
 {
-    private static RecordEditService ServiceFor(ILoadOrderMirror mirror) =>
-        new(mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
+    private static ProjectingEditService ServiceFor(ILoadOrderMirror mirror) =>
+        ProjectingEditService.Over(mirror);
 
     private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
 
@@ -33,7 +33,7 @@ public sealed class RecordEditServiceCreateRecordTests
         var result = service.Set(mod.Plugin, created.NewFormKey!, "EditorID", Json("\"RenamedNpc\""));
 
         Assert.True(result.Applied, result.Message);
-        var doc = mod.Mirror.Index!.At(RecordRef.Effective).GetDocument(created.NewFormKey!, mod.Plugin)!;
+        var doc = mod.Mirror.Projected().GetDocument(created.NewFormKey!, mod.Plugin)!;
         Assert.Equal("RenamedNpc", doc.EditorId);
         Assert.Contains("RenamedNpc", doc.Body, StringComparison.Ordinal);
     }
@@ -53,7 +53,7 @@ public sealed class RecordEditServiceCreateRecordTests
             Mutagen.Bethesda.Plugins.FormKey.Factory(result.NewFormKey!), "npc_", "BrandNewNpc"));
         Assert.True(File.Exists(sourceFile));
 
-        var doc = mod.Mirror.Index!.At(RecordRef.Effective).GetDocument(result.NewFormKey!, mod.Plugin);
+        var doc = mod.Mirror.Projected().GetDocument(result.NewFormKey!, mod.Plugin);
         Assert.NotNull(doc);
         Assert.Equal("BrandNewNpc", doc!.EditorId);
     }
@@ -92,23 +92,21 @@ public sealed class RecordEditServiceCreateRecordTests
 
         var result = ServiceFor(mod.Mirror).CreateRecord(mod.Plugin, "npc_", "BrandNewNpc");
 
-        Assert.Null(mod.Mirror.Index!.At(RecordRef.Head).GetDocument(result.NewFormKey!, mod.Plugin));
+        Assert.Null(mod.Mirror.Projected(RecordRef.Head).GetDocument(result.NewFormKey!, mod.Plugin));
     }
 
     [Fact]
     public void CreateRecord_AllocatesConsecutiveFormIds_AcrossEffectiveAndHeadHoldings()
     {
         using var mod = TrackedModFixture.Tracked();
+        mod.Mirror.Settle();
         var index = mod.Mirror.Index!;
 
-        // A native record that exists only at Head: created at the index layer with a high local ID,
-        // committed via SetCommittedBaseline, then deleted in the working tree. That is the shape an
-        // allocator scanning only Effective would miss.
+        // A native record that exists only at Head — committed once, then deleted in the working
+        // tree — which is the ingest-side seed for exactly that state. It is the shape an allocator
+        // scanning only Effective would miss.
         const string headOnlyFormKey = "F00000:Fixture.esp";
-        var seedBody = NpcBody(headOnlyFormKey, "HeadOnlySeed");
-        index.CreateWorkingTreeRecord(mod.Plugin, headOnlyFormKey, "npc_", seedBody);
-        index.SetCommittedBaseline(mod.Plugin, [(headOnlyFormKey, seedBody)]);
-        index.ApplyWorkingTreeChanges(mod.Plugin, [(headOnlyFormKey, null)]);
+        index.SeedCommittedOnly(mod.Plugin, [(headOnlyFormKey, "npc_", NpcBody(headOnlyFormKey, "HeadOnlySeed"))]);
         Assert.Null(index.At(RecordRef.Effective).GetDocument(headOnlyFormKey, mod.Plugin));
         Assert.NotNull(index.At(RecordRef.Head).GetDocument(headOnlyFormKey, mod.Plugin));
 
@@ -339,12 +337,12 @@ public sealed class RecordEditServiceCreateRecordTests
     {
         using var mod = TrackedModFixture.Tracked();
         mod.Mirror.SetFilter("SELECT form_key FROM npc_");
-        var before = mod.Mirror.Reads!.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 50, Offset: 0)).Total;
+        var before = mod.Mirror.SettledReads().Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 50, Offset: 0)).Total;
 
         var result = ServiceFor(mod.Mirror).CreateRecord(mod.Plugin, "npc_", "BrandNewNpc");
 
         Assert.True(result.Applied, result.Message);
-        var after = mod.Mirror.Reads!.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 50, Offset: 0));
+        var after = mod.Mirror.SettledReads().Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 50, Offset: 0));
         Assert.Equal(before + 1, after.Total);
         Assert.Contains(after.Items, i => i.FormKey == result.NewFormKey);
     }

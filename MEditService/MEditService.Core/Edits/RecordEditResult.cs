@@ -79,10 +79,6 @@ public enum RecordEditRefusal
     /// origin's copy would still win at runtime.</summary>
     UnderrideDestination,
 
-    /// <summary>The reference's file already landed when an index call threw (a should-never-happen guard).
-    /// Typed rather than a raw exception (ADR-0026) so the message names the reviewable working-tree file.</summary>
-    ContainerCopyIndexUpdateFailedAfterWrite,
-
     /// <summary>Entries in a keyed array are identified by key, not position, so a second one is a
     /// collision; the message names the key.</summary>
     DuplicateKeyInKeyedArray,

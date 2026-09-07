@@ -21,8 +21,8 @@ public sealed class GenericFieldWriteDispatchTests : IDisposable
 
     public void Dispose() => _mod.Dispose();
 
-    private RecordEditService Service() =>
-        new(_mod.Mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
+    private ProjectingEditService Service() =>
+        ProjectingEditService.Over(_mod.Mirror);
 
     private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
 

@@ -22,8 +22,8 @@ public sealed class QuestChildWriteApiTests : IDisposable
 
     public void Dispose() => _fixture.Dispose();
 
-    private RecordEditService EditService() =>
-        new(_fixture.Mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
+    private ProjectingEditService EditService() =>
+        ProjectingEditService.Over(_fixture.Mirror);
 
     private IRecordIndex Index => _fixture.Mirror.Index!;
 
@@ -228,12 +228,12 @@ public sealed class QuestChildWriteApiTests : IDisposable
     public void CopyingASceneAsOverride_IntoAPluginLackingItsQuest_MintsABarePartialFormQuestWithTheSceneInline()
     {
         using var fixture = ContainerCopyFixture.Create();
-        var service = new RecordEditService(fixture.Mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
+        var service = ProjectingEditService.Over(fixture.Mirror);
 
         var result = service.CopyRecordAsOverride(fixture.SourcePlugin, fixture.Scene.ToString(), fixture.DestinationPlugin);
 
         Assert.True(result.Applied, result.Message);
-        var reads = fixture.Mirror.Index!.At(RecordRef.Effective);
+        var reads = fixture.Mirror.Projected();
         Assert.True(reads.GetDocument(fixture.Quest.ToString(), fixture.DestinationPlugin)!.IsPartialForm);
         Assert.Equal(
             fixture.Scene.ToString(),
@@ -254,12 +254,12 @@ public sealed class QuestChildWriteApiTests : IDisposable
     public void CopyingATopicAsOverride_IntoAPluginLackingItsQuest_MintsTheQuest_AndLandsTheTopicWithEmptyResponses()
     {
         using var fixture = ContainerCopyFixture.Create();
-        var service = new RecordEditService(fixture.Mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
+        var service = ProjectingEditService.Over(fixture.Mirror);
 
         var result = service.CopyRecordAsOverride(fixture.SourcePlugin, fixture.DialogTopic.ToString(), fixture.DestinationPlugin);
 
         Assert.True(result.Applied, result.Message);
-        var reads = fixture.Mirror.Index!.At(RecordRef.Effective);
+        var reads = fixture.Mirror.Projected();
         Assert.True(reads.GetDocument(fixture.Quest.ToString(), fixture.DestinationPlugin)!.IsPartialForm);
         Assert.Equal(ContainerCopyFixture.DialogTopicEditorId, reads.GetDocument(fixture.DialogTopic.ToString(), fixture.DestinationPlugin)!.EditorId);
         Assert.Null(reads.GetDocument(fixture.Response1.ToString(), fixture.DestinationPlugin));
@@ -275,12 +275,12 @@ public sealed class QuestChildWriteApiTests : IDisposable
     public void CopyingAResponseAsOverride_IntoAPluginLackingItsTopicAndQuest_MintsBoth_InOneQuestDocument()
     {
         using var fixture = ContainerCopyFixture.Create();
-        var service = new RecordEditService(fixture.Mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
+        var service = ProjectingEditService.Over(fixture.Mirror);
 
         var result = service.CopyRecordAsOverride(fixture.SourcePlugin, fixture.Response2.ToString(), fixture.DestinationPlugin);
 
         Assert.True(result.Applied, result.Message);
-        var reads = fixture.Mirror.Index!.At(RecordRef.Effective);
+        var reads = fixture.Mirror.Projected();
         Assert.True(reads.GetDocument(fixture.Quest.ToString(), fixture.DestinationPlugin)!.IsPartialForm);
         Assert.True(reads.GetDocument(fixture.DialogTopic.ToString(), fixture.DestinationPlugin)!.IsPartialForm);
         Assert.Equal(fixture.DialogTopic.ToString(), Assert.Single(reads.GetContainerChildren(fixture.DestinationPlugin, fixture.Quest.ToString())).ChildFormKey);

@@ -17,8 +17,8 @@ public sealed class PluginCompileServiceParkedRefTests : IDisposable
 
     public void Dispose() => _mod.Dispose();
 
-    private RecordEditService EditService() =>
-        new(_mod.Mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
+    private ProjectingEditService EditService() =>
+        ProjectingEditService.Over(_mod.Mirror);
 
     private PluginCompileService CompileService() =>
         new(_mod.Mirror, new PluginWriter(NullLogger<PluginWriter>.Instance), NullLogger<PluginCompileService>.Instance);

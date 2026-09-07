@@ -20,8 +20,8 @@ public sealed class ResponseWriteApiTests : IDisposable
 
     public void Dispose() => _fixture.Dispose();
 
-    private RecordEditService EditService() =>
-        new(_fixture.Mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
+    private ProjectingEditService EditService() =>
+        ProjectingEditService.Over(_fixture.Mirror);
 
     private IRecordIndex Index => _fixture.Mirror.Index!;
 
@@ -121,12 +121,12 @@ public sealed class ResponseWriteApiTests : IDisposable
     public void CopyingAResponseAsOverride_IntoAPluginLackingItsTopic_MintsABarePartialFormTopicWithTheResponseInline()
     {
         using var fixture = ContainerCopyFixture.Create();
-        var service = new RecordEditService(fixture.Mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
+        var service = ProjectingEditService.Over(fixture.Mirror);
 
         var result = service.CopyRecordAsOverride(fixture.SourcePlugin, fixture.Response1.ToString(), fixture.DestinationPlugin);
 
         Assert.True(result.Applied, result.Message);
-        var reads = fixture.Mirror.Index!.At(RecordRef.Effective);
+        var reads = fixture.Mirror.Projected();
         Assert.True(reads.GetDocument(fixture.Quest.ToString(), fixture.DestinationPlugin)!.IsPartialForm);
         Assert.True(reads.GetDocument(fixture.DialogTopic.ToString(), fixture.DestinationPlugin)!.IsPartialForm);
         Assert.Equal(

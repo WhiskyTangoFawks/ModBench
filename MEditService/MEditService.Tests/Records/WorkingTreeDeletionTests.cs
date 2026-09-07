@@ -1,5 +1,6 @@
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
+using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -70,7 +71,7 @@ public sealed class WorkingTreeDeletionTests : IDisposable
     {
         using var index = LoadedIndex();
 
-        index.ApplyWorkingTreeChanges(BaseKey, [(_raceA, null)]);
+        index.ProjectDocuments(BaseKey, [(_raceA, null)]);
 
         Assert.Null(index.At(RecordRef.Effective).GetDocument(_raceA, BaseKey));
         Assert.Null(index.At(RecordRef.Effective).GetDocument(_raceA));
@@ -88,7 +89,7 @@ public sealed class WorkingTreeDeletionTests : IDisposable
 
         // Winner.esp's copy is deleted in its working tree and Base.esm's must become the winner: a
         // winner is a fact about the stack that survives at this ref, not a stored flag that goes stale.
-        index.ApplyWorkingTreeChanges(WinnerKey, [(_npc, null)]);
+        index.ProjectDocuments(WinnerKey, [(_npc, null)]);
 
         var effectiveWinner = index.At(RecordRef.Effective).GetDocument(_npc);
         Assert.Equal("Base.esm", effectiveWinner!.Plugin.Name);
@@ -110,14 +111,14 @@ public sealed class WorkingTreeDeletionTests : IDisposable
         var winnersCopy = index.At(RecordRef.Effective).GetDocument(_npc, WinnerKey)!.Body!;
 
         // Winner.esp's copy is deleted in its working tree, so Base.esm holds the field...
-        index.ApplyWorkingTreeChanges(WinnerKey, [(_npc, null)]);
+        index.ProjectDocuments(WinnerKey, [(_npc, null)]);
         Assert.Equal("Base.esm", index.At(RecordRef.Effective).GetDocument(_npc)!.Plugin.Name);
 
         // ...and then the file comes back carrying a different value, the direction a create takes
         // too, so its appearance has to move winner status.
         var edited = winnersCopy.Replace("TestNpc", "RestoredByWorkingTree", StringComparison.Ordinal);
         Assert.NotEqual(winnersCopy, edited);
-        index.ApplyWorkingTreeChanges(WinnerKey, [(_npc, edited)]);
+        index.ProjectDocuments(WinnerKey, [(_npc, edited)]);
 
         var effectiveWinner = index.At(RecordRef.Effective).GetDocument(_npc)!;
         Assert.Equal("Winner.esp", effectiveWinner.Plugin.Name);
@@ -138,7 +139,7 @@ public sealed class WorkingTreeDeletionTests : IDisposable
         using var index = LoadedIndex();
         Assert.NotNull(index.At(RecordRef.Effective).Resolve(_raceA));
 
-        index.ApplyWorkingTreeChanges(BaseKey, [(_raceA, null)]);
+        index.ProjectDocuments(BaseKey, [(_raceA, null)]);
 
         // FormKey resolution is what every FormLink check reads (CheckErrorBuilder), so this is the
         // mechanism by which a link to a record the working tree deleted becomes a dangling link.
@@ -155,7 +156,7 @@ public sealed class WorkingTreeDeletionTests : IDisposable
 
         var body = index.At(RecordRef.Effective).GetDocument(_npc, BaseKey)!.Body!;
         Assert.Contains(_raceA, body, StringComparison.Ordinal); // the fixture really does carry the link being repointed
-        index.ApplyWorkingTreeChanges(BaseKey, [(_npc, body.Replace(_raceA, _raceB, StringComparison.Ordinal))]);
+        index.ProjectDocuments(BaseKey, [(_npc, body.Replace(_raceA, _raceB, StringComparison.Ordinal))]);
 
         Assert.DoesNotContain(index.At(RecordRef.Effective).GetReferencedBy(_raceA), r => r.FormKey == _npc && r.Plugin == "Base.esm");
         Assert.Contains(index.At(RecordRef.Effective).GetReferencedBy(_raceB), r => r.FormKey == _npc && r.Plugin == "Base.esm");
@@ -167,7 +168,7 @@ public sealed class WorkingTreeDeletionTests : IDisposable
         using var index = LoadedIndex();
         Assert.Contains(index.At(RecordRef.Effective).GetReferencedBy(_raceA), r => r.FormKey == _npc && r.Plugin == "Base.esm");
 
-        index.ApplyWorkingTreeChanges(BaseKey, [(_npc, null)]);
+        index.ProjectDocuments(BaseKey, [(_npc, null)]);
 
         Assert.DoesNotContain(index.At(RecordRef.Effective).GetReferencedBy(_raceA), r => r.FormKey == _npc && r.Plugin == "Base.esm");
     }

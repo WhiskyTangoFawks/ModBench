@@ -17,8 +17,8 @@ public sealed class RecordEditServiceTests : IDisposable
 
     public void Dispose() => _mod.Dispose();
 
-    private RecordEditService Service() =>
-        new(_mod.Mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
+    private ProjectingEditService Service() =>
+        ProjectingEditService.Over(_mod.Mirror);
 
     private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
 
@@ -40,7 +40,7 @@ public sealed class RecordEditServiceTests : IDisposable
         Assert.True(File.Exists(moved));
         Assert.DoesNotContain("[", Path.GetFileName(newRelative), StringComparison.Ordinal);
         Assert.Contains("\"EditorID\": \"RenamedNpc\"", File.ReadAllText(moved), StringComparison.Ordinal);
-        Assert.Equal("RenamedNpc", _mod.Mirror.Index!.At(RecordRef.Effective).GetDocument(_mod.Npc.ToString(), _mod.Plugin)!.EditorId);
+        Assert.Equal("RenamedNpc", _mod.Mirror.Projected().GetDocument(_mod.Npc.ToString(), _mod.Plugin)!.EditorId);
     }
 
     [Fact]
@@ -100,7 +100,7 @@ public sealed class RecordEditServiceTests : IDisposable
 
         // ...and the value is read back through the same typed extraction the record editor renders
         // from, not by reaching into the Mutagen object a second way.
-        var field = _mod.Mirror.Index!.At(RecordRef.Effective).GetDocument(_mod.Npc.ToString(), _mod.Plugin)!
+        var field = _mod.Mirror.Projected().GetDocument(_mod.Npc.ToString(), _mod.Plugin)!
             .Fields.Single(f => f.Metadata.Name == "HeightMax");
         Assert.Equal(0.75f, Assert.IsType<JsonElement>(field.Value).GetSingle());
     }
@@ -122,6 +122,7 @@ public sealed class RecordEditServiceTests : IDisposable
 
         // The file write and the index update are one gesture: a write path that produced dirt on
         // disk but left the editor showing the old value, or vice versa, is half a write path.
+        _mod.Mirror.Settle();
         var index = _mod.Mirror.Index!;
         var effective = index.At(RecordRef.Effective).GetDocument(_mod.Npc.ToString(), _mod.Plugin)!;
         Assert.Contains("0.75", effective.Body!, StringComparison.Ordinal);
@@ -140,6 +141,7 @@ public sealed class RecordEditServiceTests : IDisposable
 
         // The second edit must not re-baseline against the first: Head is what the last commit
         // holds, not "the value before the most recent keystroke".
+        _mod.Mirror.Settle();
         var index = _mod.Mirror.Index!;
         Assert.Contains("0.5", index.At(RecordRef.Effective).GetDocument(_mod.Npc.ToString(), _mod.Plugin)!.Body!, StringComparison.Ordinal);
         Assert.Equal(
@@ -173,11 +175,11 @@ public sealed class RecordEditServiceTests : IDisposable
     public void EditField_MakesTheRecordNewlyMatchAnActiveFilter_FilteredListingIncludesIt()
     {
         _mod.Mirror.SetFilter("SELECT form_key FROM npc_ WHERE HeightMax = 0.75");
-        Assert.Equal(0, _mod.Mirror.Reads!.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0)).Total);
+        Assert.Equal(0, _mod.Mirror.SettledReads().Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0)).Total);
 
         Service().Set(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", Json("0.75"));
 
-        var result = _mod.Mirror.Reads!.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0));
+        var result = _mod.Mirror.SettledReads().Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0));
         Assert.Equal(1, result.Total);
         Assert.Equal(_mod.Npc.ToString(), result.Items[0].FormKey);
     }

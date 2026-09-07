@@ -177,7 +177,7 @@ public sealed class SourceIngestTests
     {
         using var mod = TrackedModFixture.Tracked();
 
-        var before = mod.Mirror.Index!.At(RecordRef.Effective).GetDocument(mod.Npc.ToString(), mod.Plugin)!;
+        var before = mod.Mirror.Projected().GetDocument(mod.Npc.ToString(), mod.Plugin)!;
         Assert.Equal(TrackedModFixture.NpcEditorId, before.EditorId);
 
         var text = File.ReadAllText(mod.NpcSourceFile);
@@ -186,7 +186,7 @@ public sealed class SourceIngestTests
 
         ((ILoadOrderMirror)mod.Mirror).ReingestPluginFromSource(mod.Plugin);
 
-        var after = mod.Mirror.Index!.At(RecordRef.Effective).GetDocument(mod.Npc.ToString(), mod.Plugin)!;
+        var after = mod.Mirror.Projected().GetDocument(mod.Npc.ToString(), mod.Plugin)!;
         Assert.Equal("ExternallyRenamed", after.EditorId);
     }
 
@@ -229,7 +229,7 @@ public sealed class SourceIngestTests
     {
         using var mod = TrackedModFixture.Tracked();
 
-        var edited = new RecordEditService(mod.Mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance)
+        var edited = ProjectingEditService.Over(mod.Mirror)
             .Set(mod.Plugin, mod.Npc.ToString(), "HeightMax", JsonDocument.Parse("0.75").RootElement);
         Assert.True(edited.Applied, edited.Message);
 
@@ -241,7 +241,7 @@ public sealed class SourceIngestTests
 
         // The binary was never consulted: it holds the fixture's untouched height_max, and what
         // still answers is the edited 0.75 the source-derived rows already carried.
-        var document = mod.Mirror.Index!.At(RecordRef.Effective).GetDocument(mod.Npc.ToString(), mod.Plugin)!;
+        var document = mod.Mirror.Projected().GetDocument(mod.Npc.ToString(), mod.Plugin)!;
         Assert.Equal(0.75f, Assert.IsType<JsonElement>(document.Fields.Single(f => f.Metadata.Name == "HeightMax").Value).GetSingle());
 
         var failure = Assert.Single(mod.Mirror.Status.Failures);
@@ -288,7 +288,7 @@ public sealed class SourceIngestTests
     {
         using var mod = TrackedModFixture.Tracked();
 
-        var edit = new RecordEditService(mod.Mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance)
+        var edit = ProjectingEditService.Over(mod.Mirror)
             .Set(mod.Plugin, mod.Npc.ToString(), "EditorID",
                 JsonDocument.Parse("\"RenamedAcrossReload\"").RootElement);
         Assert.True(edit.Applied, edit.Message);
@@ -313,7 +313,7 @@ public sealed class SourceIngestTests
     {
         using var mod = TrackedModFixture.Tracked();
 
-        new RecordEditService(mod.Mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance)
+        ProjectingEditService.Over(mod.Mirror)
             .Set(mod.Plugin, mod.Npc.ToString(), "EditorID",
                 JsonDocument.Parse("\"RenamedOnce\"").RootElement);
 

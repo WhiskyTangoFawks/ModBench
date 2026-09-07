@@ -71,8 +71,8 @@ public sealed class PartialFormHeaderWriteTests : IDisposable
         try { Directory.Delete(_gameDirectory, recursive: true); } catch { /* best-effort cleanup */ }
     }
 
-    private RecordEditService Service() =>
-        new(_mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
+    private ProjectingEditService Service() =>
+        ProjectingEditService.Over(_mirror);
 
     // xEdit's SetIsPartialForm (wbImplementation.pas:14146-14221) re-populates a cleared override from
     // its nearest non-partial predecessor; mEdit's minimum is narrower, and is that the record becomes

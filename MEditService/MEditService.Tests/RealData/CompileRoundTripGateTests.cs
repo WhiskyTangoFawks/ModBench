@@ -262,7 +262,7 @@ public sealed class CompileRoundTripGateTests(CompileRoundTripGateFixture fixtur
         var before = CompileRoundTripGateFixture.ReadSourceTree(scope.ModFolder);
         Assert.Contains(expectedPath, before.Keys);
 
-        var edit = new RecordEditService(scope.Mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance)
+        var edit = ProjectingEditService.Over(scope.Mirror)
             .Set(scope.Plugin, npc.FormKey, "HeightMax", JsonDocument.Parse("0.75").RootElement);
         Assert.True(edit.Applied, edit.Message);
 
@@ -298,7 +298,7 @@ public sealed class CompileRoundTripGateTests(CompileRoundTripGateFixture fixtur
 
         using var scope = new MutationScope(fixture);
 
-        var edit = new RecordEditService(scope.Mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance)
+        var edit = ProjectingEditService.Over(scope.Mirror)
             .Set(scope.Plugin, responseToRename.FormKey.ToString(), "EditorID",
                 JsonDocument.Parse($"\"{responseToRename.EditorID}Renamed\"").RootElement);
         Assert.True(edit.Applied, edit.Message);

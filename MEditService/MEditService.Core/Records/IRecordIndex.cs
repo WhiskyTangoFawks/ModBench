@@ -54,16 +54,6 @@ public interface IRecordIndex : IDisposable
     /// participating registrations compete.</summary>
     void UpdateWinners();
 
-    /// <summary>Folds working-tree changes into the read model: null Body deletes, byte-equal body
-    /// converges. No deferral check here: read-time self-heal must keep folding source in while an
-    /// external-change question is open.</summary>
-    void ApplyWorkingTreeChanges(PluginKey key, IReadOnlyList<(string FormKey, string? Body)> deltas);
-
-    /// <summary>Materializes a record that exists at neither ref, the one case
-    /// <see cref="ApplyWorkingTreeChanges"/> refuses to express. Throws ArgumentException if
-    /// <paramref name="key"/> already holds <paramref name="formKey"/> at either ref.</summary>
-    void CreateWorkingTreeRecord(PluginKey key, string formKey, string recordType, string body);
-
     /// <summary>Re-establishes what "committed" means for these records after <c>HEAD</c> moved under
     /// the working tree (a commit, rebase or checkout made outside Modbench, ADR-0041). Records the
     /// plugin does not hold are skipped.</summary>
@@ -79,24 +69,15 @@ public interface IRecordIndex : IDisposable
     /// held at either ref.</summary>
     void SeedCommittedOnly(PluginKey key, IReadOnlyList<(string FormKey, string RecordType, string Body)> records);
 
-    /// <summary>One transaction for a record with a file of its own: materialize the new identity,
-    /// re-point exterior cells, tear the old down. An embedded record renumbers through its owner's
-    /// document.</summary>
-    void ApplyRenumber(PluginKey key, RenumberedRecord renumbered);
-
-    /// <summary>Gives a cell a <c>cell_location</c> row copied from wherever the caller has it — never
-    /// a derivation, since an exterior cell reached through <c>SubCells</c> is never a document's
-    /// embedded child. Delete-then-insert.</summary>
-    void CreateCellLocation(PluginKey plugin, CellLocationRow row);
-
     /// <summary>Materializes a <c>_filter</c> table from <paramref name="sql"/> (null clears it) — the
     /// one door SQL crosses this seam through (ADR-0041). Throws if the SQL returns no
     /// <c>form_key</c> column; state is unchanged on failure.</summary>
     void SetFilter(string? sql);
 
     /// <summary>ADR-0046: the one projection verb. Re-derives <paramref name="formKeys"/>' rows at
-    /// both refs from the Source repository, idempotent by content; skips a key held at neither
-    /// ref. <paramref name="modFolder"/> is the caller's to resolve.</summary>
+    /// both refs from the Source repository, idempotent by content. A key the index holds at neither
+    /// ref is a record the tree has gained, which only a whole-copy re-derivation can place, so one
+    /// runs. <paramref name="modFolder"/> is the caller's to resolve.</summary>
     void RefreshByKeys(PluginKey key, string modFolder, IReadOnlyList<string> formKeys);
 
     /// <summary>ADR-0046 invariant 6: compares <paramref name="key"/>'s rows against the system of
@@ -104,6 +85,3 @@ public interface IRecordIndex : IDisposable
     /// <paramref name="modFolder"/>, the binary otherwise — and refreshes what differs.</summary>
     ValidationReport Validate(PluginKey key, string? modFolder);
 }
-
-/// <summary>What <see cref="IRecordIndex.ApplyRenumber"/> needs.</summary>
-public sealed record RenumberedRecord(string OldFormKey, string NewFormKey, string RecordType, string Body);

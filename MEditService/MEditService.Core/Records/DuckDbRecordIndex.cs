@@ -263,9 +263,8 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         tx.Commit();
     }
 
-    // The sweep itself, unwrapped: a caller already inside a transaction (ApplyWorkingTreeChanges
-    // and its neighbours below) calls this directly, since DuckDB refuses a second BeginTransaction
-    // on one connection.
+    // The sweep itself, unwrapped: a caller already inside a transaction (the projection verbs
+    // below) calls this directly, since DuckDB refuses a second BeginTransaction on one connection.
     private void UpdateWinnersCore()
     {
         Execute($"DELETE FROM {TableDdlBuilder.WinnersRelation}");
@@ -298,78 +297,31 @@ public sealed class DuckDbRecordIndex : IRecordIndex
 
     // --- Working-tree changes ---
 
-    /// <summary>See <see cref="IRecordIndex.ApplyWorkingTreeChanges"/>. One transaction for the whole
+    /// <summary>The projector's own landing of re-derived documents: one transaction for the whole
     /// batch, so a throw partway cannot leave Effective and Head disagreeing about which records
-    /// diverged.</summary>
-    public void ApplyWorkingTreeChanges(PluginKey key, IReadOnlyList<(string FormKey, string? Body)> deltas)
+    /// diverged. A null body is the record's document gone. Internal, not public: ADR-0046 leaves the
+    /// write side no way to push rows, and only the projector's own refresh reaches this.</summary>
+    internal void ProjectDocuments(PluginKey key, IReadOnlyList<(string FormKey, string? Body)> deltas)
     {
         if (deltas.Count == 0) return;
 
-        using var tx = Connection.BeginTransaction();
-        // Only a delta that added or removed a row can move winner status. Re-swept for the whole
-        // load order rather than per FormKey because UpdateWinners is the one definition of winning
-        // (measured at 18 ms over 48k records).
-        if (_workingTreeOverlay.ApplyWorkingTreeChanges(key, deltas)) UpdateWinnersCore();
-        _indexStore.BumpSequence();
-        tx.Commit();
-        // ADR-0046: after the commit, not inside it, so a subscriber that re-reads on receipt sees
-        // the rows this names.
-        _notifications?.Publish(new RowsChangedNotification(key, [.. deltas.Select(d => d.FormKey)], Sequence));
-    }
-
-    /// <summary>See <see cref="IRecordIndex.CreateWorkingTreeRecord"/>.</summary>
-    public void CreateWorkingTreeRecord(PluginKey key, string formKey, string recordType, string body)
-    {
-        ThrowIfHeldAtEitherRef(key, formKey, nameof(CreateWorkingTreeRecord), nameof(formKey));
-
-        using var tx = Connection.BeginTransaction();
-        _workingTreeOverlay.CreateWorkingTreeRecord(key, formKey, recordType, body);
-        // A create is always structural — a row that did not exist at Effective now does — so this
-        // always resweeps, the same trigger ApplyWorkingTreeChanges's own structural deltas use.
-        UpdateWinnersCore();
-        _indexStore.BumpSequence();
-        tx.Commit();
-        _notifications?.Publish(new RowsChangedNotification(key, [formKey], Sequence));
-    }
-
-    // Made before either caller opens a transaction: a collision is a caller mistake, and answering
-    // it costs no rollback.
-    private void ThrowIfHeldAtEitherRef(PluginKey key, string formKey, string verb, string parameterName)
-    {
-        if (_workingTreeOverlay.RowExistsAtEffective(key, formKey) || _workingTreeOverlay.RowExistsAtHead(key, formKey))
+        List<string> touched;
+        using (var tx = Connection.BeginTransaction())
         {
-            throw new ArgumentException(
-                $"{key.Name} ({key.Origin}) already holds {formKey} at some ref — {verb} " +
-                "is only for a FormKey neither ref answers to.", parameterName);
+            // Only a delta that added or removed a row can move winner status. Re-swept for the whole
+            // load order rather than per FormKey because UpdateWinners is the one definition of winning
+            // (measured at 18 ms over 48k records).
+            var projected = _workingTreeOverlay.ProjectDocuments(key, deltas);
+            if (projected.Structural) UpdateWinnersCore();
+            touched = projected.Touched;
+            _indexStore.BumpSequence();
+            tx.Commit();
         }
-    }
 
-    /// <summary>See <see cref="IRecordIndex.ApplyRenumber"/>. Every write below runs unwrapped on the
-    /// connection and so joins the one transaction opened here: the sequence commits once or not at
-    /// all.</summary>
-    public void ApplyRenumber(PluginKey key, RenumberedRecord renumbered)
-    {
-        var (oldFormKey, newFormKey, recordType, body) = renumbered;
-        ThrowIfHeldAtEitherRef(key, newFormKey, nameof(ApplyRenumber), nameof(renumbered));
-
-        using var tx = Connection.BeginTransaction();
-
-        _workingTreeOverlay.CreateWorkingTreeRecord(key, newFormKey, recordType, body);
-
-        // Before the old identity's rows are torn down below, so the children re-pointed here are
-        // never left naming a parent that does not exist. Re-deriving the new document cannot
-        // reach either of these.
-        RepointContainerChildParent(key, oldFormKey, newFormKey);
-        RepointCellLocationParent(key, oldFormKey, newFormKey);
-
-        _workingTreeOverlay.ApplyWorkingTreeChanges(key, [(oldFormKey, null)]);
-
-        // Once, at the end: the sequence both creates an Effective row and removes one, so it is
-        // structural either way, and UpdateWinners re-sweeps the whole load order regardless.
-        UpdateWinnersCore();
-        _indexStore.BumpSequence();
-        tx.Commit();
-        _notifications?.Publish(new RowsChangedNotification(key, [oldFormKey, newFormKey], Sequence));
+        // ADR-0046: after the commit, not inside it, so a subscriber that re-reads on receipt sees
+        // the rows this names. Every embedded child the re-derivation added, changed or removed is
+        // named too: a record panel open on a placed ref inside a refreshed cell has no other signal.
+        _notifications?.Publish(new RowsChangedNotification(key, touched, Sequence));
     }
 
     /// <summary>See <see cref="IRecordIndex.SetCommittedBaseline"/>.</summary>
@@ -418,18 +370,28 @@ public sealed class DuckDbRecordIndex : IRecordIndex
     /// <summary>See <see cref="IRecordIndex.RefreshByKeys"/>.</summary>
     public void RefreshByKeys(PluginKey key, string modFolder, IReadOnlyList<string> formKeys)
     {
+        // A key at neither ref is a record the tree has gained. Its own document cannot say where
+        // the tree puts it — a new exterior cell's worldspace block is a directory, not a field — so
+        // the copy is re-derived whole, which lands every other key in the batch with it. One
+        // projection rather than a per-key sequence a reader could catch half-applied.
+        if (formKeys.Any(formKey => At(RecordRef.Effective).GetDocument(formKey, key) == null
+                                    && At(RecordRef.Head).GetDocument(formKey, key) == null))
+        {
+            RederiveWholeCopyFromSource(key, modFolder);
+            return;
+        }
+
         foreach (var formKey in formKeys)
             RefreshOneKey(key, modFolder, formKey);
     }
 
-    // Re-derives one key's rows at both refs. Every write below is a push verb above; called again
-    // with the same bytes, neither fires.
+    // Re-derives one key's rows at both refs. Called again with the same bytes, nothing below fires.
     private void RefreshOneKey(PluginKey key, string modFolder, string formKey)
     {
         var effective = At(RecordRef.Effective).GetDocument(formKey, key);
         var head = At(RecordRef.Head).GetDocument(formKey, key);
-        // Neither ref knows this key: nothing to resolve a source unit under, and refresh re-derives
-        // an existing record rather than materializing one from a bare FormKey.
+        // Gone from both refs since the batch was read: another key's projection in this same batch
+        // took it (a container's document carries its children's rows).
         var recordType = effective?.RecordType ?? head?.RecordType;
         if (recordType == null) return;
 
@@ -443,13 +405,73 @@ public sealed class DuckDbRecordIndex : IRecordIndex
             workingTreeText = SourceUnitResolver.RecordBodyFromOwnerBytes(ownerBytes, resolved, formKey, _release, _codec);
         }
 
+        // Never exclusive owners of the file: it can be caught mid-save, or hand-edited into
+        // something that is not a document at all. Rows the projector cannot derive are left as they
+        // stand, and the next signal projects the file once it is a document again.
+        if (workingTreeText != null && !IsDocument(workingTreeText))
+        {
+            _logger.LogWarning(
+                "{Plugin} ({Origin})'s source for {FormKey} is not a readable document, so its rows were left as " +
+                "they stand", key.Name, key.Origin, formKey);
+            return;
+        }
+
         if (!string.Equals(workingTreeText, effective?.Body, StringComparison.Ordinal))
-            ApplyWorkingTreeChanges(key, [(formKey, workingTreeText)]);
+            ProjectDocuments(key, [(formKey, workingTreeText)]);
 
         // Nothing left to ask git about when Resolve found no unit at all — fail closed rather than
         // consulting a path that was never real.
         if (unit is { } resolvedUnit)
             RebaselineIfHeadMoved(key, modFolder, resolvedUnit, formKey);
+    }
+
+    private static bool IsDocument(string text)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(text);
+            return document.RootElement.ValueKind == JsonValueKind.Object;
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+    }
+
+    // The whole tree, read as one mod: the answer for a record the index has never seen, whose
+    // placement — which worldspace block holds a cell, which container carries a child — is a fact
+    // about the tree rather than about any one document. Idempotent by construction: it is the
+    // ingest Track and a re-index run.
+    private void RederiveWholeCopyFromSource(PluginKey key, string modFolder)
+    {
+        var sourceTree = Path.Combine(modFolder, SourceRecordPath.RootFor(key.Name));
+        // Nothing to re-derive from: the tree went away between the signal and this line, or this
+        // copy's rows came from its binary and a source key is not its to answer for.
+        if (!Directory.Exists(sourceTree)) return;
+        if (RegistrationOf(key) is not { } registration) return;
+
+        SourceIngest.Ingest(
+            this, modFolder, sourceTree, registration, key, _indexStore.IndexedFile(key)?.FilePath,
+            _release, _schemaReflector, _logger);
+        UpdateWinners();
+
+        // ADR-0046: too many rows to name, exactly as the plugin watcher's own re-index reports it.
+        _notifications?.Publish(new PluginChangedNotification(key, Sequence));
+    }
+
+    // The three facts the copy's registration row carries (ADR-0044), read back for a re-ingest that
+    // must not change what the load order said about this copy.
+    private Registration? RegistrationOf(PluginKey key)
+    {
+        using var cmd = Connection.CreateCommand();
+        cmd.CommandText =
+            $"SELECT load_order_idx, enabled, winning FROM {TableDdlBuilder.RegistrationsRelation} " +
+            "WHERE plugin = $1 AND origin = $2";
+        DuckDbSql.AddParams(cmd, [key.Name, key.Origin!]);
+        using var reader = cmd.ExecuteReader();
+        if (!reader.Read()) return null;
+        return new Registration(
+            reader.IsDBNull(0) ? null : reader.GetInt32(0), reader.GetBoolean(1), reader.GetBoolean(2));
     }
 
     // Asked only for a record the index already believes dirty; a clean one's committed bytes are the
@@ -1355,39 +1377,6 @@ public sealed class DuckDbRecordIndex : IRecordIndex
             ? new ContainerChildRow(
                 childFormKey, reader.GetString(0), reader.GetString(1), reader.GetString(2), reader.GetInt32(3))
             : null;
-    }
-
-    // An UPDATE, not a delete-then-rebuild: the children did not move, only the identity they name.
-    // A child the new document already re-derived is left for the old identity's teardown, or it
-    // would count twice.
-    private void RepointContainerChildParent(PluginKey key, string oldParentFormKey, string newParentFormKey) =>
-        DuckDbSql.ExecuteFor(Connection,
-            """
-            UPDATE mirror.container_child SET parent_form_key = $1
-            WHERE parent_form_key = $2 AND plugin = $3 AND origin = $4
-              AND child_form_key NOT IN (
-                SELECT child_form_key FROM mirror.container_child
-                WHERE parent_form_key = $1 AND plugin = $3 AND origin = $4)
-            """,
-            newParentFormKey, oldParentFormKey, key.Name, key.Origin!);
-
-    // The same shape for an exterior cell's parent_worldspace, the sibling gap the row above cannot
-    // cover; runs inside ApplyRenumber's transaction.
-    private void RepointCellLocationParent(PluginKey key, string oldParentFormKey, string newParentFormKey) =>
-        DuckDbSql.ExecuteFor(Connection,
-            """
-            UPDATE mirror.cell_location SET parent_worldspace = $1
-            WHERE parent_worldspace = $2 AND plugin = $3 AND origin = $4
-            """,
-            newParentFormKey, oldParentFormKey, key.Name, key.Origin!);
-
-    /// <summary>See <see cref="IRecordIndex.CreateCellLocation"/>.</summary>
-    public void CreateCellLocation(PluginKey plugin, CellLocationRow row)
-    {
-        DuckDbSql.ExecuteFor(Connection, "DELETE FROM mirror.cell_location WHERE cell_form_key = $1 AND plugin = $2 AND origin = $3",
-            row.CellFormKey, plugin.Name, plugin.Origin!);
-        using var appender = Connection.CreateAppender("mirror", "cell_location");
-        PluginIngest.AppendCellLocationRow(appender, row, plugin.Name, plugin.Origin!);
     }
 
     public void SetFilter(string? sql)

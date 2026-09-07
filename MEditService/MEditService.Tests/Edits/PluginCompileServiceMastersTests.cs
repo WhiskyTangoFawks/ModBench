@@ -118,7 +118,7 @@ public sealed class PluginCompileServiceMastersTests : IDisposable
     [Fact]
     public void Compile_AfterAnEditIntroducesAReferenceToAnUnreferencedPlugin_AddsItAsAMaster()
     {
-        var editResult = new RecordEditService(_mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance)
+        var editResult = ProjectingEditService.Over(_mirror)
             .Set(_plugin, _npc.ToString(), "Keywords",
                 System.Text.Json.JsonDocument.Parse(
                     System.Text.Json.JsonSerializer.Serialize(new[]

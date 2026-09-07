@@ -14,8 +14,8 @@ public sealed class FormLinkValidationTests : IDisposable
 
     public void Dispose() => _mod.Dispose();
 
-    private RecordEditService Service() =>
-        new(_mod.Mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
+    private ProjectingEditService Service() =>
+        ProjectingEditService.Over(_mod.Mirror);
 
     private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
 
@@ -64,7 +64,7 @@ public sealed class FormLinkValidationTests : IDisposable
         // The record still exists at Head — `git show` would print it. What it is not is somewhere a link
         // can point: exactly the divergence "checks read effective state" means.
         File.Delete(_mod.SourceFileFor(_mod.Keyword, "kywd", TrackedModFixture.KeywordEditorId));
-        _mod.Mirror.Index!.ApplyWorkingTreeChanges(_mod.Plugin, [(_mod.Keyword.ToString(), null)]);
+        _mod.Mirror.Index!.ProjectDocuments(_mod.Plugin, [(_mod.Keyword.ToString(), null)]);
 
         Assert.NotEmpty(_mod.GitShowHead(_mod.RelativeSourcePath(_mod.Keyword, "kywd", TrackedModFixture.KeywordEditorId)));
 

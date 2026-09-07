@@ -86,9 +86,11 @@ public sealed class NotificationStreamApiTests : IDisposable
             new { plugin = Plugin, origin = Origin, op = "set", path = new[] { new { kind = "member", name = "HeightMax" } }, value = 0.75 });
         edit.EnsureSuccessStatusCode();
 
-        var expectedSequence = await _client.GetFromJsonAsync<long>("/load-order/sequence");
-
+        // The event comes first and the sequence is read after it: ADR-0046 makes the write and its
+        // projection two events, so a read taken before the projection lands would name the sequence
+        // as it stood before the rows changed.
         var (kind, data) = await ReadOneEventAsync(reader, TimeSpan.FromSeconds(10));
+        var expectedSequence = await _client.GetFromJsonAsync<long>("/load-order/sequence");
 
         Assert.Equal("rows-changed", kind);
         Assert.Equal(Plugin, data.GetProperty("plugin").GetString());
