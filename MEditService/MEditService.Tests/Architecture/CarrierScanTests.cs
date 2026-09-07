@@ -3,13 +3,20 @@ using MEditService.Tests.TestSupport;
 
 namespace MEditService.Tests.Architecture;
 
-/// <summary>The source order carrier is gone. C# references to it are counted against an allowlist
-/// that stays empty; "folder-split" and the carrier's name are refused outright in docs prose.</summary>
+/// <summary>Two retirements, one scan: the source order carrier is gone, and so is every verb the
+/// write side used to push rows into the Index (ADR-0046 invariant 4). C# references to either are
+/// counted against an allowlist that stays empty; "folder-split" and the carrier's name are refused
+/// outright in docs prose.</summary>
 public sealed class CarrierScanTests
 {
-    // The carrier's own name, its drift rule, and the member it minted into a document.
+    // The carrier's own name, its drift rule, and the member it minted into a document; then the
+    // Index's four write-side push verbs, whose row work now lives behind the projector under names
+    // that say what it does for the projector rather than for a caller.
     private static readonly string[] Symbols =
-        ["SourceChildOrder", "SourceChildOrderDriftException", "MEditChildOrder"];
+    [
+        "SourceChildOrder", "SourceChildOrderDriftException", "MEditChildOrder",
+        "ApplyWorkingTreeChanges", "CreateWorkingTreeRecord", "ApplyRenumber", "CreateCellLocation",
+    ];
 
     private static readonly string[] ScannedRoots =
         ["MEditService.Core", "MEditService.Api", "MEditService.Bridge"];
@@ -21,7 +28,7 @@ public sealed class CarrierScanTests
     private static readonly string[] ProseNeedles = ["folder-split", "SourceChildOrder"];
 
     [Fact]
-    public void TheEditingAndSourceStack_ReferencesTheCarrier_OnlyAsOftenAsTheAllowlistSays()
+    public void TheEditingAndSourceStack_ReferencesARetiredSymbol_OnlyAsOftenAsTheAllowlistSays()
     {
         var root = ArchitectureTests.SolutionDirectory();
 
@@ -90,8 +97,8 @@ public sealed class CarrierScanTests
 
         Assert.True(
             unallowed.Count == 0 && unmatched.Count == 0,
-            $"References to the source order carrier differ from {allowlistPath}.\n"
-            + $"Counts the allowlist does not name ({unallowed.Count}) — the carrier is on its way out, "
+            $"References to a retired symbol differ from {allowlistPath}.\n"
+            + $"Counts the allowlist does not name ({unallowed.Count}) — these symbols are gone, "
             + "so a reference here needs the maintainer's ruling before its line is added:\n"
             + string.Join("\n", unallowed)
             + $"\nAllowlist lines matching no count ({unmatched.Count}) — rewrite them to the counts above; "
