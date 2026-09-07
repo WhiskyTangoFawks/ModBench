@@ -33,8 +33,8 @@ public sealed class SourceRepository
     public static bool IsTracked(string modFolder) => Directory.Exists(Path.Combine(modFolder, ".git"));
 
     /// <summary>The record's own text, or null when no document holds it. The identity comes back as
-    /// it was asked for; the body is the tree's answer, re-extracted through the codec when another
-    /// record's document carries it.</summary>
+    /// asked; the body is the tree's answer, re-extracted through the codec when another record's
+    /// document carries it.</summary>
     public SourceDocument? Get(PluginKey plugin, RecordIdentity identity)
     {
         if (Locate(plugin, identity) is not { } unit || !File.Exists(unit.FullPath)) return null;
@@ -44,9 +44,9 @@ public sealed class SourceRepository
         return body == null ? null : new SourceDocument(identity.FormKey, identity.RecordType, identity.EditorId, body);
     }
 
-    /// <summary>Creates or replaces the record's document, minting the group folder the first time the
-    /// plugin holds this type. A record another document carries is replaced inside it, at its own slot
-    /// position, leaving every other byte of that document alone.</summary>
+    /// <summary>Creates or replaces the record's document, minting the group folder the first time
+    /// the plugin holds this type. A record another document carries is replaced at its own slot
+    /// position, every other byte of that document untouched.</summary>
     public void Put(PluginKey plugin, SourceDocument document)
     {
         var identity = new RecordIdentity(document.FormKey, document.RecordType, document.EditorId);
@@ -70,9 +70,9 @@ public sealed class SourceRepository
             Path.GetDirectoryName(unit.FullPath)!, () => SourceUnitResolver.WriteTextAtomic(unit.FullPath, document.Body));
     }
 
-    /// <summary>Takes the record out of the tree: its file, its whole directory when it has one, or its
-    /// element of the document that carries it. Already gone is the state this asks for, not a failure.
-    /// False only when the document carrying it does not, which a caller reports rather than repeats.</summary>
+    /// <summary>Takes the record out of the tree: its file, its directory, or its element of another
+    /// record's document. Already gone is the state asked for; false means that document's text
+    /// lacks it.</summary>
     public bool Remove(PluginKey plugin, RecordIdentity identity)
     {
         if (Locate(plugin, identity) is not { } unit) return false;
@@ -98,8 +98,8 @@ public sealed class SourceRepository
     }
 
     /// <summary>Moves the record's file or directory to the name <paramref name="newEditorId"/>
-    /// computes, and answers the leaf it now has. Null when nothing moved: the header and a record
-    /// another document carries have no leaf name of their own.</summary>
+    /// computes, and answers the leaf it now has. Null when nothing moved: the header and an inlined
+    /// record have no leaf name of their own.</summary>
     public string? Rename(PluginKey plugin, RecordIdentity identity, string? newEditorId)
     {
         if (identity.RecordType == HeaderIndexer.RecordType) return null;

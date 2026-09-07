@@ -441,7 +441,7 @@ public sealed class RecordEditService(
         RecordDocument existingTarget, PluginKey destinationPlugin, string destinationModFolder, GameRelease release)
     {
         var repository = SourceRepository.Open(destinationModFolder, release)
-            ?? throw new InvalidOperationException($"{destinationPlugin.Name} is no longer tracked.");
+            ?? throw new InvalidOperationException($"{destinationPlugin.Name} stopped being tracked mid-copy.");
         var identity = new RecordIdentity(formKey, existingTarget.RecordType, existingTarget.EditorId);
         var unit = repository.Locate(destinationPlugin, identity)
             ?? throw new InvalidOperationException(
@@ -1282,9 +1282,8 @@ public sealed class RecordEditService(
                 $"FormKey and EditorID; copying it would land that stub rather than the record: {diagnosis}")
             : null;
 
-    // INVARIANT: every write gesture calls this first (untracked, then the external-change deferral).
-    // Reaching the source tree any other way bypasses the deferral refusal entirely. The only gate on
-    // tracked-ness, so no later call can disagree with it about the same folder.
+    // INVARIANT: every write gesture calls this first, and it is the only gate on tracked-ness.
+    // Reaching the source tree any other way bypasses the deferral refusal entirely.
     private RecordEditResult? RefuseIfBlocked(PluginKey plugin, out string modFolder, out SourceRepository repository)
     {
         modFolder = "";

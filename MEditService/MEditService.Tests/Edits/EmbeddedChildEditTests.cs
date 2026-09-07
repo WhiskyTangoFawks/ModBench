@@ -238,7 +238,7 @@ public sealed class EmbeddedChildEditTests : IDisposable
     public void EditingAnEmbeddedChildAbsentFromItsParentsSourceText_RefusesAsSourceUnitNotFound()
     {
         // Branch two: the document that carried the child has been edited out from under it, so the
-        // locator answers absent rather than naming a document that no longer holds it.
+        // locator answers absent rather than naming a document whose own text lacks the child.
         var file = _fixture.SourceFileContaining(ContainerModFixture.EmbedCellEditorId);
         var withoutTheRef = System.Text.RegularExpressions.Regex.Replace(
             File.ReadAllText(file), $@"\s*\{{[^{{}}]*""{ContainerModFixture.TemporaryRefEditorId}""[^{{}}]*\}},?", "",
