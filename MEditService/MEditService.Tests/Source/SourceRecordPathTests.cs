@@ -1,4 +1,5 @@
 using MEditService.Core.Records;
+using MEditService.Core.Schema;
 using MEditService.Core.Serialization;
 using MEditService.Core.Source;
 using Mutagen.Bethesda;
@@ -149,6 +150,6 @@ public sealed class SourceRecordPathTests
 
         Assert.True(ok);
         Assert.Equal("Vendor.esp", identity.PluginFileName);
-        Assert.Equal(HeaderIndexer.RecordType, identity.RecordType);
+        Assert.Equal(PluginHeader.RecordType, identity.RecordType);
     }
 }

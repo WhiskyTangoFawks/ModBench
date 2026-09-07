@@ -4,6 +4,7 @@ using DuckDB.NET.Data;
 using MEditService.Core.Plugins;
 using MEditService.Core.Queries;
 using MEditService.Core.Records;
+using MEditService.Core.Schema;
 using MEditService.Core.Source;
 using Mutagen.Bethesda.Plugins;
 
@@ -100,15 +101,15 @@ public sealed class SourceIngestParityTests(SourceParityFixture fixture) : IClas
     [Fact]
     public void TheHeaderRow_IsByteIdentical_TrackedAndUntracked()
     {
-        var headerFormKey = HeaderIndexer.FormKeyFor(ModKey.FromFileName(CutDownPluginFixture.PluginFileName));
+        var headerFormKey = PluginHeader.FormKeyFor(ModKey.FromFileName(CutDownPluginFixture.PluginFileName));
 
         var binary = fixture.FromBinary.Index!.At(RecordRef.Effective).GetDocument(headerFormKey, fixture.Plugin);
         var source = fixture.FromSource.Index!.At(RecordRef.Effective).GetDocument(headerFormKey, fixture.Plugin);
 
         Assert.NotNull(binary);
         Assert.NotNull(source);
-        Assert.Equal(HeaderIndexer.RecordType, binary.RecordType);
-        Assert.Equal(HeaderIndexer.RecordType, source.RecordType);
+        Assert.Equal(PluginHeader.RecordType, binary.RecordType);
+        Assert.Equal(PluginHeader.RecordType, source.RecordType);
 
         // Positive controls: an empty or absent body would satisfy plain equality below and prove
         // nothing at all. These pin that the body really is the root document.

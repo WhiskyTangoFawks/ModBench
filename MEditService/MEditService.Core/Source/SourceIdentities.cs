@@ -1,4 +1,5 @@
 using MEditService.Core.Records;
+using MEditService.Core.Schema;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
 
@@ -20,11 +21,11 @@ internal static class SourceIdentities
 
         // The header's document is the fixed root RecordData.json, and its FormKey is computed rather
         // than declared, so no name in the tree carries it.
-        var header = FormKey.Factory(HeaderIndexer.FormKeyFor(ModKey.FromFileName(pluginFileName)));
+        var header = FormKey.Factory(PluginHeader.FormKeyFor(ModKey.FromFileName(pluginFileName)));
         if (formKey == header)
         {
             return File.Exists(Path.Combine(root, SourceUnitResolver.RecordDataFileName))
-                ? new RecordIdentity(formKey.ToString(), HeaderIndexer.RecordType, null)
+                ? new RecordIdentity(formKey.ToString(), PluginHeader.RecordType, null)
                 : null;
         }
 

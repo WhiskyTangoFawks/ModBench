@@ -52,7 +52,7 @@ public class GetDocumentsTests
         // cannot count. Asserted as its own presence rather than folded into a "+1", so this still fails
         // if the extra row is something else entirely.
         Assert.Equal(mod.EnumerateMajorRecords().Count() + 1, documents.Count);
-        Assert.Single(documents, d => d.RecordType == HeaderIndexer.RecordType);
+        Assert.Single(documents, d => d.RecordType == PluginHeader.RecordType);
         // ...and the point-read parity below covers the header on the same terms as every record,
         // which is the whole claim of the change: one read path, no special case.
         Assert.All(documents, doc =>
@@ -94,8 +94,8 @@ public class GetDocumentsTests
         // the per-origin *record* scoping this test is about.
         var fromA = repo.At(RecordRef.Effective).GetDocuments(new PluginKey("Shared.esp", "ModA"));
         var fromB = repo.At(RecordRef.Effective).GetDocuments(new PluginKey("Shared.esp", "ModB"));
-        var recordsFromA = fromA.Where(d => d.RecordType != HeaderIndexer.RecordType).ToList();
-        var recordsFromB = fromB.Where(d => d.RecordType != HeaderIndexer.RecordType).ToList();
+        var recordsFromA = fromA.Where(d => d.RecordType != PluginHeader.RecordType).ToList();
+        var recordsFromB = fromB.Where(d => d.RecordType != PluginHeader.RecordType).ToList();
 
         var single = Assert.Single(recordsFromA);
         Assert.Equal("FromModA", single.EditorId);
@@ -105,7 +105,7 @@ public class GetDocumentsTests
 
         // ADR-0036: the header is per-copy too — one each, each carrying its own origin, never one
         // shared row keyed on the filename the two copies have in common.
-        Assert.Equal("ModA", Assert.Single(fromA, d => d.RecordType == HeaderIndexer.RecordType).Plugin.Origin);
-        Assert.Equal("ModB", Assert.Single(fromB, d => d.RecordType == HeaderIndexer.RecordType).Plugin.Origin);
+        Assert.Equal("ModA", Assert.Single(fromA, d => d.RecordType == PluginHeader.RecordType).Plugin.Origin);
+        Assert.Equal("ModB", Assert.Single(fromB, d => d.RecordType == PluginHeader.RecordType).Plugin.Origin);
     }
 }

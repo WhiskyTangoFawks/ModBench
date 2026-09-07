@@ -125,7 +125,7 @@ public sealed class ConflictClassifier(ILogger<ConflictClassifier>? logger = nul
     private static List<FieldDiff> RecordChildren(IReadOnlyList<RecordDetail> records, DiffContext ctx)
     {
         var recordClass = records.ToDictionary(
-            Column, r => FormRefPathBuilder.ExtractString(MemberValue(r, LoquiUnions.UnionTypeDiscriminator)));
+            Column, r => FormReferences.ExtractString(MemberValue(r, LoquiUnions.UnionTypeDiscriminator)));
         var memberMeta = records[0].Fields.ToDictionary(f => f.Metadata.Name, f => f.Metadata);
         var diffs = new List<FieldDiff>();
         foreach (var member in memberMeta.Values)
@@ -223,7 +223,7 @@ public sealed class ConflictClassifier(ILogger<ConflictClassifier>? logger = nul
             if (CheckErrorBuilder.Build(meta, value as JsonElement?, ctx.ResolveFormKey, ctx.Release) is { } error)
                 checkErrors[column] = error;
             if (meta.Type != "formKey") continue;
-            var fk = FormRefPathBuilder.ExtractString(value);
+            var fk = FormReferences.ExtractString(value);
             if (string.IsNullOrEmpty(fk) || fk == "Null") continue;
             resolutions[column] = FormKeyResolution.From(fk, ctx.ResolveFormKey(fk), meta.ValidFormKeyTypes, ctx.Release);
         }

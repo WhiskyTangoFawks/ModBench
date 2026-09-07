@@ -1,4 +1,5 @@
 using MEditService.Core.Records;
+using MEditService.Core.Schema;
 using MEditService.Core.Serialization;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
@@ -66,7 +67,7 @@ internal static class SourceRecordPath
             && segments[1].Length > 0
             && segments[2].Equals(RecordDataFileName, StringComparison.Ordinal))
         {
-            identity = new SourceRecordIdentity(segments[1], HeaderIndexer.RecordType);
+            identity = new SourceRecordIdentity(segments[1], PluginHeader.RecordType);
             return true;
         }
 

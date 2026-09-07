@@ -1,5 +1,6 @@
 using System.Text.Json;
 using MEditService.Core.Records;
+using MEditService.Core.Schema;
 using Mutagen.Bethesda;
 
 namespace MEditService.Core.Queries;
@@ -16,7 +17,7 @@ public static class CheckErrorBuilder
         bool absentMeansNull = true)
     {
         var entries = new List<string>();
-        FormRefPathBuilder.Walk(meta, value, "",
+        FormReferences.Walk(meta, value, "",
             (path, raw, allowsNull, validTypes) =>
             {
                 var err = CheckScalar(raw, allowsNull, validTypes, resolve, release);

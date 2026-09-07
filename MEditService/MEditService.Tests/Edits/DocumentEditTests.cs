@@ -371,7 +371,7 @@ public sealed class DocumentEditTests
     [Fact]
     public void ReadOnlyColumn_IsRefusedWithItsReason()
     {
-        var refusal = Apply(Encoding.UTF8.GetString(HeaderDocument.Write(_mod)), HeaderIndexer.RecordType, SetAt(Json("\"me\""), Member("Author")), out _);
+        var refusal = Apply(Encoding.UTF8.GetString(HeaderDocument.Write(_mod)), PluginHeader.RecordType, SetAt(Json("\"me\""), Member("Author")), out _);
 
         Assert.Equal(RecordEditRefusal.FieldReadOnly, refusal!.Refusal);
         Assert.Contains(SchemaRefusals.HeaderNoWritePathReason, refusal.Message, StringComparison.Ordinal);
@@ -522,11 +522,11 @@ public sealed class DocumentEditTests
     {
         var before = Encoding.UTF8.GetString(HeaderDocument.Write(_mod));
 
-        var set = Applied(before, HeaderIndexer.RecordType, SetAt(Json("true"), Member("IsSmallMaster")));
+        var set = Applied(before, PluginHeader.RecordType, SetAt(Json("true"), Member("IsSmallMaster")));
         Assert.True(HeaderDocument.IsLight(Encoding.UTF8.GetBytes(set)));
         AssertOnlyChanged(before, set, "ModHeader.Flags");
 
-        var cleared = Applied(set, HeaderIndexer.RecordType, SetAt(Json("false"), Member("IsSmallMaster")));
+        var cleared = Applied(set, PluginHeader.RecordType, SetAt(Json("false"), Member("IsSmallMaster")));
         Assert.Equal(before, cleared);
     }
 

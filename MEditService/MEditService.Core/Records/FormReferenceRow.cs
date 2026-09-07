@@ -1,6 +1,6 @@
 namespace MEditService.Core.Records;
 
-internal record struct FormRef(
+internal record struct FormReferenceRow(
     string SourceFormKey,
     string TargetFormKey,
     string FieldPath,
