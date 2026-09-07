@@ -1,8 +1,8 @@
 using MEditService.Core.Plugins;
 using MEditService.Core.Records;
 using MEditService.Core.Source;
-using Mutagen.Bethesda.Plugins;
 using MEditService.Tests.TestSupport;
+using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Tests.Edits;
 
