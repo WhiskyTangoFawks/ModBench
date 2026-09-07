@@ -106,7 +106,7 @@ the header participates in Head/Effective, winner selection and `form_lookup` li
 record, instead of being the one recordless special case; and the two ingest paths are one producer
 over two readers, so "the read model never sees a dialect" holds for the header by construction
 rather than by coincidence. **Landed since**: the header is now a genuine *source unit* too —
-`SourceRecordPath`/`SourceUnitResolver` locate the root `RecordData.json` directly (its own path
+`SourceRecordPath`/`SourceRepository.Locate` locate the root `RecordData.json` directly (its own path
 shape, one segment shallower than a flat record's own), so it projects like any other record and an
 external edit to that file is picked up the Source watcher's own way, through `RefreshByKeys`
 (ADR-0046). `SourceIngest.ReconcileHead`
@@ -115,7 +115,7 @@ which diffs through `EnumerateMajorRecords`, and a `ModHeader` is not in that en
 
 **Container source units are found by scanning the tree, never by computing a path.** A
 path-computation grammar would be a second copy of the serializer's own directory-naming policy
-and could only drift from it; `SourceUnitResolver` reads the disk — the one source that cannot
+and could only drift from it; `SourceRepository.Locate` reads the disk — the one source that cannot
 drift. A container's directory is found under whichever directory-per-record group folder holds
 it, and a record inlined in another record's document through a per-plugin FormKey-to-document
 map built by one token scan of the tree, validated on use rather than by a file timestamp

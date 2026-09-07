@@ -6,7 +6,7 @@ using Mutagen.Bethesda.Plugins;
 namespace MEditService.Core.Source;
 
 /// <summary>Which record the file at a path declares, and where a plugin's documents live. The
-/// reverse of <see cref="SourceUnitResolver"/>, whose question is which file a record lives
+/// reverse of <see cref="SourceRepository.Locate"/>, whose question is which file a record lives
 /// in.</summary>
 public static class SourceDocuments
 {

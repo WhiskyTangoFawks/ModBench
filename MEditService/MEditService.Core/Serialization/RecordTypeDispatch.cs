@@ -61,7 +61,7 @@ internal sealed class RecordTypeDispatch
 
     /// <summary>The group-property name ("Npcs") the generator writes verbatim as a flat record's
     /// directory. Null when the type has no top-level group, is directory-per-record, or does not
-    /// resolve — all meaning "ask SourceUnitResolver instead".</summary>
+    /// resolve — all meaning "ask the repository's own locator instead".</summary>
     internal string? FolderNameFor(string recordType) =>
         ConcreteFor(recordType) is { } concrete && _folderByType.TryGetValue(concrete, out var folder)
             ? folder

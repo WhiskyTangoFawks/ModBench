@@ -211,7 +211,7 @@ public sealed class RecordEditService(
 
     /// <summary>A working-tree deletion: gone at Effective, still served at Head until compiled. No
     /// reference cascade; a dangling FormLink surfaces as an ordinary compile diagnostic (ADR-0041).
-    /// Every record shape resolves through <see cref="SourceUnitResolver"/>.</summary>
+    /// Every record shape resolves through <see cref="SourceRepository.Locate"/>.</summary>
     public RecordEditResult DeleteRecord(PluginKey plugin, string formKey)
     {
         if (ResolveEditTarget(plugin, formKey, out var target) is { } blocked) return blocked;

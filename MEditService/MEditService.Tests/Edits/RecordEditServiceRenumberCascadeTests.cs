@@ -88,7 +88,7 @@ public sealed class RecordEditServiceRenumberCascadeTests
         var survivingBefore = File.ReadAllText(survivingFile);
 
         // A Worldspace is a directory-per-record container with no containment parent, so removing its
-        // directory is the one shape that leaves SourceUnitResolver nothing to answer: a flat record
+        // directory is the one shape that leaves the repository nothing to answer: a flat record
         // always resolves to its computed path, present or not.
         Directory.Delete(fixture.DirectoryOf(fixture.SecondReferencer), recursive: true);
 
