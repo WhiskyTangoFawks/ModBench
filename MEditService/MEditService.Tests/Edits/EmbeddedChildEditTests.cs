@@ -223,8 +223,8 @@ public sealed class EmbeddedChildEditTests : IDisposable
     [Fact]
     public void EditingARecordWhoseSourceDirectoryIsGone_RefusesAsSourceUnitNotFound()
     {
-        // Branch one: the resolver finds no file and the index names no container that would hold it.
-        // An interior cell removed from disk by something outside Modbench is exactly that.
+        // Branch one: no document of its own, and no other record's document carries it. An interior
+        // cell removed from disk by something outside Modbench is exactly that.
         Directory.Delete(Path.GetDirectoryName(_fixture.SourceFileContaining(ContainerModFixture.EmbedCellEditorId))!, recursive: true);
 
         var result = EditService().Set(_fixture.Plugin, _fixture.EmbedCell.ToString(), "WaterHeight", Json("77.0"));
@@ -237,8 +237,8 @@ public sealed class EmbeddedChildEditTests : IDisposable
     [Fact]
     public void EditingAnEmbeddedChildAbsentFromItsParentsSourceText_RefusesAsSourceUnitNotFound()
     {
-        // Branch two: the resolver finds the parent's file, but the child is not inside it any more —
-        // the index still has the placement row while the file has been edited out from under it.
+        // Branch two: the document that carried the child has been edited out from under it, so the
+        // locator answers absent rather than naming a document whose own text lacks the child.
         var file = _fixture.SourceFileContaining(ContainerModFixture.EmbedCellEditorId);
         var withoutTheRef = System.Text.RegularExpressions.Regex.Replace(
             File.ReadAllText(file), $@"\s*\{{[^{{}}]*""{ContainerModFixture.TemporaryRefEditorId}""[^{{}}]*\}},?", "",

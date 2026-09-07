@@ -204,7 +204,7 @@ public sealed class ContainerRecordRegressionTests : IDisposable
 
         var result = ExternalChangeEditLander.Keep(
             _fixture.ModFolder, _fixture.Plugin, pluginPath, GameRelease.Fallout4,
-            _fixture.Mirror.Projected(), SharedSchemaReflector.Instance, NullLogger<ContainerRecordRegressionTests>.Instance);
+            SharedSchemaReflector.Instance, NullLogger<ContainerRecordRegressionTests>.Instance);
 
         Assert.True(result.Applied, result.RefusalReason);
         Assert.DoesNotContain(_fixture.Cell.ToString(), result.LandedFormKeys);
@@ -224,7 +224,7 @@ public sealed class ContainerRecordRegressionTests : IDisposable
 
         var result = ExternalChangeEditLander.Keep(
             _fixture.ModFolder, _fixture.Plugin, pluginPath, GameRelease.Fallout4,
-            _fixture.Mirror.Projected(), SharedSchemaReflector.Instance, NullLogger<ContainerRecordRegressionTests>.Instance);
+            SharedSchemaReflector.Instance, NullLogger<ContainerRecordRegressionTests>.Instance);
 
         Assert.True(result.Applied, result.RefusalReason);
         Assert.Contains(_fixture.Cell.ToString(), result.LandedFormKeys);
@@ -248,7 +248,7 @@ public sealed class ContainerRecordRegressionTests : IDisposable
 
         var result = ExternalChangeEditLander.Keep(
             _fixture.ModFolder, _fixture.Plugin, pluginPath, GameRelease.Fallout4,
-            _fixture.Mirror.Projected(), SharedSchemaReflector.Instance, NullLogger<ContainerRecordRegressionTests>.Instance);
+            SharedSchemaReflector.Instance, NullLogger<ContainerRecordRegressionTests>.Instance);
 
         Assert.True(result.Applied, result.RefusalReason);
         Assert.Contains(_fixture.EmbedCell.ToString(), result.LandedFormKeys);
@@ -271,7 +271,7 @@ public sealed class ContainerRecordRegressionTests : IDisposable
 
         var result = ExternalChangeEditLander.Keep(
             _fixture.ModFolder, _fixture.Plugin, pluginPath, GameRelease.Fallout4,
-            _fixture.Mirror.Projected(), SharedSchemaReflector.Instance, NullLogger<ContainerRecordRegressionTests>.Instance);
+            SharedSchemaReflector.Instance, NullLogger<ContainerRecordRegressionTests>.Instance);
 
         Assert.False(result.Applied);
         Assert.Contains(_fixture.Cell.ToString(), result.RefusalReason, StringComparison.Ordinal);
@@ -297,7 +297,7 @@ public sealed class ContainerRecordRegressionTests : IDisposable
         var entries = new List<LogEntry>();
         var result = ExternalChangeEditLander.Keep(
             _fixture.ModFolder, _fixture.Plugin, pluginPath, GameRelease.Fallout4,
-            _fixture.Mirror.Projected(), SharedSchemaReflector.Instance, new CollectingLogger(entries));
+            SharedSchemaReflector.Instance, new CollectingLogger(entries));
 
         Assert.True(result.Applied, result.RefusalReason);
         Assert.DoesNotContain(brandNewCellKey.ToString(), result.LandedFormKeys);

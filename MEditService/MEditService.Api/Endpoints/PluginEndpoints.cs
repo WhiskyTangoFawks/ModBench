@@ -422,7 +422,7 @@ public static class PluginEndpoints
         {
             var result = ExternalChangeEditLander.Keep(
                 modFolder, WriteEndpointMapping.PluginKeyOf(plugin, req.Origin), pluginPath, loadOrder.GameRelease,
-                mirror.Index!.At(RecordRef.Effective), reflector, logger);
+                reflector, logger);
             if (result.Applied)
             {
                 watcher.MarkAnswered(modFolder, decoded);

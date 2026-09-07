@@ -1,7 +1,11 @@
+using System.Text;
 using System.Text.Json.Serialization;
 using MEditService.Core.Records;
+using MEditService.Core.Serialization;
+using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
+using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Core.Source;
 
@@ -28,58 +32,125 @@ public sealed class SourceRepository
     /// tracked) and nothing narrower (no registry lookup, no cached answer).</summary>
     public static bool IsTracked(string modFolder) => Directory.Exists(Path.Combine(modFolder, ".git"));
 
-    /// <summary>The record's own text, or null when no file holds it. The identity comes back as it
-    /// was asked for; the body is the tree's answer.</summary>
+    /// <summary>The record's own text, or null when no document holds it. The identity comes back as
+    /// asked; the body is the tree's answer, re-extracted through the codec when another record's
+    /// document carries it.</summary>
     public SourceDocument? Get(PluginKey plugin, RecordIdentity identity)
     {
-        var path = FileFor(plugin, identity);
-        return File.Exists(path)
-            ? new SourceDocument(identity.FormKey, identity.RecordType, identity.EditorId, File.ReadAllText(path))
-            : null;
+        if (Locate(plugin, identity) is not { } unit || !File.Exists(unit.FullPath)) return null;
+
+        var body = SourceUnitResolver.RecordBodyFromOwnerBytes(
+            File.ReadAllBytes(unit.FullPath), unit, identity.FormKey, _release, Codec);
+        return body == null ? null : new SourceDocument(identity.FormKey, identity.RecordType, identity.EditorId, body);
     }
 
-    /// <summary>Creates or replaces the record's file, minting the group folder the first time the
-    /// plugin holds this type.</summary>
+    /// <summary>Creates or replaces the record's document, minting the group folder the first time
+    /// the plugin holds this type. A record another document carries is replaced at its own slot
+    /// position, every other byte of that document untouched.</summary>
     public void Put(PluginKey plugin, SourceDocument document)
     {
-        var path = FileFor(plugin, new RecordIdentity(document.FormKey, document.RecordType, document.EditorId));
+        var identity = new RecordIdentity(document.FormKey, document.RecordType, document.EditorId);
+        var unit = Locate(plugin, identity) ?? throw NoPlaceInTheTree(plugin, identity);
+
+        if (unit.IsEmbedded)
+        {
+            var owner = ReadOwner(unit);
+            if (ContainerChildFields.FindEmbeddedChild(owner, document.FormKey) is not { } found)
+                throw NoLongerCarried(unit, document.FormKey);
+
+            var child = Codec
+                .DeserializeFromBytesAsync(Encoding.UTF8.GetBytes(document.Body), _release, document.RecordType)
+                .GetAwaiter().GetResult();
+            ContainerChildFields.ReplaceInSlot(found.Parent, found.SlotName, found.SlotIndex, child);
+            Codec.SerializeAsync(owner, unit.FullPath, _release).GetAwaiter().GetResult();
+            return;
+        }
+
         SourceUnitResolver.InMintedDirectory(
-            Path.GetDirectoryName(path)!, () => SourceUnitResolver.WriteTextAtomic(path, document.Body));
+            Path.GetDirectoryName(unit.FullPath)!, () => SourceUnitResolver.WriteTextAtomic(unit.FullPath, document.Body));
     }
 
-    /// <summary>Deletes the record's file. A file already gone is the state this asks for, not a
-    /// failure: another tool or a hand delete reaches the same place.</summary>
-    public void Remove(PluginKey plugin, RecordIdentity identity)
+    /// <summary>Takes the record out of the tree: its file, its directory, or its element of another
+    /// record's document. Already gone is the state asked for; false means that document's text
+    /// lacks it.</summary>
+    public bool Remove(PluginKey plugin, RecordIdentity identity)
     {
-        var path = FileFor(plugin, identity);
-        if (File.Exists(path)) File.Delete(path);
+        if (Locate(plugin, identity) is not { } unit) return false;
+
+        if (unit.IsEmbedded)
+        {
+            var owner = ReadOwner(unit);
+            if (!ContainerChildFields.RemoveEmbeddedChild(owner, identity.FormKey)) return false;
+
+            Codec.SerializeAsync(owner, unit.FullPath, _release).GetAwaiter().GetResult();
+            return true;
+        }
+
+        if (unit.IsDirectoryPerRecord)
+        {
+            var directory = Path.GetDirectoryName(unit.FullPath)!;
+            if (Directory.Exists(directory)) Directory.Delete(directory, recursive: true);
+            return true;
+        }
+
+        if (File.Exists(unit.FullPath)) File.Delete(unit.FullPath);
+        return true;
     }
 
-    /// <summary>Moves the record's file to the name <paramref name="newEditorId"/> computes. The body
-    /// is the caller's to update; the header has no such name and does not move.</summary>
-    public void Rename(PluginKey plugin, RecordIdentity identity, string? newEditorId)
+    /// <summary>Moves the record's file or directory to the name <paramref name="newEditorId"/>
+    /// computes, and answers the leaf it now has. Null when nothing moved: the header and an inlined
+    /// record have no leaf name of their own.</summary>
+    public string? Rename(PluginKey plugin, RecordIdentity identity, string? newEditorId)
     {
-        if (identity.RecordType == HeaderIndexer.RecordType) return;
-        // The name it already has, so nothing moves — and a file something else renamed keeps that
+        if (identity.RecordType == HeaderIndexer.RecordType) return null;
+        // The name it already has, so nothing moves — and a leaf something else renamed keeps that
         // name rather than being dragged back to the computed one.
-        if (string.Equals(newEditorId, identity.EditorId, StringComparison.Ordinal)) return;
+        if (string.Equals(newEditorId, identity.EditorId, StringComparison.Ordinal)) return null;
+        if (Locate(plugin, identity) is not { IsEmbedded: false } unit) return null;
 
-        var from = FileFor(plugin, identity);
+        var from = unit.IsDirectoryPerRecord ? Path.GetDirectoryName(unit.FullPath)! : unit.FullPath;
         var to = Path.Combine(
             Path.GetDirectoryName(from)!,
-            SourceUnitResolver.LeafNameFor(FormKey.Factory(identity.FormKey), newEditorId, isDirectory: false));
-        if (string.Equals(from, to, StringComparison.Ordinal)) return;
+            SourceUnitResolver.LeafNameFor(
+                FormKey.Factory(identity.FormKey), newEditorId, unit.IsDirectoryPerRecord));
+        if (string.Equals(from, to, StringComparison.Ordinal)) return null;
 
-        File.Move(from, to, overwrite: true);
+        if (unit.IsDirectoryPerRecord)
+        {
+            if (!Directory.Exists(from)) return null;
+            Directory.Move(from, to);
+        }
+        else
+        {
+            if (!File.Exists(from)) return null;
+            File.Move(from, to, overwrite: true);
+        }
+        return Path.GetFileName(to);
     }
 
-    // The one place an identity becomes a path, so no caller holds one. The header's is the fixed root
-    // document; a flat record's is the computed path, corrected to the file carrying the FormKey.
-    private string FileFor(PluginKey plugin, RecordIdentity identity) =>
-        identity.RecordType == HeaderIndexer.RecordType
-            ? SourceDocuments.HeaderDocumentIn(_modFolder, plugin.Name)
-            : SourceUnitResolver.FlatSourcePath(
-                _modFolder, plugin.Name, identity.RecordType, identity.FormKey, identity.EditorId, _release);
+    /// <summary>The document holding <paramref name="identity"/>, and whether that document is another
+    /// record's. The one place an identity becomes a path; the callers still holding one are moving off
+    /// it.</summary>
+    internal SourceUnit? Locate(PluginKey plugin, RecordIdentity identity, SourceUnitResolutionCache? cache = null) =>
+        SourceUnitResolver.Resolve(
+            plugin, _modFolder, identity.FormKey, identity.RecordType, identity.EditorId, _release, cache);
+
+    // The codec is the door for a record another document carries: the child is read and written as
+    // part of its owner's whole graph.
+    private static RecordTextCodec Codec => LazyCodec.Value;
+
+    private static readonly Lazy<RecordTextCodec> LazyCodec =
+        new(() => new RecordTextCodec(NullLogger<RecordTextCodec>.Instance));
+
+    private IMajorRecord ReadOwner(SourceUnit unit) =>
+        Codec.DeserializeAsync(unit.FullPath, _release, unit.OwnerRecordType).GetAwaiter().GetResult();
+
+    private static InvalidOperationException NoPlaceInTheTree(PluginKey plugin, RecordIdentity identity) =>
+        new($"No document in {plugin.Name}'s tree holds {identity.FormKey}, and its type has no file of " +
+            "its own, so there is nowhere to write it.");
+
+    private static InvalidOperationException NoLongerCarried(SourceUnit unit, string formKey) =>
+        new($"{unit.RelativePath} was found holding {formKey}, but its own text does not carry it.");
 
     /// <summary>Track's git mechanics: init, .gitignore, commit the baseline to main with trailers, park
     /// every plugin's last-compile ref there, check out the edit branch. One transaction: a failure

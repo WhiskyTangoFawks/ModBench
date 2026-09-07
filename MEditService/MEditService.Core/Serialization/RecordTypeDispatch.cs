@@ -23,17 +23,20 @@ internal sealed class RecordTypeDispatch
     private readonly IReadOnlySet<Type> _ambiguous;
     private readonly IReadOnlyDictionary<Type, string> _folderByType;
     private readonly IReadOnlyDictionary<string, IReadOnlyList<string>> _typesByFolder;
+    private readonly IReadOnlyDictionary<string, string> _directoryPerRecordTypeByFolder;
 
     private RecordTypeDispatch(
         IReadOnlyDictionary<string, Type?> byName,
         IReadOnlySet<Type> ambiguous,
         IReadOnlyDictionary<Type, string> folderByType,
-        IReadOnlyDictionary<string, IReadOnlyList<string>> typesByFolder)
+        IReadOnlyDictionary<string, IReadOnlyList<string>> typesByFolder,
+        IReadOnlyDictionary<string, string> directoryPerRecordTypeByFolder)
     {
         _byName = byName;
         _ambiguous = ambiguous;
         _folderByType = folderByType;
         _typesByFolder = typesByFolder;
+        _directoryPerRecordTypeByFolder = directoryPerRecordTypeByFolder;
     }
 
     internal static RecordTypeDispatch For(GameRelease release) =>
@@ -71,6 +74,24 @@ internal sealed class RecordTypeDispatch
         FolderNameFor(recordType)
         ?? (ConcreteFor(recordType) is { } concrete
             && DirectoryPerRecordFolders.TryGetValue(concrete.Name, out var folder) ? folder : null);
+
+    /// <summary>The group folders whose records get a directory rather than a file. Every such
+    /// record's directory sits somewhere under one of them, so a scan of all of them finds it without
+    /// being told which.</summary>
+    internal IEnumerable<string> DirectoryPerRecordFolderNames => _directoryPerRecordTypeByFolder.Keys;
+
+    /// <summary>The record type of a directory in <paramref name="groupFolder"/>, and a cell when
+    /// <paramref name="nested"/>: only a cell's directory sits below block levels. Null for any other
+    /// folder.</summary>
+    internal string? DirectoryPerRecordTypeIn(string groupFolder, bool nested)
+    {
+        if (!_directoryPerRecordTypeByFolder.ContainsKey(groupFolder)) return null;
+
+        var folder = nested ? DirectoryPerRecordFolders[NestedDirectoryPerRecordType] : groupFolder;
+        return _directoryPerRecordTypeByFolder.TryGetValue(folder, out var recordType) ? recordType : null;
+    }
+
+    private const string NestedDirectoryPerRecordType = "Cell";
 
     /// <summary>The one placement key not simply the folder it sits in: a block level's directory is
     /// named after coordinates. Here because this layer owns game-specific naming; static because
@@ -118,6 +139,7 @@ internal sealed class RecordTypeDispatch
         // Valued by the schema table spelling (lowercased GRUP signature), never the CLR name:
         // DuckDbRecordIndex's record-type dictionary is keyed by that spelling only and throws on "Npc".
         var typesByFolder = new Dictionary<string, List<string>>(StringComparer.Ordinal);
+        var directoryPerRecordTypeByFolder = new Dictionary<string, string>(StringComparer.Ordinal);
         foreach (var type in modType.Assembly.GetTypes())
         {
             if (type.IsAbstract || type.IsInterface) continue;
@@ -141,7 +163,11 @@ internal sealed class RecordTypeDispatch
 
             // Every concrete type maps to its owning top-level group, unless it is directory-per-record
             // or has no top-level group at all (a placed ref, a landscape).
-            if (DirectoryPerRecordFolders.ContainsKey(type.Name)) continue;
+            if (DirectoryPerRecordFolders.TryGetValue(type.Name, out var ownFolder))
+            {
+                directoryPerRecordTypeByFolder[ownFolder] = signature.ToLowerInvariant();
+                continue;
+            }
             var owningFolder = groupProperties.FirstOrDefault(gp => gp.ElementType.IsAssignableFrom(type)).Property?.Name;
             if (owningFolder is null) continue;
 
@@ -160,7 +186,8 @@ internal sealed class RecordTypeDispatch
             byName,
             ambiguous,
             folderByType,
-            typesByFolder.ToDictionary(kv => kv.Key, kv => (IReadOnlyList<string>)kv.Value));
+            typesByFolder.ToDictionary(kv => kv.Key, kv => (IReadOnlyList<string>)kv.Value),
+            directoryPerRecordTypeByFolder);
     }
 
     private static bool IsAmbiguous(Type concrete, HashSet<Type> abstractElements) =>
