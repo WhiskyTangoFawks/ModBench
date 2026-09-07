@@ -1,9 +1,7 @@
+using System.Text.Json;
 using MEditService.Core.Edits;
-using MEditService.Core.Plugins;
-using MEditService.Core.Records;
-using MEditService.Core.Schema;
+using MEditService.Core.Source;
 using MEditService.Tests.TestSupport;
-using Microsoft.Extensions.Logging.Abstractions;
 
 namespace MEditService.Tests.Edits;
 
@@ -11,29 +9,24 @@ namespace MEditService.Tests.Edits;
 /// included (xEdit parity: only "Deep copy as override" carries children).</summary>
 public sealed class RecordEditServiceContainerCopyTests
 {
-    private static ProjectingEditService ServiceFor(ILoadOrderMirror mirror) =>
-        ProjectingEditService.Over(mirror);
-
     [Fact]
     public void CopyRecordAsOverride_OnAQuest_Succeeds_OwnFieldsLand_ChildListsEmpty()
     {
         using var fixture = ContainerCopyFixture.Create();
 
-        var result = ServiceFor(fixture.Mirror).CopyRecordAsOverride(
+        var result = fixture.Edits.CopyRecordAsOverride(
             fixture.SourcePlugin, fixture.Quest.ToString(), fixture.DestinationPlugin);
 
         Assert.True(result.Applied, result.Message);
 
-        var doc = fixture.Mirror.Projected().GetDocument(fixture.Quest.ToString(), fixture.DestinationPlugin);
-        Assert.NotNull(doc);
-        Assert.Equal(ContainerCopyFixture.QuestEditorId, doc!.EditorId);
+        var document = fixture.Document(fixture.DestinationPlugin, fixture.Quest.ToString());
+        Assert.NotNull(document);
+        Assert.Equal(ContainerCopyFixture.QuestEditorId, document!.EditorId);
 
-        // Own fields only — no child lands as a row, and the quest's own document carries no child slot.
-        var reads = fixture.Mirror.Projected();
-        Assert.Null(reads.GetDocument(fixture.DialogTopic.ToString(), fixture.DestinationPlugin));
-        Assert.Null(reads.GetDocument(fixture.Scene.ToString(), fixture.DestinationPlugin));
-        Assert.Null(reads.GetDocument(fixture.DialogBranch.ToString(), fixture.DestinationPlugin));
-        Assert.Empty(reads.GetContainerChildren(fixture.DestinationPlugin, fixture.Quest.ToString()));
+        // Own fields only — no child lands in the tree, and the quest's own document carries no child slot.
+        Assert.Null(fixture.Document(fixture.DestinationPlugin, fixture.DialogTopic.ToString()));
+        Assert.Null(fixture.Document(fixture.DestinationPlugin, fixture.Scene.ToString()));
+        Assert.Null(fixture.Document(fixture.DestinationPlugin, fixture.DialogBranch.ToString()));
         var questText = File.ReadAllText(fixture.DestinationSourceFileContaining(ContainerCopyFixture.QuestEditorId));
         foreach (var slot in new[] { "DialogTopics", "DialogBranches", "Scenes" })
             Assert.DoesNotContain($"\"{slot}\"", questText, StringComparison.Ordinal);
@@ -46,21 +39,21 @@ public sealed class RecordEditServiceContainerCopyTests
     {
         using var fixture = ContainerCopyFixture.Create();
 
-        var result = ServiceFor(fixture.Mirror).CopyRecordAsOverride(
+        var result = fixture.Edits.CopyRecordAsOverride(
             fixture.SourcePlugin, fixture.InteriorCell.ToString(), fixture.DestinationPlugin);
 
         Assert.True(result.Applied, result.Message);
 
-        var doc = fixture.Mirror.Projected().GetDocument(fixture.InteriorCell.ToString(), fixture.DestinationPlugin);
-        Assert.NotNull(doc);
-        Assert.Equal(ContainerCopyFixture.InteriorCellEditorId, doc!.EditorId);
+        var document = fixture.Document(fixture.DestinationPlugin, fixture.InteriorCell.ToString());
+        Assert.NotNull(document);
+        Assert.Equal(ContainerCopyFixture.InteriorCellEditorId, document!.EditorId);
         Assert.Contains(
             $"\"WaterHeight\": {ContainerCopyFixture.InteriorCellWaterHeight:0.0}",
             File.ReadAllText(fixture.DestinationSourceFileContaining(ContainerCopyFixture.InteriorCellEditorId)),
             StringComparison.Ordinal);
 
-        Assert.Null(fixture.Mirror.Projected().GetDocument(fixture.PersistentRef.ToString(), fixture.DestinationPlugin));
-        Assert.Null(fixture.Mirror.Projected().GetDocument(fixture.TemporaryRef.ToString(), fixture.DestinationPlugin));
+        Assert.Null(fixture.Document(fixture.DestinationPlugin, fixture.PersistentRef.ToString()));
+        Assert.Null(fixture.Document(fixture.DestinationPlugin, fixture.TemporaryRef.ToString()));
 
         var cellFile = fixture.DestinationSourceFileContaining(ContainerCopyFixture.InteriorCellEditorId);
         var text = File.ReadAllText(cellFile);
@@ -79,16 +72,16 @@ public sealed class RecordEditServiceContainerCopyTests
     {
         using var fixture = ContainerCopyFixture.Create();
 
-        var result = ServiceFor(fixture.Mirror).CopyRecordAsOverride(
+        var result = fixture.Edits.CopyRecordAsOverride(
             fixture.SourcePlugin, fixture.Worldspace.ToString(), fixture.DestinationPlugin);
 
         Assert.True(result.Applied, result.Message);
 
-        var doc = fixture.Mirror.Projected().GetDocument(fixture.Worldspace.ToString(), fixture.DestinationPlugin);
-        Assert.NotNull(doc);
-        Assert.Equal(ContainerCopyFixture.WorldspaceEditorId, doc!.EditorId);
+        var document = fixture.Document(fixture.DestinationPlugin, fixture.Worldspace.ToString());
+        Assert.NotNull(document);
+        Assert.Equal(ContainerCopyFixture.WorldspaceEditorId, document!.EditorId);
 
-        Assert.Null(fixture.Mirror.Projected().GetDocument(fixture.TopCell.ToString(), fixture.DestinationPlugin));
+        Assert.Null(fixture.Document(fixture.DestinationPlugin, fixture.TopCell.ToString()));
         var worldFile = fixture.DestinationSourceFileContaining(ContainerCopyFixture.WorldspaceEditorId);
         Assert.DoesNotContain(ContainerCopyFixture.TopCellEditorId, File.ReadAllText(worldFile), StringComparison.Ordinal);
     }
@@ -100,7 +93,7 @@ public sealed class RecordEditServiceContainerCopyTests
     public void CopyRecordAsOverride_OnAPlacedReference_WhenDestinationAlreadyOverridesTheCell_Appends()
     {
         using var fixture = ContainerCopyFixture.Create();
-        var service = ServiceFor(fixture.Mirror);
+        var service = fixture.Edits;
         Assert.True(service.CopyRecordAsOverride(
             fixture.SourcePlugin, fixture.InteriorCell.ToString(), fixture.DestinationPlugin).Applied);
 
@@ -108,17 +101,16 @@ public sealed class RecordEditServiceContainerCopyTests
             fixture.SourcePlugin, fixture.PersistentRef.ToString(), fixture.DestinationPlugin);
 
         Assert.True(result.Applied, result.Message);
-        var childDoc = fixture.Mirror.Projected().GetDocument(fixture.PersistentRef.ToString(), fixture.DestinationPlugin);
-        Assert.NotNull(childDoc);
-        Assert.Equal(ContainerCopyFixture.PersistentRefEditorId, childDoc!.EditorId);
+        var child = fixture.Document(fixture.DestinationPlugin, fixture.PersistentRef.ToString());
+        Assert.NotNull(child);
+        Assert.Equal(ContainerCopyFixture.PersistentRefEditorId, child!.EditorId);
 
         var cellFile = fixture.DestinationSourceFileContaining(ContainerCopyFixture.InteriorCellEditorId);
         Assert.Contains(ContainerCopyFixture.PersistentRefEditorId, File.ReadAllText(cellFile), StringComparison.Ordinal);
         // The negative control this copy must not touch: the reference never copied at all.
         Assert.DoesNotContain(ContainerCopyFixture.TemporaryRefEditorId, File.ReadAllText(cellFile), StringComparison.Ordinal);
 
-        var cellDoc = fixture.Mirror.Projected().GetDocument(fixture.InteriorCell.ToString(), fixture.DestinationPlugin);
-        Assert.False(cellDoc!.IsPartialForm);
+        Assert.False(fixture.Document(fixture.DestinationPlugin, fixture.InteriorCell.ToString())!.IsPartialForm());
     }
 
     // A permanent boundary for a Worldspace's TopCell: its cell_location row carries no
@@ -128,12 +120,12 @@ public sealed class RecordEditServiceContainerCopyTests
     {
         using var fixture = ContainerCopyFixture.Create();
 
-        var result = ServiceFor(fixture.Mirror).CopyRecordAsOverride(
+        var result = fixture.Edits.CopyRecordAsOverride(
             fixture.SourcePlugin, fixture.TopCellRef.ToString(), fixture.DestinationPlugin);
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.ContainerParentMissingInDestination, result.Refusal);
-        Assert.Null(fixture.Mirror.Projected().GetDocument(fixture.TopCellRef.ToString(), fixture.DestinationPlugin));
+        Assert.Null(fixture.Document(fixture.DestinationPlugin, fixture.TopCellRef.ToString()));
     }
 
     // Copying the TopCell itself hits its own check (the isCell branch in CopyRecordAsOverride, not
@@ -143,12 +135,12 @@ public sealed class RecordEditServiceContainerCopyTests
     {
         using var fixture = ContainerCopyFixture.Create();
 
-        var result = ServiceFor(fixture.Mirror).CopyRecordAsOverride(
+        var result = fixture.Edits.CopyRecordAsOverride(
             fixture.SourcePlugin, fixture.TopCell.ToString(), fixture.DestinationPlugin);
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.ContainerParentMissingInDestination, result.Refusal);
-        Assert.Null(fixture.Mirror.Projected().GetDocument(fixture.TopCell.ToString(), fixture.DestinationPlugin));
+        Assert.Null(fixture.Document(fixture.DestinationPlugin, fixture.TopCell.ToString()));
     }
 
     // The genuine SubCells exterior case. Both ancestors mint as bare Partial Forms; the REFR lands
@@ -159,43 +151,69 @@ public sealed class RecordEditServiceContainerCopyTests
     {
         using var fixture = ContainerCopyFixture.Create();
 
-        var result = ServiceFor(fixture.Mirror).CopyRecordAsOverride(
+        var result = fixture.Edits.CopyRecordAsOverride(
             fixture.SourcePlugin, fixture.ExteriorPersistentRef.ToString(), fixture.DestinationPlugin);
 
         Assert.True(result.Applied, result.Message);
 
-        fixture.Mirror.Settle();
+        Assert.True(fixture.Document(fixture.DestinationPlugin, fixture.Worldspace.ToString())!.IsPartialForm());
 
-        var index = fixture.Mirror.Index!;
-        var worldspaceDoc = index.At(RecordRef.Effective).GetDocument(fixture.Worldspace.ToString(), fixture.DestinationPlugin);
-        Assert.NotNull(worldspaceDoc);
-        Assert.True(worldspaceDoc!.IsPartialForm);
+        var cell = fixture.Document(fixture.DestinationPlugin, fixture.ExteriorCell.ToString());
+        Assert.NotNull(cell);
+        Assert.True(cell!.IsPartialForm());
 
-        var cellDoc = index.At(RecordRef.Effective).GetDocument(fixture.ExteriorCell.ToString(), fixture.DestinationPlugin);
-        Assert.NotNull(cellDoc);
-        Assert.True(cellDoc!.IsPartialForm);
-
-        var refDoc = index.At(RecordRef.Effective).GetDocument(fixture.ExteriorPersistentRef.ToString(), fixture.DestinationPlugin);
-        Assert.NotNull(refDoc);
-        Assert.Equal(ContainerCopyFixture.ExteriorPersistentRefEditorId, refDoc!.EditorId);
+        var placed = fixture.Document(fixture.DestinationPlugin, fixture.ExteriorPersistentRef.ToString());
+        Assert.NotNull(placed);
+        Assert.Equal(ContainerCopyFixture.ExteriorPersistentRefEditorId, placed!.EditorId);
 
         var cellFile = fixture.DestinationSourceFileContaining(ContainerCopyFixture.ExteriorPersistentRefEditorId);
         var cellText = File.ReadAllText(cellFile);
         Assert.Contains(ContainerCopyFixture.ExteriorPersistentRefEditorId, cellText, StringComparison.Ordinal);
         // The negative control: the sibling temporary ref never copied, and never rode along.
         Assert.DoesNotContain(ContainerCopyFixture.ExteriorTemporaryRefEditorId, cellText, StringComparison.Ordinal);
-        Assert.Null(index.At(RecordRef.Effective).GetDocument(fixture.ExteriorTemporaryRef.ToString(), fixture.DestinationPlugin));
+        Assert.Null(fixture.Document(fixture.DestinationPlugin, fixture.ExteriorTemporaryRef.ToString()));
 
-        // Block and sub-block are the directories the mint wrote (ADR-0046 invariant 1); the grid is a
-        // field the mint carries into the bare ancestor's document, so the projector derives it same
-        // as any other cell's.
-        var source = index.At(RecordRef.Effective).GetCellLocation(fixture.SourcePlugin, fixture.ExteriorCell.ToString())!.Value;
-        var minted = index.At(RecordRef.Effective).GetCellLocation(fixture.DestinationPlugin, fixture.ExteriorCell.ToString())!.Value;
+        // Block and sub-block are the directories the mint wrote; the grid is a field the mint carries
+        // into the bare ancestor's document, the only place a lone cell can hold it.
         Assert.Equal(
-            (source.ParentWorldspace, source.BlockX, source.BlockY, source.SubX, source.SubY, source.IsInterior),
-            (minted.ParentWorldspace, minted.BlockX, minted.BlockY, minted.SubX, minted.SubY, minted.IsInterior));
-        Assert.Equal(ContainerCopyFixture.ExteriorGridX, minted.GridX);
-        Assert.Equal(ContainerCopyFixture.ExteriorGridY, minted.GridY);
+            new CellPlacement(
+                fixture.Worldspace.ToString(),
+                ContainerCopyFixture.ExteriorBlockX, ContainerCopyFixture.ExteriorBlockY,
+                ContainerCopyFixture.ExteriorSubX, ContainerCopyFixture.ExteriorSubY, IsInterior: false),
+            fixture.DestinationCellPlacement(fixture.ExteriorCell.ToString(), editorId: null));
+        Assert.Contains(
+            $"\"{ContainerCopyFixture.ExteriorGridX}, {ContainerCopyFixture.ExteriorGridY}\"",
+            cell.Body, StringComparison.Ordinal);
+    }
+
+    // A tracked source's own tree is what says where its cell sits: the block levels are directories
+    // there too, so the mint lands at the same coordinates an untracked source's file gives.
+    [Fact]
+    public void CopyRecordAsOverride_OnAnExteriorPlacedReferenceFromATrackedSource_MintsAtTheSourcesOwnBlock()
+    {
+        using var fixture = ContainerCopyFixture.CreateWithTrackedSource();
+
+        var result = fixture.Edits.CopyRecordAsOverride(
+            fixture.SourcePlugin, fixture.ExteriorPersistentRef.ToString(), fixture.DestinationPlugin);
+
+        Assert.True(result.Applied, result.Message);
+
+        // The directory names the mint wrote, not a read back through the same layout reader that
+        // supplied them: a reader that swapped the two levels would round-trip its own mistake.
+        var worldspaceDirectory = Assert.Single(
+            Directory.EnumerateDirectories(Path.Combine(fixture.DestinationSourceRoot, "Worldspaces")));
+        var blockDirectory = Assert.Single(
+            Directory.EnumerateDirectories(worldspaceDirectory),
+            d => Path.GetFileName(d)
+                .Equals($"{ContainerCopyFixture.ExteriorBlockX}, {ContainerCopyFixture.ExteriorBlockY}", StringComparison.Ordinal));
+        Assert.Single(
+            Directory.EnumerateDirectories(blockDirectory),
+            d => Path.GetFileName(d)
+                .Equals($"{ContainerCopyFixture.ExteriorSubX}, {ContainerCopyFixture.ExteriorSubY}", StringComparison.Ordinal));
+        Assert.Contains(
+            ContainerCopyFixture.ExteriorPersistentRefEditorId,
+            File.ReadAllText(fixture.DestinationSourceFileContaining(ContainerCopyFixture.ExteriorPersistentRefEditorId)),
+            StringComparison.Ordinal);
     }
 
     // "REFR in the same Persistent/Temporary slot as the source" — the
@@ -205,16 +223,23 @@ public sealed class RecordEditServiceContainerCopyTests
     {
         using var fixture = ContainerCopyFixture.Create();
 
-        var result = ServiceFor(fixture.Mirror).CopyRecordAsOverride(
+        var result = fixture.Edits.CopyRecordAsOverride(
             fixture.SourcePlugin, fixture.ExteriorTemporaryRef.ToString(), fixture.DestinationPlugin);
 
         Assert.True(result.Applied, result.Message);
-        fixture.Mirror.Settle();
-        var index = fixture.Mirror.Index!;
-        Assert.True(index.At(RecordRef.Effective).GetDocument(fixture.ExteriorCell.ToString(), fixture.DestinationPlugin)!.IsPartialForm);
-        Assert.NotNull(index.At(RecordRef.Effective).GetDocument(fixture.ExteriorTemporaryRef.ToString(), fixture.DestinationPlugin));
-        Assert.Null(index.At(RecordRef.Effective).GetDocument(fixture.ExteriorPersistentRef.ToString(), fixture.DestinationPlugin));
-        Assert.Equal("temporary", index.At(RecordRef.Effective).GetPlacement(fixture.ExteriorTemporaryRef.ToString(), fixture.DestinationPlugin)?.PlacementGroup);
+        var cell = fixture.Document(fixture.DestinationPlugin, fixture.ExteriorCell.ToString());
+        Assert.NotNull(cell);
+        Assert.True(cell!.IsPartialForm());
+        Assert.NotNull(fixture.Document(fixture.DestinationPlugin, fixture.ExteriorTemporaryRef.ToString()));
+        Assert.Null(fixture.Document(fixture.DestinationPlugin, fixture.ExteriorPersistentRef.ToString()));
+
+        // The slot itself, in the minted cell's own document: an implementation hardcoding Persistent
+        // would land the ref in the other member.
+        var slots = JsonDocument.Parse(cell.Body).RootElement;
+        Assert.Equal(
+            fixture.ExteriorTemporaryRef.ToString(),
+            Assert.Single(slots.GetProperty("Temporary").EnumerateArray()).GetProperty("FormKey").GetString());
+        Assert.False(slots.TryGetProperty("Persistent", out _));
     }
 
     // The requested record lands with its real fields and is not Partial Form; only the auto-created
@@ -225,49 +250,29 @@ public sealed class RecordEditServiceContainerCopyTests
     {
         using var fixture = ContainerCopyFixture.Create();
 
-        var result = ServiceFor(fixture.Mirror).CopyRecordAsOverride(
+        var result = fixture.Edits.CopyRecordAsOverride(
             fixture.SourcePlugin, fixture.ExteriorCell.ToString(), fixture.DestinationPlugin);
 
         Assert.True(result.Applied, result.Message);
 
-        fixture.Mirror.Settle();
+        Assert.True(fixture.Document(fixture.DestinationPlugin, fixture.Worldspace.ToString())!.IsPartialForm());
 
-        var index = fixture.Mirror.Index!;
-        var worldspaceDoc = index.At(RecordRef.Effective).GetDocument(fixture.Worldspace.ToString(), fixture.DestinationPlugin);
-        Assert.NotNull(worldspaceDoc);
-        Assert.True(worldspaceDoc!.IsPartialForm);
-
-        var cellDoc = index.At(RecordRef.Effective).GetDocument(fixture.ExteriorCell.ToString(), fixture.DestinationPlugin);
-        Assert.NotNull(cellDoc);
-        Assert.Equal(ContainerCopyFixture.ExteriorCellEditorId, cellDoc!.EditorId);
-        Assert.False(cellDoc.IsPartialForm);
+        var cell = fixture.Document(fixture.DestinationPlugin, fixture.ExteriorCell.ToString());
+        Assert.NotNull(cell);
+        Assert.Equal(ContainerCopyFixture.ExteriorCellEditorId, cell!.EditorId);
+        Assert.False(cell.IsPartialForm());
 
         // Own fields only: neither ref rides along with a plain (non-deep) copy of the Cell.
-        Assert.Null(index.At(RecordRef.Effective).GetDocument(fixture.ExteriorPersistentRef.ToString(), fixture.DestinationPlugin));
-        Assert.Null(index.At(RecordRef.Effective).GetDocument(fixture.ExteriorTemporaryRef.ToString(), fixture.DestinationPlugin));
+        Assert.Null(fixture.Document(fixture.DestinationPlugin, fixture.ExteriorPersistentRef.ToString()));
+        Assert.Null(fixture.Document(fixture.DestinationPlugin, fixture.ExteriorTemporaryRef.ToString()));
 
-        var expectedLocation = index.At(RecordRef.Effective).GetCellLocation(fixture.SourcePlugin, fixture.ExteriorCell.ToString());
-        Assert.Equal(expectedLocation, index.At(RecordRef.Effective).GetCellLocation(fixture.DestinationPlugin, fixture.ExteriorCell.ToString()));
-    }
-
-    // MintExteriorCell's two rows never reached ReapplyFilter when this branch returned straight from
-    // CopyRecordAsOverride. A brand-new row can newly match an active filter.
-    [Fact]
-    public void CopyRecordAsOverride_OnAGenuineExteriorCellItself_MakesTheCellAppearInAnActiveFilteredListing()
-    {
-        using var fixture = ContainerCopyFixture.Create();
-        // Scoped to the destination plugin: the source already holds a "cell" row under this FormKey, so
-        // an unscoped filter would match pre-copy and pass whether or not the new row was re-evaluated.
-        fixture.Mirror.SetFilter($"SELECT form_key FROM cell WHERE plugin = '{ContainerCopyFixture.DestinationPluginName}'");
-        var query = new RecordQuery(RecordTypes: ["cell"], Plugin: fixture.DestinationPlugin, Limit: 50, Offset: 0);
-        var before = fixture.Mirror.SettledReads().Search(query).Total;
-
-        var result = ServiceFor(fixture.Mirror).CopyRecordAsOverride(
-            fixture.SourcePlugin, fixture.ExteriorCell.ToString(), fixture.DestinationPlugin);
-
-        Assert.True(result.Applied, result.Message);
-        var after = fixture.Mirror.SettledReads().Search(query);
-        Assert.Equal(before + 1, after.Total);
+        Assert.Equal(
+            new CellPlacement(
+                fixture.Worldspace.ToString(),
+                ContainerCopyFixture.ExteriorBlockX, ContainerCopyFixture.ExteriorBlockY,
+                ContainerCopyFixture.ExteriorSubX, ContainerCopyFixture.ExteriorSubY, IsInterior: false),
+            fixture.DestinationCellPlacement(
+                fixture.ExteriorCell.ToString(), ContainerCopyFixture.ExteriorCellEditorId));
     }
 
     // Interior placement carries no gameplay meaning to compute, so a missing Cell override
@@ -278,14 +283,14 @@ public sealed class RecordEditServiceContainerCopyTests
     {
         using var fixture = ContainerCopyFixture.Create();
 
-        var result = ServiceFor(fixture.Mirror).CopyRecordAsOverride(
+        var result = fixture.Edits.CopyRecordAsOverride(
             fixture.SourcePlugin, fixture.PersistentRef.ToString(), fixture.DestinationPlugin);
 
         Assert.True(result.Applied, result.Message);
 
-        var cellDoc = fixture.Mirror.Projected().GetDocument(fixture.InteriorCell.ToString(), fixture.DestinationPlugin);
-        Assert.NotNull(cellDoc);
-        Assert.True(cellDoc!.IsPartialForm);
+        var mintedCell = fixture.Document(fixture.DestinationPlugin, fixture.InteriorCell.ToString());
+        Assert.NotNull(mintedCell);
+        Assert.True(mintedCell!.IsPartialForm());
 
         // The destination has no other Cell yet, so exactly one RecordData.json under Cells/ exists —
         // no EditorID to search by (the auto-created cell is bare, per the contract above).
@@ -298,7 +303,6 @@ public sealed class RecordEditServiceContainerCopyTests
             StringComparison.Ordinal);
         Assert.Contains(ContainerCopyFixture.PersistentRefEditorId, File.ReadAllText(cellFile), StringComparison.Ordinal);
 
-        var childDoc = fixture.Mirror.Projected().GetDocument(fixture.PersistentRef.ToString(), fixture.DestinationPlugin);
-        Assert.NotNull(childDoc);
+        Assert.NotNull(fixture.Document(fixture.DestinationPlugin, fixture.PersistentRef.ToString()));
     }
 }

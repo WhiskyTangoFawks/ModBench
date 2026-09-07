@@ -22,6 +22,12 @@ internal readonly record struct SourceUnit(
         && Path.GetFileName(FullPath).Equals(SourceRepository.RecordDataFileName, StringComparison.Ordinal);
 }
 
+/// <summary>Where the tree puts a cell: the worldspace whose subtree carries it and the block
+/// directories it sits in. An interior cell has neither; a worldspace's own top cell has a
+/// worldspace and no block.</summary>
+internal readonly record struct CellPlacement(
+    string? ParentWorldspace, int? BlockX, int? BlockY, int? SubX, int? SubY, bool IsInterior);
+
 /// <summary>Resolution: which document in the tree holds a record. The listing memo and the
 /// embedded-owner map are the repository's own per-operation state, and nothing outside it holds
 /// either.</summary>
@@ -179,6 +185,75 @@ public sealed partial class SourceRepository
     internal bool CarriesEmbedded(PluginKey plugin, string formKey) =>
         OwnersUnder(Path.Combine(_modFolder, RootFor(plugin.Name)))
             .DocumentHolding(formKey) is not null;
+
+    /// <summary>True when this plugin's tree holds <paramref name="formKey"/> at the working tree or
+    /// at HEAD. Both, because a working-tree deletion does not free the ID until the next
+    /// compile.</summary>
+    internal bool HoldsAtEitherRef(PluginKey plugin, string formKey) =>
+        HoldsNow(plugin, formKey) || HoldsAtRef(plugin, formKey, "HEAD");
+
+    // Its own document's text has to declare the FormKey its name carries; otherwise another
+    // record's document carries it inline, which the owner map answers.
+    private bool HoldsNow(PluginKey plugin, string formKey)
+    {
+        if (!FormKey.TryFactory(formKey, out var parsed)) return false;
+        var sourceRoot = Path.Combine(_modFolder, RootFor(plugin.Name));
+        if (!Directory.Exists(sourceRoot)) return false;
+
+        foreach (var documentPath in DocumentsNaming(sourceRoot, parsed.ToString()))
+        {
+            if (ReadOrNull(documentPath) is not { } text) continue;
+            if (RootStringIn(text, "FormKey") is { } declared
+                && FormKey.TryFactory(declared, out var carried) && carried == parsed)
+            {
+                return true;
+            }
+        }
+        return CarriesEmbedded(plugin, formKey);
+    }
+
+    // The committed set, read the same way the allocator reads it: a document's own FormKey, plus
+    // every child inlined in it.
+    private bool HoldsAtRef(PluginKey plugin, string formKey, string gitRef) =>
+        ReadAll(plugin, gitRef).Any(document =>
+            document.FormKey.Equals(formKey, StringComparison.OrdinalIgnoreCase)
+            || FormKeysIn(System.Text.Encoding.UTF8.GetBytes(document.Body))
+                .Any(key => key.InAnEmbedSlot && key.FormKey.Equals(formKey, StringComparison.OrdinalIgnoreCase)));
+
+    /// <summary>Where the tree puts the cell <paramref name="identity"/> names, or null when nothing
+    /// holds it. The block levels are directories, which is why only the repository reads them back
+    /// (ADR-0046 invariant 9).</summary>
+    internal CellPlacement? CellPlacementOf(PluginKey plugin, RecordIdentity identity)
+    {
+        if (Locate(plugin, identity) is not { } unit) return null;
+
+        // A worldspace's own top cell is inlined in the worldspace's document, so it has a worldspace
+        // above it and no numbered block to be at.
+        if (unit.IsEmbedded) return new CellPlacement(unit.OwnerFormKey, null, null, null, null, IsInterior: false);
+
+        var path = new LayoutPath(unit.RelativePath);
+        if (path.UnderGroupBlockLevels) return new CellPlacement(null, null, null, null, null, IsInterior: true);
+        if (!path.UnderWorldspaceBlockLevels) return null;
+
+        var worldspaceDocument = Path.Combine(_modFolder, path.WorldspaceDirectory, RecordDataFileName);
+        if (FormKeyDeclaredBy(worldspaceDocument, _modFolder, plugin.Name) is not { } worldspace) return null;
+
+        var (blockX, blockY) = Coordinates(path.BlockFolderName);
+        var (subX, subY) = Coordinates(path.SubBlockFolderName);
+        return new CellPlacement(worldspace, blockX, blockY, subX, subY, IsInterior: false);
+    }
+
+    // "<x>, <y>", as the whole-mod serializer names a block level's directory. Null coordinates for
+    // any other name: a tree something else restructured says nothing about a grid.
+    private static (int? X, int? Y) Coordinates(string folderName)
+    {
+        var parts = folderName.Split(',', 2);
+        return parts.Length == 2
+               && int.TryParse(parts[0].Trim(), System.Globalization.CultureInfo.InvariantCulture, out var x)
+               && int.TryParse(parts[1].Trim(), System.Globalization.CultureInfo.InvariantCulture, out var y)
+            ? (x, y)
+            : (null, null);
+    }
 
     private SourceUnit Unit(string fullPath, string ownerFormKey, string? ownerRecordType, bool isEmbedded) =>
         new(fullPath, Path.GetRelativePath(_modFolder, fullPath), ownerFormKey, ownerRecordType, isEmbedded);

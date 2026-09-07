@@ -73,11 +73,25 @@ public sealed class FormLinkResolver(
         return opened;
     }
 
-    private RecordLookupEntry? FromWorkingTree(SourceRepository repository, PluginKey plugin, FormKey formKey) =>
-        repository.IdentityOf(plugin, formKey.ToString(), schemaReflector.GetSchemas(loadOrder.GameRelease))
-            is { } identity
-            ? new RecordLookupEntry(identity.RecordType, identity.EditorId)
-            : null;
+    private RecordLookupEntry? FromWorkingTree(SourceRepository repository, PluginKey plugin, FormKey formKey)
+    {
+        try
+        {
+            return repository.IdentityOf(plugin, formKey.ToString(), schemaReflector.GetSchemas(loadOrder.GameRelease))
+                is { } identity
+                ? new RecordLookupEntry(identity.RecordType, identity.EditorId)
+                : null;
+        }
+        // Naming a record means reading the document carrying it, and a corrupt one is the target's
+        // defect, not the edited record's: unresolved here, so the edit refuses the link.
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            _logger.LogWarning(
+                ex, "Could not read {Plugin}'s tree for {FormKey}; links into it read as unresolved",
+                plugin.Name, formKey);
+            return null;
+        }
+    }
 
     private RecordLookupEntry? FromPluginFile(RegisteredCopy copy, FormKey formKey)
     {

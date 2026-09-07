@@ -23,11 +23,10 @@ public sealed class ExteriorCellCopyCompileTests : IDisposable
         _fixture.Dispose();
     }
 
-    private ProjectingEditService EditService() =>
-        ProjectingEditService.Over(_fixture.Mirror);
+    private RecordEditService EditService() => _fixture.Edits;
 
     private PluginCompileService CompileService() =>
-        CompileServices.Over(_fixture.Mirror);
+        CompileServices.Over(_fixture.LoadOrder);
 
     [Fact]
     public void CopyExteriorPlacedReference_CompilesToBinary_AndPlacesTheRefUnderTheSourcesOwnBlockAndSubBlock()

@@ -1,21 +1,20 @@
-using DuckDB.NET.Data;
+using System.Text;
 using MEditService.Core.Edits;
 using MEditService.Core.Plugins;
-using MEditService.Core.Queries;
 using MEditService.Core.Records;
-using MEditService.Core.Schema;
+using MEditService.Core.Serialization;
 using MEditService.Core.Source;
 using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
+using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Tests.Edits;
 
-/// <summary>A record Mutagen could not read is indexed as a stub of its FormKey and EditorID, so
-/// copying it would land that stub as a real record. Both copies refuse it with the
-/// diagnosis.</summary>
+/// <summary>A record the codec cannot read would land as a stub of its FormKey and EditorID rather
+/// than the record. Both copies refuse it with the reader's own diagnosis.</summary>
 public sealed class ParseFailedCopyRefusalTests : IDisposable
 {
     private const string UnreadablePerk = "0000EF:SKI_PlasmaAutocannon.esp";
@@ -28,27 +27,24 @@ public sealed class ParseFailedCopyRefusalTests : IDisposable
     [Fact]
     public void CopyRecordAsOverride_OfAParseFailedRecord_IsRefusedWithItsDiagnosis_AndWritesNothing()
     {
-        var result = _mod.Service.CopyRecordAsOverride(_mod.SourcePlugin, UnreadablePerk, _mod.DestinationPlugin);
+        var result = _mod.Edits.CopyRecordAsOverride(_mod.SourcePlugin, UnreadablePerk, _mod.DestinationPlugin);
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.RecordParseFailed, result.Refusal);
         Assert.Contains(Diagnosis, result.Message, StringComparison.Ordinal);
         Assert.Empty(_mod.DestinationGitStatus());
-        Assert.Null(_mod.Reads.GetDocument(UnreadablePerk, _mod.DestinationPlugin));
+        Assert.Null(_mod.DestinationDocument(UnreadablePerk));
     }
 
     [Fact]
     public void CopyRecordAsNewRecord_OfAParseFailedRecord_IsRefusedWithItsDiagnosis_AndWritesNothing()
     {
-        var before = _mod.DestinationRecordCount();
-
-        var result = _mod.Service.CopyRecordAsNewRecord(_mod.SourcePlugin, UnreadablePerk, _mod.DestinationPlugin);
+        var result = _mod.Edits.CopyRecordAsNewRecord(_mod.SourcePlugin, UnreadablePerk, _mod.DestinationPlugin);
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.RecordParseFailed, result.Refusal);
         Assert.Contains(Diagnosis, result.Message, StringComparison.Ordinal);
         Assert.Empty(_mod.DestinationGitStatus());
-        Assert.Equal(before, _mod.DestinationRecordCount());
     }
 
     [Fact]
@@ -56,10 +52,10 @@ public sealed class ParseFailedCopyRefusalTests : IDisposable
     {
         var readable = _mod.ReadablePerk();
 
-        var result = _mod.Service.CopyRecordAsOverride(_mod.SourcePlugin, readable, _mod.DestinationPlugin);
+        var result = _mod.Edits.CopyRecordAsOverride(_mod.SourcePlugin, readable, _mod.DestinationPlugin);
 
         Assert.True(result.Applied, result.Message);
-        Assert.NotNull(_mod.Reads.GetDocument(readable, _mod.DestinationPlugin));
+        Assert.NotNull(_mod.DestinationDocument(readable));
     }
 
     [Fact]
@@ -67,14 +63,14 @@ public sealed class ParseFailedCopyRefusalTests : IDisposable
     {
         var readable = _mod.ReadablePerk();
 
-        var result = _mod.Service.CopyRecordAsNewRecord(_mod.SourcePlugin, readable, _mod.DestinationPlugin);
+        var result = _mod.Edits.CopyRecordAsNewRecord(_mod.SourcePlugin, readable, _mod.DestinationPlugin);
 
         Assert.True(result.Applied, result.Message);
-        Assert.NotNull(_mod.Reads.GetDocument(result.NewFormKey!, _mod.DestinationPlugin));
+        Assert.NotNull(_mod.DestinationDocument(result.NewFormKey!));
     }
 
-    // The source stays untracked, so the indexed stub really is the only representation the copy
-    // can reach.
+    // The source stays untracked, so the copy reads it through the Plugin adapter — the one door a
+    // record with no source text has.
     private sealed class ParseFailedCopyFixture : IDisposable
     {
         private const string SourcePluginName = "SKI_PlasmaAutocannon.esp";
@@ -85,22 +81,21 @@ public sealed class ParseFailedCopyRefusalTests : IDisposable
         private readonly string _gameDirectory = Directory.CreateTempSubdirectory("medit-copyfail-game-").FullName;
         private readonly string _sourceModFolder = Directory.CreateTempSubdirectory("medit-copyfail-source-").FullName;
         private readonly string _destinationModFolder = Directory.CreateTempSubdirectory("medit-copyfail-dest-").FullName;
-        private readonly LoadOrderMirror _mirror;
+        private readonly string _sourcePath;
 
         public PluginKey SourcePlugin { get; } = new(SourcePluginName, SourceOrigin);
         public PluginKey DestinationPlugin { get; } = new(DestinationPluginName, DestinationOrigin);
-        public ProjectingEditService Service { get; }
-        public IRecordReads Reads => _mirror.SettledReads();
+        public RecordEditService Edits { get; }
 
         public ParseFailedCopyFixture()
         {
-            var sourcePath = Path.Combine(_sourceModFolder, SourcePluginName);
-            File.Copy(Path.Combine(AppContext.BaseDirectory, "TestData", SourcePluginName), sourcePath);
+            _sourcePath = Path.Combine(_sourceModFolder, SourcePluginName);
+            File.Copy(Path.Combine(AppContext.BaseDirectory, "TestData", SourcePluginName), _sourcePath);
 
-            // The mirror needs the fixture's declared masters present, not their content.
+            // The reader needs the fixture's declared masters present, not their content.
             var inputs = new List<LoadOrderEntry>();
             using (var overlay = Fallout4Mod.CreateFromBinaryOverlay(
-                new ModPath(ModKey.FromFileName(SourcePluginName), sourcePath), Fallout4Release.Fallout4))
+                new ModPath(ModKey.FromFileName(SourcePluginName), _sourcePath), Fallout4Release.Fallout4))
             {
                 foreach (var master in overlay.ModHeader.MasterReferences)
                 {
@@ -109,7 +104,7 @@ public sealed class ParseFailedCopyRefusalTests : IDisposable
                     inputs.Add(new LoadOrderEntry(master.Master.FileName, stubPath, "Stubs", inputs.Count, Enabled: true, Winning: true));
                 }
             }
-            inputs.Add(new LoadOrderEntry(SourcePluginName, sourcePath, SourceOrigin, inputs.Count, Enabled: true, Winning: true));
+            inputs.Add(new LoadOrderEntry(SourcePluginName, _sourcePath, SourceOrigin, inputs.Count, Enabled: true, Winning: true));
 
             // Last, so the copy is never an underride of the plugin it copies from.
             var destinationPath = Path.Combine(_destinationModFolder, DestinationPluginName);
@@ -118,29 +113,44 @@ public sealed class ParseFailedCopyRefusalTests : IDisposable
             destination.WriteToBinary(destinationPath);
             inputs.Add(new LoadOrderEntry(DestinationPluginName, destinationPath, DestinationOrigin, inputs.Count, Enabled: true, Winning: true));
 
-            _mirror = new LoadOrderMirror(
-                new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
-            ((ILoadOrderMirror)_mirror).Reconcile(_gameDirectory, inputs, GameRelease.Fallout4);
+            var loadOrder = LoadOrder.From(_gameDirectory, _gameDirectory, GameRelease.Fallout4, inputs);
             new TrackService(NullLogger<TrackService>.Instance)
-                .TrackAsync(_mirror.LoadOrder!, DestinationOrigin, SourcePreset.Edits).GetAwaiter().GetResult();
+                .TrackAsync(loadOrder, [DestinationPlugin], DestinationOrigin, SourcePreset.Edits).GetAwaiter().GetResult();
 
-            Service = ProjectingEditService.Over(_mirror);
+            var holder = new LoadOrderHolder();
+            holder.Apply(loadOrder);
+            Edits = TestEditService.Over(holder);
         }
 
-        public string ReadablePerk() =>
-            Reads.Search(new RecordQuery(RecordTypes: ["perk"], Plugin: SourcePlugin, Search: null, Limit: 1000, Offset: 0))
-                .Items.First(r => r.ParseDiagnosis is null).FormKey;
+        public SourceDocument? DestinationDocument(string formKey) =>
+            TrackedTree.Document(_destinationModFolder, DestinationPlugin, formKey);
 
-        public int DestinationRecordCount() =>
-            Reads.GetRecordTypeCounts(DestinationPlugin).Sum(c => c.Count);
+        /// <summary>A perk from the same plugin the codec does read, found the way the copy path finds
+        /// one: by asking the codec.</summary>
+        public string ReadablePerk()
+        {
+            var codec = new RecordTextCodec(NullLogger<RecordTextCodec>.Instance);
+            using var overlay = Fallout4Mod.CreateFromBinaryOverlay(
+                new ModPath(ModKey.FromFileName(SourcePluginName), _sourcePath), Fallout4Release.Fallout4);
+            foreach (var perk in overlay.Perks)
+            {
+                try
+                {
+                    codec.SerializeToBytesAsync(perk, GameRelease.Fallout4).GetAwaiter().GetResult();
+                }
+                catch (Exception)
+                {
+                    continue;
+                }
+                return perk.FormKey.ToString();
+            }
+            throw new InvalidOperationException($"{SourcePluginName} holds no perk the codec can read.");
+        }
 
-        public IReadOnlyList<string> DestinationGitStatus() =>
-            GitCli.Run(Path.Combine(_destinationModFolder, ".git"), _destinationModFolder, "status", "--porcelain")
-                .Split('\n', StringSplitOptions.RemoveEmptyEntries);
+        public IReadOnlyList<string> DestinationGitStatus() => TrackedTree.GitStatus(_destinationModFolder);
 
         public void Dispose()
         {
-            _mirror.Dispose();
             TryDelete(_sourceModFolder);
             TryDelete(_destinationModFolder);
             TryDelete(_gameDirectory);
@@ -157,38 +167,34 @@ public sealed class ParseFailedCopyRefusalTests : IDisposable
     }
 }
 
-/// <summary>A dialog topic copies its responses as new records too, so an unreadable response is
-/// refused with the topic it belongs to, before the topic or any sibling is written.</summary>
+/// <summary>A dialog topic's responses are inside its own document, so a response the codec cannot
+/// read makes the topic unreadable too: the copy refuses before the quest chain is minted.</summary>
 public sealed class ParseFailedDialogChildCopyRefusalTests : IDisposable
 {
-    private const string Diagnosis = "the response subrecord was cut short";
-
-    private readonly ContainerCopyFixture _mod = ContainerCopyFixture.Create();
+    private readonly ContainerCopyFixture _mod = ContainerCopyFixture.CreateWithTrackedSource();
 
     public void Dispose() => _mod.Dispose();
 
     [Fact]
-    public void CopyRecordAsNewRecord_OfADialogTopicWithAParseFailedResponse_IsRefused_AndWritesNothing()
+    public void CopyRecordAsNewRecord_OfADialogTopicWithAnUnreadableResponse_IsRefused_AndWritesNothing()
     {
-        using (var cmd = ((DuckDbRecordIndex)_mod.Mirror.Index!).Connection.CreateCommand())
-        {
-            cmd.CommandText = "UPDATE mirror.records SET parse_diagnosis = $1 WHERE form_key = $2";
-            cmd.Parameters.Add(new DuckDBParameter { Value = Diagnosis });
-            cmd.Parameters.Add(new DuckDBParameter { Value = _mod.Response2.ToString() });
-            cmd.ExecuteNonQuery();
-        }
-        var service = ProjectingEditService.Over(_mod.Mirror);
+        var questFile = _mod.SourceFileContaining(_mod.SourcePlugin, ContainerCopyFixture.Response2EditorId);
+        File.WriteAllText(
+            questFile,
+            File.ReadAllText(questFile).Replace(
+                $"\"EditorID\": \"{ContainerCopyFixture.Response2EditorId}\"",
+                $"\"MajorRecordFlagsRaw\": \"notanumber\",\n\"EditorID\": \"{ContainerCopyFixture.Response2EditorId}\"",
+                StringComparison.Ordinal));
 
-        var result = service.CopyRecordAsNewRecord(_mod.SourcePlugin, _mod.DialogTopic.ToString(), _mod.DestinationPlugin);
+        var result = _mod.Edits.CopyRecordAsNewRecord(
+            _mod.SourcePlugin, _mod.DialogTopic.ToString(), _mod.DestinationPlugin);
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.RecordParseFailed, result.Refusal);
-        Assert.Contains(_mod.Response2.ToString(), result.Message, StringComparison.Ordinal);
-        Assert.Contains(Diagnosis, result.Message, StringComparison.Ordinal);
-        Assert.Empty(GitCli
-            .Run(Path.Combine(_mod.DestinationModFolder, ".git"), _mod.DestinationModFolder, "status", "--porcelain")
-            .Split('\n', StringSplitOptions.RemoveEmptyEntries));
+        // The reader's own words, not ours: the codec is the only thing that can say why.
+        Assert.Contains("Unable to cast", result.Message, StringComparison.Ordinal);
+        Assert.Empty(_mod.DestinationGitStatus());
         // The auto-created parent quest override is the first thing the copy would land.
-        Assert.Null(_mod.Mirror.SettledReads().GetDocument(_mod.Quest.ToString(), _mod.DestinationPlugin));
+        Assert.Null(_mod.Document(_mod.DestinationPlugin, _mod.Quest.ToString()));
     }
 }

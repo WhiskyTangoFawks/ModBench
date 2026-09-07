@@ -86,15 +86,12 @@ public sealed class SourceEditFixture : IDisposable
 
     /// <summary>What the tree holds for a FormKey, read back through the same repository the write
     /// side wrote through — the whole read model these suites have.</summary>
-    public SourceDocument? Document(string formKey) =>
-        Repository is { } repository && Identity(repository, formKey) is { } identity
-            ? repository.Get(Plugin, identity)
-            : null;
+    public SourceDocument? Document(string formKey) => TrackedTree.Document(ModFolder, Plugin, formKey);
 
     /// <summary>The same question at HEAD: what the last commit holds, which a working-tree deletion
     /// does not change.</summary>
     public SourceDocument? CommittedDocument(string formKey, string recordType, string? editorId) =>
-        Repository?.GetAt(Plugin, new RecordIdentity(formKey, recordType, editorId), "HEAD");
+        TrackedTree.CommittedDocument(ModFolder, Plugin, new RecordIdentity(formKey, recordType, editorId));
 
     public SourceRepository? Repository => SourceRepository.Open(ModFolder, GameRelease.Fallout4);
 
@@ -117,9 +114,6 @@ public sealed class SourceEditFixture : IDisposable
         GitCli.Run(Path.Combine(ModFolder, ".git"), ModFolder, "show", $"HEAD:{relativePath.Replace('\\', '/')}");
 
     public void Dispose() => TryDelete(InstanceRoot);
-
-    private RecordIdentity? Identity(SourceRepository repository, string formKey) =>
-        repository.IdentityOf(Plugin, formKey, SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4));
 
     // Unavoidable, not defensive: plain porcelain v1 C-quotes any path containing a space
     // unconditionally — core.quotePath governs only bytes above 0x80 — and these names all have one.

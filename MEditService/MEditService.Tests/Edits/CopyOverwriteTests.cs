@@ -1,8 +1,4 @@
 using MEditService.Core.Edits;
-using MEditService.Core.Records;
-using MEditService.Core.Schema;
-using MEditService.Tests.TestSupport;
-using Microsoft.Extensions.Logging.Abstractions;
 
 namespace MEditService.Tests.Edits;
 
@@ -14,8 +10,7 @@ public sealed class CopyOverwriteTests : IDisposable
 
     public void Dispose() => _fixture.Dispose();
 
-    private ProjectingEditService EditService() =>
-        ProjectingEditService.Over(_fixture.Mirror);
+    private RecordEditService EditService() => _fixture.Edits;
 
     // The replace is own-fields-only: children the destination's override accumulated (a copied-in
     // placed ref, embedded inline in the cell's document) survive the overwrite.
@@ -36,8 +31,7 @@ public sealed class CopyOverwriteTests : IDisposable
         var cellText = File.ReadAllText(cellFile);
         // Own fields re-copied, and the copied-in child still embedded.
         Assert.Contains(ContainerCopyFixture.PersistentRefEditorId, cellText, StringComparison.Ordinal);
-        var reads = _fixture.Mirror.Projected();
-        Assert.NotNull(reads.GetDocument(_fixture.PersistentRef.ToString(), _fixture.DestinationPlugin));
+        Assert.NotNull(_fixture.Document(_fixture.DestinationPlugin, _fixture.PersistentRef.ToString()));
     }
 
     // The scope boundary: a flat record keeps the FormKeyCollision refusal — the overwrite rule
@@ -70,9 +64,7 @@ public sealed class CopyOverwriteTests : IDisposable
             _fixture.SourcePlugin, _fixture.PersistentRef.ToString(), _fixture.DestinationPlugin);
 
         Assert.True(result.Applied, result.Message);
-        var reads = _fixture.Mirror.Projected();
-        var placement = reads.GetPlacement(_fixture.PersistentRef.ToString(), _fixture.DestinationPlugin);
-        Assert.NotNull(placement);
+        Assert.NotNull(_fixture.Document(_fixture.DestinationPlugin, _fixture.PersistentRef.ToString()));
         // Still exactly one embedding of the ref in the cell's document.
         var cellFile = _fixture.DestinationSourceFileContaining(ContainerCopyFixture.PersistentRefEditorId);
         var occurrences = File.ReadAllText(cellFile).Split(ContainerCopyFixture.PersistentRefEditorId).Length - 1;
@@ -86,15 +78,14 @@ public sealed class CopyOverwriteTests : IDisposable
     public void CopyAsOverride_IntoADestinationThatLoadsBeforeTheOrigin_RefusesAsUnderride()
     {
         using var underrideFixture = ContainerCopyFixture.CreateWithDestinationLoadingFirst();
-        var service = ProjectingEditService.Over(underrideFixture.Mirror);
 
-        var result = service.CopyRecordAsOverride(
+        var result = underrideFixture.Edits.CopyRecordAsOverride(
             underrideFixture.SourcePlugin, underrideFixture.FlatNpc.ToString(), underrideFixture.DestinationPlugin);
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.UnderrideDestination, result.Refusal);
-        Assert.Null(underrideFixture.Mirror.Projected()
-            .GetDocument(underrideFixture.FlatNpc.ToString(), underrideFixture.DestinationPlugin));
+        Assert.Null(underrideFixture.Document(
+            underrideFixture.DestinationPlugin, underrideFixture.FlatNpc.ToString()));
     }
 
     [Fact]
@@ -109,9 +100,8 @@ public sealed class CopyOverwriteTests : IDisposable
 
         Assert.True(result.Applied, result.Message);
 
-        var reads = _fixture.Mirror.Projected();
-        var questDoc = reads.GetDocument(_fixture.Quest.ToString(), _fixture.DestinationPlugin);
-        Assert.Equal(ContainerCopyFixture.QuestEditorId, questDoc!.EditorId);
+        var questDocument = _fixture.Document(_fixture.DestinationPlugin, _fixture.Quest.ToString());
+        Assert.Equal(ContainerCopyFixture.QuestEditorId, questDocument!.EditorId);
 
         // Replaced in place: still exactly one quest file, one document row.
         Assert.Single(

@@ -1,9 +1,6 @@
 using System.Text.Json;
 using MEditService.Core.Edits;
-using MEditService.Core.Records;
-using MEditService.Core.Schema;
 using MEditService.Tests.TestSupport;
-using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -25,12 +22,22 @@ public sealed class CopyAsNewContainerTests : IDisposable
 
     private readonly List<IDisposable> _overlays = [];
 
-    private ProjectingEditService EditService() =>
-        ProjectingEditService.Over(_fixture.Mirror);
+    private RecordEditService EditService() => _fixture.Edits;
+
+    // Every response the destination's copy of a topic carries, in slot order, out of the topic's own
+    // document — the only place they exist, since a response has no file of its own.
+    private IReadOnlyList<JsonElement> Responses(string topicFormKey)
+    {
+        var topic = _fixture.Document(_fixture.DestinationPlugin, topicFormKey);
+        Assert.NotNull(topic);
+        return [.. JsonDocument.Parse(topic!.Body).RootElement.GetProperty("Responses").EnumerateArray()];
+    }
+
+    private static string Member(JsonElement response, string name) => response.GetProperty(name).GetString()!;
 
     private IFallout4ModGetter ImportCompiled()
     {
-        var compileResult = CompileServices.Over(_fixture.Mirror)
+        var compileResult = CompileServices.Over(_fixture.LoadOrder)
             .Compile(_fixture.DestinationPlugin, new CompileSource.WorkingTree());
         Assert.True(compileResult.Succeeded, compileResult.RefusalReason);
 
@@ -54,34 +61,29 @@ public sealed class CopyAsNewContainerTests : IDisposable
         var newTopicFormKey = result.NewFormKey!;
         Assert.EndsWith(ContainerCopyFixture.DestinationPluginName, newTopicFormKey, StringComparison.OrdinalIgnoreCase);
 
-        var reads = _fixture.Mirror.Projected();
-
         // The parent chain: quest auto-created as a bare Partial Form override, same FormKey as the
         // source quest (it is an override, not a copy).
-        var questDoc = reads.GetDocument(_fixture.Quest.ToString(), _fixture.DestinationPlugin);
-        Assert.NotNull(questDoc);
-        Assert.True(questDoc!.IsPartialForm);
+        var quest = _fixture.Document(_fixture.DestinationPlugin, _fixture.Quest.ToString());
+        Assert.NotNull(quest);
+        Assert.True(quest!.IsPartialForm());
 
-        // The topic's children in the index: two responses, fresh keys, source order preserved.
-        var children = reads.GetContainerChildren(_fixture.DestinationPlugin, newTopicFormKey);
-        Assert.Equal(2, children.Count);
-        var childDocs = children
-            .OrderBy(c => c.SlotIndex)
-            .Select(c => reads.GetDocument(c.ChildFormKey, _fixture.DestinationPlugin)!)
-            .ToList();
+        // The new topic's own document carries both responses, fresh keys, source order preserved.
+        var responses = Responses(newTopicFormKey);
+        Assert.Equal(2, responses.Count);
         Assert.Equal(
             [ContainerCopyFixture.Response1EditorId, ContainerCopyFixture.Response2EditorId],
-            childDocs.Select(d => d.EditorId!).ToArray());
-        Assert.All(children, c =>
-            Assert.EndsWith(ContainerCopyFixture.DestinationPluginName, c.ChildFormKey, StringComparison.OrdinalIgnoreCase));
-        Assert.DoesNotContain(_fixture.Response1.ToString(), children.Select(c => c.ChildFormKey));
-        Assert.DoesNotContain(_fixture.Response2.ToString(), children.Select(c => c.ChildFormKey));
+            responses.Select(r => Member(r, "EditorID")).ToArray());
+        Assert.All(responses, r =>
+            Assert.EndsWith(ContainerCopyFixture.DestinationPluginName, Member(r, "FormKey"), StringComparison.OrdinalIgnoreCase));
+        var responseKeys = responses.Select(r => Member(r, "FormKey")).ToList();
+        Assert.DoesNotContain(_fixture.Response1.ToString(), responseKeys);
+        Assert.DoesNotContain(_fixture.Response2.ToString(), responseKeys);
 
         // Compiled: the quest carries the new topic; the topic carries both responses under their
         // new keys in order; the copied Response2 still links the ORIGINAL Response1.
         // Both responses are inline in the new topic's one document.
         var topicText = File.ReadAllText(_fixture.DestinationSourceFileContaining(ContainerCopyFixture.DialogTopicEditorId));
-        Assert.All(children, c => Assert.Contains(c.ChildFormKey, topicText, StringComparison.Ordinal));
+        Assert.All(responseKeys, key => Assert.Contains(key, topicText, StringComparison.Ordinal));
         Assert.Empty(Directory.EnumerateDirectories(_fixture.DestinationSourceRoot, "Responses", SearchOption.AllDirectories));
 
         var compiled = ImportCompiled();
@@ -126,9 +128,7 @@ public sealed class CopyAsNewContainerTests : IDisposable
         var landed = Assert.Single(questAfter.RootElement.GetProperty(nameof(Quest.DialogTopics)).EnumerateArray());
         Assert.Equal(result.NewFormKey, landed.GetProperty("FormKey").GetString());
 
-        var reads = _fixture.Mirror.Projected();
-        var questDoc = reads.GetDocument(_fixture.Quest.ToString(), _fixture.DestinationPlugin);
-        Assert.False(questDoc!.IsPartialForm);
+        Assert.False(_fixture.Document(_fixture.DestinationPlugin, _fixture.Quest.ToString())!.IsPartialForm());
 
         // One quest file total, and no directory: the topic is inside it.
         var questsDir = Path.Combine(_fixture.DestinationSourceRoot, "Quests");
@@ -153,13 +153,11 @@ public sealed class CopyAsNewContainerTests : IDisposable
         var newFormKey = result.NewFormKey!;
         Assert.EndsWith(ContainerCopyFixture.DestinationPluginName, newFormKey, StringComparison.OrdinalIgnoreCase);
 
-        var reads = _fixture.Mirror.Projected();
-        Assert.True(reads.GetDocument(_fixture.Quest.ToString(), _fixture.DestinationPlugin)!.IsPartialForm);
-        Assert.True(reads.GetDocument(_fixture.DialogTopic.ToString(), _fixture.DestinationPlugin)!.IsPartialForm);
+        Assert.True(_fixture.Document(_fixture.DestinationPlugin, _fixture.Quest.ToString())!.IsPartialForm());
+        Assert.True(_fixture.Document(_fixture.DestinationPlugin, _fixture.DialogTopic.ToString())!.IsPartialForm());
 
-        var children = reads.GetContainerChildren(_fixture.DestinationPlugin, _fixture.DialogTopic.ToString());
-        var childRow = Assert.Single(children);
-        Assert.Equal(newFormKey, childRow.ChildFormKey);
+        var landed = Assert.Single(Responses(_fixture.DialogTopic.ToString()));
+        Assert.Equal(newFormKey, Member(landed, "FormKey"));
 
         // Inline in the minted topic's document, which is the only file the response is in.
         Assert.Contains(newFormKey, File.ReadAllText(_fixture.DestinationSourceFileContaining(ContainerCopyFixture.Response1EditorId)), StringComparison.Ordinal);
@@ -184,10 +182,9 @@ public sealed class CopyAsNewContainerTests : IDisposable
         var newFormKey = result.NewFormKey!;
         Assert.EndsWith(ContainerCopyFixture.DestinationPluginName, newFormKey, StringComparison.OrdinalIgnoreCase);
 
-        var reads = _fixture.Mirror.Projected();
-        var doc = reads.GetDocument(newFormKey, _fixture.DestinationPlugin);
-        Assert.NotNull(doc);
-        Assert.Equal(ContainerCopyFixture.QuestEditorId, doc!.EditorId);
+        var document = _fixture.Document(_fixture.DestinationPlugin, newFormKey);
+        Assert.NotNull(document);
+        Assert.Equal(ContainerCopyFixture.QuestEditorId, document!.EditorId);
 
         // Empty child lists in the document itself, not just in the binary.
         var questText = File.ReadAllText(_fixture.DestinationSourceFileContaining(ContainerCopyFixture.QuestEditorId));

@@ -1,6 +1,6 @@
+using MEditService.Core.Edits;
 using MEditService.Core.Plugins;
 using MEditService.Core.Records;
-using MEditService.Core.Schema;
 using MEditService.Core.Source;
 using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -11,8 +11,8 @@ using Mutagen.Bethesda.Plugins;
 namespace MEditService.Tests.Edits;
 
 /// <summary>Two mod folders and one load order, since a copy across plugins is unaskable of one.
-/// <see cref="SourcePlugin"/> defaults untracked: the primary scenario copies out of a
-/// Data-directory master, whose indexed body is its only representation.</summary>
+/// <see cref="SourcePlugin"/> defaults untracked: a Data-directory master's own file is its only
+/// representation. No index anywhere in it.</summary>
 public sealed class CopyFixture : IDisposable
 {
     public const string SourcePluginName = "Source.esm";
@@ -23,7 +23,11 @@ public sealed class CopyFixture : IDisposable
     public string SourceModFolder { get; }
     public string DestinationModFolder { get; }
     public string GameDirectory { get; }
-    public LoadOrderMirror Mirror { get; }
+    /// <summary>The same snapshot as a list, for a test that reconciles an index over these trees.</summary>
+    public IReadOnlyList<LoadOrderEntry> Entries { get; }
+
+    public LoadOrder LoadOrder { get; }
+    public RecordEditService Edits { get; }
     public PluginKey SourcePlugin { get; } = new(SourcePluginName, SourceOrigin);
     public PluginKey DestinationPlugin { get; } = new(DestinationPluginName, DestinationOrigin);
 
@@ -60,24 +64,49 @@ public sealed class CopyFixture : IDisposable
         destinationMod.WriteToBinary(destinationPath);
         DestinationNpc = destinationNpc.FormKey;
 
-        Mirror = new LoadOrderMirror(
-            new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
-        ((ILoadOrderMirror)Mirror).Reconcile(
-            GameDirectory,
-            [
-                new LoadOrderEntry(SourcePluginName, sourcePath, SourceOrigin, Slot: 0, Enabled: true, Winning: true),
-                new LoadOrderEntry(DestinationPluginName, destinationPath, DestinationOrigin, Slot: 1, Enabled: true, Winning: true),
-            ],
-            GameRelease.Fallout4);
+        Entries =
+        [
+            new LoadOrderEntry(SourcePluginName, sourcePath, SourceOrigin, Slot: 0, Enabled: true, Winning: true),
+            new LoadOrderEntry(DestinationPluginName, destinationPath, DestinationOrigin, Slot: 1, Enabled: true, Winning: true),
+        ];
+        LoadOrder = LoadOrder.From(GameDirectory, GameDirectory, GameRelease.Fallout4, Entries);
 
-        new TrackService(NullLogger<TrackService>.Instance)
-            .TrackAsync(Mirror.LoadOrder!, DestinationOrigin, SourcePreset.Edits).GetAwaiter().GetResult();
-        if (trackSource)
-        {
-            new TrackService(NullLogger<TrackService>.Instance)
-                .TrackAsync(Mirror.LoadOrder!, SourceOrigin, SourcePreset.Edits).GetAwaiter().GetResult();
-        }
+        Track(DestinationOrigin, DestinationPlugin);
+        if (trackSource) Track(SourceOrigin, SourcePlugin);
+
+        var holder = new LoadOrderHolder();
+        holder.Apply(LoadOrder);
+        Edits = TestEditService.Over(holder);
     }
+
+    private void Track(string origin, PluginKey plugin) =>
+        new TrackService(NullLogger<TrackService>.Instance)
+            .TrackAsync(LoadOrder, [plugin], origin, SourcePreset.Edits).GetAwaiter().GetResult();
+
+    /// <summary>What a tracked plugin's tree holds for a FormKey — the whole read model here.</summary>
+    public SourceDocument? Document(PluginKey plugin, string formKey) =>
+        TrackedTree.Document(ModFolderOf(plugin), plugin, formKey);
+
+    public SourceDocument? CommittedDocument(PluginKey plugin, RecordIdentity identity) =>
+        TrackedTree.CommittedDocument(ModFolderOf(plugin), plugin, identity);
+
+    public IReadOnlyList<string> DestinationGitStatus() => TrackedTree.GitStatus(DestinationModFolder);
+
+    /// <summary>Commits the destination's working tree, so what it holds now is what HEAD holds —
+    /// the state a later working-tree deletion does not free.</summary>
+    public void CommitDestination()
+    {
+        var gitDir = Path.Combine(DestinationModFolder, ".git");
+        GitCli.Run(gitDir, DestinationModFolder, "add", "-A");
+        GitCli.Run(gitDir, DestinationModFolder, "commit", "-m", "fixture");
+    }
+
+    /// <summary>The source plugin's own bytes, so "a copy, not a move" is asserted against the file
+    /// an untracked source is read from.</summary>
+    public byte[] SourcePluginBytes() => File.ReadAllBytes(Path.Combine(SourceModFolder, SourcePluginName));
+
+    public string ModFolderOf(PluginKey plugin) =>
+        plugin.Origin == SourceOrigin ? SourceModFolder : DestinationModFolder;
 
     public static CopyFixture Create(bool trackSource = false) => new(trackSource);
 
@@ -90,7 +119,6 @@ public sealed class CopyFixture : IDisposable
 
     public void Dispose()
     {
-        Mirror.Dispose();
         TryDelete(SourceModFolder);
         TryDelete(DestinationModFolder);
         TryDelete(GameDirectory);
