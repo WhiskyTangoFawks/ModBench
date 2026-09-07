@@ -110,8 +110,16 @@ These describe the present and may change without revisiting the invariants.
   a user decision; that is the one upward arrow.
 - The first transport adapter for notifications is a server-sent event stream on the HTTP API.
   The existing status polls migrate to it where they fit.
-- The projection sequence is one monotonic number per process, advanced in the same
-  transaction as the rows.
+- The projection sequence is one monotonic number per process, advanced once per logical
+  projection rather than once per transaction: a whole-plugin re-derivation is an ingest, a head
+  reconcile and a winner sweep in four transactions, and a settled watcher batch is one of those
+  per plugin named. The Index's store hands the projector a projection scope; every row
+  transaction inside it commits on its own, and the single advance lands after the last of them,
+  when the outermost scope closes. Scopes are per projection, not per store, so a reconcile and a
+  settled batch running at once each land their own advance. A reader between a row commit and
+  the advance sees the new rows at the old sequence — never the reverse — so awaiting the sequence
+  is sound and reading before it is merely early. A notification carries the number its own
+  projection landed on, published only once that advance is durable.
 - Commands share an internal module for target resolution under the load order,
   external-change detection before a write, and rename on an EditorID change. It is an internal
   seam, tested through the handlers.

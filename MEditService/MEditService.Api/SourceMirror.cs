@@ -46,6 +46,9 @@ internal sealed class SourceMirror(
         try
         {
             using var _ = mirror.WriteGate.Enter();
+            // ADR-0046: the batch is one logical write, so it is one sequence advance — a client
+            // that awaits once cannot land between two of its plugins.
+            using var projection = mirror.BeginProjection();
             foreach (var change in batch) ApplyOne(change);
         }
         catch (IndexWriteGateTimeoutException ex)
@@ -98,9 +101,10 @@ internal sealed class SourceMirror(
             foreach (var failure in report.Failures)
                 logger.LogWarning("Validating {Plugin} after a source change: {Failure}", key.Name, failure);
 
-            // ADR-0046: a re-derived copy has too many rows to name, so the notification names the
-            // plugin instead, exactly as the plugin watcher's own re-index does.
-            if (report.NeedsRebuild) notifications.Publish(new PluginChangedNotification(key, mirror.Sequence));
+            // ADR-0046: a re-derived copy has too many rows to name, so this names the plugin.
+            // Announced rather than published, so its sequence is the one the batch landed on.
+            if (report.NeedsRebuild)
+                mirror.Announce(() => notifications.Publish(new PluginChangedNotification(key, mirror.Sequence)));
         }
     }
 

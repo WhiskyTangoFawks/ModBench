@@ -36,7 +36,7 @@ index itself outliving the process.
    registers (point 3) rather than indexing — reading the other instance's records. The cost of the
    fix is that vanilla masters are indexed once per instance rather than once per game. Accepted:
    instances are rare, profiles are common, and Modbench manages an MO2-style instance and nothing
-   else — which is also why `LoadOrderMirror.Reconcile` is the only reconcile there is, and
+   else — which is also why `IndexProjector.Reconcile` is the only reconcile there is, and
    the plain-Data-folder path (`plugins.txt` beside the game's own `Data`, every origin the reserved
    Data-directory value) is deleted rather than kept as an alternative: it could name no mod folders,
    so it could key no index.

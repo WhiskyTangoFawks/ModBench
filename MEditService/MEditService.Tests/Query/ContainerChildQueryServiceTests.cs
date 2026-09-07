@@ -63,6 +63,8 @@ public class ContainerChildQueryServiceTests
         public LoadOrderStatus Status => LoadOrderStatus.None;
         public long Sequence => 0;
         public Task<bool> AwaitSequenceAsync(long atLeast, TimeSpan timeout) => throw new NotSupportedException();
+        public IDisposable BeginProjection() => throw new NotSupportedException();
+        public void Announce(Action publish) => throw new NotSupportedException();
         // Gating on repo alone: repo's presence is what "no load order" means for these tests, most of
         // which leave loadOrder null, so a "both null together" check would throw in all of them.
         public (ILoadOrder LoadOrder, IRecordReads Reads) RequireScope() =>

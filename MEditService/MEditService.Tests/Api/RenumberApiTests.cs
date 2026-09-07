@@ -66,14 +66,16 @@ public sealed class RenumberApiTests(LoadedApiFixture<TestPluginFixture> loaded)
         renumbered.EnsureSuccessStatusCode();
         var newFormKey = (await renumbered.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("newFormKey").GetString()!;
 
+        // ADR-0046: the renumber's create, delete and cascade settle as one batch and that batch is
+        // one advance, so one await is the whole wait — no poll for an end state.
         Assert.True(await ProjectionLanded(beforeRenumber), "the renumbered record never reached the index");
 
-        // The old FormKey's point-read refuses rather than serving stale data. Polls like the
-        // listing below, for the reason NpcFormKeysOnceTheyHold's own comment gives.
-        Assert.Equal(HttpStatusCode.NotFound, await OldFormKeyReadOnceItIs404(oldFormKey));
+        // The old FormKey's point-read refuses rather than serving stale data.
+        var stale = await _client.GetAsync($"/records/{Uri.EscapeDataString(oldFormKey)}");
+        Assert.Equal(HttpStatusCode.NotFound, stale.StatusCode);
 
         // The old FormKey is gone from the plugin's listing, and the new one is present.
-        var formKeys = await NpcFormKeysOnceTheyHold(newFormKey);
+        var formKeys = await NpcFormKeys();
         Assert.DoesNotContain(oldFormKey, formKeys);
         Assert.Contains(newFormKey, formKeys);
     }
@@ -88,32 +90,9 @@ public sealed class RenumberApiTests(LoadedApiFixture<TestPluginFixture> loaded)
         return (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("reached").GetBoolean();
     }
 
-    private async Task<HttpStatusCode> OldFormKeyReadOnceItIs404(string oldFormKey)
+    private async Task<List<string>> NpcFormKeys()
     {
-        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(20);
-        while (true)
-        {
-            var response = await _client.GetAsync($"/records/{Uri.EscapeDataString(oldFormKey)}");
-            if (response.StatusCode == HttpStatusCode.NotFound || DateTime.UtcNow >= deadline) return response.StatusCode;
-
-            await ProjectionLanded(await _client.GetFromJsonAsync<long>("/load-order/sequence"));
-        }
-    }
-
-    // A renumber moves one file and removes another, and a whole-plugin re-derivation of either
-    // lands as more than one sequence advance inside the Index itself: each round parks on the
-    // projection sequence rather than trusting one await.
-    private async Task<List<string>> NpcFormKeysOnceTheyHold(string formKey)
-    {
-        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(20);
-        while (true)
-        {
-            var listing = await _client.GetFromJsonAsync<JsonElement>($"/records?plugin={Plugin}&type=npc_");
-            var formKeys = listing.GetProperty("items").EnumerateArray()
-                .Select(i => i.GetProperty("formKey").GetString()!).ToList();
-            if (formKeys.Contains(formKey, StringComparer.Ordinal) || DateTime.UtcNow >= deadline) return formKeys;
-
-            await ProjectionLanded(await _client.GetFromJsonAsync<long>("/load-order/sequence"));
-        }
+        var listing = await _client.GetFromJsonAsync<JsonElement>($"/records?plugin={Plugin}&type=npc_");
+        return [.. listing.GetProperty("items").EnumerateArray().Select(i => i.GetProperty("formKey").GetString()!)];
     }
 }

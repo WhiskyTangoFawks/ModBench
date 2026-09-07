@@ -19,6 +19,15 @@ public interface IRecordIndex : IDisposable
     /// first change lands.</summary>
     long Sequence { get; }
 
+    /// <summary>ADR-0046: everything projected inside the scope advances <see cref="Sequence"/> once,
+    /// when the outermost scope closes, so a whole-plugin projection and a settled batch are each
+    /// one advance. Nested scopes count.</summary>
+    IDisposable BeginProjection();
+
+    /// <summary>Runs <paramref name="publish"/> once the projection it was raised in has landed:
+    /// immediately outside a scope, after that scope's advance inside one.</summary>
+    void Announce(Action publish);
+
     /// <summary>Indexes one plugin file, replacing whatever <paramref name="key"/> held. ADR-0001:
     /// <paramref name="filePath"/> is stamped with its content hash so the rows are validatable at
     /// the next open; omitting it claims no file backs them.</summary>
