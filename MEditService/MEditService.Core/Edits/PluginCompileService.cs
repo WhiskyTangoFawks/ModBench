@@ -7,6 +7,7 @@ using MEditService.Core.Serialization;
 using MEditService.Core.Source;
 using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
+using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Analysis;
 using Mutagen.Bethesda.Plugins.Records;
 using Noggog.WorkEngine;
@@ -143,14 +144,15 @@ public sealed class PluginCompileService(
     private (List<CompileDiagnostic> Diagnostics, IReadOnlyList<string> Masters) ContentFacts(
         IMod mod, PluginKey plugin, LoadOrder loadOrder, string resolverRoot)
     {
+        // One walk, and the record type is the one SourceRecordType names, so what compile files a
+        // record under and what the tree calls it cannot differ. A type no schema claims has no
+        // document, so nothing is derived from it.
+        var schemas = schemaReflector.GetSchemas(loadOrder.GameRelease);
         var typed = new List<(string RecordType, RecordTableSchema Schema, IMajorRecordGetter Record)>();
-        foreach (var (recordType, schema) in schemaReflector.GetSchemas(loadOrder.GameRelease))
+        foreach (var record in mod.EnumerateMajorRecords())
         {
-            // The header is not a major record, so EnumerateMajorRecords cannot reach it, and its
-            // declared masters are not an answer: masters are content-derived (ADR-0038).
-            if (recordType == PluginHeader.RecordType) continue;
-            foreach (var record in mod.EnumerateMajorRecords(schema.RecordType, throwIfUnknown: false))
-                typed.Add((recordType, schema, record));
+            var recordType = SourceRecordType.Resolve(record, schemas);
+            if (schemas.TryGetValue(recordType, out var schema)) typed.Add((recordType, schema, record));
         }
 
         var own = new Dictionary<string, RecordLookupEntry>(StringComparer.OrdinalIgnoreCase);
@@ -258,9 +260,12 @@ public sealed class PluginCompileService(
     private static bool EmbeddedInATrackedPlugin(
         string formKey, PluginKey plugin, LoadOrder loadOrder, Dictionary<string, SourceRepository?> trackedTrees)
     {
+        // The same chain the resolver walks, participation included (ADR-0044): a copy the game does
+        // not load holds nothing this link points at, so its tree is not an answer either.
         if (IsNative(formKey, plugin)
             || PluginNameIn(formKey) is not { } owner
             || loadOrder.WinningCopy(owner) is not { } copy
+            || !copy.Registration.Participates
             || ModFolders.TrackedOf(loadOrder, copy.Key) is not { } modFolder)
         {
             return false;
@@ -271,12 +276,10 @@ public sealed class PluginCompileService(
         return repository?.CarriesEmbedded(copy.Key, formKey) == true;
     }
 
-    // The plugin half of a FormKey, which is how a reference names the master it needs.
-    private static string? PluginNameIn(string formKey)
-    {
-        var colon = formKey.IndexOf(':', StringComparison.Ordinal);
-        return colon > 0 ? formKey[(colon + 1)..] : null;
-    }
+    // The plugin half of a FormKey, which is how a reference names the master it needs. Mutagen's
+    // own parser, not a split on the colon: a FormKey's spelling is its definition.
+    private static string? PluginNameIn(string formKey) =>
+        FormKey.TryFactory(formKey, out var parsed) ? parsed.ModKey.FileName.String : null;
 
     // Whatever is wrong with the source, the remedy is re-Track (ADR-0042), so the catch is
     // deliberately unfiltered and the message uniform.

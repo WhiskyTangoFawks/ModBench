@@ -27,6 +27,8 @@ public sealed class CompileEmbeddedTargetTests : IDisposable
     private readonly string _referrerFolder;
     private readonly LoadOrder _loadOrder;
     private readonly PluginKey _referrer = new(ReferrerName, ReferrerOrigin);
+    private readonly string _targetPath;
+    private readonly string _referrerPath;
     private readonly FormKey _embeddedTarget;
 
     public CompileEmbeddedTargetTests()
@@ -34,16 +36,16 @@ public sealed class CompileEmbeddedTargetTests : IDisposable
         _targetFolder = Directory.CreateDirectory(Path.Combine(_instanceRoot, "mods", TargetOrigin)).FullName;
         _referrerFolder = Directory.CreateDirectory(Path.Combine(_instanceRoot, "mods", ReferrerOrigin)).FullName;
 
-        var targetPath = Path.Combine(_targetFolder, TargetName);
+        _targetPath = Path.Combine(_targetFolder, TargetName);
         var target = new Fallout4Mod(ModKey.FromFileName(TargetName), Fallout4Release.Fallout4);
         var targetCell = new Cell(target) { EditorID = "TargetCell" };
         var embedded = new PlacedObject(target) { EditorID = "EmbeddedRef", Position = new P3Float(1f, 1f, 1f) };
         targetCell.Temporary.Add(embedded);
         AddCell(target, targetCell);
-        target.WriteToBinary(targetPath);
+        target.WriteToBinary(_targetPath);
         _embeddedTarget = embedded.FormKey;
 
-        var referrerPath = Path.Combine(_referrerFolder, ReferrerName);
+        _referrerPath = Path.Combine(_referrerFolder, ReferrerName);
         var referrer = new Fallout4Mod(ModKey.FromFileName(ReferrerName), Fallout4Release.Fallout4);
         var referrerCell = new Cell(referrer) { EditorID = "ReferrerCell" };
         var pointer = new PlacedObject(referrer) { EditorID = "Pointer", Position = new P3Float(2f, 2f, 2f) };
@@ -51,7 +53,7 @@ public sealed class CompileEmbeddedTargetTests : IDisposable
         pointer.EnableParent.Reference.SetTo(_embeddedTarget);
         referrerCell.Temporary.Add(pointer);
         AddCell(referrer, referrerCell);
-        referrer.WriteToBinary(referrerPath, new Mutagen.Bethesda.Plugins.Binary.Parameters.BinaryWriteParameters
+        referrer.WriteToBinary(_referrerPath, new Mutagen.Bethesda.Plugins.Binary.Parameters.BinaryWriteParameters
         {
             MastersListContent = Mutagen.Bethesda.Plugins.Binary.Parameters.MastersListContentOption.Iterate,
         });
@@ -59,8 +61,8 @@ public sealed class CompileEmbeddedTargetTests : IDisposable
         _loadOrder = LoadOrder.From(
             _gameDirectory, _instanceRoot, GameRelease.Fallout4,
             [
-                new LoadOrderEntry(TargetName, targetPath, TargetOrigin, Slot: 0, Enabled: true, Winning: true),
-                new LoadOrderEntry(ReferrerName, referrerPath, ReferrerOrigin, Slot: 1, Enabled: true, Winning: true),
+                Target(enabled: true),
+                Referrer,
             ]);
 
         var trackService = new TrackService(NullLogger<TrackService>.Instance);
@@ -69,6 +71,12 @@ public sealed class CompileEmbeddedTargetTests : IDisposable
         trackService.TrackAsync(_loadOrder, [_referrer], ReferrerOrigin, SourcePreset.Edits)
             .GetAwaiter().GetResult();
     }
+
+    private LoadOrderEntry Target(bool enabled) =>
+        new(TargetName, _targetPath, TargetOrigin, Slot: 0, Enabled: enabled, Winning: true);
+
+    private LoadOrderEntry Referrer =>
+        new(ReferrerName, _referrerPath, ReferrerOrigin, Slot: 1, Enabled: true, Winning: true);
 
     private static void AddCell(Fallout4Mod mod, Cell cell)
     {
@@ -102,6 +110,22 @@ public sealed class CompileEmbeddedTargetTests : IDisposable
         Assert.True(result.Succeeded, result.RefusalReason);
         Assert.DoesNotContain(
             result.Diagnostics, d => d.Message.Contains(_embeddedTarget.ToString(), StringComparison.Ordinal));
+    }
+
+    // ADR-0044: a registered copy the game does not load is not where the link points, so its tree
+    // carrying the record proves nothing and the link is dangling like any other.
+    [Fact]
+    public void Compile_ForALinkIntoATrackedCopyTheLoadOrderDoesNotLoad_ReportsItUnresolved()
+    {
+        var notLoaded = LoadOrder.From(
+            _gameDirectory, _instanceRoot, GameRelease.Fallout4, [Target(enabled: false), Referrer]);
+
+        var result = CompileServices.Over(notLoaded).Compile(_referrer, new CompileSource.WorkingTree());
+
+        Assert.True(result.Succeeded, result.RefusalReason);
+        Assert.Contains(
+            result.Diagnostics,
+            d => d.Message.Contains($"[{_embeddedTarget}] <Error: Could not be resolved>", StringComparison.Ordinal));
     }
 
     // The same tree, asked the way the resolver asks: proof the silence above is the gap and not an

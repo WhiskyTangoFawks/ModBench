@@ -19,18 +19,17 @@ public sealed class CompileFixture : IDisposable
     public const string Origin = "CompileMod";
     public const string PluginName = "Compile.esp";
     public const string NpcEditorId = "FixtureNpc";
-    public const string RaceEditorId = "FixtureRace";
-    public const string KeywordEditorId = "FixtureKeyword";
     public const string OtherNpcEditorId = "UntouchedNpc";
     public const string NpcRecordType = "npc_";
 
     private const GameRelease Release = GameRelease.Fallout4;
 
-    public string InstanceRoot { get; }
     public string ModFolder { get; }
-    public string GameDirectory { get; }
-    public LoadOrder LoadOrder { get; }
     public PluginKey Plugin { get; }
+
+    private readonly string _instanceRoot;
+    private readonly string _gameDirectory;
+    private readonly LoadOrder _loadOrder;
 
     // Keyword is a valid target for the NPC's keywords field and Race a resolvable target of the
     // wrong type, so both FormLink error axes are reachable without inventing data mid-test.
@@ -41,33 +40,33 @@ public sealed class CompileFixture : IDisposable
 
     public CompileFixture()
     {
-        InstanceRoot = Directory.CreateTempSubdirectory("medit-compile-instance-").FullName;
-        ModFolder = Directory.CreateDirectory(Path.Combine(InstanceRoot, "mods", Origin)).FullName;
-        GameDirectory = Directory.CreateTempSubdirectory("medit-compile-game-").FullName;
+        _instanceRoot = Directory.CreateTempSubdirectory("medit-compile-instance-").FullName;
+        ModFolder = Directory.CreateDirectory(Path.Combine(_instanceRoot, "mods", Origin)).FullName;
+        _gameDirectory = Directory.CreateTempSubdirectory("medit-compile-game-").FullName;
         Plugin = new PluginKey(PluginName, Origin);
 
         var mod = new Fallout4Mod(ModKey.FromFileName(PluginName), Fallout4Release.Fallout4);
-        var race = mod.Races.AddNew(RaceEditorId);
-        var keyword = mod.Keywords.AddNew(KeywordEditorId);
+        var race = mod.Races.AddNew("FixtureRace");
+        var keyword = mod.Keywords.AddNew("FixtureKeyword");
         var npc = mod.Npcs.AddNew(NpcEditorId);
         npc.Race.SetTo(race);
         var otherNpc = mod.Npcs.AddNew(OtherNpcEditorId);
         mod.WriteToBinary(PluginPath);
         (Npc, Race, Keyword, OtherNpc) = (npc.FormKey, race.FormKey, keyword.FormKey, otherNpc.FormKey);
 
-        LoadOrder = LoadOrder.From(
-            GameDirectory, InstanceRoot, Release,
+        _loadOrder = LoadOrder.From(
+            _gameDirectory, _instanceRoot, Release,
             [new LoadOrderEntry(PluginName, PluginPath, Origin, Slot: 0, Enabled: true, Winning: true)]);
         new TrackService(NullLogger<TrackService>.Instance)
-            .TrackAsync(LoadOrder, [Plugin], Origin, SourcePreset.Edits)
+            .TrackAsync(_loadOrder, [Plugin], Origin, SourcePreset.Edits)
             .GetAwaiter().GetResult();
     }
 
-    public string PluginPath => Path.Combine(ModFolder, PluginName);
+    private string PluginPath => Path.Combine(ModFolder, PluginName);
 
-    public SourceRepository Repository => SourceRepository.Open(ModFolder, Release)!;
+    private SourceRepository Repository => SourceRepository.Open(ModFolder, Release)!;
 
-    public PluginCompileService CompileService() => CompileServices.Over(LoadOrder);
+    public PluginCompileService CompileService() => CompileServices.Over(_loadOrder);
 
     public IFallout4ModGetter Reimport(out IDisposable handle)
     {
@@ -111,10 +110,7 @@ public sealed class CompileFixture : IDisposable
 
     public string NpcSourceFile => SourceFileFor(Npc, NpcRecordType, NpcEditorId);
 
-    public string RelativeSourcePath(FormKey formKey, string recordType, string? editorId) =>
-        Path.GetRelativePath(ModFolder, SourceFileFor(formKey, recordType, editorId));
-
-    public string RunGit(params string[] args) => GitCli.Run(Path.Combine(ModFolder, ".git"), ModFolder, args);
+    private string RunGit(params string[] args) => GitCli.Run(Path.Combine(ModFolder, ".git"), ModFolder, args);
 
     /// <summary>Raw porcelain lines: every caller here compares one listing to another, and none
     /// reads a path out of one.</summary>
@@ -123,8 +119,8 @@ public sealed class CompileFixture : IDisposable
 
     public void Dispose()
     {
-        TryDelete(InstanceRoot);
-        TryDelete(GameDirectory);
+        TryDelete(_instanceRoot);
+        TryDelete(_gameDirectory);
     }
 
     // A tracked mod folder holds a .git tree whose object files are read-only on some filesystems,
