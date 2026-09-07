@@ -12,8 +12,9 @@ maintainer. Vocabulary is the industry's: ports and adapters for the shape, comm
 responsibility segregation for the two sides.
 
 The full data-flow view, every arrow labelled with what moves and which way, is
-[docs/architecture/target-architecture.drawio](../architecture/target-architecture.drawio);
-the sketch below is its module skeleton.
+[docs/architecture/target-architecture.drawio](../architecture/target-architecture.drawio),
+read with [target-architecture.md](../architecture/target-architecture.md); the sketch below is
+its module skeleton.
 
 ```mermaid
 flowchart TB

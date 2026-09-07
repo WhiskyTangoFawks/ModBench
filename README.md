@@ -123,6 +123,7 @@ The repo is set up to be worked on by people and coding agents alike:
   files under `modbench/` and `MEditService/` carry each side's own.
 - [docs/specs/](docs/specs/) — one living spec per UI surface, present tense; a spec that lags the
   product is a bug.
+- [docs/architecture/](docs/architecture/) — the target data-flow diagram and how to read it.
 - [docs/adr/](docs/adr/) — decisions; [docs/out-of-scope/](docs/out-of-scope/) — the won't-do
   register; [docs/research/xedit-ux-audit.md](docs/research/xedit-ux-audit.md) — required reading
   before touching any record-editing interaction.
