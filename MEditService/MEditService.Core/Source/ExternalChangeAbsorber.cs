@@ -10,7 +10,11 @@ namespace MEditService.Core.Source;
 /// branch is the rebase's job.</summary>
 public static class ExternalChangeAbsorber
 {
-    public static void Absorb(string modFolder, string pluginName, string pluginPath, ILoadOrder loadOrder)
+    /// <summary>The same gesture for a caller still holding the mirror's view.</summary>
+    public static void Absorb(string modFolder, string pluginName, string pluginPath, ILoadOrder loadOrder) =>
+        Absorb(modFolder, pluginName, pluginPath, LoadOrder.From(loadOrder));
+
+    public static void Absorb(string modFolder, string pluginName, string pluginPath, LoadOrder loadOrder)
     {
         // A fresh deep parse of the binary now on disk, never a cached load-order view — that stale view
         // is what this method reacts to. Absorb only runs against a tracked plugin, so the mod-folder-only

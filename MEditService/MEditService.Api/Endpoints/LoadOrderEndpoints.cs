@@ -121,7 +121,7 @@ public static class LoadOrderEndpoints
             : Results.Problem($"Unknown game release: '{raw}'. Valid values: {string.Join(", ", Enum.GetNames<GameRelease>())}", statusCode: 400);
     }
 
-    internal static IResult PutLoadOrder(LoadOrderRequest req, ILoadOrderMirror mirror, ExternalChangeWatcher externalChangeWatcher, ILoggerFactory loggerFactory)
+    internal static IResult PutLoadOrder(LoadOrderRequest req, ILoadOrderMirror mirror, LoadOrderHolder holder, ExternalChangeWatcher externalChangeWatcher, ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(nameof(LoadOrderEndpoints));
         if (logger.IsEnabled(LogLevel.Information))
@@ -149,7 +149,21 @@ public static class LoadOrderEndpoints
             var entries = req.Plugins
                 .Select(p => new LoadOrderEntry(p.Name, p.Path, p.Origin, p.Slot, p.Enabled!.Value, p.Winning!.Value))
                 .ToList();
-            mirror.Reconcile(req.GameDirectory, entries, gameRelease, req.InstanceRoot);
+            // ADR-0046 invariant 11: the state lands in the shared kernel first, so a reader asking
+            // "which copy wins" during the reconcile is answered by the snapshot, not by the mirror.
+            var previous = holder.Current;
+            holder.Apply(LoadOrder.From(req.GameDirectory, req.InstanceRoot, gameRelease, entries));
+            try
+            {
+                mirror.Reconcile(req.GameDirectory, entries, gameRelease, req.InstanceRoot);
+            }
+            catch
+            {
+                // A superseded or failed reconcile leaves the index registering the previous
+                // snapshot, so the kernel goes back to it too.
+                holder.Apply(previous);
+                throw;
+            }
             // The hash check and the live watches for every plugin now held, in one pass after the
             // sweep; the crash-repair offers ride the response the same way Failures does.
             var crashRepairOffers = ExternalChangeLoadOrderHook.RunAfterReconcile(

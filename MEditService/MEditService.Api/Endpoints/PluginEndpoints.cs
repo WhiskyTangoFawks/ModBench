@@ -175,7 +175,7 @@ public static class PluginEndpoints
     // Edits — the one-keystroke "Enter accepts overwrite/" framing rules out a second prompt.
     // Never touches plugins.txt; that append is the caller's.
     internal static async Task<IResult> CreatePlugin(
-        CreatePluginRequest req, ILoadOrderMirror mirror, TrackService trackService, ILoggerFactory loggerFactory)
+        CreatePluginRequest req, ILoadOrderMirror mirror, LoadOrderHolder holder, TrackService trackService, ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
         if (string.IsNullOrWhiteSpace(req.Name))
@@ -186,9 +186,13 @@ public static class PluginEndpoints
         try
         {
             var plugin = mirror.CreatePlugin(req.Name, req.Path, req.Origin);
+            // ADR-0041: a participant at once, so the gesture below and every later reader see it
+            // without waiting for the snapshot that appends its plugins.txt line.
+            holder.Register(new RegisteredCopy(
+                plugin.Name, plugin.Origin, plugin.Path, plugin.LoadOrderIndex, Enabled: true, Winning: true));
 
             if (!SourceRepository.IsTracked(req.Path))
-                await trackService.TrackAsync(mirror.LoadOrder!, req.Origin, SourcePreset.Edits);
+                await trackService.TrackAsync(holder.Current, HeldCopies(mirror), req.Origin, SourcePreset.Edits);
 
             return Results.Ok(plugin);
         }
@@ -224,10 +228,15 @@ public static class PluginEndpoints
         }
     }
 
+    // Which registered copies Editing actually holds. A copy the mirror could not open is
+    // registered like any other but has no bytes to read.
+    private static IReadOnlyCollection<PluginKey> HeldCopies(ILoadOrderMirror mirror) =>
+        [.. (mirror.LoadOrder?.Plugins ?? []).Select(p => p.Key)];
+
     // ADR-0041: the Track gesture. Origin names the mod folder (every loaded plugin sharing
     // it gets tracked together — a mod can hold more than one plugin); the load order resolves
     // which physical folder that is.
-    internal static async Task<IResult> Track(TrackRequest req, ILoadOrderMirror mirror, TrackService trackService, ILoggerFactory loggerFactory)
+    internal static async Task<IResult> Track(TrackRequest req, ILoadOrderMirror mirror, LoadOrderHolder holder, TrackService trackService, ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
         if (string.IsNullOrWhiteSpace(req.Origin))
@@ -237,8 +246,10 @@ public static class PluginEndpoints
 
         try
         {
-            var (loadOrder, _) = mirror.RequireScope();
-            await trackService.TrackAsync(loadOrder, req.Origin, preset);
+            // RequireScope for the refusal only: which copies this origin registers is the load
+            // order's answer, read from the shared kernel rather than from the mirror.
+            mirror.RequireScope();
+            await trackService.TrackAsync(holder.Current, HeldCopies(mirror), req.Origin, preset);
             return Results.Ok(new TrackResponse(req.Origin));
         }
         catch (NoLoadOrderException ex)
@@ -379,7 +390,7 @@ public static class PluginEndpoints
 
         try
         {
-            ExternalChangeAbsorber.Absorb(modFolder, decoded, pluginPath, loadOrder!);
+            ExternalChangeAbsorber.Absorb(modFolder, decoded, pluginPath, loadOrder);
             watcher.MarkAnswered(modFolder, decoded);
             watcher.Watch(modFolder, decoded, pluginPath);
             return Results.Ok(new ExternalChangeActionResponse(true, null));
@@ -410,7 +421,7 @@ public static class PluginEndpoints
         try
         {
             var result = ExternalChangeEditLander.Keep(
-                modFolder, WriteEndpointMapping.PluginKeyOf(plugin, req.Origin), pluginPath, loadOrder!.GameRelease,
+                modFolder, WriteEndpointMapping.PluginKeyOf(plugin, req.Origin), pluginPath, loadOrder.GameRelease,
                 reflector, logger);
             if (result.Applied)
             {
@@ -462,11 +473,11 @@ public static class PluginEndpoints
     // Deliberately not PluginOriginResolver, which filters to load-order members: a copy shadowed
     // by a higher-priority mod of the same filename still has its question to answer. A null
     // pluginName means whichever plugin this origin holds.
-    private static (PluginMetadata? Plugin, ILoadOrder? LoadOrder) ResolveAnyPhysicalCopy(
+    private static (RegisteredCopy? Plugin, LoadOrder LoadOrder) ResolveAnyPhysicalCopy(
         ILoadOrderMirror mirror, string origin, string? pluginName, ILogger logger)
     {
-        var loadOrder = mirror.LoadOrder;
-        var plugin = loadOrder?.Plugins.FirstOrDefault(p =>
+        var loadOrder = mirror.LoadOrder is { } held ? LoadOrder.From(held) : LoadOrder.Empty;
+        var plugin = loadOrder.Copies.FirstOrDefault(p =>
             p.Origin.Equals(origin, StringComparison.OrdinalIgnoreCase)
             && (pluginName is null || p.Name.Equals(pluginName, StringComparison.OrdinalIgnoreCase)));
         if (plugin == null)
@@ -475,7 +486,7 @@ public static class PluginEndpoints
                 logger.LogWarning("No loaded plugin has origin {Origin}", origin);
             else
                 logger.LogWarning("No loaded plugin named {Plugin} with origin {Origin}", pluginName, origin);
-            return (null, null);
+            return (null, LoadOrder.Empty);
         }
         return (plugin, loadOrder);
     }
