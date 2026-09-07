@@ -17,6 +17,9 @@ public sealed partial class SourceRepository
     private readonly string _modFolder;
     private readonly GameRelease _release;
 
+    /// <summary>The folder this repository is over, for a caller naming a path relative to it.</summary>
+    internal string ModFolder => _modFolder;
+
     // Private so the only way to hold a repository is to have observed the mod folder tracked.
     private SourceRepository(string modFolder, GameRelease release) =>
         (_modFolder, _release) = (modFolder, release);
@@ -78,20 +81,21 @@ public sealed partial class SourceRepository
     }
 
     /// <summary>Takes the record out of the tree: its file, its directory, or its element of another
-    /// record's document. Already gone is the state asked for; false means that document's text
-    /// lacks it.</summary>
-    public bool Remove(PluginKey plugin, RecordIdentity identity)
+    /// record's document. Already gone is the state asked for, so it removes cleanly; the other two
+    /// outcomes say which of them stopped it.</summary>
+    public SourceRemoval Remove(PluginKey plugin, RecordIdentity identity)
     {
-        if (Locate(plugin, identity) is not { } unit) return false;
+        if (Locate(plugin, identity) is not { } unit) return SourceRemoval.NoDocumentHoldsIt;
 
         if (unit.IsEmbedded)
         {
             var owner = ReadOwner(unit);
-            if (!ContainerChildFields.RemoveEmbeddedChild(owner, identity.FormKey)) return false;
+            if (!ContainerChildFields.RemoveEmbeddedChild(owner, identity.FormKey))
+                return SourceRemoval.OwnerDoesNotCarryIt;
 
             Codec.SerializeAsync(owner, unit.FullPath, _release).GetAwaiter().GetResult();
             Forget();
-            return true;
+            return SourceRemoval.Removed;
         }
 
         if (unit.IsDirectoryPerRecord)
@@ -99,12 +103,12 @@ public sealed partial class SourceRepository
             var directory = Path.GetDirectoryName(unit.FullPath)!;
             if (Directory.Exists(directory)) Directory.Delete(directory, recursive: true);
             Forget();
-            return true;
+            return SourceRemoval.Removed;
         }
 
         if (File.Exists(unit.FullPath)) File.Delete(unit.FullPath);
         Forget();
-        return true;
+        return SourceRemoval.Removed;
     }
 
     /// <summary>Moves the record's file or directory to the name <paramref name="newEditorId"/>
@@ -577,6 +581,21 @@ public sealed partial class SourceRepository
             "meta.ini\n",
         _ => throw new ArgumentOutOfRangeException(nameof(preset), preset, "Unknown source preset."),
     };
+}
+
+/// <summary>Why a record is or is not out of the tree — three states a caller must tell apart, since
+/// "no document holds it" and "the owner's own text lacks it" send the author to different
+/// places.</summary>
+public enum SourceRemoval
+{
+    /// <summary>The tree no longer holds it, including the record that was already gone.</summary>
+    Removed,
+
+    /// <summary>Nothing in the tree holds it, so there was nothing to take out.</summary>
+    NoDocumentHoldsIt,
+
+    /// <summary>A document was found holding it, but that document's own text does not carry it.</summary>
+    OwnerDoesNotCarryIt,
 }
 
 /// <summary>What the repository locates a record by: the FormKey is the identity, the record type

@@ -234,7 +234,7 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
     {
         var repository = Repository;
 
-        Assert.True(repository.Remove(Plugin, Identity(_response, "info")));
+        Assert.Equal(SourceRemoval.Removed, repository.Remove(Plugin, Identity(_response, "info")));
 
         var questText = File.ReadAllText(FullPath(QuestPath));
         Assert.DoesNotContain("\"Response\"", questText, StringComparison.Ordinal);
@@ -249,7 +249,7 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
     {
         var repository = Repository;
 
-        Assert.True(repository.Remove(Plugin, Identity(_exteriorCell, "cell")));
+        Assert.Equal(SourceRemoval.Removed, repository.Remove(Plugin, Identity(_exteriorCell, "cell")));
 
         Assert.False(Directory.Exists(Path.GetDirectoryName(FullPath(ExteriorCellPath))));
         Assert.Null(repository.Get(Plugin, Identity(_exteriorCell, "cell")));

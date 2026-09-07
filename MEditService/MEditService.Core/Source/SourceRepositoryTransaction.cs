@@ -1,3 +1,5 @@
+using MEditService.Core.Records;
+
 namespace MEditService.Core.Source;
 
 /// <summary>Why a rollback left a path as it stood. Every value is a preserved outcome except
@@ -24,11 +26,53 @@ internal enum UnrestoredReason
 internal sealed record UnrestoredPath(
     string RelativePath, string FullPath, UnrestoredReason Reason, string? Error = null);
 
-/// <summary>Pre-images of the files one action writes, so a failure part-way puts the working trees
-/// back (ADR-0045). Conditional by design: a path something else has written since is preserved
-/// and reported, never reverted.</summary>
-internal sealed class SourceWriteTransaction
+/// <summary>A batch of puts and removes across one or more repositories, applied all or restored all
+/// (ADR-0045). Conditional by design: a path something else has written since is preserved and
+/// reported, never reverted.</summary>
+internal sealed class SourceTransaction
 {
+    /// <summary>Creates or replaces one repository's document, holding its bytes so a later failure in
+    /// this batch puts the file back. A record no document can hold throws before anything is
+    /// recorded.</summary>
+    internal void Put(SourceRepository repository, PluginKey plugin, SourceDocument document)
+    {
+        var identity = new RecordIdentity(document.FormKey, document.RecordType, document.EditorId);
+        if (repository.Locate(plugin, identity) is not { } unit)
+        {
+            // Nothing to record: the repository refuses without touching the tree.
+            repository.Put(plugin, document);
+            return;
+        }
+
+        var before = Snapshot(unit.FullPath);
+        try
+        {
+            repository.Put(plugin, document);
+        }
+        finally
+        {
+            _log.Add(new FileState(repository.ModFolder, unit.FullPath, before, Snapshot(unit.FullPath)));
+        }
+    }
+
+    /// <summary>Takes one repository's record out of the tree, holding the document's bytes so the
+    /// rollback puts it back. The pre-image is that document's own file, which is the whole record for
+    /// a flat one and its owner's text for an embedded child.</summary>
+    internal SourceRemoval Remove(SourceRepository repository, PluginKey plugin, RecordIdentity identity)
+    {
+        if (repository.Locate(plugin, identity) is not { } unit) return SourceRemoval.NoDocumentHoldsIt;
+
+        var before = Snapshot(unit.FullPath);
+        try
+        {
+            return repository.Remove(plugin, identity);
+        }
+        finally
+        {
+            _log.Add(new FileState(repository.ModFolder, unit.FullPath, before, Snapshot(unit.FullPath)));
+        }
+    }
+
     // Recorded in execution order and undone in reverse, so a rename is put back before the create that
     // provoked it.
     private abstract record Operation(string ModFolder);
