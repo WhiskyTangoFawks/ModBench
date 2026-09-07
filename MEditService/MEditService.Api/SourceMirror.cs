@@ -20,9 +20,10 @@ internal sealed class SourceMirror(
         watcher.UnwatchAll();
         if (mirror.LoadOrder is not { } loadOrder) return;
 
+        var order = LoadOrder.From(loadOrder);
         foreach (var plugin in loadOrder.Plugins)
         {
-            if (ModFolders.TrackedOf(loadOrder, new PluginKey(plugin.Name, plugin.Origin)) is not { } modFolder)
+            if (ModFolders.TrackedOf(order, new PluginKey(plugin.Name, plugin.Origin)) is not { } modFolder)
                 continue;
             watcher.Watch(modFolder, SourceDocuments.RootIn(modFolder, plugin.Name), plugin.Name, plugin.Origin);
         }

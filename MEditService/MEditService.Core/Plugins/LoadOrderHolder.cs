@@ -11,4 +11,8 @@ public sealed class LoadOrderHolder
     public LoadOrder Current => Volatile.Read(ref _current);
 
     public void Apply(LoadOrder snapshot) => Volatile.Write(ref _current, snapshot);
+
+    /// <summary>ADR-0041: a created plugin is a registered copy at once, before plugins.txt names
+    /// it; the next snapshot corrects its slot. The plugin endpoint is its only caller.</summary>
+    public void Register(RegisteredCopy copy) => Apply(Current.With(copy));
 }

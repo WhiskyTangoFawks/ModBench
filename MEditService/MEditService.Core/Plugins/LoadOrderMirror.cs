@@ -167,8 +167,10 @@ public sealed class LoadOrderMirror(
         {
             var token = BeginReconcile();
             var (loadOrder, index) = EnsureScope(gameDirectory, gameRelease, instanceRoot);
-            var resolved = HeldPlugins.Resolve(gameDirectory, gameRelease, plugins);
-            ReconcileProgressively(loadOrder, index, resolved, token);
+            // The value the endpoint applied to the shared kernel, built through the same door, so
+            // the registrations the index writes cannot disagree with the ones the kernel holds.
+            var snapshot = Plugins.LoadOrder.From(gameDirectory, instanceRoot, gameRelease, plugins);
+            ReconcileProgressively(loadOrder, index, snapshot, token);
         }
         catch (OperationCanceledException ex)
         {
@@ -275,8 +277,9 @@ public sealed class LoadOrderMirror(
     // Registrations the snapshot has stopped naming are dropped before anything new is opened, so a
     // freshly opened index file's last-run rows stop answering as early as possible.
     private void ReconcileProgressively(
-        HeldPlugins loadOrder, IRecordIndex index, IReadOnlyList<ResolvedPlugin> resolved, CancellationToken token)
+        HeldPlugins loadOrder, IRecordIndex index, Plugins.LoadOrder snapshot, CancellationToken token)
     {
+        var resolved = snapshot.Copies;
         var wanted = resolved.ToDictionary(r => KeyOf(r.Key), StringComparer.OrdinalIgnoreCase);
         var held = loadOrder.Plugins.ToDictionary(p => KeyOf(p.Key), StringComparer.OrdinalIgnoreCase);
 
@@ -410,7 +413,7 @@ public sealed class LoadOrderMirror(
     }
 
     // While the bytes are unchanged the error state stands, and the parse is not paid again.
-    private bool StillFailing(ResolvedPlugin plugin)
+    private bool StillFailing(RegisteredCopy plugin)
     {
         (PluginKey, string? Hash) failedAt;
         lock (_lock)
@@ -609,10 +612,11 @@ public sealed class LoadOrderMirror(
         var (loadOrder, index) = RequireHeldIndex();
         var keys = plugin is { } one ? (IReadOnlyList<PluginKey>)[one] : index.RegisteredPlugins();
 
+        var order = Plugins.LoadOrder.From(loadOrder);
         var reports = new List<ValidationReport>(keys.Count);
         foreach (var key in keys)
         {
-            var report = index.Validate(key, ModFolders.Of(loadOrder, key));
+            var report = index.Validate(key, ModFolders.Of(order, key));
             foreach (var failure in report.Failures)
                 _logger.LogWarning("Reconciling {Plugin}: {Failure}", key.Name, failure);
 
@@ -638,7 +642,7 @@ public sealed class LoadOrderMirror(
 
         // Re-derived every call, never remembered from when the watch started: the repository can be
         // deleted or replaced between the event and this line, and then there is no truth to read.
-        if (ModFolders.TrackedOf(loadOrder, key) is not { } modFolder) return;
+        if (ModFolders.TrackedOf(Plugins.LoadOrder.From(loadOrder), key) is not { } modFolder) return;
 
         index.RefreshByKeys(key, modFolder, formKeys);
         ReapplyFilter();

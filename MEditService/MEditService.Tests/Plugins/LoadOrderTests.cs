@@ -102,6 +102,42 @@ public sealed class LoadOrderTests
     }
 
     [Fact]
+    public void EqualValues_HashAlike_WhenTheirPathsDifferOnlyInCase()
+    {
+        var copy = Copy("A.esp", "ModA", slot: 0);
+        var lower = new LoadOrder(Data.ToLowerInvariant(), Instance.ToLowerInvariant(), GameRelease.Fallout4, [copy]);
+
+        Assert.Equal(Order(copy), lower);
+        Assert.Equal(Order(copy).GetHashCode(), lower.GetHashCode());
+    }
+
+    [Fact]
+    public void TheCallersList_IsCopiedOnConstruction_SoTheValueCannotChangeBehindIt()
+    {
+        var copies = new List<RegisteredCopy> { Copy("A.esp", "ModA", slot: 0) };
+        var order = new LoadOrder(Data, Instance, GameRelease.Fallout4, copies);
+
+        copies.Add(Copy("B.esp", "ModB", slot: 1));
+
+        Assert.Equal(["A.esp"], order.Copies.Select(c => c.Name));
+    }
+
+    // ADR-0041: created before any plugins.txt line names it, so the gesture that follows sees it.
+    [Fact]
+    public void Register_AddsACreatedCopy_AndReplacesTheOneAlreadyUnderThatIdentity()
+    {
+        var holder = new LoadOrderHolder();
+        holder.Apply(Order(Copy("A.esp", "ModA", slot: 0)));
+
+        holder.Register(Copy("New.esp", "ModA", slot: 1));
+        Assert.Equal(["A.esp", "New.esp"], holder.Current.Copies.Select(c => c.Name));
+
+        holder.Register(Copy("New.esp", "ModA", slot: 1, enabled: false));
+        Assert.Equal(["A.esp", "New.esp"], holder.Current.Copies.Select(c => c.Name));
+        Assert.False(holder.Current.Participates(new PluginKey("New.esp", "ModA")));
+    }
+
+    [Fact]
     public void ACopyIsIdentifiedByOriginAndName_NotByNameAlone()
     {
         var order = Order(Copy("A.esp", "ModA", slot: 0), Copy("A.esp", "ModB", slot: 0, winning: false));

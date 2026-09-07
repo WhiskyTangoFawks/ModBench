@@ -10,14 +10,6 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Core.Plugins;
 
-/// <summary>One plugin copy as the snapshot resolves it on this side of the boundary. Built by
-/// <see cref="HeldPlugins.Resolve"/>, which is where forced plugins are prepended and every snapshot
-/// slot is offset past them.</summary>
-public sealed record ResolvedPlugin(string Name, string Path, string Origin, bool IsForced, Registration Registration)
-{
-    public PluginKey Key => new(Name, Origin);
-}
-
 /// <summary>The plugin copies Editing holds (ADR-0044). Mutated in place by reconcile — a copy
 /// arrives, leaves, or has its registration moved — and never torn down as a whole for a change in
 /// what it holds.</summary>
@@ -59,7 +51,7 @@ public sealed class HeldPlugins : ILoadOrder
     /// <summary>The implicit masters and Creation Club catalog come first, forced on, and every
     /// snapshot slot is offset past them so a forced master always sorts first. A name either
     /// forced source claims is held exactly once.</summary>
-    public static IReadOnlyList<ResolvedPlugin> Resolve(
+    public static IReadOnlyList<RegisteredCopy> Resolve(
         string gameDirectory, GameRelease gameRelease, IReadOnlyList<LoadOrderEntry> entries)
     {
         var implicitKeys = ResolveImplicitKeys(gameDirectory, gameRelease);
@@ -68,9 +60,9 @@ public sealed class HeldPlugins : ILoadOrder
         forcedNames.UnionWith(creationClubNames);
 
         var forced = implicitKeys.Concat(creationClubNames)
-            .Select((name, i) => new ResolvedPlugin(
-                name, Path.Combine(gameDirectory, name), PluginOrigin.DataDirectory, IsForced: true,
-                Registration.Participating(i)))
+            .Select((name, i) => new RegisteredCopy(
+                name, PluginOrigin.DataDirectory, Path.Combine(gameDirectory, name), i, Enabled: true,
+                Winning: true, IsForced: true))
             .ToList();
         var offset = forced.Count;
 
@@ -79,9 +71,8 @@ public sealed class HeldPlugins : ILoadOrder
             .. forced,
             .. entries
                 .Where(e => !forcedNames.Contains(e.Name))
-                .Select(e => new ResolvedPlugin(
-                    e.Name, e.Path, e.Origin, IsForced: false,
-                    new Registration(e.Slot is { } slot ? offset + slot : null, e.Enabled, e.Winning))),
+                .Select(e => new RegisteredCopy(
+                    e.Name, e.Origin, e.Path, e.Slot is { } slot ? offset + slot : null, e.Enabled, e.Winning)),
         ];
     }
 
@@ -120,7 +111,7 @@ public sealed class HeldPlugins : ILoadOrder
     /// <summary>A copy that cannot be opened or parsed must not abort the whole reconcile: it is
     /// recorded in <see cref="Failures"/> and nothing is held for it. A success clears any
     /// earlier failure for the same copy.</summary>
-    public PluginMetadata? Open(ResolvedPlugin plugin)
+    public PluginMetadata? Open(RegisteredCopy plugin)
     {
         if (!File.Exists(plugin.Path))
         {
@@ -259,7 +250,7 @@ public sealed class HeldPlugins : ILoadOrder
             new ModPath(ModKey.FromFileName(fileName), filePath), GameRelease,
             LocalizedStrings.ForRead(ModFolders.Of(origin, filePath), DataFolderPath));
         var metadata = BuildPluginMetadata(
-            mod, new ResolvedPlugin(fileName, filePath, origin, IsForced: false, Registration.Participating(nextIndex)));
+            mod, new RegisteredCopy(fileName, origin, filePath, nextIndex, Enabled: true, Winning: true));
         Hold(mod, metadata);
         return metadata;
     }
@@ -275,7 +266,7 @@ public sealed class HeldPlugins : ILoadOrder
         }
     }
 
-    private PluginMetadata BuildPluginMetadata(IModGetter mod, ResolvedPlugin plugin)
+    private PluginMetadata BuildPluginMetadata(IModGetter mod, RegisteredCopy plugin)
     {
         var masters = mod.MasterReferences
             .Select(r => r.Master.FileName.ToString())

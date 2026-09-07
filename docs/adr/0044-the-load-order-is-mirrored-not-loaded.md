@@ -64,8 +64,10 @@ still received as a command rather than as state. There was no moment at which E
    carried entirely by the participation predicate.
 
 3. **There is no session.** Session management is profile management, and the profile is MO2's.
-   Editing holds *the load order* and *the index*; both are mirrors kept true by observation and
-   by reconcile. Nothing is loaded, reloaded or exited: a plugin that fails to parse is a row in an
+   Editing holds *the load order* — an immutable value in the shared kernel, replaced whole by this
+   snapshot and read by both sides ([ADR-0046](0046-ports-and-adapters-with-a-write-side-a-read-side-and-one-way-data-flow.md)
+   invariant 11) — and *the index*, a mirror kept true by observation and by reconcile. Nothing is
+   loaded, reloaded or exited: a plugin that fails to parse is a row in an
    error state, the way a file with a diagnostic is still a file. `SessionManager`, `GameSession`,
    `modbench.reloadSession`, "session settled", "exit to Loadout on load failure" and the
    `/session/*` route prefix go with the concept. Opening the index file does not clear the

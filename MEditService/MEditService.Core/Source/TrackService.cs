@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using MEditService.Core.Notifications;
 using MEditService.Core.Plugins;
+using MEditService.Core.Records;
 using MEditService.Core.Serialization;
 using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
@@ -28,12 +29,23 @@ public sealed class TrackService(ILogger<TrackService> logger, INotificationPubl
     /// the Source watcher starts on a tracked mod with no restart.</summary>
     public Action<string, string>? RepositoryCreated { get; set; }
 
-    public Task TrackAsync(LoadOrder loadOrder, string origin, SourcePreset preset, CancellationToken cancel = default) =>
-        TrackAsync(loadOrder, origin, preset, deserializeForVerification: null, cancel);
+    private static bool Held(IReadOnlyCollection<PluginKey> heldCopies, RegisteredCopy copy) =>
+        heldCopies.Any(k =>
+            k.Name.Equals(copy.Name, StringComparison.OrdinalIgnoreCase)
+            && string.Equals(k.Origin, copy.Origin, StringComparison.OrdinalIgnoreCase));
 
-    /// <summary>The same gesture for a caller still holding the mirror's view.</summary>
+    public Task TrackAsync(
+        LoadOrder loadOrder, IReadOnlyCollection<PluginKey> heldCopies, string origin, SourcePreset preset,
+        CancellationToken cancel = default) =>
+        TrackAsync(loadOrder, heldCopies, origin, preset, deserializeForVerification: null, cancel);
+
+    /// <summary>The same gesture for a caller still holding the mirror's view, whose copies are by
+    /// definition the ones Editing holds.</summary>
     public Task TrackAsync(ILoadOrder loadOrder, string origin, SourcePreset preset, CancellationToken cancel = default) =>
-        TrackAsync(LoadOrder.From(loadOrder), origin, preset, deserializeForVerification: null, cancel);
+        TrackAsync(LoadOrder.From(loadOrder), HeldKeysOf(loadOrder), origin, preset, null, cancel);
+
+    private static IReadOnlyCollection<PluginKey> HeldKeysOf(ILoadOrder loadOrder) =>
+        [.. loadOrder.Plugins.Select(p => p.Key)];
 
     /// <summary>Same gesture with one extra seam: how the round-trip gate reads the tree back. Null gets
     /// the real whole-mod door. Only a negative test overrides it: no known codec defect can trigger
@@ -44,10 +56,11 @@ public sealed class TrackService(ILogger<TrackService> logger, INotificationPubl
         SourcePreset preset,
         Func<string, CancellationToken, Task<IFallout4Mod>>? deserializeForVerification,
         CancellationToken cancel = default) =>
-        TrackAsync(LoadOrder.From(loadOrder), origin, preset, deserializeForVerification, cancel);
+        TrackAsync(LoadOrder.From(loadOrder), HeldKeysOf(loadOrder), origin, preset, deserializeForVerification, cancel);
 
     internal async Task TrackAsync(
         LoadOrder loadOrder,
+        IReadOnlyCollection<PluginKey> heldCopies,
         string origin,
         SourcePreset preset,
         Func<string, CancellationToken, Task<IFallout4Mod>>? deserializeForVerification,
@@ -56,7 +69,11 @@ public sealed class TrackService(ILogger<TrackService> logger, INotificationPubl
         var deserialize = deserializeForVerification
             ?? ((folder, ct) => RecordTextCodecGeneratorSeed.DeserializeWholeMod(folder, InlineWorkDropoff.Instance, ct));
 
-        var plugins = loadOrder.Copies.Where(p => p.Origin.Equals(origin, StringComparison.OrdinalIgnoreCase)).ToList();
+        // A copy the mirror could not open has no bytes to deep-parse, so Track passes over it
+        // rather than failing the whole origin on it.
+        var plugins = loadOrder.Copies
+            .Where(p => p.Origin.Equals(origin, StringComparison.OrdinalIgnoreCase) && Held(heldCopies, p))
+            .ToList();
         if (plugins.Count == 0)
             throw new KeyNotFoundException($"No loaded plugin has origin '{origin}' to track.");
 

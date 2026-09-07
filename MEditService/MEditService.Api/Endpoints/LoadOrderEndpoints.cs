@@ -151,8 +151,19 @@ public static class LoadOrderEndpoints
                 .ToList();
             // ADR-0046 invariant 11: the state lands in the shared kernel first, so a reader asking
             // "which copy wins" during the reconcile is answered by the snapshot, not by the mirror.
+            var previous = holder.Current;
             holder.Apply(LoadOrder.From(req.GameDirectory, req.InstanceRoot, gameRelease, entries));
-            mirror.Reconcile(req.GameDirectory, entries, gameRelease, req.InstanceRoot);
+            try
+            {
+                mirror.Reconcile(req.GameDirectory, entries, gameRelease, req.InstanceRoot);
+            }
+            catch
+            {
+                // A superseded or failed reconcile leaves the index registering the previous
+                // snapshot, so the kernel goes back to it too.
+                holder.Apply(previous);
+                throw;
+            }
             // The hash check and the live watches for every plugin now held, in one pass after the
             // sweep; the crash-repair offers ride the response the same way Failures does.
             var crashRepairOffers = ExternalChangeLoadOrderHook.RunAfterReconcile(

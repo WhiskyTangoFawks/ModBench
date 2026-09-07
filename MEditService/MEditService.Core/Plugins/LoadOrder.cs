@@ -4,8 +4,10 @@ using Mutagen.Bethesda;
 namespace MEditService.Core.Plugins;
 
 /// <summary>One registered plugin copy (ADR-0044): a physical file, its <c>plugins.txt</c> slot —
-/// null when no line names it — and the two booleans Mod Management resolves for it.</summary>
-public sealed record RegisteredCopy(string Name, string Origin, string Path, int? Slot, bool Enabled, bool Winning)
+/// null when no line names it — and the booleans Mod Management resolves for it. IsForced: loaded
+/// regardless of that list.</summary>
+public sealed record RegisteredCopy(
+    string Name, string Origin, string Path, int? Slot, bool Enabled, bool Winning, bool IsForced = false)
 {
     public PluginKey Key => new(Name, Origin);
 
@@ -38,25 +40,22 @@ public sealed class LoadOrder : IEquatable<LoadOrder>
         DataFolderPath = dataFolderPath;
         InstanceRoot = instanceRoot;
         GameRelease = gameRelease;
-        Copies = copies;
+        // Copied, not aliased: a caller keeping its list would otherwise mutate this value.
+        Copies = [.. copies];
     }
 
     /// <summary>The snapshot as it reaches the boundary: forced masters are prepended and every
     /// snapshot slot offset past them, so the value carries the registrations the Index does.</summary>
     public static LoadOrder From(
         string gameDirectory, string? instanceRoot, GameRelease gameRelease, IReadOnlyList<LoadOrderEntry> entries) =>
-        new(gameDirectory, instanceRoot, gameRelease,
-            [.. HeldPlugins.Resolve(gameDirectory, gameRelease, entries)
-                .Select(r => new RegisteredCopy(
-                    r.Name, r.Origin, r.Path, r.Registration.LoadOrderIndex, r.Registration.Enabled,
-                    r.Registration.Winning))]);
+        new(gameDirectory, instanceRoot, gameRelease, HeldPlugins.Resolve(gameDirectory, gameRelease, entries));
 
     /// <summary>The copies a mirror holds, as the value — the bridge for callers still handed the
     /// held view rather than the snapshot.</summary>
     public static LoadOrder From(ILoadOrder held) =>
         new(held.DataFolderPath, held.InstanceRoot, held.GameRelease,
             [.. held.Plugins.Select(p => new RegisteredCopy(
-                p.Name, p.Origin, p.Path, p.LoadOrderIndex, p.Enabled, p.Winning))]);
+                p.Name, p.Origin, p.Path, p.LoadOrderIndex, p.Enabled, p.Winning, p.IsForced))]);
 
     /// <summary>ADR-0044: participation is derived, never stored — enabled, winning, and named by a
     /// <c>plugins.txt</c> line. Only a participating copy competes for winner or counts in a
@@ -75,12 +74,18 @@ public sealed class LoadOrder : IEquatable<LoadOrder>
     /// <summary>The three facts one copy is registered with, or null when it is not registered.</summary>
     public Registration? Registration(PluginKey key) => Copy(key)?.Registration;
 
+    /// <summary>This load order with one more registered copy, replacing any copy already
+    /// registered under the same identity (ADR-0041: a created plugin is a member at once).</summary>
+    public LoadOrder With(RegisteredCopy copy) =>
+        new(DataFolderPath, InstanceRoot, GameRelease, [.. Copies.Where(c => !SameKey(c, copy.Key)), copy]);
+
     /// <summary>ADR-0036: origin is required, not optional — the load order can register two copies
     /// of one filename, so the filename alone does not say which.</summary>
-    public RegisteredCopy? Copy(PluginKey key) =>
-        Copies.FirstOrDefault(c =>
-            c.Name.Equals(key.Name, StringComparison.OrdinalIgnoreCase)
-            && c.Origin.Equals(key.Origin, StringComparison.OrdinalIgnoreCase));
+    public RegisteredCopy? Copy(PluginKey key) => Copies.FirstOrDefault(c => SameKey(c, key));
+
+    private static bool SameKey(RegisteredCopy copy, PluginKey key) =>
+        copy.Name.Equals(key.Name, StringComparison.OrdinalIgnoreCase)
+        && copy.Origin.Equals(key.Origin, StringComparison.OrdinalIgnoreCase);
 
     // Structural, not a record's default: Copies is interface-typed, and its reference equality would
     // make two values built from one snapshot unequal.
@@ -93,5 +98,10 @@ public sealed class LoadOrder : IEquatable<LoadOrder>
 
     public override bool Equals(object? obj) => Equals(obj as LoadOrder);
 
-    public override int GetHashCode() => HashCode.Combine(DataFolderPath, InstanceRoot, GameRelease, Copies.Count);
+    // The same comparer Equals uses for each half, or two equal values could hash apart.
+    public override int GetHashCode() => HashCode.Combine(
+        StringComparer.OrdinalIgnoreCase.GetHashCode(DataFolderPath),
+        InstanceRoot is null ? 0 : StringComparer.OrdinalIgnoreCase.GetHashCode(InstanceRoot),
+        GameRelease,
+        Copies.Count);
 }
