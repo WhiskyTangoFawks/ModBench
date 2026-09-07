@@ -54,7 +54,7 @@ versus "Master `Foo.esp` cannot be loaded"), so a cascade does not read as many 
 - **This is close to the existing behaviour.** Nothing currently checks masters at all —
   `BuildPluginMetadata` records `mod.MasterReferences` but never requires them — so the work is
   detection and display, a set difference against the loaded set, not a change to loading.
-- **`PluginLoadFailure` gets surfaced.** `LoadOrder` already isolates per-plugin load failures with
+- **`PluginLoadFailure` gets surfaced.** `HeldPlugins` already isolates per-plugin load failures with
   a reason so one unparseable file cannot abort the load order; that state has never reached the
   tree. It becomes the error decoration, alongside the missing-master flag.
 - **The Plugin List's order-aware missing-master badge and this state become one concept** in one

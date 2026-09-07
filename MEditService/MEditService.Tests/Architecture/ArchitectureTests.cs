@@ -60,12 +60,21 @@ public sealed class ArchitectureTests
         Assert.True(offenders.Count == 0, "mtime read in:\n" + string.Join("\n", offenders));
     }
 
-    // ADR-0044: PUT /load-order is the only arrival; a second caller makes the mirror's Status lie.
+    // ADR-0044: PUT /load-order is the only arrival; a second caller makes the mirror's Status lie,
+    // and a second writer makes the shared kernel's load order disagree with the index.
     [Fact]
     public void LoadOrder_ArrivesOnlyThroughTheLoadOrderEndpoint()
     {
-        var offenders = Offenders(SolutionDirectory(), Projects, ".Reconcile(", allowedFiles: ["LoadOrderEndpoints.cs"]);
-        Assert.True(offenders.Count == 0, "Reconcile called outside the endpoint in:\n" + string.Join("\n", offenders));
+        // Scoped by the holder type rather than by a receiver name, so renaming the variable a write
+        // goes through cannot disarm this.
+        string[] writers = ["LoadOrderEndpoints.cs", "PluginEndpoints.cs", "LoadOrderHolder.cs"];
+        var offenders = Offenders(SolutionDirectory(), Projects, [".Reconcile("], ["LoadOrderEndpoints.cs"])
+            .Concat(Offenders(SolutionDirectory(), Projects, [nameof(LoadOrderHolder), ".Apply("], writers))
+            .Concat(Offenders(SolutionDirectory(), Projects, [nameof(LoadOrderHolder), ".Register("], writers))
+            .Distinct()
+            .ToList();
+        Assert.True(offenders.Count == 0,
+            "The load order is reconciled or written outside its endpoints in:\n" + string.Join("\n", offenders));
     }
 
     // ADR-0008: PluginWriter backs the binary up first; LoadOrderMirror writes only a brand-new
@@ -94,12 +103,18 @@ public sealed class ArchitectureTests
 
     private static readonly string[] Projects = ["MEditService.Core", "MEditService.Api"];
 
-    internal static List<string> Offenders(string root, string[] projects, string needle, string[] allowedFiles)
+    internal static List<string> Offenders(string root, string[] projects, string needle, string[] allowedFiles) =>
+        Offenders(root, projects, [needle], allowedFiles);
+
+    // Every needle, not any: a conjunction scopes a common token like ".Apply(" to the files that
+    // name the type it is forbidden on.
+    internal static List<string> Offenders(string root, string[] projects, string[] needles, string[] allowedFiles)
     {
         return projects
             .SelectMany(p => SourceTree.CSharpFiles(Path.Combine(root, p)))
             .Where(f => !allowedFiles.Contains(Path.GetFileName(f)))
-            .Where(f => File.ReadAllText(f).Contains(needle, StringComparison.Ordinal))
+            .Where(f => File.ReadAllText(f) is var text
+                && needles.All(n => text.Contains(n, StringComparison.Ordinal)))
             .Select(f => Path.GetRelativePath(root, f))
             .ToList();
     }
@@ -119,6 +134,27 @@ public sealed class ArchitectureTests
             var offenders = Offenders(root, ["P"], "LastWriteTime", allowedFiles: ["Allowed.cs"]);
 
             Assert.Equal([Path.Combine("P", "Bad.cs")], offenders);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void Offenders_NamesOnlyTheFileCarryingEveryNeedle()
+    {
+        var root = Directory.CreateTempSubdirectory("medit-arch-").FullName;
+        try
+        {
+            Directory.CreateDirectory(Path.Combine(root, "P"));
+            File.WriteAllText(Path.Combine(root, "P", "Both.cs"), "var h = new Holder(); renamed.Apply(x);");
+            File.WriteAllText(Path.Combine(root, "P", "OnlyType.cs"), "var h = new Holder();");
+            File.WriteAllText(Path.Combine(root, "P", "OnlyCall.cs"), "renamed.Apply(x);");
+
+            var offenders = Offenders(root, ["P"], ["Holder", ".Apply("], allowedFiles: []);
+
+            Assert.Equal([Path.Combine("P", "Both.cs")], offenders);
         }
         finally
         {

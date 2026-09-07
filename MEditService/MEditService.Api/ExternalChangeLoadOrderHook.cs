@@ -18,11 +18,12 @@ internal static class ExternalChangeLoadOrderHook
         watcher.UnwatchAllIndexed();
         if (loadOrder == null) return [];
 
+        var order = LoadOrder.From(loadOrder);
         var offers = new List<CrashRepairOffer>();
         foreach (var plugin in loadOrder.Plugins)
         {
             var key = new PluginKey(plugin.Name, plugin.Origin);
-            if (ModFolders.TrackedOf(loadOrder, key) is not { } modFolder)
+            if (ModFolders.TrackedOf(order, key) is not { } modFolder)
             {
                 // ADR-0001: every other indexed binary, the game's Data/ masters included, gets an
                 // index-mirror watch: a write by another tool is answered by re-reading it, not by

@@ -30,7 +30,7 @@ public sealed class LoadOrderMirror(
     // A direct constructor parameter rather than routed through IRecordIndexFactory, which has no
     // other reason to carry it; DI already registers SchemaReflector as its own singleton.
     private readonly SchemaReflector _schemaReflector = schemaReflector ?? new SchemaReflector();
-    private LoadOrder? _loadOrder;
+    private HeldPlugins? _loadOrder;
     private IRecordIndex? _index;
     // The reconcile's own progress. Guarded by _lock like _loadOrder/_index — written by
     // the reconciling thread as each plugin lands, read by whoever asks for Status meanwhile.
@@ -101,9 +101,9 @@ public sealed class LoadOrderMirror(
         return (loadOrder, index.At(RecordRef.Effective));
     }
 
-    // The concrete LoadOrder and write-capable IRecordIndex the write-side methods need, not the
+    // The concrete HeldPlugins and write-capable IRecordIndex the write-side methods need, not the
     // narrower pair the public method hands out. One lock, one null check, one message.
-    private (LoadOrder LoadOrder, IRecordIndex Index) RequireScopeCore()
+    private (HeldPlugins LoadOrder, IRecordIndex Index) RequireScopeCore()
     {
         lock (_lock)
         {
@@ -167,8 +167,10 @@ public sealed class LoadOrderMirror(
         {
             var token = BeginReconcile();
             var (loadOrder, index) = EnsureScope(gameDirectory, gameRelease, instanceRoot);
-            var resolved = Plugins.LoadOrder.Resolve(gameDirectory, gameRelease, plugins);
-            ReconcileProgressively(loadOrder, index, resolved, token);
+            // The value the endpoint applied to the shared kernel, built through the same door, so
+            // the registrations the index writes cannot disagree with the ones the kernel holds.
+            var snapshot = Plugins.LoadOrder.From(gameDirectory, instanceRoot, gameRelease, plugins);
+            ReconcileProgressively(loadOrder, index, snapshot, token);
         }
         catch (OperationCanceledException ex)
         {
@@ -221,7 +223,7 @@ public sealed class LoadOrderMirror(
     // within one.
 
     // Published before any plugin is opened, which is what makes the reconcile progressive (ADR-0035).
-    private (LoadOrder LoadOrder, IRecordIndex Index) EnsureScope(
+    private (HeldPlugins LoadOrder, IRecordIndex Index) EnsureScope(
         string gameDirectory, GameRelease gameRelease, string? instanceRoot)
     {
         lock (_lock)
@@ -238,7 +240,7 @@ public sealed class LoadOrderMirror(
         {
             _logger.LogDebug("DuckDB record index initialized in {ElapsedMs} ms", createTimer.ElapsedMilliseconds);
         }
-        var loadOrder = new LoadOrder(gameDirectory, instanceRoot, gameRelease, _logger);
+        var loadOrder = new HeldPlugins(gameDirectory, instanceRoot, gameRelease, _logger);
 
         lock (_lock)
         {
@@ -254,7 +256,7 @@ public sealed class LoadOrderMirror(
         return (loadOrder, fresh);
     }
 
-    private static bool SameScope(LoadOrder held, string gameDirectory, GameRelease gameRelease, string? instanceRoot) =>
+    private static bool SameScope(HeldPlugins held, string gameDirectory, GameRelease gameRelease, string? instanceRoot) =>
         held.GameRelease == gameRelease
         && SamePath(held.DataFolderPath, gameDirectory)
         && (held.InstanceRoot, instanceRoot) switch
@@ -275,8 +277,9 @@ public sealed class LoadOrderMirror(
     // Registrations the snapshot has stopped naming are dropped before anything new is opened, so a
     // freshly opened index file's last-run rows stop answering as early as possible.
     private void ReconcileProgressively(
-        LoadOrder loadOrder, IRecordIndex index, IReadOnlyList<ResolvedPlugin> resolved, CancellationToken token)
+        HeldPlugins loadOrder, IRecordIndex index, Plugins.LoadOrder snapshot, CancellationToken token)
     {
+        var resolved = snapshot.Copies;
         var wanted = resolved.ToDictionary(r => KeyOf(r.Key), StringComparer.OrdinalIgnoreCase);
         var held = loadOrder.Plugins.ToDictionary(p => KeyOf(p.Key), StringComparer.OrdinalIgnoreCase);
 
@@ -410,7 +413,7 @@ public sealed class LoadOrderMirror(
     }
 
     // While the bytes are unchanged the error state stands, and the parse is not paid again.
-    private bool StillFailing(ResolvedPlugin plugin)
+    private bool StillFailing(RegisteredCopy plugin)
     {
         (PluginKey, string? Hash) failedAt;
         lock (_lock)
@@ -428,7 +431,7 @@ public sealed class LoadOrderMirror(
     // is re-derived whole.
 
     // The tree is resolved here because the register/index decision needs the answer the ingest does.
-    private void RegisterOrIndex(LoadOrder loadOrder, IRecordIndex index, PluginMetadata plugin, CancellationToken token)
+    private void RegisterOrIndex(HeldPlugins loadOrder, IRecordIndex index, PluginMetadata plugin, CancellationToken token)
     {
         var key = plugin.Key;
         var sourceTree = SourceIngest.TreeFor(plugin.Origin, plugin.Path, plugin.Name);
@@ -490,17 +493,17 @@ public sealed class LoadOrderMirror(
     // everything else. Both branches end in the same Index call, which is what keeps the read model
     // free of a dialect.
 
-    // The binary is still opened for a tracked plugin — LoadOrder reads the overlay for metadata and
+    // The binary is still opened for a tracked plugin — HeldPlugins reads the overlay for metadata and
     // the write path builds its link cache from it. What this establishes is only "never consult the
     // binary for a tracked plugin's content".
 
     // Moving masters and record count onto the tree as well is a further step, not this one: it
-    // would reach into LoadOrder's mod registry and the save path.
+    // would reach into HeldPlugins' mod registry and the save path.
 
     // A failed source read degrades to the binary, but records a real PluginLoadFailure: a silent
     // fallback would leave the user reading pre-Track binary content believing it was their source.
     private void IndexOnePlugin(
-        LoadOrder loadOrder, IRecordIndex index, PluginMetadata plugin,
+        HeldPlugins loadOrder, IRecordIndex index, PluginMetadata plugin,
         IModGetter binary, string? sourceTree, CancellationToken token)
     {
         if (sourceTree == null)
@@ -609,10 +612,11 @@ public sealed class LoadOrderMirror(
         var (loadOrder, index) = RequireHeldIndex();
         var keys = plugin is { } one ? (IReadOnlyList<PluginKey>)[one] : index.RegisteredPlugins();
 
+        var order = Plugins.LoadOrder.From(loadOrder);
         var reports = new List<ValidationReport>(keys.Count);
         foreach (var key in keys)
         {
-            var report = index.Validate(key, ModFolders.Of(loadOrder, key));
+            var report = index.Validate(key, ModFolders.Of(order, key));
             foreach (var failure in report.Failures)
                 _logger.LogWarning("Reconciling {Plugin}: {Failure}", key.Name, failure);
 
@@ -638,7 +642,7 @@ public sealed class LoadOrderMirror(
 
         // Re-derived every call, never remembered from when the watch started: the repository can be
         // deleted or replaced between the event and this line, and then there is no truth to read.
-        if (ModFolders.TrackedOf(loadOrder, key) is not { } modFolder) return;
+        if (ModFolders.TrackedOf(Plugins.LoadOrder.From(loadOrder), key) is not { } modFolder) return;
 
         index.RefreshByKeys(key, modFolder, formKeys);
         ReapplyFilter();

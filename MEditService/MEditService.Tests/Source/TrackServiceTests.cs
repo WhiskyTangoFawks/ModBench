@@ -17,6 +17,50 @@ namespace MEditService.Tests.Source;
 /// reported number, not a suite-gating assertion.</summary>
 public sealed class TrackServiceTests
 {
+    // A copy the mirror could not open is registered like any other but has no bytes to deep-parse,
+    // so Track passes over it instead of failing the whole origin on it.
+    [Fact]
+    public async Task TrackAsync_SkipsARegisteredCopyTheMirrorCouldNotOpen()
+    {
+        var modFolder = Directory.CreateTempSubdirectory("medit-track-unopened-").FullName;
+        var gameDir = Directory.CreateTempSubdirectory("medit-track-unopened-game-").FullName;
+        try
+        {
+            var pluginPath = Path.Combine(modFolder, "Fixture.esp");
+            var mod = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
+            mod.Npcs.AddNew("FirstNpc");
+            mod.WriteToBinary(pluginPath);
+
+            var unreadable = Path.Combine(modFolder, "Broken.esp");
+            await File.WriteAllTextAsync(unreadable, "not a plugin");
+
+            var loadOrder = new LoadOrder(gameDir, null, GameRelease.Fallout4,
+            [
+                new RegisteredCopy("Fixture.esp", "FixtureMod", pluginPath, 0, Enabled: true, Winning: true),
+                new RegisteredCopy("Broken.esp", "FixtureMod", unreadable, 1, Enabled: true, Winning: true),
+            ]);
+
+            await new TrackService(NullLogger<TrackService>.Instance)
+                .TrackAsync(loadOrder, [new PluginKey("Fixture.esp", "FixtureMod")], "FixtureMod", SourcePreset.Edits);
+
+            Assert.True(SourceRepository.IsTracked(modFolder));
+            Assert.True(Directory.Exists(Path.Combine(modFolder, SourceRecordPath.RootFor("Fixture.esp"))));
+            Assert.False(Directory.Exists(Path.Combine(modFolder, SourceRecordPath.RootFor("Broken.esp"))));
+        }
+        finally
+        {
+            SafeDelete(modFolder);
+            SafeDelete(gameDir);
+        }
+    }
+
+    private static void SafeDelete(string folder)
+    {
+        try { Directory.Delete(folder, recursive: true); }
+        catch (IOException) { }
+        catch (UnauthorizedAccessException) { }
+    }
+
     [Fact]
     public async Task TrackAsync_RealLoadOrder_WritesTheSourceTree_AndTracksTheModFolder()
     {

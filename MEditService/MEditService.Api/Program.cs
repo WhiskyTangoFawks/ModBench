@@ -70,6 +70,7 @@ try
     builder.Services.AddSingleton<ConflictClassifier>();
     builder.Services.AddSingleton<PluginWriter>();
     builder.Services.AddSingleton<IModImporter, DefaultModImporter>();
+    builder.Services.AddSingleton<LoadOrderHolder>();
     builder.Services.AddSingleton<ILoadOrderMirror, LoadOrderMirror>();
     // Resolved from the mirror rather than registered on its own, so there is exactly one write
     // gate — a bare `AddSingleton<IndexWriteGate>()` would inject cleanly and serialize nothing.
