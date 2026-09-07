@@ -9,18 +9,17 @@ using Mutagen.Bethesda.Plugins;
 namespace MEditService.Tests.Source;
 
 /// <summary>The header has no group folder and carries no FormKey in its file name, so every other
-/// <see cref="SourceUnitResolver.Resolve"/> branch answers null for it.</summary>
-public sealed class SourceUnitResolverHeaderTests
+/// <see cref="SourceRepository.Locate"/> branch answers null for it.</summary>
+public sealed class SourceRepositoryLocateHeaderTests
 {
     [Fact]
-    public void Resolve_ForAHeaderFormKey_FindsTheRootRecordDataJson()
+    public void Locate_ForAHeaderFormKey_FindsTheRootRecordDataJson()
     {
         using var mod = TrackedModFixture.Tracked();
         var headerFormKey = PluginHeader.FormKeyFor(ModKey.FromFileName(mod.ActualPluginName));
 
-        var unit = SourceUnitResolver.Resolve(
-            mod.Plugin, mod.ModFolder, headerFormKey, PluginHeader.RecordType, editorId: null,
-            GameRelease.Fallout4);
+        var unit = SourceRepository.Open(mod.ModFolder, GameRelease.Fallout4)!
+            .Locate(mod.Plugin, new RecordIdentity(headerFormKey, PluginHeader.RecordType, EditorId: null));
 
         Assert.NotNull(unit);
         Assert.False(unit!.Value.IsEmbedded);
@@ -32,14 +31,13 @@ public sealed class SourceUnitResolverHeaderTests
     }
 
     [Fact]
-    public void Resolve_ForAHeaderFormKey_IsNotDirectoryPerRecord()
+    public void Locate_ForAHeaderFormKey_IsNotDirectoryPerRecord()
     {
         using var mod = TrackedModFixture.Tracked();
         var headerFormKey = PluginHeader.FormKeyFor(ModKey.FromFileName(mod.ActualPluginName));
 
-        var unit = SourceUnitResolver.Resolve(
-            mod.Plugin, mod.ModFolder, headerFormKey, PluginHeader.RecordType, editorId: null,
-            GameRelease.Fallout4);
+        var unit = SourceRepository.Open(mod.ModFolder, GameRelease.Fallout4)!
+            .Locate(mod.Plugin, new RecordIdentity(headerFormKey, PluginHeader.RecordType, EditorId: null));
 
         Assert.NotNull(unit);
         Assert.False(unit!.Value.IsDirectoryPerRecord);

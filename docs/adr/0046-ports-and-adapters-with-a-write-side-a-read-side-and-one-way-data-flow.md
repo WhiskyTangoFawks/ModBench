@@ -81,9 +81,11 @@ flowchart TB
    mod is tracked. Parse status comes from the codec at edit time. A document is never taken
    from the Index; a missing file is a refusal.
 8. **A command returns success or a refusal, and nothing else.**
-9. **The Source repository is the only repository.** Documents by identity: get, put, remove,
-   rename. Layout, embedding, child paths and git live inside it. It is a concrete module, not a
-   port, because nothing varies across it.
+9. **The Source repository is the only repository.** It answers for documents by identity, for a
+   whole plugin's documents, and for either of those at a named git ref, at the working tree or
+   through the object store as the question demands. Layout, embedding, child paths, the write
+   transaction and git live inside it, and turning an identity into a path is its work alone. It is a
+   concrete module, not a port, because nothing varies across it.
 10. **The Index is one deep module**, projector and store, with the interface refresh by keys,
     validate, sequence, and reads. The projector asks the load order which copy wins and the
     schema which fields are references and children; it decides nothing itself.

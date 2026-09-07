@@ -14,9 +14,9 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Tests.Edits;
 
-/// <summary>Delete and Renumber resolve containers through <see cref="SourceUnitResolver"/>, as
-/// EditField does. A container's own record moves or removes its directory whole; an embedded
-/// child is spliced or renumbered inside its owner's document, no file move.</summary>
+/// <summary>Delete and Renumber resolve containers through <see cref="SourceRepository.Locate"/>, as
+/// EditField does. A container moves or removes its directory whole; an embedded child is spliced
+/// inside its owner's document, no file move.</summary>
 public sealed class RecordEditServiceContainerDeleteRenumberTests : IDisposable
 {
     private readonly ContainerModFixture _fixture = new();

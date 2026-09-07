@@ -47,6 +47,31 @@ public sealed class ExternalChangeEditLanderTests : IDisposable
     }
 
     [Fact]
+    public void Keep_OverAParkedTreeWhereTwoDocumentsClaimOneFormKey_StillLands()
+    {
+        // A corrupt tree is Compile's refusal to report, not Keep's to crash on: taking the first
+        // document keeps every unrelated record landing.
+        var impostor = Path.Combine(
+            Path.GetDirectoryName(_mod.NpcSourceFile)!, $"AnImpostor - {_mod.Npc.ID:X6}_{TrackedModFixture.PluginName}.json");
+        File.WriteAllText(impostor, File.ReadAllText(_mod.NpcSourceFile));
+        // Staged, or the parked snapshot would not carry it: git stash create ignores untracked files.
+        GitCli.Run(Path.Combine(_mod.ModFolder, ".git"), _mod.ModFolder, "add", "-A");
+        SourceRepository.ParkCompileSnapshot(_mod.ModFolder, TrackedModFixture.PluginName, atRef: null, "abc");
+        Assert.Equal(
+            2,
+            SourceRepository.Open(_mod.ModFolder, GameRelease.Fallout4)!
+                .ReadAll(_mod.Plugin, SourceRepository.LastCompileRef(TrackedModFixture.PluginName))
+                .Count(d => d.FormKey == _mod.Npc.ToString()));
+        File.Delete(impostor);
+        WriteExternalBinaryChange(0.9f);
+
+        var result = ExternalChangeEditLander.Keep(
+            _mod.ModFolder, _mod.Plugin, PluginPath, GameRelease.Fallout4, SharedSchemaReflector.Instance);
+
+        Assert.True(result.Applied, result.RefusalReason);
+    }
+
+    [Fact]
     public void Keep_AdvancesTheParkedRef_ToTheAbsorbedBinary()
     {
         WriteExternalBinaryChange(0.9f);

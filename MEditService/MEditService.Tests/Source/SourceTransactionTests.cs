@@ -5,7 +5,7 @@ namespace MEditService.Tests.Source;
 
 /// <summary>The third-party writes here are real: the test process writes and deletes files itself
 /// between the transaction's write and its rollback, the sequence another tool produces.</summary>
-public sealed class SourceWriteTransactionTests : IDisposable
+public sealed class SourceTransactionTests : IDisposable
 {
     private readonly string _root = Directory.CreateTempSubdirectory("medit-swt-").FullName;
 
@@ -26,7 +26,7 @@ public sealed class SourceWriteTransactionTests : IDisposable
         File.WriteAllText(path, content);
     }
 
-    private void WriteThrough(SourceWriteTransaction transaction, string relative, string content) =>
+    private void WriteThrough(SourceTransaction transaction, string relative, string content) =>
         transaction.Write(_root, Path_(relative), () => File.WriteAllText(Path_(relative), content));
 
     [Fact]
@@ -40,7 +40,7 @@ public sealed class SourceWriteTransactionTests : IDisposable
         Directory.CreateDirectory(Path_("Cells/Home/Empty"));
         var before = TreeSnapshot.Of(_root);
 
-        var transaction = new SourceWriteTransaction();
+        var transaction = new SourceTransaction();
         WriteThrough(transaction, "Npcs/existing.json", "rewritten");
         WriteThrough(transaction, "Npcs/created.json", "brand new");
         transaction.Delete(_root, Path_("Races/doomed.json"));
@@ -60,7 +60,7 @@ public sealed class SourceWriteTransactionTests : IDisposable
         // The moved file lands on exactly the name the deleted sibling vacated, which is what makes
         // reverse order load-bearing: restoring the delete first would put old.json on top of a live
         // file.
-        var transaction = new SourceWriteTransaction();
+        var transaction = new SourceTransaction();
         WriteThrough(transaction, "Races/new.json", "new");
         transaction.Delete(_root, Path_("Races/old.json"));
         transaction.Move(_root, Path_("Races/new.json"), Path_("Races/old.json"));
@@ -75,7 +75,7 @@ public sealed class SourceWriteTransactionTests : IDisposable
         Seed("Npcs/contested.json", "original");
         Seed("Npcs/quiet.json", "quiet original");
 
-        var transaction = new SourceWriteTransaction();
+        var transaction = new SourceTransaction();
         WriteThrough(transaction, "Npcs/contested.json", "ours");
         WriteThrough(transaction, "Npcs/quiet.json", "ours too");
 
@@ -95,7 +95,7 @@ public sealed class SourceWriteTransactionTests : IDisposable
     {
         Seed("Npcs/doomed.json", "original");
 
-        var transaction = new SourceWriteTransaction();
+        var transaction = new SourceTransaction();
         WriteThrough(transaction, "Npcs/doomed.json", "ours");
         File.Delete(Path_("Npcs/doomed.json"));
 
@@ -108,7 +108,7 @@ public sealed class SourceWriteTransactionTests : IDisposable
     [Fact]
     public void Rollback_NamesAFileItCreatedAndAThirdPartyRemoved_RatherThanClaimingItUndidIt()
     {
-        var transaction = new SourceWriteTransaction();
+        var transaction = new SourceTransaction();
         WriteThrough(transaction, "Npcs/created.json", "ours");
         File.Delete(Path_("Npcs/created.json"));
 
@@ -121,7 +121,7 @@ public sealed class SourceWriteTransactionTests : IDisposable
     {
         Seed("Npcs/untouched.json", "original");
 
-        var transaction = new SourceWriteTransaction();
+        var transaction = new SourceTransaction();
         Assert.ThrowsAny<Exception>(() =>
             transaction.Write(_root, Path_("Npcs/untouched.json"), () => throw new IOException("disk went away")));
 
@@ -135,7 +135,7 @@ public sealed class SourceWriteTransactionTests : IDisposable
         Seed("Npcs/first.json", "first original");
         Seed("Races/second.json", "second original");
 
-        var transaction = new SourceWriteTransaction();
+        var transaction = new SourceTransaction();
         WriteThrough(transaction, "Npcs/first.json", "ours");
         transaction.Delete(_root, Path_("Races/second.json"));
 
@@ -157,7 +157,7 @@ public sealed class SourceWriteTransactionTests : IDisposable
     {
         int positions;
         {
-            var probe = new SourceWriteTransaction();
+            var probe = new SourceTransaction();
             SeedTree();
             positions = RunSequence(probe, failAt: int.MaxValue);
             probe.Rollback();
@@ -172,7 +172,7 @@ public sealed class SourceWriteTransactionTests : IDisposable
             SeedTree();
             var before = TreeSnapshot.Of(_root);
 
-            var transaction = new SourceWriteTransaction();
+            var transaction = new SourceTransaction();
             Assert.ThrowsAny<Exception>(() => RunSequence(transaction, failAt));
             Assert.Empty(transaction.Rollback());
             Assert.Equal(before, TreeSnapshot.Of(_root));
@@ -190,7 +190,7 @@ public sealed class SourceWriteTransactionTests : IDisposable
         Directory.CreateDirectory(Path_("Cells/Home/Empty"));
     }
 
-    private int RunSequence(SourceWriteTransaction transaction, int failAt)
+    private int RunSequence(SourceTransaction transaction, int failAt)
     {
         var act = 0;
         void At(int position, Action perform)

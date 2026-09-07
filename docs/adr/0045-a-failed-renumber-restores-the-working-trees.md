@@ -5,7 +5,7 @@ status: accepted
 # A failed renumber restores the working trees: failure atomicity, conditionally, without git
 
 Governs the renumber cascade in `MEditService.Core/Edits/RecordEditService.cs` and the mechanism it
-constructs, `MEditService.Core/Source/SourceWriteTransaction.cs`. Extends
+constructs, `MEditService.Core/Source/SourceRepositoryTransaction.cs`. Extends
 [ADR-0041](0041-manual-git-tracking-compile-from-text.md) (one write path; refusals precede writes;
 commit, stash and discard are the author's gestures) and
 [ADR-0026](0026-error-surfacing-policy.md) (a partial outcome is a structured collection).
@@ -35,14 +35,18 @@ something broken behind after we are done is not.** This ADR is about failure at
 ## Decision
 
 1. **A renumber is all-or-nothing across every source tree it writes.** Phase two runs through a
-   `SourceWriteTransaction`: the pre-image of each file the cascade is about to write is captured,
-   held for the duration of the call, and on failure the acts are undone in reverse order. The
-   overruled disclose-and-recover message is deleted, not deprecated (pre-alpha, zero users).
+   `SourceTransaction`: a batch of the repositories' own puts and removes, whose pre-image of each
+   file the cascade is about to write is captured, held for the duration of the call, and undone in
+   reverse order on failure. An act whose pre-image is not one document's bytes — removing a
+   container, which takes its whole directory — is refused before the tree is touched rather than
+   performed unrestorably. The overruled disclose-and-recover message is deleted, not deprecated
+   (pre-alpha, zero users).
 
 2. **The mechanism is small and explicit, constructed by the renumber path alone.** Not an ambient
-   scope, not a chokepoint every write in the service passes through. `RenumberRecord` builds one and
-   routes its own writes through it; `EditField`, `CreateRecord`, `DeleteRecord` and the compile path
-   are untouched. A second caller wanting the same property will construct its own — that is a
+   scope, not a chokepoint every write in the service passes through. It lives with the Source
+   repository, whose verbs it batches, and spans as many repositories as one gesture writes.
+   `RenumberRecord` builds one and routes its own writes through it; `EditField`, `CreateRecord`,
+   `DeleteRecord` and the compile path are untouched. A second caller wanting the same property will construct its own — that is a
    deliberate cost, paid to keep the write paths independent and the mechanism legible.
 
 3. **It uses no git.** Nothing is written into the author's repository, no ref is created, no command

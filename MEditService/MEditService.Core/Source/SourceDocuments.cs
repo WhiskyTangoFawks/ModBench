@@ -7,7 +7,7 @@ using Mutagen.Bethesda.Plugins;
 namespace MEditService.Core.Source;
 
 /// <summary>Which record the file at a path declares, and where a plugin's documents live. The
-/// reverse of <see cref="SourceUnitResolver"/>, whose question is which file a record lives
+/// reverse of <see cref="SourceRepository.Locate"/>, whose question is which file a record lives
 /// in.</summary>
 public static class SourceDocuments
 {
@@ -51,7 +51,7 @@ public static class SourceDocuments
         var text = Encoding.UTF8.GetString(SourceUnitResolver.StripUtf8Bom(bytes));
         return (
             FormKeyDeclaredIn(text, filePath, HeaderDocumentIn(modFolder, pluginFileName), pluginFileName),
-            RootString(text, "EditorID"));
+            RootStringIn(text, "EditorID"));
     }
 
     /// <summary>The plugin header's own document: the whole-mod door's root RecordData.json.</summary>
@@ -63,16 +63,16 @@ public static class SourceDocuments
     internal static string? FormKeyDeclaredIn(
         string text, string filePath, string headerDocumentPath, string pluginFileName)
     {
-        // The header's document carries a ModKey rather than a FormKey; HeaderIndexer computes the
+        // The header's document carries a ModKey rather than a FormKey; PluginHeader computes the
         // FormKey the index files it under.
         if (filePath.Equals(headerDocumentPath, StringComparison.Ordinal))
             return PluginHeader.FormKeyFor(ModKey.FromFileName(pluginFileName));
 
-        return RootString(text, "FormKey");
+        return RootStringIn(text, "FormKey");
     }
 
     // A member of the document's own root object, as a string. Malformed text declares nothing.
-    private static string? RootString(string text, string member)
+    internal static string? RootStringIn(string text, string member)
     {
         try
         {

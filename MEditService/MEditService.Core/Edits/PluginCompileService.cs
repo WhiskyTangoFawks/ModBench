@@ -27,7 +27,7 @@ public sealed class PluginCompileService(
 
         // A compile at a named ref reads that ref's tree onto disk first, so both cases below are the
         // same "read this directory" call.
-        using var checkout = SourceCheckout.Of(modFolder, plugin.Name, source);
+        using var checkout = SourceCheckout.Of(modFolder, plugin, source, loadOrder.GameRelease);
         if (!Directory.Exists(checkout.TreeRoot))
         {
             return CompileResult.Refused(
@@ -68,8 +68,9 @@ public sealed class PluginCompileService(
         // Two source units claiming one FormKey can only become one binary record, so refuse rather
         // than pick a winner. Asked of the tree, not `mod`: the reader's group cache has already
         // resolved a same-folder collision before `mod` exists.
-        var collidingFormKeys = SourceUnitResolver.FormKeysWithMoreThanOneSourceUnit(
-            checkout.TreeRoot, mod.EnumerateMajorRecords().Select(r => r.FormKey));
+        var collidingFormKeys = SourceRepository
+            .Over(checkout.ResolverRoot, loadOrder.GameRelease)
+            .FormKeysWithMoreThanOneDocument(plugin, mod.EnumerateMajorRecords().Select(r => r.FormKey));
         if (collidingFormKeys.Count > 0)
         {
             return CompileResult.Refused(
@@ -159,8 +160,9 @@ public sealed class PluginCompileService(
         // Compile's wall clock on a 3,940-record fixture.
         var reads = index.At(RecordRef.Effective);
         var documents = reads.GetDocuments(plugin).ToDictionary(d => d.FormKey);
-        // One resolution cache for the pass: SourceUnitResolver re-scanning the tree per record dominated.
-        var resolutionCache = new SourceUnitResolutionCache();
+        // One repository for the pass, so its listing memo spans it: resolving per record against a
+        // fresh tree scan dominated.
+        var repository = SourceRepository.Over(resolverRoot, gameRelease);
         foreach (var record in mod.EnumerateMajorRecords())
         {
             var formKey = record.FormKey.ToString();
@@ -174,8 +176,8 @@ public sealed class PluginCompileService(
 
             // Only records with something to report pay for resolution, which keeps a container's
             // subtree scan off the common path.
-            var relativePath = SourceUnitResolver
-                .Resolve(plugin, resolverRoot, formKey, document.RecordType, document.EditorId, gameRelease, resolutionCache)
+            var relativePath = repository
+                .Locate(plugin, new RecordIdentity(formKey, document.RecordType, document.EditorId))
                 ?.RelativePath ?? string.Empty;
             diagnostics.AddRange(errors.Select(message => new CompileDiagnostic(formKey, relativePath, message)));
         }
@@ -266,9 +268,9 @@ internal sealed class SourceCheckout : IDisposable
     /// <summary>What to call this source in a refusal message.</summary>
     internal string Description { get; }
 
-    internal static SourceCheckout Of(string modFolder, string pluginName, CompileSource source)
+    internal static SourceCheckout Of(string modFolder, PluginKey plugin, CompileSource source, GameRelease release)
     {
-        var treeName = SourceRecordPath.RootFor(pluginName);
+        var treeName = SourceRecordPath.RootFor(plugin.Name);
 
         if (source is CompileSource.AtRef atRef)
         {
@@ -280,12 +282,7 @@ internal sealed class SourceCheckout : IDisposable
                 Path.Combine(scratchRoot, treeName), scratchRoot, atRef.Ref, scratchRoot);
             try
             {
-                foreach (var (relativePath, bytes) in SourceRepository.EnumerateSourceAtRef(modFolder, pluginName, atRef.Ref))
-                {
-                    var destination = Path.Combine(scratchRoot, relativePath);
-                    Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
-                    File.WriteAllBytes(destination, bytes);
-                }
+                SourceRepository.Open(modFolder, release)?.MaterializeAtRef(plugin, atRef.Ref, scratchRoot);
             }
             catch
             {
