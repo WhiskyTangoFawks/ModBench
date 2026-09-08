@@ -911,7 +911,7 @@ function registerLoadoutView(session: ExtensionSession, deps: LoadoutViewDeps): 
     // what happened while it wasn't. Plugins follow mods, so the first pass feeds the second.
     void reconcileModlistWithModsDir(modlistSource, () => modListProvider.invalidate(), outputChannel)
       .then(reconcilePlugins);
-    const { downloadsProvider, disposables: downloadsDisposables } = registerDownloadsView(instanceRoot, outputChannel);
+    const { downloadsProvider, disposables: downloadsDisposables } = registerDownloadsView(instanceRoot, instance, outputChannel);
     context.subscriptions.push(...downloadsDisposables);
     // ADR-0046: rebuild before resend before the tree re-reads (refreshAll.ts owns the sequence);
     // a rebuild failure is reported through makeReporter, never a bare toast (modbench/CLAUDE.md).
@@ -925,7 +925,8 @@ function registerLoadoutView(session: ExtensionSession, deps: LoadoutViewDeps): 
       // The Plugins tree renders the Instance's value now (ADR-0047): force a real re-read of
       // disk, not just a re-render of whatever the Instance last landed.
       invalidatePlugins: () => { void instance.refresh(); pluginListProvider.invalidate(); },
-      invalidateDownloads: () => downloadsProvider.invalidate(),
+      // Same as invalidatePlugins above: Downloads renders the Instance value too (ADR-0047).
+      invalidateDownloads: () => { void instance.refresh(); downloadsProvider.invalidate(); },
       updateProfileDescription,
     });
     return { modListProvider, downloadsProvider, pluginListProvider, modlistSource, instanceRoot, instance, refreshAll, enterEditing };

@@ -16,8 +16,8 @@ import { detectRoot } from './install/detectRoot';
 import { extractArchive } from './install/extractArchive';
 import { registerDownloadsHiddenToggleCommands, registerDownloadsMultiRowCommands, registerDownloadsSingleRowCommands, registerDownloadsSortCommand } from './DownloadsPanel';
 import { DownloadsProvider } from './DownloadsProvider';
-import { createDownloadsWatcher } from './downloadsWatcher';
 import { HiddenDownloadDecorationProvider } from './HiddenDownloadDecorationProvider';
+import type { Instance } from './instance';
 import { makeReporter } from '../reporter';
 import { registerNameFilter, type NameFilter } from '../nameFilter';
 import { meditConfig, makeDetectPaths, setMo2InstanceContext } from '../workspaceConfig';
@@ -304,15 +304,17 @@ export function createModListView(
   void updateProfileDescription();
   return { modListView, modListFilter, updateProfileDescription };
 }
-/** Returns the live provider alongside its disposables, so integration tests can reach it. */
+/** Returns the live provider alongside its disposables, so integration tests can reach it.
+ *  Rows come entirely from the Instance value (ADR-0047); no own scan or watcher here. */
 export function registerDownloadsView(
   instanceRoot: string,
+  instance: Pick<Instance, 'value' | 'subscribe' | 'sequence'>,
   outputChannel: vscode.LogOutputChannel,
 ): { downloadsProvider: DownloadsProvider; disposables: vscode.Disposable[] } {
   // A shim for collaborators still taking a flat `(msg) => void`, built here at the boundary so
   // the flat shape stops at them rather than one level higher.
   const log = (msg: string) => outputChannel.info(msg);
-  const downloadsProvider = new DownloadsProvider(instanceRoot, log);
+  const downloadsProvider = new DownloadsProvider({ instanceRoot, instance });
   const downloadsView = vscode.window.createTreeView('modbench.downloads', {
     treeDataProvider: downloadsProvider,
     canSelectMany: true,
@@ -321,7 +323,7 @@ export function registerDownloadsView(
     downloadsProvider,
     disposables: [
       downloadsView,
-      createDownloadsWatcher(instanceRoot, () => downloadsProvider.invalidate()),
+      downloadsProvider, // disposes its Instance subscription
       // Dims hidden rows once Show hidden is on — the sole cue distinguishing them,
       // since Show hidden is additive, not an exclusive filter.
       vscode.window.registerFileDecorationProvider(

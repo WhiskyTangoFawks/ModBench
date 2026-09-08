@@ -120,13 +120,7 @@
       },
       {
         "view": "modbench.downloads",
-        "contents": "This instance has no `downloads/` folder.",
-        "when": "!modbench.downloadsFolderExists"
-      },
-      {
-        "view": "modbench.downloads",
-        "contents": "No downloads yet. Copy archives into `downloads/` to see them here.",
-        "when": "modbench.downloadsFolderExists"
+        "contents": "No downloads yet. Copy archives into `downloads/` to see them here."
       }
     ],
     "commands": [

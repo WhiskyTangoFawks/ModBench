@@ -1,9 +1,7 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { mkdtemp, mkdir, rm, writeFile, utimes } from 'node:fs/promises';
+import { describe, it, expect, vi } from 'vitest';
+import { mkdtemp, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-
-const { executeCommand } = vi.hoisted(() => ({ executeCommand: vi.fn() }));
 
 import {
   TreeItem, TreeItemCollapsibleState, EventEmitter, ThemeIcon, ThemeColor, MarkdownString, uriFile,
@@ -11,15 +9,14 @@ import {
 
 vi.mock('vscode', () => ({
   TreeItem, TreeItemCollapsibleState, EventEmitter, ThemeIcon, ThemeColor, MarkdownString,
-  Uri: { file: uriFile }, commands: { executeCommand },
+  Uri: { file: uriFile },
 }));
 
-import { DownloadsProvider, DownloadNode, type DownloadsNode } from './DownloadsProvider';
+import { DownloadsProvider, DownloadNode, type DownloadsProviderOptions } from './DownloadsProvider';
 import type { DownloadRow } from './mo2/downloads';
-import { ErrorNode } from './ErrorNode';
+import type { InstanceValue } from './instance';
 
-const rowNames = (nodes: DownloadsNode[]): string[] =>
-  nodes.filter((n): n is DownloadNode => n instanceof DownloadNode).map((n) => n.row.name);
+const rowNames = (nodes: DownloadNode[]): string[] => nodes.map((n) => n.row.name);
 
 const row = (extra: Partial<DownloadRow> = {}): DownloadRow => ({
   name: 'foo.zip',
@@ -31,6 +28,51 @@ const row = (extra: Partial<DownloadRow> = {}): DownloadRow => ({
   hidden: false,
   ...extra,
 });
+
+// Only `.downloads` is ever read by the row provider — the rest of InstanceValue is other
+// views' territory this ticket does not touch.
+function valueOf(downloads: DownloadRow[]): InstanceValue {
+  return { downloads } as unknown as InstanceValue;
+}
+
+// The double the row provider's own contract needs: `.value` plus `.subscribe`, structurally
+// compatible with `Instance` without ever constructing one (ADR-0047's watcher is Instance's
+// concern, not this provider's).
+class FakeInstance {
+  value: InstanceValue;
+  // Defaults to 1 ("already loaded") so every existing fixture-based test needs no opinion on
+  // it; a test of the sequence === 0 ("not read yet") guard passes 0 explicitly.
+  sequence: number;
+  private subscribers: ((value: InstanceValue, sequence: number) => void)[] = [];
+  constructor(initial: InstanceValue, sequence = 1) {
+    this.value = initial;
+    this.sequence = sequence;
+  }
+  subscribe(subscriber: (value: InstanceValue, sequence: number) => void) {
+    this.subscribers.push(subscriber);
+    return { dispose: () => { this.subscribers = this.subscribers.filter((s) => s !== subscriber); } };
+  }
+  // Simulates a landed recompute: publishes to every live subscriber, the way Instance's own
+  // watcher-driven recompute does.
+  publish(value: InstanceValue): void {
+    this.value = value;
+    this.sequence++;
+    for (const subscriber of [...this.subscribers]) subscriber(value, this.sequence);
+  }
+}
+
+// Never created on disk. If DownloadsProvider ever fell back to its own scan, every test here
+// would see an empty/ENOENT result instead of the fixture rows below.
+const FAKE_ROOT = '/fake/instance-root-never-created';
+
+const makeProvider = (
+  downloads: DownloadRow[],
+  extra: Partial<{ instance: FakeInstance; instanceRoot: string }> = {},
+): DownloadsProvider => {
+  const instance = extra.instance ?? new FakeInstance(valueOf(downloads));
+  const options: DownloadsProviderOptions = { instanceRoot: extra.instanceRoot ?? FAKE_ROOT, instance };
+  return new DownloadsProvider(options);
+};
 
 // ── DownloadNode field construction ─────────────────────────────────────────
 
@@ -134,248 +176,214 @@ describe('DownloadNode', () => {
   });
 });
 
-// ── DownloadsProvider.getChildren ───────────────────────────────────────────
+// ── DownloadsProvider — rows come from the Instance value ──────────────────
 
-describe('DownloadsProvider', () => {
-  let instanceRoots: string[] = [];
-
-  beforeEach(() => vi.clearAllMocks());
-  afterEach(async () => {
-    await Promise.all(instanceRoots.map((root) => rm(root, { recursive: true, force: true })));
-    instanceRoots = [];
+describe('DownloadsProvider — rows come from the Instance value', () => {
+  it('builds one node per Instance row, default-sorted filetime descending', async () => {
+    const provider = makeProvider([
+      row({ name: 'old.zip', mtimeMs: 1000 }),
+      row({ name: 'new.zip', mtimeMs: 2000 }),
+    ]);
+    expect(rowNames(await provider.getChildren())).toEqual(['new.zip', 'old.zip']);
   });
 
-  async function makeInstanceRoot(withDownloadsDir = true): Promise<string> {
-    const root = await mkdtemp(join(tmpdir(), 'downloads-provider-'));
-    if (withDownloadsDir) await mkdir(join(root, 'downloads'), { recursive: true });
-    instanceRoots.push(root);
-    return root;
-  }
-
-  async function writeArchive(root: string, name: string, meta?: string): Promise<void> {
-    await writeFile(join(root, 'downloads', name), 'data');
-    if (meta !== undefined) await writeFile(join(root, 'downloads', `${name}.meta`), meta);
-  }
-
-  it('builds one node per archive, default-sorted filetime descending', async () => {
-    const root = await makeInstanceRoot();
-    await writeFile(join(root, 'downloads', 'old.zip'), 'x');
-    await utimes(join(root, 'downloads', 'old.zip'), new Date(1000), new Date(1000));
-    await writeFile(join(root, 'downloads', 'new.zip'), 'x');
-    await utimes(join(root, 'downloads', 'new.zip'), new Date(2000), new Date(2000));
-
-    const provider = new DownloadsProvider(root);
-    const children = await provider.getChildren();
-    expect(rowNames(children)).toEqual(['new.zip', 'old.zip']);
-  });
-
-  // Downloads narrows by name through the same widget as every other list view —
-  // the filter is one UX or it is three.
   it('narrows to rows whose name contains the filter text, case-insensitively', async () => {
-    const root = await makeInstanceRoot();
-    await writeArchive(root, 'ArmorPack.zip');
-    await writeArchive(root, 'WeaponPack.zip');
-
-    const provider = new DownloadsProvider(root);
+    const provider = makeProvider([row({ name: 'ArmorPack.zip' }), row({ name: 'WeaponPack.zip' })]);
     await provider.getChildren();
     provider.setFilter('armor');
 
     expect(rowNames(await provider.getChildren())).toEqual(['ArmorPack.zip']);
   });
 
-  it('restores every row when the filter is cleared, without re-scanning downloads/', async () => {
-    const root = await makeInstanceRoot();
-    await writeArchive(root, 'ArmorPack.zip');
-    await writeArchive(root, 'WeaponPack.zip');
-
-    const provider = new DownloadsProvider(root);
+  // The filter is render-only: it narrows already-built rows and never re-pulls the Instance
+  // value, so clearing it must show the stale cache, not a fresh read.
+  it('restores the cached rows when the filter is cleared, without re-pulling the Instance value', async () => {
+    const instance = new FakeInstance(valueOf([row({ name: 'ArmorPack.zip' }), row({ name: 'WeaponPack.zip' })]));
+    const provider = makeProvider([], { instance });
     await provider.getChildren();
     provider.setFilter('armor');
     await provider.getChildren();
-    // Deleted behind the provider's back: a filter keystroke narrows what is already
-    // rendered and must never force a re-read, so the cached row survives (the
-    // render-vs-invalidate split PluginListProvider documents).
-    await rm(join(root, 'downloads', 'WeaponPack.zip'));
+
+    instance.value = valueOf([row({ name: 'ArmorPack.zip' })]); // no publish(), no invalidate()
     provider.setFilter('');
 
     expect(rowNames(await provider.getChildren()).sort()).toEqual(['ArmorPack.zip', 'WeaponPack.zip']);
   });
 
   it('excludes hidden rows by default (Show hidden off)', async () => {
-    const root = await makeInstanceRoot();
-    await writeArchive(root, 'hidden.zip', '[General]\r\nremoved=true\r\n');
-    await writeArchive(root, 'visible.zip');
-
-    const provider = new DownloadsProvider(root);
-    const children = await provider.getChildren();
-    expect(rowNames(children)).toEqual(['visible.zip']);
+    const provider = makeProvider([row({ name: 'hidden.zip', hidden: true }), row({ name: 'visible.zip' })]);
+    expect(rowNames(await provider.getChildren())).toEqual(['visible.zip']);
   });
 
-  describe('setShowHidden', () => {
-    it('includes hidden rows alongside visible ones when turned on', async () => {
-      const root = await makeInstanceRoot();
-      await writeArchive(root, 'hidden.zip', '[General]\r\nremoved=true\r\n');
-      await writeArchive(root, 'visible.zip');
-
-      const provider = new DownloadsProvider(root);
-      provider.setShowHidden(true);
-      const children = await provider.getChildren();
-      expect(rowNames(children).sort()).toEqual(['hidden.zip', 'visible.zip']);
-    });
-
-    it('excludes hidden rows again once turned back off', async () => {
-      const root = await makeInstanceRoot();
-      await writeArchive(root, 'hidden.zip', '[General]\r\nremoved=true\r\n');
-      await writeArchive(root, 'visible.zip');
-
-      const provider = new DownloadsProvider(root);
-      provider.setShowHidden(true);
-      await provider.getChildren();
-      provider.setShowHidden(false);
-      const children = await provider.getChildren();
-      expect(rowNames(children)).toEqual(['visible.zip']);
-    });
-
-    it('re-renders: fires onDidChangeTreeData', async () => {
-      const root = await makeInstanceRoot();
-      const provider = new DownloadsProvider(root);
-      await provider.getChildren();
-      let fired = false;
-      provider.onDidChangeTreeData(() => { fired = true; });
-      provider.setShowHidden(true);
-      expect(fired).toBe(true);
-    });
-  });
-
-  describe('setSort', () => {
-    it('re-sorts by name ascending, overriding the default Filetime-descending order', async () => {
-      const root = await makeInstanceRoot();
-      await writeArchive(root, 'banana.zip');
-      await writeArchive(root, 'apple.zip');
-
-      const provider = new DownloadsProvider(root);
-      provider.setSort('name', false);
-      const children = await provider.getChildren();
-      expect(rowNames(children)).toEqual(['apple.zip', 'banana.zip']);
-    });
-
-    it('re-renders: fires onDidChangeTreeData', async () => {
-      const root = await makeInstanceRoot();
-      const provider = new DownloadsProvider(root);
-      await provider.getChildren();
-      let fired = false;
-      provider.onDidChangeTreeData(() => { fired = true; });
-      provider.setSort('name', false);
-      expect(fired).toBe(true);
-    });
-  });
-
-  describe('hiddenNames', () => {
-    it('is empty before any render', async () => {
-      const root = await makeInstanceRoot();
-      const provider = new DownloadsProvider(root);
-      expect(provider.hiddenNames()).toEqual(new Set());
-    });
-
-    it('is empty while Show hidden is off, even with hidden archives on disk', async () => {
-      const root = await makeInstanceRoot();
-      await writeArchive(root, 'hidden.zip', '[General]\r\nremoved=true\r\n');
-
-      const provider = new DownloadsProvider(root);
-      await provider.getChildren();
-      expect(provider.hiddenNames()).toEqual(new Set());
-    });
-
-    it('lists hidden row names once Show hidden is on and the tree has rendered', async () => {
-      const root = await makeInstanceRoot();
-      await writeArchive(root, 'hidden.zip', '[General]\r\nremoved=true\r\n');
-      await writeArchive(root, 'visible.zip');
-
-      const provider = new DownloadsProvider(root);
-      provider.setShowHidden(true);
-      await provider.getChildren();
-      expect(provider.hiddenNames()).toEqual(new Set(['hidden.zip']));
-    });
-  });
-
-  it('returns no children (not an error) for an empty downloads/ folder', async () => {
-    const root = await makeInstanceRoot();
-    const provider = new DownloadsProvider(root);
-    expect(await provider.getChildren()).toEqual([]);
-  });
-
-  it('returns no children when downloads/ does not exist at all', async () => {
-    const root = await makeInstanceRoot(false);
-    const provider = new DownloadsProvider(root);
+  it('returns no children when the Instance value has no downloads', async () => {
+    const provider = makeProvider([]);
     expect(await provider.getChildren()).toEqual([]);
   });
 
   it('a non-root element (a download row) has no children of its own', async () => {
-    const root = await makeInstanceRoot();
-    await writeArchive(root, 'foo.zip');
-    const provider = new DownloadsProvider(root);
+    const provider = makeProvider([row({ name: 'foo.zip' })]);
     const [node] = await provider.getChildren();
     expect(await provider.getChildren(node)).toEqual([]);
   });
+});
 
-  describe('modbench.downloadsFolderExists context key', () => {
-    it('sets false when downloads/ does not exist', async () => {
-      const root = await makeInstanceRoot(false);
-      await new DownloadsProvider(root).getChildren();
-      expect(executeCommand).toHaveBeenCalledWith('setContext', 'modbench.downloadsFolderExists', false);
-    });
-
-    it('sets true when downloads/ exists (empty or populated)', async () => {
-      const root = await makeInstanceRoot();
-      await new DownloadsProvider(root).getChildren();
-      expect(executeCommand).toHaveBeenCalledWith('setContext', 'modbench.downloadsFolderExists', true);
-    });
+describe('setShowHidden', () => {
+  it('includes hidden rows alongside visible ones when turned on', async () => {
+    const provider = makeProvider([row({ name: 'hidden.zip', hidden: true }), row({ name: 'visible.zip' })]);
+    provider.setShowHidden(true);
+    expect(rowNames(await provider.getChildren()).sort()).toEqual(['hidden.zip', 'visible.zip']);
   });
 
-  describe('invalidate', () => {
-    it('clears the cache and fires onDidChangeTreeData, so the next getChildren re-scans', async () => {
-      const root = await makeInstanceRoot();
-      const provider = new DownloadsProvider(root);
-      expect(await provider.getChildren()).toEqual([]);
-
-      await writeArchive(root, 'new.zip');
-      let fired = false;
-      provider.onDidChangeTreeData(() => { fired = true; });
-      provider.invalidate();
-      expect(fired).toBe(true);
-
-      const children = await provider.getChildren();
-      expect(rowNames(children)).toEqual(['new.zip']);
-    });
+  it('excludes hidden rows again once turned back off', async () => {
+    const provider = makeProvider([row({ name: 'hidden.zip', hidden: true }), row({ name: 'visible.zip' })]);
+    provider.setShowHidden(true);
+    await provider.getChildren();
+    provider.setShowHidden(false);
+    expect(rowNames(await provider.getChildren())).toEqual(['visible.zip']);
   });
 
-  // A `downloads` path that is a file makes readdir() throw ENOTDIR: a real, portable failure
-  // distinct from ENOENT, without mocking fs.
-  describe('getChildren — scan failure (ADR-0026)', () => {
-    it('returns an error node instead of throwing, and logs the failure', async () => {
-      const root = await mkdtemp(join(tmpdir(), 'downloads-provider-'));
-      instanceRoots.push(root);
-      await writeFile(join(root, 'downloads'), 'not a directory');
-      const log = vi.fn();
+  it('re-renders: fires onDidChangeTreeData', async () => {
+    const provider = makeProvider([]);
+    await provider.getChildren();
+    let fired = false;
+    provider.onDidChangeTreeData(() => { fired = true; });
+    provider.setShowHidden(true);
+    expect(fired).toBe(true);
+  });
+});
 
-      const provider = new DownloadsProvider(root, log);
-      const children = await provider.getChildren();
+describe('setSort', () => {
+  it('re-sorts by name ascending, overriding the default Filetime-descending order', async () => {
+    const provider = makeProvider([row({ name: 'banana.zip' }), row({ name: 'apple.zip' })]);
+    provider.setSort('name', false);
+    expect(rowNames(await provider.getChildren())).toEqual(['apple.zip', 'banana.zip']);
+  });
 
-      expect(children).toHaveLength(1);
-      expect(children[0]).toBeInstanceOf(ErrorNode);
-      // Node's fs error prose varies by version and platform; the error code is the portable part.
-      expect((children[0] as ErrorNode).tooltip).toContain('ENOTDIR');
-      expect(log).toHaveBeenCalledWith(expect.stringContaining('scanning downloads/ failed'));
-    });
+  it('re-renders: fires onDidChangeTreeData', async () => {
+    const provider = makeProvider([]);
+    await provider.getChildren();
+    let fired = false;
+    provider.onDidChangeTreeData(() => { fired = true; });
+    provider.setSort('name', false);
+    expect(fired).toBe(true);
+  });
+});
 
-    it('does not report modbench.downloadsFolderExists on a scan failure — folder existence is unknown, not false', async () => {
-      const root = await mkdtemp(join(tmpdir(), 'downloads-provider-'));
-      instanceRoots.push(root);
-      await writeFile(join(root, 'downloads'), 'not a directory');
+describe('hiddenNames', () => {
+  it('is empty before any render', () => {
+    expect(makeProvider([]).hiddenNames()).toEqual(new Set());
+  });
 
-      await new DownloadsProvider(root, vi.fn()).getChildren();
+  it('is empty while Show hidden is off, even with hidden rows in the value', async () => {
+    const provider = makeProvider([row({ name: 'hidden.zip', hidden: true })]);
+    await provider.getChildren();
+    expect(provider.hiddenNames()).toEqual(new Set());
+  });
 
-      expect(executeCommand).not.toHaveBeenCalledWith('setContext', 'modbench.downloadsFolderExists', expect.anything());
-    });
+  it('lists hidden row names once Show hidden is on and the tree has rendered', async () => {
+    const provider = makeProvider([row({ name: 'hidden.zip', hidden: true }), row({ name: 'visible.zip' })]);
+    provider.setShowHidden(true);
+    await provider.getChildren();
+    expect(provider.hiddenNames()).toEqual(new Set(['hidden.zip']));
+  });
+});
+
+describe('invalidate', () => {
+  it('clears the cache, re-pulls the current Instance value, and fires onDidChangeTreeData', async () => {
+    const instance = new FakeInstance(valueOf([row({ name: 'old.zip' })]));
+    const provider = makeProvider([], { instance });
+    expect(rowNames(await provider.getChildren())).toEqual(['old.zip']);
+
+    instance.value = valueOf([row({ name: 'old.zip' }), row({ name: 'new.zip' })]); // no publish()
+    let fired = false;
+    provider.onDidChangeTreeData(() => { fired = true; });
+    provider.invalidate();
+
+    expect(fired).toBe(true);
+    expect(rowNames(await provider.getChildren()).sort()).toEqual(['new.zip', 'old.zip']);
+  });
+});
+
+// ── DownloadsProvider — the Instance is the only way in ────────────────────
+
+describe('DownloadsProvider — reacts to the Instance, never scans on its own', () => {
+  // sequence === 0 means "the Instance has not read yet", never "genuinely empty" — a real
+  // empty downloads/ lands at sequence 1. getChildren() must await the first landed value
+  // rather than claim "no downloads" for the former.
+  it('does not resolve getChildren() until the Instance lands its first value (sequence 0)', async () => {
+    const instance = new FakeInstance(valueOf([]), 0);
+    const provider = makeProvider([], { instance });
+
+    let settled = false;
+    const pending = provider.getChildren().then((rows) => { settled = true; return rows; });
+    // A macrotask boundary: a subscribe-that-never-resolves rival would still pass a bare
+    // `await Promise.resolve()`.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(settled).toBe(false);
+
+    instance.publish(valueOf([row({ name: 'a.zip' })]));
+    const rows = await pending;
+
+    expect(settled).toBe(true);
+    expect(rowNames(rows)).toEqual(['a.zip']);
+  });
+
+  it('renders no rows immediately when the first landed value is genuinely empty', async () => {
+    const provider = makeProvider([], { instance: new FakeInstance(valueOf([]), 1) });
+    expect(await provider.getChildren()).toEqual([]);
+  });
+
+  // Guards against a provider that subscribes but drops the callback: a first-render-only
+  // assertion would pass that rival, so this renders once, waits a macrotask past a second
+  // landed value, and only then re-reads.
+  it('re-renders when the Instance publishes a new landed value, past a macrotask boundary', async () => {
+    const instance = new FakeInstance(valueOf([row({ name: 'a.zip' })]));
+    const provider = makeProvider([], { instance });
+    expect(rowNames(await provider.getChildren())).toEqual(['a.zip']);
+
+    instance.publish(valueOf([row({ name: 'a.zip' }), row({ name: 'b.zip' })]));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(rowNames(await provider.getChildren()).sort()).toEqual(['a.zip', 'b.zip']);
+  });
+
+  it('dispose() disposes the Instance subscription: a publish afterward leaves the cache untouched', async () => {
+    const instance = new FakeInstance(valueOf([row({ name: 'a.zip' })]));
+    const provider = makeProvider([], { instance });
+    await provider.getChildren();
+
+    provider.dispose();
+    instance.publish(valueOf([row({ name: 'a.zip' }), row({ name: 'b.zip' })]));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(rowNames(await provider.getChildren())).toEqual(['a.zip']);
+  });
+
+  // instanceRoot points at a real file where downloads/ would be scanned. If DownloadsProvider
+  // ever fell back to its own scan, readdir(<file>/downloads) would throw ENOTDIR here.
+  it('never touches disk: rows still come from the value when instanceRoot is not a real MO2 instance', async () => {
+    const notADirectory = join(await mkdtemp(join(tmpdir(), 'downloads-provider-')), 'not-a-dir');
+    await writeFile(notADirectory, 'not a directory');
+    try {
+      const provider = makeProvider([row({ name: 'a.zip' })], { instanceRoot: notADirectory });
+      expect(rowNames(await provider.getChildren())).toEqual(['a.zip']);
+    } finally {
+      await rm(notADirectory, { force: true });
+    }
+  });
+
+  it('a file appearing on disk changes nothing until the Instance publishes it', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'downloads-provider-'));
+    try {
+      const instance = new FakeInstance(valueOf([row({ name: 'a.zip' })]));
+      const provider = makeProvider([], { instance, instanceRoot: root });
+      expect(rowNames(await provider.getChildren())).toEqual(['a.zip']);
+
+      await writeFile(join(root, 'b.zip'), 'data'); // never reaches the Instance in this test
+
+      expect(rowNames(await provider.getChildren())).toEqual(['a.zip']);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
   });
 });
