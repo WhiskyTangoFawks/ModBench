@@ -125,9 +125,11 @@ These describe the present and may change without revisiting the invariants.
   the advance sees the new rows at the old sequence — never the reverse — so awaiting the sequence
   is sound and reading before it is merely early. A notification carries the number its own
   projection landed on, published only once that advance is durable.
-- Commands share an internal module for target resolution under the load order,
-  external-change detection before a write, and rename on an EditorID change. It is an internal
-  seam, tested through the handlers.
+- Commands share an internal module for target resolution under the load order, the pre-write
+  check that refuses while an external change is unanswered, rename on an EditorID change, and
+  FormKey allocation. It is an internal seam, tested through the handlers. The classifier that
+  decides whether an observed binary is a self-echo, a crash recovery or a real external change is
+  not part of it: its callers are the load-order hook and the watcher, both outside Commands.
 - The Plugin adapter is thin over Mutagen and says so.
 - Tests cross the same seams callers do: the write API with a temporary source tree and a load
   order object and no Index; the Index through refresh and reads with a real DuckDB; the
